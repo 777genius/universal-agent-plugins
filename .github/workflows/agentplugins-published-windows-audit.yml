@@ -1,0 +1,104 @@
+name: Published npm 0.1.101 Windows client installation E2E
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - '.github/workflows/agentplugins-published-windows-audit.yml'
+      - 'scripts/live-install-audit.py'
+      - 'scripts/test_live_install_audit_env.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: published-windows-client-audit-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  windows-native-install:
+    name: Windows npm 0.1.101 / ${{ matrix.target }} / ${{ matrix.kind }} (2 real sources)
+    runs-on: windows-2025
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        include:
+          - { target: codex, kind: plugin, native_package: '@openai/codex@0.153.4' }
+          - { target: codex, kind: skill, native_package: '@openai/codex@0.153.4' }
+          - { target: claude, kind: plugin, native_package: '@anthropic-ai/claude-code@2.1.263' }
+          - { target: claude, kind: skill, native_package: '@anthropic-ai/claude-code@2.1.263' }
+          - { target: opencode, kind: plugin, native_package: 'opencode-ai@1.18.34' }
+          - { target: opencode, kind: skill, native_package: 'opencode-ai@1.18.34' }
+          - { target: gemini, kind: plugin, native_package: '@google/gemini-cli@0.66.0' }
+          - { target: gemini, kind: skill, native_package: '@google/gemini-cli@0.66.0' }
+          - { target: copilot, kind: plugin, native_package: '@github/copilot@1.0.105' }
+          - { target: copilot, kind: skill, native_package: '@github/copilot@1.0.105' }
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Require portable disposable Git project and isolated environment
+        shell: pwsh
+        run: |
+          python -m unittest scripts.test_live_install_audit_env.IsolatedClientEnvironmentTest.test_genuine_project_git_init_uses_empty_hooks_inside_case -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m unittest discover -s scripts -p 'test_live_install_audit_components.py' -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      # No vendor login or paid API is used. These are npm 0.1.101 bytes,
+      # with the same frozen client versions as the qualified Linux audit.
+      - name: Bootstrap published npm CLI and genuine pinned native client
+        id: bootstrap
+        shell: pwsh
+        env:
+          NATIVE_PACKAGE: ${{ matrix.native_package }}
+          NATIVE_TARGET: ${{ matrix.target }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          npm.cmd install --global universal-agent-plugins@0.1.101 "$env:NATIVE_PACKAGE"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $uap = (Get-Command agentplugins.cmd -CommandType Application -ErrorAction Stop).Source
+          $observed = (& $uap version | Out-String).Trim()
+          if ($LASTEXITCODE -ne 0 -or $observed -ne 'agentplugins 0.1.101') {
+            throw "Wrong published installer: $observed"
+          }
+          $native = (Get-Command "$env:NATIVE_TARGET.cmd" -CommandType Application -ErrorAction Stop).Source
+          & $native --version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Real install / repeat / lock / native identity / removal
+        if: ${{ !cancelled() }}
+        shell: pwsh
+        env:
+          AUDIT_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          AUDIT_VENDOR_OUTCOME: ${{ steps.bootstrap.outcome }}
+          AUDIT_TARGET: ${{ matrix.target }}
+          AUDIT_KIND: ${{ matrix.kind }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP\published-windows-proof" | Out-Null
+          $uapCommand = Get-Command agentplugins.cmd -CommandType Application -ErrorAction SilentlyContinue
+          $uap = if ($uapCommand) { $uapCommand.Source } else { 'native-cli-unavailable' }
+          python scripts/live-install-audit.py --cli "$uap" --target "$env:AUDIT_TARGET" --kind "$env:AUDIT_KIND" --limit 2 --report-dir "$env:RUNNER_TEMP\published-windows-proof"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Preserve source-by-source JSON even on failure
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: published-0.1.101-windows-${{ matrix.target }}-${{ matrix.kind }}
+          path: ${{ runner.temp }}/published-windows-proof/
+          if-no-files-found: warn
+          retention-days: 14
