@@ -138,7 +138,9 @@ class PublishedCatalogNativeProofTest(unittest.TestCase):
                "native_residuals": [], "sentinels_preserved": True,
                "failed_install_residue": False,
                "install": {"exit_code": 0}, "cleanup": {"exit_code": 0}}
-        self.assertTrue(audit.expected_negative_coverage(row))
+        self.assertTrue(audit.expected_negative_coverage(row, "agentplugins 0.1.101"))
+        self.assertFalse(audit.expected_negative_coverage(row))
+        self.assertFalse(audit.expected_negative_coverage(row, "agentplugins 0.1.102"))
         for key, bad in (
             ("source", "github:unknown/plugin@" + "a" * 40),
             ("status", "passed"),
@@ -148,7 +150,8 @@ class PublishedCatalogNativeProofTest(unittest.TestCase):
             ("native_residuals", ["opencode/registry.json"]),
             ("post_remove_identity_registered", True)):
             with self.subTest(key=key):
-                self.assertFalse(audit.expected_negative_coverage({**row, key: bad}))
+                self.assertFalse(audit.expected_negative_coverage(
+                    {**row, key: bad}, "agentplugins 0.1.101"))
 
     def test_pi_explicit_unsupported_refusals_never_become_native_pass(self):
         audit = load_audit()
