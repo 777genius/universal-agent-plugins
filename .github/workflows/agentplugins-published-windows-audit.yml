@@ -1,16 +1,32 @@
-name: Published npm 0.1.101 Windows client installation E2E
+name: Published npm stable Windows native client E2E
 
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - '.github/workflows/agentplugins-published-windows-audit.yml'
+      - '.github/workflows/agentplugins-published-version.yml'
       - 'scripts/live-install-audit.py'
       - 'scripts/test_live_install_audit_env.py'
       - 'scripts/test_live_install_audit_components.py'
       - 'scripts/run-native-client-matrix.py'
       - 'tests/live-install/fixtures.json'
+  # Broad native/client coverage weekly; only five known-safe clients and
+  # two source cases are needed on ordinary pull requests.
+  schedule:
+    - cron: '11 4 * * 3'
   workflow_dispatch:
+    inputs:
+      version:
+        description: Exact public stable npm release (empty = latest)
+        type: string
+        required: false
+        default: ''
+      cases:
+        description: Number of frozen source cases per kind
+        type: choice
+        default: '20'
+        options: ['2', '20', '30']
 
 permissions:
   contents: read
@@ -20,25 +36,27 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  resolve-release:
+    uses: ./.github/workflows/agentplugins-published-version.yml
+    with:
+      version: ${{ inputs.version }}
+
   windows-native-install:
-    name: Windows npm 0.1.101 / ${{ matrix.target }} / ${{ matrix.kind }} (2 real sources)
+    needs: resolve-release
+    name: Windows npm stable / ${{ matrix.target }} / ${{ matrix.kind }}
     runs-on: windows-2025
-    timeout-minutes: 45
+    timeout-minutes: ${{ github.event_name == 'pull_request' && 45 || 80 }}
     strategy:
       fail-fast: false
       max-parallel: 3
       matrix:
-        include:
-          - { target: codex, kind: plugin, native_package: '@openai/codex@0.153.4' }
-          - { target: codex, kind: skill, native_package: '@openai/codex@0.153.4' }
-          - { target: claude, kind: plugin, native_package: '@anthropic-ai/claude-code@2.1.263' }
-          - { target: claude, kind: skill, native_package: '@anthropic-ai/claude-code@2.1.263' }
-          - { target: opencode, kind: plugin, native_package: 'opencode-ai@1.18.34' }
-          - { target: opencode, kind: skill, native_package: 'opencode-ai@1.18.34' }
-          - { target: gemini, kind: plugin, native_package: '@google/gemini-cli@0.66.0' }
-          - { target: gemini, kind: skill, native_package: '@google/gemini-cli@0.66.0' }
-          - { target: copilot, kind: plugin, native_package: '@github/copilot@1.0.105' }
-          - { target: copilot, kind: skill, native_package: '@github/copilot@1.0.105' }
+        # 5 native clients on every relevant PR; 9 clients (including Cline,
+        # Kimi, Qoder and genuine Pi project Skills) weekly/manually.
+        target: ${{ fromJSON(github.event_name == 'pull_request' && '["codex","claude","opencode","gemini","copilot"]' || '["codex","claude","opencode","gemini","copilot","cline","kimi","qoder","pi"]') }}
+        kind: [plugin, skill]
+        exclude:
+          - target: pi
+            kind: plugin
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -72,21 +90,44 @@ jobs:
           python -m unittest discover -s scripts -p 'test_live_install_audit_components.py' -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      # No vendor login or paid API is used. These are npm 0.1.101 bytes,
+      # No vendor login or paid API is used. These are exact published npm bytes,
       # with the same frozen client versions as the qualified Linux audit.
       - name: Bootstrap published npm CLI and genuine pinned native client
         id: bootstrap
         shell: pwsh
         env:
-          NATIVE_PACKAGE: ${{ matrix.native_package }}
+          UAP_VERSION: ${{ needs.resolve-release.outputs.version }}
           NATIVE_TARGET: ${{ matrix.target }}
+          NATIVE_KIND: ${{ matrix.kind }}
         run: |
           $ErrorActionPreference = 'Stop'
-          npm.cmd install --global universal-agent-plugins@0.1.101 "$env:NATIVE_PACKAGE"
+          $nativePackages = @{
+            codex = '@openai/codex@0.153.4'
+            claude = '@anthropic-ai/claude-code@2.1.263'
+            opencode = 'opencode-ai@1.18.34'
+            gemini = '@google/gemini-cli@0.66.0'
+            copilot = '@github/copilot@1.0.105'
+            cline = 'cline@3.0.74'
+            kimi = '@moonshot-ai/kimi-code@2.4.1'
+            qoder = '@qoder-ai/qodercli@1.1.81'
+            pi = '@earendil-works/pi-coding-agent@1.5.0'
+          }
+          $nativePackage = $nativePackages[$env:NATIVE_TARGET]
+          if (-not $nativePackage) { throw "Unreviewed target $env:NATIVE_TARGET" }
+          if ($env:NATIVE_TARGET -eq 'kimi' -and $env:NATIVE_KIND -eq 'skill') {
+            $nativePackage = '@moonshot-ai/kimi-code@2.3.2'
+          }
+          npm.cmd install --global "universal-agent-plugins@$env:UAP_VERSION"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($env:NATIVE_TARGET -eq 'pi') {
+            npm.cmd install --global --ignore-scripts "$nativePackage"
+          } else {
+            npm.cmd install --global "$nativePackage"
+          }
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $uap = (Get-Command agentplugins.cmd -CommandType Application -ErrorAction Stop).Source
           $observed = (& $uap version | Out-String).Trim()
-          if ($LASTEXITCODE -ne 0 -or $observed -ne 'agentplugins 0.1.101') {
+          if ($LASTEXITCODE -ne 0 -or $observed -ne "agentplugins $env:UAP_VERSION") {
             throw "Wrong published installer: $observed"
           }
           if ($env:NATIVE_TARGET -eq 'opencode') {
@@ -114,7 +155,8 @@ jobs:
             $native = Join-Path $nativeBin 'opencode.exe'
             "$nativeBin" | Out-File -FilePath "$env:GITHUB_PATH" -Encoding utf8 -Append
           } else {
-            $native = (Get-Command "$env:NATIVE_TARGET.cmd" -CommandType Application -ErrorAction Stop).Source
+            $nativeName = if ($env:NATIVE_TARGET -eq 'qoder') { 'qodercli' } else { $env:NATIVE_TARGET }
+            $native = (Get-Command "$nativeName.cmd" -CommandType Application -ErrorAction Stop).Source
           }
           & $native --version
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -127,19 +169,20 @@ jobs:
           AUDIT_VENDOR_OUTCOME: ${{ steps.bootstrap.outcome }}
           AUDIT_TARGET: ${{ matrix.target }}
           AUDIT_KIND: ${{ matrix.kind }}
+          AUDIT_LIMIT: ${{ github.event_name == 'pull_request' && '2' || github.event_name == 'schedule' && '20' || inputs.cases || '20' }}
         run: |
           $ErrorActionPreference = 'Stop'
           New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP\published-windows-proof" | Out-Null
           $uapCommand = Get-Command agentplugins.cmd -CommandType Application -ErrorAction SilentlyContinue
           $uap = if ($uapCommand) { $uapCommand.Source } else { 'native-cli-unavailable' }
-          python scripts/live-install-audit.py --cli "$uap" --target "$env:AUDIT_TARGET" --kind "$env:AUDIT_KIND" --limit 2 --report-dir "$env:RUNNER_TEMP\published-windows-proof"
+          python scripts/live-install-audit.py --cli "$uap" --target "$env:AUDIT_TARGET" --kind "$env:AUDIT_KIND" --limit "$env:AUDIT_LIMIT" --report-dir "$env:RUNNER_TEMP\published-windows-proof"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Preserve source-by-source JSON even on failure
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
-          name: published-0.1.101-windows-${{ matrix.target }}-${{ matrix.kind }}
+          name: published-${{ needs.resolve-release.outputs.version }}-windows-${{ matrix.target }}-${{ matrix.kind }}
           path: ${{ runner.temp }}/published-windows-proof/
           if-no-files-found: warn
           retention-days: 14
