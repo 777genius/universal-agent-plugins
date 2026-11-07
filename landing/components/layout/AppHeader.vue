@@ -59,7 +59,6 @@ onMounted(() => {
           :key="item.id"
           variant="text"
           :href="item.href"
-          :class="{ 'app-header__nav-secondary': item.id === 'agents' || item.id === 'faq' }"
         >
           {{ item.label }}
         </v-btn>
@@ -253,10 +252,25 @@ onMounted(() => {
   display: none;
 }
 
+/* Keep all four destinations visible on laptops, including translated labels.
+   Recover space from decorative branding and Docs text instead of hiding links. */
 @media (min-width: 960px) and (max-width: 1279px) {
-  .app-header__nav :deep(.app-header__nav-secondary) {
-    display: none;
+  .app-header__nav { margin-left: 8px; }
+  .app-header__nav :deep(.v-btn) {
+    min-width: 0;
+    padding-inline: 5px;
+    font-size: 0.76rem;
   }
+  .app-header__desktop-actions { gap: 4px; }
+  .app-header__docs-btn {
+    min-width: 36px !important;
+    width: 36px;
+    padding-inline: 0 !important;
+  }
+  .app-header__docs-btn :deep(.v-btn__content) { display: none; }
+}
+@media (min-width: 960px) and (max-width: 1199px) {
+  .app-header__inner :deep(.app-logo__copy) { display: none; }
 }
 
 @media (max-width: 959px) {

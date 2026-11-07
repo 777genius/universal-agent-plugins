@@ -86,7 +86,7 @@ async function copyCommand(which: 1 | 2 | 3) {
           {{ docsLabel(t('shell.restore.guide'), restoreGuideEnglishFallback) }} <span aria-hidden="true">↗</span>
         </a>
       </header>
-      <p class="registry-restore__subtitle">{{ mode === 'project' ? t('shell.restoreDemo.projectUnavailable') : t('shell.restoreDemo.globalSubtitle') }}</p>
+      <p class="registry-restore__subtitle">{{ t(`shell.restoreDemo.${mode}Subtitle`) }}</p>
       <div class="registry-restore__modes" role="group" :aria-label="t('shell.restoreDemo.scopeLabel')" :data-selected="mode">
         <span class="registry-restore__mode-thumb" aria-hidden="true" />
         <button v-for="value in (['project', 'global'] as const)" :key="value" type="button"
@@ -98,14 +98,14 @@ async function copyCommand(which: 1 | 2 | 3) {
         {{ tGlobal('registryUi.install.scope.marketingKitProjectUnavailable') }}
       </p>
 
-      <div v-else class="registry-restore__flow">
+      <div class="registry-restore__flow" :data-preview-only="mode === 'project' ? 'true' : undefined">
         <div class="registry-restore__machine">
           <img class="registry-restore__monitor" :src="monitorImage" width="1577" height="997"
             alt="" loading="lazy" decoding="async" aria-hidden="true" />
           <div class="registry-restore__screen">
             <div class="registry-restore__stepbar">
               <p class="registry-restore__stage-label"><span class="registry-restore__step" aria-hidden="true">01</span>{{ t('shell.restore.from') }}</p>
-              <button type="button" class="registry-restore__copy" :aria-label="copyLabel(1)"
+              <button v-if="mode === 'global'" type="button" class="registry-restore__copy" :aria-label="copyLabel(1)"
                 @click="copyCommand(1)">{{ copyText(1) }}</button>
             </div>
             <div class="registry-restore__terminal" dir="ltr" :data-command="commands.install">
@@ -147,7 +147,7 @@ async function copyCommand(which: 1 | 2 | 3) {
           <div class="registry-restore__screen">
             <div class="registry-restore__stepbar">
               <p class="registry-restore__stage-label"><span class="registry-restore__step" aria-hidden="true">02</span>{{ t('shell.restore.to') }}</p>
-              <button type="button" class="registry-restore__copy" :aria-label="copyLabel(2)"
+              <button v-if="mode === 'global'" type="button" class="registry-restore__copy" :aria-label="copyLabel(2)"
                 @click="copyCommand(2)">{{ copyText(2) }}</button>
             </div>
             <div class="registry-restore__terminal" dir="ltr" :data-command="commands.restore">

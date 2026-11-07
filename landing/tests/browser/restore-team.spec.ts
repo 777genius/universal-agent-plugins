@@ -5,6 +5,7 @@ import { hydrated, navigate, offline, projections, registryFixture } from './i18
 test.describe.configure({ mode: 'parallel' });
 
 const commands = {
+  project: ['npx -y universal-agent-plugins install marketing-kit --scope project', 'npx -y universal-agent-plugins install --scope project'],
   global: ['npx -y universal-agent-plugins install marketing-kit', 'npx -y universal-agent-plugins deps import --install'],
 } as const;
 const exportCommand = 'npx -y universal-agent-plugins deps export';
@@ -49,18 +50,28 @@ for (const theme of ['dark', 'light'] as const) {
         await expect(section).toHaveAttribute('data-mode', mode);
         await expect(section.locator(`[data-mode-option="${mode}"]`)).toHaveAttribute('aria-pressed', 'true');
         if (mode === 'project') {
-          await expect(section.locator('.registry-restore__subtitle')).toContainText(locale === 'en' ? 'Global-only' : '');
           await expect(section.locator('.registry-restore__qualification')).toBeVisible();
+          await expect(section.locator('.registry-restore__flow[data-preview-only="true"]')).toBeVisible();
           if (locale === 'en') {
-            await expect(section.locator('.registry-restore__qualification')).toContainText('not yet available for Project');
+            await expect(section.locator('.registry-restore__subtitle')).toHaveText(
+              'Marketing Kit example — keep the same plugin versions in your project.');
+            await expect(section.locator('.registry-restore__handoff-note')).toHaveText(
+              'Commit uap.toml and uap.lock. Your teammate runs install in the project.');
             for (const dependency of ['Notion', 'HubSpot', 'Playwright']) {
               await expect(section.locator('.registry-restore__qualification')).toContainText(dependency);
             }
           }
-          await expect(section.locator('.registry-restore__flow')).toHaveCount(0);
+          await expect(section.locator('.registry-restore__machine')).toHaveCount(2);
+          await expect(section.locator('.registry-restore__terminal')).toHaveCount(2);
+          await expect(section.locator('.registry-restore__terminal').first()).toHaveAttribute('data-command', commands.project[0]);
+          await expect(section.locator('.registry-restore__terminal').last()).toHaveAttribute('data-command', commands.project[1]);
           await expect(section.locator('.registry-restore__copy')).toHaveCount(0);
-          await expect(section).not.toContainText('install marketing-kit --scope project');
+          await expect(section.locator('.registry-restore__export')).toHaveCount(0);
+          await expect(section.locator('.registry-restore__package strong')).toHaveText(['v0.1.0', 'v0.1.0']);
           expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+          if ((locale === 'en' && [1440, 390, 280].includes(width)) || (locale === 'ar' && width === 390)) {
+            await section.screenshot({ path: testInfo.outputPath(`marketing-kit-${mode}-${theme}-${locale}-${width}.png`), animations: 'disabled' });
+          }
           continue;
         }
         if (locale === 'en') {
@@ -277,7 +288,8 @@ for (const qualified of [false, true]) {
     const section = page.locator('#restore-environment');
     await section.locator('[data-mode-option="project"]').click();
     await expect(section.locator('.registry-restore__qualification')).toBeVisible();
-    await expect(section.locator('.registry-restore__flow')).toHaveCount(0);
+    await expect(section.locator('.registry-restore__flow[data-preview-only="true"]')).toBeVisible();
+    await expect(section.locator('.registry-restore__terminal')).toHaveCount(2);
     await expect(section.locator('.registry-restore__copy')).toHaveCount(0);
     expect(errors).toEqual([]);
   });

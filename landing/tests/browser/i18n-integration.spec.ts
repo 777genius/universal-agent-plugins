@@ -45,11 +45,14 @@ for (const locale of publishedLocales) {
         await expect(restore.locator('.registry-restore__handoff-note')).toHaveText(showcase.globalHandoff);
         await expect(restore.locator('.registry-restore__export code')).toHaveText('npx -y universal-agent-plugins deps export');
         await restore.getByRole('button', { name: showcase.projectLabel, exact: true }).click();
-        await expect(restore.locator('.registry-restore__subtitle')).toHaveText(showcase.projectUnavailable);
+        await expect(restore.locator('.registry-restore__subtitle')).toHaveText(showcase.projectSubtitle);
         await expect(restore.locator('.registry-restore__qualification')).toBeVisible();
-        await expect(restore.locator('.registry-restore__flow')).toHaveCount(0);
+        await expect(restore.locator('.registry-restore__flow[data-preview-only="true"]')).toBeVisible();
+        await expect(restore.locator('.registry-restore__machine')).toHaveCount(2);
+        await expect(restore.locator('.registry-restore__terminal').first()).toHaveAttribute('data-command', 'npx -y universal-agent-plugins install marketing-kit --scope project');
+        await expect(restore.locator('.registry-restore__terminal').last()).toHaveAttribute('data-command', 'npx -y universal-agent-plugins install --scope project');
         await expect(restore.locator('.registry-restore__copy')).toHaveCount(0);
-        await expect(restore).not.toContainText('install marketing-kit --scope project');
+        await expect(restore.locator('.registry-restore__export')).toHaveCount(0);
         await restore.getByRole('button', { name: showcase.globalLabel, exact: true }).click();
         const docsLocale = ['en', 'ru', 'uk', 'zh', 'es', 'hi', 'ar', 'pt', 'fr'].includes(locale) ? locale : 'en';
         const guideLabel = docsLocale === locale ? copy.guide! : messages.docs.englishLabel.replace('{label}', copy.guide!);
