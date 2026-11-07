@@ -26,6 +26,7 @@ func TestParseClientIDAliasesAndLenientPassThrough(t *testing.T) {
 		"  CURSOR  ": ClientCursor, "Claude-Code": ClientClaude,
 		"grok-build": ClientGrok, "kimi-code": ClientKimi,
 		"qoder-cli": ClientQoder, "qoder-desktop": ClientQoder,
+		"chatgpt-desktop": ClientCodex, "chatgpt-web": ClientChatGPT,
 	}
 	for input, want := range aliases {
 		got, ok := ParseClientID(input)
