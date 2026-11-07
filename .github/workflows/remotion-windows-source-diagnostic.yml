@@ -119,12 +119,44 @@ jobs:
                            '--target', 'codex', '--scope', 'project', '--project-root',
                            str(project), '--no-ui', '--yes', '--format', 'json'],
                           project, 180)
-          report.write_text(json.dumps({'sha': sha, 'source': item['source'], 'windows_only_diagnostic': True,
-                                        'published_cli': '0.1.101', 'installed': installed,
+          # The original 30-source CI uses Python's default Windows TEMP
+          # (C:\\Users\\runneradmin\\AppData\\Local\\Temp), rather than
+          # the shorter RUNNER_TEMP used by this positive control. Repeat the
+          # exact public command under the real default-temp-shaped profile.
+          original = Path(tempfile.mkdtemp(prefix='uap-live-30x30-'))
+          original_case = original / 'skill-24'
+          original_home, original_project, original_data, original_temp = (
+              original_case / n for n in ('home', 'project', 'uap-data', 'tmp'))
+          for p in (original_home, original_project, original_data, original_temp):
+              p.mkdir(parents=True)
+          (original_case / 'empty.gitconfig').write_bytes(b'')
+          env.update(HOME=str(original_home), USERPROFILE=str(original_home),
+                     XDG_CONFIG_HOME=str(original_home / '.config'),
+                     XDG_CACHE_HOME=str(original_home / '.cache'),
+                     XDG_DATA_HOME=str(original_home / '.local/share'),
+                     XDG_STATE_HOME=str(original_home / '.local/state'),
+                     APPDATA=str(original_home / 'AppData/Roaming'),
+                     LOCALAPPDATA=str(original_home / 'AppData/Local'),
+                     CODEX_HOME=str(original_home / '.codex'),
+                     AGENTPLUGINS_HOME=str(original_data),
+                     GIT_CONFIG_GLOBAL=str(original_case / 'empty.gitconfig'),
+                     TEMP=str(original_temp), TMP=str(original_temp),
+                     TMPDIR=str(original_temp))
+          installed_default_temp = run('public-0.1.101-remotion-original-temp-profile',
+                                       [cli, 'skills', 'add', item['source'], '--skill', item['name'],
+                                        '--target', 'codex', '--scope', 'project', '--project-root',
+                                        str(original_project), '--no-ui', '--yes', '--format', 'json'],
+                                       original_project, 180)
+          report.write_text(json.dumps({'sha': sha, 'source': item['source'],
+                                        'windows_only_diagnostic': True, 'published_cli': '0.1.101',
+                                        'short_temp_installed': installed,
+                                        'default_temp_installed': installed_default_temp,
+                                        'short_case_root_chars': len(str(profile)),
+                                        'default_case_root_chars': len(str(original_case)),
                                         'steps': outcomes}, indent=2, ensure_ascii=True) + '\n',
                             encoding='utf-8')
-          if not installed:
-              raise SystemExit('Published immutable Remotion Skill still refused; see per-step report')
+          if not installed or not installed_default_temp:
+              raise SystemExit('Exact published Windows Remotion Skill failure reproduced; see safe report')
           '@ | python -
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Preserve refusal evidence, even on failure
