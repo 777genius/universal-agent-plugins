@@ -93,6 +93,18 @@ describe('SkillSpector v3 exact producer contract', () => {
       { id: 'static-extended-v3', digest: 'sha256:' + 'b'.repeat(64) },
     ];
     assert.deepEqual(decodeSkillSpectorManifestV3(updated).profiles, updated.profiles);
+    // Exercise the actual shard decoder too: old and new profile digests can
+    // coexist on current source records, without inventing a new scan.
+    const mixedManifest = structuredClone(manifest);
+    mixedManifest.profiles = [...legacy, ...structuredClone(manifest.profiles)];
+    const mixedShard = structuredClone(shard);
+    mixedShard.records[0].profile = structuredClone(legacy[0]);
+    const verified = decodeSkillSpectorShardV3(mixedShard, mixedManifest, descriptor);
+    assert.equal(verified[0]!.freshness, 'current');
+    assert.deepEqual(verified[0]!.profile, legacy[0]);
+    const forgedShard = structuredClone(mixedShard);
+    forgedShard.records[0].profile.digest = 'sha256:' + 'f'.repeat(64);
+    assert.throws(() => decodeSkillSpectorShardV3(forgedShard, mixedManifest, descriptor), /invalid/);
     for (const change of [
       (value: typeof updated) => { value.profiles[0]!.digest = 'sha256:' + 'c'.repeat(64); },
       (value: typeof updated) => { value.profiles[2] = structuredClone(value.profiles[0]!); },
