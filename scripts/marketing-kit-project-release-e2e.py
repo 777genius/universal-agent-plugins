@@ -76,11 +76,14 @@ def run_case(cli, target, root, name, portable=None):
     home, data, project = case / "home", case / "data", case / "project"
     for directory in (home, data, project):
         directory.mkdir(parents=True)
-    native_config = home / f".{target}"
-    native_config.mkdir(exist_ok=True)
-    # Guard a non-UAP file inside the actual native-client configuration root.
-    native_foreign = native_config / "unmanaged-native-do-not-change.txt"
-    native_foreign.write_text("unmanaged native settings\n", encoding="utf-8")
+    # Reuse the existing published audit's native-profile root inventory.
+    native_foreign = []
+    for relative in audit["NATIVE_ROOTS"][target]:
+        native_root = home / relative
+        native_root.mkdir(parents=True, exist_ok=True)
+        marker = native_root / "unmanaged-native-do-not-change.txt"
+        marker.write_text("unmanaged native settings\n", encoding="utf-8")
+        native_foreign.append((marker, "unmanaged native settings\n"))
     # The fixture must never read or modify the operator's home or native config.
     user_foreign = home / "foreign-user-do-not-change.txt"
     user_foreign.write_text("unmanaged user data\n", encoding="utf-8")
@@ -120,9 +123,9 @@ def main():
         with tempfile.TemporaryDirectory(prefix="uap-real-marketing-kit-") as location:
             root = Path(location)
             env, project_a, foreign_a, project_foreign_a, native_foreign_a = run_case(options.cli, options.target, root, "A")
-            foreign_a_files = ((foreign_a, "unmanaged user data\n"),
+            foreign_a_files = [(foreign_a, "unmanaged user data\n"),
                                (project_foreign_a, "unmanaged project data\n"),
-                               (native_foreign_a, "unmanaged native settings\n"))
+                               *native_foreign_a]
             foreign_files = list(foreign_a_files)
             version = invoke([options.cli, "version"], env, project_a, 25)
             if version["exit_code"] != 0 or "0.1.101" not in version["stdout_tail"]:
@@ -156,9 +159,9 @@ def main():
             if set(identities(inventory(options.cli, env, project_a, options.target), options.target)) != EXPECTED:
                 raise AssertionError("update lost a mandatory dependency")
             env_b, project_b, foreign_b, project_foreign_b, native_foreign_b = run_case(options.cli, options.target, root, "B", project_a)
-            foreign_b_files = ((foreign_b, "unmanaged user data\n"),
+            foreign_b_files = [(foreign_b, "unmanaged user data\n"),
                                (project_foreign_b, "unmanaged project data\n"),
-                               (native_foreign_b, "unmanaged native settings\n"))
+                               *native_foreign_b]
             foreign_files.extend(foreign_b_files)
             scoped_b = ("--scope", "project", "--project-root", str(project_b))
             run(env_b, project_b, "cold locked restore", "install", "--locked", "--yes", *scoped_b)
