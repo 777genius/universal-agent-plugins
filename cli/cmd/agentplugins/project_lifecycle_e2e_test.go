@@ -91,12 +91,20 @@ func TestProjectComposedPureComponentLifecycleAcrossUserAndProjects(t *testing.T
 			}
 			journey.run(t, journey.a, "repair", updated.InstallationID, "--target", "gemini")
 			journey.run(t, journey.a, "remove", "docs", "--target", "gemini")
-			if len(journey.state(t, journey.a).Installations) != 0 ||
-				!reflect.DeepEqual(userNative, securityFixtureTree(t, journey.nativeRoot(""))) ||
-				!reflect.DeepEqual(bNative, securityFixtureTree(t, journey.nativeRoot(journey.b))) ||
-				userState != projectJourneyRead(t, filepath.Join(journey.cache, "state-v2.json")) ||
-				bState != projectJourneyRead(t, filepath.Join(journey.namespace(journey.b), "state-v2.json")) {
-				t.Fatal("Project A lifecycle altered User or Project B state")
+			if len(journey.state(t, journey.a).Installations) != 0 {
+				t.Fatal("Project A removal retained its installation")
+			}
+			if got := securityFixtureTree(t, journey.nativeRoot("")); !reflect.DeepEqual(userNative, got) {
+				t.Fatalf("Project A changed User native files: before=%v after=%v", userNative, got)
+			}
+			if got := securityFixtureTree(t, journey.nativeRoot(journey.b)); !reflect.DeepEqual(bNative, got) {
+				t.Fatalf("Project A changed Project B native files: before=%v after=%v", bNative, got)
+			}
+			if got := projectJourneyRead(t, filepath.Join(journey.cache, "state-v2.json")); userState != got {
+				t.Fatal("Project A changed User's persisted installation state")
+			}
+			if got := projectJourneyRead(t, filepath.Join(journey.namespace(journey.b), "state-v2.json")); bState != got {
+				t.Fatal("Project A changed Project B's persisted installation state")
 			}
 			journey.run(t, journey.b, "remove", "docs", "--target", "gemini")
 			journey.run(t, "", "remove", "docs", "--target", "gemini")

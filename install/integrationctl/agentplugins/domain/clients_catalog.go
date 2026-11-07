@@ -158,7 +158,7 @@ var clientDefinitions = []ClientDefinition{
 		UsesManagedStdioLauncher: true,
 		RecordsSelectedNativeRootOnCreate: true,
 	}), LifecycleNativeConfig),
-	withProjectComponents(withProjectScope(clientDefinition(ClientGrok, "Grok Build", "grok", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
+	withProjectComponentSupport(withProjectScope(clientDefinition(ClientGrok, "Grok Build", "grok", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
 		InstallIntents: []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:  LifecycleCLIRegistry,
 	}), LifecyclePrepared), SupportNative, SupportUnsupported),
