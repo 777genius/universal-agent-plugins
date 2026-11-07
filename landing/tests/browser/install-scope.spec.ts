@@ -243,7 +243,7 @@ test('unqualified project scope is hidden while auto agent delivery stays non-nu
   expect(errors).toEqual([]);
 });
 
-test('Marketing Kit does not advertise unsupported signed project scope or force Cursor', async ({ page }) => {
+test('Marketing Kit offers signed-v1 Project installation without fabricating native evidence', async ({ page }) => {
   const errors = await offline(page);
   const index = scopedFixture();
   const plugin = index.plugins[0]!;
@@ -251,54 +251,15 @@ test('Marketing Kit does not advertise unsupported signed project scope or force
   plugin.install_source = 'marketing-kit';
   plugin.display_name = 'Marketing Kit';
   plugin.trust_state = 'reviewed';
-  plugin.client_support.clients = ['cursor', 'codex', 'claude', 'gemini'];
-  plugin.distributions = plugin.distributions.slice(0, 1);
-  plugin.distributions[0]!.releases[0]!.source.revision = 'c5bcedd4ecf12585a8a50401852e57a44891ebec';
-  plugin.distributions[0]!.releases[0]!.targets.push(
-    { client: 'claude', scopes: ['user'], delivery: 'managed', authentication: 'required' },
-    { client: 'gemini', scopes: ['user'], delivery: 'managed', authentication: 'required' },
-  );
-  await projections(page, index);
-  await navigate(page, '/', 'en', '?q=marketing-kit');
-  const card = page.locator('.plugin-card[data-install-source="marketing-kit"]');
-  await card.locator('.plugin-card__install-toggle').click();
-
-  const computer = card.getByRole('button', { name: 'This computer', exact: true });
-  const project = card.getByRole('button', { name: 'This project', exact: true });
-  await expect(computer).toHaveAttribute('aria-pressed', 'true');
-  await expect(project).toBeDisabled();
-  await expect(card.locator('.marketing-kit-project')).toHaveCount(0);
-  await expect(card).toContainText('Marketing Kit is not yet available for Project: its required Notion, HubSpot and Playwright dependencies must each qualify for Project installation.');
-  await expect(card.locator('.plugin-card__install .command-snippet--add code')).toHaveText(
-    'npx -y universal-agent-plugins add marketing-kit',
-  );
-  await expect(card.locator('.plugin-card__install .command-snippet--add code')).not.toContainText('--target cursor');
-  await expect(card).not.toContainText('Cursor: Files are prepared.');
-  await card.locator('.plugin-card__title-link').click();
-  const panel = page.locator('.install-panel');
-  await expect(panel.getByRole('button', { name: 'This project', exact: true })).toBeDisabled();
-  await expect(panel).toContainText('Notion, HubSpot and Playwright');
-  await expect(panel.locator('.marketing-kit-project')).toHaveCount(0);
-  expect(errors).toEqual([]);
-});
-
-test('Marketing Kit project becomes automatic only with a new signed project release', async ({ page }) => {
-  const errors = await offline(page);
-  const index = scopedFixture();
-  const plugin = index.plugins[0]!;
-  plugin.name = 'marketing-kit';
-  plugin.install_source = 'marketing-kit';
-  plugin.display_name = 'Marketing Kit';
-  plugin.trust_state = 'reviewed';
+  plugin.client_support.clients = ['codex', 'claude', 'gemini'];
   plugin.distributions = plugin.distributions.slice(0, 1);
   const release = plugin.distributions[0]!.releases[0]!;
-  release.source.revision = null;
-  // Synthetic future signed policy: tests UI selection only, NOT closure
-  // qualification. Production must first verify every dependency in project
-  // scope before publishing a project-enabled Marketing Kit release.
-  for (const target of release.targets) {
-    target.scopes = target.client === 'codex' ? ['user', 'project'] : ['user'];
-  }
+  release.source.revision = null; // real published v1 Marketing Kit source
+  release.targets = [
+    { client: 'codex', scopes: ['user'], delivery: 'managed', authentication: 'required' },
+    { client: 'claude', scopes: ['user'], delivery: 'managed', authentication: 'required' },
+    { client: 'gemini', scopes: ['user'], delivery: 'managed', authentication: 'required' },
+  ];
   await projections(page, index);
   await navigate(page, '/', 'en', '?q=marketing-kit');
   const card = page.locator('.plugin-card[data-install-source="marketing-kit"]');
@@ -306,12 +267,34 @@ test('Marketing Kit project becomes automatic only with a new signed project rel
   await card.getByRole('button', { name: 'This project', exact: true }).click();
   await expect(card.locator('.app-multiselect__trigger')).toContainText(cardAutoSummary);
   await expect(card.locator('.plugin-card__install .command-snippet--add code')).toHaveText(
-    'npx -y universal-agent-plugins add marketing-kit --scope project',
-  );
+    'npx -y universal-agent-plugins add marketing-kit --scope project');
   await targets(page, card, ['Codex']);
   await expect(card.locator('.plugin-card__install .command-snippet--add code')).toHaveText(
-    'npx -y universal-agent-plugins add marketing-kit --target codex --scope project',
-  );
+    'npx -y universal-agent-plugins add marketing-kit --target codex --scope project');
+  await expect(card).not.toContainText('Marketing Kit is not yet available for Project');
+  await card.locator('.plugin-card__title-link').click();
+  const panel = page.locator('.install-panel');
+  await expect(panel.getByRole('button', { name: 'This project', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(panel.locator('.command-snippet--add code')).toContainText('--scope project');
+  expect(errors).toEqual([]);
+});
+
+test('Marketing Kit Project still rejects unsupported required components', async ({ page }) => {
+  const errors = await offline(page);
+  const index = scopedFixture();
+  const plugin = index.plugins[0]!;
+  plugin.name = 'marketing-kit';
+  plugin.install_source = 'marketing-kit';
+  plugin.trust_state = 'reviewed';
+  plugin.distributions = plugin.distributions.slice(0, 1);
+  plugin.distributions[0]!.releases[0]!.components = ['extensions'];
+  await projections(page, index);
+  await navigate(page, '/', 'en', '?q=marketing-kit');
+  const card = page.locator('.plugin-card[data-install-source="marketing-kit"]');
+  await card.locator('.plugin-card__install-toggle').click();
+  await expect(card.getByRole('button', { name: 'This project', exact: true })).toBeDisabled();
+  await expect(card.locator('.plugin-card__install .command-snippet--add code')).toHaveText(
+    'npx -y universal-agent-plugins add marketing-kit');
   expect(errors).toEqual([]);
 });
 
