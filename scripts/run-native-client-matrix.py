@@ -56,6 +56,9 @@ PINS = {
         "codex": ("github", "openai/codex", "rust-v0.153.4", "codex-x86_64-pc-windows-msvc.exe.zip", "sha256:c016b0e6968b78586919c720d2685a03712f6d5f11bcd9d6f92c91eb8c41ba16", "codex-x86_64-pc-windows-msvc.exe"),
         "claude": ("npm", "@anthropic-ai/claude-code-win32-x64", "2.1.263", "claude-code-win32-x64-2.1.263.tgz", "sha512-P1LnudAWj2ptyE0IZzCZKAe7nU7LxqlkcLdBfp8FsHlH5dp75Og4JJ6TClvfjanHn3shYW4CYN6oI1vSqZlkHw==", "claude.exe"),
         "opencode": ("npm", "opencode-windows-x64", "1.18.34", "opencode-windows-x64-1.18.34.tgz", "sha512-Nbw1JUHcMd+6Zab97tvhiR/wzMBrtFbHMog3w+HssBqt0068BLdpPadLmo72+vPtBu+ZxXIZzqNB9R3qtca7qg==", "opencode.exe"),
+        # Genuine Kimi 2.3.2 Windows binary: independently SHA-256 pinned official
+        # GitHub asset (not the npm .cmd dispatcher, rejected by the adapter).
+        "kimi": ("github", "MoonshotAI/kimi-code", "@moonshot-ai/kimi-code@2.3.2", "kimi-code-win32-x64.zip", "sha256:398fff295d3ddaffe4fbefd9586e6cdc3eacd67bdb4437a43184615a1934ee74", "kimi.exe"),
         "lintai": ("github", "777genius/lintai", "v0.1.3", "lintai-v0.1.3-x86_64-pc-windows-msvc.zip", "sha256:2f61f6a83a160afa3feed9ea1722b82d0d938ebff865a4e20d39b5f55270c911", "lintai.exe"),
     },
 }

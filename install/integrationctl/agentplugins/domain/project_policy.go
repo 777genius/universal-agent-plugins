@@ -40,9 +40,17 @@ func (definition ClientDefinition) ScopedCapabilities(scope InstallScope) Client
 }
 
 // withProjectComponents is a scoped declaration, not a user-scope feature grant.
-func withProjectComponents(definition ClientDefinition, skills, mcp SupportLevel) ClientDefinition {
+func withProjectComponentSupport(definition ClientDefinition, skills, mcp SupportLevel) ClientDefinition {
 	definition.ProjectPolicy.SkillSupport = skills
 	definition.ProjectPolicy.MCPSupport = mcp
+	return definition
+}
+
+// Clients with confirmed native effects reuse these capabilities and enable
+// receipt-bound effect tracking. Grok's prepared-only Project adapter must not
+// accidentally acquire that lifecycle policy from a metadata-only correction.
+func withProjectComponents(definition ClientDefinition, skills, mcp SupportLevel) ClientDefinition {
+	definition = withProjectComponentSupport(definition, skills, mcp)
 	definition.ProjectPolicy.TracksNativeEffects = true
 	return definition
 }

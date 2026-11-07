@@ -395,6 +395,7 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
             v-if="!autoDetect && selectedDistribution"
             :distribution="selectedDistribution"
             :targets="targets"
+            :scope="scope"
           />
           <div class="plugin-card__install">
             <AppMultiSelect

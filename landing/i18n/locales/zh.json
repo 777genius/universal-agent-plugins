@@ -751,6 +751,9 @@
         "selectionUnavailable": "所选代理与安装位置的组合不可用。请选择其他代理或位置。"
       },
       "outcome": {
+        "projectPreview": "项目预览：CLI 会验证来源、MCP 传输方式和必需依赖。代理激活需另外确认。",
+        "projectSupported": "可能可以安装",
+        "projectUnsupported": "此项目不支持",
         "includes": "包含：",
         "label": "安装及后续步骤",
         "managed": "CLI 管理已安装的文件。",

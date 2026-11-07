@@ -768,6 +768,9 @@
         "selectionUnavailable": "This combination of agents and install location is unavailable. Choose another agent or location."
       },
       "outcome": {
+        "projectPreview": "Project preview: the CLI verifies the exact source, MCP transports and required dependencies. Agent activation is separate.",
+        "projectSupported": "Potentially deliverable",
+        "projectUnsupported": "Not supported for this project",
         "includes": "Includes:",
         "label": "Installation and next steps",
         "managed": "The CLI manages the installed files.",
