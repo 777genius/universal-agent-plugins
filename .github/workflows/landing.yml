@@ -33,15 +33,17 @@ permissions:
   contents: read
 
 jobs:
-  test:
-    # The release gate matches check names; keep this one distinct from Required / test.
-    name: landing-test
+  prepare-browser:
+    name: landing-prepare
     permissions:
       contents: read
       pull-requests: read
     runs-on: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && 'ubuntu-latest' || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
-    # Bound contention for the complete E2E matrix.
-    timeout-minutes: 50
+    timeout-minutes: 20
+    outputs:
+      scope: ${{ steps.browser-scope.outputs.mode }}
+      matrix: ${{ steps.shard-matrix.outputs.value }}
+      site-artifact-id: ${{ steps.upload-site.outputs.artifact-id }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -143,45 +145,106 @@ jobs:
           printf 'mode=%s\n' "$mode" >> "$GITHUB_OUTPUT"
           echo "Playwright coverage: $mode"
 
-      - name: Run browser E2E
+
+      # Full for any landing/UI change, manual and scheduled runs; docs-only PRs get one smoke shard.
+      - name: Choose shard matrix
+        id: shard-matrix
+        run: |
+          if [[ "${{ steps.browser-scope.outputs.mode }}" == "smoke" ]]; then
+            echo 'value={"include":[{"index":1,"total":1}]}' >> "$GITHUB_OUTPUT"
+          else
+            echo 'value={"include":[{"index":1,"total":2},{"index":2,"total":2}]}' >> "$GITHUB_OUTPUT"
+          fi
+
+      # One signed, typechecked, generated site for both shards in this exact workflow run.
+      - name: Upload verified site and registry inputs for browser shards
+        id: upload-site
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: landing-static-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            landing/.e2e-pages/
+            landing/public/
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 1
+
+  browser-shard:
+    name: landing-shard (${{ matrix.index }}/${{ matrix.total }})
+    needs: prepare-browser
+    if: needs.prepare-browser.result == 'success'
+    runs-on: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && 'ubuntu-latest' || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare-browser.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@a8198c4bff370c8506180b035930dea56dbd5288 # v5
+        with:
+          package_json_file: landing/package.json
+          dest: ${{ runner.temp }}/pnpm-landing
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22.21.1"
+          cache: pnpm
+          cache-dependency-path: landing/pnpm-lock.yaml
+
+      - name: Install browser test dependencies
+        working-directory: landing
+        run: pnpm install --frozen-lockfile
+
+      - name: Download exact-run verified static site
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.prepare-browser.outputs.site-artifact-id }}
+          path: landing
+
+      - name: Check same-run staged inputs
+        working-directory: landing
+        run: |
+          test -s .e2e-pages/universal-agent-plugins/index.html
+          test -s public/registry/schemas/1/latest.json
+
+      - name: Install Chromium browser
+        working-directory: landing
+        run: pnpm exec playwright install --with-deps --only-shell chromium
+
+      - name: Run browser E2E shard
         id: browser-e2e
         env:
           UAP_E2E_REPOSITORY_BASE: universal-agent-plugins
           UAP_E2E_WEB_ROOT: .e2e-pages
         working-directory: landing
         run: |
-          if [[ "${{ steps.browser-scope.outputs.mode }}" == "smoke" ]]; then
-            pnpm exec playwright test tests/browser/landing.spec.ts tests/browser/i18n-integration.spec.ts tests/browser/release-base.spec.ts tests/browser/locale-install-navigation.spec.ts
+          shard="--shard=${{ matrix.index }}/${{ matrix.total }}"
+          if [[ "${{ needs.prepare-browser.outputs.scope }}" == "smoke" ]]; then
+            pnpm exec playwright test tests/browser/landing.spec.ts tests/browser/i18n-integration.spec.ts tests/browser/release-base.spec.ts tests/browser/locale-install-navigation.spec.ts "$shard" --reporter=line,blob
           else
-            pnpm run test:browser
+            pnpm exec playwright test "$shard" --reporter=line,blob
           fi
 
-      # Capture the first Playwright run's screenshots before the live-API and
-      # Mux suites start: each Playwright invocation cleans test-results/.
-      - name: Preserve Marketing Kit visual QA evidence
-        if: always() && steps.browser-e2e.outcome == 'success' && steps.browser-scope.outputs.mode != 'smoke'
+      # Preserve evidence before opt-in live suites, which clear test-results/.
+      - name: Preserve Marketing Kit and Skills scope screenshots from this shard
+        if: always() && steps.browser-e2e.outcome == 'success' && needs.prepare-browser.outputs.scope != 'smoke'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
-          name: marketing-kit-visual-evidence
-          path: landing/test-results/**/marketing-kit-*.png
-          if-no-files-found: error
-          retention-days: 7
-
-      - name: Preserve Skills scope visual QA evidence
-        if: always() && steps.browser-e2e.outcome == 'success' && steps.browser-scope.outputs.mode != 'smoke'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
-        with:
-          name: skills-scope-visual-evidence
+          name: landing-visual-${{ matrix.index }}
           path: |
+            landing/test-results/**/marketing-kit-*.png
             landing/test-results/**/skills-card-project-mobile.png
             landing/test-results/**/skills-detail-project-mobile.png
-          if-no-files-found: error
+          if-no-files-found: ignore
           retention-days: 7
 
-      # Opt-in real public Skills API payloads exercised by the staged Pages
-      # UI. The localhost-only CORS bridge passes through actual response bytes.
       - name: Verify real Skills API against staged install UI
-        if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:live-skills')
+        if: github.event_name == 'pull_request' && matrix.index == 1 && contains(github.event.pull_request.labels.*.name, 'ci:live-skills')
         id: live-skills-e2e
         env:
           UAP_E2E_REPOSITORY_BASE: universal-agent-plugins
@@ -190,10 +253,8 @@ jobs:
         working-directory: landing
         run: pnpm exec playwright test tests/browser/skills-live-api.spec.ts
 
-      # Explicitly enabled for visual media changes. This checks actual Mux
-      # playback progression after one click, not just iframe construction.
       - name: Verify real Mux playback after one click
-        if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:live-demo')
+        if: github.event_name == 'pull_request' && matrix.index == 1 && contains(github.event.pull_request.labels.*.name, 'ci:live-demo')
         id: live-demo-e2e
         env:
           UAP_E2E_REPOSITORY_BASE: universal-agent-plugins
@@ -202,13 +263,118 @@ jobs:
         working-directory: landing
         run: pnpm exec playwright test tests/browser/hero-demo-video.spec.ts --grep 'owner-uploaded Mux film actually plays'
 
-      - name: Preserve failed browser traces
-        if: failure() && (steps.browser-e2e.outcome == 'failure' || steps.live-demo-e2e.outcome == 'failure' || steps.live-skills-e2e.outcome == 'failure')
+      - name: Upload isolated Playwright blob report
+        if: always() && steps.browser-e2e.outcome != 'skipped'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
-          name: landing-browser-failure
-          path: landing/test-results/
+          name: landing-blob-${{ matrix.index }}
+          path: landing/blob-report/*.zip
+          if-no-files-found: error
           retention-days: 7
+
+      - name: Preserve failed browser traces
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: landing-browser-failure-${{ matrix.index }}
+          path: landing/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # Branch protection sees one stable gate, not two independently green partial suites.
+  test:
+    name: landing-test
+    if: ${{ always() && !cancelled() }}
+    needs: [prepare-browser, browser-shard]
+    runs-on: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && 'ubuntu-latest' || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@a8198c4bff370c8506180b035930dea56dbd5288 # v5
+        with:
+          package_json_file: landing/package.json
+          dest: ${{ runner.temp }}/pnpm-landing
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22.21.1"
+          cache: pnpm
+          cache-dependency-path: landing/pnpm-lock.yaml
+
+      - name: Install report merger dependencies
+        working-directory: landing
+        run: pnpm install --frozen-lockfile
+
+      - name: Download exact-run shard reports
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: landing-blob-*
+          merge-multiple: true
+          path: landing/merged-blob-reports
+
+      - name: Verify shard report cardinality
+        env:
+          EXPECTED_SHARDS: ${{ needs.prepare-browser.outputs.scope == 'smoke' && '1' || '2' }}
+        run: |
+          test "$(find landing/merged-blob-reports -maxdepth 1 -type f -name '*.zip' | wc -l)" -eq "$EXPECTED_SHARDS"
+
+      - name: Merge full Playwright report
+        working-directory: landing
+        run: pnpm exec playwright merge-reports --reporter=line merged-blob-reports
+
+      - name: Download per-shard visual evidence
+        if: needs.prepare-browser.outputs.scope != 'smoke'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: landing-visual-*
+          merge-multiple: true
+          path: landing/marketing-kit-visual-evidence
+
+      - name: Require full-suite Marketing Kit visual evidence
+        if: needs.prepare-browser.outputs.scope != 'smoke'
+        run: test "$(find landing/marketing-kit-visual-evidence -type f -name 'marketing-kit-*.png' | wc -l)" -gt 0
+
+      - name: Preserve consolidated Marketing Kit visual QA evidence
+        if: needs.prepare-browser.outputs.scope != 'smoke'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: marketing-kit-visual-evidence
+          path: landing/marketing-kit-visual-evidence/
+          if-no-files-found: error
+          retention-days: 7
+
+      # Preserve the two existing mobile Skills screenshots from the complete suite.
+      - name: Require full-suite Skills scope visual evidence
+        if: needs.prepare-browser.outputs.scope != 'smoke'
+        run: |
+          test "$(find landing/marketing-kit-visual-evidence -type f -name 'skills-card-project-mobile.png' | wc -l)" -gt 0
+          test "$(find landing/marketing-kit-visual-evidence -type f -name 'skills-detail-project-mobile.png' | wc -l)" -gt 0
+
+      - name: Preserve consolidated Skills scope visual QA evidence
+        if: needs.prepare-browser.outputs.scope != 'smoke'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: skills-scope-visual-evidence
+          path: |
+            landing/marketing-kit-visual-evidence/**/skills-card-project-mobile.png
+            landing/marketing-kit-visual-evidence/**/skills-detail-project-mobile.png
+          if-no-files-found: error
+          retention-days: 7
+
+      # Cannot mark the required landing-test green if preparation or any shard failed.
+      - name: Require complete successful E2E
+        if: always()
+        env:
+          PREP_RESULT: ${{ needs.prepare-browser.result }}
+          SHARDS_RESULT: ${{ needs.browser-shard.result }}
+        run: |
+          test "$PREP_RESULT" = success
+          test "$SHARDS_RESULT" = success
 
   combined-pages-validation:
     if: github.event_name == 'pull_request'
