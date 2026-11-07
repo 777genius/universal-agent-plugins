@@ -97,10 +97,13 @@ def run_case(cli, target, root, name, portable=None):
     return env, project, user_foreign, project_foreign, native_foreign
 
 
-def check_foreign(entries):
-    """Reject foreign-state damage at each lifecycle boundary."""
+def check_foreign(entries, case_root):
+    """Reject changed foreign state and symlinked ancestors before reading."""
     for path, content in entries:
-        if not path.is_file() or path.is_symlink() or path.read_text(encoding="utf-8") != content:
+        # Reuse the live audit's fail-closed containment oracle (BUG-044).
+        if (not audit["path_inside_case"](path, case_root)
+                or not path.is_file()
+                or path.read_text(encoding="utf-8") != content):
             raise AssertionError(f"foreign content modified: {path.name}")
 
 
@@ -135,7 +138,7 @@ def main():
                     report["steps"].append(execute(options.cli, e, p, label, *args))
                 finally:
                     # Also protect foreign state when a lifecycle command refuses/fails.
-                    check_foreign(foreign_files)
+                    check_foreign(foreign_files, root)
             scoped = ("--scope", "project", "--project-root", str(project_a))
             run(env, project_a, "add", "add", "marketing-kit", "--target", options.target, *scoped)
             first = identities(inventory(options.cli, env, project_a, options.target), options.target)

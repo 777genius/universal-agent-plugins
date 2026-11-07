@@ -20,6 +20,36 @@ def load_audit():
 
 
 class IsolatedClientEnvironmentTest(unittest.TestCase):
+
+    def test_marketing_kit_foreign_guard_rejects_symlinked_ancestor(self):
+        # Regression: a native-profile directory can be replaced after add.
+        # A matching marker behind an outside symlink must not be read as proof.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        guard = runner["check_foreign"]
+        with TemporaryDirectory() as temporary, TemporaryDirectory() as external:
+            sandbox = Path(temporary).resolve()
+            outside = Path(external).resolve()
+            native = sandbox / "A" / "home" / ".copilot"
+            native.mkdir(parents=True)
+            marker = native / "unmanaged-native-do-not-change.txt"
+            content = "unmanaged native settings\\n"
+            marker.write_text(content, encoding="utf-8")
+            entries = [(marker, content)]
+            guard(entries, sandbox)
+
+            native.rename(native.parent / "original-profile")
+            outside_marker = outside / marker.name
+            outside_marker.write_text(content, encoding="utf-8")
+            try:
+                native.symlink_to(outside, target_is_directory=True)
+            except (OSError, NotImplementedError) as error:
+                self.skipTest(f"host cannot create directory symlinks: {error}")
+            with self.assertRaisesRegex(AssertionError, "foreign content modified"):
+                guard(entries, sandbox)
+            self.assertEqual(outside_marker.read_text(encoding="utf-8"), content)
     def test_bootstrap_refusal_preserves_index_source_and_real_identity(self):
         # BUG-053: the original blocked ZIPs had 30 status placeholders but
         # omitted their source and index, so fixture slots could not be audited.

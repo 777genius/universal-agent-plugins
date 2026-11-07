@@ -76,6 +76,7 @@ jobs:
         env:
           TARGET: ${{ matrix.target }}
         run: |
+          python3 -m unittest scripts/test_live_install_audit_env.py -k marketing_kit_foreign_guard
           python3 scripts/marketing-kit-project-release-e2e.py             --target "$TARGET" --cli "$(command -v agentplugins)"             --report "$RUNNER_TEMP/marketing-kit-project/report.json"
       - name: Preserve factual outcomes including failures
         if: always()
