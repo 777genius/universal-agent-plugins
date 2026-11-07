@@ -2290,5 +2290,58 @@ class CrossPlatformPublishedProofRegressions(unittest.TestCase):
             self.assertNotEqual(row["status"], "passed")
 
 
+    def test_open_code_prepared_lifecycle_is_accepted_only_as_non_native_proof(self):
+        audit = load_audit()
+        row = {
+            "status": "prepared-lifecycle-passed", "kind": "plugin",
+            "target": "opencode", "source": "atlassian",
+            "prepared_components_only": True, "native_component_candidates": [],
+            "native_identity_files": ["opencode/opencode.json"],
+            "listed_identity": True, "repeat_verified": True,
+            "removal_verified": True, "native_residuals": [],
+            "sentinels_preserved": True, "failed_install_residue": False,
+            "install": {"exit_code": 0}, "cleanup": {"exit_code": 0},
+        }
+        self.assertTrue(audit.expected_negative_coverage(row))
+        self.assertNotEqual(row["status"], "passed")
+        for key, bad in (
+                ("status", "passed"),
+                ("target", "qoder"),
+                ("prepared_components_only", False),
+                ("native_component_candidates", ["atlassian"]),
+                ("native_identity_files", ["opencode/arbitrary-active.json"]),
+                ("listed_identity", False),
+                ("repeat_verified", False),
+                ("removal_verified", False),
+                ("native_residuals", ["opencode/settings.json"]),
+                ("sentinels_preserved", False),
+                ("failed_install_residue", True),
+                ("install", {"exit_code": 1}),
+                ("cleanup", {"exit_code": 1})):
+            with self.subTest(key=key):
+                self.assertFalse(audit.expected_negative_coverage({**row, key: bad}))
+        self.assertTrue(audit.expected_negative_coverage(
+            {**row, "source": "docker-hub", "native_identity_files": []}))
+
+    def test_kimi_windows_skill_downloads_exact_pinned_native_binary(self):
+        # Kimi's actual 2.3.2 Windows .exe is accepted by the released adapter;
+        # npm .cmd wrappers are not, so the audit must provision verified bytes.
+        import runpy
+        scripts = Path(__file__).resolve().parent
+        matrix = runpy.run_path(str(scripts / "run-native-client-matrix.py"))
+        self.assertEqual(matrix["PINS"]["windows-amd64"]["kimi"], (
+            "github", "MoonshotAI/kimi-code", "@moonshot-ai/kimi-code@2.3.2",
+            "kimi-code-win32-x64.zip",
+            "sha256:398fff295d3ddaffe4fbefd9586e6cdc3eacd67bdb4437a43184615a1934ee74",
+            "kimi.exe"))
+        workflow = (scripts.parent / ".github/workflows/agentplugins-published-windows-audit.yml").read_text()
+        self.assertIn('module.provision(module.PINS["windows-amd64"]["kimi"], target, "kimi")',
+                      workflow)
+        self.assertIn('binary != target / "kimi.exe"', workflow)
+        self.assertIn('Verified genuine Kimi 2.3.2 Windows executable, sha256 pinned', workflow)
+        self.assertIn('"$nativeBin" | Out-File -FilePath "$env:GITHUB_PATH"', workflow)
+        self.assertNotIn("$nativePackage = '@moonshot-ai/kimi-code@2.3.2'", workflow)
+
+
 if __name__ == "__main__":
     unittest.main()
