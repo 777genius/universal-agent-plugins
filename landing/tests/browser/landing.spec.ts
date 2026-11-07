@@ -236,8 +236,17 @@ test('header keeps primary links at laptop width and GitHub icon follows theme',
   await expect(links).toHaveCount(4);
   await expect(links.nth(0)).toBeVisible();
   await expect(links.nth(1)).toBeVisible();
-  await expect(links.nth(2)).toBeHidden();
-  await expect(links.nth(3)).toBeHidden();
+  await expect(links.nth(2)).toBeVisible();
+  await expect(links.nth(3)).toBeVisible();
+  for (const width of [960, 1024, 1100, 1199, 1279]) {
+    await page.setViewportSize({ width, height: 850 });
+    for (const link of await links.all()) await expect(link).toBeVisible();
+    const occupied = await page.locator('.app-header__nav, .app-header__desktop-actions').evaluateAll(
+      (nodes) => nodes.map((node) => node.getBoundingClientRect().toJSON()),
+    );
+    expect(occupied[0]!.right).toBeLessThanOrEqual(occupied[1]!.left + 1);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
   const github = page.locator('.app-header__github-btn');
   const colors: string[] = [];
   for (const theme of ['light', 'dark']) {
@@ -253,7 +262,6 @@ test('header keeps primary links at laptop width and GitHub icon follows theme',
   await links.nth(1).click();
   await expect(page).toHaveURL(/\/plugins\/?$/);
   await expect(page.locator('.unified-catalog')).toBeVisible();
-  await page.setViewportSize({ width: 1440, height: 850 });
   await links.nth(2).click();
   await expect(page).toHaveURL(/#agent-support$/);
   await expect(page.locator('#agent-support')).toBeInViewport();

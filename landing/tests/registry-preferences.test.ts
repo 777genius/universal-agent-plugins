@@ -417,7 +417,7 @@ test('distribution captions use stable kind and authentication visibility ignore
   instance.stop();
 });
 
-test('saved unsupported Marketing Kit project intent never emits Cursor command and recovers to auto detection', () => {
+test('saved Marketing Kit Project selection keeps explicit user intent without cross-scope fallback', () => {
   setActivePinia(createPinia());
   const item = structuredClone(fixture);
   item.name = 'marketing-kit';
@@ -440,12 +440,14 @@ test('saved unsupported Marketing Kit project intent never emits Cursor command 
   );
   const instance = card(packageProps(item));
   assert.equal(instance.state.scope.value, 'project');
-  assert.equal(instance.state.projectAvailable.value, false);
-  assert.equal(instance.state.command.value, '', 'invalid saved project must never yield user-scope command');
+  assert.equal(instance.state.projectAvailable.value, true);
+  assert.equal(instance.state.command.value,
+    'npx -y universal-agent-plugins add marketing-kit --target cursor --scope project');
   instance.state.updateScope('user');
   assert.equal(instance.state.scope.value, 'user');
-  assert.equal(instance.state.autoDetect.value, true, 'no silent Cursor choice after recovering');
-  assert.equal(instance.state.command.value, 'npx -y universal-agent-plugins add marketing-kit');
+  assert.equal(instance.state.autoDetect.value, false, 'explicit manual Cursor intent is preserved');
+  assert.equal(instance.state.command.value,
+    'npx -y universal-agent-plugins add marketing-kit --target cursor');
   instance.stop();
 });
 

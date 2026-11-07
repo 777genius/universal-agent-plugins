@@ -21,8 +21,8 @@ gemini = ["777genius/marketing-kit"]`;
 // Source argument installs the published Marketing Kit and its dependencies.
 // Exact 0.1.0 belongs in the manifest and resulting lock; CLI does not expose
 // a marketing-kit@0.1.0 positional selector. Schema-1 published policies
-// remain User-only; the released CLI can separately admit eligible Project
-// placement only when all required dependencies and native adapters qualify.
+// remain User-only publication evidence; released CLI 0.1.101 separately
+// admits explicit Project placement after checking dependencies and adapters.
 export const marketingKitInstallCommand = 'npx -y universal-agent-plugins install marketing-kit --scope user';
 // Import uap.toml + uap.lock into this user environment first, then converge.
 export const marketingKitRestoreCommand = 'npx -y universal-agent-plugins install --scope user';

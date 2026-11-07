@@ -7,10 +7,9 @@ const composer = useI18n({ useScope: 'local' });
 composer.missingWarn = false;
 composer.fallbackWarn = false;
 const { t } = composer;
-const { t: tGlobal } = useI18n({ useScope: 'global' });
 const { asset } = useSite();
-const { userRestoreGuideUrl, restoreGuideEnglishFallback, docsLabel } = useDocsLinks();
-const mode = ref<RestoreDemoMode>('global');
+const { restoreGuideUrl, userRestoreGuideUrl, restoreGuideEnglishFallback, docsLabel } = useDocsLinks();
+const mode = ref<RestoreDemoMode>('project');
 const commands = computed(() => restoreDemoCommands[mode.value]);
 const copied = ref<1 | 2 | 3 | null>(null);
 const copyFailed = ref<1 | 2 | 3 | null>(null);
@@ -41,7 +40,7 @@ async function copyCommand(which: 1 | 2 | 3) {
   // Copy the displayed example, not an installation authorization. Actual
   // catalog/CLI scope and dependency checks remain at their own boundaries.
   const command = which === 1 ? commands.value.install : which === 2 ? commands.value.restore : commands.value.export;
-  if (mode.value === 'project' || !command) return;
+  if (!command) return;
   // An earlier feedback timer must not invalidate a new pending clipboard write.
   resetCopy();
   const request = copyRequest;
@@ -82,11 +81,11 @@ async function copyCommand(which: 1 | 2 | 3) {
     <div class="registry-restore__panel">
       <header class="registry-restore__header">
         <h2 id="restore-title">{{ t('shell.restore.title') }}</h2>
-        <a class="registry-restore__guide" :href="userRestoreGuideUrl" target="_blank" rel="noreferrer">
+        <a class="registry-restore__guide" :href="mode === 'project' ? restoreGuideUrl : userRestoreGuideUrl" target="_blank" rel="noreferrer">
           {{ docsLabel(t('shell.restore.guide'), restoreGuideEnglishFallback) }} <span aria-hidden="true">↗</span>
         </a>
       </header>
-      <p class="registry-restore__subtitle">{{ mode === 'project' ? t('shell.restoreDemo.projectUnavailable') : t('shell.restoreDemo.globalSubtitle') }}</p>
+      <p class="registry-restore__subtitle">{{ t(`shell.restoreDemo.${mode}Subtitle`) }}</p>
       <div class="registry-restore__modes" role="group" :aria-label="t('shell.restoreDemo.scopeLabel')" :data-selected="mode">
         <span class="registry-restore__mode-thumb" aria-hidden="true" />
         <button v-for="value in (['project', 'global'] as const)" :key="value" type="button"
@@ -94,11 +93,7 @@ async function copyCommand(which: 1 | 2 | 3) {
           {{ t(`shell.restoreDemo.${value}Label`) }}
         </button>
       </div>
-      <p v-if="mode === 'project'" class="registry-restore__qualification" role="status">
-        {{ tGlobal('registryUi.install.scope.marketingKitProjectUnavailable') }}
-      </p>
-
-      <div v-else class="registry-restore__flow">
+      <div class="registry-restore__flow">
         <div class="registry-restore__machine">
           <img class="registry-restore__monitor" :src="monitorImage" width="1577" height="997"
             alt="" loading="lazy" decoding="async" aria-hidden="true" />

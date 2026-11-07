@@ -5,6 +5,7 @@ import { hydrated, navigate, offline, projections, registryFixture } from './i18
 test.describe.configure({ mode: 'parallel' });
 
 const commands = {
+  project: ['npx -y universal-agent-plugins install marketing-kit --scope project', 'npx -y universal-agent-plugins install --scope project'],
   global: ['npx -y universal-agent-plugins install marketing-kit', 'npx -y universal-agent-plugins deps import --install'],
 } as const;
 const exportCommand = 'npx -y universal-agent-plugins deps export';
@@ -39,7 +40,7 @@ for (const theme of ['dark', 'light'] as const) {
       await page.evaluate(() => document.fonts.ready.then(() => undefined));
       const section = page.locator('#restore-environment');
       await section.scrollIntoViewIfNeeded();
-      await expect(section).toHaveAttribute('data-mode', 'global');
+      await expect(section).toHaveAttribute('data-mode', 'project');
       await expect(section.locator('.registry-restore__monitor')).toHaveCount(1);
       await expect(section.locator('.registry-restore__laptop')).toHaveCount(1);
       await expect(section.locator('.registry-restore__wallpaper')).toHaveCount(0);
@@ -48,26 +49,13 @@ for (const theme of ['dark', 'light'] as const) {
         await section.locator(`[data-mode-option="${mode}"]`).click();
         await expect(section).toHaveAttribute('data-mode', mode);
         await expect(section.locator(`[data-mode-option="${mode}"]`)).toHaveAttribute('aria-pressed', 'true');
-        if (mode === 'project') {
-          await expect(section.locator('.registry-restore__subtitle')).toContainText(locale === 'en' ? 'Global-only' : '');
-          await expect(section.locator('.registry-restore__qualification')).toBeVisible();
-          if (locale === 'en') {
-            await expect(section.locator('.registry-restore__qualification')).toContainText('not yet available for Project');
-            for (const dependency of ['Notion', 'HubSpot', 'Playwright']) {
-              await expect(section.locator('.registry-restore__qualification')).toContainText(dependency);
-            }
-          }
-          await expect(section.locator('.registry-restore__flow')).toHaveCount(0);
-          await expect(section.locator('.registry-restore__copy')).toHaveCount(0);
-          await expect(section).not.toContainText('install marketing-kit --scope project');
-          expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-          continue;
-        }
         if (locale === 'en') {
-          await expect(section.locator('.registry-restore__subtitle')).toHaveText(
-            'Marketing Kit example — move your global plugin setup to another computer.');
-          await expect(section.locator('.registry-restore__handoff-note')).toHaveText(
-            'Export and share both files. Import replaces the global setup after confirmation.');
+          await expect(section.locator('.registry-restore__subtitle')).toHaveText(mode === 'project'
+            ? 'Marketing Kit example — keep the same plugin versions in your project.'
+            : 'Marketing Kit example — move your global plugin setup to another computer.');
+          await expect(section.locator('.registry-restore__handoff-note')).toHaveText(mode === 'project'
+            ? 'Commit uap.toml and uap.lock. Your teammate runs install in the project.'
+            : 'Export and share both files. Import replaces the global setup after confirmation.');
         }
         await expect(section.locator('.registry-restore__locked-version')).toHaveCount(0);
         await expect(section.locator('.registry-restore__handoff')).not.toContainText('v0.1.0');
@@ -96,8 +84,8 @@ for (const theme of ['dark', 'light'] as const) {
             await expect(part).toHaveCSS('font-weight', '400');
           }
         }
-        await expect(section.locator('.registry-restore__export')).toHaveCount(1);
-        await expect(section.locator('.registry-restore__export code')).toHaveText(exportCommand);
+        await expect(section.locator('.registry-restore__export')).toHaveCount(mode === 'global' ? 1 : 0);
+        if (mode === 'global') await expect(section.locator('.registry-restore__export code')).toHaveText(exportCommand);
         const copyButtons = section.locator('.registry-restore__screen .registry-restore__copy');
         await expect(copyButtons).toHaveCount(2);
         if (locale === 'en') {
@@ -217,7 +205,7 @@ test('both modes copy complete commands during typing and reset feedback on mode
   const section = page.locator('#restore-environment');
   await section.scrollIntoViewIfNeeded();
   const buttons = section.locator('.registry-restore__screen .registry-restore__copy');
-  for (const mode of ['global'] as const) {
+  for (const mode of ['project', 'global', 'project'] as const) {
     await section.locator(`[data-mode-option="${mode}"]`).click();
     await expect(section.locator('.registry-restore__copy-status')).toBeEmpty();
     for (let i = 0; i < 2; i++) {
@@ -232,11 +220,12 @@ test('both modes copy complete commands during typing and reset feedback on mode
     }
   }
   for (let i = 0; i < 2; i++) await expect(section.locator('.typed-command').nth(i)).toHaveAttribute('data-complete', 'true', { timeout: 15_000 });
-  await expect(section.locator('.typed-command__visible')).toHaveText([...commands.global]);
+  // The last selected mode is Project; never compare it against Global text.
+  await expect(section.locator('.typed-command__visible')).toHaveText([...commands.project]);
   await expect(section.locator('.registry-restore__package').first()).toHaveCSS('visibility', 'visible');
 });
 
-for (const mode of ['global'] as const) {
+for (const mode of ['project', 'global'] as const) {
   test(`${mode} clipboard denial announces failure and restores copy-button focus`, async ({ page }) => {
     await page.goto('./');
     await hydrated(page);
@@ -276,9 +265,12 @@ for (const qualified of [false, true]) {
     await navigate(page, '/', 'en');
     const section = page.locator('#restore-environment');
     await section.locator('[data-mode-option="project"]').click();
-    await expect(section.locator('.registry-restore__qualification')).toBeVisible();
-    await expect(section.locator('.registry-restore__flow')).toHaveCount(0);
-    await expect(section.locator('.registry-restore__copy')).toHaveCount(0);
+    await expect(section.locator('.registry-restore__qualification')).toHaveCount(0);
+    await expect(section.locator('.registry-restore__flow')).toBeVisible();
+    await expect(section.locator('.registry-restore__terminal')).toHaveCount(2);
+    await expect(section.locator('.registry-restore__copy')).toHaveCount(2);
+    await section.locator('.registry-restore__screen .registry-restore__copy').first().click();
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(commands.project[0]);
     expect(errors).toEqual([]);
   });
 }

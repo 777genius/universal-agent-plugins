@@ -3,7 +3,6 @@
   Content model and implementation are new for Universal Agent Plugins.
 -->
 <script setup lang="ts">
-import { isReviewedMarketingKit } from '~/data/marketingKitDemo';
 import { usePluginInstallSelection } from '~/composables/usePluginInstallSelection';
 import type { RegistryDiagnostic, RegistryPlugin } from '~/types/registry';
 import { githubSourceUrl, reachableTargetPolicies, vendorInstallSource } from '~/utils/registry';
@@ -30,7 +29,6 @@ const {
   targetDistributions,
   projectAvailable,
   projectAutomatic,
-  projectSourceFallback,
   updateTargets,
   updateAutoDetect,
   updateScope,
@@ -64,9 +62,8 @@ function diagnosticText(
   return t(`registryUi.reason.${diagnostic.code}`, params);
 }
 const resolution = selection.resolution;
-const marketingProjectBlocked = computed(() => isReviewedMarketingKit(props.plugin) && scope.value === 'project' && !projectAvailable.value);
 const selectedDistribution = computed(() =>
-  !marketingProjectBlocked.value && (isDiscovered.value || current.value) ? resolution.value.distribution : undefined,
+  (isDiscovered.value || current.value) ? resolution.value.distribution : undefined,
 );
 const canChooseInstall = computed(
   () =>
@@ -76,7 +73,6 @@ const canChooseInstall = computed(
 );
 const canInstall = computed(
   () =>
-    !marketingProjectBlocked.value &&
     (scope.value !== 'project' || !autoDetect.value || Boolean(projectAutomatic.value?.resolution.distribution)) &&
     (isDiscovered.value
       ? props.plugin.installable &&
@@ -378,17 +374,12 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
           >
             {{ diagnosticText(resolution.fallback_diagnostic, resolution.fallback_reason) }}
           </p>
-          <p v-if="showAuthentication && !marketingProjectBlocked" class="plugin-card__auth">{{ authentication.label }}</p>
+          <p v-if="showAuthentication" class="plugin-card__auth">{{ authentication.label }}</p>
           <InstallScopeSelect
             :model-value="scope"
             :project-available="projectAvailable"
-            :always-show="isReviewedMarketingKit(plugin)"
-            :unavailable-reason="isReviewedMarketingKit(plugin) && !projectAvailable ? t('registryUi.install.scope.marketingKitProjectUnavailable') : undefined"
             @update:model-value="updateScope"
           />
-          <p v-if="projectSourceFallback" class="plugin-card__auth">
-            {{ t('registryUi.install.scope.pinnedGitFallbackInfo') }}
-          </p>
           <InstallOutcome
             v-if="!autoDetect && selectedDistribution"
             :distribution="selectedDistribution"
@@ -396,7 +387,7 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
           />
           <div class="plugin-card__install">
             <AppMultiSelect
-              v-if="targets.length && !marketingProjectBlocked"
+              v-if="targets.length"
               :model-value="targets"
               :auto-selected="autoDetect"
               :auto-option="autoOption"
