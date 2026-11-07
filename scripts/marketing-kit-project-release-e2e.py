@@ -138,7 +138,7 @@ def main():
                 raise AssertionError("update lost a mandatory dependency")
             env_b, project_b, foreign_b, project_foreign_b = run_case(options.cli, options.target, root, "B", project_a)
             scoped_b = ("--scope", "project", "--project-root", str(project_b))
-            run(env_b, project_b, "cold locked restore", "install", "--locked", *scoped_b)
+            run(env_b, project_b, "cold locked restore", "install", "--locked", "--yes", *scoped_b)
             if set(identities(inventory(options.cli, env_b, project_b, options.target), options.target)) != EXPECTED:
                 raise AssertionError("cold restore lost required closure")
             if (project_b / "uap.lock").read_bytes() != (project_a / "uap.lock").read_bytes():
