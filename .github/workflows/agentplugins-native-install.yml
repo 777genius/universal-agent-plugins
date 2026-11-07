@@ -15,14 +15,13 @@ on:
       - install.ps1
       - repotests/agentplugins_native_install_integration_test.go
       - .github/workflows/agentplugins-native-install.yml
-  # Qualify the latest stable public binary across all six native targets.
-  # Keep the substantial platform matrix out of every ordinary code PR.
+  # Weekly six-platform smoke, without a new PR for each release.
   schedule:
     - cron: '19 5 * * 2'
   workflow_dispatch:
     inputs:
       version:
-        description: Exact public release version (empty = latest stable)
+        description: Exact public stable version (empty = latest)
         required: false
         default: ''
         type: string
@@ -47,7 +46,7 @@ jobs:
         with:
           node-version: '24'
           package-manager-cache: false
-      - name: Resolve newest public stable or pinned historical release
+      - name: Resolve public stable and immutable npm version
         id: resolve
         shell: bash
         env:
@@ -57,7 +56,7 @@ jobs:
           set -euo pipefail
           requested="${REQUESTED_VERSION:-}"
           if [[ -n "$requested" && ! "$requested" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::Only an exact stable release version is accepted" >&2
+            echo "::error::Only an exact stable version is allowed" >&2
             exit 1
           fi
           if [[ -z "$requested" ]]; then
@@ -66,8 +65,20 @@ jobs:
             tag="agentplugins-v$requested"
           fi
           [[ "$tag" =~ ^agentplugins-v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 2
-          release="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" --jq '[.tag_name, (.draft|tostring), (.prerelease|tostring)] | @tsv')"
-          [[ "$release" == "$tag"    name: native install (${{ matrix.target }})
+          visibility="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" --jq 'if .draft == false and .prerelease == false then "public" else "private" end')"
+          [[ "$visibility" == "public" ]] || { echo "::error::Release is not public stable"; exit 2; }
+          version="${tag#agentplugins-v}"
+          published="$(npm view "universal-agent-plugins@$version" version)"
+          [[ "$published" == "$version" ]] || { echo "::error::Exact npm release missing"; exit 2; }
+          if [[ -z "$requested" ]]; then
+            current="$(npm view universal-agent-plugins dist-tags.latest)"
+            [[ "$current" == "$version" ]] || { echo "::error::Npm latest $current differs from public $version"; exit 2; }
+          fi
+          printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
+
+  unix:
+    needs: release-version
+    name: native install (${{ matrix.target }})
     strategy:
       fail-fast: false
       matrix:
@@ -125,165 +136,6 @@ jobs:
           AGENTPLUGINS_OUTPUT_FILE: ${{ runner.temp }}\agentplugins-install.outputs
         run: |
           $version = "${{ needs.release-version.outputs.version }}"
-          $resolvedVersion = $version -replace '^agentplugins-v', '' -replace '^v', ''
-          $binDir = Join-Path "${{ runner.temp }}" "agentplugins-bin"
-          & ./install.ps1 -Version $version -BinDir $binDir -Command "version"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $observed = (& (Join-Path $binDir "agentplugins.exe") version | Out-String).Trim()
-          if ($observed -ne "agentplugins $resolvedVersion") {
-            throw "unexpected installed version: $observed"
-          }
-          $outputs = Get-Content -LiteralPath $env:AGENTPLUGINS_OUTPUT_FILE
-          if ($outputs -notcontains "version=$resolvedVersion") {
-            throw "installer output did not contain the exact version"
-          }
-          if (-not ($outputs | Where-Object { $_ -match '^sha256=[0-9a-f]{64}$' })) {
-            throw "installer output did not contain a valid SHA-256"
-          }
-\t'false    name: native install (${{ matrix.target }})
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - target: darwin-amd64
-            runner: macos-15-intel
-          - target: darwin-arm64
-            runner: macos-15
-          - target: linux-amd64
-            runner: ubuntu-24.04
-          - target: linux-arm64
-            runner: ubuntu-24.04-arm
-    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && matrix.runner || matrix.runner == 'ubuntu-24.04-arm' && (vars.CI_LINUX_ARM_RUNNER || matrix.runner) || startsWith(matrix.runner, 'ubuntu-') && (vars.CI_LINUX_RUNNER || matrix.runner) || matrix.runner }}
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Install the published native binary without Node.js
-        env:
-          AGENTPLUGINS_VERSION: ${{ inputs.version || '0.1.44' }}
-          AGENTPLUGINS_BIN_DIR: ${{ runner.temp }}/agentplugins-bin
-          AGENTPLUGINS_OUTPUT_FILE: ${{ runner.temp }}/agentplugins-install.outputs
-        shell: bash
-        run: |
-          set -euo pipefail
-          sh ./install.sh version | tee "${RUNNER_TEMP}/installer-output.txt"
-          expected="${AGENTPLUGINS_VERSION#agentplugins-v}"
-          expected="${expected#v}"
-          test "$("${AGENTPLUGINS_BIN_DIR}/agentplugins" version)" = "agentplugins ${expected}"
-          grep -Fx "version=${expected}" "${AGENTPLUGINS_OUTPUT_FILE}"
-          grep -Fx "path=${AGENTPLUGINS_BIN_DIR}/agentplugins" "${AGENTPLUGINS_OUTPUT_FILE}"
-          grep -Eq '^sha256=[0-9a-f]{64}$' "${AGENTPLUGINS_OUTPUT_FILE}"
-
-  windows:
-    name: native install (${{ matrix.target }})
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - target: windows-amd64
-            runner: windows-2025
-          - target: windows-arm64
-            runner: windows-11-arm
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Install the published native binary without Node.js
-        shell: pwsh
-        env:
-          AGENTPLUGINS_OUTPUT_FILE: ${{ runner.temp }}\agentplugins-install.outputs
-        run: |
-          $version = "${{ inputs.version || '0.1.44' }}"
-          $resolvedVersion = $version -replace '^agentplugins-v', '' -replace '^v', ''
-          $binDir = Join-Path "${{ runner.temp }}" "agentplugins-bin"
-          & ./install.ps1 -Version $version -BinDir $binDir -Command "version"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $observed = (& (Join-Path $binDir "agentplugins.exe") version | Out-String).Trim()
-          if ($observed -ne "agentplugins $resolvedVersion") {
-            throw "unexpected installed version: $observed"
-          }
-          $outputs = Get-Content -LiteralPath $env:AGENTPLUGINS_OUTPUT_FILE
-          if ($outputs -notcontains "version=$resolvedVersion") {
-            throw "installer output did not contain the exact version"
-          }
-          if (-not ($outputs | Where-Object { $_ -match '^sha256=[0-9a-f]{64}$' })) {
-            throw "installer output did not contain a valid SHA-256"
-          }
-\t'false ]] || { echo "::error::Release is not a public stable tag"; exit 2; }
-          version="${tag#agentplugins-v}"
-          published="$(npm view "universal-agent-plugins@$version" version)"
-          [[ "$published" == "$version" ]] || { echo "::error::Missing exact published npm package"; exit 2; }
-          # A manual historical release audit may be pinned, but automatic
-          # weekly/latest runs must not silently test an outdated npm dist-tag.
-          if [[ -z "$requested" ]]; then
-            current="$(npm view universal-agent-plugins dist-tags.latest)"
-            [[ "$current" == "$version" ]] || { echo "::error::Latest npm version $current differs from public release $version"; exit 2; }
-          fi
-          printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
-          echo "Verified exact stable tag $tag and npm $version"
-
-  unix:
-    needs: release-version
-    name: native install (${{ matrix.target }})
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - target: darwin-amd64
-            runner: macos-15-intel
-          - target: darwin-arm64
-            runner: macos-15
-          - target: linux-amd64
-            runner: ubuntu-24.04
-          - target: linux-arm64
-            runner: ubuntu-24.04-arm
-    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && matrix.runner || matrix.runner == 'ubuntu-24.04-arm' && (vars.CI_LINUX_ARM_RUNNER || matrix.runner) || startsWith(matrix.runner, 'ubuntu-') && (vars.CI_LINUX_RUNNER || matrix.runner) || matrix.runner }}
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Install the published native binary without Node.js
-        env:
-          AGENTPLUGINS_VERSION: ${{ inputs.version || '0.1.44' }}
-          AGENTPLUGINS_BIN_DIR: ${{ runner.temp }}/agentplugins-bin
-          AGENTPLUGINS_OUTPUT_FILE: ${{ runner.temp }}/agentplugins-install.outputs
-        shell: bash
-        run: |
-          set -euo pipefail
-          sh ./install.sh version | tee "${RUNNER_TEMP}/installer-output.txt"
-          expected="${AGENTPLUGINS_VERSION#agentplugins-v}"
-          expected="${expected#v}"
-          test "$("${AGENTPLUGINS_BIN_DIR}/agentplugins" version)" = "agentplugins ${expected}"
-          grep -Fx "version=${expected}" "${AGENTPLUGINS_OUTPUT_FILE}"
-          grep -Fx "path=${AGENTPLUGINS_BIN_DIR}/agentplugins" "${AGENTPLUGINS_OUTPUT_FILE}"
-          grep -Eq '^sha256=[0-9a-f]{64}$' "${AGENTPLUGINS_OUTPUT_FILE}"
-
-  windows:
-    name: native install (${{ matrix.target }})
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - target: windows-amd64
-            runner: windows-2025
-          - target: windows-arm64
-            runner: windows-11-arm
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Install the published native binary without Node.js
-        shell: pwsh
-        env:
-          AGENTPLUGINS_OUTPUT_FILE: ${{ runner.temp }}\agentplugins-install.outputs
-        run: |
-          $version = "${{ inputs.version || '0.1.44' }}"
           $resolvedVersion = $version -replace '^agentplugins-v', '' -replace '^v', ''
           $binDir = Join-Path "${{ runner.temp }}" "agentplugins-bin"
           & ./install.ps1 -Version $version -BinDir $binDir -Command "version"
