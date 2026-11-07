@@ -176,7 +176,8 @@ test('manifest morph keeps highlighted TOML lossless, accessible and dismissible
   await expect(preview).toBeVisible();
   const dismiss = preview.getByRole('button', { name: /close file preview/i });
   await dismiss.focus();
-  await dismiss.press('Escape');
+  // The Escape handler removes the preview button; press on the page to avoid a detached locator retry.
+  await page.keyboard.press('Escape');
   await expect(file).toBeFocused();
   await expect(file).toHaveAttribute('aria-expanded', 'false');
   await file.click();
