@@ -13,6 +13,10 @@ on:
       - 'tests/live-install/fixtures.json'
   # Broad native/client coverage weekly; only five known-safe clients and
   # two source cases are needed on ordinary pull requests.
+  # Newly published npm releases are requalified after the publisher completes.
+  workflow_run:
+    workflows: ['Agentplugins NPM Publish']
+    types: [completed]
   schedule:
     - cron: '11 4 * * 3'
   workflow_dispatch:
@@ -37,6 +41,7 @@ concurrency:
 
 jobs:
   resolve-release:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     uses: ./.github/workflows/agentplugins-published-version.yml
     with:
       version: ${{ inputs.version }}
