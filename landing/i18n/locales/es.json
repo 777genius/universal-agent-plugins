@@ -813,11 +813,11 @@
         "activation": "Sigue las instrucciones de activación que muestre la CLI y después inicia una nueva sesión de Codex."
       },
       "chatgpt": {
-        "note": "Vinculaciones de aplicaciones verificadas y configuración guiada de Context7",
-        "status": "Configuración en la aplicación",
-        "intro": "Prepara paquetes Agent Plugins 1.0 compatibles para ChatGPT, manteniendo la activación de la aplicación y el consentimiento de la cuenta dentro de ChatGPT.",
-        "delivery": "La CLI valida las vinculaciones de aplicaciones del publicador y puede preparar un paquete de marketplace personal para Context7 con su endpoint MCP público sin autenticación.",
-        "activation": "Crea o conecta la aplicación en Developer Mode, instala el plugin personal preparado y selecciónalo en un chat nuevo."
+        "note": "Desktop: automático con Codex CLI; Web: configuración en ChatGPT",
+        "status": "Compatible",
+        "intro": "ChatGPT admite plugins en Desktop y Web. Los plugins locales de Desktop usan el catálogo de Codex CLI; los de Web requieren una app en la nube compatible o una conexión al catálogo.",
+        "delivery": "UAP instala plugins locales compatibles de Desktop mediante Codex CLI y prepara conexiones Web verificadas. La herramienta local no puede instalar silenciosamente un plugin en tu cuenta de ChatGPT.",
+        "activation": "Desktop: abre un chat local nuevo y comprueba el plugin. Web: conecta o instala la app en ChatGPT y concede los permisos necesarios."
       },
       "cursor": {
         "note": "Paquete de complemento de agente nativo",
