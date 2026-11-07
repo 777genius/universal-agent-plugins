@@ -22,13 +22,18 @@ export function usePluginInstallSelection(
   const scope = ref<InstallScope>('user');
   const availableClients = computed(() => {
     const policies = reachableTargetPolicies(plugin().distributions);
-    return installTargets.filter((client) =>
-      policies.some((policy) =>
-        policy.client === canonicalInstallTarget(client.id) &&
-        (client.id !== 'chatgptweb' ||
-          (plugin().trust_state !== 'conformant_unreviewed' && Boolean(policy.app_binding))),
-      ),
-    );
+    return installTargets.filter((client) => {
+      if (client.id === 'chatgptweb') {
+        if (plugin().trust_state === 'conformant_unreviewed') return false;
+        // A summary of reachable targets is de-duplicated by client/auth.
+        // Read the selected signed release so an earlier unbound policy
+        // cannot hide a later eligible Web app binding.
+        return Boolean(resolveDistribution(plugin(), ['chatgpt'], 'user').distribution?.targets.some(
+          (target) => target.client === 'chatgpt' && Boolean(target.app_binding),
+        ));
+      }
+      return policies.some((policy) => policy.client === canonicalInstallTarget(client.id));
+    });
   });
   const select = (selected: InstallTargetID[]): DistributionResolution => {
     // A local Desktop plugin belongs to the Codex user profile, not a project.
