@@ -41,17 +41,17 @@ não precisa de Node.js, embora plugins individuais possam precisar de seus
 próprios ambientes de execução. Confira `npx universal-agent-plugins version`
 ao usar npm: um canal de gerenciador de pacotes ainda pode fornecer uma CLI
 mais antiga. A seleção automática abaixo exige 0.1.94; o instalador nativo
-fornece a versão verificada. Os comandos explícitos de projeto deste guia também
-funcionam com a 0.1.93.
+fornece a versão verificada. O comando Project com fonte Git fixada por SHA completo funciona desde a
+0.1.93; nomes curtos do Directory em Project exigem a CLI estável atual.
 
-A [CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95)
+A [CLI](https://github.com/777genius/universal-agent-plugins/releases/latest)
 mantém o escopo de projeto explícito e a seleção automática de `install`,
 introduzida na 0.1.94. Ela também adiciona uma
 [API local de gerenciamento](../use/manage#local-management-api) e
 [extensões nativas do Pi](../reference/client-compatibility#pi-native-extensions).
 Para conferir o plano de adição de um pacote a um projeto:
 
-Para uma entrada revisada e compatível do catálogo, copie a origem Git fixada em um SHA completo e o cliente adequado. A CLI publicada 0.1.95 ainda precisa desta origem Git fixada para Project. A CLI compilada a partir de `main` já aceita nomes curtos do Directory assinado com `--scope project` para clientes compatíveis e todas as dependências obrigatórias (por exemplo, `agentplugins add context7 --target codex --scope project --dry-run`), mas esse recurso ainda não está em uma versão pública da CLI. Substitua `OWNER/REPOSITORY`, `FULL_COMMIT_SHA` e `PACKAGE_PATH`; se o pacote estiver na raiz do repositório, omita `//PACKAGE_PATH`.
+Para uma entrada revisada e compatível do catálogo, a CLI publicada aceita o nome curto do Directory assinado com escopo Project explícito quando o cliente suporta todos os componentes obrigatórios (por exemplo, `agentplugins add context7 --target codex --scope project --dry-run`). Como alternativa, use a origem Git revisada e fixada em um SHA completo, com um cliente compatível. Substitua `OWNER/REPOSITORY`, `FULL_COMMIT_SHA` e `PACKAGE_PATH`; se o pacote estiver na raiz do repositório, omita `//PACKAGE_PATH`.
 
 Modelo: `github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH`. O comando abaixo usa um commit histórico real do GitLab, não uma confirmação de revisão atual no catálogo. Para uma nova instalação, copie a origem verificada atual do catálogo.
 

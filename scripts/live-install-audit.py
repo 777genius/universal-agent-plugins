@@ -129,6 +129,16 @@ def call(argv, env, cwd, timeout=105):
         return {"exit_code": None, "stdout_tail": "", "stderr_tail": str(e)[-1800:], "timeout": False}
 
 
+def install_case_timeout(target, kind, item):
+    # The frozen Firebase Windows runtime can finish durable registration
+    # while a cold native runtime setup still holds the original add process.
+    # Stay bounded: a timeout or any surviving registration still FAILS E2E.
+    if (sys.platform == "win32" and kind == "plugin"
+            and item == "firebase"):
+        return 180
+    return 105
+
+
 def version_evidence(argv, env, cwd):
     """Record a short, observable version; a successful path alone is not proof."""
     observed = call(argv, env, cwd, 25)
@@ -242,9 +252,53 @@ def codex_owned_native_config(path, identity, case_root):
     return False
 
 
-def attributable_native_changes(native_roots, changes, identity, target):
+def native_components_from_add(parsed):
+    """Read exact natively supported component identities from the released CLI.
+
+    Metadata is a candidate list only; each name still needs independent,
+    changed on-disk native evidence inside the disposable client profile.
+    """
+    if not isinstance(parsed, dict) or not isinstance(parsed.get("data"), dict):
+        return ()
+    actions = parsed["data"].get("actions")
+    if not isinstance(actions, list):
+        return ()
+    names = set()
+    for action in actions:
+        if not isinstance(action, dict) or not isinstance(action.get("component_support"), list):
+            continue
+        for component in action["component_support"]:
+            if not isinstance(component, dict) or component.get("support") != "native":
+                continue
+            name = component.get("name")
+            if isinstance(name, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}", name):
+                names.add(name)
+    return tuple(sorted(names))
+
+
+def prepared_only_add(parsed):
+    """Never call a prepared-only package a native installation."""
+    if not isinstance(parsed, dict) or not isinstance(parsed.get("data"), dict):
+        return False
+    actions = parsed["data"].get("actions")
+    if not isinstance(actions, list) or not actions:
+        return False
+    found = False
+    for action in actions:
+        if not isinstance(action, dict) or not isinstance(action.get("component_support"), list):
+            return False
+        for component in action["component_support"]:
+            if not isinstance(component, dict) or component.get("support") != "prepared":
+                return False
+            found = True
+    return found
+
+
+def attributable_native_changes(native_roots, changes, identity, target, component_names=()):
     """Credit only identity-attributed active native state, not cached downloads."""
     found = []
+    identities = tuple(dict.fromkeys((identity, *component_names)))
+    normalized = {name.casefold() for name in identities}
     for root in native_roots:
         if not root.is_dir() or root.is_symlink():
             continue
@@ -262,17 +316,20 @@ def attributable_native_changes(native_roots, changes, identity, target):
                 # A complete name component (or file stem) is an attributable
                 # managed native path; arbitrary substring matches are not.
                 owned_path = any(
-                    component.casefold() == identity.casefold()
-                    or Path(component).stem.casefold() == identity.casefold()
+                    component.casefold() in normalized
+                    or Path(component).stem.casefold() in normalized
                     for component in Path(relative).parts
                 )
                 # Larger files without an attributable path stay unqualified.
-                owned_content = (not owned_path and leaf.stat().st_size <= 1024 * 1024
-                                 and (codex_owned_native_config(leaf, identity, root.parent.parent)
-                                      if target == "codex" and relative == "config.toml"
-                                      else exact_native_identity(
-                                          leaf.read_text(encoding="utf-8", errors="replace"),
-                                          identity)))
+                owned_content = False
+                if not owned_path and leaf.stat().st_size <= 1024 * 1024:
+                    if target == "codex" and relative == "config.toml":
+                        owned_content = codex_owned_native_config(
+                            leaf, identity, root.parent.parent)
+                    else:
+                        content = leaf.read_text(encoding="utf-8", errors="replace")
+                        owned_content = any(exact_native_identity(content, name)
+                                            for name in identities)
                 if owned_path or owned_content:
                     found.append(relpath)
             except OSError:
@@ -303,8 +360,14 @@ def host_containment_refusal(diagnostic):
 
 def passive_native_path(target, relative):
     """Downloaded caches and run logs are not active native registrations."""
-    return ((target == "codex" and relative.startswith("plugins/cache/"))
-            or (target == "qoder" and relative.startswith(("plugins/cache/", "logs/runs/"))))
+    normalized = "/".join(Path(relative).parts)
+    return ((target == "codex" and normalized.startswith("plugins/cache/"))
+            or (target == "qoder" and normalized.startswith(("plugins/cache/", "logs/runs/")))
+            # Official Grok user-guide Markdown is passive vendor documentation,
+            # not a managed plugin registration. No other paths are excluded.
+            or (target == "grok" and normalized in (
+                "docs/user-guide/05-configuration.md",
+                "docs/user-guide/16-subagents.md")))
 
 
 def qoder_passive_latest_log_link(root, file):
@@ -336,7 +399,7 @@ def qoder_native_plugin_state(home, env, cwd, identity, expected_version=None):
     if (not executable or not Path(executable).is_absolute()
             or not profile.is_dir() or profile.is_symlink()
             or not path_inside_case(profile, home)
-            or env.get("QODER_CONFIG_DIR") != str(profile)):
+            or env.get("QODER_CONFIG_DIR") != str(profile.resolve(strict=True))):
         return {"status": "unqualified-prerequisites"}
     observed = call([executable, "--config-dir", str(profile),
                      "plugins", "list", "--json"], env, cwd, 30)
@@ -431,13 +494,16 @@ def copilot_disabled_preference_only(before, after_add, after_remove,
             and after_remove.get("match_counts") == expected_after)
 
 
-def native_identity_residuals(native_roots, identity, observed_paths, target):
+def native_identity_residuals(native_roots, identity, observed_paths, target,
+                              component_names=()):
     """After remove, reject any remaining named native file/config entry.
 
     Codex may retain its downloaded source cache after its native plugin and
     marketplace are removed; that cache is not active client configuration.
     """
     leftover = []
+    identities = tuple(dict.fromkeys((identity, *component_names)))
+    normalized = {name.casefold() for name in identities}
     for root in native_roots:
         prefix = root.name + "/"
         if root.is_symlink():
@@ -456,7 +522,7 @@ def native_identity_residuals(native_roots, identity, observed_paths, target):
             try:
                 mode = file.lstat().st_mode
                 if stat.S_ISLNK(mode):
-                    if (target != "qoder" or relative != "logs/latest"
+                    if (target != "qoder" or "/".join(Path(relative).parts) != "logs/latest"
                             or not qoder_passive_latest_log_link(root, file)):
                         leftover.append(observed + ": symlink")
                 elif not stat.S_ISREG(mode):
@@ -464,11 +530,11 @@ def native_identity_residuals(native_roots, identity, observed_paths, target):
                 elif passive_native_path(target, relative):
                     continue
                 elif any(
-                        part.casefold() == identity.casefold()
-                        or Path(part).stem.casefold() == identity.casefold()
-                        or re.fullmatch(
-                            re.escape(identity) + r"@agentplugins-[0-9a-f]{12}",
-                            Path(part).stem, re.IGNORECASE)
+                        part.casefold() in normalized
+                        or Path(part).stem.casefold() in normalized
+                        or any(re.fullmatch(
+                            re.escape(name) + r"@agentplugins-[0-9a-f]{12}",
+                            Path(part).stem, re.IGNORECASE) for name in identities)
                         for part in Path(relative).parts):
                     leftover.append(observed)
                 elif file.stat().st_size > 1024 * 1024:
@@ -476,11 +542,12 @@ def native_identity_residuals(native_roots, identity, observed_paths, target):
                     leftover.append(observed + ": unscanned-too-large")
                 else:
                     contents = file.read_text(encoding="utf-8", errors="replace")
-                    qualified = re.search(
-                        r"(?<![A-Za-z0-9_./:-])" + re.escape(identity)
+                    qualified = any(re.search(
+                        r"(?<![A-Za-z0-9_./:-])" + re.escape(name)
                         + r"@agentplugins-[0-9a-f]{12}(?![A-Za-z0-9_./-])",
-                        contents, re.IGNORECASE)
-                    if exact_native_identity(contents, identity) or qualified:
+                        contents, re.IGNORECASE) for name in identities)
+                    if qualified or any(exact_native_identity(contents, name)
+                                        for name in identities):
                         leftover.append(observed)
             except FileNotFoundError:
                 continue
@@ -855,6 +922,27 @@ def grok_prepared_source_survives(response, item, prior_name, prior_uid):
                or (isinstance(n.get("name"), str) and n["name"].startswith(prior_name[:51]))
                for n in nodes)
 
+def codex_marketplace_source_in_case(source, case_root):
+    """Prove physical containment, including Windows extended-length path aliases.
+
+    Compare real directory identity; never permit a lexical prefix or an
+    unresolved source to authorize native plugin removal.
+    """
+    if not source.is_absolute():
+        return False
+    try:
+        root = case_root.resolve(strict=True)
+        selected = source.resolve(strict=True)
+        if selected.is_relative_to(root):
+            return True
+        # Go/Codex may write \\?\-prefixed Windows paths into TOML while
+        # Python's temporary root is spelled as a normal drive path.
+        return any(os.path.samefile(parent, root)
+                   for parent in (selected, *selected.parents))
+    except (OSError, ValueError, RuntimeError):
+        return False
+
+
 def uninstall_native_codex_plugin(identity, home, case_root, env, cwd):
     """Perform the documented *actual* Codex uninstall before attestation.
 
@@ -880,7 +968,7 @@ def uninstall_native_codex_plugin(identity, home, case_root, env, cwd):
         if not isinstance(entry, dict) or entry.get("source_type", "local") != "local":
             return {"completed": False, "reason": "managed local marketplace cannot be verified"}
         source = Path(entry.get("source", ""))
-        if not source.is_absolute() or not source.resolve().is_relative_to(case_root.resolve()):
+        if not codex_marketplace_source_in_case(source, case_root):
             return {"completed": False, "reason": "marketplace source outside disposable case"}
     except (OSError, TypeError, ValueError):
         return {"completed": False, "reason": "cannot parse owned Codex config"}
@@ -1075,7 +1163,16 @@ def initialize_project_skill_git_root(project, env, case_root):
     marker = project / ".git"
     if marker.exists() or marker.is_symlink():
         raise RuntimeError("disposable project Git metadata must be initially absent")
-    result = call([GIT_EXECUTABLE, "-c", "core.hooksPath=/dev/null",
+    # Git for Windows has no POSIX /dev/null. Disable hooks with an empty,
+    # case-owned directory on every OS, never through host Git config.
+    disabled_hooks = case_root / "empty-git-hooks"
+    if disabled_hooks.is_symlink():
+        raise RuntimeError("disposable Git hooks directory is redirected")
+    disabled_hooks.mkdir(exist_ok=True)
+    if (not disabled_hooks.is_dir() or disabled_hooks.is_symlink()
+            or not disabled_hooks.resolve().is_relative_to(case_root.resolve())):
+        raise RuntimeError("disposable Git hooks directory escaped its case")
+    result = call([GIT_EXECUTABLE, "-c", f"core.hooksPath={disabled_hooks.resolve()}",
                    "init", "--quiet"], env, project, 30)
     if (result["exit_code"] != 0 or not marker.is_dir() or marker.is_symlink()
             or not marker.resolve().is_relative_to(project.resolve())):
@@ -1192,12 +1289,18 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         scope = ["--scope", "project", "--project-root", str(project)]
     copilot_before = (copilot_settings_sanitized_shape(home, case_root, identity)
                       if kind == "plugin" and target == "copilot" else None)
-    output = audited_call([cli, *args], env, project)
-    output.pop("_json", None)
+    add_timeout = install_case_timeout(target, kind, item)
+    output = audited_call([cli, *args], env, project, add_timeout)
+    added_json = output.pop("_json", None)
+    native_components = (native_components_from_add(added_json)
+                         if kind == "plugin" else ())
+    prepared_components_only = (prepared_only_add(added_json)
+                                if kind == "plugin" else False)
     copilot_after_add = (copilot_settings_sanitized_shape(home, case_root, identity)
                          if copilot_before is not None else None)
     changed = set(snapshot(native_roots).items()) - set(before.items())
-    native_attribution = attributable_native_changes(native_roots, changed, identity, target)
+    native_attribution = attributable_native_changes(
+        native_roots, changed, identity, target, native_components)
     skill_path = skill_file_present(project, target, identity) if kind == "skill" else None
     locked = (project / "uap.toml").is_file() and (project / "uap.lock").is_file()
     lock_contains = locked and identity in (project / "uap.lock").read_text(encoding="utf-8")
@@ -1259,7 +1362,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                 for path in lock_paths
             )
         before_repeat_lock = lock_state()
-        repeat_add = audited_call([cli, *args], env, project)
+        repeat_add = audited_call([cli, *args], env, project, add_timeout)
         repeat_add.pop("_json", None)
         repeat_list = audited_call([cli, "list", "--target", target, *scope, "--format", "json"],
                            env, project, 30)
@@ -1368,7 +1471,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         native_identity_residuals(
             native_roots, identity,
             sorted(set(snapshot(native_roots)) | set(native_attribution) | set(unsafe_paths)),
-            target)
+            target, native_components)
         if cleanup and cleanup["exit_code"] == 0 else []
     )
     # Preserve truthful disk-state evidence without equating passive cached
@@ -1413,7 +1516,9 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     elif target == "chatgpt" and kind == "plugin" and installed and removal_verified and sentinels_preserved and repeat_verified:
         status = "manual-setup-prepared"
     elif installed and removal_verified and sentinels_preserved and repeat_verified:
-        status = ("package-installed-native-unqualified" if (
+        status = ("prepared-lifecycle-passed" if (
+                       kind == "plugin" and prepared_components_only)
+                  else "package-installed-native-unqualified" if (
                        kind == "plugin" and (
                            (target == "qoder" and
                             (qoder_native_before_remove is None or
@@ -1421,7 +1526,10 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                            or (target == "copilot" and
                                (copilot_native_before_remove is None or
                                 copilot_native_before_remove["status"] != "installed"))
-                           or (target not in ("qoder", "copilot") and not native_attribution)))
+                           or (target == "codex" and not (
+                               native_uninstall and native_uninstall.get("completed")))
+                           or (target not in ("codex", "qoder", "copilot")
+                               and not native_attribution)))
                   else "prepared-lifecycle-passed" if prepared_binding else "passed")
     elif installed and cleanup and (
             "external removal requires explicit attestation" in
@@ -1471,7 +1579,10 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "source": item if kind == "plugin" else item["source"],
             "status": status, "install": output, "list": listed,
             "native_file_delta": len(changed),
-            "native_identity_files": native_attribution, "skill_path": skill_path,
+            "native_identity_files": native_attribution,
+            "native_component_candidates": list(native_components),
+            "prepared_components_only": prepared_components_only,
+            "skill_path": skill_path,
             "lock_written": bool(locked), "lock_contains_identity": bool(lock_contains),
             "lock_exact_source_pinned": lock_pinned, "skill_bytes_match": bool(skill_bytes_match),
             "listed_identity": listed_identity, "prepared_binding": prepared_binding,
@@ -1505,6 +1616,83 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "post_list_schema_valid": post_list_schema_valid,
             "post_remove_identity_registered": post_remove_identity_registered,
             "sentinels_preserved": sentinels_preserved}
+
+
+def expected_negative_coverage(row, cli_version=None):
+    """Accept only verified *non-native* outcomes, never relabel them PASS.
+
+    The published release has frozen unsupported target combinations, and
+    OpenCode can complete a prepared package lifecycle without proving native
+    activation. Fail closed on side effects, missing cleanup, or new sources.
+    """
+    if not row.get("sentinels_preserved") or row.get("failed_install_residue"):
+        return False
+    target = row.get("target")
+    if row.get("kind") != "plugin":
+        return False
+
+    # A completed OpenCode package lifecycle can be non-native even when
+    # prepared Skills are materialized under the isolated native profile.
+    # The entire identity must be removed; a surviving file is never accepted.
+    native_files = row.get("native_identity_files")
+    if (target == "opencode"
+            and isinstance(native_files, list)
+            and all(isinstance(path, str) and path.startswith("opencode/")
+                    and ".." not in Path(path).parts for path in native_files)
+            and row.get("native_component_candidates") == []
+            and row.get("listed_identity") is True
+            and row.get("repeat_verified") is True
+            and row.get("removal_verified") is True
+            and row.get("post_remove_identity_registered") is False
+            and row.get("native_residuals") == []
+            and isinstance(row.get("install"), dict)
+            and row["install"].get("exit_code") == 0
+            and isinstance(row.get("cleanup"), dict)
+            and row["cleanup"].get("exit_code") == 0):
+        if (row.get("status") == "prepared-lifecycle-passed"
+                and row.get("prepared_components_only") is True):
+            return True
+        # Only these immutable sources in the verified 0.1.95 / 0.1.101
+        # catalog have a clean lifecycle but no attributable native component.
+        # An unknown or newly unqualified source must still fail this audit.
+        non_native_direct_sources = {
+            "github:itential/builder-skills@2ccdf77358b018ad4df125422a067fe84e63de1d",
+            "github:GoogleCloudPlatform/google-cloud-storage-plugin@b346e39698fcdfdc711ca3ee35e41c8dbaa1aa2b",
+            "github:cometchat/cometchat-skills@8652f1ea41d12e5058123db1e4e6babef9c918f1",
+            "github:uizze/uizze@fc401e9e654cbafe427b0c98142fc8bccd0c4e7e",
+        }
+        if (row.get("status") == "package-installed-native-unqualified"
+                and cli_version in ("agentplugins 0.1.95", "agentplugins 0.1.101")
+                and row.get("prepared_components_only") is False
+                and native_files == []
+                and row.get("source") in non_native_direct_sources):
+            return True
+
+    if (row.get("status") != "documented-or-source-unsupported"
+            or row.get("native_file_delta") != 0
+            or row.get("native_identity_files")
+            or row.get("listed_identity")
+            or row.get("failed_install_registered")
+            or not isinstance(row.get("install"), dict)
+            or type(row["install"].get("exit_code")) is not int
+            or row["install"]["exit_code"] == 0):
+        return False
+    diagnostic = row["install"].get("stderr_tail", "")
+    if not isinstance(diagnostic, str):
+        return False
+    if (row.get("source") == "marketing-kit"
+            and target in ("cline", "copilot", "kimi", "qoder", "grok")
+            and "release does not support complete target set" in diagnostic
+            and ("missing " + target) in diagnostic):
+        return True
+    # Pi's generic plugin route cannot install these frozen sources when the
+    # signed release explicitly lacks pi or its own manifest prevents native
+    # extension discovery. Refusals are negative, never a native installation.
+    return bool(target == "pi"
+                and (("release does not support complete target set" in diagnostic
+                      and "missing pi" in diagnostic)
+                     or "pi package manifest overrides selected extension discovery"
+                        in diagnostic))
 
 
 def unexecuted_source_rows(selected, kind, target, status, declared_names):
@@ -1622,10 +1810,17 @@ def main():
     report["passed"] = passed
     report["prepared_lifecycle_passed"] = sum(
         r["status"] == "prepared-lifecycle-passed" for r in report["results"])
+    accepted_negatives = [
+        r for r in report["results"]
+        if expected_negative_coverage(r, report["cli_version"].get("value"))
+    ]
+    report["verified_negative_coverage"] = len(accepted_negatives)
     report["full_coverage"] = args.limit == 30 and report["cases_attempted"] == 30
     save()
-    print(f'{args.target} {args.kind}: {passed}/{args.limit} passed; attempted={report["cases_attempted"]}')
-    return 0 if passed == args.limit else 1
+    print(f'{args.target} {args.kind}: {passed}/{args.limit} native PASS; '
+          f'verified_negative={len(accepted_negatives)}; attempted={report["cases_attempted"]}')
+    return 0 if (report["cases_attempted"] == args.limit
+                 and passed + len(accepted_negatives) == args.limit) else 1
 
 
 if __name__ == "__main__":

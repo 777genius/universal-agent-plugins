@@ -339,9 +339,9 @@
     "specLink": "Прочитати специфікацію Agent Plugins 1.0",
     "compatibilityLink": "Сумісність клієнтів (англійською)",
     "limitations": "Сумісність залежить від пакета. Перевірка схеми не доводить фактичну роботу під час виконання, роботу OAuth або активацію. Codex не підтримує оголошений MCP SSE; stdio та Streamable HTTP зберігають наявну підтримку адаптерів.",
-    "versions": "Перевірений нативний інсталятор: CLI 0.1.95; назва пакета npm: universal-agent-plugins; теги GitHub: agentplugins-v*.",
+    "versions": "Актуальний стабільний нативний інсталятор — у GitHub Releases; пакет npm: universal-agent-plugins; теги релізів GitHub: agentplugins-v*.",
     "availability": "Пакети вручну й інструменти з вихідного коду",
-    "releaseScope": "GitHub Releases надає перевірений інсталятор CLI 0.1.95 із локальним API керування та нативними розширеннями Pi; він не містить agentplugins author. npm і Homebrew — канали встановлення, у яких версії можуть відставати; перевірте версію CLI, перш ніж покладатися на поведінку конкретного випуску. Для команд author із посібника зі створення потрібна збірка з вихідного коду з увімкненими інструментами розробки пакетів. Згенерований довідник API зберігає історичну прив’язку до 0.1.65 і не описує поточний інсталятор.",
+    "releaseScope": "У GitHub Releases доступний актуальний стабільний CLI з локальним API керування та підтримуваними нативними розширеннями Pi; команда agentplugins author до нього не входить. Версії в npm і Homebrew можуть відставати: перевірте agentplugins version. Команди author з посібника потребують збірки з вихідного коду з підтримкою розробки пакетів. Згенерований довідник API зберігає історичну прив’язку до 0.1.65 і не описує поточний інсталятор.",
     "buildGuideLink": "Відкрити посібник зі створення"
   },
   "shell": {
@@ -431,15 +431,15 @@
       }
     },
     "seo": {
-      "indexTitle": "Universal Agent Plugins CLI {'|'} Встановлення Agent Plugins 1.0",
-      "indexDescription": "Встановлюйте, оновлюйте, відновлюйте й вилучайте Agent Plugins 1.0 для підтримуваних AI-агентів за допомогою одного CLI.",
+      "indexTitle": "Плагіни та Skills для AI-агентів {'|'} Universal Agent Plugins",
+      "indexDescription": "Встановлюйте Agent Plugins 1.0, Agent Skills і MCP-інструменти для Codex, Claude Code, Cursor, Gemini CLI та інших — глобально або для проєкту через один CLI.",
       "downloadTitle": "Завантажити Universal Agent Plugins CLI",
       "downloadDescription": "Встановіть Universal Agent Plugins CLI на macOS, Linux або Windows і керуйте Agent Plugins 1.0 однією командою.",
       "applicationSubCategory": "Менеджер плагінів для агентів",
       "softwareRequirements": "Нативний CLI для macOS, Linux і Windows; або Node.js 22+ для npx",
-      "featureList": "Встановлюйте, перевіряйте, оновлюйте, відновлюйте, змінюйте джерело й вилучайте Agent Plugins 1.0",
-      "imageAlt": "Universal Agent Plugins — встановлюйте плагіни для AI-агентів одним CLI",
-      "organizationDescription": "Відкритий багатоагентний інсталятор і менеджер життєвого циклу для Agent Plugins 1.0."
+      "featureList": "Встановлення, перевірка, оновлення, відновлення та видалення Agent Plugins 1.0 і Agent Skills глобально або в проєкті.",
+      "imageAlt": "Universal Agent Plugins — один CLI для Agent Plugins 1.0, Skills, MCP і різних AI-агентів.",
+      "organizationDescription": "Відкритий CLI для встановлення та керування Agent Plugins 1.0, Agent Skills і MCP-інструментами для різних AI-агентів."
     },
     "hero": {
       "autoLabel": "Вибрати агентів у терміналі",
@@ -746,11 +746,14 @@
         "project": "Цього проєкту",
         "projectHint": "Запускайте ці команди з папки проєкту. Агент може запитати довіру до проєкту або його активацію.",
         "projectUnavailable": "Для цього пакета встановлення в проєкт недоступне.",
-        "marketingKitProjectUnavailable": "Marketing Kit поки недоступний для проєкту: потрібен випуск CLI новіший за 0.1.95, а обов’язкові залежності Notion, HubSpot і Playwright мають окремо пройти перевірку підтримки встановлення в Project.",
-        "pinnedGitFallbackInfo": "В опублікованому CLI 0.1.95 використовується це закріплене Git-джерело. Короткі імена підписаного Directory для Project працюють у поточному коді, але ще не ввійшли до релізу.",
+        "marketingKitProjectUnavailable": "Marketing Kit поки недоступний для проєкту: обов’язкові залежності Notion, HubSpot і Playwright мають окремо підтримувати встановлення в Project.",
+        "pinnedGitFallbackInfo": "Це перевірене Git-джерело з точним комітом — варіант для відтворюваного встановлення. Опублікований CLI також підтримує короткі назви підписаного Directory у Project для сумісних клієнтів і всіх обов’язкових компонентів.",
         "selectionUnavailable": "Ця комбінація агентів і місця встановлення недоступна. Виберіть іншого агента або місце."
       },
       "outcome": {
+        "projectPreview": "Попередня оцінка для проєкту: CLI перевірить джерело, типи MCP та обов'язкові залежності. Активація агента — окремо.",
+        "projectSupported": "Можлива інсталяція",
+        "projectUnsupported": "Не підтримується для проєкту",
         "includes": "У складі:",
         "label": "Встановлення та наступні кроки",
         "managed": "CLI керує встановленими файлами.",
@@ -1029,7 +1032,7 @@
     "title": "Використовуйте плагіни / Створюйте плагіни",
     "subtitle": "Установлюйте й обслуговуйте стандартні пакети або напишіть власний пакет plugin.json і перевірте відповідними інструментами.",
     "use": {
-      "badge": "CLI 0.1.95",
+      "badge": "Стабільний CLI",
       "title": "Використовуйте плагіни",
       "description": "Шукайте, переглядайте, установлюйте й обслуговуйте пакети опублікованим інсталятором.",
       "cta": "Відкрити посібник із використання"

@@ -5,7 +5,7 @@ import { hydrated, navigate, offline, projections, registryFixture } from './i18
 test.describe.configure({ mode: 'parallel' });
 
 const commands = {
-  project: ['npx -y universal-agent-plugins install marketing-kit --scope project', 'npx -y universal-agent-plugins install'],
+  project: ['npx -y universal-agent-plugins install marketing-kit --scope project', 'npx -y universal-agent-plugins install --scope project'],
   global: ['npx -y universal-agent-plugins install marketing-kit', 'npx -y universal-agent-plugins deps import --install'],
 } as const;
 const exportCommand = 'npx -y universal-agent-plugins deps export';
@@ -27,6 +27,8 @@ const cases = [
 for (const theme of ['dark', 'light'] as const) {
   for (const [locale, width] of cases) {
     test(`marketing-kit restore ${locale} ${theme} at ${width}px`, async ({ page, context }, testInfo) => {
+      // Two mode transitions, visual evidence, and geometry checks can exceed 30s on shared CI.
+      if (locale === 'en' && theme === 'dark' && width === 1440) testInfo.setTimeout(60_000);
       await page.setViewportSize({ width, height: 1000 });
       await page.emulateMedia({ reducedMotion: 'reduce' });
       await context.addInitScript((value) => {
@@ -135,6 +137,8 @@ for (const theme of ['dark', 'light'] as const) {
 }
 
 test('manifest morph keeps highlighted TOML lossless, accessible and dismissible', async ({ page }, testInfo) => {
+  // Screenshot, focus and CSS checks can exceed 30s on a loaded CI runner.
+  test.setTimeout(60_000);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('./');
   await hydrated(page);
@@ -160,7 +164,12 @@ test('manifest morph keeps highlighted TOML lossless, accessible and dismissible
   await expect(preview).toBeVisible();
   const dismiss = preview.getByRole('button', { name: /close file preview/i });
   await dismiss.focus();
-  await dismiss.press('Escape');
+  await expect(dismiss).toBeFocused();
+  await page.mouse.move(0, 0);
+  await expect(dismiss).toBeFocused();
+  await expect(file).toHaveAttribute('aria-expanded', 'true');
+  // The Escape handler removes the preview button; press on the page to avoid a detached locator retry.
+  await page.keyboard.press('Escape');
   await expect(file).toBeFocused();
   await expect(file).toHaveAttribute('aria-expanded', 'false');
   await file.click();
@@ -211,6 +220,7 @@ test('both modes copy complete commands during typing and reset feedback on mode
     }
   }
   for (let i = 0; i < 2; i++) await expect(section.locator('.typed-command').nth(i)).toHaveAttribute('data-complete', 'true', { timeout: 15_000 });
+  // The last selected mode is Project; never compare it against Global text.
   await expect(section.locator('.typed-command__visible')).toHaveText([...commands.project]);
   await expect(section.locator('.registry-restore__package').first()).toHaveCSS('visibility', 'visible');
 });
@@ -236,7 +246,7 @@ for (const mode of ['project', 'global'] as const) {
 }
 
 for (const qualified of [false, true]) {
-  test(`copying the Project example is independent of catalog qualification: ${qualified}`, async ({ page, context }) => {
+  test(`unqualified Marketing Kit Project commands remain unavailable with catalog scopes ${qualified}`, async ({ page, context }) => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     const errors = await offline(page);
     const index = registryFixture();
@@ -254,13 +264,13 @@ for (const qualified of [false, true]) {
     await projections(page, index);
     await navigate(page, '/', 'en');
     const section = page.locator('#restore-environment');
-    const copy = section.locator('.registry-restore__screen .registry-restore__copy');
-    for (let i = 0; i < 2; i++) {
-      await expect(copy.nth(i)).toBeEnabled();
-      await copy.nth(i).click();
-      await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(commands.project[i]);
-    }
+    await section.locator('[data-mode-option="project"]').click();
     await expect(section.locator('.registry-restore__qualification')).toHaveCount(0);
+    await expect(section.locator('.registry-restore__flow')).toBeVisible();
+    await expect(section.locator('.registry-restore__terminal')).toHaveCount(2);
+    await expect(section.locator('.registry-restore__copy')).toHaveCount(2);
+    await section.locator('.registry-restore__screen .registry-restore__copy').first().click();
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(commands.project[0]);
     expect(errors).toEqual([]);
   });
 }

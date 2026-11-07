@@ -38,6 +38,14 @@ test('home lists the complete scope matrix immediately before FAQ', async ({ pag
   await expect(section).not.toContainText('E2E');
 });
 
+test('dark theme filters only monochrome client icons, not the entire app', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('theme', 'dark'));
+  await page.goto('./');
+  await expect(page.locator('.v-application.v-theme--dark')).toHaveCSS('filter', 'none');
+  await expect(page.locator('.registry-client-support__icon--contrast').first())
+    .toHaveCSS('filter', 'brightness(0) invert(1)');
+});
+
 test('scope matrix scrolls within its own region on narrow screens', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 800 });
   await page.goto('./');
@@ -51,4 +59,34 @@ test('scope matrix scrolls within its own region on narrow screens', async ({ pa
   }));
   expect(sizes.content).toBeGreaterThan(sizes.container);
   expect(sizes.page).toBeLessThanOrEqual(sizes.viewport);
+});
+
+test('dark agent icon contrast never filters the app or breaks the fixed orbit', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('./');
+  await page.evaluate(() => localStorage.setItem('theme', 'dark'));
+  await page.reload();
+
+  const app = page.locator('.v-application').first();
+  const monochromeIcon = page.locator('.registry-client-support__icon--contrast').first();
+  await expect(app).toHaveClass(/v-theme--dark/);
+  await expect(app).toHaveCSS('filter', 'none');
+  await expect(monochromeIcon).toHaveCSS('filter', 'brightness(0) invert(1)');
+  await expect(page.locator('.hero-agent-field--fixed')).toHaveCSS('position', 'fixed');
+
+  for (const width of [1440, 1100, 390, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+  }
+
+  await page.evaluate(() => localStorage.setItem('theme', 'light'));
+  await page.reload();
+  await expect(app).toHaveClass(/v-theme--light/);
+  await expect(app).toHaveCSS('filter', 'none');
+  await expect(monochromeIcon).toHaveCSS('filter', 'none');
+  // Both themes must leave the page horizontally contained on phones.
+  for (const width of [390, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+  }
 });

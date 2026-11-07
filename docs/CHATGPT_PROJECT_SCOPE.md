@@ -1,7 +1,7 @@
 # ChatGPT and project scope
 
 UAP does not qualify ChatGPT for native project installation. Selecting
-`--scope project` with `--target chatgpt` returns:
+`--scope project` with `--target chatgptweb` returns:
 
 ```text
 chatgpt does not support project scope
@@ -31,7 +31,7 @@ available under its existing validation requirements. For example, a validated
 personal Context7 registration can be prepared explicitly in user scope:
 
 ```sh
-agentplugins add context7 --target chatgpt --scope user --chatgpt-app-id <your-registration-id>
+agentplugins add context7 --target chatgptweb --scope user --chatgpt-app-id <your-registration-id>
 ```
 
 Use the registration ID obtained through the existing ChatGPT setup flow.
@@ -41,3 +41,5 @@ project discovery. ChatGPT remains excluded from saved dependency targets.
 
 The accepted scope decision and evidence are recorded in
 [the reviewed client plan](plans/project-install-e2e/client-plans.md#13-chatgpt--explicit-unsupported-project-installation).
+
+The public `chatgpt` target selects local ChatGPT Desktop and shares the Codex CLI backend. The public `chatgptweb` target selects the existing remote ChatGPT adapter, whose canonical signed Directory and saved-state ID remains `chatgpt`. Do not confuse CLI names with signed target identities.

@@ -196,7 +196,7 @@ func TestOfflinePublicInstallerSecurityBoundary(t *testing.T) {
 	}
 	defer stderr.Close()
 	os.Stdout, os.Stderr = stdout, stderr
-	argv := []string{"add", source, "--target=chatgpt", "--scope=project", "--dry-run", "--format=json"}
+	argv := []string{"add", source, "--target=chatgptweb", "--scope=project", "--dry-run", "--format=json"}
 	os.Args = append([]string{"agentplugins"}, argv...)
 	var out, errout bytes.Buffer
 	err = executeRelease(context.Background(), argv, authoringcli.Streams{Out: &out, Err: &errout}, run)

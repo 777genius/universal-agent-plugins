@@ -1,9 +1,14 @@
 import { publishedLocales, localeMetadata } from '../../data/i18n';
 import { clientLandingPages } from '../../data/clients';
-import { expect, test } from '@playwright/test';
+import { expect as baseExpect, test } from '@playwright/test';
+
+// Allow the page's async hydration and smooth anchors to settle on busy CI hosts.
+const expect = baseExpect.configure({ timeout: 15_000 });
 import { emptySkillSpectorManifest, hydrated, setSignedMirrorTestTime } from './i18n-state.helpers';
 
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async ({ page }, testInfo) => {
+  // This theme + navigation journey is CPU-heavy in the shared CI browser matrix.
+  if (testInfo.title.includes('GitHub icon follows theme')) testInfo.setTimeout(90_000);
   await setSignedMirrorTestTime(page);
   // Keep the catalog independent of optional report publication and remote availability.
   // Dedicated SkillSpector tests exercise checked, partial and unavailable reports.
@@ -32,6 +37,16 @@ async function waitForFullDirectory(page: import('@playwright/test').Page) {
       { timeout: 15_000 },
     )
     .toBe(true);
+}
+
+// Smaller batches can place a reviewed or community plugin on the next page.
+async function revealCatalogCard(page: import('@playwright/test').Page, selector: string) {
+  const card = page.locator(selector).first();
+  for (let batch = 0; batch < 3 && (await card.count()) === 0; batch++) {
+    await page.locator('.catalog-more button').click();
+  }
+  await expect(card).toBeVisible({ timeout: 15_000 });
+  return card;
 }
 
 const optionalManifest = (url: string) => url.endsWith('/reports/skillspector/v3/index.json');
@@ -90,8 +105,8 @@ test('homepage installs with auto-detection and exposes the full directory', asy
   await expect(page.locator('.client-strip li')).toHaveCount(clientLandingPages.length);
   await expect(page.getByRole('contentinfo')).toHaveCount(1);
   await expect(page.locator('.plugin-card').first()).toBeVisible();
-  const securityBadge = page.locator('.plugin-card__security').first();
-  await expect(securityBadge).toBeVisible({ timeout: 15_000 });
+  await hydrated(page);
+  const securityBadge = await revealCatalogCard(page, '.plugin-card__security');
   await expect(securityBadge).toContainText(
     /Automated review: (?:no blocking findings|\d+ notes?|\d+ blocking findings?)/,
   );
@@ -210,6 +225,9 @@ test('header exposes the documentation entrypoint on desktop and mobile', async 
 
 
 test('header keeps primary links at laptop width and GitHub icon follows theme', async ({ page }) => {
+  // Two full theme reloads plus four real route/anchor navigations can exceed
+  // the default 30-second budget on loaded CI; keep every assertion intact.
+  test.setTimeout(60_000);
   await page.setViewportSize({ width: 1024, height: 850 });
   await page.goto('./');
   await expect(page.locator('.app-header__nav')).toBeVisible();
@@ -218,8 +236,17 @@ test('header keeps primary links at laptop width and GitHub icon follows theme',
   await expect(links).toHaveCount(4);
   await expect(links.nth(0)).toBeVisible();
   await expect(links.nth(1)).toBeVisible();
-  await expect(links.nth(2)).toBeHidden();
-  await expect(links.nth(3)).toBeHidden();
+  await expect(links.nth(2)).toBeVisible();
+  await expect(links.nth(3)).toBeVisible();
+  for (const width of [960, 1024, 1100, 1199, 1279]) {
+    await page.setViewportSize({ width, height: 850 });
+    for (const link of await links.all()) await expect(link).toBeVisible();
+    const occupied = await page.locator('.app-header__nav, .app-header__desktop-actions').evaluateAll(
+      (nodes) => nodes.map((node) => node.getBoundingClientRect().toJSON()),
+    );
+    expect(occupied[0]!.right).toBeLessThanOrEqual(occupied[1]!.left + 1);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
   const github = page.locator('.app-header__github-btn');
   const colors: string[] = [];
   for (const theme of ['light', 'dark']) {
@@ -235,7 +262,6 @@ test('header keeps primary links at laptop width and GitHub icon follows theme',
   await links.nth(1).click();
   await expect(page).toHaveURL(/\/plugins\/?$/);
   await expect(page.locator('.unified-catalog')).toBeVisible();
-  await page.setViewportSize({ width: 1440, height: 850 });
   await links.nth(2).click();
   await expect(page).toHaveURL(/#agent-support$/);
   await expect(page.locator('#agent-support')).toBeInViewport();
@@ -245,12 +271,28 @@ test('header keeps primary links at laptop width and GitHub icon follows theme',
   await expect(page.locator('#faq')).toBeInViewport();
 });
 
-test('plugin grid defaults to five columns on desktop and stays responsive', async ({ page }) => {
+test('plugin grid defaults to three columns and five rows on desktop and stays responsive', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('./');
   const grid = page.locator('.plugin-grid--plugins').first();
   await expect(grid).toBeVisible();
-  for (const [width, expected] of [[1440, 5], [1100, 3], [800, 2], [390, 1]]) {
+  const cards = grid.locator(':scope > .plugin-card');
+  await expect(cards).toHaveCount(15);
+  const rowCount = await cards.evaluateAll((elements) =>
+    new Set(elements.map((element) => Math.round(element.getBoundingClientRect().top))).size,
+  );
+  expect(rowCount).toBe(5);
+  const firstCard = cards.first();
+  await firstCard.scrollIntoViewIfNeeded();
+  const initialBorderColor = await firstCard.evaluate(
+    (element) => getComputedStyle(element).borderTopColor,
+  );
+  await firstCard.hover();
+  await expect
+    .poll(() => firstCard.evaluate((element) => getComputedStyle(element).borderTopColor))
+    .not.toBe(initialBorderColor);
+  expect(await firstCard.evaluate((element) => getComputedStyle(element).transform)).toBe('none');
+  for (const [width, expected] of [[1440, 3], [1100, 3], [800, 2], [390, 1]]) {
     await page.setViewportSize({ width, height: 900 });
     const count = await grid.evaluate((element) =>
       getComputedStyle(element).gridTemplateColumns.split(' ').filter(Boolean).length,
@@ -264,7 +306,10 @@ test('plugin grid defaults to five columns on desktop and stays responsive', asy
   const directoryColumns = await page.locator('.plugin-grid--plugins').first().evaluate((element) =>
     getComputedStyle(element).gridTemplateColumns.split(' ').filter(Boolean).length,
   );
-  expect(directoryColumns).toBe(5);
+  expect(directoryColumns).toBe(3);
+  await expect(
+    page.locator('.plugin-grid--plugins').first().locator(':scope > .plugin-card'),
+  ).toHaveCount(15);
 });
 
 test('homepage omits the counter when discovery cannot load', async ({ page }) => {
@@ -379,7 +424,7 @@ test('homepage publishes canonical social metadata and complete product schema',
 }) => {
   const response = await page.goto('./');
   expect(response?.status()).toBe(200);
-  await expect(page).toHaveTitle('Universal Agent Plugins CLI | Install Agent Plugins 1.0');
+  await expect(page).toHaveTitle('AI Agent Plugins & Skills | Universal Agent Plugins');
   await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
     'href',
     'https://777genius.github.io/universal-agent-plugins/',
@@ -389,8 +434,25 @@ test('homepage publishes canonical social metadata and complete product schema',
   );
   await expect(page.locator('meta[property="og:image"]')).toHaveAttribute(
     'content',
-    'https://777genius.github.io/universal-agent-plugins/og-image.png',
+    'https://777genius.github.io/universal-agent-plugins/og-image.png?v=20261106',
   );
+  await expect(page.locator('meta[property="og:image:secure_url"]')).toHaveAttribute(
+    'content',
+    'https://777genius.github.io/universal-agent-plugins/og-image.png?v=20261106',
+  );
+  await expect(page.locator('meta[property="og:image:width"]')).toHaveAttribute('content', '1200');
+  await expect(page.locator('meta[property="og:image:height"]')).toHaveAttribute('content', '630');
+  const card = await page.request.get('og-image.png?v=20261106');
+  expect(card.status()).toBe(200);
+  const bytes = await card.body();
+  expect(bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))).toBe(true);
+  expect(bytes.readUInt32BE(16)).toBe(1200);
+  expect(bytes.readUInt32BE(20)).toBe(630);
+  const source = await page.request.get('og-image.svg');
+  expect(source.status()).toBe(200);
+  const art = await source.text();
+  expect(art).toContain('Claude Code');
+  expect(art).toContain('Copilot CLI');
   await expect(page.locator('meta[name="twitter:card"]')).toHaveAttribute(
     'content',
     'summary_large_image',
@@ -495,8 +557,8 @@ test('community plugin titles open an installable plugin page instead of GitHub'
   page,
 }) => {
   await page.goto('./');
-  const communityCard = page.locator('.plugin-card[data-trust="community"]').first();
-  await expect(communityCard).toBeVisible({ timeout: 15_000 });
+  await hydrated(page);
+  const communityCard = await revealCatalogCard(page, '.plugin-card[data-trust="community"]');
   const title = communityCard.locator('.plugin-card__title-link');
   const pluginName = (await title.textContent())?.trim();
   await expect(title).toHaveAttribute('href', /\/plugins\/community\/\?source=/);
@@ -516,8 +578,7 @@ test('security badges explain the exact checked revision and open full findings'
   await expect(page.locator('.catalog')).toHaveAttribute('data-discovery-state', /current|cached/, {
     timeout: 15_000,
   });
-  const badge = page.locator('.plugin-card__security--warnings').first();
-  await expect(badge).toBeVisible({ timeout: 15_000 });
+  const badge = await revealCatalogCard(page, '.plugin-card__security--warnings');
   await expect(badge).not.toHaveAttribute('title');
   await badge.scrollIntoViewIfNeeded();
   // Smooth scrolling can dismiss a focused tooltip. Wait for the badge's actual
@@ -746,7 +807,7 @@ test('sitemap lists only live canonical pages and unstable routes stay out of th
     'npx -y universal-agent-plugins add context7',
   );
   await expect(page.locator('#build-plugins')).toContainText(
-    'verified CLI 0.1.95 installer',
+    'latest stable CLI',
   );
   await expect(page.locator('#build-plugins')).toContainText(
     'it does not include agentplugins author',

@@ -207,7 +207,7 @@ test('all seven Braids Skills sharing one signed package receive individual exac
   assert.ok(oldRecords.every(x => x.status === 'partial'));
 });
 
-test('overlay preserves unrelated old Partial and fails closed on digest or selection drift', async () => {
+test('overlay survives unrelated manifest updates but fails closed on source or selection drift', async () => {
   const f = await fixture();
   const cohort = await readVerifiedSkillSpectorCohort(latest, f.trusted, f.fetcher, at);
   assert.ok(cohort);
@@ -244,7 +244,14 @@ test('overlay preserves unrelated old Partial and fails closed on digest or sele
   assert.equal(improved.records[1]!.status, 'partial');
   assert.equal(applyVerifiedSkillSpectorCohort(
     report, cohort.manifestDigest, cohort, new Date('2026-11-07T00:00:00Z')), report);
-  assert.equal(applyVerifiedSkillSpectorCohort(report, 'sha256:' + 'f'.repeat(64), cohort, at), report);
+  // An unrelated publisher scan changes the global v3 manifest digest,
+  // not the nine signed source content digests.
+  const republished = applyVerifiedSkillSpectorCohort(
+    report, 'sha256:' + 'f'.repeat(64), cohort, at);
+  assert.equal(republished.records[0]!.signed_cohort_verified, true);
+  assert.equal(republished.records[0]!.finding_count, 1);
+  assert.equal(republished.records[1], report.records[1]);
+  assert.equal(applyVerifiedSkillSpectorCohort(report, undefined, cohort, at), report);
   const stale = structuredClone(report);
   stale.source_states[0]!.current = false;
   assert.equal(applyVerifiedSkillSpectorCohort(stale, cohort.manifestDigest, cohort, at), stale);

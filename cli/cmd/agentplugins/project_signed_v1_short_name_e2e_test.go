@@ -21,6 +21,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/directoryv1"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/environmentstore"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -354,6 +355,101 @@ func TestProjectSignedV1ShortNameMarketingClosureAndColdRestore(t *testing.T) {
 		replayedNative := projectJourneyRead(t, filepath.Join(journey.nativeRoot(root), "settings.json"))
 		assertSignedV1NativeMCPServers(t, replayedNative, foreignSentinel(journey, root), "foreign", "notion", "hubspot", "playwright")
 	}
+	// Advance the mutable Git branch after signed installs. Repair and cold
+	// locked restore must still use the original signed revision, not its tip.
+	projectJourneyWrite(t, filepath.Join(transport.repo, "kit", "skills", "campaign-planning", "SKILL.md"),
+		strings.Replace(campaignSkill, "Local test fixture", "Unsigned branch mutation", 1))
+	projectJourneyGit(t, transport.repo, "add", "kit/skills/campaign-planning/SKILL.md")
+	projectJourneyGit(t, transport.repo, "commit", "-m", "advance branch after signed installs")
+	projectJourneyGit(t, transport.repo, "push", "--quiet", transport.remote, "main")
+	// The original signed revision is now reachable but no longer the tip.
+	projectJourneyGit(t, transport.remote, "config", "uploadpack.allowReachableSHA1InWant", "true")
+	// Repair a missing owned Skill through the public CLI using the original
+	// signed root pin. It must leave the required MCP children, exact lock and
+	// both unrelated scopes intact, not re-resolve a moving unsigned source.
+	rootID, rootDigest := "", ""
+	projectBefore := journey.state(t, journey.a)
+	for _, installation := range projectBefore.Installations {
+		if installation.Directory != nil && installation.Directory.ProductID == "marketing-kit" {
+			if rootID != "" {
+				t.Fatal("multiple signed Marketing Kit roots in Project A")
+			}
+			rootID, rootDigest = installation.InstallationID, installation.Source.TreeDigest
+		}
+	}
+	if rootID == "" || rootDigest == "" {
+		t.Fatal("signed Marketing Kit root or tree pin missing from Project A")
+	}
+	receiptsBefore := make(map[string]domain.EnvironmentReceipt, len(projectBefore.EnvironmentReceipts))
+	for _, receipt := range projectBefore.EnvironmentReceipts {
+		if _, duplicate := receiptsBefore[receipt.Alias]; duplicate {
+			t.Fatalf("duplicate Project A receipt alias %q", receipt.Alias)
+		}
+		receiptsBefore[receipt.Alias] = receipt
+	}
+	if len(receiptsBefore) != 4 {
+		t.Fatalf("Project A lacks its signed root/children receipts: %d", len(receiptsBefore))
+	}
+	protected := make(map[string]string)
+	for _, path := range []string{
+		filepath.Join(journey.nativeRoot(""), "settings.json"),
+		filepath.Join(journey.nativeRoot(journey.b), "settings.json"),
+		filepath.Join(journey.cache, "state-v2.json"),
+		filepath.Join(journey.namespace(journey.b), "state-v2.json"),
+		filepath.Join(journey.a, "uap.lock"),
+	} {
+		protected[path] = projectJourneyRead(t, path)
+	}
+	skillPath := filepath.Join(journey.nativeRoot(journey.a), "skills", "campaign-planning", "SKILL.md")
+	if err := os.Remove(skillPath); err != nil {
+		t.Fatal(err)
+	}
+	// Repair permits an absent owned Skill directory, not a partially edited one.
+	// Refuse to remove any unexpected sibling file or foreign content.
+	if err := os.Remove(filepath.Dir(skillPath)); err != nil {
+		t.Fatal(err)
+	}
+	// Evict only the signed root's verified snapshot from the disposable shared
+	// store. Otherwise repair can pass from warm cache without reacquiring the
+	// immutable Git SHA after the remote main branch moves.
+	cached, err := (environmentstore.Store{Root: filepath.Join(journey.cache, "store")}).Get(
+		t.Context(), domain.TreeDigestAlgorithm, rootDigest)
+	if err != nil {
+		t.Fatalf("signed root snapshot was not cached before repair: %v", err)
+	}
+	if err := os.Rename(filepath.Dir(cached.Root), filepath.Dir(cached.Root)+"-evicted-for-repair"); err != nil {
+		t.Fatalf("evict exact signed root snapshot: %v", err)
+	}
+	journey.run(t, journey.a, "repair", rootID, "--target", "gemini")
+	if got := projectJourneyRead(t, skillPath); got != campaignSkill {
+		t.Fatalf("signed root repair did not restore its exact Skill: %q", got)
+	}
+	for path, before := range protected {
+		if got := projectJourneyRead(t, path); got != before {
+			t.Fatalf("signed root repair changed unrelated state or lock at %q", path)
+		}
+	}
+	// A repair may legitimately update operation phase, but must not rewrite
+	// which signed packages and bindings the existing receipts authorize.
+	receiptsAfter := journey.state(t, journey.a).EnvironmentReceipts
+	if len(receiptsAfter) != len(receiptsBefore) {
+		t.Fatalf("signed root repair changed dependency receipt count: %d", len(receiptsAfter))
+	}
+	for _, receipt := range receiptsAfter {
+		before, ok := receiptsBefore[receipt.Alias]
+		if !ok || receipt.EnvironmentID != before.EnvironmentID ||
+			receipt.ClientID != before.ClientID || receipt.InstallationID != before.InstallationID ||
+			receipt.ClientBindingID != before.ClientBindingID || receipt.SourceKey != before.SourceKey ||
+			receipt.PackageDigest != before.PackageDigest ||
+			!domain.SameProfileAuthority(receipt.ProfileAuthority, before.ProfileAuthority) {
+			t.Fatalf("signed root repair changed a receipt's immutable identity: %+v", receipt)
+		}
+		delete(receiptsBefore, receipt.Alias)
+	}
+	assertSignedV1NativeMCPServers(t,
+		projectJourneyRead(t, filepath.Join(journey.nativeRoot(journey.a), "settings.json")),
+		foreignSentinel(journey, journey.a), "foreign", "notion", "hubspot", "playwright")
+
 	fresh := configure(newProjectJourney(t, transport))
 	seedForeign(fresh)
 	for _, name := range []string{"uap.toml", "uap.lock"} {

@@ -1,113 +1,99 @@
-import { isReviewedMarketingKit } from '../data/marketingKitDemo.ts';
-import { installCommands, pluginCommands, shellToken } from './commands.ts';
+import { pluginCommands } from './commands.ts';
+import capabilities from '../data/clientCapabilities.generated.json' with { type: 'json' };
 import { reachableTargetPolicies, resolveDistribution } from './registry.ts';
-import type { ClientID, DistributionResolution, RegistryPlugin } from '../types/registry.ts';
+import type { ClientID, ComponentID, DistributionResolution, RegistryPlugin } from '../types/registry.ts';
 
-// The project-native matrix in docs/PROJECT_CLIENT_SUPPORT.md qualifies
-// preparation and ownership for these clients. It does NOT claim authenticated
-// model execution or arbitrary native MCP tool calls. Do not infer project
-// eligibility from user-scope Directory policy alone.
-const PROJECT_COMPONENTS: Partial<Record<ClientID, ReadonlySet<string>>> = {
-  claude: new Set(['skills', 'mcp']),
-  codex: new Set(['skills', 'mcp']),
-  opencode: new Set(['skills', 'mcp']),
-  cursor: new Set(['skills', 'mcp']),
-  gemini: new Set(['skills', 'mcp']),
-  copilot: new Set(['skills', 'mcp']),
-  kimi: new Set(['skills', 'mcp']),
-  cline: new Set(['skills', 'mcp']),
-  // Native project MCP startup is not qualified for Windsurf.
-  windsurf: new Set(['skills']),
-  // These clients have prepared-only project skills; project MCP unsupported.
-  grok: new Set(['skills']),
-  qoder: new Set(['skills']),
-};
+// Published signed Directory v1 authenticates source identity. Released CLI
+// 0.1.101 separately checks explicit Project placement for every component
+// and mandatory dependency; User native evidence is NOT Project activation.
+// One generated adapter-derived Project matrix. This is potential component
+// delivery, NOT exact MCP-transport approval or runtime/activation evidence.
+// The released CLI checks actual package bytes, dependencies and native policy.
+const projectCapabilities = new Map(capabilities.map((client) =>
+  [client.id, 'project' in client ? client.project : undefined] as const,
+));
+
+// Broad capability preview only: the signed release does not expose which MCP
+// transports a package needs (including SSE-only). The CLI decides exact fit.
+export function projectComponentSupported(client: ClientID, component: ComponentID): boolean {
+  const scoped = projectCapabilities.get(client);
+  if (!scoped) return false;
+  if (component === 'skills') return scoped.skill_support !== 'unsupported';
+  if (component === 'extensions') return scoped.extension_support !== 'unsupported';
+  return scoped.mcp_transports.stdio !== 'unsupported' ||
+    scoped.mcp_transports['streamable-http'] !== 'unsupported';
+}
+
 const GIT_REPOSITORY = /^[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const FULL_REVISION = /^[0-9a-f]{40}$/;
 
-function pinnedSource(plugin: RegistryPlugin, targets: readonly ClientID[]) {
-  if (plugin.trust_state !== 'reviewed' || !targets.length ||
-      targets.some((client) => !PROJECT_COMPONENTS[client])) return undefined;
-  const selected = resolveDistribution(plugin, targets, 'user');
-  const distribution = selected.distribution;
-  if (!distribution || !distribution.components.length ||
-      targets.some((client) =>
-        distribution.components.some((component) => !PROJECT_COMPONENTS[client]!.has(component)),
-      )) return undefined;
-  const { repository, revision, path } = distribution.source;
-  if (!GIT_REPOSITORY.test(repository) || !revision || !FULL_REVISION.test(revision) ||
-      (path !== '.' && (!path || path.split('/').some(
+function projectCompatible(
+  plugin: RegistryPlugin, targets: readonly ClientID[],
+  resolved: DistributionResolution, hasExplicitProjectGrant: boolean,
+) {
+  const dist = resolved.distribution;
+  if (!plugin.installable || plugin.trust_state === 'conformant_unreviewed' ||
+      (!hasExplicitProjectGrant && plugin.trust_state !== 'reviewed') || !targets.length ||
+      !dist || !dist.components.length) return false;
+  // Reject malformed metadata in test projections too; signed feed validation
+  // and exact source verification remain authoritative in the released CLI.
+  const { repository, revision, path } = dist.source;
+  if (!GIT_REPOSITORY.test(repository) || (revision !== null && !FULL_REVISION.test(revision)) ||
+      (path !== '' && path !== '.' && (!path || path.split('/').some(
         (part) => !/^[A-Za-z0-9._-]+$/.test(part) || part === '.' || part === '..',
-      )))) return undefined;
-  return { selection: selected, source: `github:${repository}@${revision}${path === '.' ? '' : `//${path}`}` };
+      )))) return false;
+  return targets.every((client) => {
+    const target = dist.targets.find((candidate) => candidate.client === client);
+    return Boolean(target && !target.app_binding &&
+      dist.components.some((component) => projectComponentSupported(client, component)));
+  });
 }
 
 export function projectCatalogSelection(
   plugin: RegistryPlugin,
   targets: readonly ClientID[],
-): { resolution: DistributionResolution; directSource?: string } {
-  // An explicitly qualified signed project policy always takes precedence.
-  const signed = resolveDistribution(plugin, targets, 'project');
-  if (signed.distribution) return { resolution: signed };
-  // The published Marketing Kit release has mandatory Registry dependencies
-  // (Notion, HubSpot, Playwright) whose signed policies are user-only. An
-  // immutable Git source for the parent does NOT waive child scope checks.
-  // Do not render a copyable project command until that dependency closure
-  // is qualified and the signed policy supports the selected project targets.
-  if (isReviewedMarketingKit(plugin)) return { resolution: signed };
-  const pinned = pinnedSource(plugin, targets);
-  if (pinned) {
-    // A user-target policy can establish a reviewed source, NOT native project
-    // activation. Project delivery remains Prepared until the client proves it.
-    const distribution = pinned.selection.distribution!;
-    return {
-      resolution: {
-        ...pinned.selection,
-        distribution: {
-          ...distribution,
-          targets: distribution.targets.map((target) => ({
-            ...target,
-            delivery: 'prepared' as const,
-          })),
-        },
+): { resolution: DistributionResolution } {
+  const signedProject = resolveDistribution(plugin, targets, 'project');
+  // Honor explicit project-scoped policy if present. Signed v1 User grants
+  // also authenticate sources for the owner's explicit Project request.
+  // A signed-v2 scoped closure must never be downgraded into v1's
+  // user-grant-as-source behavior. Its explicit Project policy is authoritative.
+  const hasCanonicalClosure = plugin.distributions.some((distribution) =>
+    distribution.releases.some((release) =>
+      release.targets.some((target) =>
+        targets.includes(target.client) && target.canonical_closure !== undefined)));
+  const selected = signedProject.distribution || hasCanonicalClosure
+    ? signedProject
+    : resolveDistribution(plugin, targets, 'user');
+  if (!projectCompatible(plugin, targets, selected, Boolean(signedProject.distribution))) {
+    return { resolution: { ...signedProject, distribution: undefined } };
+  }
+  return {
+    resolution: {
+      ...selected,
+      distribution: {
+        ...selected.distribution!,
+        targets: selected.distribution!.targets.map((target) => ({
+          ...target, delivery: 'prepared' as const,
+        })),
       },
-      directSource: pinned.source,
-    };
-  }
-  return { resolution: signed };
+    },
+  };
 }
 
-/**
- * A targetless project command is an interactive CLI request, not a browser-side
- * guess at which agents are installed. Prefer a signed project release, then a
- * valid pinned Git source; the CLI detects compatible installed agents and
- * asks the user to confirm before applying any project changes.
- */
 export function projectCatalogAutomaticSelection(plugin: RegistryPlugin) {
-  const candidates = [...new Set(reachableTargetPolicies(plugin.distributions).map((t) => t.client))];
-  let pinned: ReturnType<typeof projectCatalogSelection> | undefined;
-  for (const client of candidates) {
-    const choice = projectCatalogSelection(plugin, [client]);
-    if (!choice.resolution.distribution) continue;
-    if (!choice.directSource) return choice;
-    pinned ??= choice;
+  const clients = [...new Set(reachableTargetPolicies(plugin.distributions).map((target) => target.client))];
+  for (const client of clients) {
+    const selection = projectCatalogSelection(plugin, [client]);
+    if (selection.resolution.distribution) return selection;
   }
-  return pinned;
+  return undefined;
 }
 
-export function projectCatalogCommands(
-  plugin: RegistryPlugin,
-  targets?: readonly ClientID[],
-) {
-  const selected = targets === undefined
+export function projectCatalogCommands(plugin: RegistryPlugin, targets?: readonly ClientID[]) {
+  const choice = targets === undefined
     ? projectCatalogAutomaticSelection(plugin)
     : projectCatalogSelection(plugin, targets);
-  if (!selected?.resolution.distribution) throw new Error('No eligible project installation source');
-  if (selected.directSource) {
-    // Signed user-only policy never authorizes project Directory resolution.
-    // This exact Git source remains Prepared until native client trust/activation.
-    return installCommands(shellToken(selected.directSource), plugin.name, targets,
-      undefined, 'project');
-  }
+  if (!choice?.resolution.distribution) throw new Error('No eligible project installation source');
   return pluginCommands(plugin, targets, undefined, 'project');
 }

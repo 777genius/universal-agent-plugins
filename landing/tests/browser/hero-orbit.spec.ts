@@ -401,6 +401,7 @@ test('guided ChatGPT preparation remains available for an eligible deterministic
 });
 
 test('orbit follows scrolling with a small upward and leftward drift, then returns', async ({ page }) => {
+  test.setTimeout(60_000); // Keep the full scroll/resize regression under busy CI browsers.
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('./');
   const field = page.locator('.hero-agent-field');

@@ -25,7 +25,7 @@ func runAddLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *option
 	}
 	applyLoadedGuidedIntents(opts, loaded, targets)
 	if opts.chatGPTAppID != "" && !loaded.chatGPTPreparation {
-		return fmt.Errorf("--chatgpt-app-id requires the signed Context7 Directory source and --target chatgpt")
+		return fmt.Errorf("--chatgpt-app-id requires the signed Context7 Directory source and --target chatgptweb")
 	}
 	if err := authorizeSecurityAssessment(cmd, app, opts, &loaded); err != nil {
 		return err
@@ -74,7 +74,7 @@ func applyPlannedAdd(ctx context.Context, cmd *cobra.Command, app App, opts *opt
 		}
 	}
 	freshInstall := planned.Activation.Activation == ""
-	if !freshInstall && opts.format == "human" && app.Terminal && !activationComplete && !authComplete {
+	if !freshInstall && opts.format == "human" && app.Terminal && !opts.yes && !activationComplete && !authComplete {
 		if err := renderAddResultWithSecurity(cmd.OutOrStdout(), opts.format, loaded.envelope, loaded.security, planned, false); err != nil {
 			return err
 		}
@@ -85,11 +85,7 @@ func applyPlannedAdd(ctx context.Context, cmd *cobra.Command, app App, opts *opt
 		return err
 	}
 	if !confirmed {
-		if opts.format == "json" {
-			return renderAddResultWithSecurity(cmd.OutOrStdout(), opts.format, loaded.envelope, loaded.security, planned, false)
-		}
-		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "No changes made.")
-		return nil
+		return renderDeclinedPlannedAdd(cmd, opts, loaded, planned)
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -101,15 +97,24 @@ func applyPlannedAdd(ctx context.Context, cmd *cobra.Command, app App, opts *opt
 	if renderErr := renderAddResultErrorWithSecurity(cmd.OutOrStdout(), opts.format, loaded.envelope, loaded.security, result, false, err); renderErr != nil && err == nil {
 		err = renderErr
 	}
-	if err == nil && freshInstall && opts.format == "human" && app.Terminal {
+	if err == nil && freshInstall && opts.format == "human" && app.Terminal && !opts.yes {
 		return resumeInteractiveLifecycle(ctx, cmd, service, input, loaded.envelope, result)
 	}
 	return err
 }
 
+// renderDeclinedPlannedAdd reports an unconfirmed plan without mutating anything.
+func renderDeclinedPlannedAdd(cmd *cobra.Command, opts *options, loaded loadedPackage, planned usecase.AddResult) error {
+	if opts.format == "json" {
+		return renderAddResultWithSecurity(cmd.OutOrStdout(), opts.format, loaded.envelope, loaded.security, planned, false)
+	}
+	_, _ = fmt.Fprintln(cmd.OutOrStdout(), "No changes made.")
+	return nil
+}
+
 func confirmPlannedAdd(ctx context.Context, cmd *cobra.Command, app App, opts *options, loaded loadedPackage, planned usecase.AddResult, freshInstall, needsInstallConfirmation bool) (bool, error) {
-	confirmed := mutationConfirmed(app, opts) && !needsInstallConfirmation
-	if needsInstallConfirmation {
+	confirmed := mutationConfirmed(app, opts) && (!needsInstallConfirmation || opts.yes)
+	if needsInstallConfirmation && !opts.yes {
 		return confirmInstall(ctx, cmd, app, loaded, []usecase.AddResult{planned})
 	}
 	if confirmed || opts.format != "human" || !app.Terminal {
@@ -153,7 +158,7 @@ func promptTargetChoices(cmd *cobra.Command, app App, detected []domain.Detected
 			}
 		}
 		if len(detected) == 0 {
-			return nil, nil, fmt.Errorf("no eligible detected client; nothing was installed. Install/detect a supported client or address the skipped reasons. --target chatgpt checks package eligibility for ChatGPT; it does not register remote MCP or install the full plugin in ChatGPT Plugins")
+			return nil, nil, fmt.Errorf("no eligible detected client; nothing was installed. Install/detect a supported client or address the skipped reasons. --target chatgptweb checks package eligibility for ChatGPT Web; it does not register remote MCP or install the full plugin in ChatGPT Plugins")
 		}
 		return request.DefaultIDs, allClients, cmd.Context().Err()
 	}

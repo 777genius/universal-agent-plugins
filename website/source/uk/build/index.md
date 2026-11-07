@@ -19,7 +19,7 @@ translationRequired: true
 ## Доступність {#availability}
 
 Поточний випуск нативного інсталятора,
-[CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95),
+[CLI](https://github.com/777genius/universal-agent-plugins/releases/latest),
 може перевіряти й установлювати стандартні пакети. Канали менеджерів пакетів
 можуть відставати; перевірте встановлену версію через `agentplugins version`.
 Він **не містить** `agentplugins author`. Команди розробки в цьому посібнику

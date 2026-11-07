@@ -131,6 +131,10 @@ jobs:
           mkdir -p landing/public
           cp -a "${RUNNER_TEMP}/uap-registry-mirror/." landing/public/
 
+      - name: Install Chromium for static social preview
+        working-directory: landing
+        run: pnpm exec playwright install --with-deps --only-shell chromium
+
       - name: Build landing
         env:
           GITHUB_TOKEN: ${{ github.token }}

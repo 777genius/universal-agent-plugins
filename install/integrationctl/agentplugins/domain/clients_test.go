@@ -26,6 +26,8 @@ func TestParseClientIDAliasesAndLenientPassThrough(t *testing.T) {
 		"  CURSOR  ": ClientCursor, "Claude-Code": ClientClaude,
 		"grok-build": ClientGrok, "kimi-code": ClientKimi,
 		"qoder-cli": ClientQoder, "qoder-desktop": ClientQoder,
+		"chatgptweb":      ClientChatGPT,
+		"chatgpt-desktop": ClientCodex, "chatgpt-web": ClientChatGPT,
 	}
 	for input, want := range aliases {
 		got, ok := ParseClientID(input)
@@ -40,6 +42,21 @@ func TestParseClientIDAliasesAndLenientPassThrough(t *testing.T) {
 	got, ok = ParseClientID("  Zed  ")
 	if ok || got != ClientID("zed") {
 		t.Fatalf("unknown name = %q, %v, want zed, false", got, ok)
+	}
+}
+
+func TestPublicTargetFlagNamesKeepCanonicalWebIdentity(t *testing.T) {
+	for _, tc := range []struct {
+		id   ClientID
+		want string
+	}{
+		{ClientCodex, "codex"},
+		{ClientChatGPT, "chatgptweb"},
+		{ClientCursor, "cursor"},
+	} {
+		if got := PublicTargetFlagName(tc.id); got != tc.want {
+			t.Errorf("PublicTargetFlagName(%s) = %q, want %q", tc.id, got, tc.want)
+		}
 	}
 }
 

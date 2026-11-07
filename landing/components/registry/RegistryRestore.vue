@@ -8,7 +8,7 @@ composer.missingWarn = false;
 composer.fallbackWarn = false;
 const { t } = composer;
 const { asset } = useSite();
-const { userRestoreGuideUrl, restoreGuideEnglishFallback, docsLabel } = useDocsLinks();
+const { restoreGuideUrl, userRestoreGuideUrl, restoreGuideEnglishFallback, docsLabel } = useDocsLinks();
 const mode = ref<RestoreDemoMode>('project');
 const commands = computed(() => restoreDemoCommands[mode.value]);
 const copied = ref<1 | 2 | 3 | null>(null);
@@ -81,7 +81,7 @@ async function copyCommand(which: 1 | 2 | 3) {
     <div class="registry-restore__panel">
       <header class="registry-restore__header">
         <h2 id="restore-title">{{ t('shell.restore.title') }}</h2>
-        <a class="registry-restore__guide" :href="userRestoreGuideUrl" target="_blank" rel="noreferrer">
+        <a class="registry-restore__guide" :href="mode === 'project' ? restoreGuideUrl : userRestoreGuideUrl" target="_blank" rel="noreferrer">
           {{ docsLabel(t('shell.restore.guide'), restoreGuideEnglishFallback) }} <span aria-hidden="true">↗</span>
         </a>
       </header>
@@ -93,7 +93,6 @@ async function copyCommand(which: 1 | 2 | 3) {
           {{ t(`shell.restoreDemo.${value}Label`) }}
         </button>
       </div>
-
       <div class="registry-restore__flow">
         <div class="registry-restore__machine">
           <img class="registry-restore__monitor" :src="monitorImage" width="1577" height="997"
@@ -175,6 +174,7 @@ async function copyCommand(which: 1 | 2 | 3) {
 .registry-restore {
   padding-block: 32px 48px;
   &__panel { position: relative; padding: clamp(16px, 3vw, 36px); border: 1px solid var(--line-strong); border-radius: 16px; background: var(--surface); }
+  &__qualification { max-width: 760px; margin: 0 0 16px; color: var(--muted); line-height: 1.6; overflow-wrap: anywhere; }
   &__header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 14px 24px; }
   h2 {
     margin: 0; font-size: clamp(1.5rem, 3vw, 2.5rem); line-height: 1.2; letter-spacing: -.035em; text-wrap: balance;

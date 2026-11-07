@@ -4,11 +4,12 @@ import { restoreDemoCommands } from '../data/restoreDemo.ts';
 import { tomlExampleTokens } from '../utils/tomlExampleTokens.ts';
 import { marketingKitUserManifest } from '../data/marketingKitDemo.ts';
 
-test('Project and Global keep distinct real CLI verbs and explicit project creation', () => {
-  assert.equal(restoreDemoCommands.project.install,
-    'npx -y universal-agent-plugins install marketing-kit --scope project');
-  assert.equal(restoreDemoCommands.project.restore, 'npx -y universal-agent-plugins install');
-  assert.equal(restoreDemoCommands.project.export, '');
+test('released Marketing Kit Project and Global restore commands use valid scoped installation', () => {
+  assert.deepEqual(restoreDemoCommands.project, {
+    install: 'npx -y universal-agent-plugins install marketing-kit --scope project',
+    restore: 'npx -y universal-agent-plugins install --scope project',
+    export: '',
+  });
   assert.equal(restoreDemoCommands.global.install, 'npx -y universal-agent-plugins install marketing-kit');
   assert.equal(restoreDemoCommands.global.export, 'npx -y universal-agent-plugins deps export');
   assert.equal(restoreDemoCommands.global.restore, 'npx -y universal-agent-plugins deps import --install');

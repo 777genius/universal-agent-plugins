@@ -69,7 +69,7 @@ test('the previous feedback timer cannot suppress a slower second copy result', 
   await expect(buttons.last()).toHaveText('Copied');
 });
 
-test('static project example keeps terminal output readable without JavaScript', async ({ browser, baseURL }) => {
+test('static Global example keeps released commands readable without JavaScript', async ({ browser, baseURL }) => {
   const context = await browser.newContext({ javaScriptEnabled: false, baseURL });
   try {
     const page = await context.newPage();
@@ -79,7 +79,7 @@ test('static project example keeps terminal output readable without JavaScript',
     await expect(section.locator('.registry-restore__package').first()).toBeVisible();
     await expect(section.locator('.registry-restore__package').last()).toBeVisible();
     await expect(section.locator('.typed-command__visible').first()).toHaveText('npx -y universal-agent-plugins install marketing-kit --scope project');
-    await expect(section.locator('.typed-command__visible').last()).toHaveText('npx -y universal-agent-plugins install');
+    await expect(section.locator('.typed-command__visible').last()).toHaveText('npx -y universal-agent-plugins install --scope project');
     await expect(page.locator('.hero-demo-video iframe')).toHaveCount(0);
   } finally {
     await context.close();

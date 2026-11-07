@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { marketingKitUserManifest } from '~/data/marketingKitDemo';
 import { tomlExampleTokens } from '~/utils/tomlExampleTokens';
 
@@ -26,7 +26,12 @@ function collapse() {
 function toggle() { show(); }
 function closeAndFocus() {
   collapse();
-  trigger.value?.focus();
+  // Move focus after Vue removes the preview's focused close button.
+  void nextTick(() => trigger.value?.focus());
+}
+function collapseOnMouseLeave() {
+  // Pointer movement must not dismiss a dialog containing keyboard focus.
+  if (props.autoCollapse && !root.value?.contains(document.activeElement)) collapse();
 }
 function onEscape(event: KeyboardEvent) {
   if (!open.value) return;
@@ -76,7 +81,7 @@ onBeforeUnmount(() => {
 <template>
   <div
     ref="root" class="marketing-manifest" :class="{ 'marketing-manifest--open': open }"
-    @mouseenter="show" @mouseleave="autoCollapse && collapse()" @focusout="onFocusOut" @keydown.esc="onEscape"
+    @mouseenter="show" @mouseleave="collapseOnMouseLeave" @focusout="onFocusOut" @keydown.esc="onEscape"
   >
     <button ref="trigger" type="button" class="marketing-manifest__file" :aria-expanded="open"
       aria-controls="marketing-kit-manifest-preview" @click="toggle">

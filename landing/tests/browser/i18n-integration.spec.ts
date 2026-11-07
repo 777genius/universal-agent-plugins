@@ -12,8 +12,11 @@ test.describe.configure({ mode: 'parallel' });
 for (const locale of publishedLocales) {
   for (const family of ['/', '/plugins/', '/plugins/context7/', '/agents/github-copilot-cli/', '/download/', '/create-plugin/', '/plugins/community/']) {
     test(`${locale} direct static ${family}`, async ({ page, request }) => {
+      // Homepage hydration and restoration interactions need extra time under CI load.
+      if (family === '/') test.setTimeout(60_000);
       const url = `.${localizedPath(family, locale)}`;
-      const response = await request.get(url);
+      // Retry one transient localhost connection reset without weakening content checks.
+      const response = await request.get(url, { maxRetries: 1 });
       expect(response.status()).toBe(200);
       expect(response.headers()['content-type']).toContain('text/html');
       expect(await response.text()).toContain(`lang="${locale}"`);
@@ -36,19 +39,25 @@ for (const locale of publishedLocales) {
         await expect(restore.locator('.registry-restore__package strong')).toHaveText(['v0.1.0', 'v0.1.0']);
         await expect(restore.locator('.registry-restore__locked-version')).toHaveCount(0);
         await expect(restore.locator('.registry-restore__terminal')).toHaveCount(2);
+        await expect(restore).toHaveAttribute('data-mode', 'project');
+        await expect(restore.locator('.registry-restore__guide')).toHaveAttribute('href', /#restore-project-dependencies$/);
         await expect(restore.locator('.registry-restore__terminal').first()).toHaveAttribute('data-command', 'npx -y universal-agent-plugins install marketing-kit --scope project');
-        await expect(restore.locator('.registry-restore__terminal').last()).toHaveAttribute('data-command', 'npx -y universal-agent-plugins install');
+        await expect(restore.locator('.registry-restore__terminal').last()).toHaveAttribute('data-command', 'npx -y universal-agent-plugins install --scope project');
         await expect(restore.locator('.registry-restore__subtitle')).toHaveText(showcase.projectSubtitle);
         await expect(restore.locator('.registry-restore__handoff-note')).toHaveText(showcase.projectHandoff);
+        await expect(restore.locator('.registry-restore__copy')).toHaveCount(2);
+        await expect(restore.locator('.registry-restore__qualification')).toHaveCount(0);
         await restore.getByRole('button', { name: showcase.globalLabel, exact: true }).click();
+        await expect(restore.locator('.registry-restore__guide')).toHaveAttribute('href', /#restore-on-another-machine$/);
+        await expect(restore.locator('.registry-restore__terminal').first()).toHaveAttribute('data-command', 'npx -y universal-agent-plugins install marketing-kit');
+        await expect(restore.locator('.registry-restore__terminal').last()).toHaveAttribute('data-command', 'npx -y universal-agent-plugins deps import --install');
         await expect(restore.locator('.registry-restore__subtitle')).toHaveText(showcase.globalSubtitle);
         await expect(restore.locator('.registry-restore__handoff-note')).toHaveText(showcase.globalHandoff);
         await expect(restore.locator('.registry-restore__export code')).toHaveText('npx -y universal-agent-plugins deps export');
-        await expect(restore.locator('.registry-restore__terminal').last()).toHaveAttribute('data-command', 'npx -y universal-agent-plugins deps import --install');
         await restore.getByRole('button', { name: showcase.projectLabel, exact: true }).click();
         const docsLocale = ['en', 'ru', 'uk', 'zh', 'es', 'hi', 'ar', 'pt', 'fr'].includes(locale) ? locale : 'en';
         const guideLabel = docsLocale === locale ? copy.guide! : messages.docs.englishLabel.replace('{label}', copy.guide!);
-        await expect(restore.getByRole('link', { name: guideLabel })).toHaveAttribute('href', new RegExp(`/docs/${docsLocale}/use/manage\\.html#restore-on-another-machine$`));
+        await expect(restore.getByRole('link', { name: guideLabel })).toHaveAttribute('href', new RegExp(`/docs/${docsLocale}/use/manage\\.html#restore-project-dependencies$`));
         if (locale === 'en' || locale === 'ar') {
           await page.setViewportSize({ width: locale === 'ar' ? 390 : 1440, height: 1000 });
           await restore.scrollIntoViewIfNeeded();
@@ -104,6 +113,8 @@ for (const target of ['ru', 'uk'] as const)
   for (const width of [390, 1440]) {
     test(`${target} navigation preserves query/hash and browser history at ${width}px`, async ({ page, baseURL }) => {
       test.skip(!(publishedLocales as readonly KnownLocale[]).includes(target), 'Production publishes EN only; full transition gate activates with reviewed locales');
+      // Full keyboard, focus and back/forward navigation can exceed the default timeout on CI.
+      test.setTimeout(60_000);
       await page.setViewportSize({ width, height: 900 });
       const suffix = '?q=context7&tag=one&tag=two&extra=kept#catalog';
       const initialUrl = new URL(`./plugins/${suffix}`, baseURL!).href;

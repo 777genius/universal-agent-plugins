@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { isReviewedMarketingKit } from '~/data/marketingKitDemo';
 import { usePluginInstallSelection } from '~/composables/usePluginInstallSelection';
 import type { RegistryDiagnostic, ClientID, RegistryPlugin } from '~/types/registry';
 import { pluginCommands } from '~/utils/commands';
@@ -21,7 +20,6 @@ const {
   targetDistributions,
   projectAvailable,
   projectAutomatic,
-  projectSourceFallback,
   updateTargets,
   updateAutoDetect,
   updateScope,
@@ -31,7 +29,6 @@ const autoOption = computed(() => ({
   summary: t('registryUi.install.allInstalledAgents'),
   description: t('registryUi.install.detectedWhenYouRunTheCommand'),
 }));
-const marketingProjectBlocked = computed(() => isReviewedMarketingKit(props.plugin) && scope.value === 'project' && !projectAvailable.value);
 const targetOptions = computed(() =>
   clients.map((client) => ({
     value: client.id,
@@ -71,7 +68,6 @@ const desktopCodexCommand = computed(() =>
     : '',
 );
 const commands = computed(() =>
-  !marketingProjectBlocked.value &&
   (scope.value !== 'project' || !autoDetect.value || Boolean(projectAutomatic.value?.resolution.distribution)) &&
   props.plugin.installable &&
   props.plugin.discovery?.availability !== 'unavailable' &&
@@ -99,7 +95,7 @@ function diagnosticText(
 }
 const resolution = selection.resolution;
 const expectedSource = computed(() =>
-  canUseSource.value && !marketingProjectBlocked.value ? resolution.value.distribution : undefined,
+  canUseSource.value ? resolution.value.distribution : undefined,
 );
 const expectedSourceLabel = computed(() =>
   expectedSource.value ? t(`registryUi.distribution.${expectedSource.value.kind}`) : '',
@@ -185,18 +181,12 @@ const vendorInstall = computed(() =>
       <InstallScopeSelect
         :model-value="scope"
         :project-available="projectAvailable"
-        :always-show="isReviewedMarketingKit(plugin)"
-        :unavailable-reason="isReviewedMarketingKit(plugin) && !projectAvailable ? t('registryUi.install.scope.marketingKitProjectUnavailable') : undefined"
         @update:model-value="updateScope"
       />
-      <p v-if="projectSourceFallback" class="install-panel__notice">
-        {{ t('registryUi.install.scope.pinnedGitFallbackInfo') }}
-      </p>
-      <div v-if="!marketingProjectBlocked" class="install-command-row">
+      <div class="install-command-row">
         <div class="target-select">
           <span>{{ t('registryUi.install.agents') }}</span
           ><AppMultiSelect
-            v-if="!marketingProjectBlocked"
             :model-value="targets"
             :auto-selected="autoDetect"
             :auto-option="autoOption"
@@ -219,6 +209,7 @@ const vendorInstall = computed(() =>
         v-if="commands && !autoDetect && expectedSource"
         :distribution="expectedSource"
         :targets="targets"
+        :scope="scope"
       />
       <p v-if="commands?.saveMode" class="install-panel__notice">
         {{

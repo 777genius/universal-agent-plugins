@@ -41,7 +41,7 @@ function packagedDocuments() {
 }
 
 const allowedTargets = new Set([
-  "codex", "chatgpt", "cursor", "copilot", "vscode", "kiro",
+  "codex", "chatgpt", "chatgptweb", "cursor", "copilot", "vscode", "kiro",
   "claude", "gemini", "opencode", "cline", "windsurf"
 ]);
 const exactSourcePattern = /^(?:github:)?[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9][A-Za-z0-9._-]*@[0-9a-f]{40}\/\/[A-Za-z0-9._/-]+$/;

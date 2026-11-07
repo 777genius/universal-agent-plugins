@@ -2,6 +2,12 @@
   color-scheme: light dark;
 }
 
+/* Clip decorative overhang at the document boundary; nested tables keep their own scroll. */
+html,
+body {
+  overflow-x: clip;
+}
+
 body {
   margin: 0;
   font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;

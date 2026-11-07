@@ -51,9 +51,9 @@ próprio ambiente de execução. Os exemplos deste caminho usam `agentplugins`;
 4. [Mantenha o estado instalado](./manage) com listagem, atualização, reparo e remoção.
 5. Quando necessário, restaure um conjunto compartilhado de dependências a partir de `uap.toml` e `uap.lock`.
 
-A [CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95)
+A [CLI](https://github.com/777genius/universal-agent-plugins/releases/latest)
 é o instalador nativo atual. Ela adiciona uma API local de gerenciamento e
-extensões nativas do Pi no escopo de usuário. Consulte
+extensões nativas do Pi nos escopos de usuário e de projeto elegível. Consulte
 [gerenciamento local](./manage#local-management-api) e
 [compatibilidade com o Pi](../reference/client-compatibility#pi-native-extensions).
 Canais de gerenciadores de pacotes podem demorar para receber a atualização;
