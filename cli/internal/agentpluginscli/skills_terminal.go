@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 
@@ -220,22 +221,8 @@ func renderSkillsResult(cmd *cobra.Command, opts *options, result SkillsBatchRes
 					"      reload if prompted, and confirm the Skill is visible.\n")
 			return err
 		}
-		// A partial batch can still deliver some Skills; files do not prove native readiness.
-		if result.Status == "partial" {
-			applied := 0
-			for _, item := range result.Items {
-				if item.Status == "completed" || item.Status == "unchanged" {
-					applied++
-				}
-			}
-			if applied > 0 {
-				if _, err := fmt.Fprintf(writer,
-					"Files: %d of %d target results installed or already up to date; other targets need attention.\n"+
-						"Agent discovery: not verified by this Skills flow.\n"+
-						"Activation: not verified.\n", applied, len(result.Items)); err != nil {
-					return err
-				}
-			}
+		if err := renderPartialSkillsReadiness(writer, result); err != nil {
+			return err
 		}
 		for _, instruction := range result.RepairInstructions {
 			if _, err := fmt.Fprintln(writer, "Next:", prompt.SafeText(instruction)); err != nil {
@@ -251,4 +238,26 @@ func renderSkillsResult(cmd *cobra.Command, opts *options, result SkillsBatchRes
 		RepairInstructions []string                     `json:"repairInstructions"`
 	}{Status: result.Status, Items: outcome.Items, RepairInstructions: outcome.Result.RepairInstructions}
 	return json.NewEncoder(cmd.OutOrStdout()).Encode(output)
+}
+
+
+// A partial batch can still deliver some Skills; files do not prove native readiness.
+func renderPartialSkillsReadiness(writer io.Writer, result SkillsBatchResult) error {
+	if result.Status != "partial" {
+		return nil
+	}
+	applied := 0
+	for _, item := range result.Items {
+		if item.Status == "completed" || item.Status == "unchanged" {
+			applied++
+		}
+	}
+	if applied == 0 {
+		return nil
+	}
+	_, err := fmt.Fprintf(writer,
+		"Files: %d of %d target results installed or already up to date; other targets need attention.\n"+
+			"Agent discovery: not verified by this Skills flow.\n"+
+			"Activation: not verified.\n", applied, len(result.Items))
+	return err
 }
