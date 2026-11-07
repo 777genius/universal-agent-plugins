@@ -2218,8 +2218,8 @@ class CrossPlatformPublishedProofRegressions(unittest.TestCase):
             trusted_binary = str(root / "trusted-qodercli")
             env = {"QODER_CONFIG_DIR": str(profile.resolve(strict=True))}
             rows = [{"id": "atlassian@local", "version": "0.1.0"}]
-            with patch.dict(audit.AGENT_BINARIES, {"qodercli": trusted_binary}, clear=True), \\
-                 patch.object(audit, "call", return_value={"exit_code": 0, "_json": rows}) as probe:
+            with (patch.dict(audit.AGENT_BINARIES, {"qodercli": trusted_binary}, clear=True),
+                  patch.object(audit, "call", return_value={"exit_code": 0, "_json": rows}) as probe):
                 self.assertEqual(audit.qoder_native_plugin_state(
                     home, env, root, "atlassian", "0.1.0"), {"status": "registered"})
                 self.assertEqual(probe.call_args.args[0][2], str(profile))
@@ -2255,8 +2255,8 @@ class CrossPlatformPublishedProofRegressions(unittest.TestCase):
                         ]}} if operation == "add" else
                                   {"data": {"installations": matched if state["installed"] else []}})}
 
-            with patch.object(audit, "call", side_effect=fake_call), \\
-                 patch.object(audit, "matching_installations", return_value=matched):
+            with (patch.object(audit, "call", side_effect=fake_call),
+                  patch.object(audit, "matching_installations", return_value=matched)):
                 row = audit.do_case("/unused/agentplugins", "opencode", "plugin",
                                     "atlassian", 0, root, {})
             self.assertTrue(row["prepared_components_only"])
