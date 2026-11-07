@@ -36,6 +36,7 @@ func newInstallCommand(app App, opts *options) *cobra.Command {
 				return scopeErr
 			}
 			if len(args) == 1 {
+				opts.yes = yes
 				return executeAddCommand(cmd, app, opts, args[0], activationComplete, authComplete)
 			}
 			if err := validateEnvironmentOptions("install", opts); err != nil {
@@ -46,7 +47,7 @@ func newInstallCommand(app App, opts *options) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			opts.installSelection = &installSelection{Scope: string(app.scope()), ProjectRoot: app.ProjectRoot, ManifestPath: manifestPath, LockPath: lockPath}
+			opts.installSelection = &installSelection{Scope: string(app.scope()), ProjectRoot: app.ProjectRoot, ManifestPath: manifestPath, LockPath: lockPath, ScopeSelectionReason: scopeSelectionReason(cmd, opts)}
 			app.Lifecycle.PrepareHostsForPreview = true
 			return runDependencySyncConverge(cmd, app, opts, lockedOnly, yes, func(convergeApp App) (bool, error) {
 				return repairDeclaredEnvironmentDrift(cmd, convergeApp, opts, yes)
@@ -184,7 +185,7 @@ func selectInstallScope(cmd *cobra.Command, opts *options) error {
 	if err != nil {
 		return err
 	}
-	opts.scope, opts.projectRoot = "project", root
+	opts.scope, opts.projectRoot, opts.scopeInferred = "project", root, true
 	return nil
 }
 
@@ -203,8 +204,9 @@ func installLockedOnly(lockPath string, explicit bool) (bool, error) {
 }
 
 type installSelection struct {
-	Scope        string `json:"scope"`
-	ProjectRoot  string `json:"project_root,omitempty"`
-	ManifestPath string `json:"manifest_path"`
-	LockPath     string `json:"lock_path"`
+	Scope                string `json:"scope"`
+	ScopeSelectionReason string `json:"scope_selection_reason"`
+	ProjectRoot          string `json:"project_root,omitempty"`
+	ManifestPath         string `json:"manifest_path"`
+	LockPath             string `json:"lock_path"`
 }

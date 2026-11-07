@@ -476,7 +476,15 @@ for (const width of [1280, 390]) {
     expect(scanIcon!.width).toBe(18);
     expect(Math.abs(reviewIcon!.x - scanIcon!.x)).toBeLessThan(1);
     expect(Math.abs(reviewIcon!.y + 9 - (reviewBox!.y + reviewBox!.height / 2))).toBeLessThan(1);
-    expect(Math.abs(scanIcon!.y + 9 - (scanBox!.y + scanBox!.height / 2))).toBeLessThan(1);
+    // SkillSpector data may resolve while the label is wrapping on mobile.
+    // Read both rectangles in the same browser frame, then assert alignment.
+    await expect.poll(() => summary.evaluate((element) => {
+      const icon = element.querySelector('svg.skillspector__icon');
+      if (!icon) return Infinity;
+      const box = element.getBoundingClientRect();
+      const iconBox = icon.getBoundingClientRect();
+      return Math.abs(iconBox.y + iconBox.height / 2 - (box.y + box.height / 2));
+    })).toBeLessThan(1);
     expect(scanBox!.y - reviewBox!.y - reviewBox!.height).toBeGreaterThanOrEqual(3);
     expect(scanBox!.y - reviewBox!.y - reviewBox!.height).toBeLessThanOrEqual(5);
     await expect(summary.locator('svg.skillspector__arrow')).toHaveCount(1);
