@@ -209,6 +209,7 @@ const vendorInstall = computed(() =>
         v-if="commands && !autoDetect && expectedSource"
         :distribution="expectedSource"
         :targets="targets"
+        :scope="scope"
       />
       <p v-if="commands?.saveMode" class="install-panel__notice">
         {{
