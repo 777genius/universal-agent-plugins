@@ -46,11 +46,4 @@ const { t } = useI18n();
   font-size: 0.78rem;
   text-underline-offset: 2px;
 }
-.desktop-guide :deep(.command-snippet) {
-  min-width: 0;
-}
-.desktop-guide :deep(.command-snippet pre) {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
 </style>
