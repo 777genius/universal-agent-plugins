@@ -130,7 +130,8 @@ for (const width of [1440, 390]) {
     expect(command.match(/chatgptweb/g)).toHaveLength(1);
     expect(command).not.toMatch(/--target .*\bcodex\b/);
     await snippet.locator('button').click();
-    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(command);
+    // Compact snippets visually wrap before --target, but copy the executable one-line command.
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(command.replace(/\s+/g, ' '));
     await expect(card.locator('.desktop-guide')).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     expect(errors).toEqual([]);
