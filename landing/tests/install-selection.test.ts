@@ -40,6 +40,15 @@ function mount(plugin: RegistryPlugin) {
 }
 
 
+test('mixed ChatGPT Web and Codex/Desktop commands use the imperative no-save path', () => {
+  const plugin = data();
+  const oldCommand = pluginCommands(plugin, ['codex', 'chatgpt-web']).add;
+  const splitCommand = pluginCommands(plugin, ['chatgpt-desktop', 'chatgpt-web']).add;
+  assert.match(oldCommand, /--target codex,chatgpt-web --no-save$/);
+  assert.match(splitCommand, /--target chatgpt-desktop,chatgpt-web --no-save$/);
+  assert.doesNotMatch(pluginCommands(plugin, ['codex']).add, /--no-save/);
+});
+
 test('ChatGPT Web needs signed app binding; Desktop shares Codex without project fallback', () => {
   setActivePinia(createPinia());
   const plugin = data();
