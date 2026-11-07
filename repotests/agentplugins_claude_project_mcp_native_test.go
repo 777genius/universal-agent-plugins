@@ -30,7 +30,7 @@ type claudeProjectScriptedModel struct {
 	server                                        *httptest.Server
 	mu                                            sync.Mutex
 	requests, advertised, calls, results, invalid int
-	toolName                                     string
+	toolName                                      string
 	invalidKinds                                  []string
 }
 
@@ -398,12 +398,26 @@ func claudeProjectManagedMCPCall(t *testing.T) {
 	}
 	events := filepath.Join(f.base.Root, "managed-claude-mcp-methods.log")
 	copyTree(t, commandsFixtureSource(t), f.base.PackageRoot)
+	// Portable stdio commands must be package-relative; an absolute host test
+	// binary is invalid at the MCP server boundary and would be silently
+	// excluded from the delivery plan. Bundle the genuine test responder.
+	bundled := filepath.Join(f.base.PackageRoot, "bin", filepath.Base(executable))
+	if err := os.MkdirAll(filepath.Dir(bundled), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := linkOrCopyFile(executable, bundled); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(bundled, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	portableCommand := "./" + filepath.ToSlash(filepath.Join("bin", filepath.Base(executable)))
 	// The canonical portable mcp.json is part of the UAP-installed source.
 	// No project .mcp.json or pre-registered foreign server is authored.
 	nativeJSON(t, filepath.Join(f.base.PackageRoot, "mcp.json"), map[string]any{
 		"$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
 		"mcpServers": map[string]any{"uap_project_fixture": map[string]any{
-			"type": "stdio", "command": executable,
+			"type": "stdio", "command": portableCommand,
 			"args": []string{"-test.run=^TestOpenCodeV2MCPStdioResponder$"},
 			"env": map[string]string{
 				"UAP_OPENCODE_V2_MCP_HELPER": "1",
