@@ -51,9 +51,10 @@ func checkDesktopOnlyCodexBinding(t *testing.T, fixture cliFixture, receipts int
 	if len(state.Installations) != 1 || len(state.Installations[0].Clients) != 1 {
 		t.Fatalf("expected one canonical installation and binding, got %+v", state.Installations)
 	}
-	binding, ok := state.Installations[0].Clients[string(domain.ClientCodex)]
-	if !ok || binding.Materialization != domain.MaterializationMaterialized || len(binding.Receipts) != receipts {
-		t.Fatalf("Desktop alias must retain exactly the Codex binding and %d receipts: %+v", receipts, state.Installations[0].Clients)
+	for _, binding := range state.Installations[0].Clients {
+		if binding.ClientID != domain.ClientCodex || binding.Materialization != domain.MaterializationMaterialized || len(binding.Receipts) != receipts {
+			t.Fatalf("Desktop alias must retain exactly the Codex binding and %d receipts: %+v", receipts, state.Installations[0].Clients)
+		}
 	}
 }
 
