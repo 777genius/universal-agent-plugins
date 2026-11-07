@@ -64,7 +64,7 @@ jobs:
       fail-fast: false
       max-parallel: 3
       matrix:
-        target: ${{ fromJSON(github.event_name == 'pull_request' && '["codex","claude","opencode","gemini","copilot"]' || '["codex","claude","opencode","gemini","copilot","cline","kimi","qoder","pi"]') }}
+        target: ${{ fromJSON(github.event_name == 'pull_request' && github.event.pull_request.draft && '["codex","claude","opencode","gemini","copilot"]' || '["codex","claude","opencode","gemini","copilot","cline","kimi","qoder","pi"]') }}
         kind: [plugin, skill]
         exclude:
           - target: pi
