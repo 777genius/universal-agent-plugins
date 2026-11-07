@@ -115,7 +115,7 @@ func searchReviewedDirectory(ctx context.Context, app App, query string, options
 	}
 	var selectedClient domain.ClientID
 	if strings.TrimSpace(options.client) != "" {
-		parsed, err := parseTargetOption(options.client)
+		parsed, err := parseTargetOption(canonicalPublicTargetName(options.client))
 		if err != nil || len(parsed) != 1 {
 			return searchResponse{}, fmt.Errorf("--client must name exactly one supported client")
 		}

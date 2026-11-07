@@ -30,10 +30,7 @@ func batchFailureNeedsDoctor(target addTargetResult) bool {
 
 func batchRetryCommand(source string, target domain.ClientID) string {
 	source = strings.TrimSpace(source)
-	targetID := strings.TrimSpace(string(target))
-	if target == domain.ClientChatGPT {
-		targetID = "chatgptweb"
-	}
+	targetID := strings.TrimSpace(publicCLITargetName(target))
 	if source == "" || targetID == "" {
 		return ""
 	}

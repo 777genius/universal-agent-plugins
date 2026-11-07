@@ -12,6 +12,30 @@ import (
 
 // The public CLI flag is normalized once. Canonical state/Directory identifiers
 // must still parse with chatgpt meaning the remote Web client.
+func TestCanonicalClientRecoveryCommandsRemainPubliclyExecutable(t *testing.T) {
+	t.Parallel()
+	if got := publicCLITargetName(domain.ClientChatGPT); got != "chatgptweb" {
+		t.Fatalf("remote ChatGPT recovery target = %q", got)
+	}
+	if got := publicCLITargetName(domain.ClientCodex); got != "codex" {
+		t.Fatalf("local Codex recovery target = %q", got)
+	}
+	for raw, want := range map[string]string{
+		"chatgpt": "codex", "chatgptweb": "chatgpt",
+		"chatgpt-desktop": "codex", "chatgpt-web": "chatgpt",
+		"cursor": "cursor",
+	} {
+		if got := canonicalPublicTargetName(raw); got != want {
+			t.Errorf("public target %q => %q, want %q", raw, got, want)
+		}
+	}
+	installation := domain.Installation{InstallationID: "00000000-0000-4000-8000-000000000001"}
+	binding := domain.ClientBinding{ClientID: string(domain.ClientChatGPT), Scope: string(domain.ScopeUser)}
+	if got := repairAction(installation, binding); !strings.Contains(got, "--target chatgptweb") {
+		t.Fatalf("doctor suggested an unsafe Desktop repair for Web: %q", got)
+	}
+}
+
 func TestPublicChatGPTNamesStaySeparateFromCanonicalIDs(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct{ input, want string }{
