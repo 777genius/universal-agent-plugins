@@ -1,0 +1,136 @@
+name: Published npm 0.1.101 macOS arm64 client installation E2E
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - '.github/workflows/agentplugins-published-macos-audit.yml'
+      - 'scripts/live-install-audit.py'
+      - 'scripts/test_live_install_audit_env.py'
+      - 'scripts/test_live_install_audit_components.py'
+      - 'scripts/run-native-client-matrix.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: published-macos-client-audit-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  macos-native-install:
+    name: macOS arm64 npm 0.1.101 / ${{ matrix.target }} / ${{ matrix.kind }} (2 real sources)
+    runs-on: macos-15
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        include:
+          - { target: codex, kind: plugin, native_package: '@openai/codex@0.153.4' }
+          - { target: codex, kind: skill, native_package: '@openai/codex@0.153.4' }
+          - { target: claude, kind: plugin, native_package: '@anthropic-ai/claude-code@2.1.263' }
+          - { target: claude, kind: skill, native_package: '@anthropic-ai/claude-code@2.1.263' }
+          - { target: opencode, kind: plugin, native_package: 'opencode-ai@1.18.34' }
+          - { target: opencode, kind: skill, native_package: 'opencode-ai@1.18.34' }
+          - { target: gemini, kind: plugin, native_package: '@google/gemini-cli@0.66.0' }
+          - { target: gemini, kind: skill, native_package: '@google/gemini-cli@0.66.0' }
+          - { target: copilot, kind: plugin, native_package: '@github/copilot@1.0.105' }
+          - { target: copilot, kind: skill, native_package: '@github/copilot@1.0.105' }
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Check macOS architecture and disposable native environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -s)" = Darwin
+          test "$(uname -m)" = arm64
+          python3 -m unittest \
+            scripts.test_live_install_audit_env.IsolatedClientEnvironmentTest.test_genuine_project_git_init_uses_empty_hooks_inside_case \
+            scripts.test_live_install_audit_env.IsolatedClientEnvironmentTest.test_codex_marketplace_containment_follows_physical_directory_identity -v
+          python3 -m unittest discover -s scripts -p 'test_live_install_audit_components.py' -v
+
+      # Actual npm 0.1.101 bytes and real client CLIs, never a Go-source
+      # installer substituted for the release. No model login or vendor token.
+      - name: Bootstrap published installer and pinned native client
+        id: bootstrap
+        shell: bash
+        env:
+          NATIVE_PACKAGE: ${{ matrix.native_package }}
+          NATIVE_TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          npm install --global universal-agent-plugins@0.1.101 "$NATIVE_PACKAGE"
+          test "$(agentplugins version)" = "agentplugins 0.1.101"
+          command -v agentplugins
+          if [[ "$NATIVE_TARGET" == opencode ]]; then
+            # The verified host probe must NOT accept an npm shell shim.
+            # Reuse the independently SHA-512-pinned upstream macOS arm64 binary.
+            native_dir="$RUNNER_TEMP/pinned-opencode"
+            mkdir -p "$native_dir"
+            python3 - "$native_dir" <<'PY'
+          import importlib.util
+          from pathlib import Path
+          import sys
+          source = Path("scripts/run-native-client-matrix.py").resolve()
+          spec = importlib.util.spec_from_file_location("native_matrix_pins", source)
+          module = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(module)
+          target = Path(sys.argv[1])
+          binary, evidence = module.provision(module.PINS["darwin-arm64"]["opencode"], target, "opencode")
+          if binary != target / "opencode" or evidence["version"] != "1.18.34":
+              raise RuntimeError("verified native OpenCode provenance mismatch")
+          print("Verified native OpenCode 1.18.34 with frozen SHA-512")
+          PY
+            "$native_dir/opencode" --version
+            echo "$native_dir" >> "$GITHUB_PATH"
+          else
+            command -v "$NATIVE_TARGET"
+            python3 - "$NATIVE_TARGET" <<'PY'
+          import subprocess
+          import sys
+          subprocess.run([sys.argv[1], "--version"], timeout=25, check=True)
+          PY
+          fi
+          mkdir -p "$RUNNER_TEMP/published-macos-proof"
+          npm ls --global --all --json > "$RUNNER_TEMP/published-macos-proof/npm-global-dependencies.json" \
+            2> "$RUNNER_TEMP/published-macos-proof/npm-global-dependencies-stderr.txt" || true
+
+      - name: Real install / list / repeat / locks / native registration / remove
+        if: ${{ !cancelled() }}
+        shell: bash
+        env:
+          AUDIT_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          AUDIT_VENDOR_OUTCOME: ${{ steps.bootstrap.outcome }}
+          AUDIT_TARGET: ${{ matrix.target }}
+          AUDIT_KIND: ${{ matrix.kind }}
+        run: |
+          set -euo pipefail
+          [[ "$AUDIT_PR_HEAD_SHA" =~ ^[a-f0-9]{40}$ ]] || exit 2
+          mkdir -p "$RUNNER_TEMP/published-macos-proof"
+          cli="$(command -v agentplugins || true)"
+          python3 scripts/live-install-audit.py \
+            --cli "${cli:-unavailable-native-installer}" \
+            --target "$AUDIT_TARGET" --kind "$AUDIT_KIND" --limit 2 \
+            --report-dir "$RUNNER_TEMP/published-macos-proof"
+
+      - name: Preserve source-by-source JSON even when installation fails
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: published-0.1.101-macos-arm64-${{ matrix.target }}-${{ matrix.kind }}
+          path: ${{ runner.temp }}/published-macos-proof/
+          if-no-files-found: warn
+          retention-days: 14
