@@ -55,9 +55,11 @@ func TestProjectComposedPureComponentLifecycleAcrossUserAndProjects(t *testing.T
 			projectJourneyGit(t, transport.repo, "commit", "-m", "select "+kind)
 			projectJourneyGit(t, transport.repo, "push", "--quiet", transport.remote, "main")
 			journey := newProjectJourney(t, transport)
+			ownedPaths := make(map[string]string, 3)
 			for _, root := range []string{"", journey.a, journey.b} {
 				journey.run(t, root, "add", transport.endpoint, "--alias", "docs", "--target", "gemini")
 				_, binding := journey.owned(t, root)
+				ownedPaths[root] = binding.TargetLocator
 				skill := filepath.Join(journey.nativeRoot(root), "skills", "docs", "SKILL.md")
 				settings := projectJourneyRead(t, filepath.Join(journey.nativeRoot(root), "settings.json"))
 				if kind == "skills-only" {
@@ -91,9 +93,10 @@ func TestProjectComposedPureComponentLifecycleAcrossUserAndProjects(t *testing.T
 			}
 			journey.run(t, journey.a, "repair", updated.InstallationID, "--target", "gemini")
 			journey.run(t, journey.a, "remove", "docs", "--target", "gemini")
-			if len(journey.state(t, journey.a).Installations) != 0 {
-				t.Fatal("Project A removal retained its installation")
+			if len(journey.state(t, journey.a).EnvironmentReceipts) != 0 {
+				t.Fatal("Project A removal retained active dependency ownership")
 			}
+			projectJourneyAbsent(t, ownedPaths[journey.a])
 			if got := securityFixtureTree(t, journey.nativeRoot("")); !reflect.DeepEqual(userNative, got) {
 				t.Fatalf("Project A changed User native files: before=%v after=%v", userNative, got)
 			}
@@ -109,9 +112,10 @@ func TestProjectComposedPureComponentLifecycleAcrossUserAndProjects(t *testing.T
 			journey.run(t, journey.b, "remove", "docs", "--target", "gemini")
 			journey.run(t, "", "remove", "docs", "--target", "gemini")
 			for _, root := range []string{"", journey.a, journey.b} {
-				if len(journey.state(t, root).Installations) != 0 {
-					t.Fatal("removed pure component still owns a binding", root)
+				if len(journey.state(t, root).EnvironmentReceipts) != 0 {
+					t.Fatal("removed pure component retains active dependency ownership", root)
 				}
+				projectJourneyAbsent(t, ownedPaths[root])
 				if projectJourneyRead(t, filepath.Join(journey.nativeRoot(root), "skills", "foreign", "SKILL.md")) != "foreign skill\n" ||
 					!strings.Contains(projectJourneyRead(t, filepath.Join(journey.nativeRoot(root), "settings.json")), "foreign.test") {
 					t.Fatal("pure component removal changed foreign client content")
