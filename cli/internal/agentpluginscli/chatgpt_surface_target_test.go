@@ -73,10 +73,18 @@ func TestChatGPTSurfaceTargetParsingAndScope(t *testing.T) {
 		}
 	}
 	for _, scope := range []string{"project", "user"} {
-		for _, raw := range []string{" chatgpt-desktop ", "codex,CHATGPT-DESKTOP"} {
-			err := validateCommonOptions(&options{format: "human", scope: scope, target: raw})
+		for _, raw := range []string{" chatgpt ", "CHATGPT", "codex,chatgpt", " chatgpt-desktop ", "codex,CHATGPT-DESKTOP"} {
+			var canonical, input string
+			flag := targetFlagValue{target: &canonical, input: &input}
+			if err := flag.Set(raw); err != nil {
+				t.Fatal(err)
+			}
+			err := validateCommonOptions(&options{format: "human", scope: scope, target: canonical, targetInput: input})
 			if scope == "project" && err == nil {
-				t.Errorf("ChatGPT Desktop must refuse project scope, %q", raw)
+				t.Errorf("ChatGPT Desktop must refuse project scope before mutation, %q", raw)
+			}
+			if scope == "user" && raw == "chatgpt" && err != nil {
+				t.Errorf("ChatGPT Desktop user scope must remain available: %v", err)
 			}
 		}
 	}
