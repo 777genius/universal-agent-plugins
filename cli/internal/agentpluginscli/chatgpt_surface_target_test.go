@@ -42,27 +42,30 @@ func TestChatGPTSurfaceTargetParsingAndScope(t *testing.T) {
 	}
 }
 
-func TestChatGPTDesktopAliasUsesCodexLifecycleWithoutSecondBinding(t *testing.T) {
-	t.Parallel()
-	fixture := newCLIFixture(t, []domain.DetectedClient{
-		fixtureClient(t, domain.ClientCodex),
-	})
-	plugin := writeCLIPlugin(t)
-
-	if _, _, err := fixture.execute(false, "add", plugin, "--target", "chatgpt-desktop", "--format", "json"); err != nil {
-		t.Fatalf("Desktop alias add: %v", err)
-	}
-	assertClientBindings(t, fixture, domain.MaterializationMaterialized, 1)
+func checkDesktopOnlyCodexBinding(t *testing.T, fixture cliFixture, receipts int) {
+	t.Helper()
 	state, err := fixture.store.Load()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(state.Installations) != 1 || len(state.Installations[0].Clients) != 1 {
-		t.Fatalf("expected one canonical installation and client binding, got %+v", state.Installations)
+		t.Fatalf("expected one canonical installation and binding, got %+v", state.Installations)
 	}
-	if _, ok := state.Installations[0].Clients[string(domain.ClientCodex)]; !ok {
-		t.Fatal("Desktop alias did not retain the canonical Codex-owned client binding")
+	binding, ok := state.Installations[0].Clients[string(domain.ClientCodex)]
+	if !ok || binding.Materialization != domain.MaterializationMaterialized || len(binding.Receipts) != receipts {
+		t.Fatalf("Desktop alias must retain exactly the Codex binding and %d receipts: %+v", receipts, state.Installations[0].Clients)
 	}
+}
+
+func TestChatGPTDesktopAliasUsesCodexLifecycleWithoutSecondBinding(t *testing.T) {
+	t.Parallel()
+	fixture := newCLIFixture(t, []domain.DetectedClient{fixtureClient(t, domain.ClientCodex)})
+	plugin := writeCLIPlugin(t)
+
+	if _, _, err := fixture.execute(false, "add", plugin, "--target", "chatgpt-desktop", "--format", "json"); err != nil {
+		t.Fatalf("Desktop alias add: %v", err)
+	}
+	checkDesktopOnlyCodexBinding(t, fixture, 1)
 
 	manifest := filepath.Join(plugin, "plugin.json")
 	body, err := os.ReadFile(manifest)
@@ -70,19 +73,18 @@ func TestChatGPTDesktopAliasUsesCodexLifecycleWithoutSecondBinding(t *testing.T)
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(manifest,
-		[]byte(strings.Replace(string(body), `"version": "1.0.0"`, `"version": "2.0.0"`, 1)),
-		0o644); err != nil {
+		[]byte(strings.Replace(string(body), `"version": "1.0.0"`, `"version": "2.0.0"`, 1)), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err := fixture.execute(false, "update", "demo", "--target", "chatgpt-desktop", "--format", "json"); err != nil {
 		t.Fatalf("Desktop alias update: %v", err)
 	}
-	assertClientBindings(t, fixture, domain.MaterializationMaterialized, 2)
+	checkDesktopOnlyCodexBinding(t, fixture, 2)
 
 	if _, _, err := fixture.execute(false, "remove", "demo", "--target", "chatgpt-desktop", "--external-uninstalled", "--format", "json"); err != nil {
 		t.Fatalf("Desktop alias remove: %v", err)
 	}
-	state, err = fixture.store.Load()
+	state, err := fixture.store.Load()
 	if err != nil {
 		t.Fatal(err)
 	}
