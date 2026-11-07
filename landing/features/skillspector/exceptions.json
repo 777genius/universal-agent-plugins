@@ -41,6 +41,10 @@
     {
       "digest": "sha256:3a6bac66327c0285edb6012e58fad74604c9d4bd6d3c6dfb0b25d7dcc8f59faf",
       "id": "static-standard-v3"
+    },
+    {
+      "digest": "sha256:091ca0575d0cedca4218cc0e05fdd3ed8921bb190e0e2c2a91ea8c6622c0aaee",
+      "id": "static-extended-v3"
     }
   ]
 }

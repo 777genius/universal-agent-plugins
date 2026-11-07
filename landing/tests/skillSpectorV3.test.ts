@@ -913,12 +913,13 @@ describe('SkillSpector v3 exact producer contract', () => {
     current.records[0].freshness = 'current';
     assert.throws(() => decodeSkillSpectorShardV3(current, index, part), /invalid/);
   });
-  it('accepts exact Cloudflare annotations under both published profiles', () => {
+  it('accepts exact Cloudflare annotations under three published profiles', () => {
     // The previously reviewed E4 matches keep their exact source and snippet
-    // digests across two separately pinned production scanner profiles.
+    // digests across three separately pinned production scanner profiles.
     for (const profile of [
       { id: 'static-extended-v3', digest: 'sha256:255c72648dd6a6e6b93ea75f5ad51553826692c60dd8222c7fb55613cf5766ba' },
       { id: 'static-standard-v3', digest: 'sha256:3a6bac66327c0285edb6012e58fad74604c9d4bd6d3c6dfb0b25d7dcc8f59faf' },
+      { id: 'static-extended-v3', digest: 'sha256:091ca0575d0cedca4218cc0e05fdd3ed8921bb190e0e2c2a91ea8c6622c0aaee' },
     ]) {
       const newestManifest = structuredClone(manifest);
       newestManifest.profiles = newestManifest.profiles.map((entry) =>
