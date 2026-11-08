@@ -141,6 +141,14 @@ def check_project_a_unchanged(observed, expected, current_lock, expected_lock, s
         raise AssertionError(f"{stage}: Project A signed lock changed")
 
 
+def bind_pinned_launcher_cache(env, cache, sandbox):
+    """Share only the SHA-checked released CLI binary, not native client state."""
+    if (not cache.is_dir() or cache.is_symlink()
+            or not audit["path_inside_case"](cache, sandbox)):
+        raise AssertionError("released CLI cache must be a real in-sandbox directory")
+    env["AGENTPLUGINS_CACHE_DIR"] = str(cache)
+
+
 def execute(cli, env, project, label, *args):
     result = invoke([cli, *args, "--format", "json"], env, project, 180)
     verified(result, label)
@@ -177,7 +185,13 @@ def main():
     try:
         with tempfile.TemporaryDirectory(prefix="uap-real-marketing-kit-") as location:
             root = Path(location)
+            # The npm 0.1.101 launcher validates the SHA-256 on every cache hit.
+            # Keep one private executable cache for A/B: cold restore is still
+            # independent in lock, receipts, clients and native HOME/profile.
+            launcher_cache = root / "released-cli-cache"
+            launcher_cache.mkdir(mode=0o700)
             env, project_a, foreign_a, project_foreign_a, native_foreign_a = run_case(options.cli, options.target, root, "A")
+            bind_pinned_launcher_cache(env, launcher_cache, root)
             foreign_a_files = [(foreign_a, "unmanaged user data\n"),
                                (project_foreign_a, "unmanaged project data\n"),
                                *native_foreign_a]
@@ -223,6 +237,7 @@ def main():
             if (project_a / "uap.lock").read_bytes() != pinned_after_update:
                 raise AssertionError("repair changed the signed lock")
             env_b, project_b, foreign_b, project_foreign_b, native_foreign_b = run_case(options.cli, options.target, root, "B", project_a)
+            bind_pinned_launcher_cache(env_b, launcher_cache, root)
             foreign_b_files = [(foreign_b, "unmanaged user data\n"),
                                (project_foreign_b, "unmanaged project data\n"),
                                *native_foreign_b]

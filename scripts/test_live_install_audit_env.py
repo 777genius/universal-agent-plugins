@@ -46,6 +46,39 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 with self.assertRaisesRegex(AssertionError, "not exact published"):
                     require({**valid, **invalid})
 
+    def test_marketing_kit_released_binary_cache_preserves_profile_isolation(self):
+        # A and B share only the SHA-checked npm launcher executable cache;
+        # neither project nor native profile state may cross scopes.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        bind = runner["bind_pinned_launcher_cache"]
+        with TemporaryDirectory() as temporary, TemporaryDirectory() as external:
+            sandbox = Path(temporary).resolve()
+            cache = sandbox / "released-cli-cache"
+            cache.mkdir(mode=0o700)
+            env_a, *_ = runner["run_case"]("unused", "codex", sandbox, "A")
+            env_b, *_ = runner["run_case"]("unused", "codex", sandbox, "B")
+            bind(env_a, cache, sandbox)
+            bind(env_b, cache, sandbox)
+            self.assertEqual(env_a["AGENTPLUGINS_CACHE_DIR"], str(cache))
+            self.assertEqual(env_b["AGENTPLUGINS_CACHE_DIR"], str(cache))
+            for key in ("HOME", "AGENTPLUGINS_HOME", "XDG_CACHE_HOME", "CODEX_HOME"):
+                self.assertNotEqual(env_a[key], env_b[key], key)
+            with self.assertRaisesRegex(AssertionError, "in-sandbox"):
+                bind(env_a, Path(external), sandbox)
+            self.assertEqual(env_a["AGENTPLUGINS_CACHE_DIR"], str(cache))
+            link = sandbox / "untrusted-cache-link"
+            try:
+                link.symlink_to(Path(external), target_is_directory=True)
+            except (OSError, NotImplementedError):
+                pass
+            else:
+                with self.assertRaisesRegex(AssertionError, "in-sandbox"):
+                    bind(env_b, link, sandbox)
+                self.assertEqual(env_b["AGENTPLUGINS_CACHE_DIR"], str(cache))
+
     def test_marketing_kit_foreign_guard_rejects_symlinked_ancestor(self):
         # Regression: a native-profile directory can be replaced after add.
         # A matching marker behind an outside symlink must not be read as proof.
