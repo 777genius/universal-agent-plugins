@@ -4,6 +4,7 @@ import type { InstallScope } from '~/types/registry';
 import { skillClients } from '~/data/skillClients';
 import { skillDetailIdAvailable, skillDetailRoute, skillInstallCommand, skillNeedsManualSelection, skillPublisherUrl, skillRepositoryUrl } from '~/utils/skillsCatalog';
 import { useInstallPreferencesStore } from '~/stores/installPreferences';
+import { recommendedSkillKey } from '~/data/catalogCuration';
 
 const props = defineProps<{ skill: SkillListing }>();
 const localePath = useLocalePath();
@@ -20,6 +21,7 @@ const chooseInTerminal = ref(saved.autoDetect);
 const targets = ref(saved.targetIds.length ? saved.targetIds : ['codex']);
 const scope = ref<InstallScope>(saved.scope);
 const repositoryUrl = computed(() => skillRepositoryUrl(props.skill));
+const editorialKey = computed(() => recommendedSkillKey(props.skill));
 // Use only the URL already validated by skillRepositoryUrl; never pass an
 // arbitrary upstream DTO field to the public SkillSpector repository lookup.
 const repositoryName = computed(() =>
@@ -95,6 +97,9 @@ function updateScope(value: InstallScope) {
         </p>
       </div>
     </div>
+    <p v-if="editorialKey" class="skill-card__benefit">
+      {{ t('registryUi.skills.featured.items.' + editorialKey) }}
+    </p>
     <SkillSpectorAssessment
       :subject="
         repositoryName
