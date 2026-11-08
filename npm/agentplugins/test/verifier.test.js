@@ -262,3 +262,38 @@ for (const scenario of [
     }
   });
 }
+
+test("canonical verifier retries transient gateway responses without replacing the pin", async () => {
+  const file = destination();
+  let requests = 0;
+  try {
+    await v.downloadFile(URL, file, PIN, { request: transport((res, req) => {
+      requests++;
+      if (requests < 3) {
+        res.statusCode = requests === 1 ? 502 : 504;
+        req.emit("response", res);
+        res.end();
+        return;
+      }
+      req.emit("response", res);
+      res.end(BODY);
+    }) });
+    assert.equal(requests, 3);
+    assert.deepEqual(fs.readFileSync(file), BODY);
+  } finally {
+    if (fs.existsSync(file)) fs.unlinkSync(file);
+  }
+});
+
+test("canonical verifier exhausts transient errors without creating partial cache files", async () => {
+  const file = destination();
+  let requests = 0;
+  await assert.rejects(v.downloadFile(URL, file, PIN, { request: transport((res, req) => {
+    requests++;
+    res.statusCode = 503;
+    req.emit("response", res);
+    res.end();
+  }) }), /HTTP 503/);
+  assert.equal(requests, 3);
+  assert.equal(fs.existsSync(file), false);
+});
