@@ -12,3 +12,13 @@
 
 ## Non-goals
 No Nuxt major migration solely for a transitive advisory, no security alert disabling, no blind pinning, no unrelated app changes.
+
+## Verified current lock graph (2026-11-08)
+Read the **actual 11,397-line** `landing/pnpm-lock.yaml` on `main`, without modifying production dependencies:
+- `glob@10.5.0` is pulled by `archiver-utils@5.0.2` (Nuxt/Nitro build archive path). `glob@13.0.6` also exists independently. The relevant 2026 advisory requires `glob>=14.0.2`; no compatible fix within `^10` is available.
+- `minimatch@3.1.5` is pulled by `@eslint/config-array@0.21.2`, `@eslint/eslintrc@3.3.7`, `eslint@9.39.5`, and `serve-handler@6.1.7`. Other versions `5.1.9`, `9.0.9`, `10.2.6` coexist. Reported advisory requires `minimatch>=11.0.1`; all those older majors remain affected.
+- `eslint` and `serve` are development/build-side dependencies in this app; `archiver-utils` comes through the Nuxt/Nitro archive toolchain. Whether an attack can reach production requests needs an explicit source-based analysis, not an ungrounded assumption.
+- The current `landing/package.json` has `eslint ^9.39.5`, Nuxt `^3.21.10`, and `serve 14.2.6`. Dependencies cannot be safely "fixed" by blindly overriding major `glob@10` to 14 or `minimatch@3` to 11. Upstream archiver support and an ESLint 10 migration require compatibility testing.
+- GitHub issue [archiverjs/node-archiver#822](https://github.com/archiverjs/node-archiver/issues/822) tracks the old glob major. ESLint maintainers state `@eslint/eslintrc` is frozen; switching ESLint generations may be needed.
+
+**Next implementation criterion:** identify a supported compatible upstream release/resolution that really removes the vulnerable versions, regenerate and verify the *full* frozen pnpm lock in a real Node/pnpm environment, and prove browser/build/security E2E. Until then, keep this PR Draft and the alerts visible; do not fabricate a locked graph or silently waive vulnerabilities.
