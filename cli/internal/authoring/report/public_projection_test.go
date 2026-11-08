@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 )
 
@@ -79,7 +80,24 @@ func TestPublicProjectionWithholdsPathsAndPreservesAdviceOrder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(encoded) == "" {
-		t.Fatal("missing projected response")
+	if strings.Contains(string(encoded), "my-token") {
+		t.Fatal("withheld private path leaked in public JSON")
+	}
+	var wire struct {
+		WithheldPathIDs []string `json:"withheld_path_ids"`
+		NextActions     []Action `json:"next_actions"`
+	}
+	if err := json.Unmarshal(encoded, &wire); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(wire.WithheldPathIDs, p.WithheldPathIDs) {
+		t.Fatalf("encoded withheld path IDs changed: %v", wire.WithheldPathIDs)
+	}
+	wireCodes := make([]string, 0, len(wire.NextActions))
+	for _, action := range wire.NextActions {
+		wireCodes = append(wireCodes, action.Code)
+	}
+	if !reflect.DeepEqual(wireCodes, codes) {
+		t.Fatalf("encoded advice order changed: %v", wireCodes)
 	}
 }
