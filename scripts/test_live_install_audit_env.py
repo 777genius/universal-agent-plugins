@@ -58,7 +58,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         failed = {"exit_code": 1, "timeout": False, "stdout_tail": ""}
         timed_out = {"exit_code": None, "timeout": True, "stdout_tail": ""}
         valid = {"exit_code": 0, "timeout": False,
-                 "stdout_tail": "agentplugins 0.1.101\\n"}
+                 "stdout_tail": "agentplugins 0.1.101\n"}
         probe, pause = Mock(side_effect=[failed, timed_out, valid]), Mock()
         with patch.dict(verify.__globals__, {"invoke": probe, "sleep": pause}):
             verify("agentplugins", {}, Path("."))
