@@ -52,3 +52,16 @@ This distinction lowers the immediacy of unproven public runtime exploitation bu
 - **Other independent affected paths remain in this exact lock:** `@vercel/nft@1.11.0 → glob@13.0.6 → minimatch@10.2.6`; `@typescript-eslint/typescript-estree@8.70.0 → minimatch@10.2.6`; `eslint-plugin-import-x@4.17.1 → minimatch@10.2.6`. These were checked directly against the locked `snapshots` entries (lines 7760, 7651, 8707, 9081). Upgrading Nitro alone **cannot** close the glob 13 / minimatch 10 advisory or certify the complete landing graph.
 
 **Next bounded implementation:** use the existing pinned pnpm runtime to resolve `nitropack@2.13.6` *within Nuxt's supported range* via the actual parent graph, regenerate the complete `pnpm-lock.yaml` (no hand edits), check `pnpm why glob minimatch` and `pnpm audit --json`, then run frozen install, lint, generated Pages, browser E2E and archive regression. Track remaining `@vercel/nft` / TypeScript-ESLint / import-x paths separately. The present Draft still contains **no package or lockfile change**, and no vulnerability or deployment gate is qualified as fixed.
+
+## Archiver 8's residual minimatch 10 path (independent upstream manifest audit)
+
+New cross-check on 2026-11-08: the compatible Nitro 2.13.6 candidate **removes one glob 10 chain, but does not remove minimatch 10 from Archiver**.
+
+- [Nitro 2.13.6](https://github.com/nitrojs/nitro/blob/v2.13.6/package.json) declares `archiver: ^8.0.0`, inside Nuxt 3.21.11's supported Nitro range.
+- [Archiver 8.0.0](https://github.com/archiverjs/node-archiver/blob/8.0.0/package.json) no longer lists `archiver-utils`; it declares `zip-stream: ^7.0.2` and `readdir-glob: ^3.0.0`.
+- [zip-stream 7.0.2](https://github.com/archiverjs/node-zip-stream/blob/7.0.2/package.json) also no longer lists `archiver-utils`. This is important: in the *current* lock, **both** `archiver@7.0.1` and `zip-stream@6.0.1` directly pull `archiver-utils@5.0.2 → glob@10.5.0`. Updating only one of those two parents is not sufficient.
+- [readdir-glob 3.0.0](https://github.com/Yqnn/node-readdir-glob/blob/v3.0.0/package.json) still requires **`minimatch: ^10.2.2`**. Thus the supported future route `nitropack@2.13.6 → archiver@8 → readdir-glob@3 → minimatch@10` **remains inside [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249)**. Do not report minimatch fixed when the old glob 10 chain disappears.
+
+Read-only parsing of the **actual pnpm snapshots** gave 714 package instances and 2,170 dependency edges. Other direct affected parents are unchanged: `@vercel/nft@1.11.0 → glob@13.0.6 → minimatch@10.2.6`, `@typescript-eslint/typescript-estree@8.70.0 → minimatch@10.2.6`, and `eslint-plugin-import-x@4.17.1 → minimatch@10.2.6`.
+
+**Acceptance unchanged:** Nitro 2.13.6 is a **partial upstream-compatible candidate**, not advisory closure. Keep Draft until an actual pnpm 12.3.4-generated lock, frozen install, audit, Nuxt generate and Playwright E2E prove the changed graph. No forced majors, hand-edited lockfile, signed Directory, or release.
