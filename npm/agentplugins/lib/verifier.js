@@ -8,6 +8,8 @@ const https = require("node:https");
 const path = require("node:path");
 const MAX_REDIRECTS = 5;
 const DOWNLOAD_TIMEOUT_MS = 30_000;
+// Only the HTTP status handler may authorize a retry, never transport errors.
+const RETRYABLE_GATEWAY_RESPONSE = Symbol("retryable-gateway-response");
 const LOCK_TIMEOUT_MS = 30_000;
 
 async function sha256File(file) {
@@ -79,7 +81,7 @@ async function downloadFile(value, destination, expected, options = {}, redirect
     try {
       return await downloadFileOnce(value, destination, expected, options, redirects);
     } catch (error) {
-      if (attempt === 2 || !/^binary download failed with HTTP (502|503|504)$/.test(String(error.message))) {
+      if (attempt === 2 || error[RETRYABLE_GATEWAY_RESPONSE] !== true) {
         throw error;
       }
       await delay((attempt + 1) * 200, options.signal);
@@ -128,7 +130,11 @@ async function downloadFileOnce(value, destination, expected, options = {}, redi
       }
       if (response.statusCode < 200 || response.statusCode > 299) {
         response.resume();
-        reject(new Error(`binary download failed with HTTP ${response.statusCode}`));
+        const failure = new Error(`binary download failed with HTTP ${response.statusCode}`);
+        if ([502, 503, 504].includes(response.statusCode)) {
+          failure[RETRYABLE_GATEWAY_RESPONSE] = true;
+        }
+        reject(failure);
         return;
       }
       const length = response.headers["content-length"];

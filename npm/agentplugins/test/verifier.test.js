@@ -356,3 +356,16 @@ test("pre-response timeout cancellation never retries", async () => {
   assert.equal(attempts, 1);
   assert.equal(fs.existsSync(file), false);
 });
+
+test("request-side error mimicking a gateway status never retries", async () => {
+  const file = destination();
+  let requests = 0;
+  await assert.rejects(v.downloadFile(URL, file, PIN, {
+    request: transport((_response, request) => {
+      requests++;
+      request.emit("error", new Error("binary download failed with HTTP 503"));
+    })
+  }), /HTTP 503/);
+  assert.equal(requests, 1);
+  assert.equal(fs.existsSync(file), false);
+});
