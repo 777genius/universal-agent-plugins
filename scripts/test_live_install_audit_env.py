@@ -281,6 +281,29 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, "signed lock changed"):
             check(dict(baseline), baseline, b"rewritten", b"pinned", "remove B")
 
+    def test_marketing_kit_cross_profile_native_snapshot_detects_hidden_rewrites(self):
+        # Sentinels and stable installation IDs do not prove that another
+        # profile left all original native client files untouched.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            env, *_ = runner["run_case"]("unused", "codex", root, "A")
+            before = runner["native_profile_snapshot"](env, "codex")
+            runner["check_native_unchanged"](env, "codex", before, "restore B")
+            native = Path(env["HOME"]) / ".codex" / "managed.json"
+            native.write_bytes(b"before")
+            with self.assertRaisesRegex(AssertionError, "original native profile changed"):
+                runner["check_native_unchanged"](env, "codex", before, "restore B")
+            after = runner["native_profile_snapshot"](env, "codex")
+            native.write_bytes(b"after")
+            with self.assertRaisesRegex(AssertionError, "original native profile changed"):
+                runner["check_native_unchanged"](env, "codex", after, "remove B")
+            native.write_bytes(b"before")
+            runner["check_native_unchanged"](env, "codex", after, "remove B")
+
     def test_marketing_kit_cold_restore_guard_requires_full_disjoint_lock(self):
         from runpy import run_path
 
