@@ -297,3 +297,58 @@ test("canonical verifier exhausts transient errors without creating partial cach
   assert.equal(requests, 3);
   assert.equal(fs.existsSync(file), false);
 });
+
+test("pre-response timeout then exact pinned binary retries only twice", async () => {
+  const file = destination();
+  let attempts = 0;
+  const request = (url, options) => {
+    attempts++;
+    return transport((res, req) => {
+      req.emit("response", res);
+      res.end(BODY);
+    }, attempts < 3)(url, options);
+  };
+  try {
+    await v.downloadFile(URL, file, PIN, { request });
+    assert.equal(attempts, 3);
+    assert.deepEqual(fs.readFileSync(file), BODY);
+  } finally {
+    if (fs.existsSync(file)) fs.unlinkSync(file);
+  }
+});
+
+test("persistent pre-response timeout fails closed after three attempts", async () => {
+  const file = destination();
+  let attempts = 0;
+  await assert.rejects(v.downloadFile(URL, file, PIN, { request: (url, options) => {
+    attempts++;
+    return transport(() => {}, true)(url, options);
+  } }), /binary download timed out/);
+  assert.equal(attempts, 3);
+  assert.equal(fs.existsSync(file), false);
+});
+
+test("timeout after response cannot retry an opened or partial download", async () => {
+  const file = destination();
+  let attempts = 0;
+  const request = (url, options) => {
+    attempts++;
+    let timeout;
+    const req = transport((res, emitted) => {
+      emitted.emit("response", res);
+      res.write(BODY.subarray(0, 2));
+      process.nextTick(() => timeout());
+    })(url, options);
+    req.setTimeout = (ms, fn) => {
+      assert.equal(ms, 30_000);
+      timeout = fn;
+    };
+    return req;
+  };
+  try {
+    await assert.rejects(v.downloadFile(URL, file, PIN, { request }), /timed out/);
+    assert.equal(attempts, 1, "partial acquisition must never start a retry");
+  } finally {
+    if (fs.existsSync(file)) fs.unlinkSync(file);
+  }
+});
