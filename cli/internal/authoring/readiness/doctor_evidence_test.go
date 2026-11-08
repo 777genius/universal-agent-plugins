@@ -64,13 +64,13 @@ func TestDoctorHostEvidenceIsSortedHashedAndInert(t *testing.T) {
 	pkg := &domain.PackageEnvelope{
 		Skills: map[string]domain.Skill{
 			"z-" + privateName: {Compatibility: "requires-host"},
-			"a": {AllowedTools: "host-tool"},
-			"unconstrained": {},
+			"a":                {AllowedTools: "host-tool"},
+			"unconstrained":    {},
 		},
 		MCP: domain.MCPComponent{Servers: map[string]domain.MCPServer{
 			"z-remote-" + privateName: {Type: "streamable-http", Decoded: map[string]any{"url": "https://user:password@example.invalid/mcp"}},
-			"a-bundled": {Type: "stdio", Decoded: map[string]any{"command": "./bin/runner"}},
-			"b-path": {Type: "stdio", Decoded: map[string]any{"command": "node"}},
+			"a-bundled":               {Type: "stdio", Decoded: map[string]any{"command": "./bin/runner"}},
+			"b-path":                  {Type: "stdio", Decoded: map[string]any{"command": "node"}},
 		}},
 	}
 	p := project.Result{
