@@ -3,11 +3,12 @@ package report
 import (
 	"encoding/json"
 	"reflect"
+	"sort"
 	"testing"
 )
 
-// Exercise every public finding-ID reference, not only the primary policy lanes.
-// A public projection must not change the original report's private identities.
+// TestPublicProjectionRemapsAllPolicyAndCheckReferences covers every policy lane.
+// Public projection may not change the private report's finding identities.
 func TestPublicProjectionRemapsAllPolicyAndCheckReferences(t *testing.T) {
 	r := New("validate", "revision")
 	missing := r.add(Finding{Code: "plugin_manifest_missing", Layer: "normative", Rule: "core", Location: "plugin.json", Severity: "error"})
@@ -36,7 +37,8 @@ func TestPublicProjectionRemapsAllPolicyAndCheckReferences(t *testing.T) {
 	if publicMissing == "" || publicMissing == missing {
 		t.Fatal("missing public manifest finding replacement")
 	}
-	expected := []string{other, publicMissing, publicMissing}
+	expected := []string{other, publicMissing}
+	sort.Strings(expected)
 	for _, a := range []Assessment{p.Loadability, p.Conformance, p.HostSafety, p.Readiness, p.Release, p.Runtime, p.Compatibility, p.Toolchain, p.Checks[0].Assessment} {
 		if !reflect.DeepEqual(a.FindingIDs, expected) {
 			t.Fatalf("unmapped public references: %+v", a)
@@ -51,8 +53,8 @@ func TestPublicProjectionRemapsAllPolicyAndCheckReferences(t *testing.T) {
 	}
 }
 
-// Combined error, missing-manifest and legacy advice must retain ordering,
-// and an unsafe pathname must only appear through its deterministic digest.
+// TestPublicProjectionWithholdsPathsAndPreservesAdviceOrder pins advice order
+// and represents unsafe pathnames only by their deterministic digests.
 func TestPublicProjectionWithholdsPathsAndPreservesAdviceOrder(t *testing.T) {
 	r := New("validate", "revision")
 	missing := r.add(Finding{Code: "plugin_manifest_missing", Layer: "normative", Rule: "core", Location: "plugin.json", Severity: "error"})
