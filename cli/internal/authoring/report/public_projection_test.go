@@ -101,3 +101,38 @@ func TestPublicProjectionWithholdsPathsAndPreservesAdviceOrder(t *testing.T) {
 		t.Fatalf("encoded advice order changed: %v", wireCodes)
 	}
 }
+
+// TestPublicProjectionAdviceSuccessAndReviewPaths pins advice ordering when
+// there is no manifest replacement or operation error to take precedence.
+func TestPublicProjectionAdviceSuccessAndReviewPaths(t *testing.T) {
+	cases := []struct {
+		name      string
+		operation string
+		readiness State
+		runtime   State
+		legacy    string
+		want      []Action
+	}{
+		{"readiness failure", "author.validate", Fail, NotEvaluated, "", []Action{{Code: "review_findings", Operation: "author.validate"}}},
+		{"initialization runtime pass", "author.init", Pass, Pass, "", []Action{{Code: "inspect_package", Operation: "author.inspect"}, {Code: "runtime_verified", Operation: "author.init"}}},
+		{"skills initialization static", "author.skills.init", Pass, NotEvaluated, "", []Action{{Code: "inspect_package", Operation: "author.inspect"}, {Code: "static_test", Operation: "author.test"}}},
+		{"validation static", "author.validate", Pass, NotEvaluated, "", []Action{{Code: "static_test", Operation: "author.test"}}},
+		{"legacy review priority", "author.validate", Fail, NotEvaluated, "present", []Action{{Code: "review_findings", Operation: "author.validate"}, {Code: "legacy_workflow_unavailable"}}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := New("validate", "revision")
+			r.Readiness = Assessment{Status: tc.readiness}
+			r.Runtime = Assessment{Status: tc.runtime}
+			r.Legacy = tc.legacy
+			p := r.PublicResult(tc.operation, "read", false, nil)
+			got := make([]Action, 0, len(p.NextActions))
+			for _, action := range p.NextActions {
+				got = append(got, Action{Code: action.Code, Operation: action.Operation})
+			}
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("public advice order/operations changed: got %+v want %+v", got, tc.want)
+			}
+		})
+	}
+}
