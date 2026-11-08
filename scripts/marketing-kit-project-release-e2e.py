@@ -24,9 +24,11 @@ EXPECTED = {
 
 
 def verified(result, stage):
-    if result["exit_code"] != 0 or result["timeout"] or not isinstance(result.get("_json"), dict):
+    envelope = result.get("_json")
+    if (result.get("exit_code") != 0 or result.get("timeout")
+            or not isinstance(envelope, dict) or envelope.get("result") != "success"):
         raise AssertionError(f"{stage}: CLI did not succeed with JSON: {result}")
-    return result["_json"]
+    return envelope
 
 
 def require_exact_published_version(result):

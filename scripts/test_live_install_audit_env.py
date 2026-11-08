@@ -21,6 +21,27 @@ def load_audit():
 
 class IsolatedClientEnvironmentTest(unittest.TestCase):
 
+    def test_marketing_kit_rejects_non_success_json_even_with_zero_exit(self):
+        # A zero process exit with a refusal/partial response is not lifecycle PASS.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        check = runner["verified"]
+        accepted = {"exit_code": 0, "timeout": False,
+                    "_json": {"result": "success", "data": {}}}
+        self.assertEqual(check(accepted, "add"), accepted["_json"])
+        for invalid in (
+                {"exit_code": 1},
+                {"timeout": True},
+                {"_json": None},
+                {"_json": {"data": {}}},
+                {"_json": {"result": "failure", "error": "not authorized"}},
+                {"_json": {"result": "partial", "data": {}}}):
+            with self.subTest(invalid=invalid):
+                with self.assertRaisesRegex(AssertionError, "CLI did not succeed"):
+                    check({**accepted, **invalid}, "add")
+
     def test_marketing_kit_requires_exact_published_cli_version(self):
         # The substring "0.1.101" alone also matches prereleases and 0.1.1011.
         from runpy import run_path
