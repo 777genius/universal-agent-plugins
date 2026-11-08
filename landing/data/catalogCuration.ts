@@ -94,3 +94,12 @@ export function recommendedSkillKey(
       skill.id === `skills-sh:${item.repository}:${item.slug}`,
   )?.slug;
 }
+
+/** Translation keys are keyed by the small reviewed Skill shortlist, never provider text. */
+export function recommendedSkillDescription(
+  slug: string | undefined,
+  translate: (key: string) => string,
+): string {
+  if (!slug || !recommendedSkills.some((item) => item.slug === slug)) return '';
+  return translate(`registryUi.skills.featured.items.${slug}`);
+}
