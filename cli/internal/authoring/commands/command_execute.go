@@ -67,6 +67,8 @@ func (a App) runCommand(ctx context.Context, name string, req request) (report.R
 	return r, nil
 }
 
+// runBootstrap preserves the read-only planning and mutating apply paths,
+// reporting commit and cleanup status before returning any failure.
 func (a App) runBootstrap(ctx context.Context, req request, p project.Result, r report.Report) (report.Report, error) {
 	if req.dryRun {
 		r.Mode = "read"
@@ -110,6 +112,8 @@ func (a App) runBootstrap(ctx context.Context, req request, p project.Result, r 
 	return r, nil
 }
 
+// runMCP records the selected runtime stages and cleanup evidence even if
+// execution fails, then returns the original runtime error.
 func (a App) runMCP(ctx context.Context, req request, p project.Result, r *report.Report) error {
 	evidence, runtimeErr := mcpruntime.Run(ctx, mcpruntime.Options{SourceRoot: req.root, Scratch: a.Projects.Scratch, Project: p, Server: req.server, Tool: req.tool, Fixture: req.fixture, AllowNetwork: req.allowNetwork, Deadline: req.deadline, Projects: a.Projects})
 	r.SetRuntime(evidence.Transport, evidence.Initialize, evidence.ListTools, evidence.ToolCall, evidence.ToolCount, evidence.Cleanup, runtimeErrorCode(runtimeErr))

@@ -89,6 +89,8 @@ func (a App) decodeRequest(name string, c *cobra.Command, opts authoringcli.Opti
 	return req, nil
 }
 
+// decodeInitRequest maps explicitly provided init flags into a scaffold plan
+// and preserves public-contract validation before any project effects.
 func (a App) decodeInitRequest(c *cobra.Command, root string, req *request) error {
 	get := func(n string) string { v, _ := c.Flags().GetString(n); return v }
 	mcpFlag := "mcp"
@@ -110,6 +112,8 @@ func (a App) decodeInitRequest(c *cobra.Command, root string, req *request) erro
 	return nil
 }
 
+// decodeNonInitRequest enforces non-init command options and rejects invalid
+// runtime combinations before the authoring runner is invoked.
 func (a App) decodeNonInitRequest(name string, c *cobra.Command, opts authoringcli.Options, req *request) error {
 	get := func(n string) string { v, _ := c.Flags().GetString(n); return v }
 	req.release, _ = c.Flags().GetBool("release-policy")
@@ -130,6 +134,8 @@ func (a App) decodeNonInitRequest(name string, c *cobra.Command, opts authoringc
 	return nil
 }
 
+// invalidRuntimeShape checks bounded, paired MCP arguments independent of
+// whether the caller supplied an option explicitly.
 func invalidRuntimeShape(req request) bool {
 	return (req.tool == "") != (req.fixture == "") ||
 		req.deadline <= 0 || req.deadline > time.Minute ||
@@ -137,7 +143,8 @@ func invalidRuntimeShape(req request) bool {
 		(req.runtime == "mcp" && req.server == "")
 }
 
-// Selection rules are distinct from shape limits; the parser still owns flag presence.
+// invalidRuntimeSelection enforces command-specific flag presence and JSON
+// mode rules separately from value bounds; Cobra still parses the input.
 func invalidRuntimeSelection(name string, c *cobra.Command, opts authoringcli.Options, req request) bool {
 	if name == "test" {
 		if req.runtime != "" && req.runtime != "mcp" {
