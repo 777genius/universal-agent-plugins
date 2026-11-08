@@ -12,15 +12,15 @@ export interface ClientSupport {
 
 /** Translation mapping for the display layer. Keep English README source rows unchanged. */
 export const clientSupportCapabilityKeys = {
-  "Plugins, Skills, MCP": "pluginsSkillsMcp",
-  "Skills, MCP": "skillsMcp",
-  "Plugins, Skills, MCP, hooks": "pluginsSkillsMcpHooks",
-  "Extensions, Skills, MCP": "extensionsSkillsMcp",
-  "Copilot-backed package": "copilotPackage",
-  "Personal app setup": "personalAppSetup",
-  "Skills only": "skillsOnly",
-  "Skills, MCP (prepared)": "skillsMcpPrepared",
-  "Not supported": "notSupported"
+  'Plugins, Skills, MCP': 'pluginsSkillsMcp',
+  'Skills, MCP': 'skillsMcp',
+  'Plugins, Skills, MCP, hooks': 'pluginsSkillsMcpHooks',
+  'Extensions, Skills, MCP': 'extensionsSkillsMcp',
+  'Copilot-backed package': 'copilotPackage',
+  'Personal app setup': 'personalAppSetup',
+  'Skills only': 'skillsOnly',
+  'Skills, MCP (prepared)': 'skillsMcpPrepared',
+  'Not supported': 'notSupported',
 } as const;
 
 // SYNC: Update landing/data/clientSupport.ts AND README.md "Supported clients".
