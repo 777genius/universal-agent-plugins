@@ -5,7 +5,7 @@
         "title": "推荐给 AI 开发者",
         "explanation": "针对常见开发任务精心挑选，并非安全或兼容性保证。请检查来源和安装要求。",
         "items": {
-          "agent-browser": "使用面向 AI 代理的 CLI 自动化真实浏览器操作。",
+          "agent-browser": "单独安装浏览器 CLI 后，自动化真实浏览器操作。",
           "frontend-design": "创建更精致、更有设计感的前端界面。",
           "find-skills": "为当前任务找到合适的可复用 Skills。",
           "tdd": "遵循红灯、绿灯、重构流程，以测试驱动开发。",
