@@ -23,12 +23,40 @@ EXPECTED = {
 }
 
 
+# The immutable npm 0.1.101 update command predates the common result envelope.
+# Its successful pinned no-op response is an exact four-node action plan, not
+# an arbitrary object with exit code zero. Never accept partial/failed updates.
+UPDATE_ALIASES = {"marketing-kit", "notion", "hubspot-crm", "playwright"}
+
+
 def verified(result, stage):
     envelope = result.get("_json")
     if (result.get("exit_code") != 0 or result.get("timeout")
-            or not isinstance(envelope, dict) or envelope.get("result") != "success"):
+            or not isinstance(envelope, dict)):
         raise AssertionError(f"{stage}: CLI did not succeed with JSON: {result}")
-    return envelope
+    if (envelope.get("result") == "success"
+            and envelope.get("outcome") not in ("partial", "failed", "failure")):
+        return envelope
+    if (stage in ("update", "User update")
+            and "result" not in envelope
+            and envelope.get("outcome") == "completed"
+            and envelope.get("results") == []):
+        actions = envelope.get("actions")
+        if (isinstance(actions, list)
+                and len(actions) == len(UPDATE_ALIASES)
+                and all(isinstance(action, dict)
+                        and action.get("action") == "unchanged"
+                        and isinstance(action.get("alias"), str)
+                        and isinstance(action.get("client_id"), str)
+                        and bool(action["client_id"])
+                        and isinstance(action.get("installation_id"), str)
+                        and bool(action["installation_id"])
+                        and isinstance(action.get("binding_id"), str)
+                        and bool(action["binding_id"])
+                        for action in actions)
+                and {action["alias"] for action in actions} == UPDATE_ALIASES):
+            return envelope
+    raise AssertionError(f"{stage}: CLI did not succeed with JSON: {result}")
 
 
 def require_exact_published_version(result):

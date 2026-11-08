@@ -42,6 +42,46 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 with self.assertRaisesRegex(AssertionError, "CLI did not succeed"):
                     check({**accepted, **invalid}, "add")
 
+    def test_marketing_kit_accepts_only_complete_legacy_noop_update(self):
+        # Published 0.1.101 update emits outcome/actions/results, not result.
+        # A no-op must still prove all four pinned signed bindings are intact.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        check = runner["verified"]
+        aliases = ("marketing-kit", "notion", "hubspot-crm", "playwright")
+        actions = [{"alias": alias, "client_id": "codex",
+                    "installation_id": alias + "-installation",
+                    "binding_id": alias + "-binding", "action": "unchanged"}
+                   for alias in aliases]
+        envelope = {"outcome": "completed", "actions": actions, "results": []}
+        valid = {"exit_code": 0, "timeout": False, "_json": envelope}
+        for stage in ("update", "User update"):
+            self.assertEqual(check(valid, stage), envelope)
+        for stage in ("add", "list", "User add"):
+            with self.subTest(stage=stage), self.assertRaisesRegex(
+                    AssertionError, "CLI did not succeed"):
+                check(valid, stage)
+        for changed in (
+                {"outcome": "partial"},
+                {"outcome": "failure"},
+                {"result": "failure"},
+                {"results": [{"outcome": "failed"}]},
+                {"actions": actions[:-1]},
+                {"actions": [{**actions[0], "action": "failed"}, *actions[1:]]},
+                {"actions": [{**actions[0], "installation_id": ""}, *actions[1:]]},
+                {"actions": [{**actions[0], "binding_id": ""}, *actions[1:]]},
+                {"actions": [{**actions[0], "alias": "foreign"}, *actions[1:]]},
+        ):
+            with self.subTest(changed=changed), self.assertRaisesRegex(
+                    AssertionError, "CLI did not succeed"):
+                check({**valid, "_json": {**envelope, **changed}}, "update")
+        for changed in ({"exit_code": 1}, {"timeout": True}):
+            with self.subTest(changed=changed), self.assertRaisesRegex(
+                    AssertionError, "CLI did not succeed"):
+                check({**valid, **changed}, "update")
+
     def test_marketing_kit_requires_exact_published_cli_version(self):
         # The substring "0.1.101" alone also matches prereleases and 0.1.1011.
         from runpy import run_path
