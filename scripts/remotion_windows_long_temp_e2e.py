@@ -22,9 +22,19 @@ def main():
         raise SystemExit("genuine Windows runner required")
     repo = Path(__file__).resolve().parent.parent
     fixture_path = repo / "tests/live-install/fixtures.json"
-    fixture_bytes = fixture_path.read_bytes()
+    report = Path(os.environ["RUNNER_TEMP"]) / "remotion-windows-source-longtemp.json"
+    # Windows checkout may convert LF to CRLF. Bind the immutable fixture to
+    # Git's committed object, then accept only that exact platform conversion
+    # in the disposable worktree; never invent or rewrite fixture bytes.
+    fixture_bytes = subprocess.check_output(
+        ["git", "show", "HEAD:tests/live-install/fixtures.json"], cwd=repo)
+    checkout_bytes = fixture_path.read_bytes()
     if hashlib.sha256(fixture_bytes).hexdigest() != FIXTURE_SHA256:
-        raise SystemExit("immutable source fixture checksum mismatch")
+        report.write_text(json.dumps({"stage": "fixture", "reason": "git-blob-digest"}) + "\\n")
+        raise SystemExit("immutable Git fixture SHA-256 mismatch")
+    if checkout_bytes not in (fixture_bytes, fixture_bytes.replace(b"\\n", b"\\r\\n")):
+        report.write_text(json.dumps({"stage": "fixture", "reason": "unexpected-worktree-bytes"}) + "\\n")
+        raise SystemExit("checkout modified immutable fixture beyond Windows EOL conversion")
     fixtures = json.loads(fixture_bytes)
     item = fixtures["skills"][24]
     if item["name"] != "remotion-best-practices" or REMOTION_SHA not in item["source"]:
@@ -39,12 +49,12 @@ def main():
     cli = Path(os.environ["UAP_SOURCE_CLI"]).resolve(strict=True)
     if not cli.is_file() or cli.suffix.lower() != ".exe":
         raise SystemExit("source-built Windows CLI executable missing")
-    report = Path(os.environ["RUNNER_TEMP"]) / "remotion-windows-source-longtemp.json"
     short = Path(tempfile.mkdtemp(prefix="uap-remotion-short-", dir=os.environ["RUNNER_TEMP"]))
     long = Path(tempfile.mkdtemp(prefix="uap-live-30x30-"))
     evidence = {
         "source_checkout_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip(),
         "fixture_sha256": FIXTURE_SHA256,
+        "fixture_worktree_eol": ("unchanged" if checkout_bytes == fixture_bytes else "crlf-only"),
         "remotion_commit": REMOTION_SHA,
         "cli_path_kind": "source-built-windows",
         "results": {},
