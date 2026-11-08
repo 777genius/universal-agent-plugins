@@ -3,7 +3,7 @@ import { clientSupportRows, clientSupportCapabilityKeys } from '~/data/clientSup
 import { clientLandingById } from '~/data/clients';
 
 const { asset } = useSite();
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const capabilityLabel = (value: string) => {
   const key = clientSupportCapabilityKeys[value as keyof typeof clientSupportCapabilityKeys];
   return key ? t(`shell.clientSupport.capabilities.${key}`) : value;
@@ -23,6 +23,7 @@ const monochromeIcons = new Set(['opencode', 'cline', 'windsurf', 'grok', 'kimi'
     id="agent-support"
     class="registry-client-support container anchor-offset"
     aria-labelledby="agent-support-title"
+    :dir="locale === 'ar' ? 'rtl' : 'ltr'"
     data-scroll-reveal
   >
     <header class="section-heading section-heading--center">
