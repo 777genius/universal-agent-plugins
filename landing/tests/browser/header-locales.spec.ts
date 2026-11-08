@@ -70,6 +70,7 @@ for (const locale of publishedLocales) {
       await expect(desktopDocs).toBeVisible();
       await expect(desktopDocs.locator('.v-btn__content')).toBeVisible();
       const layout = await page.evaluate(() => {
+        const logo = document.querySelector('.app-header__inner > .app-logo')!;
         const nav = document.querySelector('.app-header__nav')!;
         const actions = document.querySelector('.app-header__desktop-actions')!;
         const docs = document.querySelector('.app-header__docs-btn')!;
@@ -78,13 +79,18 @@ for (const locale of publishedLocales) {
           const { left, right, width } = element.getBoundingClientRect();
           return { left, right, width };
         };
-        const links = [...nav.querySelectorAll('a')].map(rect).sort((a, b) => a.left - b.left);
+        const links = [...nav.querySelectorAll('a')].map((anchor) => ({
+          button: rect(anchor),
+          text: rect(anchor.querySelector('.v-btn__content')!),
+        })).sort((a, b) => a.button.left - b.button.left);
         return {
+          logo: rect(logo),
+          links,
           nav: rect(nav),
           actions: rect(actions),
           docs: rect(docs),
           label: rect(label),
-          gaps: links.slice(1).map((current, index) => current.left - links[index]!.right),
+          gaps: links.slice(1).map((current, index) => current.button.left - links[index]!.button.right),
           overflow: document.documentElement.scrollWidth > innerWidth + 1,
         };
       });
@@ -98,6 +104,19 @@ for (const locale of publishedLocales) {
       `${locale} @ ${width}px: nav and actions overlap`).toBe(true);
       for (const gap of layout.gaps)
         expect(gap, `${locale} @ ${width}px: nav links touch`).toBeGreaterThanOrEqual(7);
+      const horizontalOverlap = (a: { left: number; right: number }, b: { left: number; right: number }) =>
+        Math.min(a.right, b.right) - Math.max(a.left, b.left);
+      for (const { button, text } of layout.links) {
+        expect(text.width, `${locale} @ ${width}px: nav text collapsed`).toBeGreaterThan(0);
+        expect(text.left, `${locale} @ ${width}px: nav text clips on left`)
+          .toBeGreaterThanOrEqual(button.left - 1);
+        expect(text.right, `${locale} @ ${width}px: nav text clips on right`)
+          .toBeLessThanOrEqual(button.right + 1);
+        expect(horizontalOverlap(button, layout.logo), `${locale} @ ${width}px: nav overlaps logo`)
+          .toBeLessThanOrEqual(1);
+        expect(horizontalOverlap(button, layout.actions), `${locale} @ ${width}px: nav overlaps actions`)
+          .toBeLessThanOrEqual(1);
+      }
       expect(layout.overflow, `${locale} @ ${width}px: horizontal overflow`).toBe(false);
     }
 
