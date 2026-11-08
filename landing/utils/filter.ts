@@ -294,11 +294,12 @@ export function filterPlugins(
         compareText(normalized(left.display_name), normalized(right.display_name)),
       );
     const community = matches.filter((plugin) => plugin.trust_state === 'conformant_unreviewed');
-    const discovered = filters.order === 'name'
-      ? community.sort((left, right) =>
-          compareText(normalized(left.display_name), normalized(right.display_name)),
-        )
-      : diversifiedDiscovery(community);
+    const discovered =
+      filters.order === 'name'
+        ? community.sort((left, right) =>
+            compareText(normalized(left.display_name), normalized(right.display_name)),
+          )
+        : diversifiedDiscovery(community);
     return [...reviewed, ...discovered];
   }
   return matches.sort((left, right) => {
