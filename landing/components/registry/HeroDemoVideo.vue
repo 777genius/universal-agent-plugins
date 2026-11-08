@@ -16,11 +16,12 @@ let preloadTimer: ReturnType<typeof setTimeout> | undefined;
 const thumbnailUrl = computed(
   () => `https://image.mux.com/${playbackId.value}/thumbnail.webp?time=1&width=1280`,
 );
-// The idle embed loads player/media resources into the browser cache without
-// autoplay. After an explicit gesture, retain Mux's proven sound→muted fallback
-// rather than relying on cross-origin postMessage to transfer user activation.
+// The idle embed loads media resources without playback. Only an explicit
+// Watch demo gesture requests playback. Mux's autoplay=any silently falls back
+// to mute, so use the normal sound-first mode and keep audio enabled by default.
+// Some browsers may still block audible iframe playback.
 const playerUrl = computed(() =>
-  `https://player.mux.com/${playbackId.value}?${playing.value ? 'autoplay=any&' : ''}preload=auto`,
+  `https://player.mux.com/${playbackId.value}?${playing.value ? 'autoplay=true&muted=false&no-muted-pref=true&' : ''}preload=auto`,
 );
 const muxOrigin = 'https://player.mux.com';
 function cancelPreload() {
