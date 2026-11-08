@@ -26,36 +26,77 @@ test('reviewed plugins prioritize everyday workflows and offer stable A–Z opt-
   await expect(page.locator('.catalog-curation-note')).toHaveCount(0);
 });
 
-test('curated Skills show source-bound explanations without altering provider catalog', async ({ page }, testInfo) => {
-  await page.route('https://api.universal-agent-plugins.com/v1/skills**', route =>
-    route.fulfill({
+
+test('recommended Skills lead the original cards without changing provider data or modes', async ({
+  page,
+}, testInfo) => {
+  const candidates = [
+    { repository: 'example/skills', slug: 'general-guidance' },
+    { repository: 'vercel-labs/agent-skills', slug: 'web-design-guidelines' },
+    { repository: 'mattpocock/skills', slug: 'tdd' },
+    { repository: 'anthropics/skills', slug: 'frontend-design' },
+    { repository: 'example/skills', slug: 'another-tool' },
+    { repository: 'vercel-labs/agent-browser', slug: 'agent-browser' },
+    { repository: 'vercel-labs/skills', slug: 'find-skills' },
+    { repository: 'vercel-labs/agent-skills', slug: 'vercel-react-best-practices' },
+  ];
+  const original = candidates.map(({ repository, slug }, index) => ({
+    id: `skills-sh:${repository}:${slug}`,
+    providerId: 'skills-sh',
+    providerUrl: `https://skills.sh/${repository}/${slug}`,
+    title: slug,
+    skillNameHint: slug,
+    source: { kind: 'github', repository, url: `https://github.com/${repository}` },
+    metrics: { installs: 800 - index, window: 'all-time' },
+    availability: 'unverified',
+  }));
+  const requests: string[] = [];
+  await page.route('https://api.universal-agent-plugins.com/v1/skills**', route => {
+    requests.push(new URL(route.request().url()).search);
+    return route.fulfill({
       json: {
-        items: [], page: 0, total: 0, hasMore: false, view: 'popular',
+        items: original, page: 0, total: original.length, hasMore: false, view: 'popular',
         cache: { status: 'fresh', fetchedAt: '2026-11-08T18:00:00Z' },
       },
-    }),
-  );
+    });
+  });
+
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('plugins/?tab=skills');
-  const recommended = page.locator('.skills-curated__item');
-  await expect(recommended).toHaveCount(6);
-  await expect(page.locator('.skills-curated__heading')).toContainText(/not a safety/i);
-  await expect(recommended.first()).toContainText('agent-browser');
-  await expect(recommended.first()).toContainText('vercel-labs/agent-browser');
-  const frontendLink = await recommended.nth(1).getAttribute('href');
-  expect(frontendLink).toBeTruthy();
-  const selectedSkill = new URL(frontendLink!, page.url()).searchParams;
-  expect(selectedSkill.get('id')).toBe('skills-sh:anthropics/skills:frontend-design');
-  expect(selectedSkill.get('q')).toBe('frontend-design');
-  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
-    .toBe(true);
-  await testInfo.attach('skills-curation-mobile', {
+  const cards = page.locator('.skills-catalog .skill-card');
+  await expect(cards).toHaveCount(original.length);
+  await expect(page.locator('.skills-curated')).toHaveCount(0);
+  const ids = () => cards.evaluateAll((elements) =>
+    elements.map((item) => item.getAttribute('data-skill-id')));
+  expect(await ids()).toEqual([
+    original[5]!.id, original[3]!.id, original[6]!.id, original[2]!.id,
+    original[7]!.id, original[1]!.id, original[0]!.id, original[4]!.id,
+  ]);
+  await expect(cards.first().locator('.skill-card__benefit')).toContainText(/browser CLI/i);
+  await expect(cards.first()).toContainText('795 installs');
+  await cards.first().getByRole('button', { name: 'Install agent-browser' }).click();
+  await expect(cards.first().locator('.command-snippet code'))
+    .toContainText('https://github.com/vercel-labs/agent-browser');
+  await expect.poll(() => page.evaluate(() =>
+    document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await testInfo.attach('curated-skills-original-cards-mobile', {
     body: await page.screenshot({ fullPage: true, animations: 'disabled' }),
     contentType: 'image/png',
   });
 
+  await page.goto('plugins/?tab=skills&skillView=trending');
+  await expect(cards).toHaveCount(original.length);
+  expect(await ids()).toEqual(original.map((item) => item.id));
   await page.goto('plugins/?tab=skills&q=browser');
-  await expect(page.locator('.skills-curated')).toHaveCount(0);
+  await expect(cards).toHaveCount(original.length);
+  expect(await ids()).toEqual(original.map((item) => item.id));
+  expect(requests.some((query) => query.includes('q=browser'))).toBe(true);
+
   await page.goto('ru/plugins/?tab=skills');
-  await expect(page.locator('.skills-curated__heading')).toContainText('Рекомендуем');
+  await expect(cards).toHaveCount(original.length);
+  await expect(cards.first().locator('.skill-card__benefit')).toContainText('CLI');
+  expect(await ids()).toEqual([
+    original[5]!.id, original[3]!.id, original[6]!.id, original[2]!.id,
+    original[7]!.id, original[1]!.id, original[0]!.id, original[4]!.id,
+  ]);
 });
