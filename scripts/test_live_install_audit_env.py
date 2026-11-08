@@ -50,6 +50,24 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "foreign content modified"):
                 guard(entries, sandbox)
             self.assertEqual(outside_marker.read_text(encoding="utf-8"), content)
+    def test_marketing_kit_foreign_guard_rejects_newline_rewrite(self):
+        # Text-mode newline normalization can hide a byte-changing rewrite.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            marker = root / "foreign-user-do-not-change.txt"
+            expected = "unmanaged user data\n"
+            marker.write_bytes(expected.encode("utf-8"))
+            runner["check_foreign"]([(marker, expected)], root)
+
+            marker.write_bytes(b"unmanaged user data\r\n")
+            self.assertEqual(marker.read_text(encoding="utf-8"), expected)
+            with self.assertRaisesRegex(AssertionError, "foreign content modified"):
+                runner["check_foreign"]([(marker, expected)], root)
+
     def test_bootstrap_refusal_preserves_index_source_and_real_identity(self):
         # BUG-053: the original blocked ZIPs had 30 status placeholders but
         # omitted their source and index, so fixture slots could not be audited.

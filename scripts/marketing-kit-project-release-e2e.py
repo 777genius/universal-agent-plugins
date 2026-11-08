@@ -103,7 +103,7 @@ def check_foreign(entries, case_root):
         # Reuse the live audit's fail-closed containment oracle (BUG-044).
         if (not audit["path_inside_case"](path, case_root)
                 or not path.is_file()
-                or path.read_text(encoding="utf-8") != content):
+                or path.read_bytes() != content.encode("utf-8")):
             raise AssertionError(f"foreign content modified: {path.name}")
 
 
