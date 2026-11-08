@@ -28,16 +28,21 @@ def verified(result, stage):
     return result["_json"]
 
 
-def inventory(cli, env, project, target):
-    result = invoke([cli, "list", "--target", target, "--scope", "project",
-                     "--project-root", str(project), "--format", "json"], env, project, 35)
+def inventory(cli, env, project, target, scope="project"):
+    if scope not in ("user", "project"):
+        raise ValueError(f"unsupported scope: {scope}")
+    scope_args = ["--scope", scope]
+    if scope == "project":
+        scope_args.extend(["--project-root", str(project)])
+    result = invoke([cli, "list", "--target", target, *scope_args,
+                     "--format", "json"], env, project, 35)
     data = verified(result, "list").get("data")
     if not isinstance(data, dict) or not isinstance(data.get("installations"), list):
         raise AssertionError(f"list returned invalid installations: {data}")
     return data["installations"]
 
 
-def identities(items, target):
+def identities(items, target, scope="project"):
     result = {}
     for row in items:
         if not isinstance(row, dict):
@@ -50,13 +55,13 @@ def identities(items, target):
         bindings = row.get("clients") or []
         if isinstance(bindings, dict):
             bindings = list(bindings.values())
-        project_bindings = [b for b in bindings if isinstance(b, dict)
-                            and b.get("client_id") == target and b.get("scope") == "project"]
-        if not project_bindings:
-            raise AssertionError(f"{dist}: missing project binding for {target}")
+        scope_bindings = [b for b in bindings if isinstance(b, dict)
+                          and b.get("client_id") == target and b.get("scope") == scope]
+        if not scope_bindings:
+            raise AssertionError(f"{dist}: missing {scope} binding for {target}")
         if not all(audit["recorded_signed_release_matches"](
-                directory, b.get("package_revision")) for b in project_bindings):
-            raise AssertionError(f"{dist}: project binding lacks exact signed release provenance")
+                directory, b.get("package_revision")) for b in scope_bindings):
+            raise AssertionError(f"{dist}: {scope} binding lacks exact signed release provenance")
         if dist in result:
             raise AssertionError(f"duplicate distribution: {dist}")
         installation_id = row.get("installation_id")
@@ -222,6 +227,44 @@ def main():
             for e in (env, env_b):
                 if (Path(e["AGENTPLUGINS_HOME"]) / "uap.toml").exists():
                     raise AssertionError("Project installation unexpectedly wrote User manifest")
+            # Check the same signed closure through a real, separate User lifecycle.
+            # Keep the Project artifacts unchanged while the disposable User profile
+            # installs, repeats, updates, repairs and removes its own copies.
+            project_files = {
+                name: (project_a / name).read_bytes() if (project_a / name).exists() else None
+                for name in ("uap.toml", "uap.lock")
+            }
+            user_scoped = ("--scope", "user")
+            def user_inventory():
+                return identities(inventory(options.cli, env, project_a, options.target, "user"),
+                                  options.target, "user")
+            run(env, project_a, "User add", "add", "marketing-kit",
+                "--target", options.target, *user_scoped)
+            user_first = user_inventory()
+            if set(user_first) != EXPECTED:
+                raise AssertionError("User add lost mandatory signed Marketing Kit closure")
+            if identities(inventory(options.cli, env, project_a, options.target), options.target):
+                raise AssertionError("User add recreated removed Project installations")
+            run(env, project_a, "User repeat add", "add", "marketing-kit",
+                "--target", options.target, *user_scoped)
+            if user_inventory() != user_first:
+                raise AssertionError("User repeat add changed installation identities")
+            run(env, project_a, "User update", "update", "marketing-kit", *user_scoped)
+            user_after_update = user_inventory()
+            if set(user_after_update) != EXPECTED:
+                raise AssertionError("User update lost mandatory signed closure")
+            run(env, project_a, "User repair intact", "repair", "marketing-kit",
+                "--target", options.target, *user_scoped)
+            if user_inventory() != user_after_update:
+                raise AssertionError("User repair changed installation identities")
+            run(env, project_a, "User remove", "remove", "marketing-kit", *user_scoped)
+            if user_inventory():
+                raise AssertionError("User removal retained Marketing Kit or mandatory children")
+            for name, expected_bytes in project_files.items():
+                path = project_a / name
+                current_bytes = path.read_bytes() if path.exists() else None
+                if current_bytes != expected_bytes:
+                    raise AssertionError(f"User lifecycle modified Project artifact {name}")
             # The last inventory/read assertions are outside run()'s finally.
             check_foreign(foreign_files, root)
             report["status"] = "passed"

@@ -115,6 +115,27 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "project binding lacks exact"):
                 check([row], "codex")
 
+    def test_marketing_kit_user_identity_guard_rejects_project_only_signature(self):
+        # A signed Project binding cannot authorize an unsigned User binding.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        row = {"installation_id": "owned",
+               "directory": {"recorded_distribution": "root"},
+               "clients": [{"client_id": "codex", "scope": "user",
+                            "package_revision": "unsigned"},
+                           {"client_id": "codex", "scope": "project",
+                            "package_revision": "signed"}]}
+        with patch.dict(runner["audit"],
+                        {"recorded_signed_release_matches":
+                         lambda _, revision: revision == "signed"}):
+            with self.assertRaisesRegex(AssertionError, "user binding lacks exact"):
+                runner["identities"]([row], "codex", "user")
+            row["clients"][0]["package_revision"] = "signed"
+            self.assertEqual(runner["identities"]([row], "codex", "user"),
+                             {"root": "owned"})
+
     def test_marketing_kit_project_a_guard_rejects_rekey_and_lock_rewrite(self):
         # A complete set of distributions is insufficient if B silently
         # replaces A's installation identities or changes A's signed lock.
