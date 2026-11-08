@@ -250,7 +250,7 @@ async function syncCatalogQuery() {
   }
 }
 
-watch([query, category, component, source, trust, client, authentication, owner], () => {
+watch([query, category, component, source, trust, client, authentication, owner, sort], () => {
   catalogUi.reconcile(family.value, fingerprint.value);
   void syncCatalogQuery();
 });
