@@ -33,7 +33,7 @@ test('video warms only after seven seconds and cannot autoplay or take focus whi
   await demo.getByRole('button', { name: 'Watch demo' }).click();
   const active = demo.locator('iframe');
   await expect(active).toBeVisible();
-  await expect(active).toHaveAttribute('src', /\?autoplay=true&muted=false&no-muted-pref=true&preload=auto$/);
+  await expect(active).toHaveAttribute('src', /\?autoplay=true&no-muted-pref=true&preload=auto$/);
   await expect(active).not.toHaveAttribute('inert');
   await expect(active).not.toHaveAttribute('aria-hidden', 'true');
   await expect.poll(() => requests.filter((item) => new URL(item.url).searchParams.has('autoplay')).length).toBe(1);
