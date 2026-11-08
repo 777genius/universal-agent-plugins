@@ -70,6 +70,32 @@ jobs:
             npm install --global "$NATIVE_PACKAGE"
           fi
           test "$(agentplugins version)" = 'agentplugins 0.1.102'
+      - name: Verify published ChatGPT target safety fences
+        if: matrix.target == 'codex'
+        run: |
+          set -euo pipefail
+          root="$(mktemp -d)"
+          trap 'rm -rf "$root"' EXIT
+          mkdir -p "$root/package" "$root/project" "$root/home" "$root/codex"
+          printf '%s\n' '{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"chatgpt-target-proof","version":"1.0.0"}' > "$root/package/plugin.json"
+          export AGENTPLUGINS_HOME="$root/home" CODEX_HOME="$root/codex"
+          cd "$root/project"
+          refuse_without_effects() {
+            local expected="$1"
+            shift
+            local status=0 output
+            output="$(agentplugins "$@" 2>&1)" || status=$?
+            if [[ "$status" -eq 0 || "$output" != *"$expected"* ]]; then
+              printf '%s\n' "Unexpected public CLI target result (exit=$status): $output" >&2
+              exit 1
+            fi
+            test ! -e "$AGENTPLUGINS_HOME/state-v2.json"
+          }
+          # Both scope refusals must occur before source acquisition or state mutation.
+          refuse_without_effects "only --scope user" add "$root/package" --no-save --target chatgpt --scope project --format json
+          refuse_without_effects "does not support project scope" add "$root/package" --no-save --target chatgptweb --scope project --format json
+          # Codex CLI and ChatGPT Desktop share one canonical backend, never two.
+          refuse_without_effects "duplicate" add "$root/package" --no-save --target codex,chatgpt --scope user --format json
       - name: Exercise actual signed Marketing Kit and three mandatory dependencies
         env:
           TARGET: ${{ matrix.target }}
