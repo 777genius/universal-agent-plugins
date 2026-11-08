@@ -17,7 +17,7 @@ import {
   skillsFiltersQuery,
 } from '~/utils/skillsCatalog';
 import { canonicalPath } from '~/utils/seo';
-import { recommendedSkills } from '~/data/catalogCuration';
+import { recommendedSkills, recommendedSkillDescription } from '~/data/catalogCuration';
 
 defineProps<{ hideHeading?: boolean }>();
 
@@ -160,7 +160,7 @@ const staleDate = computed(() => {
           :to="recommendedSkillRoute(skill)"
         >
           <strong>{{ skill.slug }}</strong>
-          <span>{{ t('registryUi.skills.featured.items.' + skill.slug) }}</span>
+          <span>{{ recommendedSkillDescription(skill.slug, t) }}</span>
           <small>{{ skill.repository }}</small>
         </NuxtLink>
       </div>
