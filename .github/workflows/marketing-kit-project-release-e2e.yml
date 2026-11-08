@@ -73,7 +73,21 @@ jobs:
           else
             npm install --global "$NATIVE_PACKAGE"
           fi
-          test "$(agentplugins version)" = 'agentplugins 0.1.101'
+          # The immutable npm launcher fetches the exact 0.1.101 GitHub binary
+          # on first use. A transient release-asset HTTP 504 must not turn all
+          # six genuine lifecycle lanes into unexecuted noise. Never fall back
+          # to latest, skip version validation or accept a different version.
+          for attempt in 1 2 3; do
+            if version_output="$(agentplugins version)"; then
+              test "$version_output" = 'agentplugins 0.1.101'
+              break
+            fi
+            if (( attempt == 3 )); then
+              echo 'exact agentplugins 0.1.101 unavailable after three attempts' >&2
+              exit 1
+            fi
+            sleep "$((attempt * 5))"
+          done
       - name: Exercise actual signed Marketing Kit and three mandatory dependencies
         env:
           TARGET: ${{ matrix.target }}
