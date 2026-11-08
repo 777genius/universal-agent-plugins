@@ -248,6 +248,27 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, "signed lock changed"):
             check(dict(baseline), baseline, b"rewritten", b"pinned", "remove B")
 
+    def test_marketing_kit_cold_restore_guard_requires_full_disjoint_lock(self):
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        check = runner["check_cold_restore"]
+        original = {dist: f"A-{i}"
+                    for i, dist in enumerate(sorted(runner["EXPECTED"]))}
+        restored = {dist: f"B-{i}"
+                    for i, dist in enumerate(sorted(runner["EXPECTED"]))}
+        check(restored, original, b"pinned", b"pinned", "User B")
+        incomplete = dict(restored)
+        incomplete.pop(next(iter(incomplete)))
+        with self.assertRaisesRegex(AssertionError, "mandatory signed closure"):
+            check(incomplete, original, b"pinned", b"pinned", "User B")
+        reused = {**restored, next(iter(restored)): next(iter(original.values()))}
+        with self.assertRaisesRegex(AssertionError, "reused installation IDs"):
+            check(reused, original, b"pinned", b"pinned", "User B")
+        with self.assertRaisesRegex(AssertionError, "modified pinned lock"):
+            check(restored, original, b"pinned", b"tampered", "User B")
+
     def test_marketing_kit_lock_guard_rejects_duplicate_or_unidentified_pins(self):
         # Comparing lock keys as a set can hide a duplicate signed package.
         from runpy import run_path
