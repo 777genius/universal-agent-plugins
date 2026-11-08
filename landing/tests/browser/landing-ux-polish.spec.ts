@@ -20,7 +20,8 @@ for (const width of [1440, 390]) {
     }
     await expect(table.locator('tbody th:first-child').first()).toHaveCSS('text-align', 'start');
     await testInfo.attach(`support-table-${width}`, {
-      body: await table.screenshot({ animations: 'disabled' }),
+      body: await page.locator('#agent-support .registry-client-support__scroll')
+        .screenshot({ animations: 'disabled' }),
       contentType: 'image/png',
     });
   });
