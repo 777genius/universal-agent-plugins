@@ -80,6 +80,27 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     AssertionError, "CLI did not succeed"):
                 check({**valid, **changed}, "update", "update")
 
+    def test_marketing_kit_noop_update_rejects_rekey_and_lock_rewrite(self):
+        # Released 0.1.101 reports unchanged; do not trust that envelope alone.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        check = runner["check_noop_update"]
+        original = {"marketing-kit": "root-id", "notion": "notion-id",
+                    "hubspot-crm": "hubspot-id", "playwright": "playwright-id"}
+        signed_lock = b'{"immutable": "signed"}\n'
+        for stage in ("Project update", "User update"):
+            with self.subTest(stage=stage):
+                check(dict(original), original, signed_lock, signed_lock, stage)
+                rekeyed = {**original, "notion": "unexpected-new-id"}
+                with self.assertRaisesRegex(AssertionError,
+                                            "no-op update changed installation identities"):
+                    check(rekeyed, original, signed_lock, signed_lock, stage)
+                with self.assertRaisesRegex(AssertionError,
+                                            "no-op update changed signed lock"):
+                    check(original, original, signed_lock + b" ", signed_lock, stage)
+
     def test_marketing_kit_legacy_repair_install_remove_require_real_results(self):
         from runpy import run_path
 

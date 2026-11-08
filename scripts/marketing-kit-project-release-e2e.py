@@ -212,6 +212,13 @@ def check_project_a_unchanged(observed, expected, current_lock, expected_lock, s
         raise AssertionError(f"{stage}: Project A signed lock changed")
 
 
+def check_noop_update(observed, expected, current_lock, expected_lock, stage):
+    """Require no-op update to preserve signed pins and installation IDs."""
+    if observed != expected:
+        raise AssertionError(f"{stage}: no-op update changed installation identities")
+    if current_lock != expected_lock:
+        raise AssertionError(f"{stage}: no-op update changed signed lock")
+
 def profile_snapshot(env, project):
     """Hash the originating HOME, UAP receipts and Project root against peer writes."""
     return audit["snapshot"]([Path(env["HOME"]), Path(env["AGENTPLUGINS_HOME"]), project])
@@ -330,6 +337,9 @@ def main():
             identities_after_update = identities(inventory(options.cli, env, project_a, options.target), options.target)
             if set(identities_after_update) != EXPECTED:
                 raise AssertionError("update lost a mandatory dependency")
+            check_noop_update(identities_after_update, first,
+                              (project_a / "uap.lock").read_bytes(), portable_lock,
+                              "Project update")
             # Real repair on intact signed pins: this is not drift-recovery proof.
             # A repair may refresh owned receipts, but not the locked closure.
             pinned_after_update = (project_a / "uap.lock").read_bytes()
@@ -416,6 +426,9 @@ def main():
                 raise AssertionError("User update lost mandatory signed closure")
             if lock_ids(user_portable) != expected_pins:
                 raise AssertionError("User update changed mandatory signed pins")
+            check_noop_update(user_after_update, user_first,
+                              (user_portable / "uap.lock").read_bytes(), user_initial_lock,
+                              "User update")
             user_lock_after_update = (user_portable / "uap.lock").read_bytes()
             user_manifest_after_update = (user_portable / "uap.toml").read_bytes()
             run(env, project_a, "User repair intact", "repair", "marketing-kit",
