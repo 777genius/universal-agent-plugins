@@ -208,6 +208,57 @@
     "buildGuideLink": "Abrir o guia de criação"
   },
   "shell": {
+    "clientSupport": {
+      "eyebrow": "Compatibilidade",
+      "title": "Agentes compatíveis e escopos de instalação",
+      "description": "O escopo de usuário instala componentes no perfil do agente; o escopo de projeto os instala em um único espaço de trabalho. O UAP configura os arquivos compatíveis. O agente ainda pode solicitar confiança, login ou reinício.",
+      "tableLabel": "Tabela de suporte à instalação por agente",
+      "tableCaption": "Suporte a usuário e projeto, modo de configuração e ações após a instalação.",
+      "columns": {
+        "agent": "Agente",
+        "user": "Escopo de usuário",
+        "project": "Escopo de projeto",
+        "setup": "Configuração",
+        "nextStep": "Após a instalação"
+      },
+      "scrollHint": "Role a tabela para os lados para ver todas as colunas.",
+      "note": "Automático: o UAP instala os componentes compatíveis. Guiado: siga as instruções do agente. Preparado: ative os arquivos preparados. Manual: conclua a configuração no aplicativo. A instalação não faz login nem concede confiança automaticamente. Estas são as capacidades do código-fonte atual; a CLI publicada pode ser diferente. A disponibilidade depende do plugin e da versão do agente.",
+      "details": "Ver detalhes de compatibilidade",
+      "capabilities": {
+        "pluginsSkillsMcp": "Plugins, habilidades, MCP",
+        "skillsMcp": "Habilidades, MCP",
+        "pluginsSkillsMcpHooks": "Plugins, habilidades, MCP, ganchos",
+        "extensionsSkillsMcp": "Extensões, habilidades, MCP",
+        "copilotPackage": "Pacote via Copilot",
+        "personalAppSetup": "Configuração de aplicativo pessoal",
+        "skillsOnly": "Somente habilidades",
+        "skillsMcpPrepared": "Habilidades, MCP (preparado)",
+        "notSupported": "Não suportado"
+      },
+      "setup": {
+        "automatic": "Automático",
+        "guided": "Guiado",
+        "prepared": "Preparado",
+        "manual": "Manual"
+      },
+      "nextSteps": {
+        "claude": "Confie no espaço de trabalho e recarregue o Claude Code se solicitado.",
+        "codex": "Abra uma nova sessão; autorize o acesso MCP do projeto se solicitado.",
+        "opencode": "Inicie uma nova sessão e confira as configurações efetivas do projeto.",
+        "cursor": "Recarregue o Cursor; habilite plugins ou servidores MCP se necessário.",
+        "copilot": "Reinicie o Copilot CLI se solicitado.",
+        "gemini": "Recarregue o Gemini CLI e autorize o acesso às ferramentas se solicitado.",
+        "qoder": "Reinicie o Qoder e revise as permissões MCP.",
+        "pi": "Confie no projeto e recarregue os recursos do Pi.",
+        "windsurf": "Abra ou reinicie o Devin no projeto selecionado e revise o acesso.",
+        "kimi": "Execute /reload ou /new e revise as permissões MCP.",
+        "cline": "Selecione o caminho das configurações MCP do projeto e recarregue o Cline.",
+        "kiro": "Faça login, autorize o acesso e reinicie o Kiro se solicitado.",
+        "grok": "Recarregue o Grok; revise as habilidades do projeto e as dicas de configuração da CLI.",
+        "vscode": "Abra a pasta, confie nela e revise e habilite os servidores MCP.",
+        "chatgpt": "Ative o modo de desenvolvedor, conecte o aplicativo e selecione-o em um novo chat."
+      }
+    },
     "dependencies": {
       "eyebrow": "Dependências conectadas",
       "title": "Dois plugins. Uma dependência compartilhada.",

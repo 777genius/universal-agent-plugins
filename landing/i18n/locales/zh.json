@@ -345,6 +345,57 @@
     "buildGuideLink": "打开构建指南"
   },
   "shell": {
+    "clientSupport": {
+      "eyebrow": "兼容性",
+      "title": "支持的智能体与安装范围",
+      "description": "用户范围将组件安装到智能体配置文件，项目范围仅安装到指定工作区。UAP 会配置支持的文件。智能体仍可能要求信任项目、登录或重启。",
+      "tableLabel": "智能体安装支持表",
+      "tableCaption": "各智能体的用户和项目支持情况、设置方式及安装后的操作。",
+      "columns": {
+        "agent": "智能体",
+        "user": "用户范围",
+        "project": "项目范围",
+        "setup": "设置方式",
+        "nextStep": "安装后操作"
+      },
+      "scrollHint": "横向滚动以查看所有列。",
+      "note": "自动：UAP 安装受支持的组件。引导：按智能体提示完成操作。已准备：激活准备好的文件。手动：在应用中完成设置。安装不会替您登录或授予信任权限。此表反映当前源码的能力，已发布的 CLI 可能不同。可用性取决于插件及智能体版本。",
+      "details": "查看兼容性详情",
+      "capabilities": {
+        "pluginsSkillsMcp": "插件、技能、MCP",
+        "skillsMcp": "技能、MCP",
+        "pluginsSkillsMcpHooks": "插件、技能、MCP、钩子",
+        "extensionsSkillsMcp": "扩展、技能、MCP",
+        "copilotPackage": "基于 Copilot 的软件包",
+        "personalAppSetup": "个人应用设置",
+        "skillsOnly": "仅技能",
+        "skillsMcpPrepared": "技能、MCP（已准备）",
+        "notSupported": "不支持"
+      },
+      "setup": {
+        "automatic": "自动",
+        "guided": "引导设置",
+        "prepared": "已准备",
+        "manual": "手动"
+      },
+      "nextSteps": {
+        "claude": "信任工作区，并在提示时重新加载 Claude Code。",
+        "codex": "开启新会话；如有提示，请批准项目 MCP 访问权限。",
+        "opencode": "开启新会话并检查项目的实际设置。",
+        "cursor": "重新加载 Cursor；如有要求，请启用插件或 MCP 服务器。",
+        "copilot": "如有提示，请重启 Copilot CLI。",
+        "gemini": "重新加载 Gemini CLI，并按提示批准工具访问。",
+        "qoder": "重启 Qoder 并检查 MCP 权限。",
+        "pi": "信任项目并重新加载 Pi 资源。",
+        "windsurf": "在所选项目中打开或重启 Devin，并检查访问权限。",
+        "kimi": "运行 /reload 或 /new，并检查 MCP 权限。",
+        "cline": "选择项目 MCP 设置路径，然后重新加载 Cline。",
+        "kiro": "登录、批准访问，并在提示时重启 Kiro。",
+        "grok": "重新加载 Grok；检查项目技能和 CLI 设置提示。",
+        "vscode": "打开并信任文件夹；检查并启用 MCP 服务器。",
+        "chatgpt": "启用开发者模式，连接应用，并在新聊天中选择该应用。"
+      }
+    },
     "dependencies": {
       "eyebrow": "相互连接的依赖",
       "title": "两个插件，共享一个依赖。",
