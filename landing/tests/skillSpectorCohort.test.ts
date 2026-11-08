@@ -320,6 +320,28 @@ test('overlay survives unrelated manifest updates but fails closed on source or 
     assert.equal(uncertain.records[0]!.finding_count, 1);
     assert.equal(uncertain.records[0]!.signed_cohort_verified, undefined);
   }
+  // An older signed Complete cannot discard new risk evidence from a newer
+  // source-identical Partial even when only reference_missing remains.
+  const newlyObserved = structuredClone(report);
+  newlyObserved.records[0]!.findings.push({
+    ...structuredClone(newlyObserved.records[0]!.findings[0]!),
+    rule: 'E99', severity: 'CRITICAL',
+    message: 'New source-identical risk', match_fingerprint: 'new-current-risk',
+  });
+  newlyObserved.records[0]!.finding_count = 2;
+  assert.equal(applyVerifiedSkillSpectorCohort(
+    newlyObserved, cohort.manifestDigest, cohort, at), newlyObserved);
+  assert.equal(newlyObserved.records[0]!.findings[1]?.severity, 'CRITICAL');
+  const changedRisk = structuredClone(report);
+  changedRisk.records[0]!.findings[0]!.message = 'Different risk evidence';
+  assert.equal(applyVerifiedSkillSpectorCohort(
+    changedRisk, cohort.manifestDigest, cohort, at), changedRisk);
+  const repeatedRisk = structuredClone(report);
+  repeatedRisk.records[0]!.findings.push(
+    structuredClone(repeatedRisk.records[0]!.findings[0]!));
+  repeatedRisk.records[0]!.finding_count = 2;
+  assert.equal(applyVerifiedSkillSpectorCohort(
+    repeatedRisk, cohort.manifestDigest, cohort, at), repeatedRisk);
   const changedRevision = structuredClone(report);
   changedRevision.records[0]!.source.revision = 'be4142b25bba6d424962a7788432dd813e6b768c';
   changedRevision.records[0]!.target_revision = changedRevision.records[0]!.source.revision;
