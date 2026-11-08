@@ -4,7 +4,7 @@ import type { InstallScope } from '~/types/registry';
 import { skillClients } from '~/data/skillClients';
 import { skillDetailIdAvailable, skillDetailRoute, skillInstallCommand, skillNeedsManualSelection, skillPublisherUrl, skillRepositoryUrl } from '~/utils/skillsCatalog';
 import { useInstallPreferencesStore } from '~/stores/installPreferences';
-import { recommendedSkillKey } from '~/data/catalogCuration';
+import { recommendedSkillKey, recommendedSkillDescription } from '~/data/catalogCuration';
 
 const props = defineProps<{ skill: SkillListing }>();
 const localePath = useLocalePath();
@@ -98,7 +98,7 @@ function updateScope(value: InstallScope) {
       </div>
     </div>
     <p v-if="editorialKey" class="skill-card__benefit">
-      {{ t('registryUi.skills.featured.items.' + editorialKey) }}
+      {{ recommendedSkillDescription(editorialKey, t) }}
     </p>
     <SkillSpectorAssessment
       :subject="
