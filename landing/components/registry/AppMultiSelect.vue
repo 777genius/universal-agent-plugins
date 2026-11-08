@@ -128,12 +128,12 @@ function toggle(value: string) {
       ></span>
     </PopoverTrigger>
     <PopoverPortal>
+      <!-- Keep the menu clear of the fixed 64px header when it flips upward. -->
       <PopoverContent
         class="app-multiselect__content"
         :class="{ 'app-multiselect__content--wide': fullWidth }"
         align="start"
         :side-offset="7"
-        <!-- Reserve the fixed 64px header plus clearance when the menu flips upward. -->
         :collision-padding="{ top: 80, right: 14, bottom: 14, left: 14 }"
       >
         <div class="app-multiselect__heading">
