@@ -4,21 +4,21 @@ Checked the exact `landing/pnpm-lock.yaml` and `landing/package.json` from the #
 
 ## Actual old-major parents in the pnpm v9 lockfile
 
-| Locked affected package | Immediate locked parent | Classification / investigation |
+| Locked package | Immediate locked parent | Classification / investigation |
 | --- | --- | --- |
 | `glob@10.5.0` | `archiver-utils@5.0.2` | Archiving dependency used through Nuxt/Nitro build tooling. Upstream `archiverjs/node-archiver#822` confirms `archiver-utils@5` depends on `glob@^10` and requests an upstream supported fix. |
-| `minimatch@3.1.5` | `eslint@9.39.5` | Developer lint only; ESLint 9 deliberately uses `minimatch@^3.1.5` (see official 9.39.4 release notes). |
+| `minimatch@3.1.5` | `eslint@9.39.5` | Developer lint only; outside GHSA-g3hv-75wg-m249 after its reviewed range narrowed on 2026-11-04 to `>=7.0.0, <11.0.1`. Other advisories must be assessed separately. |
 | `minimatch@3.1.5` | `@eslint/eslintrc@3.3.7` | ESLint legacy config compatibility, build/developer tooling. |
 | `minimatch@3.1.5` | `@eslint/config-array@0.21.2` | ESLint config traversal; developer tooling. |
 | `minimatch@3.1.5` | `serve-handler@6.1.7` | Transitive dependency of direct dev dependency `serve@14.2.6`; no direct `serve` invocation was found by repository-wide code search, but production exclusion must still be confirmed against actual generated output before claiming it. |
 
-Other, distinct installed majors also exist: `glob@13.0.6`, `minimatch@5.1.9`, `minimatch@9.0.9`, `minimatch@10.2.6`. Upgrading just one parent cannot establish advisory closure for all of these.
+Other, distinct installed majors also exist: `glob@13.0.6`, `minimatch@5.1.9`, `minimatch@9.0.9`, `minimatch@10.2.6`. Under the current GHSA-g3hv-75wg-m249 range, minimatch 9/10 are affected but 3/5 are not. Upgrading one affected parent cannot establish advisory closure for all paths.
 
 ## Advisory scope and safe strategy
 
 - `glob` [GHSA-3g3m-2fjr-6pw4](https://github.com/advisories/GHSA-3g3m-2fjr-6pw4) concerns post-abort filesystem walking; the published fixed line is `14.0.2+`.
 - `minimatch` [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249) concerns `optimizationLevel >= 2` + pathological patterns; the published fixed line is `11.0.1+`.
-- Both require **major-version crossings** for present affected parents; an override such as `archiver-utils>glob: 14.0.2` or `eslint>minimatch: 11.0.1` breaks their declared contracts and is **not** an approved solution merely because Dependabot alerts would disappear. Upstream archiver-utils currently lists `5.0.2` as latest; ESLint 9 v9.39.4 deliberately retains minimatch 3.
+- The currently affected glob 10/13 and minimatch 9/10 paths require supported parent updates. **Minimatch 3.1.5 and 5.1.9 are not affected by this specific GHSA**; do not force-upgrade them for this finding. An override such as `archiver-utils>glob: 14.0.2` or globally forcing `minimatch: 11.0.1` violates some declared contracts and is **not** an approved fix merely because alerts disappear. Upstream archiver-utils lists `5.0.2` as latest; ESLint 9 deliberately retains minimatch 3.
 - Site `nuxt@3.21.11` is on an upstream EOL line (Nuxt 3 EOL 2026-07-31), but migrating the entire site to Nuxt 4 in this narrow dependency PR is not justified without an independent compatibility plan and native browser E2E. This should be prioritized separately rather than silently bundled as a transient fix.
 - Risk is **dependency presence confirmed**, not remotely exploitable production runtime confirmed. Determine if any vulnerable code lands in public output or server runtime with a real generated artifact, and whether untrusted user-supplied glob patterns ever reach those build-time APIs; do not assume either outcome.
 
