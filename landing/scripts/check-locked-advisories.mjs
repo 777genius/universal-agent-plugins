@@ -12,22 +12,37 @@ const entry = (line, indent) => {
 };
 
 export function parsePnpmLock(source) {
+  const versions = [...source.matchAll(/^lockfileVersion:\s*(\S+)\s*$/gm)].map(([, value]) => scalar(value));
+  if (versions.length === 0 || versions.some((version) => version !== '9.0')) {
+    throw new Error('Unsupported pnpm lockfile version');
+  }
   const nodes = new Map();
   const roots = { dependencies: new Set(), devDependencies: new Set() };
   let section = '', importer = '', category = '', currentNode = '', edgeCategory = '';
+  let pendingRoot = '';
+  const requireResolvedRoot = () => {
+    if (pendingRoot) throw new Error(`Missing pnpm importer version: ${pendingRoot}`);
+  };
   for (const line of source.split(/\r?\n/)) {
     if (/^(importers|snapshots):\s*$/.test(line)) {
+      requireResolvedRoot();
       section = line.slice(0, -1); importer = ''; category = '';
       currentNode = ''; edgeCategory = '';
       continue;
     }
-    if (/^[^\s#-]/.test(line) || line === '---') { section = ''; continue; }
+    if (/^[^\s#-]/.test(line) || line === '---') { requireResolvedRoot(); section = ''; continue; }
     if (section === 'importers') {
       const e2 = entry(line, 2), e4 = entry(line, 4), e6 = entry(line, 6), e8 = entry(line, 8);
+      if (e2 || e4 || e6) requireResolvedRoot();
       if (e2) { importer = e2[0]; category = ''; }
       else if (e4) category = e4[0];
-      else if (importer === '.' && (category === 'dependencies' || category === 'devDependencies' || category === 'optionalDependencies') && e6) currentNode = e6[0];
-      else if (importer === '.' && (category === 'dependencies' || category === 'devDependencies' || category === 'optionalDependencies') && e8?.[0] === 'version') roots[category === 'optionalDependencies' ? 'dependencies' : category].add(lockNode(currentNode, scalar(e8[1])));
+      else if (importer === '.' && (category === 'dependencies' || category === 'devDependencies' || category === 'optionalDependencies') && e6) {
+        currentNode = e6[0]; pendingRoot = currentNode;
+      }
+      else if (importer === '.' && (category === 'dependencies' || category === 'devDependencies' || category === 'optionalDependencies') && e8?.[0] === 'version') {
+        roots[category === 'optionalDependencies' ? 'dependencies' : category].add(lockNode(currentNode, scalar(e8[1])));
+        pendingRoot = '';
+      }
       continue;
     }
     if (section === 'snapshots') {
@@ -39,6 +54,7 @@ export function parsePnpmLock(source) {
       }
     }
   }
+  requireResolvedRoot();
   if (nodes.size === 0 || [...roots.dependencies, ...roots.devDependencies].length === 0) {
     throw new Error('Unsupported pnpm lockfile: missing v9 snapshot graph or root importer');
   }

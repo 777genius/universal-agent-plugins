@@ -73,3 +73,19 @@ test('includes root optional dependencies in production reachability', () => {
   assert.ok(auditLock(withOptional).some(({ scope, package: pkg }) =>
     scope === 'dependencies' && pkg === 'minimatch@9.0.9'));
 });
+
+test('fails closed if one importer dependency has no pinned version, even when other roots exist', () => {
+  const missingVersion = fixture.replace('        version: 1.0.0(peer@2.0.0)', '        resolution: 1.0.0(peer@2.0.0)');
+  assert.throws(() => auditLock(missingVersion), /Missing pnpm importer version: @a\/entry/);
+});
+
+test('fails closed if final root dependency lacks version before snapshots', () => {
+  const missingLast = fixture.replace('        version: 1.0.0\nsnapshots:', '        specifier-only: 1.0.0\nsnapshots:');
+  assert.throws(() => auditLock(missingLast), /Missing pnpm importer version: test-tool/);
+});
+
+test('refuses a different lockfile schema even if graph keys look familiar', () => {
+  const future = fixture.replaceAll("lockfileVersion: '9.0'", "lockfileVersion: '10.0'");
+  assert.throws(() => auditLock(future), /Unsupported pnpm lockfile version/);
+  assert.throws(() => auditLock(fixture.replaceAll("lockfileVersion: '9.0'\n", '')), /Unsupported pnpm lockfile version/);
+});
