@@ -80,6 +80,41 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     AssertionError, "CLI did not succeed"):
                 check({**valid, **changed}, "update", "update")
 
+    def test_marketing_kit_dependency_reports_require_selected_client_and_receipts(self):
+        # A zero exit and generic success must not certify another client's actions.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        check = runner["verified"]
+        aliases = ("marketing-kit", "notion", "hubspot-crm", "playwright")
+        for operation, action_type, selected in (
+                ("update", "unchanged", aliases),
+                ("repair", "repair", ("marketing-kit",)),
+                ("install", "install", aliases),
+                ("remove", "remove", ("marketing-kit",))):
+            with self.subTest(operation=operation):
+                actions = [{"alias": alias, "client_id": "codex",
+                            "installation_id": alias + "-id", "action": action_type}
+                           for alias in selected]
+                results = [{"operation": action_type, "client_id": "codex",
+                            "installation_id": action["installation_id"],
+                            "outcome": "completed"}
+                           for action in actions if action_type != "unchanged"]
+                envelope = {"outcome": "completed", "actions": actions,
+                            "results": results}
+                valid = {"exit_code": 0, "timeout": False, "_json": envelope}
+                self.assertEqual(check(valid, operation, operation, "codex"), envelope)
+                # Both actions and results can consistently attest a *different*
+                # client while this target's native state remains untouched.
+                foreign = {**envelope,
+                           "actions": [{**action, "client_id": "claude"} for action in actions],
+                           "results": [{**result, "client_id": "claude"} for result in results]}
+                for invalid in (foreign, {"result": "success"},
+                                {"result": "success", **envelope}):
+                    with self.assertRaisesRegex(AssertionError, "CLI did not succeed"):
+                        check({**valid, "_json": invalid}, operation, operation, "codex")
+
     def test_marketing_kit_noop_update_rejects_rekey_and_lock_rewrite(self):
         # Released 0.1.101 reports unchanged; do not trust that envelope alone.
         from runpy import run_path

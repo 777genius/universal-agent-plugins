@@ -35,7 +35,8 @@ LEGACY_ACTIONS = {
 }
 
 
-def valid_legacy_dependency_result(envelope, operation):
+def valid_legacy_dependency_result(envelope, operation, target=None):
+    """Validate real published dependency receipts for the selected client."""
     if (operation not in LEGACY_ACTIONS or "result" in envelope
             or envelope.get("outcome") != "completed"):
         return False
@@ -46,6 +47,7 @@ def valid_legacy_dependency_result(envelope, operation):
     if any(not isinstance(action, dict)
            or not isinstance(action.get("alias"), str) or not action["alias"]
            or not isinstance(action.get("client_id"), str) or not action["client_id"]
+           or (target is not None and action["client_id"] != target)
            or action.get("action") not in LEGACY_ACTIONS[operation]
            for action in actions):
         return False
@@ -74,15 +76,18 @@ def valid_legacy_dependency_result(envelope, operation):
     return True
 
 
-def verified(result, stage, operation=None):
+def verified(result, stage, operation=None, target=None):
     envelope = result.get("_json")
     if (result.get("exit_code") != 0 or result.get("timeout")
             or not isinstance(envelope, dict)):
         raise AssertionError(f"{stage}: CLI did not succeed with JSON: {result}")
-    if (envelope.get("result") == "success"
-            and envelope.get("outcome") not in ("partial", "failed", "failure")):
-        return envelope
-    if valid_legacy_dependency_result(envelope, operation):
+    # The pinned 0.1.101 dependency commands must report explicit actions
+    # and results. A bare success envelope is not evidence of their execution.
+    if operation in LEGACY_ACTIONS:
+        if valid_legacy_dependency_result(envelope, operation, target):
+            return envelope
+    elif (envelope.get("result") == "success"
+          and envelope.get("outcome") not in ("partial", "failed", "failure")):
         return envelope
     raise AssertionError(f"{stage}: CLI did not succeed with JSON: {result}")
 
@@ -257,9 +262,9 @@ def bind_pinned_launcher_cache(env, cache, sandbox):
     env["AGENTPLUGINS_CACHE_DIR"] = str(cache)
 
 
-def execute(cli, env, project, label, *args):
+def execute(cli, env, project, target, label, *args):
     result = invoke([cli, *args, "--format", "json"], env, project, 180)
-    verified(result, label, args[0])
+    verified(result, label, args[0], target)
     return {"stage": label, "exit_code": result["exit_code"], "result": "passed"}
 
 
@@ -308,7 +313,7 @@ def main():
             verify_pinned_launcher(options.cli, env, project_a)
             def run(e, p, label, *args):
                 try:
-                    report["steps"].append(execute(options.cli, e, p, label, *args))
+                    report["steps"].append(execute(options.cli, e, p, options.target, label, *args))
                 finally:
                     # Also protect foreign state when a lifecycle command refuses/fails.
                     check_foreign(foreign_files, root)
