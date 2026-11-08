@@ -800,6 +800,11 @@ async function copyDiagnostics() {
   font-size: 0.75rem;
   line-height: 1.5;
 }
+.skillspector--noSkills {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+}
 .skillspector > summary {
   display: flex;
   align-items: center;
