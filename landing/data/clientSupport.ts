@@ -17,6 +17,7 @@ export const clientSupportCapabilityKeys = {
   'Plugins, Skills, MCP, hooks': 'pluginsSkillsMcpHooks',
   'Extensions, Skills, MCP': 'extensionsSkillsMcp',
   'Copilot-backed package': 'copilotPackage',
+  'Desktop local plugins; Web connected apps': 'desktopLocalPluginsWebConnectedApps',
   'Personal app setup': 'personalAppSetup',
   'Skills only': 'skillsOnly',
   'Skills, MCP (prepared)': 'skillsMcpPrepared',

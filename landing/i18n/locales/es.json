@@ -367,6 +367,7 @@
         "pluginsSkillsMcpHooks": "Complementos, habilidades, MCP, ganchos",
         "extensionsSkillsMcp": "Extensiones, habilidades, MCP",
         "copilotPackage": "Paquete mediante Copilot",
+        "desktopLocalPluginsWebConnectedApps": "Plugins locales de escritorio; aplicaciones web conectadas",
         "personalAppSetup": "Configuración de aplicación personal",
         "skillsOnly": "Solo habilidades",
         "skillsMcpPrepared": "Habilidades, MCP (preparado)",
@@ -393,7 +394,7 @@
         "kiro": "Inicia sesión, autoriza el acceso y reinicia Kiro si se solicita.",
         "grok": "Recarga Grok; revisa las habilidades del proyecto y las indicaciones de la CLI.",
         "vscode": "Abre la carpeta, confía en ella y revisa y activa los servidores MCP.",
-        "chatgpt": "Activa el modo de desarrollador, conecta la aplicación y selecciónala en un chat nuevo."
+        "chatgpt": "Escritorio: instalación local mediante Codex CLI; Web: conecta o instala la aplicación en ChatGPT."
       }
     },
     "dependencies": {
