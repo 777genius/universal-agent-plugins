@@ -212,14 +212,14 @@ def check_project_a_unchanged(observed, expected, current_lock, expected_lock, s
         raise AssertionError(f"{stage}: Project A signed lock changed")
 
 
-def profile_snapshot(env):
-    """Hash the entire isolated HOME and UAP state, not only native client roots."""
-    return audit["snapshot"]([Path(env["HOME"]), Path(env["AGENTPLUGINS_HOME"])])
+def profile_snapshot(env, project):
+    """Hash the originating HOME, UAP receipts and Project root against peer writes."""
+    return audit["snapshot"]([Path(env["HOME"]), Path(env["AGENTPLUGINS_HOME"]), project])
 
 
-def check_profile_unchanged(env, expected, stage):
-    """A peer restore/remove must not alter native files, receipts or other state."""
-    if profile_snapshot(env) != expected:
+def check_profile_unchanged(env, project, expected, stage):
+    """A peer restore/remove must not alter the originating profile or Project."""
+    if profile_snapshot(env, project) != expected:
         raise AssertionError(f"{stage}: original isolated profile changed")
 
 
@@ -331,7 +331,7 @@ def main():
                 raise AssertionError("repair changed installation identities")
             if (project_a / "uap.lock").read_bytes() != pinned_after_update:
                 raise AssertionError("repair changed the signed lock")
-            native_a_before_b = profile_snapshot(env)
+            native_a_before_b = profile_snapshot(env, project_a)
             env_b, project_b, foreign_b, project_foreign_b, native_foreign_b = run_case(options.cli, options.target, root, "B", project_a)
             bind_pinned_launcher_cache(env_b, launcher_cache, root)
             foreign_b_files = [(foreign_b, "unmanaged user data\n"),
@@ -340,7 +340,7 @@ def main():
             foreign_files.extend(foreign_b_files)
             scoped_b = ("--scope", "project", "--project-root", str(project_b))
             run(env_b, project_b, "cold locked restore", "install", "--locked", "--yes", *scoped_b)
-            check_profile_unchanged(env, native_a_before_b, "cold restore B")
+            check_profile_unchanged(env, project_a, native_a_before_b, "cold restore B")
             restored = identities(inventory(options.cli, env_b, project_b, options.target), options.target)
             check_cold_restore(restored, identities_after_update, pinned_after_update,
                                (project_b / "uap.lock").read_bytes(),
@@ -352,9 +352,9 @@ def main():
                 identities(inventory(options.cli, env, project_a, options.target), options.target),
                 identities_after_update, (project_a / "uap.lock").read_bytes(),
                 pinned_after_update, "cold restore B")
-            native_a_before_b = profile_snapshot(env)
+            native_a_before_b = profile_snapshot(env, project_a)
             run(env_b, project_b, "remove B", "remove", "marketing-kit", *scoped_b)
-            check_profile_unchanged(env, native_a_before_b, "remove B")
+            check_profile_unchanged(env, project_a, native_a_before_b, "remove B")
             if identities(inventory(options.cli, env_b, project_b, options.target), options.target):
                 raise AssertionError("Project B retains root or mandatory children after remove")
             check_project_a_unchanged(
@@ -429,10 +429,10 @@ def main():
             user_portable_c.mkdir(parents=True, exist_ok=True)
             for name in ("uap.toml", "uap.lock"):
                 shutil.copyfile(user_portable / name, user_portable_c / name)
-            user_a_native_before_c = profile_snapshot(env)
+            user_a_native_before_c = profile_snapshot(env, project_a)
             run(env_c, project_c, "User cold locked restore C",
                 "install", "--locked", "--yes", *user_scoped)
-            check_profile_unchanged(env, user_a_native_before_c,
+            check_profile_unchanged(env, project_a, user_a_native_before_c,
                                    "User cold restore C")
             restored_user_c = identities(
                 inventory(options.cli, env_c, project_c, options.target, "user"),
@@ -457,10 +457,10 @@ def main():
                     "stage": "User C native HubSpot uninstall",
                     "exit_code": 0, "result": "passed",
                 })
-            user_a_native_before_c = profile_snapshot(env)
+            user_a_native_before_c = profile_snapshot(env, project_a)
             run(env_c, project_c, "User remove C", "remove", "marketing-kit",
                 *user_scoped, *remove_c_attestation)
-            check_profile_unchanged(env, user_a_native_before_c,
+            check_profile_unchanged(env, project_a, user_a_native_before_c,
                                    "User remove C")
             if identities(inventory(options.cli, env_c, project_c, options.target, "user"),
                           options.target, "user"):

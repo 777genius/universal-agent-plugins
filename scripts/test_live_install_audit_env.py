@@ -389,36 +389,44 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                               "marketing-kit-project-release-e2e.py"))
         with TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
-            env, *_ = runner["run_case"]("unused", "codex", root, "A")
-            before = runner["profile_snapshot"](env)
-            runner["check_profile_unchanged"](env, before, "restore B")
+            env, project, *_ = runner["run_case"]("unused", "codex", root, "A")
+            before = runner["profile_snapshot"](env, project)
+            runner["check_profile_unchanged"](env, project, before, "restore B")
             native = Path(env["HOME"]) / ".codex" / "managed.json"
             native.write_bytes(b"before")
             with self.assertRaisesRegex(AssertionError, "original isolated profile changed"):
-                runner["check_profile_unchanged"](env, before, "restore B")
-            after = runner["profile_snapshot"](env)
+                runner["check_profile_unchanged"](env, project, before, "restore B")
+            after = runner["profile_snapshot"](env, project)
             native.write_bytes(b"after")
             with self.assertRaisesRegex(AssertionError, "original isolated profile changed"):
-                runner["check_profile_unchanged"](env, after, "remove B")
+                runner["check_profile_unchanged"](env, project, after, "remove B")
             native.write_bytes(b"before")
-            runner["check_profile_unchanged"](env, after, "remove B")
+            runner["check_profile_unchanged"](env, project, after, "remove B")
 
             # Changes outside the selected client's native roots must fail too.
             sibling = Path(env["HOME"]) / ".config" / "other-app" / "settings.json"
             sibling.parent.mkdir(parents=True)
             sibling.write_bytes(b"foreign")
             with self.assertRaisesRegex(AssertionError, "original isolated profile changed"):
-                runner["check_profile_unchanged"](env, after, "restore B")
+                runner["check_profile_unchanged"](env, project, after, "restore B")
             sibling.unlink()
-            runner["check_profile_unchanged"](env, after, "restore B")
+            runner["check_profile_unchanged"](env, project, after, "restore B")
 
             # A's durable UAP receipt/data state must remain untouched by B/C.
             receipt = Path(env["AGENTPLUGINS_HOME"]) / "foreign-receipt.json"
             receipt.write_bytes(b"other installation")
             with self.assertRaisesRegex(AssertionError, "original isolated profile changed"):
-                runner["check_profile_unchanged"](env, after, "remove C")
+                runner["check_profile_unchanged"](env, project, after, "remove C")
             receipt.unlink()
-            runner["check_profile_unchanged"](env, after, "remove C")
+            runner["check_profile_unchanged"](env, project, after, "remove C")
+
+            # A peer must not create unexpected files inside Project A either.
+            extra = project / "unexpected-peer-state.json"
+            extra.write_bytes(b"foreign")
+            with self.assertRaisesRegex(AssertionError, "original isolated profile changed"):
+                runner["check_profile_unchanged"](env, project, after, "restore B")
+            extra.unlink()
+            runner["check_profile_unchanged"](env, project, after, "restore B")
 
     def test_marketing_kit_cold_restore_guard_requires_full_disjoint_lock(self):
         from runpy import run_path
