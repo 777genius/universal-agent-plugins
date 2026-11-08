@@ -13,10 +13,12 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
+// doctorEvidenceFile creates captured file metadata for readiness tests.
 func doctorEvidenceFile(path string) packageview.Observation {
 	return packageview.Observation{Path: path, Kind: "file", State: packageview.Present, Captured: true}
 }
 
+// doctorEvidenceByID indexes test results by their public check identifiers.
 func doctorEvidenceByID(checks []Check) map[string]Check {
 	out := make(map[string]Check, len(checks))
 	for _, check := range checks {
@@ -25,6 +27,7 @@ func doctorEvidenceByID(checks []Check) map[string]Check {
 	return out
 }
 
+// TestDoctorLanguageLockEvidenceDoesNotGuessConsistency pins native lock semantics.
 func TestDoctorLanguageLockEvidenceDoesNotGuessConsistency(t *testing.T) {
 	p := project.Result{
 		Facts: conformance.Facts{Package: &domain.PackageEnvelope{}},
@@ -59,6 +62,7 @@ func TestDoctorLanguageLockEvidenceDoesNotGuessConsistency(t *testing.T) {
 	}
 }
 
+// TestDoctorHostEvidenceIsSortedHashedAndInert pins host checks and privacy.
 func TestDoctorHostEvidenceIsSortedHashedAndInert(t *testing.T) {
 	const privateName = "DO_NOT_LEAK_HOST_TOKEN"
 	pkg := &domain.PackageEnvelope{

@@ -19,8 +19,10 @@ type Check struct {
 	Action string `json:"action"`
 }
 
+// itemID returns a stable, opaque digest instead of disclosing an item name.
 func itemID(value string) string { return fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(value))) }
 
+// Doctor assembles deterministic metadata-only readiness checks without host probing.
 func Doctor(p project.Result) []Check {
 	checks := []Check{}
 	if p.Facts.Package == nil {
