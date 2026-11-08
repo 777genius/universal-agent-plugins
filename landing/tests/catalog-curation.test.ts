@@ -8,7 +8,7 @@ import {
   recommendedSkillKey,
   recommendedSkills,
 } from '../data/catalogCuration.ts';
-import { filterPlugins, groupCatalogPlugins } from '../utils/filter.ts';
+import { filterPlugins } from '../utils/filter.ts';
 
 const plugin = (name: string, extra: Partial<RegistryPlugin> = {}): RegistryPlugin =>
   ({
