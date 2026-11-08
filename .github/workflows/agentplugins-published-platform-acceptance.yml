@@ -1,0 +1,96 @@
+name: Published npm public cold bootstrap and lifecycle (six OS)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - '.github/workflows/agentplugins-published-platform-acceptance.yml'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact publicly published stable npm version
+        type: string
+        required: true
+        default: '0.1.102'
+      commit:
+        description: Exact 40-character immutable release source commit
+        type: string
+        required: true
+        default: '1717381d88cea9eef2cbf3ecf481dbe37188cde2'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: published-public-platform-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  public-bootstrap:
+    # Forks cannot enlarge the public binary-download test budget.
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    name: Public npm bootstrap + lifecycle (${{ matrix.target }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {target: linux-amd64, runner: ubuntu-24.04}
+          - {target: linux-arm64, runner: ubuntu-24.04-arm}
+          - {target: windows-amd64, runner: windows-2025}
+          - {target: windows-arm64, runner: windows-11-arm}
+          - {target: darwin-amd64, runner: macos-15-intel}
+          - {target: darwin-arm64, runner: macos-15}
+    env:
+      UAP_VERSION: ${{ inputs.version || '0.1.102' }}
+      UAP_COMMIT: ${{ inputs.commit || '1717381d88cea9eef2cbf3ecf481dbe37188cde2' }}
+      UAP_TARGET: ${{ matrix.target }}
+      GIT_TERMINAL_PROMPT: '0'
+    steps:
+      - name: Check out exact immutable release proof harness
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ env.UAP_COMMIT }}
+          path: release-source
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.21.1'
+          package-manager-cache: false
+      - name: Cold-fetch published npm tarball and real public GitHub binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$UAP_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$UAP_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git -C release-source rev-parse HEAD)" = "$UAP_COMMIT"
+          test "$(npm view "universal-agent-plugins@$UAP_VERSION" version)" = "$UAP_VERSION"
+          archive="$(npm pack --ignore-scripts --silent --pack-destination "$RUNNER_TEMP" "universal-agent-plugins@$UAP_VERSION")"
+          test -n "$archive"
+          # No frozen local binary, internal proof flag, auth token, model key,
+          # or fabricated client runtime: the npm shim must fetch the public
+          # GitHub release asset and verify its signed-in-manifest SHA-256.
+          node release-source/npm/agentplugins/scripts/platform-proof.js \
+            "$RUNNER_TEMP/$archive" "$UAP_VERSION" "$UAP_TARGET" true \
+            "$RUNNER_TEMP/public-platform-$UAP_TARGET.json" "$UAP_COMMIT" \
+            public_release_download -
+      - name: Cross-OS cache tampering, retry, lock and cancellation regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test --test-reporter=tap \
+            --test-name-pattern='cold, warm, corrupted|published immutable npm binary retries|npm binary gateway retry obeys cancellation|lock roots are isolated|lock root rejects symlinks|a non-regular binary cache target is preserved|canonical verifier retries transient gateway|canonical verifier exhausts transient|pre-response timeout|timeout after response|request-side error mimicking a gateway' \
+            release-source/npm/agentplugins/test/bootstrap.test.js \
+            release-source/npm/agentplugins/test/verifier.test.js \
+            | tee "$RUNNER_TEMP/public-platform-$UAP_TARGET-security.tap"
+      - name: Retain original public-source evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: published-public-platform-${{ matrix.target }}
+          path: |
+            ${{ runner.temp }}/public-platform-${{ matrix.target }}.json
+            ${{ runner.temp }}/public-platform-${{ matrix.target }}-security.tap
+          if-no-files-found: warn
+          retention-days: 14
