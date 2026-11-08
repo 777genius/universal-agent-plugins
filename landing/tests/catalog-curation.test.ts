@@ -17,7 +17,13 @@ const plugin = (name: string, extra: Partial<RegistryPlugin> = {}): RegistryPlug
     install_source: name,
     trust_state: 'reviewed',
     description: 'Community package for the official integration.',
-    source: { repository: 'example/tools', path: name },
+    source: {
+      repository: 'example/tools',
+      revision: '1'.repeat(40),
+      path: name,
+      manifest_sha256: `sha256:${'2'.repeat(64)}`,
+      tree_sha256: `sha256:${'3'.repeat(64)}`,
+    },
     categories: ['developer'],
     keywords: [],
     components: ['mcp'],
@@ -48,7 +54,7 @@ test('uninstallable reviewed items and discovered packages cannot be promoted by
   const ready = plugin('notion');
   const discovered = plugin('github', {
     trust_state: 'conformant_unreviewed',
-    source: { repository: 'unreviewed/github', path: '' },
+    source: { ...unready.source, repository: 'unreviewed/github', path: '' },
     install_source: 'discovery:unreviewed',
     description: 'Unreviewed community description',
   });
