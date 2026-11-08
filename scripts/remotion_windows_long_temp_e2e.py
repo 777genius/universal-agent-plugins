@@ -30,10 +30,10 @@ def main():
         ["git", "show", "HEAD:tests/live-install/fixtures.json"], cwd=repo)
     checkout_bytes = fixture_path.read_bytes()
     if hashlib.sha256(fixture_bytes).hexdigest() != FIXTURE_SHA256:
-        report.write_text(json.dumps({"stage": "fixture", "reason": "git-blob-digest"}) + "\\n")
+        report.write_text(json.dumps({"stage": "fixture", "reason": "git-blob-digest"}) + "\n")
         raise SystemExit("immutable Git fixture SHA-256 mismatch")
-    if checkout_bytes not in (fixture_bytes, fixture_bytes.replace(b"\\n", b"\\r\\n")):
-        report.write_text(json.dumps({"stage": "fixture", "reason": "unexpected-worktree-bytes"}) + "\\n")
+    if checkout_bytes not in (fixture_bytes, fixture_bytes.replace(b"\n", b"\r\n")):
+        report.write_text(json.dumps({"stage": "fixture", "reason": "unexpected-worktree-bytes"}) + "\n")
         raise SystemExit("checkout modified immutable fixture beyond Windows EOL conversion")
     fixtures = json.loads(fixture_bytes)
     item = fixtures["skills"][24]
