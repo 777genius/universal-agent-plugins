@@ -280,6 +280,32 @@ test('overlay survives unrelated manifest updates but fails closed on source or 
   const omitted = structuredClone(report);
   omitted.plugin_states[0]!.selected_ids = [];
   assert.equal(applyVerifiedSkillSpectorCohort(omitted, cohort.manifestDigest, cohort, at), omitted);
+  // A still-valid older Ed25519 release cannot cover new, source-identical
+  // authenticated recovery conflicts. Preserve the canonical Partial and all
+  // original risk evidence until a new full scan and signed requalification.
+  const quarantines: Array<(record: SkillSpectorRecord) => void> = [
+    record => { record.coverage!.reasons = [
+      { code: 'recovery_conflict', message: 'Independent source evidence differs.' },
+    ]; },
+    record => { record.coverage!.reasons = [
+      { code: 'recovery_predecessor_unavailable', message: 'Parent evidence is missing.' },
+    ]; },
+    record => { record.coverage!.reasons = [
+      { code: 'normalization_truncated', message: 'Incompletely represented risk evidence.' },
+    ]; },
+    record => { record.findings_truncated = true; },
+    record => { record.coverage!.grouping_complete = false; },
+    record => { record.coverage!.reference_evidence_truncated = true; },
+  ];
+  for (const makeUncertain of quarantines) {
+    const uncertain = structuredClone(report);
+    makeUncertain(uncertain.records[0]!);
+    assert.equal(applyVerifiedSkillSpectorCohort(
+      uncertain, cohort.manifestDigest, cohort, at), uncertain);
+    assert.equal(uncertain.records[0]!.status, 'partial');
+    assert.equal(uncertain.records[0]!.finding_count, 1);
+    assert.equal(uncertain.records[0]!.signed_cohort_verified, undefined);
+  }
   const changedRevision = structuredClone(report);
   changedRevision.records[0]!.source.revision = 'be4142b25bba6d424962a7788432dd813e6b768c';
   changedRevision.records[0]!.target_revision = changedRevision.records[0]!.source.revision;
