@@ -115,6 +115,22 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "project binding lacks exact"):
                 check([row], "codex")
 
+    def test_marketing_kit_project_a_guard_rejects_rekey_and_lock_rewrite(self):
+        # A complete set of distributions is insufficient if B silently
+        # replaces A's installation identities or changes A's signed lock.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        check = runner["check_project_a_unchanged"]
+        baseline = {"root": "id-a", "dependency": "id-child"}
+        check(dict(baseline), baseline, b"pinned", b"pinned", "restore B")
+        with self.assertRaisesRegex(AssertionError, "installation identities changed"):
+            check({"root": "rekeyed", "dependency": "id-child"},
+                  baseline, b"pinned", b"pinned", "restore B")
+        with self.assertRaisesRegex(AssertionError, "signed lock changed"):
+            check(dict(baseline), baseline, b"rewritten", b"pinned", "remove B")
+
     def test_marketing_kit_lock_guard_rejects_duplicate_or_unidentified_pins(self):
         # Comparing lock keys as a set can hide a duplicate signed package.
         from runpy import run_path

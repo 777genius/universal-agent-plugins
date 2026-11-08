@@ -119,6 +119,14 @@ def check_foreign(entries, case_root):
             raise AssertionError(f"foreign content modified: {path.name}")
 
 
+def check_project_a_unchanged(observed, expected, current_lock, expected_lock, stage):
+    """Fail if Project B's lifecycle rekeys or rewrites Project A."""
+    if observed != expected:
+        raise AssertionError(f"{stage}: Project A installation identities changed")
+    if current_lock != expected_lock:
+        raise AssertionError(f"{stage}: Project A signed lock changed")
+
+
 def execute(cli, env, project, label, *args):
     result = invoke([cli, *args, "--format", "json"], env, project, 180)
     verified(result, label)
@@ -197,17 +205,25 @@ def main():
                 raise AssertionError("cold restore reused Project A installation IDs")
             if (project_b / "uap.lock").read_bytes() != (project_a / "uap.lock").read_bytes():
                 raise AssertionError("cold restore modified pinned lock")
+            check_project_a_unchanged(
+                identities(inventory(options.cli, env, project_a, options.target), options.target),
+                identities_after_update, (project_a / "uap.lock").read_bytes(),
+                pinned_after_update, "cold restore B")
             run(env_b, project_b, "remove B", "remove", "marketing-kit", *scoped_b)
             if identities(inventory(options.cli, env_b, project_b, options.target), options.target):
                 raise AssertionError("Project B retains root or mandatory children after remove")
-            if set(identities(inventory(options.cli, env, project_a, options.target), options.target)) != EXPECTED:
-                raise AssertionError("Project B removal changed Project A's complete closure")
+            check_project_a_unchanged(
+                identities(inventory(options.cli, env, project_a, options.target), options.target),
+                identities_after_update, (project_a / "uap.lock").read_bytes(),
+                pinned_after_update, "remove B")
             run(env, project_a, "remove A", "remove", "marketing-kit", *scoped)
             if identities(inventory(options.cli, env, project_a, options.target), options.target):
                 raise AssertionError("Project A retains root or mandatory children after remove")
             for e in (env, env_b):
                 if (Path(e["AGENTPLUGINS_HOME"]) / "uap.toml").exists():
                     raise AssertionError("Project installation unexpectedly wrote User manifest")
+            # The last inventory/read assertions are outside run()'s finally.
+            check_foreign(foreign_files, root)
             report["status"] = "passed"
     except Exception as error:
         report["failure"] = str(error)[:2500]
