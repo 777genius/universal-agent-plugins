@@ -32,7 +32,7 @@ const stable = (value: unknown): string => {
 const canonical = (value: unknown) => encode.encode(stable(value) + '\n');
 const b64 = (v: Uint8Array) => btoa(String.fromCharCode(...v));
 
-async function fixture(options: { rejectedReference?: boolean } = {}) {
+async function fixture(options: { rejectedReference?: boolean; sitemapRevision?: string | string[] } = {}) {
   const pair = await crypto.subtle.generateKey({ name: 'Ed25519' }, true, ['sign', 'verify']);
   const trusted = [{ key_id: 'cohort-test', public_key: b64(new Uint8Array(
     await crypto.subtle.exportKey('raw', pair.publicKey))) }];
@@ -42,7 +42,8 @@ async function fixture(options: { rejectedReference?: boolean } = {}) {
     return {
       id: 'plugin:community:' + pack + '/' + name, kind: 'plugin_skill',
       plugin_path: '', skill_name: name,
-      source: { repository, revision, path: 'skills/' + name,
+      source: { repository, revision: index === 0 ? (options.sitemapRevision ?? revision) : revision,
+        path: 'skills/' + name,
         content_digest: 'sha256:' + 'a'.repeat(64) },
       scanner, profile, status: 'complete', findings,
       finding_count: findings.length, finding_group_count: findings.length,
@@ -141,6 +142,24 @@ test('real Ed25519 verification requires nine pinned sources and preserves risk'
   assert.equal(risk?.findings[0]?.severity, 'HIGH');
   assert.equal(risk?.findings[0]?.confidence, 0.6);
   assert.equal(risk?.execution?.acquisition_seconds, 0.266917);
+});
+
+test('reviewed sitemap revision rotation preserves signed evidence and rejects unknown SHAs', async () => {
+  for (const revision of [
+    'cc45ca06eaf48abde3bb60fb79d31c41229c58db',
+    'be4142b25bba6d424962a7788432dd813e6b768c',
+  ]) {
+    const f = await fixture({ sitemapRevision: revision });
+    const cohort = await readVerifiedSkillSpectorCohort(latest, f.trusted, f.fetcher, at);
+    assert.equal(cohort?.records.get(f.records[0]!.id)?.source.revision, revision);
+    assert.equal(cohort?.records.get(f.records[2]!.id)?.finding_count, 1);
+  }
+  for (const unreviewedRevision of ['0'.repeat(40), ['be4142b25bba6d424962a7788432dd813e6b768c']]) {
+    const unreviewed = await fixture({ sitemapRevision: unreviewedRevision });
+    await assert.rejects(() => readVerifiedSkillSpectorCohort(
+      latest, unreviewed.trusted, unreviewed.fetcher, at,
+    ));
+  }
 });
 
 test('unregistered key never fetches; signature tampering and expiration reject', async () => {
@@ -261,6 +280,12 @@ test('overlay survives unrelated manifest updates but fails closed on source or 
   const omitted = structuredClone(report);
   omitted.plugin_states[0]!.selected_ids = [];
   assert.equal(applyVerifiedSkillSpectorCohort(omitted, cohort.manifestDigest, cohort, at), omitted);
+  const changedRevision = structuredClone(report);
+  changedRevision.records[0]!.source.revision = 'be4142b25bba6d424962a7788432dd813e6b768c';
+  changedRevision.records[0]!.target_revision = changedRevision.records[0]!.source.revision;
+  changedRevision.source_states[0]!.revision = changedRevision.records[0]!.source.revision;
+  changedRevision.plugin_states[0]!.revision = changedRevision.records[0]!.source.revision;
+  assert.equal(applyVerifiedSkillSpectorCohort(changedRevision, cohort.manifestDigest, cohort, at), changedRevision);
   const changed = structuredClone(report);
   changed.records[0]!.source.content_digest = 'sha256:' + '0'.repeat(64);
   assert.equal(applyVerifiedSkillSpectorCohort(changed, cohort.manifestDigest, cohort, at), changed);
