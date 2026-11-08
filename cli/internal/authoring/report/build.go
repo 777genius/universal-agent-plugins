@@ -82,7 +82,16 @@ func (r *Report) recordFindings(p project.Result) {
 			r.HostSafety.FindingIDs = append(r.HostSafety.FindingIDs, id)
 		}
 	}
-	for _, f := range v.Findings {
+	r.recordAcquisitionFindings(p)
+	if !v.Coverage.InventoryComplete && r.HostSafety.Status == Pass {
+		r.HostSafety.Status = NotEvaluated
+	}
+}
+
+// recordAcquisitionFindings handles source acquisition diagnostics separately
+// from the package's canonical, typed conformance findings.
+func (r *Report) recordAcquisitionFindings(p project.Result) {
+	for _, f := range p.Input.Findings {
 		severity := "error"
 		if f.Code == "legacy_manifest_ignored" || f.Code == "complete_tree_identity_unavailable" {
 			severity = "warning"
@@ -94,9 +103,6 @@ func (r *Report) recordFindings(p project.Result) {
 		if severity == "error" {
 			r.HostSafety.Status = Fail
 		}
-	}
-	if !v.Coverage.InventoryComplete && r.HostSafety.Status == Pass {
-		r.HostSafety.Status = NotEvaluated
 	}
 }
 
