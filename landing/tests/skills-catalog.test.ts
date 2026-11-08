@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { spawnSync } from 'node:child_process';
 import { skillClients } from '../data/skillClients.ts';
+import { sortSkillsForCatalog } from '../data/catalogCuration.ts';
 import capabilities from '../data/clientCapabilities.generated.json' with { type: 'json' };
 import type { SkillListing } from '../types/skillsCatalog.ts';
 import {
@@ -374,6 +375,7 @@ function catalogHarness() {
       mounted = callback;
     },
     skillInstallCommand,
+    sortSkillsForCatalog,
     useRuntimeConfig: () => ({
       public: { skillsCatalogEndpoint: 'https://example.com/v1/skills' },
     }),
