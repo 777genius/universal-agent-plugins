@@ -11,6 +11,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -239,6 +240,14 @@ func (acquirer Acquirer) acquireGitTransport(ctx context.Context, url, repositor
 	for _, setting := range [][]string{{"core.autocrlf", "false"}, {"core.eol", "lf"}, {"core.filemode", "true"}, {"core.symlinks", "true"}, {"fetch.recurseSubmodules", "false"}} {
 		if _, err := run("-C", repoRoot, "config", setting[0], setting[1]); err != nil {
 			return domain.PackageSnapshot{}, gitAcquisitionFailure(repository, revision, "configure isolated repository")
+		}
+	}
+	// The isolated checkout can be nested under a long Windows TEMP. Enable
+	// Git for Windows' long-path handling only for this disposable repository;
+	// source SHA, tree digest, symlink and ownership checks stay unchanged.
+	if runtime.GOOS == "windows" {
+		if _, err := run("-C", repoRoot, "config", "core.longpaths", "true"); err != nil {
+			return domain.PackageSnapshot{}, gitAcquisitionFailure(repository, revision, "configure long-path checkout")
 		}
 	}
 	fetchArgs := []string{"-C", repoRoot, "fetch", "--quiet", "--depth=1", "--no-tags", "--no-recurse-submodules", "origin", revision}
