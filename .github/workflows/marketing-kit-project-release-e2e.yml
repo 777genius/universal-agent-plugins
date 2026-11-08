@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   marketing-kit-project:
-    name: npm 0.1.101 / ${{ matrix.target }} / real Project lifecycle
+    name: npm 0.1.102 / ${{ matrix.target }} / real Project lifecycle
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     strategy:
@@ -46,7 +46,7 @@ jobs:
           TARGET: ${{ matrix.target }}
         run: |
           set -euo pipefail
-          npm install --global universal-agent-plugins@0.1.101
+          npm install --global universal-agent-plugins@0.1.102
           if [[ "$TARGET" == cursor ]]; then
             curl --fail --show-error --silent --location --retry 2 \
               'https://downloads.cursor.com/lab/2026.10.22-27dcf5f/linux/x64/agent-cli-package.tar.gz' \
@@ -69,7 +69,7 @@ jobs:
           else
             npm install --global "$NATIVE_PACKAGE"
           fi
-          test "$(agentplugins version)" = 'agentplugins 0.1.101'
+          test "$(agentplugins version)" = 'agentplugins 0.1.102'
       - name: Exercise actual signed Marketing Kit and three mandatory dependencies
         env:
           TARGET: ${{ matrix.target }}
@@ -79,7 +79,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
-          name: marketing-kit-0.1.101-${{ matrix.target }}
+          name: marketing-kit-0.1.102-${{ matrix.target }}
           path: ${{ runner.temp }}/marketing-kit-project/
           if-no-files-found: warn
           retention-days: 14
