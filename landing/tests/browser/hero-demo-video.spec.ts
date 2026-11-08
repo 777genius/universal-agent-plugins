@@ -4,7 +4,10 @@ import { expect, test } from '@playwright/test';
 import { hydrated, setSignedMirrorTestTime } from './i18n-state.helpers';
 
 const fakePlayer = `<!doctype html><html><body><script>
-  document.body.dataset.autoplay = new URLSearchParams(location.search).get('autoplay') || '';
+  const params = new URLSearchParams(location.search);
+  document.body.dataset.autoplay = params.get('autoplay') || '';
+  document.body.dataset.muted = params.get('muted') || '';
+  document.body.dataset.noMutedPref = params.get('no-muted-pref') || '';
   window.addEventListener('message', (event) => {
     const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
     if (data?.context === 'player.js' && data?.method === 'addEventListener' && data?.value === 'ended') {
@@ -93,10 +96,14 @@ for (const width of [1440, 390, 320]) {
     )).toBe(true);
     await expect(frame).toHaveAttribute(
       'src',
-      /^https:\/\/player\.mux\.com\/[a-zA-Z0-9]+\?autoplay=any&preload=auto$/,
+      /^https:\/\/player\.mux\.com\/[a-zA-Z0-9]+\?autoplay=true&muted=false&no-muted-pref=true&preload=auto$/,
     );
     await expect.poll(() => page.frameLocator('.hero-demo-video iframe').locator('body')
-      .getAttribute('data-autoplay')).toBe('any');
+      .getAttribute('data-autoplay')).toBe('true');
+    await expect.poll(() => page.frameLocator('.hero-demo-video iframe').locator('body')
+      .getAttribute('data-muted')).toBe('false');
+    await expect.poll(() => page.frameLocator('.hero-demo-video iframe').locator('body')
+      .getAttribute('data-no-muted-pref')).toBe('true');
     await expect(demo.locator('.hero-demo-video__launch')).toHaveCount(0);
     await expect.poll(() => page.frameLocator('.hero-demo-video iframe').locator('body').getAttribute('data-subscribed')).toBe('ended');
     expect(requests).toHaveLength(1);
@@ -138,7 +145,7 @@ test('denied fullscreen still launches a viewport-filling autoplay player on one
   await demo.getByRole('button', { name: 'Watch demo' }).click();
   const frame = demo.locator('iframe');
   await expect(frame).toBeVisible();
-  await expect(frame).toHaveAttribute('src', /\?autoplay=any&preload=auto$/);
+  await expect(frame).toHaveAttribute('src', /\?autoplay=true&muted=false&no-muted-pref=true&preload=auto$/);
   await expect(demo).toHaveClass(/hero-demo-video--fallback/);
   // The site root isolates stacking contexts; the fallback must escape to <body>.
   await expect.poll(() => demo.evaluate((el) => el.parentElement === document.body)).toBe(true);
@@ -221,10 +228,12 @@ test('owner-uploaded Mux film actually plays on desktop and mobile', async ({ pa
       { timeout: 30_000 }).toBeGreaterThan(1);
     const media = await video.evaluate((element: HTMLVideoElement) => ({
       duration: element.duration, error: element.error?.code ?? null, paused: element.paused,
+      muted: element.muted,
     }));
     expect(Math.abs(media.duration - 2797 / 30)).toBeLessThan(0.25);
     expect(media.error).toBeNull();
     expect(media.paused).toBe(false);
+    expect(media.muted).toBe(false);
     if (directory) await page.screenshot({ path: resolve(directory, `hero-video-playing-${width}.png`) });
     await video.evaluate((element: HTMLVideoElement) => element.pause());
   }
