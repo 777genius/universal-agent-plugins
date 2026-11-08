@@ -1,4 +1,5 @@
 import type { RegistryPlugin } from '../types/registry.ts';
+import type { SkillListing } from '../types/skillsCatalog.ts';
 
 /** Presentation-only suggestions. Never use these IDs as a source of install authority. */
 export const recommendedPluginNames = [
@@ -96,3 +97,13 @@ export const recommendedSkills: ReadonlyArray<{ repository: string; slug: string
     "slug": "web-design-guidelines"
   }
 ];
+
+/** Avoid assigning an editorial description to another publisher's similarly named Skill. */
+export function recommendedSkillKey(skill: Pick<SkillListing, 'id' | 'skillNameHint' | 'source'>): string | undefined {
+  if (skill.source.kind !== 'github') return undefined;
+  return recommendedSkills.find((item) =>
+    item.repository === skill.source.repository &&
+    item.slug === skill.skillNameHint &&
+    skill.id === `skills-sh:${item.repository}:${item.slug}`,
+  )?.slug;
+}
