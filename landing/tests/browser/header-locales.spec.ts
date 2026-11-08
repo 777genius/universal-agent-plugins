@@ -29,6 +29,7 @@ for (const locale of publishedLocales) {
     await page.setViewportSize({ width: 960, height: 850 });
     await page.goto(`.${localizedPath('/', locale)}`);
     await expect(page.locator('html')).toHaveAttribute('lang', locale);
+    await expect(page.locator('html')).toHaveAttribute('dir', locale === 'ar' ? 'rtl' : 'ltr');
     const nav = page.locator('.app-header__nav a');
     await expect(nav).toHaveText([
       navigation.demo,
@@ -130,7 +131,5 @@ for (const locale of publishedLocales) {
     const mobileDocs = mobileMenu.getByRole('link', { name: copy.hero.docsCta, exact: true });
     await expect(mobileDocs).toBeVisible();
     await expect(mobileDocs).toHaveAttribute('href', new RegExp(`/docs/${locale}/$`));
-    if (locale === 'ar')
-      await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   });
 }
