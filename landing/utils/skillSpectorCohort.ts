@@ -288,7 +288,14 @@ export function applyVerifiedSkillSpectorCohort(
       report.schema_version !== 3) return report;
   const records = report.records.map(old => {
     const updated = cohort.records.get(old.id);
+    // A valid older signature must never hide fresh recovery conflicts or
+    // truncated evidence for that same immutable source. In those states the
+    // canonical v3 Partial remains authoritative until a new qualification.
     if (!updated || old.status !== 'partial' || old.coverage?.status !== 'partial' ||
+        old.findings_truncated || old.coverage.grouping_complete === false ||
+        old.coverage.reference_evidence_truncated === true ||
+        old.coverage.reasons?.some(reason => reason.code === 'normalization_truncated' ||
+          reason.code.startsWith('recovery_')) ||
         old.freshness !== 'current' || old.target_revision !== old.source.revision ||
         old.scanner?.version !== '2.13.1' ||
         !same(old.source, updated.source) || old.plugin_path !== updated.plugin_path ||
