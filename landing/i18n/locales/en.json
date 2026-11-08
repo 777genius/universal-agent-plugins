@@ -365,18 +365,18 @@
     "clientSupport": {
       "eyebrow": "Compatibility",
       "title": "Supported agents and installation scopes",
-      "description": "User scope installs into your agent profile; Project scope installs into one workspace. UAP configures supported files. Your agent may still ask you to trust the project, sign in, or restart.",
+      "description": "User installs into your agent profile; Project installs into one selected workspace. UAP handles supported files and configuration. Your agent may still ask for trust, sign-in, or a restart.",
       "tableLabel": "Agent installation support table",
-      "tableCaption": "User and project support, setup mode, and actions after installation.",
+      "tableCaption": "User and project installation support, setup automation, and actions after installing.",
       "columns": {
         "agent": "Agent",
         "user": "User scope",
         "project": "Project scope",
         "setup": "Setup",
-        "nextStep": "After installation"
+        "nextStep": "What you do after installing"
       },
       "scrollHint": "Scroll sideways to see every column.",
-      "note": "Automatic: UAP installs supported components. Guided: follow agent prompts. Prepared: activate the prepared files. Manual: finish setup in the app. Installation does not sign you in or grant trust. These are current source capabilities; the published CLI may differ. Availability depends on the plugin and agent version.",
+      "note": "Automatic = UAP installs the supported components; Guided = follow client prompts; Prepared = files are ready but need activation; Manual = complete setup in the app. Installing never signs you in or grants trust. These are current source capabilities; the published CLI may be older. Availability depends on the plugin and client version.",
       "details": "Check compatibility details",
       "capabilities": {
         "pluginsSkillsMcp": "Plugins, Skills, MCP",
