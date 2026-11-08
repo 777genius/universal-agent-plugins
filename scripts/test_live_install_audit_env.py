@@ -46,6 +46,39 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 with self.assertRaisesRegex(AssertionError, "not exact published"):
                     require({**valid, **invalid})
 
+    def test_marketing_kit_private_cache_version_retry_is_bounded_and_strict(self):
+        # The workflow's initial version check warms a different launcher cache.
+        # Retry acquisition inside the disposable profile, not mismatched releases.
+        from runpy import run_path
+        from unittest.mock import Mock
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        verify = runner["verify_pinned_launcher"]
+        failed = {"exit_code": 1, "timeout": False, "stdout_tail": ""}
+        timed_out = {"exit_code": None, "timeout": True, "stdout_tail": ""}
+        valid = {"exit_code": 0, "timeout": False,
+                 "stdout_tail": "agentplugins 0.1.101\\n"}
+        probe, pause = Mock(side_effect=[failed, timed_out, valid]), Mock()
+        with patch.dict(verify.__globals__, {"invoke": probe, "sleep": pause}):
+            verify("agentplugins", {}, Path("."))
+        self.assertEqual(probe.call_count, 3)
+        self.assertEqual([item.args for item in pause.call_args_list], [(5,), (10,)])
+
+        probe, pause = Mock(return_value=failed), Mock()
+        with patch.dict(verify.__globals__, {"invoke": probe, "sleep": pause}):
+            with self.assertRaisesRegex(AssertionError, "not exact published"):
+                verify("agentplugins", {}, Path("."))
+        self.assertEqual(probe.call_count, 3)
+        self.assertEqual([item.args for item in pause.call_args_list], [(5,), (10,)])
+
+        probe, pause = Mock(return_value={**valid, "stdout_tail": "agentplugins 0.1.101-dev"}), Mock()
+        with patch.dict(verify.__globals__, {"invoke": probe, "sleep": pause}):
+            with self.assertRaisesRegex(AssertionError, "not exact published"):
+                verify("agentplugins", {}, Path("."))
+        self.assertEqual(probe.call_count, 1)
+        pause.assert_not_called()
+
     def test_marketing_kit_released_binary_cache_preserves_profile_isolation(self):
         # A and B share only the SHA-checked npm launcher executable cache;
         # neither project nor native profile state may cross scopes.

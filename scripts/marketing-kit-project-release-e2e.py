@@ -8,6 +8,7 @@ import runpy
 import shutil
 import subprocess
 import tempfile
+from time import sleep
 import traceback
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -35,6 +36,18 @@ def require_exact_published_version(result):
             or not isinstance(stdout, str)
             or stdout.strip() != "agentplugins 0.1.101"):
         raise AssertionError("not exact published agentplugins 0.1.101")
+
+
+def verify_pinned_launcher(cli, env, project):
+    """Retry only failed private-cache acquisition, never accept the wrong release."""
+    for attempt in range(3):
+        result = invoke([cli, "version"], env, project, 25)
+        if result.get("exit_code") == 0 and not result.get("timeout"):
+            require_exact_published_version(result)
+            return
+        if attempt < 2:
+            sleep((attempt + 1) * 5)
+    require_exact_published_version(result)
 
 
 def inventory(cli, env, project, target, scope="project"):
@@ -209,8 +222,7 @@ def main():
                                (project_foreign_a, "unmanaged project data\n"),
                                *native_foreign_a]
             foreign_files = list(foreign_a_files)
-            version = invoke([options.cli, "version"], env, project_a, 25)
-            require_exact_published_version(version)
+            verify_pinned_launcher(options.cli, env, project_a)
             def run(e, p, label, *args):
                 try:
                     report["steps"].append(execute(options.cli, e, p, label, *args))
