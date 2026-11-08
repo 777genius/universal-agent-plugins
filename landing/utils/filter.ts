@@ -1,5 +1,5 @@
 import type { RegistryPlugin } from '../types/registry';
-import { recommendedPluginRank } from '../data/catalogCuration.ts';
+import { pluginBenefit, recommendedPluginRank } from '../data/catalogCuration.ts';
 import { isTemporarilyUnlistedProduct } from '../data/routes.ts';
 
 export interface CatalogFilters {
@@ -223,7 +223,7 @@ function textRelevance(plugin: RegistryPlugin, query: string): number {
     [4, [...plugin.keywords, ...plugin.categories, ...plugin.components]],
     [8, [sourceOwner(plugin), plugin.source.repository]],
     [12, [plugin.author.name]],
-    [16, [plugin.description]],
+    [16, [plugin.description, pluginBenefit(plugin)]],
   ];
   return Math.min(
     ...fields.flatMap(([weight, values]) =>
@@ -267,6 +267,7 @@ export function filterPlugins(
     plugin.name,
     plugin.display_name,
     plugin.description,
+    pluginBenefit(plugin),
     plugin.author.name,
     plugin.source.repository,
     ...plugin.categories,
