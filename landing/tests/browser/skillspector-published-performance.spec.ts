@@ -121,8 +121,7 @@ test('published large reports keep closed cards unmounted after real data and ap
 }) => {
   test.setTimeout(60_000);
   const { report, errors, requests } = await publishedHome(page, context);
-  // Exercise more than one page when assessing a large catalog's closed reports.
-  await page.locator('.catalog-more button').click();
+  // The setup already loads page two to include Cloudflare after editorial ranking.
   const cardSources = await page
     .locator('.plugin-card')
     .evaluateAll((elements) =>
