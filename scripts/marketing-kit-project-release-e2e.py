@@ -28,6 +28,15 @@ def verified(result, stage):
     return result["_json"]
 
 
+def require_exact_published_version(result):
+    """Reject a dev/newer/wrong binary even if its output contains the pinned version."""
+    stdout = result.get("stdout_tail")
+    if (result.get("exit_code") != 0 or result.get("timeout")
+            or not isinstance(stdout, str)
+            or stdout.strip() != "agentplugins 0.1.101"):
+        raise AssertionError("not exact published agentplugins 0.1.101")
+
+
 def inventory(cli, env, project, target, scope="project"):
     if scope not in ("user", "project"):
         raise ValueError(f"unsupported scope: {scope}")
@@ -174,8 +183,7 @@ def main():
                                *native_foreign_a]
             foreign_files = list(foreign_a_files)
             version = invoke([options.cli, "version"], env, project_a, 25)
-            if version["exit_code"] != 0 or "0.1.101" not in version["stdout_tail"]:
-                raise AssertionError(f"not published 0.1.101: {version}")
+            require_exact_published_version(version)
             def run(e, p, label, *args):
                 try:
                     report["steps"].append(execute(options.cli, e, p, label, *args))

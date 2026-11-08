@@ -21,6 +21,31 @@ def load_audit():
 
 class IsolatedClientEnvironmentTest(unittest.TestCase):
 
+    def test_marketing_kit_requires_exact_published_cli_version(self):
+        # The substring "0.1.101" alone also matches prereleases and 0.1.1011.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        require = runner["require_exact_published_version"]
+        valid = {"exit_code": 0, "timeout": False,
+                 "stdout_tail": "agentplugins 0.1.101\n"}
+        require(valid)
+        for version in ("agentplugins 0.1.101-dev",
+                        "agentplugins 0.1.1011",
+                        "agentplugins 0.1.102",
+                        "other-launcher 0.1.101",
+                        "agentplugins 0.1.101\nagentplugins 0.1.102",
+                        ""):
+            with self.subTest(version=version):
+                with self.assertRaisesRegex(AssertionError, "not exact published"):
+                    require({**valid, "stdout_tail": version})
+        for invalid in ({"exit_code": 1}, {"timeout": True},
+                        {"stdout_tail": None}):
+            with self.subTest(invalid=invalid):
+                with self.assertRaisesRegex(AssertionError, "not exact published"):
+                    require({**valid, **invalid})
+
     def test_marketing_kit_foreign_guard_rejects_symlinked_ancestor(self):
         # Regression: a native-profile directory can be replaced after add.
         # A matching marker behind an outside symlink must not be read as proof.
