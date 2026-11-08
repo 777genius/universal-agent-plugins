@@ -23,13 +23,58 @@ EXPECTED = {
 }
 
 
-# The immutable npm 0.1.101 update command predates the common result envelope.
-# Its successful pinned no-op response is an exact four-node action plan, not
-# an arbitrary object with exit code zero. Never accept partial/failed updates.
+# Published npm 0.1.101 dependency operations use outcome/actions/results
+# instead of the newer result field. Require their exact successful action
+# evidence; process exit 0 and outcome=completed alone are not sufficient.
 UPDATE_ALIASES = {"marketing-kit", "notion", "hubspot-crm", "playwright"}
+LEGACY_ACTIONS = {
+    "update": {"unchanged"},
+    "repair": {"repair"},
+    "install": {"install", "repair", "unchanged"},
+    "remove": {"remove", "unchanged"},
+}
 
 
-def verified(result, stage):
+def valid_legacy_dependency_result(envelope, operation):
+    if (operation not in LEGACY_ACTIONS or "result" in envelope
+            or envelope.get("outcome") != "completed"):
+        return False
+    actions, results = envelope.get("actions"), envelope.get("results")
+    if (not isinstance(actions, list) or not actions
+            or not isinstance(results, list)):
+        return False
+    if any(not isinstance(action, dict)
+           or not isinstance(action.get("alias"), str) or not action["alias"]
+           or not isinstance(action.get("client_id"), str) or not action["client_id"]
+           or action.get("action") not in LEGACY_ACTIONS[operation]
+           for action in actions):
+        return False
+    aliases = [action["alias"] for action in actions]
+    if len(set(aliases)) != len(aliases):
+        return False
+    if operation in ("update", "install") and set(aliases) != UPDATE_ALIASES:
+        return False
+    if operation == "repair" and aliases != ["marketing-kit"]:
+        return False
+    if operation == "remove" and (
+            "marketing-kit" not in aliases or not set(aliases) <= UPDATE_ALIASES):
+        return False
+    active = [action for action in actions if action["action"] != "unchanged"]
+    if (len(results) != len(active)
+            or operation in ("repair", "install", "remove") and not active):
+        return False
+    for action, result in zip(active, results):
+        if (not isinstance(result, dict)
+                or result.get("outcome") not in ("completed", "unchanged")
+                or result.get("operation") != action["action"]
+                or result.get("client_id") != action["client_id"]
+                or (action.get("installation_id")
+                    and result.get("installation_id") != action["installation_id"])):
+            return False
+    return True
+
+
+def verified(result, stage, operation=None):
     envelope = result.get("_json")
     if (result.get("exit_code") != 0 or result.get("timeout")
             or not isinstance(envelope, dict)):
@@ -37,25 +82,8 @@ def verified(result, stage):
     if (envelope.get("result") == "success"
             and envelope.get("outcome") not in ("partial", "failed", "failure")):
         return envelope
-    if (stage in ("update", "User update")
-            and "result" not in envelope
-            and envelope.get("outcome") == "completed"
-            and envelope.get("results") == []):
-        actions = envelope.get("actions")
-        if (isinstance(actions, list)
-                and len(actions) == len(UPDATE_ALIASES)
-                and all(isinstance(action, dict)
-                        and action.get("action") == "unchanged"
-                        and isinstance(action.get("alias"), str)
-                        and isinstance(action.get("client_id"), str)
-                        and bool(action["client_id"])
-                        and isinstance(action.get("installation_id"), str)
-                        and bool(action["installation_id"])
-                        and isinstance(action.get("binding_id"), str)
-                        and bool(action["binding_id"])
-                        for action in actions)
-                and {action["alias"] for action in actions} == UPDATE_ALIASES):
-            return envelope
+    if valid_legacy_dependency_result(envelope, operation):
+        return envelope
     raise AssertionError(f"{stage}: CLI did not succeed with JSON: {result}")
 
 
@@ -218,7 +246,7 @@ def bind_pinned_launcher_cache(env, cache, sandbox):
 
 def execute(cli, env, project, label, *args):
     result = invoke([cli, *args, "--format", "json"], env, project, 180)
-    verified(result, label)
+    verified(result, label, args[0])
     return {"stage": label, "exit_code": result["exit_code"], "result": "passed"}
 
 

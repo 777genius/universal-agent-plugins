@@ -43,8 +43,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     check({**accepted, **invalid}, "add")
 
     def test_marketing_kit_accepts_only_complete_legacy_noop_update(self):
-        # Published 0.1.101 update emits outcome/actions/results, not result.
-        # A no-op must still prove all four pinned signed bindings are intact.
+        # Immutable published 0.1.101 emits outcome/actions/results without result.
         from runpy import run_path
 
         runner = run_path(str(Path(__file__).resolve().parent /
@@ -58,11 +57,11 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         envelope = {"outcome": "completed", "actions": actions, "results": []}
         valid = {"exit_code": 0, "timeout": False, "_json": envelope}
         for stage in ("update", "User update"):
-            self.assertEqual(check(valid, stage), envelope)
-        for stage in ("add", "list", "User add"):
-            with self.subTest(stage=stage), self.assertRaisesRegex(
+            self.assertEqual(check(valid, stage, "update"), envelope)
+        for operation in (None, "add", "list", "repair", "install", "remove"):
+            with self.subTest(operation=operation), self.assertRaisesRegex(
                     AssertionError, "CLI did not succeed"):
-                check(valid, stage)
+                check(valid, "update", operation)
         for changed in (
                 {"outcome": "partial"},
                 {"outcome": "failure"},
@@ -70,17 +69,56 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 {"results": [{"outcome": "failed"}]},
                 {"actions": actions[:-1]},
                 {"actions": [{**actions[0], "action": "failed"}, *actions[1:]]},
-                {"actions": [{**actions[0], "installation_id": ""}, *actions[1:]]},
-                {"actions": [{**actions[0], "binding_id": ""}, *actions[1:]]},
                 {"actions": [{**actions[0], "alias": "foreign"}, *actions[1:]]},
+                {"actions": [{**actions[0], "client_id": ""}, *actions[1:]]},
         ):
             with self.subTest(changed=changed), self.assertRaisesRegex(
                     AssertionError, "CLI did not succeed"):
-                check({**valid, "_json": {**envelope, **changed}}, "update")
+                check({**valid, "_json": {**envelope, **changed}}, "update", "update")
         for changed in ({"exit_code": 1}, {"timeout": True}):
             with self.subTest(changed=changed), self.assertRaisesRegex(
                     AssertionError, "CLI did not succeed"):
-                check({**valid, **changed}, "update")
+                check({**valid, **changed}, "update", "update")
+
+    def test_marketing_kit_legacy_repair_install_remove_require_real_results(self):
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        check = runner["verified"]
+        actions = [{"alias": alias, "client_id": "codex",
+                    "installation_id": alias + "-installation",
+                    "action": "install"}
+                   for alias in ("marketing-kit", "notion", "hubspot-crm", "playwright")]
+        def report(action):
+            return {"installation_id": action["installation_id"],
+                    "client_id": action["client_id"],
+                    "operation": action["action"], "outcome": "completed"}
+        def accepted(operation, planned, results):
+            envelope = {"outcome": "completed", "actions": planned, "results": results}
+            wrapped = {"exit_code": 0, "timeout": False, "_json": envelope}
+            self.assertEqual(check(wrapped, operation, operation), envelope)
+            return wrapped
+        installed = accepted("install", actions, [report(action) for action in actions])
+        repair = {**actions[0], "action": "repair"}
+        intact = {**report(repair), "outcome": "unchanged",
+                  "manual_actions": ["native MCP initialization remains unobserved"]}
+        accepted("repair", [repair], [intact])
+        removal = {**actions[0], "action": "remove"}
+        accepted("remove", [removal], [report(removal)])
+        for changed in (
+                {"outcome": "partial"},
+                {"results": []},
+                {"results": [{**report(actions[0]), "outcome": "incomplete"},
+                             *[report(action) for action in actions[1:]]]},
+                {"results": [{**report(actions[0]), "client_id": "foreign"},
+                             *[report(action) for action in actions[1:]]]},
+                {"actions": [{**actions[0], "action": "unknown"}, *actions[1:]]},
+        ):
+            with self.subTest(changed=changed), self.assertRaisesRegex(
+                    AssertionError, "CLI did not succeed"):
+                check({**installed, "_json": {**installed["_json"], **changed}},
+                      "cold locked restore", "install")
 
     def test_marketing_kit_requires_exact_published_cli_version(self):
         # The substring "0.1.101" alone also matches prereleases and 0.1.1011.
