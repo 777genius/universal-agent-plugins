@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import type { RegistryPlugin } from '../types/registry.ts';
 import type { SkillListing } from '../types/skillsCatalog.ts';
@@ -6,6 +7,7 @@ import {
   pluginBenefit,
   recommendedPluginNames,
   recommendedSkillKey,
+  recommendedSkillDescription,
   recommendedSkills,
 } from '../data/catalogCuration.ts';
 import { filterPlugins } from '../utils/filter.ts';
@@ -102,4 +104,29 @@ test('curated Skill copy is bound to exact signed-like source identity, never to
     'skills-sh:anthropics/skills:another-skill')), undefined);
   const source = skill('anthropics/skills', 'frontend-design');
   assert.equal(recommendedSkillKey({ ...source, source: { kind: 'external', url: 'https://example.com' } }), undefined);
+});
+
+test('all nine locale dictionaries resolve only genuine featured Skill keys', () => {
+  const codes = ['en', 'ru', 'uk', 'zh', 'es', 'hi', 'ar', 'pt', 'fr'];
+  const slugs = recommendedSkills.map((skill) => skill.slug);
+  for (const code of codes) {
+    const locale = JSON.parse(readFileSync(
+      new URL(`../features/skills-catalog/locales/${code}.json`, import.meta.url),
+      'utf8',
+    )) as { registryUi: { skills: { featured: { title: string; explanation: string;
+      items: Record<string, string> } } } };
+    const featured = locale.registryUi.skills.featured;
+    assert.ok(featured.title && featured.explanation, `${code}: visible disclosure`);
+    assert.deepEqual(Object.keys(featured.items).sort(), [...slugs].sort(), `${code}: exact picks`);
+    for (const slug of slugs) {
+      const value = recommendedSkillDescription(slug, (key) =>
+        key.split('.').slice(4).reduce<string | Record<string, string>>((node, part) =>
+          typeof node === 'string' ? '' : (node[part] ?? ''), featured.items) as string,
+      );
+      assert.equal(value, featured.items[slug], `${code}: ${slug}`);
+      assert.ok(value.length > 10, `${code}: short actionable description`);
+    }
+  }
+  assert.equal(recommendedSkillDescription('unknown', (key) => key), '');
+  assert.equal(recommendedSkillDescription(undefined, (key) => key), '');
 });
