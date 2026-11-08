@@ -3,7 +3,7 @@ name: Remotion Windows source long TEMP E2E
 on:
   pull_request:
     paths:
-      - 'install/integrationctl/agentplugins/adapters/sourceacquisition/acquirer.go'
+      - 'install/integrationctl/agentplugins/adapters/sourceacquisition/**'
       - 'scripts/remotion_windows_long_temp_e2e.py'
       - '.github/workflows/remotion-windows-source-longtemp-e2e.yml'
   workflow_dispatch:
