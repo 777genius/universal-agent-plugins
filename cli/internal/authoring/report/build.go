@@ -106,6 +106,7 @@ func (r *Report) recordAcquisitionFindings(p project.Result) {
 	}
 }
 
+// recordLoadability records static package presence and physical-name safety without opening files.
 func (r *Report) recordLoadability(p project.Result) {
 	f := p.Facts
 	if f.Package != nil {
@@ -125,6 +126,7 @@ func (r *Report) recordLoadability(p project.Result) {
 	}
 }
 
+// recordDependencies projects retained dependency diagnostics into an independent assessment.
 func (r *Report) recordDependencies(p project.Result) Assessment {
 	dependencies := assessment(Pass)
 	for _, diagnostic := range p.DependencyDiagnostics {
@@ -135,6 +137,7 @@ func (r *Report) recordDependencies(p project.Result) Assessment {
 	return dependencies
 }
 
+// recordReadiness combines prior assessments in the original finding-reference order.
 func (r *Report) recordReadiness(p project.Result, dependencies Assessment) {
 	v, f := p.Input, p.Facts
 	c := f.Coverage
@@ -150,6 +153,7 @@ func (r *Report) recordReadiness(p project.Result, dependencies Assessment) {
 	r.Readiness.FindingIDs = append(r.Readiness.FindingIDs, r.HostSafety.FindingIDs...)
 }
 
+// recordRelease copies readiness evidence before applying release-only legacy restrictions.
 func (r *Report) recordRelease(p project.Result) {
 	v := p.Input
 	r.Release = r.Readiness
