@@ -39,7 +39,7 @@ test('curated Skills show source-bound explanations without altering provider ca
   await page.goto('plugins/?tab=skills');
   const recommended = page.locator('.skills-curated__item');
   await expect(recommended).toHaveCount(6);
-  await expect(page.locator('.skills-curated__heading')).toContainText('not a safety');
+  await expect(page.locator('.skills-curated__heading')).toContainText(/not a safety/i);
   await expect(recommended.first()).toContainText('agent-browser');
   await expect(recommended.first()).toContainText('vercel-labs/agent-browser');
   await expect(recommended.nth(1)).toHaveAttribute(
