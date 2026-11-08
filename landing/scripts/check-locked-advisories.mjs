@@ -26,8 +26,8 @@ export function parsePnpmLock(source) {
       const e2 = entry(line, 2), e4 = entry(line, 4), e6 = entry(line, 6), e8 = entry(line, 8);
       if (e2) { importer = e2[0]; category = ''; }
       else if (e4) category = e4[0];
-      else if (importer === '.' && (category === 'dependencies' || category === 'devDependencies') && e6) currentNode = e6[0];
-      else if (importer === '.' && (category === 'dependencies' || category === 'devDependencies') && e8?.[0] === 'version') roots[category].add(lockNode(currentNode, scalar(e8[1])));
+      else if (importer === '.' && (category === 'dependencies' || category === 'devDependencies' || category === 'optionalDependencies') && e6) currentNode = e6[0];
+      else if (importer === '.' && (category === 'dependencies' || category === 'devDependencies' || category === 'optionalDependencies') && e8?.[0] === 'version') roots[category === 'optionalDependencies' ? 'dependencies' : category].add(lockNode(currentNode, scalar(e8[1])));
       continue;
     }
     if (section === 'snapshots') {

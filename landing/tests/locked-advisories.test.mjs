@@ -65,3 +65,11 @@ test('refuses to report false clean when snapshots are missing', () => {
 test('fails closed on unrecognized vulnerable-version syntax', () => {
   assert.throws(() => vulnerabilityFor('glob@next'), /Unsupported advisory package version/);
 });
+
+test('includes root optional dependencies in production reachability', () => {
+  const withOptional = fixture.replace('    devDependencies:',
+    '    optionalDependencies:\n      optional-package:\n        version: 1.0.0\n    devDependencies:')
+    .replace('  glob@10.5.0: {}', '  optional-package@1.0.0:\n    dependencies:\n      minimatch: 9.0.9\n  minimatch@9.0.9: {}\n  glob@10.5.0: {}');
+  assert.ok(auditLock(withOptional).some(({ scope, package: pkg }) =>
+    scope === 'dependencies' && pkg === 'minimatch@9.0.9'));
+});
