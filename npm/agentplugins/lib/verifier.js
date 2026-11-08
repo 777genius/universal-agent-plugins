@@ -71,7 +71,23 @@ function requestApprovedTarget(target, requestOptions) {
   }
 }
 
+// Retry only gateway failures that happen before any payload file is opened.
+// Partial streams, invalid bytes, unsafe redirects and cache errors remain
+// single-attempt failures. The same immutable URL and SHA pin are reused.
 async function downloadFile(value, destination, expected, options = {}, redirects = MAX_REDIRECTS) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await downloadFileOnce(value, destination, expected, options, redirects);
+    } catch (error) {
+      if (attempt === 2 || !/^binary download failed with HTTP (502|503|504)$/.test(String(error.message))) {
+        throw error;
+      }
+      await delay((attempt + 1) * 200, options.signal);
+    }
+  }
+}
+
+async function downloadFileOnce(value, destination, expected, options = {}, redirects = MAX_REDIRECTS) {
   const target = validateDownloadURL(value);
   cancelled(options.signal);
   let abort;
@@ -106,7 +122,7 @@ async function downloadFile(value, destination, expected, options = {}, redirect
         try {
           const next = new URL(response.headers.location, target.url).toString();
           delegated = true;
-          downloadFile(next, destination, expected, options, redirects - 1).then(resolve, reject);
+          downloadFileOnce(next, destination, expected, options, redirects - 1).then(resolve, reject);
         } catch (error) { reject(error); }
         return;
       }
