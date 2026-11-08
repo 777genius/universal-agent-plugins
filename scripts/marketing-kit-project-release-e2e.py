@@ -319,42 +319,50 @@ def main():
             if (user_portable / "uap.lock").read_bytes() != user_lock_after_update:
                 raise AssertionError("User repair modified signed lock")
 
-            # Only portable manifest/lock crosses from User A to User B.
-            # HOME, native configs, receipts, immutable store and IDs stay isolated.
-            user_portable_b = Path(env_b["AGENTPLUGINS_HOME"])
-            user_portable_b.mkdir(parents=True, exist_ok=True)
+            # Project B has previously installed packages; a true cold User
+            # restore needs a third HOME with no prior installs or native state.
+            env_c, project_c, foreign_c, project_foreign_c, native_foreign_c = (
+                run_case(options.cli, options.target, root, "C"))
+            bind_pinned_launcher_cache(env_c, launcher_cache, root)
+            foreign_files.extend([(foreign_c, "unmanaged user data\n"),
+                                  (project_foreign_c, "unmanaged project data\n"),
+                                  *native_foreign_c])
+            # Transfer only portable manifest and signed lock, not User A's
+            # receipts, native config, store, or installation IDs.
+            user_portable_c = Path(env_c["AGENTPLUGINS_HOME"])
+            user_portable_c.mkdir(parents=True, exist_ok=True)
             for name in ("uap.toml", "uap.lock"):
-                shutil.copyfile(user_portable / name, user_portable_b / name)
-            run(env_b, project_b, "User cold locked restore B",
+                shutil.copyfile(user_portable / name, user_portable_c / name)
+            run(env_c, project_c, "User cold locked restore C",
                 "install", "--locked", "--yes", *user_scoped)
-            user_restored_b = identities(
-                inventory(options.cli, env_b, project_b, options.target, "user"),
+            restored_user_c = identities(
+                inventory(options.cli, env_c, project_c, options.target, "user"),
                 options.target, "user")
-            check_cold_restore(user_restored_b, user_after_update, user_lock_after_update,
-                               (user_portable_b / "uap.lock").read_bytes(), "User B")
+            check_cold_restore(restored_user_c, user_after_update, user_lock_after_update,
+                               (user_portable_c / "uap.lock").read_bytes(), "User C")
             if user_inventory() != user_after_update:
-                raise AssertionError("User B restore mutated User A installations")
+                raise AssertionError("User C restore mutated User A installations")
             if (user_portable / "uap.lock").read_bytes() != user_lock_after_update:
-                raise AssertionError("User B restore rewrote User A signed lock")
-            remove_b_attestation = ()
+                raise AssertionError("User C restore rewrote User A signed lock")
+            remove_c_attestation = ()
             if options.target == "codex":
                 try:
-                    remove_b_attestation = codex_user_native_remove_attestation(env_b, project_b)
+                    remove_c_attestation = codex_user_native_remove_attestation(env_c, project_c)
                 finally:
                     check_foreign(foreign_files, root)
                 report["steps"].append({
-                    "stage": "User B native HubSpot uninstall",
+                    "stage": "User C native HubSpot uninstall",
                     "exit_code": 0, "result": "passed",
                 })
-            run(env_b, project_b, "User remove B", "remove", "marketing-kit",
-                *user_scoped, *remove_b_attestation)
-            if identities(inventory(options.cli, env_b, project_b, options.target, "user"),
+            run(env_c, project_c, "User remove C", "remove", "marketing-kit",
+                *user_scoped, *remove_c_attestation)
+            if identities(inventory(options.cli, env_c, project_c, options.target, "user"),
                           options.target, "user"):
-                raise AssertionError("User B remove retained required closure")
+                raise AssertionError("User C remove retained required closure")
             if user_inventory() != user_after_update:
-                raise AssertionError("User B remove mutated User A installations")
+                raise AssertionError("User C remove mutated User A installations")
             if (user_portable / "uap.lock").read_bytes() != user_lock_after_update:
-                raise AssertionError("User B remove rewrote User A signed lock")
+                raise AssertionError("User C remove rewrote User A signed lock")
             # Codex user plugin dependencies require genuine external native removal.
             # Reuse the audited, pinned Codex CLI path and exact native absence oracle.
             user_remove_attestation = ()
