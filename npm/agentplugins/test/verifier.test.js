@@ -298,33 +298,14 @@ test("canonical verifier exhausts transient errors without creating partial cach
   assert.equal(fs.existsSync(file), false);
 });
 
-test("pre-response timeout then exact pinned binary retries only twice", async () => {
-  const file = destination();
-  let attempts = 0;
-  const request = (url, options) => {
-    attempts++;
-    return transport((res, req) => {
-      req.emit("response", res);
-      res.end(BODY);
-    }, attempts < 3)(url, options);
-  };
-  try {
-    await v.downloadFile(URL, file, PIN, { request });
-    assert.equal(attempts, 3);
-    assert.deepEqual(fs.readFileSync(file), BODY);
-  } finally {
-    if (fs.existsSync(file)) fs.unlinkSync(file);
-  }
-});
-
-test("persistent pre-response timeout fails closed after three attempts", async () => {
+test("pre-response timeout does not retry without an HTTP gateway status", async () => {
   const file = destination();
   let attempts = 0;
   await assert.rejects(v.downloadFile(URL, file, PIN, { request: (url, options) => {
     attempts++;
     return transport(() => {}, true)(url, options);
   } }), /binary download timed out/);
-  assert.equal(attempts, 3);
+  assert.equal(attempts, 1, "only HTTP 502/503/504 may be retried");
   assert.equal(fs.existsSync(file), false);
 });
 
@@ -353,7 +334,7 @@ test("timeout after response cannot retry an opened or partial download", async 
   }
 });
 
-test("pre-response timeout cancellation stops retries immediately", async () => {
+test("pre-response timeout cancellation never retries", async () => {
   const file = destination(), controller = new AbortController();
   let attempts = 0;
   const request = (url, options) => {
@@ -371,7 +352,7 @@ test("pre-response timeout cancellation stops retries immediately", async () => 
   };
   await assert.rejects(v.downloadFile(URL, file, PIN, {
     request, signal: controller.signal
-  }), /cancelled/);
+  }), /timed out|cancelled/);
   assert.equal(attempts, 1);
   assert.equal(fs.existsSync(file), false);
 });

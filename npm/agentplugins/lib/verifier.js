@@ -79,8 +79,7 @@ async function downloadFile(value, destination, expected, options = {}, redirect
     try {
       return await downloadFileOnce(value, destination, expected, options, redirects);
     } catch (error) {
-      if (attempt === 2 || !(error.retrySafeBeforeResponse === true ||
-        /^binary download failed with HTTP (502|503|504)$/.test(String(error.message)))) {
+      if (attempt === 2 || !/^binary download failed with HTTP (502|503|504)$/.test(String(error.message))) {
         throw error;
       }
       await delay((attempt + 1) * 200, options.signal);
@@ -102,14 +101,7 @@ async function downloadFileOnce(value, destination, expected, options = {}, redi
     const request = typeof options.request === "function"
       ? options.request(target.url, requestOptions)
       : requestApprovedTarget(target, requestOptions);
-    let sawResponse = false;
-    request.setTimeout(DOWNLOAD_TIMEOUT_MS, () => {
-      const failure = new Error("binary download timed out");
-      // Only a timeout before any response can be retried without touching an
-      // existing partial file. Once a response arrives, fail closed.
-      if (!sawResponse) failure.retrySafeBeforeResponse = true;
-      request.destroy(failure);
-    });
+    request.setTimeout(DOWNLOAD_TIMEOUT_MS, () => request.destroy(new Error("binary download timed out")));
     let streamFailure;
     let delegated = false;
     request.once("error", error => {
@@ -121,7 +113,6 @@ async function downloadFileOnce(value, destination, expected, options = {}, redi
     options.signal?.addEventListener("abort", abort, { once: true });
     if (options.signal?.aborted) { abort(); return; }
     request.once("response", (response) => {
-      sawResponse = true;
       if ([301, 302, 303, 307, 308].includes(response.statusCode) && response.headers.location) {
         response.resume();
         if (redirects <= 0) {

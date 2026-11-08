@@ -24,7 +24,7 @@ func downloadReleaseArchive(ctx context.Context, client *http.Client, url string
 				return nil, fmt.Errorf("download lintai security scanner: %w", ctx.Err())
 			}
 			var networkErr net.Error
-			if !errors.As(err, &networkErr) || !networkErr.Timeout() || attempt == 2 {
+			if !errors.As(err, &networkErr) || !(networkErr.Timeout() || networkErr.Temporary()) || attempt == 2 {
 				return nil, fmt.Errorf("download lintai security scanner: %w", err)
 			}
 		} else {

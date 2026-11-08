@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"net/http"
+	"io"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -136,5 +137,49 @@ func TestReleaseScannerCancellationStopsRetryImmediately(t *testing.T) {
 	}).resolve(ctx)
 	if !errors.Is(err, context.Canceled) || requests.Load() != 1 {
 		t.Fatalf("cancellation must stop retry without fallback: err=%v requests=%d", err, requests.Load())
+	}
+}
+
+type retryTestNetError struct{ temporary bool }
+
+func (e retryTestNetError) Error() string   { return "injected network error" }
+func (e retryTestNetError) Timeout() bool   { return false }
+func (e retryTestNetError) Temporary() bool { return e.temporary }
+
+type retryTestTransport func(*http.Request) (*http.Response, error)
+
+func (f retryTestTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+func TestDownloadReleaseArchiveRetriesTemporaryNetError(t *testing.T) {
+	const asset = "immutable scanner bytes"
+	var requests atomic.Int32
+	client := &http.Client{Transport: retryTestTransport(func(req *http.Request) (*http.Response, error) {
+		if requests.Add(1) < 3 {
+			return nil, retryTestNetError{temporary: true}
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(asset)),
+			Header:     make(http.Header),
+			Request:    req,
+		}, nil
+	})}
+	got, err := downloadReleaseArchive(context.Background(), client, "https://github.com/immutable/lintai")
+	if err != nil || string(got) != asset || requests.Load() != 3 {
+		t.Fatalf("temporary network errors must retry to immutable bytes: data=%q err=%v requests=%d", got, err, requests.Load())
+	}
+}
+
+func TestDownloadReleaseArchiveDoesNotRetryPermanentNetError(t *testing.T) {
+	var requests atomic.Int32
+	client := &http.Client{Transport: retryTestTransport(func(_ *http.Request) (*http.Response, error) {
+		requests.Add(1)
+		return nil, retryTestNetError{temporary: false}
+	})}
+	_, err := downloadReleaseArchive(context.Background(), client, "https://github.com/immutable/lintai")
+	if err == nil || requests.Load() != 1 {
+		t.Fatalf("permanent network error must fail on first attempt: err=%v requests=%d", err, requests.Load())
 	}
 }
