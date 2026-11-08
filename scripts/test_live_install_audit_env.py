@@ -281,9 +281,9 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, "signed lock changed"):
             check(dict(baseline), baseline, b"rewritten", b"pinned", "remove B")
 
-    def test_marketing_kit_cross_profile_native_snapshot_detects_hidden_rewrites(self):
+    def test_marketing_kit_cross_profile_snapshot_detects_hidden_rewrites(self):
         # Sentinels and stable installation IDs do not prove that another
-        # profile left all original native client files untouched.
+        # profile left native, HOME or UAP state untouched.
         from runpy import run_path
 
         runner = run_path(str(Path(__file__).resolve().parent /
@@ -291,18 +291,35 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         with TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
             env, *_ = runner["run_case"]("unused", "codex", root, "A")
-            before = runner["native_profile_snapshot"](env, "codex")
-            runner["check_native_unchanged"](env, "codex", before, "restore B")
+            before = runner["profile_snapshot"](env)
+            runner["check_profile_unchanged"](env, before, "restore B")
             native = Path(env["HOME"]) / ".codex" / "managed.json"
             native.write_bytes(b"before")
-            with self.assertRaisesRegex(AssertionError, "original native profile changed"):
-                runner["check_native_unchanged"](env, "codex", before, "restore B")
-            after = runner["native_profile_snapshot"](env, "codex")
+            with self.assertRaisesRegex(AssertionError, "original isolated profile changed"):
+                runner["check_profile_unchanged"](env, before, "restore B")
+            after = runner["profile_snapshot"](env)
             native.write_bytes(b"after")
-            with self.assertRaisesRegex(AssertionError, "original native profile changed"):
-                runner["check_native_unchanged"](env, "codex", after, "remove B")
+            with self.assertRaisesRegex(AssertionError, "original isolated profile changed"):
+                runner["check_profile_unchanged"](env, after, "remove B")
             native.write_bytes(b"before")
-            runner["check_native_unchanged"](env, "codex", after, "remove B")
+            runner["check_profile_unchanged"](env, after, "remove B")
+
+            # Changes outside the selected client's native roots must fail too.
+            sibling = Path(env["HOME"]) / ".config" / "other-app" / "settings.json"
+            sibling.parent.mkdir(parents=True)
+            sibling.write_bytes(b"foreign")
+            with self.assertRaisesRegex(AssertionError, "original isolated profile changed"):
+                runner["check_profile_unchanged"](env, after, "restore B")
+            sibling.unlink()
+            runner["check_profile_unchanged"](env, after, "restore B")
+
+            # A's durable UAP receipt/data state must remain untouched by B/C.
+            receipt = Path(env["AGENTPLUGINS_HOME"]) / "foreign-receipt.json"
+            receipt.write_bytes(b"other installation")
+            with self.assertRaisesRegex(AssertionError, "original isolated profile changed"):
+                runner["check_profile_unchanged"](env, after, "remove C")
+            receipt.unlink()
+            runner["check_profile_unchanged"](env, after, "remove C")
 
     def test_marketing_kit_cold_restore_guard_requires_full_disjoint_lock(self):
         from runpy import run_path
