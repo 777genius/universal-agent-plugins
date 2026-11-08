@@ -43,6 +43,8 @@ func detectPythonManager(root string, hasUV, hasPoetry bool) PythonShape {
 	}
 }
 
+// resolvePythonEnvironment prefers a runnable repo-local Python interpreter; a broken
+// .venv must be reported before any Poetry or Pipenv environment probe.
 func resolvePythonEnvironment(root string, shape PythonShape) PythonShape {
 	shape.HasVenv = hasVenv(root)
 	shape.VenvPath = pythonInterpreter(root)
@@ -54,11 +56,8 @@ func resolvePythonEnvironment(root string, shape PythonShape) PythonShape {
 			shape.VersionOutput = version
 			return shape
 		}
-		shape.BrokenReason = "found .venv but no runnable interpreter; recreate .venv or repair the virtualenv"
-		shape.ReadySource = PythonEnvSourceBroken
-		return shape
 	}
-	if shape.HasVenv {
+	if shape.HasVenv || shape.VenvPath != "" {
 		shape.BrokenReason = "found .venv but no runnable interpreter; recreate .venv or repair the virtualenv"
 		shape.ReadySource = PythonEnvSourceBroken
 		return shape

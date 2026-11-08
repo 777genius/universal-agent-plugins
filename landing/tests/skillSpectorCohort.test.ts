@@ -32,7 +32,7 @@ const stable = (value: unknown): string => {
 const canonical = (value: unknown) => encode.encode(stable(value) + '\n');
 const b64 = (v: Uint8Array) => btoa(String.fromCharCode(...v));
 
-async function fixture(options: { rejectedReference?: boolean } = {}) {
+async function fixture(options: { rejectedReference?: boolean; sitemapRevision?: string | string[] } = {}) {
   const pair = await crypto.subtle.generateKey({ name: 'Ed25519' }, true, ['sign', 'verify']);
   const trusted = [{ key_id: 'cohort-test', public_key: b64(new Uint8Array(
     await crypto.subtle.exportKey('raw', pair.publicKey))) }];
@@ -42,7 +42,8 @@ async function fixture(options: { rejectedReference?: boolean } = {}) {
     return {
       id: 'plugin:community:' + pack + '/' + name, kind: 'plugin_skill',
       plugin_path: '', skill_name: name,
-      source: { repository, revision, path: 'skills/' + name,
+      source: { repository, revision: index === 0 ? (options.sitemapRevision ?? revision) : revision,
+        path: 'skills/' + name,
         content_digest: 'sha256:' + 'a'.repeat(64) },
       scanner, profile, status: 'complete', findings,
       finding_count: findings.length, finding_group_count: findings.length,
@@ -143,6 +144,24 @@ test('real Ed25519 verification requires nine pinned sources and preserves risk'
   assert.equal(risk?.execution?.acquisition_seconds, 0.266917);
 });
 
+test('reviewed sitemap revision rotation preserves signed evidence and rejects unknown SHAs', async () => {
+  for (const revision of [
+    'cc45ca06eaf48abde3bb60fb79d31c41229c58db',
+    'be4142b25bba6d424962a7788432dd813e6b768c',
+  ]) {
+    const f = await fixture({ sitemapRevision: revision });
+    const cohort = await readVerifiedSkillSpectorCohort(latest, f.trusted, f.fetcher, at);
+    assert.equal(cohort?.records.get(f.records[0]!.id)?.source.revision, revision);
+    assert.equal(cohort?.records.get(f.records[2]!.id)?.finding_count, 1);
+  }
+  for (const unreviewedRevision of ['0'.repeat(40), ['be4142b25bba6d424962a7788432dd813e6b768c']]) {
+    const unreviewed = await fixture({ sitemapRevision: unreviewedRevision });
+    await assert.rejects(() => readVerifiedSkillSpectorCohort(
+      latest, unreviewed.trusted, unreviewed.fetcher, at,
+    ));
+  }
+});
+
 test('unregistered key never fetches; signature tampering and expiration reject', async () => {
   let called = false;
   const never = (async () => { called = true; throw new Error('must not fetch'); }) as typeof fetch;
@@ -176,12 +195,20 @@ test('all seven Braids Skills sharing one signed package receive individual exac
     const record = structuredClone(source) as unknown as SkillSpectorRecord;
     record.status = 'partial';
     record.coverage!.status = 'partial';
+    record.coverage!.reasons = [{ code: 'reference_missing', message: 'Metadata is not a file.' }];
+    record.errors = [{ code: 'reference_missing', message: 'Metadata is not a file.' }];
     record.scanner = { id: 'skillspector', version: '2.13.1',
       revision: 'f3b25697d76256998ca9d42c198d256258d4c035' };
     record.freshness = 'current';
     record.target_revision = record.source.revision;
     return record;
   });
+  // Real 2.13.1 and signed 2.13.3 LP3 records use different generated
+  // finding IDs. Reproduce this with our fingerprint-free signed E4 fixture:
+  // same source location, different ephemeral finding ID is not a new risk.
+  const oldFinding = oldRecords.find(record => record.id.endsWith('/braids'))!.findings[0]!;
+  assert.equal(oldFinding.match_fingerprint, undefined);
+  oldFinding.occurrences![0]!.finding_id = 'finding-different-scanner-generated-id';
   const report = {
     schema_version: 3,
     records: oldRecords,
@@ -214,6 +241,8 @@ test('overlay survives unrelated manifest updates but fails closed on source or 
   const old = structuredClone(f.records[2]!) as unknown as SkillSpectorRecord;
   old.status = 'partial';
   old.coverage!.status = 'partial';
+  old.coverage!.reasons = [{ code: 'reference_missing', message: 'Metadata is not a file.' }];
+  old.errors = [{ code: 'reference_missing', message: 'Metadata is not a file.' }];
   old.scanner = { id: 'skillspector', version: '2.13.1',
     revision: 'f3b25697d76256998ca9d42c198d256258d4c035' };
   old.freshness = 'current';
@@ -261,6 +290,78 @@ test('overlay survives unrelated manifest updates but fails closed on source or 
   const omitted = structuredClone(report);
   omitted.plugin_states[0]!.selected_ids = [];
   assert.equal(applyVerifiedSkillSpectorCohort(omitted, cohort.manifestDigest, cohort, at), omitted);
+  // A still-valid older Ed25519 release cannot cover new, source-identical
+  // authenticated recovery conflicts. Preserve the canonical Partial and all
+  // original risk evidence until a new full scan and signed requalification.
+  const quarantines: Array<(record: SkillSpectorRecord) => void> = [
+    record => { record.coverage!.reasons = [
+      { code: 'recovery_conflict', message: 'Independent source evidence differs.' },
+    ]; },
+    record => { record.coverage!.reasons = [
+      { code: 'recovery_predecessor_unavailable', message: 'Parent evidence is missing.' },
+    ]; },
+    record => { record.coverage!.reasons = [
+      { code: 'normalization_truncated', message: 'Incompletely represented risk evidence.' },
+    ]; },
+    record => { record.coverage!.reasons.push(
+      { code: 'static_parse_limit', message: 'New unrelated analysis limitation.' },
+    ); },
+    record => { record.coverage!.reasons = []; },
+    record => { record.errors.push(
+      { code: 'acquisition_failed', message: 'Unrelated source acquisition error.' },
+    ); },
+    record => { record.errors = []; },
+    record => { record.findings_truncated = true; },
+    record => { record.coverage!.grouping_complete = false; },
+    record => { delete record.coverage!.grouping_complete; },
+    record => { record.coverage!.reference_evidence_truncated = true; },
+    record => { delete record.coverage!.reference_evidence_truncated; },
+  ];
+  for (const makeUncertain of quarantines) {
+    const uncertain = structuredClone(report);
+    makeUncertain(uncertain.records[0]!);
+    assert.equal(applyVerifiedSkillSpectorCohort(
+      uncertain, cohort.manifestDigest, cohort, at), uncertain);
+    assert.equal(uncertain.records[0]!.status, 'partial');
+    assert.equal(uncertain.records[0]!.finding_count, 1);
+    assert.equal(uncertain.records[0]!.signed_cohort_verified, undefined);
+  }
+  // An older signed Complete cannot discard new risk evidence from a newer
+  // source-identical Partial even when only reference_missing remains.
+  const newlyObserved = structuredClone(report);
+  newlyObserved.records[0]!.findings.push({
+    ...structuredClone(newlyObserved.records[0]!.findings[0]!),
+    rule: 'E99', severity: 'CRITICAL',
+    message: 'New source-identical risk', match_fingerprint: 'new-current-risk',
+  });
+  newlyObserved.records[0]!.finding_count = 2;
+  assert.equal(applyVerifiedSkillSpectorCohort(
+    newlyObserved, cohort.manifestDigest, cohort, at), newlyObserved);
+  assert.equal(newlyObserved.records[0]!.findings[1]?.severity, 'CRITICAL');
+  const changedRisk = structuredClone(report);
+  changedRisk.records[0]!.findings[0]!.message = 'Different risk evidence';
+  assert.equal(applyVerifiedSkillSpectorCohort(
+    changedRisk, cohort.manifestDigest, cohort, at), changedRisk);
+  // A changed physical occurrence is a new identity even if an ephemeral
+  // finding_id remains the same. The valid older signature may not erase it.
+  const movedRisk = structuredClone(report);
+  const fingerprintFree = movedRisk.records[0]!.findings.find(f => !f.match_fingerprint)!;
+  assert.ok(fingerprintFree?.occurrences?.length);
+  fingerprintFree.occurrences![0]!.line = 999;
+  assert.equal(applyVerifiedSkillSpectorCohort(
+    movedRisk, cohort.manifestDigest, cohort, at), movedRisk);
+  const repeatedRisk = structuredClone(report);
+  repeatedRisk.records[0]!.findings.push(
+    structuredClone(repeatedRisk.records[0]!.findings[0]!));
+  repeatedRisk.records[0]!.finding_count = 2;
+  assert.equal(applyVerifiedSkillSpectorCohort(
+    repeatedRisk, cohort.manifestDigest, cohort, at), repeatedRisk);
+  const changedRevision = structuredClone(report);
+  changedRevision.records[0]!.source.revision = 'be4142b25bba6d424962a7788432dd813e6b768c';
+  changedRevision.records[0]!.target_revision = changedRevision.records[0]!.source.revision;
+  changedRevision.source_states[0]!.revision = changedRevision.records[0]!.source.revision;
+  changedRevision.plugin_states[0]!.revision = changedRevision.records[0]!.source.revision;
+  assert.equal(applyVerifiedSkillSpectorCohort(changedRevision, cohort.manifestDigest, cohort, at), changedRevision);
   const changed = structuredClone(report);
   changed.records[0]!.source.content_digest = 'sha256:' + '0'.repeat(64);
   assert.equal(applyVerifiedSkillSpectorCohort(changed, cohort.manifestDigest, cohort, at), changed);
