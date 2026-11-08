@@ -4,8 +4,8 @@ package sourceacquisition
 
 import (
 	"os"
-	"strings"
 	"runtime"
+	"strings"
 )
 
 func isolatedGitEnvironment(environ []string, isolatedHome string) []string {
