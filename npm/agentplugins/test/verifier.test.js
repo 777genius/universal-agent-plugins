@@ -360,7 +360,10 @@ test("pre-response timeout cancellation stops retries immediately", async () => 
     attempts++;
     const req = transport(() => {}, true)(url, options);
     const originalDestroy = req.destroy;
+    let destroyed = false;
     req.destroy = error => {
+      if (destroyed) return;
+      destroyed = true;
       originalDestroy(error);
       controller.abort();
     };
