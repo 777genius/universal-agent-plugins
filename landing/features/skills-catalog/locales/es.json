@@ -1,6 +1,18 @@
 {
   "registryUi": {
     "skills": {
+      "featured": {
+        "title": "Recomendados para agentes de programación",
+        "explanation": "Elegidos para tareas cotidianas. No garantizan seguridad ni compatibilidad; revisa la fuente y los requisitos.",
+        "items": {
+          "agent-browser": "Automatiza el navegador tras instalar por separado la CLI correspondiente.",
+          "frontend-design": "Crea interfaces frontend más cuidadas y profesionales.",
+          "find-skills": "Encuentra Skills reutilizables para tu tarea.",
+          "tdd": "Desarrolla y corrige código con pruebas: rojo, verde y refactorización.",
+          "vercel-react-best-practices": "Aplica recomendaciones de rendimiento para React y Next.js.",
+          "web-design-guidelines": "Revisa la usabilidad y la accesibilidad de las interfaces web."
+        }
+      },
       "catalogType": "Tipo de catálogo",
       "plugins": "Complementos",
       "skills": "Habilidades",

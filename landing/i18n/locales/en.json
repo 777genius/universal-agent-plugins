@@ -652,6 +652,10 @@
       "disclaimer": "Automated checks reduce risk; they do not prove that a plugin is safe. Review the source and permissions before installing software you do not trust."
     },
     "catalog": {
+      "sortLabel": "Sort plugins",
+      "sortRecommended": "Recommended",
+      "sortName": "Name A–Z",
+      "curationNote": "Recommended for everyday agent workflows, not a safety rating.",
       "staleCommunityResults": "Showing {count} community listings from the last signed catalog, generated {generated}, expired {expired}. Community installation commands are paused until a fresh catalog is available. Reviewed listings remain available.",
       "staleCommunityListing": "Historical signed listing; catalog expired {expired}.",
       "staleCommunityCommands": "Community installation commands are paused because the signed catalog has expired. You can still browse its listings and source.",

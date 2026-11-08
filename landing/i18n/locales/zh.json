@@ -635,6 +635,10 @@
       "disclaimer": "自动检查可以降低风险，但不能证明插件安全。安装不受信任的软件前，请检查源码和权限。"
     },
     "catalog": {
+      "sortLabel": "插件排序",
+      "sortRecommended": "推荐",
+      "sortName": "按名称 A–Z",
+      "curationNote": "根据常见代理工作流程推荐，并非安全评级。",
       "staleCommunityResults": "显示最新签名目录中的 {count} 个社区条目，生成于 {generated}，已于 {expired} 过期。社区安装命令已暂停，等待新目录。已审核的条目仍可使用。",
       "staleCommunityListing": "历史签名条目；目录已于 {expired} 过期。",
       "staleCommunityCommands": "签名目录已过期，社区安装命令已暂停。仍可浏览条目和源代码。",
