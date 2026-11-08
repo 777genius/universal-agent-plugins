@@ -33,3 +33,11 @@ Other, distinct installed majors also exist: `glob@13.0.6`, `minimatch@5.1.9`, `
 Current status: exact parent graph identified; no compatible fixed dependency resolution is yet proven or deployed.
 
 References: upstream [archiver issue #822](https://github.com/archiverjs/node-archiver/issues/822), [ESLint 9.39.4 release](https://eslint.org/blog/2026/03/eslint-v9.39.4-released/), [Nuxt EOL notice](https://github.com/nuxt/nuxt/releases), and the two GHSA advisory records.
+
+## Actual deployment route (checked)
+
+The checked-in `.github/workflows/landing.yml` has the landing runner execute `pnpm run generate`, then copies **`landing/.output/public/`** into the GitHub Pages base `.e2e-pages/universal-agent-plugins/`; combined-pages validation assembles `.pages-dist/` and checks its final static paths. This is a statically generated Pages deployment, **not** a deployed Nuxt Node SSR process. The presence of `archiver-utils` under Nuxt/Nitro and of ESLint under development tooling is therefore a **CI/build/development supply-chain exposure** first, not proof of a network-reachable vulnerable glob parser on the deployed site. A dedicated artifact scan is still needed to prove that none of these library bytes enter public JS/assets.
+
+Treat `serve@14.2.6` as an optional direct dev dependency until repository-wide references and the generated Preview/Pages scripts are checked; its `serve-handler` is not a site runtime route by virtue of being locked. Removing it safely would require **pnpm-generated** lockfile changes plus the existing browser preview E2E, not manual deletion of snapshots.
+
+This distinction lowers the immediacy of unproven public runtime exploitation but does **not** close advisories, upgrade dependencies, or make the issue green.
