@@ -117,11 +117,20 @@ try {
   // *immutable, signed-by-content* v3 shard evidence, never badge text alone.
   const publicationRefUrl =
     'https://api.github.com/repos/777genius/universal-agent-plugins-registry/git/ref/heads/skillspector-reports';
+  // GitHub-hosted runners share unauthenticated API limits. Use only the scoped
+  // read-only CI token for this fixed GitHub host; never send it on redirects.
+  const publicationRefHeaders: Record<string, string> = { Accept: 'application/vnd.github+json' };
+  const publicationToken = process.env.UAP_GITHUB_READ_TOKEN;
+  if (publicationToken) publicationRefHeaders.Authorization = `Bearer ${publicationToken}`;
   // Retry only transient GitHub availability failures; never accept a bad ref or stale fixture.
   async function readPublicationRef(): Promise<Response> {
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        const response = await fetch(publicationRefUrl, { signal: AbortSignal.timeout(15000) });
+        const response = await fetch(publicationRefUrl, {
+          headers: publicationRefHeaders,
+          redirect: 'error',
+          signal: AbortSignal.timeout(15000),
+        });
         if (response.status === 200 || (response.status !== 429 && response.status < 500) ||
             attempt === 2) return response;
         await response.body?.cancel();
@@ -136,7 +145,10 @@ try {
     throw new Error('Unreachable publication ref retry limit');
   }
   const publicationRef = await readPublicationRef();
-  assert.equal(publicationRef.status, 200, 'Published report branch must be readable');
+  assert.equal(
+    publicationRef.status, 200,
+    `Published report branch must be readable (HTTP ${publicationRef.status}; GitHub rate remaining ${publicationRef.headers.get('x-ratelimit-remaining') ?? 'unknown'})`,
+  );
   const publicationSha = (await publicationRef.json() as { object?: { sha?: string } }).object?.sha;
   assert.match(publicationSha || '', /^[0-9a-f]{40}$/, 'Immutable publication SHA');
   report.immutable_publication = publicationSha!;
