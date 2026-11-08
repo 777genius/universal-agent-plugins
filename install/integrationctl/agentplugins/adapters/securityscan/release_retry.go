@@ -5,10 +5,22 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"time"
 )
+
+// transientNetworkError is the narrow adapter contract for classifying a
+// transport failure. The caller still retries only errors with this contract.
+type transientNetworkError interface {
+	error
+	Timeout() bool
+	Temporary() bool
+}
+
+func retryableNetworkFailure(err error) bool {
+	var networkErr transientNetworkError
+	return errors.As(err, &networkErr) && (networkErr.Timeout() || networkErr.Temporary())
+}
 
 // downloadReleaseArchive retries only bounded transient acquisition failures.
 // All successful bytes still pass the caller's pinned archive SHA-256 check.
@@ -23,8 +35,7 @@ func downloadReleaseArchive(ctx context.Context, client *http.Client, url string
 			if ctx.Err() != nil {
 				return nil, fmt.Errorf("download lintai security scanner: %w", ctx.Err())
 			}
-			var networkErr net.Error
-			if !errors.As(err, &networkErr) || !(networkErr.Timeout() || networkErr.Temporary()) || attempt == 2 {
+			if attempt == 2 || !retryableNetworkFailure(err) {
 				return nil, fmt.Errorf("download lintai security scanner: %w", err)
 			}
 		} else {
