@@ -36,3 +36,18 @@ test('README and landing support rows, setup actions and logos are in sync', () 
   assert.deepEqual(actual, expected);
   assert.match(readme, /landing\/data\/clientSupport\.ts/);
 });
+
+test('English support translations preserve source-matrix capabilities and next steps', () => {
+  const messages = JSON.parse(
+    readFileSync(new URL('../i18n/locales/en.json', import.meta.url), 'utf8'),
+  ).shell.clientSupport;
+  assert.deepEqual(Object.keys(messages.nextSteps).sort(), clientSupportRows.map((row) => row.id).sort());
+  for (const row of clientSupportRows) {
+    assert.equal(messages.nextSteps[row.id], row.nextStep, row.id);
+    for (const original of [row.user, row.project]) {
+      const key = clientSupportCapabilityKeys[original as keyof typeof clientSupportCapabilityKeys];
+      assert.equal(messages.capabilities[key], original, original);
+    }
+    assert.equal(messages.setup[row.setup.toLowerCase()], row.setup, row.setup);
+  }
+});
