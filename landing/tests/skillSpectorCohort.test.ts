@@ -203,6 +203,12 @@ test('all seven Braids Skills sharing one signed package receive individual exac
     record.target_revision = record.source.revision;
     return record;
   });
+  // Real 2.13.1 and signed 2.13.3 use different generated IDs for
+  // identical LP3 source coordinates. That is not changed risk evidence.
+  const oldLp3 = oldRecords.find(record => record.id.endsWith('/braids'))!
+    .findings.find(finding => finding.rule === 'LP3')!;
+  assert.equal(oldLp3.match_fingerprint, null);
+  oldLp3.occurrences![0]!.finding_id = 'finding-different-scanner-generated-id';
   const report = {
     schema_version: 3,
     records: oldRecords,
@@ -336,6 +342,14 @@ test('overlay survives unrelated manifest updates but fails closed on source or 
   changedRisk.records[0]!.findings[0]!.message = 'Different risk evidence';
   assert.equal(applyVerifiedSkillSpectorCohort(
     changedRisk, cohort.manifestDigest, cohort, at), changedRisk);
+  // A changed physical occurrence is a new identity even if an ephemeral
+  // finding_id remains the same. The valid older signature may not erase it.
+  const movedRisk = structuredClone(report);
+  const fingerprintFree = movedRisk.records[0]!.findings.find(f => !f.match_fingerprint)!;
+  assert.ok(fingerprintFree?.occurrences?.length);
+  fingerprintFree.occurrences![0]!.line = 999;
+  assert.equal(applyVerifiedSkillSpectorCohort(
+    movedRisk, cohort.manifestDigest, cohort, at), movedRisk);
   const repeatedRisk = structuredClone(report);
   repeatedRisk.records[0]!.findings.push(
     structuredClone(repeatedRisk.records[0]!.findings[0]!));
