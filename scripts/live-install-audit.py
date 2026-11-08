@@ -111,17 +111,49 @@ def validate_fixtures(doc):
         raise ValueError("Insufficiently diverse publishers")
 
 
-def call(argv, env, cwd, timeout=105):
+def call(argv, env, cwd, timeout=105, capture_files=False):
     try:
-        p = subprocess.run(argv, cwd=cwd, env=env, capture_output=True,
-                           text=True, errors="replace", stdin=subprocess.DEVNULL,
-                           timeout=timeout, check=False)
+        if capture_files:
+            # A Windows native client may spawn a child which inherits stdout
+            # or stderr. Pipes stay open after the UAP process exits, causing
+            # subprocess.run(capture_output=True) to time out after a real add.
+            # Capture in private regular files so the parent exit is observed.
+            scratch = Path(env.get("TEMP", ""))
+            if not scratch.is_absolute() or not scratch.is_dir() or scratch.is_symlink():
+                raise OSError("private output capture root unavailable")
+            with (tempfile.TemporaryFile(mode="w+b", dir=scratch) as stdout_file,
+                  tempfile.TemporaryFile(mode="w+b", dir=scratch) as stderr_file):
+                p = subprocess.run(argv, cwd=cwd, env=env, stdout=stdout_file,
+                                   stderr=stderr_file, stdin=subprocess.DEVNULL,
+                                   timeout=timeout, check=False)
+                stdout_file.seek(0)
+                stderr_file.seek(0)
+                limit = 1 << 20
+                output, errors = stdout_file.read(limit + 1), stderr_file.read(limit + 1)
+            if len(output) > limit or len(errors) > limit:
+                return {"exit_code": None, "stdout_tail": "",
+                        "stderr_tail": "bounded native output capture exceeded",
+                        "timeout": False, "_json": None}
+            stdout, stderr = output.decode("utf-8", errors="replace"), errors.decode("utf-8", errors="replace")
+        else:
+            p = subprocess.run(argv, cwd=cwd, env=env, capture_output=True,
+                               text=True, errors="replace", stdin=subprocess.DEVNULL,
+                               timeout=timeout, check=False)
+            stdout, stderr = p.stdout, p.stderr
         try:
-            parsed_json = json.loads(p.stdout)
+            parsed_json = json.loads(stdout)
         except ValueError:
             parsed_json = None
-        return {"exit_code": p.returncode, "stdout_tail": p.stdout[-1800:],
-                "stderr_tail": p.stderr[-1800:], "timeout": False,
+        if (capture_files and p.returncode == 0
+                and (not isinstance(parsed_json, dict)
+                     or parsed_json.get("result") != "success")):
+            # An inherited child may append to the file after UAP exits.
+            # Never promote a truncated/corrupt add response to native PASS.
+            return {"exit_code": None, "stdout_tail": stdout[-1800:],
+                    "stderr_tail": "native add success JSON unavailable",
+                    "timeout": False, "_json": None}
+        return {"exit_code": p.returncode, "stdout_tail": stdout[-1800:],
+                "stderr_tail": stderr[-1800:], "timeout": False,
                 "_json": parsed_json}
     except subprocess.TimeoutExpired as e:
         return {"exit_code": None, "stdout_tail": "", "stderr_tail": str(e)[-1800:], "timeout": True}
@@ -1290,7 +1322,11 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     copilot_before = (copilot_settings_sanitized_shape(home, case_root, identity)
                       if kind == "plugin" and target == "copilot" else None)
     add_timeout = install_case_timeout(target, kind, item)
-    output = audited_call([cli, *args], env, project, add_timeout)
+    # Keep the original strict add/list/repeat/remove evidence; only avoid
+    # inherited Windows Firebase child pipe handles masking parent exit.
+    file_capture = (sys.platform == "win32" and kind == "plugin" and item == "firebase")
+    capture_option = {"capture_files": True} if file_capture else {}
+    output = audited_call([cli, *args], env, project, add_timeout, **capture_option)
     added_json = output.pop("_json", None)
     native_components = (native_components_from_add(added_json)
                          if kind == "plugin" else ())
@@ -1362,7 +1398,8 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                 for path in lock_paths
             )
         before_repeat_lock = lock_state()
-        repeat_add = audited_call([cli, *args], env, project, add_timeout)
+        repeat_add = audited_call([cli, *args], env, project, add_timeout,
+                                  **capture_option)
         repeat_add.pop("_json", None)
         repeat_list = audited_call([cli, "list", "--target", target, *scope, "--format", "json"],
                            env, project, 30)
