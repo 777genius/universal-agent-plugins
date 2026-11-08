@@ -138,6 +138,24 @@ def execute(cli, env, project, label, *args):
     return {"stage": label, "exit_code": result["exit_code"], "result": "passed"}
 
 
+def codex_user_native_remove_attestation(env, project):
+    """Only attest after real native HubSpot removal from this disposable profile."""
+    case_root = project.parent
+    home = case_root / "home"
+    if (env.get("HOME") != str(home)
+            or env.get("CODEX_HOME") != str(home / ".codex")
+            or not audit["path_inside_case"](home, case_root)
+            or not audit["path_inside_case"](project, case_root)):
+        raise AssertionError("Codex native removal requires the exact disposable profile")
+    native = audit["uninstall_native_codex_plugin"](
+        "hubspot-crm", home, case_root, env, project)
+    if native.get("completed") is not True:
+        raise AssertionError(
+            "Codex native HubSpot uninstall unverified: " +
+            str(native.get("reason") or "native removal and absence not confirmed"))
+    return ("--external-uninstalled",)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--target", required=True, choices=["codex", "cursor", "claude", "gemini", "opencode", "copilot"])
@@ -257,7 +275,20 @@ def main():
                 "--target", options.target, *user_scoped)
             if user_inventory() != user_after_update:
                 raise AssertionError("User repair changed installation identities")
-            run(env, project_a, "User remove", "remove", "marketing-kit", *user_scoped)
+            # Codex user plugin dependencies require genuine external native removal.
+            # Reuse the audited, pinned Codex CLI path and exact native absence oracle.
+            user_remove_attestation = ()
+            if options.target == "codex":
+                try:
+                    user_remove_attestation = codex_user_native_remove_attestation(env, project_a)
+                finally:
+                    check_foreign(foreign_files, root)
+                report["steps"].append({
+                    "stage": "User native HubSpot uninstall",
+                    "exit_code": 0, "result": "passed",
+                })
+            run(env, project_a, "User remove", "remove", "marketing-kit",
+                *user_scoped, *user_remove_attestation)
             if user_inventory():
                 raise AssertionError("User removal retained Marketing Kit or mandatory children")
             for name, expected_bytes in project_files.items():

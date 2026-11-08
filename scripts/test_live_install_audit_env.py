@@ -136,6 +136,44 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             self.assertEqual(runner["identities"]([row], "codex", "user"),
                              {"root": "owned"})
 
+    def test_marketing_kit_codex_attestation_requires_native_uninstall_proof(self):
+        # A signed Project/User binding is not proof of native uninstallation.
+        # Only the existing pinned native removal plus fresh absence grants the flag.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        with TemporaryDirectory() as temporary:
+            case = Path(temporary) / "A"
+            home, project = case / "home", case / "project"
+            home.mkdir(parents=True)
+            project.mkdir()
+            env = {"HOME": str(home), "CODEX_HOME": str(home / ".codex")}
+            check = runner["codex_user_native_remove_attestation"]
+            calls = []
+
+            def native_uninstall(identity, native_home, native_root, native_env, cwd):
+                calls.append((identity, native_home, native_root, cwd))
+                return {"completed": False, "reason": "native plugin still registered"}
+
+            with patch.dict(runner["audit"], {
+                    "uninstall_native_codex_plugin": native_uninstall}):
+                with self.assertRaisesRegex(AssertionError, "native plugin still registered"):
+                    check(env, project)
+            self.assertEqual(calls, [("hubspot-crm", home, case, project)])
+
+            # A merely truthy field cannot authorize a security attestation.
+            for unverified in ({}, {"completed": "true"}, {"completed": False}):
+                with patch.dict(runner["audit"], {
+                        "uninstall_native_codex_plugin": lambda *_: unverified}):
+                    with self.assertRaisesRegex(AssertionError, "unverified"):
+                        check(env, project)
+            with patch.dict(runner["audit"], {
+                    "uninstall_native_codex_plugin": lambda *_: {"completed": True}}):
+                self.assertEqual(check(env, project), ("--external-uninstalled",))
+                with self.assertRaisesRegex(AssertionError, "exact disposable profile"):
+                    check({**env, "CODEX_HOME": str(case / "foreign")}, project)
+
     def test_marketing_kit_project_a_guard_rejects_rekey_and_lock_rewrite(self):
         # A complete set of distributions is insufficient if B silently
         # replaces A's installation identities or changes A's signed lock.
