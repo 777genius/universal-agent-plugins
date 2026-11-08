@@ -1,8 +1,13 @@
 <script setup lang="ts">
-import { clientSupportRows } from '~/data/clientSupport';
+import { clientSupportRows, clientSupportCapabilityKeys } from '~/data/clientSupport';
 import { clientLandingById } from '~/data/clients';
 
 const { asset } = useSite();
+const { t } = useI18n();
+const capabilityLabel = (value: string) => {
+  const key = clientSupportCapabilityKeys[value as keyof typeof clientSupportCapabilityKeys];
+  return key ? t(`shell.clientSupport.capabilities.${key}`) : value;
+};
 // SYNC: landing/data/clientSupport.ts and README.md "Supported clients" must
 // match. Icons come from landing/data/clients.ts; parity is checked by
 // landing/tests/client-support-readme.test.ts.
@@ -18,37 +23,29 @@ const monochromeIcons = new Set(['opencode', 'cline', 'windsurf', 'grok', 'kimi'
     id="agent-support"
     class="registry-client-support container anchor-offset"
     aria-labelledby="agent-support-title"
-    lang="en"
-    dir="ltr"
     data-scroll-reveal
   >
     <header class="section-heading section-heading--center">
-      <p class="eyebrow">Compatibility</p>
-      <h2 id="agent-support-title">Supported agents and installation scopes</h2>
-      <p>
-        User installs into your agent profile; Project installs into one selected workspace.
-        UAP handles supported files and configuration. Your agent may still ask for trust,
-        sign-in, or a restart.
-      </p>
+      <p class="eyebrow">{{ t('shell.clientSupport.eyebrow') }}</p>
+      <h2 id="agent-support-title">{{ t('shell.clientSupport.title') }}</h2>
+      <p>{{ t('shell.clientSupport.description') }}</p>
     </header>
 
     <div
       class="registry-client-support__scroll"
       role="region"
-      aria-label="Agent installation support table"
+      :aria-label="t('shell.clientSupport.tableLabel')"
       tabindex="0"
     >
       <table>
-        <caption class="sr-only">
-          User and project installation support, setup automation, and actions after installing.
-        </caption>
+        <caption class="sr-only">{{ t('shell.clientSupport.tableCaption') }}</caption>
         <thead>
           <tr>
-            <th scope="col">Agent</th>
-            <th scope="col">User scope</th>
-            <th scope="col">Project scope</th>
-            <th scope="col">Setup</th>
-            <th scope="col">What you do after installing</th>
+            <th scope="col">{{ t('shell.clientSupport.columns.agent') }}</th>
+            <th scope="col">{{ t('shell.clientSupport.columns.user') }}</th>
+            <th scope="col">{{ t('shell.clientSupport.columns.project') }}</th>
+            <th scope="col">{{ t('shell.clientSupport.columns.setup') }}</th>
+            <th scope="col">{{ t('shell.clientSupport.columns.nextStep') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -69,34 +66,31 @@ const monochromeIcons = new Set(['opencode', 'cline', 'windsurf', 'grok', 'kimi'
                 <span>{{ client.name }}</span>
               </span>
             </th>
-            <td>{{ client.user }}</td>
+            <td>{{ capabilityLabel(client.user) }}</td>
             <td :class="{ 'registry-client-support__unavailable': client.project === 'Not supported' }">
-              {{ client.project }}
+              {{ capabilityLabel(client.project) }}
             </td>
             <td>
               <span
                 class="registry-client-support__setup"
                 :class="`registry-client-support__setup--${client.setup.toLowerCase()}`"
               >
-                {{ client.setup }}
+                {{ t(`shell.clientSupport.setup.${client.setup.toLowerCase()}`) }}
               </span>
             </td>
-            <td>{{ client.nextStep }}</td>
+            <td>{{ t(`shell.clientSupport.nextSteps.${client.id}`) }}</td>
           </tr>
         </tbody>
       </table>
     </div>
-    <p class="registry-client-support__scroll-hint">Scroll sideways to see every column.</p>
+    <p class="registry-client-support__scroll-hint">{{ t('shell.clientSupport.scrollHint') }}</p>
     <p class="registry-client-support__note">
-      Automatic = UAP installs the supported components; Guided = follow client prompts;
-      Prepared = files are ready but need activation; Manual = complete setup in the app.
-      Installing never signs you in or grants trust. These are current source capabilities;
-      the published CLI may be older. Availability depends on the plugin and client version.
+      {{ t('shell.clientSupport.note') }}
       <a
         href="https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md"
         target="_blank"
         rel="noopener noreferrer"
-      >Check compatibility details</a>.
+      >{{ t('shell.clientSupport.details') }}</a>.
     </p>
   </section>
 </template>
@@ -127,7 +121,7 @@ const monochromeIcons = new Set(['opencode', 'cline', 'windsurf', 'grok', 'kimi'
     width: 100%;
     min-width: 900px;
     border-collapse: collapse;
-    text-align: left;
+    text-align: start;
     line-height: 1.45;
   }
 

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { clientSupportRows } from '../data/clientSupport.ts';
+import { clientSupportRows, clientSupportCapabilityKeys } from '../data/clientSupport.ts';
 import { clientLandingById } from '../data/clients.ts';
 
 // SYNC: README.md "Supported clients" and landing/data/clientSupport.ts.
@@ -23,6 +23,8 @@ test('README and landing support rows, setup actions and logos are in sync', () 
   assert.equal(new Set(clientSupportRows.map((r) => r.id)).size, 15);
   const table = readme.split(first)[1]!.split(last)[0]!;
   const expected = clientSupportRows.map((r) => {
+    for (const capability of [r.user, r.project])
+      assert.ok(capability in clientSupportCapabilityKeys, `Missing translation mapping: ${capability}`);
     const client = clientLandingById.get(r.id);
     assert.ok(client, `Unknown client ${r.id}`);
     assert.ok(existsSync(new URL(`../public/client-icons/${client.icon}`, import.meta.url)));

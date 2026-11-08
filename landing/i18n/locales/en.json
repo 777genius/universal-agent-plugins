@@ -362,6 +362,57 @@
     "buildGuideLink": "Open the Build guide"
   },
   "shell": {
+    "clientSupport": {
+      "eyebrow": "Compatibility",
+      "title": "Supported agents and installation scopes",
+      "description": "User scope installs into your agent profile; Project scope installs into one workspace. UAP configures supported files. Your agent may still ask you to trust the project, sign in, or restart.",
+      "tableLabel": "Agent installation support table",
+      "tableCaption": "User and project support, setup mode, and actions after installation.",
+      "columns": {
+        "agent": "Agent",
+        "user": "User scope",
+        "project": "Project scope",
+        "setup": "Setup",
+        "nextStep": "After installation"
+      },
+      "scrollHint": "Scroll sideways to see every column.",
+      "note": "Automatic: UAP installs supported components. Guided: follow agent prompts. Prepared: activate the prepared files. Manual: finish setup in the app. Installation does not sign you in or grant trust. These are current source capabilities; the published CLI may differ. Availability depends on the plugin and agent version.",
+      "details": "Check compatibility details",
+      "capabilities": {
+        "pluginsSkillsMcp": "Plugins, Skills, MCP",
+        "skillsMcp": "Skills, MCP",
+        "pluginsSkillsMcpHooks": "Plugins, Skills, MCP, hooks",
+        "extensionsSkillsMcp": "Extensions, Skills, MCP",
+        "copilotPackage": "Copilot-backed package",
+        "personalAppSetup": "Personal app setup",
+        "skillsOnly": "Skills only",
+        "skillsMcpPrepared": "Skills, MCP (prepared)",
+        "notSupported": "Not supported"
+      },
+      "setup": {
+        "automatic": "Automatic",
+        "guided": "Guided",
+        "prepared": "Prepared",
+        "manual": "Manual"
+      },
+      "nextSteps": {
+        "claude": "Trust the workspace and reload Claude Code if prompted.",
+        "codex": "Open a new session; approve project MCP access if prompted.",
+        "opencode": "Start a new session and review effective project settings.",
+        "cursor": "Reload Cursor; enable plugins or MCP servers if requested.",
+        "copilot": "Restart Copilot CLI if requested.",
+        "gemini": "Reload Gemini CLI and approve tool access if prompted.",
+        "qoder": "Restart Qoder and review MCP permissions.",
+        "pi": "Trust the project and reload Pi resources.",
+        "windsurf": "Open or restart Devin in the selected project; review access.",
+        "kimi": "Run /reload or /new and review MCP permissions.",
+        "cline": "Select the project MCP settings path and reload Cline.",
+        "kiro": "Sign in, approve access, and restart Kiro if prompted.",
+        "grok": "Reload Grok; review project Skills and any CLI setup hint.",
+        "vscode": "Open and trust the folder; review and enable MCP servers.",
+        "chatgpt": "Enable Developer Mode, connect the app, and select it in a new chat."
+      }
+    },
     "dependencies": {
       "eyebrow": "Dependencies, connected",
       "title": "Two plugins. One shared dependency.",

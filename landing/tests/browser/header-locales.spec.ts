@@ -7,6 +7,13 @@ type HeaderCopy = {
   shell: {
     navigation: Record<'demo' | 'plugins' | 'agents' | 'faq' | 'open' | 'title', string>;
     docs: { navLabel: string };
+    clientSupport: {
+      title: string;
+      columns: Record<'agent' | 'user' | 'project' | 'setup' | 'nextStep', string>;
+      capabilities: { pluginsSkillsMcp: string; notSupported: string };
+      setup: { automatic: string; manual: string };
+      nextSteps: { claude: string; chatgpt: string };
+    };
   };
   hero: { docsCta: string };
 };
@@ -29,6 +36,28 @@ for (const locale of publishedLocales) {
       navigation.agents,
       navigation.faq,
     ]);
+    const support = page.locator('#agent-support');
+    const tableCopy = copy.shell.clientSupport;
+    await expect(support.locator('h2')).toHaveText(tableCopy.title);
+    await expect(support.locator('thead th')).toHaveText([
+      tableCopy.columns.agent, tableCopy.columns.user, tableCopy.columns.project,
+      tableCopy.columns.setup, tableCopy.columns.nextStep,
+    ]);
+    await expect(support.locator('tbody tr')).toHaveCount(15);
+    await expect(support.locator('tbody tr').first().locator('td').first())
+      .toHaveText(tableCopy.capabilities.pluginsSkillsMcp);
+    await expect(support.locator('tbody tr').first().locator('td').nth(2))
+      .toHaveText(tableCopy.setup.automatic);
+    await expect(support.locator('tbody tr').first().locator('td').last())
+      .toHaveText(tableCopy.nextSteps.claude);
+    await expect(support.locator('tbody tr').last().locator('td').nth(1))
+      .toHaveText(tableCopy.capabilities.notSupported);
+    await expect(support.locator('tbody tr').last().locator('td').nth(2))
+      .toHaveText(tableCopy.setup.manual);
+    await expect(support.locator('tbody tr').last().locator('td').last())
+      .toHaveText(tableCopy.nextSteps.chatgpt);
+    await expect(support).toHaveCSS('direction', locale === 'ar' ? 'rtl' : 'ltr');
+
     const desktopDocs = page.locator('.app-header__docs-btn');
     await expect(desktopDocs).toHaveText(docs.navLabel);
     await expect(desktopDocs).toHaveAccessibleName(copy.hero.docsCta);
