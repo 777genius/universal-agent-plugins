@@ -141,14 +141,17 @@ def check_project_a_unchanged(observed, expected, current_lock, expected_lock, s
         raise AssertionError(f"{stage}: Project A signed lock changed")
 
 
-def check_cold_restore(restored, original, original_lock, restored_lock, stage):
-    """Require the signed closure, independent IDs and byte-exact lock."""
+def check_cold_restore(restored, original, original_lock, restored_lock,
+                       original_manifest, restored_manifest, stage):
+    """Require exact portable agreement, signed closure and independent IDs."""
     if set(restored) != EXPECTED:
         raise AssertionError(f"{stage}: mandatory signed closure incomplete")
     if set(restored.values()) & set(original.values()):
         raise AssertionError(f"{stage}: reused installation IDs across profiles")
     if restored_lock != original_lock:
         raise AssertionError(f"{stage}: cold restore modified pinned lock")
+    if restored_manifest != original_manifest:
+        raise AssertionError(f"{stage}: cold restore modified portable manifest")
 
 
 def bind_pinned_launcher_cache(env, cache, sandbox):
@@ -240,6 +243,7 @@ def main():
             # Real repair on intact signed pins: this is not drift-recovery proof.
             # A repair may refresh owned receipts, but not the locked closure.
             pinned_after_update = (project_a / "uap.lock").read_bytes()
+            manifest_after_update = (project_a / "uap.toml").read_bytes()
             run(env, project_a, "repair intact", "repair", "marketing-kit",
                 "--target", options.target, *scoped)
             if identities(inventory(options.cli, env, project_a, options.target), options.target) != identities_after_update:
@@ -256,7 +260,11 @@ def main():
             run(env_b, project_b, "cold locked restore", "install", "--locked", "--yes", *scoped_b)
             restored = identities(inventory(options.cli, env_b, project_b, options.target), options.target)
             check_cold_restore(restored, identities_after_update, pinned_after_update,
-                               (project_b / "uap.lock").read_bytes(), "Project B")
+                               (project_b / "uap.lock").read_bytes(),
+                               manifest_after_update, (project_b / "uap.toml").read_bytes(),
+                               "Project B")
+            if (project_a / "uap.toml").read_bytes() != manifest_after_update:
+                raise AssertionError("Project B restore rewrote Project A portable manifest")
             check_project_a_unchanged(
                 identities(inventory(options.cli, env, project_a, options.target), options.target),
                 identities_after_update, (project_a / "uap.lock").read_bytes(),
@@ -268,6 +276,8 @@ def main():
                 identities(inventory(options.cli, env, project_a, options.target), options.target),
                 identities_after_update, (project_a / "uap.lock").read_bytes(),
                 pinned_after_update, "remove B")
+            if (project_a / "uap.toml").read_bytes() != manifest_after_update:
+                raise AssertionError("Project B remove rewrote Project A portable manifest")
             run(env, project_a, "remove A", "remove", "marketing-kit", *scoped)
             if identities(inventory(options.cli, env, project_a, options.target), options.target):
                 raise AssertionError("Project A retains root or mandatory children after remove")
@@ -312,6 +322,7 @@ def main():
             if lock_ids(user_portable) != expected_pins:
                 raise AssertionError("User update changed mandatory signed pins")
             user_lock_after_update = (user_portable / "uap.lock").read_bytes()
+            user_manifest_after_update = (user_portable / "uap.toml").read_bytes()
             run(env, project_a, "User repair intact", "repair", "marketing-kit",
                 "--target", options.target, *user_scoped)
             if user_inventory() != user_after_update:
@@ -339,7 +350,11 @@ def main():
                 inventory(options.cli, env_c, project_c, options.target, "user"),
                 options.target, "user")
             check_cold_restore(restored_user_c, user_after_update, user_lock_after_update,
-                               (user_portable_c / "uap.lock").read_bytes(), "User C")
+                               (user_portable_c / "uap.lock").read_bytes(),
+                               user_manifest_after_update, (user_portable_c / "uap.toml").read_bytes(),
+                               "User C")
+            if (user_portable / "uap.toml").read_bytes() != user_manifest_after_update:
+                raise AssertionError("User C restore rewrote User A portable manifest")
             if user_inventory() != user_after_update:
                 raise AssertionError("User C restore mutated User A installations")
             if (user_portable / "uap.lock").read_bytes() != user_lock_after_update:
@@ -363,6 +378,8 @@ def main():
                 raise AssertionError("User C remove mutated User A installations")
             if (user_portable / "uap.lock").read_bytes() != user_lock_after_update:
                 raise AssertionError("User C remove rewrote User A signed lock")
+            if (user_portable / "uap.toml").read_bytes() != user_manifest_after_update:
+                raise AssertionError("User C remove rewrote User A portable manifest")
             # Codex user plugin dependencies require genuine external native removal.
             # Reuse the audited, pinned Codex CLI path and exact native absence oracle.
             user_remove_attestation = ()

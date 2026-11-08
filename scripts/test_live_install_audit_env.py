@@ -258,16 +258,23 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     for i, dist in enumerate(sorted(runner["EXPECTED"]))}
         restored = {dist: f"B-{i}"
                     for i, dist in enumerate(sorted(runner["EXPECTED"]))}
-        check(restored, original, b"pinned", b"pinned", "User B")
+        check(restored, original, b"pinned", b"pinned",
+              b"portable", b"portable", "User B")
         incomplete = dict(restored)
         incomplete.pop(next(iter(incomplete)))
         with self.assertRaisesRegex(AssertionError, "mandatory signed closure"):
-            check(incomplete, original, b"pinned", b"pinned", "User B")
+            check(incomplete, original, b"pinned", b"pinned",
+                  b"portable", b"portable", "User B")
         reused = {**restored, next(iter(restored)): next(iter(original.values()))}
         with self.assertRaisesRegex(AssertionError, "reused installation IDs"):
-            check(reused, original, b"pinned", b"pinned", "User B")
+            check(reused, original, b"pinned", b"pinned",
+                  b"portable", b"portable", "User B")
         with self.assertRaisesRegex(AssertionError, "modified pinned lock"):
-            check(restored, original, b"pinned", b"tampered", "User B")
+            check(restored, original, b"pinned", b"tampered",
+                  b"portable", b"portable", "User B")
+        with self.assertRaisesRegex(AssertionError, "modified portable manifest"):
+            check(restored, original, b"pinned", b"pinned",
+                  b"portable", b"tampered", "User B")
 
     def test_marketing_kit_lock_guard_rejects_duplicate_or_unidentified_pins(self):
         # Comparing lock keys as a set can hide a duplicate signed package.
