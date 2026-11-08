@@ -280,7 +280,12 @@ function preservesRiskEvidence(old: SkillSpectorRecord, signed: SkillSpectorReco
     finding.match_fingerprint ?? null,
     // Without a stable fingerprint, retain the observed message and positions.
     finding.match_fingerprint ? null : finding.message,
-    finding.match_fingerprint ? null : (finding.occurrences ?? []),
+    // Scanner versions generate different finding_id values for the same
+    // occurrence. Compare immutable source coordinates, never ephemeral IDs.
+    finding.match_fingerprint ? null : (finding.occurrences ?? []).map(occurrence => [
+      occurrence.path, occurrence.line ?? null, occurrence.end_line ?? null,
+      occurrence.start_column ?? null, occurrence.end_column ?? null,
+    ]),
   ]);
   const available = new Map<string, number>();
   for (const finding of signed.findings) {
