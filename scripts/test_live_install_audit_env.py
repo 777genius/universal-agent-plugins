@@ -2418,6 +2418,68 @@ class CrossPlatformPublishedProofRegressions(unittest.TestCase):
                                  else "package-installed-native-unqualified")
 
 
+    def test_scoped_file_capture_reads_native_json_without_pipe_wait(self):
+        audit = load_audit()
+        with TemporaryDirectory() as scratch:
+            result_json = {"schema_version": 1, "result": "success"}
+            def completed(*_args, **kwargs):
+                self.assertNotIn("capture_output", kwargs)
+                self.assertEqual(kwargs["timeout"], 7)
+                self.assertTrue(kwargs["stdout"].seekable())
+                self.assertTrue(kwargs["stderr"].seekable())
+                kwargs["stdout"].write(json.dumps(result_json).encode("utf-8"))
+                kwargs["stderr"].write(b"native child stderr")
+                return subprocess.CompletedProcess(["agentplugins"], 0)
+            with patch.object(audit.subprocess, "run", side_effect=completed):
+                actual = audit.call(["agentplugins", "add", "firebase"],
+                                    {"TEMP": scratch}, scratch, timeout=7,
+                                    capture_files=True)
+            self.assertEqual(actual["exit_code"], 0)
+            self.assertFalse(actual["timeout"])
+            self.assertEqual(actual["_json"], result_json)
+            self.assertEqual(actual["stderr_tail"], "native child stderr")
+            with patch.object(audit.subprocess, "run", side_effect=subprocess.TimeoutExpired(
+                    ["agentplugins", "add", "firebase"], 7)):
+                actual = audit.call(["agentplugins"], {"TEMP": scratch}, scratch,
+                                    timeout=7, capture_files=True)
+            self.assertIsNone(actual["exit_code"])
+            self.assertTrue(actual["timeout"])
+            def oversized(*_args, **kwargs):
+                kwargs["stdout"].write(b"x" * ((1 << 20) + 1))
+                return subprocess.CompletedProcess(["agentplugins"], 0)
+            with patch.object(audit.subprocess, "run", side_effect=oversized):
+                actual = audit.call(["agentplugins"], {"TEMP": scratch}, scratch,
+                                    capture_files=True)
+            self.assertIsNone(actual["exit_code"])
+            self.assertIsNone(actual["_json"])
+            self.assertEqual(actual["stderr_tail"], "bounded native output capture exceeded")
+            for payload in (b"invalid json", b'{"result":"failed"}'):
+                def invalid(*_args, **kwargs):
+                    kwargs["stdout"].write(payload)
+                    return subprocess.CompletedProcess(["agentplugins"], 0)
+                with patch.object(audit.subprocess, "run", side_effect=invalid):
+                    actual = audit.call(["agentplugins"], {"TEMP": scratch}, scratch,
+                                        capture_files=True)
+                self.assertIsNone(actual["exit_code"])
+                self.assertIsNone(actual["_json"])
+                self.assertEqual(actual["stderr_tail"], "native add success JSON unavailable")
+            def rejected(*_args, **kwargs):
+                kwargs["stdout"].write(b'{"result":"failed"}')
+                kwargs["stderr"].write(b"provider refused immutable source")
+                return subprocess.CompletedProcess(["agentplugins"], 1)
+            with patch.object(audit.subprocess, "run", side_effect=rejected):
+                actual = audit.call(["agentplugins"], {"TEMP": scratch}, scratch,
+                                    capture_files=True)
+            self.assertEqual(actual["exit_code"], 1)
+            self.assertEqual(actual["stderr_tail"], "provider refused immutable source")
+        with patch.object(audit.subprocess, "run",
+                          return_value=subprocess.CompletedProcess(
+                              ["agentplugins"], 0, stdout='{"result":"success"}',
+                              stderr="")) as run:
+            actual = audit.call(["agentplugins"], {}, ".", timeout=7)
+            self.assertEqual(actual["_json"], {"result": "success"})
+            self.assertTrue(run.call_args.kwargs["capture_output"])
+
     def test_published_windows_firebase_timeout_is_bounded_and_scoped(self):
         audit = load_audit()
         with patch.object(audit.sys, "platform", "win32"):
