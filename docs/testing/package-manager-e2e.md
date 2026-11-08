@@ -179,14 +179,17 @@ run on a supported CI host is separate evidence for that host.
 
 ## CI and local macOS execution
 
-[`Package manager E2E`](../../.github/workflows/package-manager-e2e.yml) runs the
-full command on hosted Ubuntu 24.04, Windows 2025, macOS 15 on Apple Silicon
-(`macos-15`) and macOS 15 on Intel (`macos-15-intel`) when relevant source/test files change.
+[`Package manager E2E`](../../.github/workflows/package-manager-e2e.yml) runs
+the **same existing source-built** graph, Project/User isolation, update, repair,
+cold restore, rollback and foreign-ownership catalog. On relevant ready PRs it
+covers hosted Ubuntu 24.04, Windows 2025, macOS 15 Apple Silicon
+(`macos-15`) and Intel (`macos-15-intel`). On a relevant merge to `main`,
+manual dispatch or the weekly deep audit it also adds Linux ARM64
+(`ubuntu-24.04-arm`) and Windows ARM64 (`windows-11-arm`).
 While a PR is **draft**, only the quick Python evidence/CI-policy preflight runs;
-ordinary core tests are supplied by the separate Core fast workflow. Marking a
-PR **ready for review** runs the complete four-platform matrix, as does each
-subsequent code push while it remains ready. A relevant merge into `main`
-always gets a separate complete matrix, and manual dispatch remains available.
+ordinary core tests are supplied by the separate Core fast workflow. Moving a
+PR to **ready for review** runs the four-platform full qualification.
+A relevant merge to `main` runs all six.
 Moving a PR back to draft is not a substitute for final-head qualification.
 Superseded runs for the same PR/ref cancel automatically; jobs have a generous
 hang limit, retain reports and logs, and need no account secrets.
@@ -212,6 +215,37 @@ Success is exit code 0 with `suite: full`, `status: pass`,
 `full_qualification: true` and `source_unchanged_during_run: true` in the report.
 The reported platform must be Darwin for macOS evidence; a Linux or Windows
 result does not qualify a Mac.
+
+### Published installer and native-client checks (separate evidence)
+
+The [Native Installer](../../.github/workflows/agentplugins-native-install.yml)
+workflow installs the **current public stable** native binary from its official
+release on the six OS targets above. A single
+[version resolver](../../.github/workflows/agentplugins-published-version.yml)
+first binds the GitHub public non-prerelease tag to the exact npm version.
+This version is *not* the source-built package-manager executable.
+
+The [Windows published native-client E2E](../../.github/workflows/agentplugins-published-windows-audit.yml)
+and [macOS ARM64 published native-client E2E](../../.github/workflows/agentplugins-published-macos-audit.yml)
+reuse `scripts/live-install-audit.py`, real pinned vendor CLIs and independent
+immutable source/lock/native/cleanup proof. Draft PRs run a 5-agent × 2-source
+smoke; ready PRs also cover Cline, Kimi, Qoder and Pi project Skills with
+2 sources each. A relevant merge to `main` exercises all **30 immutable
+sources**, including Git-pinned packages, for each eligible native lane; weekly
+runs use 20 sources and manual dispatch allows 2, 20 or 30. Original case JSON
+is uploaded on both PASS and failure. Unsupported Pi generic plugins are
+not a qualifying lane.
+
+The two [Linux published-release catalogs](../../.github/workflows/agentplugins-published-catalog-audit.yml)
+([additional clients](../../.github/workflows/agentplugins-published-other-clients-audit.yml))
+retain their own real-client source counts and expected negative outcomes.
+Published client qualification also runs after a successful npm publisher
+workflow and periodically on the selected current stable public release.
+GitHub runners on secondary architectures validate the *installer and source
+package-manager*; they do **not** automatically prove a real vendor's native
+MCP activation. The separate [Native Client Runtime](../../.github/workflows/agentplugins-native-clients.yml)
+continues its existing weekly local loopback MCP and native client validation;
+external authenticated MCP/model calls are outside this evidence.
 
 ## Adding a scenario
 

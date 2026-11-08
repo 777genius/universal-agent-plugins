@@ -380,7 +380,7 @@ func selectBoundClient(
 		return client, nil
 	}
 	if strings.EqualFold(strings.TrimSpace(opts.target), "openai") {
-		return domain.DetectedClient{}, detectedMap, fmt.Errorf("target %q is ambiguous; use --target codex or --target chatgpt", opts.target)
+		return domain.DetectedClient{}, detectedMap, fmt.Errorf("target %q is ambiguous; use --target codex or --target chatgptweb", opts.target)
 	}
 	if target := normalizeTarget(opts.target); target != "" {
 		client, err := choose(target)

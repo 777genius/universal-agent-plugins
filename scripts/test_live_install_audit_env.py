@@ -68,6 +68,28 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "foreign content modified"):
                 runner["check_foreign"]([(marker, expected)], root)
 
+    def test_published_windows_runner_scratch_is_real_absolute_and_ci_only(self):
+        audit = load_audit()
+        with TemporaryDirectory() as scratch:
+            with patch.object(audit.sys, "platform", "win32"):
+                with patch.dict(audit.os.environ, {
+                        "GITHUB_ACTIONS": "true", "RUNNER_TEMP": scratch}):
+                    self.assertEqual(audit.published_audit_temp_parent(), scratch)
+                    with patch.object(audit.Path, "is_symlink", return_value=True):
+                        with self.assertRaisesRegex(RuntimeError, "redirected"):
+                            audit.published_audit_temp_parent()
+                with patch.dict(audit.os.environ, {
+                        "GITHUB_ACTIONS": "false", "RUNNER_TEMP": scratch}):
+                    self.assertIsNone(audit.published_audit_temp_parent())
+                with patch.dict(audit.os.environ, {
+                        "GITHUB_ACTIONS": "true", "RUNNER_TEMP": "relative/scratch"}):
+                    with self.assertRaisesRegex(RuntimeError, "redirected"):
+                        audit.published_audit_temp_parent()
+            with patch.object(audit.sys, "platform", "darwin"):
+                with patch.dict(audit.os.environ, {
+                        "GITHUB_ACTIONS": "true", "RUNNER_TEMP": scratch}):
+                    self.assertIsNone(audit.published_audit_temp_parent())
+
     def test_bootstrap_refusal_preserves_index_source_and_real_identity(self):
         # BUG-053: the original blocked ZIPs had 30 status placeholders but
         # omitted their source and index, so fixture slots could not be audited.
@@ -1261,7 +1283,9 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             home = Path(temporary) / "home"
             profile = home / ".qoder"
             profile.mkdir(parents=True)
-            env = {"QODER_CONFIG_DIR": str(profile)}
+            # macOS /var may resolve to /private/var; the production probe
+            # requires the same canonical directory as isolated_client_env.
+            env = {"QODER_CONFIG_DIR": str(profile.resolve(strict=True))}
             native = str(Path(temporary) / "trusted-qodercli")
             def probe(rows, code=0):
                 return {"exit_code": code, "_json": rows}
@@ -2238,6 +2262,284 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             self.assertFalse(hooks.is_symlink())
             self.assertTrue(hooks.resolve().is_relative_to(case.resolve()))
             self.assertTrue((project / ".git").is_dir())
+
+
+
+class CrossPlatformPublishedProofRegressions(unittest.TestCase):
+    """Keep raw published client proofs honest on ARM and Windows runners."""
+
+    def test_windows_qoder_cache_and_log_paths_are_passive_but_settings_are_not(self):
+        audit = load_audit()
+        for relative in ("plugins/cache/local/atlassian/0.1.0/plugin.json",
+                         "logs/runs/session-1/manifest.json"):
+            self.assertTrue(audit.passive_native_path("qoder", relative), relative)
+        # Only Windows treats backslashes as path separators. A POSIX
+        # literal-backslash filename is not a passive managed cache.
+        for relative in (r"plugins\cache\local\atlassian\0.1.0\plugin.json",
+                         r"logs\runs\session-1\manifest.json"):
+            self.assertEqual(audit.passive_native_path("qoder", relative),
+                             os.name == "nt", relative)
+        self.assertEqual(
+            audit.passive_native_path("codex", r"plugins\cache\example.json"),
+            os.name == "nt")
+        for relative in ("settings.json", r"plugins\installed_plugins_v2.json",
+                         "plugins/installed_plugins_v2.json"):
+            self.assertFalse(audit.passive_native_path("qoder", relative), relative)
+
+    def test_posix_literal_backslashes_cannot_hide_active_qoder_state(self):
+        if os.name == "nt":
+            self.skipTest("Windows cannot create literal backslash filenames")
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary) / ".qoder"
+            root.mkdir()
+            disguised = root / r"plugins\cache\managed.json"
+            disguised.write_text('{"plugins":{"atlassian":{"enabled":true}}}',
+                                 encoding="utf-8")
+            observed = f"{root.name}/{disguised.name}"
+            self.assertFalse(audit.passive_native_path("qoder", disguised.name))
+            self.assertEqual(
+                audit.native_identity_residuals(
+                    [root], "atlassian", [observed], "qoder"),
+                [observed])
+
+    def test_qoder_profile_requires_same_canonical_disposable_root(self):
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            home = root / "home"
+            profile = home / ".qoder"
+            profile.mkdir(parents=True)
+            trusted_binary = str(root / "trusted-qodercli")
+            env = {"QODER_CONFIG_DIR": str(profile.resolve(strict=True))}
+            rows = [{"id": "atlassian@local", "version": "0.1.0"}]
+            with (patch.dict(audit.AGENT_BINARIES, {"qodercli": trusted_binary}, clear=True),
+                  patch.object(audit, "call", return_value={"exit_code": 0, "_json": rows}) as probe):
+                self.assertEqual(audit.qoder_native_plugin_state(
+                    home, env, root, "atlassian", "0.1.0"), {"status": "registered"})
+                self.assertEqual(probe.call_args.args[0][2], str(profile))
+                self.assertEqual(audit.qoder_native_plugin_state(
+                    home, {"QODER_CONFIG_DIR": str(root / "other")},
+                    root, "atlassian", "0.1.0")["status"], "unqualified-prerequisites")
+
+    def test_prepared_only_opencode_config_is_not_native_pass(self):
+        # Real published 0.1.101 can write opencode.json while all components
+        # are reported as prepared, never native. Disk attribution is not activation.
+        audit = load_audit()
+        matched = [{"name": "atlassian", "installation_id": "frozen",
+                    "clients": [{"client_id": "opencode", "verification": "installation_verified"}]}]
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            config = root / "plugin-00/home/.config/opencode/opencode.json"
+            state = {"installed": False}
+
+            def fake_call(argv, _env, _cwd, timeout=105):
+                operation = argv[1]
+                if operation == "add":
+                    if not state["installed"]:
+                        config.parent.mkdir(parents=True, exist_ok=True)
+                        config.write_text('{"mcp":{"atlassian":{"type":"local"}}}')
+                    state["installed"] = True
+                elif operation == "remove":
+                    config.unlink()
+                    state["installed"] = False
+                return {"exit_code": 0, "stdout_tail": "", "stderr_tail": "",
+                        "timeout": False,
+                        "_json": ({"data": {"actions": [
+                            {"component_support": [{"name": "atlassian", "support": "prepared"}]}
+                        ]}} if operation == "add" else
+                                  {"data": {"installations": matched if state["installed"] else []}})}
+
+            with (patch.object(audit, "call", side_effect=fake_call),
+                  patch.object(audit, "matching_installations", return_value=matched)):
+                row = audit.do_case("/unused/agentplugins", "opencode", "plugin",
+                                    "atlassian", 0, root, {})
+            self.assertTrue(row["prepared_components_only"])
+            self.assertTrue(row["native_identity_files"])
+            self.assertTrue(row["repeat_verified"])
+            self.assertTrue(row["removal_verified"])
+            self.assertEqual(row["status"], "prepared-lifecycle-passed")
+            self.assertNotEqual(row["status"], "passed")
+
+
+    def test_open_code_prepared_lifecycle_is_accepted_only_as_non_native_proof(self):
+        audit = load_audit()
+        row = {
+            "status": "prepared-lifecycle-passed", "kind": "plugin",
+            "target": "opencode", "source": "atlassian",
+            "prepared_components_only": True, "native_component_candidates": [],
+            "native_identity_files": ["opencode/opencode.json"],
+            "listed_identity": True, "repeat_verified": True,
+            "removal_verified": True, "native_residuals": [],
+            "post_remove_identity_registered": False,
+            "sentinels_preserved": True, "failed_install_residue": False,
+            "install": {"exit_code": 0}, "cleanup": {"exit_code": 0},
+        }
+        self.assertTrue(audit.expected_negative_coverage(row))
+        self.assertNotEqual(row["status"], "passed")
+        for key, bad in (
+                ("status", "passed"),
+                ("target", "qoder"),
+                ("prepared_components_only", False),
+                ("native_component_candidates", ["atlassian"]),
+                ("native_identity_files", ["outside/active.json"]),
+                ("post_remove_identity_registered", True),
+                ("listed_identity", False),
+                ("repeat_verified", False),
+                ("removal_verified", False),
+                ("native_residuals", ["opencode/settings.json"]),
+                ("sentinels_preserved", False),
+                ("failed_install_residue", True),
+                ("install", {"exit_code": 1}),
+                ("cleanup", {"exit_code": 1})):
+            with self.subTest(key=key):
+                self.assertFalse(audit.expected_negative_coverage({**row, key: bad}))
+        self.assertTrue(audit.expected_negative_coverage(
+            {**row, "source": "docker-hub", "native_identity_files": []}))
+        self.assertTrue(audit.expected_negative_coverage({
+            **row, "source": "cloudflare",
+            "native_identity_files": [
+                "opencode/opencode.json",
+                "opencode/skills/cloudflare/SKILL.md",
+                "opencode/skills/cloudflare/references/api.md"]}))
+        self.assertFalse(audit.expected_negative_coverage({
+            **row, "native_identity_files": ["opencode/../other.json"]}))
+
+    def test_kimi_windows_skill_downloads_exact_pinned_native_binary(self):
+        # Kimi's actual 2.3.2 Windows .exe is accepted by the released adapter;
+        # npm .cmd wrappers are not, so the audit must provision verified bytes.
+        import runpy
+        scripts = Path(__file__).resolve().parent
+        matrix = runpy.run_path(str(scripts / "run-native-client-matrix.py"))
+        self.assertEqual(matrix["PINS"]["windows-amd64"]["kimi"], (
+            "github", "MoonshotAI/kimi-code", "@moonshot-ai/kimi-code@2.3.2",
+            "kimi-code-win32-x64.zip",
+            "sha256:398fff295d3ddaffe4fbefd9586e6cdc3eacd67bdb4437a43184615a1934ee74",
+            "kimi.exe"))
+        workflow = (scripts.parent / ".github/workflows/agentplugins-published-windows-audit.yml").read_text()
+        self.assertIn('module.provision(module.PINS["windows-amd64"]["kimi"], target, "kimi")',
+                      workflow)
+        self.assertIn('binary != target / "kimi.exe"', workflow)
+        self.assertIn('Verified genuine Kimi 2.3.2 Windows executable, sha256 pinned', workflow)
+        self.assertIn('"$nativeBin" | Out-File -FilePath "$env:GITHUB_PATH"', workflow)
+        self.assertNotIn("$nativePackage = '@moonshot-ai/kimi-code@2.3.2'", workflow)
+
+
+    def test_codex_windows_cache_is_not_native_proof_but_real_uninstall_is(self):
+        audit = load_audit()
+        source = "github:example/agent-plugin@" + ("a" * 40)
+        matched = [{"name": "atlassian", "installation_id": "one",
+                    "clients": [{"client_id": "codex",
+                                 "verification": "installation_verified"}]}]
+        for native_removed in (False, True):
+            with self.subTest(native_removed=native_removed), TemporaryDirectory() as temp:
+                runroot = Path(temp).resolve()
+                cache = (runroot / "plugin-00/home/.codex/plugins/cache/agentplugins-123"
+                         / "atlassian/0.1.0/plugin.json")
+                installed = {"value": False}
+
+                def simulate(argv, _env, _cwd, timeout=105):
+                    command = argv[1]
+                    if command == "add":
+                        if not installed["value"]:
+                            cache.parent.mkdir(parents=True, exist_ok=True)
+                            cache.write_text('{"name": "atlassian"}')
+                        installed["value"] = True
+                    elif command == "remove":
+                        installed["value"] = False
+                    return {"exit_code": 0, "stdout_tail": "", "stderr_tail": "",
+                            "timeout": False,
+                            "_json": {"data": {"installations":
+                                              matched if installed["value"] else []}}}
+
+                with (patch.object(audit, "call", side_effect=simulate),
+                      patch.object(audit, "matching_installations", return_value=matched),
+                      patch.object(audit, "uninstall_native_codex_plugin",
+                                   return_value={"completed": native_removed})):
+                    row = audit.do_case(
+                        "/unused/agentplugins", "codex", "plugin", source, 0,
+                        runroot, {source: "atlassian"})
+                self.assertEqual(row["native_identity_files"], [])
+                self.assertTrue(row["repeat_verified"])
+                self.assertTrue(row["removal_verified"])
+                self.assertEqual(row["status"], "passed" if native_removed
+                                 else "package-installed-native-unqualified")
+
+
+    def test_scoped_file_capture_reads_native_json_without_pipe_wait(self):
+        audit = load_audit()
+        with TemporaryDirectory() as scratch:
+            result_json = {"schema_version": 1, "result": "success"}
+            def completed(*_args, **kwargs):
+                self.assertNotIn("capture_output", kwargs)
+                self.assertEqual(kwargs["timeout"], 7)
+                self.assertTrue(kwargs["stdout"].seekable())
+                self.assertTrue(kwargs["stderr"].seekable())
+                kwargs["stdout"].write(json.dumps(result_json).encode("utf-8"))
+                kwargs["stderr"].write(b"native child stderr")
+                return subprocess.CompletedProcess(["agentplugins"], 0)
+            with patch.object(audit.subprocess, "run", side_effect=completed):
+                actual = audit.call(["agentplugins", "add", "firebase"],
+                                    {"TEMP": scratch}, scratch, timeout=7,
+                                    capture_files=True)
+            self.assertEqual(actual["exit_code"], 0)
+            self.assertFalse(actual["timeout"])
+            self.assertEqual(actual["_json"], result_json)
+            self.assertEqual(actual["stderr_tail"], "native child stderr")
+            with patch.object(audit.subprocess, "run", side_effect=subprocess.TimeoutExpired(
+                    ["agentplugins", "add", "firebase"], 7)):
+                actual = audit.call(["agentplugins"], {"TEMP": scratch}, scratch,
+                                    timeout=7, capture_files=True)
+            self.assertIsNone(actual["exit_code"])
+            self.assertTrue(actual["timeout"])
+            def oversized(*_args, **kwargs):
+                kwargs["stdout"].write(b"x" * ((1 << 20) + 1))
+                return subprocess.CompletedProcess(["agentplugins"], 0)
+            with patch.object(audit.subprocess, "run", side_effect=oversized):
+                actual = audit.call(["agentplugins"], {"TEMP": scratch}, scratch,
+                                    capture_files=True)
+            self.assertIsNone(actual["exit_code"])
+            self.assertIsNone(actual["_json"])
+            self.assertEqual(actual["stderr_tail"], "bounded native output capture exceeded")
+            for payload in (b"invalid json", b'{"result":"failed"}'):
+                def invalid(*_args, **kwargs):
+                    kwargs["stdout"].write(payload)
+                    return subprocess.CompletedProcess(["agentplugins"], 0)
+                with patch.object(audit.subprocess, "run", side_effect=invalid):
+                    actual = audit.call(["agentplugins"], {"TEMP": scratch}, scratch,
+                                        capture_files=True)
+                self.assertIsNone(actual["exit_code"])
+                self.assertIsNone(actual["_json"])
+                self.assertEqual(actual["stderr_tail"], "native add success JSON unavailable")
+            def rejected(*_args, **kwargs):
+                kwargs["stdout"].write(b'{"result":"failed"}')
+                kwargs["stderr"].write(b"provider refused immutable source")
+                return subprocess.CompletedProcess(["agentplugins"], 1)
+            with patch.object(audit.subprocess, "run", side_effect=rejected):
+                actual = audit.call(["agentplugins"], {"TEMP": scratch}, scratch,
+                                    capture_files=True)
+            self.assertEqual(actual["exit_code"], 1)
+            self.assertEqual(actual["stderr_tail"], "provider refused immutable source")
+        with patch.object(audit.subprocess, "run",
+                          return_value=subprocess.CompletedProcess(
+                              ["agentplugins"], 0, stdout='{"result":"success"}',
+                              stderr="")) as run:
+            actual = audit.call(["agentplugins"], {}, ".", timeout=7)
+            self.assertEqual(actual["_json"], {"result": "success"})
+            self.assertTrue(run.call_args.kwargs["capture_output"])
+
+    def test_published_windows_firebase_timeout_is_bounded_and_scoped(self):
+        audit = load_audit()
+        with patch.object(audit.sys, "platform", "win32"):
+            for target in ("codex", "claude", "opencode", "gemini",
+                           "copilot", "cline", "kimi", "qoder", "pi"):
+                self.assertEqual(audit.install_case_timeout(target, "plugin", "firebase"), 180)
+                self.assertEqual(audit.install_case_timeout(target, "plugin", "docker-hub"), 105)
+                self.assertEqual(audit.install_case_timeout(target, "skill", "firebase"), 105)
+        with patch.object(audit.sys, "platform", "darwin"):
+            self.assertEqual(audit.install_case_timeout("codex", "plugin", "firebase"), 105)
+        with patch.object(audit.sys, "platform", "linux"):
+            self.assertEqual(audit.install_case_timeout("claude", "plugin", "firebase"), 105)
 
 
 if __name__ == "__main__":

@@ -16,15 +16,17 @@ const expectedProfile = {
   id: 'static-cohort-2.13.3-v1',
   digest: 'sha256:ad4477fa9f9d61952c5fa929fc6810b0792433a1494102308a1e8e183ba6fe74',
 };
-const sourcePins = new Map<string, readonly string[]>([
+const sourcePins = new Map<string, readonly [string, readonly string[], string]>([
   ['plugin:community:3b7213be12f01b1365846d8ba375d59f/sitemap-manager',
-    ['indranilbanerjee/digital-marketing-pro', 'cc45ca06eaf48abde3bb60fb79d31c41229c58db', 'skills/sitemap-manager']],
+    ['indranilbanerjee/digital-marketing-pro',
+      ['cc45ca06eaf48abde3bb60fb79d31c41229c58db', 'be4142b25bba6d424962a7788432dd813e6b768c'],
+      'skills/sitemap-manager']],
   ['plugin:community:4d73239dc1cf321957d109bdf29c27dd/sitemap-manager',
-    ['teachskillofskills-ai/digitalmarketingpro-techshu', 'e97a5bdd91601024a9cfa870807a8d3c81dc3caf', 'skills/sitemap-manager']],
+    ['teachskillofskills-ai/digitalmarketingpro-techshu', ['e97a5bdd91601024a9cfa870807a8d3c81dc3caf'], 'skills/sitemap-manager']],
   ...['braids', 'braids-audit', 'braids-claims', 'braids-depth', 'braids-help', 'braids-review', 'braids-risk']
-    .map((name): [string, string[]] => [
+    .map((name): [string, readonly [string, readonly string[], string]] => [
       'plugin:community:b0fa2f8fff3c4570b38ffe3e0c1401a7/' + name,
-      ['vyas-devgna/braids', '79c913e9d27854d88c7ee58aa9906bd2b45001b4', 'skills/' + name],
+      ['vyas-devgna/braids', ['79c913e9d27854d88c7ee58aa9906bd2b45001b4'], 'skills/' + name],
     ]),
 ]);
 
@@ -162,7 +164,8 @@ function validateRecords(release: Json, pointer: Json): VerifiedCohort {
         raw.kind !== 'plugin_skill' || raw.plugin_path !== '' ||
         raw.status !== 'complete' || coverage.status !== 'complete' ||
         !same(raw.scanner, expectedScanner) || !same(raw.profile, expectedProfile) ||
-        source.repository !== expected[0] || source.revision !== expected[1] ||
+        source.repository !== expected[0] || typeof source.revision !== 'string' ||
+        !expected[1].includes(source.revision) ||
         source.path !== expected[2] || !digestPattern.test(String(source.content_digest)) ||
         pin.id !== raw.id ||
         !/^community:[0-9a-f]{32}$/.test(String(pin.signed_package_id)) ||

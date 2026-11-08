@@ -201,6 +201,27 @@ class QoderCycleContracts(unittest.TestCase):
             aggregate(bodies, 0, change)
             with self.subTest(fault=fault), self.assertRaises(ValueError): cycle.members(bodies, SOURCE)
 
+    def test_project_guidance_accepted_but_unscoped_or_malformed_guidance_refused(self):
+        for stage in ("add-a", "repeat-add-a"):
+            bodies = container()
+            def transform(rows, changes):
+                value = next(row["value"] for row in rows if row["stage"] == stage)
+                result = json.loads(base64.b64decode(value["stdout"]["body"]))
+                output = result["data"] if stage == "repeat-add-a" else result["data"]["targets"][0]["output"]
+                output.update(changes)
+                value["stdout"] = stream(raw(result))
+            guidance = dict(scope="project", readiness="needs_action",
+                            next_actions=[dict(code="verify_native", actor="native_client", message="Restart Qoder in this project")])
+            aggregate(bodies, 0, lambda rows: transform(rows, guidance))
+            self.assertTrue(cycle.members(bodies, SOURCE)["runtime_attempt_complete"])
+            for field, invalid in (("scope", "user"), ("readiness", "activated"),
+                                   ("next_actions", {"code": "verify_native"}),
+                                   ("next_actions", [dict(code=True, actor="native_client", message="Restart Qoder")])):
+                refused = copy.deepcopy(bodies)
+                aggregate(refused, 0, lambda rows: transform(rows, {field: invalid}))
+                with self.subTest(stage=stage, field=field, invalid=repr(invalid)), self.assertRaises(ValueError):
+                    cycle.members(refused, SOURCE)
+
     def test_measured_single_noop_and_grouped_lifecycle_sources_do_not_mix(self):
         for fault in ("grouped-repeat", "single-add", "single-operation", "single-nochange", "repeat-source", "repair-source", "remove-source"):
             bodies = container()

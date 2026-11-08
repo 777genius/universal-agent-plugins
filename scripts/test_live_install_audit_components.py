@@ -91,19 +91,113 @@ class PublishedCatalogNativeProofTest(unittest.TestCase):
                            ("status", "passed")):
             self.assertFalse(audit.expected_negative_coverage({**row, key: value}))
 
-    def test_prepared_negative_requires_exact_source_and_verified_lifecycle(self):
+    def test_prepared_negative_requires_full_lifecycle_and_never_native_pass(self):
         audit = load_audit()
         case = {"status": "prepared-lifecycle-passed", "kind": "plugin",
                 "target": "opencode", "source": "docker-hub",
-                "prepared_components_only": True, "native_identity_files": [],
-                "repeat_verified": True, "removal_verified": True,
-                "sentinels_preserved": True, "failed_install_residue": False}
+                "prepared_components_only": True, "native_component_candidates": [],
+                "native_identity_files": [], "native_residuals": [],
+                "listed_identity": True, "repeat_verified": True,
+                "removal_verified": True, "sentinels_preserved": True,
+                "post_remove_identity_registered": False,
+                "failed_install_residue": False,
+                "install": {"exit_code": 0}, "cleanup": {"exit_code": 0}}
         self.assertTrue(audit.expected_negative_coverage(case))
-        for key, value in (("source", "atlassian"), ("target", "claude"),
+        # A fully verified prepared lifecycle is a valid *non-native* result
+        # regardless of source, including a harmless OpenCode config write.
+        self.assertTrue(audit.expected_negative_coverage({
+            **case, "source": "atlassian",
+            "native_identity_files": ["opencode/opencode.json"]}))
+        self.assertTrue(audit.expected_negative_coverage({
+            **case, "source": "cloudflare",
+            "native_identity_files": ["opencode/opencode.json",
+                                      "opencode/skills/cloudflare/SKILL.md",
+                                      "opencode/skills/cloudflare/references/readme.md"]}))
+        for key, value in (("status", "passed"), ("target", "claude"),
                            ("native_identity_files", ["native.json"]),
+                           ("post_remove_identity_registered", True),
+                           ("native_component_candidates", ["dockerhub"]),
+                           ("listed_identity", False),
+                           ("native_residuals", ["opencode/active.json"]),
+                           ("install", {"exit_code": 1}),
+                           ("cleanup", {"exit_code": 1}),
                            ("repeat_verified", False), ("removal_verified", False),
                            ("prepared_components_only", False)):
             self.assertFalse(audit.expected_negative_coverage({**case, key: value}))
+
+
+    def test_known_unqualified_opencode_sources_are_negative_not_native(self):
+        audit = load_audit()
+        row = {"status": "package-installed-native-unqualified",
+               "kind": "plugin", "target": "opencode",
+               "source": "github:itential/builder-skills@2ccdf77358b018ad4df125422a067fe84e63de1d",
+               "prepared_components_only": False, "native_component_candidates": [],
+               "native_identity_files": [], "listed_identity": True,
+               "repeat_verified": True, "removal_verified": True,
+               "post_remove_identity_registered": False,
+               "native_residuals": [], "sentinels_preserved": True,
+               "failed_install_residue": False,
+               "install": {"exit_code": 0}, "cleanup": {"exit_code": 0}}
+        self.assertTrue(audit.expected_negative_coverage(row, "agentplugins 0.1.95"))
+        self.assertTrue(audit.expected_negative_coverage(row, "agentplugins 0.1.101"))
+        self.assertFalse(audit.expected_negative_coverage(row))
+        self.assertFalse(audit.expected_negative_coverage(row, "agentplugins 0.1.102"))
+        for key, bad in (
+            ("source", "github:unknown/plugin@" + "a" * 40),
+            ("status", "passed"),
+            ("native_identity_files", ["opencode/opencode.json"]),
+            ("native_component_candidates", ["builder-agent"]),
+            ("repeat_verified", False),
+            ("native_residuals", ["opencode/registry.json"]),
+            ("post_remove_identity_registered", True)):
+            with self.subTest(key=key):
+                self.assertFalse(audit.expected_negative_coverage(
+                    {**row, key: bad}, "agentplugins 0.1.101"))
+
+    def test_pi_explicit_unsupported_refusals_never_become_native_pass(self):
+        audit = load_audit()
+        row = {"kind": "plugin", "target": "pi", "source": "atlassian",
+               "status": "documented-or-source-unsupported",
+               "native_file_delta": 0, "native_identity_files": [],
+               "listed_identity": False, "failed_install_registered": False,
+               "failed_install_residue": False, "sentinels_preserved": True,
+               "install": {"exit_code": 1, "stderr_tail":
+                           "release does not support complete target set; missing pi"}}
+        self.assertTrue(audit.expected_negative_coverage(row))
+        self.assertTrue(audit.expected_negative_coverage({
+            **row, "install": {"exit_code": 1, "stderr_tail":
+                              "pi package manifest overrides selected extension discovery"}}))
+        for key, bad in (("target", "codex"), ("status", "passed"),
+                         ("native_file_delta", 1), ("listed_identity", True),
+                         ("failed_install_registered", True),
+                         ("native_identity_files", ["pi/active.json"]),
+                         ("sentinels_preserved", False),
+                         ("install", {"exit_code": 0, "stderr_tail": "missing pi"}),
+                         ("install", {"exit_code": 1, "stderr_tail": "network timeout"})):
+            with self.subTest(key=key, bad=bad):
+                self.assertFalse(audit.expected_negative_coverage({**row, key: bad}))
+
+    def test_grok_vendor_user_guide_is_not_an_active_plugin_registration(self):
+        audit = load_audit()
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp) / ".grok"
+            docs = root / "docs/user-guide"
+            docs.mkdir(parents=True)
+            ignored = ["05-configuration.md", "16-subagents.md"]
+            for name in ignored:
+                (docs / name).write_text("name: documentation\\n", encoding="utf-8")
+            active = root / "plugins/documentation/plugin.json"
+            active.parent.mkdir(parents=True)
+            active.write_text('{"name":"documentation"}')
+            observed = [".grok/docs/user-guide/" + name for name in ignored]
+            observed.append(".grok/plugins/documentation/plugin.json")
+            self.assertEqual(audit.native_identity_residuals(
+                [root], "documentation", observed, "grok"),
+                [".grok/plugins/documentation/plugin.json"])
+            self.assertFalse(audit.passive_native_path(
+                "grok", "docs/user-guide/custom-plugin.json"))
+            self.assertFalse(audit.passive_native_path(
+                "grok", "plugins/documentation/plugin.json"))
 
 
 if __name__ == "__main__":

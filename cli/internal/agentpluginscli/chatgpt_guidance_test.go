@@ -50,7 +50,7 @@ func TestContext7ChatGPTOnlyActionRequiredIsSuccess(t *testing.T) {
 	f, d, a := context7GuidedFixture(t)
 	f.app.Detector = staticDetector{clients: []domain.DetectedClient{fixtureClient(t, domain.ClientChatGPT)}}
 	before, _ := json.Marshal(d.bundle)
-	out, _, err := f.execute(false, "add", "context7", "--target", "chatgpt", "--format", "json")
+	out, _, err := f.execute(false, "add", "context7", "--target", "chatgptweb", "--format", "json")
 	if err != nil {
 		t.Fatalf("chatgpt-only setup should exit zero: %s %v", out, err)
 	}
@@ -71,7 +71,7 @@ func TestContext7DeferredChatGPTSurvivesPeerActivationFailure(t *testing.T) {
 	f, _, _ := context7GuidedFixture(t)
 	f.app.Detector = staticDetector{clients: []domain.DetectedClient{fixtureClient(t, domain.ClientKiro), fixtureClient(t, domain.ClientChatGPT)}}
 	f.app.Lifecycle.Activator = &failAllCLIGroupActivator{}
-	out, _, err := f.execute(false, "add", "--no-save", "context7", "--target", "kiro,chatgpt")
+	out, _, err := f.execute(false, "add", "--no-save", "context7", "--target", "kiro,chatgptweb")
 	if err == nil {
 		t.Fatal("expected kiro activation failure")
 	}
@@ -107,7 +107,7 @@ func emittedRegistrationCommand(t *testing.T, action string) string {
 func TestContext7ResumeEmittedMixedCommandAndPreparedGuidance(t *testing.T) {
 	f, d, a := context7GuidedFixture(t)
 	before, _ := json.Marshal(d.bundle)
-	out, _, err := f.execute(false, "add", "--no-save", "context7-alias", "--target", "kiro,chatgpt", "--format", "json", "--scope", "user", "--plain", "--security-details", "--no-color")
+	out, _, err := f.execute(false, "add", "--no-save", "context7-alias", "--target", "kiro,chatgptweb", "--format", "json", "--scope", "user", "--plain", "--security-details", "--no-color")
 	if err != nil {
 		t.Fatalf("peer installation: %s %v", out, err)
 	}
@@ -126,7 +126,7 @@ func TestContext7ResumeEmittedMixedCommandAndPreparedGuidance(t *testing.T) {
 		}
 	}
 	command := emittedRegistrationCommand(t, action)
-	for _, flag := range []string{"context7-alias", "--target chatgpt", "--format=json", "--scope=user", "--plain=true", "--security-details=true", "--no-color=true"} {
+	for _, flag := range []string{"context7-alias", "--target chatgptweb", "--format=json", "--scope=user", "--plain=true", "--security-details=true", "--no-color=true"} {
 		if !strings.Contains(command, flag) {
 			t.Fatalf("lost %s: %s", flag, command)
 		}
@@ -243,7 +243,7 @@ func TestContext7InteractiveSelectionOnlyAppliesSelectedIntent(t *testing.T) {
 
 func TestContext7PreparedGuidanceAcrossLifecycle(t *testing.T) {
 	f, _, _ := context7GuidedFixture(t)
-	prepared, _, err := f.execute(false, "add", "context7", "--target", "chatgpt", "--chatgpt-app-id", fixturePersonalAppID)
+	prepared, _, err := f.execute(false, "add", "context7", "--target", "chatgptweb", "--chatgpt-app-id", fixturePersonalAppID)
 	if err != nil {
 		t.Fatalf("%s %v", prepared, err)
 	}
@@ -253,7 +253,7 @@ func TestContext7PreparedGuidanceAcrossLifecycle(t *testing.T) {
 		t.Fatalf("initial human guidance: %s", prepared)
 	}
 	for _, op := range []string{"add", "update", "repair"} {
-		out, _, err := f.execute(false, op, "context7", "--target", "chatgpt", "--format", "json")
+		out, _, err := f.execute(false, op, "context7", "--target", "chatgptweb", "--format", "json")
 		if err != nil {
 			t.Fatalf("%s: %s %v", op, out, err)
 		}
@@ -264,7 +264,7 @@ func TestContext7PreparedGuidanceAcrossLifecycle(t *testing.T) {
 }
 
 func TestContext7HumanPathsAcrossSingleAndMixedLifecycle(t *testing.T) {
-	for _, targets := range []string{"chatgpt", "kiro,chatgpt"} {
+	for _, targets := range []string{"chatgptweb", "kiro,chatgptweb"} {
 		t.Run(targets, func(t *testing.T) {
 			f, _, _ := context7GuidedFixture(t)
 			check := func(out string) {
@@ -346,6 +346,80 @@ func TestContext7HumanPathsAcrossSingleAndMixedLifecycle(t *testing.T) {
 	}
 }
 
+// This is a two-stage request, not two native installs: the Codex backend
+// gets an owned binding while ChatGPT Web remains a remote action until consent.
+func TestContext7ExplicitCodexAndChatGPTTwoStageInstall(t *testing.T) {
+	for _, targets := range []string{"codex,chatgptweb", "chatgpt,chatgptweb"} {
+		t.Run(targets, func(t *testing.T) {
+			f, directory, acquirer := context7GuidedFixture(t)
+			policy := &directory.bundle.Snapshot.Distributions[0].ReleasePolicies[0]
+			policy.Targets = append(policy.Targets, domain.DirectoryTarget{
+				Client: domain.ClientCodex, Scopes: []domain.InstallScope{domain.ScopeUser},
+				Delivery: "managed", Authentication: domain.AuthenticationRequirementRequired,
+			})
+			policy.CurrentEvidence = append(policy.CurrentEvidence, "materialized/codex")
+			evidence := directory.bundle.Snapshot.Evidence[0]
+			evidence.ID, evidence.Client = "materialized/codex", domain.ClientCodex
+			directory.bundle.Snapshot.Evidence = append(directory.bundle.Snapshot.Evidence, evidence)
+			f.app.Detector = staticDetector{clients: []domain.DetectedClient{
+				fixtureClient(t, domain.ClientCodex), fixtureClient(t, domain.ClientChatGPT),
+			}}
+			before, _ := json.Marshal(directory.bundle)
+			out, _, err := f.execute(false, "add", "context7", "--target", targets, "--format", "json")
+			if err == nil || !strings.Contains(err.Error(), "--no-save") {
+				t.Fatalf("saved mixed request must refuse before acquisition: %s %v", out, err)
+			}
+			state, _ := f.store.Load()
+			if len(state.Installations) != 0 || acquirer.verifiedCalls != 0 {
+				t.Fatalf("refused request mutated state or acquired source: %+v", state)
+			}
+			out, _, err = f.execute(false, "add", "context7", "--target", targets, "--no-save", "--format", "json")
+			if err != nil {
+				t.Fatalf("imperative mixed install failed: %s %v", out, err)
+			}
+			var response struct {
+				Data struct {
+					Status  string            `json:"status"`
+					Targets []addTargetResult `json:"targets"`
+				} `json:"data"`
+			}
+			if json.Unmarshal([]byte(out), &response) != nil ||
+				response.Data.Status != "completed_with_action_required" ||
+				len(response.Data.Targets) != 2 {
+				t.Fatalf("two-target status not explicit: %s", out)
+			}
+			var next string
+			for _, result := range response.Data.Targets {
+				if result.Target == "chatgpt" {
+					if result.Status != "action_required" {
+						t.Fatalf("remote ChatGPT claimed installed: %+v", result)
+					}
+					next = emittedRegistrationCommand(t, result.NextAction)
+				}
+			}
+			if !strings.Contains(next, "--target chatgptweb") || strings.Contains(next, "codex") {
+				t.Fatalf("resume must not reinstall Codex: %s", next)
+			}
+			state, _ = f.store.Load()
+			if len(state.Installations) != 1 || len(state.Installations[0].Clients) != 1 ||
+				!installationHasTarget(state.Installations[0], domain.ClientCodex, string(domain.ScopeUser)) ||
+				acquirer.verifiedCalls != 1 {
+				t.Fatalf("Codex must be the only installed peer: %+v calls=%d", state, acquirer.verifiedCalls)
+			}
+			out, _, err = f.execute(false, strings.Fields(next)...)
+			if err != nil {
+				t.Fatalf("ChatGPT registration resume failed: %s %v", out, err)
+			}
+			state, _ = f.store.Load()
+			after, _ := json.Marshal(directory.bundle)
+			if len(state.Installations) != 1 || len(state.Installations[0].Clients) != 2 ||
+				string(before) != string(after) || strings.Contains(out, fixturePersonalAppID) {
+				t.Fatalf("registration changed signed source or leaked credentials: %s %+v", out, state)
+			}
+		})
+	}
+}
+
 func TestContext7GuidedSelectionKeepsEligibleCodex(t *testing.T) {
 	f, d, _ := context7GuidedFixture(t)
 	snapshot := &d.bundle.Snapshot
@@ -385,7 +459,7 @@ func TestContext7GuidedSelectionKeepsEligibleCodex(t *testing.T) {
 		t.Fatalf("registration: %s %v", out, err)
 	}
 	command := emittedRegistrationCommand(t, out)
-	if strings.Contains(command, "codex") || strings.Contains(command, "kiro") || !strings.Contains(command, "--target chatgpt") {
+	if strings.Contains(command, "codex") || strings.Contains(command, "kiro") || !strings.Contains(command, "--target chatgptweb") {
 		t.Fatal(command)
 	}
 	state, _ := f.store.Load()

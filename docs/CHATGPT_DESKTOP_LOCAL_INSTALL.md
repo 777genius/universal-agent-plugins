@@ -1,11 +1,13 @@
 # Install UAP plugins in ChatGPT Desktop (local)
 
-ChatGPT Desktop's local Work/Codex plugin marketplace is distinct from **ChatGPT Web** and from the remote ChatGPT Apps / MCP connections. Universal Agent Plugins (UAP) uses the **existing Codex CLI target** for local Desktop plugins. It does not register a ChatGPT cloud app or grant workspace permissions.
+ChatGPT Desktop's local Work/Codex plugin marketplace is distinct from **ChatGPT Web** and from the remote ChatGPT Apps / MCP connections. The updated Universal Agent Plugins (UAP) CLI uses **`--target chatgpt`**, a user-facing alias routed through the **existing Codex CLI target** for local Desktop plugins. This does not create a second native installation. It does not register a ChatGPT cloud app or grant workspace permissions.
 
 ## Install a compatible plugin
 
+**Release-safe commands:** Until the updated CLI is publicly released and verified, use `--target codex` for local Desktop. An older published CLI interprets `--target chatgpt` as Web, not Desktop. All examples in this guide use the compatible `codex` target. After the updated CLI release, `--target chatgpt` will be the Desktop spelling and `--target chatgptweb` will select the remote Web app. Both `codex` and the new Desktop spelling use one local native backend.
+
 1. Install ChatGPT Desktop with local Work/Codex support and, for automatic native registration, the supported Codex CLI. You need to sign in to the desktop app yourself.
-2. In the [UAP plugin directory](https://universal-agent-plugins.com/plugins/), open an eligible plugin and expand **ChatGPT Desktop (local)**. This option only appears for a current, installable **Codex user-scope** release.
+2. In the [UAP plugin directory](https://universal-agent-plugins.com/plugins/), open an eligible plugin and choose **ChatGPT Desktop** in the agent selector. The optional Desktop guidance then appears below the command. **Until the updated selector is deployed, use the existing ChatGPT Desktop (local) instructions on the plugin page or its Codex CLI selector, and copy the `--target codex` command instead.** This option is enabled only for a current, installable **Codex user-scope** release; the separately listed **ChatGPT Web** option requires a verified remote app binding.
 3. Copy the exact command from that plugin's card. For example, an eligible Context7 release may use:
 
    `npx -y universal-agent-plugins add context7 --target codex`
@@ -30,7 +32,7 @@ This lists UAP-managed installations; for native Codex registration independentl
 
 `npx -y universal-agent-plugins remove <plugin-name> --target codex`
 
-Follow the CLI's exact manual uninstall/confirmation instructions when requested. UAP only removes its own managed marketplace entries and files; it must never overwrite another user's or organization's marketplace configuration.
+`--target codex` still selects Codex CLI, while `--target chatgpt` selects ChatGPT Desktop. Both use the same native plugin installation; do not run both variants to install twice. `--target chatgptweb` separately prepares a remote ChatGPT Web connection. The new `chatgpt` Desktop spelling is available **only after the CLI release containing this change**. Before that release, use `--target codex` and verify the installed plugin in Desktop. Follow the CLI's exact manual uninstall/confirmation instructions when requested. UAP only removes its own managed marketplace entries and files; it must never overwrite another user's or organization's marketplace configuration.
 
 ## Troubleshooting
 

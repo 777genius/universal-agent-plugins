@@ -5,6 +5,7 @@ on:
     paths:
       - 'landing/**'
       - 'scripts/marketing-kit-project-release-e2e.py'
+      - 'scripts/test_live_install_audit_env.py'
       - '.github/workflows/marketing-kit-project-release-e2e.yml'
   workflow_dispatch:
 

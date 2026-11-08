@@ -31,7 +31,7 @@ func TestDependencyAllClientsManualAndDetectionRefusals(t *testing.T) {
 	if _, _, err := f.execute(false, "deps", "lock", "--format", "json"); err == nil || !strings.Contains(err.Error(), "prepared manually") {
 		t.Fatalf("manual target refusal: %v", err)
 	}
-	if _, _, err := f.execute(false, "add", "github:acme/demo@0123456789012345678901234567890123456789", "--target", "chatgpt,codex", "--format", "json"); err == nil || !strings.Contains(err.Error(), "separately") {
+	if _, _, err := f.execute(false, "add", "github:acme/demo@0123456789012345678901234567890123456789", "--target", "chatgptweb,codex", "--format", "json"); err == nil || !strings.Contains(err.Error(), "separately") {
 		t.Fatalf("mixed manual target refusal: %v", err)
 	}
 	dependencyWrite(t, mp, "schema_version = 1\n[dependencies.demo]\ngit = \"acme/demo\"\nref = \"main\"\n[targets]\nvscode = [\"demo\"]\n")
