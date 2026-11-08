@@ -92,6 +92,29 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             self.assertEqual(check([row("root", "one"), row("dependency", "two")], "codex"),
                              {"root": "one", "dependency": "two"})
 
+    def test_marketing_kit_identity_guard_rejects_cross_scope_provenance(self):
+        # A signed User binding must never authorize an unsigned Project binding.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        def binding(scope, revision):
+            return {"client_id": "codex", "scope": scope, "package_revision": revision}
+        row = {"installation_id": "owned", "directory": {"recorded_distribution": "root"},
+               "clients": [binding("project", "unsigned"), binding("user", "signed")]}
+
+        with patch.dict(runner["audit"],
+                        {"recorded_signed_release_matches":
+                         lambda _, revision: revision == "signed"}):
+            check = runner["identities"]
+            with self.assertRaisesRegex(AssertionError, "project binding lacks exact"):
+                check([row], "codex")
+            row["clients"] = [binding("project", "signed"), binding("user", "unsigned")]
+            self.assertEqual(check([row], "codex"), {"root": "owned"})
+            row["clients"].append(binding("project", "unsigned"))
+            with self.assertRaisesRegex(AssertionError, "project binding lacks exact"):
+                check([row], "codex")
+
     def test_marketing_kit_lock_guard_rejects_duplicate_or_unidentified_pins(self):
         # Comparing lock keys as a set can hide a duplicate signed package.
         from runpy import run_path
