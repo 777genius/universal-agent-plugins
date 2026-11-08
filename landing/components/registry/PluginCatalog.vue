@@ -395,13 +395,7 @@ watch([query, category, component, source, trust, client, authentication, owner,
             t('registryUi.catalog.findingMoreCommunityPluginsOnGithub')
           }}</template>
 
-<style scoped>
-.catalog-curation-note {
-  margin-top: 5px;
-  color: var(--subtle);
-  font-size: 0.75rem;
-}
-</style>
+
           <template v-else-if="discovery.state === 'unavailable'">{{
             t(
               'registryUi.catalog.communityResultsAreTemporarilyUnavailableReviewedListingsRemainAvailable',
@@ -443,3 +437,11 @@ watch([query, category, component, source, trust, client, authentication, owner,
     </div>
   </section>
 </template>
+
+<style scoped>
+.catalog-curation-note {
+  margin-top: 5px;
+  color: var(--subtle);
+  font-size: 0.75rem;
+}
+</style>
