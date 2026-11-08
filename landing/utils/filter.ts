@@ -1,4 +1,5 @@
 import type { RegistryPlugin } from '../types/registry';
+import { pluginBenefit, recommendedPluginRank } from '../data/catalogCuration.ts';
 import { isTemporarilyUnlistedProduct } from '../data/routes.ts';
 
 export interface CatalogFilters {
@@ -10,6 +11,7 @@ export interface CatalogFilters {
   client?: 'all' | RegistryPlugin['client_support']['clients'][number];
   authentication?: 'all' | 'none' | 'required_or_unknown';
   owner?: string;
+  order?: 'recommended' | 'name';
 }
 
 const retiredCatalogRepositories = new Set(['777genius/universal-agent-plugins-registry']);
@@ -62,6 +64,7 @@ export const catalogQueryKeys = [
   'client',
   'auth',
   'owner',
+  'sort',
 ] as const;
 
 /** Only the catalog's keys are changed; unrelated route state is preserved. */
@@ -69,7 +72,10 @@ export function catalogQuery(values: string[], existing: Record<string, unknown>
   const result = { ...existing };
   catalogQueryKeys.forEach((key, index) => {
     const value = values[index]?.trim();
-    if (value && (key === 'q' || value !== 'all')) result[key] = value;
+    if (key === 'sort') {
+      if (value === 'name') result[key] = 'name';
+      else Reflect.deleteProperty(result, key);
+    } else if (value && (key === 'q' || value !== 'all')) result[key] = value;
     else Reflect.deleteProperty(result, key);
   });
   return result;
@@ -78,6 +84,7 @@ export function catalogQuery(values: string[], existing: Record<string, unknown>
 export function restoreCatalogQuery(query: Record<string, unknown>): string[] {
   return catalogQueryKeys.map((key) => {
     const value = Array.isArray(query[key]) ? query[key][0] : query[key];
+    if (key === 'sort') return value === 'name' ? 'name' : 'recommended';
     return typeof value === 'string' && value.trim() ? value.trim() : key === 'q' ? '' : 'all';
   });
 }
@@ -216,7 +223,7 @@ function textRelevance(plugin: RegistryPlugin, query: string): number {
     [4, [...plugin.keywords, ...plugin.categories, ...plugin.components]],
     [8, [sourceOwner(plugin), plugin.source.repository]],
     [12, [plugin.author.name]],
-    [16, [plugin.description]],
+    [16, [plugin.description, pluginBenefit(plugin)]],
   ];
   return Math.min(
     ...fields.flatMap(([weight, values]) =>
@@ -260,6 +267,7 @@ export function filterPlugins(
     plugin.name,
     plugin.display_name,
     plugin.description,
+    pluginBenefit(plugin),
     plugin.author.name,
     plugin.source.repository,
     ...plugin.categories,
@@ -279,11 +287,19 @@ export function filterPlugins(
     const reviewed = matches
       .filter((plugin) => (plugin.trust_state ?? 'reviewed') === 'reviewed')
       .sort((left, right) =>
+        (filters.order === 'name'
+          ? 0
+          : Number(!left.installable) - Number(!right.installable) ||
+            recommendedPluginRank(left.name) - recommendedPluginRank(right.name)) ||
         compareText(normalized(left.display_name), normalized(right.display_name)),
       );
-    const discovered = diversifiedDiscovery(
-      matches.filter((plugin) => plugin.trust_state === 'conformant_unreviewed'),
-    );
+    const community = matches.filter((plugin) => plugin.trust_state === 'conformant_unreviewed');
+    const discovered =
+      filters.order === 'name'
+        ? community.sort((left, right) =>
+            compareText(normalized(left.display_name), normalized(right.display_name)),
+          )
+        : diversifiedDiscovery(community);
     return [...reviewed, ...discovered];
   }
   return matches.sort((left, right) => {

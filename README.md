@@ -36,6 +36,10 @@ setup on another computer or with your team.
 <a href="https://universal-agent-plugins.com/#demo" title="Watch the Universal Agent Plugins demo"><img width="680" height="392" alt="Universal Agent Plugins video preview — watch the demo" src="https://github.com/user-attachments/assets/33833cd2-f525-49b2-9181-5a4d643d2f5b" /></a>
 </p>
 
+<p align="center">
+  <img src="assets/uap-how-it-works.webp" width="1200" alt="How UAP works: find plugins and skills, choose computer or project scope, install with UAP built on Agent Plugins 1.0 and Agent Skills, use with AI agents, and manage updates, repair, removal, restoration and sharing" />
+</p>
+
 ## Contents
 
 - [Use plugins](#use-plugins)

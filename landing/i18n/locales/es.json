@@ -10,7 +10,7 @@
   "hero": {
     "primaryCta": "Abrir GitHub",
     "secondaryCta": "Ver complementos",
-    "docsCta": "Ver documentos",
+    "docsCta": "Ver documentación",
     "preview": "Vista previa del flujo de Universal Agent Plugins",
     "latestRelease": "Última versión",
     "status": "Complementos propios disponibles ahora",
@@ -345,6 +345,57 @@
     "buildGuideLink": "Abrir la guía de creación"
   },
   "shell": {
+    "clientSupport": {
+      "eyebrow": "Compatibilidad",
+      "title": "Agentes compatibles y ámbitos de instalación",
+      "description": "El ámbito de usuario instala componentes en el perfil del agente; el ámbito de proyecto lo hace en un solo espacio de trabajo. UAP configura los archivos compatibles. El agente puede solicitar confianza, inicio de sesión o reinicio.",
+      "tableLabel": "Tabla de compatibilidad de instalación por agente",
+      "tableCaption": "Compatibilidad de usuario y proyecto, modo de configuración y pasos posteriores.",
+      "columns": {
+        "agent": "Agente",
+        "user": "Ámbito de usuario",
+        "project": "Ámbito de proyecto",
+        "setup": "Configuración",
+        "nextStep": "Después de instalar"
+      },
+      "scrollHint": "Desplázate horizontalmente para ver todas las columnas.",
+      "note": "Automática: UAP instala los componentes compatibles. Guiada: sigue las indicaciones del agente. Preparada: activa los archivos preparados. Manual: termina la configuración en la aplicación. La instalación no inicia sesión ni concede confianza. Se muestran las capacidades del código fuente actual; la CLI publicada puede ser distinta. La disponibilidad depende del complemento y de la versión del agente.",
+      "details": "Ver detalles de compatibilidad",
+      "capabilities": {
+        "pluginsSkillsMcp": "Complementos, habilidades, MCP",
+        "skillsMcp": "Habilidades, MCP",
+        "pluginsSkillsMcpHooks": "Complementos, habilidades, MCP, ganchos",
+        "extensionsSkillsMcp": "Extensiones, habilidades, MCP",
+        "copilotPackage": "Paquete mediante Copilot",
+        "personalAppSetup": "Configuración de aplicación personal",
+        "skillsOnly": "Solo habilidades",
+        "skillsMcpPrepared": "Habilidades, MCP (preparado)",
+        "notSupported": "No compatible"
+      },
+      "setup": {
+        "automatic": "Automática",
+        "guided": "Guiada",
+        "prepared": "Preparada",
+        "manual": "Manual"
+      },
+      "nextSteps": {
+        "claude": "Confía en el espacio de trabajo y recarga Claude Code si se solicita.",
+        "codex": "Abre una sesión nueva; autoriza el acceso MCP del proyecto si se solicita.",
+        "opencode": "Inicia una sesión nueva y revisa los ajustes efectivos del proyecto.",
+        "cursor": "Recarga Cursor; activa los complementos o servidores MCP si se solicita.",
+        "copilot": "Reinicia Copilot CLI si se solicita.",
+        "gemini": "Recarga Gemini CLI y autoriza el acceso a las herramientas si se solicita.",
+        "qoder": "Reinicia Qoder y revisa los permisos MCP.",
+        "pi": "Confía en el proyecto y recarga los recursos de Pi.",
+        "windsurf": "Abre o reinicia Devin en el proyecto seleccionado y revisa los permisos.",
+        "kimi": "Ejecuta /reload o /new y revisa los permisos MCP.",
+        "cline": "Selecciona la ruta de ajustes MCP del proyecto y recarga Cline.",
+        "kiro": "Inicia sesión, autoriza el acceso y reinicia Kiro si se solicita.",
+        "grok": "Recarga Grok; revisa las habilidades del proyecto y las indicaciones de la CLI.",
+        "vscode": "Abre la carpeta, confía en ella y revisa y activa los servidores MCP.",
+        "chatgpt": "Activa el modo de desarrollador, conecta la aplicación y selecciónala en un chat nuevo."
+      }
+    },
     "dependencies": {
       "eyebrow": "Dependencias conectadas",
       "title": "Dos plugins. Una dependencia compartida.",
@@ -584,6 +635,10 @@
       "disclaimer": "Las comprobaciones automáticas reducen el riesgo, pero no prueban que un plugin sea seguro. Revisa la fuente y los permisos antes de instalar software en el que no confíes."
     },
     "catalog": {
+      "sortLabel": "Ordenar plugins",
+      "sortRecommended": "Recomendados",
+      "sortName": "Nombre A–Z",
+      "curationNote": "Recomendados para tareas habituales con agentes; no es una calificación de seguridad.",
       "staleCommunityResults": "Se muestran {count} entradas de la comunidad del último catálogo firmado, generado el {generated}, caducado el {expired}. Los comandos de instalación están pausados hasta que haya un catálogo actualizado. Las entradas revisadas siguen disponibles.",
       "staleCommunityListing": "Entrada histórica firmada; el catálogo caducó el {expired}.",
       "staleCommunityCommands": "Los comandos de instalación de la comunidad están pausados porque el catálogo firmado ha caducado. Puedes seguir consultando las entradas y su código fuente.",

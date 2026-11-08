@@ -8,6 +8,7 @@ import { clients, clientLandingBySlug, clientLandingById } from '../data/clients
 import { localizedPath } from '../utils/localizedRoutes.ts';
 import { productRootUrl, seoDescription, spdxLicenseUrl } from '../utils/seo.ts';
 import { catalogVisiblePlugins, isFullyRetired } from '../utils/filter.ts';
+import { pluginBenefit } from '../data/catalogCuration.ts';
 import { resolveDistribution, vendorInstallSource } from '../utils/registry.ts';
 
 const fixture = JSON.parse(readFileSync(new URL('./fixtures/registry-responses/gitlab.json', import.meta.url), 'utf8'));
@@ -26,7 +27,7 @@ async function page(
     .replace(/^import[\s\S]*?from '[^']+';\n/gm, '');
   await runInNewContext(`(async () => { ${discoverySource}\n${stripTypeScriptTypes(source)} })()`, {
     computed, ref, watch, clients, clientLandingBySlug, clientLandingById, localizedPath, productRootUrl, seoDescription, spdxLicenseUrl, catalogVisiblePlugins,
-    resolveDistribution, vendorInstallSource, isFullyRetired,
+    resolveDistribution, vendorInstallSource, isFullyRetired, pluginBenefit,
     useDirectoryStatus: () => ({ current: ref(true), expired: ref(false), published: ref(true) }),
     // Synthetic key markers test reactivity without creating translations.
     useI18n: () => ({ locale, t: (key: string) => `${locale.value}:${key}`, n: (value: number) => String(value) }),
@@ -42,7 +43,7 @@ async function page(
   return { locale, seo };
 }
 
-test('registry index/detail/client structured data follows locale and keeps original plugin descriptions', async () => {
+test('registry index/detail/client structured data follows locale and uses benefit copy without rewriting source metadata', async () => {
   for (const filename of ['plugins/index.vue', 'plugins/[slug].vue', 'agents/[client].vue']) {
     const { locale, seo } = await page(filename);
     assert.ok(toValue(seo.title).startsWith('en:'));
@@ -53,12 +54,12 @@ test('registry index/detail/client structured data follows locale and keeps orig
     assert.ok(!JSON.stringify(structured).includes('/universal-agent-plugins/universal-agent-plugins/'));
     assert.equal(seo.options.canonicalPath, undefined, 'shared SEO helper owns current canonical');
     if (filename.includes('[slug]')) {
-      assert.equal(structured[0].description, fixture.plugins[0].description);
+      assert.equal(structured[0].description, pluginBenefit(fixture.plugins[0]));
       assert.ok(structured[0].url.endsWith('/uk/plugins/gitlab/'));
       assert.equal(
         toValue(seo.description),
-        seoDescription(['uk:registryUi.detail.descriptionLead', fixture.plugins[0].description]),
-        'meta retains the original description through the existing length limit',
+        seoDescription(['uk:registryUi.detail.descriptionLead', pluginBenefit(fixture.plugins[0])]),
+        'meta renders benefit-led presentation text through the existing length limit',
       );
     } else {
       for (const entry of structured[0].itemListElement) assert.ok(entry.url.includes('/uk/plugins/'));

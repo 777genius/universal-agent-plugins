@@ -15,6 +15,7 @@ import { githubSourceUrl, reachableTargetPolicies, vendorInstallSource } from '~
 import { authenticationIndicator } from '~/utils/authentication';
 import { pluginCommands } from '~/utils/commands';
 import { projectCatalogCommands } from '~/utils/projectCatalogSource';
+import { pluginBenefit } from '~/data/catalogCuration';
 const { t, locale, n } = useI18n();
 const localePath = useLocalePath();
 
@@ -289,7 +290,7 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
         scope="plugin"
       />
     </div>
-    <p class="plugin-card__description">{{ plugin.description }}</p>
+    <p class="plugin-card__description">{{ pluginBenefit(plugin) }}</p>
     <details v-if="alternatives.length" class="plugin-other-sources">
       <summary>
         {{ t('registryUi.card.otherSources', { count: n(alternatives.length) })
