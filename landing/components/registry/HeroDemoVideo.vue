@@ -21,7 +21,7 @@ const thumbnailUrl = computed(
 // to mute, so use the normal sound-first mode and keep audio enabled by default.
 // Some browsers may still block audible iframe playback.
 const playerUrl = computed(() =>
-  `https://player.mux.com/${playbackId.value}?${playing.value ? 'autoplay=true&muted=false&no-muted-pref=true&' : ''}preload=auto`,
+  `https://player.mux.com/${playbackId.value}?${playing.value ? 'autoplay=true&no-muted-pref=true&' : ''}preload=auto`,
 );
 const muxOrigin = 'https://player.mux.com';
 function cancelPreload() {
