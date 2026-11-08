@@ -158,7 +158,7 @@ func (r *Report) recordRelease(p project.Result) {
 	v := p.Input
 	r.Release = r.Readiness
 	r.Release.FindingIDs = append([]string{}, r.Readiness.FindingIDs...)
-	if v.Legacy != "absent" {
+	if v.Legacy != packageview.Absent {
 		id := r.add(Finding{Code: "legacy_release_rejected", Layer: "release_policy", Rule: "authoring/release-hygiene-v1", Location: "plugin/plugin.yaml", Severity: "error"})
 		r.Release.Status = Fail
 		r.Release.FindingIDs = append(r.Release.FindingIDs, id)
