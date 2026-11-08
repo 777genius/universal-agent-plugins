@@ -2,7 +2,7 @@ name: Diagnostic pinned Remotion Windows Skill acquisition
 
 on:
   pull_request:
-    paths: ['.github/workflows/remotion-windows-source-diagnostic.yml']
+    paths: ['.github/workflows/remotion-windows-source-diagnostic.yml', 'scripts/remotion_published_windows_long_temp_e2e.py']
   workflow_dispatch:
 
 permissions:
@@ -192,8 +192,8 @@ jobs:
                                         'cross_results': cross_results,
                                         'steps': outcomes}, indent=2, ensure_ascii=True) + '\n',
                             encoding='utf-8')
-          if not installed or not installed_default_temp:
-              raise SystemExit('Exact published Windows Remotion Skill failure reproduced; see safe report')
+          if not installed or installed_default_temp:
+              raise SystemExit('Immutable 0.1.101 negative control changed: expected short PASS, long refusal')
           '@ | python -
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Preserve refusal evidence, even on failure
@@ -202,5 +202,52 @@ jobs:
         with:
           name: remotion-windows-diagnostic
           path: ${{ runner.temp }}/remotion-windows-diagnostic.json
+          if-no-files-found: warn
+          retention-days: 7
+
+  published-remotion-v0102:
+    name: Published npm 0.1.102 / Codex Remotion long TEMP
+    runs-on: windows-2025
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+        env:
+          GIT_CONFIG_COUNT: '1'
+          GIT_CONFIG_KEY_0: core.autocrlf
+          GIT_CONFIG_VALUE_0: 'false'
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.0.0
+        with:
+          python-version: '3.12'
+      - name: Install exact published npm CLI and pinned native Codex
+        shell: pwsh
+        run: |
+          npm.cmd install --global --ignore-scripts universal-agent-plugins@0.1.102
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm.cmd install --global '@openai/codex@0.153.4'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          agentplugins version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          codex --version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify published Remotion add, repeat, list, remove and foreign sentinels
+        shell: pwsh
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+          GIT_TERMINAL_PROMPT: '0'
+        run: |
+          python scripts/remotion_published_windows_long_temp_e2e.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Retain original published Windows evidence, including on failure
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4.6.2
+        with:
+          name: remotion-windows-published-0.1.102
+          path: ${{ runner.temp }}\remotion-windows-published-0.1.102.json
           if-no-files-found: warn
           retention-days: 7
