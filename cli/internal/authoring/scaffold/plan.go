@@ -15,7 +15,6 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
-
 )
 
 type Template string
