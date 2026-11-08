@@ -59,7 +59,7 @@ func planManifest(o Options, registry *specregistry.Registry) (map[string]any, e
 		return nil, identityError("plugin name", o.Name)
 	}
 	if err := portableLeaf(o.Name); err != nil {
-		return nil, fmt.Errorf("%w (%v)", identityError("host-safe plugin name", o.Name), err)
+		return nil, fmt.Errorf("%w (%s)", identityError("host-safe plugin name", o.Name), err.Error())
 	}
 	if !textValue(o.Description, 1024) {
 		return nil, fmt.Errorf("description must contain 1–1024 characters of nonempty text")
@@ -122,7 +122,7 @@ func validatePlanSkill(o *Options, hasSkill bool) error {
 			return identityError("skill name", o.SkillName)
 		}
 		if err := portableLeaf(o.SkillName); err != nil {
-			return fmt.Errorf("%w (%v)", identityError("host-safe skill name", o.SkillName), err)
+			return fmt.Errorf("%w (%s)", identityError("host-safe skill name", o.SkillName), err.Error())
 		}
 	} else if o.SkillName != "" {
 		return fmt.Errorf("skill name requires a skill component")
