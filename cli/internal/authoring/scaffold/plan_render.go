@@ -40,6 +40,7 @@ func renderPlan(o Options, manifest map[string]any, registry *specregistry.Regis
 
 }
 
+// appendPlanCore assembles offline package bytes without publishing filesystem effects.
 func appendPlanCore(o Options, manifest map[string]any, lane Template, hasSkill bool, license string, add func(string, []byte)) {
 	add("plugin.json", jsonBytes(manifest))
 	add(".gitignore", []byte("node_modules/\n.DS_Store\n"))
@@ -60,6 +61,7 @@ func appendPlanCore(o Options, manifest map[string]any, lane Template, hasSkill 
 	}
 }
 
+// planMCP validates the explicit server transport before emitting its MCP descriptor.
 func planMCP(o Options, lane Template, registry *specregistry.Registry) ([]byte, error) {
 	server := map[string]any{"type": "streamable-http", "url": o.RemoteURL}
 	if lane == MCPStdio {

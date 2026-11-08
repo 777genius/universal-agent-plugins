@@ -42,6 +42,7 @@ func BuildPlan(o Options) (Plan, error) {
 	return renderPlan(o, manifest, registry, lane, hasSkill, license)
 }
 
+// validatePlanInput rejects malformed bounds before reading package schemas.
 func validatePlanInput(o Options) error {
 	if len(o.Template) > 32 || len(o.MCPChoice) > 32 || len(o.Runtime) > 32 || len(o.License) > 32 {
 		return fmt.Errorf("template, MCP choice, runtime, and license values must be bounded identifiers")
@@ -74,6 +75,7 @@ func planManifest(o Options, registry *specregistry.Registry) (map[string]any, e
 	return manifest, nil
 }
 
+// planLane selects an explicit template without adding implicit fallback modes.
 func planLane(o Options) (Template, error) {
 	lane := o.Template
 	switch o.Template {
@@ -92,6 +94,7 @@ func planLane(o Options) (Template, error) {
 	return lane, nil
 }
 
+// validatePlanTransport enforces the mutually exclusive stdio and remote options.
 func validatePlanTransport(o Options, lane Template) error {
 	if lane == MCPStdio {
 		if o.Runtime != "node" {
@@ -113,6 +116,7 @@ func validatePlanTransport(o Options, lane Template) error {
 	return nil
 }
 
+// validatePlanSkill applies a local default only for actual Skill components.
 func validatePlanSkill(o *Options, hasSkill bool) error {
 	if hasSkill {
 		if o.SkillName == "" {
