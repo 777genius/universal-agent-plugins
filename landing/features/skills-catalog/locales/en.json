@@ -1,6 +1,18 @@
 {
   "registryUi": {
     "skills": {
+      "featured": {
+        "title": "Recommended for coding agents",
+        "explanation": "Selected for practical everyday tasks. Not a safety or compatibility endorsement; check the source and setup requirements.",
+        "items": {
+          "agent-browser": "Automate browser journeys after installing its separate browser CLI.",
+          "frontend-design": "Create more intentional and polished frontend interfaces.",
+          "find-skills": "Discover reusable skills that match your current task.",
+          "tdd": "Build and fix software test-first with a red–green–refactor workflow.",
+          "vercel-react-best-practices": "Apply practical React and Next.js performance guidance.",
+          "web-design-guidelines": "Review web interfaces for usability and accessibility."
+        }
+      },
       "catalogType": "Catalog type",
       "plugins": "Plugins",
       "skills": "Skills",

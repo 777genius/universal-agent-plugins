@@ -10,7 +10,7 @@
   "hero": {
     "primaryCta": "Ouvrez GitHub",
     "secondaryCta": "Voir les plugins",
-    "docsCta": "Afficher les documents",
+    "docsCta": "Consulter la documentation",
     "preview": "Aperçu du flux des Universal Agent Plugins",
     "latestRelease": "Dernière version",
     "status": "Plugins propriétaires disponibles maintenant",
@@ -345,6 +345,57 @@
     "buildGuideLink": "Ouvrir le guide de création"
   },
   "shell": {
+    "clientSupport": {
+      "eyebrow": "Compatibilité",
+      "title": "Agents compatibles et portées d’installation",
+      "description": "La portée utilisateur installe les composants dans le profil de l’agent ; la portée projet les installe dans un seul espace de travail. UAP configure les fichiers pris en charge. L’agent peut encore demander une autorisation, une connexion ou un redémarrage.",
+      "tableLabel": "Tableau de compatibilité des installations par agent",
+      "tableCaption": "Compatibilité utilisateur et projet, mode de configuration et actions après installation.",
+      "columns": {
+        "agent": "Agent",
+        "user": "Portée utilisateur",
+        "project": "Portée projet",
+        "setup": "Configuration",
+        "nextStep": "Après l’installation"
+      },
+      "scrollHint": "Faites défiler le tableau horizontalement pour voir toutes les colonnes.",
+      "note": "Automatique : UAP installe les composants pris en charge. Guidée : suivez les instructions de l’agent. Préparée : activez les fichiers préparés. Manuelle : terminez la configuration dans l’application. L’installation ne vous connecte pas et n’accorde pas automatiquement la confiance. Ce tableau reflète les capacités du code source actuel ; la version publiée du CLI peut différer. La disponibilité dépend du plugin et de la version de l’agent.",
+      "details": "Voir les détails de compatibilité",
+      "capabilities": {
+        "pluginsSkillsMcp": "Plugins, compétences, MCP",
+        "skillsMcp": "Compétences, MCP",
+        "pluginsSkillsMcpHooks": "Plugins, compétences, MCP, hooks",
+        "extensionsSkillsMcp": "Extensions, compétences, MCP",
+        "copilotPackage": "Package via Copilot",
+        "personalAppSetup": "Configuration d’application personnelle",
+        "skillsOnly": "Compétences uniquement",
+        "skillsMcpPrepared": "Compétences, MCP (préparés)",
+        "notSupported": "Non pris en charge"
+      },
+      "setup": {
+        "automatic": "Automatique",
+        "guided": "Guidée",
+        "prepared": "Préparée",
+        "manual": "Manuelle"
+      },
+      "nextSteps": {
+        "claude": "Faites confiance à l’espace de travail et rechargez Claude Code si nécessaire.",
+        "codex": "Ouvrez une nouvelle session ; autorisez l’accès MCP du projet si demandé.",
+        "opencode": "Démarrez une nouvelle session et vérifiez les paramètres effectifs du projet.",
+        "cursor": "Rechargez Cursor ; activez les plugins ou serveurs MCP si demandé.",
+        "copilot": "Redémarrez Copilot CLI si nécessaire.",
+        "gemini": "Rechargez Gemini CLI et autorisez l’accès aux outils si demandé.",
+        "qoder": "Redémarrez Qoder et vérifiez les autorisations MCP.",
+        "pi": "Faites confiance au projet et rechargez les ressources de Pi.",
+        "windsurf": "Ouvrez ou redémarrez Devin dans le projet choisi et vérifiez l’accès.",
+        "kimi": "Exécutez /reload ou /new et vérifiez les autorisations MCP.",
+        "cline": "Choisissez le chemin des paramètres MCP du projet et rechargez Cline.",
+        "kiro": "Connectez-vous, autorisez l’accès et redémarrez Kiro si demandé.",
+        "grok": "Rechargez Grok ; vérifiez les compétences du projet et les indications de configuration du CLI.",
+        "vscode": "Ouvrez le dossier, accordez-lui votre confiance, puis vérifiez et activez les serveurs MCP.",
+        "chatgpt": "Activez le mode développeur, connectez l’application et sélectionnez-la dans une nouvelle conversation."
+      }
+    },
     "dependencies": {
       "eyebrow": "Des dépendances reliées",
       "title": "Deux plugins. Une dépendance partagée.",
@@ -584,6 +635,10 @@
       "disclaimer": "Les contrôles automatisés réduisent les risques ; ils ne prouvent pas qu'un plugin est sûr. Vérifiez la source et les autorisations avant d'installer un logiciel auquel vous ne faites pas confiance."
     },
     "catalog": {
+      "sortLabel": "Trier les plugins",
+      "sortRecommended": "Recommandés",
+      "sortName": "Nom A–Z",
+      "curationNote": "Recommandés pour les usages courants des agents, pas une évaluation de sécurité.",
       "staleCommunityResults": "Affichage de {count} entrées communautaires du dernier catalogue signé, créé le {generated}, expiré le {expired}. Les commandes d'installation sont suspendues jusqu'à sa mise à jour. Les entrées examinées restent disponibles.",
       "staleCommunityListing": "Entrée historique signée ; catalogue expiré le {expired}.",
       "staleCommunityCommands": "Les commandes d'installation communautaires sont suspendues car le catalogue signé a expiré. Les entrées et leur code source restent consultables.",

@@ -6,6 +6,7 @@ import { runInNewContext } from 'node:vm';
 import { computed, ref } from 'vue';
 import { isKnownLocale } from '../data/i18n.ts';
 import { catalogVisiblePlugins } from '../utils/filter.ts';
+import { pluginBenefit } from '../data/catalogCuration.ts';
 import { localizedPath } from '../utils/localizedRoutes.ts';
 import {
   productRootUrl,
@@ -59,6 +60,7 @@ for (const base of ['/', '/universal-agent-plugins/']) {
             ref,
             isKnownLocale,
             catalogVisiblePlugins,
+            pluginBenefit,
             // URL-only fixture: the reviewed detail page's auto-imported policy
             // adapters are inert; its schema URL construction stays under test.
             resolveDistribution: (_plugin: unknown, targets: readonly string[]) => ({

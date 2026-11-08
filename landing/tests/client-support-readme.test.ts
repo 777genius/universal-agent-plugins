@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { clientSupportRows } from '../data/clientSupport.ts';
+import { clientSupportRows, clientSupportCapabilityKeys } from '../data/clientSupport.ts';
 import { clientLandingById } from '../data/clients.ts';
 
 // SYNC: README.md "Supported clients" and landing/data/clientSupport.ts.
@@ -23,6 +23,8 @@ test('README and landing support rows, setup actions and logos are in sync', () 
   assert.equal(new Set(clientSupportRows.map((r) => r.id)).size, 15);
   const table = readme.split(first)[1]!.split(last)[0]!;
   const expected = clientSupportRows.map((r) => {
+    for (const capability of [r.user, r.project])
+      assert.ok(capability in clientSupportCapabilityKeys, `Missing translation mapping: ${capability}`);
     const client = clientLandingById.get(r.id);
     assert.ok(client, `Unknown client ${r.id}`);
     assert.ok(existsSync(new URL(`../public/client-icons/${client.icon}`, import.meta.url)));
@@ -33,4 +35,19 @@ test('README and landing support rows, setup actions and logos are in sync', () 
   const actual = table.split('\n').filter((row) => row.startsWith('| <img') || row.startsWith('| <picture'));
   assert.deepEqual(actual, expected);
   assert.match(readme, /landing\/data\/clientSupport\.ts/);
+});
+
+test('English support translations preserve source-matrix capabilities and next steps', () => {
+  const messages = JSON.parse(
+    readFileSync(new URL('../i18n/locales/en.json', import.meta.url), 'utf8'),
+  ).shell.clientSupport;
+  assert.deepEqual(Object.keys(messages.nextSteps).sort(), clientSupportRows.map((row) => row.id).sort());
+  for (const row of clientSupportRows) {
+    assert.equal(messages.nextSteps[row.id], row.nextStep, row.id);
+    for (const original of [row.user, row.project]) {
+      const key = clientSupportCapabilityKeys[original as keyof typeof clientSupportCapabilityKeys];
+      assert.equal(messages.capabilities[key], original, original);
+    }
+    assert.equal(messages.setup[row.setup.toLowerCase()], row.setup, row.setup);
+  }
 });
