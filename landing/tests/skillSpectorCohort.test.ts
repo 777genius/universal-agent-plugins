@@ -295,7 +295,9 @@ test('overlay survives unrelated manifest updates but fails closed on source or 
     ]; },
     record => { record.findings_truncated = true; },
     record => { record.coverage!.grouping_complete = false; },
+    record => { delete record.coverage!.grouping_complete; },
     record => { record.coverage!.reference_evidence_truncated = true; },
+    record => { delete record.coverage!.reference_evidence_truncated; },
   ];
   for (const makeUncertain of quarantines) {
     const uncertain = structuredClone(report);
