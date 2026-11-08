@@ -203,12 +203,12 @@ test('all seven Braids Skills sharing one signed package receive individual exac
     record.target_revision = record.source.revision;
     return record;
   });
-  // Real 2.13.1 and signed 2.13.3 use different generated IDs for
-  // identical LP3 source coordinates. That is not changed risk evidence.
-  const oldLp3 = oldRecords.find(record => record.id.endsWith('/braids'))!
-    .findings.find(finding => finding.rule === 'LP3')!;
-  assert.equal(oldLp3.match_fingerprint, null);
-  oldLp3.occurrences![0]!.finding_id = 'finding-different-scanner-generated-id';
+  // Real 2.13.1 and signed 2.13.3 LP3 records use different generated
+  // finding IDs. Reproduce this with our fingerprint-free signed E4 fixture:
+  // same source location, different ephemeral finding ID is not a new risk.
+  const oldFinding = oldRecords.find(record => record.id.endsWith('/braids'))!.findings[0]!;
+  assert.equal(oldFinding.match_fingerprint, undefined);
+  oldFinding.occurrences![0]!.finding_id = 'finding-different-scanner-generated-id';
   const report = {
     schema_version: 3,
     records: oldRecords,
