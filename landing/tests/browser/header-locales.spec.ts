@@ -33,11 +33,11 @@ for (const locale of publishedLocales) {
     await expect(desktopDocs).toHaveText(docs.navLabel);
     await expect(desktopDocs).toHaveAccessibleName(copy.hero.docsCta);
     await expect(desktopDocs).toHaveAttribute('href', new RegExp(`/docs/${locale}/$`));
-    await expect(page.locator('.app-header__desktop-actions .language-switcher')).toBeVisible();
+    await expect(page.locator('.app-header__desktop-actions .language-switcher__flag-icon')).toBeVisible();
 
     for (const width of [960, 1024, 1199, 1279, 1280, 1440]) {
       await page.setViewportSize({ width, height: 850 });
-      await expect(nav).toBeVisible();
+      await expect(nav.first()).toBeVisible();
       await expect(desktopDocs).toBeVisible();
       await expect(desktopDocs.locator('.v-btn__content')).toBeVisible();
       const layout = await page.evaluate(() => {
@@ -49,19 +49,13 @@ for (const locale of publishedLocales) {
           const { left, right, width } = element.getBoundingClientRect();
           return { left, right, width };
         };
+        const links = [...nav.querySelectorAll('a')].map(rect).sort((a, b) => a.left - b.left);
         return {
           nav: rect(nav),
           actions: rect(actions),
           docs: rect(docs),
           label: rect(label),
-          gaps: [...nav.querySelectorAll('a')]
-            .map(rect)
-            .sort((a, b) => a.left - b.left)
-            .slice(1)
-            .map((current, i, _rest) => {
-              const links = [...nav.querySelectorAll('a')].map(rect).sort((a, b) => a.left - b.left);
-              return current.left - links[i]!.right;
-            }),
+          gaps: links.slice(1).map((current, index) => current.left - links[index]!.right),
           overflow: document.documentElement.scrollWidth > innerWidth + 1,
         };
       });
