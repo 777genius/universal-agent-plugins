@@ -11,7 +11,6 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -96,35 +95,6 @@ func (runner OSRunner) Run(ctx context.Context, command Command) (body []byte, r
 	}
 	// Blob callers require byte-exact stdout; diagnostic stderr is never content.
 	return append([]byte(nil), result.Stdout...), nil
-}
-
-func isolatedGitEnvironment(environ []string, isolatedHome string) []string {
-	clean := make([]string, 0, len(environ)+9)
-	for _, item := range environ {
-		key, _, _ := strings.Cut(item, "=")
-		switch upper := strings.ToUpper(key); {
-		case upper == "HOME", upper == "USERPROFILE", upper == "XDG_CONFIG_HOME":
-			continue
-		case upper == "NETRC", upper == "SSH_AUTH_SOCK", upper == "SSH_ASKPASS":
-			continue
-		case strings.HasPrefix(upper, "GIT_"):
-			continue
-		}
-		clean = append(clean, item)
-	}
-	clean = append(clean,
-		"HOME="+isolatedHome,
-		"USERPROFILE="+isolatedHome,
-		"XDG_CONFIG_HOME="+isolatedHome,
-		"GIT_CONFIG_NOSYSTEM=1",
-		"GIT_CONFIG_GLOBAL="+os.DevNull,
-		"GIT_CONFIG_COUNT=1",
-		"GIT_CONFIG_KEY_0=credential.helper",
-		"GIT_CONFIG_VALUE_0=",
-		"GIT_TERMINAL_PROMPT=0",
-		"GIT_LFS_SKIP_SMUDGE=1",
-	)
-	return clean
 }
 
 type Acquirer struct {
@@ -237,17 +207,9 @@ func (acquirer Acquirer) acquireGitTransport(ctx context.Context, url, repositor
 	// core.autocrlf=false alone still permits text=auto attributes to use
 	// core.eol=native (CRLF on Windows, LF elsewhere). Explicit per-path
 	// .gitattributes eol=crlf remains authoritative.
-	for _, setting := range [][]string{{"core.autocrlf", "false"}, {"core.eol", "lf"}, {"core.filemode", "true"}, {"core.symlinks", "true"}, {"fetch.recurseSubmodules", "false"}} {
+	for _, setting := range [][]string{{"core.autocrlf", "false"}, {"core.eol", "lf"}, {"core.filemode", "true"}, {"core.symlinks", "true"}, {"fetch.recurseSubmodules", "false"}, {"core.longpaths", "true"}} {
 		if _, err := run("-C", repoRoot, "config", setting[0], setting[1]); err != nil {
 			return domain.PackageSnapshot{}, gitAcquisitionFailure(repository, revision, "configure isolated repository")
-		}
-	}
-	// The isolated checkout can be nested under a long Windows TEMP. Enable
-	// Git for Windows' long-path handling only for this disposable repository;
-	// source SHA, tree digest, symlink and ownership checks stay unchanged.
-	if runtime.GOOS == "windows" {
-		if _, err := run("-C", repoRoot, "config", "core.longpaths", "true"); err != nil {
-			return domain.PackageSnapshot{}, gitAcquisitionFailure(repository, revision, "configure long-path checkout")
 		}
 	}
 	fetchArgs := []string{"-C", repoRoot, "fetch", "--quiet", "--depth=1", "--no-tags", "--no-recurse-submodules", "origin", revision}
