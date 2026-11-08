@@ -42,10 +42,11 @@ test('curated Skills show source-bound explanations without altering provider ca
   await expect(page.locator('.skills-curated__heading')).toContainText(/not a safety/i);
   await expect(recommended.first()).toContainText('agent-browser');
   await expect(recommended.first()).toContainText('vercel-labs/agent-browser');
-  await expect(recommended.nth(1)).toHaveAttribute(
-    'href',
-    /skills\.sh%3Aanthropics(?:%2F|\/)skills%3Afrontend-design/i,
-  );
+  const frontendLink = await recommended.nth(1).getAttribute('href');
+  expect(frontendLink).toBeTruthy();
+  const selectedSkill = new URL(frontendLink!, page.url()).searchParams;
+  expect(selectedSkill.get('id')).toBe('skills-sh:anthropics/skills:frontend-design');
+  expect(selectedSkill.get('q')).toBe('frontend-design');
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
     .toBe(true);
   await testInfo.attach('skills-curation-mobile', {
