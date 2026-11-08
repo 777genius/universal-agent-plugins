@@ -57,11 +57,8 @@ func (a App) runCommand(ctx context.Context, name string, req request) (report.R
 		r.AddDoctor(readiness.Doctor(p))
 	}
 	if req.runtime == "mcp" {
-		evidence, runtimeErr := mcpruntime.Run(ctx, mcpruntime.Options{SourceRoot: req.root, Scratch: a.Projects.Scratch, Project: p, Server: req.server, Tool: req.tool, Fixture: req.fixture, AllowNetwork: req.allowNetwork, Deadline: req.deadline, Projects: a.Projects})
-		code := runtimeErrorCode(runtimeErr)
-		r.SetRuntime(evidence.Transport, evidence.Initialize, evidence.ListTools, evidence.ToolCall, evidence.ToolCount, evidence.Cleanup, code)
-		if runtimeErr != nil {
-			return r, runtimeErr
+		if err := a.runMCP(ctx, req, p, &r); err != nil {
+			return r, err
 		}
 	}
 	if !r.Successful() {
@@ -111,4 +108,10 @@ func (a App) runBootstrap(ctx context.Context, req request, p project.Result, r 
 		return r, applyErr
 	}
 	return r, nil
+}
+
+func (a App) runMCP(ctx context.Context, req request, p project.Result, r *report.Report) error {
+	evidence, runtimeErr := mcpruntime.Run(ctx, mcpruntime.Options{SourceRoot: req.root, Scratch: a.Projects.Scratch, Project: p, Server: req.server, Tool: req.tool, Fixture: req.fixture, AllowNetwork: req.allowNetwork, Deadline: req.deadline, Projects: a.Projects})
+	r.SetRuntime(evidence.Transport, evidence.Initialize, evidence.ListTools, evidence.ToolCall, evidence.ToolCount, evidence.Cleanup, runtimeErrorCode(runtimeErr))
+	return runtimeErr
 }

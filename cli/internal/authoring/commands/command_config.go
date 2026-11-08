@@ -5,12 +5,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/readiness"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/report"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/scaffold"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/skills"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoringcli"
-	"github.com/spf13/cobra"
 )
 
 // configureCommand owns only Cobra's authoring flag surface.
@@ -122,17 +123,34 @@ func (a App) decodeNonInitRequest(name string, c *cobra.Command, opts authoringc
 			req.runtime = "mcp"
 			req.once, _ = c.Flags().GetBool("once")
 		}
-		invalid := (req.tool == "") != (req.fixture == "") || req.deadline <= 0 || req.deadline > time.Minute
-		invalid = invalid || len(req.server) > 128 || len(req.tool) > 128 || len(req.fixture) > 4096
-		invalid = invalid || name == "test" && req.runtime != "" && req.runtime != "mcp"
-		invalid = invalid || name == "test" && c.Flags().Changed("runtime") && req.runtime == ""
-		runtimeFlagsChanged := c.Flags().Changed("server") || c.Flags().Changed("tool") ||
-			c.Flags().Changed("fixture") || c.Flags().Changed("allow-network") || c.Flags().Changed("deadline")
-		invalid = invalid || name == "test" && req.runtime == "" && runtimeFlagsChanged
-		invalid = invalid || req.runtime == "mcp" && req.server == "" || name == "dev" && opts.Format == "json" && !req.once
-		if invalid {
+		if invalidRuntimeShape(*req) || invalidRuntimeSelection(name, c, opts, *req) {
 			return &inputError{"runtime_arguments_invalid", "Use test --runtime=mcp --server <name>, or dev --server <name>. --tool and --fixture are required together; deadlines are positive and at most 1m. Continuous dev requires human output; use --once with JSON."}
 		}
 	}
 	return nil
+}
+
+func invalidRuntimeShape(req request) bool {
+	return (req.tool == "") != (req.fixture == "") ||
+		req.deadline <= 0 || req.deadline > time.Minute ||
+		len(req.server) > 128 || len(req.tool) > 128 || len(req.fixture) > 4096 ||
+		(req.runtime == "mcp" && req.server == "")
+}
+
+// Selection rules are distinct from shape limits; the parser still owns flag presence.
+func invalidRuntimeSelection(name string, c *cobra.Command, opts authoringcli.Options, req request) bool {
+	if name == "test" {
+		if req.runtime != "" && req.runtime != "mcp" {
+			return true
+		}
+		if c.Flags().Changed("runtime") && req.runtime == "" {
+			return true
+		}
+		runtimeFlagsChanged := c.Flags().Changed("server") || c.Flags().Changed("tool") ||
+			c.Flags().Changed("fixture") || c.Flags().Changed("allow-network") || c.Flags().Changed("deadline")
+		if req.runtime == "" && runtimeFlagsChanged {
+			return true
+		}
+	}
+	return name == "dev" && opts.Format == "json" && !req.once
 }
