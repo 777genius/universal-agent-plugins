@@ -292,9 +292,10 @@ export function applyVerifiedSkillSpectorCohort(
     // truncated evidence for that same immutable source. In those states the
     // canonical v3 Partial remains authoritative until a new qualification.
     if (!updated || old.status !== 'partial' || old.coverage?.status !== 'partial' ||
-        old.findings_truncated || old.coverage.grouping_complete === false ||
-        old.coverage.reference_evidence_truncated === true ||
-        old.coverage.reasons?.some(reason => reason.code === 'normalization_truncated' ||
+        old.findings_truncated !== false || old.coverage.grouping_complete !== true ||
+        old.coverage.reference_evidence_truncated !== false ||
+        !Array.isArray(old.coverage.reasons) ||
+        old.coverage.reasons.some(reason => reason.code === 'normalization_truncated' ||
           reason.code.startsWith('recovery_')) ||
         old.freshness !== 'current' || old.target_revision !== old.source.revision ||
         old.scanner?.version !== '2.13.1' ||
