@@ -5,7 +5,7 @@
         "title": "Recomendados para agentes de programação",
         "explanation": "Selecionados para tarefas comuns. Não garantem segurança nem compatibilidade; confira a fonte e os requisitos.",
         "items": {
-          "agent-browser": "Automatize jornadas reais no navegador com uma CLI para agentes.",
+          "agent-browser": "Automatize o navegador depois de instalar a CLI separadamente.",
           "frontend-design": "Crie interfaces frontend mais cuidadas e refinadas.",
           "find-skills": "Encontre Skills reutilizáveis para sua tarefa.",
           "tdd": "Desenvolva e corrija código com testes: vermelho, verde e refatoração.",
