@@ -159,14 +159,16 @@ def main():
             # Real update command, not a mocked planner; unchanged upstream pins
             # are still an observable no-update lifecycle.
             run(env, project_a, "update", "update", "marketing-kit", *scoped)
-            if set(identities(inventory(options.cli, env, project_a, options.target), options.target)) != EXPECTED:
+            identities_after_update = identities(inventory(options.cli, env, project_a, options.target), options.target)
+            if set(identities_after_update) != EXPECTED:
                 raise AssertionError("update lost a mandatory dependency")
             # Real repair on intact signed pins: this is not drift-recovery proof.
             # A repair may refresh owned receipts, but not the locked closure.
             pinned_after_update = (project_a / "uap.lock").read_bytes()
-            run(env, project_a, "repair intact", "repair", "marketing-kit", *scoped)
-            if set(identities(inventory(options.cli, env, project_a, options.target), options.target)) != EXPECTED:
-                raise AssertionError("repair lost a mandatory dependency")
+            run(env, project_a, "repair intact", "repair", "marketing-kit",
+                "--target", options.target, *scoped)
+            if identities(inventory(options.cli, env, project_a, options.target), options.target) != identities_after_update:
+                raise AssertionError("repair changed installation identities")
             if (project_a / "uap.lock").read_bytes() != pinned_after_update:
                 raise AssertionError("repair changed the signed lock")
             env_b, project_b, foreign_b, project_foreign_b, native_foreign_b = run_case(options.cli, options.target, root, "B", project_a)
