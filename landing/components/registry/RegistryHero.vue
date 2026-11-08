@@ -136,7 +136,7 @@ const choice = computed(() =>
 );
 const selectedTargets = computed<InstallTargetID[]>(() =>
   choice.value.targetIds.length
-    ? (choice.value.targetIds as InstallTargetID[])
+    ? reconcileLocalChatGPTTargets(choice.value.targetIds as InstallTargetID[], [])
     : [
         compatibleClients.value.find((client) => client.id === 'cursor')?.id ??
           availableTargets.value[0]!,

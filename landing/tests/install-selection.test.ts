@@ -48,6 +48,22 @@ test('Codex and Desktop picker choices reconcile to one native backend', () => {
   assert.deepEqual(reconcileLocalChatGPTTargets(['chatgpt', 'chatgptweb'], ['chatgpt']), ['chatgpt', 'chatgptweb']);
 });
 
+test('restored Codex and Desktop preferences cannot emit duplicate local install targets', () => {
+  setActivePinia(createPinia());
+  const plugin = data();
+  const preferences = useInstallPreferencesStore();
+  preferences.selectPackage(
+    plugin.install_source,
+    { targetIds: ['codex', 'chatgpt'], autoDetect: false, expanded: true, scope: 'user' },
+    ['codex', 'chatgpt', 'cursor'],
+  );
+  const state = mount(plugin);
+  assert.deepEqual(state.targets.value, ['codex']);
+  assert.match(pluginCommands(plugin, state.targets.value).add, /--target codex$/);
+  assert.doesNotMatch(pluginCommands(plugin, state.targets.value).add, /codex,chatgpt/);
+  state.stop();
+});
+
 test('mixed ChatGPT Web and Codex/Desktop commands use the imperative no-save path', () => {
   const plugin = data();
   const oldCommand = pluginCommands(plugin, ['codex', 'chatgptweb']).add;

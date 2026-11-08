@@ -100,8 +100,10 @@ export function usePluginInstallSelection(
       const initial =
         availableClients.value.find((client) => client.id === 'cursor') ??
         availableClients.value[0];
+      // Persisted preferences may predate the public ChatGPT target rename.
+      // Never restore both public Codex and Desktop as two local installs.
       targets.value = saved.targetIds.length
-        ? (saved.targetIds as InstallTargetID[])
+        ? reconcileLocalChatGPTTargets(saved.targetIds as InstallTargetID[], [])
         : initial
           ? [initial.id]
           : [];
