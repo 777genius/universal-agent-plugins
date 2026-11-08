@@ -3,7 +3,6 @@ package readiness
 import (
 	"crypto/sha256"
 	"fmt"
-	"runtime"
 	"sort"
 	"strings"
 
@@ -20,90 +19,21 @@ type Check struct {
 	Action string `json:"action"`
 }
 
+// itemID returns a stable, opaque digest instead of disclosing an item name.
 func itemID(value string) string { return fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(value))) }
 
+// Doctor assembles deterministic metadata-only readiness checks without host probing.
 func Doctor(p project.Result) []Check {
 	checks := []Check{}
-	add := func(id, item, status, action string) { checks = append(checks, Check{id, item, status, action}) }
 	if p.Facts.Package == nil {
 		return checks
 	}
-	entries := map[string]packageview.Observation{}
+	entries := make(map[string]packageview.Observation, len(p.Input.Inventory))
 	for _, o := range p.Input.Inventory {
 		entries[o.Path] = o
 	}
-	// The reader captures these files into the scope digest, but exports metadata
-	// rather than their bytes. Do not reopen a mutable source or parse scripts.
-	for _, lane := range []struct {
-		file, language string
-		locks          []string
-	}{
-		{"package.json", "node", []string{"package-lock.json", "npm-shrinkwrap.json", "pnpm-lock.yaml", "yarn.lock", "bun.lock", "bun.lockb"}},
-		{"pyproject.toml", "python", []string{"uv.lock", "poetry.lock", "Pipfile.lock"}},
-		{"go.mod", "go", []string{"go.sum"}},
-	} {
-		o, exists := entries[lane.file]
-		if !exists {
-			continue
-		}
-		status := "not_evaluated"
-		if o.Captured && o.State == packageview.Present && o.Kind == "file" {
-			status = "pass"
-		}
-		add(lane.language+"_project_file", "", status, "Inspect the language-native project file; contents and build scripts are not interpreted.")
-		lockStatus := "not_evaluated"
-		count := 0
-		for _, file := range lane.locks {
-			if o, ok := entries[file]; ok && o.Captured && o.State == packageview.Present && o.Kind == "file" {
-				count++
-			}
-		}
-		if count == 1 {
-			lockStatus = "pass"
-		}
-		action := "Review native dependency inputs and supply the selected manager's lock/checksum file where required; no dependencies were installed."
-		if count > 1 {
-			action = "Multiple manager lockfiles are present; explicitly select and reconcile dependency inputs."
-		}
-		add(lane.language+"_lockfile_presence", "", lockStatus, action)
-		add(lane.language+"_dependency_consistency", "", "not_evaluated", "Verify dependency versions, lockfile consistency and build outputs with the selected native toolchain separately.")
-	}
-	for name, skill := range p.Facts.Package.Skills {
-		if skill.Compatibility != "" || skill.AllowedTools != "" {
-			add("skill_host_requirements", itemID("skill:"+name), "not_evaluated", "Review declared Skill compatibility and tool requirements in the intended host; declarations do not prove availability.")
-		}
-	}
-	names := make([]string, 0, len(p.Facts.Package.MCP.Servers))
-	for name := range p.Facts.Package.MCP.Servers {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	for _, name := range names {
-		s := p.Facts.Package.MCP.Servers[name]
-		id := itemID("mcp:" + name)
-		if s.Type != "stdio" {
-			add("remote_connection", id, "not_evaluated", "Remote endpoint and authentication requirements have not been tested.")
-			add("oauth", id, "not_evaluated", "Determine authentication requirements separately; no credential stores were inspected.")
-			continue
-		}
-		command, _ := s.Decoded["command"].(string)
-		if strings.ContainsAny(command, `/\`) {
-			o, status := resolve(entries, command, p.Input.Coverage.InventoryComplete)
-			add("bundled_executable_presence", id, status, "Provide the referenced bundled file inside the package; no command was executed.")
-			mode := "not_evaluated"
-			if status == "pass" && runtime.GOOS != "windows" {
-				mode = "fail"
-				if o.Executable {
-					mode = "pass"
-				}
-			}
-			add("bundled_executable_mode", id, mode, "Ensure the bundled executable has appropriate executable permissions for the target OS.")
-		} else {
-			add("path_executable_availability", id, "not_evaluated", "Confirm the declared executable is available in the intended host PATH; this command performs no PATH lookup.")
-		}
-		add("executable_version", id, "not_evaluated", "Verify the required executable version separately; version probes are not run.")
-		add("runtime", id, "not_evaluated", "Static evidence does not prove process startup, MCP handshake or runtime dependencies.")
-	}
+	checks = append(checks, languageChecks(entries)...)
+	checks = append(checks, hostChecks(p.Facts.Package, entries, p.Input.Coverage.InventoryComplete)...)
 	sort.Slice(checks, func(i, j int) bool {
 		if checks[i].ID != checks[j].ID {
 			return checks[i].ID < checks[j].ID
