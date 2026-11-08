@@ -12,7 +12,10 @@ test('reviewed plugins prioritize everyday workflows and offer stable A–Z opt-
   await expect(page.locator('.plugin-grid--plugins .plugin-card__description').first())
     .not.toContainText('Community package for the official');
 
-  await page.goto('plugins/?sort=name');
+  await page.getByRole('combobox', { name: 'Sort plugins' }).click();
+  await page.getByRole('option', { name: 'Name A–Z' }).click();
+  await expect.poll(() => new URL(page.url()).searchParams.get('sort')).toBe('name');
+  await page.reload();
   await expect(titles.first()).toBeVisible();
   const alphabetical = (await titles.allTextContents()).map(name => name.trim().toLowerCase());
   expect(alphabetical).toEqual([...alphabetical].sort());
@@ -23,7 +26,7 @@ test('reviewed plugins prioritize everyday workflows and offer stable A–Z opt-
   await expect(page.locator('.catalog-curation-note')).toHaveCount(0);
 });
 
-test('curated Skills show source-bound explanations without altering provider catalog', async ({ page }) => {
+test('curated Skills show source-bound explanations without altering provider catalog', async ({ page }, testInfo) => {
   await page.route('https://api.universal-agent-plugins.com/v1/skills**', route =>
     route.fulfill({
       json: {
@@ -45,6 +48,10 @@ test('curated Skills show source-bound explanations without altering provider ca
   );
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
     .toBe(true);
+  await testInfo.attach('skills-curation-mobile', {
+    body: await page.screenshot({ fullPage: true, animations: 'disabled' }),
+    contentType: 'image/png',
+  });
 
   await page.goto('plugins/?tab=skills&q=browser');
   await expect(page.locator('.skills-curated')).toHaveCount(0);
