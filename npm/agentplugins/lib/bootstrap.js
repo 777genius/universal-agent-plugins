@@ -5,7 +5,6 @@ const fs = require("node:fs");
 const fsp = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
-const { setTimeout: pause } = require("node:timers/promises");
 
 const { cacheRoot, detectPlatform, expectedAssetName } = require("./platform");
 
@@ -159,19 +158,7 @@ async function ensureBinary(options = {}) {
   const url = `${String(releaseBase).replace(/\/$/, "")}/${encodeURIComponent(release.asset.file)}`;
   const temporary = path.join(os.tmpdir(), `agentplugins-download-${process.pid}-${crypto.randomBytes(8).toString("hex")}`);
   try {
-    // Retry only transient approved-host gateway responses. No fallback to
-    // "latest", and no retry after a digest, size or ownership failure.
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        await downloadFile(url, temporary, release.asset, options);
-        break;
-      } catch (error) {
-        if (attempt === 2 || !/^binary download failed with HTTP (502|503|504)$/.test(String(error.message))) {
-          throw error;
-        }
-        await pause((attempt + 1) * 200, undefined, { signal: options.signal });
-      }
-    }
+    await downloadFile(url, temporary, release.asset, options);
     await installVerifiedBinary(temporary, binaryPath, release, platformInfo, lockRoot);
     return { binaryPath, version: release.version, cacheHit: false };
   } catch (error) {
