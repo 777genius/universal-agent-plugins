@@ -90,9 +90,9 @@ func TestReleaseScannerDoesNotRetry403OrBadChecksum(t *testing.T) {
 	archive := tarArchive(t, "lintai", []byte("pinned-scanner"))
 	pinRetryTestRelease(t, archive)
 	for _, tc := range []struct {
-		name string
+		name   string
 		status int
-		body []byte
+		body   []byte
 		reason string
 	}{
 		{name: "forbidden", status: http.StatusForbidden, reason: "HTTP 403"},
