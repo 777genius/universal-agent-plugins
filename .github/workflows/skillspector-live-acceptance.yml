@@ -117,6 +117,7 @@ jobs:
           UAP_E2E_LIVE_SKILLS: '1'
           UAP_LANDING_DEPLOYMENT_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
           UAP_SKILLS_INSTALL_REPORT_DIR: ${{ runner.temp }}/uap-skills-install-live
+          UAP_GITHUB_READ_TOKEN: ${{ github.token }}
         run: node --experimental-strip-types scripts/skills-install-live-smoke.ts
 
       - name: Retain evidence and screenshots
