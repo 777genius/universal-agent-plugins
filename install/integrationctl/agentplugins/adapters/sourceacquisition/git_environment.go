@@ -5,6 +5,7 @@ package sourceacquisition
 import (
 	"os"
 	"strings"
+	"runtime"
 )
 
 func isolatedGitEnvironment(environ []string, isolatedHome string) []string {
@@ -34,4 +35,14 @@ func isolatedGitEnvironment(environ []string, isolatedHome string) []string {
 		"GIT_LFS_SKIP_SMUDGE=1",
 	)
 	return clean
+}
+
+// isolatedCheckoutSettings fixes the worktree policy without borrowing
+// the user's Git configuration. core.longpaths is meaningful on Windows only.
+func isolatedCheckoutSettings() [][]string {
+	settings := [][]string{{"core.autocrlf", "false"}, {"core.eol", "lf"}, {"core.filemode", "true"}, {"core.symlinks", "true"}, {"fetch.recurseSubmodules", "false"}}
+	if runtime.GOOS == "windows" {
+		settings = append(settings, []string{"core.longpaths", "true"})
+	}
+	return settings
 }
