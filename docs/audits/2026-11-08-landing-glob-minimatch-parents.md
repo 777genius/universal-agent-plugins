@@ -1,0 +1,35 @@
+# Landing dependency advisory triage — locked-parent evidence
+
+Checked the exact `landing/pnpm-lock.yaml` and `landing/package.json` from the #792 branch based on `main` `75e441a0`, not a guessed fresh resolution. This is a **read-only investigation**, not a fix or production runtime security attestation.
+
+## Actual old-major parents in the pnpm v9 lockfile
+
+| Locked affected package | Immediate locked parent | Classification / investigation |
+| --- | --- | --- |
+| `glob@10.5.0` | `archiver-utils@5.0.2` | Archiving dependency used through Nuxt/Nitro build tooling. Upstream `archiverjs/node-archiver#822` confirms `archiver-utils@5` depends on `glob@^10` and requests an upstream supported fix. |
+| `minimatch@3.1.5` | `eslint@9.39.5` | Developer lint only; ESLint 9 deliberately uses `minimatch@^3.1.5` (see official 9.39.4 release notes). |
+| `minimatch@3.1.5` | `@eslint/eslintrc@3.3.7` | ESLint legacy config compatibility, build/developer tooling. |
+| `minimatch@3.1.5` | `@eslint/config-array@0.21.2` | ESLint config traversal; developer tooling. |
+| `minimatch@3.1.5` | `serve-handler@6.1.7` | Transitive dependency of direct dev dependency `serve@14.2.6`; no direct `serve` invocation was found by repository-wide code search, but production exclusion must still be confirmed against actual generated output before claiming it. |
+
+Other, distinct installed majors also exist: `glob@13.0.6`, `minimatch@5.1.9`, `minimatch@9.0.9`, `minimatch@10.2.6`. Upgrading just one parent cannot establish advisory closure for all of these.
+
+## Advisory scope and safe strategy
+
+- `glob` [GHSA-3g3m-2fjr-6pw4](https://github.com/advisories/GHSA-3g3m-2fjr-6pw4) concerns post-abort filesystem walking; the published fixed line is `14.0.2+`.
+- `minimatch` [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249) concerns `optimizationLevel >= 2` + pathological patterns; the published fixed line is `11.0.1+`.
+- Both require **major-version crossings** for present affected parents; an override such as `archiver-utils>glob: 14.0.2` or `eslint>minimatch: 11.0.1` breaks their declared contracts and is **not** an approved solution merely because Dependabot alerts would disappear. Upstream archiver-utils currently lists `5.0.2` as latest; ESLint 9 v9.39.4 deliberately retains minimatch 3.
+- Site `nuxt@3.21.11` is on an upstream EOL line (Nuxt 3 EOL 2026-07-31), but migrating the entire site to Nuxt 4 in this narrow dependency PR is not justified without an independent compatibility plan and native browser E2E. This should be prioritized separately rather than silently bundled as a transient fix.
+- Risk is **dependency presence confirmed**, not remotely exploitable production runtime confirmed. Determine if any vulnerable code lands in public output or server runtime with a real generated artifact, and whether untrusted user-supplied glob patterns ever reach those build-time APIs; do not assume either outcome.
+
+## Conditions for a green #792
+
+1. Use real dependency metadata and a supported fixed upstream parent release (or a separately reviewed patch with equivalent semantics) before changing package resolution.
+2. Regenerate lock through the **actual pinned pnpm 12.3.4** tool, rather than hand-editing YAML, and record `pnpm why glob minimatch` plus `pnpm audit --json`. Do not call a vulnerable major “fixed” simply by removing the alert.
+3. Run frozen-lock clean install, site build/Pages, real Playwright browser E2E, and tests of Nitro archive outputs and ESLint/config behavior after any major crossing.
+4. Compare production asset graph and Dependabot state, close [issue #692](https://github.com/777genius/universal-agent-plugins/issues/692) only when real advisories are resolved or safe mitigation evidence is accepted.
+5. Preserve Draft while upstream supported fixes and build/runtime exposure have not been demonstrated. No fake PASS or disabled advisories.
+
+Current status: exact parent graph identified; no compatible fixed dependency resolution is yet proven or deployed.
+
+References: upstream [archiver issue #822](https://github.com/archiverjs/node-archiver/issues/822), [ESLint 9.39.4 release](https://eslint.org/blog/2026/03/eslint-v9.39.4-released/), [Nuxt EOL notice](https://github.com/nuxt/nuxt/releases), and the two GHSA advisory records.
