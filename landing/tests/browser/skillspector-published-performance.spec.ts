@@ -98,11 +98,15 @@ async function publishedHome(page: Page, context: BrowserContext, isolated = fal
   } else await page.goto('./');
   await hydrated(page);
   await expect(page.locator('.v-application')).toHaveClass(/v-theme--light/);
-  if (!isolated)
+  if (!isolated) {
     // The large published catalog can finish loading after hydration on a busy CI runner.
     await expect(page.locator('.catalog')).toHaveAttribute('data-discovery-state', 'current', {
       timeout: 20_000,
     });
+    // Curation now puts broad-use packages before Cloudflare. Reveal the next
+    // regular catalog page instead of requiring a particular first-page rank.
+    await page.locator('.catalog-more button').click();
+  }
   // Anchor subsequent probes to stable source identity, not a megabyte of descendant text.
   const report = page.locator(
     `[data-install-source=${JSON.stringify(isolated ? 'i18n-state-00' : cloudflareSource)}] details.skillspector`,
