@@ -223,6 +223,12 @@ def check_profile_unchanged(env, project, expected, stage):
         raise AssertionError(f"{stage}: original isolated profile changed")
 
 
+def check_user_project_unchanged(project, expected, stage):
+    """User-scoped commands must not change the working Project's files."""
+    if audit["snapshot"]([project]) != expected:
+        raise AssertionError(f"{stage}: User lifecycle modified Project A")
+
+
 def check_cold_restore(restored, original, original_lock, restored_lock,
                        original_manifest, restored_manifest, stage):
     """Require exact portable agreement, signed closure and independent IDs."""
@@ -291,6 +297,7 @@ def main():
                                (project_foreign_a, "unmanaged project data\n"),
                                *native_foreign_a]
             foreign_files = list(foreign_a_files)
+            project_before_user = None
             verify_pinned_launcher(options.cli, env, project_a)
             def run(e, p, label, *args):
                 try:
@@ -298,6 +305,8 @@ def main():
                 finally:
                     # Also protect foreign state when a lifecycle command refuses/fails.
                     check_foreign(foreign_files, root)
+                    if project_before_user is not None:
+                        check_user_project_unchanged(project_a, project_before_user, label)
             scoped = ("--scope", "project", "--project-root", str(project_a))
             run(env, project_a, "add", "add", "marketing-kit", "--target", options.target, *scoped)
             first = identities(inventory(options.cli, env, project_a, options.target), options.target)
@@ -370,8 +379,9 @@ def main():
                 if (Path(e["AGENTPLUGINS_HOME"]) / "uap.toml").exists():
                     raise AssertionError("Project installation unexpectedly wrote User manifest")
             # Check the same signed closure through a real, separate User lifecycle.
-            # Keep the Project artifacts unchanged while the disposable User profile
-            # installs, repeats, updates, repairs and removes its own copies.
+            # Every User command must preserve all of Project A, not just the
+            # portable agreement or known foreign sentinels.
+            project_before_user = audit["snapshot"]([project_a])
             project_files = {
                 name: (project_a / name).read_bytes() if (project_a / name).exists() else None
                 for name in ("uap.toml", "uap.lock")
@@ -494,6 +504,7 @@ def main():
                     raise AssertionError(f"User lifecycle modified Project artifact {name}")
             # The last inventory/read assertions are outside run()'s finally.
             check_foreign(foreign_files, root)
+            check_user_project_unchanged(project_a, project_before_user, "User final inventory")
             report["status"] = "passed"
     except Exception as error:
         report["failure"] = str(error)[:2500]

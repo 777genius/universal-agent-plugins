@@ -428,6 +428,36 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             extra.unlink()
             runner["check_profile_unchanged"](env, project, after, "restore B")
 
+    def test_marketing_kit_user_scope_cannot_write_untracked_project_state(self):
+        # A User command may succeed while creating a new file in the current
+        # Project, leaving its signed lock, manifest and sentinels unchanged.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        check = runner["check_user_project_unchanged"]
+        snapshot = runner["audit"]["snapshot"]
+        with TemporaryDirectory() as temporary:
+            project = Path(temporary) / "project"
+            project.mkdir()
+            (project / "uap.toml").write_text("original", encoding="utf-8")
+            foreign = project / "other-tool.txt"
+            foreign.write_text("owned by another tool", encoding="utf-8")
+            baseline = snapshot([project])
+            check(project, baseline, "User add")
+
+            untracked = project / "unexpected-user-scope-output.json"
+            untracked.write_text("unexpected", encoding="utf-8")
+            with self.assertRaisesRegex(AssertionError, "User lifecycle modified Project A"):
+                check(project, baseline, "User add")
+            untracked.unlink()
+
+            foreign.write_text("overwritten by User scope", encoding="utf-8")
+            with self.assertRaisesRegex(AssertionError, "User lifecycle modified Project A"):
+                check(project, baseline, "User remove")
+            foreign.write_text("owned by another tool", encoding="utf-8")
+            check(project, baseline, "User remove")
+
     def test_marketing_kit_cold_restore_guard_requires_full_disjoint_lock(self):
         from runpy import run_path
 
