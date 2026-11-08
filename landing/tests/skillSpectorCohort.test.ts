@@ -195,6 +195,8 @@ test('all seven Braids Skills sharing one signed package receive individual exac
     const record = structuredClone(source) as unknown as SkillSpectorRecord;
     record.status = 'partial';
     record.coverage!.status = 'partial';
+    record.coverage!.reasons = [{ code: 'reference_missing', message: 'Metadata is not a file.' }];
+    record.errors = [{ code: 'reference_missing', message: 'Metadata is not a file.' }];
     record.scanner = { id: 'skillspector', version: '2.13.1',
       revision: 'f3b25697d76256998ca9d42c198d256258d4c035' };
     record.freshness = 'current';
@@ -233,6 +235,8 @@ test('overlay survives unrelated manifest updates but fails closed on source or 
   const old = structuredClone(f.records[2]!) as unknown as SkillSpectorRecord;
   old.status = 'partial';
   old.coverage!.status = 'partial';
+  old.coverage!.reasons = [{ code: 'reference_missing', message: 'Metadata is not a file.' }];
+  old.errors = [{ code: 'reference_missing', message: 'Metadata is not a file.' }];
   old.scanner = { id: 'skillspector', version: '2.13.1',
     revision: 'f3b25697d76256998ca9d42c198d256258d4c035' };
   old.freshness = 'current';
@@ -293,6 +297,14 @@ test('overlay survives unrelated manifest updates but fails closed on source or 
     record => { record.coverage!.reasons = [
       { code: 'normalization_truncated', message: 'Incompletely represented risk evidence.' },
     ]; },
+    record => { record.coverage!.reasons.push(
+      { code: 'static_parse_limit', message: 'New unrelated analysis limitation.' },
+    ); },
+    record => { record.coverage!.reasons = []; },
+    record => { record.errors.push(
+      { code: 'acquisition_failed', message: 'Unrelated source acquisition error.' },
+    ); },
+    record => { record.errors = []; },
     record => { record.findings_truncated = true; },
     record => { record.coverage!.grouping_complete = false; },
     record => { delete record.coverage!.grouping_complete; },
