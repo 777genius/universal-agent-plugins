@@ -73,7 +73,14 @@ def lock_ids(project):
     packages = lock.get("packages")
     if not isinstance(packages, list):
         raise AssertionError("locked project has no package entries")
-    return {item.get("source_key", "") for item in packages}
+    keys = []
+    for item in packages:
+        if not isinstance(item, dict) or not isinstance(item.get("source_key"), str) or not item["source_key"]:
+            raise AssertionError("invalid signed lock package source")
+        keys.append(item["source_key"])
+    if len(keys) != len(set(keys)):
+        raise AssertionError("duplicate signed lock package source")
+    return set(keys)
 
 
 def run_case(cli, target, root, name, portable=None):

@@ -92,6 +92,31 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             self.assertEqual(check([row("root", "one"), row("dependency", "two")], "codex"),
                              {"root": "one", "dependency": "two"})
 
+    def test_marketing_kit_lock_guard_rejects_duplicate_or_unidentified_pins(self):
+        # Comparing lock keys as a set can hide a duplicate signed package.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        with TemporaryDirectory() as temporary:
+            project = Path(temporary)
+            def check(packages):
+                (project / "uap.lock").write_text(
+                    json.dumps({"packages": packages}), encoding="utf-8")
+                return runner["lock_ids"](project)
+
+            root = {"source_key": "directory:777genius/marketing-kit"}
+            child = {"source_key": "directory:777genius/notion"}
+            self.assertEqual(check([root, child]),
+                             {root["source_key"], child["source_key"]})
+            with self.assertRaisesRegex(AssertionError, "duplicate signed lock"):
+                check([root, root])
+            for invalid in (None, "", 123):
+                with self.assertRaisesRegex(AssertionError, "invalid signed lock"):
+                    check([{"source_key": invalid}])
+            with self.assertRaisesRegex(AssertionError, "invalid signed lock"):
+                check([{"other": "directory:777genius/notion"}])
+
     def test_published_windows_runner_scratch_is_real_absolute_and_ci_only(self):
         audit = load_audit()
         with TemporaryDirectory() as scratch:
