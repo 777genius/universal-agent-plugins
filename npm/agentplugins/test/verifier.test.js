@@ -352,3 +352,23 @@ test("timeout after response cannot retry an opened or partial download", async 
     if (fs.existsSync(file)) fs.unlinkSync(file);
   }
 });
+
+test("pre-response timeout cancellation stops retries immediately", async () => {
+  const file = destination(), controller = new AbortController();
+  let attempts = 0;
+  const request = (url, options) => {
+    attempts++;
+    const req = transport(() => {}, true)(url, options);
+    const originalDestroy = req.destroy;
+    req.destroy = error => {
+      originalDestroy(error);
+      controller.abort();
+    };
+    return req;
+  };
+  await assert.rejects(v.downloadFile(URL, file, PIN, {
+    request, signal: controller.signal
+  }), /cancelled/);
+  assert.equal(attempts, 1);
+  assert.equal(fs.existsSync(file), false);
+});
