@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { chromium, expect } from '@playwright/test';
 import type { SkillListing, SkillsCatalogPage } from '../types/skillsCatalog.ts';
 import { skillInstallCommand } from '../utils/skillsCatalog.ts';
+import { sortSkillsForCatalog } from '../data/catalogCuration.ts';
 import { createSkillSpectorClient } from '../utils/skillSpectorCatalog.ts';
 import { hasNoPublishedRemarks, publishedScanSubject } from '../utils/skillSpectorCurrent.ts';
 
@@ -68,12 +69,13 @@ try {
 
   const renderedIds = await cards.evaluateAll(nodes =>
     nodes.map(node => node.getAttribute('data-skill-id')));
-  expect(renderedIds).toEqual(data.items.map(item => item.id));
+  const ranked = sortSkillsForCatalog(data.items);
+  expect(renderedIds).toEqual(ranked.map(item => item.id));
 
   report.checked = data.items.length;
   report.installable = eligible.length;
   report.unsupported = unavailable.length;
-  for (const [index, item] of data.items.entries()) {
+  for (const [index, item] of ranked.entries()) {
     const command = skillInstallCommand(item);
     const install = cards.nth(index).getByRole('button', { name: `Install ${item.title}`, exact: true });
     if (!command) {
@@ -84,8 +86,8 @@ try {
       await expect(install, `Missing installation action: ${item.id}`).toHaveCount(1);
     }
   }
-  const firstInstall = data.items.findIndex(item => Boolean(skillInstallCommand(item)));
-  const selected = data.items[firstInstall]!;
+  const firstInstall = ranked.findIndex(item => Boolean(skillInstallCommand(item)));
+  const selected = ranked[firstInstall]!;
   await cards.nth(firstInstall).getByRole('button', {
     name: `Install ${selected.title}`, exact: true,
   }).click();
