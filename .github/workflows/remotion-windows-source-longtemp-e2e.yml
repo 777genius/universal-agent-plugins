@@ -20,6 +20,33 @@ jobs:
         with:
           persist-credentials: false
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+        # Git for Windows defaults to CRLF, which would change embedded pinned
+        # JSON schema bytes before Go's embed.FS reads them.
+        env:
+          GIT_CONFIG_COUNT: '1'
+          GIT_CONFIG_KEY_0: core.autocrlf
+          GIT_CONFIG_VALUE_0: 'false'
+      - name: Require byte-exact Git schemas and immutable fixtures
+        shell: pwsh
+        run: |
+          git -c core.autocrlf=false checkout-index --force --all
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          @'
+          import hashlib
+          import pathlib
+          import subprocess
+          pins = {
+              "tests/live-install/fixtures.json": "cd7ba20b2144343645eed1498e4e810f47d4113811ddbfea72790294c2345a5d",
+              "install/integrationctl/agentplugins/adapters/specregistry/schemas/1.0.0/plugin.schema.json": "0a4aad95ce337878ad38802ebf0daa3fde76abe3f65400c86bcbb1ec0b3ab883",
+              "install/integrationctl/agentplugins/adapters/specregistry/schemas/1.0.0/mcp.schema.json": "6539175bfcdf43085855183e86da40ea94b166547a72b47ae9a0a390516d3acb",
+          }
+          for path, expected in pins.items():
+              blob = subprocess.check_output(["git", "show", "HEAD:" + path])
+              disk = pathlib.Path(path).read_bytes()
+              if blob != disk or hashlib.sha256(blob).hexdigest() != expected:
+                  raise SystemExit("pinned checkout bytes differ for " + path)
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: '1.26.10'
