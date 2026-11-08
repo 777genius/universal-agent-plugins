@@ -272,6 +272,30 @@ export async function readVerifiedSkillSpectorCohort(
   return validateRecords(release, pointer);
 }
 
+/** An older signature cannot erase source-identical risk groups found by a newer v3 scan. */
+function preservesRiskEvidence(old: SkillSpectorRecord, signed: SkillSpectorRecord): boolean {
+  if (!Array.isArray(old.findings) || !Array.isArray(signed.findings)) return false;
+  const identity = (finding: SkillSpectorRecord['findings'][number]) => canonical([
+    finding.rule, finding.path, finding.line ?? null, finding.severity,
+    finding.match_fingerprint ?? null,
+    // Without a stable fingerprint, retain the observed message and positions.
+    finding.match_fingerprint ? null : finding.message,
+    finding.match_fingerprint ? null : (finding.occurrences ?? []),
+  ]);
+  const available = new Map<string, number>();
+  for (const finding of signed.findings) {
+    const key = identity(finding);
+    available.set(key, (available.get(key) ?? 0) + 1);
+  }
+  for (const finding of old.findings) {
+    const key = identity(finding);
+    const count = available.get(key) ?? 0;
+    if (!count) return false;
+    available.set(key, count - 1);
+  }
+  return true;
+}
+
 /** Promote only byte-identical, currently resolved sources from an Ed25519 release. */
 export function applyVerifiedSkillSpectorCohort(
   report: SkillSpectorDisplayReport,
@@ -298,6 +322,7 @@ export function applyVerifiedSkillSpectorCohort(
         old.coverage.reasons.some(reason => reason.code !== 'reference_missing') ||
         !Array.isArray(old.errors) || old.errors.length === 0 ||
         old.errors.some(error => error.code !== 'reference_missing') ||
+        !preservesRiskEvidence(old, updated) ||
         old.freshness !== 'current' || old.target_revision !== old.source.revision ||
         old.scanner?.version !== '2.13.1' ||
         !same(old.source, updated.source) || old.plugin_path !== updated.plugin_path ||
