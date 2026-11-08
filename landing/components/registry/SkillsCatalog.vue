@@ -17,32 +17,17 @@ import {
   skillsFiltersQuery,
 } from '~/utils/skillsCatalog';
 import { canonicalPath } from '~/utils/seo';
-import { recommendedSkills, recommendedSkillDescription } from '~/data/catalogCuration';
 
 defineProps<{ hideHeading?: boolean }>();
 
 const { t, n, d } = useI18n({ useScope: 'parent' });
 const route = useRoute();
-const localePath = useLocalePath();
 const router = useRouter();
 const initial = restoreSkillsQuery(route.query);
 const query = ref(initial.query);
 const view = ref<SkillsView>(initial.view);
 const filters = ref(restoreSkillsFilters(route.query));
 const filtersOpen = ref(false);
-const showFeaturedSkills = computed(
-  () =>
-    !query.value.trim() &&
-    view.value === 'popular' &&
-    !filters.value.scannedOnly &&
-    !filters.value.noRemarksOnly,
-);
-function recommendedSkillRoute(skill: { repository: string; slug: string }) {
-  return localePath({
-    path: '/skills/',
-    query: { id: `skills-sh:${skill.repository}:${skill.slug}`, q: skill.slug },
-  });
-}
 const activeFilterCount = computed(
   () => Number(filters.value.scannedOnly) + Number(filters.value.noRemarksOnly),
 );
@@ -143,28 +128,6 @@ const staleDate = computed(() => {
       </div>
       <p>{{ t('registryUi.skills.intro') }}</p>
     </div>
-    <section
-      v-if="showFeaturedSkills"
-      class="skills-curated"
-      aria-labelledby="skills-curated-title"
-    >
-      <div class="skills-curated__heading">
-        <h3 id="skills-curated-title">{{ t('registryUi.skills.featured.title') }}</h3>
-        <p>{{ t('registryUi.skills.featured.explanation') }}</p>
-      </div>
-      <div class="skills-curated__grid">
-        <NuxtLink
-          v-for="skill in recommendedSkills"
-          :key="skill.repository + '/' + skill.slug"
-          class="skills-curated__item"
-          :to="recommendedSkillRoute(skill)"
-        >
-          <strong>{{ skill.slug }}</strong>
-          <span>{{ recommendedSkillDescription(skill.slug, t) }}</span>
-          <small>{{ skill.repository }}</small>
-        </NuxtLink>
-      </div>
-    </section>
     <div
       class="catalog-controls skills-catalog__controls"
       role="search"
