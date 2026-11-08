@@ -248,6 +248,8 @@ func TestInspectPythonBrokenVenvBlocksManagerProbe(t *testing.T) {
 	}
 }
 
+// TestResolvePythonEnvironmentBrokenVenvWithoutInterpreter ensures a broken .venv
+// with no interpreter never falls through to a manager-owned environment probe.
 func TestResolvePythonEnvironmentBrokenVenvWithoutInterpreter(t *testing.T) {
 	root := t.TempDir()
 	if err := os.Mkdir(filepath.Join(root, ".venv"), 0o755); err != nil {
