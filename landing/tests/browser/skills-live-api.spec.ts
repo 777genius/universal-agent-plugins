@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { expect, test } from '@playwright/test';
 import type { SkillsCatalogPage } from '../../types/skillsCatalog.ts';
+import { sortSkillsForCatalog } from '../../data/catalogCuration.ts';
 import { skillInstallCommand } from '../../utils/skillsCatalog.ts';
 
 // Opt-in integration: staging Pages + actual public API bytes. Staging uses a
@@ -56,10 +57,11 @@ test('staged Skills interface renders every live catalog install command truthfu
 
   const renderedIds = await cards.evaluateAll(nodes =>
     nodes.map(node => node.getAttribute('data-skill-id')));
-  expect(renderedIds).toEqual(sample.map(item => item.id));
-  const unavailable = sample.filter(item => !skillInstallCommand(item));
+  const displayed = sortSkillsForCatalog(sample);
+  expect(renderedIds).toEqual(displayed.map(item => item.id));
+  const unavailable = displayed.filter(item => !skillInstallCommand(item));
   let legacyRecovered = 0;
-  for (const [index, item] of sample.entries()) {
+  for (const [index, item] of displayed.entries()) {
     const command = skillInstallCommand(item);
     const button = cards.nth(index).getByRole('button', { name: `Install ${item.title}`, exact: true });
     if (!command) {
@@ -70,12 +72,12 @@ test('staged Skills interface renders every live catalog install command truthfu
       await expect(button).toHaveCount(1);
     }
   }
-  const firstInstall = sample.findIndex(item => Boolean(skillInstallCommand(item)));
+  const firstInstall = displayed.findIndex(item => Boolean(skillInstallCommand(item)));
   await cards.nth(firstInstall).getByRole('button', {
-    name: `Install ${sample[firstInstall]!.title}`, exact: true,
+    name: `Install ${displayed[firstInstall]!.title}`, exact: true,
   }).click();
   await expect(cards.nth(firstInstall).locator('.command-snippet code')).toHaveText(
-    skillInstallCommand(sample[firstInstall]!)!,
+    skillInstallCommand(displayed[firstInstall]!)!,
   );
   console.log(JSON.stringify({
     live: true, checked: sample.length, commandEligible: eligible.length,
