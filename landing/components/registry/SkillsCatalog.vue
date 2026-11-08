@@ -31,8 +31,11 @@ const view = ref<SkillsView>(initial.view);
 const filters = ref(restoreSkillsFilters(route.query));
 const filtersOpen = ref(false);
 const showFeaturedSkills = computed(
-  () => !query.value.trim() && view.value === 'popular' &&
-    !filters.value.scannedOnly && !filters.value.noRemarksOnly,
+  () =>
+    !query.value.trim() &&
+    view.value === 'popular' &&
+    !filters.value.scannedOnly &&
+    !filters.value.noRemarksOnly,
 );
 function recommendedSkillRoute(skill: { repository: string; slug: string }) {
   return localePath({
