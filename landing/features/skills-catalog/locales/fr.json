@@ -1,6 +1,18 @@
 {
   "registryUi": {
     "skills": {
+      "featured": {
+        "title": "Recommandés pour les agents de code",
+        "explanation": "Choisis pour les tâches courantes. Pas de garantie de sécurité ni de compatibilité : vérifiez la source et les prérequis.",
+        "items": {
+          "agent-browser": "Automatisez de vrais parcours dans le navigateur avec un CLI adapté aux agents.",
+          "frontend-design": "Créez des interfaces frontend plus soignées et réfléchies.",
+          "find-skills": "Trouvez des Skills réutilisables adaptés à votre tâche.",
+          "tdd": "Développez et corrigez le code avec le cycle rouge–vert–refactorisation.",
+          "vercel-react-best-practices": "Appliquez des bonnes pratiques de performance React et Next.js.",
+          "web-design-guidelines": "Vérifiez l’ergonomie et l’accessibilité des interfaces web."
+        }
+      },
       "catalogType": "Type de catalogue",
       "plugins": "Extensions",
       "skills": "Compétences",
