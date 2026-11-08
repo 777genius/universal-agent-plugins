@@ -294,9 +294,10 @@ export function applyVerifiedSkillSpectorCohort(
     if (!updated || old.status !== 'partial' || old.coverage?.status !== 'partial' ||
         old.findings_truncated !== false || old.coverage.grouping_complete !== true ||
         old.coverage.reference_evidence_truncated !== false ||
-        !Array.isArray(old.coverage.reasons) ||
-        old.coverage.reasons.some(reason => reason.code === 'normalization_truncated' ||
-          reason.code.startsWith('recovery_')) ||
+        !Array.isArray(old.coverage.reasons) || old.coverage.reasons.length === 0 ||
+        old.coverage.reasons.some(reason => reason.code !== 'reference_missing') ||
+        !Array.isArray(old.errors) || old.errors.length === 0 ||
+        old.errors.some(error => error.code !== 'reference_missing') ||
         old.freshness !== 'current' || old.target_revision !== old.source.revision ||
         old.scanner?.version !== '2.13.1' ||
         !same(old.source, updated.source) || old.plugin_path !== updated.plugin_path ||
