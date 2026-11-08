@@ -78,7 +78,8 @@ jobs:
         env:
           TARGET: ${{ matrix.target }}
         run: |
-          python3 -m unittest scripts/test_live_install_audit_env.py -k marketing_kit_foreign_guard
+          # Execute foreign-state and installation-ID regression tests on each real lane.
+          python3 -m unittest scripts/test_live_install_audit_env.py -k marketing_kit_
           python3 scripts/marketing-kit-project-release-e2e.py             --target "$TARGET" --cli "$(command -v agentplugins)"             --report "$RUNNER_TEMP/marketing-kit-project/report.json"
       - name: Preserve factual outcomes including failures
         if: always()
