@@ -68,6 +68,30 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "foreign content modified"):
                 runner["check_foreign"]([(marker, expected)], root)
 
+    def test_marketing_kit_identity_guard_rejects_missing_or_shared_ids(self):
+        # A missing ID can make the repeat/repair comparison falsely pass.
+        # Distinct signed distributions must also retain distinct owned IDs.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        def row(distribution, installation_id):
+            return {"installation_id": installation_id,
+                    "directory": {"recorded_distribution": distribution},
+                    "clients": [{"client_id": "codex", "scope": "project",
+                                 "package_revision": "pinned"}]}
+
+        with patch.dict(runner["audit"],
+                        {"recorded_signed_release_matches": lambda *_: True}):
+            check = runner["identities"]
+            for bad in (None, "", "  "):
+                with self.assertRaisesRegex(AssertionError, "missing installation ID"):
+                    check([row("root", bad)], "codex")
+            with self.assertRaisesRegex(AssertionError, "duplicate installation ID"):
+                check([row("root", "same"), row("dependency", "same")], "codex")
+            self.assertEqual(check([row("root", "one"), row("dependency", "two")], "codex"),
+                             {"root": "one", "dependency": "two"})
+
     def test_published_windows_runner_scratch_is_real_absolute_and_ci_only(self):
         audit = load_audit()
         with TemporaryDirectory() as scratch:

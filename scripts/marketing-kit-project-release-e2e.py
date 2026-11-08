@@ -59,7 +59,12 @@ def identities(items, target):
             raise AssertionError(f"{dist}: exact signed release provenance does not match the native binding")
         if dist in result:
             raise AssertionError(f"duplicate distribution: {dist}")
-        result[dist] = row.get("installation_id")
+        installation_id = row.get("installation_id")
+        if not isinstance(installation_id, str) or not installation_id.strip():
+            raise AssertionError(f"{dist}: missing installation ID")
+        if installation_id in result.values():
+            raise AssertionError(f"duplicate installation ID: {installation_id}")
+        result[dist] = installation_id
     return result
 
 
@@ -178,8 +183,11 @@ def main():
             foreign_files.extend(foreign_b_files)
             scoped_b = ("--scope", "project", "--project-root", str(project_b))
             run(env_b, project_b, "cold locked restore", "install", "--locked", "--yes", *scoped_b)
-            if set(identities(inventory(options.cli, env_b, project_b, options.target), options.target)) != EXPECTED:
+            restored = identities(inventory(options.cli, env_b, project_b, options.target), options.target)
+            if set(restored) != EXPECTED:
                 raise AssertionError("cold restore lost required closure")
+            if set(restored.values()) & set(identities_after_update.values()):
+                raise AssertionError("cold restore reused Project A installation IDs")
             if (project_b / "uap.lock").read_bytes() != (project_a / "uap.lock").read_bytes():
                 raise AssertionError("cold restore modified pinned lock")
             run(env_b, project_b, "remove B", "remove", "marketing-kit", *scoped_b)
