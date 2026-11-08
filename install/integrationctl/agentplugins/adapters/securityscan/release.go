@@ -11,11 +11,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
@@ -94,23 +96,11 @@ func (scanner ReleaseScanner) resolve(ctx context.Context) (string, error) {
 	}
 	client := scanner.HTTPClient
 	if client == nil {
-		client = &http.Client{}
+		client = &http.Client{Timeout: 60 * time.Second}
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, origin+asset.Name, nil)
+	body, err := downloadReleaseArchive(ctx, client, origin+asset.Name)
 	if err != nil {
 		return "", err
-	}
-	response, err := client.Do(request)
-	if err != nil {
-		return "", fmt.Errorf("download lintai security scanner: %w", err)
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("download lintai security scanner: HTTP %d", response.StatusCode)
-	}
-	body, err := io.ReadAll(io.LimitReader(response.Body, maxReleaseAsset+1))
-	if err != nil || len(body) > maxReleaseAsset {
-		return "", errors.New("downloaded lintai release asset is unreadable or oversized")
 	}
 	digest := sha256.Sum256(body)
 	if hex.EncodeToString(digest[:]) != asset.Digest {
@@ -148,6 +138,50 @@ func (scanner ReleaseScanner) resolve(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("commit lintai security scanner: %w", err)
 	}
 	return executable, nil
+}
+
+// downloadReleaseArchive retries only transient acquisition failures. Every
+// successful attempt is still subjected to the pinned asset SHA-256 check.
+func downloadReleaseArchive(ctx context.Context, client *http.Client, url string) ([]byte, error) {
+	for attempt := 0; attempt < 3; attempt++ {
+		request, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		if err != nil {
+			return nil, err
+		}
+		response, err := client.Do(request)
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil, fmt.Errorf("download lintai security scanner: %w", ctx.Err())
+			}
+			var networkErr net.Error
+			if !errors.As(err, &networkErr) || (!networkErr.Timeout() && !networkErr.Temporary()) || attempt == 2 {
+				return nil, fmt.Errorf("download lintai security scanner: %w", err)
+			}
+		} else {
+			if response.StatusCode == http.StatusOK {
+				body, readErr := io.ReadAll(io.LimitReader(response.Body, maxReleaseAsset+1))
+				_ = response.Body.Close()
+				if readErr != nil || len(body) > maxReleaseAsset {
+					return nil, errors.New("downloaded lintai release asset is unreadable or oversized")
+				}
+				return body, nil
+			}
+			status := response.StatusCode
+			_ = response.Body.Close()
+			if (status != http.StatusBadGateway && status != http.StatusServiceUnavailable && status != http.StatusGatewayTimeout) || attempt == 2 {
+				return nil, fmt.Errorf("download lintai security scanner: HTTP %d", status)
+			}
+		}
+		// At most two bounded, context-cancellable pauses. No alternate origin.
+		wait := time.NewTimer(time.Duration(attempt+1) * 200 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			wait.Stop()
+			return nil, fmt.Errorf("download lintai security scanner: %w", ctx.Err())
+		case <-wait.C:
+		}
+	}
+	return nil, errors.New("download lintai security scanner: retries exhausted")
 }
 
 func extractReleaseBinary(body []byte, zipAsset bool, binaryName string) ([]byte, error) {
