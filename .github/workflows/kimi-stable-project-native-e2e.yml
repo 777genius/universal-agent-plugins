@@ -83,8 +83,26 @@ jobs:
           evidence = json.loads(pathlib.Path(sys.argv[1]).read_text())
           expected_head = sys.argv[2]
           rows = evidence.get("results", [])
-          failures = [f"{row.get('index')}: {row.get('status')}" for row in rows
-                      if not isinstance(row, dict) or row.get("status") != "passed"]
+          # A summary-only PASS is insufficient: independently require the
+          # observable source/owned-byte, pin, repeat, removal and isolation proofs.
+          required_positive = (
+              "skill_bytes_match", "lock_written", "lock_contains_identity",
+              "lock_exact_source_pinned", "listed_identity", "repeat_verified",
+              "repeat_native_unchanged", "repeat_lock_unchanged",
+              "removal_verified", "sentinels_preserved", "post_list_schema_valid",
+          )
+          failures = []
+          for index, row in enumerate(rows):
+              if not isinstance(row, dict):
+                  failures.append(f"{index}: malformed evidence")
+                  continue
+              missing = [key for key in required_positive if row.get(key) is not True]
+              if (row.get("status") != "passed"
+                      or row.get("post_remove_identity_registered") is not False
+                      or missing):
+                  failures.append(
+                      f"{index}: status={row.get('status')}, missing={missing}, "
+                      f"remaining={row.get('post_remove_identity_registered')}")
           if (evidence.get("pr_head_sha") != expected_head
                   or evidence.get("passed") != 30
                   or evidence.get("verified_negative_coverage") != 0
