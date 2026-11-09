@@ -43,7 +43,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     check({**accepted, **invalid}, "add")
 
     def test_marketing_kit_accepts_only_complete_legacy_noop_update(self):
-        # Immutable published 0.1.102 emits outcome/actions/results without result.
+        # Published 0.1.102 emits result=success alongside outcome/actions/results.
         from runpy import run_path
 
         runner = run_path(str(Path(__file__).resolve().parent /
@@ -56,6 +56,9 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                    for alias in aliases]
         envelope = {"outcome": "completed", "actions": actions, "results": []}
         valid = {"exit_code": 0, "timeout": False, "_json": envelope}
+        with_success = {**envelope, "result": "success"}
+        self.assertEqual(check({**valid, "_json": with_success},
+                               "update", "update", "codex"), with_success)
         for stage in ("update", "User update"):
             self.assertEqual(check(valid, stage, "update"), envelope)
         for operation in (None, "add", "list", "repair", "install", "remove"):
@@ -66,6 +69,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 {"outcome": "partial"},
                 {"outcome": "failure"},
                 {"result": "failure"},
+                {"result": "partial"},
                 {"results": [{"outcome": "failed"}]},
                 {"actions": actions[:-1]},
                 {"actions": [{**actions[0], "action": "failed"}, *actions[1:]]},
@@ -105,13 +109,18 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                             "results": results}
                 valid = {"exit_code": 0, "timeout": False, "_json": envelope}
                 self.assertEqual(check(valid, operation, operation, "codex"), envelope)
+                released = {**envelope, "result": "success"}
+                self.assertEqual(check({**valid, "_json": released},
+                                       operation, operation, "codex"), released)
                 # Both actions and results can consistently attest a *different*
                 # client while this target's native state remains untouched.
                 foreign = {**envelope,
                            "actions": [{**action, "client_id": "claude"} for action in actions],
                            "results": [{**result, "client_id": "claude"} for result in results]}
-                for invalid in (foreign, {"result": "success"},
-                                {"result": "success", **envelope}):
+                for invalid in (foreign, {**foreign, "result": "success"},
+                                {"result": "success"},
+                                {**envelope, "result": "partial"},
+                                {**envelope, "result": "failure"}):
                     with self.assertRaisesRegex(AssertionError, "CLI did not succeed"):
                         check({**valid, "_json": invalid}, operation, operation, "codex")
 

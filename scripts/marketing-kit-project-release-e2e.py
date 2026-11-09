@@ -23,9 +23,9 @@ EXPECTED = {
 }
 
 
-# Published npm 0.1.102 dependency operations use outcome/actions/results
-# instead of the newer result field. Require their exact successful action
-# evidence; process exit 0 and outcome=completed alone are not sufficient.
+# Published npm 0.1.102 dependency operations include result=success AND
+# outcome/actions/results. Require exact action evidence; process exit 0 or
+# result=success alone is not sufficient.
 UPDATE_ALIASES = {"marketing-kit", "notion", "hubspot-crm", "playwright"}
 LEGACY_ACTIONS = {
     "update": {"unchanged"},
@@ -37,7 +37,8 @@ LEGACY_ACTIONS = {
 
 def valid_legacy_dependency_result(envelope, operation, target=None):
     """Validate real published dependency receipts for the selected client."""
-    if (operation not in LEGACY_ACTIONS or "result" in envelope
+    if (operation not in LEGACY_ACTIONS
+            or ("result" in envelope and envelope["result"] != "success")
             or envelope.get("outcome") != "completed"):
         return False
     actions, results = envelope.get("actions"), envelope.get("results")
@@ -82,7 +83,7 @@ def verified(result, stage, operation=None, target=None):
             or not isinstance(envelope, dict)):
         raise AssertionError(f"{stage}: CLI did not succeed with JSON: {result}")
     # The pinned 0.1.102 dependency commands must report explicit actions
-    # and results. A bare success envelope is not evidence of their execution.
+    # and results even when they also emit result=success.
     if operation in LEGACY_ACTIONS:
         if valid_legacy_dependency_result(envelope, operation, target):
             return envelope
