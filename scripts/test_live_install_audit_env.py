@@ -568,6 +568,33 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             empty.rmdir()
             check(project, baseline, "User remove")
 
+    def test_marketing_kit_snapshot_rejects_removed_or_replaced_empty_root(self):
+        # A snapshot with no child files previously equated an empty protected
+        # Project with a missing root or a regular file. These are mutations.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        snapshot = runner["scoped_snapshot"]
+        check = runner["check_user_project_unchanged"]
+        with TemporaryDirectory() as temporary:
+            project = Path(temporary) / "empty-project"
+            project.mkdir()
+            baseline = snapshot([project])
+            check(project, baseline, "User add")
+            project.rmdir()
+            with self.assertRaisesRegex(AssertionError, "User lifecycle modified Project A"):
+                check(project, baseline, "User remove")
+
+            missing = snapshot([project])
+            project.mkdir()
+            with self.assertRaisesRegex(AssertionError, "User lifecycle modified Project A"):
+                check(project, missing, "User add")
+            project.rmdir()
+            project.write_bytes(b"replaced with a regular file")
+            with self.assertRaisesRegex(AssertionError, "User lifecycle modified Project A"):
+                check(project, baseline, "User repair")
+
     def test_marketing_kit_cold_restore_guard_requires_full_disjoint_lock(self):
         from runpy import run_path
 

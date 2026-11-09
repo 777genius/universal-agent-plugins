@@ -233,8 +233,12 @@ def scoped_snapshot(roots):
         if root.is_symlink():
             state[f"root-link:{index}"] = os.readlink(root)
             continue
+        # An empty protected profile must not disappear or turn into a file
+        # unnoticed: audit.snapshot records children, not root existence.
         if not root.is_dir():
+            state[f"root-kind:{index}"] = "file" if root.exists() else "absent"
             continue
+        state[f"root-kind:{index}"] = "directory"
         for directory, dirs, files in os.walk(root, followlinks=False):
             for name in dirs:
                 path = Path(directory) / name
