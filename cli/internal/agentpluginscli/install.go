@@ -36,6 +36,9 @@ func newInstallCommand(app App, opts *options) *cobra.Command {
 				return scopeErr
 			}
 			if len(args) == 1 {
+				if opts.dependencyPolicyFile != "" {
+					return fmt.Errorf("--policy applies only to declared installs from uap.toml; a positional source must not bypass dependency policy")
+				}
 				opts.yes = yes
 				return executeAddCommand(cmd, app, opts, args[0], activationComplete, authComplete)
 			}
