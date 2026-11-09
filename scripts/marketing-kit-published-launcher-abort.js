@@ -59,21 +59,36 @@ async function verifyLockWaitCancellation() {
   const releaseOwner = await acquireLock(target, options);
   let timer;
   try {
+    // A lock *count* alone could pass if a cancelled waiter destroyed the
+    // owner's file and created a replacement. Preserve its exact identity.
+    const ownerNames = fs.readdirSync(lockRoot);
+    assert.equal(ownerNames.length, 1, "owner must hold exactly one published cache lock");
+    assert.ok(ownerNames[0].endsWith(".lock"), "expected the published lock filename");
+    const ownerPath = path.join(lockRoot, ownerNames[0]);
+    const ownerStat = fs.lstatSync(ownerPath);
+    assert.ok(ownerStat.isFile() && !ownerStat.isSymbolicLink(),
+      "published owner lock must be a regular non-symlink file");
+    const ownerBytes = fs.readFileSync(ownerPath);
     const controller = new AbortController();
     const waiter = acquireLock(target, { ...options, signal: controller.signal });
     timer = setTimeout(() => controller.abort(), 50);
     await assert.rejects(waiter, /cancel/i, "published lock waiter must honor AbortSignal");
-    assert.equal(fs.readdirSync(lockRoot).filter(name => name.endsWith(".lock")).length, 1,
-      "cancelled waiter must not remove the original owner's lock");
+    assert.deepEqual(fs.readdirSync(lockRoot), ownerNames,
+      "cancelled waiter must not replace the owner's lock or leave orphan files");
+    const surviving = fs.lstatSync(ownerPath);
+    assert.equal(surviving.dev, ownerStat.dev, "cancelled waiter replaced owner's lock device");
+    assert.equal(surviving.ino, ownerStat.ino, "cancelled waiter replaced owner's lock inode");
+    assert.deepEqual(fs.readFileSync(ownerPath), ownerBytes,
+      "cancelled waiter modified owner's lock nonce or receipt");
   } finally {
     clearTimeout(timer);
     await releaseOwner();
   }
-  assert.equal(fs.readdirSync(lockRoot).filter(name => name.endsWith(".lock")).length, 0,
-    "owner release must remove its own cache lock");
+  assert.deepEqual(fs.readdirSync(lockRoot), [],
+    "owner release must remove its own cache lock without leftovers");
   const releaseAgain = await acquireLock(target, options);
   await releaseAgain();
-  assert.equal(fs.readdirSync(lockRoot).filter(name => name.endsWith(".lock")).length, 0,
+  assert.deepEqual(fs.readdirSync(lockRoot), [],
     "released published lock must be reacquirable and removable");
 }
 
