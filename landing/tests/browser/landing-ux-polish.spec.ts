@@ -10,6 +10,13 @@ for (const width of [1440, 390]) {
     const header = table.locator('thead th:first-child');
     const icons = table.locator('tbody th:first-child img');
     await expect(icons).toHaveCount(15);
+    // An offscreen scroll-reveal section has zero opacity even though its
+    // table cells have geometry. Wait for the *visible* table before capturing
+    // review screenshots, otherwise the proof is an almost-black image.
+    const section = page.locator('#agent-support');
+    await section.scrollIntoViewIfNeeded();
+    await expect(section).toHaveClass(/scroll-reveal--visible/);
+    await expect(section).toHaveCSS('opacity', '1');
     const expectedX = await header.evaluate((node) =>
       node.getBoundingClientRect().left + parseFloat(getComputedStyle(node).paddingLeft),
     );
