@@ -127,6 +127,9 @@ def synthetic_cycle():
                     if stage in ("repeat-add-a", "unchanged-update-a"):
                         outcome["no_change"] = True
                 output = {"plugin": "native-proof", "version": version, "source": "local" if verb in ("repair", "remove") else "direct local source", "tree_digest": src["digest"], "manifest_digest": pack["manifest_digest"], "dry_run": False, "result": outcome}
+                if not removed:
+                    output.update(scope="project", readiness="needs_action", next_action="Review Cursor project discovery",
+                                  next_actions=[{"code": "verify_native", "actor": "native_client", "message": "Review Cursor project discovery"}])
                 data_out = output
                 if stage != "repeat-add-a":
                     output["operation_id"] = group
@@ -135,7 +138,7 @@ def synthetic_cycle():
                         target["selected"] = True
                     data_out = {"operation_id": group, "batch": True, "status": "data_retained" if removed else "completed", "succeeded": 1, "failed": 0, "plugin": "native-proof", "dry_run": False, "targets": [target]}
                     if verb == "add":
-                        data_out["environment"] = {"reason": "no_save_requested", "saved": False}
+                        data_out["environment"] = {"reason": "no_save_requested", "saved": False, "scope": "project", "scope_selection_reason": "explicit"}
                     if removed:
                         data_out.update(plugin_data_preserved=True, data_retained=True, retained_data=[{k: data[k] for k in ("data_receipt_id", "physical_backend_id", "scope", "state")}])
                 out = compact({"schema_version": 1, "command": verb, "result": "success", "data": data_out})
@@ -310,6 +313,27 @@ class CursorCycleContracts(unittest.TestCase):
                     command["stdout"] = wire(compact(document))
                     with self.subTest(stage=stage, field=field, fault=fault), patch.object(cycle, "pins"), self.assertRaises(ValueError):
                         cycle.complete(*captured)
+
+    def test_current_readiness_and_scope_are_closed(self):
+        for field, wrong in (("scope", "user"), ("readiness", "ready"), ("next_action", ""),
+                             ("next_actions", [{"code": "verify_native", "actor": "user", "message": "Review Cursor project discovery"}]),
+                             ("next_actions", [{"code": "verify_native", "actor": "native_client", "message": "foreign"}]),
+                             ("next_actions", []), ("unknown", True)):
+            captured = synthetic_cycle()
+            command = next(row["value"] for row in captured[0] if row["stage"] == "add-a")
+            document = json.loads(cycle.stream(command["stdout"]))
+            document["data"]["targets"][0]["output"][field] = wrong
+            command["stdout"] = wire(compact(document))
+            with self.subTest(field=field, wrong=wrong), patch.object(cycle, "pins"), self.assertRaises(ValueError):
+                cycle.complete(*captured)
+        for field in ("scope", "scope_selection_reason"):
+            captured = synthetic_cycle()
+            command = next(row["value"] for row in captured[0] if row["stage"] == "add-a")
+            document = json.loads(cycle.stream(command["stdout"]))
+            del document["data"]["environment"][field]
+            command["stdout"] = wire(compact(document))
+            with self.subTest(missing=field), patch.object(cycle, "pins"), self.assertRaises(ValueError):
+                cycle.complete(*captured)
 
     def test_stream_canonical_bounds_and_privacy(self):
         self.assertEqual(cycle.stream({"bytes": 0, "sha256": sha(b""), "body": ""}), b"")

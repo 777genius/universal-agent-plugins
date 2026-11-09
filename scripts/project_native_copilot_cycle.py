@@ -174,9 +174,20 @@ def public_json(raw, label, proof):
             require(target["selected"] is True)
         output = target["output"]
     output_required = set("plugin version source tree_digest manifest_digest dry_run result".split())
-    require(type(output) is dict and output_required <= set(output) <= output_required | {"operation_id", "revision", "security", "next_action"})
+    require(type(output) is dict and output_required <= set(output) <= output_required | {"operation_id", "revision", "security", "next_action", "scope", "readiness", "next_actions"})
     values(output, {"plugin": "native-proof", "version": proof["version"], "source": "local" if verb in ("repair", "remove") else "direct local source", "tree_digest": proof["source_digest"],
                     "manifest_digest": proof["installation"]["package"]["manifest_digest"], "dry_run": False})
+    scope = "user" if proof["scope"] == "user" else "project"
+    if "scope" in output:
+        require(output["scope"] == scope)
+    if verb != "remove":
+        require(output.get("scope") == scope and output.get("readiness") == "needs_action")
+        message = output.get("next_action")
+        require(type(message) is str and bool(message) and same(output.get("next_actions"),
+                [{"code": "verify_native", "actor": "native_client", "message": message}]))
+    if verb == "add" and label != "repeat-add-a":
+        require(same(data.get("environment"), {"reason": "no_save_requested", "saved": False,
+                                             "scope": scope, "scope_selection_reason": "explicit"}))
     outcome = output["result"]
     require(type(outcome) is dict)
     values(outcome, {"installation_id": proof["installation"]["installation_id"], "requires_confirmation": False, "mutated": changed})

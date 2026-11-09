@@ -207,10 +207,17 @@ def public_result(raw, stage, selected):
         output, group = target["output"], data["operation_id"]
         require(type(group) is str and re.fullmatch(r"op-[0-9a-f]{32}", group) and output["operation_id"] == group and (stage not in CHANGED or group == i["operation_group_id"]))
         if verb == "add":
-            require(same(data["environment"], {"reason": "no_save_requested", "saved": False}))
+            require(same(data["environment"], {"reason": "no_save_requested", "saved": False, "scope": "project", "scope_selection_reason": "explicit"}))
         if verb == "remove":
             require(data["data_retained"] is True and data["plugin_data_preserved"] is True and same(data["retained_data"], [{key: selected["data"][key] for key in ("data_receipt_id", "physical_backend_id", "scope", "state")}]))
-    obj(output, "plugin version source tree_digest manifest_digest dry_run result", "next_action security" + (" operation_id" if group else ""))
+    obj(output, "plugin version source tree_digest manifest_digest dry_run result", "next_action security scope readiness next_actions" + (" operation_id" if group else ""))
+    if "scope" in output:
+        require(output["scope"] == "project")
+    if verb != "remove":
+        require(output.get("scope") == "project" and output.get("readiness") == "needs_action")
+        message = output.get("next_action")
+        require(type(message) is str and bool(message) and same(output.get("next_actions"),
+                [{"code": "verify_native", "actor": "native_client", "message": message}]))
     expected = {"plugin": "native-proof", "version": selected["version"], "source": "local" if verb in ("repair", "remove") else "direct local source", "tree_digest": selected["source_digest"], "manifest_digest": i["package"]["manifest_digest"], "dry_run": False}
     require(all(same(output[key], value) for key, value in expected.items()))
     def identities(value):

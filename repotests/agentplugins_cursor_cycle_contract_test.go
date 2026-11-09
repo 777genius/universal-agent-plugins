@@ -201,3 +201,22 @@ func TestCursorCyclePublicOutcomeRequiresMeasuredStageShape(t *testing.T) {
 		})
 	}
 }
+
+func TestCursorCyclePreparedReadinessIsClosed(t *testing.T) {
+	valid := map[string]any{"scope": "project", "readiness": "needs_action", "next_action": "Review project", "next_actions": []any{map[string]any{"code": "verify_native", "actor": "native_client", "message": "Review project"}}}
+	if !cursorCyclePreparedReadiness(valid) {
+		t.Fatal("current prepared readiness refused")
+	}
+	for key, wrong := range map[string]any{"scope": "user", "readiness": "ready", "next_action": "", "next_actions": []any{map[string]any{"code": "verify_native", "actor": "user", "message": "Review project"}}} {
+		before := valid[key]
+		valid[key] = wrong
+		if cursorCyclePreparedReadiness(valid) {
+			t.Fatal("foreign readiness accepted", key)
+		}
+		delete(valid, key)
+		if cursorCyclePreparedReadiness(valid) {
+			t.Fatal("missing readiness accepted", key)
+		}
+		valid[key] = before
+	}
+}
