@@ -330,3 +330,23 @@ func TestProjectGrokSelectedSkillNameCollidesAcrossNativeSources(t *testing.T) {
 		}
 	}
 }
+
+func TestProjectGrokMCPOnlyPreflightAndConservativeActivation(t *testing.T) {
+	request := projectTestRequest(t)
+	request.Plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "probe", Support: domain.SupportNative}}
+	if err := New().PreflightActivation(clients.Env{}, request); err != nil {
+		t.Fatalf("MCP-only project should be admitted: %v", err)
+	}
+	projectTestWrite(t, filepath.Join(request.Plan.ActivePath, ".grok-plugin", "plugin.json"), `{"name":"demo","mcpServers":"./.mcp.json"}`)
+	projectTestWrite(t, filepath.Join(request.Plan.ActivePath, ".mcp.json"), `{"mcpServers":{"probe":{"command":"node","args":["server.js"]}}}`)
+	runner := &projectTestRunner{request: request, enabled: true}
+	out, err := New().Activate(t.Context(), clients.Env{Runner: runner}, request)
+	if err != nil || out.Activation != domain.ActivationPrepared || out.Verification != domain.VerificationPackageValid ||
+		out.AuthoritativeObservation || runner.calls != 1 {
+		t.Fatalf("MCP project promoted native execution: %+v %v calls=%d", out, err, runner.calls)
+	}
+	request.Plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentApp, Name: "app", Support: domain.SupportNative}}
+	if err := New().PreflightActivation(clients.Env{}, request); err == nil {
+		t.Fatal("unsupported application component bypassed project refusal")
+	}
+}

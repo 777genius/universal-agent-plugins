@@ -35,6 +35,15 @@ func (r *grokProjectProviderRunner) Run(_ context.Context, command legacyports.C
 	return legacyports.CommandResult{Stdout: body}, nil
 }
 func TestProjectGrokComposedPlannerStagerActivationAttestation(t *testing.T) {
+	for _, mode := range []struct {
+		name       string
+		withSkills bool
+	}{{"skills-and-mcp", true}, {"mcp-only", false}} {
+		t.Run(mode.name, func(t *testing.T) { testProjectGrokPreparedMCP(t, mode.withSkills) })
+	}
+}
+
+func testProjectGrokPreparedMCP(t *testing.T, withSkills bool) {
 	base := projectGeminiTemp(t)
 	project, user, source := filepath.Join(base, "A"), filepath.Join(base, "home", ".grok"), filepath.Join(base, "source")
 	if err := os.MkdirAll(project, 0700); err != nil {
@@ -42,7 +51,9 @@ func TestProjectGrokComposedPlannerStagerActivationAttestation(t *testing.T) {
 	}
 	projectGeminiWrite(t, filepath.Join(user, "keep"), "original")
 	projectGeminiWrite(t, filepath.Join(source, "plugin.json"), `{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"demo","version":"1.0.0"}`)
-	projectGeminiWrite(t, filepath.Join(source, "skills", "docs", "SKILL.md"), "---\nname: docs\ndescription: Inert Grok project fixture\n---\nText only.\n")
+	if withSkills {
+		projectGeminiWrite(t, filepath.Join(source, "skills", "docs", "SKILL.md"), "---\nname: docs\ndescription: Inert Grok project fixture\n---\nText only.\n")
+	}
 	projectGeminiWrite(t, filepath.Join(source, "mcp.json"), `{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"docs":{"type":"streamable-http","url":"https://inert.test/mcp"}}}`)
 	schemas, err := specregistry.New()
 	if err != nil {
@@ -62,10 +73,17 @@ func TestProjectGrokComposedPlannerStagerActivationAttestation(t *testing.T) {
 	if err != nil || plan.Status != domain.PlanReady || plan.TargetRoot != filepath.Join(project, ".grok", "plugins") {
 		t.Fatalf("Grok plan %+v %v", plan, err)
 	}
+	mcpFound := false
 	for _, component := range plan.Components {
-		if component.Kind == domain.ComponentMCPServer && component.Support != domain.SupportUnsupported {
-			t.Fatal("MCP project qualification invented")
+		if component.Kind == domain.ComponentMCPServer {
+			if component.Support != domain.SupportNative || component.Name != "docs" {
+				t.Fatalf("project MCP lost native support: %+v", component)
+			}
+			mcpFound = true
 		}
+	}
+	if !mcpFound {
+		t.Fatal("project MCP selection missing")
 	}
 	stager := providers.Stager{Registry: registry, Paths: pathpolicy.Policy{}, PluginDataRoot: filepath.Join(project, ".uap", "data")}
 	delivery, err := stager.Stage(t.Context(), envelope, plan, "inert", domain.CompatibilityHints{})
@@ -76,7 +94,29 @@ func TestProjectGrokComposedPlannerStagerActivationAttestation(t *testing.T) {
 		t.Fatal("staging entered watched plugin root")
 	}
 	if _, err := os.Stat(filepath.Join(delivery.StagingPath, "mcp.json")); !os.IsNotExist(err) {
-		t.Fatal("unsupported bundled MCP projected", err)
+		t.Fatal("project Grok wrote the user-only mcp.json", err)
+	}
+	body, err := os.ReadFile(filepath.Join(delivery.StagingPath, ".mcp.json"))
+	if err != nil {
+		t.Fatal("project MCP sidecar missing", err)
+	}
+	var document struct {
+		Servers map[string]map[string]any `json:"mcpServers"`
+	}
+	if err := json.Unmarshal(body, &document); err != nil || len(document.Servers) != 1 ||
+		document.Servers["docs"]["type"] != "http" || document.Servers["docs"]["url"] != "https://inert.test/mcp" {
+		t.Fatalf("wrong project Grok MCP sidecar: %s %v", body, err)
+	}
+	manifest, err := os.ReadFile(filepath.Join(delivery.StagingPath, ".grok-plugin", "plugin.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var attributes map[string]any
+	if err := json.Unmarshal(manifest, &attributes); err != nil || attributes["mcpServers"] != "./.mcp.json" {
+		t.Fatalf("wrong Grok project manifest MCP path: %s %v", manifest, err)
+	}
+	if _, ok := attributes["skills"]; ok != withSkills {
+		t.Fatalf("Grok project skill projection disagrees with package: %s", manifest)
 	}
 	if err := os.MkdirAll(plan.TargetRoot, 0700); err != nil {
 		t.Fatal(err)

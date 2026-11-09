@@ -81,7 +81,23 @@ func configureProjectGrokJourney(app agentpluginscli.App, user string, runner *p
 // Real TLS Git acquisition, production saved CLI/planner/staging/store/state
 // and exact directory ownership, with inert inspect-only client transport.
 func TestProjectGrokComposedSavedLifecycle(t *testing.T) {
+	for _, withMCP := range []bool{false, true} {
+		name := "skills-only"
+		if withMCP {
+			name = "skills-and-mcp"
+		}
+		t.Run(name, func(t *testing.T) { testProjectGrokComposedSavedLifecycle(t, withMCP) })
+	}
+}
+
+func testProjectGrokComposedSavedLifecycle(t *testing.T, withMCP bool) {
 	transport := newProjectJourneyTransport(t, "git")
+	if withMCP {
+		projectJourneyWrite(t, filepath.Join(transport.repo, "mcp.json"), `{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"docs":{"type":"streamable-http","url":"https://inert.test/mcp"}}}`)
+		projectJourneyGit(t, transport.repo, "add", ".")
+		projectJourneyGit(t, transport.repo, "commit", "-m", "add inert project Grok MCP to source")
+		projectJourneyGit(t, transport.repo, "push", "--quiet", transport.remote, "main")
+	}
 	journey := newProjectJourney(t, transport)
 	user := filepath.Join(journey.home, ".grok")
 	projectJourneyWrite(t, filepath.Join(user, "keep"), "original user\n")
@@ -90,7 +106,7 @@ func TestProjectGrokComposedSavedLifecycle(t *testing.T) {
 	userBefore := securityFixtureTree(t, user)
 	for _, project := range []string{journey.a, journey.b} {
 		journey.run(t, project, "add", transport.endpoint, "--alias", "docs", "--target", "grok")
-		projectGrokOwned(t, journey, project, projectJourneySkill)
+		projectGrokOwned(t, journey, project, projectJourneySkill, withMCP)
 	}
 	bBefore := securityFixtureTree(t, journey.b)
 	installation, binding := journey.owned(t, journey.a)
@@ -112,16 +128,16 @@ func TestProjectGrokComposedSavedLifecycle(t *testing.T) {
 	// A rejected attestation records a failed attempt in existing core state.
 	// An explicit ordinary add retries that attempt without native trust or loading.
 	journey.run(t, journey.a, "add", transport.endpoint, "--alias", "docs", "--target", "grok")
-	projectGrokOwned(t, journey, journey.a, projectJourneySkill)
+	projectGrokOwned(t, journey, journey.a, projectJourneySkill, withMCP)
 	projectJourneyWrite(t, filepath.Join(binding.TargetLocator, "skills", "docs", "SKILL.md"), "TEST immutable drift\n")
 	projectJourneyWrite(t, filepath.Join(transport.repo, "skills", "docs", "SKILL.md"), projectJourneyAdvancedSkill)
 	projectJourneyGit(t, transport.repo, "add", ".")
 	projectJourneyGit(t, transport.repo, "commit", "-m", "advance disposable Grok source")
 	projectJourneyGit(t, transport.repo, "push", "--quiet", transport.remote, "main")
 	journey.run(t, journey.a, "repair", installation.InstallationID, "--target", "grok")
-	projectGrokOwned(t, journey, journey.a, projectJourneySkill)
+	projectGrokOwned(t, journey, journey.a, projectJourneySkill, withMCP)
 	journey.run(t, journey.a, "update", "docs", "--target", "grok")
-	updated, current := projectGrokOwned(t, journey, journey.a, projectJourneyAdvancedSkill)
+	updated, current := projectGrokOwned(t, journey, journey.a, projectJourneyAdvancedSkill, withMCP)
 	if updated.Source.TreeDigest == installation.Source.TreeDigest || current.ClientBindingID != binding.ClientBindingID || current.TargetLocator != binding.TargetLocator {
 		t.Fatal("Grok update lost ownership or exact pin")
 	}
@@ -138,7 +154,7 @@ func TestProjectGrokComposedSavedLifecycle(t *testing.T) {
 		t.Fatal("composed contract did not exercise read-only source discovery")
 	}
 }
-func projectGrokOwned(t *testing.T, journey projectJourney, project, expected string) (domain.Installation, domain.ClientBinding) {
+func projectGrokOwned(t *testing.T, journey projectJourney, project, expected string, withMCP bool) (domain.Installation, domain.ClientBinding) {
 	t.Helper()
 	installation, binding := journey.owned(t, project)
 	if binding.ClientID != "grok" || binding.Scope != "project" || binding.NativeProfileRoot != filepath.Join(project, ".grok") || binding.Activation != domain.ActivationPrepared || binding.Verification != domain.VerificationPackageValid {
@@ -148,7 +164,25 @@ func projectGrokOwned(t *testing.T, journey projectJourney, project, expected st
 		t.Fatal("Grok exact immutable skill differs")
 	}
 	if _, err := os.Stat(filepath.Join(binding.TargetLocator, "mcp.json")); !os.IsNotExist(err) {
-		t.Fatal("Grok bundled MCP projected", err)
+		t.Fatal("project Grok wrote user-only mcp.json", err)
+	}
+	sidecar := filepath.Join(binding.TargetLocator, ".mcp.json")
+	if !withMCP {
+		if _, err := os.Stat(sidecar); !os.IsNotExist(err) {
+			t.Fatal("skills-only Grok projected MCP", err)
+		}
+	} else {
+		body, err := os.ReadFile(sidecar)
+		if err != nil {
+			t.Fatal("managed Grok project MCP sidecar missing", err)
+		}
+		var document struct {
+			Servers map[string]map[string]any `json:"mcpServers"`
+		}
+		if err := json.Unmarshal(body, &document); err != nil || len(document.Servers) != 1 ||
+			document.Servers["docs"]["type"] != "http" || document.Servers["docs"]["url"] != "https://inert.test/mcp" {
+			t.Fatalf("unexpected managed Grok MCP: %s %v", body, err)
+		}
 	}
 	return installation, binding
 }
