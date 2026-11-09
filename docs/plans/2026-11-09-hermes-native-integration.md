@@ -84,3 +84,9 @@ Deliver a first-class `--target hermes` through existing UAP client adapter cont
 **Finding and concrete plan correction:** Security: config.yaml can carry Hermes provider secrets and may be malformed, symlinked or concurrently edited. Verify clean canonical path, exact target keys, bound file size, no downgrade of 0600 permissions, no secret output, atomic no-clobber writes and stale-receipt refusal. If preservation cannot be guaranteed, fail closed.
 
 **Decision:** Treat this constraint as a release gate. Do not replace missing native proof with mocked success or expand the architecture just to claim feature parity.
+
+### Review round 6 / 6 — delivery / overengineering
+
+**Finding and concrete plan correction:** Delivery: put project activation, trust and unsupported MCP distinctions in one generated support table and site copy. Reject required packages that cannot be represented; keep this PR Hermes-only, no format migrations; verify current main before merge and do not mark Done on only fixture tests.
+
+**Decision:** Treat this constraint as a release gate. Do not replace missing native proof with mocked success or expand the architecture just to claim feature parity.
