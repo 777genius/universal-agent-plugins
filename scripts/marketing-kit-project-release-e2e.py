@@ -205,7 +205,10 @@ def run_case(cli, target, root, name, portable=None):
         native_foreign.append((marker, "unmanaged native settings\n"))
         # Pin a genuine unmanaged User SKILL.md as well: protecting a text
         # marker alone could miss native User Skill deletion during removal.
-        if relative == audit["NATIVE_ROOTS"][target][0]:
+        # Codex also discovers ~/.agents/skills; protecting only its first
+        # native root (~/.codex) would miss that independent User Skill tree.
+        if (relative == audit["NATIVE_ROOTS"][target][0]
+                or (target == "codex" and relative == ".agents")):
             user_skill = native_root / "skills" / "unmanaged-uap-foreign-skill" / "SKILL.md"
             user_skill.parent.mkdir(parents=True, exist_ok=True)
             user_skill.write_text(foreign_skill, encoding="utf-8")
