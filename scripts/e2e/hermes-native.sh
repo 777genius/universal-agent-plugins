@@ -49,6 +49,7 @@ mcp_servers:
     command: echo
     args: [foreign]
 YAML
+chmod 600 "$HERMES_HOME/config.yaml"
 
 "$UAP_BIN" add "$global_src" --target hermes --scope user \
   --no-save --yes --format json > "$tmp/uap-user-add.json"
