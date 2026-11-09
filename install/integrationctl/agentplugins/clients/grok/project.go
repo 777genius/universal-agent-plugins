@@ -15,7 +15,8 @@ import (
 var _ clients.Projector = (*Adapter)(nil)
 
 func (*Adapter) Project(_ context.Context, in clients.ProjectionInput) ([]domain.NativeObjectOwnership, error) {
-	if in.Plan.Scope == domain.ScopeProject || in.Plan.TargetContext.Scope == domain.ScopeProject || in.Plan.TargetContext.ProjectRoot != "" {
+	project := in.Plan.Scope == domain.ScopeProject || in.Plan.TargetContext.Scope == domain.ScopeProject || in.Plan.TargetContext.ProjectRoot != ""
+	if project {
 		if _, err := grokPlanRoot(domain.DetectedClient{ClientID: domain.ClientGrok, ConfigRoot: in.Plan.TargetContext.UserConfigRoot}, in.Plan); err != nil {
 			return nil, err
 		}
@@ -26,7 +27,7 @@ func (*Adapter) Project(_ context.Context, in clients.ProjectionInput) ([]domain
 			return nil, err
 		}
 		for _, component := range in.Plan.Components {
-			if component.Support != domain.SupportUnsupported && component.Kind != domain.ComponentSkill {
+			if component.Support != domain.SupportUnsupported && component.Kind != domain.ComponentSkill && component.Kind != domain.ComponentMCPServer {
 				return nil, fmt.Errorf("grok project component is unqualified")
 			}
 		}
@@ -37,14 +38,23 @@ func (*Adapter) Project(_ context.Context, in clients.ProjectionInput) ([]domain
 	}
 	names := shared.SupportedMCPNames(in.Plan)
 	if len(names) > 0 {
-		manifest["mcpServers"] = "./mcp.json"
+		if project {
+			manifest["mcpServers"] = "./.mcp.json"
+		} else {
+			manifest["mcpServers"] = "./mcp.json"
+		}
 	}
 	if err := shared.WriteJSON(filepath.Join(in.StagingPath, ".grok-plugin", "plugin.json"), manifest); err != nil {
 		return nil, fmt.Errorf("write Grok plugin manifest: %w", err)
 	}
+	dialect := shared.MCPDialectCursor
+	if project {
+		// Grok discovers plugin-scoped .mcp.json; preserve the user bundle layout.
+		dialect = shared.MCPDialectOpenAI
+	}
 	if err := shared.ProjectMCPServers(shared.MCPProjection{
 		Root: in.StagingPath, Envelope: in.Envelope, Names: names,
-		Dialect: shared.MCPDialectCursor, PluginRoot: in.Plan.ActivePath, DataPath: in.PluginDataPath,
+		Dialect: dialect, PluginRoot: in.Plan.ActivePath, DataPath: in.PluginDataPath,
 	}); err != nil {
 		return nil, err
 	}
