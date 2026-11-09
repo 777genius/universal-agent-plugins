@@ -301,7 +301,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             marker = native / "unmanaged-native-do-not-change.txt"
             content = "unmanaged native settings\\n"
             marker.write_text(content, encoding="utf-8")
-            entries = [(marker, content)]
+            entries = runner["pin_foreign"]([(marker, content)])
             guard(entries, sandbox)
 
             native.rename(native.parent / "original-profile")
