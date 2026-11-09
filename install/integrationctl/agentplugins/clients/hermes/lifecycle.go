@@ -96,10 +96,12 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, req domain.Activa
 			return layout.Verify(desired, false, env.NativeConfig)
 		},
 		Activate: func(ctx context.Context, _ domain.ActivationRequest) error {
+			servers, err := hermesDesiredServers(req.Delivery.ActivePath, desired)
+			if err != nil { return &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: err} }
 			return (shared.ProjectComponentMutation{
 				Layout: layout, ActivePath: req.Delivery.ActivePath,
 				Previous: previous, Desired: desired,
-				Kernel: env.NativeConfig,
+				Servers: servers, Kernel: env.NativeConfig,
 			}).Apply(ctx)
 		},
 	})
