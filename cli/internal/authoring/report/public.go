@@ -172,80 +172,12 @@ func (r *Report) AddOperationError(code, action string) {
 // private vertical-slice report, including its diagnostic IDs and policy states.
 func (r Report) PublicResult(operation, mode string, attempted bool, surface []string) Public {
 	r.Command, r.Mode = operation, mode
-	r.Findings = append([]Finding{}, r.Findings...)
-	replacements := map[string]string{}
-	for i, f := range r.Findings {
-		if f.Code != "plugin_manifest_missing" {
-			continue
-		}
-		old := f.ID
-		f.Code = "missing_standard_manifest"
-		f.ID = ""
-		// Use the same stable finding constructor, then remap every reference.
-		tmp := New("", "")
-		f.ID = tmp.add(f)
-		r.Findings[i] = f
-		replacements[old] = f.ID
-	}
-	remap := func(a Assessment) Assessment {
-		a.FindingIDs = append([]string{}, a.FindingIDs...)
-		for i, id := range a.FindingIDs {
-			if replacement, ok := replacements[id]; ok {
-				a.FindingIDs[i] = replacement
-			}
-		}
-		return a
-	}
-	r.Loadability = remap(r.Loadability)
-	r.Conformance = remap(r.Conformance)
-	r.HostSafety = remap(r.HostSafety)
-	r.Readiness = remap(r.Readiness)
-	r.Release = remap(r.Release)
-	r.Runtime = remap(r.Runtime)
-	r.Compatibility = remap(r.Compatibility)
-	r.Toolchain = remap(r.Toolchain)
-	r.Checks = append([]Check{}, r.Checks...)
-	for i := range r.Checks {
-		r.Checks[i].Assessment = remap(r.Checks[i].Assessment)
-	}
+	replacements := r.normalizePublicFindings()
+	r.remapPublicAssessments(replacements)
 	r.finish()
 	p := Public{Report: r, AuthoringSchemaVersion: AuthoringSchemaVersion, EngineVersion: r.Engine,
 		Requested: Requested{operation, mode}, Effects: Effects{attempted, r.Committed}, NextActions: []Action{}, Inspection: r.Display, Surface: surface}
-	p.Paths = []string{}
-	for _, path := range r.Paths {
-		safe := true
-		for _, part := range strings.Split(path, "/") {
-			if DisplayIdentity(part) == "" {
-				safe = false
-			}
-		}
-		if safe {
-			p.Paths = append(p.Paths, path)
-		} else {
-			p.WithheldPathIDs = append(p.WithheldPathIDs, opaque(path))
-		}
-	}
-	if r.Error != nil {
-		p.NextActions = append(p.NextActions, Action{Code: r.Error.Code, Message: r.Error.Action})
-	}
-	if len(replacements) > 0 {
-		p.NextActions = append(p.NextActions, Action{Code: "missing_standard_manifest", Message: "Select the exact package root containing plugin.json; no ancestor search or format fallback is performed."})
-	}
-	if r.Error == nil && len(replacements) == 0 && r.Readiness.Status == Fail {
-		p.NextActions = append(p.NextActions, Action{"review_findings", "author.validate", "Review the typed findings by policy layer, correct the selected package, then validate it again."})
-	}
-	if r.Legacy != "" && r.Legacy != "absent" {
-		p.NextActions = append(p.NextActions, Action{Code: "legacy_workflow_unavailable", Message: "This v1 workflow is unavailable in v2. Use plugin-kit-ai 1.2.4 for the legacy workflow. Project migration is unavailable in v2."})
-	}
-	if r.Error == nil && r.Readiness.Status == Pass {
-		if operation == "author.init" || operation == "author.skills.init" {
-			p.NextActions = append(p.NextActions, Action{"inspect_package", "author.inspect", "Inspect the created package using its explicit package path."})
-		}
-		if r.Runtime.Status == Pass {
-			p.NextActions = append(p.NextActions, Action{"runtime_verified", operation, "The selected MCP runtime stages passed under the transport-specific bounded runtime policy."})
-		} else {
-			p.NextActions = append(p.NextActions, Action{"static_test", "author.test", "Run the offline static test with the package path; runtime behavior remains unevaluated."})
-		}
-	}
+	p.projectPublicPaths(r.Paths)
+	p.projectPublicActions(replacements)
 	return p
 }

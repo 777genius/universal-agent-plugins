@@ -33,7 +33,7 @@ func nativeOpenCodeFixture(t *testing.T, version, mode string) string {
 	t.Helper()
 	// All executed fixture bytes and probe working directories live in this
 	// checkout, even when a caller has not supplied TMPDIR for the test command.
-	root, err := os.MkdirTemp(".", "TEST-opencode-")
+	root, err := os.MkdirTemp("testdata", "TEST-opencode-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,6 +58,9 @@ func nativeOpenCodeFixture(t *testing.T, version, mode string) string {
 // target, nor can a successful CLI probe read a real project or inherit secrets.
 func TestOpenCodeTargetExplicitAuthorityAndIsolation(t *testing.T) {
 	v1 := nativeOpenCodeFixture(t, "1.18.33", "ok")
+	if filepath.Base(filepath.Dir(filepath.Dir(v1))) != "testdata" {
+		t.Fatal("native probe fixture must remain inside the architecture-ignored testdata subtree")
+	}
 	v2 := nativeOpenCodeFixture(t, "2.0.21", "prefix")
 	t.Setenv("PATH", filepath.Dir(v1))
 	t.Setenv("HOME", "/fixture-not-inherited")
