@@ -1,6 +1,7 @@
 package agentpluginscli
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -55,7 +56,7 @@ func TestLocalDependencyPolicyTransitiveAndPins(t *testing.T) {
 
 func TestLocalDependencyPolicyExplicitOptInAndStrictParsing(t *testing.T) {
 	t.Parallel()
-	if err := checkLocalDependencyPolicy("", environment.Lock{}); err != nil {
+	if err := checkLocalDependencyPolicy(context.Background(), App{}, "", environment.Lock{}); err != nil {
 		t.Fatalf("no opt-in must preserve existing CLI behavior: %v", err)
 	}
 	root := t.TempDir()
