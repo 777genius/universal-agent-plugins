@@ -32,13 +32,12 @@ func (*Adapter) PreflightActivation(env clients.Env, req domain.ActivationReques
 	if err != nil {
 		return err
 	}
-	if _, err := ownedObjects(req.Plan.Scope, req.Delivery.NativeObjects); err != nil {
-		return err
-	}
-	if _, err := ownedObjects(req.Plan.Scope, req.PreviousNativeObjects); err != nil {
-		return err
-	}
-	if err := layout.ValidateObjects(req.Delivery.NativeObjects); err != nil {
+	desired, err := ownedObjects(req.Plan.Scope, req.Delivery.NativeObjects)
+	if err != nil { return err }
+	previous, err := ownedObjects(req.Plan.Scope, req.PreviousNativeObjects)
+	if err != nil { return err }
+	if err := layout.ValidateObjects(previous); err != nil { return err }
+	if err := layout.ValidateObjects(desired); err != nil {
 		return err
 	}
 	return env.NativeConfig.RequireFileIO()
@@ -59,6 +58,13 @@ func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, _ do
 			return clients.RegistryIndeterminate, fmt.Errorf("Hermes cannot inspect unsupported native MCP/components")
 		}
 	}
+	if binding != nil {
+		owned, err := ownedObjects(plan.Scope, binding.NativeObjects)
+		if err != nil { return clients.RegistryIndeterminate, err }
+		copy := *binding
+		copy.NativeObjects = owned
+		binding = &copy
+	}
 	return layout.Inspect(plan.Components, binding, env.NativeConfig)
 }
 
@@ -76,6 +82,10 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, req domain.Activa
 	if err != nil {
 		return domain.ActivationOutcome{}, err
 	}
+	desired, err := ownedObjects(req.Plan.Scope, req.Delivery.NativeObjects)
+	if err != nil { return domain.ActivationOutcome{}, err }
+	previous, err := ownedObjects(req.Plan.Scope, req.PreviousNativeObjects)
+	if err != nil { return domain.ActivationOutcome{}, err }
 	outcome, err := shared.CompleteNativeConfigActivation(ctx, req, shared.NativeConfigActivation{
 		Automatic: req.Plan.InstallIntent == domain.InstallIntentAutomatic,
 		UnavailableAction: "Select automatic installation for owned Hermes Skills",
@@ -83,12 +93,12 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, req domain.Activa
 		RetryAction: "Retry Hermes Skills installation after restoring ownership",
 		CompletedAction: "Restart Hermes and review project trust before using installed Skills",
 		Verify: func() error {
-			return layout.Verify(req.Delivery.NativeObjects, false, env.NativeConfig)
+			return layout.Verify(desired, false, env.NativeConfig)
 		},
 		Activate: func(ctx context.Context, _ domain.ActivationRequest) error {
 			return (shared.ProjectComponentMutation{
 				Layout: layout, ActivePath: req.Delivery.ActivePath,
-				Previous: req.PreviousNativeObjects, Desired: req.Delivery.NativeObjects,
+				Previous: previous, Desired: desired,
 				Kernel: env.NativeConfig,
 			}).Apply(ctx)
 		},
@@ -114,10 +124,9 @@ func (*Adapter) Deactivate(ctx context.Context, env clients.Env, req domain.Deac
 	if err != nil {
 		return outcome, err
 	}
-	if _, err := ownedObjects(plan.Scope, req.NativeObjects); err != nil {
-		return outcome, err
-	}
-	if err := layout.ValidateObjects(req.NativeObjects); err != nil {
+	owned, err := ownedObjects(plan.Scope, req.NativeObjects)
+	if err != nil { return outcome, err }
+	if err := layout.ValidateObjects(owned); err != nil {
 		return outcome, err
 	}
 	if !req.Confirmed {
@@ -125,7 +134,7 @@ func (*Adapter) Deactivate(ctx context.Context, env clients.Env, req domain.Deac
 		return outcome, nil
 	}
 	err = (shared.ProjectComponentMutation{
-		Layout: layout, Previous: req.NativeObjects,
+		Layout: layout, Previous: owned,
 		Kernel: env.NativeConfig,
 	}).Apply(ctx)
 	if err != nil {

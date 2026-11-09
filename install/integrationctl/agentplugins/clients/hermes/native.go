@@ -111,6 +111,9 @@ func ownedObjects(scope domain.InstallScope, objects []domain.NativeObjectOwners
 	}
 	result := make([]domain.NativeObjectOwnership, 0, len(objects))
 	for _, object := range objects {
+		if object.Kind == "managed_package_directory" {
+			continue // Generic package directory is owned and verified by the installer.
+		}
 		if object.Kind != kind {
 			return nil, fmt.Errorf("Hermes refused foreign native ownership type")
 		}

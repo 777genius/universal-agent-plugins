@@ -88,7 +88,7 @@ func (*Adapter) ValidateBindingProfile(root string, binding domain.ClientBinding
 	}
 	for _, item := range binding.NativeObjects {
 		switch item.Kind {
-		case userSkillKind, projectSkillKind:
+		case "managed_package_directory", userSkillKind, projectSkillKind:
 		default:
 			return fmt.Errorf("Hermes binding contains a foreign native ownership type")
 		}
