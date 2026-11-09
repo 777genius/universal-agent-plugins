@@ -85,3 +85,9 @@ Add `--target antigravity` to UAP for **real Antigravity-native plugin bundles**
 **Finding and concrete plan correction:** Security: hook execution and native agy shell side effects are not under UAP's transaction kernel. Do not auto-enable or install untrusted hooks without explicit consent, and never advertise atomic rollback for external vendor operations unless it is observed. Reject path collision, unexpected CLI output or foreign plugin ownership.
 
 **Decision:** Treat this constraint as a release gate. Do not replace missing native proof with mocked success or expand the architecture just to claim feature parity.
+
+### Review round 5 / 6 — test oracles
+
+**Finding and concrete plan correction:** E2E: one genuine agy version, isolated HOME/project, staged manifest validation, CLI install/list/disable/remove/restart and controlled MCP handshake where feasible; compare native inventory before/after, check foreign sentinels; on unavailable native runner keep Draft and mark lane unqualified.
+
+**Decision:** Treat this constraint as a release gate. Do not replace missing native proof with mocked success or expand the architecture just to claim feature parity.
