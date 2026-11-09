@@ -1,0 +1,144 @@
+package hermes
+
+import (
+	"context"
+	"errors"
+	"fmt"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+)
+
+var (
+	_ clients.Lifecycle = (*Adapter)(nil)
+	_ clients.AutomaticActivator = (*Adapter)(nil)
+	_ clients.ActivationPreflighter = (*Adapter)(nil)
+	_ clients.RegistryInspector = (*Adapter)(nil)
+)
+
+func (*Adapter) AutomaticallyActivates(_ clients.Env, req domain.ActivationRequest) bool {
+	return req.Plan.InstallIntent == domain.InstallIntentAutomatic && req.Plan.NativeRegistryRoot != ""
+}
+
+func (*Adapter) PreflightActivation(env clients.Env, req domain.ActivationRequest) error {
+	if err := shared.ActivationIdentityMismatch(req); err != nil {
+		return err
+	}
+	if req.Plan.ClientID != domain.ClientHermes || req.Delivery.ActivePath != req.Plan.ActivePath {
+		return fmt.Errorf("Hermes delivery identity differs")
+	}
+	layout, err := components(req.Plan, req.Delivery.ActivePath)
+	if err != nil {
+		return err
+	}
+	if _, err := ownedObjects(req.Plan.Scope, req.Delivery.NativeObjects); err != nil {
+		return err
+	}
+	if _, err := ownedObjects(req.Plan.Scope, req.PreviousNativeObjects); err != nil {
+		return err
+	}
+	if err := layout.ValidateObjects(req.Delivery.NativeObjects); err != nil {
+		return err
+	}
+	return env.NativeConfig.RequireFileIO()
+}
+
+func (*Adapter) UsesNativeRegistryExecutable() bool { return false }
+
+func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, _ domain.DetectedClient, plan domain.DeliveryPlan, binding *domain.ClientBinding) (clients.RegistryFinding, error) {
+	if err := ctx.Err(); err != nil {
+		return clients.RegistryIndeterminate, err
+	}
+	layout, err := components(plan, "")
+	if err != nil {
+		return clients.RegistryIndeterminate, err
+	}
+	for _, component := range plan.Components {
+		if component.Kind != domain.ComponentSkill {
+			return clients.RegistryIndeterminate, fmt.Errorf("Hermes cannot inspect unsupported native MCP/components")
+		}
+	}
+	return layout.Inspect(plan.Components, binding, env.NativeConfig)
+}
+
+func (*Adapter) Activate(ctx context.Context, env clients.Env, req domain.ActivationRequest) (domain.ActivationOutcome, error) {
+	if err := ctx.Err(); err != nil {
+		return domain.ActivationOutcome{}, err
+	}
+	if err := New().PreflightActivation(env, req); err != nil {
+		return domain.ActivationOutcome{}, err
+	}
+	if req.ActivationComplete {
+		return domain.ActivationOutcome{}, fmt.Errorf("Hermes runtime activation cannot be attested by installer")
+	}
+	layout, err := components(req.Plan, req.Delivery.ActivePath)
+	if err != nil {
+		return domain.ActivationOutcome{}, err
+	}
+	outcome, err := shared.CompleteNativeConfigActivation(ctx, req, shared.NativeConfigActivation{
+		Automatic: req.Plan.InstallIntent == domain.InstallIntentAutomatic,
+		UnavailableAction: "Select automatic installation for owned Hermes Skills",
+		RepairAction: "Repair UAP-managed Hermes Skills in the selected scope",
+		RetryAction: "Retry Hermes Skills installation after restoring ownership",
+		CompletedAction: "Restart Hermes and review project trust before using installed Skills",
+		Verify: func() error {
+			return layout.Verify(req.Delivery.NativeObjects, false, env.NativeConfig)
+		},
+		Activate: func(ctx context.Context, _ domain.ActivationRequest) error {
+			return (shared.ProjectComponentMutation{
+				Layout: layout, ActivePath: req.Delivery.ActivePath,
+				Previous: req.PreviousNativeObjects, Desired: req.Delivery.NativeObjects,
+				Kernel: env.NativeConfig,
+			}).Apply(ctx)
+		},
+	})
+	if err == nil && outcome.Verification == domain.VerificationInstalled {
+		outcome.Activation = domain.ActivationPrepared
+		outcome.ActivationAttested = false
+	}
+	return outcome, err
+}
+
+func (*Adapter) Deactivate(ctx context.Context, env clients.Env, req domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
+	outcome := shared.StartedDeactivation()
+	if err := ctx.Err(); err != nil {
+		return outcome, err
+	}
+	plan := domain.DeliveryPlan{
+		ClientID: domain.ClientHermes,
+		Scope: req.TargetContext.Scope, TargetContext: req.TargetContext,
+		NativeRegistryRoot: req.NativeRegistryRoot,
+	}
+	layout, err := components(plan, "")
+	if err != nil {
+		return outcome, err
+	}
+	if _, err := ownedObjects(plan.Scope, req.NativeObjects); err != nil {
+		return outcome, err
+	}
+	if err := layout.ValidateObjects(req.NativeObjects); err != nil {
+		return outcome, err
+	}
+	if !req.Confirmed {
+		outcome.UserActions = append(outcome.UserActions, "Only exact-owned Hermes Skills will be removed; foreign Skills and project trust remain unchanged")
+		return outcome, nil
+	}
+	err = (shared.ProjectComponentMutation{
+		Layout: layout, Previous: req.NativeObjects,
+		Kernel: env.NativeConfig,
+	}).Apply(ctx)
+	if err != nil {
+		var observed *shared.NativeEffectError
+		if errors.As(err, &observed) && observed.Effect == domain.NativeEffectUnchanged {
+			outcome.NativeEffect = domain.NativeEffectUnchanged
+		}
+		if !shared.CommittedNativeDeactivationCleanup(&outcome, err) {
+			return outcome, err
+		}
+	}
+	outcome.NativeEffect = domain.NativeEffectCommitted
+	outcome.ExternalRemovalComplete = true
+	outcome.UserActions = append(outcome.UserActions, "Restart Hermes to clear previously loaded Skills")
+	return outcome, nil
+}

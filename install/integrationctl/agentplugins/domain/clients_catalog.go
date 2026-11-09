@@ -29,6 +29,7 @@ const (
 	ClientKimi     ClientID = "kimi"
 	ClientQoder    ClientID = "qoder"
 	ClientPi       ClientID = "pi"
+	ClientHermes   ClientID = "hermes"
 
 	DetectionNotDetected DetectionStatus = "not_detected"
 	DetectionDetected    DetectionStatus = "detected"
@@ -174,6 +175,10 @@ var clientDefinitions = []ClientDefinition{
 		HonorsOpenAIMCPAuthHints:            true,
 		LegacyPreparedProjectPackageReceipt: true,
 	}), LifecycleNativeConfig), SupportNative, SupportNative),
+	withProjectComponentSupport(withProjectScope(clientDefinition(ClientHermes, "Hermes Agent", "hermes", "prepared", "prepared", false, PackagePrepared, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
+		InstallIntents: []InstallIntent{InstallIntentAutomatic},
+		LifecycleKind:  LifecyclePrepared,
+	}), LifecyclePrepared), SupportNative, SupportUnsupported),
 	withProjectComponents(withProjectScope(withActivation(withoutCommands(clientDefinition(ClientPi, "Pi", "pi", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportNative, ClientTraits{
 		InstallIntents: []InstallIntent{InstallIntentAutomatic}, LifecycleKind: LifecyclePrepared,
 		BindsNativeProfileRoot: true, RequiresPluginData: true, VerifiesNativeDirectory: true, ProtectsModifiedPackage: true,
