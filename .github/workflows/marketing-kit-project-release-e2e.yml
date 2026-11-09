@@ -93,22 +93,34 @@ jobs:
           async function check() {
             try {
               const release = await ensureBinary({ packageRoot, signal: abort.signal });
-              if (abort.signal.aborted || release.version !== "0.1.101") {
-                throw new Error("pinned launcher acquisition timed out or returned wrong version");
+              if (abort.signal.aborted) throw new Error("pinned launcher acquisition timed out");
+              if (release.version !== "0.1.101") {
+                throw Object.assign(new Error("unexpected pinned release version"), { noRetry: true });
               }
               const result = spawnSync("agentplugins", ["version"], { encoding: "utf8", timeout: 15_000 });
-              if (result.error || result.signal || result.status !== 0 ||
-                  result.stdout.replace(/\n+$/, "") !== "agentplugins 0.1.101") {
-                throw new Error("not exact published agentplugins 0.1.101");
+              if (result.error || result.signal || result.status !== 0) {
+                throw new Error("published agentplugins version probe failed");
+              }
+              if (result.stdout.replace(/\n+$/, "") !== "agentplugins 0.1.101") {
+                throw Object.assign(new Error("wrong published agentplugins version"), { noRetry: true });
               }
             } finally {
               clearTimeout(deadline);
             }
           }
-          check().catch(error => { console.error(error.message); process.exitCode = 1; });
+          check().catch(error => {
+            console.error(error.message);
+            process.exitCode = error.noRetry ? 42 : 1;
+          });
           NODE
             then
               break
+            else
+              status=$?
+              if (( status == 42 )); then
+                echo 'exact published version mismatch; refusing retry' >&2
+                exit 1
+              fi
             fi
             if (( attempt == 3 )); then
               echo 'exact agentplugins 0.1.101 unavailable after three attempts' >&2
