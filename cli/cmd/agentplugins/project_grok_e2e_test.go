@@ -186,3 +186,80 @@ func projectGrokOwned(t *testing.T, journey projectJourney, project, expected st
 	}
 	return installation, binding
 }
+
+
+func TestProjectGrokMCPOnlyComposedSavedLifecycle(t *testing.T) {
+	transport := newProjectJourneyTransport(t, "git")
+	if err := os.Remove(filepath.Join(transport.repo, "skills", "docs", "SKILL.md")); err != nil {
+		t.Fatal(err)
+	}
+	mcpSource := filepath.Join(transport.repo, "mcp.json")
+	projectJourneyWrite(t, mcpSource, grokMCPOnlySource("https://inert.test/mcp"))
+	projectJourneyGit(t, transport.repo, "add", "-A")
+	projectJourneyGit(t, transport.repo, "commit", "-m", "replace source Skill with MCP-only server")
+	projectJourneyGit(t, transport.repo, "push", "--quiet", transport.remote, "main")
+	journey := newProjectJourney(t, transport)
+	user := filepath.Join(journey.home, ".grok")
+	projectJourneyWrite(t, filepath.Join(user, "keep"), "original user\n")
+	runner := &projectGrokRunner{t: t, executable: filepath.Join(journey.home, "grok-not-executed")}
+	journey.app = configureProjectGrokJourney(journey.app, user, runner)
+	userBefore, bBefore := securityFixtureTree(t, user), securityFixtureTree(t, journey.b)
+
+	journey.run(t, journey.a, "add", transport.endpoint, "--alias", "docs", "--target", "grok")
+	first, binding := projectGrokMCPOnlyOwned(t, journey, "https://inert.test/mcp")
+	journey.run(t, journey.a, "deps", "sync", "--locked", "--yes")
+	projectGrokMCPOnlyOwned(t, journey, "https://inert.test/mcp")
+
+	projectJourneyWrite(t, filepath.Join(binding.TargetLocator, ".mcp.json"), `{"broken":true}`)
+	journey.run(t, journey.a, "repair", first.InstallationID, "--target", "grok")
+	projectGrokMCPOnlyOwned(t, journey, "https://inert.test/mcp")
+
+	projectJourneyWrite(t, mcpSource, grokMCPOnlySource("https://inert.test/mcp-v2"))
+	projectJourneyGit(t, transport.repo, "add", ".")
+	projectJourneyGit(t, transport.repo, "commit", "-m", "advance inert Grok MCP source")
+	projectJourneyGit(t, transport.repo, "push", "--quiet", transport.remote, "main")
+	journey.run(t, journey.a, "update", "docs", "--target", "grok")
+	updated, current := projectGrokMCPOnlyOwned(t, journey, "https://inert.test/mcp-v2")
+	if updated.Source.TreeDigest == first.Source.TreeDigest ||
+		current.ClientBindingID != binding.ClientBindingID || current.TargetLocator != binding.TargetLocator {
+		t.Fatal("MCP-only Grok update changed ownership or failed to advance pin")
+	}
+	journey.run(t, journey.a, "remove", "docs", "--target", "grok")
+	projectJourneyAbsent(t, current.TargetLocator)
+	if !reflect.DeepEqual(userBefore, securityFixtureTree(t, user)) ||
+		!reflect.DeepEqual(bBefore, securityFixtureTree(t, journey.b)) || runner.calls == 0 {
+		t.Fatal("MCP-only Grok lifecycle changed user/B or skipped native discovery")
+	}
+}
+
+func grokMCPOnlySource(url string) string {
+	return `{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"docs":{"type":"streamable-http","url":"` + url + `"}}}`
+}
+
+func projectGrokMCPOnlyOwned(t *testing.T, journey projectJourney, url string) (domain.Installation, domain.ClientBinding) {
+	t.Helper()
+	installation, binding := journey.owned(t, journey.a)
+	if binding.ClientID != "grok" || binding.Scope != "project" || binding.Activation != domain.ActivationPrepared ||
+		binding.Verification != domain.VerificationPackageValid ||
+		binding.NativeProfileRoot != filepath.Join(journey.a, ".grok") {
+		t.Fatalf("Grok MCP-only binding must remain prepared: %+v", binding)
+	}
+	if _, err := os.Stat(filepath.Join(binding.TargetLocator, "skills")); !os.IsNotExist(err) {
+		t.Fatalf("MCP-only package unexpectedly projected Skills: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(binding.TargetLocator, "mcp.json")); !os.IsNotExist(err) {
+		t.Fatalf("MCP-only package projected canonical source MCP instead of Grok sidecar: %v", err)
+	}
+	body, err := os.ReadFile(filepath.Join(binding.TargetLocator, ".mcp.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document struct {
+		Servers map[string]map[string]any `json:"mcpServers"`
+	}
+	if err := json.Unmarshal(body, &document); err != nil || len(document.Servers) != 1 ||
+		document.Servers["docs"]["type"] != "http" || document.Servers["docs"]["url"] != url {
+		t.Fatalf("MCP-only Grok sidecar differs: %s %v", body, err)
+	}
+	return installation, binding
+}
