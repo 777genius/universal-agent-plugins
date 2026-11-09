@@ -128,9 +128,15 @@ class PublishedCatalogNativeProofTest(unittest.TestCase):
 
     def test_known_unqualified_opencode_sources_are_negative_not_native(self):
         audit = load_audit()
+        sources = (
+            "github:itential/builder-skills@2ccdf77358b018ad4df125422a067fe84e63de1d",
+            "github:GoogleCloudPlatform/google-cloud-storage-plugin@b346e39698fcdfdc711ca3ee35e41c8dbaa1aa2b",
+            "github:cometchat/cometchat-skills@8652f1ea41d12e5058123db1e4e6babef9c918f1",
+            "github:uizze/uizze@fc401e9e654cbafe427b0c98142fc8bccd0c4e7e",
+        )
         row = {"status": "package-installed-native-unqualified",
                "kind": "plugin", "target": "opencode",
-               "source": "github:itential/builder-skills@2ccdf77358b018ad4df125422a067fe84e63de1d",
+               "source": sources[0],
                "prepared_components_only": False, "native_component_candidates": [],
                "native_identity_files": [], "listed_identity": True,
                "repeat_verified": True, "removal_verified": True,
@@ -138,21 +144,36 @@ class PublishedCatalogNativeProofTest(unittest.TestCase):
                "native_residuals": [], "sentinels_preserved": True,
                "failed_install_residue": False,
                "install": {"exit_code": 0}, "cleanup": {"exit_code": 0}}
-        self.assertTrue(audit.expected_negative_coverage(row, "agentplugins 0.1.95"))
-        self.assertTrue(audit.expected_negative_coverage(row, "agentplugins 0.1.101"))
-        self.assertFalse(audit.expected_negative_coverage(row))
-        self.assertFalse(audit.expected_negative_coverage(row, "agentplugins 0.1.102"))
+        # Only four exact frozen sources with independently observed clean
+        # package lifecycles can qualify as non-native negative coverage.
+        for source in sources:
+            for version in ("agentplugins 0.1.95", "agentplugins 0.1.101",
+                            "agentplugins 0.1.102"):
+                with self.subTest(source=source, version=version):
+                    self.assertTrue(audit.expected_negative_coverage(
+                        {**row, "source": source}, version))
+        for version in (None, "agentplugins 0.1.103", "agentplugins 0.2.0"):
+            self.assertFalse(audit.expected_negative_coverage(row, version))
         for key, bad in (
             ("source", "github:unknown/plugin@" + "a" * 40),
             ("status", "passed"),
+            ("target", "claude"),
             ("native_identity_files", ["opencode/opencode.json"]),
             ("native_component_candidates", ["builder-agent"]),
+            ("listed_identity", False),
             ("repeat_verified", False),
+            ("removal_verified", False),
             ("native_residuals", ["opencode/registry.json"]),
-            ("post_remove_identity_registered", True)):
+            ("post_remove_identity_registered", True),
+            ("sentinels_preserved", False),
+            ("failed_install_residue", True),
+            ("prepared_components_only", True),
+            ("install", {"exit_code": 1}),
+            ("cleanup", {"exit_code": 1}),
+        ):
             with self.subTest(key=key):
                 self.assertFalse(audit.expected_negative_coverage(
-                    {**row, key: bad}, "agentplugins 0.1.101"))
+                    {**row, key: bad}, "agentplugins 0.1.102"))
 
     def test_pi_explicit_unsupported_refusals_never_become_native_pass(self):
         audit = load_audit()
