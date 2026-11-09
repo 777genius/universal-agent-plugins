@@ -348,6 +348,25 @@ def check_scope_id_isolation(selected, other_scopes, stage):
         raise AssertionError(f"{stage}: reused installation IDs across scopes")
 
 
+def check_removed_native_components(target, home, case_root, stage):
+    """Refuse native registrations left after an otherwise empty User list."""
+    if not audit["path_inside_case"](home, case_root):
+        raise AssertionError(f"{stage}: native HOME left disposable case")
+    roots = [home / relative for relative in audit["NATIVE_ROOTS"][target]]
+    if any(not audit["path_inside_case"](root, case_root) for root in roots):
+        raise AssertionError(f"{stage}: unsafe native client root")
+    observed = audit["snapshot"](roots)
+    if any(value == "unreadable" for value in observed.values()):
+        raise AssertionError(f"{stage}: native cleanup snapshot unreadable")
+    leftovers = set()
+    for distribution in EXPECTED:
+        identity = distribution.rsplit("/", 1)[-1]
+        leftovers.update(audit["native_identity_residuals"](
+            roots, identity, observed, target))
+    if leftovers:
+        raise AssertionError(f"{stage}: native Marketing Kit remnants: {sorted(leftovers)}")
+
+
 def bind_pinned_launcher_cache(env, cache, sandbox):
     """Share only the SHA-checked released CLI binary, not native client state."""
     if (not cache.is_dir() or cache.is_symlink()
@@ -621,6 +640,8 @@ def main():
             if identities(inventory(options.cli, env_c, project_c, options.target, "user"),
                           options.target, "user"):
                 raise AssertionError("User C remove retained required closure")
+            check_removed_native_components(options.target, Path(env_c["HOME"]),
+                                            root, "User C remove")
             if user_inventory() != user_after_update:
                 raise AssertionError("User C remove mutated User A installations")
             if (user_portable / "uap.lock").read_bytes() != user_lock_after_update:
@@ -655,6 +676,8 @@ def main():
                 *user_scoped, *user_remove_attestation)
             if user_inventory():
                 raise AssertionError("User removal retained Marketing Kit or mandatory children")
+            check_removed_native_components(options.target, Path(env["HOME"]),
+                                            root, "User A remove")
             for name, expected_bytes in project_files.items():
                 path = project_a / name
                 current_bytes = path.read_bytes() if path.exists() else None

@@ -531,6 +531,39 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                                        "verification": "package_validated"}]
             self.assertEqual(check([row], "codex", "user"), {"root": "owned"})
 
+    def test_marketing_kit_user_remove_rejects_active_native_residuals(self):
+        # An empty CLI list alone cannot prove native client removal.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        with TemporaryDirectory() as temporary:
+            case = Path(temporary).resolve()
+            home = case / "home"
+            native = home / ".copilot"
+            native.mkdir(parents=True)
+            settings = native / "settings.json"
+            check = runner["check_removed_native_components"]
+            for identity in ("marketing-kit", "notion", "hubspot-crm",
+                             "playwright-bridge"):
+                settings.write_text(
+                    '{"enabledPlugins":{"' + identity +
+                    '@agentplugins-aaaaaaaaaaaa":true}}', encoding="utf-8")
+                with self.subTest(identity=identity), self.assertRaisesRegex(
+                        AssertionError, "native Marketing Kit remnants"):
+                    check("copilot", home, case, "User remove")
+            settings.write_text('{"enabledPlugins":{"other@foreign":true}}',
+                                encoding="utf-8")
+            check("copilot", home, case, "User remove")
+            settings.unlink()
+            native.rmdir()
+            try:
+                native.symlink_to(case / "untrusted", target_is_directory=True)
+            except (OSError, NotImplementedError):
+                return
+            with self.assertRaisesRegex(AssertionError, "unsafe native client root"):
+                check("copilot", home, case, "User remove")
+
     def test_marketing_kit_codex_attestation_requires_native_uninstall_proof(self):
         # A signed Project/User binding is not proof of native uninstallation.
         # Only the existing pinned native removal plus fresh absence grants the flag.
