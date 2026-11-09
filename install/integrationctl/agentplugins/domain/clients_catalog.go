@@ -175,7 +175,7 @@ var clientDefinitions = []ClientDefinition{
 		HonorsOpenAIMCPAuthHints:            true,
 		LegacyPreparedProjectPackageReceipt: true,
 	}), LifecycleNativeConfig), SupportNative, SupportNative),
-	withProjectComponentSupport(withProjectScope(clientDefinition(ClientHermes, "Hermes Agent", "hermes", "prepared", "prepared", false, PackagePrepared, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
+	withProjectComponentSupport(withProjectScope(clientDefinition(ClientHermes, "Hermes Agent", "hermes", "managed", "native", false, PackageNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
 		InstallIntents: []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:  LifecyclePrepared,
 	}), LifecyclePrepared), SupportNative, SupportUnsupported),
