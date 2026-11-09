@@ -326,6 +326,7 @@ def main():
             foreign_files = list(foreign_a_files)
             project_before_user = None
             protected_b = None
+            protected_c_project = None
             verify_pinned_launcher(options.cli, env, project_a)
             def run(e, p, label, *args):
                 try:
@@ -337,6 +338,8 @@ def main():
                         check_user_project_unchanged(project_a, project_before_user, label)
                     if protected_b is not None:
                         check_profile_unchanged(env_b, project_b, protected_b, label)
+                    if protected_c_project is not None:
+                        check_user_project_unchanged(project_c, protected_c_project, label)
             scoped = ("--scope", "project", "--project-root", str(project_a))
             run(env, project_a, "add", "add", "marketing-kit", "--target", options.target, *scoped)
             first = identities(inventory(options.cli, env, project_a, options.target), options.target)
@@ -468,6 +471,8 @@ def main():
             env_c, project_c, foreign_c, project_foreign_c, native_foreign_c = (
                 run_case(options.cli, options.target, root, "C"))
             bind_pinned_launcher_cache(env_c, launcher_cache, root)
+            # User operations must not mutate their own working Project C.
+            protected_c_project = scoped_snapshot([project_c])
             foreign_files.extend([(foreign_c, "unmanaged user data\n"),
                                   (project_foreign_c, "unmanaged project data\n"),
                                   *native_foreign_c])
@@ -544,6 +549,7 @@ def main():
             check_foreign(foreign_files, root)
             check_user_project_unchanged(project_a, project_before_user, "User final inventory")
             check_profile_unchanged(env_b, project_b, protected_b, "User final inventory")
+            check_user_project_unchanged(project_c, protected_c_project, "User final inventory")
             report["status"] = "passed"
     except Exception as error:
         report["failure"] = str(error)[:2500]

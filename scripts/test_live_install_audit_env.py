@@ -466,6 +466,10 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "original isolated profile changed"):
                 runner["check_profile_unchanged"](env, project, after, "restore B")
             sibling.unlink()
+            # Clean the newly created empty ancestors as well; they are now
+            # intentionally observable foreign-state mutations.
+            sibling.parent.rmdir()
+            sibling.parent.parent.rmdir()
             runner["check_profile_unchanged"](env, project, after, "restore B")
 
             # A's durable UAP receipt/data state must remain untouched by B/C.
