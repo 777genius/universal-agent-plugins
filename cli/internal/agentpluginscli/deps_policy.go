@@ -2,6 +2,8 @@ package agentpluginscli
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/json"
 	"context"
 	"errors"
 	"fmt"
@@ -180,22 +182,22 @@ func (policy localDependencyPolicy) evaluate(lock environment.Lock) error {
 	return nil
 }
 
-// checkLocalDependencyPolicy is read-only. A policy requiring MCP transport
-// rules examines the exact validated immutable package envelopes, not just
-// root requirements or target adapters. If bytes are absent it fails closed.
-func checkLocalDependencyPolicy(ctx context.Context, app App, path string, lock environment.Lock) error {
+// evaluateLocalDependencyPolicy returns a fingerprint of the exact
+// *evaluated semantics* so a policy changed between review and final apply
+// cannot silently authorize a different dependency operation. Read only.
+func evaluateLocalDependencyPolicy(ctx context.Context, app App, path string, lock environment.Lock) (string, error) {
 	if path == "" {
-		return nil // Unchanged default: explicit opt-in only.
+		return "", nil // Unchanged default: explicit opt-in only.
 	}
 	policy, err := readLocalDependencyPolicy(path)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if err := policy.evaluate(lock); err != nil {
-		return err
+		return "", err
 	}
 	if !policy.MCP.AllowedTransports.Present {
-		return nil
+		return fingerprintLocalDependencyPolicy(policy)
 	}
 	for _, pin := range lock.Packages {
 		_, err := inspectPinnedDependency(ctx, app, pin, func(envelope domain.PackageEnvelope) error {
@@ -208,11 +210,25 @@ func checkLocalDependencyPolicy(ctx context.Context, app App, path string, lock 
 					return fmt.Errorf("local dependency policy: package %q MCP %q uses disallowed transport %q", pin.Alias, name, server.Type)
 				}
 			}
-			return nil
+			return "", nil
 		})
 		if err != nil {
 			return fmt.Errorf("local dependency policy: verify package %q MCP transport: %w", pin.Alias, err)
 		}
 	}
-	return nil
+	return fingerprintLocalDependencyPolicy(policy)
+}
+
+func fingerprintLocalDependencyPolicy(policy localDependencyPolicy) (string, error) {
+	// All fields are explicit and serializable; a JSON digest prevents changing
+	// the rules after confirmation while ignoring inconsequential YAML trivia.
+	body, err := json.Marshal(policy)
+	if err != nil { return "", fmt.Errorf("encode local dependency policy: %w", err) }
+	sum := sha256.Sum256(body)
+	return fmt.Sprintf("%x", sum[:]), nil
+}
+
+func checkLocalDependencyPolicy(ctx context.Context, app App, path string, lock environment.Lock) error {
+	_, err := evaluateLocalDependencyPolicy(ctx, app, path, lock)
+	return err
 }

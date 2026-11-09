@@ -169,3 +169,22 @@ func TestLocalPolicyUsesConcreteGitURLHostBeforeShorthand(t *testing.T) {
 		t.Fatal("Git URL must not masquerade as GitHub shorthand")
 	}
 }
+
+
+func TestLocalPolicyFingerprintChangesWithAdmissionRules(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "policy.yml")
+	write := func(source string) {
+		t.Helper()
+		if err := os.WriteFile(path, []byte(source), 0o600); err != nil { t.Fatal(err) }
+	}
+	write("schema_version: 1\nsources:\n  allow_hosts: [github.com]\n")
+	approved, err := evaluateLocalDependencyPolicy(context.Background(), App{}, path, environment.Lock{})
+	if err != nil || approved == "" { t.Fatalf("valid policy fingerprint: %q %v", approved, err) }
+	write("# trivia change\nschema_version: 1\nsources:\n  allow_hosts: [github.com]\n")
+	same, err := evaluateLocalDependencyPolicy(context.Background(), App{}, path, environment.Lock{})
+	if err != nil || same != approved { t.Fatalf("nonsemantic comment changed policy: %q %q %v", approved, same, err) }
+	write("schema_version: 1\nsources:\n  deny_hosts: [github.com]\n")
+	modified, err := evaluateLocalDependencyPolicy(context.Background(), App{}, path, environment.Lock{})
+	if err != nil || modified == approved { t.Fatalf("changed policy escaped stable fingerprint: %q %q %v", approved, modified, err) }
+}
