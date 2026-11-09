@@ -93,7 +93,10 @@ jobs:
           EDITOR
             chmod 0700 "$RUNNER_TEMP/cursor-bin/cursor"
             editor_version="$(HOME="$RUNNER_TEMP/cursor-editor-probe-home" timeout 20s "$RUNNER_TEMP/cursor-bin/cursor" --version)"
-            [[ "${editor_version%%
+            read -r editor_first_line <<< "$editor_version"
+            test "$editor_first_line" = "3.22.12"
+          else
+            npm install --global "$NATIVE_PACKAGE"
           fi
           # The immutable npm launcher fetches the exact 0.1.102 GitHub binary
           # on first use. A transient release-asset HTTP 504 must not turn all
