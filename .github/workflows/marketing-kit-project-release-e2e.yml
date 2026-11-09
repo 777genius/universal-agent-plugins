@@ -84,7 +84,7 @@ jobs:
             test "$(dpkg-deb --field "$RUNNER_TEMP/cursor-editor.deb" Package)" = cursor
             [[ "$(dpkg-deb --field "$RUNNER_TEMP/cursor-editor.deb" Version)" =~ ^3\.22\.12([-+].*)?$ ]]
             test "$(dpkg-deb --field "$RUNNER_TEMP/cursor-editor.deb" Architecture)" = amd64
-            mkdir -p "$RUNNER_TEMP/cursor-editor-root" "$RUNNER_TEMP/cursor-editor-probe-home"
+            mkdir -p "$RUNNER_TEMP/cursor-editor-root"
             dpkg-deb --extract "$RUNNER_TEMP/cursor-editor.deb" "$RUNNER_TEMP/cursor-editor-root"
             editor="$RUNNER_TEMP/cursor-editor-root/usr/share/cursor/cursor"
             test -f "$editor" && test -x "$editor" && test ! -L "$editor"
@@ -93,9 +93,11 @@ jobs:
           exec "$RUNNER_TEMP/cursor-editor-root/usr/share/cursor/cursor" "$@"
           EDITOR
             chmod 0700 "$RUNNER_TEMP/cursor-bin/cursor"
-            editor_version="$(HOME="$RUNNER_TEMP/cursor-editor-probe-home" timeout 20s "$RUNNER_TEMP/cursor-bin/cursor" --version)"
-            read -r editor_first_line <<< "$editor_version"
-            test "$editor_first_line" = "3.22.12"
+            # The adapter's editor detector checks executable presence only.
+            # Do NOT start Chromium here: extracting the verified .deb without
+            # its privileged SUID sandbox correctly makes GUI startup refuse.
+            # Version was checked above from exact SHA-pinned Debian metadata;
+            # runtime discovery, model auth and MCP tools/call are separate gates.
           else
             npm install --global "$NATIVE_PACKAGE"
           fi
