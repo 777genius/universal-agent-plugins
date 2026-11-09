@@ -64,6 +64,7 @@ agentplugins deps sync --scope project --locked --policy ./uap-policy.yaml
 ```
 
 The policy evaluates **all pinned dependencies, including transitive ones**.
+An explicitly empty source allow-list denies all sources; an explicitly empty MCP transport allow-list denies all MCP transports. Omitting either list leaves that dimension unrestricted.
 A denied source or missing *requested* source pin rejects the selected lock
 before convergence, repairs or managed client mutations. It does not bypass
 normal signed-source, package integrity or scanner checks. Policy files use a
