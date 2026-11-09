@@ -37,9 +37,9 @@ func TestFindingIdentityIsBoundedByComponentType(t *testing.T) {
 	r.recordFindings(p)
 	r.finish()
 	expected := map[string]string{
-		"mcp": opaque("mcp:" + shared),
-		"skill": opaque("skill:" + shared),
-		"unlisted": opaque(missing),
+		"mcp":       opaque("mcp:" + shared),
+		"skill":     opaque("skill:" + shared),
+		"unlisted":  opaque(missing),
 		"unbounded": opaque(shared),
 	}
 	if len(r.Findings) != len(expected) || len(r.Conformance.FindingIDs) != 3 ||
