@@ -52,7 +52,7 @@ func TestProjectMetadataMatchesAdmittedComponentContracts(t *testing.T) {
 		}
 	}
 	for client, support := range map[string]string{
-		"grok": "unsupported", "qoder": "native", "windsurf": "prepared",
+		"grok": "native", "qoder": "native", "windsurf": "prepared",
 	} {
 		if got := string(byClient[client].Project.MCPTransports["stdio"]); got != support {
 			t.Fatalf("%s project MCP support = %s, expected %s", client, got, support)
