@@ -26,7 +26,7 @@ func (*Adapter) Project(_ context.Context, in clients.ProjectionInput) ([]domain
 			return nil, err
 		}
 		for _, component := range in.Plan.Components {
-			if component.Support != domain.SupportUnsupported && component.Kind != domain.ComponentSkill {
+			if component.Support != domain.SupportUnsupported && component.Kind != domain.ComponentSkill && component.Kind != domain.ComponentMCPServer {
 				return nil, fmt.Errorf("grok project component is unqualified")
 			}
 		}
