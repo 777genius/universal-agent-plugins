@@ -314,6 +314,31 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "foreign content modified"):
                 guard(entries, sandbox)
             self.assertEqual(outside_marker.read_text(encoding="utf-8"), content)
+    def test_marketing_kit_scoped_snapshot_fails_closed_on_walk_error(self):
+        # os.walk skips unreadable descendants without onerror; an unchanged
+        # unreadable tree is not proof that foreign project state was preserved.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary) / "project"
+            root.mkdir()
+            self.assertEqual(runner["scoped_snapshot"]([root])["root-kind:0"],
+                             "directory")
+
+            def inaccessible(_root, **kwargs):
+                onerror = kwargs.get("onerror")
+                if onerror:
+                    onerror(PermissionError("unreadable protected subtree"))
+                return iter(())
+
+            with patch.dict(runner["audit"], {"snapshot": lambda _roots: {}}):
+                with patch("os.walk", side_effect=inaccessible):
+                    with self.assertRaisesRegex(
+                            AssertionError, "protected scope snapshot unreadable"):
+                        runner["scoped_snapshot"]([root])
+
     def test_marketing_kit_foreign_guard_rejects_newline_rewrite(self):
         # Text-mode newline normalization can hide a byte-changing rewrite.
         from runpy import run_path

@@ -242,6 +242,9 @@ def scoped_snapshot(roots):
     """Record file bytes, links and empty directories without following links."""
     roots = tuple(Path(root) for root in roots)
     state = audit["snapshot"](roots)
+    def refuse_walk_error(error):
+        raise AssertionError(f"protected scope snapshot unreadable: {error}") from error
+
     for index, root in enumerate(roots):
         if root.is_symlink():
             state[f"root-link:{index}"] = os.readlink(root)
@@ -252,7 +255,7 @@ def scoped_snapshot(roots):
             state[f"root-kind:{index}"] = "file" if root.exists() else "absent"
             continue
         state[f"root-kind:{index}"] = "directory"
-        for directory, dirs, files in os.walk(root, followlinks=False):
+        for directory, dirs, files in os.walk(root, followlinks=False, onerror=refuse_walk_error):
             for name in dirs:
                 path = Path(directory) / name
                 relative = path.relative_to(root).as_posix()
