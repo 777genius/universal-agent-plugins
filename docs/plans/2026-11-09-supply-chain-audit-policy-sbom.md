@@ -72,3 +72,9 @@ Make UAP installation evidence independently inspectable in CI without weakening
 **Finding and concrete plan correction:** Scope: no org policy discovery, inheritance, remote download, provider integration or new trust service; local opt-in rules only. Security index signatures and release attestations remain separate trust domains.
 
 **Decision:** This is part of the acceptance criteria; a contradictory implementation must be rejected rather than treated as a harmless warning.
+
+### Review round 3 / 6 — Clean Architecture / DRY
+
+**Finding and concrete plan correction:** Architecture: policy evaluator consumes resolved and verified closure as a pure function; audit and SBOM read the same immutable graph/report, never add a second resolver, parser or verification cache.
+
+**Decision:** This is part of the acceptance criteria; a contradictory implementation must be rejected rather than treated as a harmless warning.
