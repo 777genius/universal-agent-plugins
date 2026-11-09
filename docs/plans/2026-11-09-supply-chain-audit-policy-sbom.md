@@ -90,3 +90,9 @@ Make UAP installation evidence independently inspectable in CI without weakening
 **Finding and concrete plan correction:** E2E: golden deterministic JSON output for SPDX/CycloneDX, schema validation, malformed manifest/lock and missing-store negative cases, a denied transitive MCP or source before any user/project mutation, offline network-deny instrumentation and Project A/B isolation.
 
 **Decision:** Treat this constraint as a release gate. Do not replace missing native proof with mocked success or expand the architecture just to claim feature parity.
+
+### Review round 6 / 6 — delivery / overengineering
+
+**Finding and concrete plan correction:** Delivery: documented opt-in flags with zero regression to install defaults, backward-compatible versioned JSON, minimal dependency budget and no hosted service. Keep security improvements in this PR and put organization inheritance in a separate future proposal only if specifically requested.
+
+**Decision:** Treat this constraint as a release gate. Do not replace missing native proof with mocked success or expand the architecture just to claim feature parity.
