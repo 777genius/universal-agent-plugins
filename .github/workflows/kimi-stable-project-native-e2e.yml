@@ -24,6 +24,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # Audit the PR's exact HEAD, never the default synthetic PR merge commit.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -69,6 +71,27 @@ jobs:
             --cli "$RUNNER_TEMP/agentplugins-kimi-source" \
             --target kimi --kind skill --limit 30 \
             --report-dir "$AUDIT_REPORT_DIR"
+          # The shared audit accepts documented negative cases as coverage.
+          # Stable admission requires 30 genuine positive passes, not 30 attempts.
+          python3 - "$AUDIT_REPORT_DIR/kimi-skill.json" "$AUDIT_PR_HEAD_SHA" <<'PY'
+          import json, pathlib, sys
+          evidence = json.loads(pathlib.Path(sys.argv[1]).read_text())
+          expected_head = sys.argv[2]
+          rows = evidence.get("results", [])
+          failures = [f"{row.get('index')}: {row.get('status')}" for row in rows
+                      if not isinstance(row, dict) or row.get("status") != "passed"]
+          if (evidence.get("pr_head_sha") != expected_head
+                  or evidence.get("passed") != 30
+                  or evidence.get("verified_negative_coverage") != 0
+                  or evidence.get("cases_attempted") != 30
+                  or evidence.get("full_coverage") is not True
+                  or evidence.get("source_selection_complete") is not True
+                  or evidence.get("client_version", {}).get("status") != "reported"
+                  or evidence.get("client_version", {}).get("value") != "2.5.2"
+                  or len(rows) != 30 or failures):
+              raise SystemExit(f"Exact-head real native Kimi Skill qualification failed: {failures}")
+          print(f"QUALIFIED: 30/30 source-backed Kimi 2.5.2 project Skills at {expected_head}")
+          PY
 
       - name: Preserve exact-head source/native E2E results, even on failure
         if: always()
