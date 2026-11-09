@@ -222,7 +222,7 @@ export const clientLandingPages: ClientLandingPage[] = [
     vendorDocsUrl:
       'https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/extensions.md',
   },
-];
+].filter((client) => client.id !== 'vscode'); // Temporarily hidden from public agent choices.
 
 export const clients: ClientTarget[] = clientLandingPages.map(
   ({ id, name, icon, note, status }) => ({ id, name, icon, note, status }),

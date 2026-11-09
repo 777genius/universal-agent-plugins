@@ -19,8 +19,11 @@ test('README and landing support rows, setup actions and logos are in sync', () 
   const last = '<!-- AGENT_SUPPORT_MATRIX_END -->';
   assert.equal(readme.split(first).length, 2);
   assert.equal(readme.split(last).length, 2);
-  assert.equal(clientSupportRows.length, 15);
-  assert.equal(new Set(clientSupportRows.map((r) => r.id)).size, 15);
+  assert.equal(clientSupportRows.length, 14);
+  assert.equal(new Set(clientSupportRows.map((r) => r.id)).size, 14);
+  assert.ok(!clientSupportRows.some((r) => r.id === 'vscode'));
+  assert.ok(!clientLandingById.has('vscode'));
+
   const table = readme.split(first)[1]!.split(last)[0]!;
   const expected = clientSupportRows.map((r) => {
     for (const capability of [r.user, r.project])
@@ -41,7 +44,7 @@ test('English support translations preserve source-matrix capabilities and next 
   const messages = JSON.parse(
     readFileSync(new URL('../i18n/locales/en.json', import.meta.url), 'utf8'),
   ).shell.clientSupport;
-  assert.deepEqual(Object.keys(messages.nextSteps).sort(), clientSupportRows.map((row) => row.id).sort());
+  assert.deepEqual(Object.keys(messages.nextSteps).filter((id) => clientLandingById.has(id)).sort(), clientSupportRows.map((row) => row.id).sort());
   for (const row of clientSupportRows) {
     assert.equal(messages.nextSteps[row.id], row.nextStep, row.id);
     for (const original of [row.user, row.project]) {

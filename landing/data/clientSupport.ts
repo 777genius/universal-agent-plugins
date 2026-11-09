@@ -1,4 +1,5 @@
 import type { ClientTarget } from '../types/registry';
+import { clients } from './clients.ts';
 
 export type AgentSetup = 'Automatic' | 'Guided' | 'Prepared' | 'Manual';
 export interface ClientSupport {
@@ -149,4 +150,4 @@ export const clientSupportRows: ClientSupport[] = [
     setup: 'Guided',
     nextStep: 'Desktop: local install via Codex CLI; Web: connect or install in ChatGPT.',
   },
-];
+].filter((row) => clients.some((client) => client.id === row.id));
