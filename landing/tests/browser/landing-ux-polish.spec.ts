@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { clientSupportRows } from '../../data/clientSupport.ts';
 
 for (const width of [1440, 390]) {
   test(`agent names and logos align to the start edge at ${width}px`, async ({
@@ -9,7 +10,7 @@ for (const width of [1440, 390]) {
     const table = page.locator('#agent-support table');
     const header = table.locator('thead th:first-child');
     const icons = table.locator('tbody th:first-child img');
-    await expect(icons).toHaveCount(15);
+    await expect(icons).toHaveCount(clientSupportRows.length);
     // An offscreen scroll-reveal section has zero opacity even though its
     // table cells have geometry. Wait for the *visible* table before capturing
     // review screenshots, otherwise the proof is an almost-black image.
