@@ -1,0 +1,80 @@
+name: Kimi stable Project native installation E2E
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'install/integrationctl/agentplugins/clients/kimi/**'
+      - 'install/integrationctl/agentplugins/providers/project_kimi_*'
+      - '.github/workflows/kimi-stable-project-native-e2e.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kimi-stable-project-e2e-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  native-project:
+    name: Official Kimi 2.5.2 / 30 project Skills (no model)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - name: Install genuine pinned stable Kimi and observe version without user profile
+        id: native-install
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global @moonshot-ai/kimi-code@2.5.2
+          command -v kimi
+          mkdir -p "$RUNNER_TEMP/kimi-version-home/cache"
+          observed="$(KIMI_CODE_HOME="$RUNNER_TEMP/kimi-version-home" \
+            KIMI_CODE_CACHE_DIR="$RUNNER_TEMP/kimi-version-home/cache" \
+            KIMI_CODE_NO_AUTO_UPDATE=1 timeout 45s kimi --version)"
+          test "$observed" = '2.5.2'
+
+      - name: Run the real project admission and ownership regressions
+        run: |
+          go test ./install/integrationctl/agentplugins/providers -run '^TestProjectKimi' -count=1
+          go test ./install/integrationctl/agentplugins/clients/kimi -count=1
+
+      - name: Build current PR source CLI with published policy version
+        run: go build -trimpath -ldflags='-X main.version=0.1.102' -o "$RUNNER_TEMP/agentplugins-kimi-source" ./cli/cmd/agentplugins
+
+      - name: Audit 30 source-backed Project Skills, repeated installs and removal
+        if: ${{ !cancelled() }}
+        env:
+          AUDIT_VENDOR_OUTCOME: ${{ steps.native-install.outcome }}
+          AUDIT_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          AUDIT_REPORT_DIR: ${{ runner.temp }}/kimi-stable-project-proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$AUDIT_REPORT_DIR"
+          python3 scripts/live-install-audit.py \
+            --cli "$RUNNER_TEMP/agentplugins-kimi-source" \
+            --target kimi --kind skill --limit 30 \
+            --report-dir "$AUDIT_REPORT_DIR"
+
+      - name: Preserve exact-head source/native E2E results, even on failure
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: kimi-stable-2.5.2-native-project-skills
+          path: ${{ runner.temp }}/kimi-stable-project-proof/
+          if-no-files-found: warn
+          retention-days: 14
