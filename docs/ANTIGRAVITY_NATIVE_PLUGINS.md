@@ -33,3 +33,7 @@ Sources: [Build plugins](https://antigravity.google/docs/build-plugins),
 [Customization discovery](https://antigravity.google/docs/customization-discovery),
 [MCP](https://antigravity.google/docs/mcp).
 Implementation criteria: [reviewed plan](plans/2026-11-09-antigravity-native-integration.md).
+
+### Native CI acceptance
+
+`Antigravity Native Plugin E2E` builds the UAP CLI from the PR and uses the real `agy` release 1.5.3 from the vendor GitHub repository, requiring SHA-256 `1b4850599cce73a17f94ffb422df3bf9531531b77dbddc40c1a435e0c2c16807` on the Linux x64 archive. It verifies strict native plugin validation, project discovery/listing, scoped removal and foreign User state preservation inside disposable HOME. A queued or failed run cannot be cited as passed, and a validated package alone does not prove authentication or MCP `tools/call`.
