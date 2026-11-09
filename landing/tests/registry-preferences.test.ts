@@ -97,6 +97,37 @@ function card(props = packageProps()) {
 }
 
 
+
+test('hidden VS Code stays unavailable in stale project choices without erasing other clients', () => {
+  setActivePinia(createPinia());
+  const preferences = useInstallPreferencesStore();
+  assert.ok(!clients.some((client) => client.id === 'vscode'));
+  assert.ok(!installTargets.some((client) => client.id === 'vscode'));
+
+  // Project state from an older site version may contain a now-hidden target.
+  preferences.package = {
+    identity: 'context7', targetIds: ['vscode'], autoDetect: false, expanded: true,
+    scope: 'project',
+  };
+  const stale = preferences.readPackage('context7', ['cursor', 'copilot']);
+  assert.deepEqual(stale.targetIds, []);
+  assert.equal(stale.autoDetect, true);
+  preferences.reconcilePackage('context7', ['cursor', 'copilot']);
+  assert.equal(preferences.package.identity, '');
+
+  preferences.selectPackage('context7', {
+    targetIds: ['vscode'], autoDetect: false, expanded: true, scope: 'project',
+  }, ['cursor', 'copilot']);
+  assert.equal(preferences.package.identity, ''); // No newly saved invalid choice.
+
+  // Preserve existing project-scope behavior for a supported but ineligible
+  // target; only the hidden presentation choice is retired.
+  preferences.selectPackage('context7', {
+    targetIds: ['kiro'], autoDetect: false, expanded: true, scope: 'project',
+  }, ['cursor']);
+  assert.deepEqual(preferences.readPackage('context7', ['cursor']).targetIds, ['kiro']);
+});
+
 test('Desktop has its own picker command, shares Codex backend, and keeps Web separate', () => {
   setActivePinia(createPinia());
   const instance = card();

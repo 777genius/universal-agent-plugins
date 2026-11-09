@@ -78,7 +78,7 @@ export const recommendedSkills: ReadonlyArray<{ repository: string; slug: string
   { repository: 'anthropics/skills', slug: 'frontend-design' },
   { repository: 'vercel-labs/skills', slug: 'find-skills' },
   { repository: 'mattpocock/skills', slug: 'tdd' },
-  { repository: 'vercel-labs/agent-skills', slug: 'vercel-react-best-practices' },
+  { repository: 'vercel-labs/agent-skills', slug: 'vercel-optimize' },
   { repository: 'vercel-labs/agent-skills', slug: 'web-design-guidelines' },
 ];
 
