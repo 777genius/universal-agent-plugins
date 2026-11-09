@@ -35,7 +35,11 @@ COMPAT_SKILL_ROOTS = {
     "opencode": (".agents", ".claude"),
     "cursor": (".agents", ".claude", ".codex"),
     "gemini": (".agents",),
+    "copilot": (".agents",),
 }
+# Copilot CLI also discovers .claude/skills in repositories, but not as
+# a documented personal Skills path.
+PROJECT_ONLY_COMPAT_SKILL_ROOTS = {"copilot": (".claude",)}
 LEGACY_ACTIONS = {
     "update": {"unchanged"},
     "repair": {"repair"},
@@ -231,6 +235,7 @@ def run_case(cli, target, root, name, portable=None):
     # outside its native MCP roots, as do compatibility Skills.
     project_skill_roots = list(audit["PROJECT_SKILL_ROOTS"].get(target, ()))
     project_skill_roots.extend(root + "/skills" for root in COMPAT_SKILL_ROOTS.get(target, ()))
+    project_skill_roots.extend(root + "/skills" for root in PROJECT_ONLY_COMPAT_SKILL_ROOTS.get(target, ()))
     for relative in project_skill_roots:
         skill = project / relative / "unmanaged-uap-foreign-skill" / "SKILL.md"
         skill.parent.mkdir(parents=True, exist_ok=True)
@@ -384,7 +389,7 @@ def check_scope_id_isolation(selected, other_scopes, stage):
         raise AssertionError(f"{stage}: reused installation IDs across scopes")
 
 
-def check_removed_native_components(target, home, case_root, stage):
+def check_removed_native_components(target, home, case_root, stage, project_scope=False):
     """Refuse native MCP and Skill remnants after an empty scoped inventory."""
     if not audit["path_inside_case"](home, case_root):
         raise AssertionError(f"{stage}: native HOME left disposable case")
@@ -393,6 +398,8 @@ def check_removed_native_components(target, home, case_root, stage):
     relative_roots = (*audit["NATIVE_ROOTS"][target],
                       *audit["PROJECT_SKILL_ROOTS"].get(target, ()),
                       *COMPAT_SKILL_ROOTS.get(target, ()))
+    if project_scope:
+        relative_roots += PROJECT_ONLY_COMPAT_SKILL_ROOTS.get(target, ())
     roots = [home / relative for relative in relative_roots]
     if any(not audit["path_inside_case"](root, case_root) for root in roots):
         raise AssertionError(f"{stage}: unsafe native client root")
@@ -600,7 +607,7 @@ def main():
             check_removed_native_components(options.target, Path(env_b["HOME"]),
                                             root, "Project B native HOME remove")
             check_removed_native_components(options.target, project_b,
-                                            root, "Project B native Project remove")
+                                            root, "Project B native Project remove", project_scope=True)
             check_project_a_unchanged(
                 identities(inventory(options.cli, env, project_a, options.target), options.target),
                 identities_after_update, (project_a / "uap.lock").read_bytes(),
@@ -615,7 +622,7 @@ def main():
             check_removed_native_components(options.target, Path(env["HOME"]),
                                             root, "Project A native HOME remove")
             check_removed_native_components(options.target, project_a,
-                                            root, "Project A native Project remove")
+                                            root, "Project A native Project remove", project_scope=True)
             for e in (env, env_b):
                 if (Path(e["AGENTPLUGINS_HOME"]) / "uap.toml").exists():
                     raise AssertionError("Project installation unexpectedly wrote User manifest")

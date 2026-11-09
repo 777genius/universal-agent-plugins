@@ -608,7 +608,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
 
     def test_marketing_kit_user_and_project_foreign_skills_are_pinned(self):
         # Protect real native User Skills independently of Project Skills;
-        # Codex, OpenCode, Cursor and Gemini also discover compatibility Skills.
+        # Codex, OpenCode, Cursor, Gemini and Copilot also discover compatibility Skills.
         from runpy import run_path
 
         runner = run_path(str(Path(__file__).resolve().parent /
@@ -616,7 +616,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         # These expected paths are independent of the harness root selector:
         # otherwise the test could replicate an incorrect native mapping.
         for target, project_root, user_roots in (
-                ("copilot", ".github/skills", (".copilot/skills",)),
+                ("copilot", ".github/skills", (".copilot/skills", ".agents/skills")),
                 ("codex", ".agents/skills", (".codex/skills", ".agents/skills")),
                 ("opencode", ".opencode/skills",
                  (".config/opencode/skills", ".agents/skills", ".claude/skills")),
@@ -639,6 +639,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     "opencode": (".agents/skills", ".claude/skills"),
                     "cursor": (".agents/skills", ".claude/skills", ".codex/skills"),
                     "gemini": (".agents/skills",),
+                    "copilot": (".agents/skills", ".claude/skills"),
                 }
                 expected_skills.update({
                     project / root / name / "SKILL.md"
@@ -778,7 +779,46 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 check("copilot", project, case, "Project remove")
             owned_with_receipt.rmdir()
             # Removing owned Skills must not require deleting a foreign Skill.
-            check("copilot", project, case, "Project remove")
+            check("copilot", project, case, "Project remove", project_scope=True)
+            for compatible in (".agents", ".claude"):
+                with self.subTest(compatible=compatible):
+                    skill_root = project / compatible / "skills"
+                    other_skill = skill_root / "foreign-skill"
+                    other_skill.mkdir(parents=True)
+                    (other_skill / "SKILL.md").write_text(
+                        "---\nname: foreign-skill\ndescription: preserve\n---\n",
+                        encoding="utf-8")
+                    check("copilot", project, case, "Project remove", project_scope=True)
+                    owned_skill = skill_root / "marketing-kit"
+                    owned_skill.mkdir()
+                    with self.assertRaisesRegex(AssertionError, "native Marketing Kit remnants"):
+                        check("copilot", project, case, "Project remove", project_scope=True)
+                    owned_skill.rmdir()
+                    check("copilot", project, case, "Project remove", project_scope=True)
+
+    def test_marketing_kit_copilot_personal_agents_skill_cleanup(self):
+        # GitHub's Copilot CLI documents ~/.agents/skills as a personal root.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        check = runner["check_removed_native_components"]
+        with TemporaryDirectory() as temporary:
+            case = Path(temporary).resolve()
+            home = case / "home"
+            skills = home / ".agents" / "skills"
+            other = skills / "foreign-skill"
+            other.mkdir(parents=True)
+            (other / "SKILL.md").write_text(
+                "---\nname: foreign-skill\ndescription: preserve\n---\n",
+                encoding="utf-8")
+            check("copilot", home, case, "User remove")
+            owned = skills / "marketing-kit"
+            owned.mkdir()
+            with self.assertRaisesRegex(AssertionError, "native Marketing Kit remnants"):
+                check("copilot", home, case, "User remove")
+            owned.rmdir()
+            check("copilot", home, case, "User remove")
 
     def test_marketing_kit_codex_attestation_requires_native_uninstall_proof(self):
         # A signed Project/User binding is not proof of native uninstallation.
