@@ -350,10 +350,14 @@ def check_scope_id_isolation(selected, other_scopes, stage):
 
 
 def check_removed_native_components(target, home, case_root, stage):
-    """Refuse native registrations left after an otherwise empty User list."""
+    """Refuse native MCP and Skill remnants after an empty scoped inventory."""
     if not audit["path_inside_case"](home, case_root):
         raise AssertionError(f"{stage}: native HOME left disposable case")
-    roots = [home / relative for relative in audit["NATIVE_ROOTS"][target]]
+    # Copilot Project Skills are under .github/skills, not its MCP config
+    # roots (.copilot/.config/copilot). Reuse the audit's authoritative paths.
+    relative_roots = (*audit["NATIVE_ROOTS"][target],
+                      *audit["PROJECT_SKILL_ROOTS"].get(target, ()))
+    roots = [home / relative for relative in relative_roots]
     if any(not audit["path_inside_case"](root, case_root) for root in roots):
         raise AssertionError(f"{stage}: unsafe native client root")
     if not home.is_dir():

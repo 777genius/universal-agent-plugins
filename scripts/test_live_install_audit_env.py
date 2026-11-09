@@ -606,6 +606,30 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 unsafe.unlink()
             check("copilot", home, case, "remove")
 
+    def test_marketing_kit_copilot_project_skill_removal_scans_github_root(self):
+        # Copilot Project Skills live in .github/skills, outside MCP config roots.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        check = runner["check_removed_native_components"]
+        with TemporaryDirectory() as temporary:
+            case = Path(temporary).resolve()
+            project = case / "project"
+            owned = project / ".github" / "skills" / "marketing-kit"
+            other = project / ".github" / "skills" / "foreign-skill"
+            owned.mkdir(parents=True)
+            other.mkdir()
+            (other / "SKILL.md").write_text("name: foreign-skill\n", encoding="utf-8")
+            file = owned / "SKILL.md"
+            file.write_text("name: marketing-kit\n", encoding="utf-8")
+            with self.assertRaisesRegex(AssertionError, "native Marketing Kit remnants"):
+                check("copilot", project, case, "Project remove")
+            file.unlink()
+            owned.rmdir()
+            # Removing owned Skills must not require deleting a foreign Skill.
+            check("copilot", project, case, "Project remove")
+
     def test_marketing_kit_codex_attestation_requires_native_uninstall_proof(self):
         # A signed Project/User binding is not proof of native uninstallation.
         # Only the existing pinned native removal plus fresh absence grants the flag.
