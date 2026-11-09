@@ -95,7 +95,7 @@ func TestAntigravityGroupPreflightHasNoStagedDeliveryYet(t *testing.T) {
 	if err := New().PreflightActivation(clients.Env{}, req); err == nil {
 		t.Fatal("foreign staged delivery path accepted")
 	}
-	req.Delivery = domain.StagedDelivery{ClientID: domain.ClientHermes, ActivePath: active}
+	req.Delivery = domain.StagedDelivery{ClientID: domain.ClientCodex, ActivePath: active}
 	if err := New().PreflightActivation(clients.Env{}, req); err == nil {
 		t.Fatal("staged delivery for another client accepted")
 	}
