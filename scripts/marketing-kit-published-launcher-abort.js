@@ -5,7 +5,9 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 
-const packageRoot = path.join(process.env.UAP_GLOBAL_NPM_ROOT, "universal-agent-plugins");
+const npmRoot = process.env.UAP_GLOBAL_NPM_ROOT;
+assert.ok(npmRoot, "UAP_GLOBAL_NPM_ROOT must point to the global npm root");
+const packageRoot = path.join(npmRoot, "universal-agent-plugins");
 const pkg = JSON.parse(fs.readFileSync(path.join(packageRoot, "package.json"), "utf8"));
 assert.equal(pkg.version, "0.1.102", "must test the exact public npm package");
 const { ensureBinary, acquireLock } = require(path.join(packageRoot, "lib/bootstrap.js"));
@@ -65,7 +67,7 @@ async function verifyLockWaitCancellation() {
     assert.equal(ownerNames.length, 1, "owner must hold exactly one published cache lock");
     assert.ok(ownerNames[0].endsWith(".lock"), "expected the published lock filename");
     const ownerPath = path.join(lockRoot, ownerNames[0]);
-    const ownerStat = fs.lstatSync(ownerPath);
+    const ownerStat = fs.lstatSync(ownerPath, { bigint: true });
     assert.ok(ownerStat.isFile() && !ownerStat.isSymbolicLink(),
       "published owner lock must be a regular non-symlink file");
     const ownerBytes = fs.readFileSync(ownerPath);
@@ -75,7 +77,7 @@ async function verifyLockWaitCancellation() {
     await assert.rejects(waiter, /cancel/i, "published lock waiter must honor AbortSignal");
     assert.deepEqual(fs.readdirSync(lockRoot), ownerNames,
       "cancelled waiter must not replace the owner's lock or leave orphan files");
-    const surviving = fs.lstatSync(ownerPath);
+    const surviving = fs.lstatSync(ownerPath, { bigint: true });
     assert.equal(surviving.dev, ownerStat.dev, "cancelled waiter replaced owner's lock device");
     assert.equal(surviving.ino, ownerStat.ino, "cancelled waiter replaced owner's lock inode");
     assert.deepEqual(fs.readFileSync(ownerPath), ownerBytes,
