@@ -140,6 +140,8 @@ func sbomDependencies(packages []environment.LockedPackage) map[string][]string 
 	return children
 }
 
+func spdxPackageID(alias string) string { return "SPDXRef-Package-" + hex.EncodeToString([]byte(alias)) }
+
 func sbomSource(pin environment.LockedPackage) string {
 	switch {
 	case pin.Source.Git != nil:
@@ -185,7 +187,10 @@ func marshalDependencySBOM(lock environment.Lock, kind string) ([]byte, error) {
 	case "spdx":
 		// A fixed creation marker makes the inventory reproducible from its
 		// lock alone; it is not the time of scanning or of the source commit.
-		encoded, err := json.Marshal(lock)
+		encoded, err := json.Marshal(struct {
+			ManifestDigest string `json:"manifest_digest"`
+			Packages []environment.LockedPackage `json:"packages"`
+		}{ManifestDigest: lock.ManifestDigest, Packages: orderedLockedPackages(lock)})
 		if err != nil {
 			return nil, err
 		}
@@ -201,7 +206,7 @@ func marshalDependencySBOM(lock environment.Lock, kind string) ([]byte, error) {
 		packages := orderedLockedPackages(lock)
 		children := sbomDependencies(packages)
 		for _, pin := range packages {
-			id := "SPDXRef-Package-" + pin.Alias
+			id := spdxPackageID(pin.Alias)
 			doc.Packages = append(doc.Packages, spdxPackage{Name: pin.Alias, ID: id,
 				Version: pin.Version, DownloadLocation: "NOASSERTION", FilesAnalyzed: false,
 				LicenseConcluded: "NOASSERTION", LicenseDeclared: "NOASSERTION",
@@ -211,7 +216,7 @@ func marshalDependencySBOM(lock environment.Lock, kind string) ([]byte, error) {
 			})
 			for _, child := range children[pin.Alias] {
 				doc.Relationships = append(doc.Relationships, spdxRelationship{
-					Element: id, Type: "DEPENDS_ON", Related: "SPDXRef-Package-" + child,
+					Element: id, Type: "DEPENDS_ON", Related: spdxPackageID(child),
 				})
 			}
 		}
