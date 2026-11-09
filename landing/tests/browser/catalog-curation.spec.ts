@@ -38,7 +38,7 @@ test('recommended Skills lead the original cards without changing provider data 
     { repository: 'example/skills', slug: 'another-tool' },
     { repository: 'vercel-labs/agent-browser', slug: 'agent-browser' },
     { repository: 'vercel-labs/skills', slug: 'find-skills' },
-    { repository: 'vercel-labs/agent-skills', slug: 'vercel-react-best-practices' },
+    { repository: 'vercel-labs/agent-skills', slug: 'vercel-optimize' },
   ];
   const original = candidates.map(({ repository, slug }, index) => ({
     id: `skills-sh:${repository}:${slug}`,

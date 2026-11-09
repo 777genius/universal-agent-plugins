@@ -9,7 +9,7 @@
           "frontend-design": "Create more intentional and polished frontend interfaces.",
           "find-skills": "Discover reusable skills that match your current task.",
           "tdd": "Build and fix software test-first with a red–green–refactor workflow.",
-          "vercel-react-best-practices": "Apply practical React and Next.js performance guidance.",
+          "vercel-optimize": "Investigate Vercel costs and performance with production metrics.",
           "web-design-guidelines": "Review web interfaces for usability and accessibility."
         }
       },
