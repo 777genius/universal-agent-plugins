@@ -25,6 +25,7 @@ var (
 	_ clients.Adapter = (*Adapter)(nil)
 	_ clients.HostDetector = (*Adapter)(nil)
 	_ clients.ProfileResolver = (*Adapter)(nil)
+	_ clients.ProfileBindingValidator = (*Adapter)(nil)
 	_ clients.ProjectTargetLayout = (*Adapter)(nil)
 	_ clients.NativeRegistryLayout = (*Adapter)(nil)
 	_ clients.PlanQualifier = (*Adapter)(nil)
@@ -72,6 +73,27 @@ func (*Adapter) ResolveProfileRoot(root string) (string, error) {
 		return "", fmt.Errorf("Hermes canonical profile root is invalid")
 	}
 	return canonical, nil
+}
+
+// ValidateBindingProfile refuses historical or replayed receipts that point
+// into a different selected native profile. No legacy Hermes migrations exist.
+func (*Adapter) ValidateBindingProfile(root string, binding domain.ClientBinding) error {
+	if binding.ClientID != string(domain.ClientHermes) || !cleanRoot(root) {
+		return fmt.Errorf("Hermes recorded binding has different client or profile authority")
+	}
+	selected, err := New().ResolveProfileRoot(root)
+	if err != nil { return err }
+	if selected != root || binding.NativeProfileRoot != root {
+		return fmt.Errorf("Hermes binding has no exact native profile proof")
+	}
+	for _, item := range binding.NativeObjects {
+		switch item.Kind {
+		case userSkillKind, projectSkillKind:
+		default:
+			return fmt.Errorf("Hermes binding contains a foreign native ownership type")
+		}
+	}
+	return nil
 }
 
 func (*Adapter) NativeRegistry(in clients.PlanInput) (string, string) {
