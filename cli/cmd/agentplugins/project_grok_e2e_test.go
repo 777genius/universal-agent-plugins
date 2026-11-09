@@ -94,10 +94,14 @@ func testProjectGrokComposedSavedLifecycle(t *testing.T, withMCP bool) {
 	transport := newProjectJourneyTransport(t, "git")
 	if withMCP {
 		projectJourneyWrite(t, filepath.Join(transport.repo, "mcp.json"), `{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"docs":{"type":"streamable-http","url":"https://inert.test/mcp"}}}`)
-		projectJourneyGit(t, transport.repo, "add", ".")
-		projectJourneyGit(t, transport.repo, "commit", "-m", "add inert project Grok MCP to source")
-		projectJourneyGit(t, transport.repo, "push", "--quiet", transport.remote, "main")
+	} else if err := os.Remove(filepath.Join(transport.repo, "mcp.json")); err != nil {
+		t.Fatal(err)
 	}
+	// The shared journey fixture contains MCP by default; remove it for a
+	// genuinely Skills-only Grok project before publishing the Git source.
+	projectJourneyGit(t, transport.repo, "add", "-A")
+	projectJourneyGit(t, transport.repo, "commit", "-m", "select Grok project fixture components")
+	projectJourneyGit(t, transport.repo, "push", "--quiet", transport.remote, "main")
 	journey := newProjectJourney(t, transport)
 	user := filepath.Join(journey.home, ".grok")
 	projectJourneyWrite(t, filepath.Join(user, "keep"), "original user\n")
