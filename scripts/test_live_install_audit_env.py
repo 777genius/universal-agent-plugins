@@ -585,6 +585,27 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "unsafe native client root"):
                 check("copilot", home, case, "User remove")
 
+    def test_marketing_kit_removed_native_root_rejects_file_ancestors(self):
+        # A non-directory native root or intermediate path cannot prove removal.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        check = runner["check_removed_native_components"]
+        with TemporaryDirectory() as temporary:
+            case = Path(temporary).resolve()
+            home = case / "home"
+            home.mkdir()
+            for unsafe in (home / ".copilot", home / ".config",
+                           home / ".config" / "copilot"):
+                unsafe.parent.mkdir(parents=True, exist_ok=True)
+                unsafe.write_text("occupied", encoding="utf-8")
+                with self.subTest(unsafe=unsafe), self.assertRaisesRegex(
+                        AssertionError, "invalid native client root"):
+                    check("copilot", home, case, "remove")
+                unsafe.unlink()
+            check("copilot", home, case, "remove")
+
     def test_marketing_kit_codex_attestation_requires_native_uninstall_proof(self):
         # A signed Project/User binding is not proof of native uninstallation.
         # Only the existing pinned native removal plus fresh absence grants the flag.

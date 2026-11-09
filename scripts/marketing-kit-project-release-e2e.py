@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import runpy
 import shutil
+import stat
 import subprocess
 import tempfile
 from time import sleep
@@ -355,6 +356,23 @@ def check_removed_native_components(target, home, case_root, stage):
     roots = [home / relative for relative in audit["NATIVE_ROOTS"][target]]
     if any(not audit["path_inside_case"](root, case_root) for root in roots):
         raise AssertionError(f"{stage}: unsafe native client root")
+    if not home.is_dir():
+        raise AssertionError(f"{stage}: invalid native client HOME")
+    # A regular file at an expected native root (or intermediate .config)
+    # is not absence of registration. The shared snapshot skips file roots.
+    for root in roots:
+        candidate = root
+        while candidate != home:
+            try:
+                mode = candidate.lstat().st_mode
+            except (FileNotFoundError, NotADirectoryError):
+                pass  # Missing native paths are valid after removal.
+            except OSError as error:
+                raise AssertionError(f"{stage}: native root metadata unreadable") from error
+            else:
+                if not stat.S_ISDIR(mode):
+                    raise AssertionError(f"{stage}: invalid native client root")
+            candidate = candidate.parent
     observed = audit["snapshot"](roots)
     if any(value == "unreadable" for value in observed.values()):
         raise AssertionError(f"{stage}: native cleanup snapshot unreadable")
