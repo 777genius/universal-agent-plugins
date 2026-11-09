@@ -13,7 +13,8 @@ trap 'rm -rf "$tmp"' EXIT
 export HOME="$tmp/home"
 export XDG_CONFIG_HOME="$tmp/config"
 export XDG_CACHE_HOME="$tmp/cache"
-export PATH="$(dirname "$AGY_BIN"):$PATH"
+ln -s "$AGY_BIN" "$tmp/agy"
+export PATH="$tmp:$(dirname "$AGY_BIN"):$PATH"
 mkdir -p "$HOME" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME"
 "$AGY_BIN" --version
 
