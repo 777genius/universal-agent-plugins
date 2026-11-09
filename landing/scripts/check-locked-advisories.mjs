@@ -6,6 +6,9 @@ import { fileURLToPath } from 'node:url';
 // explicitly if the expected importer/snapshot layout changes.
 const scalar = (value) => value.replace(/^(['"])(.*)\1$/, '$2');
 const lockNode = (name, version) => /^(?:@[^/]+\/)?[^@()]+@\d/.test(version) ? version : `${name}@${version}`;
+const rejectInlineMap = ([name, value]) => {
+  if (value && value !== '{}') throw new Error(`Unsupported inline pnpm map: ${name}`);
+};
 const entry = (line, indent) => {
   const match = line.match(new RegExp(`^ {${indent}}(\\S[^:]*):(?:\\s+(.*))?$`));
   return match ? [scalar(match[1]), match[2] ?? ''] : null;
@@ -34,8 +37,11 @@ export function parsePnpmLock(source) {
     if (section === 'importers') {
       const e2 = entry(line, 2), e4 = entry(line, 4), e6 = entry(line, 6), e8 = entry(line, 8);
       if (e2 || e4 || e6) requireResolvedRoot();
-      if (e2) { importer = e2[0]; category = ''; }
-      else if (e4) category = e4[0];
+      if (e2) { rejectInlineMap(e2); importer = e2[0]; category = ''; }
+      else if (e4) {
+        if (['dependencies', 'devDependencies', 'optionalDependencies'].includes(e4[0])) rejectInlineMap(e4);
+        category = e4[0];
+      }
       else if (importer && (category === 'dependencies' || category === 'devDependencies' || category === 'optionalDependencies') && e6) {
         currentNode = e6[0]; pendingRoot = currentNode;
       }
@@ -47,8 +53,11 @@ export function parsePnpmLock(source) {
     }
     if (section === 'snapshots') {
       const e2 = entry(line, 2), e4 = entry(line, 4), e6 = entry(line, 6);
-      if (e2) { currentNode = e2[0]; nodes.set(currentNode, []); edgeCategory = ''; }
-      else if (e4) edgeCategory = e4[0];
+      if (e2) { rejectInlineMap(e2); currentNode = e2[0]; nodes.set(currentNode, []); edgeCategory = ''; }
+      else if (e4) {
+        if (['dependencies', 'optionalDependencies'].includes(e4[0])) rejectInlineMap(e4);
+        edgeCategory = e4[0];
+      }
       else if (e6 && ['dependencies', 'optionalDependencies'].includes(edgeCategory)) {
         nodes.get(currentNode)?.push(lockNode(e6[0], scalar(e6[1])));
       }

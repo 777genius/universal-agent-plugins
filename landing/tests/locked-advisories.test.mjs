@@ -98,3 +98,23 @@ test('includes dependencies from every pnpm v9 importer, not only the top-level 
   assert.ok(findings.some(({ scope, package: pkg, path }) =>
     scope === 'dependencies' && pkg === 'minimatch@9.0.9' && path[0] === 'minimatch@9.0.9'));
 });
+
+test('rejects inline snapshot dependency maps instead of omitting vulnerable children', () => {
+  for (const category of ['dependencies', 'optionalDependencies']) {
+    const inline = fixture.replace('    dependencies:\n      glob: 13.0.6\n',
+      `    ${category}: { glob: 13.0.6 }\n`);
+    assert.throws(() => auditLock(inline), /Unsupported inline pnpm map/);
+  }
+});
+
+test('rejects inline snapshot nodes instead of treating reachable parents as leaf nodes', () => {
+  const inline = fixture.replace("  '@a/entry@1.0.0(peer@2.0.0)':\n    dependencies:\n      glob: 13.0.6\n",
+    "  '@a/entry@1.0.0(peer@2.0.0)': { dependencies: { glob: 13.0.6 } }\n");
+  assert.throws(() => auditLock(inline), /Unsupported inline pnpm map/);
+});
+
+test('rejects inline importer dependency maps instead of missing production roots', () => {
+  const inline = fixture.replace("    dependencies:\n      '@a/entry':\n        specifier: ^1.0.0\n        version: 1.0.0(peer@2.0.0)\n",
+    "    dependencies: { '@a/entry': { version: 1.0.0(peer@2.0.0) } }\n");
+  assert.throws(() => auditLock(inline), /Unsupported inline pnpm map/);
+});
