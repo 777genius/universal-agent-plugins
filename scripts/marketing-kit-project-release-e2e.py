@@ -370,6 +370,7 @@ def main():
             project_before_user = None
             protected_b = None
             protected_c_project = None
+            protected_c_profile = None
             verify_pinned_launcher(options.cli, env, project_a)
             def run(e, p, label, *args):
                 try:
@@ -383,6 +384,8 @@ def main():
                         check_profile_unchanged(env_b, project_b, protected_b, label)
                     if protected_c_project is not None:
                         check_user_project_unchanged(project_c, protected_c_project, label)
+                    if protected_c_profile is not None:
+                        check_profile_unchanged(env_c, project_c, protected_c_profile, label)
             scoped = ("--scope", "project", "--project-root", str(project_a))
             run(env, project_a, "add", "add", "marketing-kit", "--target", options.target, *scoped)
             first = identities(inventory(options.cli, env, project_a, options.target), options.target)
@@ -570,6 +573,9 @@ def main():
                 raise AssertionError("User C remove rewrote User A signed lock")
             if (user_portable / "uap.toml").read_bytes() != user_manifest_after_update:
                 raise AssertionError("User C remove rewrote User A portable manifest")
+            # Once User C is removed, User A's remaining native cleanup must
+            # not recreate receipts or settings in the independent C profile.
+            protected_c_profile = profile_snapshot(env_c, project_c)
             # Codex user plugin dependencies require genuine external native removal.
             # Reuse the audited, pinned Codex CLI path and exact native absence oracle.
             user_remove_attestation = ()
@@ -596,6 +602,8 @@ def main():
             check_user_project_unchanged(project_a, project_before_user, "User final inventory")
             check_profile_unchanged(env_b, project_b, protected_b, "User final inventory")
             check_user_project_unchanged(project_c, protected_c_project, "User final inventory")
+            check_profile_unchanged(env_c, project_c, protected_c_profile,
+                                    "User final inventory")
             report["status"] = "passed"
     except Exception as error:
         report["failure"] = str(error)[:2500]

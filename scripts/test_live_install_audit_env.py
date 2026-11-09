@@ -621,6 +621,28 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             empty.rmdir()
             runner["check_profile_unchanged"](env, project, after, "restore B")
 
+    def test_marketing_kit_removed_user_c_profile_is_not_mutated_by_user_a(self):
+        # The final User A remove happens *after* User C has been removed.
+        # It must not recreate a file in C's HOME or durable UAP data.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            env_c, project_c, *_ = runner["run_case"]("unused", "codex", root, "C")
+            before = runner["profile_snapshot"](env_c, project_c)
+            check = runner["check_profile_unchanged"]
+            check(env_c, project_c, before, "User A remove")
+            for path in (Path(env_c["HOME"]) / ".codex" / "unexpected-peer.json",
+                         Path(env_c["AGENTPLUGINS_HOME"]) / "unexpected-receipt.json"):
+                path.write_text("cross-profile mutation", encoding="utf-8")
+                with self.assertRaisesRegex(AssertionError,
+                                            "original isolated profile changed"):
+                    check(env_c, project_c, before, "User A remove")
+                path.unlink()
+                check(env_c, project_c, before, "User A remove")
+
     def test_marketing_kit_snapshot_rejects_symlink_retarget_without_following(self):
         # The shared file/dir snapshot records only 'symlink', which cannot
         # distinguish a link retargeted to a different foreign profile.
