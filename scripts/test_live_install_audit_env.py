@@ -608,7 +608,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
 
     def test_marketing_kit_user_and_project_foreign_skills_are_pinned(self):
         # Protect real native User Skills independently of Project Skills;
-        # Codex and OpenCode also discover shared compatibility Skill roots.
+        # Codex, OpenCode and Cursor also discover compatibility Skill roots.
         from runpy import run_path
 
         runner = run_path(str(Path(__file__).resolve().parent /
@@ -619,7 +619,10 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 ("copilot", ".github/skills", (".copilot/skills",)),
                 ("codex", ".agents/skills", (".codex/skills", ".agents/skills")),
                 ("opencode", ".opencode/skills",
-                 (".config/opencode/skills", ".agents/skills", ".claude/skills"))):
+                 (".config/opencode/skills", ".agents/skills", ".claude/skills")),
+                ("cursor", ".cursor/skills",
+                 (".cursor/skills", ".agents/skills", ".claude/skills",
+                  ".codex/skills"))):
             with self.subTest(target=target), TemporaryDirectory() as temporary:
                 case = Path(temporary).resolve()
                 env, project, _, _, entries = runner["run_case"](
@@ -630,11 +633,14 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     *(Path(env["HOME"]) / root / name / "SKILL.md"
                       for root in user_roots),
                 }
-                if target == "opencode":
-                    expected_skills.update({
-                        project / root / name / "SKILL.md"
-                        for root in (".agents/skills", ".claude/skills")
-                    })
+                compatible_project = {
+                    "opencode": (".agents/skills", ".claude/skills"),
+                    "cursor": (".agents/skills", ".claude/skills", ".codex/skills"),
+                }
+                expected_skills.update({
+                    project / root / name / "SKILL.md"
+                    for root in compatible_project.get(target, ())
+                })
                 skills = [(path, content) for path, content in entries
                           if path.name == "SKILL.md"]
                 self.assertEqual({path for path, _ in skills}, expected_skills)
@@ -679,6 +685,36 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                                 check("opencode", base, case, "remove")
                             owned.rmdir()
                         check("opencode", base, case, "remove")
+
+    def test_marketing_kit_cursor_compat_skills_must_be_removed(self):
+        # Cursor documents .agents/.claude/.codex compatibility Skills in
+        # User and Project scopes, not only the primary .cursor/skills tree.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        check = runner["check_removed_native_components"]
+        with TemporaryDirectory() as temporary:
+            case = Path(temporary).resolve()
+            for scope in ("home", "project"):
+                base = case / scope
+                base.mkdir()
+                for compatible in (".agents", ".claude", ".codex"):
+                    with self.subTest(scope=scope, compatible=compatible):
+                        skills = base / compatible / "skills"
+                        foreign = skills / "unmanaged-uap-foreign-skill"
+                        foreign.mkdir(parents=True)
+                        (foreign / "SKILL.md").write_text(
+                            "---\\nname: unmanaged-uap-foreign-skill\\n"
+                            "description: keep unchanged\\n---\\n", encoding="utf-8")
+                        check("cursor", base, case, "remove")
+                        owned = skills / "marketing-kit"
+                        owned.mkdir()
+                        with self.assertRaisesRegex(
+                                AssertionError, "native Marketing Kit remnants"):
+                            check("cursor", base, case, "remove")
+                        owned.rmdir()
+                        check("cursor", base, case, "remove")
 
     def test_marketing_kit_copilot_project_skill_removal_scans_github_root(self):
         # Copilot Project Skills live in .github/skills, outside MCP config roots.
