@@ -84,3 +84,9 @@ Make UAP installation evidence independently inspectable in CI without weakening
 **Finding and concrete plan correction:** Security: fail closed for unknown policy fields and unknown transitive origins, protect against injection in SBOM fields and absolute-path/credential leakage, reject symlinked policy files and stale audit bytes; policy verdicts must not substitute signed-source or content integrity verification.
 
 **Decision:** Treat this constraint as a release gate. Do not replace missing native proof with mocked success or expand the architecture just to claim feature parity.
+
+### Review round 5 / 6 — test oracles
+
+**Finding and concrete plan correction:** E2E: golden deterministic JSON output for SPDX/CycloneDX, schema validation, malformed manifest/lock and missing-store negative cases, a denied transitive MCP or source before any user/project mutation, offline network-deny instrumentation and Project A/B isolation.
+
+**Decision:** Treat this constraint as a release gate. Do not replace missing native proof with mocked success or expand the architecture just to claim feature parity.
