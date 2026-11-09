@@ -325,7 +325,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             case = Path(temporary).resolve()
             skill = case / "A" / "home" / ".agents" / "skills" / "foreign" / "SKILL.md"
             skill.parent.mkdir(parents=True)
-            original = "---\\nname: foreign\\n---\\n"
+            original = "---\nname: foreign\n---\n"
             skill.write_text(original, encoding="utf-8")
             pinned = runner["pin_foreign"]([(skill, original)], case)
             before = skill.lstat()
