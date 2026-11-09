@@ -187,7 +187,6 @@ func projectGrokOwned(t *testing.T, journey projectJourney, project, expected st
 	return installation, binding
 }
 
-
 func TestProjectGrokMCPOnlyComposedSavedLifecycle(t *testing.T) {
 	transport := newProjectJourneyTransport(t, "git")
 	if err := os.Remove(filepath.Join(transport.repo, "skills", "docs", "SKILL.md")); err != nil {
