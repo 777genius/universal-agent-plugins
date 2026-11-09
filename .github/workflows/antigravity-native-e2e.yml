@@ -43,9 +43,24 @@ jobs:
           printf '%s  %s\n' "$expected" "$archive" | sha256sum --check --status
           mkdir -p "$RUNNER_TEMP/agy-cli"
           tar -xzf "$archive" -C "$RUNNER_TEMP/agy-cli"
-          agy="$(find "$RUNNER_TEMP/agy-cli" -type f -name agy -print -quit)"
-          test -n "$agy" && test -f "$agy"
+          # GitHub's archive names the payload by release/platform; it is not
+          # guaranteed to contain a literal file named "agy". Find the single
+          # Linux x86-64 ELF, rather than assuming an archive member filename.
+          mapfile -t candidates < <(
+            find "$RUNNER_TEMP/agy-cli" -type f -print | while IFS= read -r item; do
+              if readelf -h "$item" 2>/dev/null | grep -q 'Machine:.*Advanced Micro Devices X86-64'; then
+                printf '%s\n' "$item"
+              fi
+            done
+          )
+          if [ "${#candidates[@]}" -ne 1 ]; then
+            echo "Expected exactly one x86-64 ELF executable in the digest-verified agy archive" >&2
+            find "$RUNNER_TEMP/agy-cli" -maxdepth 4 -type f -printf '%P\n' >&2
+            exit 1
+          fi
+          agy="${candidates[0]}"
           chmod u+x "$agy"
+          "$agy" --version
           echo "AGY_BIN=$agy" >> "$GITHUB_ENV"
       - name: Build the exact UAP pull-request CLI
         working-directory: cli
