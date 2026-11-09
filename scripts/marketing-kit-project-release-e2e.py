@@ -284,6 +284,13 @@ def check_cold_restore(restored, original, original_lock, restored_lock,
         raise AssertionError(f"{stage}: cold restore modified portable manifest")
 
 
+def check_scope_id_isolation(selected, other_scopes, stage):
+    """Refuse receipt ID reuse between independently installed User/Project scopes."""
+    prior = {value for identities in other_scopes for value in identities.values()}
+    if set(selected.values()) & prior:
+        raise AssertionError(f"{stage}: reused installation IDs across scopes")
+
+
 def bind_pinned_launcher_cache(env, cache, sandbox):
     """Share only the SHA-checked released CLI binary, not native client state."""
     if (not cache.is_dir() or cache.is_symlink()
@@ -448,6 +455,7 @@ def main():
             user_first = user_inventory()
             if set(user_first) != EXPECTED:
                 raise AssertionError("User add lost mandatory signed Marketing Kit closure")
+            check_scope_id_isolation(user_first, (first, restored), "User add")
             user_portable = Path(env["AGENTPLUGINS_HOME"])
             for name in ("uap.toml", "uap.lock"):
                 if not (user_portable / name).is_file():
@@ -509,6 +517,8 @@ def main():
                                (user_portable_c / "uap.lock").read_bytes(),
                                user_manifest_after_update, (user_portable_c / "uap.toml").read_bytes(),
                                "User C")
+            check_scope_id_isolation(restored_user_c, (first, restored),
+                                     "User C cold restore")
             if (user_portable / "uap.toml").read_bytes() != user_manifest_after_update:
                 raise AssertionError("User C restore rewrote User A portable manifest")
             if user_inventory() != user_after_update:

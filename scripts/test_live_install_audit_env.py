@@ -604,6 +604,24 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "User lifecycle modified Project A"):
                 check(project, baseline, "User repair")
 
+    def test_marketing_kit_user_project_receipt_ids_are_scope_isolated(self):
+        # Fresh User A and cold User C must not inherit receipt identities
+        # from removed Project A or B, even with the same signed closure.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        check = runner["check_scope_id_isolation"]
+        project_a = {"root": "project-a", "child": "project-a-child"}
+        project_b = {"root": "project-b", "child": "project-b-child"}
+        user = {"root": "user-a", "child": "user-a-child"}
+        check(user, (project_a, project_b), "User add")
+        for copied in (project_a["root"], project_b["child"]):
+            with self.assertRaisesRegex(AssertionError,
+                                        "reused installation IDs across scopes"):
+                check({"root": copied, "child": "fresh-user"},
+                      (project_a, project_b), "User cold restore")
+
     def test_marketing_kit_cold_restore_guard_requires_full_disjoint_lock(self):
         from runpy import run_path
 
