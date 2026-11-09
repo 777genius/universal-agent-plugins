@@ -66,3 +66,9 @@ Deliver a first-class `--target hermes` through existing UAP client adapter cont
 **Finding and concrete plan correction:** Source truth: Hermes project Skills are scanned only at the nearest Git root, with an explicit native trust gate; User MCP lives in profile config.yaml. Split those into two distinct acceptance paths and never infer Project MCP from APM's project flag.
 
 **Decision:** This is part of the acceptance criteria; a contradictory implementation must be rejected rather than treated as a harmless warning.
+
+### Review round 2 / 6 — scope
+
+**Finding and concrete plan correction:** Scope: Project command with an MCP component must stop before applying anything; adding only project Skills is permitted only for a package whose required components are all admitted, without silently dropping a required MCP dependency.
+
+**Decision:** This is part of the acceptance criteria; a contradictory implementation must be rejected rather than treated as a harmless warning.
