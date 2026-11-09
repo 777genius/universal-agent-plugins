@@ -30,6 +30,7 @@ var (
 	_ clients.ProfileBindingValidator = (*Adapter)(nil)
 	_ clients.ProjectTargetLayout = (*Adapter)(nil)
 	_ clients.NativeRegistryLayout = (*Adapter)(nil)
+	_ clients.PlanPrecondition = (*Adapter)(nil)
 	_ clients.PlanQualifier = (*Adapter)(nil)
 	_ clients.PlanRefiner = (*Adapter)(nil)
 )
@@ -134,6 +135,25 @@ func (*Adapter) ProjectTargetRoot(client domain.DetectedClient, mode domain.Pack
 		return "", "", err
 	}
 	return anchor, root, nil
+}
+
+// Hermes looks for workspace Skills at the nearest Git root. A user-selected
+// nested directory is not that root, and silently installing there would be a
+// false success. Require an explicit repository root; support ordinary .git
+// directories and regular worktree pointer files without following symlinks.
+func (*Adapter) CheckPlanPrecondition(in clients.PlanInput, plan *domain.DeliveryPlan) error {
+ if in.TargetContext.Scope != domain.ScopeProject && plan.Scope != domain.ScopeProject {
+  return nil
+ }
+ root := plan.TargetContext.ProjectRoot
+ if root == "" { root = in.TargetContext.ProjectRoot }
+ if !cleanRoot(root) { return fmt.Errorf("Hermes project Skills require an exact Git repository root") }
+ meta, err := os.Lstat(filepath.Join(root, ".git"))
+ if err != nil { return fmt.Errorf("Hermes project Skills require a Git root at the selected project: %w", err) }
+ if meta.Mode()&os.ModeSymlink != 0 || (!meta.IsDir() && !meta.Mode().IsRegular()) {
+  return fmt.Errorf("Hermes project Git root marker must be a real directory or worktree pointer")
+ }
+ return nil
 }
 
 // A package with required MCP/hooks/extensions must not silently become
