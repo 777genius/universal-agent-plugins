@@ -63,8 +63,8 @@ func (pending *devFailurePending) observe(next project.Result, err error, code s
 	pending.code = code
 }
 
-func (pending *devFailurePending) take() (project.Result, error, string) {
+func (pending *devFailurePending) take() (project.Result, string, error) {
 	next, err, code := pending.project, pending.err, pending.code
 	*pending = devFailurePending{}
-	return next, err, code
+	return next, code, err
 }

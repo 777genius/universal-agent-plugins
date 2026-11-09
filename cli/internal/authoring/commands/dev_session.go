@@ -164,7 +164,7 @@ func (a App) dev(ctx context.Context, req request) (r report.Report, err error) 
 				if !failedPending.ready(now) {
 					continue
 				}
-				next, readErr, code = failedPending.take()
+				next, code, readErr = failedPending.take()
 				if code != failureCode {
 					failed, failedErr = readFailure(next, readErr)
 					failureCode = code
