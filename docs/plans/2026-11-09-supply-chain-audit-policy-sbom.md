@@ -60,3 +60,9 @@ Make UAP installation evidence independently inspectable in CI without weakening
 ## Estimated size and definition of done
 
 ~2,100–3,800 new lines including docs and adversarial tests, assuming core integrity and scanner APIs are reused. Target is improved **verifiable CI security posture**, not a promise of being unconditionally more secure than APM. Done: fixed CLI contract, validated deterministic output, pre-write denial proof, 3-OS test matrix, reviewed changes and green CI.
+
+### Review round 1 / 6 — native facts
+
+**Finding and concrete plan correction:** Source truth: deps check already has versioned offline JSON and strict integrity. Avoid a duplicate audit command unless existing report cannot meet CI needs; benchmark APM SBOM/policy without treating either as a package signature.
+
+**Decision:** This is part of the acceptance criteria; a contradictory implementation must be rejected rather than treated as a harmless warning.
