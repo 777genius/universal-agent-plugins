@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import resilience_matrix as lane
 
@@ -20,6 +21,36 @@ class ResilienceMatrixContract(unittest.TestCase):
             (root / 'phase.json').write_bytes(b'original evidence')
             expected = hashlib.sha256(b'original evidence').hexdigest()
             self.assertEqual(lane.final_evidence_hashes(root), {'phase.json': expected})
+
+    def test_generated_resilience_report_excludes_self_digest(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            binary = root / 'binary'
+            binary.write_bytes(b'synthetic executable')
+            artifacts = root / 'artifacts'
+
+            def prepare_stub(args):
+                args.scanner_path = None
+                return {'source': 'test-only'}
+
+            def record_case(_name, evidence):
+                evidence.mkdir(parents=True)
+                (evidence / 'phase.json').write_bytes(b'original evidence')
+
+            argv = ['resilience_matrix.py', '--binary', str(binary),
+                    '--artifacts', str(artifacts), '--case', 'corrupt-state']
+            with patch('sys.argv', argv), \
+                 patch.object(lane, 'prepare_scanner', side_effect=prepare_stub), \
+                 patch.object(lane, 'Matrix') as matrix_cls, \
+                 patch.object(lane.subprocess, 'check_output', return_value='test-sha\n'):
+                matrix_cls.return_value.run_case.side_effect = record_case
+                self.assertEqual(lane.main(), 0)
+
+            report = json.loads((artifacts / 'report.json').read_text())
+            self.assertNotIn('report.json', report['evidence_hashes'])
+            self.assertEqual(report['evidence_hashes']['corrupt-state/phase.json'],
+                             hashlib.sha256(b'original evidence').hexdigest())
+            self.assertEqual(report['cases'][0]['status'], 'pass')
 
     def test_case_contract(self):
         self.assertEqual(len(lane.CASES), 29)
