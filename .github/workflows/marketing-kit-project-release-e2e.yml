@@ -77,9 +77,37 @@ jobs:
           # on first use. A transient release-asset HTTP 504 must not turn all
           # six genuine lifecycle lanes into unexecuted noise. Never fall back
           # to latest, skip version validation or accept a different version.
+          # Bound each acquisition by elapsed time, not socket inactivity.
+          # Reuse the published launcher's AbortSignal path so a timeout
+          # finishes its owned temporary/cache-lock cleanup before retrying.
+          # A successful but wrong pinned version is never retried or accepted.
           for attempt in 1 2 3; do
-            if version_output="$(agentplugins version)"; then
-              test "$version_output" = 'agentplugins 0.1.101'
+            if UAP_GLOBAL_NPM_ROOT="$(npm root -g)" node <<'NODE'
+          "use strict";
+          const path = require("node:path");
+          const { spawnSync } = require("node:child_process");
+          const packageRoot = path.join(process.env.UAP_GLOBAL_NPM_ROOT, "universal-agent-plugins");
+          const { ensureBinary } = require(path.join(packageRoot, "lib/bootstrap.js"));
+          const abort = new AbortController();
+          const deadline = setTimeout(() => abort.abort(), 75_000);
+          async function check() {
+            try {
+              const release = await ensureBinary({ packageRoot, signal: abort.signal });
+              if (abort.signal.aborted || release.version !== "0.1.101") {
+                throw new Error("pinned launcher acquisition timed out or returned wrong version");
+              }
+              const result = spawnSync("agentplugins", ["version"], { encoding: "utf8", timeout: 15_000 });
+              if (result.error || result.signal || result.status !== 0 ||
+                  result.stdout.replace(/\n+$/, "") !== "agentplugins 0.1.101") {
+                throw new Error("not exact published agentplugins 0.1.101");
+              }
+            } finally {
+              clearTimeout(deadline);
+            }
+          }
+          check().catch(error => { console.error(error.message); process.exitCode = 1; });
+          NODE
+            then
               break
             fi
             if (( attempt == 3 )); then
