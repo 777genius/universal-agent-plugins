@@ -19,7 +19,7 @@ func TestComponentEvidenceStatusAndRedaction(t *testing.T) {
 	pkg := &domain.PackageEnvelope{
 		MCP: domain.MCPComponent{
 			Servers: map[string]domain.MCPServer{
-				"local-private":   {
+				"local-private": {
 					Type: "stdio",
 					StdioRequirement: &domain.StdioRequirement{
 						Kind: domain.ExecutableBundled, Command: privateValue,
@@ -27,8 +27,8 @@ func TestComponentEvidenceStatusAndRedaction(t *testing.T) {
 					},
 					Decoded: map[string]any{"env": map[string]any{"TOKEN": privateValue}},
 				},
-				"remote-private":  {
-					Type: "http",
+				"remote-private": {
+					Type:    "http",
 					Decoded: map[string]any{"headers": map[string]any{"Authorization": privateValue}},
 				},
 				"unknown-private": {Type: "sse"},
@@ -110,7 +110,7 @@ func TestComponentEvidenceStatusAndRedaction(t *testing.T) {
 		strings.Contains(string(wire), "extension-private") {
 		t.Fatalf("private evidence leaked into public components: %v", err)
 	}
-	for i := 0; i < 8; i++ {
+	for range 8 {
 		next := projected(facts)
 		again, err := json.Marshal(next.Components)
 		if err != nil || string(again) != string(wire) {
