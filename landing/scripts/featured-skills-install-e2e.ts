@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import { recommendedSkills } from '../data/catalogCuration.ts';
 import { skillInstallCommand } from '../utils/skillsCatalog.ts';
 import type { SkillListing } from '../types/skillsCatalog.ts';
@@ -34,6 +34,31 @@ const run = (args: string[], cwd: string, env: NodeJS.ProcessEnv) => {
   };
 };
 const sha256 = (file: string) => createHash('sha256').update(readFileSync(file)).digest('hex');
+// Native clients choose their own project Skill directory names. Claude uses
+// managed physical skill IDs; Codex/OpenCode may expose the original slug.
+// Discover the one exact source-named native SKILL.md under the selected root,
+// without trusting a guessed slug path or following foreign symlinks.
+function nativeSkillFile(project: string, relativeRoot: string, slug: string): string | null {
+  const root = resolve(project, relativeRoot);
+  if (!existsSync(root) || !lstatSync(root).isDirectory()) return null;
+  const candidates: string[] = [];
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
+    const file = join(root, entry.name, 'SKILL.md');
+    if (!file.startsWith(root + sep) || !existsSync(file)) continue;
+    const info = lstatSync(file);
+    if (!info.isFile() || info.isSymbolicLink()) continue;
+    const lines = readFileSync(file, 'utf8').split(/\\r?\\n/);
+    if (lines[0] !== '---') continue;
+    const end = lines.indexOf('---', 1);
+    if (end < 0) continue;
+    if (lines.slice(1, end).some((line) =>
+      line === `name: ${slug}` || line === `name: "${slug}"` || line === `name: '${slug}'`))
+      candidates.push(file);
+  }
+  return candidates.length === 1 ? candidates[0]! : null;
+}
+
 const version = spawnSync('agentplugins', ['version'], { encoding: 'utf8', timeout: 15_000 });
 const report = {
   schema_version: 1, target, github_sha: process.env.GITHUB_SHA ?? '',
@@ -74,7 +99,6 @@ try {
     assert.equal(command, expected, 'The actual website command must match this native test');
     const addArgs = ['skills', 'add', source, '--skill', slug, '--target', target,
       '--scope', 'project', '--project-root', project, '--no-ui', '--yes', '--format', 'json'];
-    const ownedPath = join(project, roots[target]!, slug, 'SKILL.md');
     const lockPath = join(project, 'uap.lock');
     const sentinel = join(project, 'unmanaged.txt');
     writeFileSync(sentinel, 'do not touch this file\n');
@@ -82,7 +106,9 @@ try {
     evidence.push(row);
     const installed = run(addArgs, project, env);
     row.install = installed;
-    if (installed.code !== 0 || !existsSync(ownedPath) || !existsSync(lockPath)) {
+    const ownedPath = nativeSkillFile(project, roots[target]!, slug);
+    row.native_skill_path = ownedPath;
+    if (installed.code !== 0 || !ownedPath || !existsSync(lockPath)) {
       errors.push(repository + '/' + slug + ': install/native file/lock failed');
       continue;
     }
@@ -92,12 +118,14 @@ try {
     row.installed_sha256 = originalHash;
     const repeated = run(addArgs, project, env);
     row.repeat = repeated;
-    if (repeated.code !== 0 || !existsSync(ownedPath) || sha256(ownedPath) !== originalHash)
+    if (repeated.code !== 0 || nativeSkillFile(project, roots[target]!, slug) !== ownedPath ||
+        sha256(ownedPath) !== originalHash)
       errors.push(repository + '/' + slug + ': repeat mutated native Skill');
     const removed = run(['remove', slug, '--target', target, '--scope', 'project',
       '--project-root', project, '--format', 'json'], project, env);
     row.remove = removed;
-    row.native_removed = !existsSync(ownedPath);
+    row.native_removed = !existsSync(ownedPath) &&
+      nativeSkillFile(project, roots[target]!, slug) === null;
     row.sentinel_preserved = existsSync(sentinel) && readFileSync(sentinel, 'utf8') === 'do not touch this file\n';
     if (removed.code !== 0 || !row.native_removed || !row.sentinel_preserved)
       errors.push(repository + '/' + slug + ': removal/ownership failed');
