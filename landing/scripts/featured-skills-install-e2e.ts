@@ -48,7 +48,7 @@ function nativeSkillFile(project: string, relativeRoot: string, slug: string): s
     if (!file.startsWith(root + sep) || !existsSync(file)) continue;
     const info = lstatSync(file);
     if (!info.isFile() || info.isSymbolicLink()) continue;
-    const lines = readFileSync(file, 'utf8').split(/\\r?\\n/);
+    const lines = readFileSync(file, 'utf8').split(/\r?\n/);
     if (lines[0] !== '---') continue;
     const end = lines.indexOf('---', 1);
     if (end < 0) continue;
