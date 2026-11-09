@@ -220,7 +220,7 @@ export const clientLandingPages: ClientLandingPage[] = [
       'The CLI installs eligible components in the selected Pi profile or project and tracks updates, repair, and removal.',
     activation: 'Reload resources or restart Pi; trust the project and review MCP permissions if prompted.',
     vendorDocsUrl:
-      'https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/extensions.md',
+      'https://pi.dev/docs/latest',
   },
 ];
 

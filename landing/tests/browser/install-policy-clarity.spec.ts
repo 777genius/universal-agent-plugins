@@ -67,3 +67,14 @@ test('automatic authentication shows a release-dependent client once, not both o
   await expect(panel).toContainText('The same agent may have different sign-in requirements');
   expect(errors).toEqual([]);
 });
+
+test('Pi agent page describes extensions, Skills and MCP in user and project scopes', async ({ page }) => {
+  const errors = await offline(page);
+  await projections(page, pluginWithOnlyCodex());
+  await navigate(page, '/agents/pi', 'en');
+  const main = page.locator('main');
+  await expect(main).toContainText('Native Pi extensions, Skills and MCP');
+  await expect(main).toContainText('user or project scope');
+  await expect(main).not.toContainText('Portable skills and MCP projection are outside');
+  expect(errors).toEqual([]);
+});
