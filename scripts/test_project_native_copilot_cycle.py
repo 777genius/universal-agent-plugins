@@ -19,6 +19,17 @@ def encoded(value):
     return json.dumps(value, separators=(",", ":")).encode()
 
 
+def current_public(raw):
+    # Preserve immutable historical capture; explicitly model the current DTO.
+    public = runtime.strict_json(raw)
+    output = public["data"]["targets"][0]["output"]
+    output.update(scope="project", readiness="needs_action", next_action="Review Copilot project discovery",
+                  next_actions=[{"code": "verify_native", "actor": "native_client", "message": "Review Copilot project discovery"}])
+    public["data"]["environment"] = {"reason": "no_save_requested", "saved": False,
+                                      "scope": "project", "scope_selection_reason": "explicit"}
+    return public
+
+
 def stream(raw):
     return {"bytes": len(raw), "sha256": cycle.sha(raw), "body": base64.b64encode(raw).decode()}
 
@@ -296,11 +307,11 @@ class CopilotCycleContracts(unittest.TestCase):
     def test_measured_public_output_joins_scope_source_and_mutation(self):
         bodies = actual()
         summary = runtime.strict_json(bodies["runtime-attempt.json"])
-        public = runtime.strict_json(bodies["add-A.stdout.log"])
+        public = current_public(bodies["add-A.stdout.log"])
         fixture_proof = {"scope": "a", "version": "1.0.0", "source_digest": summary["installation_source"]["tree_digest"],
                          "binding": summary["binding"], "installation": {"installation_id": public["data"]["targets"][0]["output"]["result"]["installation_id"],
                          "package": {"manifest_digest": summary["binding"]["package_revision"]["manifest_digest"]}}}
-        cycle.public_json(bodies["add-A.stdout.log"], "add-a", fixture_proof)
+        cycle.public_json(encoded(public), "add-a", fixture_proof)
         for fault in ("scope", "digest", "mutated", "confirmation", "target", "dry-run"):
             bad = copy.deepcopy(public)
             result = bad["data"]["targets"][0]["output"]["result"]
@@ -313,10 +324,51 @@ class CopilotCycleContracts(unittest.TestCase):
             with self.subTest(fault=fault), self.assertRaises(ValueError):
                 cycle.public_json(encoded(bad), "add-a", fixture_proof)
 
+    def test_current_readiness_and_scope_are_closed(self):
+        bodies = actual()
+        summary = runtime.strict_json(bodies["runtime-attempt.json"])
+        public = current_public(bodies["add-A.stdout.log"])
+        output = public["data"]["targets"][0]["output"]
+        fixture_proof = {"scope": "a", "version": "1.0.0", "source_digest": summary["installation_source"]["tree_digest"],
+                         "binding": summary["binding"], "installation": {"installation_id": output["result"]["installation_id"],
+                         "package": {"manifest_digest": summary["binding"]["package_revision"]["manifest_digest"]}}}
+        for field, wrong in (("scope", "user"), ("readiness", "ready"), ("next_action", ""),
+                             ("next_actions", [{"code": "verify_native", "actor": "user", "message": "Review Copilot project discovery"}]),
+                             ("next_actions", [{"code": "verify_native", "actor": "native_client", "message": "foreign"}]),
+                             ("next_actions", []), ("unknown", True)):
+            bad = copy.deepcopy(public)
+            bad["data"]["targets"][0]["output"][field] = wrong
+            with self.subTest(field=field, wrong=wrong), self.assertRaises(ValueError):
+                cycle.public_json(encoded(bad), "add-a", fixture_proof)
+        for field in ("scope", "scope_selection_reason"):
+            bad = copy.deepcopy(public)
+            del bad["data"]["environment"][field]
+            with self.subTest(missing=field), self.assertRaises(ValueError):
+                cycle.public_json(encoded(bad), "add-a", fixture_proof)
+
+    def test_remove_refuses_readiness_fields(self):
+        receipt = {"data_receipt_id": "held-data", "physical_backend_id": "held-physical", "scope": "project", "state": "owned"}
+        selected = {"scope": "a", "version": "1.0.0", "source_digest": "sha256:" + "a" * 64,
+                    "binding": {}, "installation": {"installation_id": "held-installation", "package": {"manifest_digest": "sha256:" + "b" * 64}},
+                    "data": {"receipt": receipt}}
+        output = {"plugin": "native-proof", "version": "1.0.0", "source": "local", "scope": "project",
+                  "tree_digest": selected["source_digest"], "manifest_digest": selected["installation"]["package"]["manifest_digest"],
+                  "dry_run": False, "result": {"installation_id": "held-installation", "requires_confirmation": False, "mutated": True}}
+        public = {"schema_version": 1, "command": "remove", "result": "success", "data": {
+                  "batch": True, "status": "data_retained", "succeeded": 1, "failed": 0, "plugin": "native-proof", "dry_run": False,
+                  "plugin_data_preserved": True, "data_retained": True, "retained_data": [receipt],
+                  "targets": [{"target": "copilot", "status": "external_completed", "output": output}]}}
+        cycle.public_json(encoded(public), "remove-a", selected)
+        for field, wrong in (("readiness", {"malformed": True}), ("next_actions", [{"unknown": True}])):
+            bad = copy.deepcopy(public)
+            bad["data"]["targets"][0]["output"][field] = wrong
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                cycle.public_json(encoded(bad), "remove-a", selected)
+
     def test_public_repeat_add_and_installed_source_dtos_remain_label_bound(self):
         bodies = actual()
         summary = runtime.strict_json(bodies["runtime-attempt.json"])
-        public = runtime.strict_json(bodies["add-A.stdout.log"])
+        public = current_public(bodies["add-A.stdout.log"])
         output = copy.deepcopy(public["data"]["targets"][0]["output"])
         fixture_proof = {"scope": "a", "version": "1.0.0", "source_digest": summary["installation_source"]["tree_digest"],
                          "binding": summary["binding"], "installation": {"installation_id": output["result"]["installation_id"],

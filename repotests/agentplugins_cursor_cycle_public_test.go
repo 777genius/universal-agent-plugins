@@ -50,7 +50,7 @@ func cursorCyclePublicOutput(document map[string]any, step cursorCycleStep, r *c
 		if cursorCycleMutates(step.label) && data["operation_id"] != r.Installation.OperationGroupID {
 			return nil, refused
 		}
-		if step.verb == "add" && !reflect.DeepEqual(data["environment"], map[string]any{"reason": "no_save_requested", "saved": false}) {
+		if step.verb == "add" && !reflect.DeepEqual(data["environment"], map[string]any{"reason": "no_save_requested", "saved": false, "scope": "project", "scope_selection_reason": "explicit"}) {
 			return nil, refused
 		}
 		if step.verb == "remove" {
@@ -60,13 +60,23 @@ func cursorCyclePublicOutput(document map[string]any, step cursorCycleStep, r *c
 			}
 		}
 	}
-	optional := "operation_id next_action security"
+	optional := "operation_id next_action security scope"
 	if step.label == "repeat-add-a" {
-		optional = "next_action security"
+		optional = "next_action security scope"
+	}
+	if step.verb != "remove" {
+		optional += " readiness next_actions"
 	}
 	if projectNativeRuntimeKeys(output, "plugin version source tree_digest manifest_digest dry_run result", optional) != nil {
 		return nil, refused
 	}
+	if scope, present := output["scope"]; present && scope != "project" {
+		return nil, refused
+	}
+	if step.verb != "remove" && !cursorCyclePreparedReadiness(output) {
+		return nil, refused
+	}
+
 	source := "direct local source"
 	if step.verb == "repair" || step.verb == "remove" {
 		source = "local"
@@ -157,4 +167,10 @@ func (c *cursorMCPProjectCycle) publicProof(t *testing.T, r *cursorCycleRecipe, 
 	if err := cursorCyclePublicOutcome(output, step, r); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func cursorCyclePreparedReadiness(output map[string]any) bool {
+	message, ok := output["next_action"].(string)
+	return ok && message != "" && output["scope"] == "project" && output["readiness"] == "needs_action" &&
+		reflect.DeepEqual(output["next_actions"], []any{map[string]any{"code": "verify_native", "actor": "native_client", "message": message}})
 }
