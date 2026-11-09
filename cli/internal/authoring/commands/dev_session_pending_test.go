@@ -17,7 +17,7 @@ func TestDevFailurePendingDeduplicatesIdenticalCodeAndRetainsLatestEvidence(t *t
 	errSecond := errors.New("updated read error")
 	var pending devFailurePending
 	pending.observe(first, errFirst, "runtime_source_identity_unavailable", start)
-	pending.observe(second, errSecond, "runtime_source_identity_unavailable", start.Add(devDebounce - time.Millisecond))
+	pending.observe(second, errSecond, "runtime_source_identity_unavailable", start.Add(devDebounce-time.Millisecond))
 	if pending.ready(start.Add(devDebounce - time.Millisecond)) {
 		t.Fatal("identical failure code was emitted before the quiet deadline")
 	}
@@ -39,7 +39,7 @@ func TestDevFailurePendingNewCodeRestartsQuietDeadlineButNotHardLimit(t *testing
 	start := time.Unix(200, 0)
 	var pending devFailurePending
 	pending.observe(project.Result{}, errors.New("read"), "read_failed", start)
-	pending.observe(project.Result{}, errors.New("identity"), "identity_failed", start.Add(devDebounce - time.Millisecond))
+	pending.observe(project.Result{}, errors.New("identity"), "identity_failed", start.Add(devDebounce-time.Millisecond))
 	if pending.ready(start.Add(devDebounce)) {
 		t.Fatal("new failure code did not restart the quiet deadline")
 	}
