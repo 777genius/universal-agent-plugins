@@ -97,7 +97,7 @@ func grokProjectMCPReceipt(t *testing.T, project, name string) string {
 	}
 	for _, binding := range state.Installations[0].Clients {
 		active := binding.TargetLocator
-		if binding.Scope != "project" || binding.ClientID != domain.ClientGrok ||
+		if binding.Scope != "project" || binding.ClientID != string(domain.ClientGrok) ||
 			binding.Activation != domain.ActivationPrepared || binding.Verification != domain.VerificationPackageValid ||
 			binding.NativeProfileRoot != filepath.Join(project, ".grok") ||
 			filepath.Dir(active) != filepath.Join(project, ".grok", "plugins") ||
