@@ -705,8 +705,8 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                         foreign = skills / "unmanaged-uap-foreign-skill"
                         foreign.mkdir(parents=True)
                         (foreign / "SKILL.md").write_text(
-                            "---\\nname: unmanaged-uap-foreign-skill\\n"
-                            "description: keep unchanged\\n---\\n", encoding="utf-8")
+                            "---\nname: unmanaged-uap-foreign-skill\n"
+                            "description: keep unchanged\n---\n", encoding="utf-8")
                         check("cursor", base, case, "remove")
                         owned = skills / "marketing-kit"
                         owned.mkdir()
