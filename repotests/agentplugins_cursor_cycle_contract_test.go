@@ -220,3 +220,20 @@ func TestCursorCyclePreparedReadinessIsClosed(t *testing.T) {
 		valid[key] = before
 	}
 }
+
+func TestCursorCycleRemoveRefusesReadinessFields(t *testing.T) {
+	r := &cursorCycleRecipe{Version: "1.0.0", Digest: "held-tree", Installation: domain.Installation{OperationGroupID: "held-group", Package: domain.PackageBinding{ManifestDigest: "held-manifest"}}, Data: domain.DataReceipt{DataReceiptID: "held-data", PhysicalBackend: "held-physical"}}
+	output := map[string]any{"operation_id": "held-group", "plugin": cursorCycleName, "version": "1.0.0", "source": "local", "scope": "project", "tree_digest": "held-tree", "manifest_digest": "held-manifest", "dry_run": false, "result": map[string]any{}}
+	document := map[string]any{"command": "remove", "data": map[string]any{"operation_id": "held-group", "batch": true, "status": "data_retained", "succeeded": json.Number("1"), "failed": json.Number("0"), "plugin": cursorCycleName, "dry_run": false, "plugin_data_preserved": true, "data_retained": true, "retained_data": []any{map[string]any{"data_receipt_id": "held-data", "physical_backend_id": "held-physical", "scope": "project", "state": "owned"}}, "targets": []any{map[string]any{"target": "cursor", "status": "external_completed", "output": output}}}}
+	step := cursorCycleStep{"remove-a", "a", "remove"}
+	if _, err := cursorCyclePublicOutput(document, step, r); err != nil {
+		t.Fatal("valid scoped remove refused", err)
+	}
+	for field, wrong := range map[string]any{"readiness": map[string]any{"malformed": true}, "next_actions": []any{map[string]any{"unknown": true}}} {
+		output[field] = wrong
+		if _, err := cursorCyclePublicOutput(document, step, r); err == nil {
+			t.Fatal("remove accepted unrelated readiness", field)
+		}
+		delete(output, field)
+	}
+}

@@ -346,6 +346,25 @@ class CopilotCycleContracts(unittest.TestCase):
             with self.subTest(missing=field), self.assertRaises(ValueError):
                 cycle.public_json(encoded(bad), "add-a", fixture_proof)
 
+    def test_remove_refuses_readiness_fields(self):
+        receipt = {"data_receipt_id": "held-data", "physical_backend_id": "held-physical", "scope": "project", "state": "owned"}
+        selected = {"scope": "a", "version": "1.0.0", "source_digest": "sha256:" + "a" * 64,
+                    "binding": {}, "installation": {"installation_id": "held-installation", "package": {"manifest_digest": "sha256:" + "b" * 64}},
+                    "data": {"receipt": receipt}}
+        output = {"plugin": "native-proof", "version": "1.0.0", "source": "local", "scope": "project",
+                  "tree_digest": selected["source_digest"], "manifest_digest": selected["installation"]["package"]["manifest_digest"],
+                  "dry_run": False, "result": {"installation_id": "held-installation", "requires_confirmation": False, "mutated": True}}
+        public = {"schema_version": 1, "command": "remove", "result": "success", "data": {
+                  "batch": True, "status": "data_retained", "succeeded": 1, "failed": 0, "plugin": "native-proof", "dry_run": False,
+                  "plugin_data_preserved": True, "data_retained": True, "retained_data": [receipt],
+                  "targets": [{"target": "copilot", "status": "external_completed", "output": output}]}}
+        cycle.public_json(encoded(public), "remove-a", selected)
+        for field, wrong in (("readiness", {"malformed": True}), ("next_actions", [{"unknown": True}])):
+            bad = copy.deepcopy(public)
+            bad["data"]["targets"][0]["output"][field] = wrong
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                cycle.public_json(encoded(bad), "remove-a", selected)
+
     def test_public_repeat_add_and_installed_source_dtos_remain_label_bound(self):
         bodies = actual()
         summary = runtime.strict_json(bodies["runtime-attempt.json"])

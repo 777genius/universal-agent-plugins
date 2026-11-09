@@ -335,6 +335,19 @@ class CursorCycleContracts(unittest.TestCase):
             with self.subTest(missing=field), patch.object(cycle, "pins"), self.assertRaises(ValueError):
                 cycle.complete(*captured)
 
+    def test_remove_refuses_readiness_fields(self):
+        # The intact synthetic cycle validates removal before hostile additions.
+        for field, wrong in (("readiness", {"malformed": True}), ("next_actions", [{"unknown": True}])):
+            captured = synthetic_cycle()
+            with patch.object(cycle, "pins"):
+                cycle.complete(*captured)
+            command = next(row["value"] for row in captured[0] if row["stage"] == "remove-a")
+            document = json.loads(cycle.stream(command["stdout"]))
+            document["data"]["targets"][0]["output"][field] = wrong
+            command["stdout"] = wire(compact(document))
+            with self.subTest(field=field), patch.object(cycle, "pins"), self.assertRaises(ValueError):
+                cycle.complete(*captured)
+
     def test_stream_canonical_bounds_and_privacy(self):
         self.assertEqual(cycle.stream({"bytes": 0, "sha256": sha(b""), "body": ""}), b"")
         self.assertEqual(cycle.stream(wire(b"ordinary\n")), b"ordinary\n")

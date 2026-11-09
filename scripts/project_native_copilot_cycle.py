@@ -174,7 +174,10 @@ def public_json(raw, label, proof):
             require(target["selected"] is True)
         output = target["output"]
     output_required = set("plugin version source tree_digest manifest_digest dry_run result".split())
-    require(type(output) is dict and output_required <= set(output) <= output_required | {"operation_id", "revision", "security", "next_action", "scope", "readiness", "next_actions"})
+    output_optional = {"operation_id", "revision", "security", "next_action", "scope"}
+    if verb != "remove":
+        output_optional |= {"readiness", "next_actions"}
+    require(type(output) is dict and output_required <= set(output) <= output_required | output_optional)
     values(output, {"plugin": "native-proof", "version": proof["version"], "source": "local" if verb in ("repair", "remove") else "direct local source", "tree_digest": proof["source_digest"],
                     "manifest_digest": proof["installation"]["package"]["manifest_digest"], "dry_run": False})
     scope = "user" if proof["scope"] == "user" else "project"
