@@ -75,9 +75,18 @@ class PackageManagerCIPolicyTests(unittest.TestCase):
         macos = (WORKFLOW.parent / "agentplugins-published-macos-audit.yml").read_text(
             encoding="utf-8")
         # Docker Hub's frozen manifest demands an actual docker executable.
-        # Never use a synthetic shim or treat failed bootstrap as native success.
-        self.assertIn(
-            "if: ${{ github.event_name != 'pull_request' && matrix.kind == 'plugin' }}", macos)
+        # The restricted older workflow and trusted full-evidence PR expansion
+        # are both fail-closed: ordinary PRs cannot install Docker.
+        original_guard = "if: ${{ github.event_name != 'pull_request' && matrix.kind == 'plugin' }}"
+        trusted_guard = (
+            "if: ${{ matrix.kind == 'plugin' && (github.event_name != 'pull_request' || "
+            "(github.event.pull_request.head.repo.full_name == github.repository && "
+            "contains(github.event.pull_request.title, '[full-published-e2e]'))) }}"
+        )
+        self.assertTrue(
+            original_guard in macos or trusted_guard in macos,
+            "Docker CLI must be restricted to deep published plugin E2E",
+        )
         self.assertIn("brew install docker", macos)
         self.assertIn("command -v docker", macos)
         self.assertIn("docker --version", macos)
