@@ -90,3 +90,9 @@ Deliver a first-class `--target hermes` through existing UAP client adapter cont
 **Finding and concrete plan correction:** Delivery: put project activation, trust and unsupported MCP distinctions in one generated support table and site copy. Reject required packages that cannot be represented; keep this PR Hermes-only, no format migrations; verify current main before merge and do not mark Done on only fixture tests.
 
 **Decision:** Treat this constraint as a release gate. Do not replace missing native proof with mocked success or expand the architecture just to claim feature parity.
+
+### Review round 5 / 6 — E2E acceptance proof
+
+**Finding and concrete correction:** Require A/B project fixture isolation, malformed and foreign-owned YAML denial, trust unchanged, first install/reinstall/update/repair/uninstall with a disposable Hermes home. Mark genuine Hermes discovery separately from file-based fixture results; provider login and remote models are not needed.
+
+**Decision:** This is a release gate. Do not mark Native Active based only on generated files.
