@@ -36,7 +36,7 @@ npx universal-agent-plugins add context7 --target codex,cursor --dry-run
 [原生安装指南](https://github.com/777genius/universal-agent-plugins/blob/main/docs/NATIVE_INSTALL.md)提供 macOS、Linux 和 Windows 可执行文件。
 原生管理器不需要 Node.js，但插件可能需要自己的运行时。
 
-[CLI](https://github.com/777genius/universal-agent-plugins/releases/latest)保留显式项目范围和 0.1.94 引入的自动安装选择，并新增[本地管理 API](../use/manage#local-management-api)和[Pi 原生扩展](../reference/client-compatibility#pi-native-extensions)。预览将包添加到项目：
+[CLI](https://github.com/777genius/universal-agent-plugins/releases/latest)保留显式项目范围和 0.1.94 引入的自动安装选择，并新增[本地管理 API](../use/manage#local-management-api)和[Pi 扩展、Skills 和 MCP](../reference/client-compatibility#pi-native-extensions)。预览将包添加到项目：
 
 对于符合条件的已审核目录条目，如果目标客户端支持所有必需组件，已发布的 CLI 可使用签名 Directory 短名称和显式项目范围（例如 `agentplugins add context7 --target codex --scope project --dry-run`）。如需固定可复现的来源，也可以使用完整提交 SHA 的 Git 来源及兼容客户端。将 `OWNER/REPOSITORY`、`FULL_COMMIT_SHA` 和 `PACKAGE_PATH` 替换为真实值；如果包位于仓库根目录，请省略 `//PACKAGE_PATH`。
 
