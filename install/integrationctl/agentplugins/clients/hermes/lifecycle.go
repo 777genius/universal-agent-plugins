@@ -56,18 +56,24 @@ func (*Adapter) PreflightActivation(env clients.Env, req domain.ActivationReques
 
 func (*Adapter) UsesNativeRegistryExecutable() bool { return false }
 
-func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, _ domain.DetectedClient, plan domain.DeliveryPlan, binding *domain.ClientBinding) (clients.RegistryFinding, error) {
-	if err := ctx.Err(); err != nil {
-		return clients.RegistryIndeterminate, err
+func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, client domain.DetectedClient, plan domain.DeliveryPlan, binding *domain.ClientBinding) (clients.RegistryFinding, error) {
+	if err := ctx.Err(); err != nil { return clients.RegistryIndeterminate, err }
+	if client.ClientID != domain.ClientHermes || plan.ClientID != domain.ClientHermes {
+		return clients.RegistryIndeterminate, fmt.Errorf("Hermes native observation client identity differs")
+	}
+	if plan.Scope == domain.ScopeUser && client.ConfigRoot != plan.NativeRegistryRoot {
+		return clients.RegistryIndeterminate, fmt.Errorf("Hermes User profile authority differs from native registry")
+	}
+	if plan.Scope == domain.ScopeProject && plan.TargetContext.UserConfigRoot != "" &&
+		client.ConfigRoot != plan.TargetContext.UserConfigRoot {
+		return clients.RegistryIndeterminate, fmt.Errorf("Hermes Project request changed selected User profile")
 	}
 	layout, err := components(plan, "")
-	if err != nil {
-		return clients.RegistryIndeterminate, err
-	}
+	if err != nil { return clients.RegistryIndeterminate, err }
 	for _, component := range plan.Components {
-		if component.Kind != domain.ComponentSkill {
-			return clients.RegistryIndeterminate, fmt.Errorf("Hermes cannot inspect unsupported native MCP/components")
-		}
+		if component.Kind == domain.ComponentSkill { continue }
+		if component.Kind == domain.ComponentMCPServer && plan.Scope == domain.ScopeUser && component.Support != domain.SupportUnsupported { continue }
+		return clients.RegistryIndeterminate, fmt.Errorf("Hermes native observation cannot inspect an unsupported component")
 	}
 	if binding != nil {
 		owned, err := ownedObjects(plan.Scope, binding.NativeObjects)
