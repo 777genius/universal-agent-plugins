@@ -13,11 +13,14 @@ From a checkout with the exact cached packages for its pinned agreement:
 
 ```sh
 agentplugins deps check --scope project --format json > uap-integrity.json
+agentplugins deps check --scope project --format json --policy ./uap-policy.yaml > uap-policy-audit.json
 ```
 
 A zero exit means that the manifest, lock, cached exact package bytes and
 dependency graph were verified. Missing cache returns **unavailable** and a
 nonzero exit. Never treat empty or partial results as a clean bill of health.
+With `--policy`, the same versioned JSON report includes a local admission verdict for source hosts, requested integrity pins and MCP transports. A denial or missing policy returns a nonzero exit and does not mutate native files.
+
 This command does not fetch sources, check current revocations, execute MCP
 servers or authenticate an AI model. The machine report may contain local
 manifest/lock paths; keep artifacts private or redact them before publishing.
