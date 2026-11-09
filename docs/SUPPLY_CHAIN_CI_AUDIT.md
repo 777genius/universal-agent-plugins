@@ -75,7 +75,7 @@ intentionally rejected instead of silently disregarding the policy.
 
 **Limits:** Policy currently checks exact source hosts and explicit Git/Archive
 pin requirements. It has **no** organization inheritance, hosted policy
-discovery, MCP transport restriction, remote scanner or admin override system;
+discovery, remote scanner or admin override system;
 those require separate design and validation. It does not silently reuse APM's
 policy schema. Source host allow-lists do not certify trustworthiness by
 themselves.
