@@ -110,7 +110,10 @@ func validateAntigravityProjection(root string, envelope domain.PackageEnvelope,
 	// A verified source package can carry stdio MCP helper binaries under
 	// scripts/, but this directory must not be activated as an unrelated
 	// executable surface when no selected stdio MCP can reference it.
-	if _, err := os.Lstat(filepath.Join(root, "scripts")); err == nil {
+	if info, err := os.Lstat(filepath.Join(root, "scripts")); err == nil {
+		if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("Antigravity MCP helper scripts must be a real source directory")
+		}
 		stdio := false
 		for _, component := range plan.Components {
 			if component.Kind == domain.ComponentMCPServer && component.Support != domain.SupportUnsupported {
