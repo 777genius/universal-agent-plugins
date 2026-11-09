@@ -105,12 +105,6 @@ func (*Adapter) QualifyPlan(in clients.PlanInput, plan *domain.DeliveryPlan) err
 	if _, err := grokProjectRoot(in.Client, in.TargetContext, plan.NativeRegistryRoot); err != nil {
 		return err
 	}
-	for i := range plan.Components {
-		if plan.Components[i].Kind == domain.ComponentMCPServer {
-			plan.Components[i].Support = domain.SupportUnsupported
-			plan.Components[i].Reason = "Grok project bundled MCP initialization and tools are unqualified at pinned 1.0.67 and 1.0.70"
-		}
-	}
 	return nil
 }
 func (*Adapter) ValidateBindingProfile(root string, binding domain.ClientBinding) error {
