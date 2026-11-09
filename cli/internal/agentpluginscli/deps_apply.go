@@ -68,6 +68,11 @@ func runDependencySyncConverge(cmd *cobra.Command, app App, opts *options, locke
 	if err != nil {
 		return err
 	}
+	// The opt-in gate runs after complete lock resolution and before
+	// convergence repairs or any managed client mutation.
+	if err := checkLocalDependencyPolicy(opts.dependencyPolicyFile, request.lock); err != nil {
+		return err
+	}
 	if converge != nil {
 		proceed, convergeErr := converge(app)
 		if convergeErr != nil || !proceed {
