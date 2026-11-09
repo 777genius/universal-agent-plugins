@@ -49,7 +49,7 @@ func TestHermesNativeUserMCPAddUpdateRemove(t *testing.T) {
  run := func(previous, desired []domain.NativeObjectOwnership) error {
   return (shared.ProjectComponentMutation{
    Layout: layout, ActivePath: active, Previous: previous, Desired: desired,
-   Servers: servers, Kernel: nativeconfig.New(),
+   Servers: func() map[string]nativeconfig.Server { if len(desired) == 0 { return nil }; return servers }(), Kernel: nativeconfig.New(),
   }).Apply(context.Background())
  }
  if err := run(nil, objects); err != nil { t.Fatalf("add: %v", err) }
