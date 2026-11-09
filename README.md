@@ -4,7 +4,6 @@
     <img src="landing/public/client-icons/openai.svg" width="32" height="32" alt="Codex and ChatGPT" />&nbsp;&nbsp;
     <img src="landing/public/client-icons/cursor.svg" width="32" height="32" alt="Cursor" />&nbsp;&nbsp;
     <img src="landing/public/client-icons/github-copilot.svg" width="32" height="32" alt="GitHub Copilot CLI" />&nbsp;&nbsp;
-    <img src="landing/public/client-icons/vscode.svg" width="32" height="32" alt="VS Code" />&nbsp;&nbsp;
     <img src="landing/public/client-icons/kiro.svg" width="32" height="32" alt="Kiro" />&nbsp;&nbsp;
     <img src="landing/public/client-icons/claude.svg" width="32" height="32" alt="Claude Code" />&nbsp;&nbsp;
     <img src="landing/public/client-icons/gemini.svg" width="32" height="32" alt="Gemini CLI" />&nbsp;&nbsp;
