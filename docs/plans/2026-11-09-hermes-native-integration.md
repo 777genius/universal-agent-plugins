@@ -72,3 +72,9 @@ Deliver a first-class `--target hermes` through existing UAP client adapter cont
 **Finding and concrete plan correction:** Scope: Project command with an MCP component must stop before applying anything; adding only project Skills is permitted only for a package whose required components are all admitted, without silently dropping a required MCP dependency.
 
 **Decision:** This is part of the acceptance criteria; a contradictory implementation must be rejected rather than treated as a harmless warning.
+
+### Review round 3 / 6 — Clean Architecture / DRY
+
+**Finding and concrete plan correction:** Architecture: use one Hermes adapter and existing clients.Registry; do not add global YAML hooks to shared kernel unless one reusable exact-node mutation already exists; avoid injecting Hermes conditions into generic planners.
+
+**Decision:** This is part of the acceptance criteria; a contradictory implementation must be rejected rather than treated as a harmless warning.
