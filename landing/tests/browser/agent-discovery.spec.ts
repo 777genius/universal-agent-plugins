@@ -110,4 +110,5 @@ test('Skills overview links to the browser and remains usable on a small screen'
   await page.getByRole('link', { name: 'Browse the Skills catalog' }).click();
   await expect(page).toHaveURL(/\/plugins\/\?tab=skills/);
   await expect(page.locator('.skills-catalog')).toBeVisible();
+  await expect(page.locator('[data-initial-catalog]')).toHaveCount(0);
 });

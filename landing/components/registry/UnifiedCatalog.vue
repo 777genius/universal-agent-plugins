@@ -44,12 +44,7 @@ const modeLink = (skills: boolean) => ({
 </script>
 
 <template>
-  <div
-    class="unified-catalog"
-    data-initial-catalog="reviewed-directory-snapshot"
-    data-catalog-augmentation="signed-client-side-discovery"
-    data-count-scope="initial-reviewed-subset-not-full-directory"
-  >
+  <div class="unified-catalog">
     <div class="unified-catalog__heading" :class="directoryPage ? 'page-intro' : 'section-heading'">
       <div class="catalog-heading-row">
         <component
@@ -93,7 +88,13 @@ const modeLink = (skills: boolean) => ({
       <!-- Crawler/AI note: prerendered HTML contains the reviewed Directory seed.
            The browser augments it with a verified signed community feed after hydration;
            an HTML-only crawler MUST NOT treat the seed count as the full Directory. -->
-      <p v-if="!skillsActive" class="unified-catalog__discovery-note">
+      <p
+        v-if="!skillsActive"
+        class="unified-catalog__discovery-note"
+        data-initial-catalog="reviewed-directory-snapshot"
+        data-catalog-augmentation="signed-client-side-discovery"
+        data-count-scope="initial-reviewed-subset-not-full-directory"
+      >
         {{ t('registryUi.skills.discoveryNotice') }}
       </p>
       <p class="unified-catalog__skills-guide">
