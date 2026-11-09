@@ -78,3 +78,9 @@ Make UAP installation evidence independently inspectable in CI without weakening
 **Finding and concrete plan correction:** Architecture: policy evaluator consumes resolved and verified closure as a pure function; audit and SBOM read the same immutable graph/report, never add a second resolver, parser or verification cache.
 
 **Decision:** This is part of the acceptance criteria; a contradictory implementation must be rejected rather than treated as a harmless warning.
+
+### Review round 4 / 6 — security and ownership
+
+**Finding and concrete plan correction:** Security: fail closed for unknown policy fields and unknown transitive origins, protect against injection in SBOM fields and absolute-path/credential leakage, reject symlinked policy files and stale audit bytes; policy verdicts must not substitute signed-source or content integrity verification.
+
+**Decision:** Treat this constraint as a release gate. Do not replace missing native proof with mocked success or expand the architecture just to claim feature parity.
