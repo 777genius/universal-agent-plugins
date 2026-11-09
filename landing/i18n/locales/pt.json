@@ -255,7 +255,7 @@
         "kimi": "Execute /reload ou /new e revise as permissões MCP.",
         "cline": "Selecione o caminho das configurações MCP do projeto e recarregue o Cline.",
         "kiro": "Faça login, autorize o acesso e reinicie o Kiro se solicitado.",
-        "grok": "Recarregue o Grok; revise as habilidades do projeto e as dicas de configuração da CLI.",
+        "grok": "Abra o projeto selecionado no Grok, revise o plugin e conceda confiança; depois verifique as Skills e a conexão MCP.",
         "vscode": "Abra a pasta, confie nela e revise e habilite os servidores MCP.",
         "chatgpt": "Desktop: instalação local via Codex CLI; Web: conecte ou instale o aplicativo no ChatGPT."
       }

@@ -392,7 +392,7 @@
         "kimi": "运行 /reload 或 /new，并检查 MCP 权限。",
         "cline": "选择项目 MCP 设置路径，然后重新加载 Cline。",
         "kiro": "登录、批准访问，并在提示时重启 Kiro。",
-        "grok": "重新加载 Grok；检查项目技能和 CLI 设置提示。",
+        "grok": "在 Grok 中打开所选项目，检查并信任插件，然后验证技能和 MCP 连接。",
         "vscode": "打开并信任文件夹；检查并启用 MCP 服务器。",
         "chatgpt": "桌面端：通过 Codex CLI 在本地安装；网页版：在 ChatGPT 中连接或安装应用。"
       }
