@@ -271,14 +271,18 @@ def pin_foreign(entries, case_root):
                 raise AssertionError(f"invalid foreign fixture ancestor: {parent.name}")
             ancestors.append((parent, (directory.st_mode, directory.st_dev, directory.st_ino)))
             parent = parent.parent
+        # A foreign SKILL.md also owns its containing directory: silently
+        # adding a sibling file is not preservation of the foreign Skill.
+        skill_children = (tuple(sorted(child.name for child in path.parent.iterdir()))
+                          if path.name == "SKILL.md" else None)
         pinned.append((path, content, (identity.st_mode, identity.st_dev, identity.st_ino),
-                       tuple(ancestors)))
+                       tuple(ancestors), skill_children))
     return pinned
 
 
 def check_foreign(entries, case_root):
     """Reject foreign file or ancestor replacement, metadata changes and links."""
-    for path, content, expected_identity, ancestors in entries:
+    for path, content, expected_identity, ancestors, skill_children in entries:
         # A changed ancestor can conceal a moved original SKILL.md with the
         # same file inode and bytes. Native scope parents are not disposable.
         if not audit["path_inside_case"](path, case_root):
@@ -290,6 +294,10 @@ def check_foreign(entries, case_root):
                         or (directory.st_mode, directory.st_dev, directory.st_ino)
                         != expected_parent):
                     raise AssertionError(f"foreign content modified: {path.name}")
+            if (skill_children is not None
+                    and tuple(sorted(child.name for child in path.parent.iterdir()))
+                    != skill_children):
+                raise AssertionError(f"foreign content modified: {path.name}")
             identity = path.lstat()
             current_identity = (identity.st_mode, identity.st_dev, identity.st_ino)
             data = path.read_bytes() if path.is_file() else None

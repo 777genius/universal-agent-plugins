@@ -409,6 +409,10 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             marker.write_bytes(expected.encode("utf-8"))
             pinned = runner["pin_foreign"]([(marker, expected)], root)
             runner["check_foreign"](pinned, root)
+            allowed = root / "new-owned-config.json"
+            allowed.write_text("{}", encoding="utf-8")
+            runner["check_foreign"](pinned, root)
+            allowed.unlink()
 
             marker.write_bytes(b"unmanaged user data\r\n")
             self.assertEqual(marker.read_text(encoding="utf-8"), expected)
@@ -697,6 +701,15 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                         with self.assertRaisesRegex(AssertionError, "foreign content modified"):
                             runner["check_foreign"](pinned, case)
                         skill.write_text(original, encoding="utf-8")
+                        runner["check_foreign"](pinned, case)
+                        injected = skill.parent / "unexpected-native-file.txt"
+                        injected.write_text("unexpected", encoding="utf-8")
+                        try:
+                            with self.assertRaisesRegex(
+                                    AssertionError, "foreign content modified"):
+                                runner["check_foreign"](pinned, case)
+                        finally:
+                            injected.unlink()
                         runner["check_foreign"](pinned, case)
 
     def test_marketing_kit_opencode_compat_skills_must_be_removed(self):
