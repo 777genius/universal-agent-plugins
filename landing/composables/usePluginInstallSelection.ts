@@ -1,31 +1,69 @@
 import { computed, ref, watch, type Ref } from 'vue';
-import { clients } from '../data/clients.ts';
+import {
+  installTargets,
+  reconcileLocalChatGPTTargets,
+  canonicalInstallTarget,
+  canonicalInstallTargets,
+  type InstallTargetID,
+} from '../data/installTargets.ts';
 import { useInstallPreferencesStore } from '../stores/installPreferences.ts';
 import { reachableTargetPolicies, resolveDistribution } from '../utils/registry.ts';
 import { projectCatalogAutomaticSelection, projectCatalogSelection } from '../utils/projectCatalogSource.ts';
-import type { ClientID, InstallScope, RegistryPlugin } from '../types/registry';
+import type { DistributionResolution, InstallScope, RegistryPlugin } from '../types/registry';
 
 /** Card and detail share one selection/persistence policy; no machine detection occurs here. */
 export function usePluginInstallSelection(
   plugin: () => RegistryPlugin,
-  models: { targets?: Ref<ClientID[]>; autoDetect?: Ref<boolean> } = {},
+  models: { targets?: Ref<InstallTargetID[]>; autoDetect?: Ref<boolean> } = {},
 ) {
   const preferences = useInstallPreferencesStore();
-  const targets = models.targets ?? ref<ClientID[]>([]);
+  const targets = models.targets ?? ref<InstallTargetID[]>([]);
   const autoDetect = models.autoDetect ?? ref(true);
   const installExpanded = ref(false);
   const scope = ref<InstallScope>('user');
   const availableClients = computed(() => {
     const policies = reachableTargetPolicies(plugin().distributions);
-    return clients.filter((client) => policies.some((policy) => policy.client === client.id));
+    return installTargets.filter((client) => {
+      if (client.id === 'chatgptweb') {
+        if (plugin().trust_state === 'conformant_unreviewed') return false;
+        // A summary of reachable targets is de-duplicated by client/auth.
+        // Read the selected signed release so an earlier unbound policy
+        // cannot hide a later eligible Web app binding.
+        return Boolean(resolveDistribution(plugin(), ['chatgpt'], 'user').distribution?.targets.some(
+          (target) => target.client === 'chatgpt' && Boolean(target.app_binding),
+        ));
+      }
+      return policies.some((policy) => policy.client === canonicalInstallTarget(client.id));
+    });
   });
-  const select = (selected: ClientID[]) => scope.value === 'project'
-    ? projectCatalogSelection(plugin(), selected).resolution
-    : resolveDistribution(plugin(), selected, 'user');
+  const select = (selected: InstallTargetID[]): DistributionResolution => {
+    // A local Desktop plugin belongs to the Codex user profile, not a project.
+    if (scope.value === 'project' && selected.includes('chatgpt'))
+      return { unavailable_reason: 'ChatGPT Desktop supports only This computer; select Codex for a project install.' };
+    const canonical = canonicalInstallTargets(selected);
+    const resolved = scope.value === 'project'
+      ? projectCatalogSelection(plugin(), canonical).resolution
+      : resolveDistribution(plugin(), canonical, 'user');
+    // Unreviewed community metadata is not an authority for an account-bound
+    // ChatGPT Web app, even when it advertises an app_binding object.
+    if (selected.includes('chatgptweb') && plugin().trust_state === 'conformant_unreviewed') {
+      return { unavailable_reason: 'ChatGPT Web needs a reviewed signed Directory release.' };
+    }
+    // A signed ChatGPT Web target is meaningful only with its registered app
+    // identity. Older/preview projections must not enable a cloud install.
+    if (selected.includes('chatgptweb') &&
+        !resolved.distribution?.targets.some((target) =>
+          target.client === 'chatgpt' && Boolean(target.app_binding))) {
+      return {
+        unavailable_reason: 'ChatGPT Web needs a verified app binding in this release.',
+      };
+    }
+    return resolved;
+  };
   const targetDistributions = computed(
     () =>
       new Map(
-        clients.map((client) => [client.id, select([client.id]).distribution]),
+        installTargets.map((client) => [client.id, select([client.id]).distribution]),
       ),
   );
   // One authorized project source is enough to offer CLI-side target discovery.
@@ -62,8 +100,10 @@ export function usePluginInstallSelection(
       const initial =
         availableClients.value.find((client) => client.id === 'cursor') ??
         availableClients.value[0];
+      // Persisted preferences may predate the public ChatGPT target rename.
+      // Never restore both public Codex and Desktop as two local installs.
       targets.value = saved.targetIds.length
-        ? (saved.targetIds as ClientID[])
+        ? reconcileLocalChatGPTTargets(saved.targetIds as InstallTargetID[], [])
         : initial
           ? [initial.id]
           : [];
@@ -98,14 +138,15 @@ export function usePluginInstallSelection(
   });
   function updateTargets(values: string[]) {
     const next = values.filter(
-      (value): value is ClientID =>
-        clients.some((client) => client.id === value) &&
-        (Boolean(targetDistributions.value.get(value as ClientID)) ||
-          targets.value.includes(value as ClientID)),
+      (value): value is InstallTargetID =>
+        installTargets.some((client) => client.id === value) &&
+        (Boolean(targetDistributions.value.get(value as InstallTargetID)) ||
+          targets.value.includes(value as InstallTargetID)),
     );
     if (!next.length) return;
     choicePending = true;
-    targets.value = [...new Set(next)];
+    const selected = [...new Set(next)];
+    targets.value = reconcileLocalChatGPTTargets(selected, targets.value);
     saveUnboundChoice();
   }
   function updateAutoDetect(value: boolean) {

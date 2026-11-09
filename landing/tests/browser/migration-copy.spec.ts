@@ -85,7 +85,7 @@ test('download has one title, a readable version, and current client support', a
       new RegExp(`/agents/${client.slug}/$`),
     );
   }
-  await expect(support).toContainText('Setup in app');
+  await expect(support).toContainText('Desktop: automatic via Codex CLI; Web: setup in ChatGPT');
   await expect(support).toContainText('Prepared by CLI');
 });
 

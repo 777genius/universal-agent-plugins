@@ -43,7 +43,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     check({**accepted, **invalid}, "add")
 
     def test_marketing_kit_accepts_only_complete_legacy_noop_update(self):
-        # Immutable published 0.1.101 emits outcome/actions/results without result.
+        # Immutable published 0.1.102 emits outcome/actions/results without result.
         from runpy import run_path
 
         runner = run_path(str(Path(__file__).resolve().parent /
@@ -116,7 +116,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                         check({**valid, "_json": invalid}, operation, operation, "codex")
 
     def test_marketing_kit_noop_update_rejects_rekey_and_lock_rewrite(self):
-        # Released 0.1.101 reports unchanged; do not trust that envelope alone.
+        # Released 0.1.102 reports unchanged; do not trust that envelope alone.
         from runpy import run_path
 
         runner = run_path(str(Path(__file__).resolve().parent /
@@ -177,20 +177,20 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                       "cold locked restore", "install")
 
     def test_marketing_kit_requires_exact_published_cli_version(self):
-        # The substring "0.1.101" alone also matches prereleases and 0.1.1011.
+        # The substring "0.1.102" alone also matches prereleases and 0.1.1021.
         from runpy import run_path
 
         runner = run_path(str(Path(__file__).resolve().parent /
                               "marketing-kit-project-release-e2e.py"))
         require = runner["require_exact_published_version"]
         valid = {"exit_code": 0, "timeout": False,
-                 "stdout_tail": "agentplugins 0.1.101\n"}
+                 "stdout_tail": "agentplugins 0.1.102\n"}
         require(valid)
-        for version in ("agentplugins 0.1.101-dev",
-                        "agentplugins 0.1.1011",
-                        "agentplugins 0.1.102",
-                        "other-launcher 0.1.101",
-                        "agentplugins 0.1.101\nagentplugins 0.1.102",
+        for version in ("agentplugins 0.1.102-dev",
+                        "agentplugins 0.1.1021",
+                        "agentplugins 0.1.103",
+                        "other-launcher 0.1.102",
+                        "agentplugins 0.1.102\nagentplugins 0.1.102",
                         ""):
             with self.subTest(version=version):
                 with self.assertRaisesRegex(AssertionError, "not exact published"):
@@ -213,7 +213,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         failed = {"exit_code": 1, "timeout": False, "stdout_tail": ""}
         timed_out = {"exit_code": None, "timeout": True, "stdout_tail": ""}
         valid = {"exit_code": 0, "timeout": False,
-                 "stdout_tail": "agentplugins 0.1.101\n"}
+                 "stdout_tail": "agentplugins 0.1.102\n"}
         probe, pause = Mock(side_effect=[failed, timed_out, valid]), Mock()
         with patch.dict(verify.__globals__, {"invoke": probe, "sleep": pause}):
             verify("agentplugins", {}, Path("."))
@@ -227,7 +227,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         self.assertEqual(probe.call_count, 3)
         self.assertEqual([item.args for item in pause.call_args_list], [(5,), (10,)])
 
-        probe, pause = Mock(return_value={**valid, "stdout_tail": "agentplugins 0.1.101-dev"}), Mock()
+        probe, pause = Mock(return_value={**valid, "stdout_tail": "agentplugins 0.1.102-dev"}), Mock()
         with patch.dict(verify.__globals__, {"invoke": probe, "sleep": pause}):
             with self.assertRaisesRegex(AssertionError, "not exact published"):
                 verify("agentplugins", {}, Path("."))
@@ -2867,7 +2867,7 @@ class CrossPlatformPublishedProofRegressions(unittest.TestCase):
                     root, "atlassian", "0.1.0")["status"], "unqualified-prerequisites")
 
     def test_prepared_only_opencode_config_is_not_native_pass(self):
-        # Real published 0.1.101 can write opencode.json while all components
+        # Real published 0.1.102 can write opencode.json while all components
         # are reported as prepared, never native. Disk attribution is not activation.
         audit = load_audit()
         matched = [{"name": "atlassian", "installation_id": "frozen",

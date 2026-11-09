@@ -118,7 +118,7 @@ for (const width of [1440, 390]) {
         (node) => getComputedStyle(node).gridTemplateColumns.split(' ').length,
       ),
     ).toBe(1);
-    const chatgpt = page.getByRole('checkbox', { name: /^ChatGPT(?:\s|$)/ });
+    const chatgpt = page.getByRole('checkbox', { name: /^ChatGPT Web(?:\s|$)/ });
     await expect(chatgpt).toBeDisabled();
     await expect(chatgpt).toContainText('No verified ChatGPT app connection in this release');
     await page.getByRole('checkbox', { name: /^Codex(?:\s|$)/ }).click();

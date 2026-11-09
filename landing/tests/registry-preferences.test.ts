@@ -13,6 +13,12 @@ import { useInstallPreferencesStore } from '../stores/installPreferences.ts';
 import { usePluginInstallSelection } from '../composables/usePluginInstallSelection.ts';
 import { useCatalogUiStore } from '../stores/catalogUi.ts';
 import { clients } from '../data/clients.ts';
+import {
+  installTargets,
+  canonicalInstallTarget,
+  canonicalInstallTargets,
+  cliInstallTargets,
+} from '../data/installTargets.ts';
 import * as registryDomain from '../utils/registry.ts';
 import * as filters from '../utils/filter.ts';
 import { pluginCommands } from '../utils/commands.ts';
@@ -39,6 +45,10 @@ const common = {
   ref,
   watch,
   clients,
+  installTargets,
+  canonicalInstallTarget,
+  canonicalInstallTargets,
+  cliInstallTargets,
   ...registryDomain,
   authenticationIndicator,
   ...filters,
@@ -85,6 +95,30 @@ function card(props = packageProps()) {
     'targets, autoDetect, scope, projectAvailable, installExpanded, command, updateTargets, updateAutoDetect, showAuthentication, authentication, toggleInstall, deliverySummary, updateScope',
   );
 }
+
+
+test('Desktop has its own picker command, shares Codex backend, and keeps Web separate', () => {
+  setActivePinia(createPinia());
+  const instance = card();
+  instance.state.updateTargets(['chatgpt']);
+  instance.state.updateAutoDetect(false);
+  assert.deepEqual(Array.from(canonicalInstallTargets(instance.state.targets.value)), ['codex']);
+  assert.match(instance.state.command.value, /--target chatgpt$/);
+  assert.equal(instance.state.deliverySummary.value.includes('1 automatic setup'), true);
+  instance.state.updateTargets(['chatgpt', 'codex']);
+  assert.deepEqual(Array.from(instance.state.targets.value), ['codex']);
+  assert.match(instance.state.command.value, /--target codex$/);
+  instance.state.updateTargets(['codex', 'chatgpt']);
+  assert.deepEqual(Array.from(instance.state.targets.value), ['chatgpt']);
+  assert.match(instance.state.command.value, /--target chatgpt$/);
+  instance.stop();
+  assert.deepEqual(cliInstallTargets(['chatgptweb', 'chatgpt']), ['chatgptweb', 'chatgpt']);
+  assert.equal(canonicalInstallTarget('chatgptweb'), 'chatgpt');
+  assert.equal(canonicalInstallTarget('chatgpt'), 'codex');
+  assert.equal(installTargets.find((x) => x.id === 'chatgptweb')?.name, 'ChatGPT Web');
+  assert.equal(installTargets.find((x) => x.id === 'chatgpt')?.name, 'ChatGPT Desktop');
+  assert.equal(installTargets.find((x) => x.id === 'codex')?.name, 'Codex CLI');
+});
 
 test('explicit card delivery summary follows the winning scoped release rather than default aggregate', () => {
   setActivePinia(createPinia());

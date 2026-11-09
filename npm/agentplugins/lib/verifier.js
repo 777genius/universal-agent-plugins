@@ -8,6 +8,8 @@ const https = require("node:https");
 const path = require("node:path");
 const MAX_REDIRECTS = 5;
 const DOWNLOAD_TIMEOUT_MS = 30_000;
+// Only the HTTP status handler may authorize a retry, never transport errors.
+const RETRYABLE_GATEWAY_RESPONSE = Symbol("retryable-gateway-response");
 const LOCK_TIMEOUT_MS = 30_000;
 
 async function sha256File(file) {
@@ -71,7 +73,23 @@ function requestApprovedTarget(target, requestOptions) {
   }
 }
 
+// Retry only gateway failures that happen before any payload file is opened.
+// Partial streams, invalid bytes, unsafe redirects and cache errors remain
+// single-attempt failures. The same immutable URL and SHA pin are reused.
 async function downloadFile(value, destination, expected, options = {}, redirects = MAX_REDIRECTS) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await downloadFileOnce(value, destination, expected, options, redirects);
+    } catch (error) {
+      if (attempt === 2 || error[RETRYABLE_GATEWAY_RESPONSE] !== true) {
+        throw error;
+      }
+      await delay((attempt + 1) * 200, options.signal);
+    }
+  }
+}
+
+async function downloadFileOnce(value, destination, expected, options = {}, redirects = MAX_REDIRECTS) {
   const target = validateDownloadURL(value);
   cancelled(options.signal);
   let abort;
@@ -106,13 +124,17 @@ async function downloadFile(value, destination, expected, options = {}, redirect
         try {
           const next = new URL(response.headers.location, target.url).toString();
           delegated = true;
-          downloadFile(next, destination, expected, options, redirects - 1).then(resolve, reject);
+          downloadFileOnce(next, destination, expected, options, redirects - 1).then(resolve, reject);
         } catch (error) { reject(error); }
         return;
       }
       if (response.statusCode < 200 || response.statusCode > 299) {
         response.resume();
-        reject(new Error(`binary download failed with HTTP ${response.statusCode}`));
+        const failure = new Error(`binary download failed with HTTP ${response.statusCode}`);
+        if ([502, 503, 504].includes(response.statusCode)) {
+          failure[RETRYABLE_GATEWAY_RESPONSE] = true;
+        }
+        reject(failure);
         return;
       }
       const length = response.headers["content-length"];

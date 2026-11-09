@@ -36,6 +36,10 @@ setup on another computer or with your team.
 <a href="https://universal-agent-plugins.com/#demo" title="Watch the Universal Agent Plugins demo"><img width="680" height="392" alt="Universal Agent Plugins video preview — watch the demo" src="https://github.com/user-attachments/assets/33833cd2-f525-49b2-9181-5a4d643d2f5b" /></a>
 </p>
 
+<p align="center">
+  <img src="assets/uap-how-it-works.webp" width="1200" alt="How UAP works: find plugins and skills, choose computer or project scope, install with UAP built on Agent Plugins 1.0 and Agent Skills, use with AI agents, and manage updates, repair, removal, restoration and sharing" />
+</p>
+
 ## Contents
 
 - [Use plugins](#use-plugins)
@@ -273,7 +277,7 @@ workspace. Agents may still ask you to trust the project, sign in, or restart.
 | Agent | User scope | Project scope | Setup | What you do after installing |
 | --- | --- | --- | --- | --- |
 | <img src="landing/public/client-icons/claude.svg" width="24" height="24" alt="" align="middle"> **Claude Code** | Plugins, Skills, MCP | Skills, MCP | Automatic | Trust the workspace and reload Claude Code if prompted. |
-| <img src="landing/public/client-icons/openai.svg" width="24" height="24" alt="" align="middle"> **Codex** | Skills, MCP | Skills, MCP | Automatic | Open a new session; approve project MCP access if prompted. |
+| <img src="landing/public/client-icons/openai.svg" width="24" height="24" alt="" align="middle"> **Codex CLI** | Skills, MCP | Skills, MCP | Automatic | Open a new session; approve project MCP access if prompted. |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/opencode-dark.svg"><img src="landing/public/client-icons/opencode.svg" width="24" height="24" alt="" align="middle"></picture> **OpenCode** | Skills, MCP | Skills, MCP | Automatic | Start a new session and review effective project settings. |
 | <img src="landing/public/client-icons/cursor.svg" width="24" height="24" alt="" align="middle"> **Cursor** | Plugins, Skills, MCP | Skills, MCP | Automatic | Reload Cursor; enable plugins or MCP servers if requested. |
 | <img src="landing/public/client-icons/github-copilot.svg" width="24" height="24" alt="" align="middle"> **GitHub Copilot CLI** | Plugins, Skills, MCP | Skills, MCP | Automatic | Restart Copilot CLI if requested. |
@@ -286,7 +290,7 @@ workspace. Agents may still ask you to trust the project, sign in, or restart.
 | <img src="landing/public/client-icons/kiro.svg" width="24" height="24" alt="" align="middle"> **Kiro** | Skills, MCP | Skills, MCP | Guided | Sign in, approve access, and restart Kiro if prompted. |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/grok-dark.svg"><img src="landing/public/client-icons/grok.svg" width="24" height="24" alt="" align="middle"></picture> **Grok Build** | Skills, MCP | Skills only | Guided | Reload Grok; review project Skills and any CLI setup hint. |
 | <img src="landing/public/client-icons/vscode.svg" width="24" height="24" alt="" align="middle"> **VS Code** | Copilot-backed package | Skills, MCP (prepared) | Prepared | Open and trust the folder; review and enable MCP servers. |
-| <img src="landing/public/client-icons/openai.svg" width="24" height="24" alt="" align="middle"> **ChatGPT** | Personal app setup | Not supported | Manual | Enable Developer Mode, connect the app, and select it in a new chat. |
+| <img src="landing/public/client-icons/openai.svg" width="24" height="24" alt="" align="middle"> **ChatGPT** | Desktop local plugins; Web connected apps | Not supported | Guided | Desktop: local install via Codex CLI; Web: connect or install in ChatGPT. |
 
 <!-- AGENT_SUPPORT_MATRIX_END -->
 

@@ -6,6 +6,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import { usePluginInstallSelection } from '../composables/usePluginInstallSelection.ts';
 import { useInstallPreferencesStore } from '../stores/installPreferences.ts';
 import { pluginCommands } from '../utils/commands.ts';
+import { reconcileLocalChatGPTTargets } from '../data/installTargets.ts';
 import type { RegistryPlugin } from '../types/registry.ts';
 
 const fixture: RegistryPlugin = JSON.parse(
@@ -38,6 +39,124 @@ function mount(plugin: RegistryPlugin) {
   const selection = lifetime.run(() => usePluginInstallSelection(() => plugin))!;
   return { ...selection, stop: () => lifetime.stop() };
 }
+
+
+test('Codex and Desktop picker choices reconcile to one native backend', () => {
+  assert.deepEqual(reconcileLocalChatGPTTargets(['codex', 'chatgpt', 'chatgptweb'], ['codex']), ['chatgpt', 'chatgptweb']);
+  assert.deepEqual(reconcileLocalChatGPTTargets(['codex', 'chatgpt', 'chatgptweb'], ['chatgpt']), ['codex', 'chatgptweb']);
+  assert.deepEqual(reconcileLocalChatGPTTargets(['codex', 'chatgpt'], ['cursor']), ['codex']);
+  assert.deepEqual(reconcileLocalChatGPTTargets(['chatgpt', 'chatgptweb'], ['chatgpt']), ['chatgpt', 'chatgptweb']);
+});
+
+test('restored Codex and Desktop preferences cannot emit duplicate local install targets', () => {
+  setActivePinia(createPinia());
+  const plugin = data();
+  const preferences = useInstallPreferencesStore();
+  preferences.selectPackage(
+    plugin.install_source,
+    { targetIds: ['codex', 'chatgpt'], autoDetect: false, expanded: true, scope: 'user' },
+    ['codex', 'chatgpt', 'cursor'],
+  );
+  const state = mount(plugin);
+  assert.deepEqual(state.targets.value, ['codex']);
+  assert.match(pluginCommands(plugin, state.targets.value).add, /--target codex$/);
+  assert.doesNotMatch(pluginCommands(plugin, state.targets.value).add, /codex,chatgpt/);
+  state.stop();
+});
+
+test('mixed ChatGPT Web and Codex/Desktop commands use the imperative no-save path', () => {
+  const plugin = data();
+  const oldCommand = pluginCommands(plugin, ['codex', 'chatgptweb']).add;
+  const splitCommand = pluginCommands(plugin, ['chatgpt', 'chatgptweb']).add;
+  assert.match(oldCommand, /--target codex,chatgptweb --no-save$/);
+  assert.match(splitCommand, /--target chatgpt,chatgptweb --no-save$/);
+  assert.doesNotMatch(pluginCommands(plugin, ['codex']).add, /--no-save/);
+});
+
+test('unreviewed community app metadata cannot authorize a ChatGPT Web connection', () => {
+  setActivePinia(createPinia());
+  const plugin = data();
+  plugin.trust_state = 'conformant_unreviewed';
+  plugin.distributions[0]!.releases[0]!.targets.push({
+    client: 'chatgpt',
+    scopes: ['user'],
+    delivery: 'manual_activation',
+    authentication: 'unknown',
+    app_binding: { app_key: 'spoofed', id: 'untrusted_app', mcp_server: 'untrusted' },
+  });
+  const state = mount(plugin);
+  assert.ok(state.availableClients.value.some((client) => client.id === 'chatgpt'));
+  assert.equal(state.availableClients.value.some((client) => client.id === 'chatgptweb'), false);
+  // Exercise an invalid persisted choice as well as the ordinary picker.
+  state.targets.value = ['chatgptweb'];
+  assert.equal(state.resolution.value.distribution, undefined);
+  assert.match(state.resolution.value.unavailable_reason ?? '', /reviewed signed Directory/);
+  state.stop();
+});
+
+test('ChatGPT Web needs signed app binding; Desktop shares Codex without project fallback', () => {
+  setActivePinia(createPinia());
+  const plugin = data();
+  const release = plugin.distributions[0]!.releases[0]!;
+  release.targets.push({
+    client: 'chatgpt',
+    scopes: ['user'],
+    delivery: 'manual_activation',
+    authentication: 'unknown',
+  });
+  const state = mount(plugin);
+  assert.ok(state.availableClients.value.some((client) => client.id === 'chatgpt'));
+  assert.equal(state.availableClients.value.some((client) => client.id === 'chatgptweb'), false);
+  assert.equal(state.targetDistributions.value.get('chatgptweb'), undefined);
+  assert.ok(state.targetDistributions.value.get('chatgpt'));
+  release.targets[release.targets.length - 1]!.app_binding = {
+    app_key: 'context7',
+    id: 'asdk_app_verified_test',
+    mcp_server: 'context7',
+  };
+  assert.ok(state.availableClients.value.some((client) => client.id === 'chatgptweb'));
+  state.updateTargets(['chatgptweb']);
+  state.updateAutoDetect(false);
+  assert.ok(state.resolution.value.distribution?.targets.some((target) => target.client === 'chatgpt'));
+  state.updateTargets(['chatgpt']);
+  assert.equal(state.resolution.value.distribution?.id, plugin.distributions[0]!.id);
+  state.updateScope('project');
+  assert.equal(state.scope.value, 'project');
+  state.updateAutoDetect(false);
+  assert.equal(state.resolution.value.distribution, undefined);
+  state.updateScope('user');
+  assert.equal(state.scope.value, 'user');
+  assert.ok(state.resolution.value.distribution);
+  state.stop();
+});
+
+test('Web picker uses the eligible signed release rather than a de-duplicated target policy', () => {
+  setActivePinia(createPinia());
+  const plugin = data();
+  const older = plugin.distributions[0]!.releases[0]!;
+  older.targets.push({
+    client: 'chatgpt',
+    scopes: ['user'],
+    delivery: 'manual_activation',
+    authentication: 'unknown',
+  });
+  // Reachable target summaries collapse identical client/authentication pairs.
+  // An earlier unbound release must not hide the later signed Web binding.
+  const newer = structuredClone(toRaw(older));
+  newer.release_sequence = older.release_sequence + 1;
+  newer.targets.find((target) => target.client === 'chatgpt')!.app_binding = {
+    app_key: 'context7',
+    id: 'asdk_app_verified_test',
+    mcp_server: 'context7',
+  };
+  plugin.distributions[0]!.releases = [older, newer];
+  const state = mount(plugin);
+  assert.ok(state.availableClients.value.some((client) => client.id === 'chatgptweb'));
+  state.updateTargets(['chatgptweb']);
+  state.updateAutoDetect(false);
+  assert.equal(state.resolution.value.distribution?.release_sequence, newer.release_sequence);
+  state.stop();
+});
 
 test('project defaults to CLI detection and preserves manual project targets', () => {
   setActivePinia(createPinia());

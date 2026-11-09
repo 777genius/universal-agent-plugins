@@ -208,6 +208,58 @@
     "buildGuideLink": "Abrir o guia de criação"
   },
   "shell": {
+    "clientSupport": {
+      "eyebrow": "Compatibilidade",
+      "title": "Agentes compatíveis e escopos de instalação",
+      "description": "O escopo de usuário instala componentes no perfil do agente; o escopo de projeto os instala em um único espaço de trabalho. O UAP configura os arquivos compatíveis. O agente ainda pode solicitar confiança, login ou reinício.",
+      "tableLabel": "Tabela de suporte à instalação por agente",
+      "tableCaption": "Suporte a usuário e projeto, modo de configuração e ações após a instalação.",
+      "columns": {
+        "agent": "Agente",
+        "user": "Escopo de usuário",
+        "project": "Escopo de projeto",
+        "setup": "Configuração",
+        "nextStep": "Após a instalação"
+      },
+      "scrollHint": "Role a tabela para os lados para ver todas as colunas.",
+      "note": "Automático: o UAP instala os componentes compatíveis. Guiado: siga as instruções do agente. Preparado: ative os arquivos preparados. Manual: conclua a configuração no aplicativo. A instalação não faz login nem concede confiança automaticamente. Estas são as capacidades do código-fonte atual; a CLI publicada pode ser diferente. A disponibilidade depende do plugin e da versão do agente.",
+      "details": "Ver detalhes de compatibilidade",
+      "capabilities": {
+        "pluginsSkillsMcp": "Plugins, habilidades, MCP",
+        "skillsMcp": "Habilidades, MCP",
+        "pluginsSkillsMcpHooks": "Plugins, habilidades, MCP, ganchos",
+        "extensionsSkillsMcp": "Extensões, habilidades, MCP",
+        "copilotPackage": "Pacote via Copilot",
+        "desktopLocalPluginsWebConnectedApps": "Plugins locais no desktop; aplicativos conectados na Web",
+        "personalAppSetup": "Configuração de aplicativo pessoal",
+        "skillsOnly": "Somente habilidades",
+        "skillsMcpPrepared": "Habilidades, MCP (preparado)",
+        "notSupported": "Não suportado"
+      },
+      "setup": {
+        "automatic": "Automático",
+        "guided": "Guiado",
+        "prepared": "Preparado",
+        "manual": "Manual"
+      },
+      "nextSteps": {
+        "claude": "Confie no espaço de trabalho e recarregue o Claude Code se solicitado.",
+        "codex": "Abra uma nova sessão; autorize o acesso MCP do projeto se solicitado.",
+        "opencode": "Inicie uma nova sessão e confira as configurações efetivas do projeto.",
+        "cursor": "Recarregue o Cursor; habilite plugins ou servidores MCP se necessário.",
+        "copilot": "Reinicie o Copilot CLI se solicitado.",
+        "gemini": "Recarregue o Gemini CLI e autorize o acesso às ferramentas se solicitado.",
+        "qoder": "Reinicie o Qoder e revise as permissões MCP.",
+        "pi": "Confie no projeto e recarregue os recursos do Pi.",
+        "windsurf": "Abra ou reinicie o Devin no projeto selecionado e revise o acesso.",
+        "kimi": "Execute /reload ou /new e revise as permissões MCP.",
+        "cline": "Selecione o caminho das configurações MCP do projeto e recarregue o Cline.",
+        "kiro": "Faça login, autorize o acesso e reinicie o Kiro se solicitado.",
+        "grok": "Recarregue o Grok; revise as habilidades do projeto e as dicas de configuração da CLI.",
+        "vscode": "Abra a pasta, confie nela e revise e habilite os servidores MCP.",
+        "chatgpt": "Desktop: instalação local via Codex CLI; Web: conecte ou instale o aplicativo no ChatGPT."
+      }
+    },
     "dependencies": {
       "eyebrow": "Dependências conectadas",
       "title": "Dois plugins. Uma dependência compartilhada.",
@@ -584,6 +636,10 @@
       "disclaimer": "Verificações automatizadas reduzem riscos; elas não provam que um plugin é seguro. Revise o código-fonte e as permissões antes de instalar software em que você não confia."
     },
     "catalog": {
+      "sortLabel": "Ordenar plugins",
+      "sortRecommended": "Recomendados",
+      "sortName": "Nome A–Z",
+      "curationNote": "Recomendações para tarefas comuns de agentes, não uma classificação de segurança.",
       "staleCommunityResults": "Exibindo {count} entradas da comunidade do último catálogo assinado, gerado em {generated}, expirado em {expired}. Os comandos de instalação estão pausados até a atualização do catálogo. As entradas revisadas continuam disponíveis.",
       "staleCommunityListing": "Entrada histórica assinada; o catálogo expirou em {expired}.",
       "staleCommunityCommands": "Os comandos de instalação da comunidade estão pausados porque o catálogo assinado expirou. Você ainda pode consultar as entradas e o código-fonte.",
@@ -816,11 +872,11 @@
         "activation": "Siga qualquer dica de ativação exibida pela CLI e inicie uma nova sessão do Codex."
       },
       "chatgpt": {
-        "note": "Vínculos de apps verificados e configuração guiada do Context7",
-        "status": "Configuração no app",
-        "intro": "Prepare Agent Plugins 1.0 compatíveis para o ChatGPT, mantendo a ativação do app e o consentimento da conta dentro do ChatGPT.",
-        "delivery": "A CLI valida os vínculos de apps dos publicadores e pode preparar um pacote de marketplace pessoal para o Context7 usando seu endpoint MCP público, que não exige autenticação.",
-        "activation": "Crie ou conecte o app no Modo de Desenvolvedor (Developer Mode), instale o plugin pessoal preparado e selecione-o em uma nova conversa."
+        "note": "Desktop: automático pelo Codex CLI; Web: configuração no ChatGPT",
+        "status": "Compatível",
+        "intro": "O ChatGPT oferece suporte a plugins no Desktop e na Web. Os plugins locais de Desktop usam o catálogo do Codex CLI; na Web, é necessário um app na nuvem compatível ou uma conexão ao catálogo.",
+        "delivery": "O UAP instala plugins locais compatíveis no Desktop pelo Codex CLI e prepara conexões Web verificadas. A ferramenta local não instala silenciosamente um plugin na sua conta do ChatGPT.",
+        "activation": "Desktop: abra uma nova conversa local e verifique o plugin. Web: conecte ou instale o app no ChatGPT e conceda as permissões necessárias."
       },
       "cursor": {
         "note": "Pacote nativo de Agent Plugin",

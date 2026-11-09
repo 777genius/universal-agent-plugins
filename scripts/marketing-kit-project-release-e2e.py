@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Actual public npm 0.1.101 + signed Marketing Kit Project lifecycle, no mocks."""
+"""Actual public npm 0.1.102 + signed Marketing Kit Project lifecycle, no mocks."""
 import argparse
 import json
 import os
@@ -23,7 +23,7 @@ EXPECTED = {
 }
 
 
-# Published npm 0.1.101 dependency operations use outcome/actions/results
+# Published npm 0.1.102 dependency operations use outcome/actions/results
 # instead of the newer result field. Require their exact successful action
 # evidence; process exit 0 and outcome=completed alone are not sufficient.
 UPDATE_ALIASES = {"marketing-kit", "notion", "hubspot-crm", "playwright"}
@@ -81,7 +81,7 @@ def verified(result, stage, operation=None, target=None):
     if (result.get("exit_code") != 0 or result.get("timeout")
             or not isinstance(envelope, dict)):
         raise AssertionError(f"{stage}: CLI did not succeed with JSON: {result}")
-    # The pinned 0.1.101 dependency commands must report explicit actions
+    # The pinned 0.1.102 dependency commands must report explicit actions
     # and results. A bare success envelope is not evidence of their execution.
     if operation in LEGACY_ACTIONS:
         if valid_legacy_dependency_result(envelope, operation, target):
@@ -97,8 +97,8 @@ def require_exact_published_version(result):
     stdout = result.get("stdout_tail")
     if (result.get("exit_code") != 0 or result.get("timeout")
             or not isinstance(stdout, str)
-            or stdout.strip() != "agentplugins 0.1.101"):
-        raise AssertionError("not exact published agentplugins 0.1.101")
+            or stdout.strip() != "agentplugins 0.1.102"):
+        raise AssertionError("not exact published agentplugins 0.1.102")
 
 
 def verify_pinned_launcher(cli, env, project):
@@ -319,11 +319,11 @@ def main():
     options = parser.parse_args()
     report_path = Path(options.report)
     report_path.parent.mkdir(parents=True, exist_ok=True)
-    report = {"cli_version": "0.1.101", "target": options.target, "source": "real signed marketing-kit", "steps": [], "status": "failed"}
+    report = {"cli_version": "0.1.102", "target": options.target, "source": "real signed marketing-kit", "steps": [], "status": "failed"}
     try:
         with tempfile.TemporaryDirectory(prefix="uap-real-marketing-kit-") as location:
             root = Path(location)
-            # The npm 0.1.101 launcher validates the SHA-256 on every cache hit.
+            # The npm 0.1.102 launcher validates the SHA-256 on every cache hit.
             # Keep one private executable cache for A/B: cold restore is still
             # independent in lock, receipts, clients and native HOME/profile.
             launcher_cache = root / "released-cli-cache"

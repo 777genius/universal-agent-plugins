@@ -6,7 +6,8 @@ import { clientLandingById } from '~/data/clients';
 import { productRootUrl, seoDescription, spdxLicenseUrl } from '~/utils/seo';
 import { isFullyRetired } from '~/utils/filter';
 import { resolveDistribution, vendorInstallSource } from '~/utils/registry';
-import type { ClientID } from '~/types/registry';
+import { pluginBenefit } from '~/data/catalogCuration';
+import type { InstallTargetID } from '~/data/installTargets';
 const { t, locale } = useI18n();
 const localePath = useLocalePath();
 
@@ -22,6 +23,7 @@ if (!plugin || plugin.trust_state === 'conformant_unreviewed') {
 }
 
 const iconURL = pluginIcon(plugin);
+const benefit = pluginBenefit(plugin);
 const { current, expired, published } = useDirectoryStatus();
 // The card's install picker resolves each agent against an active release. Do
 // the same here: client_support is an aggregate that may include retired targets
@@ -50,7 +52,7 @@ const clientGroups = computed(() =>
 );
 const initialTarget =
   supportedClients.find((client) => client.id === 'cursor')?.id ?? supportedClients[0]?.id;
-const targets = ref<ClientID[]>(initialTarget ? [initialTarget] : []);
+const targets = ref<InstallTargetID[]>(initialTarget ? [initialTarget === 'chatgpt' ? 'chatgptweb' : initialTarget] : []);
 const autoDetect = ref(true);
 const installAvailable = computed(
   () =>
@@ -85,7 +87,7 @@ const description = computed(() =>
       name: plugin.display_name,
       clients: clientNames.join(', '),
     }),
-    plugin.description,
+    benefit,
   ]),
 );
 const licenseUrl = spdxLicenseUrl(plugin.license);
@@ -105,7 +107,7 @@ usePageSeo(() => t('registryUi.detail.title', { name: plugin.display_name }), de
       '@type': 'SoftwareSourceCode',
       '@id': pluginSchemaId.value,
       name: t('registryUi.detail.schemaName', { name: plugin.display_name }),
-      description: plugin.description,
+      description: benefit,
       url: pluginUrl.value,
       codeRepository: sourceUrl(plugin),
       softwareVersion: plugin.version,
@@ -178,7 +180,7 @@ usePageSeo(() => t('registryUi.detail.title', { name: plugin.display_name }), de
               </span>
               <div>
                 <h1 class="plugin-detail__title">{{ plugin.display_name }}</h1>
-                <p class="plugin-detail__tagline">{{ plugin.description }}</p>
+                <p class="plugin-detail__tagline">{{ benefit }}</p>
               </div>
             </div>
 

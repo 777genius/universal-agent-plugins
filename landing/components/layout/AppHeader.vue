@@ -193,7 +193,8 @@ onMounted(() => {
   display: flex;
   align-self: stretch;
   align-items: stretch;
-  margin-left: clamp(16px, 3vw, 40px);
+  margin-inline-start: clamp(16px, 3vw, 40px);
+  gap: clamp(12px, 1.2vw, 20px);
 }
 
 .app-header__nav :deep(.v-btn) {
@@ -233,14 +234,7 @@ onMounted(() => {
 }
 
 .app-header__docs-btn {
-  max-width: 190px;
   font-weight: 700;
-}
-
-.app-header__docs-btn :deep(.v-btn__content) {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -252,24 +246,19 @@ onMounted(() => {
   display: none;
 }
 
-/* Keep all four destinations visible on laptops, including translated labels.
-   Recover space from decorative branding and Docs text instead of hiding links. */
+/* Keep all four destinations and a readable Docs label on laptops.
+   Reclaim space from the decorative logo copy, never from navigation text. */
 @media (min-width: 960px) and (max-width: 1279px) {
-  .app-header__nav { margin-left: 8px; }
+  .app-header__nav {
+    margin-inline-start: 8px;
+    gap: 8px;
+  }
   .app-header__nav :deep(.v-btn) {
     min-width: 0;
     padding-inline: 5px;
     font-size: 0.76rem;
   }
   .app-header__desktop-actions { gap: 4px; }
-  .app-header__docs-btn {
-    min-width: 36px !important;
-    width: 36px;
-    padding-inline: 0 !important;
-  }
-  .app-header__docs-btn :deep(.v-btn__content) { display: none; }
-}
-@media (min-width: 960px) and (max-width: 1199px) {
   .app-header__inner :deep(.app-logo__copy) { display: none; }
 }
 

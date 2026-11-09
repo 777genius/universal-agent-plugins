@@ -171,6 +171,7 @@ export const usePageSeo = (
     return {
       htmlAttrs: {
         lang: locale.value || 'en',
+        dir: locale.value === 'ar' ? 'rtl' : 'ltr',
       },
       link: includeCanonical.value
         ? [

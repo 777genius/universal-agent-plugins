@@ -362,6 +362,58 @@
     "buildGuideLink": "Open the Build guide"
   },
   "shell": {
+    "clientSupport": {
+      "eyebrow": "Compatibility",
+      "title": "Supported agents and installation scopes",
+      "description": "User installs into your agent profile; Project installs into one selected workspace. UAP handles supported files and configuration. Your agent may still ask for trust, sign-in, or a restart.",
+      "tableLabel": "Agent installation support table",
+      "tableCaption": "User and project installation support, setup automation, and actions after installing.",
+      "columns": {
+        "agent": "Agent",
+        "user": "User scope",
+        "project": "Project scope",
+        "setup": "Setup",
+        "nextStep": "What you do after installing"
+      },
+      "scrollHint": "Scroll sideways to see every column.",
+      "note": "Automatic = UAP installs the supported components; Guided = follow client prompts; Prepared = files are ready but need activation; Manual = complete setup in the app. Installing never signs you in or grants trust. These are current source capabilities; the published CLI may be older. Availability depends on the plugin and client version.",
+      "details": "Check compatibility details",
+      "capabilities": {
+        "pluginsSkillsMcp": "Plugins, Skills, MCP",
+        "skillsMcp": "Skills, MCP",
+        "pluginsSkillsMcpHooks": "Plugins, Skills, MCP, hooks",
+        "extensionsSkillsMcp": "Extensions, Skills, MCP",
+        "copilotPackage": "Copilot-backed package",
+        "desktopLocalPluginsWebConnectedApps": "Desktop local plugins; Web connected apps",
+        "personalAppSetup": "Personal app setup",
+        "skillsOnly": "Skills only",
+        "skillsMcpPrepared": "Skills, MCP (prepared)",
+        "notSupported": "Not supported"
+      },
+      "setup": {
+        "automatic": "Automatic",
+        "guided": "Guided",
+        "prepared": "Prepared",
+        "manual": "Manual"
+      },
+      "nextSteps": {
+        "claude": "Trust the workspace and reload Claude Code if prompted.",
+        "codex": "Open a new session; approve project MCP access if prompted.",
+        "opencode": "Start a new session and review effective project settings.",
+        "cursor": "Reload Cursor; enable plugins or MCP servers if requested.",
+        "copilot": "Restart Copilot CLI if requested.",
+        "gemini": "Reload Gemini CLI and approve tool access if prompted.",
+        "qoder": "Restart Qoder and review MCP permissions.",
+        "pi": "Trust the project and reload Pi resources.",
+        "windsurf": "Open or restart Devin in the selected project; review access.",
+        "kimi": "Run /reload or /new and review MCP permissions.",
+        "cline": "Select the project MCP settings path and reload Cline.",
+        "kiro": "Sign in, approve access, and restart Kiro if prompted.",
+        "grok": "Reload Grok; review project Skills and any CLI setup hint.",
+        "vscode": "Open and trust the folder; review and enable MCP servers.",
+        "chatgpt": "Desktop: local install via Codex CLI; Web: connect or install in ChatGPT."
+      }
+    },
     "dependencies": {
       "eyebrow": "Dependencies, connected",
       "title": "Two plugins. One shared dependency.",
@@ -601,6 +653,10 @@
       "disclaimer": "Automated checks reduce risk; they do not prove that a plugin is safe. Review the source and permissions before installing software you do not trust."
     },
     "catalog": {
+      "sortLabel": "Sort plugins",
+      "sortRecommended": "Recommended",
+      "sortName": "Name A–Z",
+      "curationNote": "Recommended for everyday agent workflows, not a safety rating.",
       "staleCommunityResults": "Showing {count} community listings from the last signed catalog, generated {generated}, expired {expired}. Community installation commands are paused until a fresh catalog is available. Reviewed listings remain available.",
       "staleCommunityListing": "Historical signed listing; catalog expired {expired}.",
       "staleCommunityCommands": "Community installation commands are paused because the signed catalog has expired. You can still browse its listings and source.",
@@ -833,11 +889,11 @@
         "activation": "Follow any activation hint printed by the CLI, then start a new Codex session."
       },
       "chatgpt": {
-        "note": "Verified app bindings and guided Context7 setup",
-        "status": "Setup in app",
-        "intro": "Prepare compatible Agent Plugins 1.0 for ChatGPT while keeping app activation and account consent inside ChatGPT.",
-        "delivery": "The CLI validates publisher app bindings and can prepare a personal marketplace package for Context7 using its public no-auth MCP endpoint.",
-        "activation": "Create or connect the app in Developer Mode, install the prepared personal plugin, and select it in a new chat."
+        "note": "Desktop: automatic via Codex CLI; Web: setup in ChatGPT",
+        "status": "Supported",
+        "intro": "ChatGPT supports plugins on Desktop and Web. Desktop local plugins use the Codex CLI marketplace, while Web plugins require a compatible cloud app or marketplace connection.",
+        "delivery": "UAP installs eligible local Desktop packages through the Codex CLI and prepares qualified Web app bindings; it cannot silently install a cloud plugin into a ChatGPT account.",
+        "activation": "Desktop: open a new local thread and verify the plugin. Web: connect or install the app in ChatGPT and grant any required permissions."
       },
       "cursor": {
         "note": "Native Agent Plugin package",
