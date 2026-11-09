@@ -44,7 +44,7 @@ test('English support translations preserve source-matrix capabilities and next 
   const messages = JSON.parse(
     readFileSync(new URL('../i18n/locales/en.json', import.meta.url), 'utf8'),
   ).shell.clientSupport;
-  assert.deepEqual(Object.keys(messages.nextSteps).filter((id) => clientLandingById.has(id)).sort(), clientSupportRows.map((row) => row.id).sort());
+  assert.deepEqual(Object.keys(messages.nextSteps).filter((id) => new Set<string>(clientLandingById.keys()).has(id)).sort(), clientSupportRows.map((row) => row.id).sort());
   for (const row of clientSupportRows) {
     assert.equal(messages.nextSteps[row.id], row.nextStep, row.id);
     for (const original of [row.user, row.project]) {
