@@ -124,9 +124,11 @@ func (*Adapter) QualifyPlan(_ clients.PlanInput, plan *domain.DeliveryPlan) erro
 		return nil
 	}
 	for _, component := range plan.Components {
-		if component.Kind != domain.ComponentSkill || component.Support == domain.SupportUnsupported {
+		allowed := component.Kind == domain.ComponentSkill ||
+			component.Kind == domain.ComponentMCPServer && plan.Scope == domain.ScopeUser
+		if !allowed || component.Support == domain.SupportUnsupported {
 			plan.Status = domain.PlanUnsupported
-			plan.Warnings = shared.AppendUnique(plan.Warnings, "Hermes currently supports native Skills only; MCP and other package components cannot be silently discarded or redirected to User scope")
+			plan.Warnings = shared.AppendUnique(plan.Warnings, "Hermes supports User Skills/MCP and Project Skills; project MCP and unqualified package components cannot be redirected or discarded")
 			return nil
 		}
 	}
