@@ -62,6 +62,7 @@ func projectPlugin(root string, envelope domain.PackageEnvelope, plan domain.Del
 	manifest := map[string]any{
 		"$schema": "https://antigravity.google/schemas/v1/plugin.json",
 		"name": envelope.Manifest.Name,
+		"displayName": envelope.Manifest.Name,
 	}
 	if envelope.Manifest.Version != "" {
 		manifest["version"] = envelope.Manifest.Version
