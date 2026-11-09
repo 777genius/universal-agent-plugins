@@ -89,10 +89,27 @@ func (*Adapter) ValidateBindingProfile(root string, binding domain.ClientBinding
 		return fmt.Errorf("Hermes binding has no exact native profile proof")
 	}
 	for _, item := range binding.NativeObjects {
-		switch item.Kind {
-		case "managed_package_directory", userSkillKind, projectSkillKind:
+		if item.Kind == "managed_package_directory" { continue }
+		switch domain.InstallScope(binding.Scope) {
+		case domain.ScopeUser:
+			if item.Kind != userSkillKind && item.Kind != userMCPKind {
+				return fmt.Errorf("Hermes user binding contains foreign scope ownership")
+			}
+		case domain.ScopeProject:
+			if item.Kind != projectSkillKind {
+				return fmt.Errorf("Hermes project binding contains a User native entry")
+			}
 		default:
-			return fmt.Errorf("Hermes binding contains a foreign native ownership type")
+			return fmt.Errorf("Hermes binding has unsupported scope")
+		}
+		expected := filepath.Join(root, "skills", item.LogicalName)
+		if item.Kind == userMCPKind {
+			expected = filepath.Join(root, "config.yaml")
+		} else if err := pathpolicy.ValidateLeafID(item.LogicalName); err != nil {
+			return err
+		}
+		if item.Path != expected {
+			return fmt.Errorf("Hermes binding owns a path outside the selected native scope")
 		}
 	}
 	return nil
