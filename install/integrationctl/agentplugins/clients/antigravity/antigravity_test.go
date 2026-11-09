@@ -161,3 +161,26 @@ func TestAntigravityAllowsOnlySelectedStdioHelperScripts(t *testing.T) {
   t.Fatalf("selected verified stdio helper scripts must remain usable: %v", err)
  }
 }
+
+
+func TestAntigravityRejectsInvalidNativeIdentityBeforeStaging(t *testing.T) {
+	t.Parallel()
+	for _, name := range []string{"bad_name", "Has Uppercase", "contains/slash", ""} {
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			plan := domain.DeliveryPlan{
+				ClientID: domain.ClientAntigravity, DeclaredName: name,
+				Scope: domain.ScopeProject,
+				TargetContext: domain.TargetContext{Scope: domain.ScopeProject, ProjectRoot: root},
+				Status: domain.PlanReady,
+			}
+			input := clients.PlanInput{Envelope: domain.PackageEnvelope{Manifest: domain.PluginManifest{Name: name}}}
+			if err := New().CheckPlanPrecondition(input, &plan); err != nil || plan.Status != domain.PlanUnsupported {
+				t.Fatalf("invalid identity was not refused before staging: %+v %v", plan, err)
+			}
+			if _, err := os.Lstat(filepath.Join(root, ".agents")); !os.IsNotExist(err) {
+				t.Fatalf("identity preflight mutated workspace: %v", err)
+			}
+		})
+	}
+}
