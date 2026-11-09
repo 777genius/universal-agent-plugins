@@ -185,6 +185,12 @@ func applyDependencySync(cmd *cobra.Command, app App, opts *options, request dep
 		if err := request.checkInputs(); err != nil {
 			return err
 		}
+		// User confirmation may be long-lived. Re-read explicit policy at the
+		// final pre-write boundary, after input revalidation. A stale allowance
+		// must not authorize a different policy observed during actual apply.
+		if err := checkLocalDependencyPolicy(ctx, app, opts.dependencyPolicyFile, request.lock); err != nil {
+			return err
+		}
 		var err error
 		actions, err = request.recheck(cmd, app, opts)
 		if err == nil && !reflect.DeepEqual(actions, prepared) {
