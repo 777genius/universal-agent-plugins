@@ -682,6 +682,33 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 saved.replace(foreign)
             check(env, project, before, "peer identity restored")
 
+    def test_marketing_kit_snapshot_rejects_same_mode_directory_replacement(self):
+        # The complete protected tree can look identical after swapping an
+        # empty directory: bytes, names and permissions alone do not prove
+        # foreign-state isolation. Check the profile root and a nested root.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        for nested in (False, True):
+            with self.subTest(nested=nested), TemporaryDirectory() as temporary:
+                base = Path(temporary)
+                protected = base / "protected"
+                protected.mkdir()
+                victim = protected / "empty" if nested else protected
+                if nested:
+                    victim.mkdir()
+                before = runner["scoped_snapshot"]([protected])
+                saved = base / "saved-original"
+                victim.rename(saved)
+                try:
+                    victim.mkdir(mode=saved.stat().st_mode & 0o7777)
+                    self.assertNotEqual(runner["scoped_snapshot"]([protected]), before)
+                finally:
+                    victim.rmdir()
+                    saved.rename(victim)
+                self.assertEqual(runner["scoped_snapshot"]([protected]), before)
+
     def test_marketing_kit_native_uninstall_checks_peer_on_success_and_failure(self):
         # The audited native Codex uninstall runs outside the UAP CLI wrapper.
         # Both success and error paths must detect mutations in a peer HOME.

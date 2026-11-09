@@ -257,7 +257,7 @@ def check_noop_update(observed, expected, current_lock, expected_lock, stage):
         raise AssertionError(f"{stage}: no-op update changed signed lock")
 
 def scoped_snapshot(roots):
-    """Record file bytes, links and empty directories without following links."""
+    """Record protected file and directory identities without following links."""
     roots = tuple(Path(root) for root in roots)
     state = audit["snapshot"](roots)
     # The shared audit records failed file reads and walk errors as
@@ -265,15 +265,14 @@ def scoped_snapshot(roots):
     if any(digest == "unreadable" for digest in state.values()):
         raise AssertionError("protected scope snapshot unreadable: native entry")
 
-    def record_metadata(index, path, relative, *, regular_file=False):
-        """Preserve permissions and regular-file identity, not only bytes."""
+    def record_metadata(index, path, relative):
+        """Preserve directory and file inode identity, not only permissions."""
         try:
             entry = path.lstat()
         except OSError as error:
             raise AssertionError("protected scope snapshot unreadable: metadata") from error
         state[f"metadata:{index}:{relative}"] = (
-            (entry.st_mode, entry.st_dev, entry.st_ino)
-            if regular_file else entry.st_mode
+            entry.st_mode, entry.st_dev, entry.st_ino
         )
 
     def refuse_walk_error(error):
@@ -304,8 +303,7 @@ def scoped_snapshot(roots):
                 if path.is_symlink():
                     state[f"link:{index}:{path.relative_to(root).as_posix()}"] = os.readlink(path)
                 else:
-                    record_metadata(index, path, path.relative_to(root).as_posix(),
-                                    regular_file=True)
+                    record_metadata(index, path, path.relative_to(root).as_posix())
     return state
 
 
