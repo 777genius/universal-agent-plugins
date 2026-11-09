@@ -67,7 +67,7 @@ func TestLocalDependencyPolicyExplicitOptInAndStrictParsing(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write("schema_version: 1\nsources:\n  allow_hosts: [github.com]\nintegrity:\n  require_pinned_git: true\n")
+	write("schema_version: 1\nsources:\n  allow_hosts: [github.com]\nintegrity:\n  require_pinned_git: true\nmcp:\n  allowed_transports: [stdio, streamable-http]\n")
 	policy, err := readLocalDependencyPolicy(path)
 	if err != nil || len(policy.Sources.AllowHosts) != 1 || !policy.Integrity.RequirePinnedGit {
 		t.Fatalf("valid local policy not parsed: %+v, %v", policy, err)
@@ -78,6 +78,7 @@ func TestLocalDependencyPolicyExplicitOptInAndStrictParsing(t *testing.T) {
 		"invalid-host": "schema_version: 1\nsources:\n  allow_hosts: ["GitHub.com"]\n",
 		"wrong-version": "schema_version: 99\n",
 		"duplicate": "schema_version: 1\nschema_version: 1\n",
+		"unknown-mcp-transport": "schema_version: 1\nmcp:\n  allowed_transports: [telnet]\n",
 	} {
 		t.Run(name, func(t *testing.T) {
 			write(body)
