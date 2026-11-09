@@ -621,6 +621,49 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             empty.rmdir()
             runner["check_profile_unchanged"](env, project, after, "restore B")
 
+    def test_marketing_kit_native_uninstall_checks_peer_on_success_and_failure(self):
+        # The audited native Codex uninstall runs outside the UAP CLI wrapper.
+        # Both success and error paths must detect mutations in a peer HOME.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            env, project, *_ = runner["run_case"]("unused", "codex", root, "peer")
+            before = runner["profile_snapshot"](env, project)
+            marker = Path(env["HOME"]) / ".codex" / "unexpected-native-write.json"
+
+            def verify_peer():
+                runner["check_profile_unchanged"](env, project, before,
+                                                   "native Codex uninstall")
+
+            for must_fail in (False, True):
+                def native_command():
+                    marker.write_text("unexpected cross-profile write", encoding="utf-8")
+                    if must_fail:
+                        raise RuntimeError("native CLI failed")
+                    return ("--external-uninstalled",)
+
+                try:
+                    with self.assertRaisesRegex(AssertionError,
+                                                "original isolated profile changed"):
+                        runner["guarded_native_attestation"](native_command,
+                                                              (verify_peer,))
+                finally:
+                    marker.unlink(missing_ok=True)
+            self.assertEqual(
+                runner["guarded_native_attestation"](
+                    lambda: ("--external-uninstalled",), (verify_peer,)),
+                ("--external-uninstalled",))
+
+            def failed_without_mutation():
+                raise RuntimeError("native CLI failed")
+
+            with self.assertRaisesRegex(RuntimeError, "native CLI failed"):
+                runner["guarded_native_attestation"](failed_without_mutation,
+                                                      (verify_peer,))
+
     def test_marketing_kit_removed_user_c_profile_is_not_mutated_by_user_a(self):
         # The final User A remove happens *after* User C has been removed.
         # It must not recreate a file in C's HOME or durable UAP data.

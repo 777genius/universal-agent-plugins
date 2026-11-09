@@ -326,6 +326,15 @@ def execute(cli, env, project, target, label, *args):
     return {"stage": label, "exit_code": result["exit_code"], "result": "passed"}
 
 
+def guarded_native_attestation(attest, checks):
+    """Validate peer scopes even when a native CLI fails before UAP remove."""
+    try:
+        return attest()
+    finally:
+        for check in checks:
+            check()
+
+
 def codex_user_native_remove_attestation(env, project):
     """Only attest after real native HubSpot removal from this disposable profile."""
     case_root = project.parent
@@ -549,17 +558,26 @@ def main():
                 raise AssertionError("User C restore mutated User A installations")
             if (user_portable / "uap.lock").read_bytes() != user_lock_after_update:
                 raise AssertionError("User C restore rewrote User A signed lock")
+            # Pin A *before* running C's external native uninstall. Taking the
+            # snapshot after that command would conceal a cross-profile write.
+            user_a_native_before_c = profile_snapshot(env, project_a)
             remove_c_attestation = ()
             if options.target == "codex":
-                try:
-                    remove_c_attestation = codex_user_native_remove_attestation(env_c, project_c)
-                finally:
-                    check_foreign(foreign_files, root)
+                remove_c_attestation = guarded_native_attestation(
+                    lambda: codex_user_native_remove_attestation(env_c, project_c),
+                    (
+                        lambda: check_foreign(foreign_files, root),
+                        lambda: check_profile_unchanged(
+                            env, project_a, user_a_native_before_c, "User C native uninstall"),
+                        lambda: check_profile_unchanged(
+                            env_b, project_b, protected_b, "User C native uninstall"),
+                        lambda: check_user_project_unchanged(
+                            project_c, protected_c_project, "User C native uninstall"),
+                    ))
                 report["steps"].append({
                     "stage": "User C native HubSpot uninstall",
                     "exit_code": 0, "result": "passed",
                 })
-            user_a_native_before_c = profile_snapshot(env, project_a)
             run(env_c, project_c, "User remove C", "remove", "marketing-kit",
                 *user_scoped, *remove_c_attestation)
             check_profile_unchanged(env, project_a, user_a_native_before_c,
@@ -580,10 +598,19 @@ def main():
             # Reuse the audited, pinned Codex CLI path and exact native absence oracle.
             user_remove_attestation = ()
             if options.target == "codex":
-                try:
-                    user_remove_attestation = codex_user_native_remove_attestation(env, project_a)
-                finally:
-                    check_foreign(foreign_files, root)
+                user_remove_attestation = guarded_native_attestation(
+                    lambda: codex_user_native_remove_attestation(env, project_a),
+                    (
+                        lambda: check_foreign(foreign_files, root),
+                        lambda: check_user_project_unchanged(
+                            project_a, project_before_user, "User A native uninstall"),
+                        lambda: check_profile_unchanged(
+                            env_b, project_b, protected_b, "User A native uninstall"),
+                        lambda: check_user_project_unchanged(
+                            project_c, protected_c_project, "User A native uninstall"),
+                        lambda: check_profile_unchanged(
+                            env_c, project_c, protected_c_profile, "User A native uninstall"),
+                    ))
                 report["steps"].append({
                     "stage": "User native HubSpot uninstall",
                     "exit_code": 0, "result": "passed",
