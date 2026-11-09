@@ -212,13 +212,13 @@ export const clientLandingPages: ClientLandingPage[] = [
     slug: 'pi',
     name: 'Pi',
     icon: 'pi.svg',
-    note: 'Managed native Pi extensions only',
+    note: 'Native Pi extensions, Skills and MCP',
     status: 'Supported',
     intro:
-      'Install Agent Plugins 1.0 packages that declare a native Pi extension. Portable skills and MCP projection are outside this adapter’s current scope.',
+      'Install compatible Pi extensions, Skills, and stdio/Streamable HTTP MCP servers in user or project scope. Availability depends on each plugin’s signed release.',
     delivery:
-      'The CLI installs the declared Pi extension in your Pi agent directory and tracks the managed package for update, repair, and removal.',
-    activation: 'Reload resources or restart Pi after installation to load the managed extension.',
+      'The CLI installs eligible components in the selected Pi profile or project and tracks updates, repair, and removal.',
+    activation: 'Reload resources or restart Pi; trust the project and review MCP permissions if prompted.',
     vendorDocsUrl:
       'https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/extensions.md',
   },

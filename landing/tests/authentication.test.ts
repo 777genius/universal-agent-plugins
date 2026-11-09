@@ -16,6 +16,30 @@ const t = (key: string, params?: Record<string, string | number>) =>
 const groupStates = (indicator: ReturnType<typeof authenticationIndicator>) =>
   indicator.groups.map((group) => [group.authentication, group.clients]);
 describe('card authentication indicator', () => {
+  it('does not duplicate clients when eligible releases disagree in auto mode', () => {
+    const variants = {
+      ...release,
+      targets: [
+        { client: 'codex', authentication: 'required', delivery: 'managed', scopes: ['user'] },
+        { client: 'codex', authentication: 'not_required', delivery: 'managed', scopes: ['user'] },
+        { client: 'pi', authentication: 'unknown', delivery: 'managed', scopes: ['user'] },
+        { client: 'cursor', authentication: 'required', delivery: 'managed', scopes: ['user'] },
+      ] as typeof release.targets,
+    };
+    const automatic = authenticationIndicator(variants, ['codex'], true, t);
+    assert.deepEqual(groupStates(automatic), [
+      ['required', ['cursor']],
+      ['varies', ['codex']],
+      ['unknown', ['pi']],
+    ]);
+    assert.equal(automatic.varies, true);
+    // Explicit selection is resolved against one signed release, never pooled.
+    const resolved = { ...variants, targets: [variants.targets[1]!] };
+    assert.deepEqual(groupStates(authenticationIndicator(resolved, ['codex'], false, t)), [
+      ['not_required', ['codex']],
+    ]);
+  });
+
   it('uses resolved release target policy instead of contradictory legacy hints', () => {
     const plugin = { authentication: 'none', distribution: release };
     assert.equal(
@@ -63,7 +87,7 @@ describe('card authentication indicator', () => {
       ['unknown', ['kiro']],
       ['not_required', ['cursor']],
     ]);
-    assert.equal(mixed.summary, 'registryUi.authenticationIndicator.unknownDetail');
+    assert.equal(mixed.summary, 'registryUi.authenticationIndicator.variesDetail');
     assert.equal(mixed.note, 'registryUi.authenticationIndicator.automatic');
   });
   it('keeps unresolved selections unknown', () => {
@@ -88,10 +112,8 @@ describe('card authentication indicator', () => {
     assert.equal(result.state, 'unknown');
     assert.equal(result.varies, true);
     assert.match(result.label, /varies/);
-    assert.deepEqual(groupStates(result), [
-      ['required', ['cursor']],
-      ['not_required', ['cursor']],
-    ]);
+    assert.deepEqual(groupStates(result), [['varies', ['cursor']]]);
+    assert.equal(result.summary, 'registryUi.authenticationIndicator.variesDetail');
     assert.equal(result.note, 'registryUi.authenticationIndicator.automatic');
   });
   it('explains mixed and unknown requirements without an open-lock claim', () => {

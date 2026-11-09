@@ -150,6 +150,11 @@ onBeforeUnmount(() => clearTimeout(leaveTimer));
                   <rect x="4" y="10" width="16" height="11" rx="2" />
                   <path d="M8 10V6a4 4 0 0 1 7.5-2M12 15v2" />
                 </template>
+                <template v-else-if="group.authentication === 'varies'">
+                  <rect x="5" y="10.5" width="14" height="9.5" rx="2" />
+                  <path d="M8 10.5V7a4 4 0 0 1 8 0v3.5" />
+                  <path d="M8.5 15.8c.9-1.4 1.9-1.4 2.9 0 .9 1.3 1.9 1.3 2.9 0" />
+                </template>
                 <template v-else>
                   <circle cx="12" cy="12" r="9" />
                   <path d="M9.5 8.5a2.5 2.5 0 1 1 4 2c-1 .7-1.5 1-1.5 2.5M12 17h.01" />
