@@ -78,8 +78,8 @@ func TestAntigravityNativeManifestAndMCPProjection(t *testing.T) {
 	if _, exists := config.Servers["api"]["url"]; exists {
 		t.Fatal("legacy URL field must not be included")
 	}
-	if err := New().Project(context.Background(), clients.ProjectionInput{StagingPath: root, Envelope: envelope, Plan: plan}); err != nil {
-		_ = err
+	if _, err := New().Project(context.Background(), clients.ProjectionInput{StagingPath: root, Envelope: envelope, Plan: plan}); err != nil {
+		t.Fatalf("native projector: %v", err)
 	}
 }
 
