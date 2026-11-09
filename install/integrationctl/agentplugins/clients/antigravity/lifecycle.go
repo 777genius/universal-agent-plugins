@@ -22,11 +22,17 @@ var (
 // roots. File delivery does not authorize a claim that the host loaded,
 // enabled or authenticated the plugin.
 func (*Adapter) PreflightActivation(_ clients.Env, request domain.ActivationRequest) error {
-	if err := shared.ActivationIdentityMismatch(request); err != nil {
-		return err
+	// A group previews activation before the stager creates a delivery. An
+	// absent delivery is not a mismatched one, but a partially identified or
+	// already staged delivery must match exactly.
+	if request.Plan.ClientID != domain.ClientAntigravity || request.Client.ClientID != domain.ClientAntigravity {
+		return fmt.Errorf("Antigravity selected client identity changed")
 	}
-	if request.Plan.ClientID != domain.ClientAntigravity || request.Delivery.ActivePath != request.Plan.ActivePath {
-		return fmt.Errorf("Antigravity activation delivery identity changed")
+	if request.Delivery.ClientID != "" || request.Delivery.ActivePath != "" {
+		if err := shared.ActivationIdentityMismatch(request); err != nil { return err }
+		if request.Delivery.ActivePath != request.Plan.ActivePath {
+			return fmt.Errorf("Antigravity activation delivery identity changed")
+		}
 	}
 	if request.ActivationComplete {
 		return fmt.Errorf("Antigravity activation cannot be attested without native client evidence")
@@ -85,6 +91,12 @@ func verifyPreparedNativePlugin(plan domain.DeliveryPlan, name string) error {
 func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
 	if err := ctx.Err(); err != nil {
 		return domain.ActivationOutcome{}, err
+	}
+	if err := shared.ActivationIdentityMismatch(request); err != nil {
+		return domain.ActivationOutcome{}, err
+	}
+	if request.Delivery.ActivePath != request.Plan.ActivePath {
+		return domain.ActivationOutcome{}, fmt.Errorf("Antigravity staged delivery path changed")
 	}
 	if err := New().PreflightActivation(env, request); err != nil {
 		return domain.ActivationOutcome{}, err
