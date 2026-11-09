@@ -108,6 +108,23 @@
         "moreCandidatesHelp": "Aucun résultat dans ce groupe. Affichez la suite pour vérifier les candidats restants.",
         "noMatches": "Aucune Skill ne correspond aux filtres",
         "noMatchesHelp": "Modifiez la recherche ou réinitialisez les filtres pour voir toutes les Skills."
+      },
+      "discoveryNotice": "La page statique affiche d'abord les plugins examinés. Le navigateur peut ajouter des entrées communautaires après vérification du flux signé ; si celui-ci est indisponible, seules les entrées examinées restent visibles.",
+      "overview": {
+        "seoTitle": "Agent Skills autonomes — Universal Agent Plugins",
+        "metaDescription": "Découvrez, vérifiez et installez des instructions SKILL.md autonomes pour les agents compatibles, sans créer de paquet plugin.json.",
+        "title": "Agent Skills, sans paquet plugin.",
+        "lead": "Trouvez des instructions SKILL.md réutilisables, choisissez les agents compatibles et installez-les pour votre compte ou un projet. Les Skills autonomes ne nécessitent pas de paquet Agent Plugins 1.0.",
+        "standaloneTitle": "Fichiers Skills autonomes",
+        "standaloneDescription": "Installez directement depuis un dépôt GitHub examiné ou un éditeur compatible. Aucun manifeste plugin.json n'est requis.",
+        "scopeTitle": "Agents et portée explicites",
+        "scopeDescription": "Choisissez les agents dans le terminal ou indiquez les cibles. Avec --scope, installez dans le profil utilisateur ou un projet compatible.",
+        "reviewTitle": "Examinez d'abord la source",
+        "reviewDescription": "Les fiches du catalogue et les analyses statiques SkillSpector ne garantissent ni sécurité, ni activation, ni utilisation réussie par l'agent.",
+        "browse": "Explorer le catalogue Skills",
+        "installGuide": "Lire le guide d'installation",
+        "learnMore": "Comment fonctionnent les Skills autonomes",
+        "exampleCaption": "Commande d'exemple — remplacez owner/repository par la véritable source"
       }
     },
     "directoryPage": {

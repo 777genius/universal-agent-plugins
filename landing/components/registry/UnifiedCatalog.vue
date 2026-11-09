@@ -29,6 +29,7 @@ const catalogIntro = computed(() =>
       : (props.intro ?? t('registryUi.catalog.searchByCapabilityComponentOrSource')),
 );
 const { repositoryUrl } = useSite();
+const localePath = useLocalePath();
 const route = useRoute();
 const skillsActive = computed(() => isSkillsCatalog(route.query));
 const headingLabel = computed(
@@ -84,6 +85,13 @@ const modeLink = (skills: boolean) => ({
         </a>
       </div>
       <p>{{ catalogIntro }}</p>
+      <!-- Crawler/AI note: prerendered HTML contains the reviewed Directory seed.
+           The browser augments it with a verified signed community feed after hydration;
+           an HTML-only crawler MUST NOT treat the seed count as the full Directory. -->
+      <p v-if="!skillsActive" class="unified-catalog__discovery-note">
+        {{ t('registryUi.skills.discoveryNotice') }}
+        <NuxtLink :to="localePath('/agent-skills/')">{{ t('registryUi.skills.overview.learnMore') }}</NuxtLink>
+      </p>
     </div>
     <SkillsCatalog v-if="skillsActive" hide-heading />
     <PluginCatalog v-else :plugins="plugins" hide-heading />
