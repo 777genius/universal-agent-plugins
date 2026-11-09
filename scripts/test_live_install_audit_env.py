@@ -484,6 +484,14 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             extra.unlink()
             runner["check_profile_unchanged"](env, project, after, "restore B")
 
+            # Empty directories are foreign state too; no file hash would catch them.
+            empty = project / "unexpected-empty-peer-dir"
+            empty.mkdir()
+            with self.assertRaisesRegex(AssertionError, "original isolated profile changed"):
+                runner["check_profile_unchanged"](env, project, after, "restore B")
+            empty.rmdir()
+            runner["check_profile_unchanged"](env, project, after, "restore B")
+
     def test_marketing_kit_user_scope_cannot_write_untracked_project_state(self):
         # A User command may succeed while creating a new file in the current
         # Project, leaving its signed lock, manifest and sentinels unchanged.
@@ -492,7 +500,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         runner = run_path(str(Path(__file__).resolve().parent /
                               "marketing-kit-project-release-e2e.py"))
         check = runner["check_user_project_unchanged"]
-        snapshot = runner["audit"]["snapshot"]
+        snapshot = runner["scoped_snapshot"]
         with TemporaryDirectory() as temporary:
             project = Path(temporary) / "project"
             project.mkdir()
@@ -512,6 +520,13 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "User lifecycle modified Project A"):
                 check(project, baseline, "User remove")
             foreign.write_text("owned by another tool", encoding="utf-8")
+            check(project, baseline, "User remove")
+
+            empty = project / "unexpected-empty-user-dir"
+            empty.mkdir()
+            with self.assertRaisesRegex(AssertionError, "User lifecycle modified Project A"):
+                check(project, baseline, "User remove")
+            empty.rmdir()
             check(project, baseline, "User remove")
 
     def test_marketing_kit_cold_restore_guard_requires_full_disjoint_lock(self):

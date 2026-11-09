@@ -224,9 +224,24 @@ def check_noop_update(observed, expected, current_lock, expected_lock, stage):
     if current_lock != expected_lock:
         raise AssertionError(f"{stage}: no-op update changed signed lock")
 
+def scoped_snapshot(roots):
+    """Record file bytes, links and empty directories without following links."""
+    roots = tuple(Path(root) for root in roots)
+    state = audit["snapshot"](roots)
+    for index, root in enumerate(roots):
+        if root.is_symlink() or not root.is_dir():
+            continue
+        for directory, dirs, _ in os.walk(root, followlinks=False):
+            for name in dirs:
+                path = Path(directory) / name
+                if not path.is_symlink():
+                    state[f"directory:{index}:{path.relative_to(root).as_posix()}"] = "present"
+    return state
+
+
 def profile_snapshot(env, project):
-    """Hash the originating HOME, UAP receipts and Project root against peer writes."""
-    return audit["snapshot"]([Path(env["HOME"]), Path(env["AGENTPLUGINS_HOME"]), project])
+    """Hash all files and directory entries in HOME, UAP data and Project."""
+    return scoped_snapshot([Path(env["HOME"]), Path(env["AGENTPLUGINS_HOME"]), project])
 
 
 def check_profile_unchanged(env, project, expected, stage):
@@ -237,7 +252,7 @@ def check_profile_unchanged(env, project, expected, stage):
 
 def check_user_project_unchanged(project, expected, stage):
     """User-scoped commands must not change the working Project's files."""
-    if audit["snapshot"]([project]) != expected:
+    if scoped_snapshot([project]) != expected:
         raise AssertionError(f"{stage}: User lifecycle modified Project A")
 
 
@@ -310,6 +325,7 @@ def main():
                                *native_foreign_a]
             foreign_files = list(foreign_a_files)
             project_before_user = None
+            protected_b = None
             verify_pinned_launcher(options.cli, env, project_a)
             def run(e, p, label, *args):
                 try:
@@ -319,6 +335,8 @@ def main():
                     check_foreign(foreign_files, root)
                     if project_before_user is not None:
                         check_user_project_unchanged(project_a, project_before_user, label)
+                    if protected_b is not None:
+                        check_profile_unchanged(env_b, project_b, protected_b, label)
             scoped = ("--scope", "project", "--project-root", str(project_a))
             run(env, project_a, "add", "add", "marketing-kit", "--target", options.target, *scoped)
             first = identities(inventory(options.cli, env, project_a, options.target), options.target)
@@ -387,6 +405,8 @@ def main():
                 pinned_after_update, "remove B")
             if (project_a / "uap.toml").read_bytes() != manifest_after_update:
                 raise AssertionError("Project B remove rewrote Project A portable manifest")
+            # A's remaining lifecycle and User C must not mutate the removed B profile.
+            protected_b = profile_snapshot(env_b, project_b)
             run(env, project_a, "remove A", "remove", "marketing-kit", *scoped)
             if identities(inventory(options.cli, env, project_a, options.target), options.target):
                 raise AssertionError("Project A retains root or mandatory children after remove")
@@ -396,7 +416,7 @@ def main():
             # Check the same signed closure through a real, separate User lifecycle.
             # Every User command must preserve all of Project A, not just the
             # portable agreement or known foreign sentinels.
-            project_before_user = audit["snapshot"]([project_a])
+            project_before_user = scoped_snapshot([project_a])
             project_files = {
                 name: (project_a / name).read_bytes() if (project_a / name).exists() else None
                 for name in ("uap.toml", "uap.lock")
@@ -523,6 +543,7 @@ def main():
             # The last inventory/read assertions are outside run()'s finally.
             check_foreign(foreign_files, root)
             check_user_project_unchanged(project_a, project_before_user, "User final inventory")
+            check_profile_unchanged(env_b, project_b, protected_b, "User final inventory")
             report["status"] = "passed"
     except Exception as error:
         report["failure"] = str(error)[:2500]
