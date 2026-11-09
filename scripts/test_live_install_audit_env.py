@@ -343,6 +343,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             return {"installation_id": installation_id,
                     "directory": {"recorded_distribution": distribution},
                     "clients": [{"client_id": "codex", "scope": "project",
+                                 "verification": "installation_verified",
                                  "package_revision": "pinned"}]}
 
         with patch.dict(runner["audit"],
@@ -363,7 +364,8 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         runner = run_path(str(Path(__file__).resolve().parent /
                               "marketing-kit-project-release-e2e.py"))
         def binding(scope, revision):
-            return {"client_id": "codex", "scope": scope, "package_revision": revision}
+            return {"client_id": "codex", "scope": scope,
+                    "verification": "installation_verified", "package_revision": revision}
         row = {"installation_id": "owned", "directory": {"recorded_distribution": "root"},
                "clients": [binding("project", "unsigned"), binding("user", "signed")]}
 
@@ -388,8 +390,10 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         row = {"installation_id": "owned",
                "directory": {"recorded_distribution": "root"},
                "clients": [{"client_id": "codex", "scope": "user",
+                            "verification": "installation_verified",
                             "package_revision": "unsigned"},
                            {"client_id": "codex", "scope": "project",
+                            "verification": "installation_verified",
                             "package_revision": "signed"}]}
         with patch.dict(runner["audit"],
                         {"recorded_signed_release_matches":
@@ -399,6 +403,39 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             row["clients"][0]["package_revision"] = "signed"
             self.assertEqual(runner["identities"]([row], "codex", "user"),
                              {"root": "owned"})
+
+    def test_marketing_kit_requires_installed_verification_in_selected_scope(self):
+        # Signed provenance and a persisted list entry do not prove delivery.
+        # Prepared/package-only and failed bindings cannot qualify E2E.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        binding = {"client_id": "codex", "scope": "user",
+                   "package_revision": "signed",
+                   "verification": "installation_verified"}
+        row = {"installation_id": "owned",
+               "directory": {"recorded_distribution": "root"},
+               "clients": [binding]}
+        with patch.dict(runner["audit"],
+                        {"recorded_signed_release_matches":
+                         lambda _, revision: revision == "signed"}):
+            check = runner["identities"]
+            self.assertEqual(check([row], "codex", "user"), {"root": "owned"})
+            for invalid in (None, "", "package_validated", "not_checked",
+                            "verification_failed", "manual_activation_required"):
+                with self.subTest(verification=invalid):
+                    row["clients"] = [{**binding, "verification": invalid}]
+                    with self.assertRaisesRegex(AssertionError, "lacks installed verification"):
+                        check([row], "codex", "user")
+            row["clients"] = [binding, {**binding, "verification": "package_validated"}]
+            with self.assertRaisesRegex(AssertionError, "lacks installed verification"):
+                check([row], "codex", "user")
+            # An unverified foreign scope must not overwrite the selected
+            # User binding's verified status.
+            row["clients"] = [binding, {**binding, "scope": "project",
+                                       "verification": "package_validated"}]
+            self.assertEqual(check([row], "codex", "user"), {"root": "owned"})
 
     def test_marketing_kit_codex_attestation_requires_native_uninstall_proof(self):
         # A signed Project/User binding is not proof of native uninstallation.

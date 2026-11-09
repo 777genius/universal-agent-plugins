@@ -148,6 +148,10 @@ def identities(items, target, scope="project"):
         if not all(audit["recorded_signed_release_matches"](
                 directory, b.get("package_revision")) for b in scope_bindings):
             raise AssertionError(f"{dist}: {scope} binding lacks exact signed release provenance")
+        # A signed identity alone is not an installed component: a prepared,
+        # failed or package-only validation must not qualify this lifecycle.
+        if any(b.get("verification") != "installation_verified" for b in scope_bindings):
+            raise AssertionError(f"{dist}: {scope} binding lacks installed verification")
         if dist in result:
             raise AssertionError(f"duplicate distribution: {dist}")
         installation_id = row.get("installation_id")
