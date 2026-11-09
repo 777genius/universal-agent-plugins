@@ -44,6 +44,12 @@ function parsePnpmDocument(source) {
       const depths = section === 'importers' ? [2, 4, 6, 8] : section === 'snapshots' ? [2, 4, 6] : null;
       if (depths && !depths.includes(indent)) throw new Error(`Unsupported pnpm indentation in ${section}`);
     }
+    // Reject a sequence where pnpm requires a dependency mapping; otherwise
+    // the scanner can silently miss the only vulnerable edge.
+    if (/^ {6}-(?:\s|$)/.test(line) && (
+      (section === 'importers' && ROOT_CATEGORIES.includes(category)) ||
+      (section === 'snapshots' && ['dependencies', 'optionalDependencies'].includes(edgeCategory))
+    )) throw new Error('Unsupported pnpm dependency sequence');
     if (section === 'importers') {
       const e2 = entry(line, 2), e4 = entry(line, 4), e6 = entry(line, 6), e8 = entry(line, 8);
       if (e2 || e4 || e6) requireResolvedRoot();

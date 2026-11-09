@@ -175,3 +175,13 @@ test('recognizes YAML-equivalent category spaces before an importer colon', () =
   assert.notEqual(alternate, fixture);
   assert.deepEqual(auditLock(alternate), auditLock(fixture));
 });
+
+test('rejects YAML sequence dependency mappings instead of hiding vulnerable edges', () => {
+  const snapshotSequence = fixture.replace('    dependencies:\n      glob: 13.0.6\n',
+    '    dependencies:\n      - glob@13.0.6\n');
+  assert.throws(() => auditLock(snapshotSequence), /Unsupported pnpm dependency sequence/);
+
+  const importerSequence = fixture.replace("    dependencies:\n      '@a/entry':\n        specifier: ^1.0.0\n        version: 1.0.0(peer@2.0.0)\n",
+    "    dependencies:\n      - '@a/entry@1.0.0(peer@2.0.0)'\n");
+  assert.throws(() => auditLock(importerSequence), /Unsupported pnpm dependency sequence/);
+});
