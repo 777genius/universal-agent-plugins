@@ -5,7 +5,7 @@ import { clientLandingPages } from '../../data/clients';
 import { hydrated, setSignedMirrorTestTime, wording } from './i18n-state.helpers';
 
 const exactCommand =
-  'npx -y universal-agent-plugins add context7 --target codex,cursor,vscode --no-save';
+  'npx -y universal-agent-plugins add context7 --target codex,cursor,copilot --no-save';
 
 async function capture(page: Page, name: string) {
   const directory = process.env.UAP_LANDING_SCREENSHOT_DIR;
@@ -141,7 +141,7 @@ test('selected targets produce one complete copyable command with keyboard activ
     const trigger = page.locator('.hero-quick-start__step .app-multiselect__trigger');
     await trigger.focus();
     await page.keyboard.press('Enter');
-    for (const name of [/^Codex /, /^Cursor /, /^VS Code /]) {
+    for (const name of [/^Codex /, /^Cursor /, /^GitHub Copilot CLI /]) {
       await page.getByRole('checkbox', { name }).click();
     }
     await page.keyboard.press('Escape');
