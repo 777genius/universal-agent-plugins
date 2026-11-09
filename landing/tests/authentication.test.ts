@@ -87,7 +87,7 @@ describe('card authentication indicator', () => {
       ['unknown', ['kiro']],
       ['not_required', ['cursor']],
     ]);
-    assert.equal(mixed.summary, 'registryUi.authenticationIndicator.variesDetail');
+    assert.equal(mixed.summary, 'registryUi.authenticationIndicator.unknownDetail');
     assert.equal(mixed.note, 'registryUi.authenticationIndicator.automatic');
   });
   it('keeps unresolved selections unknown', () => {

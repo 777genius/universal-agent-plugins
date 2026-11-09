@@ -63,7 +63,8 @@ export function authenticationIndicator(
       summary: text(autoDetect ? 'automatic' : 'unresolved'),
       note: '',
     };
-  const varies = entries.some((entry) => entry.authentication === 'varies') ||
+  const hasReleasePolicyConflict = entries.some((entry) => entry.authentication === 'varies');
+  const varies = hasReleasePolicyConflict ||
     new Set(entries.map((entry) => entry.authentication)).size > 1;
   const selectedState = entries[0]!.authentication;
   const state: TargetAuthentication =
@@ -90,7 +91,7 @@ export function authenticationIndicator(
       label: label(policy),
       clients: byPolicy.get(policy)!,
     })),
-    summary: text(varies ? 'variesDetail' : `${state}Detail`),
+    summary: text(hasReleasePolicyConflict ? 'variesDetail' : varies ? 'unknownDetail' : `${state}Detail`),
     note: autoDetect ? text('automatic') : '',
   };
 }

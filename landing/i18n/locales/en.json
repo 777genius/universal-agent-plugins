@@ -731,7 +731,7 @@
       "checkedAgainBeforeInstallation": "Checked again before installation",
       "reviewedListing": "Reviewed",
       "notAvailableForChatgpt": "No verified ChatGPT Web app binding for this plugin. Connect Web apps inside ChatGPT.",
-      "verifiedConnectionFinishSetupInChatgpt": "Verified connection; finish setup in ChatGPT",
+      "verifiedConnectionFinishSetupInChatgpt": "Verified ChatGPT Web app binding; complete the connection inside ChatGPT.",
       "allInstalledAgents": "Choose agents in terminal",
       "commandsDisabledInPreview": "Commands disabled in preview.",
       "allInstalledAgentsRecommended": "Choose agents in terminal",
@@ -774,7 +774,7 @@
       "noActiveReleaseSupportsThisClient": "No active release supports this client",
       "unavailableReviewDataIsNotInstallationAuthority": "Unavailable: review data is not installation authority",
       "thisPackageDoesNotSupportAnyOfTheAgentsAvailableInTheInstallerYet": "This package does not support any of the agents available in the installer yet.",
-      "verifiedConnectionFinishSetupInChatgpt": "Verified connection; finish setup in ChatGPT",
+      "verifiedConnectionFinishSetupInChatgpt": "Verified ChatGPT Web app binding; complete the connection inside ChatGPT.",
       "allInstalledAgents": "Choose agents in terminal",
       "weFoundThisProjectButItDoesnTIncludeAnyToolsTheInstallerCanAddYet": "We found this project, but it doesn't include any tools the installer can add yet.",
       "chooseTargetAgents": "Choose target agents",
@@ -983,9 +983,9 @@
       "pi": {
         "note": "Native Pi extensions, Skills and MCP",
         "status": "Supported",
-        "intro": "Install compatible Pi extensions, Skills and MCP (stdio/Streamable HTTP) for a user or project. Catalog packages require a compatible signed release; direct sources are validated by the CLI.",
-        "delivery": "The CLI installs eligible components in the selected Pi profile or project and manages update, repair and removal.",
-        "activation": "Reload Pi resources or restart Pi. Review project trust and MCP permissions if prompted."
+        "intro": "Install compatible Pi extensions, Skills, and stdio/Streamable HTTP MCP servers in user or project scope. Catalog packages require a compatible signed release; direct sources are validated by the CLI.",
+        "delivery": "The CLI installs eligible components in the selected Pi profile or project and tracks updates, repair, and removal.",
+        "activation": "Reload resources or restart Pi; trust the project and review MCP permissions if prompted."
       }
     },
     "directoryPage": {
