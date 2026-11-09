@@ -63,8 +63,8 @@ func TestProjectGrokComposedPlannerStagerActivationAttestation(t *testing.T) {
 		t.Fatalf("Grok plan %+v %v", plan, err)
 	}
 	for _, component := range plan.Components {
-		if component.Kind == domain.ComponentMCPServer && component.Support != domain.SupportUnsupported {
-			t.Fatal("MCP project qualification invented")
+		if component.Kind == domain.ComponentMCPServer && component.Support != domain.SupportNative {
+			t.Fatal("project MCP is not supported in the prepared native plugin bundle")
 		}
 	}
 	stager := providers.Stager{Registry: registry, Paths: pathpolicy.Policy{}, PluginDataRoot: filepath.Join(project, ".uap", "data")}
@@ -75,8 +75,19 @@ func TestProjectGrokComposedPlannerStagerActivationAttestation(t *testing.T) {
 	if filepath.Dir(delivery.StagingPath) != plan.TargetAnchor {
 		t.Fatal("staging entered watched plugin root")
 	}
-	if _, err := os.Stat(filepath.Join(delivery.StagingPath, "mcp.json")); !os.IsNotExist(err) {
-		t.Fatal("unsupported bundled MCP projected", err)
+	bundledMCP, err := os.ReadFile(filepath.Join(delivery.StagingPath, "mcp.json"))
+	if err != nil {
+		t.Fatal("Grok project MCP file not staged", err)
+	}
+	var config struct {
+		Servers map[string]struct {
+			Type string `json:"type"`
+			URL  string `json:"url"`
+		} `json:"mcpServers"`
+	}
+	if err := json.Unmarshal(bundledMCP, &config); err != nil || len(config.Servers) != 1 ||
+		config.Servers["docs"].Type != "http" || config.Servers["docs"].URL != "https://inert.test/mcp" {
+		t.Fatalf("Grok native MCP sidecar is not the expected selected payload: %v %+v", err, config)
 	}
 	if err := os.MkdirAll(plan.TargetRoot, 0700); err != nil {
 		t.Fatal(err)
