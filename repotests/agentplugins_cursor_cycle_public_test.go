@@ -60,11 +60,14 @@ func cursorCyclePublicOutput(document map[string]any, step cursorCycleStep, r *c
 			}
 		}
 	}
-	optional := "operation_id next_action security scope"
+	optional := "operation_id next_action security"
 	if step.label == "repeat-add-a" {
-		optional = "next_action security scope"
+		optional = "next_action security"
 	}
-	if step.verb != "remove" {
+	if step.verb != "repair" {
+		optional += " scope"
+	}
+	if step.verb == "add" || step.verb == "update" {
 		optional += " readiness next_actions"
 	}
 	if projectNativeRuntimeKeys(output, "plugin version source tree_digest manifest_digest dry_run result", optional) != nil {
@@ -73,7 +76,7 @@ func cursorCyclePublicOutput(document map[string]any, step cursorCycleStep, r *c
 	if scope, present := output["scope"]; present && scope != "project" {
 		return nil, refused
 	}
-	if step.verb != "remove" && !cursorCyclePreparedReadiness(output) {
+	if (step.verb == "add" || step.verb == "update") && !cursorCyclePreparedReadiness(output) {
 		return nil, refused
 	}
 

@@ -210,10 +210,10 @@ def public_result(raw, stage, selected):
             require(same(data["environment"], {"reason": "no_save_requested", "saved": False, "scope": "project", "scope_selection_reason": "explicit"}))
         if verb == "remove":
             require(data["data_retained"] is True and data["plugin_data_preserved"] is True and same(data["retained_data"], [{key: selected["data"][key] for key in ("data_receipt_id", "physical_backend_id", "scope", "state")}]))
-    obj(output, "plugin version source tree_digest manifest_digest dry_run result", "next_action security scope" + (" readiness next_actions" if verb != "remove" else "") + (" operation_id" if group else ""))
+    obj(output, "plugin version source tree_digest manifest_digest dry_run result", "next_action security" + (" scope" if verb != "repair" else "") + (" readiness next_actions" if verb in ("add", "update") else "") + (" operation_id" if group else ""))
     if "scope" in output:
         require(output["scope"] == "project")
-    if verb != "remove":
+    if verb in ("add", "update"):
         require(output.get("scope") == "project" and output.get("readiness") == "needs_action")
         message = output.get("next_action")
         require(type(message) is str and bool(message) and same(output.get("next_actions"),

@@ -66,7 +66,13 @@ func (c *windProjectCycle) publicDTO(label string, r *windComponentRecipe, raw [
 			return refused
 		}
 	}
-	if projectNativeRuntimeKeys(output, "plugin version source tree_digest manifest_digest dry_run result", "operation_id security scope readiness next_action next_actions") != nil {
+	optional := "operation_id next_action security"
+	if verb == "add" || verb == "update" {
+		optional += " scope readiness next_actions"
+	} else if verb == "remove" {
+		optional += " scope"
+	}
+	if projectNativeRuntimeKeys(output, "plugin version source tree_digest manifest_digest dry_run result", optional) != nil {
 		return refused
 	}
 	source := "direct local source"
@@ -81,10 +87,14 @@ func (c *windProjectCycle) publicDTO(label string, r *windComponentRecipe, raw [
 	if scope, present := output["scope"]; present && scope != r.scopeName() {
 		return refused
 	}
-	// Add/update/repair must remain Prepared with a single explicit human
-	// trust/discovery action. Remove's separately verified deactivation DTO
-	// need not invent a post-remove readiness or a new activation request.
-	if verb != "remove" {
+	// Only add/update use addResultData. Repair carries legacy next_action;
+	// removal carries its separately verified deactivation result.
+	if verb == "repair" {
+		if next, ok := output["next_action"].(string); !ok || next == "" {
+			return refused
+		}
+	}
+	if verb == "add" || verb == "update" {
 		if output["scope"] != r.scopeName() || output["readiness"] != "needs_action" {
 			return refused
 		}
