@@ -141,7 +141,8 @@ test('selected targets produce one complete copyable command with keyboard activ
     const trigger = page.locator('.hero-quick-start__step .app-multiselect__trigger');
     await trigger.focus();
     await page.keyboard.press('Enter');
-    for (const name of [/^Codex /, /^Cursor /, /^GitHub Copilot CLI /]) {
+    await expect(page.getByRole('checkbox', { name: /^VS Code / })).toHaveCount(0);
+    for (const name of [/^Codex /, /^Cursor /, /^Copilot /]) {
       await page.getByRole('checkbox', { name }).click();
     }
     await page.keyboard.press('Escape');
