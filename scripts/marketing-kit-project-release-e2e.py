@@ -516,6 +516,12 @@ def main():
             check_profile_unchanged(env, project_a, native_a_before_b, "remove B")
             if identities(inventory(options.cli, env_b, project_b, options.target), options.target):
                 raise AssertionError("Project B retains root or mandatory children after remove")
+            # Empty signed inventory must also imply native absence in both
+            # the isolated client HOME and the Project's own client settings.
+            check_removed_native_components(options.target, Path(env_b["HOME"]),
+                                            root, "Project B native HOME remove")
+            check_removed_native_components(options.target, project_b,
+                                            root, "Project B native Project remove")
             check_project_a_unchanged(
                 identities(inventory(options.cli, env, project_a, options.target), options.target),
                 identities_after_update, (project_a / "uap.lock").read_bytes(),
@@ -527,6 +533,10 @@ def main():
             run(env, project_a, "remove A", "remove", "marketing-kit", *scoped)
             if identities(inventory(options.cli, env, project_a, options.target), options.target):
                 raise AssertionError("Project A retains root or mandatory children after remove")
+            check_removed_native_components(options.target, Path(env["HOME"]),
+                                            root, "Project A native HOME remove")
+            check_removed_native_components(options.target, project_a,
+                                            root, "Project A native Project remove")
             for e in (env, env_b):
                 if (Path(e["AGENTPLUGINS_HOME"]) / "uap.toml").exists():
                     raise AssertionError("Project installation unexpectedly wrote User manifest")

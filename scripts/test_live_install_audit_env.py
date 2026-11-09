@@ -555,6 +555,27 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             settings.write_text('{"enabledPlugins":{"other@foreign":true}}',
                                 encoding="utf-8")
             check("copilot", home, case, "User remove")
+            # Project cleanup must cover native configuration under both
+            # Project and HOME, without conflating their separate roots.
+            project = case / "project"
+            native_project = project / ".copilot"
+            native_project.mkdir(parents=True)
+            project_settings = native_project / "settings.json"
+            project_settings.write_text(
+                '{"enabledPlugins":{"marketing-kit@agentplugins-aaaaaaaaaaaa":true}}',
+                encoding="utf-8")
+            with self.assertRaisesRegex(AssertionError, "native Marketing Kit remnants"):
+                check("copilot", project, case, "Project remove")
+            project_settings.write_text('{"enabledPlugins":{"other@foreign":true}}',
+                                        encoding="utf-8")
+            check("copilot", project, case, "Project remove")
+            # Checking Project does not silently cover HOME; caller must do both.
+            settings.write_text(
+                '{"enabledPlugins":{"marketing-kit@agentplugins-aaaaaaaaaaaa":true}}',
+                encoding="utf-8")
+            check("copilot", project, case, "Project remove")
+            with self.assertRaisesRegex(AssertionError, "native Marketing Kit remnants"):
+                check("copilot", home, case, "Project native HOME remove")
             settings.unlink()
             native.rmdir()
             try:
