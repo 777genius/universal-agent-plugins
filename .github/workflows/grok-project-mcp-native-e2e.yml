@@ -1,0 +1,97 @@
+name: Grok Project bundled MCP native evidence
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'install/integrationctl/agentplugins/clients/grok/**'
+      - 'install/integrationctl/agentplugins/domain/clients_catalog.go'
+      - 'install/integrationctl/agentplugins/providers/project_grok_test.go'
+      - 'cli/cmd/agentplugins/project_grok_e2e_test.go'
+      - '.github/workflows/grok-project-mcp-native-e2e.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: grok-project-mcp-e2e-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  native-prepared:
+    name: Pinned Grok 1.0.70 / project plugin and MCP source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - name: Verify production scoped MCP files and complete saved lifecycle
+        run: |
+          go test ./install/integrationctl/agentplugins/clients/grok -count=1
+          go test ./install/integrationctl/agentplugins/providers -run '^TestProjectGrok' -count=1
+          go test ./cli/cmd/agentplugins -run '^TestProjectGrokComposedSavedLifecycle$' -count=1
+      - name: Acquire immutable official Grok 1.0.70 binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --connect-timeout 20 --max-time 180 \
+            'https://x.ai/cli/grok-1.0.70-linux-x86_64.gz' -o "$RUNNER_TEMP/grok.gz"
+          printf '%s  %s\n' '11d27a30adfb75c4b9b180072ab27412a1916f054ff5497ab70fb9a77d304bcc' "$RUNNER_TEMP/grok.gz" | sha256sum -c -
+          gzip -dc "$RUNNER_TEMP/grok.gz" > "$RUNNER_TEMP/grok"
+          printf '%s  %s\n' '22d281c5964c5444147328096ba2a221f3f0874c6858e27c825656a80f6e58e9' "$RUNNER_TEMP/grok" | sha256sum -c -
+          chmod 0700 "$RUNNER_TEMP/grok"
+          mkdir -p "$RUNNER_TEMP/grok-project-proof"
+          timeout 40 "$RUNNER_TEMP/grok" --version > "$RUNNER_TEMP/grok-project-proof/version.txt"
+          grep -Eq '^grok 1\.0\.70 \([0-9a-f]{7,40}\)' "$RUNNER_TEMP/grok-project-proof/version.txt"
+      - name: Read native plugin discovery without granting trust
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/grok-project-proof"
+          mkdir -p "$root/home" "$root/project/.grok/plugins/uap-inert/.grok-plugin"
+          git -C "$root/project" -c core.hooksPath=/dev/null init --quiet
+          printf '%s\n' '{"name":"uap-inert","version":"1.0.0","mcpServers":"./mcp.json"}' > "$root/project/.grok/plugins/uap-inert/.grok-plugin/plugin.json"
+          printf '%s\n' '{"mcpServers":{"uap-inert-mcp":{"command":"/bin/false","args":[]}}}' > "$root/project/.grok/plugins/uap-inert/mcp.json"
+          cd "$root/project"
+          env -i HOME="$root/home" USERPROFILE="$root/home" XDG_CONFIG_HOME="$root/home/.config" \
+            XDG_DATA_HOME="$root/home/.local/share" XDG_CACHE_HOME="$root/home/.cache" \
+            PATH="/usr/bin:/bin" CI=1 TERM=dumb \
+            timeout 30 "$RUNNER_TEMP/grok" inspect --json > "$root/inspect.json"
+          python3 - "$root/inspect.json" "$root/project/.grok/plugins/uap-inert" "$root/report.json" <<'PY'
+          import json, pathlib, sys
+          source, plugin_path, report = sys.argv[1:]
+          data = json.loads(pathlib.Path(source).read_text())
+          records = data.get("plugins")
+          match = [p for p in records if isinstance(p, dict) and p.get("name") == "uap-inert"] if isinstance(records, list) else []
+          if len(match) != 1 or match[0].get("scope") != "project" or match[0].get("path") != plugin_path:
+              raise SystemExit("Native Grok project plugin discovery did not identify the exact inert fixture")
+          result = {
+              "source": "pinned official Grok 1.0.70 binary",
+              "project_plugin_source_verified": True,
+              "project_trusted": data.get("projectTrusted"),
+              "plugin_enabled": match[0].get("enabled"),
+              "manifest_mcp_file_present": True,
+              "native_mcp_startup_qualified": False,
+              "native_tools_list_qualified": False,
+              "native_tools_call_qualified": False,
+              "vendor_auth_qualified": False,
+              "note": "Read-only inspect does not authorize trust or MCP execution"
+          }
+          pathlib.Path(report).write_text(json.dumps(result, indent=2) + "\n")
+          PY
+      - name: Preserve bounded native evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: grok-project-mcp-prepared-source
+          path: |
+            ${{ runner.temp }}/grok-project-proof/report.json
+            ${{ runner.temp }}/grok-project-proof/version.txt
+          if-no-files-found: warn
+          retention-days: 14
