@@ -25,38 +25,56 @@ func (r *Report) recordScope(p project.Result) {
 	r.HostSafety = assessment(Pass)
 }
 
-// recordFindings maps retained, typed diagnostics into stable public IDs.
-func (r *Report) recordFindings(p project.Result) {
-	v, f := p.Input, p.Facts
-	// Translate retained canonical identities within their component boundary.
-	serverIDs := map[string]string{}
-	skillIDs := map[string]string{}
-	if f.Package != nil {
-		for name := range f.Package.MCP.Servers {
-			serverIDs[opaque(name)] = opaque("mcp:" + name)
-		}
-		for name := range f.Package.MCP.InvalidServer {
-			serverIDs[opaque(name)] = opaque("mcp:" + name)
-		}
-		for name := range f.Package.Skills {
-			skillIDs[opaque(name)] = opaque("skill:" + name)
-		}
-		for _, name := range f.Package.Inventory.InvalidSkills {
-			skillIDs[opaque(name)] = opaque("skill:" + name)
-		}
+// knownFindingIDs retains canonical component identity only within its own
+// boundary. The key includes the kind, so equal private MCP and Skill names
+// cannot overwrite each other's public identity.
+func knownFindingIDs(pkg *domain.PackageEnvelope) map[string]string {
+	ids := map[string]string{}
+	if pkg == nil {
+		return ids
 	}
-	for _, f := range f.Findings {
-		switch f.Boundary {
-		case domain.BoundarySkill:
-			if id, ok := skillIDs[f.Item]; ok {
-				f.Item = id
-			}
-		case domain.BoundaryMCPServer:
-			if id, ok := serverIDs[f.Item]; ok {
-				f.Item = id
-			}
-		}
-		id := r.add(Finding{Code: f.Code, Layer: string(f.Layer), Rule: f.RuleRef, Location: f.Path, ItemID: f.Item, Severity: string(f.Severity)})
+	for name := range pkg.MCP.Servers {
+		registerFindingID(ids, "mcp", name)
+	}
+	for name := range pkg.MCP.InvalidServer {
+		registerFindingID(ids, "mcp", name)
+	}
+	for name := range pkg.Skills {
+		registerFindingID(ids, "skill", name)
+	}
+	for _, name := range pkg.Inventory.InvalidSkills {
+		registerFindingID(ids, "skill", name)
+	}
+	return ids
+}
+
+func registerFindingID(ids map[string]string, kind, name string) {
+	ids[kind+":"+opaque(name)] = opaque(kind + ":" + name)
+}
+
+func canonicalFindingItem(f conformance.Finding, ids map[string]string) string {
+	var kind string
+	switch f.Boundary {
+	case domain.BoundaryMCPServer:
+		kind = "mcp"
+	case domain.BoundarySkill:
+		kind = "skill"
+	default:
+		return f.Item
+	}
+	if id, ok := ids[kind+":"+f.Item]; ok {
+		return id
+	}
+	return f.Item
+}
+
+// recordFindings records typed diagnostics and their policy classification.
+func (r *Report) recordFindings(p project.Result) {
+	v, facts := p.Input, p.Facts
+	ids := knownFindingIDs(facts.Package)
+	for _, f := range facts.Findings {
+		item := canonicalFindingItem(f, ids)
+		id := r.add(Finding{Code: f.Code, Layer: string(f.Layer), Rule: f.RuleRef, Location: f.Path, ItemID: item, Severity: string(f.Severity)})
 		if f.Layer == conformance.Normative {
 			r.Conformance.FindingIDs = append(r.Conformance.FindingIDs, id)
 		} else {
