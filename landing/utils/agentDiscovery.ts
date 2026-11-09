@@ -103,6 +103,7 @@ UAP supports Agent Plugins 1.0 packages (plugin.json, Skills and MCP) **and inde
 Project scope and User scope use separate native installation targets; not all agents support the same components, scopes, activation or authentication. A prepared installation is not proof that an external MCP tool ran.
 Versioned Go Installer/Hooks and TypeScript Management SDKs allow other applications to embed aspects of UAP.
 Share uap.toml and uap.lock for exact project restore; user setup export/import excludes credentials and live plugin data.
+Use the documentation's availability labels: source-build authoring capabilities are separate from the current installer download.
 
 ## Catalog and search-engine caveat
 
