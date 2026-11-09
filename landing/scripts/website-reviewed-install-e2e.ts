@@ -43,6 +43,29 @@ function execute(args: string[], env: NodeJS.ProcessEnv, cwd: string) {
     error: child.error?.message ?? null,
     stdout_tail: (child.stdout || '').slice(-1400), stderr_tail: (child.stderr || '').slice(-1400) };
 }
+// Codex User plugin removal deliberately asks for an external-uninstall
+// confirmation. Verify that exact documented refusal rather than pretending
+// the partial result was an automatic removal; other clients must still remove.
+function guidedCodexUserRemoval(output: { exit_code: number | null; stdout_tail: string }) {
+  if (output.exit_code !== 1) return false;
+  try {
+    const payload: unknown = JSON.parse(output.stdout_tail);
+    if (!payload || typeof payload !== 'object') return false;
+    const value = payload as Record<string, unknown>;
+    if (value.command !== 'agentplugins remove' || value.result !== 'failure' ||
+        value.outcome !== 'partial' || value.scope !== 'user') return false;
+    const outcomes = value.results;
+    if (!Array.isArray(outcomes) || outcomes.length !== 1) return false;
+    const result = outcomes[0] as Record<string, unknown>;
+    if (result.client_id !== 'codex' || result.outcome !== 'incomplete') return false;
+    const actions = result.next_actions;
+    return Array.isArray(actions) && actions.length === 1 &&
+      (actions[0] as Record<string, unknown>).kind === 'external_uninstall';
+  } catch {
+    return false;
+  }
+}
+
 const version = spawnSync('agentplugins', ['version'], { encoding: 'utf8', timeout: 15_000 });
 const report = {
   schema_version: 1, run_sha: process.env.GITHUB_SHA ?? '', cli_version: (version.stdout || '').trim(),
@@ -103,16 +126,21 @@ try {
       '--scope', 'user', '--format', 'json'], env, project);
     row.sentinel_preserved = existsSync(sentinel) &&
       readFileSync(sentinel, 'utf8') === 'must be preserved\n';
-    if ((row.list as { exit_code: number | null }).exit_code !== 0 ||
-        (row.repeat as { exit_code: number | null }).exit_code !== 0 ||
-        (row.remove as { exit_code: number | null }).exit_code !== 0 ||
-        !row.sentinel_preserved) {
+    const observed = row.remove as { exit_code: number | null; stdout_tail: string };
+    const listAndRepeat = (row.list as { exit_code: number | null }).exit_code === 0 &&
+      (row.repeat as { exit_code: number | null }).exit_code === 0;
+    if (!listAndRepeat || !row.sentinel_preserved) {
       row.status = 'lifecycle-not-qualified';
-      errors.push(plugin.name + ': real list/repeat/remove/ownership failed');
+      errors.push(plugin.name + ': real list/repeat/ownership failed');
+    } else if (selectedClient === 'codex' && guidedCodexUserRemoval(observed)) {
+      // An exact typed guidance result is an expected scope boundary, never
+      // an uninstall PASS. No false --external-uninstalled attestation here.
+      row.status = 'guided-codex-user-external-removal-required';
+    } else if (observed.exit_code !== 0) {
+      row.status = 'removal-not-qualified';
+      errors.push(plugin.name + ': native removal did not succeed or match guided Codex policy');
     } else {
-      // Qualified installer lifecycle only. The existing 30-source matrix
-      // separately verifies identity-attributed native registration and
-      // native clean removal for its immutable coverage set.
+      // Qualified installer lifecycle only; native tool-call proof is separate.
       row.status = 'installer-lifecycle-passed-native-unqualified';
     }
   }
