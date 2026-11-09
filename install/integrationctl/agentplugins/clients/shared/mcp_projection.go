@@ -19,6 +19,9 @@ const (
 	// MCPDialectCursor writes mcp.json with the same transport rewriting and no
 	// auth hints.
 	MCPDialectCursor
+	// MCPDialectGrok writes plugin-bundled .mcp.json without unrelated OpenAI
+	// authentication hints; the source selection and stdio safety remain shared.
+	MCPDialectGrok
 	// MCPDialectKiro writes a schema-tagged mcp.json and passes every entry
 	// through as authored: it reads the authored transport members directly.
 	MCPDialectKiro
@@ -41,6 +44,8 @@ func (dialect MCPDialect) rules() (mcpDialectRules, error) {
 		return mcpDialectRules{file: ".mcp.json", label: "stdio MCP server", rewriteTypes: true, applyHints: true, removeLabel: "remove empty OpenAI MCP projection"}, nil
 	case MCPDialectCursor:
 		return mcpDialectRules{file: "mcp.json", label: "project Cursor stdio MCP server", rewriteTypes: true}, nil
+	case MCPDialectGrok:
+		return mcpDialectRules{file: ".mcp.json", label: "project Grok stdio MCP server", rewriteTypes: true, removeLabel: "remove empty Grok MCP projection"}, nil
 	case MCPDialectKiro:
 		return mcpDialectRules{file: "mcp.json", label: "project Kiro stdio MCP server", schema: domain.MCPSchemaV1}, nil
 	default:

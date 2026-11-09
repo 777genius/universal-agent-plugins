@@ -50,7 +50,7 @@ func (*Adapter) Project(_ context.Context, in clients.ProjectionInput) ([]domain
 	dialect := shared.MCPDialectCursor
 	if project {
 		// Grok discovers plugin-scoped .mcp.json; preserve the user bundle layout.
-		dialect = shared.MCPDialectOpenAI
+		dialect = shared.MCPDialectGrok
 	}
 	if err := shared.ProjectMCPServers(shared.MCPProjection{
 		Root: in.StagingPath, Envelope: in.Envelope, Names: names,
