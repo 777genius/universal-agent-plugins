@@ -60,3 +60,9 @@ Deliver a first-class `--target hermes` through existing UAP client adapter cont
 ## Expected code footprint
 
 ~1,000–1,800 net new lines including tests for a source-complete, careful implementation, conditional on existing native YAML and ownership APIs; revise estimate if forced to implement exact node-preserving YAML writes. **Definition of done:** installed UAP target, faithful capabilities, tests and real-platform evidence, green required CI and no unreviewed security exceptions. No automatic publication or merge without completing those gates.
+
+### Review round 1 / 6 — native facts
+
+**Finding and concrete plan correction:** Source truth: Hermes project Skills are scanned only at the nearest Git root, with an explicit native trust gate; User MCP lives in profile config.yaml. Split those into two distinct acceptance paths and never infer Project MCP from APM's project flag.
+
+**Decision:** This is part of the acceptance criteria; a contradictory implementation must be rejected rather than treated as a harmless warning.
