@@ -1109,6 +1109,9 @@ img {
   grid-template-columns: minmax(260px, 1.7fr) repeat(3, minmax(140px, 0.7fr));
   gap: 12px 20px;
 }
+.catalog-controls--plugins > .search-field {
+  grid-column: span 2;
+}
 .catalog-controls input {
   width: 100%;
   min-height: 44px;
@@ -1161,6 +1164,13 @@ img {
 }
 .catalog-advanced-filters {
   display: contents;
+}
+.catalog-filter-pair {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 20px;
+  min-width: 0;
 }
 /* Flat toolbar only; dropdown panels and installation controls keep their surfaces. */
 .catalog-controls .search-field input,
@@ -3270,7 +3280,8 @@ img {
   .catalog-controls {
     grid-template-columns: 1fr;
   }
-  .search-field {
+  .search-field,
+  .catalog-controls--plugins > .search-field {
     grid-column: auto;
   }
   .catalog-filter-toggle {
@@ -3395,5 +3406,11 @@ img {
   }
   .workflow-path--animate::before {
     transform: none;
+  }
+}
+
+@media (max-width: 380px) {
+  .catalog-filter-pair {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
