@@ -966,7 +966,7 @@
       "pi": {
         "note": "Extensões nativas do Pi, Skills e MCP",
         "status": "Compatível",
-        "intro": "Instale extensões, Skills e MCP (stdio/Streamable HTTP) compatíveis com Pi no usuário ou projeto. A disponibilidade depende da versão assinada do plugin.",
+        "intro": "Instale extensões, Skills e MCP (stdio/Streamable HTTP) compatíveis com Pi no usuário ou projeto. Pacotes do catálogo exigem uma versão assinada compatível; a CLI valida as fontes diretas separadamente.",
         "delivery": "A CLI instala componentes elegíveis no perfil ou projeto Pi escolhido e gerencia atualização, reparo e remoção.",
         "activation": "Recarregue os recursos ou reinicie o Pi. Revise a confiança no projeto e as permissões MCP, se necessário."
       }

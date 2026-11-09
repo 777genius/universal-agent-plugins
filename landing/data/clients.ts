@@ -215,7 +215,7 @@ export const clientLandingPages: ClientLandingPage[] = [
     note: 'Native Pi extensions, Skills and MCP',
     status: 'Supported',
     intro:
-      'Install compatible Pi extensions, Skills, and stdio/Streamable HTTP MCP servers in user or project scope. Availability depends on each plugin’s signed release.',
+      'Install compatible Pi extensions, Skills, and stdio/Streamable HTTP MCP servers in user or project scope. Catalog packages require a compatible signed release; direct sources are validated by the CLI.',
     delivery:
       'The CLI installs eligible components in the selected Pi profile or project and tracks updates, repair, and removal.',
     activation: 'Reload resources or restart Pi; trust the project and review MCP permissions if prompted.',

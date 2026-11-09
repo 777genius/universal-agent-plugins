@@ -966,7 +966,7 @@
       "pi": {
         "note": "Pi 原生扩展、Skills 和 MCP",
         "status": "已支持",
-        "intro": "可在用户或项目范围安装兼容的 Pi 扩展、Skills 和 MCP（stdio/Streamable HTTP）。可用性取决于插件的已签名发行版本。",
+        "intro": "可在用户或项目范围安装兼容的 Pi 扩展、Skills 和 MCP（stdio/Streamable HTTP）。目录包需要兼容的已签名发行版本；CLI 会单独验证直接来源。",
         "delivery": "CLI 将合格组件安装到选定的 Pi 用户配置或项目中，并管理更新、修复和移除。",
         "activation": "重新加载 Pi 资源或重启 Pi；如有提示，请检查项目信任及 MCP 权限。"
       }
