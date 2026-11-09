@@ -271,3 +271,48 @@ func projectGrokMCPOnlyOwned(t *testing.T, journey projectJourney, url string) (
 	}
 	return installation, binding
 }
+
+func TestProjectGrokMCPOnlyStdioKeepsOwnedData(t *testing.T) {
+	transport := newProjectJourneyTransport(t, "git")
+	if err := os.Remove(filepath.Join(transport.repo, "skills", "docs", "SKILL.md")); err != nil {
+		t.Fatal(err)
+	}
+	// Keep the shared source's real stdio server with a PLUGIN_DATA placeholder.
+	projectJourneyGit(t, transport.repo, "add", "-A")
+	projectJourneyGit(t, transport.repo, "commit", "-m", "MCP-only stdio source")
+	projectJourneyGit(t, transport.repo, "push", "--quiet", transport.remote, "main")
+	journey := newProjectJourney(t, transport)
+	user := filepath.Join(journey.home, ".grok")
+	projectJourneyWrite(t, filepath.Join(user, "keep"), "original user\n")
+	runner := &projectGrokRunner{t: t, executable: filepath.Join(journey.home, "grok-not-executed")}
+	journey.app = configureProjectGrokJourney(journey.app, user, runner)
+	userBefore, bBefore := securityFixtureTree(t, user), securityFixtureTree(t, journey.b)
+
+	journey.run(t, journey.a, "add", transport.endpoint, "--alias", "docs", "--target", "grok")
+	installation, binding := journey.owned(t, journey.a)
+	receipt := installation.DataReceipts[binding.DataReceiptID]
+	expectedData := filepath.Join(journey.a, ".uap", "plugin-data", binding.PhysicalArtifact)
+	if len(installation.DataReceipts) != 1 || receipt.DataReceiptID == "" ||
+		receipt.Scope != "project" || receipt.State != domain.DataReceiptOwned ||
+		receipt.Locator != expectedData || receipt.PhysicalBackend != binding.PhysicalArtifact ||
+		binding.Activation != domain.ActivationPrepared {
+		t.Fatalf("Grok stdio MCP lost owned data or prepared state: %+v %+v", receipt, binding)
+	}
+	body, err := os.ReadFile(filepath.Join(binding.TargetLocator, ".mcp.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var projected struct {
+		Servers map[string]map[string]any `json:"mcpServers"`
+	}
+	if err := json.Unmarshal(body, &projected); err != nil || len(projected.Servers) != 1 ||
+		projected.Servers["docs"]["command"] != "go" {
+		t.Fatalf("Grok stdio native MCP projection differs: %s %v", body, err)
+	}
+	journey.run(t, journey.a, "remove", "docs", "--target", "grok")
+	projectJourneyAbsent(t, binding.TargetLocator)
+	if !reflect.DeepEqual(userBefore, securityFixtureTree(t, user)) ||
+		!reflect.DeepEqual(bBefore, securityFixtureTree(t, journey.b)) || runner.calls == 0 {
+		t.Fatal("Grok stdio Project removal changed User/B or skipped native observation")
+	}
+}
