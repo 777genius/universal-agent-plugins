@@ -32,6 +32,9 @@ func (kernel Kernel) requireDocumentParser(codec Codec) error {
 }
 
 func (kernel Kernel) parseDocument(body []byte, jsonc bool, codec Codec) (*document, error) {
+	if codec == CodecHermes {
+		return parseHermesDocument(body, jsonc)
+	}
 	if codec != CodecCodex {
 		return parseCodecDocument(body, jsonc, codec)
 	}
@@ -107,6 +110,8 @@ func (doc *document) renderCodexDocument() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	body, err := doc.codexDocument.RenderMCPEntries(cloneCodexEntries(entries))
+	native := doc.codexDocument
+	if doc.hermesDocument != nil { native = doc.hermesDocument }
+	body, err := native.RenderMCPEntries(cloneCodexEntries(entries))
 	return bytes.Clone(body), err
 }

@@ -29,6 +29,7 @@ const (
 	CodecWindsurf   Codec = "windsurf-mcpServers"
 	CodecDevin      Codec = "devin-mcpServers"
 	CodecCline      Codec = "cline-mcpServers"
+	CodecHermes     Codec = "hermes-mcp-servers-yaml"
 )
 
 type Action string
@@ -193,6 +194,9 @@ func NewWithLockAcquirer(acquireLocks func(Paths, Codec) (func() error, error)) 
 }
 
 func validateRequest(req Request) error {
+	if req.Codec == CodecHermes && (req.Paths.JSONC != "" || filepath.Base(req.Paths.JSON) != "config.yaml") {
+		return fmt.Errorf("Hermes YAML requires one selected config.yaml path")
+	}
 	if req.Codec == CodecCodex && req.Paths.JSONC != "" {
 		return fmt.Errorf("codex requires one TOML config path")
 	}
@@ -229,10 +233,11 @@ func validateRequest(req Request) error {
 }
 
 func supportedCodec(codec Codec) bool {
-	return codec == CodecMCPServers || codec == CodecQoder || codec == CodecCopilot || codec == CodecVSCode || codec == CodecKimi || codec == CodecGemini || codec == CodecCodex || codec == CodecOpenCode || codec == CodecOpenCodeV2 || codec == CodecWindsurf || codec == CodecDevin || codec == CodecCline
+	return codec == CodecMCPServers || codec == CodecQoder || codec == CodecCopilot || codec == CodecVSCode || codec == CodecKimi || codec == CodecGemini || codec == CodecCodex || codec == CodecOpenCode || codec == CodecOpenCodeV2 || codec == CodecWindsurf || codec == CodecDevin || codec == CodecCline || codec == CodecHermes
 }
 
 func codecCollectionKey(codec Codec) string {
+	if codec == CodecHermes { return "mcp_servers" }
 	if codec == CodecVSCode {
 		return "servers"
 	}
