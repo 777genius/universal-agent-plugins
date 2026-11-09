@@ -69,7 +69,7 @@ try {
       availability: 'unverified', metrics: { installs: 0, window: 'all-time' },
     };
     const command = skillInstallCommand(listing, [target], 'project');
-    const expected = 'npx universal-agent-plugins@latest skills add ' + source +
+    const expected: string = 'npx universal-agent-plugins@latest skills add ' + source +
       ' --skill ' + slug + ' --target ' + target + ' --scope project';
     assert.equal(command, expected, 'The actual website command must match this native test');
     const addArgs = ['skills', 'add', source, '--skill', slug, '--target', target,
