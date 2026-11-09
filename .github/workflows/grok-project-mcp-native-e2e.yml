@@ -26,6 +26,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -71,12 +72,23 @@ jobs:
           match = [p for p in records if isinstance(p, dict) and p.get("name") == "uap-inert"] if isinstance(records, list) else []
           if len(match) != 1 or match[0].get("scope") != "project" or match[0].get("path") != plugin_path:
               raise SystemExit("Native Grok project plugin discovery did not identify the exact inert fixture")
+          root = pathlib.Path(plugin_path)
+          project = root.parents[2]
+          manifest = json.loads((root / ".grok-plugin" / "plugin.json").read_text())
+          sidecar = json.loads((root / "mcp.json").read_text())
+          if (pathlib.Path(data.get("projectRoot", "")).resolve() != project.resolve()
+                  or pathlib.Path(data.get("cwd", "")).resolve() != project.resolve()
+                  or data.get("projectTrusted") is not False
+                  or manifest.get("mcpServers") != "./mcp.json"
+                  or sidecar.get("mcpServers") != {"uap-inert-mcp": {"command": "/bin/false", "args": []}}):
+              raise SystemExit("Grok scope/trust or inert bundled MCP source identity was not preserved")
           result = {
               "source": "pinned official Grok 1.0.70 binary",
               "project_plugin_source_verified": True,
               "project_trusted": data.get("projectTrusted"),
               "plugin_enabled": match[0].get("enabled"),
               "manifest_mcp_file_present": True,
+              "native_mcp_schema_parsed_qualified": False,
               "native_mcp_startup_qualified": False,
               "native_tools_list_qualified": False,
               "native_tools_call_qualified": False,
