@@ -266,7 +266,7 @@ export async function checkPagesArtifact({
     assert.equal(new URL(entry.url).origin, new URL(siteUrl).origin);
   }
   const llmsIndex = (await read('llms.txt')).toString();
-  assert(llmsIndex.startsWith('# Universal Agent Plugins\\n'), 'Missing UAP AI index');
+  assert(llmsIndex.startsWith('# Universal Agent Plugins\n'), 'Missing UAP AI index');
   for (const phrase of [
     'independent SKILL.md Skills',
     'initial HTML shows the reviewed',
