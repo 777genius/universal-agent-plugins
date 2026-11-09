@@ -153,7 +153,7 @@ const authentication = computed(() =>
     autoDetect.value
       ? {
           id: props.plugin.name,
-          targets: reachableTargetPolicies(props.plugin.distributions, 'user'),
+          targets: reachableTargetPolicies(props.plugin.distributions, scope.value),
         }
       : selectedDistribution.value,
     canonicalInstallTargets(targets.value),

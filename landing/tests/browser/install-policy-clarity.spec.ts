@@ -78,3 +78,27 @@ test('Pi agent page describes extensions, Skills and MCP in user and project sco
   await expect(main).not.toContainText('Portable skills and MCP projection are outside');
   expect(errors).toEqual([]);
 });
+
+test('automatic authentication uses the selected User or Project scope, not a pooled account policy', async ({ page }) => {
+  const errors = await offline(page);
+  const index = pluginWithOnlyCodex();
+  const distribution = index.plugins[0]!.distributions[0]!;
+  const userRelease = distribution.releases[0]!;
+  const projectRelease = structuredClone(userRelease);
+  projectRelease.release_sequence += 1;
+  projectRelease.targets[0]!.authentication = 'required';
+  projectRelease.targets[0]!.scopes = ['project'];
+  distribution.releases = [userRelease, projectRelease];
+  await projections(page, index);
+  await navigate(page, '/', 'en', '?q=i18n-state-00');
+  const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]').first();
+  const indicator = card.locator('.authentication-indicator');
+  await expect(indicator).toHaveAttribute('data-authentication', 'not_required');
+  await card.locator('.plugin-card__install-toggle').click();
+  const project = card.locator('.install-scope').getByRole('button', { name: 'This project' });
+  await expect(project).toBeEnabled();
+  await project.click();
+  await expect(indicator).toHaveAttribute('data-authentication', 'required');
+  await expect(indicator).toHaveAttribute('data-varies', 'false');
+  expect(errors).toEqual([]);
+});
