@@ -210,10 +210,10 @@ func evaluateLocalDependencyPolicy(ctx context.Context, app App, path string, lo
 					return fmt.Errorf("local dependency policy: package %q MCP %q uses disallowed transport %q", pin.Alias, name, server.Type)
 				}
 			}
-			return "", nil
+			return nil
 		})
 		if err != nil {
-			return fmt.Errorf("local dependency policy: verify package %q MCP transport: %w", pin.Alias, err)
+			return "", fmt.Errorf("local dependency policy: verify package %q MCP transport: %w", pin.Alias, err)
 		}
 	}
 	return fingerprintLocalDependencyPolicy(policy)
