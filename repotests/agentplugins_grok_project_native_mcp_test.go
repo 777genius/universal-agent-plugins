@@ -78,7 +78,7 @@ func grokProjectMCPRun(t *testing.T, f *projectNativeCLIAttempt, cwd string, arg
 		Argv: argv, Env: f.env(), Dir: cwd, StdoutLimitBytes: 1 << 20,
 	}, 5*time.Second)
 	if err != nil || ctx.Err() != nil || result.ExitCode != 0 || len(result.Stdout) > 1<<20 {
-		t.Fatalf("Grok native project MCP command failed (exit=%d, err=%v, stderr=%q)", result.ExitCode, err, string(result.Stderr))
+		t.Fatalf("Grok native project MCP command failed (exit=%d, err=%v)", result.ExitCode, err)
 	}
 	f.check(t)
 	return result.Stdout
@@ -118,7 +118,7 @@ func grokProjectMCPReceipt(t *testing.T, project, name string) string {
 			t.Fatal(err)
 		}
 		var document struct {
-			Servers map[string]map[string]any \`json:"mcpServers"\`
+			Servers map[string]map[string]any `json:"mcpServers"`
 		}
 		if json.Unmarshal(rawMCP, &document) != nil || len(document.Servers) != 1 ||
 			document.Servers["uap-grok-mcp-probe"]["type"] != "http" ||
