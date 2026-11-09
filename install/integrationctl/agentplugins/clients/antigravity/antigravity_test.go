@@ -97,3 +97,38 @@ func TestAntigravityRejectsUnqualifiedComponents(t *testing.T) {
 		t.Fatal("foreign extension/hook must not be silently enabled")
 	}
 }
+
+func TestAntigravityRefusesUnselectedHookAndMCPFiles(t *testing.T) {
+	t.Parallel()
+	for _, raw := range []string{"hooks.json", "mcp_config.json"} {
+		t.Run(raw, func(t *testing.T) {
+			root := t.TempDir()
+			if err := os.WriteFile(filepath.Join(root, raw), []byte("{}"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			envelope := domain.PackageEnvelope{Manifest: domain.PluginManifest{Name: "test-plugin"}}
+			plan := domain.DeliveryPlan{ActivePath: filepath.Join(t.TempDir(), "active")}
+			if err := projectPlugin(root, envelope, plan, ""); err == nil {
+				t.Fatalf("unselected %s must not be installed natively", raw)
+			}
+			if _, err := os.Stat(filepath.Join(root, ".antigravity-plugin", "plugin.json")); !os.IsNotExist(err) && raw == "hooks.json" {
+				t.Fatalf("hook preflight must not create native manifest: %v", err)
+			}
+		})
+	}
+}
+
+func TestAntigravityRefusesUnsafeRemoteMCP(t *testing.T) {
+	t.Parallel()
+	for _, endpoint := range []string{"http://remote.example.test/mcp", "file:///secret", "https://"} {
+		t.Run(endpoint, func(t *testing.T) {
+			servers := map[string]map[string]any{}
+			envelope := domain.PackageEnvelope{MCP: domain.MCPComponent{Servers: map[string]domain.MCPServer{
+				"bad": {Type: "streamable-http", Decoded: map[string]any{"type": "streamable-http", "url": endpoint}},
+			}}}
+			if err := appendNativeServer(servers, "bad", envelope, t.TempDir(), t.TempDir(), ""); err == nil {
+				t.Fatal("invalid remote endpoint accepted")
+			}
+		})
+	}
+}
