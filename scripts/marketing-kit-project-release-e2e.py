@@ -201,6 +201,14 @@ def run_case(cli, target, root, name, portable=None):
         marker = native_root / "unmanaged-native-do-not-change.txt"
         marker.write_text("unmanaged native settings\n", encoding="utf-8")
         native_foreign.append((marker, "unmanaged native settings\n"))
+    # Exercise actual third-party Project Skills, not only generic text
+    # markers. Copilot's .github/skills is outside its native MCP roots.
+    foreign_skill = "---\nname: unmanaged-uap-foreign-skill\ndescription: keep unchanged\n---\n"
+    for relative in audit["PROJECT_SKILL_ROOTS"].get(target, ()):
+        skill = project / relative / "unmanaged-uap-foreign-skill" / "SKILL.md"
+        skill.parent.mkdir(parents=True, exist_ok=True)
+        skill.write_text(foreign_skill, encoding="utf-8")
+        native_foreign.append((skill, foreign_skill))
     # The fixture must never read or modify the operator's home or native config.
     user_foreign = home / "foreign-user-do-not-change.txt"
     user_foreign.write_text("unmanaged user data\n", encoding="utf-8")
