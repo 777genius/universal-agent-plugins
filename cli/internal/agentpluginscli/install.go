@@ -61,6 +61,7 @@ func newInstallCommand(app App, opts *options) *cobra.Command {
 	command.Flags().BoolVar(&activationComplete, "activation-complete", false, "attest that manual client activation is complete")
 	command.Flags().BoolVar(&authComplete, "auth-complete", false, "attest that required authentication is complete or none is required after review")
 	command.Flags().BoolVar(&opts.externalUninstalled, "external-uninstalled", false, "attest removed targets were uninstalled manually or never imported")
+	command.Flags().StringVar(&opts.dependencyPolicyFile, "policy", "", "optional local YAML dependency source and pin policy for declared installs")
 	command.Flags().BoolVar(&locked, "locked", false, "require an exact existing lock and never resolve refs")
 	command.Flags().BoolVar(&yes, "yes", false, "confirm the complete preflighted install without an interactive prompt")
 	return command
