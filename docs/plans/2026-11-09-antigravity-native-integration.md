@@ -91,3 +91,9 @@ Add `--target antigravity` to UAP for **real Antigravity-native plugin bundles**
 **Finding and concrete plan correction:** E2E: one genuine agy version, isolated HOME/project, staged manifest validation, CLI install/list/disable/remove/restart and controlled MCP handshake where feasible; compare native inventory before/after, check foreign sentinels; on unavailable native runner keep Draft and mark lane unqualified.
 
 **Decision:** Treat this constraint as a release gate. Do not replace missing native proof with mocked success or expand the architecture just to claim feature parity.
+
+### Review round 6 / 6 — delivery / overengineering
+
+**Finding and concrete plan correction:** Delivery: no changes to existing Gemini target, no Plugin Marketplace auth and no project-to-user fallback. Release/docs matrix must distinguish native plugin from separate workspace MCP/Skills; guard migration-free existing installs and report unsupported components explicitly.
+
+**Decision:** Treat this constraint as a release gate. Do not replace missing native proof with mocked success or expand the architecture just to claim feature parity.
