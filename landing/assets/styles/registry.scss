@@ -1162,6 +1162,29 @@ img {
 .catalog-advanced-filters {
   display: contents;
 }
+.catalog-filter-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  min-width: 0;
+}
+/* Both filters share one ordinary desktop slot. Reclaim decorative icon space
+   so their accessible labels remain useful without turning into tiny inputs. */
+@media (min-width: 981px) {
+  .catalog-filter-pair .app-select__value > svg,
+  .catalog-filter-pair .app-combobox__anchor > svg:first-child {
+    display: none;
+  }
+  .catalog-filter-pair .app-select__trigger,
+  .catalog-filter-pair .app-combobox__anchor {
+    padding-inline: 6px;
+    gap: 4px;
+  }
+  .catalog-filter-pair .app-select__value,
+  .catalog-filter-pair .app-combobox__input {
+    font-size: 0.75rem;
+  }
+}
 /* Flat toolbar only; dropdown panels and installation controls keep their surfaces. */
 .catalog-controls .search-field input,
 .catalog-controls .app-select__trigger,
@@ -3115,8 +3138,9 @@ img {
   .catalog-controls {
     grid-template-columns: 1fr 1fr;
   }
-  .search-field {
-    grid-column: span 2;
+  .search-field,
+  .catalog-controls--plugins .catalog-filter-pair {
+    grid-column: 1 / -1;
   }
   .validation-section {
     grid-template-columns: 1fr;
@@ -3395,5 +3419,11 @@ img {
   }
   .workflow-path--animate::before {
     transform: none;
+  }
+}
+
+@media (max-width: 380px) {
+  .catalog-filter-pair {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
