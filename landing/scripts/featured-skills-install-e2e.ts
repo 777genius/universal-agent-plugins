@@ -100,14 +100,31 @@ function nativeSkillFile(
   return file;
 }
 
+const checkout = spawnSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8', timeout: 15_000 });
+const checkoutSha = (checkout.stdout || '').trim();
+const expectedHeadSha = process.env.UAP_EXPECTED_HEAD_SHA ?? '';
+const nativeVersionHome = join(parent, 'native-version-home');
+mkdirSync(nativeVersionHome, { recursive: true });
+const nativeVersionEnv = { ...process.env, HOME: nativeVersionHome, USERPROFILE: nativeVersionHome,
+  CODEX_HOME: join(nativeVersionHome, '.codex'), XDG_CONFIG_HOME: join(nativeVersionHome, 'config'),
+  XDG_CACHE_HOME: join(nativeVersionHome, 'cache'), CI: 'true', DO_NOT_TRACK: '1' };
+const nativeVersion = spawnSync(target, ['--version'], { env: nativeVersionEnv, encoding: 'utf8', timeout: 15_000 });
 const version = spawnSync('agentplugins', ['version'], { encoding: 'utf8', timeout: 15_000 });
 const report = {
-  schema_version: 1, target, github_sha: process.env.GITHUB_SHA ?? '',
-  cli_version: (version.stdout || '').trim(), native_client: process.env.UAP_NATIVE_CLIENT_VERSION ?? '',
+  schema_version: 1, target, github_sha: checkoutSha, expected_pr_head_sha: expectedHeadSha,
+  cli_version: (version.stdout || '').trim(), native_client: { exit_code: nativeVersion.status, value: (nativeVersion.stdout || '').trim(),
+    stderr: (nativeVersion.stderr || '').trim(), error: nativeVersion.error?.message ?? null },
   source: 'public website recommendedSkills; live GitHub checkout; genuine Linux client',
   simulated_native_activation: false, model_calls: false, evidence,
 };
 try {
+  assert.equal(checkout.status, 0, 'Observed checkout SHA must be available');
+  assert.match(checkoutSha, /^[0-9a-f]{40}$/, 'Observed checkout SHA must be valid');
+  if (process.env.GITHUB_EVENT_NAME === 'pull_request') {
+    assert.equal(checkoutSha, expectedHeadSha, 'Live audit must execute the exact expected PR HEAD');
+  }
+  assert.equal(nativeVersion.status, 0, 'Genuine native client version must execute');
+  assert.ok((nativeVersion.stdout || '').trim(), 'Genuine native client must report a version');
   assert.equal(version.status, 0, 'Published CLI version must execute');
   for (const [index, { repository, slug }] of recommendedSkills.entries()) {
     const source = 'https://github.com/' + repository;

@@ -32,6 +32,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -58,6 +59,7 @@ jobs:
           opencode --version
       - name: Check each reviewed website card using real install, list, repeat and remove
         env:
+          UAP_EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           UAP_REVIEWED_SHARD: ${{ matrix.shard }}
           UAP_REVIEWED_REPORT_DIR: ${{ runner.temp }}/reviewed-plugin-receipts
         run: node --experimental-strip-types landing/scripts/website-reviewed-install-e2e.ts

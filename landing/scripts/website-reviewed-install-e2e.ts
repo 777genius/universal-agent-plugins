@@ -66,15 +66,38 @@ function guidedCodexUserRemoval(output: { exit_code: number | null; stdout_tail:
   }
 }
 
+const checkout = spawnSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8', timeout: 15_000 });
+const checkoutSha = (checkout.stdout || '').trim();
+const expectedHeadSha = process.env.UAP_EXPECTED_HEAD_SHA ?? '';
+const nativeVersionHome = join(parent, 'native-version-home');
+mkdirSync(nativeVersionHome, { recursive: true });
+const nativeVersionEnv = { ...process.env, HOME: nativeVersionHome, USERPROFILE: nativeVersionHome,
+  CODEX_HOME: join(nativeVersionHome, '.codex'), XDG_CONFIG_HOME: join(nativeVersionHome, 'config'),
+  XDG_CACHE_HOME: join(nativeVersionHome, 'cache'), CI: 'true', DO_NOT_TRACK: '1' };
+const nativeVersions = native.map((client) => {
+  const result = spawnSync(client, ['--version'], { env: nativeVersionEnv, encoding: 'utf8', timeout: 15_000 });
+  return { client, exit_code: result.status, value: (result.stdout || '').trim(),
+    stderr: (result.stderr || '').trim(), error: result.error?.message ?? null };
+});
 const version = spawnSync('agentplugins', ['version'], { encoding: 'utf8', timeout: 15_000 });
 const report = {
-  schema_version: 1, run_sha: process.env.GITHUB_SHA ?? '', cli_version: (version.stdout || '').trim(),
+  schema_version: 1, run_sha: checkoutSha, expected_pr_head_sha: expectedHeadSha, cli_version: (version.stdout || '').trim(),
+  native_clients: nativeVersions,
   reviewed_total: reviewed.length, selected_total: selected.length, shard, shards,
   signed_snapshot_sha256: createHash('sha256').update(original).digest('hex'),
   scope: 'all live signed reviewed website cards; installed where compatible with a genuine native client',
   actual_model_calls: false, native_activation_qualified_by_this_job: false, outcomes,
 };
 try {
+  assert.equal(checkout.status, 0, 'Observed checkout SHA must be available');
+  assert.match(checkoutSha, /^[0-9a-f]{40}$/, 'Observed checkout SHA must be valid');
+  if (process.env.GITHUB_EVENT_NAME === 'pull_request') {
+    assert.equal(checkoutSha, expectedHeadSha, 'Live audit must execute the exact expected PR HEAD');
+  }
+  for (const receipt of nativeVersions) {
+    assert.equal(receipt.exit_code, 0, receipt.client + ' version must execute');
+    assert.ok(receipt.value, receipt.client + ' must report a version');
+  }
   assert.equal(version.status, 0, 'Published CLI must run');
   for (const [i, plugin] of selected.entries()) {
     const source = plugin.install_source;
