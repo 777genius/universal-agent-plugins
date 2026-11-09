@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
@@ -98,4 +99,36 @@ func TestHermesProjectPreconditionNeedsExactGitRoot(t *testing.T) {
  if err := New().CheckPlanPrecondition(input, &plan); err != nil {
   t.Fatalf("Git worktree pointer is a legitimate root marker: %v", err)
  }
+}
+
+func TestHermesPreflightAcceptsUnstagedGroupButRejectsMismatchedDelivery(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	profile := filepath.Join(root, ".hermes")
+	if err := os.MkdirAll(profile, 0o700); err != nil { t.Fatal(err) }
+	active := filepath.Join(root, "managed", "hermes", "test")
+	req := domain.ActivationRequest{
+		Client: domain.DetectedClient{ClientID: domain.ClientHermes, ConfigRoot: profile},
+		Plan: domain.DeliveryPlan{ClientID: domain.ClientHermes, Scope: domain.ScopeUser,
+			NativeRegistryRoot: profile, ActivePath: active, 
+			TargetContext: domain.TargetContext{Scope: domain.ScopeUser, UserConfigRoot: profile}},
+	}
+	env := clients.Env{NativeConfig: nativeconfig.New()}
+	if err := New().PreflightActivation(env, req); err != nil {
+		t.Fatalf("group pre-staging preflight refused a valid client/plan: %v", err)
+	}
+	req.Delivery = domain.StagedDelivery{ClientID: domain.ClientHermes, ActivePath: filepath.Join(root, "other")}
+	if err := New().PreflightActivation(env, req); err == nil {
+		t.Fatal("staged delivery drift must be refused")
+	}
+	req.Delivery.ActivePath = active
+	req.Delivery.ClientID = domain.ClientCodex
+	if err := New().PreflightActivation(env, req); err == nil {
+		t.Fatal("staged delivery client mismatch must be refused")
+	}
+	req.Delivery.ClientID = domain.ClientHermes
+	req.Client.ClientID = domain.ClientCodex
+	if err := New().PreflightActivation(env, req); err == nil {
+		t.Fatal("selected wrong client must be refused even before mutation")
+	}
 }
