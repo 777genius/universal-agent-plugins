@@ -713,7 +713,7 @@
       "unavailableAtItsIndexedSource": "No disponible en su fuente indexada",
       "checkedAgainBeforeInstallation": "Comprobado nuevamente antes de la instalación.",
       "reviewedListing": "Revisado",
-      "notAvailableForChatgpt": "Esta versión no tiene una conexión verificada con ChatGPT",
+      "notAvailableForChatgpt": "Este plugin no tiene una vinculación verificada de ChatGPT Web. Las aplicaciones Web se conectan dentro de ChatGPT.",
       "verifiedConnectionFinishSetupInChatgpt": "Conexión verificada; finalizar la configuración en ChatGPT",
       "allInstalledAgents": "Elegir agentes en la terminal",
       "commandsDisabledInPreview": "Comandos deshabilitados en la vista previa.",
@@ -752,7 +752,7 @@
       "notReadyToInstall": "No listo para instalar",
       "detectedWhenYouRunTheCommand": "El comando permite elegir agentes antes de instalar.",
       "thisPackageIsNoLongerAvailableFromItsSource": "Este paquete ya no está disponible desde su fuente.",
-      "notAvailableForChatgpt": "Esta versión no tiene una conexión verificada con ChatGPT",
+      "notAvailableForChatgpt": "Este plugin no tiene una vinculación verificada de ChatGPT Web. Las aplicaciones Web se conectan dentro de ChatGPT.",
       "unavailableSignedDirectorySnapshotExpired": "No disponible: la instantánea del directorio firmada expiró",
       "noActiveReleaseSupportsThisClient": "Ninguna versión activa admite este cliente",
       "unavailableReviewDataIsNotInstallationAuthority": "No disponible: los datos de revisión no autorizan la instalación",
@@ -781,7 +781,7 @@
       "unresolvedDataIsForReviewOnlyProductionCommandsRequireAPublishedSignedDirectorySnapshot": "Los datos no resueltos son sólo para revisión; Los comandos de producción requieren una instantánea del directorio firmada y publicada.",
       "commandsUnavailable": "Comandos no disponibles.",
       "automaticDetection": "Elegir agentes en la terminal",
-      "theCliChecksThisPluginAgainstInstalledAgentsSkipsIncompatibleOnesAndLetsYouConfirmTheTargetsChatgptIsIncludedOnlyWhenThisPluginProvidesAVerifiedConnection": "La CLI detecta agentes compatibles para confirmarlos. ChatGPT requiere una conexión verificada.",
+      "theCliChecksThisPluginAgainstInstalledAgentsSkipsIncompatibleOnesAndLetsYouConfirmTheTargetsChatgptIsIncludedOnlyWhenThisPluginProvidesAVerifiedConnection": "La CLI comprueba los agentes locales y permite confirmar los destinos compatibles. ChatGPT Web es distinto: se pueden preparar aplicaciones aptas, pero la conexión se completa en ChatGPT.",
       "oneStepRemainsInChatgpt": "Queda un paso en ChatGPT.",
       "noSingleSourceServesThisTargetSet": "Ninguna fuente admite todos los destinos seleccionados.",
       "theCliWillFailBeforeMutationAndSuggestCompatibleTargetSourceCombinationsItNeverMixesDistributionsAcrossClients": "La CLI se detendrá antes de modificar archivos y sugerirá combinaciones de destinos y fuentes compatibles. Nunca mezcla distribuciones entre clientes.",
@@ -825,7 +825,8 @@
           "mcp": "Herramientas MCP",
           "extensions": "Extensiones"
         }
-      }
+      },
+      "piNoCompatibleRelease": "Pi es compatible, pero la versión firmada de este plugin no incluye un destino compatible con Pi."
     },
     "authentication": {
       "not_required": "No se requiere cuenta",
@@ -963,11 +964,11 @@
         "activation": "Recarga los plugins de Qoder o reinicia Qoder después de instalar. Las conexiones MCP y la autenticación del proveedor todavía deben confirmarse en Qoder."
       },
       "pi": {
-        "note": "Solo extensiones nativas de Pi gestionadas",
+        "note": "Extensiones nativas de Pi, Skills y MCP",
         "status": "Compatible",
-        "intro": "Instala paquetes Agent Plugins 1.0 que declaren una extensión nativa de Pi. Las habilidades portátiles y la proyección MCP quedan fuera del alcance actual de este adaptador.",
-        "delivery": "El CLI instala la extensión de Pi declarada en tu directorio del agente Pi y registra el paquete gestionado para actualizarlo, repararlo y eliminarlo.",
-        "activation": "Tras la instalación, recarga los recursos o reinicia Pi para cargar la extensión gestionada."
+        "intro": "Instala extensiones, Skills y MCP (stdio/Streamable HTTP) compatibles con Pi para usuario o proyecto. Depende de la versión firmada del plugin.",
+        "delivery": "La CLI instala los componentes aptos en el perfil o proyecto Pi elegido y gestiona actualizaciones, reparación y eliminación.",
+        "activation": "Recarga los recursos o reinicia Pi. Revisa la confianza del proyecto y los permisos MCP si se solicitan."
       }
     },
     "directoryPage": {
@@ -1074,13 +1075,14 @@
       "required": "Autenticación requerida",
       "not_required": "No requiere autenticación",
       "unknown": "Requisitos de autenticación desconocidos",
-      "varies": "Depende del agente",
+      "varies": "Depende del agente o la versión",
       "automatic": "Los agentes instalados se detectan al ejecutar el comando. Selecciona agentes en Instalar para ver sus requisitos.",
       "unresolved": "No se ha resuelto una opción de instalación para estos agentes. Selecciona un agente compatible para comprobar sus requisitos.",
       "release": "{id} · versión {sequence}",
       "requiredDetail": "El paquete puede requerir una cuenta, token o inicio de sesión; esto no especifica OAuth ni confirma que hayas iniciado sesión.",
       "not_requiredDetail": "No se declara autenticación para estos agentes. Pueden aplicarse límites del servicio y otros requisitos de configuración.",
-      "unknownDetail": "Comprueba los requisitos del paquete antes de conectar."
+      "unknownDetail": "Comprueba los requisitos del paquete antes de conectar.",
+      "variesDetail": "Un mismo agente puede requerir distinta autenticación según la versión compatible. Elige un destino y comprueba el plan de instalación."
     }
   },
   "pluginAuthoring": {

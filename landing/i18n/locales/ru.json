@@ -713,7 +713,7 @@
       "unavailableAtItsIndexedSource": "Недоступно в проиндексированном источнике",
       "checkedAgainBeforeInstallation": "Проверяется снова перед установкой",
       "reviewedListing": "Проверено",
-      "notAvailableForChatgpt": "В этом релизе нет проверенного подключения ChatGPT",
+      "notAvailableForChatgpt": "У этого плагина нет подтверждённой привязки к приложению ChatGPT Web. Web-приложения подключаются внутри ChatGPT.",
       "verifiedConnectionFinishSetupInChatgpt": "Проверенное подключение; завершите настройку в ChatGPT",
       "allInstalledAgents": "Выбрать агентов в терминале",
       "commandsDisabledInPreview": "Команды отключены в предварительном просмотре.",
@@ -752,7 +752,7 @@
       "notReadyToInstall": "Не готов к установке",
       "detectedWhenYouRunTheCommand": "Команда предложит выбрать агентов перед установкой.",
       "thisPackageIsNoLongerAvailableFromItsSource": "Этот пакет больше недоступен в своём источнике.",
-      "notAvailableForChatgpt": "В этом релизе нет проверенного подключения ChatGPT",
+      "notAvailableForChatgpt": "У этого плагина нет подтверждённой привязки к приложению ChatGPT Web. Web-приложения подключаются внутри ChatGPT.",
       "unavailableSignedDirectorySnapshotExpired": "Недоступно: срок действия подписанного снимка Directory истёк",
       "noActiveReleaseSupportsThisClient": "Ни один активный выпуск не поддерживает этого клиента",
       "unavailableReviewDataIsNotInstallationAuthority": "Недоступно: данные проверки не являются основанием для установки",
@@ -781,7 +781,7 @@
       "unresolvedDataIsForReviewOnlyProductionCommandsRequireAPublishedSignedDirectorySnapshot": "Неразрешённые данные предназначены только для проверки; рабочим командам требуется опубликованный подписанный снимок Directory.",
       "commandsUnavailable": "Команды недоступны.",
       "automaticDetection": "Выбрать агентов в терминале",
-      "theCliChecksThisPluginAgainstInstalledAgentsSkipsIncompatibleOnesAndLetsYouConfirmTheTargetsChatgptIsIncludedOnlyWhenThisPluginProvidesAVerifiedConnection": "CLI находит совместимых агентов и просит подтвердить выбор. ChatGPT требует проверенного подключения.",
+      "theCliChecksThisPluginAgainstInstalledAgentsSkipsIncompatibleOnesAndLetsYouConfirmTheTargetsChatgptIsIncludedOnlyWhenThisPluginProvidesAVerifiedConnection": "CLI проверяет локальных агентов и предлагает подтвердить совместимые варианты. ChatGPT Web настраивается отдельно: UAP может подготовить подходящее приложение, но подключение завершается в ChatGPT.",
       "oneStepRemainsInChatgpt": "В ChatGPT остаётся один шаг.",
       "noSingleSourceServesThisTargetSet": "Ни один источник не обслуживает этот набор целей.",
       "theCliWillFailBeforeMutationAndSuggestCompatibleTargetSourceCombinationsItNeverMixesDistributionsAcrossClients": "CLI завершится ошибкой до изменения данных и предложит совместимые комбинации целей и источников; он никогда не смешивает дистрибутивы разных клиентов.",
@@ -825,7 +825,8 @@
           "mcp": "Инструменты MCP",
           "extensions": "Расширения"
         }
-      }
+      },
+      "piNoCompatibleRelease": "Pi поддерживается, но в подписанном релизе этого плагина нет совместимого варианта установки для Pi."
     },
     "authentication": {
       "not_required": "Учётная запись не требуется",
@@ -963,11 +964,11 @@
         "activation": "После установки перезагрузите плагины Qoder или перезапустите Qoder. Соединения MCP во время выполнения и аутентификацию провайдера по-прежнему нужно подтвердить в Qoder."
       },
       "pi": {
-        "note": "Только управляемые нативные расширения Pi",
+        "note": "Нативные расширения Pi, Skills и MCP",
         "status": "Поддерживается",
-        "intro": "Устанавливайте пакеты Agent Plugins 1.0 с объявленным нативным расширением Pi. Переносимые навыки и проекция MCP пока не входят в возможности этого адаптера.",
-        "delivery": "CLI устанавливает объявленное расширение Pi в каталог агента Pi и отслеживает управляемый пакет для обновления, восстановления и удаления.",
-        "activation": "После установки перезагрузите ресурсы или перезапустите Pi, чтобы загрузить управляемое расширение."
+        "intro": "Устанавливайте совместимые расширения Pi, Skills и MCP (stdio/Streamable HTTP) для пользователя или проекта. Доступность зависит от подписанного релиза плагина.",
+        "delivery": "CLI устанавливает компоненты в выбранный профиль Pi или проект и управляет обновлением, восстановлением и удалением.",
+        "activation": "Перезагрузите ресурсы или перезапустите Pi. При необходимости подтвердите доверие проекту и разрешения MCP."
       }
     },
     "directoryPage": {
@@ -1074,13 +1075,14 @@
       "required": "Требуется аутентификация",
       "not_required": "Аутентификация не требуется",
       "unknown": "Требования аутентификации неизвестны",
-      "varies": "Зависит от агента",
+      "varies": "Зависит от агента или релиза",
       "automatic": "Установленные агенты определяются при запуске команды. Выберите агентов в разделе установки, чтобы увидеть их требования.",
       "unresolved": "Вариант установки для этих агентов не определён. Выберите поддерживаемого агента, чтобы проверить требования.",
       "release": "{id} · выпуск {sequence}",
       "requiredDetail": "Пакету может требоваться аккаунт, токен или вход. Это не указывает на OAuth и не подтверждает, что вы вошли.",
       "not_requiredDetail": "Для этих агентов аутентификация не заявлена. Возможны ограничения сервиса и другие требования настройки.",
-      "unknownDetail": "Проверьте требования пакета перед подключением."
+      "unknownDetail": "Проверьте требования пакета перед подключением.",
+      "variesDetail": "Для одного агента в разных подходящих релизах могут действовать разные требования входа. Выберите агент и проверьте конкретный план установки."
     }
   },
   "pluginAuthoring": {

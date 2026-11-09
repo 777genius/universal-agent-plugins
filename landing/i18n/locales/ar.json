@@ -713,7 +713,7 @@
       "unavailableAtItsIndexedSource": "غير متاح في مصدره المفهرس",
       "checkedAgainBeforeInstallation": "يُفحص مجددًا قبل التثبيت",
       "reviewedListing": "مُراجَع",
-      "notAvailableForChatgpt": "لا يتوفر اتصال ChatGPT موثّق في هذا الإصدار",
+      "notAvailableForChatgpt": "لا توجد لهذه الإضافة رابطة تطبيق ChatGPT Web موثّقة. تُربط تطبيقات الويب داخل ChatGPT.",
       "verifiedConnectionFinishSetupInChatgpt": "اتصال تم التحقق منه؛ أكمل الإعداد في ChatGPT",
       "allInstalledAgents": "اختيار الوكلاء في الطرفية",
       "commandsDisabledInPreview": "الأوامر معطلة في المعاينة.",
@@ -752,7 +752,7 @@
       "notReadyToInstall": "غير جاهز للتثبيت",
       "detectedWhenYouRunTheCommand": "يتيح الأمر اختيار الوكلاء قبل التثبيت.",
       "thisPackageIsNoLongerAvailableFromItsSource": "لم تعد هذه الحزمة متاحة من مصدرها.",
-      "notAvailableForChatgpt": "لا يتوفر اتصال ChatGPT موثّق في هذا الإصدار",
+      "notAvailableForChatgpt": "لا توجد لهذه الإضافة رابطة تطبيق ChatGPT Web موثّقة. تُربط تطبيقات الويب داخل ChatGPT.",
       "unavailableSignedDirectorySnapshotExpired": "غير متاح: انتهت صلاحية لقطة Directory الموقعة",
       "noActiveReleaseSupportsThisClient": "لا يوجد إصدار نشط يدعم هذا العميل",
       "unavailableReviewDataIsNotInstallationAuthority": "غير متاح: بيانات المراجعة ليست مرجعًا معتمدًا للتثبيت",
@@ -781,7 +781,7 @@
       "unresolvedDataIsForReviewOnlyProductionCommandsRequireAPublishedSignedDirectorySnapshot": "البيانات غير المحسومة مخصصة للمراجعة فقط؛ تتطلب أوامر الإنتاج لقطة Directory موقعة ومنشورة.",
       "commandsUnavailable": "الأوامر غير متاحة.",
       "automaticDetection": "اختيار الوكلاء في الطرفية",
-      "theCliChecksThisPluginAgainstInstalledAgentsSkipsIncompatibleOnesAndLetsYouConfirmTheTargetsChatgptIsIncludedOnlyWhenThisPluginProvidesAVerifiedConnection": "تكتشف CLI الوكلاء المتوافقين لتأكيدهم. يتطلب ChatGPT اتصالًا موثقًا.",
+      "theCliChecksThisPluginAgainstInstalledAgentsSkipsIncompatibleOnesAndLetsYouConfirmTheTargetsChatgptIsIncludedOnlyWhenThisPluginProvidesAVerifiedConnection": "تفحص أداة CLI الوكلاء المحليين وتتيح تأكيد الأهداف المتوافقة. ويختلف ChatGPT Web: يمكن إعداد التطبيقات المؤهلة، لكن اكتمال الربط يتم داخل ChatGPT.",
       "oneStepRemainsInChatgpt": "تبقت خطوة واحدة في ChatGPT.",
       "noSingleSourceServesThisTargetSet": "لا يوجد مصدر واحد يخدم مجموعة الأهداف هذه.",
       "theCliWillFailBeforeMutationAndSuggestCompatibleTargetSourceCombinationsItNeverMixesDistributionsAcrossClients": "سيفشل CLI قبل إجراء أي تعديل وسيقترح تركيبات متوافقة من الأهداف والمصادر؛ ولا يخلط أبدًا توزيعات مختلفة بين العملاء.",
@@ -825,7 +825,8 @@
           "mcp": "أدوات MCP",
           "extensions": "إضافات"
         }
-      }
+      },
+      "piNoCompatibleRelease": "يدعم UAP وكيل Pi، لكن الإصدار الموقّع لهذه الإضافة لا يتضمن هدف تثبيت متوافقًا مع Pi."
     },
     "authentication": {
       "not_required": "لا يلزم حساب",
@@ -963,11 +964,11 @@
         "activation": "أعد تحميل إضافات Qoder أو أعد تشغيل Qoder بعد التثبيت. ما زالت اتصالات MCP وقت التشغيل ومصادقة المزوّد بحاجة إلى تأكيد داخل Qoder."
       },
       "pi": {
-        "note": "إضافات Pi الأصلية المُدارة فقط",
+        "note": "امتدادات Pi الأصلية والمهارات وMCP",
         "status": "مدعوم",
-        "intro": "ثبّت حزم Agent Plugins 1.0 التي تعلن عن إضافة Pi أصلية. المهارات القابلة للنقل وإسقاط MCP خارج النطاق الحالي لهذا المحوّل.",
-        "delivery": "يثبّت CLI إضافة Pi المعلنة في دليل وكيل Pi ويتتبّع الحزمة المُدارة لتحديثها وإصلاحها وإزالتها.",
-        "activation": "بعد التثبيت، أعد تحميل الموارد أو أعد تشغيل Pi لتحميل الإضافة المُدارة."
+        "intro": "ثبّت امتدادات Pi والمهارات وMCP المتوافقة (stdio وStreamable HTTP) للمستخدم أو المشروع. يعتمد التوفر على الإصدار الموقّع للإضافة.",
+        "delivery": "تثبّت CLI المكونات المؤهلة في ملف Pi أو المشروع المحدد وتدير التحديث والإصلاح والإزالة.",
+        "activation": "أعد تحميل موارد Pi أو تشغيله. راجع الثقة بالمشروع وأذونات MCP عند الطلب."
       }
     },
     "directoryPage": {
@@ -1074,13 +1075,14 @@
       "required": "المصادقة مطلوبة",
       "not_required": "لا تتطلب مصادقة",
       "unknown": "متطلبات المصادقة غير معروفة",
-      "varies": "تختلف حسب الوكيل",
+      "varies": "يعتمد على الوكيل أو الإصدار",
       "automatic": "يتم اكتشاف الوكلاء المثبتين عند تشغيل الأمر. اختر الوكلاء في قسم التثبيت لعرض متطلباتهم.",
       "unresolved": "لم يتم تحديد خيار تثبيت لهؤلاء الوكلاء. اختر وكيلاً مدعوماً للتحقق من متطلباته.",
       "release": "{id} · الإصدار {sequence}",
       "requiredDetail": "قد تتطلب الحزمة حساباً أو رمزاً أو تسجيل دخول؛ هذا لا يحدد OAuth ولا يؤكد أنك سجلت الدخول.",
       "not_requiredDetail": "لم يتم الإعلان عن مصادقة لهؤلاء الوكلاء. قد تنطبق حدود الخدمة ومتطلبات إعداد أخرى.",
-      "unknownDetail": "تحقق من متطلبات الحزمة قبل الاتصال."
+      "unknownDetail": "تحقق من متطلبات الحزمة قبل الاتصال.",
+      "variesDetail": "قد يختلف تسجيل الدخول للوكيل نفسه بين الإصدارات المتوافقة. اختر هدفًا وراجع خطة التثبيت المحددة."
     }
   },
   "pluginAuthoring": {
