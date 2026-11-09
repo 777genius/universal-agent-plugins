@@ -22,7 +22,7 @@ func TestFindingIdentityIsBoundedByComponentType(t *testing.T) {
 	p := project.Result{
 		Input: packageview.Input{Coverage: packageview.Coverage{InventoryComplete: true}},
 		Facts: conformance.Facts{
-			Package: pkg,
+			Package:     pkg,
 			Conformance: conformance.Fail,
 			Findings: []conformance.Finding{
 				{Code: "mcp", Layer: conformance.Normative, Boundary: domain.BoundaryMCPServer, Item: opaque(shared), Severity: domain.SeverityError},
