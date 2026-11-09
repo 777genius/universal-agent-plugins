@@ -42,6 +42,10 @@ func (f *geminiCompleteContractFixture) publicOutput(r *geminiCycleRecipe, stage
 	if !strings.HasPrefix(stage, "remove-") {
 		output["next_action"] = next
 	}
+	if strings.HasPrefix(stage, "add-") || stage == "repeat-add-a" || stage == "update-a" || stage == "unchanged-update-a" {
+		output["scope"], output["readiness"] = r.scopeName(), "needs_action"
+		output["next_actions"] = []any{map[string]any{"code": "verify_native", "actor": "native_client", "message": next}}
+	}
 	if stage == "repeat-add-a" {
 		output["security"] = f.publicSecurity(r, "cache")
 		return output
@@ -61,7 +65,7 @@ func (f *geminiCompleteContractFixture) publicOutput(r *geminiCycleRecipe, stage
 	}
 	if strings.HasPrefix(stage, "add-") {
 		data["action_required"], data["manifest_digest"], data["security"] = 1, output["manifest_digest"], f.publicSecurity(r, "local_scan")
-		data["environment"] = map[string]any{"reason": "no_save_requested", "saved": false}
+		data["environment"] = map[string]any{"reason": "no_save_requested", "saved": false, "scope": r.scopeName(), "scope_selection_reason": "explicit"}
 	}
 	if strings.HasPrefix(stage, "remove-") {
 		data["status"], data["data_retained"], data["plugin_data_preserved"] = "data_retained", true, true
