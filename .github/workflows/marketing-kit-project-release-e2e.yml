@@ -5,6 +5,7 @@ on:
     paths:
       - 'landing/**'
       - 'scripts/marketing-kit-project-release-e2e.py'
+      - 'scripts/marketing-kit-published-launcher-abort.js'
       - 'scripts/test_live_install_audit_env.py'
       - 'scripts/live-install-audit.py'
       - '.github/workflows/marketing-kit-project-release-e2e.yml'
@@ -128,6 +129,13 @@ jobs:
             fi
             sleep "$((attempt * 5))"
           done
+      - name: Verify published launcher abort cleanup
+        if: matrix.target == 'codex'
+        run: |
+          set -euo pipefail
+          # Real pinned npm 0.1.102 module, with only the HTTPS request stalled.
+          # A mock transport here proves cleanup, not a native-client tools/call.
+          UAP_GLOBAL_NPM_ROOT="$(npm root -g)" timeout 20s node scripts/marketing-kit-published-launcher-abort.js
       - name: Verify published ChatGPT target safety fences
         if: matrix.target == 'codex'
         run: |
