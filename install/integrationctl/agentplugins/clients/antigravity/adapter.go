@@ -62,9 +62,8 @@ func (*Adapter) ResolveProfileRoot(root string) (string, error) {
 		return "", fmt.Errorf("Antigravity native profile must be a clean absolute directory")
 	}
 	canonical, err := clients.CanonicalDirectory(root, os.Lstat, filepath.EvalSymlinks)
-	if err != nil || !cleanAbsolute(canonical) {
-		return "", fmt.Errorf("Antigravity native profile cannot be resolved: %w", err)
-	}
+	if err != nil { return "", fmt.Errorf("resolve Antigravity native profile: %w", err) }
+	if !cleanAbsolute(canonical) { return "", fmt.Errorf("Antigravity resolved profile is not a clean absolute path") }
 	return canonical, nil
 }
 
