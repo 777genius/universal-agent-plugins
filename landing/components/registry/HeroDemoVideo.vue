@@ -183,7 +183,7 @@ onBeforeUnmount(() => {
         <div class="hero-demo-video__terminal" aria-hidden="true">
           <span>● ● ●</span>
           <code>$ npx universal-agent-plugins</code>
-          <code>✓ Codex &nbsp; ✓ Cursor &nbsp; ✓ VS Code</code>
+          <code>✓ Codex &nbsp; ✓ Cursor &nbsp; ✓ OpenCode</code>
         </div>
         <div class="hero-demo-video__caption">
           <svg viewBox="0 0 24 24" aria-hidden="true">
