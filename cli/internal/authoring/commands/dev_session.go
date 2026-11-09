@@ -2,121 +2,15 @@ package commands
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/mcpruntime"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/project"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/report"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/processlock"
 )
 
-const (
-	devPollInterval = 100 * time.Millisecond
-	devDebounce     = 250 * time.Millisecond
-	devMaxCoalesce  = time.Second
-)
-
-func devSessionLockPath(cache, root string) (string, error) {
-	if cache == "" || !filepath.IsAbs(cache) {
-		return "", &mcpruntime.Error{Code: "runtime_dev_session_lock_unavailable"}
-	}
-	canonical, err := filepath.Abs(root)
-	if err != nil {
-		return "", &mcpruntime.Error{Code: "runtime_dev_session_lock_unavailable"}
-	}
-	canonical, err = filepath.EvalSymlinks(canonical)
-	if err != nil {
-		return "", &mcpruntime.Error{Code: "runtime_dev_session_lock_unavailable"}
-	}
-	digest := sha256.Sum256([]byte(filepath.Clean(canonical)))
-	return filepath.Join(cache, "agentplugins", "author-dev-locks", hex.EncodeToString(digest[:])+".lock"), nil
-}
-
-func acquireDevSession(ctx context.Context, root string) (func() error, error) {
-	cache, err := os.UserCacheDir()
-	if err != nil {
-		return nil, &mcpruntime.Error{Code: "runtime_dev_session_lock_unavailable"}
-	}
-	lockPath, err := devSessionLockPath(cache, root)
-	if err != nil {
-		return nil, err
-	}
-	release, err := (processlock.Lock{Path: lockPath}).Acquire(ctx)
-	if err != nil {
-		code := "runtime_dev_session_lock_unavailable"
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			return nil, err
-		}
-		if errors.Is(err, processlock.ErrActive) {
-			code = "runtime_dev_session_conflict"
-		}
-		return nil, &mcpruntime.Error{Code: code}
-	}
-	return release, nil
-}
-
-type devPending struct {
-	project project.Result
-	set     bool
-	first   time.Time
-	last    time.Time
-}
-
-type devFailurePending struct {
-	project project.Result
-	err     error
-	code    string
-	set     bool
-	first   time.Time
-	last    time.Time
-}
-
-func (pending *devFailurePending) observe(next project.Result, err error, code string, now time.Time) {
-	pending.project = next
-	pending.err = err
-	if !pending.set {
-		pending.set = true
-		pending.first = now
-		pending.last = now
-	} else if pending.code != code {
-		pending.last = now
-	}
-	pending.code = code
-}
-
-func (pending devFailurePending) ready(now time.Time) bool {
-	return pending.set && (now.Sub(pending.last) >= devDebounce || now.Sub(pending.first) >= devMaxCoalesce)
-}
-
-func (pending *devFailurePending) take() (project.Result, error, string) {
-	next, err, code := pending.project, pending.err, pending.code
-	*pending = devFailurePending{}
-	return next, err, code
-}
-
-func (pending *devPending) observe(next project.Result, now time.Time) {
-	pending.project = next
-	pending.last = now
-	if !pending.set {
-		pending.set = true
-		pending.first = now
-	}
-}
-
-func (pending devPending) ready(now time.Time) bool {
-	return pending.set && (now.Sub(pending.last) >= devDebounce || now.Sub(pending.first) >= devMaxCoalesce)
-}
-
-func (pending *devPending) take() project.Result {
-	next := pending.project
-	*pending = devPending{}
-	return next
-}
+const devPollInterval = 100 * time.Millisecond
 
 func (a App) dev(ctx context.Context, req request) (r report.Report, err error) {
 	type cycleResult struct {
