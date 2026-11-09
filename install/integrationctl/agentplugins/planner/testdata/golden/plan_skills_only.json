@@ -147,7 +147,7 @@
       "TargetRoot": "\u003croot\u003e/managed/clients/cline",
       "UserActions": [
         "verify the plugin's authentication requirements before using it",
-        "agentplugins will install and verify Cline skills and MCP entries in the selected native profile automatically; Cline CLI reads its selected MCP settings on its next process. For a Cline IDE extension, open MCP Servers > Configure > Configure MCP Servers and confirm the settings file matches the selected profile before expecting those entries"
+        "agentplugins will install and verify Cline skills in the selected native profile automatically; verify Skills discovery in the selected Cline CLI or IDE session"
       ],
       "Verification": "package_validated",
       "Warnings": [
