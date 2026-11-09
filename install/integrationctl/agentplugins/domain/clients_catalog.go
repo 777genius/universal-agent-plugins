@@ -175,10 +175,13 @@ var clientDefinitions = []ClientDefinition{
 		HonorsOpenAIMCPAuthHints:            true,
 		LegacyPreparedProjectPackageReceipt: true,
 	}), LifecycleNativeConfig), SupportNative, SupportNative),
-	withProjectComponentSupport(withProjectScope(clientDefinition(ClientHermes, "Hermes Agent", "hermes", "managed", "native", false, PackageNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
-		InstallIntents: []InstallIntent{InstallIntentAutomatic},
-		LifecycleKind:  LifecyclePrepared,
-	}), LifecyclePrepared), SupportNative, SupportUnsupported),
+	withProjectComponents(withProjectScope(clientDefinition(ClientHermes, "Hermes Agent", "hermes", "managed", "native", false, PackageNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
+		InstallIntents:            []InstallIntent{InstallIntentAutomatic},
+		LifecycleKind:             LifecycleNativeConfig,
+		BindsNativeProfileRoot:    true,
+		TracksNativeEffects:      true,
+		SupportsPreparedRecovery: true,
+	}), LifecycleNativeConfig), SupportNative, SupportUnsupported),
 	withProjectComponents(withProjectScope(withActivation(withoutCommands(clientDefinition(ClientPi, "Pi", "pi", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportNative, ClientTraits{
 		InstallIntents: []InstallIntent{InstallIntentAutomatic}, LifecycleKind: LifecyclePrepared,
 		BindsNativeProfileRoot: true, RequiresPluginData: true, VerifiesNativeDirectory: true, ProtectsModifiedPackage: true,
