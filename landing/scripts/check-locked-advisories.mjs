@@ -14,13 +14,16 @@ const entry = (line, indent) => {
   return match ? [scalar(match[1]), match[2] ?? ''] : null;
 };
 
-export function parsePnpmLock(source) {
+const SCOPES = ['dependencies', 'devDependencies', 'configDependencies', 'packageManagerDependencies'];
+const ROOT_CATEGORIES = [...SCOPES, 'optionalDependencies'];
+
+function parsePnpmDocument(source) {
   const versions = [...source.matchAll(/^lockfileVersion:\s*(\S+)\s*$/gm)].map(([, value]) => scalar(value));
   if (versions.length === 0 || versions.some((version) => version !== '9.0')) {
     throw new Error('Unsupported pnpm lockfile version');
   }
   const nodes = new Map();
-  const roots = { dependencies: new Set(), devDependencies: new Set() };
+  const roots = Object.fromEntries(SCOPES.map((scope) => [scope, new Set()]));
   let section = '', importer = '', category = '', currentNode = '', edgeCategory = '';
   let pendingRoot = '';
   const requireResolvedRoot = () => {
@@ -39,13 +42,13 @@ export function parsePnpmLock(source) {
       if (e2 || e4 || e6) requireResolvedRoot();
       if (e2) { rejectInlineMap(e2); importer = e2[0]; category = ''; }
       else if (e4) {
-        if (['dependencies', 'devDependencies', 'optionalDependencies'].includes(e4[0])) rejectInlineMap(e4);
+        if (ROOT_CATEGORIES.includes(e4[0])) rejectInlineMap(e4);
         category = e4[0];
       }
-      else if (importer && (category === 'dependencies' || category === 'devDependencies' || category === 'optionalDependencies') && e6) {
+      else if (importer && ROOT_CATEGORIES.includes(category) && e6) {
         currentNode = e6[0]; pendingRoot = currentNode;
       }
-      else if (importer && (category === 'dependencies' || category === 'devDependencies' || category === 'optionalDependencies') && e8?.[0] === 'version') {
+      else if (importer && ROOT_CATEGORIES.includes(category) && e8?.[0] === 'version') {
         roots[category === 'optionalDependencies' ? 'dependencies' : category].add(lockNode(currentNode, scalar(e8[1])));
         pendingRoot = '';
       }
@@ -64,10 +67,18 @@ export function parsePnpmLock(source) {
     }
   }
   requireResolvedRoot();
-  if (nodes.size === 0 || [...roots.dependencies, ...roots.devDependencies].length === 0) {
+  return { nodes, roots };
+}
+
+export function parsePnpmLock(source) {
+  // pnpm 12 can emit a separate boot document for config and package-manager dependencies.
+  // Keep document graphs isolated: identical snapshot IDs can have different edges.
+  const documents = source.split(/^---\s*$/gm).filter((part) => part.trim()).map(parsePnpmDocument);
+  if (documents.length === 0 || documents.length > 2 || !documents.some(({ nodes, roots }) =>
+    nodes.size > 0 && (roots.dependencies.size > 0 || roots.devDependencies.size > 0))) {
     throw new Error('Unsupported pnpm lockfile: missing v9 snapshot graph or root importer');
   }
-  return { nodes, roots };
+  return documents;
 }
 
 // These exact advisory ranges, not arbitrary versions of the packages.
@@ -85,9 +96,10 @@ export function vulnerabilityFor(key) {
 }
 
 export function auditLock(source) {
-  const { nodes, roots } = parsePnpmLock(source);
+  const documents = parsePnpmLock(source);
   const findings = new Map();
-  for (const scope of ['dependencies', 'devDependencies']) {
+  for (const { nodes, roots } of documents) {
+    for (const scope of SCOPES) {
     const pending = [...roots[scope]].map((key) => [key, [key]]);
     const visited = new Set();
     for (let i = 0; i < pending.length; i++) {
@@ -101,6 +113,7 @@ export function auditLock(source) {
       }
       for (const child of nodes.get(key) ?? []) pending.push([child, [...path, child]]);
     }
+  }
   }
   return [...findings.values()].sort((a, b) => a.scope.localeCompare(b.scope) || a.package.localeCompare(b.package));
 }

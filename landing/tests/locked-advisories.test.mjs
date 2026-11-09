@@ -9,6 +9,8 @@ importers:
     packageManagerDependencies:
       pnpm:
         version: 12.3.4
+snapshots:
+  pnpm@12.3.4: {}
 ---
 lockfileVersion: '9.0'
 importers:
@@ -91,8 +93,8 @@ test('refuses a different lockfile schema even if graph keys look familiar', () 
 });
 
 test('includes dependencies from every pnpm v9 importer, not only the top-level project', () => {
-  const multiImporter = fixture.replace('snapshots:\n',
-    '  packages/site:\n    dependencies:\n      minimatch:\n        specifier: 9.0.9\n        version: 9.0.9\nsnapshots:\n')
+  const multiImporter = fixture.replace("snapshots:\n  '@a/entry@1.0.0(peer@2.0.0)':",
+    '  packages/site:\n    dependencies:\n      minimatch:\n        specifier: 9.0.9\n        version: 9.0.9\nsnapshots:\n  \'@a/entry@1.0.0(peer@2.0.0)\':')
     .replace('  minimatch@3.1.5: {}', '  minimatch@9.0.9: {}\n  minimatch@3.1.5: {}');
   const findings = auditLock(multiImporter);
   assert.ok(findings.some(({ scope, package: pkg, path }) =>
@@ -117,4 +119,28 @@ test('rejects inline importer dependency maps instead of missing production root
   const inline = fixture.replace("    dependencies:\n      '@a/entry':\n        specifier: ^1.0.0\n        version: 1.0.0(peer@2.0.0)\n",
     "    dependencies: { '@a/entry': { version: 1.0.0(peer@2.0.0) } }\n");
   assert.throws(() => auditLock(inline), /Unsupported inline pnpm map/);
+});
+
+test('scans config dependencies in the pnpm 12 boot document', () => {
+  const withConfig = fixture.replace('    packageManagerDependencies:',
+    '    configDependencies:\n      config-plugin:\n        version: 1.0.0\n    packageManagerDependencies:')
+    .replace('  pnpm@12.3.4: {}', '  config-plugin@1.0.0:\n    dependencies:\n      glob: 13.0.6\n  glob@13.0.6: {}\n  pnpm@12.3.4: {}');
+  assert.ok(auditLock(withConfig).some(({ scope, package: pkg }) =>
+    scope === 'configDependencies' && pkg === 'glob@13.0.6'));
+});
+
+test('scans package-manager dependencies instead of ignoring the pnpm boot graph', () => {
+  const withManager = fixture.replace('  pnpm@12.3.4: {}',
+    '  pnpm@12.3.4:\n    dependencies:\n      glob: 13.0.6\n  glob@13.0.6: {}');
+  assert.ok(auditLock(withManager).some(({ scope, package: pkg }) =>
+    scope === 'packageManagerDependencies' && pkg === 'glob@13.0.6'));
+});
+
+test('does not overwrite boot snapshot edges with matching keys in the project document', () => {
+  const colliding = fixture.replace('    packageManagerDependencies:',
+    '    configDependencies:\n      test-tool:\n        version: 1.0.0\n    packageManagerDependencies:')
+    .replace('  pnpm@12.3.4: {}',
+      '  test-tool@1.0.0:\n    dependencies:\n      glob: 13.0.6\n  glob@13.0.6: {}\n  pnpm@12.3.4: {}');
+  assert.ok(auditLock(colliding).some(({ scope, package: pkg }) =>
+    scope === 'configDependencies' && pkg === 'glob@13.0.6'));
 });
