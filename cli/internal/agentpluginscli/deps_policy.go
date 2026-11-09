@@ -195,7 +195,7 @@ func checkLocalDependencyPolicy(ctx context.Context, app App, path string, lock 
 		_, err := inspectPinnedDependency(ctx, app, pin, func(envelope domain.PackageEnvelope) error {
 			for name, server := range envelope.MCP.Servers {
 				allowed := false
-				for _, transport := range policy.MCP.AllowedTransports {
+				for _, transport := range policy.MCP.AllowedTransports.Values {
 					allowed = allowed || transport == server.Type
 				}
 				if !allowed {
