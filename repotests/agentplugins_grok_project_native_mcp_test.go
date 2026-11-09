@@ -156,9 +156,11 @@ func grokProjectMCPNativeInspect(t *testing.T, f *projectNativeCLIAttempt, proje
 	obj, ok := value.(map[string]any)
 	if !ok || obj["grokVersion"] != "1.0.70" || obj["cwd"] != project ||
 		(obj["projectRoot"] != project && obj["projectRoot"] != project+"/") ||
-		obj["projectTrusted"] != false {
-		t.Fatal("real Grok native inspect returned different project/version/trust")
+		obj["projectTrusted"] != true {
+		t.Fatal("real Grok native inspect returned different project/version/folder trust")
 	}
+	// The disposable Git folder is trusted by Grok, as in the original native
+	// cycle; that does not grant trust or enable an individual project plugin.
 	// A prepared plugin must never activate project MCP on its own.
 	servers, ok := obj["mcpServers"].([]any)
 	if !ok || len(servers) != 0 {
