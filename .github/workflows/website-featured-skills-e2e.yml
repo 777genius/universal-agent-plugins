@@ -1,0 +1,62 @@
+name: Website recommended Skills live Linux E2E
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+    paths:
+      - 'landing/data/catalogCuration.ts'
+      - 'landing/scripts/featured-skills-install-e2e.ts'
+      - '.github/workflows/website-featured-skills-e2e.yml'
+  workflow_dispatch:
+  schedule:
+    - cron: '23 5 * * 4'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: website-featured-skills-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  published-linux:
+    if: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:live-skills') }}
+    name: Published npm + real ${{ matrix.target }} / all six featured Skills
+    runs-on: ubuntu-24.04
+    timeout-minutes: 32
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - {target: codex, package: '@openai/codex@0.153.4', binary: codex}
+          - {target: claude, package: '@anthropic-ai/claude-code@2.1.263', binary: claude}
+          - {target: opencode, package: 'opencode-ai@1.18.34', binary: opencode}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+      - name: Install genuine target and actual published npm CLI
+        env:
+          NATIVE_PACKAGE: ${{ matrix.package }}
+          NATIVE_BINARY: ${{ matrix.binary }}
+        run: |
+          npm install --global "universal-agent-plugins@latest" "$NATIVE_PACKAGE"
+          agentplugins version
+          "$NATIVE_BINARY" --version
+      - name: Live six-source project install, repeat, native path and removal
+        env:
+          UAP_FEATURED_SKILLS_TARGET: ${{ matrix.target }}
+          UAP_FEATURED_SKILLS_REPORT_DIR: ${{ runner.temp }}/website-featured-evidence
+        run: node --experimental-strip-types landing/scripts/featured-skills-install-e2e.ts
+      - name: Preserve every source receipt even on failure
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: website-featured-skills-${{ matrix.target }}
+          path: ${{ runner.temp }}/website-featured-evidence/
+          if-no-files-found: warn
+          retention-days: 14
