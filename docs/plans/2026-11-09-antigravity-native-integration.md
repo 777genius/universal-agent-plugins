@@ -67,3 +67,9 @@ Add `--target antigravity` to UAP for **real Antigravity-native plugin bundles**
 **Finding and concrete plan correction:** Source truth: agy native plugin lifecycle is distinct from workspace MCP; APM's 55-line adapter targets only MCP. Define separate acceptance oracle for plugin validation, installation, discovery and safe removal.
 
 **Decision:** This is part of the acceptance criteria; a contradictory implementation must be rejected rather than treated as a harmless warning.
+
+### Review round 2 / 6 — scope
+
+**Finding and concrete plan correction:** Scope: native plugin installation may be User-authoritative; explicit Project requests may only deliver documented Project Skills/MCP, and must never register a User plugin as a fallback. Optional .agents creation requires verified client behavior.
+
+**Decision:** This is part of the acceptance criteria; a contradictory implementation must be rejected rather than treated as a harmless warning.
