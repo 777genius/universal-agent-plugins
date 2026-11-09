@@ -93,8 +93,8 @@ func testProjectGrokPreparedMCP(t *testing.T, withSkills bool) {
 	if filepath.Dir(delivery.StagingPath) != plan.TargetAnchor {
 		t.Fatal("staging entered watched plugin root")
 	}
-	if _, err := os.Stat(filepath.Join(delivery.StagingPath, "mcp.json")); !os.IsNotExist(err) {
-		t.Fatal("project Grok wrote the user-only mcp.json", err)
+	if _, err := os.Stat(filepath.Join(delivery.StagingPath, "mcp.json")); err != nil {
+		t.Fatal("Grok Project lost its portable MCP source", err)
 	}
 	body, err := os.ReadFile(filepath.Join(delivery.StagingPath, ".mcp.json"))
 	if err != nil {
