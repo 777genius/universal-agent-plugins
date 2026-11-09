@@ -185,3 +185,18 @@ test('rejects YAML sequence dependency mappings instead of hiding vulnerable edg
     "    dependencies:\n      - '@a/entry@1.0.0(peer@2.0.0)'\n");
   assert.throws(() => auditLock(importerSequence), /Unsupported pnpm dependency sequence/);
 });
+
+
+test('rejects YAML-escaped glob package names instead of returning a false-clean advisory result', () => {
+  const disguised = fixture
+    .replace('      glob: 13.0.6', String.raw`      "\u0067lob": 13.0.6`)
+    .replace('  glob@13.0.6:', String.raw`  "\u0067lob@13.0.6":`);
+  assert.throws(() => auditLock(disguised), /Unsupported escaped YAML scalar/);
+});
+
+test('rejects YAML-escaped minimatch package names instead of omitting the vulnerable edge', () => {
+  const disguised = fixture
+    .replace('      minimatch: 10.2.6', String.raw`      "minim\u0061tch": 10.2.6`)
+    .replace('  minimatch@10.2.6:', String.raw`  "minim\u0061tch@10.2.6":`);
+  assert.throws(() => auditLock(disguised), /Unsupported escaped YAML scalar/);
+});

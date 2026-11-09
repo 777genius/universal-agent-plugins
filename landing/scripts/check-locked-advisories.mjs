@@ -4,7 +4,13 @@ import { fileURLToPath } from 'node:url';
 
 // Read only the subset of pnpm v9 YAML needed for graph reachability; fail
 // explicitly if the expected importer/snapshot layout changes.
-const scalar = (value) => value.replace(/^(['"])(.*)\1$/, '$2');
+const scalar = (value) => {
+  const quoted = value.match(/^(['"])(.*)\1$/);
+  if (!quoted) return value;
+  // YAML decodes backslash escapes in double quotes; do not silently audit a different package name.
+  if (quoted[1] === '"' && quoted[2].includes('\\')) throw new Error('Unsupported escaped YAML scalar');
+  return quoted[2];
+};
 const lockNode = (name, version) => /^(?:@[^/]+\/)?[^@()]+@\d/.test(version) ? version : `${name}@${version}`;
 const rejectInlineMap = ([name, value]) => {
   if (value && value !== '{}') throw new Error(`Unsupported inline pnpm map: ${name}`);
