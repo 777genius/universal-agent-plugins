@@ -301,7 +301,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             marker = native / "unmanaged-native-do-not-change.txt"
             content = "unmanaged native settings\\n"
             marker.write_text(content, encoding="utf-8")
-            entries = runner["pin_foreign"]([(marker, content)])
+            entries = runner["pin_foreign"]([(marker, content)], sandbox)
             guard(entries, sandbox)
 
             native.rename(native.parent / "original-profile")
@@ -314,6 +314,47 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "foreign content modified"):
                 guard(entries, sandbox)
             self.assertEqual(outside_marker.read_text(encoding="utf-8"), content)
+    def test_marketing_kit_foreign_guard_rejects_replaced_skill_ancestors(self):
+        # Moving the original SKILL.md preserves its inode/bytes; replacing
+        # either owning directory must still fail foreign-state isolation.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        with TemporaryDirectory() as temporary:
+            case = Path(temporary).resolve()
+            skill = case / "A" / "home" / ".agents" / "skills" / "foreign" / "SKILL.md"
+            skill.parent.mkdir(parents=True)
+            original = "---\\nname: foreign\\n---\\n"
+            skill.write_text(original, encoding="utf-8")
+            pinned = runner["pin_foreign"]([(skill, original)], case)
+            before = skill.lstat()
+
+            for replaced in (skill.parent, skill.parent.parent.parent):
+                with self.subTest(replaced=str(replaced)):
+                    saved = replaced.with_name(replaced.name + "-saved")
+                    replaced.rename(saved)
+                    replaced.mkdir()
+                    if replaced == skill.parent:
+                        (saved / "SKILL.md").rename(skill)
+                    else:
+                        (saved / "skills").rename(replaced / "skills")
+                    try:
+                        after = skill.lstat()
+                        self.assertEqual((after.st_dev, after.st_ino),
+                                         (before.st_dev, before.st_ino))
+                        with self.assertRaisesRegex(
+                                AssertionError, "foreign content modified"):
+                            runner["check_foreign"](pinned, case)
+                    finally:
+                        if replaced == skill.parent:
+                            skill.rename(saved / "SKILL.md")
+                        else:
+                            (replaced / "skills").rename(saved / "skills")
+                        replaced.rmdir()
+                        saved.rename(replaced)
+                    runner["check_foreign"](pinned, case)
+
     def test_marketing_kit_scoped_snapshot_fails_closed_on_walk_error(self):
         # os.walk skips unreadable descendants without onerror; an unchanged
         # unreadable tree is not proof that foreign project state was preserved.
@@ -366,7 +407,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             marker = root / "foreign-user-do-not-change.txt"
             expected = "unmanaged user data\n"
             marker.write_bytes(expected.encode("utf-8"))
-            pinned = runner["pin_foreign"]([(marker, expected)])
+            pinned = runner["pin_foreign"]([(marker, expected)], root)
             runner["check_foreign"](pinned, root)
 
             marker.write_bytes(b"unmanaged user data\r\n")
@@ -648,7 +689,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 skills = [(path, content) for path, content in entries
                           if path.name == "SKILL.md"]
                 self.assertEqual({path for path, _ in skills}, expected_skills)
-                pinned = runner["pin_foreign"](entries)
+                pinned = runner["pin_foreign"](entries, case)
                 runner["check_foreign"](pinned, case)
                 for skill, original in skills:
                     with self.subTest(skill=str(skill)):
