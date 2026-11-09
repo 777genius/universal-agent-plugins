@@ -94,9 +94,10 @@ func TestProjectGrokComposedSavedLifecycle(t *testing.T) {
 	}
 	bBefore := securityFixtureTree(t, journey.b)
 	installation, binding := journey.owned(t, journey.a)
-	if len(installation.DataReceipts) != 0 {
-		t.Fatal("Grok package without authored data invented persistent receipts")
-	}
+	// The selected stdio MCP uses PLUGIN_DATA, so its persistent project data
+	// is now legitimately owned. Assert its exact scope and retention instead
+	// of retaining the old skills-only no-data assumption.
+	projectJourneyDataMarker(t, journey, journey.a, installation)
 	journey.run(t, journey.a, "deps", "sync", "--locked", "--yes")
 	beforeAttest := securityFixtureTree(t, filepath.Join(journey.a, ".grok"))
 	if _, err := journey.execute(journey.a, "add", transport.endpoint, "--alias", "docs", "--target", "grok", "--activation-complete"); err == nil {
@@ -125,12 +126,23 @@ func TestProjectGrokComposedSavedLifecycle(t *testing.T) {
 	if updated.Source.TreeDigest == installation.Source.TreeDigest || current.ClientBindingID != binding.ClientBindingID || current.TargetLocator != binding.TargetLocator {
 		t.Fatal("Grok update lost ownership or exact pin")
 	}
+	for key, receipt := range installation.DataReceipts {
+		if updated.DataReceipts[key].Locator != receipt.Locator ||
+			projectJourneyRead(t, filepath.Join(receipt.Locator, "keep.txt")) != "retained environment data\n" {
+			t.Fatal("Grok MCP update replaced persistent project data authority")
+		}
+	}
 	status := journey.run(t, journey.a, "deps", "status")
 	if !strings.Contains(status, `"activation_prepared"`) || strings.Contains(status, `"activation_active"`) {
 		t.Fatal("status promoted unqualified native loading", status)
 	}
 	journey.run(t, journey.a, "remove", "docs", "--target", "grok")
 	projectJourneyAbsent(t, current.TargetLocator)
+	for _, receipt := range installation.DataReceipts {
+		if projectJourneyRead(t, filepath.Join(receipt.Locator, "keep.txt")) != "retained environment data\n" {
+			t.Fatal("Grok MCP removal consumed user-owned persistent project data")
+		}
+	}
 	if !reflect.DeepEqual(userBefore, securityFixtureTree(t, user)) || !reflect.DeepEqual(bBefore, securityFixtureTree(t, journey.b)) {
 		t.Fatal("Grok A lifecycle changed original user or B")
 	}
