@@ -27,7 +27,7 @@ Interpreta la compatibilidad como comprobaciones independientes:
 | Ejecución MCP | Un proceso o conexión registrado se inicializó e hizo las llamadas probadas. |
 | Autenticación y uso del modelo | Solo se demuestran si las pruebas los ejercitan explícitamente. |
 
-La entrega de proyecto suele quedar **Prepared** mientras falten confianza, recarga, configuración explícita o una nueva sesión. ChatGPT rechaza la instalación de proyecto. VS Code prepara archivos para una sola carpeta local; observar sus metadatos no demuestra arranque MCP ni ejecución de modelos. Consulta [la compatibilidad por proyecto](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md) y [el índice de pruebas de proyecto](https://github.com/777genius/universal-agent-plugins/blob/main/docs/evidence/PROJECT_INSTALLATION.md).
+La entrega de proyecto suele quedar **Prepared** mientras falten confianza, recarga, configuración explícita o una nueva sesión. ChatGPT rechaza la instalación de proyecto. Consulta [la compatibilidad por proyecto](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md) y [el índice de pruebas de proyecto](https://github.com/777genius/universal-agent-plugins/blob/main/docs/evidence/PROJECT_INSTALLATION.md).
 
 ## Extensiones nativas de Pi {#pi-native-extensions}
 

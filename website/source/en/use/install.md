@@ -170,10 +170,9 @@ scope when a regular `uap.toml` exists in the exact current folder; explicit
 scope wins. See [restoration rules](./manage) for strict lock behavior.
 
 The target must support the requested project components. ChatGPT project
-installation is explicitly unsupported. VS Code prepares `.github/skills` and
-owned `servers` members in `.vscode/mcp.json` for one local folder. Its result
-remains Prepared: review workspace/server trust and inspect the client settings.
-That metadata observation does not prove MCP startup, tool calls or model use.
+installation is explicitly unsupported. When the result is **Prepared**, review
+any required workspace/server trust and client configuration. Installed files
+alone do not prove MCP startup, tool calls or model use.
 
 Read the [project installation guide](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_INSTALLATION.md)
 and [per-client project boundaries](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)

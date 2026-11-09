@@ -43,9 +43,7 @@ Interprete a compatibilidade como várias perguntas separadas:
 
 A entrega em projetos costuma permanecer **Prepared** enquanto faltam confiança,
 recarga, configuração explícita ou etapas de sessão. A instalação em projetos
-do ChatGPT é explicitamente incompatível. O escopo de projeto do VS Code prepara
-arquivos para uma única pasta local; a observação de metadados de sua versão
-fixada não é evidência de inicialização MCP nem de execução do modelo. Consulte
+do ChatGPT é explicitamente incompatível. Consulte
 [suporte a projetos por cliente](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md) e o [índice de evidências de projetos](https://github.com/777genius/universal-agent-plugins/blob/main/docs/evidence/PROJECT_INSTALLATION.md).
 
 Os registros abaixo preservam versões históricas exatas, versões dos clientes,
