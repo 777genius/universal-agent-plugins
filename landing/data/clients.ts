@@ -29,14 +29,14 @@ export const clientLandingPages: ClientLandingPage[] = [
     slug: 'chatgpt',
     name: 'ChatGPT',
     icon: 'openai.svg',
-    note: 'Verified app bindings and guided Context7 setup',
-    status: 'Setup in app',
+    note: 'Desktop: automatic via Codex CLI; Web: setup in ChatGPT',
+    status: 'Supported',
     intro:
-      'Prepare compatible Agent Plugins 1.0 for ChatGPT while keeping app activation and account consent inside ChatGPT.',
+      'ChatGPT supports plugins on Desktop and Web. Desktop local plugins use the Codex CLI marketplace, while Web plugins require a compatible cloud app or marketplace connection.',
     delivery:
-      'The CLI validates publisher app bindings and can prepare a personal marketplace package for Context7 using its public no-auth MCP endpoint.',
+      'UAP installs eligible local Desktop packages through the Codex CLI and prepares qualified Web app bindings; it cannot silently install a cloud plugin into a ChatGPT account.',
     activation:
-      'Create or connect the app in Developer Mode, install the prepared personal plugin, and select it in a new chat.',
+      'Desktop: open a new local thread and verify the plugin. Web: connect or install the app in ChatGPT and grant any required permissions.',
   },
   {
     id: 'cursor',

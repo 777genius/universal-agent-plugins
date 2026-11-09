@@ -27,7 +27,7 @@ test('production saves supported selections and retains explicit legacy command 
   assert.equal(published.add, 'npx -y universal-agent-plugins add gitlab --target codex,cursor');
   assert.equal(published.update, 'npx -y universal-agent-plugins update gitlab');
   assert.equal(published.remove, 'npx -y universal-agent-plugins remove gitlab');
-  for (const targets of [['gemini'], ['opencode'], ['cursor'], ['chatgpt'], ['chatgpt', 'codex']]) {
+  for (const targets of [['gemini'], ['opencode'], ['cursor'], ['chatgpt'], ['chatgptweb', 'codex']]) {
     const commands = pluginCommands(plugin, targets, false);
     const targetFlag = ` --target ${targets.join(',')}`;
     assert.equal(commands.add, `npx -y universal-agent-plugins add gitlab${targetFlag}`);
@@ -70,7 +70,7 @@ test('released generator saves supported remote selections and manages all owned
 });
 
 test('released generator explicitly opts unsupported and mixed remote selections out', () => {
-  for (const targets of [['unknown'], ['vscode'], ['chatgpt', 'codex'], ['chatgpt', 'claude']]) {
+  for (const targets of [['unknown'], ['vscode'], ['chatgptweb', 'codex'], ['chatgptweb', 'claude']]) {
     const commands = pluginCommands(plugin, targets, true);
     assert.equal(
       commands.add,
@@ -112,7 +112,7 @@ test('local, literal discovery, and ChatGPT-only keep imperative commands and tr
     ['/tmp/plugin', ['codex'], 'local'],
     ['C:\\plugin', ['codex'], 'local'],
     ['discovery:example/demo', ['codex'], 'discovery'],
-    ['gitlab', ['chatgpt'], 'chatgpt'],
+    ['gitlab', ['chatgptweb'], 'chatgpt'],
   ] as const) {
     const commands = pluginCommands({ ...plugin, install_source: source }, targets, true);
     assert.equal(commands.saveMode, mode);

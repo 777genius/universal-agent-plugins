@@ -230,6 +230,7 @@
         "pluginsSkillsMcpHooks": "Plugins, habilidades, MCP, ganchos",
         "extensionsSkillsMcp": "Extensões, habilidades, MCP",
         "copilotPackage": "Pacote via Copilot",
+        "desktopLocalPluginsWebConnectedApps": "Plugins locais no desktop; aplicativos conectados na Web",
         "personalAppSetup": "Configuração de aplicativo pessoal",
         "skillsOnly": "Somente habilidades",
         "skillsMcpPrepared": "Habilidades, MCP (preparado)",
@@ -256,7 +257,7 @@
         "kiro": "Faça login, autorize o acesso e reinicie o Kiro se solicitado.",
         "grok": "Recarregue o Grok; revise as habilidades do projeto e as dicas de configuração da CLI.",
         "vscode": "Abra a pasta, confie nela e revise e habilite os servidores MCP.",
-        "chatgpt": "Ative o modo de desenvolvedor, conecte o aplicativo e selecione-o em um novo chat."
+        "chatgpt": "Desktop: instalação local via Codex CLI; Web: conecte ou instale o aplicativo no ChatGPT."
       }
     },
     "dependencies": {
@@ -871,11 +872,11 @@
         "activation": "Siga qualquer dica de ativação exibida pela CLI e inicie uma nova sessão do Codex."
       },
       "chatgpt": {
-        "note": "Vínculos de apps verificados e configuração guiada do Context7",
-        "status": "Configuração no app",
-        "intro": "Prepare Agent Plugins 1.0 compatíveis para o ChatGPT, mantendo a ativação do app e o consentimento da conta dentro do ChatGPT.",
-        "delivery": "A CLI valida os vínculos de apps dos publicadores e pode preparar um pacote de marketplace pessoal para o Context7 usando seu endpoint MCP público, que não exige autenticação.",
-        "activation": "Crie ou conecte o app no Modo de Desenvolvedor (Developer Mode), instale o plugin pessoal preparado e selecione-o em uma nova conversa."
+        "note": "Desktop: automático pelo Codex CLI; Web: configuração no ChatGPT",
+        "status": "Compatível",
+        "intro": "O ChatGPT oferece suporte a plugins no Desktop e na Web. Os plugins locais de Desktop usam o catálogo do Codex CLI; na Web, é necessário um app na nuvem compatível ou uma conexão ao catálogo.",
+        "delivery": "O UAP instala plugins locais compatíveis no Desktop pelo Codex CLI e prepara conexões Web verificadas. A ferramenta local não instala silenciosamente um plugin na sua conta do ChatGPT.",
+        "activation": "Desktop: abra uma nova conversa local e verifique o plugin. Web: conecte ou instale o app no ChatGPT e conceda as permissões necessárias."
       },
       "cursor": {
         "note": "Pacote nativo de Agent Plugin",

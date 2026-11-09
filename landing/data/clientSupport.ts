@@ -17,6 +17,7 @@ export const clientSupportCapabilityKeys = {
   'Plugins, Skills, MCP, hooks': 'pluginsSkillsMcpHooks',
   'Extensions, Skills, MCP': 'extensionsSkillsMcp',
   'Copilot-backed package': 'copilotPackage',
+  'Desktop local plugins; Web connected apps': 'desktopLocalPluginsWebConnectedApps',
   'Personal app setup': 'personalAppSetup',
   'Skills only': 'skillsOnly',
   'Skills, MCP (prepared)': 'skillsMcpPrepared',
@@ -38,7 +39,7 @@ export const clientSupportRows: ClientSupport[] = [
   },
   {
     id: 'codex',
-    name: 'Codex',
+    name: 'Codex CLI',
     user: 'Skills, MCP',
     project: 'Skills, MCP',
     setup: 'Automatic',
@@ -143,9 +144,9 @@ export const clientSupportRows: ClientSupport[] = [
   {
     id: 'chatgpt',
     name: 'ChatGPT',
-    user: 'Personal app setup',
+    user: 'Desktop local plugins; Web connected apps',
     project: 'Not supported',
-    setup: 'Manual',
-    nextStep: 'Enable Developer Mode, connect the app, and select it in a new chat.',
+    setup: 'Guided',
+    nextStep: 'Desktop: local install via Codex CLI; Web: connect or install in ChatGPT.',
   },
 ];

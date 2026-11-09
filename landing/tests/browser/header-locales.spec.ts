@@ -10,8 +10,8 @@ type HeaderCopy = {
     clientSupport: {
       title: string;
       columns: Record<'agent' | 'user' | 'project' | 'setup' | 'nextStep', string>;
-      capabilities: { pluginsSkillsMcp: string; notSupported: string };
-      setup: { automatic: string; manual: string };
+      capabilities: { pluginsSkillsMcp: string; desktopLocalPluginsWebConnectedApps: string; notSupported: string };
+      setup: { automatic: string; guided: string; manual: string };
       nextSteps: { claude: string; chatgpt: string };
     };
   };
@@ -51,10 +51,12 @@ for (const locale of publishedLocales) {
       .toHaveText(tableCopy.setup.automatic);
     await expect(support.locator('tbody tr').first().locator('td').last())
       .toHaveText(tableCopy.nextSteps.claude);
+    await expect(support.locator('tbody tr').last().locator('td').first())
+      .toHaveText(tableCopy.capabilities.desktopLocalPluginsWebConnectedApps);
     await expect(support.locator('tbody tr').last().locator('td').nth(1))
       .toHaveText(tableCopy.capabilities.notSupported);
     await expect(support.locator('tbody tr').last().locator('td').nth(2))
-      .toHaveText(tableCopy.setup.manual);
+      .toHaveText(tableCopy.setup.guided);
     await expect(support.locator('tbody tr').last().locator('td').last())
       .toHaveText(tableCopy.nextSteps.chatgpt);
     await expect(support).toHaveCSS('direction', locale === 'ar' ? 'rtl' : 'ltr');

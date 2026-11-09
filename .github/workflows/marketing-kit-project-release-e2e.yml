@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   marketing-kit-project:
-    name: npm 0.1.101 / ${{ matrix.target }} / real Project lifecycle
+    name: npm 0.1.102 / ${{ matrix.target }} / real Project lifecycle
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     strategy:
@@ -46,7 +46,7 @@ jobs:
           TARGET: ${{ matrix.target }}
         run: |
           set -euo pipefail
-          npm install --global universal-agent-plugins@0.1.101
+          npm install --global universal-agent-plugins@0.1.102
           if [[ "$TARGET" == cursor ]]; then
             curl --fail --show-error --silent --location --retry 2 \
               'https://downloads.cursor.com/lab/2026.10.22-27dcf5f/linux/x64/agent-cli-package.tar.gz' \
@@ -69,7 +69,33 @@ jobs:
           else
             npm install --global "$NATIVE_PACKAGE"
           fi
-          test "$(agentplugins version)" = 'agentplugins 0.1.101'
+          test "$(agentplugins version)" = 'agentplugins 0.1.102'
+      - name: Verify published ChatGPT target safety fences
+        if: matrix.target == 'codex'
+        run: |
+          set -euo pipefail
+          root="$(mktemp -d)"
+          trap 'rm -rf "$root"' EXIT
+          mkdir -p "$root/package" "$root/project" "$root/home" "$root/codex"
+          printf '%s\n' '{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"chatgpt-target-proof","version":"1.0.0"}' > "$root/package/plugin.json"
+          export AGENTPLUGINS_HOME="$root/home" CODEX_HOME="$root/codex"
+          cd "$root/project"
+          refuse_without_effects() {
+            local expected="$1"
+            shift
+            local status=0 output
+            output="$(agentplugins "$@" 2>&1)" || status=$?
+            if [[ "$status" -eq 0 || "$output" != *"$expected"* ]]; then
+              printf '%s\n' "Unexpected public CLI target result (exit=$status): $output" >&2
+              exit 1
+            fi
+            test ! -e "$AGENTPLUGINS_HOME/state-v2.json"
+          }
+          # Both scope refusals must occur before source acquisition or state mutation.
+          refuse_without_effects "only --scope user" add "$root/package" --no-save --target chatgpt --scope project --format json
+          refuse_without_effects "does not support project scope" add "$root/package" --no-save --target chatgptweb --scope project --format json
+          # Codex CLI and ChatGPT Desktop share one canonical backend, never two.
+          refuse_without_effects "duplicate" add "$root/package" --no-save --target codex,chatgpt --scope user --format json
       - name: Exercise actual signed Marketing Kit and three mandatory dependencies
         env:
           TARGET: ${{ matrix.target }}
@@ -79,7 +105,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
-          name: marketing-kit-0.1.101-${{ matrix.target }}
+          name: marketing-kit-0.1.102-${{ matrix.target }}
           path: ${{ runner.temp }}/marketing-kit-project/
           if-no-files-found: warn
           retention-days: 14

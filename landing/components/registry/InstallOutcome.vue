@@ -1,19 +1,21 @@
 <script setup lang="ts">
-import { clients } from '~/data/clients';
+import { installTargets, canonicalInstallTarget, type InstallTargetID } from '~/data/installTargets';
 import { projectComponentSupported } from '~/utils/projectCatalogSource';
-import type { ClientID, DistributionView, InstallScope } from '~/types/registry';
+import type { DistributionView, InstallScope } from '~/types/registry';
 
 const props = defineProps<{
   distribution: DistributionView;
-  targets: readonly ClientID[];
+  targets: readonly InstallTargetID[];
   scope?: InstallScope;
 }>();
 const { t } = useI18n();
 const selected = computed(() =>
   props.targets.map((id) => ({
     id,
-    name: clients.find((client) => client.id === id)?.name ?? id,
-    policy: props.distribution.targets.find((target) => target.client === id),
+    canonicalId: canonicalInstallTarget(id),
+    name: installTargets.find((client) => client.id === id)?.name ?? id,
+    policy: props.distribution.targets.find((target) =>
+      target.client === canonicalInstallTarget(id)),
   })),
 );
 </script>
@@ -35,10 +37,10 @@ const selected = computed(() =>
             v-for="(component, index) in distribution.components"
             :key="component"
             :data-component="component"
-            :data-support="projectComponentSupported(target.id, component) ? 'supported' : 'unsupported'"
+            :data-support="projectComponentSupported(target.canonicalId, component) ? 'supported' : 'unsupported'"
           >
             {{ index ? ' · ' : ' ' }}{{ t(`registryUi.install.outcome.components.${component}`) }} —
-            {{ t(`registryUi.install.outcome.${projectComponentSupported(target.id, component) ? 'projectSupported' : 'projectUnsupported'}`) }}
+            {{ t(`registryUi.install.outcome.${projectComponentSupported(target.canonicalId, component) ? 'projectSupported' : 'projectUnsupported'}`) }}
           </span>
         </template>
         <template v-else>{{ t(`registryUi.install.outcome.${target.policy?.delivery ?? 'unknown'}`) }}</template>

@@ -367,6 +367,7 @@
         "pluginsSkillsMcpHooks": "插件、技能、MCP、钩子",
         "extensionsSkillsMcp": "扩展、技能、MCP",
         "copilotPackage": "基于 Copilot 的软件包",
+        "desktopLocalPluginsWebConnectedApps": "桌面端本地插件；网页版已连接应用",
         "personalAppSetup": "个人应用设置",
         "skillsOnly": "仅技能",
         "skillsMcpPrepared": "技能、MCP（已准备）",
@@ -393,7 +394,7 @@
         "kiro": "登录、批准访问，并在提示时重启 Kiro。",
         "grok": "重新加载 Grok；检查项目技能和 CLI 设置提示。",
         "vscode": "打开并信任文件夹；检查并启用 MCP 服务器。",
-        "chatgpt": "启用开发者模式，连接应用，并在新聊天中选择该应用。"
+        "chatgpt": "桌面端：通过 Codex CLI 在本地安装；网页版：在 ChatGPT 中连接或安装应用。"
       }
     },
     "dependencies": {
@@ -871,11 +872,11 @@
         "activation": "按照 CLI 打印的任何激活提示进行操作，然后启动新的 Codex 会话。"
       },
       "chatgpt": {
-        "note": "已验证的应用绑定与 Context7 设置指引",
-        "status": "在应用程序中设置",
-        "intro": "为 ChatGPT 准备兼容的 Agent Plugins 1.0 软件包；应用激活和账户授权仍在 ChatGPT 内完成。",
-        "delivery": "CLI 会验证发布者的应用绑定，也可通过 Context7 公开且无需身份验证的 MCP 端点，为其准备个人 marketplace 软件包。",
-        "activation": "在 Developer Mode 中创建或连接应用，安装已准备的个人插件，然后在新聊天中选择它。"
+        "note": "桌面版：通过 Codex CLI 自动安装；网页版：在 ChatGPT 中设置",
+        "status": "支持",
+        "intro": "ChatGPT 的桌面版和网页版都支持插件。桌面版的本地插件使用 Codex CLI 插件市场；网页版需要兼容的云端应用或插件市场连接。",
+        "delivery": "UAP 通过 Codex CLI 安装符合条件的桌面本地插件，并准备经过验证的网页应用绑定。本地命令行无法静默将云端插件安装到 ChatGPT 账户。",
+        "activation": "桌面版：打开新的本地对话并验证插件。网页版：在 ChatGPT 中连接或安装应用，并授予所需权限。"
       },
       "cursor": {
         "note": "原生 Agent Plugin 软件包",

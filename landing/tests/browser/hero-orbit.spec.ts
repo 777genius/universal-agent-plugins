@@ -338,20 +338,20 @@ test('installation works with WebGL forbidden and the orbit has no canvas or opt
   await expect(cursor).not.toBeChecked();
   await expect(page.locator('.app-multiselect__auto')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('.hero__demo .command-snippet')).not.toContainText('--target');
-  const chatgpt = page.getByRole('checkbox', { name: /^ChatGPT / });
+  const chatgpt = page.getByRole('checkbox', { name: /^ChatGPT Web / });
   if (guidedSetupEligible) {
     await expect(chatgpt).toBeEnabled();
     await expect(chatgpt).toContainText('Finish setup in ChatGPT');
     await chatgpt.click();
     await expect(chatgpt).toBeChecked();
     await expect(page.locator('.hero__demo .command-snippet')).toContainText(
-      'add context7 --target chatgpt',
+      'add context7 --target chatgptweb',
     );
   } else {
     await expect(chatgpt).toBeDisabled();
     await expect(chatgpt).toContainText('Not available for this plugin');
     await expect(page.locator('.hero__demo .command-snippet')).not.toContainText(
-      '--target chatgpt',
+      '--target chatgptweb',
     );
   }
   await page.keyboard.press('Escape');
@@ -390,13 +390,25 @@ test('guided ChatGPT preparation remains available for an eligible deterministic
   await page
     .getByRole('button', { name: 'Choose target agents: Choose agents in terminal', exact: true })
     .click();
-  const chatgpt = page.getByRole('checkbox', { name: /^ChatGPT / });
+  const chatgpt = page.getByRole('checkbox', { name: /^ChatGPT Web / });
   await expect(chatgpt).toBeEnabled();
   await expect(chatgpt).toContainText('Finish setup in ChatGPT');
   await chatgpt.click();
   await expect(chatgpt).toBeChecked();
   await expect(page.locator('.hero__demo .command-snippet')).toContainText(
-    'add context7 --target chatgpt',
+    'add context7 --target chatgptweb',
+  );
+  // Community metadata cannot grant remote setup authority by imitating the
+  // exact Context7 source/selector used by the signed Directory.
+  plugin.trust_state = 'conformant_unreviewed';
+  await projections(page, index);
+  await navigate(page, '/');
+  await page
+    .getByRole('button', { name: 'Choose target agents: Choose agents in terminal', exact: true })
+    .click();
+  await expect(page.getByRole('checkbox', { name: /^ChatGPT Web / })).toBeDisabled();
+  await expect(page.locator('.hero__demo .command-snippet')).not.toContainText(
+    '--target chatgptweb',
   );
 });
 

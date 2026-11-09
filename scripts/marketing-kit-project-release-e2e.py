@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Actual public npm 0.1.101 + signed Marketing Kit Project lifecycle, no mocks."""
+"""Actual public npm 0.1.102 + signed Marketing Kit Project lifecycle, no mocks."""
 import argparse
 import json
 import os
@@ -104,14 +104,14 @@ def main():
     options = parser.parse_args()
     report_path = Path(options.report)
     report_path.parent.mkdir(parents=True, exist_ok=True)
-    report = {"cli_version": "0.1.101", "target": options.target, "source": "real signed marketing-kit", "steps": [], "status": "failed"}
+    report = {"cli_version": "0.1.102", "target": options.target, "source": "real signed marketing-kit", "steps": [], "status": "failed"}
     try:
         with tempfile.TemporaryDirectory(prefix="uap-real-marketing-kit-") as location:
             root = Path(location)
             env, project_a, foreign_a, project_foreign_a = run_case(options.cli, options.target, root, "A")
             version = invoke([options.cli, "version"], env, project_a, 25)
-            if version["exit_code"] != 0 or "0.1.101" not in version["stdout_tail"]:
-                raise AssertionError(f"not published 0.1.101: {version}")
+            if version["exit_code"] != 0 or "0.1.102" not in version["stdout_tail"]:
+                raise AssertionError(f"not published 0.1.102: {version}")
             def run(e, p, label, *args):
                 report["steps"].append(execute(options.cli, e, p, label, *args))
             scoped = ("--scope", "project", "--project-root", str(project_a))
