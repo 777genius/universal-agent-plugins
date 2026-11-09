@@ -1,5 +1,6 @@
 """Contract tests plus an opt-in execution of the black-box resilience lane."""
 
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -12,6 +13,14 @@ import resilience_matrix as lane
 
 
 class ResilienceMatrixContract(unittest.TestCase):
+    def test_final_evidence_hashes_exclude_stale_self_digest(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / 'report.json').write_text('{"intermediate": true}')
+            (root / 'phase.json').write_bytes(b'original evidence')
+            expected = hashlib.sha256(b'original evidence').hexdigest()
+            self.assertEqual(lane.final_evidence_hashes(root), {'phase.json': expected})
+
     def test_case_contract(self):
         self.assertEqual(len(lane.CASES), 29)
         self.assertEqual(len(set(lane.CASES)), len(lane.CASES))

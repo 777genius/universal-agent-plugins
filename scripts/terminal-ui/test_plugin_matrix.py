@@ -1,4 +1,5 @@
 """Fixture validation plus opt-in actual PTY integration (never mocked CLI)."""
+import hashlib
 import json
 import http.client
 from urllib.parse import urlsplit
@@ -13,6 +14,20 @@ import plugin_matrix as lane
 
 
 class FixtureValidation(unittest.TestCase):
+    def test_uploaded_evidence_manifest_does_not_claim_hidden_fixture_bytes(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / 'visible.txt').write_bytes(b'public evidence')
+            hidden = root / 'foreign' / '.cursor-plugin'
+            hidden.mkdir(parents=True)
+            (hidden / 'plugin.json').write_bytes(b'{"synthetic": true}')
+            uploaded, omitted = lane.uploadable_evidence_hashes(root)
+            self.assertEqual(uploaded['visible.txt'], hashlib.sha256(b'public evidence').hexdigest())
+            self.assertNotIn('foreign/.cursor-plugin/plugin.json', uploaded)
+            self.assertEqual(omitted['foreign/.cursor-plugin'], 'directory')
+            self.assertEqual(omitted['foreign/.cursor-plugin/plugin.json'],
+                             hashlib.sha256(b'{"synthetic": true}').hexdigest())
+
     def test_platform_discovery_paths(self):
         for system, editor in (('Linux', 'config'), ('Darwin', 'Library/Application Support')):
             with self.subTest(system=system), tempfile.TemporaryDirectory() as tmp:

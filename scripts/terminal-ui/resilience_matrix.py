@@ -1147,6 +1147,12 @@ class Matrix:
             fixture.validate_stubs()
 
 
+def final_evidence_hashes(root):
+    """Omit report.json: its previous bytes cannot hash the final report."""
+    return {name: digest for name, digest in hashes(root).items()
+            if name != "report.json"}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", type=Path, required=True)
@@ -1187,7 +1193,7 @@ def main():
         report["cases"].append(row)
         write_json(args.artifacts / "report.json", report)
         print(json.dumps(row), flush=True)
-    report["evidence_hashes"] = hashes(args.artifacts)
+    report["evidence_hashes"] = final_evidence_hashes(args.artifacts)
     write_json(args.artifacts / "report.json", report)
     return int(any(
         row["status"] == "fail" for row in report["cases"]))
