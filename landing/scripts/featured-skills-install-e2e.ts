@@ -38,14 +38,15 @@ const sha256 = (file: string) => createHash('sha256').update(readFileSync(file))
 // managed physical skill IDs; Codex/OpenCode may expose the original slug.
 // Discover the one exact source-named native SKILL.md under the selected root,
 // without trusting a guessed slug path or following foreign symlinks.
-function installedDirectory(output: string, slug: string, targetId: string): string | null {
+function installedDirectory(output: string, slug: string, targetId: string, repeated = false): string | null {
   try {
     const response = JSON.parse(output) as Record<string, unknown>;
     if (response.command !== 'skills add' || response.result !== 'success' ||
         response.status !== 'succeeded' || response.scope !== 'project' ||
         !Array.isArray(response.items) || response.items.length !== 1) return null;
     const item = response.items[0] as Record<string, unknown>;
-    if (item.alias !== slug || item.targetId !== targetId || item.status !== 'succeeded' ||
+    if (item.alias !== slug || item.targetId !== targetId ||
+        (item.status !== (repeated ? 'unchanged' : 'succeeded')) ||
         typeof item.destinationPath !== 'string' || !isAbsolute(item.destinationPath) ||
         resolve(item.destinationPath) !== item.destinationPath) return null;
     return item.destinationPath;
@@ -58,12 +59,21 @@ function installedDirectory(output: string, slug: string, targetId: string): str
 // Claude's skill-<digest>) rather than the original slug. Validate the CLI's
 // exact source-bound destination within the selected native root. This does not
 // infer or claim that a fresh vendor session activated the Skill.
-function nativeSkillFile(project: string, relativeRoot: string, reportedDirectory: string | null): string | null {
+function nativeSkillFile(
+  project: string, relativeRoot: string, reportedDirectory: string | null, targetId: string, slug: string,
+): string | null {
   if (!reportedDirectory) return null;
   const root = resolve(project, relativeRoot);
-  const directory = resolve(reportedDirectory);
-  if (dirname(directory) !== root || !existsSync(root) || !existsSync(directory) ||
+  const reported = resolve(reportedDirectory);
+  // Claude's physical receipt is its native skill root; Codex/OpenCode
+  // separately project a managed package into the native per-skill directory.
+  const expectedParent = targetId === 'claude' ? root :
+    resolve(project, '.uap', 'managed', 'clients', targetId);
+  const directory = targetId === 'claude' ? reported : join(root, slug);
+  if (dirname(reported) !== expectedParent || dirname(directory) !== root ||
+      !existsSync(root) || !existsSync(reported) || !existsSync(directory) ||
       !lstatSync(root).isDirectory() || lstatSync(root).isSymbolicLink() ||
+      !lstatSync(reported).isDirectory() || lstatSync(reported).isSymbolicLink() ||
       !lstatSync(directory).isDirectory() || lstatSync(directory).isSymbolicLink())
     return null;
   const file = join(directory, 'SKILL.md');
@@ -125,7 +135,7 @@ try {
     const installed = run(addArgs, project, env);
     row.install = installed;
     const directory = installedDirectory(installed.stdout, slug, target);
-    const ownedPath = nativeSkillFile(project, roots[target]!, directory);
+    const ownedPath = nativeSkillFile(project, roots[target]!, directory, target, slug);
     row.native_skill_path = ownedPath;
     if (installed.code !== 0 || !ownedPath || !existsSync(lockPath)) {
       errors.push(repository + '/' + slug + ': install/native file/lock failed');
@@ -137,15 +147,15 @@ try {
     row.installed_sha256 = originalHash;
     const repeated = run(addArgs, project, env);
     row.repeat = repeated;
-    if (repeated.code !== 0 || installedDirectory(repeated.stdout, slug, target) !== directory ||
-        nativeSkillFile(project, roots[target]!, directory) !== ownedPath ||
+    if (repeated.code !== 0 || installedDirectory(repeated.stdout, slug, target, true) !== directory ||
+        nativeSkillFile(project, roots[target]!, directory, target, slug) !== ownedPath ||
         sha256(ownedPath) !== originalHash)
       errors.push(repository + '/' + slug + ': repeat mutated native Skill');
     const removed = run(['remove', slug, '--target', target, '--scope', 'project',
       '--project-root', project, '--format', 'json'], project, env);
     row.remove = removed;
     row.native_removed = !existsSync(ownedPath) &&
-      nativeSkillFile(project, roots[target]!, directory) === null;
+      nativeSkillFile(project, roots[target]!, directory, target, slug) === null;
     row.sentinel_preserved = existsSync(sentinel) && readFileSync(sentinel, 'utf8') === 'do not touch this file\n';
     if (removed.code !== 0 || !row.native_removed || !row.sentinel_preserved)
       errors.push(repository + '/' + slug + ': removal/ownership failed');
