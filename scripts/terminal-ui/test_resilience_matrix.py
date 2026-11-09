@@ -42,6 +42,7 @@ class ResilienceMatrixContract(unittest.TestCase):
             with patch('sys.argv', argv), \
                  patch.object(lane, 'prepare_scanner', side_effect=prepare_stub), \
                  patch.object(lane, 'Matrix') as matrix_cls, \
+                 patch.object(lane.platform, 'platform', return_value='test-platform'), \
                  patch.object(lane.subprocess, 'check_output', return_value='test-sha\n'):
                 matrix_cls.return_value.run_case.side_effect = record_case
                 self.assertEqual(lane.main(), 0)
