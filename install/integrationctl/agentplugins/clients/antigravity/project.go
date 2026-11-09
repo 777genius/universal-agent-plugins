@@ -51,7 +51,7 @@ func projectPlugin(root string, envelope domain.PackageEnvelope, plan domain.Del
 	// Never auto-enable undisclosed native hooks/subagents/rules. A UAP
 	// component declaration is not evidence of authorization for these
 	// Antigravity-specific executable or prompt surfaces.
-	for _, relative := range []string{"hooks.json", "agents", "rules"} {
+	for _, relative := range []string{"hooks.json", "hooks", "agents", "rules", "scripts", "extensions", ".antigravity-plugin", ".gemini-plugin"} {
 		candidate := filepath.Join(root, relative)
 		if err := pathpolicy.RequireContainedChild(root, candidate); err != nil {
 			return err
