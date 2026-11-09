@@ -95,7 +95,7 @@ func TestProjectGrokComposedSavedLifecycle(t *testing.T) {
 	bBefore := securityFixtureTree(t, journey.b)
 	installation, binding := journey.owned(t, journey.a)
 	if len(installation.DataReceipts) != 0 {
-		t.Fatal("skills-only projection invented MCP persistent data")
+		t.Fatal("Grok package without authored data invented persistent receipts")
 	}
 	journey.run(t, journey.a, "deps", "sync", "--locked", "--yes")
 	beforeAttest := securityFixtureTree(t, filepath.Join(journey.a, ".grok"))
@@ -147,8 +147,18 @@ func projectGrokOwned(t *testing.T, journey projectJourney, project, expected st
 	if projectJourneyRead(t, filepath.Join(binding.TargetLocator, "skills", "docs", "SKILL.md")) != expected {
 		t.Fatal("Grok exact immutable skill differs")
 	}
-	if _, err := os.Stat(filepath.Join(binding.TargetLocator, "mcp.json")); !os.IsNotExist(err) {
-		t.Fatal("Grok bundled MCP projected", err)
+	mcpBody, err := os.ReadFile(filepath.Join(binding.TargetLocator, "mcp.json"))
+	if err != nil {
+		t.Fatal("Grok project MCP was not bundled with its exact owned plugin", err)
+	}
+	var mcp struct {
+		Servers map[string]map[string]any `json:"mcpServers"`
+	}
+	if err := json.Unmarshal(mcpBody, &mcp); err != nil || len(mcp.Servers) != 1 || mcp.Servers["docs"] == nil {
+		t.Fatalf("Grok bundled MCP identity mismatch: %v %+v", err, mcp)
+	}
+	if command, ok := mcp.Servers["docs"]["command"].(string); !ok || command != "go" {
+		t.Fatalf("Grok MCP stdio command differs from source: %+v", mcp.Servers["docs"])
 	}
 	return installation, binding
 }
