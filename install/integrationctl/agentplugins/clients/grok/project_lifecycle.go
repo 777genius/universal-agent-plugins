@@ -61,7 +61,7 @@ func activateProject(ctx context.Context, env clients.Env, request domain.Activa
 	if request.Delivery.ClientID != domain.ClientGrok || request.Delivery.ActivePath != request.Plan.ActivePath || request.Delivery.OwnedBase != request.Plan.TargetRoot || request.DeclaredName != request.Plan.DeclaredName {
 		return domain.ActivationOutcome{}, fmt.Errorf("grok project delivered identity differs from plan")
 	}
-	finding, err := inspectProject(ctx, env, request.Client, request.Plan, true)
+	finding, err := inspectProject(ctx, env, request.Client, request.Plan, true, true)
 	if err != nil {
 		return domain.ActivationOutcome{}, err
 	}

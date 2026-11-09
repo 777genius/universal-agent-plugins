@@ -72,7 +72,7 @@ func exactProjectFields(object map[string]any, fields []string) bool {
 }
 func parseProjectPlugin(entry any) (projectPlugin, error) {
 	object, ok := entry.(map[string]any)
-	if !ok || !exactProjectFields(object, []string{"name", "scope", "path", "enabled"}) {
+	if !ok || !exactProjectFields(object, []string{"name", "scope", "path", "enabled", "provides"}) {
 		return projectPlugin{}, fmt.Errorf("grok plugin inspect identity is not recognized")
 	}
 	name, n := object["name"].(string)
@@ -104,7 +104,7 @@ func parseProjectPlugin(entry any) (projectPlugin, error) {
 	}
 	return projectPlugin{name: name, scope: scope, path: path, enabled: enabled, mcpServers: mcpServers}, nil
 }
-func inspectProject(ctx context.Context, env clients.Env, client domain.DetectedClient, plan domain.DeliveryPlan, owned bool) (clients.RegistryFinding, error) {
+func inspectProject(ctx context.Context, env clients.Env, client domain.DetectedClient, plan domain.DeliveryPlan, owned, requireMCPDiscovery bool) (clients.RegistryFinding, error) {
 	root, err := grokPlanRoot(client, plan)
 	if err != nil {
 		return clients.RegistryIndeterminate, err
@@ -138,13 +138,16 @@ func inspectProject(ctx context.Context, env clients.Env, client domain.Detected
 				if finding != clients.RegistryExpected {
 					return clients.RegistryIndeterminate, fmt.Errorf("grok project source lacks its exact prepared manifest")
 				}
-				if shared.HasSupportedMCP(plan.Components) && entry.mcpServers != int64(len(shared.SupportedMCPNames(plan))) {
+				if requireMCPDiscovery && shared.HasSupportedMCP(plan.Components) && entry.mcpServers != int64(len(shared.SupportedMCPNames(plan))) {
 					return clients.RegistryIndeterminate, fmt.Errorf("grok native inspect did not report the selected project MCP servers")
 				}
 				return clients.RegistryExpected, nil
 			}
 			return clients.RegistryCollision, nil
 		}
+	}
+	if requireMCPDiscovery && shared.HasSupportedMCP(plan.Components) {
+		return clients.RegistryIndeterminate, fmt.Errorf("grok native inspect did not report the selected project MCP plugin")
 	}
 	return finding, nil
 }

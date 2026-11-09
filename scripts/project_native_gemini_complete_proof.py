@@ -171,6 +171,9 @@ def public_data(view, label, operation, paths):
               "manifest_digest": "sha256:" + r["manifest"]["sha256"], "dry_run": False, "result": operation_result(view, label)}
     if not label.startswith("remove-"):
         output["next_action"] = NEXT
+    if label.startswith("add-") or label in ("repeat-add-a", "update-a", "unchanged-update-a"):
+        output.update(scope=b["scope"], readiness="needs_action",
+                      next_actions=[{"code": "verify_native", "actor": "native_client", "message": NEXT}])
     if label == "repeat-add-a":
         output["security"] = assessment(r, True)
         return output
@@ -186,7 +189,7 @@ def public_data(view, label, operation, paths):
         data.update(version="1.0.0", source=source, tree_digest=r["digest"])
     if label.startswith("add-"):
         data.update(action_required=1, manifest_digest=output["manifest_digest"], security=assessment(r),
-                    environment={"reason": "no_save_requested", "saved": False})
+                    environment={"reason": "no_save_requested", "saved": False, "scope": b["scope"], "scope_selection_reason": "explicit"})
     if label.startswith("remove-"):
         data.update(status="data_retained", plugin_data_preserved=True, data_retained=True,
                     retained_data=[{"data_receipt_id": b["data_receipt_id"], "physical_backend_id": b["physical_artifact_id"],

@@ -158,7 +158,8 @@ func testProjectGrokStrictObservedInspectShape(t *testing.T, version string) {
 			t.Fatal("observed root spelling refused", err)
 		}
 	}
-	invalid := make([]string, 0, 12)
+	invalid := make([]string, 0, 14)
+	invalid = append(invalid, strings.Replace(body, `"provides":`, `"Provides":`, 1), strings.Replace(body, `"provides":`, `"provides":{},"Provides":`, 1))
 	for _, unsupported := range []string{"1.0.68", "1.0.71", "1.0.70-dev"} {
 		invalid = append(invalid, strings.Replace(body, `"grokVersion":"`+version+`"`, `"grokVersion":"`+unsupported+`"`, 1))
 	}
@@ -383,9 +384,29 @@ func TestProjectGrokMCPOnlyPreflightAndConservativeActivation(t *testing.T) {
 		t.Fatalf("unqualified Grok MCP version admitted: %v calls=%d", err, runner.calls)
 	}
 	runner.version, runner.calls, runner.omitMCPDiscovery = "1.0.70", 0, true
+	binding := domain.ClientBinding{ClientID: "grok", Scope: "project", NativeProfileRoot: request.Plan.NativeRegistryRoot,
+		PhysicalArtifact: request.Plan.PhysicalArtifactID, TargetLocator: request.Plan.ActivePath}
+	finding, err := New().InspectNativeRegistry(t.Context(), clients.Env{Runner: runner}, request.Client, request.Plan, &binding)
+	if err != nil || finding != clients.RegistryExpected || runner.calls != 1 {
+		t.Fatalf("missing MCP discovery blocked owned repair preflight: %v %v calls=%d", finding, err, runner.calls)
+	}
+	runner.calls = 0
 	if _, err := New().Activate(t.Context(), clients.Env{Runner: runner}, request); err == nil ||
 		!strings.Contains(err.Error(), "did not report the selected project MCP servers") || runner.calls != 1 {
 		t.Fatalf("plugin inventory was mistaken for native MCP discovery: %v calls=%d", err, runner.calls)
+	}
+	empty, _ := json.Marshal(map[string]any{"grokVersion": "1.0.70", "cwd": request.Plan.TargetContext.ProjectRoot,
+		"projectRoot": request.Plan.TargetContext.ProjectRoot + string(filepath.Separator), "projectTrusted": false,
+		"plugins": []any{}, "skills": []any{}})
+	runner.bad, runner.calls = string(empty), 0
+	finding, err = New().InspectNativeRegistry(t.Context(), clients.Env{Runner: runner}, request.Client, request.Plan, &binding)
+	if err != nil || finding != clients.RegistryExpected || runner.calls != 1 {
+		t.Fatalf("empty native inventory blocked owned repair preflight: %v %v calls=%d", finding, err, runner.calls)
+	}
+	runner.calls = 0
+	if _, err := New().Activate(t.Context(), clients.Env{Runner: runner}, request); err == nil ||
+		!strings.Contains(err.Error(), "did not report the selected project MCP plugin") || runner.calls != 1 {
+		t.Fatalf("filesystem receipt was mistaken for native MCP discovery: %v calls=%d", err, runner.calls)
 	}
 	request.Plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentApp, Name: "app", Support: domain.SupportNative}}
 	if err := New().PreflightActivation(clients.Env{}, request); err == nil {

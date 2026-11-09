@@ -52,7 +52,13 @@ func (r *projectGrokRunner) Run(_ context.Context, command legacyports.Command) 
 		}
 		mcpCount := 0
 		if object["mcpServers"] == "./.mcp.json" {
-			mcpCount = 1
+			var sidecar struct {
+				Servers map[string]json.RawMessage `json:"mcpServers"`
+			}
+			raw, readErr := os.ReadFile(filepath.Join(root, entry.Name(), ".mcp.json"))
+			if readErr == nil && json.Unmarshal(raw, &sidecar) == nil {
+				mcpCount = len(sidecar.Servers)
+			}
 		}
 		plugins = append(plugins, map[string]any{"name": object["name"], "scope": "project", "path": filepath.Join(root, entry.Name()), "enabled": false, "provides": map[string]any{"mcpServers": mcpCount}})
 	}
