@@ -1168,6 +1168,23 @@ img {
   gap: 12px;
   min-width: 0;
 }
+/* Both filters share one ordinary desktop slot. Reclaim decorative icon space
+   so their accessible labels remain useful without turning into tiny inputs. */
+@media (min-width: 981px) {
+  .catalog-filter-pair .app-select__value > svg,
+  .catalog-filter-pair .app-combobox__anchor > svg:first-child {
+    display: none;
+  }
+  .catalog-filter-pair .app-select__trigger,
+  .catalog-filter-pair .app-combobox__anchor {
+    padding-inline: 6px;
+    gap: 4px;
+  }
+  .catalog-filter-pair .app-select__value,
+  .catalog-filter-pair .app-combobox__input {
+    font-size: 0.75rem;
+  }
+}
 /* Flat toolbar only; dropdown panels and installation controls keep their surfaces. */
 .catalog-controls .search-field input,
 .catalog-controls .app-select__trigger,
