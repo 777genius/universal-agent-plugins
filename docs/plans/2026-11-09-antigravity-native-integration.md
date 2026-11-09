@@ -73,3 +73,9 @@ Add `--target antigravity` to UAP for **real Antigravity-native plugin bundles**
 **Finding and concrete plan correction:** Scope: native plugin installation may be User-authoritative; explicit Project requests may only deliver documented Project Skills/MCP, and must never register a User plugin as a fallback. Optional .agents creation requires verified client behavior.
 
 **Decision:** This is part of the acceptance criteria; a contradictory implementation must be rejected rather than treated as a harmless warning.
+
+### Review round 3 / 6 — Clean Architecture / DRY
+
+**Finding and concrete plan correction:** Architecture: a single Antigravity adapter composes existing UAP staging and ownership; a small pure converter owns plugin.json projection, not a new generic compiler or forked Gemini adapter.
+
+**Decision:** This is part of the acceptance criteria; a contradictory implementation must be rejected rather than treated as a harmless warning.
