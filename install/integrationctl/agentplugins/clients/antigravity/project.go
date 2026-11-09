@@ -44,48 +44,19 @@ func (*Adapter) ProjectActiveNative(ctx context.Context, root string, envelope d
 	return nil, nil
 }
 
+// Convert only explicitly supported portable components. Preflight every
+// native autoload surface before emitting any managed manifest or MCP config.
 func projectPlugin(root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, dataRoot string) error {
-	if !cleanAbsolute(root) || !cleanAbsolute(plan.ActivePath) {
-		return fmt.Errorf("Antigravity projection root must be absolute")
+	if err := validateAntigravityProjection(root, envelope, plan); err != nil {
+		return err
 	}
-	// Never auto-enable undisclosed native hooks/subagents/rules. A UAP
-	// component declaration is not evidence of authorization for these
-	// Antigravity-specific executable or prompt surfaces.
-	for _, relative := range []string{"hooks.json", "hooks", "agents", "rules", "scripts", "extensions", ".antigravity-plugin", ".gemini-plugin"} {
-		candidate := filepath.Join(root, relative)
-		if err := pathpolicy.RequireContainedChild(root, candidate); err != nil {
-			return err
-		}
-		if _, err := os.Lstat(candidate); err == nil {
-			return fmt.Errorf("Antigravity native %s requires a separate, explicit capability review", relative)
-		} else if !os.IsNotExist(err) {
-			return err
-		}
-	}
-	if !nativePluginID.MatchString(envelope.Manifest.Name) {
-		return fmt.Errorf("Antigravity plugin requires a lowercase kebab-case name")
-	}
+	servers := map[string]map[string]any{}
 	for _, component := range plan.Components {
-		if component.Kind == domain.ComponentSkill {
-			if err := pathpolicy.ValidateLeafID(component.Name); err != nil {
-				return fmt.Errorf("invalid Antigravity native skill name: %w", err)
-			}
-			skill, ok := envelope.Skills[component.Name]
-			if !ok {
-				return fmt.Errorf("Antigravity selected skill %q is not in the verified package", component.Name)
-			}
-			path := skill.RelativePath
-			if path == "" { path = filepath.ToSlash(filepath.Join("skills", component.Name, "SKILL.md")) }
-			file := filepath.Join(root, filepath.FromSlash(path))
-			if err := pathpolicy.RequireContainedChild(root, file); err != nil { return err }
-			info, err := os.Lstat(file)
-			if err != nil || !info.Mode().IsRegular() { return fmt.Errorf("Antigravity native skill file is missing or invalid") }
+		if component.Kind != domain.ComponentMCPServer {
+			continue
 		}
-		if component.Kind != domain.ComponentSkill && component.Kind != domain.ComponentMCPServer {
-			return fmt.Errorf("Antigravity cannot silently convert unsupported native components")
-		}
-		if component.Support == domain.SupportUnsupported {
-			return fmt.Errorf("Antigravity refuses unqualified required components")
+		if err := appendNativeServer(servers, component.Name, envelope, root, plan.ActivePath, dataRoot); err != nil {
+			return err
 		}
 	}
 	manifest := map[string]any{
@@ -101,25 +72,76 @@ func projectPlugin(root string, envelope domain.PackageEnvelope, plan domain.Del
 	if err := shared.WriteJSON(filepath.Join(root, ".antigravity-plugin", "plugin.json"), manifest); err != nil {
 		return fmt.Errorf("write Antigravity native manifest: %w", err)
 	}
-	servers := map[string]map[string]any{}
-	for _, component := range plan.Components {
-		if component.Kind != domain.ComponentMCPServer {
-			continue
+	if len(servers) > 0 {
+		return shared.WriteJSON(filepath.Join(root, "mcp_config.json"), map[string]any{"mcpServers": servers})
+	}
+	return nil
+}
+
+func validateAntigravityProjection(root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan) error {
+	if !cleanAbsolute(root) || !cleanAbsolute(plan.ActivePath) {
+		return fmt.Errorf("Antigravity projection root must be absolute")
+	}
+	if !nativePluginID.MatchString(envelope.Manifest.Name) {
+		return fmt.Errorf("Antigravity plugin requires a lowercase kebab-case name")
+	}
+	// Do not silently authorize preexisting vendor hook, script, agent, or
+	// raw MCP config files copied from an arbitrary source package.
+	for _, name := range []string{
+		"hooks.json", "hooks", "agents", "rules", "scripts", "extensions",
+		".antigravity-plugin", ".gemini-plugin", "mcp_config.json",
+	} {
+		path := filepath.Join(root, name)
+		if err := pathpolicy.RequireContainedChild(root, path); err != nil {
+			return err
 		}
-		if err := appendNativeServer(servers, component.Name, envelope, root, plan.ActivePath, dataRoot); err != nil {
+		if _, err := os.Lstat(path); err == nil {
+			return fmt.Errorf("Antigravity native %s requires a separate capability review", name)
+		} else if !os.IsNotExist(err) {
 			return err
 		}
 	}
-	if len(servers) == 0 {
-		// A source may already contain an Antigravity-native file. It is not
-		// selected through UAP's verified MCP manifest, so never install it.
-		path := filepath.Join(root, "mcp_config.json")
-		if _, err := os.Lstat(path); err == nil {
-			return fmt.Errorf("unselected Antigravity MCP configuration in package is not authorized")
-		} else if !os.IsNotExist(err) { return err }
-		return nil
+	for _, component := range plan.Components {
+		if err := validateAntigravityComponent(root, envelope, component); err != nil {
+			return err
+		}
 	}
-	return shared.WriteJSON(filepath.Join(root, "mcp_config.json"), map[string]any{"mcpServers": servers})
+	return nil
+}
+
+func validateAntigravityComponent(root string, envelope domain.PackageEnvelope, component domain.ComponentDecision) error {
+	if component.Support == domain.SupportUnsupported {
+		return fmt.Errorf("Antigravity refuses unqualified required components")
+	}
+	switch component.Kind {
+	case domain.ComponentMCPServer:
+		if strings.TrimSpace(component.Name) == "" {
+			return fmt.Errorf("Antigravity MCP server name is empty")
+		}
+	case domain.ComponentSkill:
+		if err := pathpolicy.ValidateLeafID(component.Name); err != nil {
+			return fmt.Errorf("invalid Antigravity native skill name: %w", err)
+		}
+		skill, ok := envelope.Skills[component.Name]
+		if !ok {
+			return fmt.Errorf("Antigravity selected skill %q is not in the verified package", component.Name)
+		}
+		relative := skill.RelativePath
+		if relative == "" {
+			relative = filepath.ToSlash(filepath.Join("skills", component.Name, "SKILL.md"))
+		}
+		path := filepath.Join(root, filepath.FromSlash(relative))
+		if err := pathpolicy.RequireContainedChild(root, path); err != nil {
+			return err
+		}
+		info, err := os.Lstat(path)
+		if err != nil || !info.Mode().IsRegular() {
+			return fmt.Errorf("Antigravity native skill file is missing or invalid")
+		}
+	default:
+		return fmt.Errorf("Antigravity cannot silently convert unsupported native components")
+	}
+	return nil
 }
 
 func appendNativeServer(out map[string]map[string]any, name string, envelope domain.PackageEnvelope, staged, active, dataRoot string) error {
