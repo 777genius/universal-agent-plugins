@@ -138,3 +138,26 @@ func TestAntigravityRefusesUnsafeRemoteMCP(t *testing.T) {
 		})
 	}
 }
+
+func TestAntigravityAllowsOnlySelectedStdioHelperScripts(t *testing.T) {
+ t.Parallel()
+ root := t.TempDir()
+ scripts := filepath.Join(root, "scripts")
+ if err := os.MkdirAll(scripts, 0o700); err != nil { t.Fatal(err) }
+ if err := os.WriteFile(filepath.Join(scripts, "helper.js"), []byte("process.stdout.write('ok')"), 0o600); err != nil { t.Fatal(err) }
+ envelope := domain.PackageEnvelope{Manifest: domain.PluginManifest{Name: "scripted-plugin"}}
+ plan := domain.DeliveryPlan{ActivePath: filepath.Join(t.TempDir(), "active")}
+ if err := validateAntigravityProjection(root, envelope, plan); err == nil {
+  t.Fatal("unselected scripts must not be enabled")
+ }
+ envelope.MCP.Servers = map[string]domain.MCPServer{
+  "helper": {Name: "helper", Type: "stdio", Decoded: map[string]any{
+   "type": "stdio", "command": "node", "args": []any{"${PLUGIN_ROOT}/scripts/helper.js"},
+  }},
+ }
+ plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentMCPServer,
+  Name: "helper", Support: domain.SupportNative}}
+ if err := validateAntigravityProjection(root, envelope, plan); err != nil {
+  t.Fatalf("selected verified stdio helper scripts must remain usable: %v", err)
+ }
+}
