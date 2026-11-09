@@ -167,8 +167,13 @@ func projectGrokOwned(t *testing.T, journey projectJourney, project, expected st
 	if projectJourneyRead(t, filepath.Join(binding.TargetLocator, "skills", "docs", "SKILL.md")) != expected {
 		t.Fatal("Grok exact immutable skill differs")
 	}
-	if _, err := os.Stat(filepath.Join(binding.TargetLocator, "mcp.json")); !os.IsNotExist(err) {
-		t.Fatal("project Grok wrote user-only mcp.json", err)
+	portable := filepath.Join(binding.TargetLocator, "mcp.json")
+	if withMCP {
+		if _, err := os.Stat(portable); err != nil {
+			t.Fatal("managed project is missing its portable source MCP", err)
+		}
+	} else if _, err := os.Stat(portable); !os.IsNotExist(err) {
+		t.Fatal("skills-only Grok retained a portable MCP", err)
 	}
 	sidecar := filepath.Join(binding.TargetLocator, ".mcp.json")
 	if !withMCP {
@@ -250,8 +255,8 @@ func projectGrokMCPOnlyOwned(t *testing.T, journey projectJourney, url string) (
 	if _, err := os.Stat(filepath.Join(binding.TargetLocator, "skills")); !os.IsNotExist(err) {
 		t.Fatalf("MCP-only package unexpectedly projected Skills: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(binding.TargetLocator, "mcp.json")); !os.IsNotExist(err) {
-		t.Fatalf("MCP-only package projected canonical source MCP instead of Grok sidecar: %v", err)
+	if _, err := os.Stat(filepath.Join(binding.TargetLocator, "mcp.json")); err != nil {
+		t.Fatalf("MCP-only package lost the sanitized portable MCP: %v", err)
 	}
 	body, err := os.ReadFile(filepath.Join(binding.TargetLocator, ".mcp.json"))
 	if err != nil {
