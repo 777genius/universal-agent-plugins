@@ -247,6 +247,17 @@ def scoped_snapshot(roots):
     if any(digest == "unreadable" for digest in state.values()):
         raise AssertionError("protected scope snapshot unreadable: native entry")
 
+    def record_metadata(index, path, relative, *, regular_file=False):
+        """Preserve permissions and regular-file identity, not only bytes."""
+        try:
+            entry = path.lstat()
+        except OSError as error:
+            raise AssertionError("protected scope snapshot unreadable: metadata") from error
+        state[f"metadata:{index}:{relative}"] = (
+            (entry.st_mode, entry.st_dev, entry.st_ino)
+            if regular_file else entry.st_mode
+        )
+
     def refuse_walk_error(error):
         raise AssertionError(f"protected scope snapshot unreadable: {error}") from error
 
@@ -260,6 +271,7 @@ def scoped_snapshot(roots):
             state[f"root-kind:{index}"] = "file" if root.exists() else "absent"
             continue
         state[f"root-kind:{index}"] = "directory"
+        record_metadata(index, root, ".")
         for directory, dirs, files in os.walk(root, followlinks=False, onerror=refuse_walk_error):
             for name in dirs:
                 path = Path(directory) / name
@@ -268,10 +280,14 @@ def scoped_snapshot(roots):
                     state[f"link:{index}:{relative}"] = os.readlink(path)
                 else:
                     state[f"directory:{index}:{relative}"] = "present"
+                    record_metadata(index, path, relative)
             for name in files:
                 path = Path(directory) / name
                 if path.is_symlink():
                     state[f"link:{index}:{path.relative_to(root).as_posix()}"] = os.readlink(path)
+                else:
+                    record_metadata(index, path, path.relative_to(root).as_posix(),
+                                    regular_file=True)
     return state
 
 

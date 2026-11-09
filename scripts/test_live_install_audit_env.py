@@ -621,6 +621,43 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             empty.rmdir()
             runner["check_profile_unchanged"](env, project, after, "restore B")
 
+    def test_marketing_kit_scoped_snapshot_rejects_metadata_only_changes(self):
+        # Equal bytes alone cannot prove that a foreign native file was kept.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            env, project, *_ = runner["run_case"]("unused", "codex", root, "peer")
+            foreign = Path(env["HOME"]) / ".codex" / "foreign-settings.json"
+            foreign.write_bytes(b"same bytes")
+            before = runner["profile_snapshot"](env, project)
+            check = runner["check_profile_unchanged"]
+            original_mode = foreign.stat().st_mode & 0o7777
+            try:
+                foreign.chmod(original_mode ^ 0o200)
+                with self.assertRaisesRegex(AssertionError,
+                                            "original isolated profile changed"):
+                    check(env, project, before, "peer chmod")
+            finally:
+                foreign.chmod(original_mode)
+            check(env, project, before, "peer mode restored")
+
+            # An atomically replaced file with identical bytes is not the
+            # original foreign file, even when its permissions are equal.
+            saved = root / "saved-foreign-native"
+            foreign.replace(saved)
+            try:
+                foreign.write_bytes(b"same bytes")
+                with self.assertRaisesRegex(AssertionError,
+                                            "original isolated profile changed"):
+                    check(env, project, before, "peer replacement")
+            finally:
+                foreign.unlink(missing_ok=True)
+                saved.replace(foreign)
+            check(env, project, before, "peer identity restored")
+
     def test_marketing_kit_native_uninstall_checks_peer_on_success_and_failure(self):
         # The audited native Codex uninstall runs outside the UAP CLI wrapper.
         # Both success and error paths must detect mutations in a peer HOME.
