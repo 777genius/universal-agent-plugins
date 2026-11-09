@@ -2,6 +2,7 @@ package agentpluginscli
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -11,6 +12,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 const maxLocalDependencyPolicyBytes int64 = 64 << 10
@@ -27,6 +29,9 @@ type localDependencyPolicy struct {
 		RequirePinnedGit bool `yaml:"require_pinned_git"`
 		RequireArchiveSHA256 bool `yaml:"require_archive_sha256"`
 	} `yaml:"integrity"`
+	MCP struct {
+		AllowedTransports []string `yaml:"allowed_transports"`
+	} `yaml:"mcp"`
 }
 
 func readLocalDependencyPolicy(path string) (localDependencyPolicy, error) {
@@ -58,6 +63,13 @@ func readLocalDependencyPolicy(path string) (localDependencyPolicy, error) {
 			if !validPolicyHost(host) {
 				return policy, fmt.Errorf("invalid local dependency policy hostname %q", host)
 			}
+		}
+	}
+	for _, transport := range policy.MCP.AllowedTransports {
+		switch transport {
+		case "stdio", "streamable-http", "sse":
+		default:
+			return policy, fmt.Errorf("unsupported local dependency policy MCP transport %q", transport)
 		}
 	}
 	return policy, nil
@@ -145,7 +157,10 @@ func (policy localDependencyPolicy) evaluate(lock environment.Lock) error {
 	return nil
 }
 
-func checkLocalDependencyPolicy(path string, lock environment.Lock) error {
+// checkLocalDependencyPolicy is read-only. A policy requiring MCP transport
+// rules examines the exact validated immutable package envelopes, not just
+// root requirements or target adapters. If bytes are absent it fails closed.
+func checkLocalDependencyPolicy(ctx context.Context, app App, path string, lock environment.Lock) error {
 	if path == "" {
 		return nil // Unchanged default: explicit opt-in only.
 	}
@@ -153,5 +168,28 @@ func checkLocalDependencyPolicy(path string, lock environment.Lock) error {
 	if err != nil {
 		return err
 	}
-	return policy.evaluate(lock)
+	if err := policy.evaluate(lock); err != nil {
+		return err
+	}
+	if len(policy.MCP.AllowedTransports) == 0 {
+		return nil
+	}
+	for _, pin := range lock.Packages {
+		_, err := inspectPinnedDependency(ctx, app, pin, func(envelope domain.PackageEnvelope) error {
+			for name, server := range envelope.MCP.Servers {
+				allowed := false
+				for _, transport := range policy.MCP.AllowedTransports {
+					allowed = allowed || transport == server.Type
+				}
+				if !allowed {
+					return fmt.Errorf("local dependency policy: package %q MCP %q uses disallowed transport %q", pin.Alias, name, server.Type)
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return fmt.Errorf("local dependency policy: verify package %q MCP transport: %w", pin.Alias, err)
+		}
+	}
+	return nil
 }
