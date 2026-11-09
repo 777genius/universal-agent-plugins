@@ -125,3 +125,25 @@ func TestLocalDependencyPolicyHostParsing(t *testing.T) {
 		t.Fatalf("git+ssh normalization failed: %q %v", host, err)
 	}
 }
+
+func TestExplicitEmptyPolicyAllowListsDenyRatherThanBypass(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	path := filepath.Join(root, "empty-policy.yaml")
+	if err := os.WriteFile(path, []byte("schema_version: 1\nsources:\n  allow_hosts: []\nmcp:\n  allowed_transports: []\n"), 0o600); err != nil { t.Fatal(err) }
+	policy, err := readLocalDependencyPolicy(path)
+	if err != nil { t.Fatal(err) }
+	if !policy.Sources.AllowHosts.Present || !policy.MCP.AllowedTransports.Present {
+		t.Fatal("explicit empty policy list silently became unrestricted")
+	}
+	locked := environment.Lock{Packages: []environment.LockedPackage{{
+		Alias: "blocked", Source: environment.LockedSource{Git: &environment.LockedGitSource{Repository: "example/repo"}},
+	}}}
+	if err := policy.evaluate(locked); err == nil {
+		t.Fatal("empty source allow-list must deny all sources")
+	}
+	if err := os.WriteFile(path, []byte("schema_version: 1\nsources:\n  allow_hosts: null\n"), 0o600); err != nil { t.Fatal(err) }
+	if _, err := readLocalDependencyPolicy(path); err == nil {
+		t.Fatal("null source allow-list must not disable security policy")
+	}
+}
