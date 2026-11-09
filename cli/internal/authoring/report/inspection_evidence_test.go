@@ -19,7 +19,7 @@ func TestInspectionMixedComponentEvidence(t *testing.T) {
 	}
 	pkg := &domain.PackageEnvelope{
 		SchemaURI: domain.PluginSchemaV1,
-		Manifest: domain.PluginManifest{Name: "token-private", Version: "preview-1"},
+		Manifest:  domain.PluginManifest{Name: "token-private", Version: "preview-1"},
 	}
 	pkg.MCP.Servers = map[string]domain.MCPServer{
 		"bare": {

@@ -51,6 +51,7 @@ func DisplayIdentity(s string) string {
 	return s
 }
 
+// inspection constructs a bounded, deterministic public view of inert package facts.
 func inspection(p project.Result) *Inspection {
 	pkg := p.Facts.Package
 	if pkg == nil {
