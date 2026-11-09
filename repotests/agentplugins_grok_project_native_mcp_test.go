@@ -125,8 +125,8 @@ func grokProjectMCPReceipt(t *testing.T, project, name string) string {
 			document.Servers["uap-grok-mcp-probe"]["url"] != "https://inert.test/mcp" {
 			t.Fatalf("native Grok MCP sidecar differs: %s", rawMCP)
 		}
-		if _, err := os.Stat(filepath.Join(active, "mcp.json")); !os.IsNotExist(err) {
-			t.Fatal("Grok Project should not write User mcp.json")
+		if _, err := os.Stat(filepath.Join(active, "mcp.json")); err != nil {
+			t.Fatal("Grok Project lost its standard portable MCP source", err)
 		}
 		return active
 	}
