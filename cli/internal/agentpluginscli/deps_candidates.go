@@ -134,7 +134,10 @@ func (resolver dependencyResolver) DescribePinned(ctx context.Context, pin envir
 }
 
 // Read pinned source facts locally, without checking eligibility for a new install.
-func describePinnedDependency(ctx context.Context, app App, pin environment.LockedPackage) (resolved environment.ResolvedPackage, resultErr error) {
+// inspectPinnedDependency invokes a read-only visitor on the same exact,
+ // validated immutable package envelope as dependency integrity checks. This
+ // keeps policy decisions from trusting a parallel parser or mutable source.
+func inspectPinnedDependency(ctx context.Context, app App, pin environment.LockedPackage, visitor func(domain.PackageEnvelope) error) (resolved environment.ResolvedPackage, resultErr error) {
 	snapshot, err := app.dependencyStore().Snapshot(ctx, pin.DigestAlgorithm, pin.TreeDigest)
 	if err != nil {
 		return environment.ResolvedPackage{}, err
@@ -156,6 +159,11 @@ func describePinnedDependency(ctx context.Context, app App, pin environment.Lock
 	if err := validateDependencyPinEnvelope(pin, envelope); err != nil {
 		return environment.ResolvedPackage{}, err
 	}
+	if visitor != nil {
+		if err := visitor(envelope); err != nil {
+			return environment.ResolvedPackage{}, err
+		}
+	}
 	pin.Version = envelope.Manifest.Version
 	facts, err := packageDependencyFacts(envelope)
 	if err != nil {
@@ -165,4 +173,9 @@ func describePinnedDependency(ctx context.Context, app App, pin environment.Lock
 		return environment.ResolvedPackage{}, err
 	}
 	return environment.ResolvedPackage{Package: pin, Dependencies: facts}, nil
+}
+
+// Integrity and the optional MCP policy share one verified immutable loader.
+func describePinnedDependency(ctx context.Context, app App, pin environment.LockedPackage) (environment.ResolvedPackage, error) {
+	return inspectPinnedDependency(ctx, app, pin, nil)
 }
