@@ -1,0 +1,35 @@
+# Google Antigravity native plugins (draft source)
+
+**Release status: Draft PR #815; no published CLI or runtime-activation claim yet.**
+
+The Antigravity target ID is `antigravity`. The adapter prepares one
+source-verified package in the vendor's documented **plugin discovery folder**,
+rather than calling `agy plugin install` with untracked filesystem effects:
+
+| Scope | Native plugin directory |
+| --- | --- |
+| User | `~/.gemini/config/plugins/<managed-artifact>/` |
+| Project | `<project>/.agents/plugins/<managed-artifact>/` |
+
+Inside the verified staged plugin it writes a schema-tagged
+`.antigravity-plugin/plugin.json` and `mcp_config.json` with
+`mcpServers` (stdio or Streamable HTTP with `serverUrl`).
+Portable Skills remain in `skills/<name>/SKILL.md`.
+No Project command falls back to mutating User configuration.
+
+**Security:** Reject unqualified hooks, rules, subagents, unknown components,
+unexpected raw `mcp_config.json` and unsafe remote MCP destinations.
+Never silently execute downloaded hook scripts or copy foreign native files.
+An Antigravity plugin folder being present does not prove it was indexed,
+enabled, trusted or authenticated. Report **Prepared**, not Active.
+
+**Still to qualify before Ready:** real `agy plugin validate --strict`
+and native list/restart/remove evidence with disposable profile,
+complete E2E across applicable OS targets, exact owner/foreign-state
+preservation, support metadata/site compatibility and published CLI tests.
+There is no claim of support for all Antigravity native hook and agent kinds.
+
+Sources: [Build plugins](https://antigravity.google/docs/build-plugins),
+[Customization discovery](https://antigravity.google/docs/customization-discovery),
+[MCP](https://antigravity.google/docs/mcp).
+Implementation criteria: [reviewed plan](plans/2026-11-09-antigravity-native-integration.md).
