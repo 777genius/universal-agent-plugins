@@ -1,0 +1,52 @@
+name: Temporary PR Go format evidence
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - '**/*.go'
+      - '.github/workflows/pr-gofmt-evidence.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: format-evidence-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  format-evidence:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Emit read-only gofmt changes as chunked evidence
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python3 - <<'PY'
+          import base64
+          import os
+          import subprocess
+          diff = subprocess.check_output(
+              ["git", "diff", "--name-only", "--diff-filter=ACMRT", os.environ["BASE_SHA"], os.environ["HEAD_SHA"], "--", "*.go"],
+              text=True,
+          )
+          for path in diff.splitlines():
+              if not os.path.isfile(path):
+                  continue
+              with open(path, "rb") as source:
+                  original = source.read()
+              formatted = subprocess.run(["gofmt"], input=original, check=True, capture_output=True).stdout
+              if formatted == original:
+                  continue
+              chunks = [base64.b64encode(formatted).decode("ascii")[i:i + 1600]
+                        for i in range(0, len(base64.b64encode(formatted)), 1600)]
+              for index, chunk in enumerate(chunks):
+                  print(f"GFMTEVIDENCE::{path}::{index}::{len(chunks)}::{chunk}", flush=True)
+          PY
