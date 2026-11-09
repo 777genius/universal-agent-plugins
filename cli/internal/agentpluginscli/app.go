@@ -114,6 +114,7 @@ type options struct {
 	purgeData            bool
 	acceptSecurityRisk   bool
 	securityDetails      bool
+	dependencyPolicyFile string
 }
 
 func (app App) input() io.Reader {
