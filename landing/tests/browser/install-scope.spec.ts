@@ -328,7 +328,7 @@ for (const locale of ['en', 'ar'] as const) {
   });
 }
 
-function partialComponentsFixture(components: Array<'skills' | 'mcp' | 'extensions'>, clients: Array<'codex' | 'grok' | 'qoder' | 'pi'> = ['codex', 'grok']) {
+function partialComponentsFixture(components: Array<'skills' | 'mcp' | 'extensions'>, clients: Array<'codex' | 'cursor' | 'grok' | 'qoder' | 'pi'> = ['codex', 'grok']) {
   const index = scopedFixture();
   const plugin = index.plugins[0]!;
   plugin.trust_state = 'reviewed';
@@ -372,7 +372,7 @@ for (const width of [1440, 390]) {
 
 test('unsupported extensions-only Project does not show a misleading scope switch, but the User command remains', async ({ page }) => {
   const errors = await offline(page);
-  await projections(page, partialComponentsFixture(['extensions'], ['grok']));
+  await projections(page, partialComponentsFixture(['extensions'], ['cursor']));
   await navigate(page, '/', 'en', '?q=i18n-state-00');
   const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]');
   await card.locator('.plugin-card__install-toggle').click();
