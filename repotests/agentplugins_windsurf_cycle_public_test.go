@@ -67,9 +67,10 @@ func (c *windProjectCycle) publicDTO(label string, r *windComponentRecipe, raw [
 		}
 	}
 	optional := "operation_id next_action security"
-	if verb == "add" || verb == "update" {
+	switch verb {
+	case "add", "update":
 		optional += " scope readiness next_actions"
-	} else if verb == "remove" {
+	case "remove":
 		optional += " scope"
 	}
 	if projectNativeRuntimeKeys(output, "plugin version source tree_digest manifest_digest dry_run result", optional) != nil {
