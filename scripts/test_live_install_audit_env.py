@@ -545,7 +545,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             settings = native / "settings.json"
             check = runner["check_removed_native_components"]
             for identity in ("marketing-kit", "notion", "hubspot-crm",
-                             "playwright-bridge"):
+                             "playwright-bridge", "playwright"):
                 settings.write_text(
                     '{"enabledPlugins":{"' + identity +
                     '@agentplugins-aaaaaaaaaaaa":true}}', encoding="utf-8")

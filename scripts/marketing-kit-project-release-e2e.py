@@ -359,8 +359,12 @@ def check_removed_native_components(target, home, case_root, stage):
     if any(value == "unreadable" for value in observed.values()):
         raise AssertionError(f"{stage}: native cleanup snapshot unreadable")
     leftovers = set()
-    for distribution in EXPECTED:
-        identity = distribution.rsplit("/", 1)[-1]
+    # The signed playwright-bridge distribution's native manifest alias is
+    # "playwright"; checking its distribution slug alone misses a leftover.
+    identities = UPDATE_ALIASES | {
+        distribution.rsplit("/", 1)[-1] for distribution in EXPECTED
+    }
+    for identity in sorted(identities):
         leftovers.update(audit["native_identity_residuals"](
             roots, identity, observed, target))
     if leftovers:
