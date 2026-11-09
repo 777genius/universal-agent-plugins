@@ -52,10 +52,11 @@ func projectTestRequest(t *testing.T) domain.ActivationRequest {
 
 type projectTestRunner struct {
 	request domain.ActivationRequest
-	calls             int
-	enabled           bool
-	bad               string
-	version           string
+	calls   int
+	enabled bool
+	bad     string
+	version string
+
 	omitMCPDiscovery bool
 }
 
