@@ -155,8 +155,14 @@ func grokProjectMCPNativeInspect(t *testing.T, f *projectNativeCLIAttempt, proje
 	}
 	obj, ok := value.(map[string]any)
 	if !ok || obj["grokVersion"] != "1.0.70" || obj["cwd"] != project ||
-		(obj["projectRoot"] != project && obj["projectRoot"] != project+"/") {
-		t.Fatal("real Grok native inspect returned different project/version")
+		(obj["projectRoot"] != project && obj["projectRoot"] != project+"/") ||
+		obj["projectTrusted"] != false {
+		t.Fatal("real Grok native inspect returned different project/version/trust")
+	}
+	// A prepared plugin must never activate project MCP on its own.
+	servers, ok := obj["mcpServers"].([]any)
+	if !ok || len(servers) != 0 {
+		t.Fatal("untrusted Grok project unexpectedly activated MCP")
 	}
 	plugins, ok := obj["plugins"].([]any)
 	if !ok {
