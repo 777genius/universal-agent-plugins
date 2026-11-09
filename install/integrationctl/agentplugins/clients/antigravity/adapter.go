@@ -28,6 +28,7 @@ var (
 	_ clients.TargetLayout = (*Adapter)(nil)
 	_ clients.ProjectTargetLayout = (*Adapter)(nil)
 	_ clients.NativeRegistryLayout = (*Adapter)(nil)
+	_ clients.PlanPrecondition = (*Adapter)(nil)
 	_ clients.PlanQualifier = (*Adapter)(nil)
 	_ clients.PlanRefiner = (*Adapter)(nil)
 )
@@ -91,6 +92,20 @@ func (*Adapter) ProjectTargetRoot(_ domain.DetectedClient, _ domain.PackageMode,
 	}
 	anchor := filepath.Join(target.ProjectRoot, ".agents")
 	return anchor, filepath.Join(anchor, "plugins"), nil
+}
+
+// Antigravity requires kebab-case plugin identities for strict CLI validation.
+// Reject incompatible package names before staging, creating plugin roots or
+// invoking any client-native operation; do not silently rename an identity.
+func (*Adapter) CheckPlanPrecondition(in clients.PlanInput, plan *domain.DeliveryPlan) error {
+	name := plan.DeclaredName
+	if name == "" { name = in.Envelope.Manifest.Name }
+	if !nativePluginID.MatchString(name) {
+		plan.Status = domain.PlanUnsupported
+		plan.Warnings = shared.AppendUnique(plan.Warnings,
+			"Antigravity native plugins require a lowercase kebab-case package name; rename in the source manifest, not during installation")
+	}
+	return nil
 }
 
 // Only Skills and MCP have an explicit portable equivalence. UAP's generic
