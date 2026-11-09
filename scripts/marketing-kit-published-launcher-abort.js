@@ -8,7 +8,7 @@ const path = require("node:path");
 const packageRoot = path.join(process.env.UAP_GLOBAL_NPM_ROOT, "universal-agent-plugins");
 const pkg = JSON.parse(fs.readFileSync(path.join(packageRoot, "package.json"), "utf8"));
 assert.equal(pkg.version, "0.1.102", "must test the exact public npm package");
-const { ensureBinary } = require(path.join(packageRoot, "lib/bootstrap.js"));
+const { ensureBinary, acquireLock } = require(path.join(packageRoot, "lib/bootstrap.js"));
 const cacheRoot = fs.mkdtempSync(path.join(os.tmpdir(), "uap-published-abort-"));
 
 async function abortOnce() {
@@ -48,11 +48,41 @@ async function abortOnce() {
   visit(cacheRoot);
 }
 
+
+async function verifyLockWaitCancellation() {
+  // Aborting an HTTP download happens before the binary cache lock is taken.
+  // Exercise the actual published lock primitive separately rather than
+  // incorrectly treating downloader cancellation as lock-cleanup evidence.
+  const lockRoot = path.join(cacheRoot, ".locks");
+  const target = path.join(cacheRoot, "locked-binary");
+  const options = { lockRoot, pollMs: 10, timeoutMs: 2_000 };
+  const releaseOwner = await acquireLock(target, options);
+  let timer;
+  try {
+    const controller = new AbortController();
+    const waiter = acquireLock(target, { ...options, signal: controller.signal });
+    timer = setTimeout(() => controller.abort(), 50);
+    await assert.rejects(waiter, /cancel/i, "published lock waiter must honor AbortSignal");
+    assert.equal(fs.readdirSync(lockRoot).filter(name => name.endsWith(".lock")).length, 1,
+      "cancelled waiter must not remove the original owner's lock");
+  } finally {
+    clearTimeout(timer);
+    await releaseOwner();
+  }
+  assert.equal(fs.readdirSync(lockRoot).filter(name => name.endsWith(".lock")).length, 0,
+    "owner release must remove its own cache lock");
+  const releaseAgain = await acquireLock(target, options);
+  await releaseAgain();
+  assert.equal(fs.readdirSync(lockRoot).filter(name => name.endsWith(".lock")).length, 0,
+    "released published lock must be reacquirable and removable");
+}
+
 (async () => {
   try {
     await abortOnce();
-    await abortOnce(); // Verify reacquisition of the same cache after cleanup.
-    console.log("Published npm 0.1.102 abort/cache-lock cleanup: PASS (2 attempts)");
+    await abortOnce(); // Two real published downloader aborts against a stalled request.
+    await verifyLockWaitCancellation();
+    console.log("Published npm 0.1.102 abort/lock cleanup: PASS (2 downloads; lock wait/reacquire)");
   } finally {
     fs.rmSync(cacheRoot, { recursive: true, force: true });
   }
