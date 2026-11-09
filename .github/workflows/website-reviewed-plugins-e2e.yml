@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   reviewed-live:
-    if: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:live-skills') }}
+    if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.labels.*.name, 'ci:live-skills')) }}
     name: Live signed website reviewed plugins / shard ${{ matrix.shard }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
