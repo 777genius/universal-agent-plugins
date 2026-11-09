@@ -66,3 +66,9 @@ Make UAP installation evidence independently inspectable in CI without weakening
 **Finding and concrete plan correction:** Source truth: deps check already has versioned offline JSON and strict integrity. Avoid a duplicate audit command unless existing report cannot meet CI needs; benchmark APM SBOM/policy without treating either as a package signature.
 
 **Decision:** This is part of the acceptance criteria; a contradictory implementation must be rejected rather than treated as a harmless warning.
+
+### Review round 2 / 6 — scope
+
+**Finding and concrete plan correction:** Scope: no org policy discovery, inheritance, remote download, provider integration or new trust service; local opt-in rules only. Security index signatures and release attestations remain separate trust domains.
+
+**Decision:** This is part of the acceptance criteria; a contradictory implementation must be rejected rather than treated as a harmless warning.
