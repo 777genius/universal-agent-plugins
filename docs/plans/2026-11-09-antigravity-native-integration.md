@@ -79,3 +79,9 @@ Add `--target antigravity` to UAP for **real Antigravity-native plugin bundles**
 **Finding and concrete plan correction:** Architecture: a single Antigravity adapter composes existing UAP staging and ownership; a small pure converter owns plugin.json projection, not a new generic compiler or forked Gemini adapter.
 
 **Decision:** This is part of the acceptance criteria; a contradictory implementation must be rejected rather than treated as a harmless warning.
+
+### Review round 4 / 6 — security and ownership
+
+**Finding and concrete plan correction:** Security: hook execution and native agy shell side effects are not under UAP's transaction kernel. Do not auto-enable or install untrusted hooks without explicit consent, and never advertise atomic rollback for external vendor operations unless it is observed. Reject path collision, unexpected CLI output or foreign plugin ownership.
+
+**Decision:** Treat this constraint as a release gate. Do not replace missing native proof with mocked success or expand the architecture just to claim feature parity.
