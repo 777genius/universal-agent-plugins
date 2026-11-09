@@ -47,7 +47,7 @@ export function stableVersion(version) {
 
 async function json(url) {
   const response = await fetch(url, { redirect: 'error', signal: AbortSignal.timeout(30000) });
-  if (!response.ok) throw new Error(`Release capability fetch failed: ${response.status}`);
+  if (!response.ok) throw new Error(`Release capability fetch failed for ${url}: ${response.status}`);
   const body = await response.text();
   if (body.length > 2 * 1024 * 1024) throw new Error('Release metadata exceeds limit');
   return JSON.parse(body);

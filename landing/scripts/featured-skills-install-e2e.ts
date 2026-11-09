@@ -30,7 +30,7 @@ const run = (args: string[], cwd: string, env: NodeJS.ProcessEnv) => {
   });
   return {
     code: result.status, error: result.error?.message ?? null,
-    stdout: (result.stdout || '').slice(-1200), stderr: (result.stderr || '').slice(-1200),
+    stdout: result.stdout || '', stderr: (result.stderr || '').slice(-1200),
   };
 };
 const sha256 = (file: string) => createHash('sha256').update(readFileSync(file)).digest('hex');
@@ -163,7 +163,7 @@ try {
     const row: Record<string, unknown> = { repository, slug, command, target };
     evidence.push(row);
     const installed = run(addArgs, project, env);
-    row.install = installed;
+    row.install = { ...installed, stdout: installed.stdout.slice(-1200) };
     const directory = installedDirectory(installed.stdout, slug, target);
     const ownedPath = nativeSkillFile(project, roots[target]!, directory, target, slug);
     row.native_skill_path = ownedPath;
@@ -176,14 +176,14 @@ try {
     if (!lockText.includes(slug)) errors.push(repository + '/' + slug + ': lock omits skill');
     row.installed_sha256 = originalHash;
     const repeated = run(addArgs, project, env);
-    row.repeat = repeated;
+    row.repeat = { ...repeated, stdout: repeated.stdout.slice(-1200) };
     if (repeated.code !== 0 || installedDirectory(repeated.stdout, slug, target, true) !== directory ||
         nativeSkillFile(project, roots[target]!, directory, target, slug) !== ownedPath ||
         sha256(ownedPath) !== originalHash)
       errors.push(repository + '/' + slug + ': repeat mutated native Skill');
     const removed = run(['remove', slug, '--target', target, '--scope', 'project',
       '--project-root', project, '--format', 'json'], project, env);
-    row.remove = removed;
+    row.remove = { ...removed, stdout: removed.stdout.slice(-1200) };
     row.native_removed = !existsSync(ownedPath) &&
       nativeSkillFile(project, roots[target]!, directory, target, slug) === null;
     row.sentinel_preserved = existsSync(sentinel) && readFileSync(sentinel, 'utf8') === 'do not touch this file\n';
