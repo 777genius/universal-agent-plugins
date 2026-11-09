@@ -147,3 +147,25 @@ func TestExplicitEmptyPolicyAllowListsDenyRatherThanBypass(t *testing.T) {
 		t.Fatal("null source allow-list must not disable security policy")
 	}
 }
+
+
+func TestLocalPolicyUsesConcreteGitURLHostBeforeShorthand(t *testing.T) {
+	t.Parallel()
+	pin := environment.LockedPackage{
+		Alias: "custom-git",
+		Source: environment.LockedSource{Git: &environment.LockedGitSource{
+			URL: "https://git.example.test/acme/repo.git",
+			Repository: "acme/repo",
+		}},
+	}
+	host, err := lockedSourceHost(pin)
+	if err != nil || host != "git.example.test" {
+		t.Fatalf("actual Git source host ignored: %q %v", host, err)
+	}
+	var policy localDependencyPolicy
+	policy.SchemaVersion = 1
+	policy.Sources.AllowHosts = policyAllowList{Present: true, Values: []string{"github.com"}}
+	if err := policy.evaluate(environment.Lock{Packages: []environment.LockedPackage{pin}}); err == nil {
+		t.Fatal("Git URL must not masquerade as GitHub shorthand")
+	}
+}
