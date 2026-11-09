@@ -19,10 +19,27 @@ const maxLocalDependencyPolicyBytes int64 = 64 << 10
 
 // LocalDependencyPolicy is an explicit, standalone install-time admission gate.
 // It is not an organization policy discovery mechanism or a runtime sandbox.
+// A present empty allow-list denies all. An omitted list imposes no restriction.
+// This distinction prevents "allow_hosts: []" from silently disabling policy.
+type policyAllowList struct {
+	Values []string
+	Present bool
+}
+
+func (list *policyAllowList) UnmarshalYAML(node *yaml.Node) error {
+	if node.Kind != yaml.SequenceNode {
+		return fmt.Errorf("policy allow-list must be a YAML sequence, not null or scalar")
+	}
+	var values []string
+	if err := node.Decode(&values); err != nil { return err }
+	list.Values, list.Present = values, true
+	return nil
+}
+
 type localDependencyPolicy struct {
 	SchemaVersion int `yaml:"schema_version"`
 	Sources struct {
-		AllowHosts []string `yaml:"allow_hosts"`
+		AllowHosts policyAllowList `yaml:"allow_hosts"`
 		DenyHosts []string `yaml:"deny_hosts"`
 	} `yaml:"sources"`
 	Integrity struct {
@@ -30,7 +47,7 @@ type localDependencyPolicy struct {
 		RequireArchiveSHA256 bool `yaml:"require_archive_sha256"`
 	} `yaml:"integrity"`
 	MCP struct {
-		AllowedTransports []string `yaml:"allowed_transports"`
+		AllowedTransports policyAllowList `yaml:"allowed_transports"`
 	} `yaml:"mcp"`
 }
 
@@ -58,14 +75,14 @@ func readLocalDependencyPolicy(path string) (localDependencyPolicy, error) {
 	if policy.SchemaVersion != 1 {
 		return policy, fmt.Errorf("unsupported local dependency policy schema_version %d", policy.SchemaVersion)
 	}
-	for _, hosts := range [][]string{policy.Sources.AllowHosts, policy.Sources.DenyHosts} {
+	for _, hosts := range [][]string{policy.Sources.AllowHosts.Values, policy.Sources.DenyHosts} {
 		for _, host := range hosts {
 			if !validPolicyHost(host) {
 				return policy, fmt.Errorf("invalid local dependency policy hostname %q", host)
 			}
 		}
 	}
-	for _, transport := range policy.MCP.AllowedTransports {
+	for _, transport := range policy.MCP.AllowedTransports.Values {
 		switch transport {
 		case "stdio", "streamable-http", "sse":
 		default:
@@ -144,7 +161,7 @@ func (policy localDependencyPolicy) evaluate(lock environment.Lock) error {
 		if containsPolicyHost(policy.Sources.DenyHosts, host) {
 			return fmt.Errorf("local dependency policy: source for %q uses denied host %q", pin.Alias, host)
 		}
-		if len(policy.Sources.AllowHosts) != 0 && !containsPolicyHost(policy.Sources.AllowHosts, host) {
+		if policy.Sources.AllowHosts.Present && !containsPolicyHost(policy.Sources.AllowHosts.Values, host) {
 			return fmt.Errorf("local dependency policy: source for %q uses unapproved host %q", pin.Alias, host)
 		}
 		if policy.Integrity.RequirePinnedGit && pin.Source.Git != nil && pin.Source.Git.Requested.Kind != environment.SelectorCommit {
@@ -171,7 +188,7 @@ func checkLocalDependencyPolicy(ctx context.Context, app App, path string, lock 
 	if err := policy.evaluate(lock); err != nil {
 		return err
 	}
-	if len(policy.MCP.AllowedTransports) == 0 {
+	if !policy.MCP.AllowedTransports.Present {
 		return nil
 	}
 	for _, pin := range lock.Packages {
