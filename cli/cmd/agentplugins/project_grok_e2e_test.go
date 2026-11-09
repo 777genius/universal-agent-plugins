@@ -50,7 +50,11 @@ func (r *projectGrokRunner) Run(_ context.Context, command legacyports.Command) 
 		if err := json.Unmarshal(body, &object); err != nil {
 			return legacyports.CommandResult{}, err
 		}
-		plugins = append(plugins, map[string]any{"name": object["name"], "scope": "project", "path": filepath.Join(root, entry.Name()), "enabled": false})
+		mcpCount := 0
+		if object["mcpServers"] == "./.mcp.json" {
+			mcpCount = 1
+		}
+		plugins = append(plugins, map[string]any{"name": object["name"], "scope": "project", "path": filepath.Join(root, entry.Name()), "enabled": false, "provides": map[string]any{"mcpServers": mcpCount}})
 	}
 	version := r.version
 	if version == "" {

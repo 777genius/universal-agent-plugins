@@ -52,10 +52,11 @@ func projectTestRequest(t *testing.T) domain.ActivationRequest {
 
 type projectTestRunner struct {
 	request domain.ActivationRequest
-	calls   int
-	enabled bool
-	bad     string
-	version string
+	calls             int
+	enabled           bool
+	bad               string
+	version           string
+	omitMCPDiscovery bool
 }
 
 func (runner *projectTestRunner) Run(_ context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
@@ -68,7 +69,17 @@ func (runner *projectTestRunner) Run(_ context.Context, command legacyports.Comm
 	if version == "" {
 		version = "1.0.67"
 	}
-	body, _ := json.Marshal(map[string]any{"grokVersion": version, "cwd": command.Dir, "projectRoot": command.Dir + string(filepath.Separator), "projectTrusted": false, "skills": []any{}, "plugins": []any{map[string]any{"name": "demo", "scope": "project", "path": plan.ActivePath, "enabled": runner.enabled}}})
+	mcpCount := 0
+	for _, component := range plan.Components {
+		if component.Kind == domain.ComponentMCPServer && component.Support == domain.SupportNative {
+			mcpCount++
+		}
+	}
+	provides := map[string]any{"mcpServers": mcpCount}
+	if runner.omitMCPDiscovery {
+		delete(provides, "mcpServers")
+	}
+	body, _ := json.Marshal(map[string]any{"grokVersion": version, "cwd": command.Dir, "projectRoot": command.Dir + string(filepath.Separator), "projectTrusted": false, "skills": []any{}, "plugins": []any{map[string]any{"name": "demo", "scope": "project", "path": plan.ActivePath, "enabled": runner.enabled, "provides": provides}}})
 	if runner.bad != "" {
 		body = []byte(runner.bad)
 	}
@@ -369,6 +380,11 @@ func TestProjectGrokMCPOnlyPreflightAndConservativeActivation(t *testing.T) {
 	if _, err := New().Activate(t.Context(), clients.Env{Runner: runner}, request); err == nil ||
 		!strings.Contains(err.Error(), "requires qualified Grok 1.0.70") || runner.calls != 1 {
 		t.Fatalf("unqualified Grok MCP version admitted: %v calls=%d", err, runner.calls)
+	}
+	runner.version, runner.calls, runner.omitMCPDiscovery = "1.0.70", 0, true
+	if _, err := New().Activate(t.Context(), clients.Env{Runner: runner}, request); err == nil ||
+		!strings.Contains(err.Error(), "did not report the selected project MCP servers") || runner.calls != 1 {
+		t.Fatalf("plugin inventory was mistaken for native MCP discovery: %v calls=%d", err, runner.calls)
 	}
 	request.Plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentApp, Name: "app", Support: domain.SupportNative}}
 	if err := New().PreflightActivation(clients.Env{}, request); err == nil {

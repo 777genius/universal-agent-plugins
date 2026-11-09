@@ -2,6 +2,7 @@ package grok
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -15,6 +16,7 @@ import (
 type projectPlugin struct {
 	name, scope, path string
 	enabled           bool
+	mcpServers        int64
 }
 type projectInspection struct {
 	version string
@@ -80,7 +82,27 @@ func parseProjectPlugin(entry any) (projectPlugin, error) {
 	if !n || !s || !p || !e || strings.TrimSpace(name) == "" || !filepath.IsAbs(path) || filepath.Clean(path) != path || (scope != "project" && scope != "user") {
 		return projectPlugin{}, fmt.Errorf("grok plugin inspect identity is not recognized")
 	}
-	return projectPlugin{name, scope, path, enabled}, nil
+	// Directory discovery and MCP discovery are separate native observations.
+	// Unreported MCP servers must never be treated as loaded or available.
+	var mcpServers int64
+	if raw, present := object["provides"]; present {
+		provides, valid := raw.(map[string]any)
+		if !valid || !exactProjectFields(provides, []string{"mcpServers"}) {
+			return projectPlugin{}, fmt.Errorf("grok plugin provides contract is not recognized")
+		}
+		if count, present := provides["mcpServers"]; present {
+			number, valid := count.(json.Number)
+			if !valid {
+				return projectPlugin{}, fmt.Errorf("grok plugin MCP count is not numeric")
+			}
+			parsed, err := number.Int64()
+			if err != nil || parsed < 0 {
+				return projectPlugin{}, fmt.Errorf("grok plugin MCP count is invalid")
+			}
+			mcpServers = parsed
+		}
+	}
+	return projectPlugin{name: name, scope: scope, path: path, enabled: enabled, mcpServers: mcpServers}, nil
 }
 func inspectProject(ctx context.Context, env clients.Env, client domain.DetectedClient, plan domain.DeliveryPlan, owned bool) (clients.RegistryFinding, error) {
 	root, err := grokPlanRoot(client, plan)
@@ -115,6 +137,9 @@ func inspectProject(ctx context.Context, env clients.Env, client domain.Detected
 			if owned && entry.scope == "project" && entry.path == plan.ActivePath {
 				if finding != clients.RegistryExpected {
 					return clients.RegistryIndeterminate, fmt.Errorf("grok project source lacks its exact prepared manifest")
+				}
+				if shared.HasSupportedMCP(plan.Components) && entry.mcpServers != int64(len(shared.SupportedMCPNames(plan))) {
+					return clients.RegistryIndeterminate, fmt.Errorf("grok native inspect did not report the selected project MCP servers")
 				}
 				return clients.RegistryExpected, nil
 			}
