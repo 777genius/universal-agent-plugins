@@ -1064,7 +1064,9 @@
       "availableFor": "Plugins available for {name}",
       "count": "{count} reviewed package supports this client. | {count} reviewed packages support this client.",
       "tryPlugin": "Try Context7, or replace {source} with another compatible plugin’s reviewed short name or complete package source.",
-      "localPackageHint": "Replace ./my-plugin with the path to a valid Agent Plugins 1.0 package."
+      "localPackageHint": "Replace ./my-plugin with the path to a valid Agent Plugins 1.0 package.",
+      "piSignedCount": "Signed catalog packages for Pi: {count}",
+      "piDirectSourceNote": "Only packages whose signed Directory release explicitly supports Pi appear here. Compatible Skills, MCP servers and extensions can also be installed from a local package or a pinned Git commit; the CLI validates those sources separately."
     },
     "components": {
       "extensions": "extensions",

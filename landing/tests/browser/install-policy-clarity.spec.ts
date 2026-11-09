@@ -75,6 +75,8 @@ test('Pi agent page describes extensions, Skills and MCP in user and project sco
   const main = page.locator('main.agent-page');
   await expect(main).toContainText('Install compatible Pi extensions, Skills, and stdio/Streamable HTTP MCP servers');
   await expect(main).toContainText('user or project scope');
+  await expect(main).toContainText('Signed catalog packages for Pi: 0');
+  await expect(main).toContainText('Compatible Skills, MCP servers and extensions can also be installed');
   await expect(main).not.toContainText('Portable skills and MCP projection are outside');
   expect(errors).toEqual([]);
 });

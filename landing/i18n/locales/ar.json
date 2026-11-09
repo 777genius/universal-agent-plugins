@@ -1047,7 +1047,9 @@
       "availableFor": "الإضافات المتاحة لـ {name}",
       "count": "تدعم {count} حزمة مراجَعة هذا العميل. | تدعم {count} حزم مراجَعة هذا العميل.",
       "tryPlugin": "جرّب Context7 أو استبدل {source} بالاسم المختصر المراجع لإضافة أخرى متوافقة أو بمصدر حزمة كاملة.",
-      "localPackageHint": "استبدل ./my-plugin بمسار حزمة Agent Plugins 1.0 صالحة."
+      "localPackageHint": "استبدل ./my-plugin بمسار حزمة Agent Plugins 1.0 صالحة.",
+      "piSignedCount": "حزم Pi في الدليل الموقّع: {count}",
+      "piDirectSourceNote": "تظهر هنا فقط الحزم التي تسمح إصداراتها الموقّعة باستخدام Pi. ويمكن أيضًا تثبيت Skills وخوادم MCP والامتدادات المتوافقة من حزمة محلية أو إصدار Git محدد؛ تتحقق CLI من هذه المصادر على نحو مستقل."
     },
     "components": {
       "extensions": "الامتدادات",

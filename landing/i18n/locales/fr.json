@@ -1047,7 +1047,9 @@
       "availableFor": "Plugins disponibles pour {name}",
       "count": "{count} paquet examiné prend en charge ce client. | {count} paquets examinés prennent en charge ce client.",
       "tryPlugin": "Essayez Context7 ou remplacez {source} par le nom court vérifié d’un autre plugin compatible ou par la source d’un paquet complet.",
-      "localPackageHint": "Remplacez ./my-plugin par le chemin d’un paquet Agent Plugins 1.0 valide."
+      "localPackageHint": "Remplacez ./my-plugin par le chemin d’un paquet Agent Plugins 1.0 valide.",
+      "piSignedCount": "Paquets du catalogue signé pour Pi : {count}",
+      "piDirectSourceNote": "Cette liste présente uniquement les versions signées du catalogue compatibles avec Pi. Les Skills, serveurs MCP et extensions compatibles peuvent aussi être installés depuis un paquet local ou un commit Git précis, vérifié séparément par la CLI."
     },
     "components": {
       "extensions": "extensions",

@@ -1047,7 +1047,9 @@
       "availableFor": "适用于 {name} 的插件",
       "count": "{count} 个已审核的软件包支持此客户端。 | {count} 个已审核的软件包支持此客户端。",
       "tryPlugin": "可先试用 Context7，或将 {source} 替换为其他兼容插件经过审核的短名称或完整包的源地址。",
-      "localPackageHint": "将 ./my-plugin 替换为有效 Agent Plugins 1.0 包的路径。"
+      "localPackageHint": "将 ./my-plugin 替换为有效 Agent Plugins 1.0 包的路径。",
+      "piSignedCount": "Pi 已签名目录包：{count}",
+      "piDirectSourceNote": "此处仅显示已签名目录发行版明确支持 Pi 的包。兼容的 Skills、MCP 服务器和扩展也可从本地包或固定的 Git 提交安装；CLI 会独立验证这些来源。"
     },
     "components": {
       "extensions": "扩展",
