@@ -608,7 +608,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
 
     def test_marketing_kit_user_and_project_foreign_skills_are_pinned(self):
         # Protect real native User Skills independently of Project Skills;
-        # Codex discovers both the legacy and .agents User Skill roots.
+        # Codex and OpenCode also discover shared compatibility Skill roots.
         from runpy import run_path
 
         runner = run_path(str(Path(__file__).resolve().parent /
@@ -617,7 +617,9 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         # otherwise the test could replicate an incorrect native mapping.
         for target, project_root, user_roots in (
                 ("copilot", ".github/skills", (".copilot/skills",)),
-                ("codex", ".agents/skills", (".codex/skills", ".agents/skills"))):
+                ("codex", ".agents/skills", (".codex/skills", ".agents/skills")),
+                ("opencode", ".opencode/skills",
+                 (".config/opencode/skills", ".agents/skills", ".claude/skills"))):
             with self.subTest(target=target), TemporaryDirectory() as temporary:
                 case = Path(temporary).resolve()
                 env, project, _, _, entries = runner["run_case"](
@@ -628,6 +630,11 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     *(Path(env["HOME"]) / root / name / "SKILL.md"
                       for root in user_roots),
                 }
+                if target == "opencode":
+                    expected_skills.update({
+                        project / root / name / "SKILL.md"
+                        for root in (".agents/skills", ".claude/skills")
+                    })
                 skills = [(path, content) for path, content in entries
                           if path.name == "SKILL.md"]
                 self.assertEqual({path for path, _ in skills}, expected_skills)
@@ -640,6 +647,38 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                             runner["check_foreign"](pinned, case)
                         skill.write_text(original, encoding="utf-8")
                         runner["check_foreign"](pinned, case)
+
+    def test_marketing_kit_opencode_compat_skills_must_be_removed(self):
+        # Official OpenCode discovery includes .agents/.claude Skills in
+        # both scopes; empty owned native directories must not be a false PASS.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        check = runner["check_removed_native_components"]
+        with TemporaryDirectory() as temporary:
+            case = Path(temporary).resolve()
+            for scope in ("home", "project"):
+                base = case / scope
+                base.mkdir()
+                for compatible in (".agents", ".claude"):
+                    with self.subTest(scope=scope, compatible=compatible):
+                        skills = base / compatible / "skills"
+                        foreign = skills / "unmanaged-uap-foreign-skill"
+                        foreign.mkdir(parents=True)
+                        (foreign / "SKILL.md").write_text(
+                            "---\nname: unmanaged-uap-foreign-skill\n"
+                            "description: keep unchanged\n---\n", encoding="utf-8")
+                        check("opencode", base, case, "remove")
+                        for owned_name in ("marketing-kit",
+                                           "playwright@agentplugins-aaaaaaaaaaaa"):
+                            owned = skills / owned_name
+                            owned.mkdir()
+                            with self.assertRaisesRegex(
+                                    AssertionError, "native Marketing Kit remnants"):
+                                check("opencode", base, case, "remove")
+                            owned.rmdir()
+                        check("opencode", base, case, "remove")
 
     def test_marketing_kit_copilot_project_skill_removal_scans_github_root(self):
         # Copilot Project Skills live in .github/skills, outside MCP config roots.

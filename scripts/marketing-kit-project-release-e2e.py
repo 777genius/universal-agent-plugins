@@ -29,6 +29,9 @@ EXPECTED = {
 # outcome/actions/results. Require exact action evidence; process exit 0 or
 # result=success alone is not sufficient.
 UPDATE_ALIASES = {"marketing-kit", "notion", "hubspot-crm", "playwright"}
+# OpenCode also discovers user/project compatibility Skills in these native roots.
+# Keep the paths separate from managed OpenCode config, and never follow links.
+OPENCODE_COMPAT_ROOTS = (".agents", ".claude")
 LEGACY_ACTIONS = {
     "update": {"unchanged"},
     "repair": {"repair"},
@@ -213,9 +216,20 @@ def run_case(cli, target, root, name, portable=None):
             user_skill.parent.mkdir(parents=True, exist_ok=True)
             user_skill.write_text(foreign_skill, encoding="utf-8")
             native_foreign.append((user_skill, foreign_skill))
+    # OpenCode discovers additional global compatibility Skills outside
+    # ~/.config/opencode and ~/.opencode; protect those foreign files as well.
+    if target == "opencode":
+        for relative in OPENCODE_COMPAT_ROOTS:
+            skill = home / relative / "skills" / "unmanaged-uap-foreign-skill" / "SKILL.md"
+            skill.parent.mkdir(parents=True, exist_ok=True)
+            skill.write_text(foreign_skill, encoding="utf-8")
+            native_foreign.append((skill, foreign_skill))
     # Exercise independent Project Skills too. Copilot's .github/skills lies
-    # outside its native MCP roots.
-    for relative in audit["PROJECT_SKILL_ROOTS"].get(target, ()):
+    # outside its native MCP roots, as do OpenCode's compatibility Skills.
+    project_skill_roots = list(audit["PROJECT_SKILL_ROOTS"].get(target, ()))
+    if target == "opencode":
+        project_skill_roots.extend(root + "/skills" for root in OPENCODE_COMPAT_ROOTS)
+    for relative in project_skill_roots:
         skill = project / relative / "unmanaged-uap-foreign-skill" / "SKILL.md"
         skill.parent.mkdir(parents=True, exist_ok=True)
         skill.write_text(foreign_skill, encoding="utf-8")
@@ -375,7 +389,8 @@ def check_removed_native_components(target, home, case_root, stage):
     # Copilot Project Skills are under .github/skills, not its MCP config
     # roots (.copilot/.config/copilot). Reuse the audit's authoritative paths.
     relative_roots = (*audit["NATIVE_ROOTS"][target],
-                      *audit["PROJECT_SKILL_ROOTS"].get(target, ()))
+                      *audit["PROJECT_SKILL_ROOTS"].get(target, ()),
+                      *(OPENCODE_COMPAT_ROOTS if target == "opencode" else ()))
     roots = [home / relative for relative in relative_roots]
     if any(not audit["path_inside_case"](root, case_root) for root in roots):
         raise AssertionError(f"{stage}: unsafe native client root")
