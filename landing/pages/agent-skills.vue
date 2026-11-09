@@ -8,7 +8,7 @@ const { useGuideUrl } = useDocsLinks();
 usePageSeo(
   () => t('registryUi.skills.overview.seoTitle'),
   () => t('registryUi.skills.overview.metaDescription'),
-  { translate: false },
+  { translate: false, pageType: 'WebPage' },
 );
 </script>
 
