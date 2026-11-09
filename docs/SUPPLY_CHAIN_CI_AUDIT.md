@@ -90,3 +90,7 @@ actual Linux/macOS/Windows CI; review of error paths and paths/secrets in
 machine outputs. Successful unit fixtures do not replace these tests.
 
 Related reference: [local dependency integrity](dependency-integrity.md).
+
+### Policy admission timing
+
+The opt-in policy is evaluated against the complete resolved lock before any convergence repair, and re-evaluated at the final pre-mutation checkpoint after user confirmation. This guards against the policy being changed between preview and apply. Explicitly empty `allow_hosts: []` and `allowed_transports: []` lists are restrictive rather than equivalent to omitted lists. This remains a local policy; it does not supersede UAP's existing source trust, scanner or revocation checks.
