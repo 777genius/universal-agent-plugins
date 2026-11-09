@@ -12,7 +12,7 @@ export interface ClientLandingPage extends ClientTarget {
 /** Public presentation only: keep technical compatibility and previously installed profiles intact. */
 export const hiddenPublicClientIds: ReadonlySet<string> = new Set(['vscode']);
 
-export const clientLandingPages: ClientLandingPage[] = [
+const allClientLandingPages: ClientLandingPage[] = [
   {
     id: 'codex',
     slug: 'codex',
@@ -225,7 +225,11 @@ export const clientLandingPages: ClientLandingPage[] = [
     vendorDocsUrl:
       'https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/extensions.md',
   },
-].filter((client) => !hiddenPublicClientIds.has(client.id));
+];
+
+export const clientLandingPages: ClientLandingPage[] = allClientLandingPages.filter(
+  (client) => !hiddenPublicClientIds.has(client.id),
+);
 
 export const clients: ClientTarget[] = clientLandingPages.map(
   ({ id, name, icon, note, status }) => ({ id, name, icon, note, status }),
