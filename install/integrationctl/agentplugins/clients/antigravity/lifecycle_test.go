@@ -73,3 +73,30 @@ func TestAntigravityRemovalUsesSharedOwnedDirectoryOnly(t *testing.T) {
 		t.Fatalf("foreign plugin was affected: %q %v", body, err)
 	}
 }
+
+func TestAntigravityGroupPreflightHasNoStagedDeliveryYet(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	profile := filepath.Join(root, "user", ".gemini", "config")
+	project := filepath.Join(root, "project")
+	nativeRoot := filepath.Join(project, ".agents")
+	pluginRoot := filepath.Join(nativeRoot, "plugins")
+	active := filepath.Join(pluginRoot, "managed")
+	req := domain.ActivationRequest{
+		Client: domain.DetectedClient{ClientID: domain.ClientAntigravity, ConfigRoot: profile},
+		Plan: domain.DeliveryPlan{ClientID: domain.ClientAntigravity, Scope: domain.ScopeProject,
+			NativeRegistryRoot: nativeRoot, TargetRoot: pluginRoot, ActivePath: active,
+			TargetContext: domain.TargetContext{Scope: domain.ScopeProject, ProjectRoot: project, UserConfigRoot: profile}},
+	}
+	if err := New().PreflightActivation(clients.Env{}, req); err != nil {
+		t.Fatalf("pre-staging group preflight refused valid selected authority: %v", err)
+	}
+	req.Delivery = domain.StagedDelivery{ClientID: domain.ClientAntigravity, ActivePath: filepath.Join(pluginRoot, "foreign")}
+	if err := New().PreflightActivation(clients.Env{}, req); err == nil {
+		t.Fatal("foreign staged delivery path accepted")
+	}
+	req.Delivery = domain.StagedDelivery{ClientID: domain.ClientHermes, ActivePath: active}
+	if err := New().PreflightActivation(clients.Env{}, req); err == nil {
+		t.Fatal("staged delivery for another client accepted")
+	}
+}
