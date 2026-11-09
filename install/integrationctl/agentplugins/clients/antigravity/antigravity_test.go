@@ -78,8 +78,14 @@ func TestAntigravityNativeManifestAndMCPProjection(t *testing.T) {
 	if _, exists := config.Servers["api"]["url"]; exists {
 		t.Fatal("legacy URL field must not be included")
 	}
-	if _, err := New().Project(context.Background(), clients.ProjectionInput{StagingPath: root, Envelope: envelope, Plan: plan}); err != nil {
-		t.Fatalf("native projector: %v", err)
+	// A second run is performed on an independently staged source. An already
+	// generated native manifest cannot be silently overwritten or adopted.
+	other := filepath.Join(t.TempDir(), "plugin")
+	if err := os.MkdirAll(other, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := New().Project(context.Background(), clients.ProjectionInput{StagingPath: other, Envelope: envelope, Plan: plan}); err != nil {
+		t.Fatalf("native projector on a clean stage: %v", err)
 	}
 }
 
