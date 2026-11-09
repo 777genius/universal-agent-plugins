@@ -95,6 +95,9 @@ func (kernel Kernel) ApplyBatch(requests []Request) (receipts []Receipt, err err
 	if err != nil {
 		return nil, err
 	}
+	if err := requireHermesPrivateConfig(file, requests[0].Codec); err != nil {
+		return nil, err
+	}
 	var doc *document
 	if file.exists {
 		doc, err = kernel.parseDocument(file.body, file.jsonc, requests[0].Codec)
@@ -257,6 +260,9 @@ func (kernel Kernel) Inspect(paths Paths, codec Codec, name string, owned *Recei
 	}
 	file, err := kernel.resolve(paths)
 	if err != nil || !file.exists {
+		return false, false, err
+	}
+	if err := requireHermesPrivateConfig(file, codec); err != nil {
 		return false, false, err
 	}
 	doc, err := kernel.parseDocument(file.body, file.jsonc, codec)

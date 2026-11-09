@@ -1,6 +1,8 @@
 package nativeconfig
 
 import (
+	"bytes"
+	"runtime"
   "errors"
   "os"
   "path/filepath"
@@ -88,4 +90,23 @@ func TestHermesYAMLRejectsMalformedAndAmbiguousConfig(t *testing.T) {
   Server: Server{Type: "stdio", Command: "node"}}); err == nil {
   t.Fatal("Hermes YAML writes require exact config.yaml")
  }
+}
+
+
+func TestHermesRefusesExistingWorldReadableConfig(t *testing.T) {
+	if runtime.GOOS == "windows" { t.Skip("Windows security uses ACLs rather than POSIX mode bits") }
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	body := []byte("model: demo\n")
+	if err := os.WriteFile(path, body, 0o644); err != nil { t.Fatal(err) }
+	kernel := New()
+	req := Request{Paths: Paths{JSON:path}, Codec:CodecHermes, Action:ActionAdd,
+		Name:"managed", Server:Server{Type:"stdio",Command:"node"}}
+	if _, err := kernel.Apply(req); err == nil {
+		t.Fatal("Hermes must not write secrets into an existing 0644 config")
+	}
+	now, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(now, body) {
+		t.Fatalf("unsafe file changed on refusal: %q %v", now, err)
+	}
 }

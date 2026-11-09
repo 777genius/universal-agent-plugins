@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"runtime"
 
 	"gopkg.in/yaml.v3"
 )
@@ -190,3 +191,17 @@ func hermesValueNode(encoded json.RawMessage) (*yaml.Node, error) {
 	if err := value.Encode(object); err != nil { return nil, err }
 	return &value, nil
 }
+
+ // Refuse to mutate an existing provider config that is readable by another
+ // local Unix user. The mutation kernel retains existing file modes by design,
+ // so writing credentials into a pre-existing 0644 file would preserve the leak.
+ // Windows uses ACLs rather than meaningful POSIX permission bits.
+ func requireHermesPrivateConfig(file resolvedFile, codec Codec) error {
+ 	if codec != CodecHermes || !file.exists || runtime.GOOS == "windows" {
+ 		return nil
+ 	}
+ 	if file.mode.Perm()&0o077 != 0 {
+ 		return fmt.Errorf("Hermes config.yaml must have owner-only permissions before UAP manages MCP entries")
+ 	}
+ 	return nil
+ }
