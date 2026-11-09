@@ -213,13 +213,31 @@ def run_case(cli, target, root, name, portable=None):
     return env, project, user_foreign, project_foreign, native_foreign
 
 
-def check_foreign(entries, case_root):
-    """Reject changed foreign state and symlinked ancestors before reading."""
+def pin_foreign(entries):
+    """Pin the original unmanaged file identity before lifecycle operations."""
+    pinned = []
     for path, content in entries:
-        # Reuse the live audit's fail-closed containment oracle (BUG-044).
-        if (not audit["path_inside_case"](path, case_root)
-                or not path.is_file()
+        if (path.is_symlink() or not path.is_file()
                 or path.read_bytes() != content.encode("utf-8")):
+            raise AssertionError(f"invalid foreign fixture: {path.name}")
+        identity = path.lstat()
+        pinned.append((path, content, (identity.st_mode, identity.st_dev, identity.st_ino)))
+    return pinned
+
+
+def check_foreign(entries, case_root):
+    """Reject foreign content, permission or inode changes and unsafe links."""
+    for path, content, expected_identity in entries:
+        # Reuse the live audit's fail-closed containment oracle (BUG-044).
+        if not audit["path_inside_case"](path, case_root):
+            raise AssertionError(f"foreign content modified: {path.name}")
+        try:
+            identity = path.lstat()
+            current_identity = (identity.st_mode, identity.st_dev, identity.st_ino)
+            data = path.read_bytes() if path.is_file() else None
+        except OSError as error:
+            raise AssertionError(f"foreign content modified: {path.name}") from error
+        if current_identity != expected_identity or data != content.encode("utf-8"):
             raise AssertionError(f"foreign content modified: {path.name}")
 
 
@@ -388,9 +406,9 @@ def main():
             launcher_cache.mkdir(mode=0o700)
             env, project_a, foreign_a, project_foreign_a, native_foreign_a = run_case(options.cli, options.target, root, "A")
             bind_pinned_launcher_cache(env, launcher_cache, root)
-            foreign_a_files = [(foreign_a, "unmanaged user data\n"),
-                               (project_foreign_a, "unmanaged project data\n"),
-                               *native_foreign_a]
+            foreign_a_files = pin_foreign([(foreign_a, "unmanaged user data\n"),
+                                           (project_foreign_a, "unmanaged project data\n"),
+                                           *native_foreign_a])
             foreign_files = list(foreign_a_files)
             project_before_user = None
             protected_b = None
@@ -450,9 +468,9 @@ def main():
             native_a_before_b = profile_snapshot(env, project_a)
             env_b, project_b, foreign_b, project_foreign_b, native_foreign_b = run_case(options.cli, options.target, root, "B", project_a)
             bind_pinned_launcher_cache(env_b, launcher_cache, root)
-            foreign_b_files = [(foreign_b, "unmanaged user data\n"),
-                               (project_foreign_b, "unmanaged project data\n"),
-                               *native_foreign_b]
+            foreign_b_files = pin_foreign([(foreign_b, "unmanaged user data\n"),
+                                           (project_foreign_b, "unmanaged project data\n"),
+                                           *native_foreign_b])
             foreign_files.extend(foreign_b_files)
             scoped_b = ("--scope", "project", "--project-root", str(project_b))
             run(env_b, project_b, "cold locked restore", "install", "--locked", "--yes", *scoped_b)
@@ -545,9 +563,9 @@ def main():
             bind_pinned_launcher_cache(env_c, launcher_cache, root)
             # User operations must not mutate their own working Project C.
             protected_c_project = scoped_snapshot([project_c])
-            foreign_files.extend([(foreign_c, "unmanaged user data\n"),
-                                  (project_foreign_c, "unmanaged project data\n"),
-                                  *native_foreign_c])
+            foreign_files.extend(pin_foreign([(foreign_c, "unmanaged user data\n"),
+                                              (project_foreign_c, "unmanaged project data\n"),
+                                              *native_foreign_c]))
             # Transfer only portable manifest and signed lock, not User A's
             # receipts, native config, store, or installation IDs.
             user_portable_c = Path(env_c["AGENTPLUGINS_HOME"])

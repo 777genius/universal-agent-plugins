@@ -366,12 +366,36 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             marker = root / "foreign-user-do-not-change.txt"
             expected = "unmanaged user data\n"
             marker.write_bytes(expected.encode("utf-8"))
-            runner["check_foreign"]([(marker, expected)], root)
+            pinned = runner["pin_foreign"]([(marker, expected)])
+            runner["check_foreign"](pinned, root)
 
             marker.write_bytes(b"unmanaged user data\r\n")
             self.assertEqual(marker.read_text(encoding="utf-8"), expected)
             with self.assertRaisesRegex(AssertionError, "foreign content modified"):
-                runner["check_foreign"]([(marker, expected)], root)
+                runner["check_foreign"](pinned, root)
+
+            # Even identical bytes must not excuse a chmod or inode swap of
+            # unmanaged state in the profile being actively installed.
+            marker.write_bytes(expected.encode("utf-8"))
+            original_mode = marker.stat().st_mode & 0o7777
+            try:
+                marker.chmod(original_mode ^ 0o200)
+                with self.assertRaisesRegex(AssertionError, "foreign content modified"):
+                    runner["check_foreign"](pinned, root)
+            finally:
+                marker.chmod(original_mode)
+            runner["check_foreign"](pinned, root)
+
+            saved = root / "saved-original-foreign"
+            marker.replace(saved)
+            try:
+                marker.write_bytes(expected.encode("utf-8"))
+                with self.assertRaisesRegex(AssertionError, "foreign content modified"):
+                    runner["check_foreign"](pinned, root)
+            finally:
+                marker.unlink(missing_ok=True)
+                saved.replace(marker)
+            runner["check_foreign"](pinned, root)
 
     def test_marketing_kit_identity_guard_rejects_missing_or_shared_ids(self):
         # A missing ID can make the repeat/repair comparison falsely pass.
