@@ -98,7 +98,7 @@ jobs:
       # prerequisite for all plugin targets, never by a synthetic stub.
       # No Docker daemon or authenticated MCP execution is claimed here.
       - name: Install real Docker CLI for published Docker Hub source
-        if: ${{ github.event_name != 'pull_request' && matrix.kind == 'plugin' }}
+        if: ${{ matrix.kind == 'plugin' && (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.title, '[full-published-e2e]'))) }}
         shell: bash
         run: |
           set -euo pipefail

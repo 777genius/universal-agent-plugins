@@ -79,11 +79,79 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          pattern='cold, warm, corrupted|published immutable npm binary retries|npm binary gateway retry obeys cancellation|lock roots are isolated|lock root rejects symlinks|a non-regular binary cache target is preserved|canonical verifier retries transient gateway|canonical verifier exhausts transient|pre-response timeout|timeout after response|request-side error mimicking a gateway'
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            # Frozen Linux-mode test asserts POSIX 0700 under NTFS; on Windows
+            # prove actual native per-user LOCALAPPDATA separation instead.
+            pattern="${pattern/lock roots are isolated|/}"
+          fi
           node --test --test-reporter=tap \
-            --test-name-pattern='cold, warm, corrupted|published immutable npm binary retries|npm binary gateway retry obeys cancellation|lock roots are isolated|lock root rejects symlinks|a non-regular binary cache target is preserved|canonical verifier retries transient gateway|canonical verifier exhausts transient|pre-response timeout|timeout after response|request-side error mimicking a gateway' \
+            --test-name-pattern="$pattern" \
             release-source/npm/agentplugins/test/bootstrap.test.js \
             release-source/npm/agentplugins/test/verifier.test.js \
             | tee "$RUNNER_TEMP/public-platform-$UAP_TARGET-security.tap"
+      - name: Verify actual Windows two-profile cache lock isolation
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          'use strict';
+          const assert = require('node:assert/strict');
+          const crypto = require('node:crypto');
+          const fs = require('node:fs/promises');
+          const os = require('node:os');
+          const path = require('node:path');
+          const { acquireLock } = require('./release-source/npm/agentplugins/lib/bootstrap');
+          
+          async function check() {
+            assert.equal(process.platform, 'win32', 'real Windows runner required');
+            const base = await fs.mkdtemp(path.join(os.tmpdir(), 'uap-win-lock-users-'));
+            const a = path.join(base, 'user-a');
+            const b = path.join(base, 'user-b');
+            const target = path.join(base, 'same-binary-target');
+            const hash = crypto.createHash('sha256').update(target).digest('hex') + '.lock';
+            const lockPath = local => path.join(local, 'agentplugins', 'Cache', '.locks', hash);
+            const sentinel = path.join(base, 'foreign-neighbor.txt');
+            let releaseA, releaseB;
+            try {
+              await fs.writeFile(sentinel, 'foreign content must survive\n');
+              releaseA = await acquireLock(target, {
+                environment: { LOCALAPPDATA: a }, platform: 'win32', home: a, timeoutMs: 2500
+              });
+              releaseB = await acquireLock(target, {
+                environment: { LOCALAPPDATA: b }, platform: 'win32', home: b, timeoutMs: 2500
+              });
+              assert.notEqual(lockPath(a), lockPath(b));
+              assert.equal((await fs.lstat(lockPath(a))).isFile(), true);
+              assert.equal((await fs.lstat(lockPath(b))).isFile(), true);
+              const other = await fs.readFile(lockPath(b), 'utf8');
+              assert.match(other, /"nonce":"[a-f0-9]{32}"/);
+              await releaseA(); releaseA = undefined;
+              await assert.rejects(fs.lstat(lockPath(a)), { code: 'ENOENT' });
+              assert.equal(await fs.readFile(lockPath(b), 'utf8'), other);
+              await releaseB(); releaseB = undefined;
+              await assert.rejects(fs.lstat(lockPath(b)), { code: 'ENOENT' });
+              assert.equal(await fs.readFile(sentinel, 'utf8'), 'foreign content must survive\n');
+              const receipt = {
+                schema_version: 1, platform: process.platform, target: process.env.UAP_TARGET,
+                release_version: process.env.UAP_VERSION, code_sha: process.env.UAP_COMMIT,
+                actual_native_windows: true, isolated_local_app_data_roots: true,
+                simultaneous_same_target_locks: true, releasing_one_does_not_steal_other: true,
+                exact_lock_removal: true, unmanaged_sentinel_preserved: true
+              };
+              await fs.writeFile(path.join(process.env.RUNNER_TEMP,
+                'public-platform-' + process.env.UAP_TARGET + '-winlock.json'),
+                JSON.stringify(receipt, null, 2) + '\n');
+              process.stdout.write('Windows two-user LOCALAPPDATA lock isolation PASS\n');
+            } finally {
+              if (releaseA) await releaseA();
+              if (releaseB) await releaseB();
+              await fs.rm(base, { recursive: true, force: true });
+            }
+          }
+          check().catch(error => { console.error(error); process.exitCode = 1; });
+          NODE
       - name: Retain original public-source evidence even on failure
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
@@ -92,5 +160,6 @@ jobs:
           path: |
             ${{ runner.temp }}/public-platform-${{ matrix.target }}.json
             ${{ runner.temp }}/public-platform-${{ matrix.target }}-security.tap
+            ${{ runner.temp }}/public-platform-${{ matrix.target }}-winlock.json
           if-no-files-found: warn
           retention-days: 14

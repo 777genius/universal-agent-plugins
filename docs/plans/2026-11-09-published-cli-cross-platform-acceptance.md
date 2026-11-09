@@ -13,3 +13,23 @@ Verify the exact public immutable `universal-agent-plugins@0.1.102` without mode
 - Source scope and native status must remain honest: `passed` lifecycle vs `prepared-lifecycle-passed` vs denied/auth-required; no claim of model invocation or authenticated MCP `tools/call`.
 - Preserve existing #791/#794 merged P0 and published Remotion long-TEMP positive/negative receipts. Avoid unnecessary reruns or duplicated manual dispatch.
 - Merge only after applicable exact-head review and CI; inspect post-merge main checks and any real failures. Do not publish a new release from this test-only change.
+## First-run findings and strict remediation
+
+- **OpenCode / plugins:** Four previously frozen Git source revisions can
+  complete package add/list/repeat/remove without proving native component
+  registration on public 0.1.102. Treat them only as verified *non-native
+  negatives* with exact source and version checks and unchanged ownership.
+  Unknown sources, new CLI versions or native residuals continue to fail.
+- **macOS Docker Hub:** The pinned source requires the real `docker` CLI
+  on PATH. The existing Homebrew CLI prerequisite is enabled only for the
+  explicitly trusted 30-source PR run; never substitute a fake binary or
+  disable runtime preflight.
+- **Windows cache locks:** An existing frozen source unit test emulates Linux
+  and checks POSIX mode 0700, which NTFS does not report. Keep that test on
+  Linux/macOS; on genuine Windows x64/ARM64 instead prove two independent
+  LOCALAPPDATA lock roots can simultaneously own the same target, releasing
+  one never removes the other's lock, and foreign sentinels survive.
+- **Public-vs-draft proof:** The six-OS acceptance mode must always use
+  `public_release_download` with no local frozen binary. It does not claim
+  authenticated native vendor tool calls or access to a real model session.
+
