@@ -496,6 +496,32 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             empty.rmdir()
             runner["check_profile_unchanged"](env, project, after, "restore B")
 
+    def test_marketing_kit_snapshot_rejects_symlink_retarget_without_following(self):
+        # The shared file/dir snapshot records only 'symlink', which cannot
+        # distinguish a link retargeted to a different foreign profile.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            project = root / "project"
+            left, right = root / "left", root / "right"
+            for directory in (project, left, right):
+                directory.mkdir()
+            link = project / "external-native-profile"
+            try:
+                link.symlink_to(left, target_is_directory=True)
+            except (OSError, NotImplementedError) as error:
+                self.skipTest(f"host cannot create directory symlinks: {error}")
+            before = runner["scoped_snapshot"]([project])
+            link.unlink()
+            link.symlink_to(right, target_is_directory=True)
+            self.assertNotEqual(runner["scoped_snapshot"]([project]), before)
+            link.unlink()
+            link.symlink_to(left, target_is_directory=True)
+            self.assertEqual(runner["scoped_snapshot"]([project]), before)
+
     def test_marketing_kit_user_scope_cannot_write_untracked_project_state(self):
         # A User command may succeed while creating a new file in the current
         # Project, leaving its signed lock, manifest and sentinels unchanged.

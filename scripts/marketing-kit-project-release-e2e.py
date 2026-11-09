@@ -229,13 +229,23 @@ def scoped_snapshot(roots):
     roots = tuple(Path(root) for root in roots)
     state = audit["snapshot"](roots)
     for index, root in enumerate(roots):
-        if root.is_symlink() or not root.is_dir():
+        if root.is_symlink():
+            state[f"root-link:{index}"] = os.readlink(root)
             continue
-        for directory, dirs, _ in os.walk(root, followlinks=False):
+        if not root.is_dir():
+            continue
+        for directory, dirs, files in os.walk(root, followlinks=False):
             for name in dirs:
                 path = Path(directory) / name
-                if not path.is_symlink():
-                    state[f"directory:{index}:{path.relative_to(root).as_posix()}"] = "present"
+                relative = path.relative_to(root).as_posix()
+                if path.is_symlink():
+                    state[f"link:{index}:{relative}"] = os.readlink(path)
+                else:
+                    state[f"directory:{index}:{relative}"] = "present"
+            for name in files:
+                path = Path(directory) / name
+                if path.is_symlink():
+                    state[f"link:{index}:{path.relative_to(root).as_posix()}"] = os.readlink(path)
     return state
 
 
