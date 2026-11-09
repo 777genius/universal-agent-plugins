@@ -194,7 +194,6 @@ func applyDependencySync(cmd *cobra.Command, app App, opts *options, request dep
 		if observedPolicy != request.policyFingerprint {
 			return fmt.Errorf("local dependency policy changed after confirmation: %w", installer.ErrPlanChanged)
 		}
-		var err error
 		actions, err = request.recheck(cmd, app, opts)
 		if err == nil && !reflect.DeepEqual(actions, prepared) {
 			return installer.ErrPlanChanged
