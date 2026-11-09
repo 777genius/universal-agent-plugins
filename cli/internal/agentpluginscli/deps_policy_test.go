@@ -29,11 +29,11 @@ func TestLocalDependencyPolicyTransitiveAndPins(t *testing.T) {
 	lock := environment.Lock{Packages: []environment.LockedPackage{pin, child}}
 	var policy localDependencyPolicy
 	policy.SchemaVersion = 1
-	policy.Sources.AllowHosts = []string{"github.com"}
+	policy.Sources.AllowHosts = policyAllowList{Present: true, Values: []string{"github.com"}}
 	if err := policy.evaluate(lock); err == nil || !strings.Contains(err.Error(), "transitive") {
 		t.Fatalf("must block transitive disallowed source: %v", err)
 	}
-	policy.Sources.AllowHosts = []string{"github.com", "untrusted.example.test"}
+	policy.Sources.AllowHosts = policyAllowList{Present: true, Values: []string{"github.com", "untrusted.example.test"}}
 	policy.Integrity.RequireArchiveSHA256 = true
 	if err := policy.evaluate(lock); err == nil || !strings.Contains(err.Error(), "transitive") {
 		t.Fatalf("must require declared hash, not merely downloaded hash: %v", err)
@@ -69,7 +69,7 @@ func TestLocalDependencyPolicyExplicitOptInAndStrictParsing(t *testing.T) {
 	}
 	write("schema_version: 1\nsources:\n  allow_hosts: [github.com]\nintegrity:\n  require_pinned_git: true\nmcp:\n  allowed_transports: [stdio, streamable-http]\n")
 	policy, err := readLocalDependencyPolicy(path)
-	if err != nil || len(policy.Sources.AllowHosts) != 1 || !policy.Integrity.RequirePinnedGit {
+	if err != nil || len(policy.Sources.AllowHosts.Values) != 1 || !policy.Integrity.RequirePinnedGit {
 		t.Fatalf("valid local policy not parsed: %+v, %v", policy, err)
 	}
 	for name, body := range map[string]string{
