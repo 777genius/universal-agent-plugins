@@ -328,5 +328,8 @@ func TestAgentpluginsGrokNativeProjectCompleteCycle(t *testing.T) {
 	}
 	c.append(t, "grok-cycle-proof.jsonl", "final", map[string]any{"preserved": c.preserved(t), "retained_a": c.guards[c.recipes["a"].Data], "retained_b": c.guards[c.recipes["b"].Data], "absent_a": c.recipes["a"].Active, "absent_b": c.recipes["b"].Active})
 	c.proofs = append(c.proofs, "final")
+	// The original pinned Skills lifecycle is complete; independently verify
+	// Grok's real Project MCP plugin discovery without granting trust.
+	grokProjectNativeMCPCycle(t, c)
 	c.complete = true
 }
