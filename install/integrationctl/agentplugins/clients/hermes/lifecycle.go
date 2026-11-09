@@ -22,11 +22,22 @@ func (*Adapter) AutomaticallyActivates(_ clients.Env, req domain.ActivationReque
 }
 
 func (*Adapter) PreflightActivation(env clients.Env, req domain.ActivationRequest) error {
-	if err := shared.ActivationIdentityMismatch(req); err != nil {
-		return err
+	// Group preflight runs before staging, so Delivery has no identity or path
+	// yet. Validate the selected client and plan now; demand exact delivery
+	// identity only once a staged delivery actually exists.
+	if req.Plan.ClientID != domain.ClientHermes || req.Client.ClientID != domain.ClientHermes {
+		return fmt.Errorf("Hermes selected client identity differs")
 	}
-	if req.Plan.ClientID != domain.ClientHermes || req.Delivery.ActivePath != req.Plan.ActivePath {
-		return fmt.Errorf("Hermes delivery identity differs")
+	if req.Delivery.ClientID != "" || req.Delivery.ActivePath != "" {
+		if err := shared.ActivationIdentityMismatch(req); err != nil {
+			return err
+		}
+		if req.Delivery.ActivePath != req.Plan.ActivePath {
+			return fmt.Errorf("Hermes staged delivery path differs")
+		}
+	}
+	if req.ActivationComplete {
+		return fmt.Errorf("Hermes runtime activation cannot be attested by installer")
 	}
 	layout, err := components(req.Plan, req.Delivery.ActivePath)
 	if err != nil {
@@ -71,6 +82,12 @@ func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, _ do
 func (*Adapter) Activate(ctx context.Context, env clients.Env, req domain.ActivationRequest) (domain.ActivationOutcome, error) {
 	if err := ctx.Err(); err != nil {
 		return domain.ActivationOutcome{}, err
+	}
+	if err := shared.ActivationIdentityMismatch(req); err != nil {
+		return domain.ActivationOutcome{}, err
+	}
+	if req.Delivery.ActivePath != req.Plan.ActivePath {
+		return domain.ActivationOutcome{}, fmt.Errorf("Hermes staged delivery path differs")
 	}
 	if err := New().PreflightActivation(env, req); err != nil {
 		return domain.ActivationOutcome{}, err
