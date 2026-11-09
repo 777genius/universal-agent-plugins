@@ -114,10 +114,16 @@ func validPolicyHost(host string) bool {
 func lockedSourceHost(pin environment.LockedPackage) (string, error) {
 	switch {
 	case pin.Source.Git != nil:
+		// A concrete URL takes precedence over a GitHub-style shorthand.
+		// Treating a remote URL as github.com merely because Repository is
+		// populated could silently bypass a host allow/deny policy.
+		if pin.Source.Git.URL != "" {
+			return hostFromPolicyURL(pin.Source.Git.URL)
+		}
 		if pin.Source.Git.Repository != "" {
 			return "github.com", nil
 		}
-		return hostFromPolicyURL(pin.Source.Git.URL)
+		return "", errors.New("Git dependency source has no origin authority")
 	case pin.Source.Registry != nil:
 		// Registry coordinates bind a signed Directory publication to a
 		// GitHub owner/repository + exact commit.
