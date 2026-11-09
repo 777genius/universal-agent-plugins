@@ -608,7 +608,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
 
     def test_marketing_kit_user_and_project_foreign_skills_are_pinned(self):
         # Protect real native User Skills independently of Project Skills;
-        # Codex, OpenCode and Cursor also discover compatibility Skill roots.
+        # Codex, OpenCode, Cursor and Gemini also discover compatibility Skills.
         from runpy import run_path
 
         runner = run_path(str(Path(__file__).resolve().parent /
@@ -622,7 +622,9 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                  (".config/opencode/skills", ".agents/skills", ".claude/skills")),
                 ("cursor", ".cursor/skills",
                  (".cursor/skills", ".agents/skills", ".claude/skills",
-                  ".codex/skills"))):
+                  ".codex/skills")),
+                ("gemini", ".gemini/skills",
+                 (".gemini/skills", ".agents/skills"))):
             with self.subTest(target=target), TemporaryDirectory() as temporary:
                 case = Path(temporary).resolve()
                 env, project, _, _, entries = runner["run_case"](
@@ -636,6 +638,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 compatible_project = {
                     "opencode": (".agents/skills", ".claude/skills"),
                     "cursor": (".agents/skills", ".claude/skills", ".codex/skills"),
+                    "gemini": (".agents/skills",),
                 }
                 expected_skills.update({
                     project / root / name / "SKILL.md"
@@ -715,6 +718,34 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                             check("cursor", base, case, "remove")
                         owned.rmdir()
                         check("cursor", base, case, "remove")
+
+    def test_marketing_kit_gemini_alias_skill_cleanup(self):
+        # Gemini's documented native .agents/skills alias is discovered
+        # independently in User and Project scope.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        check = runner["check_removed_native_components"]
+        with TemporaryDirectory() as temporary:
+            case = Path(temporary).resolve()
+            for scope in ("home", "project"):
+                base = case / scope
+                base.mkdir()
+                skills = base / ".agents" / "skills"
+                foreign = skills / "unmanaged-uap-foreign-skill"
+                foreign.mkdir(parents=True)
+                (foreign / "SKILL.md").write_text(
+                    "---\nname: unmanaged-uap-foreign-skill\n"
+                    "description: keep unchanged\n---\n", encoding="utf-8")
+                check("gemini", base, case, "remove")
+                owned = skills / "marketing-kit"
+                owned.mkdir()
+                with self.subTest(scope=scope), self.assertRaisesRegex(
+                        AssertionError, "native Marketing Kit remnants"):
+                    check("gemini", base, case, "remove")
+                owned.rmdir()
+                check("gemini", base, case, "remove")
 
     def test_marketing_kit_copilot_project_skill_removal_scans_github_root(self):
         # Copilot Project Skills live in .github/skills, outside MCP config roots.

@@ -34,6 +34,7 @@ UPDATE_ALIASES = {"marketing-kit", "notion", "hubspot-crm", "playwright"}
 COMPAT_SKILL_ROOTS = {
     "opencode": (".agents", ".claude"),
     "cursor": (".agents", ".claude", ".codex"),
+    "gemini": (".agents",),
 }
 LEGACY_ACTIONS = {
     "update": {"unchanged"},
