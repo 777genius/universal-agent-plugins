@@ -129,9 +129,9 @@ export const clientSupportRows: ClientSupport[] = [
     id: 'grok',
     name: 'Grok Build',
     user: 'Skills, MCP',
-    project: 'Skills only',
+    project: 'Skills, MCP (prepared)',
     setup: 'Guided',
-    nextStep: 'Reload Grok; review project Skills and any CLI setup hint.',
+    nextStep: 'Open the selected project in Grok; review and trust the plugin, then verify Skills and MCP connectivity.',
   },
   {
     id: 'vscode',
