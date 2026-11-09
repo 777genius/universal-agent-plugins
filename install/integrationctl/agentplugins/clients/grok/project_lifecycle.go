@@ -12,7 +12,18 @@ import (
 
 var _ clients.ActivationPreflighter = (*Adapter)(nil)
 
-const projectPreparationAction = "Grok project Skills/MCP are prepared; Project MCP requires Grok 1.0.70; open the selected project, enable and trust the plugin in Grok, then reload and verify effective MCP discovery; UAP has not activated it"
+// Project guidance must describe only components actually delivered. A
+// Skills-only project remains qualified on Grok 1.0.67.
+func projectPreparationAction(components []domain.ComponentDecision) string {
+	if !shared.HasSupportedMCP(components) {
+		return "Grok project Skills are prepared; open the selected project, review trust in Grok, then reload and verify native Skills discovery; UAP has not activated them"
+	}
+	label := "MCP"
+	if shared.ComponentKindPresent(components, domain.ComponentSkill) {
+		label = "Skills/MCP"
+	}
+	return "Grok project " + label + " delivery is prepared; Project MCP requires Grok 1.0.70; open the selected project, enable and trust the plugin in Grok, then reload and verify effective MCP discovery; UAP has not activated it"
+}
 
 func (*Adapter) PreflightActivation(_ clients.Env, request domain.ActivationRequest) error {
 	if request.Plan.Scope != domain.ScopeProject && request.Plan.TargetContext.Scope != domain.ScopeProject && request.Plan.TargetContext.ProjectRoot == "" {
@@ -59,7 +70,7 @@ func activateProject(ctx context.Context, env clients.Env, request domain.Activa
 	}
 	outcome := shared.StartedActivation(request)
 	outcome.Activation = domain.ActivationPrepared
-	outcome.UserActions = []string{projectPreparationAction}
+	outcome.UserActions = []string{projectPreparationAction(request.Plan.Components)}
 	return outcome, nil
 }
 func deactivateProject(_ context.Context, _ clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {

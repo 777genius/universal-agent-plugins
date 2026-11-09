@@ -331,6 +331,26 @@ func TestProjectGrokSelectedSkillNameCollidesAcrossNativeSources(t *testing.T) {
 	}
 }
 
+func TestProjectGrokPreparationGuidanceMatchesComponents(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		components []domain.ComponentDecision
+		contains   string
+		excludes   string
+	}{
+		{"skills-only", []domain.ComponentDecision{{Kind: domain.ComponentSkill, Support: domain.SupportNative}}, "Skills discovery", "Project MCP requires"},
+		{"mcp-only", []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Support: domain.SupportNative}}, "Grok project MCP delivery", "Skills/MCP"},
+		{"both", []domain.ComponentDecision{{Kind: domain.ComponentSkill, Support: domain.SupportNative}, {Kind: domain.ComponentMCPServer, Support: domain.SupportNative}}, "Grok project Skills/MCP delivery", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			guidance := projectPreparationAction(tc.components)
+			if !strings.Contains(guidance, tc.contains) || (tc.excludes != "" && strings.Contains(guidance, tc.excludes)) {
+				t.Fatalf("incorrect selected-component native guidance: %s", guidance)
+			}
+		})
+	}
+}
+
 func TestProjectGrokMCPOnlyPreflightAndConservativeActivation(t *testing.T) {
 	request := projectTestRequest(t)
 	request.Plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "probe", Support: domain.SupportNative}}
