@@ -16,16 +16,17 @@ import (
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
-type projectGrokDetector struct{ user, executable string }
+type projectGrokDetector struct{ user, executable, version string }
 
 func (d projectGrokDetector) Detect(context.Context) ([]domain.DetectedClient, error) {
-	return []domain.DetectedClient{{ClientID: domain.ClientGrok, ConfigRoot: d.user, ExecutablePath: d.executable, Version: "1.0.67", Status: domain.DetectionDetected}}, nil
+	return []domain.DetectedClient{{ClientID: domain.ClientGrok, ConfigRoot: d.user, ExecutablePath: d.executable, Version: d.version, Status: domain.DetectionDetected}}, nil
 }
 
 type projectGrokRunner struct {
 	t          *testing.T
 	calls      int
 	executable string
+	version    string
 }
 
 func (r *projectGrokRunner) Run(_ context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
@@ -51,7 +52,11 @@ func (r *projectGrokRunner) Run(_ context.Context, command legacyports.Command) 
 		}
 		plugins = append(plugins, map[string]any{"name": object["name"], "scope": "project", "path": filepath.Join(root, entry.Name()), "enabled": false})
 	}
-	body, _ := json.Marshal(map[string]any{"grokVersion": "1.0.67", "cwd": command.Dir, "projectRoot": command.Dir + string(filepath.Separator), "projectTrusted": false, "skills": []any{}, "plugins": plugins})
+	version := r.version
+	if version == "" {
+		version = "1.0.67"
+	}
+	body, _ := json.Marshal(map[string]any{"grokVersion": version, "cwd": command.Dir, "projectRoot": command.Dir + string(filepath.Separator), "projectTrusted": false, "skills": []any{}, "plugins": plugins})
 	return legacyports.CommandResult{Stdout: body}, nil
 }
 func configureProjectGrokJourney(app agentpluginscli.App, user string, runner *projectGrokRunner) agentpluginscli.App {
@@ -64,7 +69,11 @@ func configureProjectGrokJourney(app agentpluginscli.App, user string, runner *p
 		runner.t.Fatal(err)
 	}
 	app.Installer = engine
-	app.Detector = projectGrokDetector{user: user, executable: runner.executable}
+	version := runner.version
+	if version == "" {
+		version = "1.0.67"
+	}
+	app.Detector = projectGrokDetector{user: user, executable: runner.executable, version: version}
 	app.Lifecycle.Activator = providers.Activator{Registry: app.ClientRegistry, Runner: runner}
 	app.Lifecycle.NativeObserver = providers.NativeIdentityObserver{Registry: app.ClientRegistry, Runner: runner}
 	compose := app.ForScope
@@ -106,6 +115,9 @@ func testProjectGrokComposedSavedLifecycle(t *testing.T, withMCP bool) {
 	user := filepath.Join(journey.home, ".grok")
 	projectJourneyWrite(t, filepath.Join(user, "keep"), "original user\n")
 	runner := &projectGrokRunner{t: t, executable: filepath.Join(journey.home, "grok-not-executed")}
+	if withMCP {
+		runner.version = "1.0.70"
+	}
 	journey.app = configureProjectGrokJourney(journey.app, user, runner)
 	userBefore := securityFixtureTree(t, user)
 	for _, project := range []string{journey.a, journey.b} {
@@ -209,7 +221,7 @@ func TestProjectGrokMCPOnlyComposedSavedLifecycle(t *testing.T) {
 	journey := newProjectJourney(t, transport)
 	user := filepath.Join(journey.home, ".grok")
 	projectJourneyWrite(t, filepath.Join(user, "keep"), "original user\n")
-	runner := &projectGrokRunner{t: t, executable: filepath.Join(journey.home, "grok-not-executed")}
+	runner := &projectGrokRunner{t: t, executable: filepath.Join(journey.home, "grok-not-executed"), version: "1.0.70"}
 	journey.app = configureProjectGrokJourney(journey.app, user, runner)
 	userBefore, bBefore := securityFixtureTree(t, user), securityFixtureTree(t, journey.b)
 
@@ -232,6 +244,8 @@ func TestProjectGrokMCPOnlyComposedSavedLifecycle(t *testing.T) {
 		current.ClientBindingID != binding.ClientBindingID || current.TargetLocator != binding.TargetLocator {
 		t.Fatal("MCP-only Grok update changed ownership or failed to advance pin")
 	}
+	// A client downgrade must not prevent safe removal of the owned package.
+	runner.version = "1.0.67"
 	journey.run(t, journey.a, "remove", "docs", "--target", "grok")
 	projectJourneyAbsent(t, current.TargetLocator)
 	if !reflect.DeepEqual(userBefore, securityFixtureTree(t, user)) ||
@@ -284,7 +298,7 @@ func TestProjectGrokMCPOnlyStdioKeepsOwnedData(t *testing.T) {
 	journey := newProjectJourney(t, transport)
 	user := filepath.Join(journey.home, ".grok")
 	projectJourneyWrite(t, filepath.Join(user, "keep"), "original user\n")
-	runner := &projectGrokRunner{t: t, executable: filepath.Join(journey.home, "grok-not-executed")}
+	runner := &projectGrokRunner{t: t, executable: filepath.Join(journey.home, "grok-not-executed"), version: "1.0.70"}
 	journey.app = configureProjectGrokJourney(journey.app, user, runner)
 	userBefore, bBefore := securityFixtureTree(t, user), securityFixtureTree(t, journey.b)
 
@@ -314,5 +328,24 @@ func TestProjectGrokMCPOnlyStdioKeepsOwnedData(t *testing.T) {
 	if !reflect.DeepEqual(userBefore, securityFixtureTree(t, user)) ||
 		!reflect.DeepEqual(bBefore, securityFixtureTree(t, journey.b)) || runner.calls == 0 {
 		t.Fatal("Grok stdio Project removal changed User/B or skipped native observation")
+	}
+}
+
+func TestProjectGrokUnqualifiedMCPVersionRefusesBeforeOwnedMutation(t *testing.T) {
+	transport := newProjectJourneyTransport(t, "git")
+	journey := newProjectJourney(t, transport)
+	user := filepath.Join(journey.home, ".grok")
+	projectJourneyWrite(t, filepath.Join(user, "keep"), "original user\n")
+	runner := &projectGrokRunner{t: t, executable: filepath.Join(journey.home, "grok-not-executed"), version: "1.0.67"}
+	journey.app = configureProjectGrokJourney(journey.app, user, runner)
+	userBefore, otherBefore := securityFixtureTree(t, user), securityFixtureTree(t, journey.b)
+	if _, err := journey.execute(journey.a, "add", transport.endpoint, "--alias", "docs", "--target", "grok"); err == nil ||
+		!strings.Contains(err.Error(), "requires qualified Grok 1.0.70") {
+		t.Fatalf("unqualified MCP version was not refused: %v", err)
+	}
+	projectJourneyAbsent(t, filepath.Join(journey.a, ".grok"))
+	if !reflect.DeepEqual(userBefore, securityFixtureTree(t, user)) ||
+		!reflect.DeepEqual(otherBefore, securityFixtureTree(t, journey.b)) || runner.calls == 0 {
+		t.Fatal("version refusal changed user/B or skipped read-only inspect")
 	}
 }

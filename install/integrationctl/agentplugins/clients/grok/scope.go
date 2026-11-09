@@ -91,7 +91,7 @@ func (*Adapter) CheckPlanPrecondition(in clients.PlanInput, plan *domain.Deliver
 	if in.Client.ExecutablePath == "" {
 		plan.Status = domain.PlanUnsupported
 		plan.Warnings = append(plan.Warnings, "pinned_grok_inspect_required")
-		plan.UserActions = append(plan.UserActions, "Grok Build 1.0.67 or 1.0.70 CLI is required for read-only project source checks")
+		plan.UserActions = append(plan.UserActions, "Grok Build 1.0.67 or 1.0.70 CLI is required for read-only project source checks; Project MCP preparation requires 1.0.70")
 	}
 	return nil
 }

@@ -12,7 +12,7 @@ import (
 
 var _ clients.ActivationPreflighter = (*Adapter)(nil)
 
-const projectPreparationAction = "Grok project Skills/MCP are prepared; open the selected project, enable and trust the plugin in Grok, then reload and verify effective MCP discovery; UAP has not activated it"
+const projectPreparationAction = "Grok project Skills/MCP are prepared; Project MCP requires Grok 1.0.70; open the selected project, enable and trust the plugin in Grok, then reload and verify effective MCP discovery; UAP has not activated it"
 
 func (*Adapter) PreflightActivation(_ clients.Env, request domain.ActivationRequest) error {
 	if request.Plan.Scope != domain.ScopeProject && request.Plan.TargetContext.Scope != domain.ScopeProject && request.Plan.TargetContext.ProjectRoot == "" {

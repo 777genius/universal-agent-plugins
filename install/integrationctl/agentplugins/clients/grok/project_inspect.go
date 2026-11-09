@@ -16,7 +16,10 @@ type projectPlugin struct {
 	name, scope, path string
 	enabled           bool
 }
-type projectInspection struct{ plugins []projectPlugin }
+type projectInspection struct {
+	version string
+	plugins []projectPlugin
+}
 
 func parseProjectInspect(body []byte, project string) (projectInspection, error) {
 	fail := func() (projectInspection, error) {
@@ -42,7 +45,8 @@ func parseProjectInspect(body []byte, project string) (projectInspection, error)
 	if !ok {
 		return fail()
 	}
-	out := projectInspection{}
+	version, _ := value["grokVersion"].(string)
+	out := projectInspection{version: version}
 	seen := map[string]bool{}
 	for _, entry := range entries {
 		parsed, err := parseProjectPlugin(entry)
@@ -102,6 +106,9 @@ func inspectProject(ctx context.Context, env clients.Env, client domain.Detected
 	native, err := parseProjectInspect(result.Stdout, filepath.Dir(root))
 	if err != nil {
 		return clients.RegistryIndeterminate, err
+	}
+	if shared.HasSupportedMCP(plan.Components) && native.version != "1.0.70" {
+		return clients.RegistryIndeterminate, fmt.Errorf("grok project MCP preparation requires qualified Grok 1.0.70; 1.0.67 remains qualified for Skills preparation only")
 	}
 	for _, entry := range native.plugins {
 		if entry.name == plan.DeclaredName {

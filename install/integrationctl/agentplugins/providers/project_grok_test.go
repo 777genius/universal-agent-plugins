@@ -31,7 +31,7 @@ func (r *grokProjectProviderRunner) Run(_ context.Context, command legacyports.C
 	if !reflect.DeepEqual(command.Argv, []string{r.request.Client.ExecutablePath, "inspect", "--json"}) || command.Dir != plan.TargetContext.ProjectRoot {
 		r.t.Fatal("non-readonly or wrong project command", command)
 	}
-	body, _ := json.Marshal(map[string]any{"grokVersion": "1.0.67", "cwd": command.Dir, "projectRoot": command.Dir + string(filepath.Separator), "projectTrusted": false, "skills": []any{}, "plugins": []any{map[string]any{"name": plan.DeclaredName, "scope": "project", "path": plan.ActivePath, "enabled": true}}})
+	body, _ := json.Marshal(map[string]any{"grokVersion": "1.0.70", "cwd": command.Dir, "projectRoot": command.Dir + string(filepath.Separator), "projectTrusted": false, "skills": []any{}, "plugins": []any{map[string]any{"name": plan.DeclaredName, "scope": "project", "path": plan.ActivePath, "enabled": true}}})
 	return legacyports.CommandResult{Stdout: body}, nil
 }
 func TestProjectGrokComposedPlannerStagerActivationAttestation(t *testing.T) {
