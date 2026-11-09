@@ -330,3 +330,32 @@ func TestProjectGrokSelectedSkillNameCollidesAcrossNativeSources(t *testing.T) {
 		}
 	}
 }
+
+
+func TestProjectGrokMCPOnlyRemainsPreparedWithoutTrust(t *testing.T) {
+	request := projectTestRequest(t)
+	request.Plan.Components = []domain.ComponentDecision{{
+		Kind: domain.ComponentMCPServer, Name: "owned-mcp", Support: domain.SupportNative,
+	}}
+	projectTestWrite(t, filepath.Join(request.Plan.ActivePath, ".grok-plugin", "plugin.json"),
+		`{"name":"demo","mcpServers":"./mcp.json"}`)
+	projectTestWrite(t, filepath.Join(request.Plan.ActivePath, "mcp.json"),
+		`{"mcpServers":{"owned-mcp":{"command":"false"}}}`)
+	runner := &projectTestRunner{request: request, enabled: true, version: "1.0.70"}
+	out, err := New().Activate(t.Context(), clients.Env{Runner: runner}, request)
+	if err != nil || runner.calls != 1 || out.Activation != domain.ActivationPrepared ||
+		out.Verification != domain.VerificationPackageValid || out.AuthoritativeObservation {
+		t.Fatalf("project MCP preparation falsely promoted or rejected: %+v %v calls=%d",
+			out, err, runner.calls)
+	}
+	request.ActivationComplete = true
+	before := runner.calls
+	if _, err := New().Activate(t.Context(), clients.Env{Runner: runner}, request); err == nil ||
+		runner.calls != before {
+		t.Fatal("Grok project MCP accepted unsupported activation attestation")
+	}
+	if body, err := os.ReadFile(filepath.Join(request.Client.ConfigRoot, "keep.txt")); err != nil ||
+		string(body) != "original user" {
+		t.Fatal("Grok project MCP touched original user profile")
+	}
+}
