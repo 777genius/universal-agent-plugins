@@ -19,7 +19,7 @@ var publicCredentialFamily = regexp.MustCompile(`(?i)(glpat-[a-z0-9_-]{20}|xox[b
 // ordinary names and non-SemVer versions remain useful; paths, controls, URL and
 // credential-like tokens do not become public identity or suggestion text.
 func DisplayIdentity(s string) string {
-	if len(s) == 0 || len(s) > 64 {
+	if s == "" || len(s) > 64 {
 		return ""
 	}
 	if publicCredentialFamily.MatchString(s) {
