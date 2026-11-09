@@ -63,7 +63,7 @@ func TestPublicTargetFlagNamesKeepCanonicalWebIdentity(t *testing.T) {
 func TestClientRegistryHasStableOrderAndSharedCopilotBackend(t *testing.T) {
 	want := []ClientID{
 		ClientCodex, ClientChatGPT, ClientCursor, ClientCopilot, ClientVSCode, ClientKiro,
-		ClientClaude, ClientGemini, ClientOpenCode, ClientCline, ClientWindsurf, ClientGrok, ClientKimi, ClientQoder, ClientPi,
+		ClientClaude, ClientGemini, ClientOpenCode, ClientCline, ClientWindsurf, ClientGrok, ClientKimi, ClientQoder, ClientAntigravity, ClientPi,
 	}
 	if got := SupportedClientIDs(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("supported clients = %v, want %v", got, want)
