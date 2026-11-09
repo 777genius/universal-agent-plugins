@@ -793,12 +793,47 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             except (OSError, NotImplementedError) as error:
                 self.skipTest(f"host cannot create directory symlinks: {error}")
             before = runner["scoped_snapshot"]([project])
-            link.unlink()
-            link.symlink_to(right, target_is_directory=True)
-            self.assertNotEqual(runner["scoped_snapshot"]([project]), before)
-            link.unlink()
-            link.symlink_to(left, target_is_directory=True)
+            # Preserve the original inode while probing both a retarget and
+            # a recreated link to the SAME target; neither is foreign-state
+            # preservation even when the final target string is unchanged.
+            saved = root / "saved-original-native-link"
+            link.rename(saved)
+            try:
+                link.symlink_to(right, target_is_directory=True)
+                self.assertNotEqual(runner["scoped_snapshot"]([project]), before)
+                link.unlink()
+                link.symlink_to(left, target_is_directory=True)
+                self.assertNotEqual(runner["scoped_snapshot"]([project]), before)
+            finally:
+                link.unlink(missing_ok=True)
+                saved.rename(link)
             self.assertEqual(runner["scoped_snapshot"]([project]), before)
+
+    def test_marketing_kit_snapshot_rejects_recreated_root_symlink(self):
+        # A protected symlink root must retain its inode, not just its target.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        with TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            target = base / "actual-profile"
+            target.mkdir()
+            link = base / "protected-profile"
+            try:
+                link.symlink_to(target, target_is_directory=True)
+            except (OSError, NotImplementedError) as error:
+                self.skipTest(f"host cannot create directory symlinks: {error}")
+            before = runner["scoped_snapshot"]([link])
+            saved = base / "saved-original-link"
+            link.rename(saved)
+            try:
+                link.symlink_to(target, target_is_directory=True)
+                self.assertNotEqual(runner["scoped_snapshot"]([link]), before)
+            finally:
+                link.unlink(missing_ok=True)
+                saved.rename(link)
+            self.assertEqual(runner["scoped_snapshot"]([link]), before)
 
     def test_marketing_kit_user_scope_cannot_write_untracked_project_state(self):
         # A User command may succeed while creating a new file in the current

@@ -281,6 +281,7 @@ def scoped_snapshot(roots):
     for index, root in enumerate(roots):
         if root.is_symlink():
             state[f"root-link:{index}"] = os.readlink(root)
+            record_metadata(index, root, ".")
             continue
         # An empty protected profile must not disappear or turn into a file
         # unnoticed: audit.snapshot records children, not root existence.
@@ -295,13 +296,16 @@ def scoped_snapshot(roots):
                 relative = path.relative_to(root).as_posix()
                 if path.is_symlink():
                     state[f"link:{index}:{relative}"] = os.readlink(path)
+                    record_metadata(index, path, relative)
                 else:
                     state[f"directory:{index}:{relative}"] = "present"
                     record_metadata(index, path, relative)
             for name in files:
                 path = Path(directory) / name
                 if path.is_symlink():
-                    state[f"link:{index}:{path.relative_to(root).as_posix()}"] = os.readlink(path)
+                    relative = path.relative_to(root).as_posix()
+                    state[f"link:{index}:{relative}"] = os.readlink(path)
+                    record_metadata(index, path, relative)
                 else:
                     record_metadata(index, path, path.relative_to(root).as_posix())
     return state
