@@ -36,10 +36,10 @@ export function parsePnpmLock(source) {
       if (e2 || e4 || e6) requireResolvedRoot();
       if (e2) { importer = e2[0]; category = ''; }
       else if (e4) category = e4[0];
-      else if (importer === '.' && (category === 'dependencies' || category === 'devDependencies' || category === 'optionalDependencies') && e6) {
+      else if (importer && (category === 'dependencies' || category === 'devDependencies' || category === 'optionalDependencies') && e6) {
         currentNode = e6[0]; pendingRoot = currentNode;
       }
-      else if (importer === '.' && (category === 'dependencies' || category === 'devDependencies' || category === 'optionalDependencies') && e8?.[0] === 'version') {
+      else if (importer && (category === 'dependencies' || category === 'devDependencies' || category === 'optionalDependencies') && e8?.[0] === 'version') {
         roots[category === 'optionalDependencies' ? 'dependencies' : category].add(lockNode(currentNode, scalar(e8[1])));
         pendingRoot = '';
       }

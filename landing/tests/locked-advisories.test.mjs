@@ -89,3 +89,12 @@ test('refuses a different lockfile schema even if graph keys look familiar', () 
   assert.throws(() => auditLock(future), /Unsupported pnpm lockfile version/);
   assert.throws(() => auditLock(fixture.replaceAll("lockfileVersion: '9.0'\n", '')), /Unsupported pnpm lockfile version/);
 });
+
+test('includes dependencies from every pnpm v9 importer, not only the top-level project', () => {
+  const multiImporter = fixture.replace('snapshots:\n',
+    '  packages/site:\n    dependencies:\n      minimatch:\n        specifier: 9.0.9\n        version: 9.0.9\nsnapshots:\n')
+    .replace('  minimatch@3.1.5: {}', '  minimatch@9.0.9: {}\n  minimatch@3.1.5: {}');
+  const findings = auditLock(multiImporter);
+  assert.ok(findings.some(({ scope, package: pkg, path }) =>
+    scope === 'dependencies' && pkg === 'minimatch@9.0.9' && path[0] === 'minimatch@9.0.9'));
+});
