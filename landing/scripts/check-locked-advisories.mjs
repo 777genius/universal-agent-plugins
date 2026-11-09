@@ -37,6 +37,13 @@ function parsePnpmDocument(source) {
       continue;
     }
     if (/^[^\s#-]/.test(line) || line === '---') { requireResolvedRoot(); section = ''; continue; }
+    // pnpm uses fixed-depth mappings here. A YAML-valid alternative indentation
+    // must not silently drop dependency edges from this deliberately narrow parser.
+    if (/^ +[^#\s]/.test(line)) {
+      const indent = line.search(/\S/);
+      const depths = section === 'importers' ? [2, 4, 6, 8] : section === 'snapshots' ? [2, 4, 6] : null;
+      if (depths && !depths.includes(indent)) throw new Error(`Unsupported pnpm indentation in ${section}`);
+    }
     if (section === 'importers') {
       const e2 = entry(line, 2), e4 = entry(line, 4), e6 = entry(line, 6), e8 = entry(line, 8);
       if (e2 || e4 || e6) requireResolvedRoot();

@@ -149,3 +149,15 @@ test('rejects duplicate snapshot mappings instead of hiding a reachable vulnerab
   const duplicate = `lockfileVersion: '9.0'\nimporters:\n  .:\n    dependencies:\n      app:\n        version: 1.0.0\nsnapshots:\n  app@1.0.0:\n    dependencies:\n      glob: 13.0.6\n  app@1.0.0: {}\n  glob@13.0.6: {}\n`;
   assert.throws(() => auditLock(duplicate), /Duplicate pnpm snapshot: app@1\.0\.0/);
 });
+
+test('rejects YAML-valid alternate snapshot indentation instead of silently omitting vulnerable edges', () => {
+  const alternate = fixture.replace('    dependencies:\n      glob: 13.0.6\n',
+    '   dependencies:\n     glob: 13.0.6\n');
+  assert.notEqual(alternate, fixture);
+  assert.throws(() => auditLock(alternate), /Unsupported pnpm indentation in snapshots/);
+});
+
+test('ignores unusually indented YAML comments without changing graph reachability', () => {
+  const commented = fixture.replace('  glob@13.0.6:\n', '   # comment at arbitrary indentation\n  glob@13.0.6:\n');
+  assert.deepEqual(auditLock(commented), auditLock(fixture));
+});
