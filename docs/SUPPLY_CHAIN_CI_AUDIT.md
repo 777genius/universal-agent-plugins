@@ -54,6 +54,8 @@ sources:
 integrity:
   require_pinned_git: true
   require_archive_sha256: true
+mcp:
+  allowed_transports: [stdio, streamable-http]
 ```
 
 ```sh
