@@ -44,7 +44,12 @@ const modeLink = (skills: boolean) => ({
 </script>
 
 <template>
-  <div class="unified-catalog">
+  <div
+    class="unified-catalog"
+    data-initial-catalog="reviewed-directory-snapshot"
+    data-catalog-augmentation="signed-client-side-discovery"
+    data-count-scope="initial-reviewed-subset-not-full-directory"
+  >
     <div class="unified-catalog__heading" :class="directoryPage ? 'page-intro' : 'section-heading'">
       <div class="catalog-heading-row">
         <component

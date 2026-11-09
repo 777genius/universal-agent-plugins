@@ -28,6 +28,13 @@ test('static site advertises readable agent indexes and matching catalogs', asyn
   }
   expect(catalogs[0]).toEqual(catalogs[1]);
 
+  const catalogHtml = await page.request.get('plugins/').then((response) => response.text());
+  // These attributes survive the production SSR build (Vue removes template comments).
+  expect(catalogHtml).toContain('data-initial-catalog="reviewed-directory-snapshot"');
+  expect(catalogHtml).toContain('data-catalog-augmentation="signed-client-side-discovery"');
+  expect(catalogHtml).toContain('data-count-scope="initial-reviewed-subset-not-full-directory"');
+  expect(catalogHtml).toContain('The static page starts with reviewed plugins.');
+
   const indexLink = page.locator('head link[rel="describedby"][type="text/plain"]');
   await expect(indexLink).toHaveCount(1);
   const index = await page.request.get((await indexLink.getAttribute('href'))!);
