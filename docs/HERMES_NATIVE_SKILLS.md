@@ -4,22 +4,25 @@
 
 The Hermes Agent target ID is `hermes`. This first implementation preserves UAP's
 immutable-pinned package source, transaction journal and exact ownership while
-materializing **Skills** into the directories Hermes documents:
+materializing **Skills and a scoped subset of MCP servers** into the native locations Hermes documents:
 
 | Scope | Native Skills destination | MCP handling |
 | --- | --- | --- |
-| `--scope user` | `~/.hermes/skills/<name>/SKILL.md` (or selected `HERMES_HOME`) | **Not yet implemented in this PR** |
+| `--scope user` | `~/.hermes/skills/<name>/SKILL.md` (or selected `HERMES_HOME`) | Exact-member `mcp_servers` edits in `config.yaml` (stdio and Streamable HTTP) |
 | `--scope project` | `<project>/.hermes/skills/<name>/SKILL.md` | Explicitly refused: Hermes' current `mcp_servers` authority is user `config.yaml` |
 
 Hermes honors project Skills only after its own project trust conditions. UAP
 never grants trust or equates installed filesystem bytes with live availability.
 
-**Strict scope:** source-verified Skill install/update/repair/remove, no reuse of
-foreign skill names, no rewriting the user's YAML credentials. Packages that
-require MCP or another unqualified component must fail rather than silently
-dropping the component. Use a package whose required features are only Skills.
+**Strict scope:** source-verified Skills and User MCP install/update/repair/remove,
+no reuse of foreign skill/MCP names. User MCP uses the existing atomic native
+config kernel, strict bounded YAML parsing, per-entry receipts, and
+post-write verification while preserving unrelated settings and comments.
+An ambiguous YAML document, foreign edit, symlink, unknown tag/anchor or
+unsupported transport fails closed. No user YAML is ever changed by Project
+MCP. Packages requiring hooks or unqualified components are refused.
 
-**Not yet qualified:** profile-YAML MCP mutation, native Hermes observation,
+**Not yet qualified:** real Hermes CLI MCP listing / tool call,
 cross-platform E2E with real Hermes executable, end-user release and full
 Directory compatibility. These are required before the PR can be promoted or
 advertised as complete Hermes support.
