@@ -78,3 +78,9 @@ Deliver a first-class `--target hermes` through existing UAP client adapter cont
 **Finding and concrete plan correction:** Architecture: use one Hermes adapter and existing clients.Registry; do not add global YAML hooks to shared kernel unless one reusable exact-node mutation already exists; avoid injecting Hermes conditions into generic planners.
 
 **Decision:** This is part of the acceptance criteria; a contradictory implementation must be rejected rather than treated as a harmless warning.
+
+### Review round 4 / 6 — security and ownership
+
+**Finding and concrete plan correction:** Security: config.yaml can carry Hermes provider secrets and may be malformed, symlinked or concurrently edited. Verify clean canonical path, exact target keys, bound file size, no downgrade of 0600 permissions, no secret output, atomic no-clobber writes and stale-receipt refusal. If preservation cannot be guaranteed, fail closed.
+
+**Decision:** Treat this constraint as a release gate. Do not replace missing native proof with mocked success or expand the architecture just to claim feature parity.
