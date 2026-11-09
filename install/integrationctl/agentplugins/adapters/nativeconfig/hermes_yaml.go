@@ -65,6 +65,13 @@ func validateHermesYAMLNode(node *yaml.Node) error {
 	if node == nil || node.Kind == yaml.AliasNode || node.Alias != nil || node.Anchor != "" {
 		return fmt.Errorf("%w: YAML anchors or aliases are not safe to rewrite", ErrMalformed)
 	}
+	// No non-standard YAML tags may be accepted in a credential-bearing
+	// config: a later native loader could interpret those differently.
+	switch node.Tag {
+	case "", "!!str", "!!int", "!!bool", "!!float", "!!null", "!!map", "!!seq":
+	default:
+		return fmt.Errorf("%w: unsafe or unsupported YAML tag", ErrMalformed)
+	}
 	if node.Kind == yaml.MappingNode {
 		seen := map[string]bool{}
 		if len(node.Content)%2 != 0 { return fmt.Errorf("%w: invalid Hermes mapping", ErrMalformed) }

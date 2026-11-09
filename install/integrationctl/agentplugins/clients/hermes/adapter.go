@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
@@ -58,7 +60,7 @@ func (*Adapter) DetectSurfaces(host clients.Host) clients.Detection {
 func cleanRoot(path string) bool {
 	return path != "" && filepath.IsAbs(path) && filepath.Clean(path) == path &&
 		filepath.Dir(path) != path && strings.TrimSpace(path) == path &&
-		!strings.ContainsAny(path, "\x00\r\n")
+		utf8.ValidString(path) && strings.IndexFunc(path, unicode.IsControl) < 0
 }
 
 func (*Adapter) ResolveProfileRoot(root string) (string, error) {
