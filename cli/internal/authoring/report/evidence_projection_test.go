@@ -30,7 +30,7 @@ func TestStaticEvidencePreservesComponentIdentityAndHostRefusals(t *testing.T) {
 			},
 		},
 		Facts: conformance.Facts{
-			Package: pkg,
+			Package:     pkg,
 			Conformance: conformance.Fail,
 			Findings: []conformance.Finding{
 				{Code: "mcp_invalid", Layer: conformance.Normative, Boundary: domain.BoundaryMCPServer, Item: opaque(server), Path: "mcp.json", Severity: domain.SeverityError},
@@ -86,9 +86,9 @@ func TestStaticEvidenceScopeKeepsCoverageAndStableSchemaIDs(t *testing.T) {
 			Coverage: packageview.Coverage{ComponentsRequested: true, SkillsEnumerated: true, InventoryComplete: true, TreeComplete: true},
 		},
 		Facts: conformance.Facts{
-			Coverage: conformance.Coverage{Plugin: conformance.Pass, MCP: conformance.NotEvaluated, Skills: conformance.Pass, Filesystem: conformance.Pass, Complete: false},
+			Coverage:    conformance.Coverage{Plugin: conformance.Pass, MCP: conformance.NotEvaluated, Skills: conformance.Pass, Filesystem: conformance.Pass, Complete: false},
 			Conformance: conformance.NotEvaluated,
-			SchemaIDs: []string{"schema/b", "schema/a", "schema/a"},
+			SchemaIDs:   []string{"schema/b", "schema/a", "schema/a"},
 		},
 	}
 	r := New("validate", "revision")

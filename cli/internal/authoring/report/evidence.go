@@ -107,4 +107,3 @@ func (r *Report) recordLoadability(p project.Result) {
 		}
 	}
 }
-
