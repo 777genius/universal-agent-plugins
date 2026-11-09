@@ -56,7 +56,13 @@ function parsePnpmDocument(source) {
     }
     if (section === 'snapshots') {
       const e2 = entry(line, 2), e4 = entry(line, 4), e6 = entry(line, 6);
-      if (e2) { rejectInlineMap(e2); currentNode = e2[0]; nodes.set(currentNode, []); edgeCategory = ''; }
+      if (e2) {
+        rejectInlineMap(e2);
+        currentNode = e2[0];
+        if (nodes.has(currentNode)) throw new Error(`Duplicate pnpm snapshot: ${currentNode}`);
+        nodes.set(currentNode, []);
+        edgeCategory = '';
+      }
       else if (e4) {
         if (['dependencies', 'optionalDependencies'].includes(e4[0])) rejectInlineMap(e4);
         edgeCategory = e4[0];

@@ -144,3 +144,8 @@ test('does not overwrite boot snapshot edges with matching keys in the project d
   assert.ok(auditLock(colliding).some(({ scope, package: pkg }) =>
     scope === 'configDependencies' && pkg === 'glob@13.0.6'));
 });
+
+test('rejects duplicate snapshot mappings instead of hiding a reachable vulnerable child', () => {
+  const duplicate = `lockfileVersion: '9.0'\nimporters:\n  .:\n    dependencies:\n      app:\n        version: 1.0.0\nsnapshots:\n  app@1.0.0:\n    dependencies:\n      glob: 13.0.6\n  app@1.0.0: {}\n  glob@13.0.6: {}\n`;
+  assert.throws(() => auditLock(duplicate), /Duplicate pnpm snapshot: app@1\.0\.0/);
+});
