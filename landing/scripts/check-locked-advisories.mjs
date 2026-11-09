@@ -10,7 +10,7 @@ const rejectInlineMap = ([name, value]) => {
   if (value && value !== '{}') throw new Error(`Unsupported inline pnpm map: ${name}`);
 };
 const entry = (line, indent) => {
-  const match = line.match(new RegExp(`^ {${indent}}(\\S[^:]*):(?:\\s+(.*))?$`));
+  const match = line.match(new RegExp(`^ {${indent}}(\\S[^:]*?) *:(?:\\s+(.*))?$`));
   return match ? [scalar(match[1]), match[2] ?? ''] : null;
 };
 

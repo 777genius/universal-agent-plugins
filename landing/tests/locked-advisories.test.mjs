@@ -161,3 +161,17 @@ test('ignores unusually indented YAML comments without changing graph reachabili
   const commented = fixture.replace('  glob@13.0.6:\n', '   # comment at arbitrary indentation\n  glob@13.0.6:\n');
   assert.deepEqual(auditLock(commented), auditLock(fixture));
 });
+
+test('recognizes YAML-equivalent category spaces before a snapshot colon', () => {
+  const alternate = fixture.replace('    dependencies:\n      glob: 13.0.6\n',
+    '    dependencies  :\n      glob: 13.0.6\n');
+  assert.notEqual(alternate, fixture);
+  assert.deepEqual(auditLock(alternate), auditLock(fixture));
+});
+
+test('recognizes YAML-equivalent category spaces before an importer colon', () => {
+  const alternate = fixture.replace("    dependencies:\n      '@a/entry':\n",
+    "    dependencies :\n      '@a/entry':\n");
+  assert.notEqual(alternate, fixture);
+  assert.deepEqual(auditLock(alternate), auditLock(fixture));
+});
