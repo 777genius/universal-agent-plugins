@@ -13,7 +13,7 @@ type projectKimiDetector struct{ user, executable string }
 
 func (d projectKimiDetector) Detect(context.Context) ([]domain.DetectedClient, error) {
 	return []domain.DetectedClient{{ClientID: domain.ClientKimi, ConfigRoot: d.user,
-		Version: "2.3.1", ExecutablePath: d.executable, Status: domain.DetectionDetected}}, nil
+		Version: "2.5.2", ExecutablePath: d.executable, Status: domain.DetectionDetected}}, nil
 }
 
 func configureProjectKimiJourney(app agentpluginscli.App, user, executable string) agentpluginscli.App {
