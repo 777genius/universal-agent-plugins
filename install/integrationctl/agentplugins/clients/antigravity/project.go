@@ -48,10 +48,39 @@ func projectPlugin(root string, envelope domain.PackageEnvelope, plan domain.Del
 	if !cleanAbsolute(root) || !cleanAbsolute(plan.ActivePath) {
 		return fmt.Errorf("Antigravity projection root must be absolute")
 	}
+	// Never auto-enable undisclosed native hooks/subagents/rules. A UAP
+	// component declaration is not evidence of authorization for these
+	// Antigravity-specific executable or prompt surfaces.
+	for _, relative := range []string{"hooks.json", "agents", "rules"} {
+		candidate := filepath.Join(root, relative)
+		if err := pathpolicy.RequireContainedChild(root, candidate); err != nil {
+			return err
+		}
+		if _, err := os.Lstat(candidate); err == nil {
+			return fmt.Errorf("Antigravity native %s requires a separate, explicit capability review", relative)
+		} else if !os.IsNotExist(err) {
+			return err
+		}
+	}
 	if !nativePluginID.MatchString(envelope.Manifest.Name) {
 		return fmt.Errorf("Antigravity plugin requires a lowercase kebab-case name")
 	}
 	for _, component := range plan.Components {
+		if component.Kind == domain.ComponentSkill {
+			if err := pathpolicy.ValidateLeafID(component.Name); err != nil {
+				return fmt.Errorf("invalid Antigravity native skill name: %w", err)
+			}
+			skill, ok := envelope.Skills[component.Name]
+			if !ok {
+				return fmt.Errorf("Antigravity selected skill %q is not in the verified package", component.Name)
+			}
+			path := skill.RelativePath
+			if path == "" { path = filepath.ToSlash(filepath.Join("skills", component.Name, "SKILL.md")) }
+			file := filepath.Join(root, filepath.FromSlash(path))
+			if err := pathpolicy.RequireContainedChild(root, file); err != nil { return err }
+			info, err := os.Lstat(file)
+			if err != nil || !info.Mode().IsRegular() { return fmt.Errorf("Antigravity native skill file is missing or invalid") }
+		}
 		if component.Kind != domain.ComponentSkill && component.Kind != domain.ComponentMCPServer {
 			return fmt.Errorf("Antigravity cannot silently convert unsupported native components")
 		}
@@ -82,6 +111,12 @@ func projectPlugin(root string, envelope domain.PackageEnvelope, plan domain.Del
 		}
 	}
 	if len(servers) == 0 {
+		// A source may already contain an Antigravity-native file. It is not
+		// selected through UAP's verified MCP manifest, so never install it.
+		path := filepath.Join(root, "mcp_config.json")
+		if _, err := os.Lstat(path); err == nil {
+			return fmt.Errorf("unselected Antigravity MCP configuration in package is not authorized")
+		} else if !os.IsNotExist(err) { return err }
 		return nil
 	}
 	return shared.WriteJSON(filepath.Join(root, "mcp_config.json"), map[string]any{"mcpServers": servers})
