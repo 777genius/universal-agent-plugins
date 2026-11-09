@@ -61,3 +61,9 @@ Add `--target antigravity` to UAP for **real Antigravity-native plugin bundles**
 ## Estimate and done
 
 ~1,800–3,200 new lines including fixtures/E2E if native CLI API and existing UAP staging can be reused; if vendor lifecycle lacks safe uninstall/update semantics, stop at documented Prepared status with exact limitations rather than claim complete native parity. Done requires genuine native validation, mutation-proof fixtures, review, green CI and evidence. No forced source migrations.
+
+### Review round 1 / 6 — native facts
+
+**Finding and concrete plan correction:** Source truth: agy native plugin lifecycle is distinct from workspace MCP; APM's 55-line adapter targets only MCP. Define separate acceptance oracle for plugin validation, installation, discovery and safe removal.
+
+**Decision:** This is part of the acceptance criteria; a contradictory implementation must be rejected rather than treated as a harmless warning.
