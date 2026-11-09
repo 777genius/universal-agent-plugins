@@ -127,7 +127,7 @@ def synthetic_cycle():
                     if stage in ("repeat-add-a", "unchanged-update-a"):
                         outcome["no_change"] = True
                 output = {"plugin": "native-proof", "version": version, "source": "local" if verb in ("repair", "remove") else "direct local source", "tree_digest": src["digest"], "manifest_digest": pack["manifest_digest"], "dry_run": False, "result": outcome}
-                if not removed:
+                if verb in ("add", "update"):
                     output.update(scope="project", readiness="needs_action", next_action="Review Cursor project discovery",
                                   next_actions=[{"code": "verify_native", "actor": "native_client", "message": "Review Cursor project discovery"}])
                 data_out = output
@@ -334,6 +334,19 @@ class CursorCycleContracts(unittest.TestCase):
             command["stdout"] = wire(compact(document))
             with self.subTest(missing=field), patch.object(cycle, "pins"), self.assertRaises(ValueError):
                 cycle.complete(*captured)
+
+    def test_repair_uses_repair_dto_without_add_readiness(self):
+        for stage in ("intact-repair-a", "missing-repair-a"):
+            for field, wrong in (("scope", "project"), ("readiness", "needs_action"), ("next_actions", [])):
+                captured = synthetic_cycle()
+                with patch.object(cycle, "pins"):
+                    cycle.complete(*captured)
+                command = next(row["value"] for row in captured[0] if row["stage"] == stage)
+                document = json.loads(cycle.stream(command["stdout"]))
+                document["data"]["targets"][0]["output"][field] = wrong
+                command["stdout"] = wire(compact(document))
+                with self.subTest(stage=stage, field=field), patch.object(cycle, "pins"), self.assertRaises(ValueError):
+                    cycle.complete(*captured)
 
     def test_remove_refuses_readiness_fields(self):
         # The intact synthetic cycle validates removal before hostile additions.

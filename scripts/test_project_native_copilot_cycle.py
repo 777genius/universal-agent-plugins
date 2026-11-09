@@ -394,7 +394,14 @@ class CopilotCycleContracts(unittest.TestCase):
             repaired = copy.deepcopy(public)
             repaired["command"] = "repair"
             repaired["data"]["targets"][0]["output"]["source"] = "local"
+            for field in ("scope", "readiness", "next_actions"):
+                repaired["data"]["targets"][0]["output"].pop(field, None)
             cycle.public_json(encoded(repaired), label, fixture_proof)
+            for field, wrong in (("scope", "project"), ("readiness", "needs_action"), ("next_actions", [])):
+                bad = copy.deepcopy(repaired)
+                bad["data"]["targets"][0]["output"][field] = wrong
+                with self.subTest(label=label, field=field), self.assertRaises(ValueError):
+                    cycle.public_json(encoded(bad), label, fixture_proof)
             repaired["data"]["targets"][0]["output"]["source"] = "direct local source"
             with self.subTest(label=label), self.assertRaises(ValueError):
                 cycle.public_json(encoded(repaired), label, fixture_proof)
