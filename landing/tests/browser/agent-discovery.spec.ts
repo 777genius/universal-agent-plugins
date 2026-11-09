@@ -69,8 +69,8 @@ test('prerendered Skills overview is indexable for each locale without JavaScrip
     expect(html).toContain('agentplugins skills add owner/repository');
     expect(html).toContain('name="robots"');
     expect(html).not.toMatch(/<meta[^>]+name="robots"[^>]+content="noindex/);
-    const canonicalTag = html.match(/<link\\b[^>]*rel="canonical"[^>]*>/)?.[0];
-    const canonicalHref = canonicalTag?.match(/\\bhref="([^"]+)"/)?.[1];
+    const canonicalTag = html.match(/<link\b[^>]*rel="canonical"[^>]*>/)?.[0];
+    const canonicalHref = canonicalTag?.match(/\bhref="([^"]+)"/)?.[1];
     expect(canonicalHref, `Missing canonical for ${url}`).toBeTruthy();
     const canonical = new URL(canonicalHref!);
     expect(canonical.protocol).toBe('https:');
