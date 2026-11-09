@@ -655,7 +655,16 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "native Marketing Kit remnants"):
                 check("copilot", project, case, "Project remove")
             file.unlink()
+            # Empty named Skill directories are absent from audit.snapshot()
+            # yet remain native residue after a claimed successful remove.
+            with self.assertRaisesRegex(AssertionError, "native Marketing Kit remnants"):
+                check("copilot", project, case, "Project remove")
             owned.rmdir()
+            owned_with_receipt = owned.parent / "marketing-kit@agentplugins-aaaaaaaaaaaa"
+            owned_with_receipt.mkdir()
+            with self.assertRaisesRegex(AssertionError, "native Marketing Kit remnants"):
+                check("copilot", project, case, "Project remove")
+            owned_with_receipt.rmdir()
             # Removing owned Skills must not require deleting a foreign Skill.
             check("copilot", project, case, "Project remove")
 

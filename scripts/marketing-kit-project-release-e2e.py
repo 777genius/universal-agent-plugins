@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import re
 from pathlib import Path
 import runpy
 import shutil
@@ -404,6 +405,27 @@ def check_removed_native_components(target, home, case_root, stage):
     for identity in sorted(identities):
         leftovers.update(audit["native_identity_residuals"](
             roots, identity, observed, target))
+    # The shared native snapshot records files and links, but not empty
+    # directories. An emptied owned Skill/plugin directory is still residue.
+    names = {name.casefold() for name in identities}
+
+    def refuse_walk_error(error):
+        raise AssertionError(f"{stage}: native cleanup walk unreadable") from error
+
+    for root in roots:
+        if not root.is_dir():
+            continue
+        for base, directories, _ in os.walk(root, followlinks=False,
+                                            onerror=refuse_walk_error):
+            for name in directories:
+                relative = (Path(base) / name).relative_to(root).as_posix()
+                if audit["passive_native_path"](target, relative):
+                    continue
+                if (name.casefold() in names
+                        or any(re.fullmatch(
+                            re.escape(alias) + r"@agentplugins-[0-9a-f]{12}",
+                            name, re.IGNORECASE) for alias in identities)):
+                    leftovers.add(f"{root.name}/{relative}: directory")
     if leftovers:
         raise AssertionError(f"{stage}: native Marketing Kit remnants: {sorted(leftovers)}")
 
