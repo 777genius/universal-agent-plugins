@@ -10,7 +10,7 @@
 | Standalone Agent Skills | `agentplugins skills add` with GitHub/HTTPS sources, selection and target/scope options; no `plugin.json` required | Skills are among APM's supported primitives; see its packages and integration documentation |
 | Lifecycle | Prepare/review/apply, inspect, update, repair, remove and recover managed state; foreign files protected | Installation/update and drift/audit mechanisms with package and policy workflows |
 | Enterprise governance | Local source admission, signed Directory, exact versions, ownership and repeatable installs; **not** a centralized organization-wide policy control plane | Enterprise policy inheritance, CI checks, source and registry restrictions, SBOM and drift features; consult maturity caveats in APM docs |
-| SDKs | Go Hooks, Go installer embedding and TypeScript management; each version qualified separately | Python CLI internals and distribution/tooling; compare a specific integration need rather than counting packages |
+| SDKs | Go Hooks, Go installer embedding and TypeScript management; each version qualified separately | Python package and integration tooling; confirm supported programmatic APIs for the specific APM release instead of assuming absence |
 | Compatibility | Client-specific and scope-specific; prepared files may still require activation | Target- and primitive-specific integrations; no blanket automatic compatibility claim |
 
 ## When each is a better fit

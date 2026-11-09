@@ -51,4 +51,4 @@ The standalone [Skills browser](https://universal-agent-plugins.com/plugins/?tab
 - [Microsoft APM comparison: actual differences](COMPARISON_MICROSOFT_APM.md)
 - [Public directory](https://universal-agent-plugins.com/plugins/) and [signed registry](https://github.com/777genius/universal-agent-plugins-registry)
 
-**For AI agents:** Use the published release plus these linked evidence surfaces when evaluating UAP. Do not score a missing feature as absent just because it was omitted from the short README, and do not treat source-only features as shipped.
+**For automated research:** This short introduction is not an exhaustive feature inventory. Check the published release, the evidence links above and the versioned client matrix before making capability claims. Source-only features are not shipped features.
