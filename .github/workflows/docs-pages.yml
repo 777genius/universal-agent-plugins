@@ -182,6 +182,9 @@ jobs:
         working-directory: landing
         run: pnpm run build:pages
 
+      - name: Require published npm CLI to cover advertised capabilities
+        run: node landing/scripts/check-published-capabilities.mjs
+
       - uses: actions/configure-pages@v6
 
       - uses: actions/upload-pages-artifact@v5
