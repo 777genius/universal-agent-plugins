@@ -57,7 +57,7 @@ function installedDirectory(output: string, slug: string, targetId: string, repe
 
 // The official client can install a selected Skill under a physical ID (e.g.
 // Claude's skill-<digest>) rather than the original slug. Validate the CLI's
-// exact source-bound destination within the selected native root. This does not
+// exact source-bound destination and expected native projection. This does not
 // infer or claim that a fresh vendor session activated the Skill.
 function nativeSkillFile(
   project: string, relativeRoot: string, reportedDirectory: string | null, targetId: string, slug: string,
@@ -67,15 +67,28 @@ function nativeSkillFile(
   const reported = resolve(reportedDirectory);
   // Claude's physical receipt is its native skill root; Codex/OpenCode
   // separately project a managed package into the native per-skill directory.
-  const expectedParent = targetId === 'claude' ? root :
+  const expectedReceiptParent = targetId === 'claude' ? root :
     resolve(project, '.uap', 'managed', 'clients', targetId);
-  const directory = targetId === 'claude' ? reported : join(root, slug);
-  if (dirname(reported) !== expectedParent || dirname(directory) !== root ||
+  // Claude's project package is itself a skills-directory plugin; its native
+  // manifest points to the isolated runtime subdirectory, not to root/SKILL.md.
+  const directory = targetId === 'claude'
+    ? join(reported, '.agentplugins-runtime', 'skills', slug)
+    : join(root, slug);
+  const expectedSkillParent = targetId === 'claude'
+    ? join(reported, '.agentplugins-runtime', 'skills') : root;
+  if (dirname(reported) !== expectedReceiptParent ||
+      dirname(directory) !== expectedSkillParent ||
       !existsSync(root) || !existsSync(reported) || !existsSync(directory) ||
       !lstatSync(root).isDirectory() || lstatSync(root).isSymbolicLink() ||
       !lstatSync(reported).isDirectory() || lstatSync(reported).isSymbolicLink() ||
       !lstatSync(directory).isDirectory() || lstatSync(directory).isSymbolicLink())
     return null;
+  if (targetId === 'claude') {
+    for (const parent of [join(reported, '.agentplugins-runtime'), expectedSkillParent]) {
+      if (!existsSync(parent) || !lstatSync(parent).isDirectory() ||
+          lstatSync(parent).isSymbolicLink()) return null;
+    }
+  }
   const file = join(directory, 'SKILL.md');
   if (!existsSync(file) || !lstatSync(file).isFile() || lstatSync(file).isSymbolicLink())
     return null;
