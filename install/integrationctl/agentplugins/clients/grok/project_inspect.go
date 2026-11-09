@@ -52,10 +52,16 @@ func parseProjectInspect(body []byte, project string) (projectInspection, error)
 	seen := map[string]bool{}
 	for _, entry := range entries {
 		parsed, err := parseProjectPlugin(entry)
-		if err != nil || seen[parsed.name] {
+		if err != nil {
 			return fail()
 		}
-		seen[parsed.name] = true
+		// A case-folded alias cannot represent an independent native plugin
+		// identity, including on case-insensitive project filesystems.
+		identity := shared.FoldJSONKey(parsed.name)
+		if seen[identity] {
+			return fail()
+		}
+		seen[identity] = true
 		out.plugins = append(out.plugins, parsed)
 	}
 	return out, nil

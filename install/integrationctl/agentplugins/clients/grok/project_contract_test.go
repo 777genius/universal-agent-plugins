@@ -413,3 +413,48 @@ func TestProjectGrokMCPOnlyPreflightAndConservativeActivation(t *testing.T) {
 		t.Fatal("unsupported application component bypassed project refusal")
 	}
 }
+
+// Native plugin inventory identity must stay unambiguous even when the native
+// client reports spellings that fold to the same name.
+func TestProjectGrokRejectsFoldedNativePluginCollisions(t *testing.T) {
+	request := projectTestRequest(t)
+	project := request.Plan.TargetContext.ProjectRoot
+	for _, names := range [][2]string{{"demo", "DEMO"}, {"K", "K"}} {
+		t.Run(names[0]+"-"+names[1], func(t *testing.T) {
+			plugins := []any{}
+			for i, name := range names {
+				path := request.Plan.ActivePath
+				if i == 1 {
+					path = filepath.Join(filepath.Dir(path), "foreign")
+				}
+				plugins = append(plugins, map[string]any{
+					"name": name, "scope": "project", "path": path,
+					"enabled": false, "provides": map[string]any{"mcpServers": 0},
+				})
+			}
+			inventory := map[string]any{
+				"grokVersion": "1.0.70", "cwd": project,
+				"projectRoot": project + string(filepath.Separator),
+				"projectTrusted": false, "skills": []any{},
+				"plugins": plugins,
+			}
+			other := plugins[1].(map[string]any)
+			other["name"] = "foreign"
+			payload, err := json.Marshal(inventory)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := parseProjectInspect(payload, project); err != nil {
+				t.Fatalf("distinct native plugin identities were refused: %v", err)
+			}
+			other["name"] = names[1]
+			payload, err = json.Marshal(inventory)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := parseProjectInspect(payload, project); err == nil {
+				t.Fatalf("folded native identity collision accepted: %q and %q", names[0], names[1])
+			}
+		})
+	}
+}
