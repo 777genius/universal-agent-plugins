@@ -70,3 +70,32 @@ func TestHermesProjectScopeCannotInstallUserMCP(t *testing.T) {
 		t.Fatalf("skills must remain Prepared until native trust: %+v, %v", plan, err)
 	}
 }
+
+func TestHermesProjectPreconditionNeedsExactGitRoot(t *testing.T) {
+ t.Parallel()
+ root := t.TempDir()
+ project := filepath.Join(root, "repo")
+ if err := os.MkdirAll(project, 0o700); err != nil { t.Fatal(err) }
+ plan := domain.DeliveryPlan{Scope: domain.ScopeProject,
+  TargetContext: domain.TargetContext{Scope: domain.ScopeProject, ProjectRoot: project}}
+ input := clients.PlanInput{TargetContext: plan.TargetContext}
+ if err := New().CheckPlanPrecondition(input, &plan); err == nil {
+  t.Fatal("Hermes ignored absent .git marker and would install undiscoverable Skills")
+ }
+ marker := filepath.Join(project, ".git")
+ if err := os.Mkdir(marker, 0o700); err != nil { t.Fatal(err) }
+ if err := New().CheckPlanPrecondition(input, &plan); err != nil { t.Fatal(err) }
+ nested := filepath.Join(project, "nested")
+ if err := os.MkdirAll(nested, 0o700); err != nil { t.Fatal(err) }
+ plan.TargetContext.ProjectRoot = nested
+ input.TargetContext.ProjectRoot = nested
+ if err := New().CheckPlanPrecondition(input, &plan); err == nil {
+  t.Fatal("nested directory is not Hermes' nearest Git root")
+ }
+ plan.TargetContext.ProjectRoot, input.TargetContext.ProjectRoot = project, project
+ if err := os.Remove(marker); err != nil { t.Fatal(err) }
+ if err := os.WriteFile(marker, []byte("gitdir: /tmp/worktree\n"), 0o600); err != nil { t.Fatal(err) }
+ if err := New().CheckPlanPrecondition(input, &plan); err != nil {
+  t.Fatalf("Git worktree pointer is a legitimate root marker: %v", err)
+ }
+}
