@@ -109,6 +109,8 @@ test('plugin source and owner filters share a row without losing mobile usabilit
   const toolbar = page.locator('.catalog-controls--plugins');
   const source = toolbar.getByRole('combobox', { name: 'Filter by source' });
   const owner = toolbar.getByRole('combobox', { name: 'Filter by owner' });
+  const sourceControl = toolbar.locator('.catalog-filter-pair .app-select__trigger');
+  const ownerControl = toolbar.locator('.catalog-filter-pair .app-combobox__anchor');
   const toggle = toolbar.locator('.catalog-filter-toggle');
 
   for (const width of [1440, 820, 600, 390, 320]) {
@@ -119,8 +121,8 @@ test('plugin source and owner filters share a row without losing mobile usabilit
 
     await expect(source).toBeVisible();
     await expect(owner).toBeVisible();
-    const sourceRect = await source.boundingBox();
-    const ownerRect = await owner.boundingBox();
+    const sourceRect = await sourceControl.boundingBox();
+    const ownerRect = await ownerControl.boundingBox();
     expect(sourceRect).not.toBeNull();
     expect(ownerRect).not.toBeNull();
 
