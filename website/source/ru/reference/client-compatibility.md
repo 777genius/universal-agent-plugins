@@ -16,7 +16,7 @@ localeDisposition: "current-translation"
 [CLI](https://github.com/777genius/universal-agent-plugins/releases/latest),
 нативный выпуск, добавляет локальный API управления
 с процессом под управлением приложения, обнаружение клиентов и профилей
-без изменений и поддержку расширений Pi、Skills и MCP stdio/Streamable HTTP в пользовательской и совместимой проектной областях.
+без изменений и поддержку расширений Pi, Skills и MCP stdio/Streamable HTTP в пользовательской и совместимой проектной областях.
 Подробнее: [локальное управление](../use/manage#local-management-api).
 Пакетные каналы могут обновляться позднее; проверьте `agentplugins version`.
 

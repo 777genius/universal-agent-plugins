@@ -13,7 +13,7 @@ localeDisposition: "current-translation"
 
 ## Versión actual y alcance
 
-[CLI nativo](https://github.com/777genius/universal-agent-plugins/releases/latest) añade una API local de gestión con un proceso controlado por la aplicación, detección de clientes y perfiles sin cambios y un proveedor de extensiones nativas de Pi en el ámbito de usuario. Consulta [la gestión local](../use/manage#local-management-api). Los canales de los gestores de paquetes pueden actualizarse más tarde: comprueba `agentplugins version`.
+[CLI nativo](https://github.com/777genius/universal-agent-plugins/releases/latest) añade una API local de gestión con un proceso controlado por la aplicación, detección de clientes y perfiles sin cambios y extensiones Pi, Skills y MCP stdio/Streamable HTTP para usuario y proyecto elegible. Consulta [la gestión local](../use/manage#local-management-api). Los canales de los gestores de paquetes pueden actualizarse más tarde: comprueba `agentplugins version`.
 
 Desde CLI 0.1.94, `install` sin argumento de origen selecciona automáticamente el proyecto si existe un `uap.toml` regular en el directorio actual exacto. Un ámbito explícito tiene prioridad; no se buscan directorios superiores. Los archivos de bloqueo existentes se validan de forma estricta incluso sin `--locked`. La instalación de proyecto explícita se introdujo en 0.1.93. Las pruebas de publicación del instalador no acreditan la ejecución de todos los clientes nativos ni el ejecutable estándar de creación. El instalador actual npm o nativo no incluye `agentplugins author`; consulta [Crear plugins](../build/) para las herramientas del código fuente.
 
