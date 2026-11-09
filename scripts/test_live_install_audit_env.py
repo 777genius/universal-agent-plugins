@@ -339,6 +339,22 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                             AssertionError, "protected scope snapshot unreadable"):
                         runner["scoped_snapshot"]([root])
 
+    def test_marketing_kit_scoped_snapshot_rejects_unreadable_file_hash(self):
+        # The shared audit returns a stable 'unreadable' sentinel for failed
+        # file reads. Two identical sentinels are not byte-for-byte evidence.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary) / "project"
+            root.mkdir()
+            with patch.dict(runner["audit"], {
+                    "snapshot": lambda _roots: {"project/foreign": "unreadable"}}):
+                with self.assertRaisesRegex(
+                        AssertionError, "protected scope snapshot unreadable"):
+                    runner["scoped_snapshot"]([root])
+
     def test_marketing_kit_foreign_guard_rejects_newline_rewrite(self):
         # Text-mode newline normalization can hide a byte-changing rewrite.
         from runpy import run_path

@@ -242,6 +242,11 @@ def scoped_snapshot(roots):
     """Record file bytes, links and empty directories without following links."""
     roots = tuple(Path(root) for root in roots)
     state = audit["snapshot"](roots)
+    # The shared audit records failed file reads and walk errors as
+    # 'unreadable'. Identical failures before/after must not prove isolation.
+    if any(digest == "unreadable" for digest in state.values()):
+        raise AssertionError("protected scope snapshot unreadable: native entry")
+
     def refuse_walk_error(error):
         raise AssertionError(f"protected scope snapshot unreadable: {error}") from error
 
