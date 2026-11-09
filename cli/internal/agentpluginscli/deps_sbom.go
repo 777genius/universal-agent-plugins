@@ -165,6 +165,15 @@ func sbomSource(pin environment.LockedPackage) string {
 func marshalDependencySBOM(lock environment.Lock, kind string) ([]byte, error) {
 	switch kind {
 	case "cyclonedx":
+		return marshalCycloneDX(lock)
+	case "spdx":
+		return marshalSPDX(lock)
+	default:
+		return nil, errors.New("unsupported SBOM type: choose cyclonedx or spdx")
+	}
+}
+
+func marshalCycloneDX(lock environment.Lock) ([]byte, error) {
 		doc := cyclonedxDocument{BOMFormat: "CycloneDX", SpecVersion: "1.5", Version: 1,
 			Components: []cdxComponent{}, Dependencies: []cdxDependency{}}
 		packages := orderedLockedPackages(lock)
@@ -184,7 +193,10 @@ func marshalDependencySBOM(lock environment.Lock, kind string) ([]byte, error) {
 			doc.Dependencies = append(doc.Dependencies, dep)
 		}
 		return json.MarshalIndent(doc, "", "  ")
-	case "spdx":
+
+}
+
+func marshalSPDX(lock environment.Lock) ([]byte, error) {
 		// A fixed creation marker makes the inventory reproducible from its
 		// lock alone; it is not the time of scanning or of the source commit.
 		encoded, err := json.Marshal(struct {
@@ -221,7 +233,5 @@ func marshalDependencySBOM(lock environment.Lock, kind string) ([]byte, error) {
 			}
 		}
 		return json.MarshalIndent(doc, "", "  ")
-	default:
-		return nil, errors.New("unsupported SBOM type: choose cyclonedx or spdx")
-	}
+
 }
