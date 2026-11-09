@@ -194,6 +194,7 @@ def run_case(cli, target, root, name, portable=None):
     for directory in (home, data, project):
         directory.mkdir(parents=True)
     # Reuse the existing published audit's native-profile root inventory.
+    foreign_skill = "---\nname: unmanaged-uap-foreign-skill\ndescription: keep unchanged\n---\n"
     native_foreign = []
     for relative in audit["NATIVE_ROOTS"][target]:
         native_root = home / relative
@@ -201,9 +202,15 @@ def run_case(cli, target, root, name, portable=None):
         marker = native_root / "unmanaged-native-do-not-change.txt"
         marker.write_text("unmanaged native settings\n", encoding="utf-8")
         native_foreign.append((marker, "unmanaged native settings\n"))
-    # Exercise actual third-party Project Skills, not only generic text
-    # markers. Copilot's .github/skills is outside its native MCP roots.
-    foreign_skill = "---\nname: unmanaged-uap-foreign-skill\ndescription: keep unchanged\n---\n"
+        # Pin a genuine unmanaged User SKILL.md as well: protecting a text
+        # marker alone could miss native User Skill deletion during removal.
+        if relative == audit["NATIVE_ROOTS"][target][0]:
+            user_skill = native_root / "skills" / "unmanaged-uap-foreign-skill" / "SKILL.md"
+            user_skill.parent.mkdir(parents=True, exist_ok=True)
+            user_skill.write_text(foreign_skill, encoding="utf-8")
+            native_foreign.append((user_skill, foreign_skill))
+    # Exercise independent Project Skills too. Copilot's .github/skills lies
+    # outside its native MCP roots.
     for relative in audit["PROJECT_SKILL_ROOTS"].get(target, ()):
         skill = project / relative / "unmanaged-uap-foreign-skill" / "SKILL.md"
         skill.parent.mkdir(parents=True, exist_ok=True)

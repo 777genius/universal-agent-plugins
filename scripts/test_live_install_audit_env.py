@@ -606,27 +606,34 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 unsafe.unlink()
             check("copilot", home, case, "remove")
 
-    def test_marketing_kit_project_foreign_skill_is_pinned(self):
-        # Real Project lifecycle must preserve a third-party native SKILL.md.
+    def test_marketing_kit_user_and_project_foreign_skills_are_pinned(self):
+        # User operations must preserve a real unmanaged native SKILL.md,
+        # independently from the Project Skill's separate fixture.
         from runpy import run_path
 
         runner = run_path(str(Path(__file__).resolve().parent /
                               "marketing-kit-project-release-e2e.py"))
         with TemporaryDirectory() as temporary:
             case = Path(temporary).resolve()
-            _, project, _, _, entries = runner["run_case"](
+            env, project, _, _, entries = runner["run_case"](
                 "agentplugins", "copilot", case, "A")
-            candidates = [(path, content) for path, content in entries
-                          if path.name == "SKILL.md"]
-            self.assertEqual(len(candidates), 1)
-            skill, original = candidates[0]
-            self.assertEqual(skill, project / ".github" / "skills" /
-                             "unmanaged-uap-foreign-skill" / "SKILL.md")
+            name = "unmanaged-uap-foreign-skill"
+            project_skill = project / ".github" / "skills" / name / "SKILL.md"
+            user_skill = (Path(env["HOME"]) /
+                          runner["audit"]["NATIVE_ROOTS"]["copilot"][0] /
+                          "skills" / name / "SKILL.md")
+            skills = [(path, content) for path, content in entries
+                      if path.name == "SKILL.md"]
+            self.assertEqual({path for path, _ in skills}, {project_skill, user_skill})
             pinned = runner["pin_foreign"](entries)
             runner["check_foreign"](pinned, case)
-            skill.write_text(original + "rewritten\n", encoding="utf-8")
-            with self.assertRaisesRegex(AssertionError, "foreign content modified"):
-                runner["check_foreign"](pinned, case)
+            for skill, original in skills:
+                with self.subTest(skill=str(skill)):
+                    skill.write_text(original + "rewritten\n", encoding="utf-8")
+                    with self.assertRaisesRegex(AssertionError, "foreign content modified"):
+                        runner["check_foreign"](pinned, case)
+                    skill.write_text(original, encoding="utf-8")
+                    runner["check_foreign"](pinned, case)
 
     def test_marketing_kit_copilot_project_skill_removal_scans_github_root(self):
         # Copilot Project Skills live in .github/skills, outside MCP config roots.
