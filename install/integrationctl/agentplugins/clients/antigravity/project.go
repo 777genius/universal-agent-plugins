@@ -89,7 +89,7 @@ func validateAntigravityProjection(root string, envelope domain.PackageEnvelope,
 	// Do not silently authorize preexisting vendor hook, script, agent, or
 	// raw MCP config files copied from an arbitrary source package.
 	for _, name := range []string{
-		"hooks.json", "hooks", "agents", "rules", "scripts", "extensions",
+		"hooks.json", "hooks", "agents", "rules", "extensions",
 		".antigravity-plugin", ".gemini-plugin", "mcp_config.json",
 	} {
 		path := filepath.Join(root, name)
@@ -106,6 +106,23 @@ func validateAntigravityProjection(root string, envelope domain.PackageEnvelope,
 		if err := validateAntigravityComponent(root, envelope, component); err != nil {
 			return err
 		}
+	}
+	// A verified source package can carry stdio MCP helper binaries under
+	// scripts/, but this directory must not be activated as an unrelated
+	// executable surface when no selected stdio MCP can reference it.
+	if _, err := os.Lstat(filepath.Join(root, "scripts")); err == nil {
+		stdio := false
+		for _, component := range plan.Components {
+			if component.Kind == domain.ComponentMCPServer && component.Support != domain.SupportUnsupported {
+				server, ok := envelope.MCP.Servers[component.Name]
+				stdio = stdio || ok && server.Type == "stdio"
+			}
+		}
+		if !stdio {
+			return fmt.Errorf("Antigravity scripts directory requires an explicitly selected stdio MCP")
+		}
+	} else if !os.IsNotExist(err) {
+		return err
 	}
 	return nil
 }
