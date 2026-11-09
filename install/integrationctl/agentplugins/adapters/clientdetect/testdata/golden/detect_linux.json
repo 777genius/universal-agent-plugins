@@ -1,5 +1,30 @@
 [
   {
+    "ClientID": "antigravity",
+    "ConfigRoot": "\u003chome\u003e/.gemini/config",
+    "DetectionError": null,
+    "DisplayName": "Google Antigravity",
+    "ExecutablePath": "",
+    "NativeConfigRoot": "",
+    "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
+    "Status": "not_detected",
+    "Surfaces": [
+      {
+        "Detected": false,
+        "Evidence": "",
+        "ID": "antigravity_cli"
+      },
+      {
+        "Detected": false,
+        "Evidence": "",
+        "ID": "antigravity_config"
+      }
+    ],
+    "Version": ""
+  },
+  {
     "ClientID": "chatgpt",
     "ConfigRoot": "",
     "DetectionError": null,
