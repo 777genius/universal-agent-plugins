@@ -148,10 +148,19 @@ def identities(items, target, scope="project"):
         if not all(audit["recorded_signed_release_matches"](
                 directory, b.get("package_revision")) for b in scope_bindings):
             raise AssertionError(f"{dist}: {scope} binding lacks exact signed release provenance")
-        # A signed identity alone is not an installed component: a prepared,
-        # failed or package-only validation must not qualify this lifecycle.
-        if any(b.get("verification") != "installation_verified" for b in scope_bindings):
-            raise AssertionError(f"{dist}: {scope} binding lacks installed verification")
+        # Signed provenance alone cannot certify successful delivery. The
+        # Cursor User adapter deliberately prepares a package for manual Editor
+        # activation; that is not native discovery or MCP execution evidence.
+        for binding in scope_bindings:
+            if binding.get("materialization") != "materialized":
+                raise AssertionError(f"{dist}: {scope} binding lacks materialized delivery")
+            if (target == "cursor" and scope == "user"
+                    and binding.get("verification") == "package_validated"
+                    and binding.get("activation") == "manual_activation_required"
+                    and binding.get("policy") == "allowed"):
+                continue
+            if binding.get("verification") != "installation_verified":
+                raise AssertionError(f"{dist}: {scope} binding lacks installed verification")
         if dist in result:
             raise AssertionError(f"duplicate distribution: {dist}")
         installation_id = row.get("installation_id")

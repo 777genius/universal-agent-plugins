@@ -344,6 +344,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     "directory": {"recorded_distribution": distribution},
                     "clients": [{"client_id": "codex", "scope": "project",
                                  "verification": "installation_verified",
+                                 "materialization": "materialized",
                                  "package_revision": "pinned"}]}
 
         with patch.dict(runner["audit"],
@@ -365,7 +366,8 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                               "marketing-kit-project-release-e2e.py"))
         def binding(scope, revision):
             return {"client_id": "codex", "scope": scope,
-                    "verification": "installation_verified", "package_revision": revision}
+                    "verification": "installation_verified", "materialization": "materialized",
+                    "package_revision": revision}
         row = {"installation_id": "owned", "directory": {"recorded_distribution": "root"},
                "clients": [binding("project", "unsigned"), binding("user", "signed")]}
 
@@ -391,9 +393,11 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                "directory": {"recorded_distribution": "root"},
                "clients": [{"client_id": "codex", "scope": "user",
                             "verification": "installation_verified",
+                            "materialization": "materialized",
                             "package_revision": "unsigned"},
                            {"client_id": "codex", "scope": "project",
                             "verification": "installation_verified",
+                            "materialization": "materialized",
                             "package_revision": "signed"}]}
         with patch.dict(runner["audit"],
                         {"recorded_signed_release_matches":
@@ -413,7 +417,8 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                               "marketing-kit-project-release-e2e.py"))
         binding = {"client_id": "codex", "scope": "user",
                    "package_revision": "signed",
-                   "verification": "installation_verified"}
+                   "verification": "installation_verified",
+                   "materialization": "materialized"}
         row = {"installation_id": "owned",
                "directory": {"recorded_distribution": "root"},
                "clients": [binding]}
@@ -431,6 +436,30 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             row["clients"] = [binding, {**binding, "verification": "package_validated"}]
             with self.assertRaisesRegex(AssertionError, "lacks installed verification"):
                 check([row], "codex", "user")
+            row["clients"] = [{**binding, "materialization": "staged"}]
+            with self.assertRaisesRegex(AssertionError, "lacks materialized delivery"):
+                check([row], "codex", "user")
+            # Cursor User deliberately prepares a package with an explicit
+            # manual-activation requirement, not an installed native MCP.
+            prepared = {**binding, "client_id": "cursor",
+                        "verification": "package_validated",
+                        "activation": "manual_activation_required",
+                        "policy": "allowed"}
+            row["clients"] = [prepared]
+            self.assertEqual(check([row], "cursor", "user"), {"root": "owned"})
+            for change in ({"activation": "prepared"}, {"policy": "blocked"},
+                           {"materialization": "degraded"},
+                           {"verification": "failed"}):
+                row["clients"] = [{**prepared, **change}]
+                with self.subTest(change=change), self.assertRaises(AssertionError):
+                    check([row], "cursor", "user")
+            # Only Cursor User can take the documented manual preparation path.
+            row["clients"] = [{**prepared, "client_id": "codex"}]
+            with self.assertRaisesRegex(AssertionError, "lacks installed verification"):
+                check([row], "codex", "user")
+            row["clients"] = [{**prepared, "scope": "project"}]
+            with self.assertRaisesRegex(AssertionError, "lacks installed verification"):
+                check([row], "cursor", "project")
             # An unverified foreign scope must not overwrite the selected
             # User binding's verified status.
             row["clients"] = [binding, {**binding, "scope": "project",
