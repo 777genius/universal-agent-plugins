@@ -88,7 +88,7 @@ def verified(result, stage, operation=None, target=None):
         if valid_legacy_dependency_result(envelope, operation, target):
             return envelope
     elif (envelope.get("result") == "success"
-          and envelope.get("outcome") not in ("partial", "failed", "failure")):
+          and envelope.get("outcome") in (None, "completed")):
         return envelope
     raise AssertionError(f"{stage}: CLI did not succeed with JSON: {result}")
 

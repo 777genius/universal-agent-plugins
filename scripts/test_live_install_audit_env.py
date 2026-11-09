@@ -30,14 +30,23 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         check = runner["verified"]
         accepted = {"exit_code": 0, "timeout": False,
                     "_json": {"result": "success", "data": {}}}
-        self.assertEqual(check(accepted, "add"), accepted["_json"])
+        for command in ("add", "list"):
+            self.assertEqual(check(accepted, command, command), accepted["_json"])
+            completed = {**accepted, "_json": {"result": "success",
+                                              "outcome": "completed", "data": {}}}
+            self.assertEqual(check(completed, command, command), completed["_json"])
         for invalid in (
                 {"exit_code": 1},
                 {"timeout": True},
                 {"_json": None},
                 {"_json": {"data": {}}},
                 {"_json": {"result": "failure", "error": "not authorized"}},
-                {"_json": {"result": "partial", "data": {}}}):
+                {"_json": {"result": "partial", "data": {}}},
+                # 'success' must not override an explicitly incomplete outcome.
+                {"_json": {"result": "success", "outcome": "pending"}},
+                {"_json": {"result": "success", "outcome": "manual_action_required"}},
+                {"_json": {"result": "success", "outcome": "unexpected"}},
+                {"_json": {"result": "success", "outcome": 42}}):
             with self.subTest(invalid=invalid):
                 with self.assertRaisesRegex(AssertionError, "CLI did not succeed"):
                     check({**accepted, **invalid}, "add")
