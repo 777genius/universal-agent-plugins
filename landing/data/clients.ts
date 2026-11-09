@@ -9,6 +9,9 @@ export interface ClientLandingPage extends ClientTarget {
   vendorDocsUrl?: string;
 }
 
+/** Public presentation only: keep technical compatibility and previously installed profiles intact. */
+export const hiddenPublicClientIds: ReadonlySet<string> = new Set(['vscode']);
+
 export const clientLandingPages: ClientLandingPage[] = [
   {
     id: 'codex',
@@ -222,7 +225,7 @@ export const clientLandingPages: ClientLandingPage[] = [
     vendorDocsUrl:
       'https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/extensions.md',
   },
-].filter((client) => client.id !== 'vscode'); // Temporarily hidden from public agent choices.
+].filter((client) => !hiddenPublicClientIds.has(client.id));
 
 export const clients: ClientTarget[] = clientLandingPages.map(
   ({ id, name, icon, note, status }) => ({ id, name, icon, note, status }),

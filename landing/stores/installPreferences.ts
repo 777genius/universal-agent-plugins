@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import type { InstallScope } from '../types/registry';
+import { hiddenPublicClientIds } from '../data/clients.ts';
 
 const defaults = () => ({
   identity: '',
@@ -34,7 +35,10 @@ export const useInstallPreferencesStore = defineStore('installPreferences', {
       }
     },
     readPackage(identity: string, available: readonly string[]) {
+      // A removed public choice must never reach a picker whose options omit it,
+      // even when project scope intentionally remembers other unavailable clients.
       return this.package.identity === identity &&
+        !this.package.targetIds.some((id) => hiddenPublicClientIds.has(id)) &&
         (this.package.scope === 'project' ||
           this.package.targetIds.every((id) => available.includes(id)))
         ? { ...this.package, targetIds: [...this.package.targetIds] }
@@ -43,6 +47,7 @@ export const useInstallPreferencesStore = defineStore('installPreferences', {
     reconcilePackage(identity: string, available: readonly string[]) {
       if (
         this.package.identity !== identity ||
+        this.package.targetIds.some((id) => hiddenPublicClientIds.has(id)) ||
         (this.package.scope !== 'project' &&
           this.package.targetIds.some((id) => !available.includes(id)))
       )
@@ -60,6 +65,7 @@ export const useInstallPreferencesStore = defineStore('installPreferences', {
     ) {
       if (
         !identity ||
+        choice.targetIds.some((id) => hiddenPublicClientIds.has(id)) ||
         (choice.scope !== 'project' && choice.targetIds.some((id) => !available.includes(id)))
       ) {
         this.package = defaults();
