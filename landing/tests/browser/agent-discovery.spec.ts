@@ -69,9 +69,14 @@ test('prerendered Skills overview is indexable for each locale without JavaScrip
     expect(html).toContain('agentplugins skills add owner/repository');
     expect(html).toContain('name="robots"');
     expect(html).not.toMatch(/<meta[^>]+name="robots"[^>]+content="noindex/);
-    expect(html).toContain(`rel="canonical" href="${url}"`);
+    const canonicalTag = html.match(/<link\\b[^>]*rel="canonical"[^>]*>/)?.[0];
+    const canonicalHref = canonicalTag?.match(/\\bhref="([^"]+)"/)?.[1];
+    expect(canonicalHref, `Missing canonical for ${url}`).toBeTruthy();
+    const canonical = new URL(canonicalHref!);
+    expect(canonical.protocol).toBe('https:');
+    expect(canonical.pathname).toBe(new URL(path.slice(1), site).pathname);
     expect(html).toContain('hreflang="x-default"');
-    expect(sitemap).toContain(`<loc>${url}</loc>`);
+    expect(sitemap).toContain(`<loc>${canonical.href}</loc>`);
   }
 
   // Third-party Skill detail routes are deliberately not public SEO identities.
