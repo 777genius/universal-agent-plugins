@@ -61,7 +61,11 @@ test -f "$plugin/.antigravity-plugin/plugin.json"
 test -f "$plugin/skills/native-smoke/SKILL.md"
 
 # Only this native executable can establish vendor format compatibility.
-"$AGY_BIN" plugin validate --strict "$plugin" > "$tmp/agy-validation.txt"
+if ! "$AGY_BIN" plugin validate --strict "$plugin" > "$tmp/agy-validation.txt" 2>&1; then
+  cat "$tmp/agy-validation.txt" >&2
+  echo "Pinned agy rejected the native plugin in strict mode" >&2
+  exit 1
+fi
 cd "$project"
 "$AGY_BIN" plugin list --json > "$tmp/agy-list.json"
 python3 - "$tmp/agy-list.json" <<'PY'

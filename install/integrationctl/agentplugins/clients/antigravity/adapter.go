@@ -18,19 +18,19 @@ import (
 
 type Adapter struct{}
 
-func New() *Adapter { return &Adapter{} }
+func New() *Adapter                  { return &Adapter{} }
 func (*Adapter) ID() domain.ClientID { return domain.ClientAntigravity }
 
 var (
-	_ clients.Adapter = (*Adapter)(nil)
-	_ clients.HostDetector = (*Adapter)(nil)
-	_ clients.ProfileResolver = (*Adapter)(nil)
-	_ clients.TargetLayout = (*Adapter)(nil)
-	_ clients.ProjectTargetLayout = (*Adapter)(nil)
+	_ clients.Adapter              = (*Adapter)(nil)
+	_ clients.HostDetector         = (*Adapter)(nil)
+	_ clients.ProfileResolver      = (*Adapter)(nil)
+	_ clients.TargetLayout         = (*Adapter)(nil)
+	_ clients.ProjectTargetLayout  = (*Adapter)(nil)
 	_ clients.NativeRegistryLayout = (*Adapter)(nil)
-	_ clients.PlanPrecondition = (*Adapter)(nil)
-	_ clients.PlanQualifier = (*Adapter)(nil)
-	_ clients.PlanRefiner = (*Adapter)(nil)
+	_ clients.PlanPrecondition     = (*Adapter)(nil)
+	_ clients.PlanQualifier        = (*Adapter)(nil)
+	_ clients.PlanRefiner          = (*Adapter)(nil)
 )
 
 func cleanAbsolute(path string) bool {
@@ -63,8 +63,12 @@ func (*Adapter) ResolveProfileRoot(root string) (string, error) {
 		return "", fmt.Errorf("antigravity native profile must be a clean absolute directory")
 	}
 	canonical, err := clients.CanonicalDirectory(root, os.Lstat, filepath.EvalSymlinks)
-	if err != nil { return "", fmt.Errorf("resolve Antigravity native profile: %w", err) }
-	if !cleanAbsolute(canonical) { return "", fmt.Errorf("antigravity resolved profile is not a clean absolute path") }
+	if err != nil {
+		return "", fmt.Errorf("resolve Antigravity native profile: %w", err)
+	}
+	if !cleanAbsolute(canonical) {
+		return "", fmt.Errorf("antigravity resolved profile is not a clean absolute path")
+	}
 	return canonical, nil
 }
 
@@ -99,7 +103,9 @@ func (*Adapter) ProjectTargetRoot(_ domain.DetectedClient, _ domain.PackageMode,
 // invoking any client-native operation; do not silently rename an identity.
 func (*Adapter) CheckPlanPrecondition(in clients.PlanInput, plan *domain.DeliveryPlan) error {
 	name := plan.DeclaredName
-	if name == "" { name = in.Envelope.Manifest.Name }
+	if name == "" {
+		name = in.Envelope.Manifest.Name
+	}
 	if !nativePluginID.MatchString(name) {
 		plan.Status = domain.PlanUnsupported
 		plan.Warnings = shared.AppendUnique(plan.Warnings,

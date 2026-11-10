@@ -14,7 +14,7 @@ import (
 const maxNativeManifestBytes int64 = 1 << 20
 
 var (
-	_ clients.Lifecycle = (*Adapter)(nil)
+	_ clients.Lifecycle             = (*Adapter)(nil)
 	_ clients.ActivationPreflighter = (*Adapter)(nil)
 )
 
@@ -29,7 +29,9 @@ func (*Adapter) PreflightActivation(_ clients.Env, request domain.ActivationRequ
 		return fmt.Errorf("antigravity selected client identity changed")
 	}
 	if request.Delivery.ClientID != "" || request.Delivery.ActivePath != "" {
-		if err := shared.ActivationIdentityMismatch(request); err != nil { return err }
+		if err := shared.ActivationIdentityMismatch(request); err != nil {
+			return err
+		}
 		if request.Delivery.ActivePath != request.Plan.ActivePath {
 			return fmt.Errorf("antigravity activation delivery identity changed")
 		}

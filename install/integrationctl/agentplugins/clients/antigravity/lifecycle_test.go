@@ -25,11 +25,11 @@ func TestAntigravityPreparedNativeLifecycleDoesNotClaimActive(t *testing.T) {
 	}
 	plan := domain.DeliveryPlan{
 		ClientID: domain.ClientAntigravity, Scope: domain.ScopeProject,
-		TargetContext: domain.TargetContext{Scope: domain.ScopeProject, ProjectRoot: project},
+		TargetContext:      domain.TargetContext{Scope: domain.ScopeProject, ProjectRoot: project},
 		NativeRegistryRoot: nativeRoot, TargetRoot: pluginRoot, ActivePath: active,
 	}
 	req := domain.ActivationRequest{
-		Client: domain.DetectedClient{ClientID: domain.ClientAntigravity},
+		Client:       domain.DetectedClient{ClientID: domain.ClientAntigravity},
 		DeclaredName: "test-plugin", Plan: plan,
 		Delivery: domain.StagedDelivery{ClientID: domain.ClientAntigravity, ActivePath: active},
 	}

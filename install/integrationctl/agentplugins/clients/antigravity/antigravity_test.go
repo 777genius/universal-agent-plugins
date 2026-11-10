@@ -23,7 +23,9 @@ func TestAdapterIdentityAndScopes(t *testing.T) {
 		HomeDir: root, Environment: map[string]string{},
 		Lstat: os.Lstat, EvalSymlinks: filepath.EvalSymlinks,
 		LookPath: func(name string) (string, error) {
-			if name != "agy" { t.Fatalf("unrecognized probe %q", name) }
+			if name != "agy" {
+				t.Fatalf("unrecognized probe %q", name)
+			}
 			return filepath.Join(root, "agy"), nil
 		},
 	}))
@@ -47,7 +49,9 @@ func TestAntigravityNativeManifestAndMCPProjection(t *testing.T) {
 	t.Parallel()
 	staged := t.TempDir()
 	root := filepath.Join(staged, "plugin")
-	if err := os.MkdirAll(root, 0o700); err != nil { t.Fatal(err) }
+	if err := os.MkdirAll(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	envelope := domain.PackageEnvelope{
 		Manifest: domain.PluginManifest{Name: "test-plugin", Version: "1.2.3"},
 		MCP: domain.MCPComponent{Servers: map[string]domain.MCPServer{
@@ -61,17 +65,27 @@ func TestAntigravityNativeManifestAndMCPProjection(t *testing.T) {
 		ActivePath: filepath.Join(staged, "active"),
 		Components: []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "api", Support: domain.SupportNative}},
 	}
-	if err := projectPlugin(root, envelope, plan, ""); err != nil { t.Fatal(err) }
+	if err := projectPlugin(root, envelope, plan, ""); err != nil {
+		t.Fatal(err)
+	}
 	raw, err := os.ReadFile(filepath.Join(root, ".antigravity-plugin", "plugin.json"))
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	var manifest map[string]any
 	if err := json.Unmarshal(raw, &manifest); err != nil || manifest["name"] != "test-plugin" {
 		t.Fatalf("unexpected native manifest: %v, %v", manifest, err)
 	}
 	raw, err = os.ReadFile(filepath.Join(root, "mcp_config.json"))
-	if err != nil { t.Fatal(err) }
-	var config struct { Servers map[string]map[string]any `json:"mcpServers"` }
-	if err := json.Unmarshal(raw, &config); err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
+	var config struct {
+		Servers map[string]map[string]any `json:"mcpServers"`
+	}
+	if err := json.Unmarshal(raw, &config); err != nil {
+		t.Fatal(err)
+	}
 	if config.Servers["api"]["serverUrl"] != "https://example.test/mcp" {
 		t.Fatalf("remote MCP serverUrl mapping invalid: %+v", config.Servers)
 	}
@@ -140,28 +154,31 @@ func TestAntigravityRefusesUnsafeRemoteMCP(t *testing.T) {
 }
 
 func TestAntigravityAllowsOnlySelectedStdioHelperScripts(t *testing.T) {
- t.Parallel()
- root := t.TempDir()
- scripts := filepath.Join(root, "scripts")
- if err := os.MkdirAll(scripts, 0o700); err != nil { t.Fatal(err) }
- if err := os.WriteFile(filepath.Join(scripts, "helper.js"), []byte("process.stdout.write('ok')"), 0o600); err != nil { t.Fatal(err) }
- envelope := domain.PackageEnvelope{Manifest: domain.PluginManifest{Name: "scripted-plugin"}}
- plan := domain.DeliveryPlan{ActivePath: filepath.Join(t.TempDir(), "active")}
- if err := validateAntigravityProjection(root, envelope, plan); err == nil {
-  t.Fatal("unselected scripts must not be enabled")
- }
- envelope.MCP.Servers = map[string]domain.MCPServer{
-  "helper": {Name: "helper", Type: "stdio", Decoded: map[string]any{
-   "type": "stdio", "command": "node", "args": []any{"${PLUGIN_ROOT}/scripts/helper.js"},
-  }},
- }
- plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentMCPServer,
-  Name: "helper", Support: domain.SupportNative}}
- if err := validateAntigravityProjection(root, envelope, plan); err != nil {
-  t.Fatalf("selected verified stdio helper scripts must remain usable: %v", err)
- }
+	t.Parallel()
+	root := t.TempDir()
+	scripts := filepath.Join(root, "scripts")
+	if err := os.MkdirAll(scripts, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(scripts, "helper.js"), []byte("process.stdout.write('ok')"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	envelope := domain.PackageEnvelope{Manifest: domain.PluginManifest{Name: "scripted-plugin"}}
+	plan := domain.DeliveryPlan{ActivePath: filepath.Join(t.TempDir(), "active")}
+	if err := validateAntigravityProjection(root, envelope, plan); err == nil {
+		t.Fatal("unselected scripts must not be enabled")
+	}
+	envelope.MCP.Servers = map[string]domain.MCPServer{
+		"helper": {Name: "helper", Type: "stdio", Decoded: map[string]any{
+			"type": "stdio", "command": "node", "args": []any{"${PLUGIN_ROOT}/scripts/helper.js"},
+		}},
+	}
+	plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentMCPServer,
+		Name: "helper", Support: domain.SupportNative}}
+	if err := validateAntigravityProjection(root, envelope, plan); err != nil {
+		t.Fatalf("selected verified stdio helper scripts must remain usable: %v", err)
+	}
 }
-
 
 func TestAntigravityRejectsInvalidNativeIdentityBeforeStaging(t *testing.T) {
 	t.Parallel()
@@ -170,9 +187,9 @@ func TestAntigravityRejectsInvalidNativeIdentityBeforeStaging(t *testing.T) {
 			root := t.TempDir()
 			plan := domain.DeliveryPlan{
 				ClientID: domain.ClientAntigravity, DeclaredName: name,
-				Scope: domain.ScopeProject,
+				Scope:         domain.ScopeProject,
 				TargetContext: domain.TargetContext{Scope: domain.ScopeProject, ProjectRoot: root},
-				Status: domain.PlanReady,
+				Status:        domain.PlanReady,
 			}
 			input := clients.PlanInput{Envelope: domain.PackageEnvelope{Manifest: domain.PluginManifest{Name: name}}}
 			if err := New().CheckPlanPrecondition(input, &plan); err != nil || plan.Status != domain.PlanUnsupported {

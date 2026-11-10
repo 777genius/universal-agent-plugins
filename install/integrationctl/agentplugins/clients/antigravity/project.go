@@ -17,7 +17,7 @@ import (
 )
 
 var (
-	_ clients.Projector = (*Adapter)(nil)
+	_ clients.Projector             = (*Adapter)(nil)
 	_ clients.ActiveNativeProjector = (*Adapter)(nil)
 )
 
@@ -60,8 +60,8 @@ func projectPlugin(root string, envelope domain.PackageEnvelope, plan domain.Del
 		}
 	}
 	manifest := map[string]any{
-		"$schema": "https://antigravity.google/schemas/v1/plugin.json",
-		"name": envelope.Manifest.Name,
+		"$schema":     "https://antigravity.google/schemas/v1/plugin.json",
+		"name":        envelope.Manifest.Name,
 		"displayName": envelope.Manifest.Name,
 	}
 	if envelope.Manifest.Version != "" {
