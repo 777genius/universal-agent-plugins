@@ -283,9 +283,9 @@ func TestGrokProjectMCPInventoryRejectsFoldedAliasesAndUnexpectedTrust(t *testin
 
 func TestGrokProjectMCPUnambiguousInspectIdentity(t *testing.T) {
 	for _, tc := range []struct {
-		name string
+		name   string
 		fields map[string]any
-		valid bool
+		valid  bool
 	}{
 		{"canonical", map[string]any{"projectTrusted": false, "plugins": []any{}}, true},
 		{"unrelated extension", map[string]any{"projectTrusted": false, "futureVendorField": 1}, true},
