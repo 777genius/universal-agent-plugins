@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { spawnSync } from 'node:child_process';
 import { skillClients } from '../data/skillClients.ts';
+import { clients } from '../data/clients.ts';
 import { sortSkillsForCatalog } from '../data/catalogCuration.ts';
 import capabilities from '../data/clientCapabilities.generated.json' with { type: 'json' };
 import type { SkillListing } from '../types/skillsCatalog.ts';
@@ -305,9 +306,12 @@ test('Detail identity uses only a canonical source, never the listing-page URL',
   }
 });
 
-test('Skill agents come only from generated saved-dependency and skill capabilities', () => {
+test('Skill agents are public clients with generated saved-dependency and skill support', () => {
+  // Generated capabilities can include qualified clients not yet listed publicly.
+  // Do not surface unreleased targets in Skills simply because their metadata exists.
+  const published = new Set(clients.map((client) => client.id));
   const expected = capabilities
-    .filter((client) => client.saved_dependency && client.skill_support !== 'unsupported')
+    .filter((client) => published.has(client.id) && client.saved_dependency && client.skill_support !== 'unsupported')
     .map((client) => client.id);
   assert.deepEqual(
     skillClients.map((client) => client.id),
