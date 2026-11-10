@@ -19,6 +19,8 @@ class TestSyntheticModelOracle(unittest.TestCase):
         Model.search_requested = False
         Model.mcp_output_seen = False
         Model.mcp_digest_verified = False
+        Model.mcp_output_indicators = []
+        Model.mcp_output_type = "not_observed"
         Model.shell_output_seen = False
         Model.shell_execution_verified = False
         Model.shell_response_category = "not_observed"
@@ -88,6 +90,8 @@ class TestSyntheticModelOracle(unittest.TestCase):
                                         "text": '{"observed":false,"sha256":""}'}]}}]})
         self.assertTrue(Model.mcp_output_seen)
         self.assertFalse(Model.mcp_digest_verified)
+        self.assertIn("observed", Model.mcp_output_indicators)
+        self.assertEqual(Model.mcp_output_type, "object")
 
     def test_shell_error_response_does_not_prove_execution(self):
         self.call({"tools": [{"type": "function", "name": "exec_command"}]})
