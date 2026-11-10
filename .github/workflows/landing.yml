@@ -98,6 +98,7 @@ jobs:
           NUXT_PUBLIC_SITE_URL: https://777genius.github.io/universal-agent-plugins
         working-directory: landing
         run: |
+          pnpm run check:advisories
           pnpm run test:registry
           pnpm run lint
           pnpm run check:i18n
@@ -467,6 +468,7 @@ jobs:
           pnpm exec nuxt prepare
           pnpm exec vue-tsc --noEmit
           pnpm run test:artifact
+          pnpm run check:advisories
           pnpm run test:registry
           pnpm run lint
           pnpm run generate
