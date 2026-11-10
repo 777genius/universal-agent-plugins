@@ -46,10 +46,10 @@ type Client struct {
 	// FeedID identifies the pinned signing lineage for persisted installation
 	// sequence floors. The historical schema-1 feed is the empty identity.
 	// It is never loaded from a URL, signed snapshot, or environment variable.
-	FeedID     string
-	Embedded   EmbeddedBundle
-	Cache      Cache
-	Now        func() time.Time
+	FeedID   string
+	Embedded EmbeddedBundle
+	Cache    Cache
+	Now      func() time.Time
 	// AllowHTTPForTests is an explicit in-memory test switch. It is never read
 	// from or written to the cache.
 	AllowHTTPForTests bool
