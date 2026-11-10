@@ -10,7 +10,7 @@ import unittest
 from unittest.mock import patch
 import http.server
 
-from codex_env_names_native_spike import CHILD, Model, MCP_CALL, SHELL_CALL, SHELL_MARKER, inspect
+from codex_env_names_native_spike import CHILD, Model, MCP_CALL, SHELL_CALL, SHELL_MARKER, SHELL_ENV_PRESENT, ENV_NAME, inspect
 
 
 class TestSyntheticModelOracle(unittest.TestCase):
@@ -25,6 +25,7 @@ class TestSyntheticModelOracle(unittest.TestCase):
         Model.mcp_output_type = "not_observed"
         Model.shell_output_seen = False
         Model.shell_execution_verified = False
+        Model.shell_secret_visible = False
         Model.shell_response_category = "not_observed"
         Model.shell_response_indicators = []
         Model.shell_requested_at = 0.0
@@ -63,6 +64,7 @@ class TestSyntheticModelOracle(unittest.TestCase):
         self.assertEqual(shell["name"], "exec_command")
         # A native async session result is not a completed shell invocation.
         self.assertEqual(json.loads(shell["arguments"])["yield_time_ms"], 10000)
+        self.assertIn(ENV_NAME, json.loads(shell["arguments"])["cmd"])
         tool = self.call({
             "tools": [{"type": "namespace", "name": "mcp__env_spike",
                        "tools": [{"name": "confirm_env"}]}],
@@ -116,6 +118,26 @@ class TestSyntheticModelOracle(unittest.TestCase):
         Model.shell_requested_at -= 7.0
         self.call(payload)
         self.assertTrue(Model.shell_execution_verified)
+
+    def test_shell_credential_presence_is_recorded_without_secret_value(self):
+        self.call({"tools": [{"type": "function", "name": "exec_command"}]})
+        Model.shell_requested_at -= 7.0
+        self.call({"input": [{"type": "function_call_output", "call_id": SHELL_CALL,
+                             "output": SHELL_ENV_PRESENT + SHELL_MARKER}],
+                   "tools": [{"type": "namespace", "name": "mcp__env_spike",
+                              "tools": [{"name": "confirm_env"}]}]})
+        self.assertTrue(Model.shell_execution_verified)
+        self.assertTrue(Model.shell_secret_visible)
+
+    def test_shell_without_credential_is_not_marked_exposed(self):
+        self.call({"tools": [{"type": "function", "name": "exec_command"}]})
+        Model.shell_requested_at -= 7.0
+        self.call({"input": [{"type": "function_call_output", "call_id": SHELL_CALL,
+                             "output": SHELL_MARKER}],
+                   "tools": [{"type": "namespace", "name": "mcp__env_spike",
+                              "tools": [{"name": "confirm_env"}]}]})
+        self.assertTrue(Model.shell_execution_verified)
+        self.assertFalse(Model.shell_secret_visible)
 
     def test_missing_mcp_advertisement_refuses(self):
         self.call({"tools": [{"type": "function", "name": "exec_command"}]})
