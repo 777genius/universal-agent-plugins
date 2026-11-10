@@ -12,10 +12,13 @@ test('community installer is centered, full-width, and readable at desktop/table
   const panel = page.locator('.install-panel');
   await expect(panel.locator('.command-snippet')).toHaveCount(4, { timeout: 15_000 });
   await expect(page.locator('.breadcrumbs a')).toHaveAttribute('href', /\/plugins\/$/);
-  // The signed security feed is independent of discovery; it may have no
-  // reviewed assessment for this community source. The Skill scan still
-  // gives an honest checked / not-checked state in the page.
-  await expect(page.locator('.skillspector--notChecked > summary')).toContainText('Not checked', { timeout: 15_000 });
+  // SkillSpector has its own signed feed: a current, historical, or unchecked
+  // result is valid. On this expanded page the loading state is a paragraph,
+  // so the details summary proves the scan has settled without inventing a result.
+  await expect(page.locator('.plugin-profile details.skillspector > summary > span')).toHaveText(
+    /^Skill scan · \S/,
+    { timeout: 15_000 },
+  );
 
   for (const width of [1280, 980, 390]) {
     await page.setViewportSize({ width, height: 900 });
