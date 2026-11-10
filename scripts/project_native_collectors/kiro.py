@@ -106,12 +106,13 @@ def _probe(ctx, owned, label, arguments, project="a"):
         _runtime_bin(ctx)
     if ctx.env.get("PATH") != str(directory) + ":/usr/bin:/bin":
         raise ValueError("Kiro acquired companion PATH changed")
-    for path, body in owned.items():
+    for path, (body, device, inode) in owned.items():
         _parents(path)
         info = path.lstat()
         if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size != len(body)
+                or info.st_uid != os.getuid() or (info.st_dev, info.st_ino) != (device, inode)
                 or stat.S_IMODE(info.st_mode) != 0o600 or path.read_bytes() != body):
-            raise ValueError("Kiro changed authored fixture bytes/mode")
+            raise ValueError("Kiro changed authored fixture identity/bytes/mode")
     if (label in ("a-workspace-raw-list", "a-agent-raw-list") and isinstance(record, dict)
             and type(record.get("exit")) is int and record["exit"] == 1
             and "error" in record and record["error"] is None
@@ -204,7 +205,8 @@ def collect(ctx):
             with native.open("xb") as stream:
                 stream.write(body)
             native.chmod(0o600)
-            owned[native] = body
+            identity = native.lstat()
+            owned[native] = (body, identity.st_dev, identity.st_ino)
         for project in ("a", "b", "user"):
             for scope in ("workspace", "global"):
                 label = project + "-" + scope + "-raw-list"

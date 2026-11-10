@@ -550,6 +550,30 @@ class KiroCollectorTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "authored fixture"):
             kiro.collect(ctx)
 
+    def test_replaced_fixture_with_identical_bytes_is_not_accepted_as_owned(self):
+        # A native child must not substitute a different inode even when its
+        # bytes and permissions mimic an authored disposable research marker.
+        for scope in ("a", "b", "user"):
+            ctx = self.context()
+            root = ctx.home if scope == "user" else ctx.projects[scope]
+            fixture = root / ".kiro/settings/mcp.json"
+
+            def substituted():
+                original = fixture.lstat()
+                body = fixture.read_bytes()
+                replacement = fixture.with_name("replacement.json")
+                replacement.write_bytes(body)
+                replacement.chmod(0o600)
+                self.assertNotEqual(replacement.lstat().st_ino, original.st_ino)
+                replacement.replace(fixture)
+                self.assertEqual(fixture.read_bytes(), body)
+                return {"exit": 0, "error": None}, b"Opaque read-only listing.\\n", b""
+
+            ctx.replace["a-workspace-raw-list"] = substituted
+            with self.subTest(scope=scope), self.assertRaisesRegex(ValueError, "fixture identity"):
+                kiro.collect(ctx)
+            self.assertEqual(len(ctx.calls), 11)
+
     def test_foreign_kiro_parent_cannot_be_adopted_or_partially_written(self):
         # Even when mcp.json itself is absent, an existing .kiro tree belongs
         # to something else. The last (User) conflict must not leave earlier
