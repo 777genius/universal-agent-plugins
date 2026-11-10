@@ -14,6 +14,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/process"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
@@ -170,33 +171,78 @@ func grokProjectMCPNativeInspect(t *testing.T, f *projectNativeCLIAttempt, proje
 	if !ok {
 		t.Fatal("real Grok native inspect lacks plugin inventory")
 	}
+	if err := grokProjectMCPInventory(plugins, name, active, present); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// The observed native inventory must not contain a case-folded alternative to
+// the selected owned plugin, even if the exact spelling is also present.
+func grokProjectMCPInventory(plugins []any, name, active string, present bool) error {
 	matched := false
 	for _, raw := range plugins {
 		entry, ok := raw.(map[string]any)
 		if !ok {
-			t.Fatal("real Grok native plugin inventory has unrecognized entry")
+			return fmt.Errorf("real Grok native plugin inventory has unrecognized entry")
 		}
-		if entry["name"] != name {
+		candidate, ok := entry["name"].(string)
+		if !ok || strings.TrimSpace(candidate) == "" {
+			return fmt.Errorf("real Grok native plugin has invalid name")
+		}
+		if candidate != name {
+			if shared.FoldJSONKey(candidate) == shared.FoldJSONKey(name) {
+				return fmt.Errorf("real Grok native plugin has a folded alias of the selected name")
+			}
 			continue
 		}
 		if matched || entry["scope"] != "project" || entry["path"] != active || entry["enabled"] != false {
-			t.Fatalf("real Grok MCP project entry is foreign, duplicated or unexpectedly trusted: %v", entry)
+			return fmt.Errorf("real Grok MCP project entry is foreign, duplicated or unexpectedly trusted")
 		}
 		provides, ok := entry["provides"].(map[string]any)
 		if !ok || fmt.Sprint(provides["mcpServers"]) != "1" {
-			t.Fatalf("real Grok did not discover one plugin MCP server: %v", entry)
+			return fmt.Errorf("real Grok did not discover exactly one plugin MCP server")
 		}
 		matched = true
 	}
 	if matched != present {
-		t.Fatalf("real Grok native MCP plugin discovery mismatch: present=%t observed=%t", present, matched)
+		return fmt.Errorf("real Grok native MCP plugin discovery mismatch: present=%t observed=%t", present, matched)
 	}
-	if !present {
-		for _, value := range plugins {
-			entry, _ := value.(map[string]any)
-			if strings.EqualFold(fmt.Sprint(entry["name"]), name) {
-				t.Fatal("same-name Grok project MCP candidate survived removal")
+	return nil
+}
+
+func TestGrokProjectMCPInventoryRejectsFoldedAliasesAndUnexpectedTrust(t *testing.T) {
+	const name = "uap-grok-mcp-only"
+	const active = "/fixture/.grok/plugins/owned"
+	plugin := func(candidate string) map[string]any {
+		return map[string]any{"name": candidate, "scope": "project", "path": active,
+			"enabled": false, "provides": map[string]any{"mcpServers": json.Number("1")}}
+	}
+	valid := plugin(name)
+	foreign := plugin("other-project-plugin")
+	for _, tc := range []struct {
+		name string
+		plugins []any
+		present, refused bool
+	}{
+		{"exact selected", []any{foreign, valid}, true, false},
+		{"absent with unrelated plugin", []any{foreign}, false, false},
+		{"missing selected", []any{foreign}, true, true},
+		{"duplicate exact", []any{valid, valid}, true, true},
+		{"folded alias before selected", []any{plugin("UAP-grok-mcp-only"), valid}, true, true},
+		{"folded alias after selected", []any{valid, plugin("UAP-grok-mcp-only")}, true, true},
+		{"folded alias after removal", []any{plugin("UAP-grok-mcp-only")}, false, true},
+		{"malformed entry", []any{"invalid"}, false, true},
+		{"missing native name", []any{map[string]any{"scope": "project"}}, false, true},
+		{"unexpected trust", []any{map[string]any{"name": name, "scope": "project", "path": active,
+			"enabled": true, "provides": map[string]any{"mcpServers": json.Number("1")}}}, true, true},
+		{"missing MCP discovery", []any{map[string]any{"name": name, "scope": "project", "path": active,
+			"enabled": false, "provides": map[string]any{}}}, true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := grokProjectMCPInventory(tc.plugins, name, active, tc.present)
+			if (err != nil) != tc.refused {
+				t.Fatalf("native inventory admission mismatch (refused=%t): %v", tc.refused, err)
 			}
-		}
+		})
 	}
 }
