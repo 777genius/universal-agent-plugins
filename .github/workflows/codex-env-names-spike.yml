@@ -53,15 +53,33 @@ jobs:
         run: |
           python3 -m py_compile scripts/codex_env_names_appserver_spike.py
           python3 scripts/codex_env_names_appserver_spike.py "$CODEX_BINARY" "$RUNNER_TEMP/codex-appserver-spike-report.json"
+      # Research-only mitigated control: no real user's Codex settings touched.
+      # This cannot retroactively make the default-mode snapshot leak safe.
+      - name: Compare isolated shell env filtering with real Codex CLI
+        if: always() && steps.native-binary.outcome == 'success'
+        id: native-filtered-cli
+        shell: bash
+        run: |
+          python3 scripts/codex_env_names_native_spike.py "$CODEX_BINARY" "$RUNNER_TEMP/codex-env-filtered-cli.json" filtered
+      - name: Compare isolated shell env filtering with real Codex app-server
+        if: always() && steps.native-binary.outcome == 'success'
+        id: native-filtered-appserver
+        shell: bash
+        run: |
+          python3 scripts/codex_env_names_appserver_spike.py "$CODEX_BINARY" "$RUNNER_TEMP/codex-env-filtered-appserver.json" filtered
       - name: Enforce both independently successful native proofs
         if: always()
         shell: bash
         env:
           CLI_OUTCOME: ${{ steps.native-cli-spike.outcome }}
           APPSERVER_OUTCOME: ${{ steps.native-appserver-spike.outcome }}
+          FILTERED_CLI_OUTCOME: ${{ steps.native-filtered-cli.outcome }}
+          FILTERED_APPSERVER_OUTCOME: ${{ steps.native-filtered-appserver.outcome }}
         run: |
           test "$CLI_OUTCOME" = success
           test "$APPSERVER_OUTCOME" = success
+          test "$FILTERED_CLI_OUTCOME" = success
+          test "$FILTERED_APPSERVER_OUTCOME" = success
       - name: Preserve only bounded, redacted proof (no native home or child output)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
@@ -70,5 +88,7 @@ jobs:
           path: |
             ${{ runner.temp }}/codex-env-spike-report.json
             ${{ runner.temp }}/codex-appserver-spike-report.json
+            ${{ runner.temp }}/codex-env-filtered-cli.json
+            ${{ runner.temp }}/codex-env-filtered-appserver.json
           if-no-files-found: warn
           retention-days: 7
