@@ -92,6 +92,15 @@ func TestInfoShortNameShowsOneDirectoryProductDefaultAlternativesCompatibilityAn
 	}
 }
 
+func TestInfoProjectSourceWithoutTargetPreservesCatalogRead(t *testing.T) {
+	app := App{Scope: domain.ScopeProject, Version: "1.0.0",
+		DirectoryClient: &fixedDirectoryClient{bundle: readModelBundle()}}
+	inspection, err := inspectDirectoryProduct(t.Context(), app, domain.StateFileV2{}, "demo", "")
+	if err != nil || inspection.SelectedDistribution != "owner/demo" || inspection.SelectedRelease.ReleaseSequence != 2 {
+		t.Fatalf("Project info without --target lost source inspection: %+v %v", inspection, err)
+	}
+}
+
 func TestPublicDirectoryEvidenceDistinguishesMissingTrust(t *testing.T) {
 	bundle := readModelBundle()
 	bundle.Snapshot.Evidence[0].Trust = nil

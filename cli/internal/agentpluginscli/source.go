@@ -179,7 +179,7 @@ func (app App) acquireDirectory(ctx context.Context, selector string, request pa
 	productID, _ := directorySelectorProductID(bundle.Snapshot, resolveSelector)
 	affectedTargets := expandAffectedSurfaceTargets(request.Targets, app.scope())
 	resolveRequest := domain.DirectoryResolveRequest{
-		Selector: resolveSelector, Targets: affectedTargets, Scope: app.scope(),
+		Selector: resolveSelector, Targets: request.Targets, Scope: app.scope(),
 		InstallerVersion: app.Version, ClientVersions: environment.ClientVersions, OS: environment.OS, Architecture: environment.Architecture,
 		DependencyIdentity: environment.DependencyIdentity,
 		SchemaVersion:      "1.0.0", Operation: operation, Recorded: request.Recorded,
@@ -189,13 +189,13 @@ func (app App) acquireDirectory(ctx context.Context, selector string, request pa
 	var retainedMapping *domain.ChatGPTLocalMapping
 	installation, _ := locallyMatchedInstallation(state, resolveSelector)
 	intents := lifecycleInstallIntents(installation, string(app.scope()), nil)
-	for _, target := range affectedTargets {
+	for _, target := range request.Targets {
 		if requiresPersonalMapping(target) && (productID == "context7" || app.chatGPTPreparation || intents[target] == domain.InstallIntentPrepare) {
 			preparingChatGPT = true
 		}
 	}
 	if preparingChatGPT {
-		if id, purpose, ok := directoryPreparationClient(affectedTargets); ok {
+		if id, purpose, ok := directoryPreparationClient(request.Targets); ok {
 			resolveRequest.Purpose = purpose
 			resolveRequest.Targets = []domain.ClientID{id}
 		}
@@ -222,14 +222,9 @@ func (app App) acquireDirectory(ctx context.Context, selector string, request pa
 	}
 	snapshot.Source.SourceBindingHint = fmt.Sprintf("directory-v%d", bundle.Snapshot.SnapshotSchemaVersion)
 	origin := &domain.DirectoryOrigin{
-		ProductID:              selection.ProductID,
-		DistributionID:         selection.DistributionID,
-		DistributionKind:       selection.DistributionKind,
-		DesiredReleaseSequence: selection.ReleaseSequence,
-		FeedID:                 directoryFeedForClient(app.DirectoryClient),
-		SnapshotSchema:         bundle.Snapshot.SnapshotSchemaVersion,
-		SnapshotSequence:       selection.SnapshotSequence,
-		SnapshotDigest:         bundle.Digest,
+		ProductID: selection.ProductID, DistributionID: selection.DistributionID, DistributionKind: selection.DistributionKind,
+		DesiredReleaseSequence: selection.ReleaseSequence, FeedID: directoryFeedForClient(app.DirectoryClient), SnapshotSchema: bundle.Snapshot.SnapshotSchemaVersion,
+		SnapshotSequence: selection.SnapshotSequence, SnapshotDigest: bundle.Digest,
 	}
 	load := app.loadSnapshot
 	if request.StandardOnly {
@@ -275,7 +270,7 @@ func (app App) acquireDirectory(ctx context.Context, selector string, request pa
 	// normal signed eligibility; never acquire another target's substitute package.
 	if preparingChatGPT {
 		var peers []domain.ClientID
-		for _, target := range affectedTargets {
+		for _, target := range request.Targets {
 			if !requiresPersonalMapping(target) {
 				peers = append(peers, target)
 			}

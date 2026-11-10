@@ -40,16 +40,15 @@ type Client struct {
 	// Origin is the configured schema-1 directory (for example,
 	// https://host/registry/schemas/1/). Artifact URLs never come from signed or
 	// unsigned metadata beyond validated relative names.
-	Origin     string
-	HTTPClient *http.Client
-	Trust      TrustStore
 	// FeedID identifies the pinned signing lineage for persisted installation
 	// sequence floors. The historical schema-1 feed is the empty identity.
 	// It is never loaded from a URL, signed snapshot, or environment variable.
-	FeedID   string
-	Embedded EmbeddedBundle
-	Cache    Cache
-	Now      func() time.Time
+	Origin, FeedID string
+	HTTPClient     *http.Client
+	Trust          TrustStore
+	Embedded       EmbeddedBundle
+	Cache          Cache
+	Now            func() time.Time
 	// AllowHTTPForTests is an explicit in-memory test switch. It is never read
 	// from or written to the cache.
 	AllowHTTPForTests bool
@@ -58,10 +57,6 @@ type Client struct {
 	// the binary; test/local clients may leave it false.
 	RequireEmbeddedBootstrap bool
 }
-
-// SignedFeedID is compile-time client configuration, not remote metadata.
-// A second signed schema-1 feed must use a distinct identity and cache path.
-func (client Client) SignedFeedID() string { return client.FeedID }
 
 // LoadLocal returns the highest authenticated embedded/cache publication at or
 // above installedFloor without performing network I/O. Expiry is deliberately

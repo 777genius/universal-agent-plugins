@@ -17,7 +17,7 @@ func TestDirectoryTransitionCannotBorrowAnotherSignedFeed(t *testing.T) {
 	}
 	installation := domain.Installation{
 		OriginMode: domain.OriginModeDirectory,
-		Directory: &current,
+		Directory:  &current,
 		Source: domain.SourceBinding{
 			Repository: "owner/demo", ResolvedRevision: revision,
 			TreeDigest: "sha256:tree",
@@ -28,18 +28,18 @@ func TestDirectoryTransitionCannotBorrowAnotherSignedFeed(t *testing.T) {
 		OriginMode: domain.OriginModeDirectory,
 		DirectoryResolution: &domain.DirectoryOrigin{
 			ProductID: current.ProductID, DistributionID: current.DistributionID,
-			DistributionKind: current.DistributionKind,
+			DistributionKind:       current.DistributionKind,
 			DesiredReleaseSequence: current.DesiredReleaseSequence,
-			SnapshotSchema: 1, SnapshotSequence: 5, SnapshotDigest: "sha256:modern",
+			SnapshotSchema:         1, SnapshotSequence: 5, SnapshotDigest: "sha256:modern",
 		},
 		Envelope: domain.PackageEnvelope{
-			Source: domain.SourceIdentity{Repository: "owner/demo", ResolvedRevision: revision},
+			Source:     domain.SourceIdentity{Repository: "owner/demo", ResolvedRevision: revision},
 			TreeDigest: "sha256:tree", ManifestDigest: "sha256:manifest",
 		},
 	}
 	cases := []struct {
 		name, currentFeed, incomingFeed string
-		reject bool
+		reject                          bool
 	}{
 		{"legacy-to-modern", "", "modern-v1", true},
 		{"modern-to-legacy", "modern-v1", "", true},
