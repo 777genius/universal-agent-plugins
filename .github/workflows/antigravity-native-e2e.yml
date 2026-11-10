@@ -8,6 +8,7 @@ on:
       - 'install/integrationctl/agentplugins/domain/clients_catalog.go'
       - 'scripts/e2e/antigravity-native.sh'
       - 'scripts/e2e/antigravity-native-cross.py'
+      - 'docs/ANTIGRAVITY_NATIVE_PLUGINS.md'
       - '.github/workflows/antigravity-native-e2e.yml'
   workflow_dispatch:
 

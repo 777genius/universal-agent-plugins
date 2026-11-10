@@ -1,6 +1,6 @@
-# Google Antigravity native plugins (draft source)
+# Google Antigravity native plugins
 
-**Release status: Draft PR #815; no published CLI or runtime-activation claim yet.**
+**Source tracking:** PR #815. Merging source or passing native CLI tests does not establish a published UAP release, model authentication, or Antigravity IDE activation.
 
 The Antigravity target ID is `antigravity`. The adapter prepares one
 source-verified package in the vendor's documented **plugin discovery folder**,
@@ -32,11 +32,10 @@ remain a deliberate user-managed action until a safe transactional lifecycle
 is independently qualified. Do not report automatic User activation from a
 successful UAP file install; UAP removes only the directory it owns.
 
-**Still to qualify before Ready:** pinned real `agy plugin validate --strict`,
-separate CLI local import/list/uninstall in a disposable profile,
-project-scoped UAP add/remove and foreign-state preservation,
-complete CI on applicable OS targets, support metadata/site compatibility,
-and published CLI tests. The CLI installed-plugin list is **not** evidence
+**Merge qualification:** Require passing pinned `agy plugin validate --strict`,
+separate disposable vendor CLI import/list/uninstall, UAP User and Project
+add/remove with independent ownership, complete applicable cross-OS CI, support
+metadata/site compatibility and published-CLI checks on the exact final commit. The CLI installed-plugin list is **not** evidence
 of workspace IDE discovery: project `.agents/plugins/` loading requires an
 actual IDE observation and must not be reported as proven by shell tests.
 There is no claim of support for all Antigravity native hook and agent kinds.
@@ -53,5 +52,5 @@ Implementation criteria: [reviewed plan](plans/2026-11-09-antigravity-native-int
 Cross-platform qualification additionally pins the official agy 1.5.3 macOS
 x64/arm64 and Windows x64 release archives by SHA-256. These jobs repeat the
 native CLI lifecycle in a separate disposable vendor profile and UAP's scoped
-project add/remove, while preserving a foreign User plugin. None of these
+User and Project add/remove, while preserving a foreign User plugin. None of these
 shell/CLI checks claims that the Antigravity IDE loaded a project plugin.
