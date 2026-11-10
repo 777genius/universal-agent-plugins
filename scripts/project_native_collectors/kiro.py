@@ -134,10 +134,12 @@ def collect(ctx):
     projects = {name: Path(ctx.projects[name]) for name in ("a", "b", "user")}
     # Resolving source roots silently would adopt a symlinked foreign tree as a
     # research fixture. Refuse aliases before launching any native child.
-    if (not home.is_absolute() or home.resolve() != home
-            or any(not path.is_absolute() or path.resolve() != path
+    if (not home.is_absolute() or home.resolve() != home or not home.is_dir()
+            or any(not path.is_absolute() or path.resolve() != path or not path.is_dir()
                    for path in projects.values())):
-        raise ValueError("Kiro requires canonical home and project roots without aliases")
+        # Do not silently manufacture an absent project or HOME when the
+        # native client is selected; only existing disposable roots qualify.
+        raise ValueError("Kiro requires existing canonical home and project directories without aliases")
     project_roots = tuple(projects.values())
     if (len(set(project_roots)) != 3 or not home.is_relative_to(root)
             or any(not path.is_relative_to(root) or home.is_relative_to(path) or path.is_relative_to(home)
