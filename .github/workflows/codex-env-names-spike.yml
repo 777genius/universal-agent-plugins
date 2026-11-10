@@ -84,6 +84,30 @@ jobs:
         shell: bash
         run: |
           python3 scripts/codex_env_names_appserver_spike.py "$CODEX_BINARY" "$RUNNER_TEMP/codex-default-excludes-appserver.json" default_excludes
+      # Research-only: still sandboxed by native Landlock. This is a deprecated
+      # Codex fallback, NOT a replacement for full default bwrap qualification.
+      # Keep baseline negative proof and research controls separate, with no
+      # host AppArmor/sysctl changes, no unsandboxed execution and no real keys.
+      - name: Protected Landlock baseline CLI (expected default leak oracle)
+        if: always() && steps.native-binary.outcome == 'success'
+        shell: bash
+        run: |
+          python3 scripts/codex_env_names_native_spike.py "$CODEX_BINARY" "$RUNNER_TEMP/codex-landlock-default-cli.json" default legacy_landlock
+      - name: Protected Landlock baseline app-server (expected default leak oracle)
+        if: always() && steps.native-binary.outcome == 'success'
+        shell: bash
+        run: |
+          python3 scripts/codex_env_names_appserver_spike.py "$CODEX_BINARY" "$RUNNER_TEMP/codex-landlock-default-appserver.json" default legacy_landlock
+      - name: Protected Landlock excludes CLI research control
+        if: always() && steps.native-binary.outcome == 'success'
+        shell: bash
+        run: |
+          python3 scripts/codex_env_names_native_spike.py "$CODEX_BINARY" "$RUNNER_TEMP/codex-landlock-excludes-cli.json" default_excludes legacy_landlock
+      - name: Protected Landlock excludes app-server research control
+        if: always() && steps.native-binary.outcome == 'success'
+        shell: bash
+        run: |
+          python3 scripts/codex_env_names_appserver_spike.py "$CODEX_BINARY" "$RUNNER_TEMP/codex-landlock-excludes-appserver.json" default_excludes legacy_landlock
       - name: Enforce both independently successful native proofs
         if: always()
         shell: bash
@@ -113,5 +137,9 @@ jobs:
             ${{ runner.temp }}/codex-env-filtered-appserver.json
             ${{ runner.temp }}/codex-default-excludes-cli.json
             ${{ runner.temp }}/codex-default-excludes-appserver.json
+            ${{ runner.temp }}/codex-landlock-default-cli.json
+            ${{ runner.temp }}/codex-landlock-default-appserver.json
+            ${{ runner.temp }}/codex-landlock-excludes-cli.json
+            ${{ runner.temp }}/codex-landlock-excludes-appserver.json
           if-no-files-found: warn
           retention-days: 7
