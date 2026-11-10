@@ -1,8 +1,8 @@
-import claudeBadge from '~/assets/images/agent-badges/claude.png';
+import claudeBadge from '~/assets/images/agent-badges/claude.webp';
 import codexBadge from '~/assets/images/agent-badges/codex.svg';
 import cursorBadge from '~/assets/images/agent-badges/cursor.svg';
 import geminiBadge from '~/assets/images/agent-badges/gemini.svg';
-import openCodeBadge from '~/assets/images/agent-badges/opencode.png';
+import openCodeBadge from '~/assets/images/agent-badges/opencode.webp';
 
 const agentBadgeMap = {
   Claude: claudeBadge,
