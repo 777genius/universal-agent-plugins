@@ -329,6 +329,38 @@ def corrupt_locked_child_digest(lock_file):
                          encoding="utf-8")
 
 
+def verify_corrupt_lock_refusal(cli, env, project, target, scope, guards):
+    """Require genuine signed-lock refusal before either scoped cold restore."""
+    if scope not in ("user", "project"):
+        raise AssertionError("invalid cold restore scope")
+    lock_parent = project if scope == "project" else Path(env["AGENTPLUGINS_HOME"])
+    lock_file = lock_parent / "uap.lock"
+    original = lock_file.read_bytes()
+    corrupt_locked_child_digest(lock_file)
+    before = profile_snapshot(env, project)
+    scope_args = ["--scope", scope]
+    if scope == "project":
+        scope_args.extend(["--project-root", str(project)])
+    try:
+        refused = invoke([cli, "install", "--locked", "--yes",
+                          *scope_args, "--format", "json"], env, project, 180)
+        if refused.get("exit_code") in (None, 0) or refused.get("timeout"):
+            raise AssertionError("corrupt signed lock did not fail closed")
+        reason = (str(refused.get("stderr_tail") or "") + " " +
+                  str(refused.get("_json") or "")).lower()
+        if "lock" not in reason and "digest" not in reason:
+            raise AssertionError("corrupt lock rejection was not attributable to lock integrity")
+        check_profile_unchanged(env, project, before, f"corrupt {scope} locked restore")
+        if identities(inventory(cli, env, project, target, scope), target, scope):
+            raise AssertionError("corrupt locked restore installed a dependency")
+        check_profile_unchanged(env, project, before, f"corrupt {scope} locked restore inventory")
+        return refused["exit_code"]
+    finally:
+        lock_file.write_bytes(original)
+        for guard in guards:
+            guard()
+
+
 def run_case(cli, target, root, name, portable=None):
     case = root / name
     # B and C are created *after* untrusted package execution in A. Refuse a
@@ -777,32 +809,15 @@ def main():
             scoped_b = ("--scope", "project", "--project-root", str(project_b))
             # The genuine published CLI must refuse a corrupted child pin
             # without modifying native or durable state in cold Project B.
-            b_lock = project_b / "uap.lock"
-            original_b_lock = b_lock.read_bytes()
-            corrupt_locked_child_digest(b_lock)
-            before_bad_restore = profile_snapshot(env_b, project_b)
-            try:
-                refused = invoke([options.cli, "install", "--locked", "--yes",
-                                  *scoped_b, "--format", "json"],
-                                 env_b, project_b, 180)
-                if refused.get("exit_code") in (None, 0) or refused.get("timeout"):
-                    raise AssertionError("corrupt signed lock did not fail closed")
-                reason = (str(refused.get("stderr_tail") or "") + " " +
-                          str(refused.get("_json") or "")).lower()
-                if "lock" not in reason and "digest" not in reason:
-                    raise AssertionError(
-                        "corrupt lock rejection was not attributable to lock integrity")
-                check_profile_unchanged(
-                    env_b, project_b, before_bad_restore, "corrupt locked restore")
-                if identities(inventory(options.cli, env_b, project_b, options.target),
-                              options.target):
-                    raise AssertionError("corrupt locked restore installed a dependency")
-                report["steps"].append({
-                    "stage": "corrupt signed lock refused before install",
-                    "exit_code": refused["exit_code"], "result": "passed"})
-            finally:
-                b_lock.write_bytes(original_b_lock)
-                check_foreign(foreign_files, root)
+            negative_exit = verify_corrupt_lock_refusal(
+                options.cli, env_b, project_b, options.target, "project", (
+                    lambda: check_foreign(foreign_files, root),
+                    lambda: check_profile_unchanged(
+                        env, project_a, native_a_before_b, "corrupt Project B restore"),
+                ))
+            report["steps"].append({
+                "stage": "corrupt Project signed lock refused before install",
+                "exit_code": negative_exit, "result": "passed"})
             run(env_b, project_b, "cold locked restore", "install", "--locked", "--yes", *scoped_b)
             check_profile_unchanged(env, project_a, native_a_before_b, "cold restore B")
             restored = identities(inventory(options.cli, env_b, project_b, options.target), options.target)
@@ -913,6 +928,19 @@ def main():
             for name in ("uap.toml", "uap.lock"):
                 shutil.copyfile(user_portable / name, user_portable_c / name)
             user_a_native_before_c = profile_snapshot(env, project_a)
+            negative_exit = verify_corrupt_lock_refusal(
+                options.cli, env_c, project_c, options.target, "user", (
+                    lambda: check_foreign(foreign_files, root),
+                    lambda: check_profile_unchanged(
+                        env, project_a, user_a_native_before_c, "corrupt User C restore"),
+                    lambda: check_profile_unchanged(
+                        env_b, project_b, protected_b, "corrupt User C restore"),
+                    lambda: check_user_project_unchanged(
+                        project_c, protected_c_project, "corrupt User C restore"),
+                ))
+            report["steps"].append({
+                "stage": "corrupt User signed lock refused before install",
+                "exit_code": negative_exit, "result": "passed"})
             run(env_c, project_c, "User cold locked restore C",
                 "install", "--locked", "--yes", *user_scoped)
             check_profile_unchanged(env, project_a, user_a_native_before_c,

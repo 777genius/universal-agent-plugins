@@ -314,6 +314,64 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     alter(locked)
 
 
+    def test_marketing_kit_corrupt_locked_restore_refuses_user_and_project(self):
+        # Both scopes must reach the real locked CLI refusal (not an invented
+        # missing-file error), restore exact portable bytes, and run guards.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        verify = runner["verify_corrupt_lock_refusal"]
+        original = {"packages": [
+            {"alias": "marketing-kit", "tree_digest": "sha256:" + "a" * 64},
+            {"alias": "notion", "tree_digest": "sha256:" + "b" * 64}]}
+        for scope in ("project", "user"):
+            with self.subTest(scope=scope), TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                home, data, project = (root / name for name in ("home", "data", "project"))
+                for path in (home, data, project):
+                    path.mkdir()
+                env = {"HOME": str(home), "AGENTPLUGINS_HOME": str(data)}
+                lock_file = (project if scope == "project" else data) / "uap.lock"
+                lock_file.write_text(json.dumps(original) + "\n", encoding="utf-8")
+                original_bytes = lock_file.read_bytes()
+                invoked, checked = [], []
+
+                def refuse(command, *_):
+                    invoked.append(command)
+                    self.assertEqual(json.loads(lock_file.read_text())["packages"][1][
+                        "tree_digest"], "sha256:0" + "b" * 63)
+                    return {"exit_code": 1, "timeout": False,
+                            "stderr_tail": "signed lock digest mismatch"}
+
+                def preserved():
+                    checked.append(lock_file.read_bytes())
+
+                with patch.dict(verify.__globals__, {
+                        "invoke": refuse,
+                        "inventory": lambda *args: [],
+                        "identities": lambda *args: {}}):
+                    self.assertEqual(verify("agentplugins", env, project, "codex",
+                                            scope, (preserved,)), 1)
+                    self.assertEqual(lock_file.read_bytes(), original_bytes)
+                    self.assertEqual(checked, [original_bytes])
+                    self.assertEqual(invoked[0].count("--scope"), 1)
+                    self.assertEqual(invoked[0][invoked[0].index("--scope") + 1], scope)
+                    self.assertEqual("--project-root" in invoked[0], scope == "project")
+                    for failed in (
+                            {"exit_code": 0, "stderr_tail": "digest mismatch"},
+                            {"exit_code": 1, "timeout": True,
+                             "stderr_tail": "digest mismatch"},
+                            {"exit_code": 1, "stderr_tail": "native client unavailable"}):
+                        with self.subTest(failed=failed), patch.dict(
+                                verify.__globals__, {
+                                    "invoke": lambda *args: failed}):
+                            with self.assertRaisesRegex(AssertionError, "corrupt"):
+                                verify("agentplugins", env, project, "codex",
+                                       scope, (preserved,))
+                            self.assertEqual(lock_file.read_bytes(), original_bytes)
+                    self.assertEqual(len(checked), 4)
+
     def test_marketing_kit_cold_locked_restore_receipts_match_installed_scope(self):
         # A real cold restore must bind each reported applied result to the
         # installed distribution, not merely return four plausible IDs.
