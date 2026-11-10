@@ -606,6 +606,33 @@ class KiroCollectorTests(unittest.TestCase):
                         root = ctx.home if other == "user" else ctx.projects[other]
                         self.assertFalse((root / ".kiro").exists())
 
+    def test_native_read_only_inventory_rejects_unapproved_fixture_members(self):
+        # The selected CLI may read our inert marker, but must not silently
+        # create other project/user configuration while being observed.
+        for scope in ("a", "b", "user"):
+            for kind in ("settings-file", "agent-directory"):
+                ctx = self.context()
+                root = ctx.home if scope == "user" else ctx.projects[scope]
+                unexpected = (root / ".kiro/settings/extra.json" if kind == "settings-file"
+                              else root / ".kiro/agents")
+
+                def observed_list():
+                    if kind == "settings-file":
+                        unexpected.write_text("foreign sentinel\\n")
+                    else:
+                        unexpected.mkdir()
+                    return {"exit": 0, "error": None}, b"opaque native list\\n", b""
+
+                ctx.replace["a-workspace-raw-list"] = observed_list
+                with self.subTest(scope=scope, kind=kind), self.assertRaisesRegex(
+                        ValueError, "unowned fixture tree member"):
+                    kiro.collect(ctx)
+                self.assertEqual(ctx.calls[-1][0], "a-workspace-raw-list")
+                self.assertTrue(unexpected.exists())
+                # Detection is read-only: never remove or rewrite the unexpected member.
+                if kind == "settings-file":
+                    self.assertEqual(unexpected.read_text(), "foreign sentinel\\n")
+
     def test_alias_and_nested_project_roots_refuse_before_native_probes(self):
         for kind in ("project-symlink", "project-parent-symlink",
                      "home-symlink", "nested-project-a", "nested-project-b",
