@@ -151,6 +151,36 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                             check({**valid, "_json": foreign_no_op},
                                   operation, operation, "codex")
 
+    def test_marketing_kit_project_git_init_uses_pinned_audit_prerequisite(self):
+        # The second profile is created after running untrusted packages; it
+        # must not start PATH-resolved Git or use ambient Git hooks/config.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        audit = runner["audit"]
+        pinned_git = audit["initialize_project_skill_git_root"]
+        calls = []
+
+        def checked_git(project, env, root):
+            calls.append((project, root))
+            return pinned_git(project, env, root)
+
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            case = root / "A"
+            with patch.dict(audit, {"initialize_project_skill_git_root": checked_git}):
+                # Any fallback to the original subprocess.run(["git", ...])
+                # would now fail rather than silently choosing PATH's binary.
+                with patch.dict(runner["run_case"].__globals__,
+                                {"subprocess": None}):
+                    env, project, _, _, _ = runner["run_case"](
+                        "agentplugins", "codex", root, "A")
+            self.assertEqual(calls, [(project, case)])
+            self.assertEqual(env["HOME"], str(case / "home"))
+            self.assertTrue((project / ".git").is_dir())
+            self.assertTrue((case / "empty-git-hooks").is_dir())
+
     def test_marketing_kit_dependency_execution_checks_reported_scope(self):
         # Native/portable state can already exist, so a successful command
         # targeting the wrong scope must be rejected from its own JSON receipt.

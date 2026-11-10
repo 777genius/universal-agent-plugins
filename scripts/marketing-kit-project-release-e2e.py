@@ -8,7 +8,6 @@ from pathlib import Path
 import runpy
 import shutil
 import stat
-import subprocess
 import tempfile
 from time import sleep
 import traceback
@@ -254,7 +253,10 @@ def run_case(cli, target, root, name, portable=None):
     project_foreign = project / "foreign-project-do-not-change.txt"
     project_foreign.write_text("unmanaged project data\n", encoding="utf-8")
     env = isolated_env(home, case, data)
-    subprocess.run(["git", "init", "-q", str(project)], check=True, env=env, capture_output=True)
+    # Reuse the live-audit's prebound Git executable, hook isolation and
+    # disposable-root guard. A PATH-selected 'git' after acquiring untrusted
+    # sources could be a shadow executable, not the original host prerequisite.
+    audit["initialize_project_skill_git_root"](project, env, case)
     if portable is not None:
         for filename in ("uap.toml", "uap.lock"):
             shutil.copyfile(portable / filename, project / filename)
