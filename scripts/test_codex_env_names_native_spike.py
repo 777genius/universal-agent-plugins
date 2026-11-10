@@ -22,6 +22,7 @@ class TestSyntheticModelOracle(unittest.TestCase):
         Model.shell_output_seen = False
         Model.shell_execution_verified = False
         Model.shell_response_category = "not_observed"
+        Model.shell_response_indicators = []
         Model.shell_requested_at = 0.0
         Model.error = ""
         Model.expected_digest = "UNITTEST_SYNTHETIC_SHA_ONLY"
