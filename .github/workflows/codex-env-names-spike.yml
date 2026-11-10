@@ -24,17 +24,17 @@ jobs:
           persist-credentials: false
       - name: Verify deterministic synthetic MCP and snapshot oracles
         run: python3 -m unittest discover -s scripts -p 'test_codex_env_names_native_spike.py'
-      - name: Install verified official Codex 0.167.0 executable
+      - name: Install verified official Codex 0.167.1 executable
         id: native-binary
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/codex-native"
           curl -fSL --retry 3 --connect-timeout 15 --max-time 200 \
-            https://github.com/openai/codex/releases/download/rust-v0.167.0/codex-x86_64-unknown-linux-musl.tar.gz \
+            https://github.com/openai/codex/releases/download/rust-v0.167.1/codex-x86_64-unknown-linux-musl.tar.gz \
             -o "$RUNNER_TEMP/codex-native/codex.tar.gz"
           printf '%s  %s\n' \
-            '9d64836106d5b374e90ee4454c7ebcde7ca7106558bd7e41a34b9f26ebda251a' \
+            '64bcc99c32e434b4bcb0508a97df9b7aeecdb97e956d976fb13661096ec4e3e2' \
             "$RUNNER_TEMP/codex-native/codex.tar.gz" | sha256sum -c -
           tar -xzf "$RUNNER_TEMP/codex-native/codex.tar.gz" -C "$RUNNER_TEMP/codex-native"
           test -s "$RUNNER_TEMP/codex-native/codex-x86_64-unknown-linux-musl"
