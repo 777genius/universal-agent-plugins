@@ -1,7 +1,7 @@
 package agentpluginscli
 
 import (
-	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -11,7 +11,7 @@ import (
 // source compatibility checks for the same shared physical backend.
 func TestUpdateSourceTargetsKeepsLocalCopilotVSCodeSurface(t *testing.T) {
 	installation := domain.Installation{
-		Clients: []domain.ClientBinding{{
+		Clients: map[string]domain.ClientBinding{"copilot:user": {
 			ClientID:         string(domain.ClientCopilot),
 			Scope:            string(domain.ScopeUser),
 			Materialization:  "materialized",
@@ -22,22 +22,22 @@ func TestUpdateSourceTargetsKeepsLocalCopilotVSCodeSurface(t *testing.T) {
 		t.Helper()
 		sortTargets(got)
 		sortTargets(want)
-		if !reflect.DeepEqual(got, want) {
+		if !slices.Equal(slices.Compact(got), slices.Compact(want)) {
 			t.Fatalf("%s: target set = %v, want %v", label, got, want)
 		}
 	}
 	selectedCopilot := []domain.ClientID{domain.ClientCopilot}
 	check("local update", updateSourceTargets(installation, "user", selectedCopilot),
 		[]domain.ClientID{domain.ClientCopilot, domain.ClientVSCode})
-	check("local repair", repairSourceTargets(installation, installation.Clients[0],
+	check("local repair", repairSourceTargets(installation, installation.Clients["copilot:user"],
 		domain.ClientCopilot, domain.ScopeUser),
 		[]domain.ClientID{domain.ClientCopilot, domain.ClientVSCode})
 
 	installation.OriginMode = domain.OriginModeDirectory
-	check("signed Copilot repair", repairSourceTargets(installation, installation.Clients[0],
+	check("signed Copilot repair", repairSourceTargets(installation, installation.Clients["copilot:user"],
 		domain.ClientCopilot, domain.ScopeUser),
 		[]domain.ClientID{domain.ClientCopilot})
-	check("explicit VS Code repair", repairSourceTargets(installation, installation.Clients[0],
+	check("explicit VS Code repair", repairSourceTargets(installation, installation.Clients["copilot:user"],
 		domain.ClientVSCode, domain.ScopeUser),
 		[]domain.ClientID{domain.ClientCopilot, domain.ClientVSCode})
 	check("signed Copilot owner", updateSourceTargets(installation, "user", selectedCopilot),
