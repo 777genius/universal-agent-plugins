@@ -66,7 +66,7 @@ Unit/conformance: extension parsing, negative/missing/malicious names, stdio-onl
 | R2 | DONE — hostile package, child process, UX consent and audit oracle | See review log below |
 | R3 | DONE — reuse existing CLI preview/permissions; no parallel system | See review log below |
 | R4 | DONE — pinned native artifact, transient leak oracle, original evidence requirements | See review log below |
-| Native Linux spike | CI QUEUED on exact verified 0.167.0 release; initial probe is *insufficient* to prove absence of transient files | One-shot workflow on this Draft branch; strengthen with live observation before any GO |
+| Native Linux spike | First iteration FAIL (genuine Codex ran shell; MCP not discovered); **not** a secrecy pass. Revised trusted-project + live-scan iteration queued | [run #42863491111](https://github.com/777genius/universal-agent-plugins/actions/runs/42863491111), follow-ups #42864100790 and #42864292953 |
 | Native 3-OS proof | Pending | Needed only if Linux proof and security acceptance pass |
 | Production implementation | NOT STARTED | Security gate first |
 | E2E / merge | NOT STARTED | No bypass if negative oracle |
@@ -116,3 +116,9 @@ Unit/conformance: extension parsing, negative/missing/malicious names, stdio-onl
 **Finding R4-4:** CodeRabbit's explicit draft review command was rate-limited; this is **NOT** a positive independent approval. Record the four actual design critiques and their source justifications without claiming independent model agents, collect real CodeRabbit comments once available, and require a meaningful peer/security disposition before a sensitive production merge. No Strix-billing bypass.
 
 **Result of fourth self-review:** plan has 4 concrete corrected rounds, but the **native secrecy uncertainty remains a hard GO/NO-GO gate**. **NO production implementation before the amended live-snapshot oracle.** The preliminary one-shot workflow can fail and provide negative evidence; do not soften it or interpret a missing screenshot/file as a passing security condition.
+
+### Native spike checkpoint — initial evidence (2026-11-10)
+
+- [Codex native security spike #42863491111](https://github.com/777genius/universal-agent-plugins/actions/runs/42863491111) used the **real pinned Codex 0.167.0 Linux binary** (official artifact SHA256 verified), not a model substitute. It invoked a genuine built-in shell tool, but ended **FAIL** because the MCP server was not advertised; therefore child `tools/call` and receipt were absent. Treat this as *an incomplete native protocol test*, **not** as proof the canary is safe. The preliminary post-exit scan also cannot rule out transient files.
+- Corrections: trust the disposable project explicitly like the existing native UAP fixture; accept both direct function and deferred `tool_search` MCP advertisement; hold shell execution long enough for **live snapshot scanning**, then check post-exit. All values are randomly generated **synthetic only**. The `symlinks` count is observational (do not follow links), not automatically a security breach: some are Codex-owned internals unrelated to leaked content.
+- Native or upstream release source may still leave canaries in snapshots. If observed, record only path hash/stage/result and stop before any production changes. If no canary is observed, require a complete MCP child receipt and three native platforms before production GO; a single Linux run is insufficient.
