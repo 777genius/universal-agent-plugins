@@ -220,7 +220,7 @@ def identities(items, target, scope="project"):
     return result
 
 
-def lock_ids(project):
+def lock_ids(project, target=None):
     lock = json.loads((project / "uap.lock").read_text(encoding="utf-8"))
     packages = lock.get("packages")
     if not isinstance(packages, list):
@@ -232,6 +232,52 @@ def lock_ids(project):
         keys.append(item["source_key"])
     if len(keys) != len(set(keys)):
         raise AssertionError("duplicate signed lock package source")
+    if target is not None:
+        # The source-key set by itself cannot prove mandatory child edges.
+        # Check the recorded signed coordinates and selected-client closure.
+        by_alias = {}
+        for item in packages:
+            alias, source = item.get("alias"), item.get("source")
+            registry = source.get("registry") if isinstance(source, dict) else None
+            if (alias not in REQUIRED_DISTRIBUTIONS or alias in by_alias
+                    or not isinstance(registry, dict)
+                    or registry.get("distribution") != REQUIRED_DISTRIBUTIONS[alias]
+                    or not isinstance(item.get("targets"), list)
+                    or target not in item["targets"]
+                    or any(not isinstance(item.get(field), str)
+                           or not re.fullmatch(r"sha256:[0-9a-f]{64}", item[field])
+                           for field in ("tree_digest", "manifest_digest"))):
+                raise AssertionError("invalid selected-client signed lock pin")
+            by_alias[alias] = item
+        if set(by_alias) != set(REQUIRED_DISTRIBUTIONS):
+            raise AssertionError("mandatory signed lock aliases incomplete")
+        children = {alias: set() for alias in by_alias}
+        for alias, item in by_alias.items():
+            required_by = item.get("required_by", [])
+            if not isinstance(required_by, list):
+                raise AssertionError("invalid signed lock dependency edges")
+            for edge in required_by:
+                if not isinstance(edge, dict) or edge.get("alias") not in by_alias:
+                    raise AssertionError("unknown signed lock dependency consumer")
+                if alias in children[edge["alias"]]:
+                    raise AssertionError("duplicate signed lock dependency edge")
+                children[edge["alias"]].add(alias)
+        visited, visiting = set(), set()
+
+        def visit(alias):
+            if alias in visiting:
+                raise AssertionError("cyclic signed lock dependency closure")
+            if alias in visited:
+                return
+            visiting.add(alias)
+            for child in children[alias]:
+                visit(child)
+            visiting.remove(alias)
+            visited.add(alias)
+
+        visit("marketing-kit")
+        if visited != set(by_alias):
+            raise AssertionError("signed Marketing Kit lock closure disconnected")
     return set(keys)
 
 
@@ -646,8 +692,8 @@ def main():
                 if not (project_a / name).is_file():
                     raise AssertionError(f"missing Project agreement: {name}")
             expected_pins = {"directory:" + item for item in EXPECTED}
-            if lock_ids(project_a) != expected_pins:
-                raise AssertionError(f"wrong locked signed source set: {sorted(lock_ids(project_a))}")
+            if lock_ids(project_a, options.target) != expected_pins:
+                raise AssertionError(f"wrong locked signed source set: {sorted(lock_ids(project_a, options.target))}")
             portable_lock = (project_a / "uap.lock").read_bytes()
             run(env, project_a, "repeat add", "add", "marketing-kit", "--target", options.target, *scoped)
             if identities(inventory(options.cli, env, project_a, options.target), options.target) != first:
@@ -745,7 +791,7 @@ def main():
             for name in ("uap.toml", "uap.lock"):
                 if not (user_portable / name).is_file():
                     raise AssertionError(f"User add did not persist portable {name}")
-            if lock_ids(user_portable) != expected_pins:
+            if lock_ids(user_portable, options.target) != expected_pins:
                 raise AssertionError("User add did not pin complete signed closure")
             user_initial_lock = (user_portable / "uap.lock").read_bytes()
             if identities(inventory(options.cli, env, project_a, options.target), options.target):
@@ -760,7 +806,7 @@ def main():
             user_after_update = user_inventory()
             if set(user_after_update) != EXPECTED:
                 raise AssertionError("User update lost mandatory signed closure")
-            if lock_ids(user_portable) != expected_pins:
+            if lock_ids(user_portable, options.target) != expected_pins:
                 raise AssertionError("User update changed mandatory signed pins")
             check_noop_update(user_after_update, user_first,
                               (user_portable / "uap.lock").read_bytes(), user_initial_lock,

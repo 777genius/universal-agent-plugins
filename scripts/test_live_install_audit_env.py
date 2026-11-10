@@ -158,6 +158,57 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                                 execute("agentplugins", {}, Path.cwd(), "codex",
                                         "add", *args)
 
+    def test_marketing_kit_lock_requires_real_selected_scope_dependency_graph(self):
+        # Four correct source keys can still conceal detached mandatory children.
+        from copy import deepcopy
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        verify = runner["lock_ids"]
+        required = runner["REQUIRED_DISTRIBUTIONS"]
+        pins = []
+        for alias, distribution in required.items():
+            pins.append({
+                "alias": alias, "source_key": "directory:" + distribution,
+                "source": {"registry": {"distribution": distribution}},
+                "targets": ["codex"], "tree_digest": "sha256:" + "a" * 64,
+                "manifest_digest": "sha256:" + "b" * 64,
+                "required_by": ([] if alias == "marketing-kit" else
+                                [{"alias": "marketing-kit", "selector": {
+                                    "kind": "release", "value": "1"}}]),
+            })
+
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            lock = root / "uap.lock"
+
+            def check(packages, target="codex"):
+                lock.write_text(json.dumps({"packages": packages}), encoding="utf-8")
+                return verify(root, target)
+
+            self.assertEqual(check(pins),
+                             {"directory:" + d for d in required.values()})
+            for mutate in (
+                    lambda rows: rows[1].update(required_by=[]),
+                    lambda rows: rows[1].update(targets=["claude"]),
+                    lambda rows: rows[1]["source"]["registry"].update(
+                        distribution="someone/foreign"),
+                    lambda rows: rows[1].update(tree_digest="sha256:invalid"),
+                    lambda rows: rows[1]["required_by"][0].update(alias="missing"),
+                    lambda rows: rows[1].update(alias="marketing-kit"),
+                    lambda rows: rows[0].update(required_by=[
+                        {"alias": "notion", "selector": {
+                            "kind": "release", "value": "1"}}]),
+            ):
+                with self.subTest(change=mutate):
+                    bad = deepcopy(pins)
+                    mutate(bad)
+                    with self.assertRaises(AssertionError):
+                        check(bad)
+            with self.assertRaisesRegex(AssertionError, "signed lock pin"):
+                check(pins, "claude")
+
     def test_marketing_kit_accepts_only_complete_legacy_noop_update(self):
         # Published 0.1.102 emits result=success alongside outcome/actions/results.
         from runpy import run_path
