@@ -53,6 +53,44 @@ func installedBindingTargets(installation domain.Installation, scope string) []d
 	return result
 }
 
+// directoryBindingTargets retains all known affected clients except an
+// implicitly shared sibling whose native owner has its own signed grant.
+// Explicitly selected siblings are added by the caller and remain gated.
+func directoryBindingTargets(binding domain.ClientBinding) []domain.ClientID {
+	owner := domain.ClientID(binding.ClientID)
+	definition, known := domain.ClientDefinitionFor(owner)
+	var result []domain.ClientID
+	for _, target := range bindingSurfaceTargets(binding) {
+		if !supportedTarget(target) {
+			continue
+		}
+		if known && definition.Traits.DirectoryOwnGrant && target != owner &&
+			domain.SameClientBackendForScope(owner, target, domain.InstallScope(binding.Scope)) {
+			continue
+		}
+		result = append(result, target)
+	}
+	return result
+}
+
+func directoryInstallationTargets(installation domain.Installation, scope string) []domain.ClientID {
+	var result []domain.ClientID
+	seen := make(map[domain.ClientID]bool)
+	for _, binding := range installation.Clients {
+		if binding.Scope != scope || binding.Materialization == domain.MaterializationAbsent {
+			continue
+		}
+		for _, target := range directoryBindingTargets(binding) {
+			if !seen[target] {
+				seen[target] = true
+				result = append(result, target)
+			}
+		}
+	}
+	sortTargets(result)
+	return result
+}
+
 func bindingAffectsTarget(binding domain.ClientBinding, target domain.ClientID) bool {
 	for _, surface := range bindingSurfaceTargets(binding) {
 		if surface == target {
