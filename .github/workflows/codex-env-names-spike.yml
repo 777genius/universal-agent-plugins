@@ -40,6 +40,18 @@ jobs:
           test -s "$RUNNER_TEMP/codex-native/codex-x86_64-unknown-linux-musl"
           chmod 0755 "$RUNNER_TEMP/codex-native/codex-x86_64-unknown-linux-musl"
           echo "CODEX_BINARY=$RUNNER_TEMP/codex-native/codex-x86_64-unknown-linux-musl" >> "$GITHUB_ENV"
+      # The pinned upstream tarball contains only the Codex binary, not
+      # codex-resources/bwrap. Install the normal Ubuntu sandbox dependency;
+      # do not disable AppArmor, userns checks or native Codex sandboxing.
+      - name: Install native Linux sandbox helper without relaxing host security
+        if: steps.native-binary.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install --yes --no-install-recommends bubblewrap
+          command -v bwrap
+          bwrap --version
       # A minimal host-sandbox probe has NO canary or user credentials at all.
       # Raw sandbox diagnostics are permitted only in this env -i experiment.
       # Never log actual MCP/tool output from canary-bearing Codex processes.
