@@ -193,7 +193,9 @@ func NewWithLockAcquirer(acquireLocks func(Paths, Codec) (func() error, error)) 
 	return Kernel{files: conditionalOSFiles{}, acquireLocks: acquireLocks}
 }
 
-func validateRequest(req Request) error {
+// Keep dialect-specific config path admission separate from generic
+// request validation. These checks run before any native file access.
+func validateCodecPath(req Request) error {
 	if req.Codec == CodecHermes && (req.Paths.JSONC != "" || filepath.Base(req.Paths.JSON) != "config.yaml") {
 		return fmt.Errorf("hermes YAML requires one selected config.yaml path")
 	}
@@ -202,6 +204,13 @@ func validateRequest(req Request) error {
 	}
 	if req.Codec == CodecVSCode && req.Paths.JSONC != "" {
 		return fmt.Errorf("VS Code requires one mcp.json config path with native JSONC syntax")
+	}
+	return nil
+}
+
+func validateRequest(req Request) error {
+	if err := validateCodecPath(req); err != nil {
+		return err
 	}
 	if err := validateExactPath(req.Paths.JSON, "JSON native config path"); err != nil {
 		return err
