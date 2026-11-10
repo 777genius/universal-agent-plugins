@@ -29,14 +29,14 @@ UX target: keep `--scope project` and normal add/update/repair/remove. At source
 
 - **P1 native compatibility:** pin the released genuine Codex 0.167.0 binary by immutable release artifact digest on **Linux amd64 + macOS ARM64 + Windows AMD64**. Use disposable project, `CODEX_HOME`, HOME and XDG; no real credentials, no network OAuth and no actual remote model: the model is a local scripted Responses fixture, Codex CLI/app-server is real.
 - **P2 real child:** start one inert MCP stdio subprocess; call `tools/list` and `tools/call` via native Codex with a random *synthetic* value available **only to Codex parent**. MCP child reports only `boolean present` + stable one-way digest; no plaintext in logs. Prove the child **actually** saw the value (negative missing-value case must fail).
-- **P3 negative oracle:** after complete process exit and crash/restart, recursively inspect project, `CODEX_HOME` (especially `shell_snapshots`), HOME/XDG, UAP receipts/state, argv, CLI evidence and original artifact ZIPs for raw/URL/base64/hex canary; no real secrets ever used. No symlink following. If a local trusted actor must set environment, do not claim that equivalent to safe default UX.
+- **P3 negative oracle:** observe the **live** Codex process/filesystem while a real shell tool runs (transient snapshot files may be deleted on normal exit); then, after process exit and crash/restart, recursively inspect project, `CODEX_HOME` (especially `shell_snapshots`), HOME/XDG, UAP receipts/state, argv, CLI evidence and original artifact ZIPs for raw/URL/base64/hex canary; no real secrets ever used. No symlink following. If a local trusted actor must set environment, do not claim that equivalent to safe default UX.
 - **P4 isolated control:** compare bare native Codex with and without UAP config and with a shell command step that can trigger snapshot creation. If snapshot leak persists in current release, **STOP**: record reproducible safe evidence (no canary text), do not implement/merge secret-forwarding. Other code may remain design-only Draft until upstream fix. *Do not weaken the oracle*.
 
 ## 4. Tests and acceptance
 
 Unit/conformance: extension parsing, negative/missing/malicious names, stdio-only, no arbitrary `${VAR}` conversion; three Codex project lifecycle mutations and native ownership digests; foreign TOML/comments/format preservation; duplicate cross-platform case; no secrets in config, logs, receipts, artifacts; negative oracle tests. Existing Claude/ChatGPT/Cursor/OpenCode non-opted fixture byte equality. E2E genuine Codex `tools/call` + install→repeat→update→repair→remove, fresh trusted session, 3 OS. CodeQL/Required/unit/landing only when changed paths warrant it; do not claim skipped as PASS.
 
-**Merge gate:** 3-OS genuine native proof PASS; zero persistence findings across native snapshot family; CodeRabbit review threads resolved, clean CI on **exact HEAD**, reproducible original proof ZIPs, SHA-gated squash merge, postmerge main exact-sha tests. If unsupported or leak: keep feature **unmerged**, document blocker in #642; don't bypass authorization/third-party controls or ask for real secrets.
+**Merge gate:** Linux pinned canary pilot first to avoid wasting 3-platform CI, then 3-OS genuine native proof PASS; zero persistence findings across native snapshot family **including files while the process is alive**; CodeRabbit review threads resolved or an explicitly documented inability to obtain review must not be misrepresented as approval, clean CI on **exact HEAD**, reproducible original proof ZIPs, SHA-gated squash merge, postmerge main exact-sha tests. If unsupported or leak: keep feature **unmerged**, document blocker in #642; don't bypass authorization/third-party controls or ask for real secrets.
 
 ## 5. Estimates and non-goals
 
@@ -65,8 +65,9 @@ Unit/conformance: extension parsing, negative/missing/malicious names, stdio-onl
 | R1 | DONE — corrected installer-env vs Codex-parent-env confusion | See review log below |
 | R2 | DONE — hostile package, child process, UX consent and audit oracle | See review log below |
 | R3 | DONE — reuse existing CLI preview/permissions; no parallel system | See review log below |
-| R4 | Pending | Update in this very file after each round |
-| Native spike | Pending | No claimed proof |
+| R4 | DONE — pinned native artifact, transient leak oracle, original evidence requirements | See review log below |
+| Native Linux spike | CI QUEUED on exact verified 0.167.0 release; initial probe is *insufficient* to prove absence of transient files | One-shot workflow on this Draft branch; strengthen with live observation before any GO |
+| Native 3-OS proof | Pending | Needed only if Linux proof and security acceptance pass |
 | Production implementation | NOT STARTED | Security gate first |
 | E2E / merge | NOT STARTED | No bypass if negative oracle |
 
@@ -103,3 +104,15 @@ Unit/conformance: extension parsing, negative/missing/malicious names, stdio-onl
 **Finding R3-4:** Codex already sets `ActivationPrepared` after native project installation. Reuse this one human-visible status, standard `--scope project` UX and existing exact-membership ownership digest. Do not add credential-lifecycle state, a new status enum, global settings, a token vault or a secret-scanning background service. Revalidation belongs in the test harness, not production.
 
 **Check of touched production areas:** `clients/codex` projection/selection; `adapters/nativeconfig` Codex codec; a single opt-in through existing installer/CLI input and preview. No global server generator, no Go DB/schema change, no migration. Decision: ACCEPT CONDITIONAL, native P1–P4 evidence still mandatory.
+
+### R4 — release evidence, original artifacts, fail-open pitfalls (2026-11-10)
+
+**Finding R4-1 (critical):** Codex 0.167.0 still contains `fs::write(output_path, snapshot)` in `codex-rs/core/src/shell_snapshot.rs` and a `shell_snapshots` directory; its executor also contains an unnamed FD transport, which is **not** proof all capture paths are fileless. A post-exit-only filesystem scan could falsely pass after native cleanup. **Correction:** require a **live interval scan during a deliberately long-running native shell tool**, plus post-exit, crash/restart and original artifacts. A green result from the initial small script without live observation is a *methodology check*, not security acceptance.
+
+**Finding R4-2:** the public release `rust-v0.167.0` is a genuine Nov 6 stable GitHub release. Pin immutable Linux artifact `codex-x86_64-unknown-linux-musl.tar.gz` SHA256 `9d64836106d5b374e90ee4454c7ebcde7ca7106558bd7e41a34b9f26ebda251a`. Its macOS ARM64 and Windows AMD64 assets must each have independent asset SHA and native-runner provenance; never pretend Linux evidence covers them.
+
+**Finding R4-3:** avoid **test circularity**: the local scripted Responses model must issue a real built-in shell tool, observe the resulting tool response, then call an **actual connected MCP stdio child** that proves receipt by digest only. A configuration inspection (`codex mcp list`), model request, or static synthetic reconstruction is **not** sufficient. The negative missing variable case must fail rather than show as expected skip. Exclude real accounts/keys and any OAuth.
+
+**Finding R4-4:** CodeRabbit's explicit draft review command was rate-limited; this is **NOT** a positive independent approval. Record the four actual design critiques and their source justifications without claiming independent model agents, collect real CodeRabbit comments once available, and require a meaningful peer/security disposition before a sensitive production merge. No Strix-billing bypass.
+
+**Result of fourth self-review:** plan has 4 concrete corrected rounds, but the **native secrecy uncertainty remains a hard GO/NO-GO gate**. **NO production implementation before the amended live-snapshot oracle.** The preliminary one-shot workflow can fail and provide negative evidence; do not soften it or interpret a missing screenshot/file as a passing security condition.
