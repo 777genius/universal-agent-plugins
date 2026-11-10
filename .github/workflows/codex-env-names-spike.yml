@@ -63,20 +63,14 @@ jobs:
           probe="$(mktemp -d "$RUNNER_TEMP/codex-sandbox-no-secret.XXXXXX")"
           trap 'rm -rf "$probe"' EXIT
           mkdir -p "$probe/.codex"
-          for backend in bwrap legacy_landlock; do
-            args=()
-            if [ "$backend" = legacy_landlock ]; then
-              args=(--enable use_legacy_landlock)
-            fi
-            echo "sandbox_probe_backend=$backend"
-            if timeout 15s env -i HOME="$probe" CODEX_HOME="$probe/.codex" PATH="/usr/bin:/bin" \
-                "$CODEX_BINARY" "${args[@]}" sandbox -- /usr/bin/true > "$probe/sandbox-log" 2>&1; then
-              echo "sandbox_probe_pass=true"
-            else
-              echo "sandbox_probe_pass=false"
-              cat "$probe/sandbox-log"
-            fi
-          done
+          echo "sandbox_probe_backend=bwrap"
+          if timeout 15s env -i HOME="$probe" CODEX_HOME="$probe/.codex" PATH="/usr/bin:/bin" \
+              "$CODEX_BINARY" sandbox -- /usr/bin/true > "$probe/sandbox-log" 2>&1; then
+            echo "sandbox_probe_pass=true"
+          else
+            echo "sandbox_probe_pass=false"
+            cat "$probe/sandbox-log"
+          fi
       # Keep both independent results, even if one E2E fails. Never infer PASS
       # from the other; artifacts record only redacted boolean/hash facts.
       - name: Run real Codex CLI shell and MCP names-only proof
@@ -121,30 +115,6 @@ jobs:
         shell: bash
         run: |
           python3 scripts/codex_env_names_appserver_spike.py "$CODEX_BINARY" "$RUNNER_TEMP/codex-default-excludes-appserver.json" default_excludes
-      # Research-only: still sandboxed by native Landlock. This is a deprecated
-      # Codex fallback, NOT a replacement for full default bwrap qualification.
-      # Keep baseline negative proof and research controls separate, with no
-      # host AppArmor/sysctl changes, no unsandboxed execution and no real keys.
-      - name: Protected Landlock baseline CLI (expected default leak oracle)
-        if: always() && steps.native-binary.outcome == 'success'
-        shell: bash
-        run: |
-          python3 scripts/codex_env_names_native_spike.py "$CODEX_BINARY" "$RUNNER_TEMP/codex-landlock-default-cli.json" default legacy_landlock
-      - name: Protected Landlock baseline app-server (expected default leak oracle)
-        if: always() && steps.native-binary.outcome == 'success'
-        shell: bash
-        run: |
-          python3 scripts/codex_env_names_appserver_spike.py "$CODEX_BINARY" "$RUNNER_TEMP/codex-landlock-default-appserver.json" default legacy_landlock
-      - name: Protected Landlock excludes CLI research control
-        if: always() && steps.native-binary.outcome == 'success'
-        shell: bash
-        run: |
-          python3 scripts/codex_env_names_native_spike.py "$CODEX_BINARY" "$RUNNER_TEMP/codex-landlock-excludes-cli.json" default_excludes legacy_landlock
-      - name: Protected Landlock excludes app-server research control
-        if: always() && steps.native-binary.outcome == 'success'
-        shell: bash
-        run: |
-          python3 scripts/codex_env_names_appserver_spike.py "$CODEX_BINARY" "$RUNNER_TEMP/codex-landlock-excludes-appserver.json" default_excludes legacy_landlock
       - name: Enforce both independently successful native proofs
         if: always()
         shell: bash
@@ -174,9 +144,5 @@ jobs:
             ${{ runner.temp }}/codex-env-filtered-appserver.json
             ${{ runner.temp }}/codex-default-excludes-cli.json
             ${{ runner.temp }}/codex-default-excludes-appserver.json
-            ${{ runner.temp }}/codex-landlock-default-cli.json
-            ${{ runner.temp }}/codex-landlock-default-appserver.json
-            ${{ runner.temp }}/codex-landlock-excludes-cli.json
-            ${{ runner.temp }}/codex-landlock-excludes-appserver.json
           if-no-files-found: warn
           retention-days: 7

@@ -47,10 +47,8 @@ def main():
     mode = sys.argv[3] if len(sys.argv) > 3 else "default"
     if mode not in ("default", "filtered", "default_excludes"):
         raise ValueError("unsupported native shell policy control mode")
-    # Isolated research-only Linux sandbox comparison; never installed for users.
-    backend = sys.argv[4] if len(sys.argv) > 4 else "bwrap"
-    if backend not in ("bwrap", "legacy_landlock"):
-        raise ValueError("unsupported native sandbox backend")
+    if len(sys.argv) > 4:
+        raise ValueError("unexpected native spike parameter")
     secret = "uap_appserver_spike_" + secrets.token_hex(24)
     Model.expected_digest = hashlib.sha256(secret.encode()).hexdigest()
     root = Path(tempfile.mkdtemp(prefix="uap-codex-appserver-"))
@@ -98,7 +96,7 @@ def main():
            "TMPDIR": str(root / "tmp"), "TEMP": str(root / "tmp"),
            "TMP": str(root / "tmp"), "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
            "LANG": "C.UTF-8", "NO_COLOR": "1", ENV_NAME: secret}
-    report = {"policy_mode": mode, "sandbox_backend": backend, "version": "", "real_codex_shell_called": False,
+    report = {"policy_mode": mode, "sandbox_backend": "bwrap", "version": "", "real_codex_shell_called": False,
               "mcp_native_connected": False, "real_codex_mcp_called": False,
               "mcp_child_saw_secret": False, "leak": False,
               "secrecy_pass": False, "failure": None}
@@ -124,11 +122,7 @@ def main():
         version = subprocess.run([str(codex), "--version"], env=env,
                                  capture_output=True, timeout=15, text=True)
         report["version"] = version.stdout.strip()[:100]
-        cmd = [str(codex)]
-        if backend == "legacy_landlock":
-            cmd += ["--enable", "use_legacy_landlock"]
-        cmd.append("app-server")
-        proc = subprocess.Popen(cmd, cwd=project, env=env,
+        proc = subprocess.Popen([str(codex), "app-server"], cwd=project, env=env,
                                 stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                 stderr=subprocess.DEVNULL)
         messages = queue.Queue(maxsize=512)
