@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { spawnSync } from 'node:child_process';
 import { skillClients } from '../data/skillClients.ts';
+import { clients } from '../data/clients.ts';
 import { sortSkillsForCatalog } from '../data/catalogCuration.ts';
 import capabilities from '../data/clientCapabilities.generated.json' with { type: 'json' };
 import type { SkillListing } from '../types/skillsCatalog.ts';
@@ -305,14 +306,16 @@ test('Detail identity uses only a canonical source, never the listing-page URL',
   }
 });
 
-test('Skill agents come only from generated saved-dependency and skill capabilities', () => {
-  const expected = capabilities
-    .filter((client) => client.saved_dependency && client.skill_support !== 'unsupported')
-    .map((client) => client.id);
-  assert.deepEqual(
-    skillClients.map((client) => client.id),
-    expected,
+test('Skill agents are the public subset of generated saved-dependency and skill capabilities', () => {
+  const eligible = new Set(
+    capabilities
+      .filter((client) => client.saved_dependency && client.skill_support !== 'unsupported')
+      .map((client) => client.id),
   );
+  // New CLI targets may be qualified before their public landing presentation.
+  const expected = clients.filter((client) => eligible.has(client.id)).map((client) => client.id);
+  assert.deepEqual(skillClients.map((client) => client.id), expected);
+  assert.ok(skillClients.every((client) => eligible.has(client.id)));
   assert.ok(!skillClients.some((client) => ['chatgpt', 'vscode'].includes(client.id)));
 });
 

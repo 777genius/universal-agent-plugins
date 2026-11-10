@@ -81,6 +81,9 @@ def public_data(value, r, label, paths):
         if label in ("repeat-add-a", "unchanged-update-a"):
             result["no_change"] = True
         output["next_action"] = NEXT
+    if label.startswith("add-") or label in ("repeat-add-a", "update-a", "unchanged-update-a"):
+        output.update(scope="user" if user else "project", readiness="needs_action",
+                      next_actions=[{"code": "verify_native", "actor": "native_client", "message": NEXT}])
     security = {"schema_version": 1, "subject": {"tree_digest": r["digest"], "manifest_digest": output["manifest_digest"]},
                 "scanner": {"id": "lintai", "version": "0.1.3"},
                 "policy": {"id": "agent-plugin-install", "version": 2, "digest": "sha256:9cf869e299d847d7078aeca01f5a182fcdb0144bbf513c83290459991c79e037"},
@@ -100,7 +103,7 @@ def public_data(value, r, label, paths):
     if label.startswith("add-") or label in ("unchanged-update-a", "update-a"):
         data.update(version="1.0.0", source=local, tree_digest=r["digest"])
     if label.startswith("add-"):
-        data.update(action_required=1, manifest_digest=output["manifest_digest"], security=security, environment={"reason": "no_save_requested", "saved": False})
+        data.update(action_required=1, manifest_digest=output["manifest_digest"], security=security, environment={"reason": "no_save_requested", "saved": False, "scope": "user" if user else "project", "scope_selection_reason": "explicit"})
     if label.startswith("remove-"):
         data.update(status="data_retained", plugin_data_preserved=True, data_retained=True,
                     retained_data=[{"data_receipt_id": b["data_receipt_id"], "physical_backend_id": b["physical_artifact_id"], "scope": b["scope"], "state": "owned"}])
@@ -429,6 +432,40 @@ class GeminiCompleteTests(unittest.TestCase):
         self.refuses(lambda b, _s: b.update({"git-a.command.json": b'{"argv":[],"argv":[]}'}))
         self.refuses(lambda b, _s: b.update({"git-a.stderr.log": b'\xff'}))
         self.refuses(lambda b, _s: b.update({"git-a.stderr.log": raw({"nested": '{"secret":"\\u0075ap-gemini-private-test"}'})}))
+
+    def test_public_scoped_readiness_matches_each_production_verb(self):
+        bodies, source = fixture()
+        self.assertTrue(self.admit(bodies, source)["runtime_attempt_complete"])
+        for stage in ("add-user", "add-a", "add-b", "repeat-add-a", "unchanged-update-a", "update-a"):
+            for key in ("scope", "readiness", "next_actions"):
+                with self.subTest(stage=stage, missing=key):
+                    changed = copy.deepcopy(bodies)
+                    row = runtime.strict_json(changed[stage + ".stdout.log"])
+                    data = row["data"]
+                    output = data if stage == "repeat-add-a" else data["targets"][0]["output"]
+                    del output[key]
+                    changed[stage + ".stdout.log"] = raw(row)
+                    with self.assertRaises(ValueError):
+                        self.admit(changed, source)
+        for stage in ("intact-repair-a", "missing-repair-a", "remove-a", "remove-b", "remove-user"):
+            for key, value in (("scope", "project"), ("readiness", "needs_action"),
+                               ("next_actions", [{"code": "verify_native", "actor": "native_client", "message": NEXT}])):
+                with self.subTest(stage=stage, extra=key):
+                    changed = copy.deepcopy(bodies)
+                    row = runtime.strict_json(changed[stage + ".stdout.log"])
+                    row["data"]["targets"][0]["output"][key] = value
+                    changed[stage + ".stdout.log"] = raw(row)
+                    with self.assertRaises(ValueError):
+                        self.admit(changed, source)
+        for stage in ("add-user", "add-a", "add-b"):
+            for key in ("scope", "scope_selection_reason"):
+                with self.subTest(stage=stage, environment_missing=key):
+                    changed = copy.deepcopy(bodies)
+                    row = runtime.strict_json(changed[stage + ".stdout.log"])
+                    del row["data"]["environment"][key]
+                    changed[stage + ".stdout.log"] = raw(row)
+                    with self.assertRaises(ValueError):
+                        self.admit(changed, source)
 
     def test_public_and_consistently_rehashed_state_semantic_refusals(self):
         for key, value in (("batch", False), ("succeeded", True), ("operation_id", "op-" + "0" * 32), ("tree_digest", "sha256:" + "0" * 64)):

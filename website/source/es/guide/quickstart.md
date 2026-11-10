@@ -32,7 +32,7 @@ npx universal-agent-plugins add context7 --target codex,cursor --dry-run
 
 La [guía de instalación nativa](https://github.com/777genius/universal-agent-plugins/blob/main/docs/NATIVE_INSTALL.md) ofrece ejecutables para macOS, Linux y Windows. El gestor nativo no necesita Node.js, aunque cada plugin puede requerir su propio entorno de ejecución.
 
-[CLI nativo](https://github.com/777genius/universal-agent-plugins/releases/latest) conserva el ámbito de proyecto explícito y la selección automática de `install` introducida en 0.1.94. También añade una [API local de gestión](../use/manage#local-management-api) y [extensiones nativas de Pi](../reference/client-compatibility#pi-native-extensions). Para previsualizar una instalación de proyecto:
+[CLI nativo](https://github.com/777genius/universal-agent-plugins/releases/latest) conserva el ámbito de proyecto explícito y la selección automática de `install` introducida en 0.1.94. También añade una [API local de gestión](../use/manage#local-management-api) y [extensiones de Pi, Skills y MCP](../reference/client-compatibility#pi-native-extensions). Para previsualizar una instalación de proyecto:
 
 Para una entrada revisada y compatible del catálogo, la CLI publicada acepta el nombre corto del Directory firmado con ámbito de proyecto explícito cuando el cliente admite todos los componentes obligatorios (por ejemplo, `npx universal-agent-plugins add context7 --target codex --scope project --dry-run`). También puedes usar un origen Git revisado y fijado a un SHA completo. Sustituye `OWNER/REPOSITORY`, `FULL_COMMIT_SHA` y `PACKAGE_PATH`; si el paquete está en la raíz del repositorio, omite `//PACKAGE_PATH`.
 

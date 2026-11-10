@@ -239,6 +239,20 @@ export async function checkPagesArtifact({
   );
   const expanded = expandLocalizedRoutes(routes, locales);
   const artifactFiles = await files(root);
+  // Pages upload must include dotfiles for AI discovery, never arbitrary hidden build data.
+  const allowedHiddenFiles = new Set([
+    '.nojekyll',
+    'docs/.nojekyll',
+    ...['ai-catalog.json', 'ard.json'].flatMap((name) =>
+      ['', '.gz', '.br'].map((suffix) => `.well-known/${name}${suffix}`),
+    ),
+  ]);
+  for (const relative of artifactFiles) {
+    const normalized = relative.split(path.sep).join('/');
+    if (normalized.split('/').some((segment) => segment.startsWith('.'))) {
+      assert(allowedHiddenFiles.has(normalized), `Unexpected hidden Pages artifact file: ${normalized}`);
+    }
+  }
   const fileSet = new Set(artifactFiles);
   const referenceIndex = buildReferenceIndex(expanded, fileSet);
   const descriptionOwners = new Map(registry.plugins.map((plugin) => [plugin.description, plugin.name]));

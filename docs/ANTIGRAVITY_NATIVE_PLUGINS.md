@@ -19,6 +19,10 @@ package is not modified. One native manifest avoids strict validation warnings
 about a second, ignored root manifest.
 No Project command falls back to mutating User configuration.
 
+These targets remain source capabilities until a qualified CLI release includes
+them. Public install actions retain the released target set; the SDK-generated
+capability inventory still describes every source adapter.
+
 **Security:** Reject unqualified hooks, rules, subagents, unknown components,
 unexpected raw `mcp_config.json` and unsafe remote MCP destinations.
 Never silently execute downloaded hook scripts or copy foreign native files.
@@ -54,3 +58,9 @@ x64/arm64 and Windows x64 release archives by SHA-256. These jobs repeat the
 native CLI lifecycle in a separate disposable vendor profile and UAP's scoped
 User and Project add/remove, while preserving a foreign User plugin. None of these
 shell/CLI checks claims that the Antigravity IDE loaded a project plugin.
+
+The native fixtures include Skills plus stdio and Streamable HTTP MCP. They
+exercise idempotent update, refusal of partially modified packages without
+changing their bytes, and exact-revision recovery of an entirely missing owned
+bundle. A partial digest mismatch remains an ownership refusal; the smoke does
+not weaken that gate or report partial-file repair as supported.

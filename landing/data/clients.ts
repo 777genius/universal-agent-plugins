@@ -9,7 +9,12 @@ export interface ClientLandingPage extends ClientTarget {
   vendorDocsUrl?: string;
 }
 
-export const clientLandingPages: ClientLandingPage[] = [
+/** Public presentation only: keep technical compatibility and previously installed profiles intact.
+ * Hermes and Antigravity require a qualified CLI release before public install actions are exposed.
+ */
+export const hiddenPublicClientIds: ReadonlySet<string> = new Set(['vscode', 'hermes', 'antigravity']);
+
+const allClientLandingPages: ClientLandingPage[] = [
   {
     id: 'codex',
     slug: 'codex',
@@ -242,17 +247,21 @@ export const clientLandingPages: ClientLandingPage[] = [
     slug: 'pi',
     name: 'Pi',
     icon: 'pi.svg',
-    note: 'Managed native Pi extensions only',
+    note: 'Native Pi extensions, Skills and MCP',
     status: 'Supported',
     intro:
-      'Install Agent Plugins 1.0 packages that declare a native Pi extension. Portable skills and MCP projection are outside this adapter’s current scope.',
+      'Install compatible Pi extensions, Skills, and stdio/Streamable HTTP MCP servers in user or project scope. Catalog packages require a compatible signed release; direct sources are validated by the CLI.',
     delivery:
-      'The CLI installs the declared Pi extension in your Pi agent directory and tracks the managed package for update, repair, and removal.',
-    activation: 'Reload resources or restart Pi after installation to load the managed extension.',
+      'The CLI installs eligible components in the selected Pi profile or project and tracks updates, repair, and removal.',
+    activation: 'Reload resources or restart Pi; trust the project and review MCP permissions if prompted.',
     vendorDocsUrl:
-      'https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/extensions.md',
+      'https://pi.dev/docs/latest',
   },
 ];
+
+export const clientLandingPages: ClientLandingPage[] = allClientLandingPages.filter(
+  (client) => !hiddenPublicClientIds.has(client.id),
+);
 
 export const clients: ClientTarget[] = clientLandingPages.map(
   ({ id, name, icon, note, status }) => ({ id, name, icon, note, status }),

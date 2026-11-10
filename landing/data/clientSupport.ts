@@ -1,4 +1,5 @@
 import type { ClientTarget } from '../types/registry';
+import { clients } from './clients.ts';
 
 export type AgentSetup = 'Automatic' | 'Guided' | 'Prepared' | 'Manual';
 export interface ClientSupport {
@@ -28,7 +29,7 @@ export const clientSupportCapabilityKeys = {
 // The landing renders this in landing/components/registry/RegistryClientSupport.vue
 // before FAQ in landing/pages/index.vue. Icon mapping: landing/data/clients.ts,
 // assets: landing/public/client-icons/. Enforcement: landing/tests/client-support-readme.test.ts.
-export const clientSupportRows: ClientSupport[] = [
+const publishedClientSupportRows: ClientSupport[] = [
   {
     id: 'claude',
     name: 'Claude Code',
@@ -150,3 +151,7 @@ export const clientSupportRows: ClientSupport[] = [
     nextStep: 'Desktop: local install via Codex CLI; Web: connect or install in ChatGPT.',
   },
 ];
+
+export const clientSupportRows: ClientSupport[] = publishedClientSupportRows.filter((row) =>
+  clients.some((client) => client.id === row.id),
+);

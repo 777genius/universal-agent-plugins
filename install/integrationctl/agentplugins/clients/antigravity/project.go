@@ -190,12 +190,9 @@ func appendNativeServer(out map[string]map[string]any, name string, envelope dom
 		if err := rejectAntigravityTransportFields(config, "command", "args", "env", "cwd"); err != nil {
 			return err
 		}
-		raw, ok := config["serverUrl"].(string)
-		if !ok || raw == "" {
-			raw, ok = config["url"].(string)
-		}
-		if !ok || raw == "" {
-			return fmt.Errorf("antigravity remote MCP %q requires serverUrl", name)
+		raw, err := antigravityRemoteEndpoint(config, name)
+		if err != nil {
+			return err
 		}
 		endpoint, err := url.Parse(raw)
 		allowed := endpoint != nil && endpoint.Host != "" &&
@@ -215,6 +212,30 @@ func appendNativeServer(out map[string]map[string]any, name string, envelope dom
 	}
 	out[name] = config
 	return nil
+}
+
+// Compatibility imports can retain both endpoint aliases. They must agree
+// before projection removes url, so native delivery cannot change destination.
+func antigravityRemoteEndpoint(config map[string]any, name string) (string, error) {
+	var endpoint string
+	for _, field := range []string{"url", "serverUrl"} {
+		value, exists := config[field]
+		if !exists {
+			continue
+		}
+		raw, ok := value.(string)
+		if !ok || raw == "" {
+			return "", fmt.Errorf("antigravity remote MCP %q requires a nonempty %s string", name, field)
+		}
+		if endpoint != "" && endpoint != raw {
+			return "", fmt.Errorf("antigravity remote MCP %q has conflicting url and serverUrl", name)
+		}
+		endpoint = raw
+	}
+	if endpoint == "" {
+		return "", fmt.Errorf("antigravity remote MCP %q requires serverUrl", name)
+	}
+	return endpoint, nil
 }
 
 // A compatible package can reach this adapter without the portable loader's

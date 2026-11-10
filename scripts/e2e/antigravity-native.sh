@@ -8,6 +8,47 @@ set -euo pipefail
 test -x "$AGY_BIN" || { echo "agy is unavailable: cannot qualify native E2E" >&2; exit 1; }
 test -x "$UAP_BIN" || { echo "UAP binary is unavailable" >&2; exit 1; }
 
+tree_snapshot() {
+  python3 - "$1" <<'PY'
+import hashlib,json,sys
+from pathlib import Path
+root=Path(sys.argv[1])
+entries={}
+for entry in sorted(root.rglob("*")):
+    assert not entry.is_symlink(), "Unexpected symlink in native fixture"
+    entries[entry.relative_to(root).as_posix()] = (
+        "directory" if entry.is_dir() else hashlib.sha256(entry.read_bytes()).hexdigest()
+    )
+print(json.dumps(entries,sort_keys=True))
+PY
+}
+
+assert_native_mcp() {
+  python3 - "$1" "$tmp" <<'PY'
+import json,sys
+from pathlib import Path
+plugin,fixture=map(Path,sys.argv[1:])
+config=json.loads((plugin/"mcp_config.json").read_text(encoding="utf-8"))
+servers=config.get("mcpServers",{})
+assert set(servers)=={"native-stdio","native-http"}, "Selected MCP servers differ"
+stdio=servers["native-stdio"]
+assert stdio.get("command")=="node" and not {"type","url","serverUrl"}.intersection(stdio)
+assert Path(stdio["cwd"]).resolve()==plugin.resolve(), "MCP cwd retained staging path"
+assert Path(stdio["env"]["PLUGIN_ROOT"]).resolve()==plugin.resolve()
+data=Path(stdio["env"]["PLUGIN_DATA"])
+assert data.is_absolute() and data.is_dir() and fixture.resolve() in data.resolve().parents
+assert stdio["env"]["UAP_SMOKE_DATA"]==str(data), "MCP data variable was not expanded"
+args=stdio.get("args",[])
+assert len(args)==3 and Path(args[0]).resolve()==(plugin/"scripts"/"mcp-smoke.cjs").resolve()
+assert args[1]=="--data-dir" and Path(args[2]).resolve()==data.resolve()
+assert servers["native-http"]=={
+    "serverUrl":"https://example.invalid/uap-native-smoke",
+    "headers":{"X-UAP-Smoke":"native-e2e"},
+}, "Remote URL or headers were not projected exactly"
+assert "${PLUGIN_" not in json.dumps(config), "Unexpanded managed MCP placeholder"
+PY
+}
+
 tmp="$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/uap-antigravity-native.XXXXXXXX")"
 trap 'rm -rf "$tmp"' EXIT
 export HOME="$tmp/home"
@@ -36,6 +77,41 @@ description: Runs a disposable native plugin validation smoke.
 ---
 Do not execute commands or connect to external services.
 MD
+mkdir -p "$source/scripts"
+cat > "$source/scripts/mcp-smoke.cjs" <<'JS'
+// Native validation fixture; no network access or model calls.
+const lines = require('node:readline').createInterface({ input: process.stdin });
+lines.on('line', line => {
+  const request = JSON.parse(line);
+  if (request.id === undefined) return;
+  const result = request.method === 'initialize'
+    ? { protocolVersion: request.params.protocolVersion, capabilities: { tools: {} },
+        serverInfo: { name: 'uap-native-smoke', version: '1.0.0' } }
+    : { tools: [] };
+  process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: request.id, result }) + '\n');
+});
+JS
+chmod 755 "$source/scripts/mcp-smoke.cjs"
+cat > "$source/mcp.json" <<'JSON'
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "native-stdio": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["${PLUGIN_ROOT}/scripts/mcp-smoke.cjs", "--data-dir", "${PLUGIN_DATA}"],
+      "cwd": "${PLUGIN_ROOT}",
+      "env": {"UAP_SMOKE_DATA": "${PLUGIN_DATA}"}
+    },
+    "native-http": {
+      "type": "streamable-http",
+      "url": "https://example.invalid/uap-native-smoke",
+      "headers": {"X-UAP-Smoke": "native-e2e"}
+    }
+  }
+}
+JSON
+source_snapshot="$(tree_snapshot "$source")"
 foreign="$HOME/.gemini/config/plugins/existing-foreign-plugin"
 mkdir -p "$foreign"
 printf 'foreign must survive\n' > "$foreign/sentinel"
@@ -60,21 +136,41 @@ plugin="${paths[0]}"
 test -f "$plugin/plugin.json"
 test ! -e "$plugin/.antigravity-plugin" || { echo "Duplicate native manifest remained" >&2; exit 1; }
 test -f "$plugin/skills/native-smoke/SKILL.md"
+assert_native_mcp "$plugin"
 
-# Exercise public no-save update and exact-revision repair on the REAL installed
-# project bundle, before asking agy to validate it. Neither operation may
-# affect a foreign User plugin or silently change the portable source.
+# Exercise public no-save update and both repair ownership boundaries before
+# native validation: partial drift is refused; an absent exact-owned bundle
+# is restored from its recorded revision. Neither may affect foreign state.
 baseline_manifest="$(sha256sum "$plugin/plugin.json" | cut -d' ' -f1)"
+baseline_tree="$(tree_snapshot "$plugin")"
 "$UAP_BIN" update uap-agy-native-smoke --target antigravity \
   --scope project --project-root "$project" --yes --format json > "$tmp/uap-project-update.json"
 python3 -m json.tool "$tmp/uap-project-update.json" > /dev/null
 test "$(sha256sum "$plugin/plugin.json" | cut -d' ' -f1)" = "$baseline_manifest"
 rm "$plugin/skills/native-smoke/SKILL.md"
+damaged_tree="$(tree_snapshot "$plugin")"
+if "$UAP_BIN" repair uap-agy-native-smoke --target antigravity \
+  --scope project --project-root "$project" --yes --format json \
+  > "$tmp/uap-partial-repair.json" 2> "$tmp/uap-partial-repair.err"; then
+  echo "Repair silently replaced a partially changed native package" >&2
+  exit 1
+fi
+grep -Fq 'native identity ownership is indeterminate; refusing repair' \
+  "$tmp/uap-partial-repair.err" "$tmp/uap-partial-repair.json"
+test "$(tree_snapshot "$plugin")" = "$damaged_tree"
+test "$(tree_snapshot "$source")" = "$source_snapshot"
+test "$(cat "$foreign/sentinel")" = "foreign must survive"
+# Delete only the disposable fixture's exact-owned complete native bundle.
+# Keep its state receipt so public repair must recover the recorded revision.
+test "$(dirname "$plugin")" = "$native"
+rm -rf "$plugin"
 "$UAP_BIN" repair uap-agy-native-smoke --target antigravity \
   --scope project --project-root "$project" --yes --format json > "$tmp/uap-project-repair.json"
 python3 -m json.tool "$tmp/uap-project-repair.json" > /dev/null
 cmp "$source/skills/native-smoke/SKILL.md" "$plugin/skills/native-smoke/SKILL.md"
 test "$(sha256sum "$plugin/plugin.json" | cut -d' ' -f1)" = "$baseline_manifest"
+test "$(tree_snapshot "$plugin")" = "$baseline_tree"
+assert_native_mcp "$plugin"
 test "$(cat "$foreign/sentinel")" = "foreign must survive"
 
 # Only this native executable can establish vendor format compatibility.
@@ -136,6 +232,7 @@ test ! -e "$HOME/.gemini/config/plugins/uap-agy-native-smoke"
   user_plugin="${user_paths[0]}"
   test -f "$user_plugin/plugin.json"
   test -f "$user_plugin/skills/native-smoke/SKILL.md"
+  assert_native_mcp "$user_plugin"
   "$AGY_BIN" plugin validate --strict "$user_plugin" > "$tmp/agy-user-validation.txt"
   "$AGY_BIN" plugin list --json > "$tmp/agy-user-list.json"
   python3 - "$tmp/agy-user-list.json" <<'PY'
@@ -160,4 +257,5 @@ test -d "$plugin" || { echo "User scope removed Project plugin" >&2; exit 1; }
   --yes --format json > "$tmp/uap-remove.json"
 test ! -e "$plugin" || { echo "Owned project plugin survived remove" >&2; exit 1; }
 test "$(cat "$foreign/sentinel")" = "foreign must survive"
-echo "Antigravity strict validation, separate native CLI import/list/uninstall, and isolated UAP project removal passed."
+test "$(tree_snapshot "$source")" = "$source_snapshot"
+echo "PASS: real agy strict Skills + stdio/HTTP MCP validation; separate native CLI import/list/uninstall; User/Project add/remove, update, partial-drift refusal and exact absent-bundle repair. IDE activation and live MCP execution were not observed."

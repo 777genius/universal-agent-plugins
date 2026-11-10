@@ -368,7 +368,12 @@ test('download and client strip retain every original support qualification', ()
   }
   const source = read('components/sections/DownloadSection.vue');
   for (const field of ['note', 'activation']) assert.ok(source.includes(`registryUi.clients.${'${client.id}'}.${field}`));
-  assert.equal(clientLandingPages.length, 17);
+  assert.equal(clientLandingPages.length, 14);
+  assert.ok(clientLandingPages.every((client) => client.id !== 'vscode'));
+  for (const pending of ['hermes', 'antigravity']) {
+    assert.ok(clientLandingPages.every((client) => client.id !== pending),
+      `${pending} needs a qualified CLI release before public installation`);
+  }
 });
 
 test('shell agent links keep language prefixes and canonical trailing slashes', () => {

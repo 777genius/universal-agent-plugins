@@ -15,6 +15,7 @@ import tempfile
 
 
 NAME = "uap-agy-native-smoke"
+REMOTE_URL = "https://example.invalid/uap-native-smoke"
 
 
 def run(binary, *args, env, cwd):
@@ -61,6 +62,46 @@ def checked_list(cli, env, project):
     return [item.get("name") for item in rows if isinstance(item, dict)]
 
 
+def tree_snapshot(root):
+    """Record every fixture entry, including empty directories and file bytes."""
+    result = {}
+    for entry in sorted(root.rglob("*")):
+        if entry.is_symlink():
+            raise AssertionError("Unexpected symlink in the disposable native fixture")
+        result[entry.relative_to(root).as_posix()] = (
+            "directory" if entry.is_dir() else hashlib.sha256(entry.read_bytes()).hexdigest()
+        )
+    return result
+
+
+def assert_native_mcp(plugin, fixture_root):
+    config = json.loads((plugin / "mcp_config.json").read_text(encoding="utf-8"))
+    servers = config.get("mcpServers", {})
+    if set(servers) != {"native-stdio", "native-http"}:
+        raise AssertionError("Native MCP projection lost or added a selected server")
+    stdio = servers["native-stdio"]
+    if stdio.get("command") != "node" or "type" in stdio or "url" in stdio or "serverUrl" in stdio:
+        raise AssertionError("Native stdio transport was not projected unambiguously")
+    if Path(stdio["cwd"]).resolve() != plugin.resolve():
+        raise AssertionError("Native stdio working directory is not the active plugin")
+    if Path(stdio["env"]["PLUGIN_ROOT"]).resolve() != plugin.resolve():
+        raise AssertionError("Native stdio environment retained a staging path")
+    data = Path(stdio["env"]["PLUGIN_DATA"])
+    if not data.is_absolute() or not data.is_dir() or fixture_root.resolve() not in data.resolve().parents:
+        raise AssertionError("Native stdio data directory is not an owned disposable directory")
+    if stdio["env"]["UAP_SMOKE_DATA"] != str(data):
+        raise AssertionError("Native stdio plugin data variable was not expanded")
+    args = stdio.get("args", [])
+    if (len(args) != 3 or Path(args[0]).resolve() != (plugin / "scripts" / "mcp-smoke.cjs").resolve()
+            or args[1] != "--data-dir" or Path(args[2]).resolve() != data.resolve()):
+        raise AssertionError("Native stdio arguments do not reference committed plugin/data paths")
+    remote = servers["native-http"]
+    if remote != {"serverUrl": REMOTE_URL, "headers": {"X-UAP-Smoke": "native-e2e"}}:
+        raise AssertionError("Native Streamable HTTP URL or headers were not preserved")
+    if "${PLUGIN_" in json.dumps(config):
+        raise AssertionError("A client-managed placeholder remained in native MCP configuration")
+
+
 def main():
     agy = Path(os.environ["AGY_BIN"]).resolve(strict=True)
     uap = Path(os.environ["UAP_BIN"]).resolve(strict=True)
@@ -95,6 +136,40 @@ def main():
             "---\nDo not run commands or connect to external services.\n",
             encoding="utf-8",
         )
+        scripts = source / "scripts"
+        scripts.mkdir()
+        helper = scripts / "mcp-smoke.cjs"
+        helper.write_text(
+            "// Native validation fixture; no network access or model calls.\n"
+            "const lines = require('node:readline').createInterface({ input: process.stdin });\n"
+            "lines.on('line', line => {\n"
+            "  const request = JSON.parse(line);\n"
+            "  if (request.id === undefined) return;\n"
+            "  const result = request.method === 'initialize'\n"
+            "    ? { protocolVersion: request.params.protocolVersion, capabilities: { tools: {} },\n"
+            "        serverInfo: { name: 'uap-native-smoke', version: '1.0.0' } }\n"
+            "    : { tools: [] };\n"
+            "  process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: request.id, result }) + '\\n');\n"
+            "});\n",
+            encoding="utf-8",
+        )
+        if os.name != "nt":
+            helper.chmod(0o755)
+        (source / "mcp.json").write_text(json.dumps({
+            "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+            "mcpServers": {
+                "native-stdio": {
+                    "type": "stdio", "command": "node",
+                    "args": ["${PLUGIN_ROOT}/scripts/mcp-smoke.cjs", "--data-dir", "${PLUGIN_DATA}"],
+                    "cwd": "${PLUGIN_ROOT}", "env": {"UAP_SMOKE_DATA": "${PLUGIN_DATA}"},
+                },
+                "native-http": {
+                    "type": "streamable-http", "url": REMOTE_URL,
+                    "headers": {"X-UAP-Smoke": "native-e2e"},
+                },
+            },
+        }, indent=2) + "\n", encoding="utf-8")
+        source_snapshot = tree_snapshot(source)
         foreign = Path(user_env["HOME"]) / ".gemini" / "config" / "plugins" / "existing-foreign-plugin"
         foreign.mkdir(parents=True)
         sentinel = foreign / "sentinel"
@@ -126,6 +201,8 @@ def main():
         if not (plugin / "skills" / "native-smoke" / "SKILL.md").is_file():
             raise AssertionError("Selected native Skill was not staged")
         projected_hash = hashlib.sha256(vendor_manifest.read_bytes()).hexdigest()
+        assert_native_mcp(plugin, root)
+        projected_snapshot = tree_snapshot(plugin)
 
         # Use the public CLI with a genuine tracked native Project installation.
         # Repeated update must preserve the exact source and native manifest.
@@ -141,15 +218,33 @@ def main():
         skill_path = plugin / "skills" / "native-smoke" / "SKILL.md"
         original_skill = (source / "skills" / "native-smoke" / "SKILL.md").read_bytes()
         skill_path.unlink()
-        repaired = run(
-            uap, "repair", NAME, "--target", "antigravity", "--scope", "project",
+        damaged_snapshot = tree_snapshot(plugin)
+        repair_args = (
+            "repair", NAME, "--target", "antigravity", "--scope", "project",
             "--project-root", project, "--yes", "--format", "json",
-            env=user_env, cwd=project,
         )
+        # Grouped repair deliberately refuses partially changed packages.
+        # Preserve this ownership gate and prove refusal does not touch bytes.
+        try:
+            run(uap, *repair_args, env=user_env, cwd=project)
+        except RuntimeError as error:
+            if "native identity ownership is indeterminate; refusing repair" not in str(error):
+                raise
+        else:
+            raise AssertionError("Repair silently replaced a partially changed native package")
+        if tree_snapshot(plugin) != damaged_snapshot or tree_snapshot(source) != source_snapshot:
+            raise AssertionError("Refused partial-package repair changed fixture bytes")
+        if sentinel.read_text(encoding="utf-8") != "foreign must survive\n":
+            raise AssertionError("Refused partial-package repair changed a foreign User plugin")
+        # The exact-owned bundle is disposable test data. A fully absent bundle
+        # is the supported recovery case, with its receipt and revision intact.
+        shutil.rmtree(plugin)
+        repaired = run(uap, *repair_args, env=user_env, cwd=project)
         if not json.loads(repaired) or skill_path.read_bytes() != original_skill:
-            raise AssertionError("Exact-revision Project repair did not restore owned Skill bytes")
-        if hashlib.sha256(vendor_manifest.read_bytes()).hexdigest() != projected_hash:
-            raise AssertionError("Project repair changed the native manifest")
+            raise AssertionError("Exact-revision absent Project repair did not restore owned Skill bytes")
+        if tree_snapshot(plugin) != projected_snapshot:
+            raise AssertionError("Absent Project repair did not restore the exact native package")
+        assert_native_mcp(plugin, root)
         if sentinel.read_text(encoding="utf-8") != "foreign must survive\n":
             raise AssertionError("Update or repair changed a foreign User plugin")
 
@@ -199,6 +294,7 @@ def main():
             raise AssertionError("UAP User scope did not project a native manifest")
         if not (user_plugin / "skills" / "native-smoke" / "SKILL.md").is_file():
             raise AssertionError("UAP User scope omitted the selected Skill")
+        assert_native_mcp(user_plugin, root)
         run(agy, "plugin", "validate", "--strict", user_plugin, env=user_native_env, cwd=project_b)
         # Current agy can validate a prepared native User bundle without
         # automatically registering it. Record discovery, but never equate
@@ -224,9 +320,12 @@ def main():
             raise AssertionError("UAP did not remove only its exact-owned project plugin")
         if sentinel.read_text(encoding="utf-8") != "foreign must survive\n":
             raise AssertionError("UAP removal modified a foreign User plugin")
-        print("PASS: real agy strict validation + separate CLI import/list/uninstall; "
-              "UAP project add/remove and foreign User state preserved. "
-              "IDE activation was not observed.", flush=True)
+        if tree_snapshot(source) != source_snapshot:
+            raise AssertionError("Native lifecycle changed the verified portable source")
+        print("PASS: real agy strict validation of Skills + stdio/HTTP MCP, separate CLI "
+              "import/list/uninstall; UAP User/Project add/remove, idempotent update, "
+              "partial-drift refusal and exact absent-bundle repair. Foreign User state "
+              "preserved. IDE activation and live MCP execution were not observed.", flush=True)
 
 
 if __name__ == "__main__":
