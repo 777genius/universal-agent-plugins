@@ -148,6 +148,43 @@ def main():
         if (Path(user_env["HOME"]) / ".gemini" / "config" / "plugins" / NAME).exists():
             raise AssertionError("Project installation registered global User plugin")
 
+        # Exercise the public UAP User lifecycle independently of the Project
+        # receipt and the separate vendor-only import/uninstall profile.
+        user_native_env = profile(root / "uap-native-user-scope", executable_dir)
+        native_user_root = Path(user_native_env["HOME"]) / ".gemini" / "config" / "plugins"
+        user_result = run(
+            uap, "add", source, "--target", "antigravity", "--scope", "user",
+            "--no-save", "--yes", "--format", "json",
+            env=user_native_env, cwd=project_b,
+        )
+        if not json.loads(user_result) or not native_user_root.is_dir():
+            raise AssertionError("UAP User installation did not create native plugin root")
+        user_plugins = [
+            entry for entry in native_user_root.iterdir()
+            if entry.is_dir() and not entry.is_symlink()
+            and not entry.name.startswith(".agentplugins-staging-")
+        ]
+        if len(user_plugins) != 1:
+            raise AssertionError("UAP User scope did not create exactly one owned plugin")
+        user_plugin = user_plugins[0]
+        user_manifest = json.loads((user_plugin / "plugin.json").read_text(encoding="utf-8"))
+        if (user_manifest.get("name") != NAME or
+                user_manifest.get("$schema") != "https://antigravity.google/schemas/v1/plugin.json"):
+            raise AssertionError("UAP User scope did not project a native manifest")
+        if not (user_plugin / "skills" / "native-smoke" / "SKILL.md").is_file():
+            raise AssertionError("UAP User scope omitted the selected Skill")
+        run(agy, "plugin", "validate", "--strict", user_plugin, env=user_native_env, cwd=project_b)
+        if NAME not in checked_list(agy, user_native_env, project_b):
+            raise AssertionError("Pinned agy did not discover the UAP User-scoped plugin")
+        user_removed = run(
+            uap, "remove", NAME, "--target", "antigravity", "--scope", "user",
+            "--yes", "--format", "json", env=user_native_env, cwd=project_b,
+        )
+        if not json.loads(user_removed) or user_plugin.exists():
+            raise AssertionError("UAP User-scoped plugin survived exact-owned removal")
+        if not plugin.is_dir() or hashlib.sha256(vendor_manifest.read_bytes()).hexdigest() != projected_hash:
+            raise AssertionError("UAP User-scoped removal changed Project-scoped plugin")
+
         result = run(
             uap, "remove", NAME, "--target", "antigravity", "--scope", "project",
             "--project-root", project, "--yes", "--format", "json",

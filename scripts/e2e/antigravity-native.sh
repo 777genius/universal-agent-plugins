@@ -103,6 +103,37 @@ test "$(sha256sum "$plugin/plugin.json" | cut -d' ' -f1)" = "$native_digest"
 test "$(cat "$foreign/sentinel")" = "foreign must survive"
 test ! -e "$HOME/.gemini/config/plugins/uap-agy-native-smoke"
 
+# A separate disposable UAP User profile must discover and remove its own
+# native plugin without changing the previously installed Project instance.
+(
+  export HOME="$tmp/native-user-home"
+  export XDG_CONFIG_HOME="$tmp/native-user-config"
+  export XDG_CACHE_HOME="$tmp/native-user-cache"
+  mkdir -p "$HOME" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" "$tmp/independent-project"
+  cd "$tmp/independent-project"
+  "$UAP_BIN" add "$source" --target antigravity --scope user \
+    --no-save --yes --format json > "$tmp/uap-user-add.json"
+  user_native="$HOME/.gemini/config/plugins"
+  test -d "$user_native"
+  mapfile -t user_paths < <(find "$user_native" -mindepth 1 -maxdepth 1 -type d ! -name '.agentplugins-staging-*' -print)
+  test "${#user_paths[@]}" -eq 1
+  user_plugin="${user_paths[0]}"
+  test -f "$user_plugin/plugin.json"
+  test -f "$user_plugin/skills/native-smoke/SKILL.md"
+  "$AGY_BIN" plugin validate --strict "$user_plugin" > "$tmp/agy-user-validation.txt"
+  "$AGY_BIN" plugin list --json > "$tmp/agy-user-list.json"
+  python3 - "$tmp/agy-user-list.json" <<'PY'
+import json,sys
+with open(sys.argv[1],encoding="utf-8") as stream:
+    doc=json.load(stream)
+assert "uap-agy-native-smoke" in json.dumps(doc), "Real agy did not discover UAP User plugin"
+PY
+  "$UAP_BIN" remove uap-agy-native-smoke --target antigravity \
+    --scope user --yes --format json > "$tmp/uap-user-remove.json"
+  test ! -e "$user_plugin" || { echo "Owned User plugin survived remove" >&2; exit 1; }
+)
+test -d "$plugin" || { echo "User scope removed Project plugin" >&2; exit 1; }
+
 # A normal UAP remove must clean only its scoped owner. No vendor uninstall
 # call may run, and the existing global plugin must remain untouched.
 "$UAP_BIN" remove uap-agy-native-smoke \
