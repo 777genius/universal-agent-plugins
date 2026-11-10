@@ -574,13 +574,14 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 with self.assertRaises(AssertionError):
                     runner["check_refusal_profile_unchanged"](env, project, before)
 
-    def test_marketing_kit_copilot_user_policy_refusal_requires_exact_diagnostic(self):
+    def test_marketing_kit_vscode_user_policy_refusal_requires_exact_diagnostic(self):
         from runpy import run_path
 
         runner = run_path(str(Path(__file__).resolve().parent /
                               "marketing-kit-project-release-e2e.py"))
-        verify = runner["verify_copilot_user_policy_refusal"]
-        diagnostic = ('agentplugins: no eligible directory release for "marketing-kit": '
+        verify = runner["verify_vscode_user_policy_refusal"]
+        diagnostic = ('Resolving and validating one Agent Plugin package for every selected target...\n'
+                      'agentplugins: no eligible directory release for "marketing-kit": '
                       '777genius/marketing-kit: release does not support complete '
                       'target set; missing vscode')
         accepted = {"exit_code": 1, "timeout": False, "stderr_tail": diagnostic + "\n",
@@ -605,7 +606,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 stage = verify("agentplugins", env, project,
                                (lambda: guards.append("checked"),))
             self.assertEqual(commands, [["agentplugins", "add", "marketing-kit",
-                "--target", "copilot", "--scope", "user", "--yes", "--format", "json"]])
+                "--target", "vscode", "--scope", "user", "--no-save", "--yes", "--format", "json"]])
             self.assertEqual(stage["scope"], "user")
             self.assertEqual(stage["contract"], "negative_policy")
             self.assertEqual(stage["result"], "expected_refusal")
@@ -614,12 +615,14 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             self.assertEqual(runner["profile_snapshot"](env, project), before)
             for ending in ("", "\r\n"):
                 with patch.dict(verify.__globals__, {
-                        "invoke": lambda *_: {**accepted, "stderr_tail": diagnostic + ending},
+                        "invoke": lambda *_: {**accepted, "stderr_tail": diagnostic.replace("\n", "\r\n") + ending if ending else diagnostic},
                         "inventory": lambda *_: []}):
                     self.assertEqual(verify("agentplugins", env, project, ())["result"], "expected_refusal")
             for invalid in ({"exit_code": 0}, {"exit_code": -9}, {"exit_code": None},
                             {"exit_code": True}, {"timeout": True}, {"timeout": None},
                             {"stderr_tail": "network unavailable"},
+                            {"stderr_tail": diagnostic.split("\n", 1)[1]},
+                            {"stderr_tail": 'agentplugins: target vscode cannot be saved; retry agentplugins add marketing-kit --target vscode --no-save\n'},
                             {"stderr_tail": diagnostic.replace("vscode", "copilot")},
                             {"stderr_tail": diagnostic.replace('"marketing-kit"', '"notion"')},
                             {"stderr_tail": diagnostic + "\nremote download failed"},
@@ -637,13 +640,14 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     self.assertEqual(checked, [True])
                     self.assertEqual(runner["profile_snapshot"](env, project), before)
 
-    def test_marketing_kit_copilot_user_policy_refusal_rejects_own_mutations(self):
+    def test_marketing_kit_vscode_user_policy_refusal_rejects_own_mutations(self):
         from runpy import run_path
 
         runner = run_path(str(Path(__file__).resolve().parent /
                               "marketing-kit-project-release-e2e.py"))
-        verify = runner["verify_copilot_user_policy_refusal"]
+        verify = runner["verify_vscode_user_policy_refusal"]
         response = {"exit_code": 1, "timeout": False, "stdout_tail": "", "stderr_tail": (
+            'Resolving and validating one Agent Plugin package for every selected target...\n'
             'agentplugins: no eligible directory release for "marketing-kit": '
             '777genius/marketing-kit: release does not support complete target set; missing vscode')}
         for relative in ("home/.copilot/settings.json", "home/foreign.txt", "project/uap.lock",
@@ -658,7 +662,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                         directory.mkdir(mode=0o700)
                     env = {"HOME": str(home), "AGENTPLUGINS_HOME": str(data)}
                     path = case / relative
-                    if path.name in ("foreign.txt", "uap.lock", "state-v2.json"):
+                    if path.name in ("foreign.txt", "uap.lock", "state-v2.json", "directory-v1-cache.json"):
                         path.write_text("original")
                     checked = []
 
@@ -677,17 +681,18 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                         return []
 
                     with patch.dict(verify.__globals__, {"invoke": invoke, "inventory": inventory}):
-                        with self.assertRaisesRegex(AssertionError, "isolated profile changed"):
+                        with self.assertRaises(AssertionError):
                             verify("agentplugins", env, project, (lambda: checked.append(True),))
                     self.assertEqual(checked, [True])
 
-    def test_marketing_kit_copilot_user_policy_refusal_checks_inventory_and_peers(self):
+    def test_marketing_kit_vscode_user_policy_refusal_checks_inventory_and_peers(self):
         from runpy import run_path
 
         runner = run_path(str(Path(__file__).resolve().parent /
                               "marketing-kit-project-release-e2e.py"))
-        verify = runner["verify_copilot_user_policy_refusal"]
+        verify = runner["verify_vscode_user_policy_refusal"]
         response = {"exit_code": 1, "timeout": False, "stdout_tail": "", "stderr_tail": (
+            'Resolving and validating one Agent Plugin package for every selected target...\n'
             'agentplugins: no eligible directory release for "marketing-kit": '
             '777genius/marketing-kit: release does not support complete target set; missing vscode')}
         with TemporaryDirectory() as temporary:
@@ -697,7 +702,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             peer_before = runner["profile_snapshot"](peer_env, peer_project)
             pinned = runner["pin_foreign"]([(foreign, "unmanaged user data\n")], case)
             with patch.dict(verify.__globals__, {"invoke": lambda *_: response,
-                    "inventory": lambda *_: ["unexpected"], "identities": lambda *_: {"installed": "id"}}):
+                    "inventory": lambda *_: ["unexpected"]}):
                 with self.assertRaisesRegex(AssertionError, "retained an installation"):
                     verify("agentplugins", env, project, ())
             marker = Path(peer_env["HOME"]) / "unexpected-native.json"
@@ -713,13 +718,14 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                         lambda: runner["check_profile_unchanged"](
                             peer_env, peer_project, peer_before, "User refusal"),))
 
-    def test_marketing_kit_copilot_user_refusal_rejects_padded_real_capture(self):
+    def test_marketing_kit_vscode_user_refusal_rejects_padded_real_capture(self):
         from runpy import run_path
 
         runner = run_path(str(Path(__file__).resolve().parent /
                               "marketing-kit-project-release-e2e.py"))
-        verify = runner["verify_copilot_user_policy_refusal"]
-        diagnostic = ('agentplugins: no eligible directory release for "marketing-kit": '
+        verify = runner["verify_vscode_user_policy_refusal"]
+        diagnostic = ('Resolving and validating one Agent Plugin package for every selected target...\n'
+                      'agentplugins: no eligible directory release for "marketing-kit": '
                       '777genius/marketing-kit: release does not support complete '
                       'target set; missing vscode')
         padded_stdout = 'unrelated prefix {"result":"success"}' + " " * 2200
@@ -748,7 +754,80 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                         with self.assertRaisesRegex(AssertionError, "exact missing-vscode"):
                             verify("agentplugins", env, project, ())
 
-    def test_marketing_kit_cleanup_exception_overrides_successful_report(self):
+    def test_marketing_kit_vscode_refusal_allows_only_own_finite_directory_cache(self):
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        verify = runner["verify_vscode_user_policy_refusal"]
+        response = {"exit_code": 1, "timeout": False, "stdout_tail": "", "stderr_tail": (
+            'Resolving and validating one Agent Plugin package for every selected target...\n'
+            'agentplugins: no eligible directory release for "marketing-kit": '
+            '777genius/marketing-kit: release does not support complete target set; missing vscode')}
+        # Cache contents are authenticated by the genuine released command;
+        # this audit constrains additions, ownership, type, mode and identity.
+        for mutation in ("valid", "inventory-cache", "scanner", "assessment", "unknown",
+                         "nonempty-lock", "symlink", "hardlink", "directory", "fifo", "mode"):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
+                case = Path(temporary)
+                env, project, *_ = runner["run_case"]("unused", "copilot", case, "A")
+                data = Path(env["AGENTPLUGINS_HOME"])
+                checked = []
+
+                def add_cache():
+                    path = data / "directory-v1-cache.json"
+                    if mutation == "scanner":
+                        path = data / runner["REFUSAL_SCANNER_PATH"]
+                    elif mutation == "assessment":
+                        path = data / "security/assessments" / ("a" * 64 + ".json")
+                    elif mutation == "unknown":
+                        path = data / "directory-v1-cache.json.tmp"
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    if mutation in ("symlink", "hardlink"):
+                        original = case / "outside-cache"
+                        original.write_bytes(b"signed Directory cache")
+                        original.chmod(0o600)
+                        try:
+                            if mutation == "symlink":
+                                path.symlink_to(original)
+                            else:
+                                os.link(original, path)
+                        except (OSError, NotImplementedError) as error:
+                            self.skipTest(f"host cannot create link: {error}")
+                    elif mutation == "directory":
+                        path.mkdir(mode=0o700)
+                    elif mutation == "fifo":
+                        if not hasattr(os, "mkfifo"):
+                            self.skipTest("host cannot create FIFO")
+                        os.mkfifo(path, mode=0o600)
+                    else:
+                        path.write_bytes(b"signed Directory cache")
+                        path.chmod(0o644 if mutation == "mode" else 0o600)
+                    lock = data / "directory-v1-cache.json.lock"
+                    lock.write_bytes(b"unexpected" if mutation == "nonempty-lock" else b"")
+                    lock.chmod(0o600)
+
+                def invoke(*_):
+                    if mutation != "inventory-cache":
+                        add_cache()
+                    return response
+
+                def inventory(*_):
+                    if mutation == "inventory-cache" and not (data / "directory-v1-cache.json").exists():
+                        add_cache()
+                    return []
+
+                with patch.dict(verify.__globals__, {"invoke": invoke, "inventory": inventory}):
+                    if mutation == "valid":
+                        self.assertEqual(verify("agentplugins", env, project,
+                            (lambda: checked.append(True),))["result"], "expected_refusal")
+                    else:
+                        with self.assertRaises(AssertionError):
+                            verify("agentplugins", env, project, (lambda: checked.append(True),))
+                self.assertEqual(checked, [True])
+
+    def _exercise_marketing_kit_scope_report(self, target, *, cleanup_failure=False,
+                                              negative_error=False):
         from io import StringIO
         from runpy import run_path
         from types import SimpleNamespace
@@ -756,10 +835,9 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         runner = run_path(str(Path(__file__).resolve().parent /
                               "marketing-kit-project-release-e2e.py"))
         main = runner["main"]
-        installed = {}
-        phases = []
+        installed, phases = {}, []
 
-        class FailedCleanup:
+        class CheckedCleanup:
             def __init__(self, **kwargs):
                 self.inner = TemporaryDirectory(**kwargs)
 
@@ -768,51 +846,99 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
 
             def __exit__(self, exc_type, exc, traceback):
                 self.inner.__exit__(exc_type, exc, traceback)
-                if exc_type is not None:
-                    return False  # Never mask a pre-cleanup failure.
-                if phases != ["user-refusal"]:
-                    raise AssertionError("cleanup fixture did not reach both scope phases")
-                raise OSError("disposable cleanup failed")
+                if exc_type is None and cleanup_failure:
+                    raise OSError("disposable cleanup failed")
 
-        def execute(_cli, _env, project, _target, label, *args):
+        def execute(_cli, env, project, _target, label, *args):
+            phases.append(label)
+            scope = args[args.index("--scope") + 1]
+            key = (env["AGENTPLUGINS_HOME"], scope)
+            portable = project if scope == "project" else Path(env["AGENTPLUGINS_HOME"])
             if args[0] in ("add", "install"):
                 for name in ("uap.toml", "uap.lock"):
-                    if not (project / name).exists():
-                        (project / name).write_text("retained portable agreement")
-                installed[project] = {name: project.parent.name + name for name in runner["EXPECTED"]}
+                    if not (portable / name).exists():
+                        (portable / name).write_text("retained portable agreement")
+                installed[key] = {name: f"{scope}:{project.parent.name}:{name}"
+                                  for name in runner["EXPECTED"]}
             elif args[0] == "remove":
-                installed[project] = {}
+                installed[key] = {}
             return {"stage": label, "exit_code": 0, "result": "passed"}
 
-        def user_refusal(*_):
-            phases.append("user-refusal")
-            return {"stage": "User negative contract", "reason": "missing_vscode_grant"}
+        def negative(*_):
+            phases.append("vscode-user-refusal")
+            if negative_error:
+                raise AssertionError("required signed refusal failed")
+            return {"stage": "Explicit VS Code User negative contract",
+                    "result": "expected_refusal", "reason": "missing_vscode_grant"}
+
+        def inventory(_cli, env, _project, _target, scope="project"):
+            return installed.get((env["AGENTPLUGINS_HOME"], scope), {})
 
         with TemporaryDirectory() as output:
             report_path = Path(output) / "report.json"
             with patch.dict(main.__globals__, {
                     "execute": execute, "verify_pinned_launcher": lambda *_: None,
-                    "inventory": lambda _cli, _env, project, *_: installed.get(project, {}),
-                    "identities": lambda items, *_: items,
+                    "inventory": inventory, "identities": lambda items, *_: items,
                     "lock_ids": lambda *_: {"directory:" + name for name in runner["EXPECTED"]},
                     "settled_profile_snapshot": runner["profile_snapshot"],
                     "verify_corrupt_lock_refusal": lambda *_: 1,
-                    "verify_copilot_user_policy_refusal": user_refusal,
-                    # Patch only the runner's binding, not the process-wide
-                    # tempfile module used by unrelated setup helpers.
-                    "tempfile": SimpleNamespace(TemporaryDirectory=FailedCleanup),
+                    "verify_vscode_user_policy_refusal": negative,
+                    "codex_user_native_remove_attestation": lambda *_: ("--external-uninstalled",),
+                    # Patch the runner binding, preserving tempfile for setup helpers.
+                    "tempfile": SimpleNamespace(TemporaryDirectory=CheckedCleanup),
                     }), \
-                    patch.object(sys, "argv", ["runner", "--target", "copilot", "--cli", "unused",
+                    patch.object(sys, "argv", ["runner", "--target", target, "--cli", "unused",
                                                "--report", str(report_path)]), \
                     patch.object(sys, "stdout", StringIO()), patch.object(sys, "stderr", StringIO()):
-                self.assertEqual(main(), 1)
-            report = json.loads(report_path.read_text())
-            self.assertEqual(phases, ["user-refusal"])
-            self.assertEqual(report["scope_results"]["project"]["status"], "passed")
-            self.assertEqual(report["scope_results"]["user"]["status"], "refused_as_expected")
-            self.assertFalse(report["two_scope_lifecycle_qualified"])
-            self.assertEqual(report["status"], "failed")
-            self.assertEqual(report["failure"], "disposable cleanup failed")
+                code = main()
+            return code, json.loads(report_path.read_text()), phases
+
+    def test_marketing_kit_all_six_require_complete_positive_user_and_project_phases(self):
+        for target in ("codex", "cursor", "claude", "gemini", "opencode", "copilot"):
+            with self.subTest(target=target):
+                code, report, phases = self._exercise_marketing_kit_scope_report(target)
+                self.assertEqual(code, 0, report.get("failure"))
+                self.assertEqual(report["status"], "passed")
+                self.assertEqual(report["qualification_scope"], "user_and_project")
+                self.assertTrue(report["two_scope_lifecycle_qualified"])
+                for scope in ("user", "project"):
+                    self.assertEqual(report["scope_results"][scope], {
+                        "expectation": "positive_lifecycle", "status": "passed"})
+                required = ["add", "repeat add", "update", "repair intact", "cold locked restore",
+                            "remove B", "remove A", "User add", "User repeat add", "User update",
+                            "User repair intact", "User cold locked restore C", "User remove C", "User remove"]
+                self.assertEqual([phase for phase in phases if phase in required], required)
+                negative = report["negative_policy_results"]["vscode_user"]
+                if target == "copilot":
+                    self.assertEqual(phases[-1], "vscode-user-refusal")
+                    self.assertEqual(negative["status"], "refused_as_expected")
+                else:
+                    self.assertNotIn("vscode-user-refusal", phases)
+                    self.assertEqual(negative["status"], "not_applicable")
+
+    def test_marketing_kit_required_negative_failure_cannot_qualify_positive_lifecycles(self):
+        code, report, phases = self._exercise_marketing_kit_scope_report(
+            "copilot", negative_error=True)
+        self.assertEqual(code, 1)
+        self.assertEqual(phases[-2:], ["User remove", "vscode-user-refusal"])
+        self.assertEqual(report["scope_results"]["project"]["status"], "passed")
+        self.assertEqual(report["scope_results"]["user"]["status"], "passed")
+        self.assertFalse(report["two_scope_lifecycle_qualified"])
+        self.assertEqual(report["status"], "failed")
+        self.assertEqual(report["failure"], "required signed refusal failed")
+
+    def test_marketing_kit_cleanup_exception_overrides_successful_report(self):
+        for target in ("copilot", "cursor"):
+            with self.subTest(target=target):
+                code, report, phases = self._exercise_marketing_kit_scope_report(
+                    target, cleanup_failure=True)
+                self.assertEqual(code, 1)
+                self.assertIn("User remove", phases)
+                self.assertEqual(report["scope_results"]["project"]["status"], "passed")
+                self.assertEqual(report["scope_results"]["user"]["status"], "passed")
+                self.assertFalse(report["two_scope_lifecycle_qualified"])
+                self.assertEqual(report["status"], "failed")
+                self.assertEqual(report["failure"], "disposable cleanup failed")
 
     def test_marketing_kit_corrupt_lock_restore_rejects_foreign_symlink(self):
         # A malicious native invocation may swap the fixture lock for a link to

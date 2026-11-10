@@ -629,7 +629,7 @@ def scoped_snapshot(roots):
     return state
 
 
-def refusal_profile_snapshot(env, project, lock):
+def refusal_profile_snapshot(env, project, lock, *, directory_only=False):
     """Protect own durable/native state while deriving finite cold-cache names."""
     data = Path(env["AGENTPLUGINS_HOME"])
     if not audit["path_inside_case"](data, data.parent) or not data.parent.is_dir():
@@ -651,6 +651,7 @@ def refusal_profile_snapshot(env, project, lock):
         "data": scoped_snapshot([data]),
         "parent": (parent.st_mode, parent.st_dev, parent.st_ino),
         "subjects": subjects,
+        "directory_only": directory_only,
     }
 
 
@@ -668,8 +669,9 @@ def check_refusal_profile_unchanged(env, project, before):
             continue
         if observed.get(key) != value:
             raise AssertionError("corrupt restore changed existing data entry")
-    files = {"directory-v1-cache.json", "directory-v1-cache.json.lock",
-             REFUSAL_SCANNER_PATH, *before["subjects"]}
+    files = {"directory-v1-cache.json", "directory-v1-cache.json.lock"}
+    if not before.get("directory_only"):
+        files.update((REFUSAL_SCANNER_PATH, *before["subjects"]))
     directories = {parent.as_posix() for name in files
                    for parent in Path(name).parents if parent != Path(".")}
     allowed = set()
@@ -954,34 +956,47 @@ def codex_user_native_remove_attestation(env, project):
     return ("--external-uninstalled",)
 
 
-def verify_copilot_user_policy_refusal(cli, env, project, guards):
-    """User Copilot shares a backend whose missing signed grant must refuse."""
-    before = profile_snapshot(env, project)
+def verify_vscode_user_policy_refusal(cli, env, project, guards):
+    """Explicit VS Code still needs its own signed grant, before acquisition."""
+    before = refusal_profile_snapshot(env, project, {}, directory_only=True)
+    inventory_before = None
     try:
-        refused = invoke([cli, "add", "marketing-kit", "--target", "copilot",
-                          "--scope", "user", "--yes", "--format", "json"],
+        refused = invoke([cli, "add", "marketing-kit", "--target", "vscode",
+                          "--scope", "user", "--no-save", "--yes", "--format", "json"],
                          env, project, 180)
-        expected = ('agentplugins: no eligible directory release for "marketing-kit": '
+        # Frozen VS Code uses its documented direct --no-save route.
+        expected = ('Resolving and validating one Agent Plugin package for every selected target...\n'
+                    'agentplugins: no eligible directory release for "marketing-kit": '
                     '777genius/marketing-kit: release does not support complete '
                     'target set; missing vscode')
         code = refused.get("exit_code")
+        # call() preserves the last 1800 raw characters without stripping.
+        # This shorter exact diagnostic and empty stdout cannot be a truncated
+        # tail: any truncated nonempty output has length 1800.
         if (type(code) is not int or code <= 0 or refused.get("timeout") is not False
-                or refused.get("stderr_tail") not in (expected, expected + "\n", expected + "\r\n")
+                or refused.get("stderr_tail") not in (expected, expected + "\n",
+                    expected.replace("\n", "\r\n") + "\r\n")
                 or refused.get("_json") is not None
                 or refused.get("stdout_tail") != ""):
-            raise AssertionError("Copilot User add did not receive exact missing-vscode policy refusal")
-        check_profile_unchanged(env, project, before, "Copilot User policy refusal")
-        if identities(inventory(cli, env, project, "copilot", "user"), "copilot", "user"):
-            raise AssertionError("Copilot User refusal retained an installation")
-        return {"stage": "Copilot User add refused by shared-backend signed policy",
-                "scope": "user", "contract": "negative_policy", "exit_code": code,
-                "result": "expected_refusal", "reason": "missing_vscode_grant"}
+            raise AssertionError("VS Code User add did not receive exact missing-vscode policy refusal")
+        # The genuine CLI authenticates the Directory before this exact signed
+        # eligibility refusal. A cold read may persist only its cache and empty
+        # lock; scanners/assessments are unnecessary before package acquisition.
+        check_refusal_profile_unchanged(env, project, before)
+        inventory_before = profile_snapshot(env, project)
+        for target in ("copilot", "vscode"):
+            if inventory(cli, env, project, target, "user"):
+                raise AssertionError("VS Code User refusal retained an installation")
+        return {"stage": "Explicit VS Code User add refused by signed policy",
+                "target": "vscode", "scope": "user", "contract": "negative_policy",
+                "exit_code": code, "result": "expected_refusal",
+                "reason": "missing_vscode_grant"}
     finally:
         try:
-            # The refusal occurs before package acquisition. Reuse a strict
-            # full snapshot: neither the command nor inventory may add caches,
-            # agreement files, native state, receipts or installed state.
-            check_profile_unchanged(env, project, before, "Copilot User refusal inventory")
+            check_refusal_profile_unchanged(env, project, before)
+            if inventory_before is not None:
+                check_profile_unchanged(env, project, inventory_before,
+                                        "VS Code User refusal inventory")
         finally:
             for guard in guards:
                 guard()
@@ -996,10 +1011,12 @@ def main():
     report_path = Path(options.report)
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report = {"cli_version": "0.1.102", "target": options.target, "source": "real signed marketing-kit", "steps": [], "status": "failed",
-              "qualification_scope": "project", "two_scope_lifecycle_qualified": False,
+              "qualification_scope": "user_and_project", "two_scope_lifecycle_qualified": False,
               "scope_results": {"project": {"expectation": "positive_lifecycle", "status": "not_run"},
-                                "user": {"expectation": "policy_refusal" if options.target == "copilot" else "positive_lifecycle",
-                                         "status": "not_run"}}}
+                                "user": {"expectation": "positive_lifecycle", "status": "not_run"}},
+              "negative_policy_results": {"vscode_user": {
+                  "expectation": "signed_grant_refusal",
+                  "status": "not_run" if options.target == "copilot" else "not_applicable"}}}
     try:
         with tempfile.TemporaryDirectory(prefix="uap-real-marketing-kit-") as location:
             root = Path(location)
@@ -1138,20 +1155,6 @@ def main():
             check_foreign(foreign_files, root)
             check_profile_unchanged(env_b, project_b, protected_b, "Project final inventory")
             report["scope_results"]["project"]["status"] = "passed"
-            if options.target == "copilot":
-                # Project placement has independent native backends. User
-                # placement retains its real shared-backend signed refusal;
-                # this negative contract is not a positive User lifecycle.
-                step = verify_copilot_user_policy_refusal(options.cli, env, project_a, (
-                    lambda: check_foreign(foreign_files, root),
-                    lambda: check_profile_unchanged(
-                        env_b, project_b, protected_b, "Copilot User policy refusal"),
-                ))
-                report["steps"].append(step)
-                report["scope_results"]["user"].update(
-                    status="refused_as_expected", reason=step["reason"])
-                report["status"] = "passed"
-                return 0
             # Check the same signed closure through a real, separate User lifecycle.
             # Every User command must preserve all of Project A, not just the
             # portable agreement or known foreign sentinels.
@@ -1330,8 +1333,25 @@ def main():
             check_profile_unchanged(env_c, project_c, protected_c_profile,
                                     "User final inventory")
             report["scope_results"]["user"]["status"] = "passed"
-            report["two_scope_lifecycle_qualified"] = True
-            report["status"] = "passed"
+            if options.target == "copilot":
+                # A separate explicit VS Code request must still fail. Never
+                # count this negative contract as either positive lifecycle.
+                step = verify_vscode_user_policy_refusal(options.cli, env, project_a, (
+                    lambda: check_foreign(foreign_files, root),
+                    lambda: check_user_project_unchanged(
+                        project_a, project_before_user, "VS Code User policy refusal"),
+                    lambda: check_profile_unchanged(
+                        env_b, project_b, protected_b, "VS Code User policy refusal"),
+                    lambda: check_profile_unchanged(
+                        env_c, project_c, protected_c_profile, "VS Code User policy refusal"),
+                ))
+                report["steps"].append(step)
+                report["negative_policy_results"]["vscode_user"].update(
+                    status="refused_as_expected", reason=step["reason"])
+        # TemporaryDirectory cleanup is part of qualification; exceptions from
+        # its __exit__ must never leave a successful two-scope result behind.
+        report["two_scope_lifecycle_qualified"] = True
+        report["status"] = "passed"
     except Exception as error:
         report["status"] = "failed"
         report["failure"] = str(error)[:2500]
