@@ -7,7 +7,7 @@ test('home lists the complete scope matrix immediately before FAQ', async ({ pag
   const section = page.locator('#agent-support');
   const table = section.getByRole('table');
   await expect(table.locator('tbody tr')).toHaveCount(clientSupportRows.length);
-  expect(clientSupportRows).toHaveLength(14);
+  expect(clientSupportRows).toHaveLength(16);
   await expect(table.getByRole('row', { name: /^VS Code / })).toHaveCount(0);
   const logos = table.locator('tbody th img');
   await expect(logos).toHaveCount(clientSupportRows.length);
