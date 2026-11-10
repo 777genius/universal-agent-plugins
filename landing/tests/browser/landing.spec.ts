@@ -103,6 +103,7 @@ test('homepage installs with auto-detection and exposes the full directory', asy
   await expect(page.locator('.command-snippet').first()).not.toContainText('--target');
   await expect(page.getByText('Supported clients')).toBeVisible();
   await expect(page.locator('.client-strip li')).toHaveCount(clientLandingPages.length);
+  await expect(page.locator('a[href*="/agents/vscode/"]')).toHaveCount(0);
   await expect(page.getByRole('contentinfo')).toHaveCount(1);
   await expect(page.locator('.plugin-card').first()).toBeVisible();
   await hydrated(page);

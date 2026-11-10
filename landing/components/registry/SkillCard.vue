@@ -40,7 +40,6 @@ const options = computed(() =>
     value: client.id,
     label: client.name,
     icon: asset(`client-icons/${client.icon}`),
-    description: t('registryUi.skills.checkedBeforeInstall'),
   })),
 );
 const terminalOption = computed(() => ({

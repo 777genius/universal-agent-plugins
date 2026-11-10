@@ -38,7 +38,7 @@ test('recommended Skills lead the original cards without changing provider data 
     { repository: 'example/skills', slug: 'another-tool' },
     { repository: 'vercel-labs/agent-browser', slug: 'agent-browser' },
     { repository: 'vercel-labs/skills', slug: 'find-skills' },
-    { repository: 'vercel-labs/agent-skills', slug: 'vercel-react-best-practices' },
+    { repository: 'vercel-labs/agent-skills', slug: 'vercel-optimize' },
   ];
   const original = candidates.map(({ repository, slug }, index) => ({
     id: `skills-sh:${repository}:${slug}`,
@@ -75,6 +75,17 @@ test('recommended Skills lead the original cards without changing provider data 
   await expect(cards.first().locator('.skill-card__benefit')).toContainText(/browser CLI/i);
   await expect(cards.first()).toContainText('795 installs');
   await cards.first().getByRole('button', { name: 'Install agent-browser' }).click();
+  await cards.first().locator('.app-multiselect__trigger').click();
+  const picker = page.locator('.app-multiselect__content');
+  await expect(picker).toBeVisible();
+  await expect(picker.locator('.app-multiselect__item small')).toHaveCount(0);
+  await expect(picker.getByRole('checkbox', { name: /VS Code/i })).toHaveCount(0);
+  await expect(cards.first().getByText('The CLI checks the source and Skill before installation.', { exact: true })).toHaveCount(1);
+  await testInfo.attach('skills-agent-picker-without-duplicate-copy', {
+    body: await page.screenshot({ animations: 'disabled' }),
+    contentType: 'image/png',
+  });
+  await page.keyboard.press('Escape');
   await expect(cards.first().locator('.command-snippet code'))
     .toContainText('https://github.com/vercel-labs/agent-browser');
   await expect.poll(() => page.evaluate(() =>

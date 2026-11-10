@@ -1,13 +1,16 @@
 import { expect, test } from '@playwright/test';
+import { clientSupportRows } from '../../data/clientSupport.ts';
 
 test('home lists the complete scope matrix immediately before FAQ', async ({ page }) => {
   await page.goto('./');
 
   const section = page.locator('#agent-support');
   const table = section.getByRole('table');
-  await expect(table.locator('tbody tr')).toHaveCount(15);
+  await expect(table.locator('tbody tr')).toHaveCount(clientSupportRows.length);
+  expect(clientSupportRows).toHaveLength(14);
+  await expect(table.getByRole('row', { name: /^VS Code / })).toHaveCount(0);
   const logos = table.locator('tbody th img');
-  await expect(logos).toHaveCount(15);
+  await expect(logos).toHaveCount(clientSupportRows.length);
   await expect(logos.first()).toHaveAttribute('src', /client-icons\/claude.svg$/);
   await expect(logos.nth(8)).toHaveAttribute('src', /client-icons\/windsurf.svg$/);
   // Icons load lazily: scroll to them before checking their decoded bytes.
