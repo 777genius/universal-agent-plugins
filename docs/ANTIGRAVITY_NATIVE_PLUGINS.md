@@ -42,3 +42,9 @@ Implementation criteria: [reviewed plan](plans/2026-11-09-antigravity-native-int
 ### Native CI acceptance
 
 `Antigravity Native Plugin E2E` builds the UAP CLI from the PR and uses the real `agy` release 1.5.3 from the vendor GitHub repository, requiring SHA-256 `1b4850599cce73a17f94ffb422df3bf9531531b77dbddc40c1a435e0c2c16807` on the Linux x64 archive. It verifies strict native plugin validation, local CLI import/list/uninstall in a **separate disposable CLI profile**, UAP project-scoped removal and preservation of foreign User state. CLI listing is not presented as project-workspace discovery or host activation evidence. A queued or failed run cannot be cited as passed, and a validated package alone does not prove authentication or MCP `tools/call`.
+
+Cross-platform qualification additionally pins the official agy 1.5.3 macOS
+x64/arm64 and Windows x64 release archives by SHA-256. These jobs repeat the
+native CLI lifecycle in a separate disposable vendor profile and UAP's scoped
+project add/remove, while preserving a foreign User plugin. None of these
+shell/CLI checks claims that the Antigravity IDE loaded a project plugin.
