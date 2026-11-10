@@ -220,8 +220,8 @@ func TestGrokProjectMCPInventoryRejectsFoldedAliasesAndUnexpectedTrust(t *testin
 	valid := plugin(name)
 	foreign := plugin("other-project-plugin")
 	for _, tc := range []struct {
-		name string
-		plugins []any
+		name             string
+		plugins          []any
 		present, refused bool
 	}{
 		{"exact selected", []any{foreign, valid}, true, false},
