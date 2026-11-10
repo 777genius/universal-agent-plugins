@@ -13,6 +13,10 @@ func TestAllPolicyLanesNormalizeAndRemapWithoutPrivateMutation(t *testing.T) {
 	r := New("author.validate", "revision")
 	missing := r.add(Finding{Code: "plugin_manifest_missing", Layer: "normative", Rule: "core", Severity: "error"})
 	other := r.add(Finding{Code: "mcp_server_invalid", Layer: "normative", Rule: "mcp/server", Severity: "error"})
+	// Keep the independent concrete-field assertions in sync with the production traversal.
+	if got := len(r.policyAssessments()); got != 8 {
+		t.Fatalf("policy lane count changed: got %d, update explicit field assertions", got)
+	}
 	for _, a := range []*Assessment{
 		&r.Loadability, &r.Conformance, &r.HostSafety, &r.Readiness,
 		&r.Release, &r.Runtime, &r.Compatibility, &r.Toolchain,
