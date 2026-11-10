@@ -11,12 +11,11 @@ test('homepage raster images are valid served WebP, not PNG fallbacks', async ({
   }
 });
 
-test('reviewed plugin logo keeps transparent WebP asset on cards', async ({ page }) => {
-  await page.goto('./plugins/');
-  const card = page.locator('.plugin-card[data-install-source="context7"]');
-  await expect(card).toBeVisible();
-  const images = card.locator('img[src*=".webp"]');
-  await expect(images.first()).toBeVisible();
-  await expect.poll(() => images.first().evaluate((node) => (node as HTMLImageElement).naturalWidth))
-    .toBeGreaterThan(0);
+test('static SEO logo is a valid WebP asset', async ({ page }) => {
+  const response = await page.request.get('./logo-192.webp');
+  expect(response.ok()).toBe(true);
+  expect(response.headers()['content-type']).toContain('image/webp');
+  const image = await response.body();
+  expect(image.toString('ascii', 0, 4)).toBe('RIFF');
+  expect(image.toString('ascii', 8, 12)).toBe('WEBP');
 });
