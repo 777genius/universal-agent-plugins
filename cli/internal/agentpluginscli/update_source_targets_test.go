@@ -37,6 +37,9 @@ func TestUpdateSourceTargetsKeepsLocalCopilotVSCodeSurface(t *testing.T) {
 	check("signed Copilot repair", repairSourceTargets(installation, installation.Clients[0],
 		domain.ClientCopilot, domain.ScopeUser),
 		[]domain.ClientID{domain.ClientCopilot})
+	check("explicit VS Code repair", repairSourceTargets(installation, installation.Clients[0],
+		domain.ClientVSCode, domain.ScopeUser),
+		[]domain.ClientID{domain.ClientCopilot, domain.ClientVSCode})
 	check("signed Copilot owner", updateSourceTargets(installation, "user", selectedCopilot),
 		[]domain.ClientID{domain.ClientCopilot})
 	check("explicit signed sibling", updateSourceTargets(installation, "user",
