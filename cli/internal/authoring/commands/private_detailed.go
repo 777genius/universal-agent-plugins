@@ -30,7 +30,7 @@ func writePrivateDetailed(w io.Writer, r report.Report) error {
 }
 
 func writePrivateDetailedSummary(w io.Writer, r report.Report) error {
-	if _, e := io.WriteString(w, privateReportSummary(r)); e != nil {
+	if _, e := fmt.Fprint(w, privateReportSummary(r)); e != nil {
 		return exitx.Wrap(errors.New("authoring output failed"), 1)
 	}
 	for _, f := range r.Findings {
