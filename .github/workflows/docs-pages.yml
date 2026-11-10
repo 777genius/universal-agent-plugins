@@ -208,6 +208,10 @@ jobs:
     timeout-minutes: 30
     needs: build
     steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
       - name: Confirm requested deployment commit
         env:
           EXPECTED_SHA: ${{ inputs.expected_sha }}
@@ -290,6 +294,9 @@ jobs:
           provenance = json.loads((root / "provenance.json").read_text(encoding="utf-8"))
           assert provenance.get("workflow_commit") == os.environ["GITHUB_SHA"], "deployed source differs from control commit"
           assert len(provenance.get("source_commit", "")) == 40, "missing accepted source identity"
+          pinned = json.loads(Path("website/production-source.json").read_text(encoding="utf-8"))
+          assert provenance.get("source_commit") == pinned["source_commit"], "live source commit differs from production pin"
+          assert provenance.get("source_tree") == pinned["source_tree"], "live source tree differs from production pin"
 
           llms = (root / "llms.txt").read_text(encoding="utf-8")
           assert llms.startswith("# Universal Agent Plugins\n")
