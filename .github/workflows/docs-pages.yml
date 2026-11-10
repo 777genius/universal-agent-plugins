@@ -187,9 +187,11 @@ jobs:
 
       - uses: actions/configure-pages@v6
 
+      # Only vetted .well-known AI discovery files and .nojekyll may be hidden (artifact gate).
       - uses: actions/upload-pages-artifact@v5
         with:
           path: .pages-dist
+          include-hidden-files: true
 
   deploy:
     environment:

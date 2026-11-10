@@ -27,6 +27,10 @@ Install and manage plugins and Skills across your AI agents with one CLI.
 Share `uap.toml` (package list) and `uap.lock` (exact versions) to restore your
 setup on another computer or with your team.
 
+**More than a one-time installer:** UAP combines a [searchable plugin directory](https://universal-agent-plugins.com/plugins/), independent [Agent Skills](https://universal-agent-plugins.com/agent-skills/) (no `plugin.json` wrapper needed), native multi-agent installation, managed repair/removal, portable dependency locks, and [Go/TypeScript SDKs](https://universal-agent-plugins.com/docs/en/sdk/). Review [product capabilities and release boundaries](docs/PRODUCT_CAPABILITIES.md) for evidence and limitations.
+
+The static website initially shows **reviewed** packages; after page load it can append additional community records from a signed discovery feed. The initial reviewed count is **not** the full discovered-catalog count, and discovery is not proof that every entry is installable or E2E-tested. See [how catalog discovery works](docs/PRODUCT_CAPABILITIES.md#how-the-public-catalog-works-important-for-crawlers).
+
 [Documentation](https://universal-agent-plugins.com/docs/) ·
 [Browse plugins](https://universal-agent-plugins.com/plugins/) ·
 [Build a plugin](#build-plugins)
@@ -303,9 +307,11 @@ for tested versions, platforms, and setup steps.
 <details>
 <summary>Client-specific setup and limits</summary>
 
-The stable CLI supports [native Pi extensions](docs/PI_NATIVE_EXTENSION_CONTRACT.md)
-for user scope and eligible project scope. Pi Skills and MCP have separate
-client-specific evidence and activation requirements; check the
+Published CLI 0.1.102 supports Pi [native extensions](docs/PI_NATIVE_EXTENSION_CONTRACT.md),
+Skills and stdio/Streamable HTTP MCP in user and eligible project scope.
+Each signed Directory release still needs an explicit Pi target; direct pinned
+Git sources use a separate CLI-validated installation path. For scoped trust,
+activation and native E2E limits, see the
 [project compatibility matrix](docs/PROJECT_CLIENT_SUPPORT.md).
 
 Grok Build, Kimi Code, and Qoder support stdio and Streamable HTTP MCP in user

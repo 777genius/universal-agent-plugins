@@ -2,6 +2,10 @@ import { defineStore } from 'pinia';
 import type { InstallScope } from '../types/registry';
 import { hiddenPublicClientIds } from '../data/clients.ts';
 
+// Retired public targets must not erase the user's explicit project scope.
+const visibleTargetIds = (ids: readonly string[]) =>
+  ids.filter((id) => !hiddenPublicClientIds.has(id));
+
 const defaults = () => ({
   identity: '',
   targetIds: [] as string[],
@@ -35,23 +39,28 @@ export const useInstallPreferencesStore = defineStore('installPreferences', {
       }
     },
     readPackage(identity: string, available: readonly string[]) {
-      // A removed public choice must never reach a picker whose options omit it,
-      // even when project scope intentionally remembers other unavailable clients.
+      // Keep explicit scope when a previously visible agent is retired.
+      const targetIds = visibleTargetIds(this.package.targetIds);
       return this.package.identity === identity &&
-        !this.package.targetIds.some((id) => hiddenPublicClientIds.has(id)) &&
         (this.package.scope === 'project' ||
-          this.package.targetIds.every((id) => available.includes(id)))
-        ? { ...this.package, targetIds: [...this.package.targetIds] }
+          targetIds.every((id) => available.includes(id)))
+        ? { ...this.package, targetIds, autoDetect: this.package.autoDetect || !targetIds.length }
         : { ...defaults(), identity };
     },
     reconcilePackage(identity: string, available: readonly string[]) {
+      const targetIds = visibleTargetIds(this.package.targetIds);
       if (
         this.package.identity !== identity ||
-        this.package.targetIds.some((id) => hiddenPublicClientIds.has(id)) ||
         (this.package.scope !== 'project' &&
-          this.package.targetIds.some((id) => !available.includes(id)))
-      )
+          targetIds.some((id) => !available.includes(id)))
+      ) {
         this.package = defaults();
+        return;
+      }
+      if (targetIds.length !== this.package.targetIds.length) {
+        this.package.targetIds = targetIds;
+        if (!targetIds.length) this.package.autoDetect = true;
+      }
     },
     selectPackage(
       identity: string,
@@ -63,19 +72,16 @@ export const useInstallPreferencesStore = defineStore('installPreferences', {
       },
       available: readonly string[],
     ) {
-      if (
-        !identity ||
-        choice.targetIds.some((id) => hiddenPublicClientIds.has(id)) ||
-        (choice.scope !== 'project' && choice.targetIds.some((id) => !available.includes(id)))
-      ) {
+      const targetIds = [...new Set(visibleTargetIds(choice.targetIds))];
+      const scope = choice.scope ?? 'user';
+      if (!identity || (scope !== 'project' && targetIds.some((id) => !available.includes(id)))) {
         this.package = defaults();
         return;
       }
-      const scope = choice.scope ?? 'user';
       this.package = {
         identity,
-        targetIds: [...new Set(choice.targetIds)],
-        autoDetect: choice.autoDetect,
+        targetIds,
+        autoDetect: choice.autoDetect || !targetIds.length,
         expanded: choice.expanded,
         scope,
       };

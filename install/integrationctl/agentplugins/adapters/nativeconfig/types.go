@@ -29,6 +29,7 @@ const (
 	CodecWindsurf   Codec = "windsurf-mcpServers"
 	CodecDevin      Codec = "devin-mcpServers"
 	CodecCline      Codec = "cline-mcpServers"
+	CodecHermes     Codec = "hermes-mcp-servers-yaml"
 )
 
 type Action string
@@ -192,12 +193,24 @@ func NewWithLockAcquirer(acquireLocks func(Paths, Codec) (func() error, error)) 
 	return Kernel{files: conditionalOSFiles{}, acquireLocks: acquireLocks}
 }
 
-func validateRequest(req Request) error {
+// Keep dialect-specific config path admission separate from generic
+// request validation. These checks run before any native file access.
+func validateCodecPath(req Request) error {
+	if req.Codec == CodecHermes && (req.Paths.JSONC != "" || filepath.Base(req.Paths.JSON) != "config.yaml") {
+		return fmt.Errorf("hermes YAML requires one selected config.yaml path")
+	}
 	if req.Codec == CodecCodex && req.Paths.JSONC != "" {
 		return fmt.Errorf("codex requires one TOML config path")
 	}
 	if req.Codec == CodecVSCode && req.Paths.JSONC != "" {
 		return fmt.Errorf("VS Code requires one mcp.json config path with native JSONC syntax")
+	}
+	return nil
+}
+
+func validateRequest(req Request) error {
+	if err := validateCodecPath(req); err != nil {
+		return err
 	}
 	if err := validateExactPath(req.Paths.JSON, "JSON native config path"); err != nil {
 		return err
@@ -229,10 +242,13 @@ func validateRequest(req Request) error {
 }
 
 func supportedCodec(codec Codec) bool {
-	return codec == CodecMCPServers || codec == CodecQoder || codec == CodecCopilot || codec == CodecVSCode || codec == CodecKimi || codec == CodecGemini || codec == CodecCodex || codec == CodecOpenCode || codec == CodecOpenCodeV2 || codec == CodecWindsurf || codec == CodecDevin || codec == CodecCline
+	return codec == CodecMCPServers || codec == CodecQoder || codec == CodecCopilot || codec == CodecVSCode || codec == CodecKimi || codec == CodecGemini || codec == CodecCodex || codec == CodecOpenCode || codec == CodecOpenCodeV2 || codec == CodecWindsurf || codec == CodecDevin || codec == CodecCline || codec == CodecHermes
 }
 
 func codecCollectionKey(codec Codec) string {
+	if codec == CodecHermes {
+		return "mcp_servers"
+	}
 	if codec == CodecVSCode {
 		return "servers"
 	}

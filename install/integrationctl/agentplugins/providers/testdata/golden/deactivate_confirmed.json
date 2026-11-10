@@ -129,6 +129,18 @@
       "UserActions": null
     }
   },
+  "hermes": {
+    "Commands": [],
+    "Error": "hermes native root must be canonical and absolute",
+    "Outcome": {
+      "Activation": "not_required",
+      "ArtifactRemovalAllowed": true,
+      "ExternalRemovalComplete": false,
+      "LocalActions": null,
+      "NativeEffect": "",
+      "UserActions": null
+    }
+  },
   "kimi": {
     "Commands": [],
     "Error": "",

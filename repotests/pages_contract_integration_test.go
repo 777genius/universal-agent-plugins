@@ -29,6 +29,8 @@ func TestPagesSite_CombinesLandingRootAndDocsSubpath(t *testing.T) {
 	mustContain(t, workflow, "777genius/universal-agent-plugins-registry")
 	mustContain(t, workflow, "pnpm run build:pages")
 	mustContain(t, workflow, "path: .pages-dist")
+	mustContain(t, workflow, "uses: actions/upload-pages-artifact@v5")
+	mustContain(t, workflow, "include-hidden-files: true")
 	mustContain(t, workflow, "group: github-pages")
 	// Only a newer production push supersedes an in-progress Pages release;
 	// a manual run must never cancel it.
@@ -255,6 +257,8 @@ func TestRegistryCompatibilityMirror_RefreshesFeedsOnSchedule(t *testing.T) {
 	workflow := string(workflowBody)
 	mustContain(t, workflow, "name: Registry compatibility mirror")
 	mustContain(t, workflow, `cron: "27 */12 * * *"`)
+	mustContain(t, workflow, "uses: actions/upload-pages-artifact@v5")
+	mustContain(t, workflow, "include-hidden-files: true")
 	mustContain(t, workflow, "registry-published")
 	mustContain(t, workflow, "group: github-pages")
 	mustContain(t, workflow, "cancel-in-progress: false")

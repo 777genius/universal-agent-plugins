@@ -65,6 +65,7 @@ const targetOptions = computed(() =>
         return target?.app_binding
           ? t('registryUi.install.verifiedConnectionFinishSetupInChatgpt')
           : t('registryUi.install.notAvailableForChatgpt');
+      if (client.id === 'pi' && !target) return t('registryUi.install.piNoCompatibleRelease');
       if (target) return t(`registryUi.delivery.${target.delivery}`);
       return t('registryUi.install.noActiveReleaseSupportsThisClient');
     })(),

@@ -278,7 +278,7 @@ watch([query, category, component, source, trust, client, authentication, owner,
       </div>
       <p>{{ intro ?? t('registryUi.catalog.searchByCapabilityComponentOrSource') }}</p>
     </div>
-    <div class="catalog-controls" role="search" :aria-label="t('registryUi.catalog.filterPlugins')">
+    <div class="catalog-controls catalog-controls--plugins" role="search" :aria-label="t('registryUi.catalog.filterPlugins')">
       <CatalogSearchField
         v-model="query"
         :label="t('registryUi.catalog.searchPlugins')"
@@ -329,12 +329,6 @@ watch([query, category, component, source, trust, client, authentication, owner,
           :options="stableComponentOptions"
         />
         <AppSelect
-          v-model="source"
-          leading-icon="source"
-          :label="t('registryUi.catalog.filterBySource')"
-          :options="sourceOptions"
-        />
-        <AppSelect
           v-model="trust"
           leading-icon="trust"
           :label="t('registryUi.catalog.filterByTrustLevel')"
@@ -352,13 +346,21 @@ watch([query, category, component, source, trust, client, authentication, owner,
           :label="t('registryUi.catalog.filterByAuthentication')"
           :options="authenticationOptions"
         />
-        <AppCombobox
-          v-model="owner"
-          leading-icon="owner"
-          :label="t('registryUi.catalog.filterByOwner')"
-          :search-placeholder="t('registryUi.catalog.searchOwners')"
-          :options="ownerOptions"
-        />
+        <div class="catalog-filter-pair">
+          <AppSelect
+            v-model="source"
+            leading-icon="source"
+            :label="t('registryUi.catalog.filterBySource')"
+            :options="sourceOptions"
+          />
+          <AppCombobox
+            v-model="owner"
+            leading-icon="owner"
+            :label="t('registryUi.catalog.filterByOwner')"
+            :search-placeholder="t('registryUi.catalog.searchOwners')"
+            :options="ownerOptions"
+          />
+        </div>
       </div>
     </div>
     <div v-if="activeChips.length" class="catalog-active-filters" :aria-label="t('registryUi.catalog.activeFilters')">
