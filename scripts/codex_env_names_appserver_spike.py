@@ -19,7 +19,7 @@ import tempfile
 import threading
 import time
 
-from codex_env_names_native_spike import CHILD, ENV_NAME, Model, inspect
+from codex_env_names_native_spike import CHILD, ENV_NAME, FOREIGN_ENV_NAME, Model, inspect
 
 def rpc_send(proc, q, serial, method, params, timeout=35):
     proc.stdin.write((json.dumps({"id": serial, "method": method,
@@ -50,6 +50,7 @@ def main():
     if len(sys.argv) > 4:
         raise ValueError("unexpected native spike parameter")
     secret = "uap_appserver_spike_" + secrets.token_hex(24)
+    foreign_secret = "uap_foreign_appserver_" + secrets.token_hex(24)
     Model.expected_digest = hashlib.sha256(secret.encode()).hexdigest()
     root = Path(tempfile.mkdtemp(prefix="uap-codex-appserver-"))
     home, project = root / "home", root / "project"
@@ -70,6 +71,7 @@ def main():
         'wire_api = "responses"\nrequires_openai_auth = false\n'
         '[analytics]\nenabled = false\n[feedback]\nenabled = false\n'
         f'[projects.{json.dumps(str(project))}]\ntrust_level = "trusted"\n'
+        f'[shell_environment_policy]\nexclude = ["{FOREIGN_ENV_NAME}"]\n'
     )
     (home / ".codex" / "config.toml").write_text(user_config)
     project_server = (
@@ -95,7 +97,8 @@ def main():
     env = {"HOME": str(home), "CODEX_HOME": str(home / ".codex"),
            "TMPDIR": str(root / "tmp"), "TEMP": str(root / "tmp"),
            "TMP": str(root / "tmp"), "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
-           "LANG": "C.UTF-8", "NO_COLOR": "1", ENV_NAME: secret}
+           "LANG": "C.UTF-8", "NO_COLOR": "1", ENV_NAME: secret,
+           FOREIGN_ENV_NAME: foreign_secret}
     report = {"policy_mode": mode, "sandbox_backend": "bwrap", "version": "", "real_codex_shell_called": False,
               "mcp_native_connected": False, "real_codex_mcp_called": False,
               "mcp_child_saw_secret": False, "leak": False,
@@ -106,7 +109,7 @@ def main():
     def observer():
         while not stop.is_set():
             try:
-                hits, _ = inspect(root, secret)
+                hits, _ = inspect(root, (secret, foreign_secret))
                 live["samples"] += 1
                 for hit in hits:
                     live["hits"][hit["path_sha256"]] = hit
@@ -184,6 +187,7 @@ def main():
             time.sleep(.05)
         report["shell_tool_output_seen"] = Model.shell_output_seen
         report["shell_secret_visible"] = Model.shell_secret_visible
+        report["shell_foreign_visible"] = Model.shell_foreign_visible
         report["shell_response_category"] = Model.shell_response_category
         report["shell_response_indicators"] = Model.shell_response_indicators
         report["real_codex_shell_called"] = Model.shell_requested and Model.shell_execution_verified
@@ -214,7 +218,7 @@ def main():
                 proc.communicate(timeout=5)
         stop.set()
         watch.join(timeout=3)
-        found, symlinks = inspect(root, secret)
+        found, symlinks = inspect(root, (secret, foreign_secret))
         all_hits = {x["path_sha256"]: x for x in [*found, *live["hits"].values()]}
         report["leak"] = bool(all_hits)
         report["matching_path_hashes"] = list(all_hits.values())[:12]
@@ -226,6 +230,7 @@ def main():
         report["model_advertised_tools"] = sorted(Model.advertised_tool_names)[:25]
         report["secrecy_pass"] = (report["failure"] is None and not all_hits
                                   and not Model.shell_secret_visible
+                                  and not Model.shell_foreign_visible
                                   and live["errors"] == 0 and live["samples"] >= 20)
         if report["failure"] is None and not report["secrecy_pass"]:
             report["failure"] = "canary_persistence_or_incomplete_live_scan"
