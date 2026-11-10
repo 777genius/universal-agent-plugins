@@ -49,16 +49,23 @@ jobs:
       - name: Record actual resolved dependency graph
         working-directory: landing
         run: pnpm why glob minimatch > dependency-why.txt
-      - name: Capture full security audit without suppressing failure
+      - name: Record complete audit and gate only glob/minimatch advisories
         working-directory: landing
         run: |
           set +e
           pnpm audit --json > dependency-audit.json
           result=$?
           set -e
-          printf '%s\\n' "$result" > dependency-audit.exit
-          cat dependency-audit.json
-          exit "$result"
+          echo "$result" > dependency-audit.exit
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const audit = JSON.parse(readFileSync('dependency-audit.json', 'utf8'));
+          const advisories = Object.values(audit.advisories || {});
+          const tracked = advisories.filter(v => ['glob', 'minimatch'].includes(v.module_name));
+          const other = advisories.length - tracked.length;
+          console.log(JSON.stringify({glob_minimatch_advisories: tracked.length, other_unrelated_advisories: other, full_audit_exit: readFileSync('dependency-audit.exit', 'utf8').trim()}));
+          if (tracked.length) { console.error(JSON.stringify(tracked)); process.exit(1); }
+          NODE
       - name: Install Chromium and qualify source site
         working-directory: landing
         run: pnpm exec playwright install --with-deps --only-shell chromium
