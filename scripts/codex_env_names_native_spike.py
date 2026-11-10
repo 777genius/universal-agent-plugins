@@ -149,7 +149,12 @@ class Model(http.server.BaseHTTPRequestHandler):
                 self.send_error(409)
                 return
             command = f"sleep 7; printf {SHELL_MARKER}"
-            args = {"cmd": command} if shell == "exec_command" else {"command": command}
+            # Codex exec_command can yield before a long command has finished.
+            # Request a full bounded wait so the completion marker is observed
+            # from the real native shell rather than mistaking an async
+            # session-creation response for command execution.
+            args = ({"cmd": command, "yield_time_ms": 10000} if shell == "exec_command"
+                    else {"command": command})
             item = {"type": "function_call", "name": shell,
                     "call_id": SHELL_CALL, "arguments": json.dumps(args)}
             cls.shell_requested = True
