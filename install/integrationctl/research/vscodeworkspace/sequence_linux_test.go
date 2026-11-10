@@ -57,7 +57,7 @@ func runInertSequence(t *testing.T, fail string, overflow bool) ([]string, []chi
 	events := &sequenceEvents{}
 	work, cancelWork := context.WithCancel(t.Context())
 	defer cancelWork()
-	c := &controller{request: sealedRequest{Input: inputRequest{UID: 1001, GID: 1001}}, parentNS: 1, work: work, files: map[string][]byte{}}
+	c := &controller{request: sealedRequest{Input: inputRequest{UID: 1001, GID: 1001}}, parentNS: 1, work: work, checkExec: func(string) error { return nil }, files: map[string][]byte{}}
 	c.cancelWork = func() { events.add("work-cancel"); cancelWork() }
 	runner := &sequenceRunner{events: events}
 	c.runner = runner
@@ -175,7 +175,7 @@ func TestUnjoinedDrainCannotBecomePlannedSuccess(t *testing.T) {
 	work, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	reader := io.MultiReader(strings.NewReader(testProof()), unjoinedReader{release, joined})
-	c := &controller{request: sealedRequest{Input: inputRequest{UID: 1001, GID: 1001}}, parentNS: 1, work: work, files: map[string][]byte{}, runner: unjoinedRunner{reader}}
+	c := &controller{request: sealedRequest{Input: inputRequest{UID: 1001, GID: 1001}}, parentNS: 1, work: work, checkExec: func(string) error { return nil }, files: map[string][]byte{}, runner: unjoinedRunner{reader}}
 	record, err := c.strict(work, "A", []string{"inert"}, t.TempDir(), map[string]string{}, func(context.Context, isolationProof) error { return nil })
 	close(release)
 	select {
