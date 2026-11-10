@@ -16,18 +16,19 @@ ROOT = Path(__file__).resolve().parents[1]
 audit = runpy.run_path(str(ROOT / "scripts/live-install-audit.py"))
 isolated_env = audit["isolated_client_env"]
 invoke = audit["call"]
-EXPECTED = {
-    "777genius/marketing-kit",
-    "777genius/notion",
-    "777genius/hubspot-crm",
-    "777genius/playwright-bridge",
+REQUIRED_DISTRIBUTIONS = {
+    "marketing-kit": "777genius/marketing-kit",
+    "notion": "777genius/notion",
+    "hubspot-crm": "777genius/hubspot-crm",
+    "playwright": "777genius/playwright-bridge",
 }
+EXPECTED = set(REQUIRED_DISTRIBUTIONS.values())
 
 
 # Published npm 0.1.102 dependency operations include result=success AND
 # outcome/actions/results. Require exact action evidence; process exit 0 or
 # result=success alone is not sufficient.
-UPDATE_ALIASES = {"marketing-kit", "notion", "hubspot-crm", "playwright"}
+UPDATE_ALIASES = set(REQUIRED_DISTRIBUTIONS)
 # OpenCode and Cursor discover additional native compatibility Skill roots.
 # These are read-only E2E audit paths, never installer authorization.
 COMPAT_SKILL_ROOTS = {
@@ -97,6 +98,17 @@ def valid_legacy_dependency_result(envelope, operation, target=None, scope=None)
     if len({row["installation_id"] for row in results}) != len(results):
         return False
     return True
+
+
+def verify_add_receipt_inventory(envelope, observed):
+    """Bind applied dependency receipts to the actual selected-scope inventory."""
+    data = envelope.get("data", envelope)
+    active = [action for action in data["actions"] if action["action"] != "unchanged"]
+    for action, receipt in zip(active, data["results"]):
+        distribution = REQUIRED_DISTRIBUTIONS[action["alias"]]
+        if observed.get(distribution) != receipt["installation_id"]:
+            raise AssertionError(
+                f"add receipt does not match installed {distribution} identity")
 
 
 def verified(result, stage, operation=None, target=None, scope=None):
@@ -539,7 +551,16 @@ def execute(cli, env, project, target, label, *args):
     if selected >= len(args) or args[selected] not in ("user", "project"):
         raise AssertionError(f"{label}: invalid explicit scope")
     result = invoke([cli, *args, "--format", "json"], env, project, 180)
-    verified(result, label, args[0], target, args[selected])
+    envelope = verified(result, label, args[0], target, args[selected])
+    if args[0] == "add":
+        # The released result DTO has no alias. In a cold add planned IDs
+        # can be absent, so match each applied result to fresh signed inventory.
+        data = envelope.get("data", envelope)
+        if any(action["action"] != "unchanged" for action in data["actions"]):
+            current = identities(
+                inventory(cli, env, project, target, args[selected]),
+                target, args[selected])
+            verify_add_receipt_inventory(envelope, current)
     return {"stage": label, "exit_code": result["exit_code"], "result": "passed"}
 
 

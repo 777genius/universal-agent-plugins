@@ -102,6 +102,55 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     AssertionError, "CLI did not succeed"):
                 check({**wrapped, "_json": bad}, "add", "add", "codex", "project")
 
+    def test_marketing_kit_add_receipts_match_native_scope_inventory(self):
+        # Cold add plans do not have installation IDs. Even four unique
+        # successful result IDs cannot prove they belong to the four installs.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        execute = runner["execute"]
+        aliases = ("marketing-kit", "notion", "hubspot-crm", "playwright")
+        distributions = runner["REQUIRED_DISTRIBUTIONS"]
+        actions = [{"alias": alias, "client_id": "codex", "action": "install"}
+                   for alias in aliases]
+        results = [{"client_id": "codex", "operation": "install",
+                    "installation_id": alias + "-id", "outcome": "completed"}
+                   for alias in aliases]
+        for scope in ("user", "project"):
+            with self.subTest(scope=scope):
+                envelope = {"result": "success", "data": {
+                    "result": "success", "outcome": "completed",
+                    "scope": scope, "actions": actions, "results": results}}
+                receipt = {"exit_code": 0, "timeout": False, "_json": envelope}
+                installed = {distributions[alias]: alias + "-id"
+                             for alias in aliases}
+                with patch.dict(execute.__globals__, {
+                        "invoke": lambda *args: receipt,
+                        "inventory": lambda *args: None,
+                        "identities": lambda *args: installed}):
+                    args = ("add", "marketing-kit", "--target", "codex",
+                            "--scope", scope)
+                    if scope == "project":
+                        args += ("--project-root", str(Path.cwd()),)
+                    self.assertEqual(
+                        execute("agentplugins", {}, Path.cwd(), "codex",
+                                "add", *args)["result"], "passed")
+                    for changed in (
+                            # Unique, plausible receipts swapped between
+                            # dependencies were previously accepted.
+                            [results[1], results[0], *results[2:]],
+                            [{**results[0], "installation_id": "foreign-id"},
+                             *results[1:]]):
+                        bad_receipt = {**receipt, "_json": {**envelope, "data": {
+                            **envelope["data"], "results": changed}}}
+                        with patch.dict(execute.__globals__, {
+                                "invoke": lambda *args: bad_receipt}):
+                            with self.assertRaisesRegex(
+                                    AssertionError, "receipt does not match"):
+                                execute("agentplugins", {}, Path.cwd(), "codex",
+                                        "add", *args)
+
     def test_marketing_kit_accepts_only_complete_legacy_noop_update(self):
         # Published 0.1.102 emits result=success alongside outcome/actions/results.
         from runpy import run_path
