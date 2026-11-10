@@ -45,7 +45,8 @@ for line in sys.stdin:
                         "sha256": hashlib.sha256(value.encode()).hexdigest() if value else ""}
             with open(sys.argv[1], "w", encoding="utf-8") as f:
                 json.dump(evidence, f)
-            out = {"content": [{"type": "text", "text": "presence-confirmed"}]}
+            out = {"content": [{"type": "text",
+                        "text": json.dumps(evidence, sort_keys=True)}]}
         elif method == "ping":
             out = {}
         else:
@@ -62,6 +63,8 @@ class Model(http.server.BaseHTTPRequestHandler):
     mcp_requested = False
     search_requested = False
     mcp_output_seen = False
+    mcp_digest_verified = False
+    expected_digest = None
     shell_output_seen = False
     error = ""
     advertised_tool_names = set()
@@ -89,10 +92,16 @@ class Model(http.server.BaseHTTPRequestHandler):
             x.get("type") == "function_call_output" and x.get("call_id") == SHELL_CALL
             for x in outputs
         )
-        cls.mcp_output_seen |= any(
-            x.get("type") == "function_call_output" and x.get("call_id") == MCP_CALL
-            for x in outputs
-        )
+        for response in outputs:
+            if (response.get("type") == "function_call_output"
+                    and response.get("call_id") == MCP_CALL):
+                cls.mcp_output_seen = True
+                # SHA256 of a fresh synthetic-only canary, never real credentials.
+                # Correlate the ACTUAL native tool result rather than relying
+                # on a sandbox-blocked child sidecar receipt.
+                rendered = json.dumps(response.get("output"), sort_keys=True)
+                if cls.expected_digest and cls.expected_digest in rendered:
+                    cls.mcp_digest_verified = True
         tools = req.get("tools", [])
         function_names = {x.get("name") for x in tools if isinstance(x, dict)}
         cls.advertised_tool_names.update(name for name in function_names if name)
@@ -199,6 +208,7 @@ def main():
     report_path = Path(sys.argv[2]).resolve()
     report_path.parent.mkdir(parents=True, exist_ok=True)
     secret = "uap_spike_" + secrets.token_hex(24)
+    Model.expected_digest = hashlib.sha256(secret.encode()).hexdigest()
     root = Path(tempfile.mkdtemp(prefix="uap-codex-spike-"))
     home, project = root / "home", root / "project"
     (home / ".codex").mkdir(parents=True)
@@ -276,12 +286,14 @@ def main():
         report["live_scan_errors"] = live["errors"]
         report["real_codex_shell_called"] = Model.shell_requested and Model.shell_output_seen
         report["real_codex_mcp_called"] = Model.mcp_requested and Model.mcp_output_seen
+        report["native_mcp_digest_seen"] = Model.mcp_digest_verified
         report["requests"] = Model.requests
         report["advertised_tool_names"] = sorted(Model.advertised_tool_names)[:35]
         if receipt.exists():
             observed = json.loads(receipt.read_text())
             report["mcp_child_saw_secret"] = (observed.get("observed") is True
                 and observed.get("sha256") == hashlib.sha256(secret.encode()).hexdigest())
+        report["mcp_child_saw_secret"] |= Model.mcp_digest_verified
         found, symlinks = inspect(root, secret)
         combined = {entry["path_sha256"]: entry for entry in
                     [*found, *live["hits"].values()]}
