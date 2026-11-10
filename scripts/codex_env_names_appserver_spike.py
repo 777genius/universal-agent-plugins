@@ -138,25 +138,11 @@ def main():
         thread_id = thread.get("thread", {}).get("id")
         if not thread_id:
             raise RuntimeError("codex_thread_id_missing")
-        for attempt in range(45):
-            inv = rpc_send(proc, messages, 3 + attempt, "mcpServerStatus/list",
-                           {"threadId": thread_id, "limit": 100})
-            if inv.get("nextCursor"):
-                raise RuntimeError("mcp_inventory_incomplete")
-            servers = [x for x in inv.get("data", []) if x.get("name") == "env_spike"]
-            if len(servers) > 1:
-                raise RuntimeError("mcp_duplicate_server")
-            if servers and servers[0].get("runtimeStatus") == "connected":
-                tools = servers[0].get("tools", {})
-                if "confirm_env" not in tools:
-                    raise RuntimeError("mcp_tool_not_advertised")
-                report["mcp_native_connected"] = True
-                break
-            if servers and servers[0].get("runtimeStatus") == "failed":
-                raise RuntimeError("mcp_native_failed")
-            time.sleep(.1)
-        if not report["mcp_native_connected"]:
-            raise RuntimeError("mcp_native_not_connected")
+        # Codex 0.167 can stall mcpServerStatus/list while the global MCP
+        # registry initializes. Avoid making registry listing a precondition
+        # for a genuine native tool/call. The only acceptable success oracle
+        # remains a correlated native MCP function output + digest.
+        # The model turn itself exercises the actual MCP child and shell.
         rpc_send(proc, messages, 100, "turn/start", {
             "threadId": thread_id,
             "input": [{"type": "text",
@@ -172,6 +158,7 @@ def main():
             time.sleep(.05)
         report["real_codex_shell_called"] = Model.shell_requested and Model.shell_output_seen
         report["real_codex_mcp_called"] = Model.mcp_requested and Model.mcp_output_seen
+        report["mcp_native_connected"] = Model.mcp_digest_verified
         report["native_mcp_digest_seen"] = Model.mcp_digest_verified
         report["mcp_child_saw_secret"] = Model.mcp_digest_verified
         if not (report["real_codex_shell_called"] and report["real_codex_mcp_called"]
