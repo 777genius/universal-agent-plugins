@@ -263,6 +263,11 @@ def lock_ids(project, target=None):
                 if alias in children[edge["alias"]]:
                     raise AssertionError("duplicate signed lock dependency edge")
                 children[edge["alias"]].add(alias)
+        # Marketing Kit's signed uap.toml directly requires all three MCP
+        # children. Mere reachability allows a reparented child to masquerade
+        # as the unchanged four-node closure during cold lock restoration.
+        if children["marketing-kit"] != set(by_alias) - {"marketing-kit"}:
+            raise AssertionError("signed Marketing Kit direct required dependencies changed")
         visited, visiting = set(), set()
 
         def visit(alias):

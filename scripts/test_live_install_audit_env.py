@@ -196,6 +196,14 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 rows[0]["source_key"], rows[1]["source_key"] = (
                     rows[1]["source_key"], rows[0]["source_key"])
 
+            # The old graph check accepted this connected but reparented
+            # closure even though Marketing Kit no longer directly requires
+            # Notion as recorded in the signed package manifest.
+            chained = deepcopy(pins)
+            chained[1]["required_by"][0]["alias"] = "hubspot-crm"
+            with self.assertRaisesRegex(AssertionError, "direct required dependencies"):
+                check(chained)
+
             for mutate in (
                     swap_source_keys,
                     lambda rows: rows[1].update(required_by=[]),
