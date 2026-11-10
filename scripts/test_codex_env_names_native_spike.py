@@ -56,6 +56,8 @@ class TestSyntheticModelOracle(unittest.TestCase):
         shell = self.call({"tools": [{"type": "function", "name": "exec_command"}]})
         self.assertEqual(shell["call_id"], SHELL_CALL)
         self.assertEqual(shell["name"], "exec_command")
+        # A native async session result is not a completed shell invocation.
+        self.assertEqual(json.loads(shell["arguments"])["yield_time_ms"], 10000)
         tool = self.call({
             "tools": [{"type": "namespace", "name": "mcp__env_spike",
                        "tools": [{"name": "confirm_env"}]}],
