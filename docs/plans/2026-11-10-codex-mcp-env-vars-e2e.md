@@ -15,7 +15,7 @@ Official [Agent Plugins 1.0](https://agent-plugins.org/specification) only expan
 
 Candidate simplest authored input: a **target-qualified, names-only** member inside the **already accepted and preserved** `plugin.json.extensions` namespace (e.g., `"com.universal-agent-plugins.codex": {"mcp_env_vars": {"server-id": ["SERVICE_API_KEY"]}}`). There is already an extensions map with opaque namespace preservation. No separate manifest file, schema version, migration, global flag, new credentials store or new service. **Validate whether consuming this namespace is allowed by the existing conformance contract before implementing.** The v1 loader already admits a namespace object and preserves its bytes; **only `clients/codex` may interpret this one namespace**. If the extension has to be portable or affects ChatGPT, reject it and choose the existing *project-native configuration input* instead; do not invent parallel settings.
 
-UX target: keep `--scope project` and normal add/update/repair/remove. At source/plan time reject **missing/empty/unsafe/ambiguous variable NAMES** before mutation. Do **not** test the variable's VALUE using the UAP installer's process environment: **Codex may be launched later with a completely different environment**, so installation-time `os.Getenv` is an invalid proxy. A missing runtime value must be reported as **prepared/unverified** (native preflight if available), with one action: `Set SERVICE_API_KEY in Codex's launch environment, restart Codex, then verify MCP.` **Never** prompt for, read/store, render or log a secret value in production. **Separate user consent** is mandatory; the package author's namespace alone is not permission to forward local credentials. Show the names + native snapshot warning in the existing install preview. Non-interactive installs **fail closed** unless an already-supported explicit approval record/option can express that consent; if none exists, add a single narrow Codex Project consent input (not global feature flags). If safe operation cannot be proven, report **prepared/unsupported**, not installed+working.
+UX target: keep `--scope project` and normal add/update/repair/remove. At source/plan time reject **missing/empty/unsafe/ambiguous variable NAMES** before mutation. Do **not** test the variable's VALUE using the UAP installer's process environment: **Codex may be launched later with a completely different environment**, so installation-time `os.Getenv` is an invalid proxy. A missing runtime value must be reported as **prepared/unverified** (native preflight if available), with one action: `Set SERVICE_API_KEY in Codex's launch environment, restart Codex, then verify MCP.` **Never** prompt for, read/store, render or log a secret value in production. **Separate user consent** is mandatory; package-authored namespace alone is not permission to forward ambient credentials. Reuse the existing install preview, but it must show **exact names** and a clear native snapshot warning. Existing `--yes` is a blanket confirmation, **not sufficient** for new credential forwarding; require one explicit Codex Project-only opt-in parameter for automated calls, and interactive confirmation of the same risk. No extra standalone screen, wizard, feature flag, or secret prompt. If safe operation cannot be proven, report **prepared/unsupported**, not installed+working.
 
 ## 2. Minimal architectural delta (proposal, not yet implemented)
 
@@ -48,7 +48,7 @@ Unit/conformance: extension parsing, negative/missing/malicious names, stdio-onl
 | Native 3-platform proof and docs | 0–25 | 200–420 |
 | **Total** | **235–450** | **425–785** |
 
-**Estimate:** 660–1,235 changed lines. Risk: native upstream snapshot leak **9/10**, architectural regression **3/10** with strict scope, user workflow **2/10** if existing opt-in route suffices. No new tables, migrations, global gates, process owner or vault.
+**Estimate (initial, revise after spike):** 660–1,235 changed lines, with an additional 80–200 lines only if exposing an explicit consent parameter must traverse the existing CLI/management boundary. Risk: native upstream snapshot leak **9/10**, architectural regression **3/10** with strict scope, user workflow **2/10** if existing opt-in route suffices. No new tables, migrations, global gates, process owner or vault.
 
 ## 6. Required review rounds (edit THIS file, no separate competing plan)
 
@@ -64,7 +64,8 @@ Unit/conformance: extension parsing, negative/missing/malicious names, stdio-onl
 | Initial plan | Draft; PR creation pending | Based on #642, APM #3406, real UAP Codex source and release 0.167.0 |
 | R1 | DONE — corrected installer-env vs Codex-parent-env confusion | See review log below |
 | R2 | DONE — hostile package, child process, UX consent and audit oracle | See review log below |
-| R3–R4 | Pending | Update in this very file after each round |
+| R3 | DONE — reuse existing CLI preview/permissions; no parallel system | See review log below |
+| R4 | Pending | Update in this very file after each round |
 | Native spike | Pending | No claimed proof |
 | Production implementation | NOT STARTED | Security gate first |
 | E2E / merge | NOT STARTED | No bypass if negative oracle |
@@ -90,3 +91,15 @@ Unit/conformance: extension parsing, negative/missing/malicious names, stdio-onl
 **Finding R2-4:** Codex execution can start asynchronously, so 'installed' is configuration committed, **not** a claim of observed authentication. Use existing `ActivationPrepared` and one 'restart Codex, verify MCP' user action; never create a second wait loop, new daemon, or special status database. Unsupported or missing runtime value does **not** justify storing secret values in receipts.
 
 **Open challenge:** if *any* released supported Codex defaults persist the canary in shell snapshots, a forwarding implementation cannot be described as 'non-persistent' merely because UAP writes only names. Owner consent is not a substitute for the security proof; fail closed per the P4 gate. Decision: ACCEPT WITH CORRECTIONS, *not production-ready*.
+
+### R3 — Clean Architecture, SOLID/DRY and minimum UX review (2026-11-10)
+
+**Finding R3-1:** `agentplugins add` already owns a plan preview/confirmation (`--yes`), but `--yes` is a *generic* installation approval and can run on untrusted package sources. **Correction:** display env-name list + native snapshot risk in the existing preview. Only an *explicit* target-qualified positive acknowledgement can enable forwarding in noninteractive usage; do not infer authorization from `--yes`, an installed plugin or a package author. This might require one narrow input through the existing command/management contract; account for the small incremental LOC instead of a new UI wizard.
+
+**Finding R3-2:** generic `shared.ProjectOpenAIMCP` also serves ChatGPT and other OpenAI dialect readers. Keep namespace interpretation in `clients/codex` and Codex-only `nativeconfig.CodecCodex`. Do not change generic `conformance.ParseStdio` or `domain.MCPServer` for all agents, and do not modify `CodexAuthOptions` (it currently handles remote token references). This preserves Clean Architecture by keeping a client-specific schema at the client adapter boundary.
+
+**Finding R3-3:** published `plugin.json.extensions` is an opaque map, so interpreting one **own** namespace is legal only for explicit Codex-native delivery; do not turn it into generic Agent Plugins 1.0 interpolation, and do not treat unknown third-party namespaces as executable instructions. Enforce strict duplicated/unknown fields **within our namespace only**; other extension namespaces remain opaque and untouched. No extra authored file; **zero migrations**.
+
+**Finding R3-4:** Codex already sets `ActivationPrepared` after native project installation. Reuse this one human-visible status, standard `--scope project` UX and existing exact-membership ownership digest. Do not add credential-lifecycle state, a new status enum, global settings, a token vault or a secret-scanning background service. Revalidation belongs in the test harness, not production.
+
+**Check of touched production areas:** `clients/codex` projection/selection; `adapters/nativeconfig` Codex codec; a single opt-in through existing installer/CLI input and preview. No global server generator, no Go DB/schema change, no migration. Decision: ACCEPT CONDITIONAL, native P1–P4 evidence still mandatory.
