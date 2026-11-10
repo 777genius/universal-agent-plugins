@@ -309,7 +309,7 @@ test('Detail identity uses only a canonical source, never the listing-page URL',
 test('Skill agents require an explicit published landing entry and generated capability', () => {
   // A newly registered SDK client must not automatically appear on the public
   // site before its installation guidance and published CLI are qualified.
-  const publishedClients = new Set(clients.map((client) => client.id));
+  const publishedClients = new Set<string>(clients.map((client) => client.id));
   const expected = capabilities
     .filter((client) => publishedClients.has(client.id))
     .filter((client) => client.saved_dependency && client.skill_support !== 'unsupported')
