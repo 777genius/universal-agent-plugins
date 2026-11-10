@@ -30,6 +30,8 @@ export type ClientID =
   | 'grok'
   | 'kimi'
   | 'qoder'
+  | 'hermes'
+  | 'antigravity'
   | 'pi';
 export type ComponentID = 'extensions' | 'mcp' | 'skills';
 export type DistributionKind = 'upstream' | 'community_bridge' | 'community' | 'direct';

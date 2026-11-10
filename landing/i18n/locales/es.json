@@ -962,6 +962,20 @@
         "delivery": "La CLI escribe un manifiesto nativo .qoder-plugin y registra el paquete gestionado mediante Qoder CLI cuando está disponible.",
         "activation": "Recarga los plugins de Qoder o reinicia Qoder después de instalar. Las conexiones MCP y la autenticación del proveedor todavía deben confirmarse en Qoder."
       },
+      "hermes": {
+        "note": "Skills y MCP de usuario; Skills de proyecto sin MCP de proyecto",
+        "status": "Compatible",
+        "intro": "Instala Skills nativas de Hermes Agent para tu usuario o un proyecto Git seleccionado, además de servidores MCP de usuario, sin alterar configuraciones ajenas.",
+        "delivery": "UAP administra los directorios Skills que le pertenecen y las entradas MCP concretas de config.yaml del usuario. Una instalación de proyecto nunca modifica el MCP de usuario.",
+        "activation": "Reinicia Hermes para recargar la integración. Comprueba la confianza del repositorio antes de usar Skills de proyecto; el descubrimiento y la autenticación requieren verificación aparte."
+      },
+      "antigravity": {
+        "note": "Plugins nativos de usuario y proyecto; verificar activación",
+        "status": "Preparado por CLI",
+        "intro": "Prepara plugins nativos de Google Antigravity con Skills y servidores MCP compatibles en el ámbito de usuario o proyecto elegido.",
+        "delivery": "UAP prepara una carpeta de plugin administrada en la configuración de usuario o proyecto seleccionada, preserva otros plugins y no activa hooks implícitamente.",
+        "activation": "Abre o recarga Antigravity y comprueba que el plugin se descubrió y está habilitado. Los archivos preparados no acreditan una sesión de modelo, autenticación ni ejecución real de MCP."
+      },
       "pi": {
         "note": "Solo extensiones nativas de Pi gestionadas",
         "status": "Compatible",
