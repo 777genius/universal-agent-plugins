@@ -126,7 +126,7 @@ test('plugin source and owner filters keep independent desktop slots and mobile 
   const authenticationControl = toolbar.getByRole('combobox', { name: 'Filter by authentication' });
   const toggle = toolbar.locator('.catalog-filter-toggle');
 
-  for (const width of [1440, 820, 600, 390, 320]) {
+  for (const width of [1600, 1440, 820, 600, 390, 320]) {
     await page.setViewportSize({ width, height: 900 });
     if (width <= 720 && (await toggle.getAttribute('aria-expanded')) !== 'true') {
       await toggle.click();
@@ -139,7 +139,7 @@ test('plugin source and owner filters keep independent desktop slots and mobile 
     expect(sourceRect).not.toBeNull();
     expect(ownerRect).not.toBeNull();
 
-    if (width >= 1381) {
+    if (width >= 1521) {
       // Separate full desktop columns for Source and Owner, with the same
       // width and baseline as Authentication. The pair has display: contents.
       const authRect = await authenticationControl.boundingBox();
