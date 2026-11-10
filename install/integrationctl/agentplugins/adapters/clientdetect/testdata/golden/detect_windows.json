@@ -246,7 +246,7 @@
   },
   {
     "ClientID": "hermes",
-    "ConfigRoot": "\u003chome\u003e/.hermes",
+    "ConfigRoot": "\u003chome\u003e/AppData/Local/hermes",
     "DetectionError": null,
     "DisplayName": "Hermes Agent",
     "ExecutablePath": "",

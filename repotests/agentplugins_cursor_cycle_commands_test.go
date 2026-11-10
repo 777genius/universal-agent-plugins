@@ -72,7 +72,10 @@ func (c *cursorMCPProjectCycle) capture(t *testing.T, command cursorProjectComma
 	for key, item := range receipt {
 		value[key] = item
 	}
-	value["started_at"], value["ended_at"] = start.UTC().Format(time.RFC3339Nano), end.UTC().Format(time.RFC3339Nano)
+	// Derive the receipt from its serialized clock; command deadlines remain monotonic.
+	start, end = start.UTC(), end.UTC()
+	value["elapsed_ms"] = end.Sub(start).Milliseconds()
+	value["started_at"], value["ended_at"] = start.Format(time.RFC3339Nano), end.Format(time.RFC3339Nano)
 	value["stdout"], value["stderr"] = c.stream(t, result.Stdout), c.stream(t, result.Stderr)
 	c.append(t, cursorCycleMembers[0], command.label, value)
 	c.completed = append(c.completed, command.label)
