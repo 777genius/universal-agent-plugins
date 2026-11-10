@@ -1,0 +1,263 @@
+#!/usr/bin/env python3
+"""Bounded REAL Codex native secrecy spike; synthetic secret only, never logs its value.
+
+Pass requires an actual Codex shell tool call, then an MCP stdio tools/call
+through name-only env_vars; inspect the entire isolated Codex/home/project tree.
+This is not a product feature, and never reads real user credentials.
+"""
+import base64
+import hashlib
+import http.server
+import json
+import os
+from pathlib import Path
+import secrets
+import shutil
+import subprocess
+import sys
+import tempfile
+import threading
+import urllib.parse
+
+ENV_NAME = "UAP_E2E_SYNTHETIC_TOKEN"
+SHELL_CALL = "call_uap_shell_snapshot"
+MCP_CALL = "call_uap_env_mcp"
+SEARCH_CALL = "call_uap_tool_search"
+
+CHILD = r'''
+import hashlib, json, os, sys
+name = "UAP_E2E_SYNTHETIC_TOKEN"
+for line in sys.stdin:
+    try:
+        q = json.loads(line)
+        method = q.get("method")
+        if method == "initialize":
+            out = {"protocolVersion": "2025-03-26",
+                   "capabilities": {"tools": {}},
+                   "serverInfo": {"name": "uap-env-spike", "version": "1"}}
+        elif method == "tools/list":
+            out = {"tools": [{"name": "confirm_env",
+                  "description": "Return inert value-presence proof, no plaintext",
+                  "inputSchema": {"type": "object", "properties": {}}}]}
+        elif method == "tools/call":
+            value = os.environ.get(name)
+            evidence = {"observed": bool(value),
+                        "sha256": hashlib.sha256(value.encode()).hexdigest() if value else ""}
+            with open(sys.argv[1], "w", encoding="utf-8") as f:
+                json.dump(evidence, f)
+            out = {"content": [{"type": "text", "text": "presence-confirmed"}]}
+        elif method == "ping":
+            out = {}
+        else:
+            continue
+        if q.get("id") is not None:
+            print(json.dumps({"jsonrpc": "2.0", "id": q["id"], "result": out}), flush=True)
+    except Exception:
+        break
+'''
+
+class Model(http.server.BaseHTTPRequestHandler):
+    requests = 0
+    shell_requested = False
+    mcp_requested = False
+    search_requested = False
+    mcp_output_seen = False
+    shell_output_seen = False
+    error = ""
+
+    def log_message(self, *_args):
+        pass
+
+    def do_POST(self):
+        if self.path != "/v1/responses":
+            self.send_error(404)
+            return
+        length = int(self.headers.get("Content-Length", 0))
+        if length <= 0 or length > 1 << 20:
+            self.send_error(413)
+            return
+        try:
+            req = json.loads(self.rfile.read(length))
+        except ValueError:
+            self.send_error(400)
+            return
+        cls = type(self)
+        cls.requests += 1
+        outputs = [x for x in req.get("input", []) if isinstance(x, dict)]
+        cls.shell_output_seen |= any(
+            x.get("type") == "function_call_output" and x.get("call_id") == SHELL_CALL
+            for x in outputs
+        )
+        cls.mcp_output_seen |= any(
+            x.get("type") == "function_call_output" and x.get("call_id") == MCP_CALL
+            for x in outputs
+        )
+        tools = req.get("tools", [])
+        function_names = {x.get("name") for x in tools if isinstance(x, dict)}
+        namespace = next((x for x in tools if isinstance(x, dict)
+                          and x.get("type") == "namespace"
+                          and x.get("name") == "mcp__env_spike"), None)
+        if cls.requests > 10:
+            cls.error = "model request budget"
+            self.send_error(409)
+            return
+        if not cls.shell_requested:
+            shell = "exec_command" if "exec_command" in function_names else (
+                "shell_command" if "shell_command" in function_names else None
+            )
+            if shell is None:
+                cls.error = "no advertised shell tool"
+                self.send_error(409)
+                return
+            args = {"cmd": "pwd"} if shell == "exec_command" else {"command": "pwd"}
+            item = {"type": "function_call", "name": shell,
+                    "call_id": SHELL_CALL, "arguments": json.dumps(args)}
+            cls.shell_requested = True
+        elif not cls.shell_output_seen:
+            cls.error = "shell tool output missing"
+            self.send_error(409)
+            return
+        elif cls.mcp_output_seen:
+            item = {"type": "message", "id": "msg_uap_spike", "role": "assistant",
+                    "content": [{"type": "output_text", "text": "Proof complete."}]}
+        elif namespace and any(x.get("name") == "confirm_env"
+                               for x in namespace.get("tools", [])):
+            item = {"type": "function_call", "namespace": "mcp__env_spike",
+                    "name": "confirm_env", "call_id": MCP_CALL, "arguments": "{}"}
+            cls.mcp_requested = True
+        elif not cls.search_requested and "tool_search" in function_names:
+            item = {"type": "tool_search_call", "call_id": SEARCH_CALL,
+                    "execution": "client",
+                    "arguments": {"query": "env_spike confirm_env", "limit": 8}}
+            cls.search_requested = True
+        else:
+            cls.error = "MCP tool not advertised"
+            self.send_error(409)
+            return
+        events = [
+            ("response.created", {"type": "response.created",
+                                  "response": {"id": "resp_uap_spike"}}),
+            ("response.output_item.done", {"type": "response.output_item.done",
+                                           "item": item}),
+            ("response.completed", {"type": "response.completed",
+                                    "response": {"id": "resp_uap_spike",
+                                                 "usage": {"input_tokens": 1,
+                                                           "output_tokens": 1,
+                                                           "total_tokens": 2}}}),
+        ]
+        body = "".join(f"event: {event}\ndata: {json.dumps(payload)}\n\n"
+                       for event, payload in events).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+def inspect(root, secret):
+    patterns = [secret.encode(), secret.encode().hex().encode(),
+                base64.b64encode(secret.encode()),
+                urllib.parse.quote(secret).encode()]
+    found, symlinks = [], 0
+    for directory, subdirs, files in os.walk(root, followlinks=False):
+        for name in list(subdirs):
+            if (Path(directory) / name).is_symlink():
+                symlinks += 1
+                subdirs.remove(name)
+        for name in files:
+            path = Path(directory) / name
+            if path.is_symlink():
+                symlinks += 1
+                continue
+            if path.stat().st_size > 32 * 1024 * 1024:
+                found.append({"path_sha256": hashlib.sha256(str(path.relative_to(root)).encode()).hexdigest(),
+                              "result": "unscanned_oversize"})
+                continue
+            data = path.read_bytes()
+            if any(p and p in data for p in patterns):
+                found.append({"path_sha256": hashlib.sha256(str(path.relative_to(root)).encode()).hexdigest(),
+                              "result": "synthetic_value_persisted",
+                              "shell_snapshot_path": "shell_snapshots" in path.parts})
+    return found, symlinks
+
+def main():
+    codex = Path(sys.argv[1]).resolve(strict=True)
+    report_path = Path(sys.argv[2]).resolve()
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    secret = "uap_spike_" + secrets.token_hex(24)
+    root = Path(tempfile.mkdtemp(prefix="uap-codex-spike-"))
+    home, project = root / "home", root / "project"
+    (home / ".codex").mkdir(parents=True)
+    (project / ".codex").mkdir(parents=True)
+    (project / ".git").mkdir()
+    (root / "tmp").mkdir()
+    child = root / "child.py"
+    child.write_text(CHILD)
+    receipt = root / "child-result.json"
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Model)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    config = (
+        'cli_auth_credentials_store = "file"\n'
+        'mcp_oauth_credentials_store = "file"\n'
+        'model_provider = "fixture"\nmodel = "fixture-model"\n'
+        '[model_providers.fixture]\nname = "Fixture"\n'
+        f'base_url = "http://127.0.0.1:{server.server_port}/v1"\n'
+        'wire_api = "responses"\nrequires_openai_auth = false\n'
+        '[analytics]\nenabled = false\n[feedback]\nenabled = false\n'
+    )
+    (home / ".codex" / "config.toml").write_text(config)
+    project_server = (
+        '[mcp_servers.env_spike]\ncommand = "python3"\n'
+        f'args = [{json.dumps(str(child))}, {json.dumps(str(receipt))}]\n'
+        f'env_vars = ["{ENV_NAME}"]\n'
+    )
+    (project / ".codex" / "config.toml").write_text(project_server)
+    env = {"HOME": str(home), "CODEX_HOME": str(home / ".codex"),
+           "TMPDIR": str(root / "tmp"), "TEMP": str(root / "tmp"),
+           "TMP": str(root / "tmp"), "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+           "LANG": "C.UTF-8", "NO_COLOR": "1", ENV_NAME: secret}
+    commands = [
+        str(codex), "exec", "--skip-git-repo-check",
+        "--sandbox", "read-only", "Call the available shell tool once and then confirm_env."
+    ]
+    report = {"version": "", "real_codex_shell_called": False,
+              "real_codex_mcp_called": False, "mcp_child_saw_secret": False,
+              "leak": False, "secrecy_pass": False, "failure": None}
+    try:
+        version = subprocess.run([str(codex), "--version"], env=env,
+                                 capture_output=True, timeout=15, text=True)
+        report["version"] = version.stdout.strip()[:100]
+        result = subprocess.run(commands, cwd=project, env=env,
+                                capture_output=True, timeout=115)
+        report["codex_exit_code"] = result.returncode
+        report["real_codex_shell_called"] = Model.shell_requested and Model.shell_output_seen
+        report["real_codex_mcp_called"] = Model.mcp_requested and Model.mcp_output_seen
+        report["requests"] = Model.requests
+        if receipt.exists():
+            observed = json.loads(receipt.read_text())
+            report["mcp_child_saw_secret"] = (observed.get("observed") is True
+                and observed.get("sha256") == hashlib.sha256(secret.encode()).hexdigest())
+        found, symlinks = inspect(root, secret)
+        report["leak"] = bool(found)
+        report["matches"] = found[:10]
+        report["symlinks"] = symlinks
+        if result.returncode != 0:
+            report["failure"] = Model.error or "native_codex_exit_nonzero"
+        elif not all([report["real_codex_shell_called"], report["real_codex_mcp_called"],
+                      report["mcp_child_saw_secret"]]):
+            report["failure"] = Model.error or "native_proof_incomplete"
+        elif found or symlinks:
+            report["failure"] = "synthetic_canary_persisted_or_unsafe_scan"
+        else:
+            report["secrecy_pass"] = True
+    except (OSError, subprocess.TimeoutExpired, ValueError) as exc:
+        report["failure"] = type(exc).__name__
+    finally:
+        server.shutdown()
+        report_path.write_text(json.dumps(report, indent=2, sort_keys=True))
+        shutil.rmtree(root, ignore_errors=True)
+    print(json.dumps({k: v for k, v in report.items() if k != "matches"}, sort_keys=True))
+    return 0 if report["secrecy_pass"] else 1
+
+if __name__ == "__main__":
+    raise SystemExit(main())
