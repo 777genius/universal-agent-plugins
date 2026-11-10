@@ -707,11 +707,13 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
     def test_marketing_kit_cleanup_exception_overrides_successful_report(self):
         from io import StringIO
         from runpy import run_path
+        from types import SimpleNamespace
 
         runner = run_path(str(Path(__file__).resolve().parent /
                               "marketing-kit-project-release-e2e.py"))
         main = runner["main"]
         installed = {}
+        phases = []
 
         class FailedCleanup:
             def __init__(self, **kwargs):
@@ -720,8 +722,12 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             def __enter__(self):
                 return self.inner.__enter__()
 
-            def __exit__(self, *args):
-                self.inner.__exit__(*args)
+            def __exit__(self, exc_type, exc, traceback):
+                self.inner.__exit__(exc_type, exc, traceback)
+                if exc_type is not None:
+                    return False  # Never mask a pre-cleanup failure.
+                if phases != ["user-refusal"]:
+                    raise AssertionError("cleanup fixture did not reach both scope phases")
                 raise OSError("disposable cleanup failed")
 
         def execute(_cli, _env, project, _target, label, *args):
@@ -734,6 +740,10 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 installed[project] = {}
             return {"stage": label, "exit_code": 0, "result": "passed"}
 
+        def user_refusal(*_):
+            phases.append("user-refusal")
+            return {"stage": "User negative contract", "reason": "missing_vscode_grant"}
+
         with TemporaryDirectory() as output:
             report_path = Path(output) / "report.json"
             with patch.dict(main.__globals__, {
@@ -743,14 +753,17 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     "lock_ids": lambda *_: {"directory:" + name for name in runner["EXPECTED"]},
                     "settled_profile_snapshot": runner["profile_snapshot"],
                     "verify_corrupt_lock_refusal": lambda *_: 1,
-                    "verify_copilot_user_policy_refusal": lambda *_: {
-                        "stage": "User negative contract", "reason": "missing_vscode_grant"},
-                    }), patch.object(main.__globals__["tempfile"], "TemporaryDirectory", FailedCleanup), \
+                    "verify_copilot_user_policy_refusal": user_refusal,
+                    # Patch only the runner's binding, not the process-wide
+                    # tempfile module used by unrelated setup helpers.
+                    "tempfile": SimpleNamespace(TemporaryDirectory=FailedCleanup),
+                    }), \
                     patch.object(sys, "argv", ["runner", "--target", "copilot", "--cli", "unused",
                                                "--report", str(report_path)]), \
                     patch.object(sys, "stdout", StringIO()), patch.object(sys, "stderr", StringIO()):
                 self.assertEqual(main(), 1)
             report = json.loads(report_path.read_text())
+            self.assertEqual(phases, ["user-refusal"])
             self.assertEqual(report["scope_results"]["project"]["status"], "passed")
             self.assertEqual(report["scope_results"]["user"]["status"], "refused_as_expected")
             self.assertFalse(report["two_scope_lifecycle_qualified"])
