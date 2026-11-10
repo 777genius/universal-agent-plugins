@@ -40,6 +40,31 @@ jobs:
           test -s "$RUNNER_TEMP/codex-native/codex-x86_64-unknown-linux-musl"
           chmod 0755 "$RUNNER_TEMP/codex-native/codex-x86_64-unknown-linux-musl"
           echo "CODEX_BINARY=$RUNNER_TEMP/codex-native/codex-x86_64-unknown-linux-musl" >> "$GITHUB_ENV"
+      # A minimal host-sandbox probe has NO canary or user credentials at all.
+      # Raw sandbox diagnostics are permitted only in this env -i experiment.
+      # Never log actual MCP/tool output from canary-bearing Codex processes.
+      - name: Diagnose native sandbox with an empty environment and inert true
+        if: steps.native-binary.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          probe="$(mktemp -d "$RUNNER_TEMP/codex-sandbox-no-secret.XXXXXX")"
+          trap 'rm -rf "$probe"' EXIT
+          mkdir -p "$probe/.codex"
+          for backend in bwrap legacy_landlock; do
+            args=()
+            if [ "$backend" = legacy_landlock ]; then
+              args=(--enable use_legacy_landlock)
+            fi
+            echo "sandbox_probe_backend=$backend"
+            if timeout 15s env -i HOME="$probe" CODEX_HOME="$probe/.codex" PATH="/usr/bin:/bin" \
+                "$CODEX_BINARY" "${args[@]}" sandbox linux /usr/bin/true > "$probe/sandbox-log" 2>&1; then
+              echo "sandbox_probe_pass=true"
+            else
+              echo "sandbox_probe_pass=false"
+              cat "$probe/sandbox-log"
+            fi
+          done
       # Keep both independent results, even if one E2E fails. Never infer PASS
       # from the other; artifacts record only redacted boolean/hash facts.
       - name: Run real Codex CLI shell and MCP names-only proof
