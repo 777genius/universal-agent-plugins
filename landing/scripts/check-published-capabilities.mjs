@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import path from 'node:path';
 
 const levels = new Set(['unsupported', 'prepared', 'projected', 'native']);
 function supportSnapshot(rows) {
@@ -26,6 +27,18 @@ function supportSnapshot(rows) {
     }
   }
   return fields;
+}
+
+export function publicCapabilities(rows, clients) {
+  if (!Array.isArray(clients) || !clients.length || !Array.isArray(rows)) throw new Error('Invalid public clients');
+  const ids = clients.map(client => client.id);
+  if (ids.some(id => typeof id !== 'string' || !/^[a-z][a-z0-9-]*$/.test(id)) || new Set(ids).size !== ids.length)
+    throw new Error('Invalid or duplicate public client');
+  return ids.map(id => {
+    const matches = rows.filter(row => row?.id === id);
+    if (matches.length !== 1) throw new Error(`Missing or duplicate public capability: ${id}`);
+    return matches[0];
+  });
 }
 
 export function requireReleasedCapabilities(source, released) {
@@ -56,8 +69,10 @@ async function json(url) {
 async function main() {
   const version = stableVersion((await json('https://registry.npmjs.org/universal-agent-plugins/latest')).version);
   const released = await json(`https://raw.githubusercontent.com/777genius/universal-agent-plugins/agentplugins-v${version}/landing/data/clientCapabilities.generated.json`);
-  const source = JSON.parse(await readFile(new URL('../data/clientCapabilities.generated.json', import.meta.url), 'utf8'));
-  requireReleasedCapabilities(source, released);
+  const root = path.resolve(process.argv[2] || fileURLToPath(new URL('../../', import.meta.url)));
+  const source = JSON.parse(await readFile(path.join(root, 'landing/data/clientCapabilities.generated.json'), 'utf8'));
+  const { clients } = await import(pathToFileURL(path.join(root, 'landing/data/clients.ts')).href);
+  requireReleasedCapabilities(publicCapabilities(source, clients), released);
   console.log(`Published npm ${version} covers advertised source capabilities`);
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

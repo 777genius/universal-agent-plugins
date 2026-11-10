@@ -258,3 +258,15 @@ throwaway Git repositories, real npm archives and a read-only GitHub API fixture
 Negative controls cover missing/failed qualification jobs, changed tags or
 artifacts, stale attempts, archive traversal and changed public asset identities.
 This tests orchestration and custody, not new real-client/runtime qualification.
+
+### Production site source activation
+
+Both Pages publishers select `website/production-source.json` before installing
+build tools. The accepted immutable commit/tree keeps CLI source changes separate
+from public site activation while signed feeds continue refreshing normally.
+Advance this pin only after reviewing the selected site source and qualifying its
+public client capabilities against the actual published stable npm CLI. Manual
+Pages `expected_sha` still identifies the workflow/control commit. The final
+`BUILD_PROVENANCE.json` records both commits, the source tree, pin digest and
+mirrored feed marker digest. Source or release checks fail closed; no fallback
+source or alternative feed publisher is used.

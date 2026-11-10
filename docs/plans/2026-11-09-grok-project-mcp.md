@@ -33,3 +33,9 @@ Primary docs:
 - **Security:** separate Project authority, no cross-scope fallback, preserve immutable receipt and refusal paths.
 - **Compatibility:** leave User Grok CLI install/uninstall behavior unchanged; project old Skills behavior retained.
 - **Proof:** project delivery + native plugin discovery + MCP initialize/`tools/list`/`tools/call` are different gates, not interchangeable.
+
+Production publication remains on accepted deployed source `001ca0385618ac47d6404e25d6fa8fc408cbadd5`
+through the shared immutable production source pin. Both publishers retain normal
+signed-feed verification and refresh. Release capability checks use exactly the
+public client identities from that selected tree, excluding unadvertised backend
+adapters; the current Grok MCP candidate remains refused against npm 0.1.102.
