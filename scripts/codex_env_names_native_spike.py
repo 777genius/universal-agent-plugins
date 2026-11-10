@@ -251,7 +251,7 @@ class Model(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-def inspect(root, (secret, foreign_secret)):
+def inspect(root, secret):
     values = (secret,) if isinstance(secret, str) else secret
     patterns = []
     for value in values:
