@@ -183,6 +183,7 @@ def main():
                 raise RuntimeError("codex_ended_while_turn_active")
             time.sleep(.05)
         report["shell_tool_output_seen"] = Model.shell_output_seen
+        report["shell_secret_visible"] = Model.shell_secret_visible
         report["shell_response_category"] = Model.shell_response_category
         report["shell_response_indicators"] = Model.shell_response_indicators
         report["real_codex_shell_called"] = Model.shell_requested and Model.shell_execution_verified
@@ -224,6 +225,7 @@ def main():
         report["model_requests"] = Model.requests
         report["model_advertised_tools"] = sorted(Model.advertised_tool_names)[:25]
         report["secrecy_pass"] = (report["failure"] is None and not all_hits
+                                  and not Model.shell_secret_visible
                                   and live["errors"] == 0 and live["samples"] >= 20)
         if report["failure"] is None and not report["secrecy_pass"]:
             report["failure"] = "canary_persistence_or_incomplete_live_scan"
