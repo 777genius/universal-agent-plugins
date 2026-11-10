@@ -155,7 +155,8 @@ func grokProjectMCPNativeInspect(t *testing.T, f *projectNativeCLIAttempt, proje
 		t.Fatal(err)
 	}
 	obj, ok := value.(map[string]any)
-	if !ok || obj["grokVersion"] != "1.0.70" || obj["cwd"] != project ||
+	if !ok || !grokProjectMCPUnambiguousFields(obj, "grokVersion", "cwd", "projectRoot", "projectTrusted", "mcpServers", "plugins") ||
+		obj["grokVersion"] != "1.0.70" || obj["cwd"] != project ||
 		(obj["projectRoot"] != project && obj["projectRoot"] != project+"/") ||
 		obj["projectTrusted"] != false {
 		t.Fatal("real Grok native inspect returned different project/version/folder trust")
@@ -176,14 +177,27 @@ func grokProjectMCPNativeInspect(t *testing.T, f *projectNativeCLIAttempt, proje
 	}
 }
 
+// Native identity fields must not have Unicode-folded aliases. Unknown fields
+// remain allowed for forward-compatible inspect metadata.
+func grokProjectMCPUnambiguousFields(object map[string]any, fields ...string) bool {
+	for key := range object {
+		for _, field := range fields {
+			if key != field && shared.FoldJSONKey(key) == shared.FoldJSONKey(field) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 // The observed native inventory must not contain a case-folded alternative to
 // the selected owned plugin, even if the exact spelling is also present.
 func grokProjectMCPInventory(plugins []any, name, active string, present bool) error {
 	matched := false
 	for _, raw := range plugins {
 		entry, ok := raw.(map[string]any)
-		if !ok {
-			return fmt.Errorf("real Grok native plugin inventory has unrecognized entry")
+		if !ok || !grokProjectMCPUnambiguousFields(entry, "name", "scope", "path", "enabled", "provides") {
+			return fmt.Errorf("real Grok native plugin inventory has unrecognized or ambiguous entry")
 		}
 		candidate, ok := entry["name"].(string)
 		if !ok || strings.TrimSpace(candidate) == "" {
@@ -199,8 +213,8 @@ func grokProjectMCPInventory(plugins []any, name, active string, present bool) e
 			return fmt.Errorf("real Grok MCP project entry is foreign, duplicated or unexpectedly trusted")
 		}
 		provides, ok := entry["provides"].(map[string]any)
-		if !ok {
-			return fmt.Errorf("real Grok did not report plugin MCP discovery")
+		if !ok || !grokProjectMCPUnambiguousFields(provides, "mcpServers") {
+			return fmt.Errorf("real Grok did not report unambiguous plugin MCP discovery")
 		}
 		count, ok := provides["mcpServers"].(json.Number)
 		if !ok || count != "1" {
@@ -236,6 +250,18 @@ func TestGrokProjectMCPInventoryRejectsFoldedAliasesAndUnexpectedTrust(t *testin
 		{"folded alias after selected", []any{valid, plugin("UAP-grok-mcp-only")}, true, true},
 		{"folded alias after removal", []any{plugin("UAP-grok-mcp-only")}, false, true},
 		{"malformed entry", []any{"invalid"}, false, true},
+		{"ambiguous selected name", []any{map[string]any{
+			"name": name, "Name": "not-the-selected-plugin", "scope": "project",
+			"path": active, "enabled": false, "provides": map[string]any{"mcpServers": json.Number("1")},
+		}}, true, true},
+		{"ambiguous foreign scope", []any{map[string]any{
+			"name": "foreign", "scope": "user", "Scope": "project", "path": "/foreign",
+			"enabled": false,
+		}}, false, true},
+		{"ambiguous MCP count", []any{map[string]any{
+			"name": name, "scope": "project", "path": active, "enabled": false,
+			"provides": map[string]any{"mcpServers": json.Number("1"), "McpServers": json.Number("2")},
+		}}, true, true},
 		{"missing native name", []any{map[string]any{"scope": "project"}}, false, true},
 		{"unexpected trust", []any{map[string]any{"name": name, "scope": "project", "path": active,
 			"enabled": true, "provides": map[string]any{"mcpServers": json.Number("1")}}}, true, true},
@@ -250,6 +276,26 @@ func TestGrokProjectMCPInventoryRejectsFoldedAliasesAndUnexpectedTrust(t *testin
 			err := grokProjectMCPInventory(tc.plugins, name, active, tc.present)
 			if (err != nil) != tc.refused {
 				t.Fatalf("native inventory admission mismatch (refused=%t): %v", tc.refused, err)
+			}
+		})
+	}
+}
+
+func TestGrokProjectMCPUnambiguousInspectIdentity(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		fields map[string]any
+		valid bool
+	}{
+		{"canonical", map[string]any{"projectTrusted": false, "plugins": []any{}}, true},
+		{"unrelated extension", map[string]any{"projectTrusted": false, "futureVendorField": 1}, true},
+		{"ASCII alias", map[string]any{"projectTrusted": false, "ProjectTrusted": true}, false},
+		{"Unicode folded alias", map[string]any{"plugins": []any{}, "plu\u212ains": []any{}}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := grokProjectMCPUnambiguousFields(tc.fields, "projectTrusted", "plugins")
+			if got != tc.valid {
+				t.Fatalf("canonical inspect field admission: got %t, want %t", got, tc.valid)
 			}
 		})
 	}
