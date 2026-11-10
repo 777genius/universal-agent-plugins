@@ -1607,6 +1607,31 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, "signed lock changed"):
             check(dict(baseline), baseline, b"rewritten", b"pinned", "remove B")
 
+    def test_marketing_kit_peer_baseline_waits_for_own_security_cache(self):
+        # Own post-command writes may settle before the peer starts. No writes
+        # observed *after* a peer operation are ever excused or rebaselined.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        settle = runner["settled_profile_snapshot"]
+        states = iter(({"security": "starting"},
+                       {"security": "completed"},
+                       {"security": "completed"},
+                       {"security": "completed"}))
+        with patch.dict(settle.__globals__, {
+                "profile_snapshot": lambda *_: next(states),
+                "sleep": lambda _: None}):
+            self.assertEqual(settle({}, Path("."), attempts=4, interval=0),
+                             {"security": "completed"})
+
+        changing = iter(({"cache": index} for index in range(5)))
+        with patch.dict(settle.__globals__, {
+                "profile_snapshot": lambda *_: next(changing),
+                "sleep": lambda _: None}):
+            with self.assertRaisesRegex(AssertionError, "did not quiesce"):
+                settle({}, Path("."), attempts=5, interval=0)
+
     def test_marketing_kit_cross_profile_snapshot_detects_hidden_rewrites(self):
         # Sentinels and stable installation IDs do not prove that another
         # profile left native, HOME or UAP state untouched.

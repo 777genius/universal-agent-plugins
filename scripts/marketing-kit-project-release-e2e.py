@@ -600,6 +600,27 @@ def profile_snapshot(env, project):
     return scoped_snapshot([Path(env["HOME"]), Path(env["AGENTPLUGINS_HOME"]), project])
 
 
+def settled_profile_snapshot(env, project, *, attempts=12, interval=2):
+    """Bounded *own-profile* cache/scanner settling before peer operations.
+
+    The released installer can finish its own security cache writes after the
+    command exits. Require three identical full-state snapshots before the
+    first peer operation. Never rebaseline after a peer command: its writes
+    must still fail the unchanged-profile guard.
+    """
+    previous = None
+    identical = 0
+    for attempt in range(attempts):
+        observed = profile_snapshot(env, project)
+        identical = identical + 1 if observed == previous else 1
+        if identical >= 3:
+            return observed
+        previous = observed
+        if attempt + 1 < attempts:
+            sleep(interval)
+    raise AssertionError("own profile did not quiesce before peer lifecycle")
+
+
 def check_profile_unchanged(env, project, expected, stage):
     """A peer restore/remove must not alter the originating profile or Project."""
     observed = profile_snapshot(env, project)
@@ -843,7 +864,7 @@ def main():
                 raise AssertionError("repair changed installation identities")
             if (project_a / "uap.lock").read_bytes() != pinned_after_update:
                 raise AssertionError("repair changed the signed lock")
-            native_a_before_b = profile_snapshot(env, project_a)
+            native_a_before_b = settled_profile_snapshot(env, project_a)
             env_b, project_b, foreign_b, project_foreign_b, native_foreign_b = run_case(options.cli, options.target, root, "B", project_a)
             bind_pinned_launcher_cache(env_b, launcher_cache, root)
             foreign_b_files = pin_foreign([(foreign_b, "unmanaged user data\n"),
@@ -893,7 +914,7 @@ def main():
             if (project_a / "uap.toml").read_bytes() != manifest_after_update:
                 raise AssertionError("Project B remove rewrote Project A portable manifest")
             # A's remaining lifecycle and User C must not mutate the removed B profile.
-            protected_b = profile_snapshot(env_b, project_b)
+            protected_b = settled_profile_snapshot(env_b, project_b)
             run(env, project_a, "remove A", "remove", "marketing-kit", *scoped)
             if identities(inventory(options.cli, env, project_a, options.target), options.target):
                 raise AssertionError("Project A retains root or mandatory children after remove")
@@ -971,7 +992,7 @@ def main():
             user_portable_c.mkdir(parents=True, exist_ok=True)
             for name in ("uap.toml", "uap.lock"):
                 shutil.copyfile(user_portable / name, user_portable_c / name)
-            user_a_native_before_c = profile_snapshot(env, project_a)
+            user_a_native_before_c = settled_profile_snapshot(env, project_a)
             negative_exit = verify_corrupt_lock_refusal(
                 options.cli, env_c, project_c, options.target, "user", (
                     lambda: check_foreign(foreign_files, root),
@@ -1041,7 +1062,7 @@ def main():
                 raise AssertionError("User C remove rewrote User A portable manifest")
             # Once User C is removed, User A's remaining native cleanup must
             # not recreate receipts or settings in the independent C profile.
-            protected_c_profile = profile_snapshot(env_c, project_c)
+            protected_c_profile = settled_profile_snapshot(env_c, project_c)
             # Codex user plugin dependencies require genuine external native removal.
             # Reuse the audited, pinned Codex CLI path and exact native absence oracle.
             user_remove_attestation = ()
