@@ -321,7 +321,7 @@
       "items": {
         "0": {
           "question": "ما وكلاء الذكاء الاصطناعي المدعومون؟",
-          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder: لكل عميل مسار خاص للتثبيت أو الإعداد. يعتمد التوافق على مكونات الحزمة ونطاق التثبيت ومتطلبات التفعيل."
+          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder, Pi: لكل عميل مسار خاص للتثبيت أو الإعداد. يعتمد التوافق على مكونات الحزمة ونطاق التثبيت ومتطلبات التفعيل."
         },
         "1": {
           "question": "هل يثبّت أمر واحد في كل وكيل؟",
