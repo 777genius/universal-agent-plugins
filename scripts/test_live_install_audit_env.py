@@ -133,6 +133,19 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     with self.assertRaisesRegex(AssertionError, "CLI did not succeed"):
                         check({**valid, "_json": invalid}, operation, operation, "codex")
                 if results:
+                    # A completed native operation without a durable installation
+                    # identity cannot be attributed to this signed dependency.
+                    # Cold install plans may omit the *action* ID; an applied
+                    # result must still return its actual installation ID.
+                    for missing_id in (None, "", "   ", 42):
+                        malformed_results = [dict(result) for result in results]
+                        malformed_results[0]["installation_id"] = missing_id
+                        with self.subTest(operation=operation, missing_id=missing_id):
+                            with self.assertRaisesRegex(
+                                    AssertionError, "CLI did not succeed"):
+                                check({**valid, "_json": {**envelope,
+                                      "results": malformed_results}},
+                                      operation, operation, "codex")
                     # The released installer legitimately returns "unchanged"
                     # when an active repair/install/remove converges with no
                     # filesystem mutation. Preserve this exact public contract,

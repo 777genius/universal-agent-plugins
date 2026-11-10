@@ -84,8 +84,12 @@ def valid_legacy_dependency_result(envelope, operation, target=None, scope=None)
                 or result.get("outcome") not in ("completed", "unchanged")
                 or result.get("operation") != action["action"]
                 or result.get("client_id") != action["client_id"]
+                # Active receipts must identify their durable installation.
+                # For a cold add the planned action may not have an ID yet.
+                or not isinstance(result.get("installation_id"), str)
+                or not result["installation_id"].strip()
                 or (action.get("installation_id")
-                    and result.get("installation_id") != action["installation_id"])):
+                    and result["installation_id"] != action["installation_id"])):
             return False
     return True
 
