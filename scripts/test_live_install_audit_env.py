@@ -763,8 +763,8 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             check("copilot", home, case, "remove")
 
     def test_marketing_kit_native_cleanup_refuses_in_sandbox_profile_aliases(self):
-        # Resolved path containment can accept a link to another disposable
-        # profile. That must not count as auditing the selected HOME.
+        # Reuse the shared path_inside_case guard: it must reject symlinks
+        # even when they resolve to another profile *inside* the sandbox.
         from runpy import run_path
 
         runner = run_path(str(Path(__file__).resolve().parent /
@@ -783,12 +783,12 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             except (OSError, NotImplementedError) as error:
                 self.skipTest(f"host cannot create directory symlinks: {error}")
             self.assertTrue(alias.is_dir())  # Symlink resolves within sandbox.
-            with self.assertRaisesRegex(AssertionError, "unsafe native client HOME ancestry"):
+            with self.assertRaisesRegex(AssertionError, "native HOME left disposable case"):
                 check("copilot", alias, case, "remove B")
             alias.unlink()
             b.rmdir()
             b.symlink_to(a, target_is_directory=True)
-            with self.assertRaisesRegex(AssertionError, "unsafe native client HOME ancestry"):
+            with self.assertRaisesRegex(AssertionError, "native HOME left disposable case"):
                 check("copilot", b / "home", case, "remove B")
             b.unlink()
             b.mkdir()

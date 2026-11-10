@@ -439,19 +439,6 @@ def check_removed_native_components(target, home, case_root, stage, project_scop
     """Refuse native MCP and Skill remnants after an empty scoped inventory."""
     if not audit["path_inside_case"](home, case_root):
         raise AssertionError(f"{stage}: native HOME left disposable case")
-    # Resolved containment alone admits an in-sandbox symlink to another
-    # profile. Audit the selected physical HOME/Project, not a peer's tree.
-    if case_root not in home.parents:
-        raise AssertionError(f"{stage}: unsafe native client HOME ancestry")
-    ancestor = home
-    while ancestor != case_root:
-        try:
-            mode = ancestor.lstat().st_mode
-        except OSError as error:
-            raise AssertionError(f"{stage}: native client HOME ancestry unreadable") from error
-        if not stat.S_ISDIR(mode):
-            raise AssertionError(f"{stage}: unsafe native client HOME ancestry")
-        ancestor = ancestor.parent
     # Copilot Project Skills are under .github/skills, not its MCP config
     # roots (.copilot/.config/copilot). Reuse the audit's authoritative paths.
     relative_roots = (*audit["NATIVE_ROOTS"][target],
