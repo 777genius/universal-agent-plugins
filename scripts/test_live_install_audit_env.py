@@ -762,6 +762,39 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 unsafe.unlink()
             check("copilot", home, case, "remove")
 
+    def test_marketing_kit_native_cleanup_refuses_in_sandbox_profile_aliases(self):
+        # Resolved path containment can accept a link to another disposable
+        # profile. That must not count as auditing the selected HOME.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        check = runner["check_removed_native_components"]
+        with TemporaryDirectory() as temporary:
+            case = Path(temporary).resolve()
+            a = case / "A"
+            a.mkdir()
+            (a / "home").mkdir()
+            b = case / "B"
+            b.mkdir()
+            alias = b / "home"
+            try:
+                alias.symlink_to(a / "home", target_is_directory=True)
+            except (OSError, NotImplementedError) as error:
+                self.skipTest(f"host cannot create directory symlinks: {error}")
+            self.assertTrue(alias.is_dir())  # Symlink resolves within sandbox.
+            with self.assertRaisesRegex(AssertionError, "unsafe native client HOME ancestry"):
+                check("copilot", alias, case, "remove B")
+            alias.unlink()
+            b.rmdir()
+            b.symlink_to(a, target_is_directory=True)
+            with self.assertRaisesRegex(AssertionError, "unsafe native client HOME ancestry"):
+                check("copilot", b / "home", case, "remove B")
+            b.unlink()
+            b.mkdir()
+            (b / "home").mkdir()
+            check("copilot", b / "home", case, "remove B")
+
     def test_marketing_kit_user_and_project_foreign_skills_are_pinned(self):
         # Protect real native User Skills independently of Project Skills;
         # Codex, OpenCode, Cursor, Gemini and Copilot also discover compatibility Skills.
