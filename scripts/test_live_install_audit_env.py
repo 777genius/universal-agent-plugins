@@ -167,6 +167,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                               "marketing-kit-project-release-e2e.py"))
         verify = runner["lock_ids"]
         required = runner["REQUIRED_DISTRIBUTIONS"]
+        selectors = runner["REQUIRED_CHILD_SELECTORS"]
         pins = []
         for alias, distribution in required.items():
             pins.append({
@@ -175,8 +176,8 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 "targets": ["codex"], "tree_digest": "sha256:" + "a" * 64,
                 "manifest_digest": "sha256:" + "b" * 64,
                 "required_by": ([] if alias == "marketing-kit" else
-                                [{"alias": "marketing-kit", "selector": {
-                                    "kind": "release", "value": "1"}}]),
+                                [{"alias": "marketing-kit",
+                                  "selector": dict(selectors[alias])}]),
             })
 
         with TemporaryDirectory() as temporary:
@@ -220,6 +221,10 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                         distribution="someone/foreign"),
                     lambda rows: rows[1].update(tree_digest="sha256:invalid"),
                     lambda rows: rows[1]["required_by"][0].update(alias="missing"),
+                    lambda rows: rows[1]["required_by"][0]["selector"].update(value="0.2.0"),
+                    lambda rows: rows[2]["required_by"][0]["selector"].update(
+                        kind="release", value="1"),
+                    lambda rows: rows[3]["required_by"][0].pop("selector"),
                     lambda rows: rows[1].update(alias="marketing-kit"),
                     lambda rows: rows[0].update(required_by=[
                         {"alias": "notion", "selector": {

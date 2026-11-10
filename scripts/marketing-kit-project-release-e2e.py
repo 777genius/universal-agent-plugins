@@ -23,6 +23,13 @@ REQUIRED_DISTRIBUTIONS = {
     "playwright": "777genius/playwright-bridge",
 }
 EXPECTED = set(REQUIRED_DISTRIBUTIONS.values())
+# Versions declared by the immutable, published Marketing Kit uap.toml.
+# Edge aliases alone cannot prove an unchanged locked selector.
+REQUIRED_CHILD_SELECTORS = {
+    "notion": {"kind": "version", "value": "0.1.0"},
+    "hubspot-crm": {"kind": "version", "value": "0.1.0"},
+    "playwright": {"kind": "version", "value": "0.0.80"},
+}
 
 
 # Published npm 0.1.102 dependency operations include result=success AND
@@ -260,6 +267,9 @@ def lock_ids(project, target=None):
             for edge in required_by:
                 if not isinstance(edge, dict) or edge.get("alias") not in by_alias:
                     raise AssertionError("unknown signed lock dependency consumer")
+                if (edge["alias"] == "marketing-kit"
+                        and edge.get("selector") != REQUIRED_CHILD_SELECTORS.get(alias)):
+                    raise AssertionError("signed Marketing Kit dependency selector changed")
                 if alias in children[edge["alias"]]:
                     raise AssertionError("duplicate signed lock dependency edge")
                 children[edge["alias"]].add(alias)
