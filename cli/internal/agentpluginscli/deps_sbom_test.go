@@ -99,6 +99,11 @@ func TestSPDXIDsAcceptUAPUnderscoreAlias(t *testing.T) {
 	if doc.SPDXVersion != "SPDX-2.3" || len(doc.Packages) != 2 {
 		t.Fatalf("unexpected document: %+v", doc)
 	}
+	for _, pkg := range doc.Packages {
+		if pkg.CopyrightText != "NOASSERTION" {
+			t.Fatalf("SPDX 2.3 requires a truthful package copyrightText field: %+v", pkg)
+		}
+	}
 	if doc.Packages[0].ID != spdxPackageID("app_pkg") || strings.Contains(doc.Packages[0].ID, "_") {
 		t.Fatalf("invalid SPDX package ID: %q", doc.Packages[0].ID)
 	}

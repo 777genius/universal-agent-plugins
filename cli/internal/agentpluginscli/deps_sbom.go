@@ -98,6 +98,7 @@ type spdxPackage struct {
 	FilesAnalyzed    bool   `json:"filesAnalyzed"`
 	LicenseConcluded string `json:"licenseConcluded"`
 	LicenseDeclared  string `json:"licenseDeclared"`
+	CopyrightText   string `json:"copyrightText"`
 	Comment          string `json:"comment,omitempty"`
 }
 
@@ -223,7 +224,7 @@ func marshalSPDX(lock environment.Lock) ([]byte, error) {
 		id := spdxPackageID(pin.Alias)
 		doc.Packages = append(doc.Packages, spdxPackage{Name: pin.Alias, ID: id,
 			Version: pin.Version, DownloadLocation: "NOASSERTION", FilesAnalyzed: false,
-			LicenseConcluded: "NOASSERTION", LicenseDeclared: "NOASSERTION",
+			LicenseConcluded: "NOASSERTION", LicenseDeclared: "NOASSERTION", CopyrightText: "NOASSERTION",
 			Comment: "Source: " + sbomSource(pin) + "; UAP canonical tree digest (" + pin.DigestAlgorithm + "): " + pin.TreeDigest})
 		doc.Relationships = append(doc.Relationships, spdxRelationship{
 			Element: "SPDXRef-DOCUMENT", Type: "DESCRIBES", Related: id,
