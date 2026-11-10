@@ -608,9 +608,9 @@ def execute(cli, env, project, target, label, *args):
         raise AssertionError(f"{label}: invalid explicit scope")
     result = invoke([cli, *args, "--format", "json"], env, project, 180)
     envelope = verified(result, label, args[0], target, args[selected])
-    if args[0] in ("add", "install"):
-        # The released result DTO has no alias. In a cold add/install planned IDs
-        # can be absent, so match each applied result to fresh signed inventory.
+    if args[0] in ("add", "install", "repair"):
+        # The released result DTO has no alias. Bind applied receipts to live
+        # inventory, including repairs; cold install actions may omit IDs.
         data = envelope.get("data", envelope)
         if any(action["action"] != "unchanged" for action in data["actions"]):
             current = identities(

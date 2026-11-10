@@ -271,6 +271,43 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                                 execute("agentplugins", {}, Path.cwd(), "codex",
                                         "cold restore", *args)
 
+    def test_marketing_kit_repair_receipt_matches_selected_scope_inventory(self):
+        # A plausible repair receipt cannot attest to a different durable
+        # installation merely because the action itself reports the same ID.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        execute = runner["execute"]
+        distribution = runner["REQUIRED_DISTRIBUTIONS"]["marketing-kit"]
+        action = {"alias": "marketing-kit", "client_id": "codex",
+                  "action": "repair", "installation_id": "root-id"}
+        receipt = {"client_id": "codex", "operation": "repair",
+                   "installation_id": "root-id", "outcome": "completed"}
+        for scope in ("project", "user"):
+            with self.subTest(scope=scope):
+                envelope = {"result": "success", "outcome": "completed",
+                            "scope": scope, "actions": [action],
+                            "results": [receipt]}
+                response = {"exit_code": 0, "timeout": False, "_json": envelope}
+                args = ("repair", "marketing-kit", "--target", "codex",
+                        "--scope", scope)
+                if scope == "project":
+                    args += ("--project-root", str(Path.cwd()))
+                with patch.dict(execute.__globals__, {
+                        "invoke": lambda *argv: response,
+                        "inventory": lambda *argv: [],
+                        "identities": lambda *argv: {distribution: "root-id"}}):
+                    self.assertEqual(
+                        execute("agentplugins", {}, Path.cwd(), "codex",
+                                "repair", *args)["result"], "passed")
+                    with patch.dict(execute.__globals__, {
+                            "identities": lambda *argv: {distribution: "foreign-id"}}):
+                        with self.assertRaisesRegex(
+                                AssertionError, "receipt does not match installed"):
+                            execute("agentplugins", {}, Path.cwd(),
+                                    "codex", "repair", *args)
+
     def test_marketing_kit_accepts_only_complete_legacy_noop_update(self):
         # Published 0.1.102 emits result=success alongside outcome/actions/results.
         from runpy import run_path
