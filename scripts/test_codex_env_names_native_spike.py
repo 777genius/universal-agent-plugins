@@ -8,7 +8,7 @@ import unittest
 from unittest.mock import patch
 import http.server
 
-from codex_env_names_native_spike import Model, MCP_CALL, SHELL_CALL, inspect
+from codex_env_names_native_spike import Model, MCP_CALL, SHELL_CALL, SHELL_MARKER, inspect
 
 
 class TestSyntheticModelOracle(unittest.TestCase):
@@ -20,6 +20,8 @@ class TestSyntheticModelOracle(unittest.TestCase):
         Model.mcp_output_seen = False
         Model.mcp_digest_verified = False
         Model.shell_output_seen = False
+        Model.shell_execution_verified = False
+        Model.shell_requested_at = 0.0
         Model.error = ""
         Model.expected_digest = "UNITTEST_SYNTHETIC_SHA_ONLY"
         Model.advertised_tool_names = set()
@@ -82,6 +84,27 @@ class TestSyntheticModelOracle(unittest.TestCase):
                                         "text": '{"observed":false,"sha256":""}'}]}}]})
         self.assertTrue(Model.mcp_output_seen)
         self.assertFalse(Model.mcp_digest_verified)
+
+    def test_shell_error_response_does_not_prove_execution(self):
+        self.call({"tools": [{"type": "function", "name": "exec_command"}]})
+        self.call({"input": [{"type": "function_call_output", "call_id": SHELL_CALL,
+                              "output": "native shell tool denied"}],
+                   "tools": [{"type": "namespace", "name": "mcp__env_spike",
+                              "tools": [{"name": "confirm_env"}]}]})
+        self.assertTrue(Model.shell_output_seen)
+        self.assertFalse(Model.shell_execution_verified)
+
+    def test_shell_marker_only_counts_after_bounded_execution(self):
+        self.call({"tools": [{"type": "function", "name": "exec_command"}]})
+        payload = {"input": [{"type": "function_call_output", "call_id": SHELL_CALL,
+                              "output": SHELL_MARKER}],
+                   "tools": [{"type": "namespace", "name": "mcp__env_spike",
+                              "tools": [{"name": "confirm_env"}]}]}
+        self.call(payload)
+        self.assertFalse(Model.shell_execution_verified)
+        Model.shell_requested_at -= 7.0
+        self.call(payload)
+        self.assertTrue(Model.shell_execution_verified)
 
     def test_missing_mcp_advertisement_refuses(self):
         self.call({"tools": [{"type": "function", "name": "exec_command"}]})
