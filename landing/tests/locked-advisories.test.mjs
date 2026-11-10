@@ -322,6 +322,28 @@ test('rejects YAML merge aliases that hide boot importer roots', () => {
   assert.throws(() => auditLock(mergedBoot), /Unsupported pnpm YAML merge mapping/);
 });
 
+test('colon-bearing YAML comments cannot hide snapshot dependency edges or importer roots', () => {
+  const expected = auditLock(fixture);
+  const cases = [
+    fixture.replace(
+      "  '@a/entry@1.0.0(peer@2.0.0)':\n",
+      "  '@a/entry@1.0.0(peer@2.0.0)':\n  # misleading: snapshot\n",
+    ),
+    fixture.replace(
+      '    dependencies:\n      glob: 13.0.6\n',
+      '    dependencies:\n    # misleading: category\n      glob: 13.0.6\n',
+    ),
+    fixture.replace(
+      "    dependencies:\n      '@a/entry':\n",
+      "    dependencies:\n    # misleading: importer\n      '@a/entry':\n",
+    ),
+  ];
+  for (const input of cases) {
+    assert.notEqual(input, fixture, 'fixture must have changed');
+    assert.deepEqual(auditLock(input), expected);
+  }
+});
+
 // Test the checked-in lock as well as synthetic adversarial pnpm graph fixtures.
 test('checked-in frozen landing lock contains no scoped advisory paths', () => {
   const lockfile = new URL('../pnpm-lock.yaml', import.meta.url);

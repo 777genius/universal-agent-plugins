@@ -1,5 +1,7 @@
 # Landing dependency advisory triage — locked-parent evidence
 
+> **Historical checkpoint (2026-11-08).** The affected `glob` and `minimatch` dependency graph was fixed by [PR #829](https://github.com/777genius/universal-agent-plugins/pull/829). The parent tables and unresolved-blocker statements below describe the **pre-#829** state. PR #792 now adds preventive advisory-regression checks only; it is not the dependency remediation.
+
 Checked the exact `landing/pnpm-lock.yaml` and `landing/package.json` from the #792 branch based on `main` `75e441a0`, not a guessed fresh resolution. This is a **read-only investigation**, not a fix or production runtime security attestation.
 
 ## Actual old-major parents in the pnpm v9 lockfile

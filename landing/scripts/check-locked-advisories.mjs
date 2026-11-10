@@ -36,6 +36,8 @@ function parsePnpmDocument(source) {
     if (pendingRoot) throw new Error(`Missing pnpm importer version: ${pendingRoot}`);
   };
   for (const line of source.split(/\r?\n/)) {
+    // YAML comments are not mapping keys; ignore even when they contain ':'.
+    if (/^\s*#/.test(line)) continue;
     const header = line.match(/^(?:(importers|snapshots)|'(importers|snapshots)'|"(importers|snapshots)")\s*:\s*(.*)$/);
     if (header) {
       const suffix = header[4].trim();
