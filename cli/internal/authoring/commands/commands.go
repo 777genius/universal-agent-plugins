@@ -143,58 +143,8 @@ func (a App) Execute(ctx context.Context, args []string, streams authoringcli.St
 			return exitx.Wrap(errors.New("authoring output failed"), 1)
 		}
 	} else {
-		if _, e := fmt.Fprintf(streams.Out, "%s: readiness %s; conformance %s; host %s; compatibility %s; toolchain %s; runtime %s\n", captured.Command, captured.Readiness.Status, captured.Conformance.Status, captured.HostSafety.Status, captured.Compatibility.Status, captured.Toolchain.Status, captured.Runtime.Status); e != nil {
-			return exitx.Wrap(errors.New("authoring output failed"), 1)
-		}
-		for _, f := range captured.Findings {
-			if _, e := fmt.Fprintf(streams.Out, "%s: %s (%s)\n", f.Severity, f.Code, f.Layer); e != nil {
-				return exitx.Wrap(errors.New("authoring output failed"), 1)
-			}
-		}
-		for _, component := range captured.Components {
-			if _, e := fmt.Fprintf(streams.Out, "%s %s: %s; requirements %s\n", component.Type, component.ID, component.Status, strings.Join(component.Requirements, ", ")); e != nil {
-				return exitx.Wrap(errors.New("authoring output failed"), 1)
-			}
-		}
-		if captured.Capabilities != nil {
-			if _, e := fmt.Fprintf(streams.Out, "commands: %s\n", strings.Join(captured.Capabilities.Commands, ", ")); e != nil {
-				return exitx.Wrap(e, 1)
-			}
-			for _, s := range captured.Capabilities.Schemas {
-				if _, e := fmt.Fprintf(streams.Out, "schema: %s; %s\n", s.ID, s.Digest); e != nil {
-					return exitx.Wrap(e, 1)
-				}
-			}
-			for _, p := range captured.Capabilities.Profiles {
-				if _, e := fmt.Fprintf(streams.Out, "profile: %s; revision %s; %s\n", p.ID, p.Revision, p.Digest); e != nil {
-					return exitx.Wrap(e, 1)
-				}
-			}
-			for _, c := range captured.Capabilities.Clients {
-				if _, e := fmt.Fprintf(streams.Out, "client: %s; activation: %s\n", c.ClientID, c.ActivationMode); e != nil {
-					return exitx.Wrap(e, 1)
-				}
-			}
-		}
-		for _, c := range captured.Clients {
-			if _, e := fmt.Fprintf(streams.Out, "target %s: static support only; %s\n", c.ClientID, strings.Join(c.Limitations, ", ")); e != nil {
-				return exitx.Wrap(e, 1)
-			}
-			for _, v := range c.Components {
-				if _, e := fmt.Fprintf(streams.Out, "  %s %d: %s\n", v.Kind, v.Index, v.Support); e != nil {
-					return exitx.Wrap(e, 1)
-				}
-			}
-		}
-		for _, c := range captured.DoctorChecks {
-			if _, e := fmt.Fprintf(streams.Out, "%s: %s; %s\n", c.ID, c.Status, c.Action); e != nil {
-				return exitx.Wrap(e, 1)
-			}
-		}
-		if captured.Error != nil {
-			if _, e := fmt.Fprintln(streams.Out, captured.Error.Action); e != nil {
-				return exitx.Wrap(errors.New("authoring output failed"), 1)
-			}
+		if e := writePrivateDetailed(streams.Out, *captured); e != nil {
+			return e
 		}
 	}
 	if err != nil {
