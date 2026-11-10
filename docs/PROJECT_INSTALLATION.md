@@ -39,38 +39,40 @@ take a saved dependency `--alias`. The [project evidence index](evidence/PROJECT
 separates historical failures, blocked observations and successful checks from
 the final feature-source native run; each client's activation limits still apply.
 
-## Reviewed catalog: pinned project source
+## Signed Directory and direct sources in Project
 
-The signed Directory v1 policy remains **user-only** for backward compatibility.
-A catalog entry that is reviewed, active and pinned to a complete Git commit
-may separately offer an explicit project **direct-source** command for
-Claude Code, Codex, OpenCode, Cursor, Gemini CLI, GitHub Copilot CLI, Kimi Code
-and Cline, when the release contains only supported portable Skills/MCP
-components and its user-scope package eligibility already passes. Grok Build,
-Qoder and Windsurf are limited to Skills-only project packages in this catalog
-route. Kiro, VS Code, Pi and ChatGPT are not enabled by this bridge. This is
-not a newly signed project-scope Directory policy and does not change the
-behavior of an existing user-scope alias. Copy the pinned direct-source command,
-not the catalog's short user-only alias: `add context7 --scope project` is not
-an equivalent installation and may be refused by Directory v1.
+The Directory uses **one signed schema-1 source authority**. Its published
+scope rows remain User-only for existing readers, but the current stable CLI can independently admit **explicit Project placement** for an eligible
+signed root and each mandatory dependency. It enforces exact source pins,
+revocations, source integrity, selected native Project capabilities and
+ownership. User runtime evidence is never reused as Project activation proof.
 
-From the exact project root, the generated command takes the form:
+Use the current stable CLI to preview a short Directory name for an eligible
+Project package (all required dependencies must also qualify):
+
+```sh
+cd /path/to/project
+agentplugins add context7 --target codex --scope project --dry-run
+```
+
+Review the plan, then omit `--dry-run` to apply. A supported signed package
+can have separate installations in User, Project A and Project B. A denied
+Project request must not silently install into User. See the
+[client matrix](PROJECT_CLIENT_SUPPORT.md) for supported components.
+
+**Alternative: exact Git pin.** The published stable CLI supports signed
+Directory short names in eligible Project scope. For a reproducible direct Git
+source, use the reviewed full commit SHA:
 
 ```sh
 agentplugins add github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH \
   --target codex --scope project
 ```
 
-The CLI acquires and checks the selected pinned package under its ordinary Git
-source authority, then uses the existing project-specific transaction, ownership,
-repair and removal boundaries. The saved dependency remains pinned to that
-source; to advance versions, explicitly choose and review a new source commit.
-Do not treat preparation as proof of native MCP initialization, workspace trust,
-OAuth or real-model activation. Unsupported clients/components, incomplete
-sources and stale signed snapshots must never be offered this shortcut.
-Publishing real `project` target policies in the Directory requires a
-separate versioned compatible signed contract; do not change v1 `scopes` to
-`["user", "project"]` while older clients reject that field.
+Omit `//PACKAGE_PATH` for a repository-root package. A direct-Git source uses
+its own verified transport; it is not a substitute for a signed Directory
+selector when mandatory Registry children need separate authorization.
+Do not infer native MCP calls, workspace trust or OAuth from prepared files.
 
 ## Select the environment on every command
 

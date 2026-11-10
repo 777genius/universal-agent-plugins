@@ -135,7 +135,7 @@ for (const mobile of [false, true]) {
       const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]');
       const details = card.locator('.skillspector');
       await expect(details).toHaveClass(/skillspector--incomplete/);
-      await expect(details.locator(':scope > summary')).toContainText('Coverage has limits');
+      await expect(details.locator(':scope > summary')).toContainText('Incomplete scan');
       await details.locator(':scope > summary').focus();
       await page.keyboard.press('Enter');
       await expect(details).toHaveAttribute('open', '');
@@ -165,10 +165,10 @@ for (const mobile of [false, true]) {
       await details.locator('.skillspector__dialog-close').click();
       await expect(details).not.toHaveAttribute('open');
       await card.getByRole('button', { name: 'Install I18n State 00', exact: true }).click();
-      await expect(card.locator('.plugin-card__install-panel pre')).toContainText(
+      await expect(card.locator('.plugin-card__install .command-snippet--add pre')).toContainText(
         'npx -y universal-agent-plugins add i18n-state-00',
       );
-      await navigate(page, '/plugins/', 'en', '?tab=skills');
+      await navigate(page, '/plugins/', 'en', '?tab=skills&skillScan=all');
       const skill = page.locator('.skill-card').first();
       await expect(skill.locator('.skillspector')).toHaveClass(/skillspector--stale/);
       await skill.locator('.skillspector > summary').click();
@@ -185,9 +185,11 @@ for (const mobile of [false, true]) {
       await expect(skill.locator('.plugin-card__install-panel pre')).toContainText(
         'skills add https://github.com/anthropics/skills --skill frontend-design',
       );
-      await navigate(page, '/plugins/', 'ru', '?tab=skills');
+      await navigate(page, '/plugins/', 'ru', '?tab=skills&skillScan=all');
       await expect(page.locator('.skill-card .skillspector > summary')).toContainText(
-        wording('ru')('registryUi.skillSpector.stale'),
+        wording('ru')('registryUi.skillSpector.lastScan', {
+          result: wording('ru')('registryUi.skillSpector.partial'),
+        }),
       );
       expect(requests).toBe(1);
       expect(
@@ -324,7 +326,7 @@ test('partial reports explain coverage and link the visible finding count to sca
   await projections(page, index);
   await navigate(page, '/plugins/', 'en', '?q=i18n-state-00');
   const details = page.locator('.plugin-card[data-install-source="i18n-state-00"] .skillspector');
-  await expect(details.locator(':scope > summary')).toContainText('Coverage has limits');
+  await expect(details.locator(':scope > summary')).toContainText('Incomplete scan');
   await details.locator(':scope > summary').click();
   await expect(details).toContainText('static_parse_limit');
   await expect(details).toContainText('reference_missing');

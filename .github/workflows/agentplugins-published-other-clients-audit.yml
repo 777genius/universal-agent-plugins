@@ -1,0 +1,127 @@
+name: Published npm stable additional native clients audit
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - '.github/workflows/agentplugins-published-other-clients-audit.yml'
+      - '.github/workflows/agentplugins-published-version.yml'
+      - 'scripts/live-install-audit.py'
+      - 'scripts/test_live_install_audit_components.py'
+  workflow_run:
+    workflows: ['Agentplugins NPM Publish']
+    types: [completed]
+  schedule:
+    - cron: '29 3 * * 6'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact public stable version (empty = latest)
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: published-other-clients-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  resolve-release:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    uses: ./.github/workflows/agentplugins-published-version.yml
+    with:
+      version: ${{ inputs.version }}
+
+  published-additional-clients:
+    needs: resolve-release
+    name: npm stable / ${{ matrix.target }} / ${{ matrix.kind }} (${{ matrix.limit }} sources)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        include:
+          - { target: gemini, kind: plugin, limit: 30, native_package: '@google/gemini-cli@0.66.0' }
+          - { target: gemini, kind: skill, limit: 30, native_package: '@google/gemini-cli@0.66.0' }
+          - { target: copilot, kind: plugin, limit: 30, native_package: '@github/copilot@1.0.105' }
+          - { target: copilot, kind: skill, limit: 15, native_package: '@github/copilot@1.0.105' }
+          - { target: cline, kind: plugin, limit: 15, native_package: 'cline@3.0.74' }
+          - { target: cline, kind: skill, limit: 15, native_package: 'cline@3.0.74' }
+          - { target: kimi, kind: plugin, limit: 30, native_package: '@moonshot-ai/kimi-code@2.4.1' }
+          # Project Skills are qualified against the observed native 2.3.2 CLI.
+          - { target: kimi, kind: skill, limit: 15, native_package: '@moonshot-ai/kimi-code@2.3.2' }
+          - { target: qoder, kind: plugin, limit: 30, native_package: '@qoder-ai/qodercli@1.1.81' }
+          - { target: qoder, kind: skill, limit: 15, native_package: '@qoder-ai/qodercli@1.1.81' }
+          # Pi has a genuine standalone project Skill route. Do not mislabel
+          # generic user-scope MCP packages as supported Pi extensions.
+          - { target: pi, kind: skill, limit: 15, native_package: '@earendil-works/pi-coding-agent@1.5.0' }
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - name: Check native-component attribution and expected negative proofs
+        run: python3 -m unittest discover -s scripts -p 'test_live_install_audit_components.py' -v
+
+      - name: Install released UAP and genuine pinned native client
+        id: bootstrap
+        env:
+          UAP_VERSION: ${{ needs.resolve-release.outputs.version }}
+          NATIVE_PACKAGE: ${{ matrix.native_package }}
+          TARGET: ${{ matrix.target }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global "universal-agent-plugins@$UAP_VERSION"
+          if [[ "$TARGET" == pi ]]; then
+            npm install --global --ignore-scripts "$NATIVE_PACKAGE"
+          else
+            npm install --global "$NATIVE_PACKAGE"
+          fi
+          test "$(agentplugins version)" = "agentplugins $UAP_VERSION"
+          native="$TARGET"
+          if [[ "$TARGET" == qoder ]]; then native="qodercli"; fi
+          command -v "$native"
+          timeout 25s "$native" --version
+          # Preserve actual transitive versions; global npm installs do not have a shared lockfile.
+          mkdir -p "$RUNNER_TEMP/published-additional-proof"
+          npm ls --global --all --json > "$RUNNER_TEMP/published-additional-proof/npm-global-dependencies.json" \
+            2> "$RUNNER_TEMP/published-additional-proof/npm-global-dependencies-stderr.txt" || true
+
+      - name: Audit install, repeat, identity, locks and safe removal
+        if: ${{ !cancelled() }}
+        env:
+          # Pull request checkout is a synthetic merge commit; attest the exact PR tip.
+          AUDIT_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          AUDIT_VENDOR_OUTCOME: ${{ steps.bootstrap.outcome }}
+          AUDIT_TARGET: ${{ matrix.target }}
+          AUDIT_KIND: ${{ matrix.kind }}
+          AUDIT_LIMIT: ${{ matrix.limit }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$AUDIT_PR_HEAD_SHA" =~ ^[a-f0-9]{40}$ ]] || { echo 'PR head attestation missing'; exit 2; }
+          python3 scripts/live-install-audit.py \
+            --cli "$(command -v agentplugins)" \
+            --target "$AUDIT_TARGET" --kind "$AUDIT_KIND" \
+            --limit "$AUDIT_LIMIT" \
+            --report-dir "$RUNNER_TEMP/published-additional-proof"
+
+      - name: Preserve source-by-source JSON even when blocked
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: published-${{ needs.resolve-release.outputs.version }}-${{ matrix.target }}-${{ matrix.kind }}
+          path: ${{ runner.temp }}/published-additional-proof/
+          if-no-files-found: warn
+          retention-days: 14

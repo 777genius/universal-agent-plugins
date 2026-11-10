@@ -114,6 +114,11 @@ func (c *windProjectCycle) command(t *testing.T, label string) {
 		t.Fatal("Windsurf lifecycle child failed")
 	}
 	after := w.profile(t)
+	if command.Native && label != "version" {
+		if err := c.auditNativeCache(label, start, end); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if command.Native {
 		valid := reflect.DeepEqual(before, after)
 		if label != "version" {
@@ -133,7 +138,8 @@ func (c *windProjectCycle) command(t *testing.T, label string) {
 		}
 	} else if windCyclePublic(label) {
 		if err := windPublicProfileClosure(before, after, command.Scope, start, end); err != nil {
-			t.Fatal(err)
+			// Failure-only hashes from the same held before/after frames; never accept the mutation.
+			t.Fatal("Windsurf public profile closure: ", err, " ", windFrozenTreeRefusal("original-profile", before, after))
 		}
 		c.publicProof(t, label, w.recipes[command.Scope], result, start, end)
 	} else {
@@ -150,4 +156,9 @@ func (c *windProjectCycle) command(t *testing.T, label string) {
 	}
 	c.append(t, windCycleMembers[2], label, map[string]any{"events": windCycleStream(probe)})
 	w.check(t)
+	// The bounded audit is failure-only evidence. Keep it on any refusal above,
+	// but never publish it after the complete native frame passed its checks.
+	if command.Native {
+		delete(f.evidence, "native_cache_delta")
+	}
 }

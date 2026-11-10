@@ -3,6 +3,8 @@ import type { ProductRoute } from '../data/routes.ts';
 import { expandLocalizedRoutes, normalizeAppBase, localizedPath } from './localizedRoutes.ts';
 
 const DEFAULT_DESCRIPTION_LIMIT = 160;
+// Version the crawler URL when social art changes; keep the PNG filename stable.
+export const SOCIAL_PREVIEW_PATH = 'og-image.png?v=20261106';
 
 export function canonicalPath(path: string): string {
   const normalized = `/${path.split(/[?#]/, 1)[0]}`.replace(/\/{2,}/g, '/').replace(/\/+$/, '');
@@ -69,7 +71,7 @@ export function productSoftwareSchema(options: ProductSoftwareSchemaOptions) {
       options.softwareRequirements ??
       'Native CLI for macOS, Linux, and Windows; or Node.js 22+ for npx',
     codeRepository: options.githubUrl,
-    screenshot: `${siteUrl}/og-image.png`,
+    screenshot: `${siteUrl}/${SOCIAL_PREVIEW_PATH}`,
     sameAs: [options.githubUrl, npmUrl],
     publisher: { '@id': `${siteUrl}/#organization` },
     license: 'https://www.apache.org/licenses/LICENSE-2.0',

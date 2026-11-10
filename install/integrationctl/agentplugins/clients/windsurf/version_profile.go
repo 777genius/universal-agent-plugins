@@ -13,10 +13,15 @@ import (
 
 var (
 	_ clients.ProjectVersionRequirement   = (*Adapter)(nil)
+	_ clients.UserVersionRequirement      = (*Adapter)(nil)
 	_ clients.HostVersionProbeEnvironment = (*Adapter)(nil)
 )
 
-func (*Adapter) RequiresProjectVersion(client domain.DetectedClient) bool {
+func (adapter *Adapter) RequiresProjectVersion(client domain.DetectedClient) bool {
+	return adapter.RequiresUserVersion(client)
+}
+
+func (*Adapter) RequiresUserVersion(client domain.DetectedClient) bool {
 	return client.ClientID == domain.ClientWindsurf && primaryDevinExecutable(client.ExecutablePath)
 }
 

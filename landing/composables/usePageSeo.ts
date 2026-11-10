@@ -1,5 +1,5 @@
 import { computed, toValue } from 'vue';
-import { pageRouteSeo, productRootUrl, productImageUrl } from '~/utils/seo';
+import { pageRouteSeo, productRootUrl, productImageUrl, SOCIAL_PREVIEW_PATH } from '~/utils/seo';
 import type { ProductRoute } from '~/data/routes';
 import type { MaybeRefOrGetter } from 'vue';
 
@@ -71,7 +71,7 @@ export const usePageSeo = (
     }
 
     return {
-      url: 'og-image.png',
+      url: SOCIAL_PREVIEW_PATH,
       width: 1200,
       height: 630,
       type: 'image/png',
@@ -93,6 +93,9 @@ export const usePageSeo = (
     ogLocale: computed(() => routeSeo.value.ogLocale),
     ogUrl: canonicalUrl,
     ogImage: resolvedImageUrl,
+    ogImageSecureUrl: computed(() =>
+      resolvedImageUrl.value.startsWith('https://') ? resolvedImageUrl.value : undefined,
+    ),
     ogImageType: computed(() => resolvedImage.value.type) as never,
     ogImageWidth: computed(() =>
       resolvedImage.value.width ? String(resolvedImage.value.width) : undefined,
@@ -168,6 +171,7 @@ export const usePageSeo = (
     return {
       htmlAttrs: {
         lang: locale.value || 'en',
+        dir: locale.value === 'ar' ? 'rtl' : 'ltr',
       },
       link: includeCanonical.value
         ? [

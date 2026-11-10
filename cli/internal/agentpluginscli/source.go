@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/catalog"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/directoryv1"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/sourcespec"
 )
@@ -159,7 +158,7 @@ func (app App) acquireDirectory(ctx context.Context, selector string, request pa
 	if err != nil {
 		return loadedPackage{}, err
 	}
-	bundle, err := app.DirectoryClient.Load(ctx, installedDirectoryFloor(state))
+	bundle, err := app.DirectoryClient.Load(ctx, directoryFloorForClient(state, app.DirectoryClient))
 	if err != nil {
 		return loadedPackage{}, fmt.Errorf("load signed Directory: %w", err)
 	}
@@ -202,7 +201,7 @@ func (app App) acquireDirectory(ctx context.Context, selector string, request pa
 		}
 		retainedMapping = installation.LocalChatGPTMapping
 	}
-	selection, err := domain.ResolveDirectory(bundle.Snapshot, resolveRequest)
+	selection, err := selectDirectorySourceForPlacement(bundle.Snapshot, resolveRequest)
 	if err != nil {
 		return loadedPackage{}, err
 	}
@@ -221,10 +220,10 @@ func (app App) acquireDirectory(ctx context.Context, selector string, request pa
 	if request.RequestedSelector != "" {
 		snapshot.Source.RequestedSource = request.RequestedSelector
 	}
-	snapshot.Source.SourceBindingHint = "directory-v1"
+	snapshot.Source.SourceBindingHint = fmt.Sprintf("directory-v%d", bundle.Snapshot.SnapshotSchemaVersion)
 	origin := &domain.DirectoryOrigin{
 		ProductID: selection.ProductID, DistributionID: selection.DistributionID, DistributionKind: selection.DistributionKind,
-		DesiredReleaseSequence: selection.ReleaseSequence, SnapshotSchema: directoryv1.SnapshotSchemaVersion,
+		DesiredReleaseSequence: selection.ReleaseSequence, SnapshotSchema: bundle.Snapshot.SnapshotSchemaVersion,
 		SnapshotSequence: selection.SnapshotSequence, SnapshotDigest: bundle.Digest,
 	}
 	load := app.loadSnapshot
@@ -254,13 +253,17 @@ func (app App) acquireDirectory(ctx context.Context, selector string, request pa
 		TreeDigestAlgorithm: selection.TreeDigestAlgorithm, TreeDigest: selection.TreeDigest, ManifestDigest: selection.ManifestDigest,
 	}
 	exactRequest.DependencyIdentity = environment.DependencyIdentity
-	checked, err := domain.ResolveDirectory(bundle.Snapshot, exactRequest)
+	checked, err := selectDirectorySourceForPlacement(bundle.Snapshot, exactRequest)
 	if err != nil || checked.DistributionID != selection.DistributionID || checked.ReleaseSequence != selection.ReleaseSequence {
-		_ = loaded.cleanup()
 		if err != nil {
-			return loadedPackage{}, fmt.Errorf("acquired exact Directory release failed compatibility recheck: %w", err)
+			err = fmt.Errorf("acquired exact Directory release failed compatibility recheck: %w", err)
+		} else {
+			err = errors.New("acquired exact Directory release changed during compatibility recheck")
 		}
-		return loadedPackage{}, fmt.Errorf("acquired exact Directory release changed during compatibility recheck")
+		if cleanupErr := loaded.cleanup(); cleanupErr != nil {
+			err = errors.Join(err, fmt.Errorf("%w: %w", errDependencySnapshotCleanup, cleanupErr))
+		}
+		return loadedPackage{}, err
 	}
 	// The preparation resolver intentionally accepts exactly ChatGPT. Compose
 	// mixed requests by checking peers against its exact immutable selection with
@@ -276,7 +279,7 @@ func (app App) acquireDirectory(ctx context.Context, selector string, request pa
 			peerRequest := exactRequest
 			peerRequest.Purpose = ""
 			peerRequest.Targets = peers
-			peer, peerErr := domain.ResolveDirectory(bundle.Snapshot, peerRequest)
+			peer, peerErr := selectDirectorySourceForPlacement(bundle.Snapshot, peerRequest)
 			if peerErr != nil || peer.DistributionID != selection.DistributionID || peer.ReleaseSequence != selection.ReleaseSequence || peer.TreeDigest != selection.TreeDigest {
 				_ = loaded.cleanup()
 				return loadedPackage{}, fmt.Errorf("mixed preparation peers must qualify the same immutable Context7 release: %v", peerErr)
@@ -314,7 +317,7 @@ func (app App) acquireDirectory(ctx context.Context, selector string, request pa
 	}
 	loaded.distributionSuspended = distribution.Status == domain.DistributionSuspended
 	loaded.releaseRevoked = policy.Status == domain.ReleaseRevoked || snapshotRevokes(bundle.Snapshot, selection)
-	if err := applyDirectoryCompatibility(&loaded, bundle, selection, *policy, environment); err != nil {
+	if err := applyDirectoryCompatibility(&loaded, bundle, selection, *policy, environment, app.scope()); err != nil {
 		_ = loaded.cleanup()
 		return loadedPackage{}, err
 	}
@@ -392,56 +395,4 @@ func prepareLoadedPackageForClient(loaded *loadedPackage, clientID domain.Client
 	loaded.envelope.Inventory.AppPresent = true
 	loaded.envelope.Inventory.AppBindings = []string{binding.AppKey}
 	return nil
-}
-
-func restoreCatalogEvidence(loaded *loadedPackage, binding domain.ClientBinding) {
-	if loaded == nil || binding.PackageRevision == nil {
-		return
-	}
-	// Directory acquisition has already composed compatibility evidence for the
-	// currently detected installer, client, platform, and dependency tuple. The
-	// recorded copy identifies what was applicable when this binding was last
-	// written and must not replace that freshly filtered evidence during repair.
-	if loaded.origin == domain.OriginModeDirectory && loaded.envelope.CatalogEvidence != nil {
-		return
-	}
-	if binding.PackageRevision.CatalogEvidence == nil {
-		loaded.envelope.CatalogEvidence = nil
-		loaded.hints.Compatibility = nil
-		return
-	}
-	evidence := *binding.PackageRevision.CatalogEvidence
-	evidence.Compatibility = cloneCatalogCompatibility(evidence.Compatibility)
-	loaded.envelope.CatalogEvidence = &evidence
-	loaded.hints.Compatibility = cloneCatalogCompatibility(evidence.Compatibility)
-}
-
-func isDirectorySelector(value string) bool {
-	if isShortName(value) {
-		return true
-	}
-	parts := strings.Split(value, "/")
-	return len(parts) == 2 && isShortName(parts[0]) && isShortName(parts[1])
-}
-
-func isShortName(value string) bool {
-	return shortNamePattern.MatchString(value) && !strings.ContainsAny(value, `/\\`)
-}
-
-func explicitLocalPath(value string) bool {
-	if strings.HasPrefix(value, "/") || strings.HasPrefix(value, "./") || strings.HasPrefix(value, "../") || strings.HasPrefix(value, `.\`) || strings.HasPrefix(value, `..\`) {
-		return true
-	}
-	// Classify syntax independently of the host OS, including Unix roots and
-	// only genuinely absolute Windows spellings, so copied sources are stable;
-	// drive-relative forms such as C:plugin intentionally remain selectors.
-	if len(value) >= 3 && ((value[0] >= 'A' && value[0] <= 'Z') || (value[0] >= 'a' && value[0] <= 'z')) && value[1] == ':' && (value[2] == '\\' || value[2] == '/') {
-		return true
-	}
-	if !strings.HasPrefix(value, `\\`) {
-		return false
-	}
-	unc := strings.TrimPrefix(value, `\\`)
-	server, share, ok := strings.Cut(unc, `\`)
-	return ok && server != "" && strings.Trim(share, `\`) != ""
 }

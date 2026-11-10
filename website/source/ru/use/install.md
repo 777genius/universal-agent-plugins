@@ -150,7 +150,7 @@ agentplugins skills add owner/repository --skill review --skill pdf \
 [CLI 0.1.93 и новее](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.93).
 Выберите существующую папку и указывайте область в каждой команде:
 
-Для проекта возьмите из проверенной карточки каталога точный Git-источник с полным SHA коммита и совместимый агент. Псевдонимы Directory v1 (например, `context7`) предназначены только для пользовательской области. Замените `OWNER/REPOSITORY`, `FULL_COMMIT_SHA` и `PACKAGE_PATH`; для пакета в корне репозитория уберите `//PACKAGE_PATH`.
+Для совместимого проверенного пакета используйте короткое имя из подписанного Directory с явной областью Project, если выбранный агент поддерживает все обязательные компоненты (например, `agentplugins add context7 --target codex --scope project --dry-run`). Для воспроизводимой установки можно вместо этого указать Git-источник с полным SHA коммита. Замените `OWNER/REPOSITORY`, `FULL_COMMIT_SHA` и `PACKAGE_PATH`; для пакета в корне репозитория уберите `//PACKAGE_PATH`.
 
 Шаблон: `github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH`. Команда ниже использует реальный исторический коммит GitLab, а не подтверждение текущей проверки в каталоге. Для новой установки скопируйте актуальный проверенный источник из каталога.
 
@@ -170,11 +170,10 @@ agentplugins skills add owner/repository --ui --scope project \
 Правила строгой работы с lock-файлом см. в [восстановлении](./manage).
 
 Клиент должен поддерживать запрошенные проектные компоненты. Установка в проект
-ChatGPT явно не поддерживается. VS Code подготавливает `.github/skills` и
-принадлежащие установщику записи `servers` в `.vscode/mcp.json` для одной
-локальной папки. Результат остаётся Prepared: проверьте доверие к рабочей папке,
-серверам и настройки клиента. Наблюдение метаданных не доказывает запуск MCP,
-вызов инструментов или работу модели.
+ChatGPT явно не поддерживается. Если результат — **Prepared**, проверьте
+требуемое доверие к рабочей папке и серверам, а также настройки клиента. Наличие
+установленных файлов само по себе не доказывает запуск MCP, вызов инструментов
+или работу модели.
 
 См. [установку в проект](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_INSTALLATION.md)
 и [границы каждого клиента](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md).

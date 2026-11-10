@@ -27,7 +27,7 @@ func TestSwitchSynthesizesRemoteChatGPTAndRecoversAfterActivationFailure(t *test
 		t.Fatal(err)
 	}
 
-	if _, _, err := fixture.execute(false, "add", first, "--target", "chatgpt"); err != nil {
+	if _, _, err := fixture.execute(false, "add", first, "--target", "chatgptweb"); err != nil {
 		t.Fatal(err)
 	}
 	// No desktop detector entry exists. switch must synthesize the already-bound

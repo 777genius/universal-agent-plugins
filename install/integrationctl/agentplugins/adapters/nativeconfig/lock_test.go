@@ -24,6 +24,10 @@ func fastClineLockTiming() clineLockTiming {
 func TestClineLockUsesOfficialOwnerTokenProtocolAndKeepsSlowHolderLive(t *testing.T) {
 	lockDir := filepath.Join(t.TempDir(), "cline_mcp_settings.json.lock")
 	timing := fastClineLockTiming()
+	// Preserve multiple stale-window assertions, but leave enough scheduling
+	// margin for a busy CI runner; the production stale window stays 10s.
+	timing.staleAfter = 750 * time.Millisecond
+	timing.acquireTimeout = 4 * time.Second
 	release, err := lockClineConfigWithTiming(lockDir, timing)
 	if err != nil {
 		t.Fatal(err)

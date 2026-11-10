@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
@@ -16,6 +17,9 @@ func (e *Engine) scope() domain.InstallScope {
 
 func (e *Engine) nativeRegistryRoot(client domain.DetectedClient) (string, error) {
 	if e.scope() != domain.ScopeProject {
+		if layout, ok := clients.As[clients.UserNativeRegistryLayout](e.cfg.Registry, client.ClientID); ok {
+			return layout.UserNativeRegistry(client), nil
+		}
 		return client.ConfigRoot, nil
 	}
 	target, err := e.planner().ResolveTarget(context.Background(), client, e.scope(), "project-context")

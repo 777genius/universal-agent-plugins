@@ -313,7 +313,7 @@ func (app App) canonicalizeDependencyRequirements(ctx context.Context, requireme
 		if app.DirectoryClient == nil {
 			return environment.Requirements{}, errors.New("signed Directory client is required to canonicalize short registry names")
 		}
-		bundle, err := app.DirectoryClient.Load(ctx, 0)
+		bundle, err := app.loadAuthorizedDirectory(ctx)
 		if err != nil {
 			return environment.Requirements{}, err
 		}
@@ -327,7 +327,7 @@ func (app App) canonicalizeDependencyRequirements(ctx context.Context, requireme
 			}
 		}
 
-		selection, err := domain.ResolveDirectory(bundle.Snapshot, domain.DirectoryResolveRequest{
+		selection, err := selectDirectorySourceForPlacement(bundle.Snapshot, domain.DirectoryResolveRequest{
 			Selector: requirement.Registry.Distribution, DesiredReleaseSequence: sequence, Targets: targets, Scope: app.scope(),
 			Operation: domain.DirectoryInstall, SchemaVersion: "1.0.0", InstallerVersion: app.Version,
 		})

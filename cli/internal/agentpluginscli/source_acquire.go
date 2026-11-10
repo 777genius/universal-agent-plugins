@@ -121,7 +121,7 @@ func (app App) warnDirectRevocation(treeDigest string) {
 	floor := uint64(0)
 	if app.StateStore != nil {
 		if state, err := app.StateStore.Load(); err == nil {
-			floor = installedDirectoryFloor(state)
+			floor = directoryFloorForClient(state, app.DirectoryClient)
 		}
 	}
 	bundle, err := local.LoadLocal(floor)

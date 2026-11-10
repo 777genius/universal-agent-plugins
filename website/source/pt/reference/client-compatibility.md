@@ -14,8 +14,8 @@ translationRequired: false
 
 ## Versão atual e escopo {#current-release-and-scope}
 
-A [CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95),
-versão nativa publicada em 29 de outubro de 2026, adiciona uma API local de
+A [CLI](https://github.com/777genius/universal-agent-plugins/releases/latest),
+versão nativa publicada, adiciona uma API local de
 gerenciamento com processo controlado pelo aplicativo, descoberta de clientes
 e perfis sem alterações e um provedor de extensões nativas do Pi no escopo de
 usuário. Consulte [gerenciamento local](../use/manage#local-management-api).
@@ -43,24 +43,21 @@ Interprete a compatibilidade como várias perguntas separadas:
 
 A entrega em projetos costuma permanecer **Prepared** enquanto faltam confiança,
 recarga, configuração explícita ou etapas de sessão. A instalação em projetos
-do ChatGPT é explicitamente incompatível. O escopo de projeto do VS Code prepara
-arquivos para uma única pasta local; a observação de metadados de sua versão
-fixada não é evidência de inicialização MCP nem de execução do modelo. Consulte
+do ChatGPT é explicitamente incompatível. Consulte
 [suporte a projetos por cliente](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md) e o [índice de evidências de projetos](https://github.com/777genius/universal-agent-plugins/blob/main/docs/evidence/PROJECT_INSTALLATION.md).
 
 Os registros abaixo preservam versões históricas exatas, versões dos clientes,
 identidades das plataformas e limitações observadas. Eles não se aplicam
-automaticamente à 0.1.95, a uma versão posterior de cliente, a outro escopo ou
+automaticamente à versão atual, a uma versão posterior de cliente, a outro escopo ou
 a um pacote não testado. UAP é uma ferramenta independente da comunidade; estas
 são observações delimitadas dos mantenedores, não certificação de fornecedores
 nem uma afirmação de prontidão universal para produção.
 
 ## Extensões nativas do Pi {#pi-native-extensions}
 
-A CLI 0.1.95 aceita `--target pi` para pacotes que declaram uma
+A CLI atual aceita `--target pi` para pacotes que declaram uma
 [extensão nativa do Pi](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_CONTRACT.md).
-Esse provedor oferece extensões nativas no escopo de usuário; Skills portáteis
-e projeção MCP estão fora do escopo atual. Recarregue os recursos ou reinicie
+Esse provedor oferece extensões nativas nos escopos de usuário e de projeto elegível; Skills e MCP de projeto têm regras específicas de instalação, confiança e verificação de ativação (consulte a [compatibilidade de projetos](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)). Recarregue os recursos ou reinicie
 o Pi após a instalação.
 
 As [evidências nativas registradas](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_EVIDENCE.md)

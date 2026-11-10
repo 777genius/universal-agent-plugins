@@ -97,35 +97,6 @@ func (runner OSRunner) Run(ctx context.Context, command Command) (body []byte, r
 	return append([]byte(nil), result.Stdout...), nil
 }
 
-func isolatedGitEnvironment(environ []string, isolatedHome string) []string {
-	clean := make([]string, 0, len(environ)+9)
-	for _, item := range environ {
-		key, _, _ := strings.Cut(item, "=")
-		switch upper := strings.ToUpper(key); {
-		case upper == "HOME", upper == "USERPROFILE", upper == "XDG_CONFIG_HOME":
-			continue
-		case upper == "NETRC", upper == "SSH_AUTH_SOCK", upper == "SSH_ASKPASS":
-			continue
-		case strings.HasPrefix(upper, "GIT_"):
-			continue
-		}
-		clean = append(clean, item)
-	}
-	clean = append(clean,
-		"HOME="+isolatedHome,
-		"USERPROFILE="+isolatedHome,
-		"XDG_CONFIG_HOME="+isolatedHome,
-		"GIT_CONFIG_NOSYSTEM=1",
-		"GIT_CONFIG_GLOBAL="+os.DevNull,
-		"GIT_CONFIG_COUNT=1",
-		"GIT_CONFIG_KEY_0=credential.helper",
-		"GIT_CONFIG_VALUE_0=",
-		"GIT_TERMINAL_PROMPT=0",
-		"GIT_LFS_SKIP_SMUDGE=1",
-	)
-	return clean
-}
-
 type Acquirer struct {
 	// HTTPClient is optional test/host transport configuration; redirects still obey archive policy.
 	HTTPClient *http.Client
@@ -215,78 +186,6 @@ func (acquirer Acquirer) discoverGitPackages(ctx context.Context, url, repositor
 	return paths, nil
 }
 
-func (acquirer Acquirer) AcquireGitHub(ctx context.Context, repository, revision, pluginSubpath string) (domain.PackageSnapshot, error) {
-	return acquirer.acquireGitHub(ctx, repository, revision, pluginSubpath, true)
-}
-
-// AcquireGitHubSkill snapshots one complete raw Skill subtree. Unlike ordinary
-// root packages, a root Skill cannot omit an unrelated-looking Git submodule.
-func (acquirer Acquirer) AcquireGitHubSkill(ctx context.Context, repository, revision, skillSubpath string) (domain.PackageSnapshot, error) {
-	return acquirer.acquireGitHub(ctx, repository, revision, skillSubpath, false)
-}
-func (acquirer Acquirer) acquireGitHub(ctx context.Context, repository, revision, pluginSubpath string, allowRootGitlinks bool) (domain.PackageSnapshot, error) {
-	if !repositoryPattern.MatchString(repository) {
-		return domain.PackageSnapshot{}, fmt.Errorf("github repository must be owner/repo")
-	}
-	if !fullSHA.MatchString(revision) {
-		return domain.PackageSnapshot{}, fmt.Errorf("immutable GitHub source requires a full 40-character lowercase commit SHA")
-	}
-	subpath, err := normalizeSubpath(pluginSubpath)
-	if err != nil {
-		return domain.PackageSnapshot{}, err
-	}
-	url := "https://github.com/" + repository + ".git"
-	if acquirer.URLForRepo != nil {
-		url = acquirer.URLForRepo(repository)
-	}
-	return acquirer.acquireGit(ctx, url, repository, revision, subpath, allowRootGitlinks)
-}
-
-// AcquireGitHubVerified fails closed when signed/reviewed package identity
-// disagrees with the bytes at the immutable source.
-func (acquirer Acquirer) AcquireGitHubVerified(ctx context.Context, repository, revision, pluginSubpath, expectedTreeDigest string) (domain.PackageSnapshot, error) {
-	snapshot, err := acquirer.AcquireGitHub(ctx, repository, revision, pluginSubpath)
-	if err != nil {
-		return domain.PackageSnapshot{}, err
-	}
-	return verifyAcquiredTree(snapshot, expectedTreeDigest)
-}
-
-// AcquireGitHubSkillVerified replays a raw Skill with its own source digest and
-// strict tree completeness before normalization into the standard artifact.
-func (acquirer Acquirer) AcquireGitHubSkillVerified(ctx context.Context, repository, revision, skillSubpath, expectedTreeDigest string) (domain.PackageSnapshot, error) {
-	snapshot, err := acquirer.AcquireGitHubSkill(ctx, repository, revision, skillSubpath)
-	if err != nil {
-		return domain.PackageSnapshot{}, err
-	}
-	return verifyAcquiredTree(snapshot, expectedTreeDigest)
-}
-func verifyAcquiredTree(snapshot domain.PackageSnapshot, expectedTreeDigest string) (domain.PackageSnapshot, error) {
-	if strings.TrimSpace(expectedTreeDigest) == "" || snapshot.TreeDigest != expectedTreeDigest {
-		_ = packagedigest.Remove(snapshot)
-		return domain.PackageSnapshot{}, fmt.Errorf("acquired package tree digest %s does not match expected %s", snapshot.TreeDigest, expectedTreeDigest)
-	}
-	return snapshot, nil
-}
-
-func (acquirer Acquirer) AcquireLocal(ctx context.Context, sourceRoot string) (domain.PackageSnapshot, error) {
-	absolute, err := filepath.Abs(sourceRoot)
-	if err != nil {
-		return domain.PackageSnapshot{}, fmt.Errorf("resolve local package source failed")
-	}
-	source := domain.SourceIdentity{RequestedSource: sourceRoot, CanonicalSource: filepath.Clean(absolute), SourceBindingHint: "direct-local"}
-	snapshot, err := acquirer.digester().Snapshot(ctx, absolute, source)
-	if err != nil {
-		return domain.PackageSnapshot{}, fmt.Errorf("acquire local package: snapshot package content failed")
-	}
-	snapshot.AcquiredAt = acquirer.now()
-	return snapshot, nil
-}
-
-func (acquirer Acquirer) acquireGit(ctx context.Context, url, repository, revision, subpath string, allowRootGitlinks bool) (domain.PackageSnapshot, error) {
-	return acquirer.acquireGitTransport(ctx, url, repository, revision, subpath, false, allowRootGitlinks)
-}
-
 func (acquirer Acquirer) acquireGitTransport(ctx context.Context, url, repository, revision, subpath string, native, allowRootGitlinks bool) (domain.PackageSnapshot, error) {
 	tempRoot, err := os.MkdirTemp(acquirer.TempRoot, "agentplugins-git-*")
 	if err != nil {
@@ -308,7 +207,7 @@ func (acquirer Acquirer) acquireGitTransport(ctx context.Context, url, repositor
 	// core.autocrlf=false alone still permits text=auto attributes to use
 	// core.eol=native (CRLF on Windows, LF elsewhere). Explicit per-path
 	// .gitattributes eol=crlf remains authoritative.
-	for _, setting := range [][]string{{"core.autocrlf", "false"}, {"core.eol", "lf"}, {"core.filemode", "true"}, {"core.symlinks", "true"}, {"fetch.recurseSubmodules", "false"}} {
+	for _, setting := range isolatedCheckoutSettings() {
 		if _, err := run("-C", repoRoot, "config", setting[0], setting[1]); err != nil {
 			return domain.PackageSnapshot{}, gitAcquisitionFailure(repository, revision, "configure isolated repository")
 		}
@@ -392,70 +291,6 @@ func (acquirer Acquirer) acquireGitTransport(ctx context.Context, url, repositor
 	}
 	snapshot.AcquiredAt = acquirer.now()
 	return snapshot, nil
-}
-
-func gitAcquisitionFailure(repository, revision, operation string) error {
-	return fmt.Errorf("acquire GitHub repository %q at revision %s: %s failed", repository, revision, operation)
-}
-
-func publicTreeError(err error) string {
-	message := err.Error()
-	switch {
-	case strings.Contains(message, "submodule"):
-		return "Git submodule content is unsupported in plugin subpath"
-	case strings.Contains(message, "outside plugin subpath"):
-		return "Git tree contained content outside the plugin subpath"
-	default:
-		return "Git returned an invalid package tree"
-	}
-}
-
-func executablePathsFromTree(tree []byte, subpath string) ([]string, error) {
-	return executablePathsFromTreePolicy(tree, subpath, true)
-}
-func executablePathsFromTreePolicy(tree []byte, subpath string, allowRootGitlinks bool) ([]string, error) {
-	var executable []string
-	prefix := ""
-	if subpath != "" {
-		prefix = subpath + "/"
-	}
-	for _, record := range bytes.Split(tree, []byte{0}) {
-		if len(record) == 0 {
-			continue
-		}
-		metadata, filename, ok := bytes.Cut(record, []byte{'\t'})
-		fields := bytes.Fields(metadata)
-		if !ok || len(fields) != 3 {
-			return nil, fmt.Errorf("git tree returned a malformed entry")
-		}
-		mode, objectType := string(fields[0]), string(fields[1])
-		if mode == "160000" || objectType == "commit" {
-			// A repository-root Agent Plugin may live beside unrelated Git
-			// submodules. The isolated checkout never fetches their content, so
-			// they cannot contribute files or executable bits to the snapshot.
-			// Keep rejecting a gitlink inside an explicitly selected package
-			// subpath, where omitting it could silently produce a partial package.
-			if subpath == "" && allowRootGitlinks {
-				continue
-			}
-			return nil, fmt.Errorf("git submodule content is unsupported in plugin subpath")
-		}
-		if mode != "100755" {
-			continue
-		}
-		relative := string(filename)
-		if prefix != "" {
-			if !strings.HasPrefix(relative, prefix) {
-				return nil, fmt.Errorf("git tree entry %q is outside plugin subpath %q", relative, subpath)
-			}
-			relative = strings.TrimPrefix(relative, prefix)
-		}
-		if relative == "" {
-			return nil, fmt.Errorf("git tree returned an empty executable path")
-		}
-		executable = append(executable, relative)
-	}
-	return executable, nil
 }
 
 func packagePathsFromTree(tree []byte) ([]string, error) {

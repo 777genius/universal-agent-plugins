@@ -44,7 +44,7 @@ test('shell English messages compile, interpolate and retain baseline FAQ facts'
       key,
     );
   }
-  assert.equal(t('shell.hero.install', { name: 'context7' }), 'Install context7');
+  assert.equal(t('shell.hero.install', { name: 'Context7' }), 'Install the Context7 plugin');
   assert.equal(
     t('shell.docs.englishLabel', { label: 'Quickstart' }),
     'Quickstart (documentation in English)',
@@ -60,6 +60,20 @@ test('shell English messages compile, interpolate and retain baseline FAQ facts'
     [...registryFaqItems],
   );
   assert.equal(errors.mock.callCount(), 0);
+});
+
+test('supported-agent FAQ stays in sync with the 14 public clients across all locales', () => {
+  const expected = clientLandingPages.map((client) => client.name);
+  for (const locale of publishedLocales) {
+    const localized = JSON.parse(read(`i18n/locales/${locale}.json`)) as {
+      shell: { faq: { items: Array<{ answer: string }> } };
+    };
+    const listed = localized.shell.faq.items[0]!.answer
+      .split(/[:：]/, 1)[0]!
+      .split(',')
+      .map((name) => name.trim());
+    assert.deepEqual(listed, expected, `FAQ agents for ${locale}`);
+  }
 });
 
 test('narrow overlay preserves every active English field and technical byte', () => {
@@ -368,7 +382,12 @@ test('download and client strip retain every original support qualification', ()
   }
   const source = read('components/sections/DownloadSection.vue');
   for (const field of ['note', 'activation']) assert.ok(source.includes(`registryUi.clients.${'${client.id}'}.${field}`));
-  assert.equal(clientLandingPages.length, 15);
+  assert.equal(clientLandingPages.length, 14);
+  assert.ok(clientLandingPages.every((client) => client.id !== 'vscode'));
+  for (const pending of ['hermes', 'antigravity']) {
+    assert.ok(clientLandingPages.every((client) => client.id !== pending),
+      `${pending} needs a qualified CLI release before public installation`);
+  }
 });
 
 test('shell agent links keep language prefixes and canonical trailing slashes', () => {
@@ -389,7 +408,7 @@ test('visible FAQ and schema share the exact same localized page value', () => {
   const page = read('pages/index.vue');
   assert.match(page, /<RegistryFaq :items="registryFaqItems"/);
   assert.match(page, /mainEntity: registryFaqItems.value.map/);
-  assert.match(read('components/registry/RegistryFaq.vue'), /v-for="item in items"/);
+  assert.match(read('components/registry/RegistryFaq.vue'), /v-for="\(item, index\) in items"/);
   const { tm, rt } = createI18n<[typeof messages], 'en', false>({ legacy: false, locale: 'en', messages: { en: messages } }).global;
   assert.deepEqual(Object.values(tm('shell.faq.items') as Record<string, { question: string; answer: string }>).map((item) => ({
     question: rt(item.question), answer: rt(item.answer),
@@ -405,8 +424,9 @@ test('active shared controls have English reference labels', () => {
   const header = read('components/layout/AppHeader.vue');
   assert.match(header, /const navItems = computed/);
   assert.match(header, /publishedLocales.length > 1/);
-  for (const key of Object.keys(messages.shell!.navigation as object)) {
+  for (const key of ['demo', 'plugins', 'agents', 'faq', 'open', 'close', 'title', 'description', 'appearance']) {
     assert.ok(header.includes(`shell.navigation.${key}`), key);
+    assert.notEqual(t(`shell.navigation.${key}`), `shell.navigation.${key}`);
   }
 });
 

@@ -26,7 +26,17 @@ translationRequired: true
     <h2>بناء الإضافات</h2>
     <p>اكتب حزمة معيارية تضم plugin.json وSkills وإعدادات MCP. تعرّف على أدوات التأليف المبنية من المصدر.</p>
   </a>
+  <a class="docs-card" href="./sdk/">
+    <h2>دمج UAP</h2>
+    <p>Hooks وكشف الوكيل ومثبّت Go وإدارة TypeScript.</p>
+  </a>
 </div>
+
+## قدرات إضافية لـ UAP
+
+- ثبّت لعدة وكلاء، وأضف Skills مستقلة، واستخدم الفهرس الموقّع أو Git/SSH أو الأرشيف. [التثبيت](./use/install).
+- افصل المشروع عن المستخدم عبر `uap.toml` / `uap.lock`؛ ثم حدّث وأصلح وشخّص الحالة. [الإدارة](./use/manage).
+- أنشئ حزم Skills/MCP قابلة للنقل، وادمج SDK بلغة Go وTypeScript. [SDK](./sdk/) · [الإنشاء](./build/).
 
 ## ثبّت إضافتك الأولى {#install-your-first-plugin}
 
@@ -40,11 +50,11 @@ npx universal-agent-plugins add context7
 
 ## ما المتاح حاليًا {#what-is-available}
 
-[CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95) هو الإصدار الحالي من المثبّت الأصلي، وقد نُشر في 29 أكتوبر 2026. يضيف واجهة API للإدارة المحلية وامتدادات Pi الأصلية ضمن نطاق المستخدم. راجع [الإدارة المحلية](./use/manage#local-management-api) و[توافق Pi](./reference/client-compatibility#pi-native-extensions).
+[CLI](https://github.com/777genius/universal-agent-plugins/releases/latest) هو الإصدار الحالي من المثبّت الأصلي. يضيف واجهة API للإدارة المحلية وامتدادات Pi الأصلية ضمن نطاق المستخدم والمشروعات المؤهلة. راجع [الإدارة المحلية](./use/manage#local-management-api) و[توافق Pi](./reference/client-compatibility#pi-native-extensions).
 
 يحتفظ بتحديد نطاق المشروع صراحةً والاستعادة وفق ملف القفل. تعمل معظم الأوامر افتراضيًا على بيئة المستخدم. منذ 0.1.94، يختار `install` دون وسيطة مصدر المشروع الحالي فقط إذا احتوى المجلد الحالي نفسه على ملف عادي باسم `uap.toml`؛ وتكون الأولوية للنطاق الصريح. حدّد `--scope project` في أوامر الإضافة والصيانة للمشروع. راجع [التثبيت](./use/install) و[الصيانة](./use/manage).
 
-قد تختلف الإصدارات بين قنوات التوزيع. تحقّق من `agentplugins version`؛ واستخدم [المثبّت الأصلي](https://github.com/777genius/universal-agent-plugins/blob/main/docs/NATIVE_INSTALL.md) للحصول على الإصدار 0.1.95 المتحقق منه. يتطلب الاختيار التلقائي للمشروع 0.1.94 أو أحدث، ويتوفر نطاق المشروع الصريح منذ 0.1.93.
+قد تختلف الإصدارات بين قنوات التوزيع. تحقّق من `agentplugins version`؛ واستخدم [المثبّت الأصلي](https://github.com/777genius/universal-agent-plugins/blob/main/docs/NATIVE_INSTALL.md) للحصول على أحدث إصدار مستقر منشور. يتطلب الاختيار التلقائي للمشروع 0.1.94 أو أحدث، ويتوفر نطاق المشروع الصريح منذ 0.1.93.
 
 لا يتضمن المثبّت الحالي `agentplugins author`. يشرح [دليل البناء](./build/) إنشاء الحزم يدويًا وأوامر التأليف المنفذة في المصدر الحالي. تبقى أدلة إصدارات التأليف الأقدم مرتبطة بإصداراتها الأصلية، ولا تصف تنزيل المثبّت الحالي.
 

@@ -25,7 +25,17 @@ translationRequired: true
     <h2>Build plugins</h2>
     <p>Write a standard package with plugin.json, Skills and MCP configuration. Explore source-build authoring tools.</p>
   </a>
+  <a class="docs-card" href="./sdk/">
+    <h2>Integrate UAP</h2>
+    <p>Hooks, host detection, Go installer and TypeScript management.</p>
+  </a>
 </div>
+
+## Explore more than installation
+
+- Install packages for multiple agents, choose standalone Skills, or use the signed catalog, Git/SSH and archives. [Install](./use/install).
+- Keep user and project dependencies separate with `uap.toml` / `uap.lock`; update, repair and diagnose managed state. [Manage](./use/manage).
+- Build portable Skills/MCP packages and embed Go/TypeScript SDKs. [SDK](./sdk/) · [Build](./build/).
 
 ## Install your first plugin
 
@@ -42,9 +52,9 @@ for macOS, Linux or Windows; the native manager itself does not require Node.js.
 
 ## What is available
 
-[CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95)
+[CLI](https://github.com/777genius/universal-agent-plugins/releases/latest)
 is the current native installer release. It adds a local management API and
-user-scope native Pi extensions. See [local management](./use/manage#local-management-api)
+native Pi extensions, Skills and stdio/Streamable HTTP MCP in user and eligible project scope. Signed Directory releases still require their own Pi target policy. See [local management](./use/manage#local-management-api)
 and [Pi compatibility](./reference/client-compatibility#pi-native-extensions).
 It retains explicit project scope and locked restoration. Most commands default
 to your user environment. An `install` without

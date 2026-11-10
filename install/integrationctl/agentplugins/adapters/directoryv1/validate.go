@@ -14,30 +14,6 @@ import (
 
 const supportedPluginSchema = "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json"
 
-func validatePointer(v Pointer) error {
-	if v.PointerSchemaVersion != 1 || v.SnapshotSchemaVersion != 1 || v.Sequence < 1 {
-		return strictError("unsupported pointer schema or sequence")
-	}
-	stem := fmt.Sprintf("%020d", v.Sequence)
-	if err := exactArtifactPath(v.SnapshotPath, "snapshots/"+stem+".json"); err != nil {
-		return err
-	}
-	if err := exactArtifactPath(v.EnvelopePath, "snapshots/"+stem+".envelope.json"); err != nil {
-		return err
-	}
-	c := v.FetchContract
-	if !c.HTTPSRequired || !c.SameOriginRedirectsOnly || c.ForwardCredentialsOnRedirect {
-		return strictError("unsafe fetch contract")
-	}
-	if c.MaxRedirects < 0 || c.MaxRedirects > 2 || c.RetryAttempts < 1 || c.RetryAttempts > 3 {
-		return strictError("fetch retry/redirect bounds")
-	}
-	if c.LatestMaxBytes < 1 || c.LatestMaxBytes > MaxLatestBytes || c.SnapshotMaxBytes < 1 || c.SnapshotMaxBytes > MaxSnapshotBytes || c.EnvelopeMaxBytes < 1 || c.EnvelopeMaxBytes > MaxEnvelopeBytes {
-		return strictError("fetch size bounds")
-	}
-	return nil
-}
-
 func exactArtifactPath(actual, expected string) error {
 	if actual != expected || strings.ContainsAny(actual, `\:`) || strings.HasPrefix(actual, "/") || path.Clean(actual) != actual {
 		return strictError("unsafe artifact path %q", actual)
@@ -352,6 +328,9 @@ func validatePolicy(p domain.DirectoryReleasePolicy) error {
 	clients := map[domain.ClientID]bool{}
 	for _, t := range p.Targets {
 		expectedDelivery, supportedDelivery := domain.ExpectedDirectoryDelivery(t.Client)
+		if t.Scope != "" || t.MinimumInstallerVersion != "" || t.CurrentEvidence != nil || t.CanonicalClosure != nil {
+			return fmt.Errorf("v1 target cannot carry scoped grant fields")
+		}
 		if !validClient(t.Client) || clients[t.Client] || len(t.Scopes) != 1 || t.Scopes[0] != domain.ScopeUser || !supportedDelivery || t.Delivery != expectedDelivery {
 			return fmt.Errorf("invalid target")
 		}
@@ -381,108 +360,6 @@ func validatePolicy(p domain.DirectoryReleasePolicy) error {
 	return nil
 }
 
-func validateSource(s domain.DirectorySource) error {
-	if !repositoryPattern.MatchString(s.Repository) || !shaPattern.MatchString(s.Revision) {
-		return fmt.Errorf("malformed immutable source")
-	}
-	return validateSourcePath(s.Path)
-}
-
-func validateSourcePath(sourcePath string) error {
-	if sourcePath == "" || strings.HasPrefix(sourcePath, "/") || strings.Contains(sourcePath, "\\") {
-		return fmt.Errorf("unsafe source path")
-	}
-	for _, part := range strings.Split(sourcePath, "/") {
-		if part == "" || part == "." || part == ".." {
-			return fmt.Errorf("unsafe source path")
-		}
-		for _, r := range part {
-			if !(r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || strings.ContainsRune("._-", r)) {
-				return fmt.Errorf("unsafe source path")
-			}
-		}
-	}
-	return nil
-}
-func parseTimestamp(v string) (time.Time, error) {
-	if !timestampPattern.MatchString(v) {
-		return time.Time{}, fmt.Errorf("must be second-precision UTC RFC3339")
-	}
-	return time.Parse("2006-01-02T15:04:05Z", v)
-}
-func parseSemver(v string) ([3]uint64, error) {
-	var out [3]uint64
-	if !semverPattern.MatchString(v) {
-		return out, fmt.Errorf("not x.y.z")
-	}
-	parts := strings.Split(v, ".")
-	if len(parts) != 3 {
-		return out, fmt.Errorf("not x.y.z")
-	}
-	for i, s := range parts {
-		if s == "" || (len(s) > 1 && s[0] == '0') {
-			return out, fmt.Errorf("invalid component")
-		}
-		n, e := fmt.Sscan(s, &out[i])
-		if e != nil || n != 1 {
-			return out, fmt.Errorf("invalid component")
-		}
-	}
-	return out, nil
-}
-func validClient(v domain.ClientID) bool {
-	return domain.IsSupportedClient(v)
-}
-func oneOf(v string, values ...string) bool {
-	for _, x := range values {
-		if v == x {
-			return true
-		}
-	}
-	return false
-}
-func contains(values []string, v string) bool {
-	for _, x := range values {
-		if x == v {
-			return true
-		}
-	}
-	return false
-}
-func releaseKey(distribution string, sequence uint64) string {
-	return fmt.Sprintf("%s#%d", distribution, sequence)
-}
-func uniqueSimpleIDs(values []string, where string) error {
-	seen := map[string]bool{}
-	for _, v := range values {
-		if !simpleIDPattern.MatchString(v) || seen[v] {
-			return strictError("%s contains malformed or duplicate %q", where, v)
-		}
-		seen[v] = true
-	}
-	return nil
-}
-func uniqueDistributionIDs(values []string, where string) error {
-	seen := map[string]bool{}
-	for _, v := range values {
-		if !distributionPattern.MatchString(v) || seen[v] {
-			return strictError("%s contains malformed or duplicate %q", where, v)
-		}
-		seen[v] = true
-	}
-	return nil
-}
-func strictError(format string, args ...any) error {
-	return fmt.Errorf("%w: %s", ErrStrictJSON, fmt.Sprintf(format, args...))
-}
-
-func requireRootFields(body []byte, fields ...string) error {
-	var root map[string]json.RawMessage
-	if err := json.Unmarshal(body, &root); err != nil {
-		return err
-	}
-	return requiredMap(root, fields...)
-}
 func requireSnapshotFields(body []byte) error {
 	var root map[string]json.RawMessage
 	if err := json.Unmarshal(body, &root); err != nil {
@@ -567,6 +444,11 @@ func requireSnapshotFields(body []byte) error {
 				return err
 			}
 			for _, target := range targets {
+				for _, key := range []string{"scope", "minimum_installer_version", "current_evidence", "canonical_closure"} {
+					if _, present := target[key]; present {
+						return fmt.Errorf("schema-1 target cannot contain %s", key)
+					}
+				}
 				if err := requiredMap(target, "client", "scopes", "delivery", "authentication"); err != nil {
 					return err
 				}
@@ -587,6 +469,13 @@ func requireSnapshotFields(body []byte) error {
 		return err
 	}
 	for _, e := range evidence {
+		// Domain evidence is shared with future protocols; v1 wire evidence
+		// remains strict and never accepts a scoped identity, including null.
+		for _, field := range []string{"scope", "closure_digest"} {
+			if _, present := e[field]; present {
+				return fmt.Errorf("schema-1 evidence cannot contain %s", field)
+			}
+		}
 		required := []string{"schema_version", "id", "distribution_id", "release_sequence", "package_tree_digest", "level", "outcome", "artifact"}
 		if legacyEvidence {
 			if _, present := e["trust"]; present {
@@ -643,19 +532,3 @@ func requireSnapshotFields(body []byte) error {
 	}
 	return nil
 }
-func requiredMap(value map[string]json.RawMessage, fields ...string) error {
-	if value == nil {
-		return fmt.Errorf("expected object")
-	}
-	for _, f := range fields {
-		raw, ok := value[f]
-		if !ok {
-			return fmt.Errorf("missing required field %q", f)
-		}
-		if string(raw) == "null" {
-			return fmt.Errorf("required field %q cannot be null", f)
-		}
-	}
-	return nil
-}
-func isJSONNull(value json.RawMessage) bool { return strings.TrimSpace(string(value)) == "null" }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -53,6 +54,12 @@ func (controller legacyController) Remove(ctx context.Context, name string) (por
 }
 
 func (controller legacyController) remove(ctx context.Context, name string, dryRun bool) (ports.LegacyRemovalPlan, error) {
+	// Legacy.Remove uses os.UserHomeDir internally, not controller.statePath.
+	// Refuse to operate on an unrelated real user profile when a caller
+	// composed this controller with a different explicit home directory.
+	if err := controller.requireLegacyEngineHome(); err != nil {
+		return ports.LegacyRemovalPlan{}, err
+	}
 	result, err := legacy.Remove(ctx, legacy.RemoveParams{Name: name, DryRun: dryRun})
 	if err != nil {
 		return ports.LegacyRemovalPlan{}, err
@@ -69,4 +76,16 @@ func (controller legacyController) remove(ctx context.Context, name string, dryR
 	}
 	sort.Strings(targets)
 	return ports.LegacyRemovalPlan{Summary: result.Summary, TargetIDs: targets}, nil
+}
+
+func (controller legacyController) requireLegacyEngineHome() error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("resolve legacy lifecycle home: %w", err)
+	}
+	expected := filepath.Join(home, ".plugin-kit-ai", "state.json")
+	if filepath.Clean(controller.statePath) != expected {
+		return fmt.Errorf("legacy lifecycle state root does not match OS user home; refusing the legacy engine")
+	}
+	return nil
 }

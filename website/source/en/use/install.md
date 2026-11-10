@@ -150,7 +150,7 @@ Explicit project scope is available in
 [CLI 0.1.93 and later](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.93).
 Choose an existing directory and select scope on each command:
 
-For a compatible reviewed catalog entry, copy its exact commit-pinned Git source and supported target. Directory v1 aliases such as `context7` remain user-scoped. Replace `OWNER/REPOSITORY`, `FULL_COMMIT_SHA`, and `PACKAGE_PATH`; omit `//PACKAGE_PATH` for a repository-root package.
+For an eligible reviewed catalog entry, the published CLI accepts its signed Directory short name with explicit Project scope when the client supports all required components (for example, `agentplugins add context7 --target codex --scope project --dry-run`). Alternatively, use the reviewed exact commit-pinned Git source and compatible target. Replace `OWNER/REPOSITORY`, `FULL_COMMIT_SHA`, and `PACKAGE_PATH`; omit `//PACKAGE_PATH` for a repository-root package.
 
 Template: `github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH`. The command below uses a real historical GitLab commit, not a currently reviewed catalog revision. For a new installation, copy the current reviewed source from the catalog.
 
@@ -170,10 +170,9 @@ scope when a regular `uap.toml` exists in the exact current folder; explicit
 scope wins. See [restoration rules](./manage) for strict lock behavior.
 
 The target must support the requested project components. ChatGPT project
-installation is explicitly unsupported. VS Code prepares `.github/skills` and
-owned `servers` members in `.vscode/mcp.json` for one local folder. Its result
-remains Prepared: review workspace/server trust and inspect the client settings.
-That metadata observation does not prove MCP startup, tool calls or model use.
+installation is explicitly unsupported. When the result is **Prepared**, review
+any required workspace/server trust and client configuration. Installed files
+alone do not prove MCP startup, tool calls or model use.
 
 Read the [project installation guide](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_INSTALLATION.md)
 and [per-client project boundaries](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)

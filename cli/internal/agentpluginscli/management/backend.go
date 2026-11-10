@@ -3,7 +3,6 @@ package management
 import (
 	"context"
 	"errors"
-	"net/http"
 )
 
 // Backend is the application boundary. Implementations retain installer authority
@@ -46,20 +45,3 @@ type Refusal struct {
 }
 
 func (r *Refusal) Error() string { return r.Message }
-
-func writeBackendError(w http.ResponseWriter, err error) {
-	var refusal *Refusal
-	if errors.As(err, &refusal) {
-		status := refusal.Status
-		if status < 400 || status > 599 {
-			status = http.StatusUnprocessableEntity
-		}
-		writeError(w, status, refusal.Code, refusal.Message, refusal.Retryable)
-		return
-	}
-	if errors.Is(err, ErrPlanStale) {
-		writeError(w, 409, "PLAN_STALE", "Installer facts changed; prepare a new review", false)
-		return
-	}
-	writeError(w, 422, "OPERATION_REFUSED", "The requested operation could not be prepared; inspect the environment and source", false)
-}

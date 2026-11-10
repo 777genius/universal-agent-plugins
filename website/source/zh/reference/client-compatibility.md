@@ -13,7 +13,7 @@ localeDisposition: "current-translation"
 
 ## 当前版本与范围
 
-[CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95)于 2026 年 10 月 29 日发布，新增由宿主管理生命周期的本地管理 API、只读客户端和配置目录发现，以及用户范围的 Pi 原生扩展提供程序。请参阅[本地管理](../use/manage#local-management-api)。各分发渠道的版本可能滞后，请先用 `agentplugins version` 确认。
+[CLI](https://github.com/777genius/universal-agent-plugins/releases/latest)是当前发布的原生 CLI，新增由宿主管理生命周期的本地管理 API、只读客户端和配置目录发现，以及适用于用户与符合条件项目范围的 Pi 扩展、Skills 和 stdio/Streamable HTTP MCP。请参阅[本地管理](../use/manage#local-management-api)。各分发渠道的版本可能滞后，请先用 `agentplugins version` 确认。
 
 自 CLI 0.1.94 起，未指定来源参数的 `install` 在当前目录存在普通 `uap.toml` 文件时自动选择项目；显式范围优先，不搜索父目录。即使没有 `--locked`，已有锁文件也会严格验证。显式项目范围从 0.1.93 起提供。安装器的发布证据不能证明每个原生客户端的运行行为，也不能替代标准创作工具的可执行文件发布验收。当前 npm/原生安装器不包含 `agentplugins author`；源码工具见[构建指南](../build/)。
 
@@ -26,18 +26,20 @@ localeDisposition: "current-translation"
 | 认证和模型使用 | 只有明确执行过相应流程的证据才能证明。 |
 
 项目交付通常保持 **Prepared**，因为仍可能需要信任、重新加载、明确配置或新会话。
-ChatGPT 明确不支持原生项目安装。VS Code 项目范围为单个本地文件夹准备文件；固定版本元数据观察不能证明 MCP 启动或模型执行。
+ChatGPT 明确不支持原生项目安装。
 请参阅[逐客户端项目支持](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)和
 [项目证据索引](https://github.com/777genius/universal-agent-plugins/blob/main/docs/evidence/PROJECT_INSTALLATION.md)。
 
-下列历史观察对应精确的安装器、客户端、平台和测试范围。结果不会自动延伸到 0.1.95、其他客户端版本、其他安装范围或未经测试的包。
+下列历史观察对应精确的安装器、客户端、平台和测试范围。结果不会自动延伸到当前发布版本、其他客户端版本、其他安装范围或未经测试的包。
 UAP 是独立社区工具；这些是维护者进行的有限观察，不是厂商认证或通用的生产就绪保证。
 
-## Pi 原生扩展 {#pi-native-extensions}
+## Pi 扩展、Skills 与 MCP {#pi-native-extensions}
 
-CLI 0.1.95 支持为声明了[Pi 原生扩展](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_CONTRACT.md)的包指定 `--target pi`。此提供程序支持用户范围的原生扩展，当前范围不包括可移植技能和 MCP 配置投射。安装后请重新加载资源或重启 Pi。
+已发布的 CLI `0.1.102` 支持使用 `--target pi` 安装兼容的 Agent Plugins 1.0 包，包括 [Pi 原生扩展](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_CONTRACT.md)、Skills，以及 stdio 和 Streamable HTTP MCP。支持用户范围和符合条件的项目范围；不支持 MCP SSE 或通用 App 组件。项目扩展位于 `.pi/extensions`，Skills 位于 `.pi/skills`，由 UAP 管理的 MCP 配置位于 `.pi/mcp.json`。安装后仍可能需要信任项目、重新加载资源或创建新会话。
 
-[已记录的原生证据](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_EVIDENCE.md)覆盖 Linux 上的 Pi 1.4.0，包括原生发现、选定的扩展执行、更新、缺失包修复、移除和保留外部扩展。它不能证明 macOS/Windows 执行、桌面通知、音频或终端焦点行为。仅安装成功不能证明正在运行的 Pi 会话已加载扩展。
+**CLI 能安装某类组件，不表示签名 Directory 已经授权每个包使用 Pi。** 截至 2026 年 11 月 9 日，37 项活跃 Directory 发布策略都尚未声明 `pi` 目标，因此通过短名称执行 `add context7 --target pi` 会正确拒绝。精确的 `github:owner/repo@FULL_SHA//path` 来源是不同的显式安装途径，仍须通过 CLI 验证，不能替代签名目录的授权。
+
+[项目 E2E](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md) 与[真实 Pi 的 `tools/call` (#656)](https://github.com/777genius/universal-agent-plugins/pull/656) 证实了 Linux、macOS 和 Windows 上使用本地脚本模型的特定 Skills/MCP 场景。早期[扩展验证](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_EVIDENCE.md)仅覆盖 Linux；那是历史测试范围，不是当前适配器限制。成功写入文件并不证明 OAuth、远程模型权限或客户端实际激活。
 
 ## 历史证据索引
 

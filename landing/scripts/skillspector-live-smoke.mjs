@@ -8,6 +8,10 @@ import { chromium, expect } from '@playwright/test';
 import { createI18n } from 'vue-i18n';
 import { loadI18nMessages } from './load-i18n-messages.ts';
 import { createSkillSpectorClient } from '../utils/skillSpectorCatalog.ts';
+import { hasCurrentPublishedScan } from '../utils/skillSpectorCurrent.ts';
+import {
+  applyVerifiedSkillSpectorCohort, readVerifiedSkillSpectorCohort,
+} from '../utils/skillSpectorCohort.ts';
 import {
   decodeSkillSpectorManifestV3,
   decodeSkillSpectorShardV3,
@@ -17,6 +21,10 @@ import {
   skillSpectorFindingUrl,
   skillSpectorSourceUrl,
 } from '../utils/skillSpector.ts';
+
+// Load the same reviewed trust store as the Nuxt consumer without importing JSON into its runtime verifier.
+const cohortTrust = JSON.parse(readFileSync(new URL('../features/skillspector/cohort-trusted-keys.json', import.meta.url), 'utf8'));
+const pinnedCohortKeys = cohortTrust.schema_version === 1 && Array.isArray(cohortTrust.keys) ? cohortTrust.keys : [];
 
 // Read-only production acceptance with real requests and no route interception.
 // Node 24; install Chromium with `pnpm exec playwright install --only-shell chromium`.
@@ -51,6 +59,9 @@ const parse = (bytes) => JSON.parse(new TextDecoder('utf-8', { fatal: true }).de
 const sourceFiles = [
   'scripts/skillspector-live-smoke.mjs',
   'utils/skillSpectorCatalog.ts',
+  'utils/skillSpectorCurrent.ts',
+  'utils/skillSpectorCohort.ts',
+  'features/skillspector/cohort-trusted-keys.json',
   'utils/skillSpectorV3.ts',
   'utils/skillSpector.ts',
   'utils/skillSpectorDiagnostics.ts',
@@ -85,9 +96,15 @@ const evidence = {
   success: false,
 };
 
-async function bytes(url, maximum) {
-  const response = await fetch(url, { credentials: 'omit', signal: AbortSignal.timeout(60_000) });
-  assert.equal(response.status, 200, url);
+async function readBytesOnce(url, maximum) {
+  const response = await fetch(url, { credentials: 'omit', redirect: 'error',
+    signal: AbortSignal.timeout(60_000) });
+  if (response.status !== 200) {
+    await response.body?.cancel().catch(() => undefined);
+    const error = new Error(`HTTP ${response.status}: ${url}`);
+    error.httpStatus = response.status;
+    throw error;
+  }
   assert.ok(
     Number(response.headers.get('content-length')) <= maximum,
     `Oversized response: ${url}`,
@@ -109,6 +126,24 @@ async function bytes(url, maximum) {
     reader.releaseLock();
   }
   return Buffer.concat(chunks, size);
+}
+async function bytes(url, maximum) {
+  // The real v3 report contains >2,000 immutable shards. Retry only temporary
+  // network/429/5xx interruptions for the individual shard, never bad digests.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await readBytesOnce(url, maximum);
+    } catch (error) {
+      const transient = error instanceof TypeError ||
+        error?.name === 'TimeoutError' ||
+        error?.httpStatus === 429 ||
+        (typeof error?.httpStatus === 'number' && error.httpStatus >= 500);
+      if (!transient || attempt === 2) throw error;
+      console.warn(`Retrying transient SkillSpector evidence read ${attempt + 1}/2: ${url}`);
+      await new Promise(resolve => setTimeout(resolve, (attempt + 1) * 300));
+    }
+  }
+  throw new Error('Unreachable retry limit');
 }
 async function json(url) {
   return parse(await bytes(url, 16 << 20));
@@ -150,10 +185,20 @@ let browser;
 try {
   let publication = process.env.UAP_SKILLSPECTOR_PUBLICATION_COMMIT || publicationMatch[1];
   if (!/^[0-9a-f]{40}$/.test(publication)) {
-    const ref = await json(
-      `https://api.github.com/repos/777genius/universal-agent-plugins-registry/git/ref/heads/${encodeURIComponent(publication)}`,
-    );
-    publication = ref.object?.sha;
+    // Anonymous GitHub API requests can return 403 on shared CI runners.
+    // Resolve the exact public ref via Git smart HTTP, then pin all report reads.
+    assert.equal(publication, 'skillspector-reports', 'Expected the public report branch');
+    const gitEnv = { ...process.env, GIT_TERMINAL_PROMPT: '0' };
+    // A runner's inherited Git settings must not disable TLS verification.
+    delete gitEnv.GIT_SSL_NO_VERIFY;
+    const remote = execFileSync(
+      'git',
+      ['-c', 'http.sslVerify=true', 'ls-remote', '--heads', 'https://github.com/777genius/universal-agent-plugins-registry.git', 'refs/heads/skillspector-reports'],
+      { encoding: 'utf8', timeout: 30_000, maxBuffer: 4096, env: gitEnv },
+    ).trim();
+    const match = /^([0-9a-f]{40})\trefs\/heads\/skillspector-reports$/.exec(remote);
+    assert.ok(match, 'Expected exactly one immutable SHA for the public report branch');
+    publication = match[1];
   }
   assert.match(publication || '', /^[0-9a-f]{40}$/, 'Expected an immutable publication commit');
   const immutableUrl = manifestUrl.replace(
@@ -261,6 +306,37 @@ try {
     ),
     success: true,
   });
+
+  // A production-signed cohort must be accepted against actual immutable
+  // v3 shards by the SAME browser consumer, never just an isolated unit fixture.
+  // With zero approved independent keys, old Partial behavior stays unchanged.
+  if (pinnedCohortKeys.length) {
+    const cohortUrl = process.env.NUXT_PUBLIC_SKILLSPECTOR_COHORT_LATEST_URL ||
+      'https://raw.githubusercontent.com/777genius/universal-agent-plugins-registry/skillspector-cohort-releases/reports/skillspector/cohort/v1/latest.json';
+    const verified = await readVerifiedSkillSpectorCohort(cohortUrl, pinnedCohortKeys);
+    assert.ok(verified, 'A configured cohort key must validate the actual signed release');
+    const overlay = applyVerifiedSkillSpectorCohort(
+      { ...manifest, records }, digest(manifestBytes), verified);
+    const changed = overlay.records.filter((record) => record.signed_cohort_verified);
+    assert.equal(changed.length, 9, 'Exactly nine immutable sources may be promoted');
+    assert.equal(changed.reduce((sum, record) => sum + record.finding_count, 0), 9,
+      'All nine content security findings must remain visible');
+    assert.ok(changed.every((record) => record.scanner?.version === '2.13.3' &&
+      record.coverage?.status === 'complete' && record.execution?.state === 'completed'),
+    'Every cohort member must retain complete static-analysis provenance');
+    assert.ok(overlay.records.every((record, index) =>
+      record.signed_cohort_verified || record === records[index]),
+    'All unrelated historical and genuine Partial sources must be unchanged');
+    Object.assign(evidence.publication, {
+      signed_cohort: {
+        verified: true,
+        records: changed.length,
+        risk_findings: changed.reduce((sum, record) => sum + record.finding_count, 0),
+        expires_at: new Date(verified.expiresAt).toISOString(),
+        source_manifest_sha256: verified.manifestDigest,
+      },
+    });
+  }
 
   if (process.env.UAP_SKILLSPECTOR_PUBLICATION_ONLY !== '1') {
     const projection = await json(new URL('api/registry/plugin/cloudflare', site).href);
@@ -476,7 +552,9 @@ try {
           evidence.page_errors.push({ locale, width, message: message.text() });
       });
       page.on('response', (response) => {
-        if (!response.url().includes('/reports/skillspector/')) return;
+        // The separately signed cohort uses /cohort/v1/, not the immutable v3 shard namespace.
+        // Its Ed25519/digest/expiry checks run above; do not misclassify it as v3.
+        if (!response.url().includes('/reports/skillspector/v3/')) return;
         const check = (async () => {
           assert.equal(response.status(), 200, response.url());
           const part = response.url().split('/reports/skillspector/v3/')[1];
@@ -702,6 +780,66 @@ try {
       );
       await panel.locator('.skillspector__dialog').screenshot({ path: resolve(output, `plugin-${locale}-${width}.png`) });
       await panel.locator('.skillspector__dialog-close').click();
+      // The explicit scanned filter must show real, currently inspected Skills.
+      // Check one desktop visit against the exact published, digest-validated
+      // reports already loaded above. Browser/API traffic is never mocked.
+      if (locale === 'en' && width === 1280) {
+        // Stay in the same Nuxt app: a full page reload resets the scoped
+        // manifest cache and cannot test cross-catalog request reuse.
+        await page.evaluate(
+          async (target) => document.querySelector('#__nuxt').__vue_app__.config.globalProperties.$router.push(target),
+          `${site.pathname}${prefix}plugins/?tab=skills&skillScan=scanned`,
+        );
+        await hydrated(page);
+        const catalog = page.locator('.skills-catalog');
+        await expect(catalog.getByRole('button', { name: /^Filters/ })).toBeVisible();
+        const cards = catalog.locator('.skill-card');
+        await expect(cards.first()).toBeVisible({ timeout: 90_000 });
+        const count = await cards.count();
+        assert.ok(count <= 48, 'Filtered Skills page must obey the display bound');
+        await expect(catalog.locator('.skill-card details.skillspector')).toHaveCount(count, {
+          timeout: 60_000,
+        });
+        const visible = await cards.evaluateAll((elements) =>
+          elements.map((element) => ({
+            id: element.getAttribute('data-skill-id'),
+            sourceUrl: element.querySelector('.plugin-card__source-label a')?.getAttribute('href'),
+            statusClass: element.querySelector('details.skillspector')?.className,
+          })),
+        );
+        for (const item of visible) {
+          const identity = /^skills-sh:([^:]+):([^:]+)$/.exec(item.id || '');
+          assert.ok(identity, `Visible Skill has ambiguous source identity: ${item.id}`);
+          const repository = /^https:\/\/github\.com\/([^/]+\/[^/]+)(?:\/|$)/i.exec(item.sourceUrl || '')?.[1];
+          assert.equal(
+            repository?.toLowerCase(),
+            identity[1].toLowerCase(),
+            `Visible Skill source disagrees with its catalog identity: ${item.id}`,
+          );
+          const canonical = repository.toLowerCase();
+          const report = reports.get(canonical);
+          assert.ok(report, `No published v3 report for visible Skill: ${item.id}`);
+          assert.ok(
+            hasCurrentPublishedScan(report, {
+              repository: canonical,
+              sourceStateId: canonical + '/' + identity[2],
+              name: identity[2],
+            }),
+            `Visible Skill lacks a completed, current, inspected report: ${item.id}`,
+          );
+          assert.ok(
+            !/skillspector--(?:loading|unavailable|stale|pending|unsupported|notChecked)/.test(
+              item.statusClass || '',
+            ),
+            `Visible Skill card misrepresents scan state: ${item.id}`,
+          );
+        }
+        evidence.current_skill_catalog = {
+          filter: 'scanned',
+          cards_verified: count,
+          visible_skill_ids: visible.map((item) => item.id),
+        };
+      }
       const standaloneAssessment = skillSpectorAssessment(standalone.report, {
         kind: 'skill',
         repository: standalone.listing.source.repository,

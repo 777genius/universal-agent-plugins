@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/codex"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 )
 
@@ -225,6 +226,48 @@ func nativeSession(t *testing.T, f *nativeFixture, client, label, revision, oper
 	if inventory.NextCursor != nil {
 		t.Fatal("unexpected inventory pagination; refusing incomplete evidence")
 	}
+	// Codex emits startup statuses asynchronously. A newly started native
+	// process can still be "starting" when the first inventory arrives, even
+	// though its independently correlated startup failure is imminent. Await
+	// that exact terminal failure with a strict deadline; never accept ready,
+	// absent, duplicate or tool-bearing failed servers as proof.
+	if label == "partial_failure" {
+		deadline := time.Now().Add(10 * time.Second)
+		for {
+			status := ""
+			for _, server := range inventory.Data {
+				if server.PluginID != f.PluginID || server.Name != "startup-failure" {
+					continue
+				}
+				if status != "" {
+					t.Fatal("duplicate startup-failure native server")
+				}
+				if len(server.Tools) != 0 {
+					t.Fatal("startup-failure server advertised tools")
+				}
+				status = server.RuntimeStatus
+			}
+			if status == "failed" {
+				break
+			}
+			if status != "starting" {
+				t.Fatalf("unexpected startup-failure native status: %q", status)
+			}
+			if !time.Now().Before(deadline) {
+				t.Fatal("startup-failure native server did not transition to failed within bounded deadline")
+			}
+			time.Sleep(25 * time.Millisecond)
+			b = r.must(t, "mcpServerStatus/list", map[string]any{"threadId": thread.Thread.ID, "limit": 100})
+			inventory.Data = nil
+			inventory.NextCursor = nil
+			if err := json.Unmarshal(b, &inventory); err != nil {
+				t.Fatal(err)
+			}
+			if inventory.NextCursor != nil {
+				t.Fatal("unexpected inventory pagination during startup-failure observation")
+			}
+		}
+	}
 	var observed nativeFacts
 	count := 0
 	serverNames := map[string]bool{}
@@ -380,7 +423,7 @@ func TestAgentpluginsCodexNativeLifecycle(t *testing.T) {
 	f := newNativeFixture(t, true)
 	f.ClientBinDir = filepath.Dir(client)
 	stages := map[string]nativeStage{}
-	for _, name := range []string{"install", "A_native_tool", "B_native_tool", "same_version_native_tool", "unchanged", "owned_repair", "native_cache_repair", "partial_failure", "all_unsupported", "remove", "repeat_remove", "foreign_preservation", "collision_drift", "immutable_git", "immutable_git_native", "http", "redirect_headers", "skill_context", "real_model_skill_use", "oauth"} {
+	for _, name := range []string{"install", "A_native_tool", "B_native_tool", "same_version_native_tool", "unchanged", "explicit_user_scope", "owned_repair", "native_cache_repair", "partial_failure", "all_unsupported", "remove", "repeat_remove", "foreign_preservation", "collision_drift", "immutable_git", "immutable_git_native", "http", "redirect_headers", "skill_context", "real_model_skill_use", "oauth"} {
 		stages[name] = nativeStage{Status: "not_evaluated", Reason: "not reached"}
 	}
 	evidence := map[string]any{"started_utc": time.Now().UTC().Format(time.RFC3339Nano), "os": runtime.GOOS, "arch": runtime.GOARCH, "profile": f.Root, "client_version": "0.153.4", "client_source": "3d2ee51ca2d5db578f328aa75e20aa22c0197c9a", "client_sha256": nativeSHA(t, client), "installer_sha256": nativeSHA(t, installer), "acquisition": "local_directory", "native_surface": "codex app-server direct thread MCP RPC", "stages": stages}
@@ -527,6 +570,59 @@ func TestAgentpluginsCodexNativeLifecycle(t *testing.T) {
 		t.Fatal("non-mutating same-source add changed state or managed/cache content")
 	}
 	stages["unchanged"] = nativeStage{Status: "passed", Reason: "Unchanged package: explicit mutated=false and identical state/managed/cache bytes; authentication convergence not claimed"}
+
+	// The public CLI's global installation contract is --scope user, also
+	// selected when --scope is omitted. The real Codex registry must remain
+	// byte-identical when the same package is replayed with explicit scope.
+	nativeAttempt(stages, "explicit_user_scope", "unchanged-explicit-user-installer.json")
+	explicitUser := nativeInstaller(t, f, installer, client, "unchanged-explicit-user", "add", f.Package, "--scope", "user")
+	if err := nativeUnchangedResult(explicitUser); err != nil {
+		t.Fatalf("explicit user scope diverged from default Codex install: %v", err)
+	}
+	if nativeSHA(t, statePath) != unchangedState || nativeTreeDigest(t, active) != unchangedManaged || nativeTreeDigest(t, c.Root) != unchangedCache {
+		t.Fatal("explicit user scope replay mutated the Codex user installation")
+	}
+	// Re-query the real native Codex registry after explicit scope replay;
+	// an unchanged installer response alone does not prove native discovery.
+	listing, listErr := nativeCommand(t, f, client, "list-explicit-user", "plugin", "list", "--json")
+	if listErr != nil {
+		t.Fatalf("native Codex inventory after explicit user replay: %v: %s", listErr, listing)
+	}
+	// Reject malformed or duplicate entries (including foreign IDs), not
+	// just the presence of one matching entry in an otherwise invalid list.
+	marketplace, ok := strings.CutPrefix(f.PluginID, "native-proof@")
+	if !ok || marketplace == "" ||
+		codex.PluginStatusFromList(listing, "native-proof", marketplace) != codex.StatusInstalled {
+		t.Fatalf("native Codex inventory after explicit user replay is invalid: %s", listing)
+	}
+	var explicitInventory struct {
+		Installed []struct {
+			ID        string `json:"pluginId"`
+			Installed bool   `json:"installed"`
+			Enabled   bool   `json:"enabled"`
+			Source    struct {
+				Path string `json:"path"`
+			} `json:"source"`
+		} `json:"installed"`
+	}
+	if err := json.Unmarshal(listing, &explicitInventory); err != nil {
+		t.Fatalf("invalid native Codex inventory after explicit user replay: %v", err)
+	}
+	matched := 0
+	for _, plugin := range explicitInventory.Installed {
+		if plugin.ID != f.PluginID {
+			continue
+		}
+		if !plugin.Installed || !plugin.Enabled || plugin.Source.Path != active {
+			t.Fatalf("native Codex replay lost exact enabled source path: %+v", plugin)
+		}
+		matched++
+	}
+	if matched != 1 {
+		t.Fatalf("native Codex replay matched %d entries, want exactly one: %s", matched, listing)
+	}
+	stages["explicit_user_scope"] = nativeStage{Status: "passed", Reason: "real Codex plugin list retained exact enabled user plugin; identical persisted state/managed/cache bytes after explicit --scope user", Artifacts: []string{"unchanged-explicit-user-installer.json", "list-explicit-user.log"}}
+
 	// A changed existing directory deliberately loses provable content ownership.
 	// Verify fail-closed protection, then restore only bytes this fixture saved.
 	nativeAttempt(stages, "owned_artifact_guard", "owned-guard.log")

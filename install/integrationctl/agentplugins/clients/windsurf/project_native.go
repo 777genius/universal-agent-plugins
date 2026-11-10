@@ -112,9 +112,13 @@ func devinProjectedServer(activeRoot, name string) (nativeconfig.Server, error) 
 }
 
 func devinDesiredServers(activeRoot string, objects []domain.NativeObjectOwnership) (map[string]nativeconfig.Server, error) {
+	return devinDesiredServersForKind(activeRoot, objects, DevinProjectMCPKind)
+}
+
+func devinDesiredServersForKind(activeRoot string, objects []domain.NativeObjectOwnership, kind string) (map[string]nativeconfig.Server, error) {
 	servers := map[string]nativeconfig.Server{}
 	for _, object := range objects {
-		if object.Kind != DevinProjectMCPKind {
+		if object.Kind != kind {
 			continue
 		}
 		server, err := devinProjectedServer(activeRoot, object.LogicalName)

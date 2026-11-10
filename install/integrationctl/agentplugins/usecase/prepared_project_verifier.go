@@ -20,8 +20,26 @@ func (e *preparedProjectVerificationError) Unwrap() error { return e.cause }
 
 func preparedProjectFileCandidate(input AddInput, plan domain.DeliveryPlan) bool {
 	project := input.Scope == domain.ScopeProject || plan.Scope == domain.ScopeProject || plan.TargetContext.Scope == domain.ScopeProject || plan.TargetContext.ProjectRoot != ""
+	if !project {
+		return false
+	}
+	// Classify the old package-only receipt before validating authority. Even
+	// a mismatched client or package ID must reach the fail-closed verifier,
+	// rather than escape into a native-capability fallback. The exact identity
+	// check belongs to matchPreparedProjectBinding.
+	// The client table, not this generic use case, declares legacy package-only
+	// project compatibility. Either identity may identify a legacy binding:
+	// mismatched identities still enter the fail-closed authority verifier.
+	legacy := domain.ClientTraitsFor(input.Client.ClientID).LegacyPreparedProjectPackageReceipt ||
+		domain.ClientTraitsFor(plan.ClientID).LegacyPreparedProjectPackageReceipt
+	if legacy && len(plan.PreviousNativeObjects) == 1 {
+		object := plan.PreviousNativeObjects[0]
+		if object.Kind == "managed_package_directory" && object.Path == plan.ActivePath {
+			return true
+		}
+	}
 	traits := (domain.SelectedDelivery{}).EffectiveTraitsForScope(input.Client.ClientID, domain.ScopeProject)
-	return project && traits.LifecycleKind == domain.LifecyclePrepared && !traits.TracksNativeEffects
+	return traits.LifecycleKind == domain.LifecyclePrepared && !traits.TracksNativeEffects
 }
 
 // Applicability is separate from authority and capability. A malformed project

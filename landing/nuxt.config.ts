@@ -35,9 +35,9 @@ const registryPagesOrigin =
 const discoveryKeyID = process.env.NUXT_PUBLIC_DISCOVERY_KEY_ID || 'uap-discovery-2026-01';
 const discoveryPublicKey =
   process.env.NUXT_PUBLIC_DISCOVERY_PUBLIC_KEY || 'IxWvGuscXR9crlCrGyBQZNqroYNVPbBA1B3pnjSffhc=';
-// Public playback ID for the verified v29 product film; an empty override disables it.
+// Public playback ID for the verified v34 product film; an empty override disables it.
 const muxPlaybackId =
-  process.env.NUXT_PUBLIC_MUX_PLAYBACK_ID ?? 'hq9E01xwa01Mxgz101B02wdKbjOV700GGpSUGjo8ehi0001cQU';
+  process.env.NUXT_PUBLIC_MUX_PLAYBACK_ID ?? 'yz02QRJdmL4XQp7VIyD02NTZ1PMHVQiFaYrvIkNGlL0154';
 
 function resolveRegistrySnapshot(): string {
   const explicit = process.env.UAP_SIGNED_SNAPSHOT_PATH;
@@ -76,6 +76,9 @@ export default defineNuxtConfig({
         '/components/registry/SkillSpectorAssessment.vue',
         '/components/PageBackground.vue',
         '/components/registry/InstallPanel.vue',
+        // Detail-page scoped CSS is also emitted as a cached page stylesheet.
+        // Avoid repeating 400+ CSS source lines in every localized plugin HTML.
+        '/pages/plugins/[slug].vue',
       ].some((component) => moduleId?.includes(component));
     },
   },
@@ -208,6 +211,9 @@ export default defineNuxtConfig({
       discoveryKeyID,
       discoveryPublicKey,
       muxPlaybackId,
+      skillspectorCohortLatestUrl:
+        process.env.NUXT_PUBLIC_SKILLSPECTOR_COHORT_LATEST_URL ||
+        'https://raw.githubusercontent.com/777genius/universal-agent-plugins-registry/skillspector-cohort-releases/reports/skillspector/cohort/v1/latest.json',
       skillspectorV3ManifestUrl:
         process.env.NUXT_PUBLIC_SKILLSPECTOR_V3_MANIFEST_URL ||
         'https://raw.githubusercontent.com/777genius/universal-agent-plugins-registry/skillspector-reports/reports/skillspector/v3/index.json',

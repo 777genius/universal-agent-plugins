@@ -26,7 +26,17 @@ localeDisposition: "current-translation"
     <h2>构建插件</h2>
     <p>使用 plugin.json、技能和 MCP 配置编写标准包，并了解源码构建中的创作工具。</p>
   </a>
+  <a class="docs-card" href="./sdk/">
+    <h2>集成 UAP</h2>
+    <p>Hooks、代理检测、Go 安装器与 TypeScript 管理。</p>
+  </a>
 </div>
+
+## UAP 的更多功能
+
+- 为多个代理安装插件，添加独立 Skills，使用签名目录、Git/SSH 或归档来源。 [安装](./use/install).
+- 通过 `uap.toml` / `uap.lock` 隔离用户和项目；更新、修复和诊断状态。 [管理](./use/manage).
+- 构建可移植的 Skills/MCP 包，并集成 Go 与 TypeScript SDK。 [SDK](./sdk/) · [构建](./build/).
 
 ## 安装第一个插件
 
@@ -42,11 +52,11 @@ CLI 会询问要使用哪些兼容客户端。检查计划，并完成结果中�
 
 ## 当前可用功能
 
-[CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95)是当前原生安装器版本，于 2026 年 10 月 29 日发布。新增本地管理 API 和用户范围的 Pi 原生扩展。请参阅[本地管理](./use/manage#local-management-api)和[Pi 兼容性](./reference/client-compatibility#pi-native-extensions)。
+[CLI](https://github.com/777genius/universal-agent-plugins/releases/latest)是当前原生安装器版本。新增本地管理 API，并在用户范围和符合条件的项目范围支持 Pi 扩展、Skills 及 stdio/Streamable HTTP MCP。签名目录中的 Pi 目标仍需独立的发布策略授权。请参阅[本地管理](./use/manage#local-management-api)和[Pi 兼容性](./reference/client-compatibility#pi-native-extensions)。
 
 它保留显式项目范围和锁定恢复。多数命令默认使用用户范围。自 0.1.94 起，未指定来源参数的 `install` 仅在当前目录存在普通 `uap.toml` 文件时自动选择项目；显式范围优先。add 和维护命令需明确指定 `--scope project`。请参阅[安装](./use/install)和[维护](./use/manage)。
 
-各分发渠道的版本可能不同。先用 `agentplugins version` 确认版本；要获取已验证的 0.1.95，可使用[原生安装器](https://github.com/777genius/universal-agent-plugins/blob/main/docs/NATIVE_INSTALL.md)。自动项目选择要求 0.1.94 或更高；显式项目范围从 0.1.93 起可用。
+各分发渠道的版本可能不同。先用 `agentplugins version` 确认版本；要获取当前稳定发布版，可使用[原生安装器](https://github.com/777genius/universal-agent-plugins/blob/main/docs/NATIVE_INSTALL.md)。自动项目选择要求 0.1.94 或更高；显式项目范围从 0.1.93 起可用。
 
 当前安装器不包含 `agentplugins author`。[构建指南](./build/)同时说明手动编写标准包的方法和当前源码中实现的创作命令。
 旧版创作工具的发布证据仍对应其原始版本，不能用于说明当前安装器下载包含哪些命令。

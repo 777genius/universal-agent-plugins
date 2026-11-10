@@ -46,8 +46,10 @@ jobs:
         run: |
           npm --prefix sdks/typescript run build
           npm --prefix sdks/typescript run typecheck
-      # These fixtures qualify HTTP/process behavior, not native installation.
-      - name: Verify SDK protocol and owned-process lifecycle
+      # npm test always builds this checkout's actual CLI for the local Skill
+      # create/edit/delete/restart/restore journey, alongside protocol fixtures.
+      # These checks do not substitute for native client installation proof.
+      - name: Verify SDK protocol, owned-process and production CLI lifecycle
         run: npm --prefix sdks/typescript test
       - name: Verify the actual packed SDK in an isolated consumer
         run: npm --prefix sdks/typescript run test:consumer

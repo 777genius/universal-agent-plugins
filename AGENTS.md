@@ -1,5 +1,36 @@
 # Agent instructions
 
+## Architecture and contribution guardrails
+
+Before implementation changes, read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+for the applicable package boundaries and [CONTRIBUTING.md](CONTRIBUTING.md)
+for actual lint and test commands. Check current `main` and overlapping PRs
+before touching a package. Preserve all owner decisions below.
+
+- **Domain:** business rules and invariants, no external I/O. Reuse the
+  existing Go domain types instead of creating another source of truth.
+- **Ports/use cases:** depend on narrow contracts, not concrete adapters;
+  keep client-specific protocol and filesystem effects behind existing seams.
+- **Clients:** implement capabilities in `clients/<id>` and register them
+  through `clients/all` at a composition root. Do not introduce client-ID
+  branches into generic planners, providers, or use cases.
+- **Composition:** executable entrypoints assemble concrete client registries;
+  libraries receive their dependencies explicitly.
+- **Safety:** preserve source/path containment, foreign-file ownership,
+  immutable package identity, locking, receipts, rollback and recovery, public
+  JSON and exit statuses. Never weaken a refusal just to make tests pass.
+- **Simplicity:** reuse existing parsers, validation and adapters. Introduce an
+  interface only for a real dependency boundary or testable requirement; do
+  not add a second installer, resolver, state engine, or feature flag.
+- **Scope:** do not modify frozen VS Code behavior, hand-edit generated files,
+  widen legacy lint exemptions, or silently change public/release contracts.
+- **Verification:** new Go files are limited to 500 effective lines by `revive`;
+  complexity, duplication and import rules are enforced by `golangci-lint`.
+  Run `make lint` and `make test-core` for relevant Go changes. For lifecycle
+  changes also run the affected native, rollback and cross-platform E2E.
+  Verify actual cases on the final commit: queued, cancelled, skipped or
+  evidence-only workflows are not proof that the product passed.
+
 ## VS Code is frozen (owner decision, 2026-10-16)
 
 Do not change VS Code implementation, adapters, protocols, configuration,
@@ -58,8 +89,43 @@ tag requirements remain mandatory.
 - Install buttons in the Directory and the landing catalog must match the
   source kinds the released CLI accepts. Check `agentplugins skills add --help`
   (or the release notes) before changing them.
-- Public docs are published only for `index`, `use/*`, `build/*`,
+- Public docs are published only for `index`, `use/*`, `build/*`, `sdk/*`,
   `guide/quickstart`, `reference/client-compatibility` and the authoring API.
   Other `website/source/en` pages are archived and not published.
 - Pages under `use/` and `build/` are journey pages. They need released status
   and routes in all nine maintained locales (`en`, `ru`, `uk`, `zh`, `es`, `hi`, `ar`, `pt`, `fr`).
+
+## Engineering architecture and agent review rules
+
+The canonical dependency direction, accepted exceptions, and Go size limits live
+in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Follow the actual checks in
+[CONTRIBUTING.md](CONTRIBUTING.md); do not duplicate or relax those contracts.
+Before a change, inspect the current `main`, open overlapping PRs, and the
+existing owners of the affected behavior.
+
+- **Domain:** preserve the stdlib-only rule, immutable identities, state
+  invariants, and typed refusals. **Use cases:** orchestrate through existing
+  ports, not concrete adapters or client-specific branches.
+- **Adapters:** own filesystem, network, process and native-client effects.
+  One client implementation lives under `clients/<id>`; generic code consumes
+  its contract via an explicitly injected registry. Only composition roots
+  assemble `clients/all`. Keep the existing adapter-to-adapter exceptions
+  documented rather than adding a blanket import ban.
+- **Changes:** reuse current domain, parser, security, lock and snapshot
+  authorities. Do not add a second resolver, service locator, state store,
+  framework, or interface without a demonstrated boundary/testing need.
+- **Safety:** never weaken path containment, user/foreign-file ownership,
+  symlink checks, lock ordering, durable receipts, rollback or recovery.
+  Preserve public commands, JSON, exit codes, schema and compatible data unless
+  separately authorized. Fail closed on uncertain ownership.
+- **Scope:** no default feature flags; do not change frozen VS Code code,
+  generated files by hand, or unrelated native clients. Preserve legacy
+  capabilities unless their retirement is explicitly approved.
+- **Quality:** new Go production code has a 500-effective-line file limit,
+  60-line/40-statement function limits, and the existing complexity gates.
+  Existing lint exemptions may only shrink; never add suppressions to pass CI.
+  Prefer cohesive changes to mechanical line-count splits.
+- **Evidence:** use `make lint` and `make test-core` before submitting Go core
+  changes; run affected contract, cross-OS and genuine native E2E for behavioral
+  changes. Verify exact-HEAD checks and independent review findings before
+  merging. A skipped, unrun, blocked or evidence-only test is not a PASS.

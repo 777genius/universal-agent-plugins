@@ -47,7 +47,7 @@ point inward.
 |-------|---------|------------|----------------|
 | Domain | `agentplugins/domain` | stdlib only | yes, `domain-stdlib-only` |
 | Ports | `agentplugins/ports` | stdlib, `domain`, `install/integrationctl/ports` (see below) | yes, `ports-only-domain` |
-| Use cases | `agentplugins/usecase` | stdlib, `domain`, `ports`, `transaction`, `pathcontract`, `install/integrationctl/ports` for the legacy lock (see below) | yes, `usecase-through-ports` |
+| Use cases | `agentplugins/usecase` | stdlib, `domain`, `ports`, `transaction`, `pathcontract` | yes, `usecase-through-ports` |
 | Client contract | `agentplugins/clients` (+ `clients/shared`) | stdlib, `domain`, `ports`, `adapters/nativeconfig` (see below) | yes, `clients-no-upward`, `clients-no-concrete-clients` |
 | Client adapters | `agentplugins/clients/<id>` | the client contract, `clients/shared`, `domain`, `ports` | yes, `clients-no-upward`, `clients-no-concrete-clients` |
 | Command format | `agentplugins/commandext` | stdlib, `domain`, `conformance`, `gopkg.in/yaml.v3` | yes, `commandext-pure` |
@@ -155,12 +155,16 @@ exception. Duplicating the two types into `domain` would create a second source 
 truth and force a conversion on every call, which costs more than the formal
 purity is worth.
 
-**`usecase.Service.LegacyLock` is typed `install/integrationctl/ports.LockManager`.** This
-one is not the data-only exception above: `LockManager` is a behavioural
-interface, so the use case does name a package outside its layer. It is the
-remaining edge of the pre-refactor installer that still owns the lock, and it is
-listed here rather than quietly excluded, because the deny list permits it only
-by not mentioning it.
+**Legacy state locking is bridged at the adapter boundary.** The use case
+accepts the existing `ports.MutationLock` interface for both its own mutation
+lock and its *separate* legacy-state reconciliation lock. The
+`adapters/legacylock.StateLock` bridge adapts the older
+`install/integrationctl/ports.LockManager` using the unchanged `"state"`
+namespace. The composition root injects the existing `locks.FileLock` and its
+original path. After legacy removal the use case holds the legacy lock through
+the negative observation **and** the state-v2 save, preventing a legacy writer
+from invalidating reconciliation between them. Depguard and archtest forbid
+reintroducing old lock imports in the new use case.
 
 **`agentplugins/clients` is close to self-contained, but not a leaf.**
 `clients.Env` carries a `nativeconfig.Kernel`, so the contract imports
@@ -244,6 +248,57 @@ Current runtime carriers:
 - `InitRunner` resolves generated scaffold definitions and delegates generating to `scaffold`
 
 `cli/internal/validate` enforces generated platform rules for scaffolded projects.
+
+### Management application and adapters
+
+Management has one application owner for retained reviews, durable acceptance,
+execution, cancellation, restart observation, retention and recovery linking.
+The ordinary dependency installer and local Skill authoring both use that owner.
+
+| Package under `cli/internal/agentpluginscli` | Responsibility | Permitted implementation dependencies |
+| --- | --- | --- |
+| `management` | Protocol models, backend/prepared contracts, `Application`, observation and mutation-lock ports, lifecycle policy | Standard library without HTTP, filesystem/process I/O or concrete adapters |
+| `managementhttp` | Loopback listener/capability, strict decoding, routes, bootstrap and response rendering | `management`, `loopbackapi` |
+| `managementstate` | Version-1 atomic observation files and existing nonblocking process lock | `management`, existing `atomicfile` and `processlock` adapters |
+| `agentpluginscli` | Installer-facing backend and `manage serve` process composition | Explicit application/state/HTTP wiring and existing installer facades |
+
+The generated Go DTOs remain in `management`, at the existing OpenAPI generator
+destination. They are shared protocol data, not executable authority. No duplicate
+domain schema or persistence migration is introduced. The existing numeric status
+in a sanitized `Refusal` remains contract metadata; only HTTP writes responses.
+
+Application calls own their admission and lifetime, including direct callers.
+The application detaches retained request/review/operation snapshots so callers
+cannot mutate authority through a returned DTO. Accepted effects derive from the
+application context, survive an individual request ending and stop on explicit
+cancel or application shutdown. HTTP owns connections and body decoding; it closes
+those before waiting for application cleanup. The application owns backend cleanup
+after construction, and the CLI cleans up a failed listener/bootstrap handoff.
+
+The mutation lock protects replay, revalidation, admission, retention and
+acceptance continuously, then transfers to execution through outcome persistence
+and recovery linking. A save error starts no effects but may leave a visible
+acceptance; retries keep their original identity. Persisted observations are
+never jobs to replay. Storage implements lookup/list/save/delete; the application
+alone decides whether uncertainty is settled and private undo can be forgotten.
+
+A final outcome-save error cancels the current application before a conservative
+Interrupted write is attempted under the same lock. History reads already in
+flight cannot publish their snapshots after that stop. The caller must reopen
+the host even when the conservative write succeeds. If both writes fail, restart
+can only inspect whichever complete version-1 record survived; there is no new
+durable marker, job replay, or cross-process snapshot invalidation protocol.
+
+`management-application`, `management-http-adapter` and `management-state-adapter`
+in depguard, mirrored in `internal/archtest`, enforce these import directions.
+The source scan covers platform/build-tagged files and tests negative fixtures.
+Import checks prevent dependency regressions; they do not prove every operation
+is pure or replace lifecycle, race and production CLI/SDK tests.
+
+The broader installer-facing `ManagementBackend` still depends on the CLI `App`
+and shared dependency preparation. That adapter boundary is deliberately retained
+for a separate change; this extraction does not claim to remove all CLI coupling.
+See the [research and implementation plan](plans/2026-11-04-management-application-boundaries.md).
 
 ## Generated Sources
 

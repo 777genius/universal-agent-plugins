@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import type { SkillListing } from '~/types/skillsCatalog';
+import type { InstallScope } from '~/types/registry';
 import { skillClients } from '~/data/skillClients';
 import { skillDetailIdAvailable, skillDetailRoute, skillInstallCommand, skillNeedsManualSelection, skillPublisherUrl, skillRepositoryUrl } from '~/utils/skillsCatalog';
 import { useInstallPreferencesStore } from '~/stores/installPreferences';
+import { recommendedSkillKey, recommendedSkillDescription } from '~/data/catalogCuration';
 
 const props = defineProps<{ skill: SkillListing }>();
 const localePath = useLocalePath();
@@ -17,7 +19,9 @@ const saved = preferences.readPackage(identity, allowed);
 const expanded = ref(saved.expanded);
 const chooseInTerminal = ref(saved.autoDetect);
 const targets = ref(saved.targetIds.length ? saved.targetIds : ['codex']);
+const scope = ref<InstallScope>(saved.scope);
 const repositoryUrl = computed(() => skillRepositoryUrl(props.skill));
+const editorialKey = computed(() => recommendedSkillKey(props.skill));
 // Use only the URL already validated by skillRepositoryUrl; never pass an
 // arbitrary upstream DTO field to the public SkillSpector repository lookup.
 const repositoryName = computed(() =>
@@ -28,7 +32,7 @@ const detailAvailable = computed(() =>
 );
 const needsManualSelection = computed(() => skillNeedsManualSelection(props.skill));
 const command = computed(() =>
-  skillInstallCommand(props.skill, chooseInTerminal.value ? undefined : targets.value),
+  skillInstallCommand(props.skill, chooseInTerminal.value ? undefined : targets.value, scope.value),
 );
 const panelId = `skill-install-${useId()}`;
 const options = computed(() =>
@@ -36,7 +40,6 @@ const options = computed(() =>
     value: client.id,
     label: client.name,
     icon: asset(`client-icons/${client.icon}`),
-    description: t('registryUi.skills.checkedBeforeInstall'),
   })),
 );
 const terminalOption = computed(() => ({
@@ -47,7 +50,7 @@ const terminalOption = computed(() => ({
 function saveChoice() {
   preferences.selectPackage(
     identity,
-    { targetIds: targets.value, autoDetect: chooseInTerminal.value, expanded: expanded.value },
+    { targetIds: targets.value, autoDetect: chooseInTerminal.value, expanded: expanded.value, scope: scope.value },
     allowed,
   );
 }
@@ -64,6 +67,10 @@ function updateTargets(values: string[]) {
 }
 function updateTerminal(value: boolean) {
   chooseInTerminal.value = value;
+  saveChoice();
+}
+function updateScope(value: InstallScope) {
+  scope.value = value;
   saveChoice();
 }
 </script>
@@ -89,6 +96,9 @@ function updateTerminal(value: boolean) {
         </p>
       </div>
     </div>
+    <p v-if="editorialKey" class="skill-card__benefit">
+      {{ recommendedSkillDescription(editorialKey, t) }}
+    </p>
     <SkillSpectorAssessment
       :subject="
         repositoryName
@@ -135,6 +145,11 @@ function updateTerminal(value: boolean) {
       <Transition name="plugin-install">
         <div v-if="expanded && command" :id="panelId" class="plugin-card__install-panel">
           <div class="plugin-card__install">
+            <InstallScopeSelect
+              :model-value="scope"
+              :project-available="true"
+              @update:model-value="updateScope"
+            />
             <AppMultiSelect
               :model-value="targets"
               :auto-selected="chooseInTerminal"

@@ -65,7 +65,8 @@ check_pattern "removed OpenCode env-config compatibility" 'OPENCODE_CONFIG(_DIR)
   'install/integrationctl/**' 'docs/UNIVERSAL_INSTALL_UPDATE_CONTROL_PLANE_PLAN.md' \
   'repotests/agentplugins_opencode_project_native_contract_test.go' \
   'repotests/agentplugins_opencode_project_native_e2e_test.go' \
-  'docs/plans/project-install-e2e/opencode-project-native-gate-plan.md'
+  'docs/plans/project-install-e2e/opencode-project-native-gate-plan.md' \
+  'scripts/live-install-audit.py' # The isolated negative-profile audit is not a public OpenCode env contract.
 check_pattern "removed Gemini binary aliases" 'PLUGIN_KIT_AI_GEMINI_BIN|GEMINI_BIN'
 check_pattern "Gemini migratedTo field outside research or runtime codec" 'migratedTo|migrated_to' 'docs/research/**' 'docs/UNIVERSAL_INSTALL_UPDATE_CONTROL_PLANE_PLAN.md' 'cli/internal/geminimanifest/**' 'cli/internal/platformexec/gemini*.go' 'cli/internal/validate/validate_test.go' 'install/integrationctl/**' 'repotests/plugin_manifest_lifecycle_integration_test.go' 'sdk/platformmeta/**'
 check_pattern "deleted maintainer docs tree" 'maintainer-docs' 'website/tools/quality/check-output.mjs'

@@ -22,6 +22,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/locks"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/clientdetect"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/legacylock"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/loader"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/processlock"
@@ -1212,19 +1213,31 @@ func TestCommaSeparatedTargetsFailCompletePreflightBeforeMutation(t *testing.T) 
 	}
 }
 
-func TestYesFlagIsNotPartOfThePublicCLI(t *testing.T) {
+func TestYesExplicitlyConfirmsOnlyTheSelectedInstallation(t *testing.T) {
 	t.Parallel()
 	fixture := newCLIFixture(t, []domain.DetectedClient{fixtureClient(t, domain.ClientCursor)})
 	plugin := writeCLIPlugin(t)
-	if _, _, err := fixture.execute(true, "add", plugin, "--target", "cursor", "--yes"); err == nil || !strings.Contains(err.Error(), "unknown flag") {
-		t.Fatalf("--yes error = %v", err)
+	if _, _, err := fixture.execute(true, "add", plugin, "--target", "cursor", "--yes", "--dry-run"); err != nil {
+		t.Fatalf("explicit --yes dry run: %v", err)
 	}
 	state, err := fixture.store.Load()
-	if err != nil {
-		t.Fatal(err)
+	if err != nil || len(state.Installations) != 0 {
+		t.Fatalf("--yes --dry-run modified state: %+v %v", state, err)
 	}
-	if len(state.Installations) != 0 {
-		t.Fatalf("rejected --yes mutated state: %+v", state)
+	if _, _, err := fixture.execute(true, "add", plugin, "--target", "cursor", "--yes"); err != nil {
+		t.Fatalf("explicit --yes must accept the preflighted target: %v", err)
+	}
+	state, err = fixture.store.Load()
+	if err != nil || len(state.Installations) != 1 {
+		t.Fatalf("explicit --yes did not install selected target: %+v %v", state, err)
+	}
+	if len(state.Installations[0].Clients) != 1 {
+		t.Fatalf("--yes changed unselected targets: %+v", state.Installations[0].Clients)
+	}
+	for _, binding := range state.Installations[0].Clients {
+		if binding.ClientID != "cursor" {
+			t.Fatalf("--yes installed an unintended client: %+v", binding)
+		}
 	}
 }
 
@@ -1518,7 +1531,7 @@ func TestDoctorRecoveryIncludesProjectScopeAndExactTarget(t *testing.T) {
 	t.Parallel()
 	installation := domain.Installation{InstallationID: "00000000-0000-4000-8000-000000000001", DeclaredName: "demo"}
 	binding := domain.ClientBinding{ClientID: "cursor", Scope: string(domain.ScopeProject)}
-	if got := repairAction(installation, binding); got != "run `agentplugins repair 00000000-0000-4000-8000-000000000001 --target cursor --scope project`" {
+	if got := repairAction(installation, binding); got != "run `agentplugins repair 00000000-0000-4000-8000-000000000001 --target cursor --scope project --project-root \"<PROJECT_ROOT>\"`" {
 		t.Fatalf("project repair action = %q", got)
 	}
 }
@@ -2236,7 +2249,7 @@ func TestChatGPTMCPWithoutAppBindingFailsBeforeMutation(t *testing.T) {
 	fixture := newCLIFixture(t, []domain.DetectedClient{{ClientID: domain.ClientChatGPT, DisplayName: "ChatGPT", Status: domain.DetectionNotDetected}})
 	plugin := writeCLIPlugin(t)
 	writeCLIMCP(t, plugin)
-	stdout, _, err := fixture.execute(false, "add", plugin, "--target", "chatgpt")
+	stdout, _, err := fixture.execute(false, "add", plugin, "--target", "chatgptweb")
 	if err == nil || !strings.Contains(err.Error(), "Plugins developer mode") || !strings.Contains(err.Error(), ".app.json") {
 		t.Fatalf("missing app error = %v", err)
 	}
@@ -2257,7 +2270,7 @@ func TestChatGPTUnsupportedPlanRendersStructuredJSONGuidance(t *testing.T) {
 	fixture := newCLIFixture(t, []domain.DetectedClient{{ClientID: domain.ClientChatGPT, DisplayName: "ChatGPT", Status: domain.DetectionNotDetected}})
 	plugin := writeCLIPlugin(t)
 	writeCLIMCP(t, plugin)
-	stdout, _, err := fixture.execute(false, "add", plugin, "--target", "chatgpt", "--dry-run", "--format", "json")
+	stdout, _, err := fixture.execute(false, "add", plugin, "--target", "chatgptweb", "--dry-run", "--format", "json")
 	if err == nil {
 		t.Fatal("unsupported ChatGPT dry-run succeeded")
 	}
@@ -2284,7 +2297,7 @@ func TestChatGPTUnsupportedUpdateRendersRecoveryWithoutMutation(t *testing.T) {
 			t.Parallel()
 			fixture := newCLIFixture(t, nil)
 			plugin := writeCLIOfficialAppPlugin(t)
-			if _, _, err := fixture.execute(false, "add", plugin, "--target", "chatgpt"); err != nil {
+			if _, _, err := fixture.execute(false, "add", plugin, "--target", "chatgptweb"); err != nil {
 				t.Fatal(err)
 			}
 			state, err := fixture.store.Load()
@@ -2299,7 +2312,7 @@ func TestChatGPTUnsupportedUpdateRendersRecoveryWithoutMutation(t *testing.T) {
 			if err := os.Remove(filepath.Join(plugin, ".app.json")); err != nil {
 				t.Fatal(err)
 			}
-			args := []string{"update", "demo", "--target", "chatgpt"}
+			args := []string{"update", "demo", "--target", "chatgptweb"}
 			if test.format == "json" {
 				args = append(args, "--format", "json")
 			}
@@ -2339,7 +2352,7 @@ func TestChatGPTUnsupportedRepairRendersStructuredRecoveryWithoutMutation(t *tes
 	t.Parallel()
 	fixture := newCLIFixture(t, nil)
 	plugin := writeCLIOfficialAppPlugin(t)
-	if _, _, err := fixture.execute(false, "add", plugin, "--target", "chatgpt"); err != nil {
+	if _, _, err := fixture.execute(false, "add", plugin, "--target", "chatgptweb"); err != nil {
 		t.Fatal(err)
 	}
 	state, err := fixture.store.Load()
@@ -2357,7 +2370,7 @@ func TestChatGPTUnsupportedRepairRendersStructuredRecoveryWithoutMutation(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	stdout, _, repairErr := fixture.execute(false, "repair", "demo", "--target", "chatgpt", "--format", "json")
+	stdout, _, repairErr := fixture.execute(false, "repair", "demo", "--target", "chatgptweb", "--format", "json")
 	if repairErr == nil {
 		t.Fatal("unsupported ChatGPT repair succeeded")
 	}
@@ -2385,7 +2398,7 @@ func TestNoDetectedClientSuggestsExplicitChatGPTTarget(t *testing.T) {
 	fixture := newCLIFixture(t, nil)
 	plugin := writeCLIPlugin(t)
 	_, _, err := fixture.execute(true, "add", plugin)
-	if err == nil || !strings.Contains(err.Error(), "--target chatgpt") || !strings.Contains(err.Error(), "Install/detect a supported client") {
+	if err == nil || !strings.Contains(err.Error(), "--target chatgptweb") || !strings.Contains(err.Error(), "Install/detect a supported client") {
 		t.Fatalf("zero-client guidance = %v", err)
 	}
 	state, stateErr := fixture.store.Load()
@@ -2486,7 +2499,7 @@ func TestChatGPTAppPackagePreparesManualInstallWithoutDesktopDetection(t *testin
 	t.Parallel()
 	fixture := newCLIFixture(t, []domain.DetectedClient{fixtureClient(t, domain.ClientCodex)})
 	plugin := writeCLIOfficialAppPlugin(t)
-	stdout, _, err := fixture.execute(false, "add", plugin, "--target", "chatgpt")
+	stdout, _, err := fixture.execute(false, "add", plugin, "--target", "chatgptweb")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2544,7 +2557,7 @@ func TestOfficialOpenAIPackagePreparesForChatGPT(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(plugin, ".mcp.json"), []byte(`{"mcpServers":{"demo":{"type":"http","url":"https://example.test/mcp"}}}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := fixture.execute(false, "add", plugin, "--target", "chatgpt"); err != nil {
+	if _, _, err := fixture.execute(false, "add", plugin, "--target", "chatgptweb"); err != nil {
 		t.Fatal(err)
 	}
 	state, err := fixture.store.Load()
@@ -2575,7 +2588,7 @@ func TestOfficialHooksFailClosedBeforeDryRunOrMutation(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(plugin, ".codex-plugin", "plugin.json"), []byte(manifest), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := fixture.execute(false, "add", plugin, "--target", "chatgpt", "--dry-run", "--format", "json"); err == nil {
+	if _, _, err := fixture.execute(false, "add", plugin, "--target", "chatgptweb", "--dry-run", "--format", "json"); err == nil {
 		t.Fatal("hook dry-run succeeded")
 	} else {
 		var loadErr *domain.LoadError
@@ -2602,7 +2615,7 @@ func TestImplicitPortableHooksAreIgnoredAndNotStaged(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(plugin, "hooks", "hooks.json"), []byte(`{}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := fixture.execute(false, "add", plugin, "--target", "chatgpt", "--dry-run", "--format", "json"); err != nil {
+	if _, _, err := fixture.execute(false, "add", plugin, "--target", "chatgptweb", "--dry-run", "--format", "json"); err != nil {
 		t.Fatalf("portable package with unsupported root directory failed validation: %v", err)
 	}
 	state, err := fixture.store.Load()
@@ -2612,7 +2625,7 @@ func TestImplicitPortableHooksAreIgnoredAndNotStaged(t *testing.T) {
 	if _, err := os.Stat(fixture.app.ManagedRoot); !os.IsNotExist(err) {
 		t.Fatalf("dry-run mutated managed filesystem: %v", err)
 	}
-	if _, _, err := fixture.execute(false, "add", plugin, "--target", "chatgpt"); err != nil {
+	if _, _, err := fixture.execute(false, "add", plugin, "--target", "chatgptweb"); err != nil {
 		t.Fatalf("install portable package with ignored hooks: %v", err)
 	}
 	state, err = fixture.store.Load()
@@ -2673,7 +2686,7 @@ func TestChatGPTBoundLifecycleWorksWithoutLocalDesktopDetection(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(plugin, ".app.json"), []byte(`{"apps":{"demo":{"id":"plugin_asdk_app_demo_123"}}}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := fixture.execute(false, "add", plugin, "--target", "chatgpt"); err != nil {
+	if _, _, err := fixture.execute(false, "add", plugin, "--target", "chatgptweb"); err != nil {
 		t.Fatal(err)
 	}
 	manifestPath := filepath.Join(plugin, "plugin.json")
@@ -2684,7 +2697,7 @@ func TestChatGPTBoundLifecycleWorksWithoutLocalDesktopDetection(t *testing.T) {
 	if err := os.WriteFile(manifestPath, []byte(strings.Replace(string(body), `"version": "1.0.0"`, `"version": "2.0.0"`, 1)), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := fixture.execute(false, "update", "demo", "--target", "chatgpt"); err != nil {
+	if _, _, err := fixture.execute(false, "update", "demo", "--target", "chatgptweb"); err != nil {
 		t.Fatalf("undetected ChatGPT update: %v", err)
 	}
 	updated, err := fixture.store.Load()
@@ -2694,10 +2707,10 @@ func TestChatGPTBoundLifecycleWorksWithoutLocalDesktopDetection(t *testing.T) {
 	if err := os.RemoveAll(onlyCLIClient(updated.Installations[0]).TargetLocator); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := fixture.execute(false, "repair", "demo", "--target", "chatgpt"); err != nil {
+	if _, _, err := fixture.execute(false, "repair", "demo", "--target", "chatgptweb"); err != nil {
 		t.Fatalf("undetected ChatGPT repair: %v", err)
 	}
-	if _, _, err := fixture.execute(false, "remove", "demo", "--target", "chatgpt", "--external-uninstalled"); err != nil {
+	if _, _, err := fixture.execute(false, "remove", "demo", "--target", "chatgptweb", "--external-uninstalled"); err != nil {
 		t.Fatalf("undetected ChatGPT remove: %v", err)
 	}
 	state, err := fixture.store.Load()
@@ -2716,7 +2729,7 @@ func TestCodexAndChatGPTUseIndependentBindings(t *testing.T) {
 		{ClientID: domain.ClientChatGPT, DisplayName: "ChatGPT", Status: domain.DetectionNotDetected},
 	})
 	plugin := writeCLIOfficialAppPlugin(t)
-	for _, target := range []string{"codex", "chatgpt"} {
+	for _, target := range []string{"codex", "chatgptweb"} {
 		if _, _, err := fixture.execute(false, "add", plugin, "--target", target); err != nil {
 			t.Fatalf("add %s: %v", target, err)
 		}
@@ -3165,7 +3178,7 @@ func newCLIFixture(t *testing.T, clients []domain.DetectedClient) cliFixture {
 			SourceAcquirer: sourceacquisition.Acquirer{TempRoot: root},
 			PackageLoader:  packageLoader, NativePackageLoader: loader.OpenAILoader{Loader: packageLoader},
 			Lifecycle:       lifecycle,
-			LegacyStateLock: locks.FileLock{BaseDir: filepath.Join(root, "legacy-locks")},
+			LegacyStateLock: legacylock.StateLock{Manager: locks.FileLock{BaseDir: filepath.Join(root, "legacy-locks")}},
 		},
 	}
 }

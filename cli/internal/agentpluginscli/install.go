@@ -36,6 +36,10 @@ func newInstallCommand(app App, opts *options) *cobra.Command {
 				return scopeErr
 			}
 			if len(args) == 1 {
+				if opts.dependencyPolicyFile != "" {
+					return fmt.Errorf("--policy applies only to declared installs from uap.toml; a positional source must not bypass dependency policy")
+				}
+				opts.yes = yes
 				return executeAddCommand(cmd, app, opts, args[0], activationComplete, authComplete)
 			}
 			if err := validateEnvironmentOptions("install", opts); err != nil {
@@ -46,7 +50,7 @@ func newInstallCommand(app App, opts *options) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			opts.installSelection = &installSelection{Scope: string(app.scope()), ProjectRoot: app.ProjectRoot, ManifestPath: manifestPath, LockPath: lockPath}
+			opts.installSelection = &installSelection{Scope: string(app.scope()), ProjectRoot: app.ProjectRoot, ManifestPath: manifestPath, LockPath: lockPath, ScopeSelectionReason: scopeSelectionReason(cmd, opts)}
 			app.Lifecycle.PrepareHostsForPreview = true
 			return runDependencySyncConverge(cmd, app, opts, lockedOnly, yes, func(convergeApp App) (bool, error) {
 				return repairDeclaredEnvironmentDrift(cmd, convergeApp, opts, yes)
@@ -60,6 +64,7 @@ func newInstallCommand(app App, opts *options) *cobra.Command {
 	command.Flags().BoolVar(&activationComplete, "activation-complete", false, "attest that manual client activation is complete")
 	command.Flags().BoolVar(&authComplete, "auth-complete", false, "attest that required authentication is complete or none is required after review")
 	command.Flags().BoolVar(&opts.externalUninstalled, "external-uninstalled", false, "attest removed targets were uninstalled manually or never imported")
+	command.Flags().StringVar(&opts.dependencyPolicyFile, "policy", "", "optional local YAML dependency source and pin policy for declared installs")
 	command.Flags().BoolVar(&locked, "locked", false, "require an exact existing lock and never resolve refs")
 	command.Flags().BoolVar(&yes, "yes", false, "confirm the complete preflighted install without an interactive prompt")
 	return command
@@ -184,7 +189,7 @@ func selectInstallScope(cmd *cobra.Command, opts *options) error {
 	if err != nil {
 		return err
 	}
-	opts.scope, opts.projectRoot = "project", root
+	opts.scope, opts.projectRoot, opts.scopeInferred = "project", root, true
 	return nil
 }
 
@@ -203,8 +208,9 @@ func installLockedOnly(lockPath string, explicit bool) (bool, error) {
 }
 
 type installSelection struct {
-	Scope        string `json:"scope"`
-	ProjectRoot  string `json:"project_root,omitempty"`
-	ManifestPath string `json:"manifest_path"`
-	LockPath     string `json:"lock_path"`
+	Scope                string `json:"scope"`
+	ScopeSelectionReason string `json:"scope_selection_reason"`
+	ProjectRoot          string `json:"project_root,omitempty"`
+	ManifestPath         string `json:"manifest_path"`
+	LockPath             string `json:"lock_path"`
 }

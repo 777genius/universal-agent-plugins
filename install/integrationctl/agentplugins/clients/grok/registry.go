@@ -139,7 +139,7 @@ func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, clie
 				return clients.RegistryIndeterminate, fmt.Errorf("grok binding differs from planned project artifact")
 			}
 		}
-		return inspectProject(ctx, env, client, plan, managed != nil)
+		return inspectProject(ctx, env, client, plan, managed != nil, false)
 	}
 	if err := ctx.Err(); err != nil {
 		return clients.RegistryIndeterminate, err

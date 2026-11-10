@@ -9,7 +9,12 @@ export interface ClientLandingPage extends ClientTarget {
   vendorDocsUrl?: string;
 }
 
-export const clientLandingPages: ClientLandingPage[] = [
+/** Public presentation only: keep technical compatibility and previously installed profiles intact.
+ * Hermes and Antigravity require a qualified CLI release before public install actions are exposed.
+ */
+export const hiddenPublicClientIds: ReadonlySet<string> = new Set(['vscode', 'hermes', 'antigravity']);
+
+const allClientLandingPages: ClientLandingPage[] = [
   {
     id: 'codex',
     slug: 'codex',
@@ -29,14 +34,14 @@ export const clientLandingPages: ClientLandingPage[] = [
     slug: 'chatgpt',
     name: 'ChatGPT',
     icon: 'openai.svg',
-    note: 'Verified app bindings and guided Context7 setup',
-    status: 'Setup in app',
+    note: 'Desktop: automatic via Codex CLI; Web: setup in ChatGPT',
+    status: 'Supported',
     intro:
-      'Prepare compatible Agent Plugins 1.0 for ChatGPT while keeping app activation and account consent inside ChatGPT.',
+      'ChatGPT supports plugins on Desktop and Web. Desktop local plugins use the Codex CLI marketplace, while Web plugins require a compatible cloud app or marketplace connection.',
     delivery:
-      'The CLI validates publisher app bindings and can prepare a personal marketplace package for Context7 using its public no-auth MCP endpoint.',
+      'UAP installs eligible local Desktop packages through the Codex CLI and prepares qualified Web app bindings; it cannot silently install a cloud plugin into a ChatGPT account.',
     activation:
-      'Create or connect the app in Developer Mode, install the prepared personal plugin, and select it in a new chat.',
+      'Desktop: open a new local thread and verify the plugin. Web: connect or install the app in ChatGPT and grant any required permissions.',
   },
   {
     id: 'cursor',
@@ -208,21 +213,55 @@ export const clientLandingPages: ClientLandingPage[] = [
       'Reload Qoder plugins or restart Qoder after installation. Runtime MCP connections and provider authentication still need confirmation in Qoder.',
   },
   {
+    id: 'hermes',
+    slug: 'hermes',
+    name: 'Hermes Agent',
+    icon: 'terminal.svg',
+    note: 'User Skills/MCP and Project Skills; Project MCP is unsupported',
+    status: 'Supported',
+    intro:
+      'Install native Hermes Agent Skills for your user or a selected Git project, plus user-scoped MCP servers, without changing unrelated settings.',
+    delivery:
+      'UAP manages owned Skills directories and exact User MCP entries in config.yaml. Project installation never modifies User MCP configuration.',
+    activation:
+      'Restart Hermes to reload the integration. Review project trust before using Project Skills; runtime discovery and authentication still need confirmation.',
+    vendorDocsUrl: 'https://github.com/NousResearch/hermes-agent',
+  },
+  {
+    id: 'antigravity',
+    slug: 'antigravity',
+    name: 'Google Antigravity',
+    icon: 'terminal.svg',
+    note: 'Native User/Project plugins; activation requires verification',
+    status: 'Prepared by CLI',
+    intro:
+      'Prepare native Google Antigravity plugins with supported Skills and MCP servers in the selected User or Project scope.',
+    delivery:
+      'UAP prepares a managed plugin folder under the selected user or project configuration, preserves unrelated plugins, and does not enable hooks implicitly.',
+    activation:
+      'Open or reload Antigravity and verify the plugin is discovered and enabled. Prepared files do not prove a model session, authentication, or live MCP execution.',
+    vendorDocsUrl: 'https://antigravity.google/docs/build-plugins',
+  },
+  {
     id: 'pi',
     slug: 'pi',
     name: 'Pi',
     icon: 'pi.svg',
-    note: 'Managed native Pi extensions only',
+    note: 'Native Pi extensions, Skills and MCP',
     status: 'Supported',
     intro:
-      'Install Agent Plugins 1.0 packages that declare a native Pi extension. Portable skills and MCP projection are outside this adapter’s current scope.',
+      'Install compatible Pi extensions, Skills, and stdio/Streamable HTTP MCP servers in user or project scope. Catalog packages require a compatible signed release; direct sources are validated by the CLI.',
     delivery:
-      'The CLI installs the declared Pi extension in your Pi agent directory and tracks the managed package for update, repair, and removal.',
-    activation: 'Reload resources or restart Pi after installation to load the managed extension.',
+      'The CLI installs eligible components in the selected Pi profile or project and tracks updates, repair, and removal.',
+    activation: 'Reload resources or restart Pi; trust the project and review MCP permissions if prompted.',
     vendorDocsUrl:
-      'https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/extensions.md',
+      'https://pi.dev/docs/latest',
   },
 ];
+
+export const clientLandingPages: ClientLandingPage[] = allClientLandingPages.filter(
+  (client) => !hiddenPublicClientIds.has(client.id),
+);
 
 export const clients: ClientTarget[] = clientLandingPages.map(
   ({ id, name, icon, note, status }) => ({ id, name, icon, note, status }),

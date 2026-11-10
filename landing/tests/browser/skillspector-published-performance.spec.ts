@@ -60,7 +60,11 @@ async function publishedHome(page: Page, context: BrowserContext, isolated = fal
   await setSignedMirrorTestTime(page);
   const mirrorTime = await page.evaluate(() => Date.now());
   await page.clock.setFixedTime(new Date(Math.max(mirrorTime, Date.parse(manifest.generated_at))));
-  await context.addInitScript(() => localStorage.setItem('theme', 'light'));
+  await context.addInitScript(() => {
+    // Context scripts also run in child frames, including opaque error documents
+    // after offline() blocks the delayed Mux preload. Only the app owns this theme.
+    if (window === window.top) localStorage.setItem('theme', 'light');
+  });
   let registryRequests = 0;
   const requests = new Map<string, number>();
   await page.route('**/reports/skillspector/v3/**', (route) => {
@@ -94,16 +98,20 @@ async function publishedHome(page: Page, context: BrowserContext, isolated = fal
   } else await page.goto('./');
   await hydrated(page);
   await expect(page.locator('.v-application')).toHaveClass(/v-theme--light/);
-  if (!isolated)
+  if (!isolated) {
     // The large published catalog can finish loading after hydration on a busy CI runner.
     await expect(page.locator('.catalog')).toHaveAttribute('data-discovery-state', 'current', {
       timeout: 20_000,
     });
+    // Curation now puts broad-use packages before Cloudflare. Reveal the next
+    // regular catalog page instead of requiring a particular first-page rank.
+    await page.locator('.catalog-more button').click();
+  }
   // Anchor subsequent probes to stable source identity, not a megabyte of descendant text.
   const report = page.locator(
     `[data-install-source=${JSON.stringify(isolated ? 'i18n-state-00' : cloudflareSource)}] details.skillspector`,
   );
-  await expect(report.locator(':scope > summary')).toContainText(/Skill scan · (13\/13 checked · 10 not fully checked|Coverage has limits)/);
+  await expect(report.locator(':scope > summary')).toContainText(/Skill scan · (13\/13 checked · 10 not fully checked|Incomplete scan)/);
   return { report, errors, requests, registryRequests: () => registryRequests };
 }
 
@@ -113,6 +121,7 @@ test('published large reports keep closed cards unmounted after real data and ap
 }) => {
   test.setTimeout(60_000);
   const { report, errors, requests } = await publishedHome(page, context);
+  // The setup already loads page two to include Cloudflare after editorial ranking.
   const cardSources = await page
     .locator('.plugin-card')
     .evaluateAll((elements) =>
@@ -147,9 +156,18 @@ test('published large reports keep closed cards unmounted after real data and ap
   expect(noSkills).toEqual(expectedNoSkills);
   await expect(page.locator('details.skillspector')).toHaveCount(expectedSources.length);
   await expect(page.locator('.skillspector__details')).toHaveCount(0);
-  await expect(report.locator(':scope > summary')).toContainText(/Skill scan · (13\/13 checked · 10 not fully checked|Coverage has limits)/);
+  await expect(report.locator(':scope > summary')).toContainText(/Skill scan · (13\/13 checked · 10 not fully checked|Incomplete scan)/);
   expect(requests.get('index.json')).toBe(1);
   for (const shard of shards) expect(requests.get(shard.path)).toBe(1);
+  // Exercise the delayed preload even on fast runners: the offline Chromium
+  // frame must reach its opaque error document before checking all page errors.
+  const preload = page.locator('.hero-demo-video iframe');
+  await expect(preload).toBeAttached({ timeout: 15_000 });
+  await expect(preload).toHaveAttribute('src', /^https:\/\/player\.mux\.com\/.+\?preload=auto$/);
+  await expect.poll(() => page.frames().some((frame) =>
+    frame.parentFrame() === page.mainFrame() && frame.url().startsWith('chrome-error://'),
+  ), { timeout: 15_000 }).toBe(true);
+  await expect(page.locator('.v-application')).toHaveClass(/v-theme--light/);
   expect(errors).toEqual([]);
 });
 

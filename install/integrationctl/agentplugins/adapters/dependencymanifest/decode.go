@@ -14,6 +14,10 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/sourcespec"
 )
 
+// MaxBytes bounds dependency documents before parsing in every root, package,
+// authoring and in-memory entrypoint. Readers must enforce the same ceiling.
+const MaxBytes int64 = 4 << 20
+
 type rawDependency struct {
 	Website      string `toml:"website"`
 	Archive      string `toml:"archive"`
@@ -41,6 +45,9 @@ type Document struct {
 // Decode validates the common grammar, source expressions and schema version.
 // Root target authority and package-only source restrictions belong to the views.
 func Decode(body []byte, source string) (Document, error) {
+	if int64(len(body)) > MaxBytes {
+		return Document{}, manifestError(source, nil, fmt.Errorf("dependency manifest exceeds %d bytes", MaxBytes))
+	}
 	var raw map[string]any
 	if err := toml.Unmarshal(body, &raw); err != nil {
 		return Document{}, manifestError(source, body, err)

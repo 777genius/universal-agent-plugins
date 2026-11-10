@@ -1,10 +1,36 @@
 [
   {
+    "ClientID": "antigravity",
+    "ConfigRoot": "\u003chome\u003e/.gemini/config",
+    "DetectionError": null,
+    "DisplayName": "Google Antigravity",
+    "ExecutablePath": "",
+    "NativeConfigRoot": "",
+    "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
+    "Status": "not_detected",
+    "Surfaces": [
+      {
+        "Detected": false,
+        "Evidence": "",
+        "ID": "antigravity_cli"
+      },
+      {
+        "Detected": false,
+        "Evidence": "",
+        "ID": "antigravity_config"
+      }
+    ],
+    "Version": ""
+  },
+  {
     "ClientID": "chatgpt",
     "ConfigRoot": "",
     "DetectionError": null,
     "DisplayName": "ChatGPT",
     "ExecutablePath": "",
+    "NativeConfigRoot": "",
     "OpenCodeHost": null,
     "ProfileAuthority": null,
     "ProfileNamespace": "",
@@ -24,6 +50,7 @@
     "DetectionError": null,
     "DisplayName": "Claude Code",
     "ExecutablePath": "\u003chome\u003e/bin/claude",
+    "NativeConfigRoot": "",
     "OpenCodeHost": null,
     "ProfileAuthority": null,
     "ProfileNamespace": "",
@@ -48,6 +75,7 @@
     "DetectionError": null,
     "DisplayName": "Cline",
     "ExecutablePath": "",
+    "NativeConfigRoot": "",
     "OpenCodeHost": null,
     "ProfileAuthority": null,
     "ProfileNamespace": "",
@@ -87,6 +115,7 @@
     "DetectionError": null,
     "DisplayName": "OpenAI Codex",
     "ExecutablePath": "\u003chome\u003e/bin/codex",
+    "NativeConfigRoot": "",
     "OpenCodeHost": null,
     "ProfileAuthority": null,
     "ProfileNamespace": "",
@@ -116,6 +145,7 @@
     "DetectionError": null,
     "DisplayName": "GitHub Copilot CLI",
     "ExecutablePath": "\u003chome\u003e/bin/copilot",
+    "NativeConfigRoot": "",
     "OpenCodeHost": null,
     "ProfileAuthority": null,
     "ProfileNamespace": "",
@@ -140,6 +170,7 @@
     "DetectionError": null,
     "DisplayName": "Cursor",
     "ExecutablePath": "\u003chome\u003e/bin/cursor",
+    "NativeConfigRoot": "",
     "OpenCodeHost": null,
     "ProfileAuthority": null,
     "ProfileNamespace": "",
@@ -174,6 +205,7 @@
     "DetectionError": null,
     "DisplayName": "Gemini CLI",
     "ExecutablePath": "\u003chome\u003e/bin/gemini",
+    "NativeConfigRoot": "",
     "OpenCodeHost": null,
     "ProfileAuthority": null,
     "ProfileNamespace": "",
@@ -198,6 +230,7 @@
     "DetectionError": null,
     "DisplayName": "Grok Build",
     "ExecutablePath": "\u003chome\u003e/bin/grok",
+    "NativeConfigRoot": "",
     "OpenCodeHost": null,
     "ProfileAuthority": null,
     "ProfileNamespace": "",
@@ -217,11 +250,37 @@
     "Version": ""
   },
   {
+    "ClientID": "hermes",
+    "ConfigRoot": "\u003chome\u003e/.hermes",
+    "DetectionError": null,
+    "DisplayName": "Hermes Agent",
+    "ExecutablePath": "",
+    "NativeConfigRoot": "",
+    "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
+    "Status": "not_detected",
+    "Surfaces": [
+      {
+        "Detected": false,
+        "Evidence": "",
+        "ID": "hermes_cli"
+      },
+      {
+        "Detected": false,
+        "Evidence": "",
+        "ID": "hermes_config"
+      }
+    ],
+    "Version": ""
+  },
+  {
     "ClientID": "kimi",
     "ConfigRoot": "\u003chome\u003e/.kimi-code",
     "DetectionError": null,
     "DisplayName": "Kimi Code",
     "ExecutablePath": "\u003chome\u003e/bin/kimi",
+    "NativeConfigRoot": "",
     "OpenCodeHost": null,
     "ProfileAuthority": null,
     "ProfileNamespace": "",
@@ -246,6 +305,7 @@
     "DetectionError": null,
     "DisplayName": "Kiro",
     "ExecutablePath": "\u003chome\u003e/bin/kiro-cli",
+    "NativeConfigRoot": "",
     "OpenCodeHost": null,
     "ProfileAuthority": null,
     "ProfileNamespace": "",
@@ -280,6 +340,7 @@
     "DetectionError": null,
     "DisplayName": "OpenCode",
     "ExecutablePath": "\u003chome\u003e/bin/opencode",
+    "NativeConfigRoot": "",
     "OpenCodeHost": null,
     "ProfileAuthority": null,
     "ProfileNamespace": "",
@@ -314,6 +375,7 @@
     "DetectionError": null,
     "DisplayName": "Pi",
     "ExecutablePath": "",
+    "NativeConfigRoot": "",
     "OpenCodeHost": null,
     "ProfileAuthority": null,
     "ProfileNamespace": "",
@@ -338,6 +400,7 @@
     "DetectionError": null,
     "DisplayName": "Qoder",
     "ExecutablePath": "",
+    "NativeConfigRoot": "",
     "OpenCodeHost": null,
     "ProfileAuthority": null,
     "ProfileNamespace": "",
@@ -362,6 +425,7 @@
     "DetectionError": null,
     "DisplayName": "Visual Studio Code",
     "ExecutablePath": "\u003chome\u003e/bin/code",
+    "NativeConfigRoot": "",
     "OpenCodeHost": null,
     "ProfileAuthority": null,
     "ProfileNamespace": "",
@@ -391,6 +455,7 @@
     "DetectionError": null,
     "DisplayName": "Windsurf / Devin",
     "ExecutablePath": "\u003chome\u003e/bin/windsurf",
+    "NativeConfigRoot": "",
     "OpenCodeHost": null,
     "ProfileAuthority": null,
     "ProfileNamespace": "",

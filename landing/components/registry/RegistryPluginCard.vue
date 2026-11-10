@@ -3,13 +3,19 @@
   Content model and implementation are new for Universal Agent Plugins.
 -->
 <script setup lang="ts">
-import { isReviewedMarketingKit } from '~/data/marketingKitDemo';
 import { usePluginInstallSelection } from '~/composables/usePluginInstallSelection';
+import {
+  installTargets,
+  canonicalInstallTarget,
+  canonicalInstallTargets,
+  cliInstallTargets,
+} from '~/data/installTargets';
 import type { RegistryDiagnostic, RegistryPlugin } from '~/types/registry';
 import { githubSourceUrl, reachableTargetPolicies, vendorInstallSource } from '~/utils/registry';
 import { authenticationIndicator } from '~/utils/authentication';
 import { pluginCommands } from '~/utils/commands';
 import { projectCatalogCommands } from '~/utils/projectCatalogSource';
+import { pluginBenefit } from '~/data/catalogCuration';
 const { t, locale, n } = useI18n();
 const localePath = useLocalePath();
 
@@ -29,6 +35,7 @@ const {
   installExpanded,
   targetDistributions,
   projectAvailable,
+  projectAutomatic,
   updateTargets,
   updateAutoDetect,
   updateScope,
@@ -36,14 +43,15 @@ const {
 } = selection;
 const deliverySummary = computed(() => {
   if (autoDetect.value) return '';
+  const canonical = canonicalInstallTargets(targets.value);
   const delivery = selection.resolution.value.distribution?.targets
-    .filter((target) => targets.value.includes(target.client))
+    .filter((target) => canonical.includes(target.client))
     .map((target) => target.delivery) ?? [];
   const managed = delivery.filter((mode) => mode === 'managed').length;
   const prepared = delivery.filter(
     (mode) => mode === 'prepared' || mode === 'manual_activation',
   ).length;
-  if (managed + prepared !== targets.value.length || !delivery.length) return '';
+  if (managed + prepared !== canonical.length || !delivery.length) return '';
   return t('registryUi.card.deliverySummary', { managed: n(managed), prepared: n(prepared) });
 });
 const installPanelId = `plugin-install-${props.plugin.install_source.replace(/[^a-z0-9_-]+/gi, '-')}`;
@@ -62,9 +70,8 @@ function diagnosticText(
   return t(`registryUi.reason.${diagnostic.code}`, params);
 }
 const resolution = selection.resolution;
-const marketingProjectBlocked = computed(() => isReviewedMarketingKit(props.plugin) && scope.value === 'project' && !projectAvailable.value);
 const selectedDistribution = computed(() =>
-  !marketingProjectBlocked.value && (isDiscovered.value || current.value) ? resolution.value.distribution : undefined,
+  (isDiscovered.value || current.value) ? resolution.value.distribution : undefined,
 );
 const canChooseInstall = computed(
   () =>
@@ -74,8 +81,7 @@ const canChooseInstall = computed(
 );
 const canInstall = computed(
   () =>
-    !marketingProjectBlocked.value &&
-    (scope.value !== 'project' || !autoDetect.value) &&
+    (scope.value !== 'project' || !autoDetect.value || Boolean(projectAutomatic.value?.resolution.distribution)) &&
     (isDiscovered.value
       ? props.plugin.installable &&
         props.plugin.discovery?.availability !== 'unavailable' &&
@@ -86,29 +92,35 @@ const canInstall = computed(
 const command = computed(() =>
   canInstall.value
     ? (scope.value === 'project'
-        ? projectCatalogCommands(props.plugin, targets.value)
-        : pluginCommands(props.plugin, autoDetect.value ? undefined : targets.value)
+        ? projectCatalogCommands(props.plugin, autoDetect.value ? undefined : canonicalInstallTargets(targets.value))
+        : pluginCommands(props.plugin, autoDetect.value ? undefined : cliInstallTargets(targets.value))
       ).add
     : '',
+);
+const showDesktopGuide = computed(() =>
+  scope.value === 'user' &&
+  !autoDetect.value &&
+  targets.value.includes('chatgpt') &&
+  canChooseInstall.value &&
+  Boolean(targetDistributions.value.get('chatgpt')),
 );
 const vendorInstall = computed(() => vendorInstallSource(props.plugin));
 const vendorAvailable = computed(() => Boolean(vendorInstall.value && current.value));
 const iconURL = computed(() => pluginIcon(props.plugin));
-const autoOption = computed(() =>
-  scope.value === 'project'
-    ? undefined
-    : {
-        label: t('registryUi.card.allInstalledAgentsRecommended'),
-        summary: t('registryUi.card.allInstalledAgents'),
-        description: t('registryUi.card.detectedWhenYouRunTheCommand'),
-      },
-);
+const autoOption = computed(() => ({
+  label: t('registryUi.card.allInstalledAgentsRecommended'),
+  summary: t('registryUi.card.allInstalledAgents'),
+  description: t('registryUi.card.detectedWhenYouRunTheCommand'),
+}));
 const targetOptions = computed(() =>
-  clients.map((client) => ({
+  installTargets.map((client) => ({
     value: client.id,
     label: client.name,
     icon: asset(`client-icons/${client.icon}`),
-    disabled: !targetDistributions.value.get(client.id) && !targets.value.includes(client.id),
+    // Keep invalid explicitly saved selections visible for recovery, but an
+    // auto-detected project must never make a stale Cursor placeholder selectable.
+    disabled: !targetDistributions.value.get(client.id) &&
+      (autoDetect.value || !targets.value.includes(client.id)),
     description: (() => {
       if (isDiscovered.value)
         return props.plugin.discovery?.availability === 'available'
@@ -118,11 +130,18 @@ const targetOptions = computed(() =>
         return t('registryUi.card.unavailableReviewDataIsNotInstallationAuthority');
       if (expired.value) return t('registryUi.card.unavailableSignedDirectorySnapshotExpired');
       const source = targetDistributions.value.get(client.id);
-      const target = source?.targets.find((item) => item.client === client.id);
+      const target = source?.targets.find(
+        (item) => item.client === canonicalInstallTarget(client.id),
+      );
       if (client.id === 'chatgpt')
+        return target
+          ? t('registryUi.desktopGuide.description')
+          : t('registryUi.card.notInstallableFromAnActiveRelease');
+      if (client.id === 'chatgptweb')
         return target?.app_binding
           ? t('registryUi.card.verifiedConnectionFinishSetupInChatgpt')
           : t('registryUi.card.notAvailableForChatgpt');
+      if (client.id === 'pi' && !target) return t('registryUi.install.piNoCompatibleRelease');
       return target
         ? t(`registryUi.delivery.${target.delivery}`)
         : t('registryUi.card.notInstallableFromAnActiveRelease');
@@ -134,10 +153,10 @@ const authentication = computed(() =>
     autoDetect.value
       ? {
           id: props.plugin.name,
-          targets: reachableTargetPolicies(props.plugin.distributions, 'user'),
+          targets: reachableTargetPolicies(props.plugin.distributions, scope.value),
         }
       : selectedDistribution.value,
-    targets.value,
+    canonicalInstallTargets(targets.value),
     autoDetect.value,
     t,
   ),
@@ -272,7 +291,7 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
         scope="plugin"
       />
     </div>
-    <p class="plugin-card__description">{{ plugin.description }}</p>
+    <p class="plugin-card__description">{{ pluginBenefit(plugin) }}</p>
     <details v-if="alternatives.length" class="plugin-other-sources">
       <summary>
         {{ t('registryUi.card.otherSources', { count: n(alternatives.length) })
@@ -368,26 +387,27 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
           >
             {{ diagnosticText(resolution.fallback_diagnostic, resolution.fallback_reason) }}
           </p>
-          <p v-if="showAuthentication && !marketingProjectBlocked" class="plugin-card__auth">{{ authentication.label }}</p>
+          <p v-if="showAuthentication" class="plugin-card__auth">{{ authentication.label }}</p>
           <InstallScopeSelect
             :model-value="scope"
             :project-available="projectAvailable"
-            :always-show="isReviewedMarketingKit(plugin)"
             @update:model-value="updateScope"
           />
           <InstallOutcome
             v-if="!autoDetect && selectedDistribution"
             :distribution="selectedDistribution"
             :targets="targets"
+            :scope="scope"
           />
           <div class="plugin-card__install">
             <AppMultiSelect
-              v-if="targets.length && !marketingProjectBlocked"
+              v-if="targets.length"
               :model-value="targets"
               :auto-selected="autoDetect"
               :auto-option="autoOption"
               :label="t('registryUi.card.chooseClients', { name: plugin.display_name })"
               :options="targetOptions"
+              full-width
               @update:auto-selected="updateAutoDetect"
               @update:model-value="updateTargets"
             />
@@ -402,6 +422,7 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
               {{ t('registryUi.install.scope.selectionUnavailable') }}
             </p>
           </div>
+          <ChatGPTDesktopGuide v-if="showDesktopGuide" />
         </div>
       </Transition>
     </div>
@@ -411,13 +432,22 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
 <style scoped lang="scss">
 .plugin-card__assessments {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   align-items: flex-start;
-  gap: 0 12px;
+  gap: 4px;
   min-width: 0;
+  font-size: 0.75rem;
 }
-.plugin-card__assessments :deep(.skillspector[open]) {
-  flex-basis: 100%;
+.plugin-card__assessments :deep(.plugin-card__security) {
+  min-height: 32px;
+  margin: 0;
+  gap: 8px;
+  font-size: inherit;
+  line-height: 1.5;
+}
+.plugin-card__assessments :deep(.skillspector) {
+  margin: 0;
+  font-size: inherit;
 }
 .plugin-card__actions {
   display: flex;

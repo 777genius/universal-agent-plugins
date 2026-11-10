@@ -39,7 +39,7 @@ for (const width of [1440, 390]) {
     const card = page.locator('[data-install-source="i18n-state-00"]').first();
     await expect(card.locator('.plugin-card__source-label')).toHaveCount(0);
     await card.locator('.plugin-card__install-toggle').click();
-    await expect(card.locator('.command-snippet code')).toHaveText(
+    await expect(card.locator('.plugin-card__install .command-snippet code')).toHaveText(
       'npx -y universal-agent-plugins add i18n-state-00',
     );
     // Switching from terminal detection selects only one initial agent.
@@ -51,7 +51,7 @@ for (const width of [1440, 390]) {
     await expect(card.locator('.plugin-card__source-label')).toContainText(
       'Agents: 1 automatic setup · 1 need follow-up',
     );
-    await expect(card.locator('.command-snippet code')).toContainText('--target codex,cursor');
+    await expect(card.locator('.plugin-card__install .command-snippet code')).toContainText('--target codex,cursor');
 
     await card.locator('.plugin-card__title-link').click();
     const detail = page.locator('.plugin-detail[data-install-source="i18n-state-00"]');
@@ -70,7 +70,7 @@ for (const width of [1440, 390]) {
     await expect(detail.locator('.plugin-detail__client').filter({ hasText: 'Kiro' })).toHaveCount(0);
     await expect(detail.locator('.install-outcome')).toContainText('Cursor');
     await expect(detail.locator('.install-outcome')).toContainText('Codex');
-    await expect(detail.locator('.command-snippet--add code')).toContainText('--target codex,cursor');
+    await expect(detail.locator('.install-command-row .command-snippet--add code')).toContainText('--target codex,cursor');
     expect(errors).toEqual([]);
   });
 }
@@ -90,5 +90,86 @@ test('expired Directory disables both catalog and standalone install promises', 
   await expect(detail.locator('.plugin-detail__status')).toHaveClass(/plugin-detail__status--muted/);
   await expect(detail.locator('.plugin-detail__install-cta')).toHaveCount(0);
   await expect(detail.locator('.command-snippet--add')).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+for (const width of [1440, 390]) {
+  test('plugin agent picker is a full-width select at ' + width + 'px', async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const errors = await offline(page);
+    await projections(page, eligibleFixture());
+    await navigate(page, '/', 'en', '?q=i18n-state-00');
+    const card = page.locator('[data-install-source="i18n-state-00"]').first();
+    await card.locator('.plugin-card__install-toggle').click();
+
+    const trigger = card.locator('.app-multiselect__trigger');
+    const row = card.locator('.plugin-card__install');
+    const triggerBox = (await trigger.boundingBox())!;
+    const rowBox = (await row.boundingBox())!;
+    expect(triggerBox.width).toBeGreaterThanOrEqual(rowBox.width - 2);
+
+    await trigger.click();
+    const popup = page.locator('.app-multiselect__content--wide');
+    await expect(popup).toBeVisible();
+    const popupBox = (await popup.boundingBox())!;
+    expect(Math.abs(popupBox.width - triggerBox.width)).toBeLessThanOrEqual(3);
+    expect(
+      await popup.locator('.app-multiselect__options').evaluate(
+        (node) => getComputedStyle(node).gridTemplateColumns.split(' ').length,
+      ),
+    ).toBe(1);
+    const chatgpt = page.getByRole('checkbox', { name: /^ChatGPT Web(?:\s|$)/ });
+    await expect(chatgpt).toBeDisabled();
+    await expect(chatgpt).toContainText('No verified ChatGPT Web app binding for this plugin.');
+    await page.getByRole('checkbox', { name: /^Codex(?:\s|$)/ }).click();
+    await expect(card.locator('.plugin-card__install .command-snippet--add code')).toContainText('--target codex');
+    await page.keyboard.press('Escape');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect(errors).toEqual([]);
+  });
+}
+
+test('plugin detail uses readable theme tokens and aligned mobile breadcrumbs', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const errors = await offline(page);
+  await projections(page, eligibleFixture());
+  await navigate(page, '/', 'en', '?q=i18n-state-00');
+  await page.locator('[data-install-source="i18n-state-00"] .plugin-card__title-link').first().click();
+
+  const detail = page.locator('.plugin-detail[data-install-source="i18n-state-00"]');
+  await page.getByRole('button', { name: 'Light', exact: true }).click();
+  await expect(page.locator('.v-application')).toHaveClass(/v-theme--light/);
+  await expect(detail.locator('.plugin-detail__title')).toHaveCSS('color', 'rgb(22, 25, 43)');
+  await expect(detail.locator('.plugin-detail__summary-title').first()).toHaveCSS(
+    'color',
+    'rgb(8, 113, 138)',
+  );
+  await expect(detail.locator('.plugin-detail__client').first()).toHaveCSS(
+    'color',
+    'rgb(22, 25, 43)',
+  );
+  await expect(detail.locator('.plugin-detail__list-item').first()).toHaveCSS(
+    'color',
+    'rgb(83, 93, 117)',
+  );
+
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    const breadcrumbs = detail.locator('.plugin-detail__hero-topbar .breadcrumbs');
+    const centerDelta = await detail.locator('.plugin-detail__hero-topbar').evaluate((bar) => {
+      const back = bar.querySelector('.plugin-detail__back-cta')!.getBoundingClientRect();
+      const crumb = bar.querySelector('.breadcrumbs')!.getBoundingClientRect();
+      return Math.abs(back.top + back.height / 2 - (crumb.top + crumb.height / 2));
+    });
+    expect(centerDelta).toBeLessThan(3);
+    await expect(breadcrumbs).toHaveCSS('padding-top', '0px');
+    await expect(breadcrumbs.locator('[aria-current="page"]')).toHaveText('I18n State 00');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.getByRole('button', { name: 'Dark', exact: true }).click();
+  await expect(detail.locator('.plugin-detail__title')).toHaveCSS('color', 'rgb(224, 230, 255)');
   expect(errors).toEqual([]);
 });

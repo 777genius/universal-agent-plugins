@@ -2,6 +2,70 @@
   {
     "Capabilities": {
       "ActivationMode": "manual",
+      "AppSupport": "unsupported",
+      "ClientID": "antigravity",
+      "ExtensionSupport": "unsupported",
+      "MCPTransports": {
+        "sse": "unsupported",
+        "stdio": "native",
+        "streamable-http": "native"
+      },
+      "PackageMode": "native",
+      "Scopes": [
+        "user",
+        "project"
+      ],
+      "SkillSupport": "native"
+    },
+    "ClientID": "antigravity",
+    "Components": [
+      {
+        "Index": 1,
+        "Kind": "app",
+        "Limitations": [
+          "component_not_supported_by_client"
+        ],
+        "Source": "",
+        "Support": "unsupported"
+      },
+      {
+        "Index": 1,
+        "Kind": "extension",
+        "Limitations": [
+          "component_not_supported_by_client",
+          "extension_semantics_not_established"
+        ],
+        "Source": "",
+        "Support": "unsupported"
+      },
+      {
+        "Index": 1,
+        "Kind": "mcp_server",
+        "Limitations": null,
+        "Source": "",
+        "Support": "native"
+      },
+      {
+        "Index": 1,
+        "Kind": "skill",
+        "Limitations": null,
+        "Source": "",
+        "Support": "native"
+      }
+    ],
+    "Limitations": [
+      "authentication_not_checked",
+      "catalog_publication_not_checked",
+      "client_version_not_checked",
+      "installation_not_checked",
+      "manual_activation_required",
+      "runtime_not_checked",
+      "static_adapter_support_only"
+    ]
+  },
+  {
+    "Capabilities": {
+      "ActivationMode": "manual",
       "AppSupport": "projected",
       "ClientID": "chatgpt",
       "ExtensionSupport": "unsupported",
@@ -514,6 +578,70 @@
     "Capabilities": {
       "ActivationMode": "manual",
       "AppSupport": "unsupported",
+      "ClientID": "hermes",
+      "ExtensionSupport": "unsupported",
+      "MCPTransports": {
+        "sse": "unsupported",
+        "stdio": "native",
+        "streamable-http": "native"
+      },
+      "PackageMode": "native",
+      "Scopes": [
+        "user",
+        "project"
+      ],
+      "SkillSupport": "native"
+    },
+    "ClientID": "hermes",
+    "Components": [
+      {
+        "Index": 1,
+        "Kind": "app",
+        "Limitations": [
+          "component_not_supported_by_client"
+        ],
+        "Source": "",
+        "Support": "unsupported"
+      },
+      {
+        "Index": 1,
+        "Kind": "extension",
+        "Limitations": [
+          "component_not_supported_by_client",
+          "extension_semantics_not_established"
+        ],
+        "Source": "",
+        "Support": "unsupported"
+      },
+      {
+        "Index": 1,
+        "Kind": "mcp_server",
+        "Limitations": null,
+        "Source": "",
+        "Support": "native"
+      },
+      {
+        "Index": 1,
+        "Kind": "skill",
+        "Limitations": null,
+        "Source": "",
+        "Support": "native"
+      }
+    ],
+    "Limitations": [
+      "authentication_not_checked",
+      "catalog_publication_not_checked",
+      "client_version_not_checked",
+      "installation_not_checked",
+      "manual_activation_required",
+      "runtime_not_checked",
+      "static_adapter_support_only"
+    ]
+  },
+  {
+    "Capabilities": {
+      "ActivationMode": "manual",
+      "AppSupport": "unsupported",
       "ClientID": "kimi",
       "ExtensionSupport": "unsupported",
       "MCPTransports": {
@@ -709,15 +837,15 @@
       "ExtensionSupport": "native",
       "MCPTransports": {
         "sse": "unsupported",
-        "stdio": "unsupported",
-        "streamable-http": "unsupported"
+        "stdio": "native",
+        "streamable-http": "native"
       },
       "PackageMode": "native",
       "Scopes": [
         "user",
         "project"
       ],
-      "SkillSupport": "unsupported"
+      "SkillSupport": "native"
     },
     "ClientID": "pi",
     "Components": [
@@ -742,20 +870,16 @@
       {
         "Index": 1,
         "Kind": "mcp_server",
-        "Limitations": [
-          "component_not_supported_by_client"
-        ],
+        "Limitations": null,
         "Source": "",
-        "Support": "unsupported"
+        "Support": "native"
       },
       {
         "Index": 1,
         "Kind": "skill",
-        "Limitations": [
-          "component_not_supported_by_client"
-        ],
+        "Limitations": null,
         "Source": "",
-        "Support": "unsupported"
+        "Support": "native"
       }
     ],
     "Limitations": [

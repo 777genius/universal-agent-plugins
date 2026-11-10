@@ -3,6 +3,7 @@ const { t } = useI18n();
 const config = useRuntimeConfig();
 const playbackId = computed(() => config.public.muxPlaybackId.trim());
 const playing = ref(false);
+const preloading = ref(false);
 const fallbackFullscreen = ref(false);
 const demoContainer = ref<HTMLElement | null>(null);
 const playerFrame = ref<HTMLIFrameElement | null>(null);
@@ -10,16 +11,23 @@ const closeButton = ref<HTMLButtonElement | null>(null);
 const launchButton = ref<HTMLButtonElement | null>(null);
 let enteredFullscreen = false;
 let previousBodyOverflow = '';
+let preloadTimer: ReturnType<typeof setTimeout> | undefined;
 
 const thumbnailUrl = computed(
   () => `https://image.mux.com/${playbackId.value}/thumbnail.webp?time=1&width=1280`,
 );
-// "any" first tries sound, then retries muted when browser autoplay policy
-// blocks sound. Unlike autoplay=true, it needs no second click to start.
-const playerUrl = computed(
-  () => `https://player.mux.com/${playbackId.value}?autoplay=any&preload=auto`,
+// The idle embed loads media resources without playback. Only an explicit
+// Watch demo gesture requests playback. Mux's autoplay=any silently falls back
+// to mute, so use the normal sound-first mode and keep audio enabled by default.
+// Some browsers may still block audible iframe playback.
+const playerUrl = computed(() =>
+  `https://player.mux.com/${playbackId.value}?${playing.value ? 'autoplay=true&no-muted-pref=true&' : ''}preload=auto`,
 );
 const muxOrigin = 'https://player.mux.com';
+function cancelPreload() {
+  if (preloadTimer !== undefined) clearTimeout(preloadTimer);
+  preloadTimer = undefined;
+}
 
 // Mux iframe embeds support Player.js. Only trust events from our iframe
 // at Mux's exact origin; an unrelated frame may not stop the demo.
@@ -35,25 +43,23 @@ function onPlayerMessage(event: MessageEvent) {
   if (message.event === 'ready') {
     playerFrame.value?.contentWindow?.postMessage(
       JSON.stringify({
-        context: 'player.js',
-        version: '0.0.11',
-        method: 'addEventListener',
-        value: 'ended',
-        listener: 'uap-demo-ended',
+        context: 'player.js', version: '0.0.11', method: 'addEventListener',
+        value: 'ended', listener: 'uap-demo-ended',
       }),
       muxOrigin,
     );
   }
-  if (message.event === 'ended') stopDemo();
+  if (message.event === 'ended' && playing.value) stopDemo();
 }
 
 function stopDemo() {
+  cancelPreload();
   const wasPlaying = playing.value;
+  preloading.value = false;
   playing.value = false;
   fallbackFullscreen.value = false;
   if (document.fullscreenElement === demoContainer.value)
     void document.exitFullscreen().catch(() => {});
-  // Return keyboard focus to the poster control after Vue remounts it.
   if (wasPlaying) void nextTick(() => launchButton.value?.focus({ preventScroll: true }));
 }
 
@@ -63,8 +69,6 @@ function onFullscreenChange() {
     fallbackFullscreen.value = false;
     return;
   }
-  // Exiting native fullscreen (Escape, browser or media controls) stops the
-  // embedded media rather than leaving it running off-screen.
   if (!document.fullscreenElement && enteredFullscreen) {
     enteredFullscreen = false;
     stopDemo();
@@ -77,9 +81,8 @@ function onKeydown(event: KeyboardEvent) {
 
 function playDemo() {
   if (!playbackId.value || playing.value) return;
-  // Fullscreen MUST be requested synchronously during this same click/key
-  // gesture, before mounting the iframe. On browsers without the Fullscreen
-  // API, a viewport-filling overlay provides the same one-click experience.
+  cancelPreload();
+  // Fullscreen must be requested synchronously in the user's click/key gesture.
   const container = demoContainer.value;
   if (!container?.requestFullscreen) {
     fallbackFullscreen.value = true;
@@ -94,6 +97,7 @@ function playDemo() {
     }
   }
   playing.value = true;
+  preloading.value = false;
 }
 
 watch(fallbackFullscreen, async (open, wasOpen) => {
@@ -112,8 +116,16 @@ onMounted(() => {
   window.addEventListener('message', onPlayerMessage);
   document.addEventListener('fullscreenchange', onFullscreenChange);
   document.addEventListener('keydown', onKeydown);
+  if (playbackId.value) {
+    // Count from navigation, not from an arbitrarily late hydration callback.
+    preloadTimer = setTimeout(() => {
+      preloadTimer = undefined;
+      if (!playing.value && playbackId.value) preloading.value = true;
+    }, Math.max(0, 7000 - performance.now()));
+  }
 });
 onBeforeUnmount(() => {
+  cancelPreload();
   window.removeEventListener('message', onPlayerMessage);
   document.removeEventListener('fullscreenchange', onFullscreenChange);
   document.removeEventListener('keydown', onKeydown);
@@ -133,11 +145,15 @@ onBeforeUnmount(() => {
       :aria-label="t('shell.hero.demoVideoTitle')"
     >
       <iframe
-        v-if="playing"
+        v-if="playbackId && (playing || preloading)"
         ref="playerFrame"
         :src="playerUrl"
+        :class="{ 'hero-demo-video__preload': !playing }"
+        :aria-hidden="!playing ? 'true' : undefined"
+        :inert="!playing"
+        :tabindex="playing ? 0 : -1"
         :title="t('shell.hero.demoVideoTitle')"
-        allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+        :allow="playing ? 'autoplay; fullscreen; encrypted-media; picture-in-picture' : 'fullscreen; encrypted-media; picture-in-picture'"
         allowfullscreen
       />
       <button
@@ -151,8 +167,8 @@ onBeforeUnmount(() => {
       <template v-if="!playing && playbackId">
         <img :src="thumbnailUrl" :alt="t('shell.hero.demoVideoTitle')" loading="lazy" />
         <button
-          type="button"
           ref="launchButton"
+          type="button"
           class="hero-demo-video__launch"
           :aria-label="t('shell.hero.watchDemo')"
           @click="playDemo"
@@ -167,7 +183,7 @@ onBeforeUnmount(() => {
         <div class="hero-demo-video__terminal" aria-hidden="true">
           <span>● ● ●</span>
           <code>$ npx universal-agent-plugins</code>
-          <code>✓ Codex &nbsp; ✓ Cursor &nbsp; ✓ VS Code</code>
+          <code>✓ Codex &nbsp; ✓ Cursor &nbsp; ✓ OpenCode</code>
         </div>
         <div class="hero-demo-video__caption">
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -179,3 +195,13 @@ onBeforeUnmount(() => {
     </figure>
   </Teleport>
 </template>
+
+<style scoped>
+/* Keep the warm embed out of layout, focus and hit testing without pausing its loading. */
+.hero-demo-video__preload {
+  position: absolute;
+  inset: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+</style>

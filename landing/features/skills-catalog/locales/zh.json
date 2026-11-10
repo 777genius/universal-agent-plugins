@@ -1,6 +1,18 @@
 {
   "registryUi": {
     "skills": {
+      "featured": {
+        "title": "推荐给 AI 开发者",
+        "explanation": "针对常见开发任务精心挑选，并非安全或兼容性保证。请检查来源和安装要求。",
+        "items": {
+          "agent-browser": "单独安装浏览器 CLI 后，自动化真实浏览器操作。",
+          "frontend-design": "创建更精致、更有设计感的前端界面。",
+          "find-skills": "为当前任务找到合适的可复用 Skills。",
+          "tdd": "遵循红灯、绿灯、重构流程，以测试驱动开发。",
+          "vercel-optimize": "根据生产环境指标分析 Vercel 成本与性能。",
+          "web-design-guidelines": "检查网页的易用性与无障碍体验。"
+        }
+      },
       "catalogType": "目录类型",
       "plugins": "插件",
       "skills": "技能",
@@ -68,6 +80,51 @@
         "viewPublisher": "查看发布方源代码",
         "revision": "源代码修订版",
         "rawDocument": "查看完整 SKILL.md 原文"
+      },
+      "scanFilterLabel": "扫描覆盖情况",
+      "scanModes": {
+        "scanned": "已有当前扫描",
+        "all": "所有技能"
+      },
+      "scanNotice": "显示所有技能，包括未扫描的技能。扫描不保证安全性或可安装性。",
+      "scanNone": "在本次有限范围内未找到具有当前扫描结果的技能。",
+      "scanHelp": "选择所有技能以查看未扫描的项目。",
+      "scanClear": "浏览所有技能",
+      "scanReportUnavailable": "部分扫描报告无法验证，因此已排除相应技能。",
+      "scanSnapshot": "发布于 {date}：在 {selected} 个扫描目标中，{complete} 个完整、{partial} 个部分完成、{error} 个失败、{pending} 个没有当前扫描（其中 {stale} 个仅有旧报告）。",
+      "scanSnapshotHelp": "这是最新发布的静态扫描快照，不代表服务实时可用性，也不保证安全。",
+      "filters": {
+        "button": "筛选",
+        "active": "已启用 {count} 项筛选",
+        "title": "筛选技能",
+        "close": "关闭",
+        "description": "更改立即生效。两个筛选条件可同时使用。",
+        "scanned": "已由 SkillSpector 扫描",
+        "scannedHelp": "已检查当前源代码。包含部分检查结果，并明确标注。",
+        "noRemarks": "无检查发现",
+        "noRemarksHelp": "当前静态分析完整且没有内容问题发现。不完整或不可用的检查会被排除。这不保证安全。",
+        "reset": "重置筛选",
+        "moreCandidates": "还可检查更多技能",
+        "moreCandidatesHelp": "此批次没有匹配项。显示更多以检查剩余候选项。",
+        "noMatches": "没有符合筛选条件的技能",
+        "noMatchesHelp": "调整搜索或重置筛选条件以查看所有技能。"
+      },
+      "discoveryNotice": "静态页面首先显示经过审核的插件。浏览器加载并验证已签名的发现数据后，可能添加更多社区条目；如果数据不可用，仍会显示审核子集。",
+      "overview": {
+        "seoTitle": "独立 Agent Skills — Universal Agent Plugins",
+        "metaDescription": "查找、检查并安装独立的 SKILL.md 指令，无需创建 plugin.json 插件包。",
+        "title": "Agent Skills，无需插件封装。",
+        "lead": "查找可复用的 SKILL.md 指令，为所支持的 AI 代理选择安装目标，可安装到用户配置或项目中。独立 Skills 不需要 Agent Plugins 1.0 插件包。",
+        "standaloneTitle": "独立的 Skill 文件",
+        "standaloneDescription": "从您已检查的 GitHub 仓库或受支持的发布方直接安装 Skills，无需 plugin.json 清单。",
+        "scopeTitle": "明确选择代理和范围",
+        "scopeDescription": "在终端中选择代理，或明确指定目标。使用 --scope 安装到用户配置或受支持的项目。",
+        "reviewTitle": "先检查来源",
+        "reviewDescription": "目录条目及 SkillSpector 静态扫描结果不保证安全、激活成功或代理能正确使用。",
+        "browse": "浏览 Skills 目录",
+        "installGuide": "阅读安装指南",
+        "learnMore": "了解独立 Skills",
+        "exampleCaption": "示例命令：请将 owner/repository 替换为真实来源"
       }
     },
     "directoryPage": {

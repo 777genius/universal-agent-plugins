@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
@@ -94,23 +95,11 @@ func (scanner ReleaseScanner) resolve(ctx context.Context) (string, error) {
 	}
 	client := scanner.HTTPClient
 	if client == nil {
-		client = &http.Client{}
+		client = &http.Client{Timeout: 60 * time.Second}
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, origin+asset.Name, nil)
+	body, err := downloadReleaseArchive(ctx, client, origin+asset.Name)
 	if err != nil {
 		return "", err
-	}
-	response, err := client.Do(request)
-	if err != nil {
-		return "", fmt.Errorf("download lintai security scanner: %w", err)
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("download lintai security scanner: HTTP %d", response.StatusCode)
-	}
-	body, err := io.ReadAll(io.LimitReader(response.Body, maxReleaseAsset+1))
-	if err != nil || len(body) > maxReleaseAsset {
-		return "", errors.New("downloaded lintai release asset is unreadable or oversized")
 	}
 	digest := sha256.Sum256(body)
 	if hex.EncodeToString(digest[:]) != asset.Digest {

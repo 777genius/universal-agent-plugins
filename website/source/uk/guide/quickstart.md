@@ -41,15 +41,16 @@ Node.js не потрібен, хоча окремі плагіни можуть
 виконання. Під час використання npm перевіряйте `npx universal-agent-plugins version`:
 канал менеджера пакетів може ще надавати старішу CLI. Автоматичний вибір нижче
 потребує 0.1.94; перевірений випуск можна отримати через нативний інсталятор.
-Явні команди для проєкту в цьому посібнику також працюють із 0.1.93.
+Приклад Project із Git-джерелом, закріпленим повним SHA, працює і з 0.1.93;
+короткі назви підписаного Directory у Project потребують поточної стабільної CLI.
 
-[CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95)
+[CLI](https://github.com/777genius/universal-agent-plugins/releases/latest)
 зберігає явну область проєкту та автоматичний вибір для `install`, запроваджений
 у 0.1.94. Також доступні [локальний API керування](../use/manage#local-management-api)
-та [нативні розширення Pi](../reference/client-compatibility#pi-native-extensions).
+та [розширення Pi, Skills і MCP](../reference/client-compatibility#pi-native-extensions).
 Щоб переглянути план додавання пакета до проєкту:
 
-Для проєкту скопіюйте з перевіреної картки каталогу точне Git-джерело з повним SHA коміту та сумісний агент. Псевдоніми Directory v1 (наприклад, `context7`) діють лише в області користувача. Замініть `OWNER/REPOSITORY`, `FULL_COMMIT_SHA` і `PACKAGE_PATH`; для пакета в корені репозиторію приберіть `//PACKAGE_PATH`.
+Для сумісного перевіреного пакета використовуйте коротку назву з підписаного Directory з явною областю Project, якщо вибраний клієнт підтримує всі обов'язкові компоненти (наприклад, `agentplugins add context7 --target codex --scope project --dry-run`). Для відтворюваного встановлення можна натомість указати Git-джерело з повним SHA коміту. Замініть `OWNER/REPOSITORY`, `FULL_COMMIT_SHA` і `PACKAGE_PATH`; для пакета в корені репозиторію приберіть `//PACKAGE_PATH`.
 
 Шаблон: `github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH`. Команда нижче використовує справжній історичний коміт GitLab, а не підтвердження поточної перевірки в каталозі. Для нової інсталяції скопіюйте актуальне перевірене джерело з каталогу.
 

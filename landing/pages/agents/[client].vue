@@ -184,7 +184,10 @@ usePageSeo(title, () => t(`${client.presentationKey}.intro`), {
           <h2 id="agent-plugins-title">
             {{ t('registryUi.agentPage.availableFor', { name: client.name }) }}
           </h2>
-          <p>
+          <p v-if="client.id === 'pi'">
+            {{ t('registryUi.agentPage.piSignedCount', { count: n(reviewedPlugins.length) }) }}
+          </p>
+          <p v-else>
             {{
               t(
                 'registryUi.agentPage.count',
@@ -192,6 +195,9 @@ usePageSeo(title, () => t(`${client.presentationKey}.intro`), {
                 reviewedPlugins.length,
               )
             }}
+          </p>
+          <p v-if="client.id === 'pi'" class="agent-page__directory-note">
+            {{ t('registryUi.agentPage.piDirectSourceNote') }}
           </p>
         </div>
         <ul class="agent-page__plugin-grid">

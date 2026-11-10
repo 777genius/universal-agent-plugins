@@ -61,7 +61,11 @@ func (scanner CommandScanner) Scan(ctx context.Context, packageRoot string) ([]b
 	if err != nil {
 		var exitErr *exec.ExitError
 		if !errors.As(err, &exitErr) || exitErr.ExitCode() != 1 {
-			return nil, fmt.Errorf("lintai security scan failed: %s", strings.TrimSpace(stderr.String()))
+			detail := strings.TrimSpace(stderr.String())
+			if detail == "" {
+				return nil, fmt.Errorf("lintai security scan failed: %w", err)
+			}
+			return nil, fmt.Errorf("lintai security scan failed: %s: %w", detail, err)
 		}
 	}
 	return append([]byte(nil), stdout.Bytes()...), nil

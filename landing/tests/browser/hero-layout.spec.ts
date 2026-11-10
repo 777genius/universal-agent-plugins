@@ -5,7 +5,7 @@ import { clientLandingPages } from '../../data/clients';
 import { hydrated, setSignedMirrorTestTime, wording } from './i18n-state.helpers';
 
 const exactCommand =
-  'npx -y universal-agent-plugins add context7 --target codex,cursor,vscode --no-save';
+  'npx -y universal-agent-plugins add context7 --target codex,cursor,copilot';
 
 async function capture(page: Page, name: string) {
   const directory = process.env.UAP_LANDING_SCREENSHOT_DIR;
@@ -28,6 +28,8 @@ test.beforeEach(async ({ page }) => {
 
 for (const width of [1440, 1024, 390, 320]) {
   test(`hero controls and all client links remain complete at ${width}px`, async ({ page }) => {
+    // Validate every client link and loaded icon at four widths without a CI-contention timeout.
+    test.setTimeout(60_000);
     await page.setViewportSize({ width, height: width >= 1024 ? 1000 : 844 });
     await page.goto('./');
     await waitForCommand(page);
@@ -35,6 +37,20 @@ for (const width of [1440, 1024, 390, 320]) {
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBe(true);
+
+    await expect(page.locator('.hero-quick-start__header h2')).toHaveText('Install the Context7 plugin');
+    const standards = page.locator('.hero__standards');
+    await expect(standards.locator('.hero__standards-label')).toHaveText('Supported formats');
+    await expect(standards.locator('a')).toHaveText(['Agent Plugins 1.0', 'Agent Skills']);
+    await expect(standards.locator('a').nth(0)).toHaveAttribute(
+      'href',
+      'https://agent-plugins.org/specification',
+    );
+    await expect(standards.locator('a').nth(1)).toHaveAttribute(
+      'href',
+      'https://agentskills.io/specification',
+    );
+    await expect(standards.locator('a').nth(1)).toBeVisible();
 
     const items = page.locator('.client-strip > li');
     await expect(items).toHaveCount(clientLandingPages.length);
@@ -125,7 +141,8 @@ test('selected targets produce one complete copyable command with keyboard activ
     const trigger = page.locator('.hero-quick-start__step .app-multiselect__trigger');
     await trigger.focus();
     await page.keyboard.press('Enter');
-    for (const name of [/^Codex /, /^Cursor /, /^VS Code /]) {
+    await expect(page.getByRole('checkbox', { name: /^VS Code / })).toHaveCount(0);
+    for (const name of [/^Codex /, /^Cursor /, /^Copilot /]) {
       await page.getByRole('checkbox', { name }).click();
     }
     await page.keyboard.press('Escape');
@@ -146,7 +163,7 @@ test('selected targets produce one complete copyable command with keyboard activ
 test('catalog reveal is early on navigation, compact trust badges stay compact, and video preview waits for a real Mux asset', async ({
   page,
 }) => {
-  test.setTimeout(60_000);
+  test.setTimeout(90_000);
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.setViewportSize({ width: 1440, height: 600 });
   const gotoReadyHome = async (url = './') => {
@@ -205,7 +222,17 @@ test('catalog reveal is early on navigation, compact trust badges stay compact, 
   expect(preview.y - (supported.y + supported.height)).toBeGreaterThanOrEqual(15);
   expect(install.y + install.height).toBeLessThan(preview.y);
   await expect(page.locator('.hero__demo .hero-demo-video')).toHaveCount(0);
-  await expect(page.locator('iframe[src*="player.mux.com"]')).toHaveCount(0);
+  // After seven seconds the hidden warm-up frame is intentional. It must not
+  // become an active, focusable or autoplay-enabled player without a gesture.
+  const muxFrames = page.locator('iframe[src*="player.mux.com"]');
+  await expect(page.locator('iframe[src*="player.mux.com"]:not(.hero-demo-video__preload)')).toHaveCount(0);
+  expect(await muxFrames.evaluateAll((frames) => frames.every((frame) =>
+    frame.getAttribute('aria-hidden') === 'true' &&
+    frame.hasAttribute('inert') && frame.getAttribute('tabindex') === '-1' &&
+    !new URL((frame as HTMLIFrameElement).src).searchParams.has('autoplay') &&
+    !(frame.getAttribute('allow') || '').includes('autoplay') &&
+    getComputedStyle(frame).visibility === 'hidden',
+  ))).toBe(true);
   await expect(page.locator('.hero-quick-start__footer')).toHaveCount(0);
   await capture(page, 'hero-early-reveal');
 });

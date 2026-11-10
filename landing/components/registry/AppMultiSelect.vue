@@ -23,6 +23,7 @@ const props = defineProps<{
   autoOption?: AutoDetectOption;
   autoSelected?: boolean;
   automaticHelp?: string;
+  fullWidth?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -127,11 +128,13 @@ function toggle(value: string) {
       ></span>
     </PopoverTrigger>
     <PopoverPortal>
+      <!-- Keep the menu clear of the fixed 64px header when it flips upward. -->
       <PopoverContent
         class="app-multiselect__content"
+        :class="{ 'app-multiselect__content--wide': fullWidth }"
         align="start"
         :side-offset="7"
-        :collision-padding="14"
+        :collision-padding="{ top: 80, right: 14, bottom: 14, left: 14 }"
       >
         <div class="app-multiselect__heading">
           <strong>{{ label }}</strong
@@ -205,7 +208,7 @@ function toggle(value: string) {
               : t('registryUi.multi.manualHelp')
           }}
         </p>
-        <PopoverArrow class="app-multiselect__arrow" />
+        <PopoverArrow v-if="!fullWidth" class="app-multiselect__arrow" />
       </PopoverContent>
     </PopoverPortal>
   </PopoverRoot>

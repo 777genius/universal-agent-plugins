@@ -150,7 +150,10 @@ func TestAgentpluginsReleaseContractsStayFailClosed(t *testing.T) {
 	mustContain(t, yamlJob(t, releaseWorkflow, "dispatch-promotion"), "inputs.auto_publish == true")
 	mustContain(t, releaseWorkflow, "release workflow source does not match the exact tagged commit")
 	mustContain(t, releaseWorkflow, "commits/${COMMIT}/pulls")
-	mustContain(t, releaseWorkflow, "release commit must come from a merged pull request into main")
+	mustContain(t, releaseWorkflow, `pr_checks="[]"`)
+	mustContain(t, releaseWorkflow, `.merged_at != null and .base.ref == "main"`)
+	mustContain(t, releaseWorkflow, `if [[ -n "${pr_head}" ]]; then`)
+	mustContain(t, releaseWorkflow, `if ! has_check "${commit_checks}" "${name}" && ! has_check "${pr_checks}" "${name}"; then`)
 	mustContain(t, releaseWorkflow, "check-runs?filter=latest&per_page=100")
 	for _, name := range []string{
 		"dependency-review",
@@ -339,7 +342,7 @@ func TestAgentpluginsReleaseContractsStayFailClosed(t *testing.T) {
 		"all six native platform proofs, its verified",
 		"Every dispatch still requires the exact frozen tag/workflow-source gate",
 		"This runbook does not establish that any new draft has already qualified",
-		"requires a merged pull request into",
+		"merged PR is not required when the exact commit has every required check",
 		"Repository settings are not treated as the release proof",
 		"short-lived bootstrap",
 		"disallow bypass-2FA tokens",

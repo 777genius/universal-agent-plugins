@@ -1,0 +1,237 @@
+name: Published npm stable Windows native client E2E
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - '.github/workflows/agentplugins-published-windows-audit.yml'
+      - '.github/workflows/agentplugins-published-version.yml'
+      - 'scripts/live-install-audit.py'
+      - 'scripts/test_live_install_audit_env.py'
+      - 'scripts/test_live_install_audit_components.py'
+      - 'scripts/run-native-client-matrix.py'
+      - 'tests/live-install/fixtures.json'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/agentplugins-published-windows-audit.yml'
+      - '.github/workflows/agentplugins-published-version.yml'
+      - 'scripts/live-install-audit.py'
+      - 'scripts/test_live_install_audit_env.py'
+      - 'scripts/test_live_install_audit_components.py'
+      - 'scripts/run-native-client-matrix.py'
+      - 'tests/live-install/fixtures.json'
+  # Broad native/client coverage weekly; only five known-safe clients and
+  # two source cases are needed on ordinary pull requests.
+  # Newly published npm releases are requalified after the publisher completes.
+  workflow_run:
+    workflows: ['Agentplugins NPM Publish']
+    types: [completed]
+  schedule:
+    - cron: '11 4 * * 3'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact public stable npm release (empty = latest)
+        type: string
+        required: false
+        default: ''
+      cases:
+        description: Number of frozen source cases per kind
+        type: choice
+        default: '20'
+        options: ['2', '20', '30']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: published-windows-client-audit-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  resolve-release:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    uses: ./.github/workflows/agentplugins-published-version.yml
+    with:
+      version: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.title, '[full-published-e2e]') && '0.1.102' || inputs.version }}
+
+  windows-native-install:
+    needs: resolve-release
+    name: Windows npm stable / ${{ matrix.target }} / ${{ matrix.kind }}
+    runs-on: windows-2025
+    timeout-minutes: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.title, '[full-published-e2e]') && 120 || github.event_name == 'pull_request' && 45 || 80 }}
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        # 5 native clients on every relevant PR; 9 clients (including Cline,
+        # Kimi, Qoder and genuine Pi project Skills) weekly/manually.
+        target: ${{ fromJSON(github.event_name == 'pull_request' && github.event.pull_request.draft && !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.title, '[full-published-e2e]')) && '["codex","claude","opencode","gemini","copilot"]' || '["codex","claude","opencode","gemini","copilot","cline","kimi","qoder","pi"]') }}
+        kind: [plugin, skill]
+        exclude:
+          - target: pi
+            kind: plugin
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        # Windows Git may transparently rewrite text files to CRLF.
+        # Keep the signed fixture's raw bytes equal to the pinned Git revision.
+        env:
+          GIT_CONFIG_COUNT: '1'
+          GIT_CONFIG_KEY_0: core.autocrlf
+          GIT_CONFIG_VALUE_0: 'false'
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Prove immutable fixture bytes were not rewritten by checkout
+        shell: pwsh
+        run: |
+          python -c "import pathlib,subprocess; f='tests/live-install/fixtures.json'; expected=subprocess.check_output(['git','show','HEAD:'+f]); actual=pathlib.Path(f).read_bytes(); assert expected==actual, 'checkout rewrote frozen fixture bytes'"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Require portable disposable Git project and isolated environment
+        shell: pwsh
+        run: |
+          python -m unittest scripts.test_live_install_audit_env.IsolatedClientEnvironmentTest.test_genuine_project_git_init_uses_empty_hooks_inside_case scripts.test_live_install_audit_env.IsolatedClientEnvironmentTest.test_codex_marketplace_containment_follows_physical_directory_identity -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m unittest discover -s scripts -p 'test_live_install_audit_components.py' -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      # No vendor login or paid API is used. These are exact published npm bytes,
+      # with the same frozen client versions as the qualified Linux audit.
+      - name: Bootstrap published npm CLI and genuine pinned native client
+        id: bootstrap
+        shell: pwsh
+        env:
+          UAP_VERSION: ${{ needs.resolve-release.outputs.version }}
+          NATIVE_TARGET: ${{ matrix.target }}
+          NATIVE_KIND: ${{ matrix.kind }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $nativePackages = @{
+            codex = '@openai/codex@0.153.4'
+            claude = '@anthropic-ai/claude-code@2.1.263'
+            opencode = 'opencode-ai@1.18.34'
+            gemini = '@google/gemini-cli@0.66.0'
+            copilot = '@github/copilot@1.0.105'
+            cline = 'cline@3.0.74'
+            kimi = '@moonshot-ai/kimi-code@2.4.1'
+            qoder = '@qoder-ai/qodercli@1.1.81'
+            pi = '@earendil-works/pi-coding-agent@1.5.0'
+          }
+          $nativePackage = $nativePackages[$env:NATIVE_TARGET]
+          if (-not $nativePackage) { throw "Unreviewed target $env:NATIVE_TARGET" }
+          npm.cmd install --global "universal-agent-plugins@$env:UAP_VERSION"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($env:NATIVE_TARGET -eq 'kimi' -and $env:NATIVE_KIND -eq 'skill') {
+            # The published Kimi adapter requires an actual pinned 2.3.2
+            # native executable; npm's Windows .cmd shim cannot qualify.
+            Write-Host 'Using the independently pinned official Kimi Windows binary'
+          } elseif ($env:NATIVE_TARGET -eq 'pi') {
+            npm.cmd install --global --ignore-scripts "$nativePackage"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } else {
+            npm.cmd install --global "$nativePackage"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          $uap = (Get-Command agentplugins.cmd -CommandType Application -ErrorAction Stop).Source
+          $observed = (& $uap version | Out-String).Trim()
+          if ($LASTEXITCODE -ne 0 -or $observed -ne "agentplugins $env:UAP_VERSION") {
+            throw "Wrong published installer: $observed"
+          }
+          if ($env:NATIVE_TARGET -eq 'opencode') {
+            # The verified OpenCode host probe intentionally rejects Windows
+            # npm .cmd shims. Use the real 1.18.34 .exe from the already
+            # SHA-512-pinned upstream tarball (shared native matrix pin).
+            $nativeBin = Join-Path "$env:RUNNER_TEMP" 'verified-opencode'
+            New-Item -ItemType Directory -Force -Path $nativeBin | Out-Null
+            $program = @'
+          import importlib.util
+          from pathlib import Path
+          import sys
+          source = Path("scripts/run-native-client-matrix.py").resolve()
+          spec = importlib.util.spec_from_file_location("native_matrix_pins", source)
+          module = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(module)
+          target = Path(sys.argv[1])
+          binary, evidence = module.provision(module.PINS["windows-amd64"]["opencode"], target, "opencode")
+          if binary != target / "opencode.exe" or evidence["version"] != "1.18.34":
+              raise RuntimeError("verified native OpenCode provenance mismatch")
+          print("Verified native OpenCode 1.18.34, sha512 pinned")
+          '@
+            $program | python - "$nativeBin"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            $native = Join-Path $nativeBin 'opencode.exe'
+            "$nativeBin" | Out-File -FilePath "$env:GITHUB_PATH" -Encoding utf8 -Append
+          } elseif ($env:NATIVE_TARGET -eq 'kimi' -and $env:NATIVE_KIND -eq 'skill') {
+            # Reuse the existing no-symlink, no-archive-traversal verified
+            # extractor. The release ZIP SHA-256 is pinned separately from UAP.
+            $nativeBin = Join-Path "$env:RUNNER_TEMP" 'verified-kimi'
+            New-Item -ItemType Directory -Force -Path $nativeBin | Out-Null
+            $program = @'
+          import importlib.util
+          from pathlib import Path
+          import sys
+          source = Path("scripts/run-native-client-matrix.py").resolve()
+          spec = importlib.util.spec_from_file_location("native_matrix_pins", source)
+          module = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(module)
+          target = Path(sys.argv[1])
+          binary, evidence = module.provision(module.PINS["windows-amd64"]["kimi"], target, "kimi")
+          if binary != target / "kimi.exe" or evidence["version"] != "@moonshot-ai/kimi-code@2.3.2":
+              raise RuntimeError("verified native Kimi 2.3.2 provenance mismatch")
+          print("Verified genuine Kimi 2.3.2 Windows executable, sha256 pinned")
+          '@
+            # Only the verified release downloader gets GitHub read-only auth;
+            # earlier third-party npm install scripts never inherit this token.
+            $env:GH_TOKEN = '${{ github.token }}'
+            try {
+              $program | python - "$nativeBin"
+              if ($LASTEXITCODE -ne 0) { throw "Verified native Kimi download failed" }
+            } finally {
+              Remove-Item Env:\GH_TOKEN -ErrorAction SilentlyContinue
+            }
+            $native = Join-Path $nativeBin 'kimi.exe'
+            "$nativeBin" | Out-File -FilePath "$env:GITHUB_PATH" -Encoding utf8 -Append
+          } else {
+            $nativeName = if ($env:NATIVE_TARGET -eq 'qoder') { 'qodercli' } else { $env:NATIVE_TARGET }
+            $native = (Get-Command "$nativeName.cmd" -CommandType Application -ErrorAction Stop).Source
+          }
+          & $native --version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Real install / repeat / lock / native identity / removal
+        if: ${{ !cancelled() }}
+        shell: pwsh
+        env:
+          AUDIT_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          AUDIT_VENDOR_OUTCOME: ${{ steps.bootstrap.outcome }}
+          AUDIT_TARGET: ${{ matrix.target }}
+          AUDIT_KIND: ${{ matrix.kind }}
+          # Trusted, explicitly titled E2E PRs run all 30 frozen source cases.
+          # Ordinary PRs/forks retain the original cheap two-source smoke.
+          AUDIT_LIMIT: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.title, '[full-published-e2e]') && '30' || github.event_name == 'pull_request' && '2' || github.event_name == 'push' && '30' || github.event_name == 'schedule' && '20' || inputs.cases || '20' }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP\published-windows-proof" | Out-Null
+          $uapCommand = Get-Command agentplugins.cmd -CommandType Application -ErrorAction SilentlyContinue
+          $uap = if ($uapCommand) { $uapCommand.Source } else { 'native-cli-unavailable' }
+          python scripts/live-install-audit.py --cli "$uap" --target "$env:AUDIT_TARGET" --kind "$env:AUDIT_KIND" --limit "$env:AUDIT_LIMIT" --report-dir "$env:RUNNER_TEMP\published-windows-proof"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Preserve source-by-source JSON even on failure
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: published-${{ needs.resolve-release.outputs.version }}-windows-${{ matrix.target }}-${{ matrix.kind }}
+          path: ${{ runner.temp }}/published-windows-proof/
+          if-no-files-found: warn
+          retention-days: 14

@@ -2,11 +2,15 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { spawnSync } from 'node:child_process';
 import { skillClients } from '../data/skillClients.ts';
+import { clients } from '../data/clients.ts';
+import { sortSkillsForCatalog } from '../data/catalogCuration.ts';
 import capabilities from '../data/clientCapabilities.generated.json' with { type: 'json' };
 import type { SkillListing } from '../types/skillsCatalog.ts';
 import {
   catalogModeQuery,
   restoreSkillsQuery,
+  restoreSkillsFilters,
+  skillsFiltersQuery,
   skillsCatalogQuery,
   skillInstallCommand,
   skillNeedsManualSelection,
@@ -57,6 +61,17 @@ test('Skill command preserves repository identity and exact selector without inv
   for (const target of ['unknown-agent', 'codex; echo injected', 'codex"', 'codex$HOME']) {
     assert.equal(skillInstallCommand(skill, [target]), undefined);
   }
+});
+
+
+test('Skills user/project choice uses the same explicit CLI scope as plugins', () => {
+  assert.equal(skillInstallCommand(skill, undefined, 'user'), skillInstallCommand(skill));
+  assert.equal(skillInstallCommand(skill, undefined, 'project'),
+    'npx universal-agent-plugins@latest skills add https://github.com/anthropics/skills --skill frontend-design --scope project');
+  assert.equal(skillInstallCommand(skill, ['codex', 'claude'], 'project'),
+    'npx universal-agent-plugins@latest skills add https://github.com/anthropics/skills --skill frontend-design --target "codex,claude" --scope project');
+  assert.equal(skillInstallCommand(skill, ['chatgpt'], 'project'), undefined);
+  assert.equal(skillInstallCommand(skill, ['codex; echo unsafe'], 'project'), undefined);
 });
 
 test(
@@ -291,14 +306,16 @@ test('Detail identity uses only a canonical source, never the listing-page URL',
   }
 });
 
-test('Skill agents come only from generated saved-dependency and skill capabilities', () => {
-  const expected = capabilities
-    .filter((client) => client.saved_dependency && client.skill_support !== 'unsupported')
-    .map((client) => client.id);
-  assert.deepEqual(
-    skillClients.map((client) => client.id),
-    expected,
+test('Skill agents are the public subset of generated saved-dependency and skill capabilities', () => {
+  const eligible = new Set(
+    capabilities
+      .filter((client) => client.saved_dependency && client.skill_support !== 'unsupported')
+      .map((client) => client.id),
   );
+  // New CLI targets may be qualified before their public landing presentation.
+  const expected = clients.filter((client) => eligible.has(client.id)).map((client) => client.id);
+  assert.deepEqual(skillClients.map((client) => client.id), expected);
+  assert.ok(skillClients.every((client) => eligible.has(client.id)));
   assert.ok(!skillClients.some((client) => ['chatgpt', 'vscode'].includes(client.id)));
 });
 
@@ -347,7 +364,7 @@ function catalogHarness() {
     new URL('../composables/useSkillsCatalog.ts', import.meta.url),
     'utf8',
   )
-    .replace(/^import[^\n]+\n/gm, '')
+    .replace(/^import[\s\S]*?;\n/gm, '')
     .replace('export function', 'function');
   const useCatalog = runInNewContext(stripTypeScriptTypes(source) + '\nuseSkillsCatalog;', {
     computed,
@@ -361,9 +378,11 @@ function catalogHarness() {
       mounted = callback;
     },
     skillInstallCommand,
+    sortSkillsForCatalog,
     useRuntimeConfig: () => ({
       public: { skillsCatalogEndpoint: 'https://example.com/v1/skills' },
     }),
+    useNuxtApp: () => ({}),
     setTimeout: (callback: () => void, delay: number) => {
       assert.equal(delay, 300);
       timers.set(++timerId, callback);
@@ -539,35 +558,37 @@ test('legacy source variants produce CLI commands without using directory pages 
   }
 });
 
-test('installable filtering skips unsupported records and bounds upstream pagination', async () => {
+test('catalog shows non-installable entries without inventing install commands or extra requests', async () => {
   const catalog = catalogHarness();
-  const first = catalog.respond(0, 200, 0, 200, 175);
-  await first;
-  assert.equal(catalog.requests.length, 2);
-  assert.equal(catalog.requests[1]!.url.searchParams.get('page'), '1');
-  await catalog.respond(1, 200, 1, 200, 0);
-  assert.equal(catalog.state.items.value.length, 225);
+  await catalog.respond(0, 200, 0, 200, 175);
+  assert.equal(catalog.requests.length, 1);
+  assert.equal(catalog.state.items.value.length, 200);
   assert.equal(catalog.state.displayed.value.length, 48);
-  assert.ok(catalog.state.displayed.value.every((item: SkillListing) => skillInstallCommand(item)));
-  catalog.stop();
-});
-
-test('empty unsupported pages stop at a bounded hop limit until the next user action', async () => {
-  const catalog = catalogHarness();
-  for (let page = 0; page < 5; page++) {
-    await catalog.respond(page, 200, page, 200, 200, true);
+  assert.ok(catalog.state.displayed.value.every((item: SkillListing) => !skillInstallCommand(item)));
+  for (const count of [96, 144, 192, 200]) {
+    catalog.state.showMore();
+    assert.equal(catalog.state.displayed.value.length, count);
+    assert.equal(catalog.requests.length, 1);
   }
-  assert.equal(catalog.requests.length, 5);
-  assert.equal(catalog.state.displayed.value.length, 0);
-  assert.equal(catalog.state.hasMore.value, true);
   catalog.state.showMore();
-  assert.equal(catalog.requests.length, 6);
-  await catalog.respond(5, 200, 5, 200, 0);
-  assert.equal(catalog.state.displayed.value.length, 48);
-  assert.equal(catalog.requests.length, 6);
+  assert.equal(catalog.requests.length, 2);
+  await catalog.respond(1, 200, 1, 200, 0, false);
+  assert.equal(catalog.state.items.value.length, 400);
+  assert.equal(catalog.state.displayed.value.length, 248);
+  assert.ok(catalog.state.items.value.some((item: SkillListing) => skillInstallCommand(item)));
   catalog.stop();
 });
 
+test('empty upstream page stops rather than looping on unsupported or missing data', async () => {
+  const catalog = catalogHarness();
+  await catalog.respond(0, 0, 0, 200, 0, true);
+  assert.equal(catalog.requests.length, 1);
+  assert.equal(catalog.state.displayed.value.length, 0);
+  assert.equal(catalog.state.hasMore.value, false);
+  catalog.state.showMore();
+  assert.equal(catalog.requests.length, 1);
+  catalog.stop();
+});
 
 test('Skill search honors API page-zero-only contract even if response advertises more', async () => {
   const catalog = catalogHarness();
@@ -578,8 +599,12 @@ test('Skill search honors API page-zero-only contract even if response advertise
   assert.equal(catalog.requests[1]!.url.searchParams.get('q'), 'frontend');
   await catalog.respond(1, 200, 0, 200, 200, true);
   assert.equal(catalog.requests.length, 2);
-  assert.equal(catalog.state.displayed.value.length, 0);
-  assert.equal(catalog.state.hasMore.value, false);
+  assert.equal(catalog.state.displayed.value.length, 48);
+  assert.ok(catalog.state.displayed.value.every((item: SkillListing) => !skillInstallCommand(item)));
+  assert.equal(catalog.state.hasMore.value, true); // Remaining page-zero candidates, not a second search page.
+  catalog.state.showMore();
+  assert.equal(catalog.requests.length, 2);
+  assert.equal(catalog.state.displayed.value.length, 96);
   catalog.stop();
 });
 
@@ -602,4 +627,41 @@ test('malformed DTOs disable their own Install action without crashing the catal
   assert.equal(skillInstallCommand({ ...skill, id: undefined as unknown as string }), undefined);
   assert.equal(skillInstallCommand({ ...skill, source: null as unknown as SkillListing['source'] }), undefined);
   assert.equal(skillInstallCommand(null as unknown as SkillListing), undefined);
+});
+
+test('Skill filters default unchecked and serialize each independent checkbox without losing other URL state', () => {
+  const none = { scannedOnly: false, noRemarksOnly: false };
+  for (const params of [
+    {},
+    { skillScan: 'all' },
+    { skillScan: 'unknown', skillRemarks: 'some' },
+    { skillScan: ['scanned'], skillRemarks: ['none'] },
+  ])
+    assert.deepEqual(restoreSkillsFilters(params), none);
+  const existing = {
+    tab: 'skills',
+    q: 'frontend',
+    skillView: 'hot',
+    source: 'keep',
+    skillScan: 'all',
+  };
+  for (const [filters, expected] of [
+    [none, {}],
+    [{ scannedOnly: true, noRemarksOnly: false }, { skillScan: 'scanned' }],
+    [{ scannedOnly: false, noRemarksOnly: true }, { skillRemarks: 'none' }],
+    [
+      { scannedOnly: true, noRemarksOnly: true },
+      { skillScan: 'scanned', skillRemarks: 'none' },
+    ],
+  ] as const) {
+    const route = skillsFiltersQuery(existing, filters);
+    assert.deepEqual(route, {
+      tab: 'skills',
+      q: 'frontend',
+      skillView: 'hot',
+      source: 'keep',
+      ...expected,
+    });
+    assert.deepEqual(restoreSkillsFilters(route), filters);
+  }
 });

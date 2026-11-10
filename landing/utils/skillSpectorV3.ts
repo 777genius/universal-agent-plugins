@@ -156,7 +156,8 @@ function referenceContext(value: unknown, status: string, legacy: boolean) {
     if (reference.status === 'uninspected' && reference.disposition !== 'partial') fail();
     if (
       (['missing', 'ambiguous', 'uninspected'].includes(reference.status) ||
-        (reference.status === 'resolved' && reference.disposition !== 'analyzed')) &&
+        (reference.status === 'resolved' && reference.disposition !== 'analyzed') ||
+        (reference.status === 'rejected' && reference.disposition === 'partial')) &&
       (status === 'complete' || c.status === 'complete')
     )
       fail();
@@ -280,12 +281,30 @@ export function decodeSkillSpectorManifestV3(
     fail();
   if (profile(m.profile).id !== 'static-policy-v3') fail();
   if (!Array.isArray(m.profiles) || !m.profiles.length || m.profiles.length > 8) fail();
+  // The new signed producer policy can retain verified old observations while
+  // new scans use a distinct digest. Profile IDs repeat only across those two
+  // exact generations, never for arbitrary or conflicting report metadata.
   const profiles = new Set<string>();
   for (const p of m.profiles) {
     profile(p);
-    if (profiles.has(p.id) || !['static-standard-v3', 'static-extended-v3'].includes(p.id)) fail();
-    profiles.add(p.id);
+    if (!['static-standard-v3', 'static-extended-v3'].includes(p.id)) fail();
+    const identity = `${p.id}:${p.digest}`;
+    if (profiles.has(identity)) fail();
+    profiles.add(identity);
   }
+  if (m.profiles.length === 4) {
+    const ids = m.profiles.map((p: { id: string }) => p.id);
+    if (JSON.stringify(ids) !== JSON.stringify([
+      'static-standard-v3', 'static-extended-v3',
+      'static-standard-v3', 'static-extended-v3',
+    ])) fail();
+    if (
+      m.profiles[0].digest !== 'sha256:33e3822d74ce72625cc5b479f4473b515f693890a3818366206a4dbc2b8f509c' ||
+      m.profiles[1].digest !== 'sha256:255c72648dd6a6e6b93ea75f5ad51553826692c60dd8222c7fb55613cf5766ba' ||
+      m.profiles[2].digest === m.profiles[0].digest ||
+      m.profiles[3].digest === m.profiles[1].digest
+    ) fail();
+  } else if (new Set(m.profiles.map((p: { id: string }) => p.id)).size !== m.profiles.length) fail();
   const c = coverage(m.coverage);
   if (
     !Array.isArray(m.shards) ||
@@ -364,23 +383,32 @@ export function decodeSkillSpectorManifestV3(
       current = aliases.get(current)!;
     }
   }
+  const sourceIds = new Set<string>();
   for (const state of m.source_states) {
     const s = obj(state);
     if (
       !text(s.id, 1025) ||
+      sourceIds.has(s.id) ||
       typeof s.repository !== 'string' ||
       s.repository.length > 1000 ||
       !['resolved', 'historical', 'unresolved', 'unavailable', 'unsupported'].includes(s.state) ||
       typeof s.current !== 'boolean' ||
-      !(s.reason === null || text(s.reason, 200)) ||
+      s.current !== (s.state === 'resolved') ||
+      !(s.current ? s.reason === null : text(s.reason, 200)) ||
       !(s.revision === null || revision.test(s.revision)) ||
       !(s.path === null || safePath(s.path, true)) ||
       !Array.isArray(s.selected_ids) ||
       !s.selected_ids.every((id: unknown) => text(id, 200)) ||
+      new Set(s.selected_ids).size !== s.selected_ids.length ||
+      Boolean(s.selected_ids.length) !== ['resolved', 'historical'].includes(s.state) ||
+      (s.current && (s.revision === null || s.path === null)) ||
       !Array.isArray(s.candidates) ||
-      !s.candidates.every((path: unknown) => safePath(path, true))
+      s.candidates.length > 64 ||
+      !s.candidates.every((path: unknown) => safePath(path, true)) ||
+      new Set(s.candidates).size !== s.candidates.length
     )
       fail();
+    sourceIds.add(s.id);
   }
   for (const state of m.plugin_states) {
     const s = obj(state);

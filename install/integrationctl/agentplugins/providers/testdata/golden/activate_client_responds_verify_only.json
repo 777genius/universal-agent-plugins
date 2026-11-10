@@ -1,4 +1,22 @@
 {
+  "antigravity": {
+    "Commands": [],
+    "Error": "antigravity plugin must live beneath the exact selected native root",
+    "Outcome": {
+      "Activation": "",
+      "ActivationAttested": false,
+      "Authentication": "",
+      "AuthenticationAttested": false,
+      "AuthoritativeObservation": false,
+      "LocalActions": null,
+      "LocalEntryObservation": null,
+      "NativeEffect": "",
+      "NativeObjects": null,
+      "Policy": "",
+      "UserActions": null,
+      "Verification": ""
+    }
+  },
   "chatgpt": {
     "Commands": [],
     "Error": "",
@@ -187,6 +205,26 @@
       "NativeObjects": null,
       "Policy": "allowed",
       "UserActions": null,
+      "Verification": "installation_verified"
+    }
+  },
+  "hermes": {
+    "Commands": [],
+    "Error": "",
+    "Outcome": {
+      "Activation": "prepared",
+      "ActivationAttested": false,
+      "Authentication": "not_checked",
+      "AuthenticationAttested": false,
+      "AuthoritativeObservation": false,
+      "LocalActions": null,
+      "LocalEntryObservation": null,
+      "NativeEffect": "unchanged",
+      "NativeObjects": null,
+      "Policy": "allowed",
+      "UserActions": [
+        "Restart Hermes and review project trust before using installed Skills"
+      ],
       "Verification": "installation_verified"
     }
   },

@@ -26,7 +26,17 @@ localeDisposition: "current-translation"
     <h2>Crear plugins</h2>
     <p>Prepara un paquete estándar con plugin.json, Skills y configuración MCP. Conoce las herramientas de creación disponibles en el código fuente.</p>
   </a>
+  <a class="docs-card" href="./sdk/">
+    <h2>Integrar UAP</h2>
+    <p>Hooks, detección del agente, instalador Go y gestión TypeScript.</p>
+  </a>
 </div>
+
+## Más capacidades de UAP
+
+- Instala en varios agentes, agrega Skills individuales, usa el catálogo firmado, Git/SSH y archivos. [Instalar](./use/install).
+- Separa proyecto y usuario con `uap.toml` / `uap.lock`; actualiza, repara y diagnostica. [Gestionar](./use/manage).
+- Crea paquetes Skills/MCP portables e integra los SDK de Go y TypeScript. [SDK](./sdk/) · [Crear](./build/).
 
 ## Instala tu primer plugin
 
@@ -40,7 +50,7 @@ El CLI pregunta qué agentes compatibles quieres usar. Revisa el plan y completa
 
 ## Qué está disponible
 
-[CLI nativo 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95), publicado el 29 de octubre de 2026, es la versión actual del instalador nativo. Añade una API local de gestión y extensiones nativas de Pi en el ámbito de usuario. Consulta [la gestión local](./use/manage#local-management-api) y [la compatibilidad con Pi](./reference/client-compatibility#pi-native-extensions).
+[CLI nativo](https://github.com/777genius/universal-agent-plugins/releases/latest) es la versión actual del instalador nativo. Añade una API local de gestión, extensiones Pi, Skills y MCP stdio/Streamable HTTP para usuario y proyecto elegible. El catálogo firmado todavía exige una política específica que autorice Pi. Consulta [la gestión local](./use/manage#local-management-api) y [la compatibilidad con Pi](./reference/client-compatibility#pi-native-extensions).
 
 El instalador ofrece selección explícita del ámbito de proyecto y restauración con archivo de bloqueo. La mayoría de los comandos usa por defecto el entorno de usuario. `agentplugins install` sin argumento de origen selecciona el proyecto si existe un `uap.toml` regular en el directorio actual exacto; un ámbito explícito tiene prioridad. Para las operaciones de mantenimiento, selecciona el ámbito de proyecto explícitamente. Comprueba `agentplugins version`: la selección automática requiere 0.1.94. Los canales de los gestores de paquetes pueden actualizarse más tarde; el instalador nativo ofrece la versión actual verificada. Los parámetros explícitos de proyecto están disponibles desde 0.1.93. Consulta [instalación](./use/install) y [mantenimiento](./use/manage).
 

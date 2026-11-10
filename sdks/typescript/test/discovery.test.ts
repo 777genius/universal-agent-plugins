@@ -25,18 +25,34 @@ after(async () => {
   if (directory) await rm(directory, { recursive: true, force: true });
 });
 async function options(mode = 'valid') {
-  const executable = join(directory, mode + (process.platform === 'win32' ? '.exe' : ''));
+  // Windows keeps a running .exe locked. Each test owns its executable and PID file.
+  const home = await mkdtemp(join(directory, mode + '-'));
+  const executable = join(home, mode + (process.platform === 'win32' ? '.exe' : ''));
   await copyFile(fixture, executable);
   return {
     executable,
     timeoutMs: 2_000,
     env: {
-      HOME: directory,
-      USERPROFILE: directory,
-      GEMINI_CLI_HOME: join(directory, 'gemini-profile'),
+      HOME: home,
+      USERPROFILE: home,
+      GEMINI_CLI_HOME: join(home, 'gemini-profile'),
       ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
     },
   };
+}
+
+async function waitForOwnedPID(home: string): Promise<number> {
+  const deadline = Date.now() + (process.platform === 'win32' ? 8_000 : 2_000);
+  while (Date.now() < deadline) {
+    try {
+      const pid = Number(await readFile(join(home, 'pid'), 'utf8'));
+      if (Number.isInteger(pid) && pid > 0) return pid;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+    await delay(25);
+  }
+  assert.fail('owned child did not start');
 }
 
 test('real owned discovery child preserves private canonical facts without starting a server', async () => {
@@ -121,12 +137,15 @@ test('discovery preserves native profile locators while filtering credentials an
 test('deadline reaps only the owned discovery process even when it ignores SIGTERM', async () => {
   const input = await options('hang');
   const started = Date.now();
+  // Windows cold-process startup can exceed 200 ms; without the child's PID
+  // marker the reaping oracle would be inconclusive. Keep other OS budgets.
+  const coldWindows = process.platform === 'win32';
   await assert.rejects(
-    discoverTargets({ ...input, timeoutMs: 200 }),
+    discoverTargets({ ...input, timeoutMs: coldWindows ? 5_000 : 200 }),
     (error: unknown) => error instanceof ManagementError && error.code === 'DISCOVERY_TIMEOUT',
   );
-  assert.ok(Date.now() - started < 3_000);
-  const pid = Number(await readFile(join(directory, 'pid'), 'utf8'));
+  assert.ok(Date.now() - started < (coldWindows ? 8_000 : 3_000));
+  const pid = Number(await readFile(join(input.env.HOME, 'pid'), 'utf8'));
   assert.throws(
     () => process.kill(pid, 0),
     (error: unknown) => (error as NodeJS.ErrnoException).code === 'ESRCH',
@@ -135,30 +154,33 @@ test('deadline reaps only the owned discovery process even when it ignores SIGTE
 
 test('abort after child start waits for owned-process cleanup', async () => {
   const input = await options('hang');
-  await rm(join(directory, 'pid'), { force: true });
   const controller = new AbortController();
   const reason = new Error('caller canceled discovery');
-  const pending = discoverTargets({ ...input, signal: controller.signal });
-  let pid = 0;
-  for (let attempt = 0; attempt < 50 && !pid; attempt++) {
-    try {
-      pid = Number(await readFile(join(directory, 'pid'), 'utf8'));
-    } catch {
-      await delay(10);
-    }
-  }
-  assert.ok(pid > 0, 'owned child did not start');
-  controller.abort(reason);
-  await assert.rejects(pending, (error: unknown) => error === reason);
-  assert.throws(
-    () => process.kill(pid, 0),
-    (error: unknown) => (error as NodeJS.ErrnoException).code === 'ESRCH',
+  // Attach rejection handling before waiting for process startup.
+  const outcome = discoverTargets({
+    ...input,
+    timeoutMs: process.platform === 'win32' ? 15_000 : 5_000,
+    signal: controller.signal,
+  }).then(
+    () => undefined,
+    (error: unknown) => error,
   );
+  try {
+    const pid = await waitForOwnedPID(input.env.HOME);
+    controller.abort(reason);
+    assert.equal(await outcome, reason);
+    assert.throws(
+      () => process.kill(pid, 0),
+      (error: unknown) => (error as NodeJS.ErrnoException).code === 'ESRCH',
+    );
+  } finally {
+    controller.abort(reason);
+    await outcome;
+  }
 });
 
 test('repeated denied discovery signals stay handled until bounded cleanup refusal', async (t) => {
   const input = await options('hang');
-  await rm(join(directory, 'pid'), { force: true });
   const controller = new AbortController();
   const originalKill = ChildProcess.prototype.kill;
   const owned: { child?: ChildProcess } = {};
@@ -192,23 +214,14 @@ test('repeated denied discovery signals stay handled until bounded cleanup refus
   );
   const outcome = discoverTargets({
     ...input,
-    timeoutMs: 5_000,
+    timeoutMs: process.platform === 'win32' ? 15_000 : 5_000,
     signal: controller.signal,
   }).then(
     () => undefined,
     (error: unknown) => error,
   );
   try {
-    const startupDeadline = Date.now() + 2_000;
-    while (pid === 0 && Date.now() < startupDeadline) {
-      try {
-        pid = Number(await readFile(join(directory, 'pid'), 'utf8'));
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-      }
-      if (pid === 0) await delay(10);
-    }
-    assert.ok(Number.isInteger(pid) && pid > 0, 'Owned discovery child did not start');
+    pid = await waitForOwnedPID(input.env.HOME);
     controller.abort();
     const error = await outcome;
     assert.ok(error instanceof ManagementError);

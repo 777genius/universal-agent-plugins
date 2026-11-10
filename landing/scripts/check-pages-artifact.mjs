@@ -27,7 +27,7 @@ export function checkPageSchemaUrls(graphs, route, siteUrl, base) {
     assert.equal(software['@id'], `${root}#software`);
     assert.equal(software.url, root);
     assert.equal(software.publisher?.['@id'], `${root}#organization`);
-    assert.equal(software.screenshot, `${root}og-image.png`);
+    assert.equal(software.screenshot, `${root}og-image.png?v=20261106`);
     if (route.family === 'home') assert.equal(node('FAQPage')['@id'], `${canonical}#faq`);
   }
   if (route.family === 'plugin') {
@@ -90,6 +90,24 @@ async function files(root, prefix = '') {
   ).flat();
 }
 
+// Build a fresh index for each artifact validation. Never cache across mutated fixtures.
+function buildReferenceIndex(routes, fileSet) {
+  return {
+    routePaths: new Set(routes.map((route) => route.path)),
+    namespaces: new Set([
+      'docs',
+      'og-image.png',
+      '_nuxt',
+      'api',
+      'registry',
+      'discovery',
+      'security',
+      ...routes.map((route) => route.path.split('/').filter(Boolean)[0]).filter(Boolean),
+      ...[...fileSet].filter((file) => !file.endsWith('.html')).map((file) => file.split('/')[0]),
+    ]),
+  };
+}
+
 /** Validate references using manifest families and assembled asset/docs namespaces.
  * Sibling sites are path-scoped exceptions, never an origin-wide bypass.
  */
@@ -102,23 +120,14 @@ export async function checkHtmlReferences({
   base,
   siteUrl,
   allowedSiblingSites = [],
+  referenceIndex,
 }) {
   const appBase = normalizeAppBase(base);
   const site = new URL(siteUrl);
   for (const value of allowedSiblingSites) {
     assert(new URL(value).pathname !== '/', `Invalid sibling scope: ${value}`);
   }
-  const namespaces = new Set([
-    'docs',
-    'og-image.png',
-    '_nuxt',
-    'api',
-    'registry',
-    'discovery',
-    'security',
-    ...routes.map((route) => route.path.split('/').filter(Boolean)[0]).filter(Boolean),
-    ...[...fileSet].filter((file) => !file.endsWith('.html')).map((file) => file.split('/')[0]),
-  ]);
+  const { routePaths, namespaces } = referenceIndex ?? buildReferenceIndex(routes, fileSet);
   const owned = (local) =>
     !local ||
     namespaces.has(local.split('/')[0]) ||
@@ -182,7 +191,7 @@ export async function checkHtmlReferences({
       continue;
     }
     let local = pathname.slice(appBase.length);
-    const landingRoute = routes.some((route) => route.path === `/${local.replace(/\/+$/, '')}/`);
+    const landingRoute = routePaths.has(`/${local.replace(/\/+$/, '')}/`);
     if (!asset && landingRoute) assert(pathname.endsWith('/'), `Missing trailing slash in landing reference: ${href}`);
     if (sibling && !owned(local)) continue;
     if (appBase === '/' && !owned(local) && !asset) continue;
@@ -230,12 +239,34 @@ export async function checkPagesArtifact({
   );
   const expanded = expandLocalizedRoutes(routes, locales);
   const artifactFiles = await files(root);
+  // Pages upload must include dotfiles for AI discovery, never arbitrary hidden build data.
+  const allowedHiddenFiles = new Set([
+    '.nojekyll',
+    'docs/.nojekyll',
+    ...['ai-catalog.json', 'ard.json'].flatMap((name) =>
+      ['', '.gz', '.br'].map((suffix) => `.well-known/${name}${suffix}`),
+    ),
+  ]);
+  for (const relative of artifactFiles) {
+    const normalized = relative.split(path.sep).join('/');
+    if (normalized.split('/').some((segment) => segment.startsWith('.'))) {
+      assert(allowedHiddenFiles.has(normalized), `Unexpected hidden Pages artifact file: ${normalized}`);
+    }
+  }
   const fileSet = new Set(artifactFiles);
+  const referenceIndex = buildReferenceIndex(expanded, fileSet);
+  const descriptionOwners = new Map(registry.plugins.map((plugin) => [plugin.description, plugin.name]));
+  const seoByCanonical = new Map();
   const requireFile = (relative) =>
     assert(fileSet.has(relative), `Missing final artifact file: ${relative}`);
   requireFile('.nojekyll');
   requireFile('404.html');
   requireFile('robots.txt');
+  requireFile('og-image.png');
+  const social = await read('og-image.png');
+  assert(social.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])), 'Social preview must be PNG');
+  assert.equal(social.readUInt32BE(16), 1200, 'Social preview width');
+  assert.equal(social.readUInt32BE(20), 630, 'Social preview height');
   requireFile('llms.txt');
   requireFile('.well-known/ai-catalog.json');
   requireFile('.well-known/ard.json');
@@ -248,7 +279,26 @@ export async function checkPagesArtifact({
     assert(!('data' in entry), 'Referenced catalog entries must not also inline data');
     assert.equal(new URL(entry.url).origin, new URL(siteUrl).origin);
   }
-  assert((await read('llms.txt')).toString().startsWith('# Universal Agent Plugins\n'));
+  const llmsIndex = (await read('llms.txt')).toString();
+  assert(llmsIndex.startsWith('# Universal Agent Plugins\n'), 'Missing UAP AI index');
+  for (const phrase of [
+    'independent SKILL.md Skills',
+    'initial HTML shows the reviewed',
+    'HTML-only crawlers do not see those additional records',
+    'Go Installer/Hooks and TypeScript Management SDKs',
+    'docs/PRODUCT_CAPABILITIES.md',
+  ]) {
+    assert(llmsIndex.includes(phrase), `Missing product evidence in llms.txt: ${phrase}`);
+  }
+  const rootUrl = productRootUrl(siteUrl, base);
+  for (const [label, relative] of [
+    ['Standalone Agent Skills', 'agent-skills/'],
+    ['Browse standalone Skills', 'plugins/?tab=skills'],
+  ]) {
+    const entry = catalog.entries.find((item) => item.displayName === label);
+    assert(entry, `Missing discovery resource: ${label}`);
+    assert.equal(entry.url, new URL(relative, rootUrl).href);
+  }
   requireFile('docs/index.html');
   requireFile('docs/sitemap.xml');
   // Compare every byte of both assembled inputs, including signed metadata/icons and docs aliases.
@@ -299,17 +349,18 @@ export async function checkPagesArtifact({
       projectRegistry(registry, projection).plugins.map((plugin) => plugin.description),
     );
     const strings = new Set(payload.filter((value) => typeof value === 'string'));
-    for (const plugin of registry.plugins) {
-      if (!allowedDescriptions.has(plugin.description))
-        assert(
-          !strings.has(plugin.description),
-          `Unrelated registry description in ${payloadPath}: ${plugin.name}`,
-        );
+    for (const description of strings) {
+      if (descriptionOwners.has(description) && !allowedDescriptions.has(description))
+        assert.fail(`Unrelated registry description in ${payloadPath}: ${descriptionOwners.get(description)}`);
     }
     if (route.family === 'download')
       assert(!payloadText.includes('registry-page:'), 'Download must not initialize registry');
     assert.equal(tags(html, 'html')[0]?.lang, route.locale, `HTML lang: ${relative}`);
     const seo = pageRouteSeo(route.path, routes, siteUrl, base, locales);
+    if (seo.canonical) {
+      assert(!seoByCanonical.has(seo.canonical), `Duplicate canonical: ${seo.canonical}`);
+      seoByCanonical.set(seo.canonical, seo);
+    }
     const links = tags(html, 'link');
     assert.deepEqual(
       links.filter((link) => link.rel === 'canonical').map((link) => link.href),
@@ -368,6 +419,7 @@ export async function checkPagesArtifact({
       base,
       siteUrl,
       allowedSiblingSites,
+      referenceIndex,
     });
   }
 
@@ -378,10 +430,9 @@ export async function checkPagesArtifact({
   );
   for (const entry of [...sitemap.matchAll(/<url>([\s\S]*?)<\/url>/g)]) {
     const loc = decode(entry[1].match(/<loc>([^<]+)<\/loc>/)[1]);
-    const route = expanded.find(
-      (route) => pageRouteSeo(route.path, routes, siteUrl, base, locales).canonical === loc,
-    );
-    const expected = pageRouteSeo(route.path, routes, siteUrl, base, locales).alternates;
+    const seo = seoByCanonical.get(loc);
+    assert(seo, `Unknown sitemap canonical: ${loc}`);
+    const expected = seo.alternates;
     assert.deepEqual(
       tags(entry[1], 'xhtml:link').map(({ hreflang, href }) => ({ hreflang, href })),
       expected,

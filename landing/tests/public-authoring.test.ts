@@ -32,7 +32,7 @@ test('all authoring messages compile and distinguish installer, source tools and
     }
     assert.ok(rendered.versions.includes('universal-agent-plugins'), locale);
     assert.ok(rendered.versions.includes('agentplugins-v*'), locale);
-    for (const fact of ['0.1.95', 'agentplugins author', '0.1.65'])
+    for (const fact of ['GitHub Releases', 'agentplugins author', '0.1.65'])
       assert.ok(rendered.releaseScope.includes(fact), `${locale}:${fact}`);
     assert.doesNotMatch(rendered.releaseScope, /E2E|production-ready/i, locale);
     assert.doesNotMatch(rendered.releaseScope, /plugin-kit-ai|PyPI|pipx/i, locale);
@@ -58,7 +58,8 @@ test('the authoring front door renders Use/Build and preserves its indexing poli
     assert.ok(copy.standard.includes('plugin.json'));
     assert.doesNotMatch(copy.releaseScope, /plugin-kit-ai|PyPI|pipx|1\.2\.4/i);
     assert.ok(copy.versions.includes('agentplugins-v*'));
-    assert.ok(copy.versions.includes('0.1.95'));
+    assert.ok(copy.versions.includes('GitHub Releases'));
+    assert.doesNotMatch(copy.versions, /CLI 0\.1\.95/);
     assert.ok(copy.releaseScope.includes('0.1.65'));
     assert.ok(copy.releaseScope.includes('agentplugins author'));
     assert.equal(Object.hasOwn(copy, 'history'), false);
@@ -100,7 +101,7 @@ test('quickstarts use released installer commands and link source authoring sepa
     assert.ok(text.includes('canonicalId: "page:guide:quickstart"'));
     assert.match(publishedText, /^description: .*Agent Plugins 1\.0.*$/m);
     assert.doesNotMatch(publishedText, /^description: .*plugin-kit-ai.*$/m);
-    for (const fact of ['universal-agent-plugins', 'agentplugins-v0.1.95', '0.1.94', 'agentplugins author'])
+    for (const fact of ['universal-agent-plugins', 'releases/latest', '0.1.94', 'agentplugins author'])
       assert.ok(publishedText.includes(fact), `${locale}:${fact}`);
     assert.ok(publishedText.includes('../build/#build-from-source'), locale);
     assert.doesNotMatch(publishedText, /plugin-kit-ai|PyPI|pipx|historical-v1/i);
@@ -127,7 +128,7 @@ test('quickstarts use released installer commands and link source authoring sepa
   }
 });
 
-test('project examples require pinned complete sources, not user-only Directory v1 aliases', () => {
+test('project examples preserve full-SHA reproducibility and released signed Directory alternatives', () => {
   const paths = [
     'README.md',
     'npm/agentplugins/README.md',
@@ -142,11 +143,25 @@ test('project examples require pinned complete sources, not user-only Directory 
     const projectBlocks = chunks.filter((chunk) =>
       (chunk.startsWith('sh\n') || chunk.startsWith('bash\n')) && chunk.includes('--scope project'));
     assert.ok(projectBlocks.length, path + ': missing project command');
-    assert.ok(projectBlocks.some((chunk) =>
-      chunk.includes('github:777genius/universal-agent-plugins@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/gitlab')),
-      path + ': missing exact pinned project source');
-    for (const chunk of projectBlocks) {
-      assert.ok(!chunk.includes('add context7'), path + ': user-only alias offered for project');
+    if (path === 'README.md') {
+      assert.ok(source.includes('**Alternative: exact Git source.**'),
+        'README must distinguish the reviewed immutable Git alternative');
+      assert.ok(source.includes('full 40-character commit SHA'),
+        'README template must require an immutable commit');
+      assert.ok(source.includes('In the published stable CLI:'),
+        'README must identify released signed Project short-name capability');
+      assert.doesNotMatch(source, /Published CLI 0\.1\.95|predates PR #725/);
+      assert.ok(projectBlocks.some((chunk) =>
+        chunk.includes('github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH')),
+        'README must show the released full-SHA fallback');
+      assert.equal(projectBlocks.filter((chunk) => chunk.includes('add context7')).length, 1,
+        'README must show exactly one supported Project alias example');
+    } else {
+      assert.ok(projectBlocks.some((chunk) =>
+        chunk.includes('github:777genius/universal-agent-plugins@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/gitlab')),
+        path + ': missing released pinned project source');
+      assert.match(source, /(?:agentplugins|universal-agent-plugins) add context7 --target codex --scope project(?: --project-root \/path\/to\/project)? --dry-run/,
+        path + ': missing released signed Directory Project example');
     }
   }
 });
@@ -156,17 +171,14 @@ test('README retains the available installer and canonical client limitations', 
   assert.ok(text.includes('## Use plugins'));
   assert.ok(text.includes('## Build plugins'));
   assert.ok(text.includes('### Quick start'));
-  assert.ok(text.includes('[Build plugins](#build-plugins)'));
+  assert.match(text, /\[(?:Build plugins|Build a plugin)\]\(#build-plugins\)/);
   // The public entry uses the nine-language gateway, not a forced English locale.
+  assert.match(text, /\[(?:Read the documentation|Documentation)\]\(https:\/\/universal-agent-plugins\.com\/docs\/\)/);
+  assert.match(text, /(?:\[Native Agent Plugins releases\]|Native installer \[releases\])\(https:\/\/github\.com\/777genius\/universal-agent-plugins\/releases\)/);
   assert.ok(
-    text.includes(
-      '[Read the documentation](https://universal-agent-plugins.com/docs/)',
-    ),
-  );
-  assert.ok(text.includes('Native Agent Plugins releases'));
-  assert.match(
-    text,
-    /(?:^|\n)[^\n]*\b[Ii]nstall\b[^\n]*\blatest\b[^\n]*Node\.js 22\+[^\n]*:\n\n```bash\nnpm install (?:--global|-g) universal-agent-plugins\n```/,
+    /(?:^|\n)[^\n]*\b[Ii]nstall\b[^\n]*\blatest\b[^\n]*Node\.js 22\+[^\n]*:\n\n```bash\nnpm install (?:--global|-g) universal-agent-plugins\n```/.test(text) ||
+    /\*\*npm — Node\.js 22\+:\*\*\n\n```bash\nnpm install (?:--global|-g) universal-agent-plugins\nagentplugins add context7\n```/.test(text),
+    'README must document the unpinned npm CLI install on Node.js 22+',
   );
   assert.doesNotMatch(text, /npm install (?:--global|-g) universal-agent-plugins@\d+\.\d+\.\d+/);
   assert.doesNotMatch(
@@ -177,9 +189,14 @@ test('README retains the available installer and canonical client limitations', 
     text,
     /Availability is unverified|candidate commands are not current installation advice/,
   );
-  assert.ok(text.includes('For Codex, declared MCP SSE is unsupported'));
+  assert.ok(
+    text.includes('For Codex, declared MCP SSE is unsupported') ||
+    text.includes('Codex supports stdio and Streamable HTTP MCP, but excludes SSE components'),
+    'README must state that Codex excludes SSE MCP',
+  );
   assert.ok(text.includes('docs/CODEX_TRANSPORT_EVIDENCE.md'));
-  assert.ok(text.includes('[Go SDK integration guide](sdk/README.md)'));
+  assert.match(text, /\[(?:Go SDK integration guide|Go SDK)\]\(sdk\/README\.md\)/);
+  assert.ok(text.includes('[SDK integration guides](https://universal-agent-plugins.com/docs/en/sdk/)'));
   assert.ok(existsSync(fileURLToPath(new URL('sdk/README.md', root))));
   const showcase = read('landing/components/sections/BuiltWithSection.vue');
   assert.ok(showcase.includes('https://github.com/777genius/universal-agent-plugins/blob/main/sdk/README.md'));

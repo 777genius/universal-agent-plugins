@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { setSignedMirrorTestTime } from './i18n-state.helpers';
+import { setSignedMirrorTestTime, targets } from './i18n-state.helpers';
 
 test.beforeEach(async ({ page }) => setSignedMirrorTestTime(page));
 
@@ -34,6 +34,8 @@ test('catalog groups duplicate sources and tolerates a small typo', async ({ pag
 test('catalog URL preserves filters through detail navigation and Reset appears only for active filters', async ({
   page,
 }) => {
+  // The filter, detail, history, and reset journey needs more than 30s on shared CI.
+  test.setTimeout(60_000);
   await page.goto('./plugins/');
   await waitForDiscovery(page);
   const search = page.getByRole('searchbox', { name: 'Search plugins' });
@@ -77,4 +79,22 @@ test('community source labels link to the exact GitHub source', async ({ page })
   await expect(page.locator('.app-tooltip')).toContainText(
     "GitHub repository's star count, not a rating for this individual plugin",
   );
+});
+
+test('reviewed Context7 picker copies the native-qualified Codex and Claude install command', async ({ page }) => {
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.goto('./plugins/');
+  await waitForDiscovery(page);
+  await page.getByRole('searchbox', { name: 'Search plugins' }).fill('context7');
+  const card = page.locator('.plugin-card[data-install-source="context7"]');
+  await expect(card).toHaveCount(1);
+  await card.locator('.plugin-card__install-toggle').click();
+
+  // The actual browser picker must agree with the public CLI command
+  // exercised by the pinned real-client Directory integration test.
+  await targets(page, card, ['Codex', 'Claude Code']);
+  const command = 'npx -y universal-agent-plugins add context7 --target codex,claude';
+  await expect(card.locator('.plugin-card__install .command-snippet--add code')).toHaveText(command);
+  await card.locator('.plugin-card__install .command-snippet--add button').click();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(command);
 });

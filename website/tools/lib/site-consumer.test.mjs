@@ -44,11 +44,12 @@ test("production publication requires released metadata and maintained locale ro
   assert.throws(() => requirePublicationBoundary([], { DOCS_PREPARATION_PREVIEW: "true" }), /non-empty/);
 });
 
-test("all nine navigations expose real Use and Build journeys with truthful English fallback", async () => {
+test("all nine navigations expose real Use, Build and SDK journeys with truthful English fallback", async () => {
   const released = sourceEntities.filter((entry) => entry.status === "released");
   const requiredJourneys = ["use:index", "use:install", "use:manage", "build:index", "build:skill",
     "build:mcp-remote", "build:mcp-stdio", "build:hybrid", "build:skills", "build:layout",
-    "build:checks", "build:handoff"];
+    "build:checks", "build:handoff", "sdk:index", "sdk:go-hooks", "sdk:host-detection",
+    "sdk:go-installer", "sdk:typescript-management"];
   for (const id of requiredJourneys) assert.ok(released.some(entry => entry.canonicalId === `page:${id}`), id);
   for (const entry of released) {
     assert.equal(entry.released, true);
@@ -63,12 +64,13 @@ test("all nine navigations expose real Use and Build journeys with truthful Engl
     }
   }
   for (const locale of docsLocales) {
-    assert.deepEqual(journeyNav(locale).map((entry) => entry.link), [`/${locale}/use/`, `/${locale}/build/`]);
+    assert.deepEqual(journeyNav(locale).map((entry) => entry.link), [`/${locale}/use/`, `/${locale}/build/`, `/${locale}/sdk/`]);
     const sidebar = buildSidebar(locale, sourceEntities);
     assert.equal(sidebar[`/${locale}/use/`][0].text, journeyLabels[locale][0]);
     assert.equal(sidebar[`/${locale}/build/`][1].text, journeyLabels[locale][1]);
+    assert.equal(sidebar[`/${locale}/sdk/`][2].text, "SDK");
     if (locale !== "en") assert.equal(sidebar[`/${locale}/use/`][0].items[0].text, journeyPageLabels[locale]["page:use:index"]);
-    const links = flattenLinks({ use: sidebar[`/${locale}/use/`], build: sidebar[`/${locale}/build/`] });
+    const links = flattenLinks({ use: sidebar[`/${locale}/use/`], build: sidebar[`/${locale}/build/`], sdk: sidebar[`/${locale}/sdk/`] });
     for (const entry of released.filter(entry => requiredJourneys.includes(entry.canonicalId.slice("page:".length))))
       assert.ok(links.includes(entityPath(entry, locale)), entry.canonicalId);
     for (const link of flattenLinks(sidebar)) assert.equal(isRetiredArchive(link), false, link);
@@ -188,7 +190,7 @@ test("actual accepted adapter envelope preserves all commands/flags/provenance a
     assert.match(page.content, /Released Agent Plugins CLI reference/);
     assert.match(page.content, /::: warning Versioned authoring reference: CLI 0\.1\.65/);
     assert.match(page.content, /immutable `agentplugins-v0\.1\.65` source/);
-    assert.match(page.content, /current native installer, CLI 0\.1\.95, does not include `agentplugins author`/);
+    assert.match(page.content, /current stable native installer\]\(https:\/\/github\.com\/777genius\/universal-agent-plugins\/releases\/latest\) does not include `agentplugins author`/);
     assert.match(page.content, /current source-build setup[\s\S]*\[Build guide\]\(\/en\/build\/\)/);
     assert.match(page.content, /does not describe current-source runtime or development commands/);
     assert.doesNotMatch(page.content, /Milestone A/);

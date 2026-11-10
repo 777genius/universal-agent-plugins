@@ -41,7 +41,7 @@ function packagedDocuments() {
 }
 
 const allowedTargets = new Set([
-  "codex", "chatgpt", "cursor", "copilot", "vscode", "kiro",
+  "codex", "chatgpt", "chatgptweb", "cursor", "copilot", "vscode", "kiro",
   "claude", "gemini", "opencode", "cline", "windsurf"
 ]);
 const exactSourcePattern = /^(?:github:)?[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9][A-Za-z0-9._-]*@[0-9a-f]{40}\/\/[A-Za-z0-9._/-]+$/;
@@ -113,7 +113,11 @@ test("root documentation recommends the native Go installer without hiding npm",
     return;
   }
   const markdown = fs.readFileSync(documents[0][1], "utf8");
-  assert.match(markdown, /The native CLI does not require Node\.js/i);
+  const prose = markdown.replace(/\s+/g, " ");
+  assert.match(
+    prose,
+    /(?:The native CLI does not require Node\.js|Only npm requires Node\.js; Homebrew and the native scripts do not)/i
+  );
   assert.match(markdown, /brew install 777genius\/agentplugins\/agentplugins/);
   assert.match(
     markdown,

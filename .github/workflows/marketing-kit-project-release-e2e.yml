@@ -1,0 +1,111 @@
+name: Published Marketing Kit Project E2E
+
+on:
+  pull_request:
+    paths:
+      - 'landing/**'
+      - 'scripts/marketing-kit-project-release-e2e.py'
+      - '.github/workflows/marketing-kit-project-release-e2e.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: published-marketing-project-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  marketing-kit-project:
+    name: npm 0.1.102 / ${{ matrix.target }} / real Project lifecycle
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - { target: codex, package: '@openai/codex@0.153.4' }
+          # Marketing Kit signed v1 also supports Cursor. Use the independently
+          # SHA-pinned official Cursor Agent package (not mutable install scripts).
+          - { target: cursor, package: '' }
+          - { target: claude, package: '@anthropic-ai/claude-code@2.1.263' }
+          - { target: gemini, package: '@google/gemini-cli@0.66.0' }
+          - { target: opencode, package: 'opencode-ai@1.18.34' }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Install real released UAP and native client
+        env:
+          NATIVE_PACKAGE: ${{ matrix.package }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          npm install --global universal-agent-plugins@0.1.102
+          if [[ "$TARGET" == cursor ]]; then
+            curl --fail --show-error --silent --location --retry 2 \
+              'https://downloads.cursor.com/lab/2026.10.22-27dcf5f/linux/x64/agent-cli-package.tar.gz' \
+              --output "$RUNNER_TEMP/cursor-agent.tar.gz"
+            # Reviewed official Homebrew Cask pin, reused from the repository's
+            # existing live-install-remaining-clients.yml (Cursor skill lane).
+            echo "85296944e4600a83c4b764f578d1502bf9c416db200d33a593e8f3ecabfdc294  $RUNNER_TEMP/cursor-agent.tar.gz" | sha256sum --check -
+            mkdir -p "$RUNNER_TEMP/cursor-agent-package" "$RUNNER_TEMP/cursor-bin"
+            python3 - "$RUNNER_TEMP/cursor-agent.tar.gz" "$RUNNER_TEMP/cursor-agent-package" <<'PY'
+          import sys
+          import tarfile
+          with tarfile.open(sys.argv[1], 'r:gz') as archive:
+              archive.extractall(path=sys.argv[2], filter='data')
+          PY
+            executable="$RUNNER_TEMP/cursor-agent-package/dist-package/cursor-agent"
+            test -f "$executable" && test -x "$executable" && test ! -L "$executable"
+            ln -s "$executable" "$RUNNER_TEMP/cursor-bin/cursor-agent"
+            echo "$RUNNER_TEMP/cursor-bin" >> "$GITHUB_PATH"
+            "$executable" --version
+          else
+            npm install --global "$NATIVE_PACKAGE"
+          fi
+          test "$(agentplugins version)" = 'agentplugins 0.1.102'
+      - name: Verify published ChatGPT target safety fences
+        if: matrix.target == 'codex'
+        run: |
+          set -euo pipefail
+          root="$(mktemp -d)"
+          trap 'rm -rf "$root"' EXIT
+          mkdir -p "$root/package" "$root/project" "$root/home" "$root/codex"
+          printf '%s\n' '{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"chatgpt-target-proof","version":"1.0.0"}' > "$root/package/plugin.json"
+          export AGENTPLUGINS_HOME="$root/home" CODEX_HOME="$root/codex"
+          cd "$root/project"
+          refuse_without_effects() {
+            local expected="$1"
+            shift
+            local status=0 output
+            output="$(agentplugins "$@" 2>&1)" || status=$?
+            if [[ "$status" -eq 0 || "$output" != *"$expected"* ]]; then
+              printf '%s\n' "Unexpected public CLI target result (exit=$status): $output" >&2
+              exit 1
+            fi
+            test ! -e "$AGENTPLUGINS_HOME/state-v2.json"
+          }
+          # Both scope refusals must occur before source acquisition or state mutation.
+          refuse_without_effects "only --scope user" add "$root/package" --no-save --target chatgpt --scope project --format json
+          refuse_without_effects "does not support project scope" add "$root/package" --no-save --target chatgptweb --scope project --format json
+          # Codex CLI and ChatGPT Desktop share one canonical backend, never two.
+          refuse_without_effects "duplicate" add "$root/package" --no-save --target codex,chatgpt --scope user --format json
+      - name: Exercise actual signed Marketing Kit and three mandatory dependencies
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          python3 scripts/marketing-kit-project-release-e2e.py             --target "$TARGET" --cli "$(command -v agentplugins)"             --report "$RUNNER_TEMP/marketing-kit-project/report.json"
+      - name: Preserve factual outcomes including failures
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: marketing-kit-0.1.102-${{ matrix.target }}
+          path: ${{ runner.temp }}/marketing-kit-project/
+          if-no-files-found: warn
+          retention-days: 14

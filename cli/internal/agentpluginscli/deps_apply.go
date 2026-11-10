@@ -18,16 +18,17 @@ import (
 )
 
 type dependencySyncRequest struct {
-	requirements environment.Requirements
-	lock         environment.Lock
-	intent       environmentapp.Intent
-	prepared     []dependencyAction
-	detected     map[domain.ClientID]domain.DetectedClient
-	consent      map[string]bool
-	aliases      []string
-	targets      []string
-	attestation  *environment.Attestation
-	repairOnly   bool
+	requirements      environment.Requirements
+	lock              environment.Lock
+	intent            environmentapp.Intent
+	prepared          []dependencyAction
+	detected          map[domain.ClientID]domain.DetectedClient
+	consent           map[string]bool
+	aliases           []string
+	targets           []string
+	attestation       *environment.Attestation
+	repairOnly        bool
+	policyFingerprint string
 }
 
 func dependencyActions(view installer.Inspection, requirements environment.Requirements, lock environment.Lock, environmentIDs ...string) ([]dependencyAction, error) {
@@ -68,6 +69,13 @@ func runDependencySyncConverge(cmd *cobra.Command, app App, opts *options, locke
 	if err != nil {
 		return err
 	}
+	// The opt-in gate runs after complete lock resolution and before
+	// convergence repairs or any managed client mutation.
+	policyFingerprint, err := evaluateLocalDependencyPolicy(cmd.Context(), app, opts.dependencyPolicyFile, request.lock)
+	if err != nil {
+		return err
+	}
+	request.policyFingerprint = policyFingerprint
 	if converge != nil {
 		proceed, convergeErr := converge(app)
 		if convergeErr != nil || !proceed {
@@ -124,7 +132,7 @@ func runDependencySyncApply(cmd *cobra.Command, app App, opts *options, request 
 
 func renderDependencySync(cmd *cobra.Command, opts *options, actions []dependencyAction, dryRun bool) error {
 	if opts.format == "json" {
-		data := map[string]any{"actions": dependencyActionOutput(actions, opts.dependencyComponents), "dry_run": dryRun}
+		data := map[string]any{"schema_version": outputSchemaVersion, "command": cmd.CommandPath(), "result": outputResultSuccess, "actions": dependencyActionOutput(actions, opts.dependencyComponents), "dry_run": dryRun, "scope": opts.scope, "scope_selection_reason": scopeSelectionReason(cmd, opts)}
 		if opts.installSelection != nil {
 			data["selection"] = opts.installSelection
 		}
@@ -180,7 +188,16 @@ func applyDependencySync(cmd *cobra.Command, app App, opts *options, request dep
 		if err := request.checkInputs(); err != nil {
 			return err
 		}
-		var err error
+		// User confirmation may be long-lived. Re-read explicit policy at the
+		// final pre-write boundary, after input revalidation. A stale allowance
+		// must not authorize a different policy observed during actual apply.
+		observedPolicy, err := evaluateLocalDependencyPolicy(ctx, app, opts.dependencyPolicyFile, request.lock)
+		if err != nil {
+			return err
+		}
+		if observedPolicy != request.policyFingerprint {
+			return fmt.Errorf("local dependency policy changed after confirmation: %w", installer.ErrPlanChanged)
+		}
 		actions, err = request.recheck(cmd, app, opts)
 		if err == nil && !reflect.DeepEqual(actions, prepared) {
 			return installer.ErrPlanChanged

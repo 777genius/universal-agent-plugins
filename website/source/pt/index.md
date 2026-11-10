@@ -27,7 +27,17 @@ translationRequired: true
     <h2>Criar plugins</h2>
     <p>Escreva um pacote padrão com plugin.json, Skills e configuração MCP. Explore as ferramentas de criação disponíveis em compilações do código-fonte.</p>
   </a>
+  <a class="docs-card" href="./sdk/">
+    <h2>Integrar UAP</h2>
+    <p>Hooks, detecção do agente, instalador Go e gerenciamento TypeScript.</p>
+  </a>
 </div>
+
+## Outros recursos do UAP
+
+- Instale em vários agentes, adicione Skills avulsas, use o catálogo assinado, Git/SSH e arquivos. [Instalar](./use/install).
+- Separe projeto e usuário com `uap.toml` / `uap.lock`; atualize, repare e diagnostique. [Gerenciar](./use/manage).
+- Crie pacotes Skills/MCP portáteis e integre os SDKs Go e TypeScript. [SDK](./sdk/) · [Criar](./build/).
 
 ## Instale seu primeiro plugin {#install-your-first-plugin}
 
@@ -44,10 +54,9 @@ para macOS, Linux ou Windows; o gerenciador nativo em si não exige Node.js.
 
 ## O que está disponível {#what-is-available}
 
-A [CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95)
-é a versão atual do instalador nativo, publicada em 29 de outubro de 2026.
-Ela adiciona uma API local de gerenciamento e extensões nativas do Pi no escopo
-de usuário. Consulte [gerenciamento local](./use/manage#local-management-api) e
+A [CLI](https://github.com/777genius/universal-agent-plugins/releases/latest)
+é a versão atual do instalador nativo.
+Ela adiciona uma API local de gerenciamento e extensões nativas do Pi nos escopos de usuário e de projeto elegível. Consulte [gerenciamento local](./use/manage#local-management-api) e
 [compatibilidade com o Pi](./reference/client-compatibility#pi-native-extensions).
 
 O instalador oferece escopo de projeto explícito e restauração com versões

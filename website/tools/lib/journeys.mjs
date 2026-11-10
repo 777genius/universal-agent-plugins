@@ -1,7 +1,7 @@
 import { docsLocales, localePathField } from "../config/locales.mjs";
 export { docsLocales, localePathField };
 export const entityPath = (entry, locale) => entry[localePathField(locale)] || entry.pathEn || "";
-export const isCurrentJourney = (relative) => /^(use|build)\//.test(relative);
+export const isCurrentJourney = (relative) => /^(use|build|sdk)\//.test(relative);
 
 export const journeyLabels = {
   uk: ["Використовувати плагіни", "Створювати плагіни", "Англійською"],
@@ -36,7 +36,10 @@ export const journeyLabels = {
 };
 
 export function journeyNav(locale) {
-  return ["use", "build"].map((section, index) => ({ text: journeyLabels[locale][index], link: `/${locale}/${section}/` }));
+  return [
+    ...["use", "build"].map((section, index) => ({ text: journeyLabels[locale][index], link: `/${locale}/${section}/` })),
+    { text: "SDK", link: `/${locale}/sdk/` }
+  ];
 }
 
 export const journeyPageLabels = {
@@ -160,15 +163,82 @@ const referenceLabels = {
   fr: "référence 0.1.65", zh: "0.1.65 版本参考"
 };
 
+const sdkPageLabels = {
+  "en": {
+    "page:sdk:index": "Overview",
+    "page:sdk:go-hooks": "Go Hooks",
+    "page:sdk:host-detection": "Agent detection",
+    "page:sdk:go-installer": "Go Installer",
+    "page:sdk:typescript-management": "TypeScript Management"
+  },
+  "ru": {
+    "page:sdk:index": "Обзор",
+    "page:sdk:go-hooks": "Go Hooks",
+    "page:sdk:host-detection": "Определение агента",
+    "page:sdk:go-installer": "Go Installer",
+    "page:sdk:typescript-management": "TypeScript Management"
+  },
+  "uk": {
+    "page:sdk:index": "Огляд",
+    "page:sdk:go-hooks": "Go Hooks",
+    "page:sdk:host-detection": "Визначення агента",
+    "page:sdk:go-installer": "Go Installer",
+    "page:sdk:typescript-management": "TypeScript Management"
+  },
+  "es": {
+    "page:sdk:index": "Resumen",
+    "page:sdk:go-hooks": "Go Hooks",
+    "page:sdk:host-detection": "Detección del agente",
+    "page:sdk:go-installer": "Go Installer",
+    "page:sdk:typescript-management": "TypeScript Management"
+  },
+  "fr": {
+    "page:sdk:index": "Présentation",
+    "page:sdk:go-hooks": "Go Hooks",
+    "page:sdk:host-detection": "Détection de l'agent",
+    "page:sdk:go-installer": "Go Installer",
+    "page:sdk:typescript-management": "TypeScript Management"
+  },
+  "pt": {
+    "page:sdk:index": "Visão geral",
+    "page:sdk:go-hooks": "Go Hooks",
+    "page:sdk:host-detection": "Detecção do agente",
+    "page:sdk:go-installer": "Go Installer",
+    "page:sdk:typescript-management": "TypeScript Management"
+  },
+  "zh": {
+    "page:sdk:index": "概览",
+    "page:sdk:go-hooks": "Go Hooks",
+    "page:sdk:host-detection": "主机识别",
+    "page:sdk:go-installer": "Go Installer",
+    "page:sdk:typescript-management": "TypeScript Management"
+  },
+  "hi": {
+    "page:sdk:index": "अवलोकन",
+    "page:sdk:go-hooks": "Go Hooks",
+    "page:sdk:host-detection": "एजेंट की पहचान",
+    "page:sdk:go-installer": "Go Installer",
+    "page:sdk:typescript-management": "TypeScript Management"
+  },
+  "ar": {
+    "page:sdk:index": "نظرة عامة",
+    "page:sdk:go-hooks": "Go Hooks",
+    "page:sdk:host-detection": "اكتشاف العميل",
+    "page:sdk:go-installer": "Go Installer",
+    "page:sdk:typescript-management": "TypeScript Management"
+  }
+};
+
 export function journeySidebar(locale, entities) {
   const groups = [
     [journeyLabels[locale][0], "use", ["index", "install", "manage"]],
-    [journeyLabels[locale][1], "build", ["index", "skill", "mcp-remote", "mcp-stdio", "hybrid", "skills", "layout", "checks", "handoff"]]
+    [journeyLabels[locale][1], "build", ["index", "skill", "mcp-remote", "mcp-stdio", "hybrid", "skills", "layout", "checks", "handoff"]],
+    ["SDK", "sdk", ["index", "go-hooks", "host-detection", "go-installer", "typescript-management"]]
   ].map(([text, section, pages]) => ({ text, items: pages.map((page) => {
     const id = `page:${section}:${page}`;
     const entity = entities.find((entry) => entry.canonicalId === id);
     if (!entity?.pathEn) throw new Error(`Missing journey source: ${id}`);
-    return { text: (journeyPageLabels[locale]?.[id] || entity.title) + (locale === "en" || entity[localePathField(locale)] ? "" : ` (${journeyLabels[locale][2]})`),
+    return { text: (journeyPageLabels[locale]?.[id] || sdkPageLabels[locale]?.[id] || entity.title) + (locale === "en" || entity[localePathField(locale)] ? "" : ` (${journeyLabels[locale][2]})`),
       link: entityPath(entity, locale) };
   }) }));
   groups.push(...["agentplugins author"].map((surface) => ({

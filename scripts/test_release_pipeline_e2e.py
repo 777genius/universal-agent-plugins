@@ -344,7 +344,7 @@ pathlib.Path(os.environ['PUBLISH_HASH']).write_text(hashlib.sha256(pathlib.Path(
         success = [{'name': name, 'status': 'completed', 'conclusion': 'success'} for name in names]
         self.add(pulls_endpoint, pulls, ['-H', 'Accept: application/vnd.github+json'])
         self.add(pr_endpoint, [{'check_runs': success}], ['--paginate', '--slurp'])
-        gate = shell_step('agentplugins-release.yml', 'Verify merged PR and required commit evidence')
+        gate = shell_step('agentplugins-release.yml', 'Verify required commit evidence')
         env = {**self.env, 'COMMIT': self.commit, 'GITHUB_REPOSITORY': REPOSITORY}
         for merge_checks in ([], [{**check, 'conclusion': 'cancelled'} for check in success]):
             with self.subTest(merge_checks='absent' if not merge_checks else 'cancelled'):
@@ -362,13 +362,17 @@ pathlib.Path(os.environ['PUBLISH_HASH']).write_text(hashlib.sha256(pathlib.Path(
             self.assertIn('required successful check is missing on merge commit and PR head: govulncheck (sdk)',
                           result.stderr.decode())
         self.add(pr_endpoint, [{'check_runs': success}], ['--paginate', '--slurp'])
-        for invalid in ([], [{**pulls[0], 'merged_at': None}],
-                        [{**pulls[0], 'base': {'ref': 'feature'}}]):
-            self.add(pulls_endpoint, invalid, ['-H', 'Accept: application/vnd.github+json'])
-            self.save()
-            result = self.run_command(['bash', '-e', '-o', 'pipefail', '-c', gate], env=env, check=False)
-            self.assertNotEqual(result.returncode, 0)
-            self.assertIn('release commit must come from a merged pull request into main', result.stderr.decode())
+        # A direct commit is eligible only when every required check succeeded
+        # on that exact commit; no unrelated PR head can supply evidence.
+        self.add(pulls_endpoint, [], ['-H', 'Accept: application/vnd.github+json'])
+        self.add(merge_endpoint, [{'check_runs': success}], ['--paginate', '--slurp'])
+        self.save()
+        self.run_command(['bash', '-e', '-o', 'pipefail', '-c', gate], env=env)
+        self.add(merge_endpoint, [{'check_runs': success[:-1]}], ['--paginate', '--slurp'])
+        self.save()
+        result = self.run_command(['bash', '-e', '-o', 'pipefail', '-c', gate], env=env, check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('required successful check is missing', result.stderr.decode())
         self.add(pulls_endpoint, pulls, ['-H', 'Accept: application/vnd.github+json'])
         self.save()
 

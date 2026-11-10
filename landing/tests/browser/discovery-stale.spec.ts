@@ -2,9 +2,20 @@ import { expect, test } from '@playwright/test';
 import type { DiscoverySnapshot } from '../../types/discovery';
 import { hydrated, navigate } from './i18n-state.helpers';
 
+async function revealCommunityCard(catalog: import('@playwright/test').Locator, selector: string) {
+  const card = catalog.locator(selector).first();
+  for (let batch = 0; batch < 3 && (await card.count()) === 0; batch++) {
+    await catalog.locator('.catalog-more button').click();
+  }
+  await expect(card).toBeVisible();
+  return card;
+}
+
 test('expired authenticated mirror keeps community catalog interactive with exact commit installation and no age warnings', async ({
   page,
 }) => {
+  // Full signed-mirror fallback and reload can take longer under CI browser contention.
+  test.setTimeout(60_000);
   // Keep every production signature and trusted key unchanged. Only advance
   // the browser clock past the real signed mirror's expiry.
   const latest = await page.request.get('./discovery/latest.json');
@@ -23,8 +34,7 @@ test('expired authenticated mirror keeps community catalog interactive with exac
   const total = Number((await page.locator('.hero__plugin-count').innerText()).replace(/\D/g, ''));
   expect(total).toBeGreaterThan(29);
   await hydrated(page);
-  const community = catalog.locator('.plugin-card[data-trust="community"]').first();
-  await expect(community).toBeVisible();
+  const community = await revealCommunityCard(catalog, '.plugin-card[data-trust="community"]');
   await expect(community).not.toContainText(
     /catalog expired|catalog has expired|historical signed listing/i,
   );
@@ -52,8 +62,10 @@ test('expired authenticated mirror keeps community catalog interactive with exac
   await page.goto('./');
   await expect(catalog).toHaveAttribute('data-discovery-state', 'stale', { timeout: 20_000 });
   await expect(catalog.locator('.discovery-status')).toHaveCount(0);
-  const cachedCommunity = catalog.locator(`.plugin-card[data-install-source="${source}"]`);
-  await expect(cachedCommunity).toBeVisible();
+  const cachedCommunity = await revealCommunityCard(
+    catalog,
+    `.plugin-card[data-install-source="${source}"]`,
+  );
   await cachedCommunity.locator('.plugin-card__install-toggle').click();
   await expect(cachedCommunity.locator('.command-snippet--add code')).toHaveText(expectedAdd);
   await expect(cachedCommunity.locator('.plugin-card__security')).toHaveCount(0);

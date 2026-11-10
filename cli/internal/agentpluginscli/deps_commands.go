@@ -25,6 +25,7 @@ func newDepsCommand(app App, opts *options) *cobra.Command {
 	var locked, yes bool
 	command.AddCommand(newDependencyInitCommand(app, opts), newDependencyLockCommand(app, opts, false), newDependencyLockCommand(app, opts, true), newDependencyStatusCommand(app, opts), newDependencySyncCommand(app, opts, &locked, &yes))
 	command.AddCommand(newDependencyTransferCommand(app, opts, "export"), newDependencyTransferCommand(app, opts, "import"), newDependencyTreeCommand(app, opts), newDependencyRecoverCommand(app, opts, &yes))
+	command.AddCommand(newDependencyCheckCommand(app, opts), newDependencySBOMCommand(app, opts))
 	return command
 }
 
@@ -288,15 +289,30 @@ func initializeDependencies(cmd *cobra.Command, app App, opts *options) error {
 }
 
 func validateDependencyTargets(app App, requirements environment.Requirements) error {
+	if err := validateDependencyTargetScopes(app, requirements); err != nil {
+		return err
+	}
 	for target := range requirements.Targets {
-		if app.scope() == domain.ScopeProject && !supportsDependencyTarget(app, target) {
+		if !supportsDependencyTarget(app, target) {
+			return fmt.Errorf("unsupported dependency target %q; supported targets: %v", target, supportedDependencyTargets(app))
+		}
+	}
+	return nil
+}
+
+// Scope qualification is registry policy, independent of installer availability.
+// Read-only integrity inspection needs this policy without installation services.
+func validateDependencyTargetScopes(app App, requirements environment.Requirements) error {
+	for target := range requirements.Targets {
+		supported := installer.ClientScopeSupported(app.ClientRegistry, target, app.scope())
+		if app.scope() == domain.ScopeProject && !supported {
 			return fmt.Errorf("%s does not support project scope", target)
 		}
 		if definition, ok := domain.ClientDefinitionFor(domain.ClientID(target)); ok && (definition.PlansWithoutHostPresence || definition.Traits.RequiresPersonalMappingForPrepare) {
-			return fmt.Errorf("%s is prepared manually and cannot be a saved dependency target; use agentplugins add <source> --target %s (not saved)", definition.DisplayName, target)
+			return fmt.Errorf("%s is prepared manually and cannot be a saved dependency target; use agentplugins add <source> --target %s (not saved)", definition.DisplayName, publicCLITargetName(domain.ClientID(target)))
 		}
-		if !supportsDependencyTarget(app, target) {
-			return fmt.Errorf("unsupported dependency target %q; supported targets: %v", target, supportedDependencyTargets(app))
+		if !supported {
+			return fmt.Errorf("unsupported dependency target %q in %s scope", target, app.scope())
 		}
 	}
 	return nil

@@ -339,12 +339,64 @@
     "specLink": "Agent Plugins 1.0 规范",
     "compatibilityLink": "客户端兼容性（英文）",
     "limitations": "兼容性取决于包。通过模式验证并不证明运行、OAuth 或激活成功。Codex 不支持声明的 MCP SSE；stdio 和 Streamable HTTP 保留现有适配器支持。",
-    "versions": "已验证原生安装器：CLI 0.1.95；npm 包名为 universal-agent-plugins；GitHub 发布标签为 agentplugins-v*。",
+    "versions": "最新稳定版原生安装器：GitHub Releases；npm 包名：universal-agent-plugins；GitHub 发行标签：agentplugins-v*。",
     "availability": "手动编写包，或使用源码创作工具",
-    "releaseScope": "GitHub Releases 提供 CLI 0.1.95，新增本地管理 API 和用户范围的 Pi 原生扩展，其中不包含 agentplugins author。Homebrew 和 npm 的版本可能滞后；请用 agentplugins version 确认。构建指南中的创作命令需要启用创作功能的源码构建。生成的 API 参考保留其历史 0.1.65 来源，不能用于说明当前安装器包含哪些功能。",
+    "releaseScope": "GitHub Releases 提供最新稳定版 CLI，包含本地管理 API 和受支持的 Pi 原生扩展，但不包含 agentplugins author。npm 与 Homebrew 的版本可能滞后；请用 agentplugins version 确认。构建指南中的 author 命令需要支持创作功能的源码构建。生成的 API 参考保留历史 0.1.65 来源，不代表当前安装器的功能。",
     "buildGuideLink": "打开构建指南"
   },
   "shell": {
+    "clientSupport": {
+      "eyebrow": "兼容性",
+      "title": "支持的智能体与安装范围",
+      "description": "用户范围将组件安装到智能体配置文件，项目范围仅安装到指定工作区。UAP 会配置支持的文件。智能体仍可能要求信任项目、登录或重启。",
+      "tableLabel": "智能体安装支持表",
+      "tableCaption": "各智能体的用户和项目支持情况、设置方式及安装后的操作。",
+      "columns": {
+        "agent": "智能体",
+        "user": "用户范围",
+        "project": "项目范围",
+        "setup": "设置方式",
+        "nextStep": "安装后操作"
+      },
+      "scrollHint": "横向滚动以查看所有列。",
+      "note": "自动：UAP 安装受支持的组件。引导：按智能体提示完成操作。已准备：激活准备好的文件。手动：在应用中完成设置。安装不会替您登录或授予信任权限。此表反映当前源码的能力，已发布的 CLI 可能不同。可用性取决于插件及智能体版本。",
+      "details": "查看兼容性详情",
+      "capabilities": {
+        "pluginsSkillsMcp": "插件、技能、MCP",
+        "skillsMcp": "技能、MCP",
+        "pluginsSkillsMcpHooks": "插件、技能、MCP、钩子",
+        "extensionsSkillsMcp": "扩展、技能、MCP",
+        "copilotPackage": "基于 Copilot 的软件包",
+        "desktopLocalPluginsWebConnectedApps": "桌面端本地插件；网页版已连接应用",
+        "personalAppSetup": "个人应用设置",
+        "skillsOnly": "仅技能",
+        "skillsMcpPrepared": "技能、MCP（已准备）",
+        "notSupported": "不支持"
+      },
+      "setup": {
+        "automatic": "自动",
+        "guided": "引导设置",
+        "prepared": "已准备",
+        "manual": "手动"
+      },
+      "nextSteps": {
+        "claude": "信任工作区，并在提示时重新加载 Claude Code。",
+        "codex": "开启新会话；如有提示，请批准项目 MCP 访问权限。",
+        "opencode": "开启新会话并检查项目的实际设置。",
+        "cursor": "重新加载 Cursor；如有要求，请启用插件或 MCP 服务器。",
+        "copilot": "如有提示，请重启 Copilot CLI。",
+        "gemini": "重新加载 Gemini CLI，并按提示批准工具访问。",
+        "qoder": "重启 Qoder 并检查 MCP 权限。",
+        "pi": "信任项目并重新加载 Pi 资源。",
+        "windsurf": "在所选项目中打开或重启 Devin，并检查访问权限。",
+        "kimi": "运行 /reload 或 /new，并检查 MCP 权限。",
+        "cline": "选择项目 MCP 设置路径，然后重新加载 Cline。",
+        "kiro": "登录、批准访问，并在提示时重启 Kiro。",
+        "grok": "在 Grok 中打开所选项目，启用并信任插件，重新加载后验证技能和 MCP。",
+        "vscode": "打开并信任文件夹；检查并启用 MCP 服务器。",
+        "chatgpt": "桌面端：通过 Codex CLI 在本地安装；网页版：在 ChatGPT 中连接或安装应用。"
+      }
+    },
     "dependencies": {
       "eyebrow": "相互连接的依赖",
       "title": "两个插件，共享一个依赖。",
@@ -361,12 +413,10 @@
       "guide": "指南",
       "from": "我的电脑",
       "to": "队友的电脑",
-      "transfer": "导出 {manifest} 和 {lockfile}，将两个文件交给队友并导入，即可恢复相同版本。",
-      "requirements": "当前发布的 Marketing Kit 仅支持用户环境，尚未验证项目范围安装。恢复时需要可用的固定来源和兼容代理。",
-      "excludes": "不会传输登录状态、机密信息、设置或插件数据。",
-      "subtitle": "安装前先在用户的 uap.toml 中声明 Marketing Kit 0.1.0，再导出锁文件，让队友恢复相同的版本。",
-      "commit": "导出精确版本",
-      "manifestPreview": "预览用户环境的 uap.toml",
+      "transfer": "将 {manifest} 和 {lockfile} 交给队友。安装前，队友需把这两个文件导入用户环境。",
+      "handoff": "提交并共享两个文件。导入前会预览并确认是否替换队友现有的用户清单与锁文件。",
+      "subtitle": "Marketing Kit v0.1.0 示例：安装后共享锁定的版本。",
+      "manifestPreview": "预览 uap.toml 示例",
       "closePreview": "关闭文件预览"
     },
     "docs": {
@@ -384,17 +434,17 @@
     },
     "why": {
       "eyebrow": "为什么它有效",
-      "title": "一个标准",
-      "subtitle": "原生交付",
-      "intro": "软件包保持可移植，安装程序负责各客户端的格式转换和生命周期管理。",
-      "standardTitle": "标准第一",
-      "clientTitle": "适配各客户端",
-      "clientDescription": "Codex、Cursor、Claude Code、Gemini CLI、OpenCode 和其他客户端接收它们支持的格式。",
-      "lifecycleTitle": "全生命周期",
-      "lifecycleDescription": "通过同一 CLI 添加、检查、更新、修复、切换源或删除插件。",
-      "sourceTitle": "来源可见",
-      "sourceDescription": "已审查的软件包和社区发现仍然有清晰的标签，并且在安装之前可以获取其来源。",
-      "standardDescription": "从符合 Agent Plugins 1.0 的 {manifest} 读取软件包，无需额外的安装清单。"
+      "title": "一个插件包",
+      "subtitle": "适配多种智能体，减少手动配置",
+      "intro": "选择插件和兼容的智能体。UAP 准备受支持的组件，并提示仍需登录或激活的步骤。",
+      "standardTitle": "从 plugin.json 开始",
+      "clientTitle": "适配不同智能体",
+      "clientDescription": "Skills、MCP 服务器及其他组件会按所选智能体支持的方式准备。",
+      "lifecycleTitle": "安全管理变更",
+      "lifecycleDescription": "预览、更新、修复或移除 UAP 管理的安装，不覆盖无关文件。",
+      "sourceTitle": "了解插件来源",
+      "sourceDescription": "安装前可查看插件包来源，以及目录条目是否经过审核。",
+      "standardDescription": "使用包含 {manifest} 的 Agent Plugins 1.0 插件包，无需另建 UAP 专用插件格式。"
     },
     "builtWith": {
       "title": "已使用 UAP 构建",
@@ -408,7 +458,7 @@
       "items": {
         "0": {
           "question": "支持哪些人工智能代理？",
-          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, VS Code, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder：各客户端有自己的安装或准备流程。兼容性取决于包的组件、安装范围和激活要求。"
+          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder, Pi：各客户端有自己的安装或准备流程。兼容性取决于包的组件、安装范围和激活要求。"
         },
         "1": {
           "question": "一个命令就能为所有智能体安装插件吗？",
@@ -433,15 +483,15 @@
       }
     },
     "seo": {
-      "indexTitle": "Universal Agent Plugins CLI {'|'} 安装 Agent Plugins 1.0",
-      "indexDescription": "通过同一个 CLI，在受支持的 AI 客户端中安装、更新、修复和移除 Agent Plugins 1.0 软件包。",
+      "indexTitle": "AI 智能体插件与 Skills {'|'} Universal Agent Plugins",
+      "indexDescription": "使用一个 CLI，为 Codex、Claude Code、Cursor、Gemini CLI 等客户端安装和管理 Agent Plugins 1.0、Agent Skills 和 MCP 工具，支持全局与项目范围。",
       "downloadTitle": "下载 Universal Agent Plugins CLI",
       "downloadDescription": "在 macOS、Linux 或 Windows 上安装 Universal Agent Plugins CLI，并通过一个命令管理 Agent Plugins 1.0。",
       "applicationSubCategory": "代理插件管理器",
       "softwareRequirements": "适用于 macOS、Linux 和 Windows 的本机 CLI；或适用于 npx 的 Node.js 22+",
-      "featureList": "安装、检查、更新、修复、切换来源和移除 Agent Plugins 1.0 软件包",
-      "imageAlt": "Universal Agent Plugins：用同一个 CLI 为 AI 客户端安装插件",
-      "organizationDescription": "Agent Plugins 1.0 的开源多代理安装程序和生命周期管理器。"
+      "featureList": "在全局或项目范围安装、检查、更新、修复和卸载 Agent Plugins 1.0 与 Agent Skills。",
+      "imageAlt": "Universal Agent Plugins：使用一个 CLI 管理多个 AI 客户端的插件、Skills 与 MCP 工具。",
+      "organizationDescription": "面向多个 AI 客户端的开源 CLI，可安装和管理 Agent Plugins 1.0、Agent Skills 和 MCP 工具。"
     },
     "hero": {
       "autoLabel": "在终端中选择代理",
@@ -462,11 +512,12 @@
       "terminal": "在您的终端中",
       "refreshNotice": "插件数据正在更新，请稍后重试。",
       "otherMethods": "其他安装方式",
+      "supportedFormats": "支持的格式",
       "watchDemo": "观看演示",
       "demoVideoTitle": "Universal Agent Plugins 安装演示",
       "supportedClients": "支持的客户端",
       "clientNote": "CLI 会安装或准备各客户端支持的原生格式。部分客户端仍需手动完成激活或登录。",
-      "install": "安装 {name}",
+      "install": "安装 {name} 插件",
       "explore": "浏览插件",
       "exploreCount": "浏览 {count} 个插件 | 浏览 {count} 个插件 | 浏览 {count} 个插件",
       "delivery": {
@@ -506,17 +557,26 @@
       "appearance": "外观"
     },
     "navigation": {
+      "demo": "视频",
       "plugins": "插件",
       "why": "为什么它有效",
       "faq": "常见问题解答",
       "open": "打开导航菜单",
       "close": "关闭导航菜单",
       "title": "导航菜单",
-      "description": "跳转至插件、产品详细信息、常见问题或 GitHub。",
-      "appearance": "外观"
+      "description": "打开演示、插件目录、文档或 GitHub。",
+      "appearance": "外观",
+      "agents": "支持的智能体"
     }
   },
   "registryUi": {
+    "desktopGuide": {
+      "title": "ChatGPT Desktop（本地）",
+      "description": "使用 Codex 本地插件目录，而不是 ChatGPT 网页连接。",
+      "command": "为桌面版安装",
+      "nextStep": "Codex CLI 会自动安装并启用本地插件。打开桌面版（可用时运行 codex app），必要时重新启动，并在新的本地会话中验证。CLI 成功不代表桌面运行已验证。",
+      "help": "设置与故障排除"
+    },
     "select": {
       "up": "向上滚动选项",
       "down": "向下滚动选项"
@@ -576,6 +636,10 @@
       "disclaimer": "自动检查可以降低风险，但不能证明插件安全。安装不受信任的软件前，请检查源码和权限。"
     },
     "catalog": {
+      "sortLabel": "插件排序",
+      "sortRecommended": "推荐",
+      "sortName": "按名称 A–Z",
+      "curationNote": "根据常见代理工作流程推荐，并非安全评级。",
       "staleCommunityResults": "显示最新签名目录中的 {count} 个社区条目，生成于 {generated}，已于 {expired} 过期。社区安装命令已暂停，等待新目录。已审核的条目仍可使用。",
       "staleCommunityListing": "历史签名条目；目录已于 {expired} 过期。",
       "staleCommunityCommands": "签名目录已过期，社区安装命令已暂停。仍可浏览条目和源代码。",
@@ -649,8 +713,8 @@
       "unavailableAtItsIndexedSource": "在其索引源中不可用",
       "checkedAgainBeforeInstallation": "安装前再次检查",
       "reviewedListing": "已审核",
-      "notAvailableForChatgpt": "不适用于 ChatGPT",
-      "verifiedConnectionFinishSetupInChatgpt": "已验证连接；在 ChatGPT 中完成设置",
+      "notAvailableForChatgpt": "此插件没有经过验证的 ChatGPT Web 应用绑定。Web 应用需在 ChatGPT 内连接。",
+      "verifiedConnectionFinishSetupInChatgpt": "ChatGPT Web 应用绑定已验证；请在 ChatGPT 内完成连接。",
       "allInstalledAgents": "在终端中选择代理",
       "commandsDisabledInPreview": "预览期间不提供安装命令。",
       "allInstalledAgentsRecommended": "在终端中选择代理",
@@ -688,12 +752,12 @@
       "notReadyToInstall": "尚未准备好安装",
       "detectedWhenYouRunTheCommand": "命令会在安装前让你选择代理。",
       "thisPackageIsNoLongerAvailableFromItsSource": "该软件包的来源不再可用。",
-      "notAvailableForChatgpt": "不适用于 ChatGPT",
+      "notAvailableForChatgpt": "此插件没有经过验证的 ChatGPT Web 应用绑定。Web 应用需在 ChatGPT 内连接。",
       "unavailableSignedDirectorySnapshotExpired": "不可用：签名的目录快照已过期",
       "noActiveReleaseSupportsThisClient": "没有活动版本支持此客户端",
       "unavailableReviewDataIsNotInstallationAuthority": "不可用：审核数据不能作为安装授权依据",
       "thisPackageDoesNotSupportAnyOfTheAgentsAvailableInTheInstallerYet": "此软件包尚不支持安装程序中可用的任何代理。",
-      "verifiedConnectionFinishSetupInChatgpt": "已验证连接；在 ChatGPT 中完成设置",
+      "verifiedConnectionFinishSetupInChatgpt": "ChatGPT Web 应用绑定已验证；请在 ChatGPT 内完成连接。",
       "allInstalledAgents": "在终端中选择代理",
       "weFoundThisProjectButItDoesnTIncludeAnyToolsTheInstallerCanAddYet": "我们找到了这个项目，但它不包含安装程序可以添加的任何工具。",
       "chooseTargetAgents": "选择目标客户端",
@@ -717,11 +781,11 @@
       "unresolvedDataIsForReviewOnlyProductionCommandsRequireAPublishedSignedDirectorySnapshot": "未解决的数据仅供审核；生产命令需要已发布的签名目录快照。",
       "commandsUnavailable": "命令不可用。",
       "automaticDetection": "在终端中选择代理",
-      "theCliChecksThisPluginAgainstInstalledAgentsSkipsIncompatibleOnesAndLetsYouConfirmTheTargetsChatgptIsIncludedOnlyWhenThisPluginProvidesAVerifiedConnection": "CLI 根据已安装的代理检查此插件，跳过不兼容的代理，并让您确认目标。仅当此插件提供经过验证的连接时，才会包含 ChatGPT。",
+      "theCliChecksThisPluginAgainstInstalledAgentsSkipsIncompatibleOnesAndLetsYouConfirmTheTargetsChatgptIsIncludedOnlyWhenThisPluginProvidesAVerifiedConnection": "CLI 会检查本地代理并让你确认兼容目标。ChatGPT Web 需要单独设置：UAP 可准备合格应用，但连接必须在 ChatGPT 内完成。",
       "oneStepRemainsInChatgpt": "ChatGPT 还剩下一步。",
       "noSingleSourceServesThisTargetSet": "没有任何一个来源支持全部选定的客户端。",
       "theCliWillFailBeforeMutationAndSuggestCompatibleTargetSourceCombinationsItNeverMixesDistributionsAcrossClients": "CLI 会在修改文件前停止，并建议兼容的客户端与来源组合；不会为不同客户端混用多个分发包。",
-      "theCliChecksEverySelectedAgentBeforeChangingFilesAndShowsAnySignInOrActivationStepOauthCredentialsStayWithTheAgent": "CLI 在更改文件之前检查每个选定的代理并显示任何登录或激活步骤。 OAuth 凭据由代理保留。",
+      "theCliChecksEverySelectedAgentBeforeChangingFilesAndShowsAnySignInOrActivationStepOauthCredentialsStayWithTheAgent": "CLI 在修改文件前检查代理并提示设置步骤。OAuth 凭据保留在代理端。",
       "chatgptFinish": "打开 ChatGPT，在 Apps 或 Plugins 中选择 {name}，完成连接后开始新聊天。可用性取决于你的账户和工作区。",
       "expectedFallback": "预期的源回退：{source}。",
       "dependencySaving": {
@@ -738,9 +802,14 @@
         "project": "此项目",
         "projectHint": "请在项目文件夹中运行这些命令。代理可能会要求您信任或激活该项目。",
         "projectUnavailable": "此软件包不支持项目安装。",
+        "marketingKitProjectUnavailable": "Marketing Kit 暂不能安装到项目：必需的 Notion、HubSpot 和 Playwright 依赖需要分别支持 Project 范围安装。",
+        "pinnedGitFallbackInfo": "此经过审核并固定到准确提交的 Git 来源是可复现安装的备选方案。已发布的 CLI 也支持在客户端及全部必需组件符合条件时，在 Project 范围使用签名 Directory 短名称。",
         "selectionUnavailable": "所选代理与安装位置的组合不可用。请选择其他代理或位置。"
       },
       "outcome": {
+        "projectPreview": "项目预览：CLI 会验证来源、MCP 传输方式和必需依赖。代理激活需另外确认。",
+        "projectSupported": "可能可以安装",
+        "projectUnsupported": "此项目不支持",
         "includes": "包含：",
         "label": "安装及后续步骤",
         "managed": "CLI 管理已安装的文件。",
@@ -756,7 +825,8 @@
           "mcp": "MCP 工具",
           "extensions": "扩展"
         }
-      }
+      },
+      "piNoCompatibleRelease": "Pi 已获支持，但此插件的已签名发行版本不包含兼容 Pi 的安装目标。"
     },
     "authentication": {
       "not_required": "无需帐户",
@@ -803,11 +873,11 @@
         "activation": "按照 CLI 打印的任何激活提示进行操作，然后启动新的 Codex 会话。"
       },
       "chatgpt": {
-        "note": "已验证的应用绑定与 Context7 设置指引",
-        "status": "在应用程序中设置",
-        "intro": "为 ChatGPT 准备兼容的 Agent Plugins 1.0 软件包；应用激活和账户授权仍在 ChatGPT 内完成。",
-        "delivery": "CLI 会验证发布者的应用绑定，也可通过 Context7 公开且无需身份验证的 MCP 端点，为其准备个人 marketplace 软件包。",
-        "activation": "在 Developer Mode 中创建或连接应用，安装已准备的个人插件，然后在新聊天中选择它。"
+        "note": "桌面版：通过 Codex CLI 自动安装；网页版：在 ChatGPT 中设置",
+        "status": "支持",
+        "intro": "ChatGPT 的桌面版和网页版都支持插件。桌面版的本地插件使用 Codex CLI 插件市场；网页版需要兼容的云端应用或插件市场连接。",
+        "delivery": "UAP 通过 Codex CLI 安装符合条件的桌面本地插件，并准备经过验证的网页应用绑定。本地命令行无法静默将云端插件安装到 ChatGPT 账户。",
+        "activation": "桌面版：打开新的本地对话并验证插件。网页版：在 ChatGPT 中连接或安装应用，并授予所需权限。"
       },
       "cursor": {
         "note": "原生 Agent Plugin 软件包",
@@ -893,12 +963,26 @@
         "delivery": "CLI 会写入原生 .qoder-plugin 清单，并在 Qoder CLI 可用时通过它注册托管软件包。",
         "activation": "安装后重新加载 Qoder 插件或重启 Qoder。MCP 运行时连接和服务提供方的身份验证仍需在 Qoder 中确认。"
       },
+      "hermes": {
+        "note": "用户级 Skills/MCP 和项目级 Skills；不支持项目级 MCP",
+        "status": "支持",
+        "intro": "为当前用户或选定的 Git 项目安装 Hermes Agent 原生 Skills，并配置用户级 MCP 服务器，同时保留其他设置。",
+        "delivery": "UAP 管理自身安装的 Skills 目录和用户 config.yaml 中的特定 MCP 条目。项目安装不会修改用户级 MCP 配置。",
+        "activation": "重启 Hermes 以重新加载集成。使用项目 Skills 前请确认仓库信任；运行时发现和身份认证仍需单独验证。"
+      },
+      "antigravity": {
+        "note": "原生用户/项目插件；需验证激活状态",
+        "status": "已由 CLI 准备",
+        "intro": "为所选用户或项目范围准备含受支持 Skills 和 MCP 服务器的 Google Antigravity 原生插件。",
+        "delivery": "UAP 在所选用户或项目配置中准备受管理的插件目录，保留其他插件，且不会自动启用 hooks。",
+        "activation": "打开或重新加载 Antigravity，确认插件已被发现并启用。仅有准备好的文件不能证明模型会话、身份认证或 MCP 实际执行。"
+      },
       "pi": {
-        "note": "仅支持受管理的 Pi 原生扩展",
+        "note": "Pi 原生扩展、Skills 和 MCP",
         "status": "已支持",
-        "intro": "安装声明了 Pi 原生扩展的 Agent Plugins 1.0 软件包。此适配器目前不支持可移植技能和 MCP 映射。",
-        "delivery": "CLI 将声明的 Pi 扩展安装到你的 Pi 代理目录，并跟踪受管理的软件包，以便更新、修复和删除。",
-        "activation": "安装后重新加载资源或重启 Pi，以加载受管理的扩展。"
+        "intro": "可在用户或项目范围安装兼容的 Pi 扩展、Skills 和 MCP（stdio/Streamable HTTP）。目录包需要兼容的已签名发行版本；CLI 会单独验证直接来源。",
+        "delivery": "CLI 将合格组件安装到选定的 Pi 用户配置或项目中，并管理更新、修复和移除。",
+        "activation": "重新加载 Pi 资源或重启 Pi；如有提示，请检查项目信任及 MCP 权限。"
       }
     },
     "directoryPage": {
@@ -911,7 +995,7 @@
       "breadcrumb": "导航路径",
       "plugins": "插件",
       "agentPlugins10": "Agent Plugins 1.0",
-      "theListingAndMetadataWereReviewedAnAutomatedSecurityAssessmentWhenPresentAppliesOnlyToTheExactScannedRevisionRuntimeBehaviorIsNotAudited": "条目信息和元数据已审核。自动安全评估（若有）只适用于所扫描的确切版本，不代表已审核运行时行为。",
+      "theListingAndMetadataWereReviewedAnAutomatedSecurityAssessmentWhenPresentAppliesOnlyToTheExactScannedRevisionRuntimeBehaviorIsNotAudited": "条目及元数据已审核。安全扫描（若有）仅覆盖已扫描版本，不代表运行行为已获审计。",
       "installPlugin": "安装插件",
       "viewSource": "查看源码",
       "pluginOverview": "插件概述",
@@ -977,7 +1061,9 @@
       "availableFor": "适用于 {name} 的插件",
       "count": "{count} 个已审核的软件包支持此客户端。 | {count} 个已审核的软件包支持此客户端。",
       "tryPlugin": "可先试用 Context7，或将 {source} 替换为其他兼容插件经过审核的短名称或完整包的源地址。",
-      "localPackageHint": "将 ./my-plugin 替换为有效 Agent Plugins 1.0 包的路径。"
+      "localPackageHint": "将 ./my-plugin 替换为有效 Agent Plugins 1.0 包的路径。",
+      "piSignedCount": "Pi 已签名目录包：{count}",
+      "piDirectSourceNote": "此处仅显示已签名目录发行版明确支持 Pi 的包。兼容的 Skills、MCP 服务器和扩展也可从本地包或固定的 Git 提交安装；CLI 会独立验证这些来源。"
     },
     "components": {
       "extensions": "扩展",
@@ -1005,13 +1091,14 @@
       "required": "需要身份验证",
       "not_required": "无需身份验证",
       "unknown": "身份验证要求未知",
-      "varies": "取决于客户端",
+      "varies": "取决于代理或发行版本",
       "automatic": "运行命令时会检测已安装的客户端。请在“安装”中选择客户端，查看对应的身份验证要求。",
       "unresolved": "尚未确定这些客户端的安装方案。请选择受支持的客户端，查看对应要求。",
       "release": "{id} · 版本 {sequence}",
       "requiredDetail": "此包可能需要账户、令牌或登录；这并不指定 OAuth，也不确认您已登录。",
       "not_requiredDetail": "这些代理未声明身份验证要求。仍可能存在服务限制和其他设置要求。",
-      "unknownDetail": "连接前请检查包的要求。"
+      "unknownDetail": "连接前请检查包的要求。",
+      "variesDetail": "同一代理在不同兼容发行版本中的登录要求可能不同。请选择目标并检查实际安装计划。"
     }
   },
   "pluginAuthoring": {
@@ -1019,7 +1106,7 @@
     "title": "使用插件 / 构建插件",
     "subtitle": "安装和管理标准包，或编写自己的 plugin.json 包并使用相应工具检查。",
     "use": {
-      "badge": "CLI 0.1.95",
+      "badge": "稳定版 CLI",
       "title": "使用插件",
       "description": "通过已发布安装器查找、预览、安装和维护包。",
       "cta": "打开使用指南"

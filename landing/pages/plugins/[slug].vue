@@ -6,7 +6,8 @@ import { clientLandingById } from '~/data/clients';
 import { productRootUrl, seoDescription, spdxLicenseUrl } from '~/utils/seo';
 import { isFullyRetired } from '~/utils/filter';
 import { resolveDistribution, vendorInstallSource } from '~/utils/registry';
-import type { ClientID } from '~/types/registry';
+import { pluginBenefit } from '~/data/catalogCuration';
+import type { InstallTargetID } from '~/data/installTargets';
 const { t, locale } = useI18n();
 const localePath = useLocalePath();
 
@@ -21,8 +22,8 @@ if (!plugin || plugin.trust_state === 'conformant_unreviewed') {
   throw createError({ statusCode: 404, statusMessage: t('registryUi.detail.pluginNotFound') });
 }
 
-const accent = '#00f0ff';
 const iconURL = pluginIcon(plugin);
+const benefit = pluginBenefit(plugin);
 const { current, expired, published } = useDirectoryStatus();
 // The card's install picker resolves each agent against an active release. Do
 // the same here: client_support is an aggregate that may include retired targets
@@ -51,7 +52,7 @@ const clientGroups = computed(() =>
 );
 const initialTarget =
   supportedClients.find((client) => client.id === 'cursor')?.id ?? supportedClients[0]?.id;
-const targets = ref<ClientID[]>(initialTarget ? [initialTarget] : []);
+const targets = ref<InstallTargetID[]>(initialTarget ? [initialTarget === 'chatgpt' ? 'chatgptweb' : initialTarget] : []);
 const autoDetect = ref(true);
 const installAvailable = computed(
   () =>
@@ -86,7 +87,7 @@ const description = computed(() =>
       name: plugin.display_name,
       clients: clientNames.join(', '),
     }),
-    plugin.description,
+    benefit,
   ]),
 );
 const licenseUrl = spdxLicenseUrl(plugin.license);
@@ -106,7 +107,7 @@ usePageSeo(() => t('registryUi.detail.title', { name: plugin.display_name }), de
       '@type': 'SoftwareSourceCode',
       '@id': pluginSchemaId.value,
       name: t('registryUi.detail.schemaName', { name: plugin.display_name }),
-      description: plugin.description,
+      description: benefit,
       url: pluginUrl.value,
       codeRepository: sourceUrl(plugin),
       softwareVersion: plugin.version,
@@ -143,7 +144,7 @@ usePageSeo(() => t('registryUi.detail.title', { name: plugin.display_name }), de
 </script>
 
 <template>
-  <div class="plugin-detail registry-surface" :data-install-source="plugin.install_source" :style="{ '--accent': accent }">
+  <div class="plugin-detail registry-surface" :data-install-source="plugin.install_source">
     <PageBackground />
     <section class="plugin-detail__hero section">
       <v-container>
@@ -158,8 +159,9 @@ usePageSeo(() => t('registryUi.detail.title', { name: plugin.display_name }), de
             <v-icon :icon="mdiArrowLeft" size="22" />
           </v-btn>
           <nav class="breadcrumbs" :aria-label="t('registryUi.detail.breadcrumb')">
-            <NuxtLink :to="localePath('/plugins/')"> {{ t('registryUi.detail.plugins') }} </NuxtLink
-            ><span aria-hidden="true">/</span><span>{{ plugin.display_name }}</span>
+            <NuxtLink :to="localePath('/plugins/')">{{ t('registryUi.detail.plugins') }}</NuxtLink>
+            <span aria-hidden="true">/</span>
+            <span aria-current="page">{{ plugin.display_name }}</span>
           </nav>
         </div>
 
@@ -178,7 +180,7 @@ usePageSeo(() => t('registryUi.detail.title', { name: plugin.display_name }), de
               </span>
               <div>
                 <h1 class="plugin-detail__title">{{ plugin.display_name }}</h1>
-                <p class="plugin-detail__tagline">{{ plugin.description }}</p>
+                <p class="plugin-detail__tagline">{{ benefit }}</p>
               </div>
             </div>
 
@@ -315,6 +317,7 @@ usePageSeo(() => t('registryUi.detail.title', { name: plugin.display_name }), de
 
 <style scoped>
 .plugin-detail {
+  --accent: var(--cyan);
   position: relative;
   min-height: 100vh;
 }
@@ -327,9 +330,30 @@ usePageSeo(() => t('registryUi.detail.title', { name: plugin.display_name }), de
 .plugin-detail__hero-topbar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 10px;
-  padding-left: 4px;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.plugin-detail__hero-topbar .breadcrumbs {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
+.plugin-detail__hero-topbar .breadcrumbs a {
+  color: var(--primary-bright);
+  text-underline-offset: 3px;
+}
+
+.plugin-detail__hero-topbar .breadcrumbs [aria-current='page'] {
+  color: var(--text);
 }
 
 .plugin-detail__hero-shell {
@@ -344,15 +368,15 @@ usePageSeo(() => t('registryUi.detail.title', { name: plugin.display_name }), de
 .plugin-detail__panel {
   position: relative;
   border-radius: 28px;
-  border: 1px solid color-mix(in srgb, var(--accent) 16%, rgba(255, 255, 255, 0.08));
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--line));
   background:
     radial-gradient(
       circle at top right,
-      color-mix(in srgb, var(--accent) 14%, transparent) 0%,
-      transparent 36%
+      color-mix(in srgb, var(--accent) 8%, transparent) 0%,
+      transparent 40%
     ),
-    rgba(10, 10, 15, 0.82);
-  box-shadow: 0 24px 72px rgba(0, 0, 0, 0.26);
+    color-mix(in srgb, var(--surface-solid) 94%, transparent);
+  box-shadow: var(--shadow);
   backdrop-filter: blur(14px);
 }
 
@@ -381,7 +405,7 @@ usePageSeo(() => t('registryUi.detail.title', { name: plugin.display_name }), de
 
 .plugin-detail__summary-eyebrow,
 .plugin-detail__summary-title {
-  color: #7dd3fc;
+  color: var(--accent);
 }
 
 .plugin-detail__headline {
@@ -398,8 +422,8 @@ usePageSeo(() => t('registryUi.detail.title', { name: plugin.display_name }), de
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid color-mix(in srgb, var(--accent) 30%, rgba(255, 255, 255, 0.08));
+  background: var(--surface-raised);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line));
   flex-shrink: 0;
 }
 
@@ -422,12 +446,12 @@ usePageSeo(() => t('registryUi.detail.title', { name: plugin.display_name }), de
   font-size: clamp(2.2rem, 5vw, 4rem);
   line-height: 0.98;
   letter-spacing: -0.05em;
-  color: #eff6ff;
+  color: var(--text);
 }
 
 .plugin-detail__tagline {
   margin: 0;
-  color: #d9ecff;
+  color: var(--muted);
   font-size: 1.05rem;
   line-height: 1.7;
   max-width: 680px;
@@ -450,41 +474,46 @@ usePageSeo(() => t('registryUi.detail.title', { name: plugin.display_name }), de
 }
 
 .plugin-detail__type {
-  background: rgba(0, 240, 255, 0.08);
-  color: #7dd3fc;
-  border: 1px solid rgba(125, 211, 252, 0.16);
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface-solid));
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--line));
 }
 
 .plugin-detail__status {
-  background: rgba(57, 255, 20, 0.1);
-  color: #39ff14;
-  border: 1px solid rgba(57, 255, 20, 0.2);
+  background: color-mix(in srgb, var(--green) 11%, var(--surface-solid));
+  color: var(--green);
+  border: 1px solid color-mix(in srgb, var(--green) 24%, var(--line));
 }
 
 .plugin-detail__status--muted {
-  background: rgba(203, 213, 225, 0.1);
-  color: #cbd5e1;
-  border-color: rgba(203, 213, 225, 0.24);
+  background: var(--surface-raised);
+  color: var(--muted);
+  border-color: var(--line-strong);
 }
 
 .plugin-detail__category {
-  background: rgba(255, 255, 255, 0.05);
-  color: #dbe7ff;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--surface-raised);
+  color: var(--text);
+  border: 1px solid var(--line);
 }
 
 .plugin-detail__summary {
   margin: 22px 0 0;
-  color: #91a0bf;
+  color: var(--muted);
   font-size: 1rem;
   line-height: 1.8;
   max-width: 720px;
 }
 
 .plugin-detail__back-cta {
-  color: #dffaff !important;
-  background: rgba(255, 255, 255, 0.03) !important;
-  border: 1px solid rgba(255, 255, 255, 0.05) !important;
+  width: 42px !important;
+  height: 42px !important;
+  min-width: 42px !important;
+  padding: 0 !important;
+  color: var(--text) !important;
+  background: var(--surface-raised) !important;
+  border: 1px solid var(--line-strong) !important;
+  border-radius: 12px !important;
 }
 
 .plugin-detail__actions {
@@ -511,15 +540,15 @@ usePageSeo(() => t('registryUi.detail.title', { name: plugin.display_name }), de
 
 .plugin-detail__primary-cta {
   min-height: 54px !important;
-  border-color: color-mix(in srgb, var(--accent) 20%, rgba(255, 255, 255, 0.08)) !important;
-  background: rgba(255, 255, 255, 0.03) !important;
-  color: #dffaff !important;
+  border-color: color-mix(in srgb, var(--accent) 20%, var(--line)) !important;
+  background: var(--surface-raised) !important;
+  color: var(--text) !important;
   font-weight: 800 !important;
 }
 
 .plugin-detail__secondary-cta {
-  border-color: rgba(125, 211, 252, 0.2) !important;
-  color: #dffaff !important;
+  border-color: var(--line-strong) !important;
+  color: var(--text) !important;
 }
 
 .plugin-detail__summary-block + .plugin-detail__summary-block {
@@ -548,9 +577,9 @@ usePageSeo(() => t('registryUi.detail.title', { name: plugin.display_name }), de
   display: flex;
   align-items: center;
   gap: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--line);
   border-radius: 12px;
-  color: #cbd5e1;
+  color: var(--text);
   font-size: 0.74rem;
   text-decoration: none;
   transition:
@@ -559,8 +588,8 @@ usePageSeo(() => t('registryUi.detail.title', { name: plugin.display_name }), de
 }
 
 .plugin-detail__client:hover {
-  color: #fff;
-  border-color: rgba(0, 240, 255, 0.32);
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
 }
 
 .plugin-detail__client img {
@@ -594,7 +623,7 @@ usePageSeo(() => t('registryUi.detail.title', { name: plugin.display_name }), de
 
 .plugin-detail__panel-title {
   margin: 12px 0 0;
-  color: #eff6ff;
+  color: var(--text);
   font-size: 1.5rem;
 }
 
@@ -609,7 +638,7 @@ usePageSeo(() => t('registryUi.detail.title', { name: plugin.display_name }), de
 .plugin-detail__list-item {
   position: relative;
   padding-left: 18px;
-  color: #a9b7d7;
+  color: var(--muted);
   line-height: 1.72;
 }
 
@@ -623,48 +652,6 @@ usePageSeo(() => t('registryUi.detail.title', { name: plugin.display_name }), de
   border-radius: 999px;
   background: var(--accent);
   box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 54%, transparent);
-}
-
-.v-theme--light .plugin-detail__hero-copy,
-.v-theme--light .plugin-detail__summary-card,
-.v-theme--light .plugin-detail__panel {
-  background:
-    radial-gradient(
-      circle at top right,
-      color-mix(in srgb, var(--accent) 10%, transparent) 0%,
-      transparent 36%
-    ),
-    rgba(255, 255, 255, 0.92);
-}
-
-.v-theme--light .plugin-detail__title,
-.v-theme--light .plugin-detail__panel-title,
-.v-theme--light .plugin-detail__category,
-.v-theme--light :deep(.agent-badge) {
-  color: #0f172a;
-}
-
-.v-theme--light .plugin-detail__logo-wrap--light {
-  background: #ffffff;
-  border-color: rgba(148, 163, 184, 0.3);
-  box-shadow:
-    0 10px 26px rgba(15, 23, 42, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.92);
-}
-
-.v-theme--light .plugin-detail__tagline,
-.v-theme--light .plugin-detail__summary,
-.v-theme--light .plugin-detail__list-item {
-  color: #475569;
-}
-
-.v-theme--light .plugin-detail__install-cta {
-  color: #0f172a !important;
-}
-
-.v-theme--light .plugin-detail__back-cta,
-.v-theme--light .plugin-detail__primary-cta {
-  color: #0f172a !important;
 }
 
 @media (max-width: 960px) {

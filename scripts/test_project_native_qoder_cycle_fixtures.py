@@ -50,7 +50,7 @@ def state_rows():
         source_digest, manifest_digest = proof.tree_digest(files, True), "sha256:" + cycle.sha(files["plugin.json"])
         binding = dict(client_binding_id=bid, client_id="qoder", scope="project", target_locator=active, physical_artifact_id=physical, materialization="materialized", activation="prepared", authentication="not_checked", policy="allowed", verification="installation_verified", affected_surfaces=["qoder"], native_profile_root=native_base,
                        package_revision=dict(version="1.0.0", tree_digest=source_digest, manifest_digest=manifest_digest), updated_at=stamp,
-                       native_objects=[dict(object_id="package:qoder:" + physical, kind="managed_package_directory", logical_name=cycle.NAME, path=active, managed_digest=proof.tree_digest(proof.projected(NONCE, key, revision)), protection_class="managed")])
+                       native_objects=[dict(object_id="package:qoder:" + physical, kind="managed_package_directory", logical_name=cycle.NAME, path=active, managed_digest=proof.tree_digest(proof.projected(NONCE, key, revision)), protection_class="managed"), proof.native_skill(LAYOUT, NONCE, key, revision)])
         removed = stage in ("remove-a", "remove-b")
         prior = current.get(key)
         if removed:
@@ -63,7 +63,7 @@ def state_rows():
                             source=dict(source_binding_id="src_" + cycle.sha((source + "\0\0").encode())[:24], requested_source=source, canonical_source=source, resolved_revision="", tree_digest=source_digest),
                             package=dict(loader_kind="agent_plugins", format_id="agent-plugins/1.0.0", schema_uri=cycle.SCHEMA, declared_name=cycle.NAME, version="1.0.0", manifest_digest=manifest_digest, inventory=dict(mcp_present=False, mcp_enabled=False, skills=[cycle.NAME])), clients={} if removed else {bid: binding})
         payload = proof.projected(NONCE, key, revision)
-        delivery = dict(active=active, view=active + "/.agentplugins-qoder-native", files=proof.tree(payload, "644", "755"), manifest=stream(payload[".agentplugins-qoder-native/.qoder-plugin/plugin.json"]), skill=stream(files["skills/" + cycle.NAME + "/SKILL.md"]))
+        delivery = dict(active=active, view=active + "/.agentplugins-qoder-native", files=proof.tree(payload, "644", "755"), manifest=stream(payload[".agentplugins-qoder-native/.qoder-plugin/plugin.json"]), skill=stream(files["skills/" + cycle.NAME + "/SKILL.md"]), native_skill=stream(files["skills/" + cycle.NAME + "/SKILL.md"]))
         data_path = LAYOUT[key] + "/.uap/plugin-data/" + physical
         data = dict(allocated=False, path=data_path, receipt=None, owner=None, files=None)
         document = dict(schema_version=5, installations=[installation])
@@ -73,7 +73,7 @@ def state_rows():
             owner = raw(receipt) + b"\n"
             installation.update(data_retained=True, data_receipts={did: receipt})
             data.update(allocated=True, receipt=receipt, owner=stream(owner), files=proof.tree({".agentplugins-data-owner.json": owner}))
-            delivery.update(files=None, manifest=None, skill=None)
+            delivery.update(files=None, manifest=None, skill=None, native_skill=None)
             document["transaction_receipts"] = [mutation(binding, group, len(binding["receipts"]) + 1, "directory_remove", binding["native_objects"][0]["managed_digest"])]
         result[stage] = dict(scope=key, revision=revision, removed=removed, source_digest=source_digest, state=stream(raw(document)), binding=binding, delivery=delivery, data=data)
         current[key] = result[stage]

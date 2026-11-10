@@ -63,6 +63,13 @@ const { report, status: loadedStatus, recoverable, retry: retryReport } = useSki
 );
 const reportStatus = computed(() => (props.applicable === false ? 'ready' : loadedStatus.value));
 const assessment = computed(() => skillSpectorAssessment(report.value, props.subject));
+const displayedScannerVersions = computed(() => {
+  const versions = [...new Set(assessment.value.records
+    .filter((record) => record.freshness === 'current')
+    .map((record) => record.scanner?.version)
+    .filter((version): version is string => typeof version === 'string'))].sort();
+  return versions.length ? versions.join(' / ') : report.value?.scanner.version ?? '';
+});
 const legacy = computed(() => isLegacySkillSpectorReport(report.value));
 const hasLegacyEvidence = computed(
   () => report.value?.schema_version === 3 &&
@@ -80,6 +87,26 @@ const displayStatus = computed(() => {
     if (status === 'historical') return 'stale';
   }
   return status;
+});
+const lastReportLabel = computed(() => {
+  // A historical result is useful context, never proof for the current revision.
+  if (assessment.value.records.length !== 1) return null;
+  const record = assessment.value.records[0];
+  if (!record?.scanned_at || !['complete', 'partial'].includes(record.status)) return null;
+  const complete =
+    report.value?.schema_version === 3 &&
+    record.status === 'complete' &&
+    record.coverage?.status === 'complete' &&
+    record.execution?.state === 'completed' &&
+    !record.legacy_format &&
+    !record.errors.length &&
+    !hasIncompleteSkillSpectorFindings(record);
+  const result = !complete
+    ? t('registryUi.skillSpector.incomplete')
+    : record.finding_count
+      ? t('registryUi.skillSpector.findingsCount', { count: n(record.finding_count) })
+      : t('registryUi.skillSpector.noStaticFindings');
+  return t('registryUi.skillSpector.lastScan', { result });
 });
 const label = computed(() => {
   let key: string = displayStatus.value;
@@ -136,6 +163,14 @@ const label = computed(() => {
         });
     }
     if (outcomes.limited && !waiting) return t('registryUi.skillSpector.outcomelimited');
+  }
+  if (key === 'stale') {
+    return lastReportLabel.value ??
+      (assessment.value.records.length
+        ? t('registryUi.skillSpector.historyProgress', {
+            previous: n(assessment.value.records.length),
+          })
+        : t('registryUi.skillSpector.pending'));
   }
   return t(`registryUi.skillSpector.${key}`);
 });
@@ -292,9 +327,12 @@ async function copyDiagnostics() {
       aria-haspopup="dialog"
       :aria-label="`${name}: ${t('registryUi.skillSpector.title')} · ${label}. ${t('registryUi.skillSpector.openReport')}`"
     >
-      <span class="skillspector__icon" aria-hidden="true">i</span>
+      <svg class="skillspector__icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10" />
+        <path d="M12 10.5v5.5M12 7.5h.01" />
+      </svg>
       <span>{{ t('registryUi.skillSpector.title') }} · {{ label }}</span>
-      <span class="skillspector__arrow" aria-hidden="true">⌄</span>
+      <svg class="skillspector__arrow" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></svg>
     </summary>
     <dialog
       v-if="detailsOpen"
@@ -312,7 +350,7 @@ async function copyDiagnostics() {
               <span class="skillspector__status-dot" aria-hidden="true"></span>
               {{ t('registryUi.skillSpector.title') }} · {{ label }}
             </p>
-            <p>{{ t('registryUi.skillSpector.statusExplanation') }}</p>
+            <p v-if="displayStatus === 'incomplete'">{{ t('registryUi.skillSpector.statusExplanation') }}</p>
             <p
               class="skillspector__copy-feedback"
               :class="{ 'skillspector__copy-feedback--empty': copyState === 'idle' }"
@@ -346,6 +384,17 @@ async function copyDiagnostics() {
         <div class="skillspector__details" :aria-busy="reportStatus === 'loading'">
       <section class="skillspector__advice">
         <strong>{{ t('registryUi.skillSpector.installAdvice') }}</strong>
+        <p v-if="scannedSkills !== undefined">
+          {{
+            t(
+              `registryUi.skillSpector.${assessment.inventoryKnown ? 'fullyChecked' : 'selectedFullyChecked'}`,
+              {
+                checked: n(scannedSkills),
+                total: n(assessment.selected ?? 0),
+              },
+            )
+          }}
+        </p>
         <p>
           {{ t(`registryUi.skillSpector.${scope === 'plugin' ? 'pluginScope' : 'skillScope'}`) }}
         </p>
@@ -368,17 +417,6 @@ async function copyDiagnostics() {
         >
           {{ t('registryUi.skillSpector.retryLoad') }}
         </button>
-        <p v-if="scannedSkills !== undefined">
-          {{
-            t(
-              `registryUi.skillSpector.${assessment.inventoryKnown ? 'fullyChecked' : 'selectedFullyChecked'}`,
-              {
-                checked: n(scannedSkills),
-                total: n(assessment.selected ?? 0),
-              },
-            )
-          }}
-        </p>
         <section v-if="assessment.pendingIds?.length" class="skillspector__waiting">
           <h3>{{ t('registryUi.skillSpector.awaitingList') }}</h3>
           <p>{{ t('registryUi.skillSpector.awaitingExplanation') }}</p>
@@ -447,7 +485,7 @@ async function copyDiagnostics() {
                   ·
                   {{ t(`registryUi.skillSpector.${recordStatus(record)}`) }}</span
                 >
-                <span class="skillspector__arrow" aria-hidden="true">⌄</span>
+                <svg class="skillspector__arrow" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></svg>
               </summary>
               <div :class="{ 'skillspector__record-body': assessment.records.length > 1 }">
                 <p v-if="record.findings_truncated">
@@ -701,7 +739,7 @@ async function copyDiagnostics() {
       </section>
       <details v-if="assessment.records.length" class="skillspector__technical">
         <summary>{{ t('registryUi.skillSpector.provenance') }}</summary>
-        <p>{{ t('registryUi.skillSpector.scanner', { version: report!.scanner.version }) }}</p>
+        <p>{{ t('registryUi.skillSpector.scanner', { version: displayedScannerVersions }) }}</p>
         <div v-for="record in assessment.records" :key="record.id">
           <a :href="skillSpectorSourceUrl(record)" target="_blank" rel="noreferrer"
             >{{ record.source.path || record.skill_name || record.source.repository }} ↗</a
@@ -762,10 +800,17 @@ async function copyDiagnostics() {
   font-size: 0.75rem;
   line-height: 1.5;
 }
+.skillspector--noSkills {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  min-height: 32px;
+}
 .skillspector > summary {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   width: fit-content;
   max-width: 100%;
   min-height: 32px;
@@ -783,17 +828,16 @@ async function copyDiagnostics() {
   border-radius: 4px;
 }
 .skillspector__icon {
-  display: inline-grid;
-  place-items: center;
-  flex: 0 0 16px;
-  height: 16px;
-  border: 1px solid currentcolor;
-  border-radius: 50%;
-  font-size: 0.6875rem;
+  display: block;
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
 }
 .skillspector__arrow {
-  flex-shrink: 0;
-  margin-inline-start: 2px;
+  display: block;
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
 }
 .skillspector[open] > summary > .skillspector__arrow,
 .skillspector__record[open] > summary > .skillspector__arrow {
@@ -844,7 +888,7 @@ async function copyDiagnostics() {
 }
 .skillspector__dialog-intro {
   min-width: 0;
-  flex: 1 1 320px;
+  flex: 1 1 auto;
 }
 .skillspector__dialog-actions {
   display: flex;
@@ -1087,7 +1131,7 @@ async function copyDiagnostics() {
     max-height: calc(100dvh - 12px);
   }
   .skillspector__dialog-frame { max-height: calc(100dvh - 12px); }
-  .skillspector__dialog-header { padding: 14px; gap: 10px; flex-direction: column; }
+  .skillspector__dialog-header { padding: 14px; gap: 10px; flex-direction: column; align-items: stretch; }
   .skillspector__dialog-actions { width: 100%; flex-wrap: nowrap; }
   .skillspector__copy { flex: 1 1 auto; min-width: 0; text-align: center; white-space: normal; line-height: 1.35; }
   .skillspector__copy svg { flex: 0 0 16px; }

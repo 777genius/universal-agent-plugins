@@ -36,9 +36,9 @@ npx universal-agent-plugins add context7 --target codex,cursor --dry-run
 [原生安装指南](https://github.com/777genius/universal-agent-plugins/blob/main/docs/NATIVE_INSTALL.md)提供 macOS、Linux 和 Windows 可执行文件。
 原生管理器不需要 Node.js，但插件可能需要自己的运行时。
 
-[CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95)保留显式项目范围和 0.1.94 引入的自动安装选择，并新增[本地管理 API](../use/manage#local-management-api)和[Pi 原生扩展](../reference/client-compatibility#pi-native-extensions)。预览将包添加到项目：
+[CLI](https://github.com/777genius/universal-agent-plugins/releases/latest)保留显式项目范围和 0.1.94 引入的自动安装选择，并新增[本地管理 API](../use/manage#local-management-api)和[Pi 扩展、Skills 和 MCP](../reference/client-compatibility#pi-native-extensions)。预览将包添加到项目：
 
-对于符合条件的已审核目录条目，请复制其固定到完整 Git 提交 SHA 的来源和兼容客户端。Directory v1 的别名（如 `context7`）仅适用于用户范围。请替换 `OWNER/REPOSITORY`、`FULL_COMMIT_SHA` 和 `PACKAGE_PATH`；如果包位于仓库根目录，请省略 `//PACKAGE_PATH`。
+对于符合条件的已审核目录条目，如果目标客户端支持所有必需组件，已发布的 CLI 可使用签名 Directory 短名称和显式项目范围（例如 `agentplugins add context7 --target codex --scope project --dry-run`）。如需固定可复现的来源，也可以使用完整提交 SHA 的 Git 来源及兼容客户端。将 `OWNER/REPOSITORY`、`FULL_COMMIT_SHA` 和 `PACKAGE_PATH` 替换为真实值；如果包位于仓库根目录，请省略 `//PACKAGE_PATH`。
 
 语法模板：`github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH`。下面的命令使用一个真实的 GitLab 历史提交，并不代表该版本目前仍通过目录审核。实际安装时请从目录复制当前已审核的固定来源。
 
@@ -52,7 +52,7 @@ npx universal-agent-plugins add github:777genius/universal-agent-plugins@2ddbb99
 
 各分发渠道的版本可能不同。使用 0.1.94 的自动项目选择前，先运行 `agentplugins version` 或
 `npx universal-agent-plugins version`。若所选渠道仍较旧，可使用[原生安装器](https://github.com/777genius/universal-agent-plugins/blob/main/docs/NATIVE_INSTALL.md)，
-或继续使用 0.1.93 已支持的显式项目范围命令。
+或使用 0.1.93 已支持的完整 SHA 固定 Git 来源项目命令；签名 Directory 短名称的项目安装需使用当前稳定版 CLI。
 
 检查计划后再去掉 `--dry-run`。写入包文件不等于客户端已发现、授予信任、完成认证或成功调用 MCP。
 

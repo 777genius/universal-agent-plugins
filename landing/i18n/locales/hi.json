@@ -339,12 +339,64 @@
     "specLink": "Agent Plugins 1.0 विनिर्देश पढ़ें",
     "compatibilityLink": "क्लाइंट संगतता (अंग्रेज़ी में)",
     "limitations": "संगतता हर पैकेज के लिए अलग होती है। स्कीमा सत्यापन रनटाइम, OAuth या सक्रियण सिद्ध नहीं करता। Codex घोषित MCP SSE का समर्थन नहीं करता; stdio और Streamable HTTP को उनके मौजूदा अडैप्टर का समर्थन मिलता है।",
-    "versions": "सत्यापित नेटिव इंस्टॉलर: CLI 0.1.95; npm पैकेज का नाम: universal-agent-plugins; GitHub रिलीज़ टैग: agentplugins-v*।",
+    "versions": "नवीनतम स्थिर नेटिव इंस्टॉलर: GitHub Releases; npm पैकेज: universal-agent-plugins; GitHub रिलीज़ टैग: agentplugins-v*।",
     "availability": "पैकेज हाथ से बनाएँ या स्रोत से पैकेज निर्माण टूल तैयार करें",
-    "releaseScope": "GitHub Releases पर CLI 0.1.95 मिलता है, जिसमें लोकल मैनेजमेंट API और उपयोगकर्ता स्कोप में Pi के नेटिव एक्सटेंशन जोड़े गए हैं। इसमें agentplugins author शामिल नहीं है। Homebrew और npm पर पुराना संस्करण मिल सकता है; agentplugins version से जाँचें। बिल्ड गाइड की पैकेज निर्माण कमांड के लिए उस सुविधा वाला सोर्स बिल्ड चाहिए। बनाई गई API संदर्भ सामग्री अपने ऐतिहासिक 0.1.65 स्रोत से जुड़ी है; वह वर्तमान इंस्टॉलर का विवरण नहीं है।",
+    "releaseScope": "GitHub Releases पर नवीनतम स्थिर CLI उपलब्ध है, जिसमें लोकल मैनेजमेंट API और समर्थित Pi नेटिव एक्सटेंशन हैं; इसमें agentplugins author शामिल नहीं है। npm और Homebrew के संस्करण पुराने हो सकते हैं; agentplugins version से जाँचें। बिल्ड गाइड की author कमांड के लिए उस सुविधा वाला सोर्स बिल्ड चाहिए। बनाई गई API संदर्भ सामग्री अपने ऐतिहासिक 0.1.65 स्रोत से जुड़ी है और वर्तमान इंस्टॉलर का विवरण नहीं है।",
     "buildGuideLink": "बिल्ड गाइड खोलें"
   },
   "shell": {
+    "clientSupport": {
+      "eyebrow": "संगतता",
+      "title": "समर्थित एजेंट और इंस्टॉलेशन के दायरे",
+      "description": "उपयोगकर्ता दायरे में घटक एजेंट प्रोफ़ाइल में इंस्टॉल होते हैं, जबकि प्रोजेक्ट दायरे में एक ही कार्यक्षेत्र में। UAP समर्थित फ़ाइलें कॉन्फ़िगर करता है। एजेंट आपसे प्रोजेक्ट पर भरोसा करने, साइन इन करने या पुनः शुरू करने को कह सकता है।",
+      "tableLabel": "एजेंट इंस्टॉलेशन समर्थन तालिका",
+      "tableCaption": "हर एजेंट के लिए उपयोगकर्ता और प्रोजेक्ट समर्थन, सेटअप का तरीका और इंस्टॉलेशन के बाद के कदम।",
+      "columns": {
+        "agent": "एजेंट",
+        "user": "उपयोगकर्ता दायरा",
+        "project": "प्रोजेक्ट दायरा",
+        "setup": "सेटअप",
+        "nextStep": "इंस्टॉल करने के बाद"
+      },
+      "scrollHint": "सभी कॉलम देखने के लिए दाएँ-बाएँ स्क्रॉल करें।",
+      "note": "स्वचालित: UAP समर्थित घटक इंस्टॉल करता है। मार्गदर्शित: एजेंट के निर्देशों का पालन करें। तैयार: तैयार फ़ाइलें सक्रिय करें। मैन्युअल: ऐप में सेटअप पूरा करें। इंस्टॉलेशन अपने आप साइन इन नहीं करता या भरोसे की अनुमति नहीं देता। यहाँ वर्तमान स्रोत कोड की क्षमताएँ दिखाई गई हैं; प्रकाशित CLI अलग हो सकता है। उपलब्धता प्लगइन और एजेंट के संस्करण पर निर्भर है।",
+      "details": "संगतता का विवरण देखें",
+      "capabilities": {
+        "pluginsSkillsMcp": "प्लगइन, स्किल, MCP",
+        "skillsMcp": "स्किल, MCP",
+        "pluginsSkillsMcpHooks": "प्लगइन, स्किल, MCP, हुक",
+        "extensionsSkillsMcp": "एक्सटेंशन, स्किल, MCP",
+        "copilotPackage": "Copilot-आधारित पैकेज",
+        "desktopLocalPluginsWebConnectedApps": "डेस्कटॉप के स्थानीय प्लगइन; वेब पर जुड़े ऐप",
+        "personalAppSetup": "निजी ऐप सेटअप",
+        "skillsOnly": "केवल स्किल",
+        "skillsMcpPrepared": "स्किल, MCP (तैयार)",
+        "notSupported": "समर्थित नहीं"
+      },
+      "setup": {
+        "automatic": "स्वचालित",
+        "guided": "मार्गदर्शित",
+        "prepared": "तैयार",
+        "manual": "मैन्युअल"
+      },
+      "nextSteps": {
+        "claude": "कार्यस्थान पर भरोसा करें और संकेत मिलने पर Claude Code फिर से लोड करें।",
+        "codex": "नया सत्र खोलें; संकेत मिलने पर प्रोजेक्ट MCP पहुँच मंज़ूर करें।",
+        "opencode": "नया सत्र शुरू करें और प्रभावी प्रोजेक्ट सेटिंग जाँचें।",
+        "cursor": "Cursor फिर से लोड करें; माँगे जाने पर प्लगइन या MCP सर्वर चालू करें।",
+        "copilot": "संकेत मिलने पर Copilot CLI फिर शुरू करें।",
+        "gemini": "Gemini CLI फिर से लोड करें और संकेत मिलने पर टूल पहुँच मंज़ूर करें।",
+        "qoder": "Qoder फिर शुरू करें और MCP अनुमतियाँ जाँचें।",
+        "pi": "प्रोजेक्ट पर भरोसा करें और Pi संसाधन फिर से लोड करें।",
+        "windsurf": "चुने हुए प्रोजेक्ट में Devin खोलें या पुनः शुरू करें और पहुँच जाँचें।",
+        "kimi": "/reload या /new चलाएँ और MCP अनुमतियाँ जाँचें।",
+        "cline": "प्रोजेक्ट MCP सेटिंग का पथ चुनें और Cline फिर से लोड करें।",
+        "kiro": "साइन इन करें, पहुँच मंज़ूर करें और संकेत मिलने पर Kiro फिर शुरू करें।",
+        "grok": "Grok में चुना हुआ प्रोजेक्ट खोलें, प्लगइन सक्षम करें और उस पर भरोसा करें; फिर पुनः लोड करके Skills और MCP जाँचें।",
+        "vscode": "फ़ोल्डर खोलकर उस पर भरोसा करें; MCP सर्वर जाँचें और चालू करें।",
+        "chatgpt": "डेस्कटॉप: Codex CLI से स्थानीय रूप से इंस्टॉल करें; वेब: ChatGPT में ऐप कनेक्ट या इंस्टॉल करें।"
+      }
+    },
     "dependencies": {
       "eyebrow": "जुड़ी हुई निर्भरताएँ",
       "title": "दो प्लगइन। एक साझा निर्भरता।",
@@ -361,12 +413,10 @@
       "guide": "गाइड",
       "from": "मेरा कंप्यूटर",
       "to": "टीममेट का कंप्यूटर",
-      "transfer": "{manifest} और {lockfile} निर्यात करें, दोनों फ़ाइलें सहकर्मी को दें और वही संस्करण बहाल करने के लिए आयात करें।",
-      "requirements": "प्रकाशित Marketing Kit केवल उपयोगकर्ता वातावरण में समर्थित है; प्रोजेक्ट स्कोप अभी सत्यापित नहीं है। स्रोत और संगत एजेंट उपलब्ध होने चाहिए।",
-      "excludes": "साइन-इन, सीक्रेट, सेटिंग और प्लगइन डेटा स्थानांतरित नहीं होते।",
-      "subtitle": "इंस्टॉल करने से पहले उपयोगकर्ता के uap.toml में Marketing Kit 0.1.0 घोषित करें। फिर लॉकफ़ाइल निर्यात करें, ताकि सहकर्मी वही संस्करण बहाल कर सके।",
-      "commit": "सटीक संस्करण निर्यात करें",
-      "manifestPreview": "उपयोगकर्ता uap.toml का पूर्वावलोकन",
+      "transfer": "{manifest} और {lockfile} साझा करें। साथी को इंस्टॉल से पहले दोनों फ़ाइलें अपने यूज़र एनवायरनमेंट में इंपोर्ट करनी होंगी।",
+      "handoff": "दोनों फ़ाइलें कमिट करके साझा करें। इंपोर्ट साथी के मौजूदा यूज़र मैनिफ़ेस्ट और लॉक को बदलने से पहले पूर्वावलोकन और पुष्टि माँगता है।",
+      "subtitle": "Marketing Kit v0.1.0 का उदाहरण: इंस्टॉल करें और लॉक किए गए वर्ज़न साझा करें।",
+      "manifestPreview": "uap.toml उदाहरण का पूर्वावलोकन",
       "closePreview": "फ़ाइल पूर्वावलोकन बंद करें"
     },
     "docs": {
@@ -384,17 +434,17 @@
     },
     "why": {
       "eyebrow": "यह क्यों काम करता है",
-      "title": "एक मानक",
-      "subtitle": "क्लाइंट के नेटिव प्रारूप में इंस्टॉलेशन",
-      "intro": "पैकेज पोर्टेबल रहता है; इंस्टॉलर प्रत्येक क्लाइंट के प्रारूप और जीवनचक्र को संभालता है।",
-      "standardTitle": "मानक पहले",
-      "clientTitle": "हर क्लाइंट के अनुसार",
-      "clientDescription": "Codex, Cursor, Claude Code, Gemini CLI, OpenCode और अन्य क्लाइंट उनके द्वारा समर्थित प्रारूप प्राप्त करते हैं।",
-      "lifecycleTitle": "पूर्ण जीवनचक्र",
-      "lifecycleDescription": "उसी CLI के माध्यम से प्लगइन जोड़ें, निरीक्षण करें, अपडेट करें, मरम्मत करें, स्रोत बदलें या हटाएँ।",
-      "sourceTitle": "स्रोत उपलब्ध",
-      "sourceDescription": "समीक्षा किए गए पैकेज और सामुदायिक खोज को स्पष्ट रूप से लेबल किया गया है, और उनका स्रोत इंस्टॉल से पहले उपलब्ध है।",
-      "standardDescription": "पैकेज Agent Plugins 1.0 के {manifest} से पढ़े जाते हैं; दूसरे इंस्टॉलेशन मेनिफ़ेस्ट की ज़रूरत नहीं होती।"
+      "title": "एक ही पैकेज",
+      "subtitle": "अलग-अलग एजेंट, कम मैन्युअल सेटअप",
+      "intro": "प्लगइन और संगत एजेंट चुनें। UAP समर्थित घटक तैयार करता है और बाकी साइन-इन या सक्रियण चरण दिखाता है।",
+      "standardTitle": "plugin.json से शुरुआत",
+      "clientTitle": "हर एजेंट के अनुरूप",
+      "clientDescription": "Skills, MCP सर्वर और अन्य घटक चुने गए एजेंट की समर्थित क्षमताओं के अनुसार तैयार होते हैं।",
+      "lifecycleTitle": "बदलाव सुरक्षित ढंग से प्रबंधित करें",
+      "lifecycleDescription": "योजना देखें, अपडेट करें, सुधारें या प्रबंधित इंस्टॉल हटाएँ—अन्य फ़ाइलों को बदले बिना।",
+      "sourceTitle": "स्रोत की जानकारी",
+      "sourceDescription": "इंस्टॉल करने से पहले पैकेज का स्रोत और कैटलॉग समीक्षा की स्थिति देखें।",
+      "standardDescription": "{manifest} वाला Agent Plugins 1.0 पैकेज इस्तेमाल करें—UAP के लिए अलग प्लगइन फ़ॉर्मैट की ज़रूरत नहीं।"
     },
     "builtWith": {
       "title": "UAP से पहले ही बनाए गए प्रोजेक्ट",
@@ -408,7 +458,7 @@
       "items": {
         "0": {
           "question": "कौन से AI एजेंट समर्थित हैं?",
-          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, VS Code, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder: हर क्लाइंट के लिए स्थापना या तैयारी का अपना तरीका है। संगतता पैकेज के घटकों, स्थापना के दायरे और सक्रियण की आवश्यकताओं पर निर्भर करती है।"
+          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder, Pi: हर क्लाइंट के लिए स्थापना या तैयारी का अपना तरीका है। संगतता पैकेज के घटकों, स्थापना के दायरे और सक्रियण की आवश्यकताओं पर निर्भर करती है।"
         },
         "1": {
           "question": "क्या एक कमांड से सभी एजेंटों में इंस्टॉल होता है?",
@@ -433,15 +483,15 @@
       }
     },
     "seo": {
-      "indexTitle": "Universal Agent Plugins CLI {'|'} Agent Plugins 1.0 स्थापित करें",
-      "indexDescription": "एक CLI के साथ समर्थित एआई एजेंटों में Agent Plugins 1.0 को स्थापित करें, अपडेट करें, मरम्मत करें और हटाएँ।",
+      "indexTitle": "AI एजेंट प्लगइन्स और Skills {'|'} Universal Agent Plugins",
+      "indexDescription": "एक CLI से Codex, Claude Code, Cursor, Gemini CLI और अन्य के लिए Agent Plugins 1.0, Agent Skills और MCP टूल इंस्टॉल करें। ग्लोबल या प्रोजेक्ट स्तर पर प्रबंधित करें।",
       "downloadTitle": "Universal Agent Plugins CLI डाउनलोड करें",
       "downloadDescription": "macOS, Linux, या Windows पर Universal Agent Plugins CLI इंस्टॉल करें और एक कमांड से Agent Plugins 1.0 प्रबंधित करें।",
       "applicationSubCategory": "एजेंट प्लगइन प्रबंधक",
       "softwareRequirements": "macOS, Linux और Windows के लिए मूल CLI; या npx के लिए Node.js 22+",
-      "featureList": "Agent Plugins 1.0 को स्थापित करें, निरीक्षण करें, अद्यतन करें, मरम्मत करें, स्रोत स्विच करें और हटाएँ",
-      "imageAlt": "Universal Agent Plugins - एक CLI के साथ एआई एजेंटों में प्लगइन्स इंस्टॉल करें",
-      "organizationDescription": "Agent Plugins 1.0 के लिए ओपन-सोर्स मल्टी-एजेंट इंस्टॉलर और जीवनचक्र प्रबंधक।"
+      "featureList": "Agent Plugins 1.0 और Agent Skills को ग्लोबल या प्रोजेक्ट स्तर पर इंस्टॉल, जाँच, अपडेट, रिपेयर और रिमूव करें।",
+      "imageAlt": "Universal Agent Plugins — कई AI एजेंटों के प्लगइन्स, Skills और MCP टूल के लिए एक CLI।",
+      "organizationDescription": "अनेक AI एजेंटों में Agent Plugins 1.0, Agent Skills और MCP टूल को इंस्टॉल व प्रबंधित करने वाला ओपन-सोर्स CLI।"
     },
     "hero": {
       "autoLabel": "टर्मिनल में एजेंट चुनें",
@@ -462,11 +512,12 @@
       "terminal": "आपके टर्मिनल में",
       "refreshNotice": "प्लगइन डेटा ताज़ा किया जा रहा है। थोड़ी देर बाद फिर प्रयास करें।",
       "otherMethods": "अन्य स्थापना विधियाँ",
+      "supportedFormats": "समर्थित प्रारूप",
       "watchDemo": "डेमो देखें",
       "demoVideoTitle": "Universal Agent Plugins इंस्टॉलेशन डेमो",
       "supportedClients": "समर्थित क्लाइंट",
       "clientNote": "CLI प्रत्येक क्लाइंट द्वारा समर्थित मूल प्रारूप को स्थापित या तैयार करता है। कुछ क्लाइंट आपसे सक्रियण पूरा करने या साइन इन करने के लिए कह सकते हैं।",
-      "install": "{name} स्थापित करें",
+      "install": "{name} प्लगइन इंस्टॉल करें",
       "explore": "प्लगइन्स का अन्वेषण करें",
       "exploreCount": "{count} प्लगइन्स का अन्वेषण करें | {count} प्लगइन का अन्वेषण करें | {count} प्लगइन्स का अन्वेषण करें",
       "delivery": {
@@ -506,17 +557,26 @@
       "appearance": "दिखावट"
     },
     "navigation": {
+      "demo": "वीडियो",
       "plugins": "प्लगइन्स",
       "why": "यह क्यों काम करता है",
       "faq": "अक्सर पूछे जाने वाले प्रश्न",
       "open": "नेविगेशन मेनू खोलें",
       "close": "नेविगेशन मेनू बंद करें",
       "title": "नेविगेशन मेनू",
-      "description": "प्लगइन्स, उत्पाद विवरण, अक्सर पूछे जाने वाले प्रश्न या GitHub पर जाएं।",
-      "appearance": "दिखावट"
+      "description": "डेमो, प्लगइन सूची, दस्तावेज़ या GitHub खोलें।",
+      "appearance": "दिखावट",
+      "agents": "समर्थित एजेंट"
     }
   },
   "registryUi": {
+    "desktopGuide": {
+      "title": "ChatGPT Desktop (लोकल)",
+      "description": "Codex का लोकल प्लगइन कैटलॉग इस्तेमाल होता है, ChatGPT Web कनेक्शन नहीं।",
+      "command": "Desktop के लिए इंस्टॉल करें",
+      "nextStep": "Codex CLI लोकल प्लगइन को अपने आप इंस्टॉल और चालू करता है। Desktop खोलें (उपलब्ध हो तो codex app), ज़रूरत पड़ने पर रीस्टार्ट करें और नई लोकल चैट जाँचें। CLI की सफलता Desktop रनटाइम का प्रमाण नहीं है।",
+      "help": "सेटअप और समस्या समाधान"
+    },
     "select": {
       "up": "विकल्पों को ऊपर स्क्रॉल करें",
       "down": "विकल्पों को नीचे स्क्रॉल करें"
@@ -576,6 +636,10 @@
       "disclaimer": "स्वचालित जाँचें जोखिम कम करती हैं; वे प्लगइन सुरक्षित होने का प्रमाण नहीं हैं। जिस सॉफ़्टवेयर पर भरोसा न हो, उसे इंस्टॉल करने से पहले स्रोत और अनुमतियाँ देखें।"
     },
     "catalog": {
+      "sortLabel": "प्लगइन क्रमबद्ध करें",
+      "sortRecommended": "अनुशंसित",
+      "sortName": "नाम A–Z",
+      "curationNote": "सामान्य एजेंट कार्यों के लिए सुझाव; यह सुरक्षा रेटिंग नहीं है।",
       "staleCommunityResults": "अंतिम हस्ताक्षरित कैटलॉग की {count} सामुदायिक प्रविष्टियाँ दिखाई जा रही हैं। यह {generated} को बना था और {expired} को समाप्त हुआ। नया कैटलॉग आने तक इंस्टॉल कमांड रुके हैं। समीक्षा की गई प्रविष्टियाँ उपलब्ध हैं।",
       "staleCommunityListing": "ऐतिहासिक हस्ताक्षरित प्रविष्टि; कैटलॉग {expired} को समाप्त हुआ।",
       "staleCommunityCommands": "हस्ताक्षरित कैटलॉग की अवधि समाप्त होने के कारण सामुदायिक इंस्टॉल कमांड रुके हैं। प्रविष्टियाँ और स्रोत कोड अभी भी देख सकते हैं।",
@@ -649,8 +713,8 @@
       "unavailableAtItsIndexedSource": "इसके अनुक्रमित स्रोत पर अनुपलब्ध है",
       "checkedAgainBeforeInstallation": "इंस्टॉलेशन से पहले फिर जाँचा जाता है",
       "reviewedListing": "समीक्षित",
-      "notAvailableForChatgpt": "ChatGPT के लिए उपलब्ध नहीं है",
-      "verifiedConnectionFinishSetupInChatgpt": "सत्यापित कनेक्शन; ChatGPT में सेटअप पूरा करें",
+      "notAvailableForChatgpt": "इस प्लगइन के लिए सत्यापित ChatGPT Web ऐप बाइंडिंग नहीं है। वेब ऐप ChatGPT में कनेक्ट होते हैं।",
+      "verifiedConnectionFinishSetupInChatgpt": "ChatGPT Web ऐप बाइंडिंग सत्यापित है; कनेक्शन ChatGPT के अंदर पूरा करें।",
       "allInstalledAgents": "टर्मिनल में एजेंट चुनें",
       "commandsDisabledInPreview": "पूर्वावलोकन में कमांड अक्षम हैं.",
       "allInstalledAgentsRecommended": "टर्मिनल में एजेंट चुनें",
@@ -688,12 +752,12 @@
       "notReadyToInstall": "स्थापित करने के लिए तैयार नहीं है",
       "detectedWhenYouRunTheCommand": "कमांड इंस्टॉल से पहले एजेंट चुनने देता है।",
       "thisPackageIsNoLongerAvailableFromItsSource": "यह पैकेज अब अपने स्रोत से उपलब्ध नहीं है.",
-      "notAvailableForChatgpt": "ChatGPT के लिए उपलब्ध नहीं है",
+      "notAvailableForChatgpt": "इस प्लगइन के लिए सत्यापित ChatGPT Web ऐप बाइंडिंग नहीं है। वेब ऐप ChatGPT में कनेक्ट होते हैं।",
       "unavailableSignedDirectorySnapshotExpired": "अनुपलब्ध: हस्ताक्षरित Directory स्नैपशॉट की अवधि समाप्त",
       "noActiveReleaseSupportsThisClient": "कोई भी सक्रिय रिलीज़ इस क्लाइंट का समर्थन नहीं करता है",
       "unavailableReviewDataIsNotInstallationAuthority": "अनुपलब्ध: केवल समीक्षा का डेटा इंस्टॉलेशन की अनुमति का आधार नहीं है",
       "thisPackageDoesNotSupportAnyOfTheAgentsAvailableInTheInstallerYet": "यह पैकेज अभी तक इंस्टॉलर में उपलब्ध किसी भी एजेंट का समर्थन नहीं करता है।",
-      "verifiedConnectionFinishSetupInChatgpt": "सत्यापित कनेक्शन; ChatGPT में सेटअप पूरा करें",
+      "verifiedConnectionFinishSetupInChatgpt": "ChatGPT Web ऐप बाइंडिंग सत्यापित है; कनेक्शन ChatGPT के अंदर पूरा करें।",
       "allInstalledAgents": "टर्मिनल में एजेंट चुनें",
       "weFoundThisProjectButItDoesnTIncludeAnyToolsTheInstallerCanAddYet": "हमें यह प्रोजेक्ट मिला, लेकिन इसमें इंस्टॉलर द्वारा जोड़ा जा सकने वाला कोई भी टूल शामिल नहीं है।",
       "chooseTargetAgents": "लक्ष्य एजेंट चुनें",
@@ -717,11 +781,11 @@
       "unresolvedDataIsForReviewOnlyProductionCommandsRequireAPublishedSignedDirectorySnapshot": "अनसुलझा डेटा केवल समीक्षा के लिए है; उत्पादन कमांडों के लिए एक प्रकाशित हस्ताक्षरित निर्देशिका स्नैपशॉट की आवश्यकता होती है।",
       "commandsUnavailable": "कमांड अनुपलब्ध.",
       "automaticDetection": "टर्मिनल में एजेंट चुनें",
-      "theCliChecksThisPluginAgainstInstalledAgentsSkipsIncompatibleOnesAndLetsYouConfirmTheTargetsChatgptIsIncludedOnlyWhenThisPluginProvidesAVerifiedConnection": "CLI स्थापित एजेंटों के विरुद्ध इस प्लगइन की जाँच करता है, असंगत एजेंटों को छोड़ देता है, और आपको लक्ष्यों की पुष्टि करने देता है। ChatGPT तभी शामिल किया जाता है जब यह प्लगइन एक सत्यापित कनेक्शन प्रदान करता है।",
+      "theCliChecksThisPluginAgainstInstalledAgentsSkipsIncompatibleOnesAndLetsYouConfirmTheTargetsChatgptIsIncludedOnlyWhenThisPluginProvidesAVerifiedConnection": "CLI स्थानीय एजेंट जाँचकर संगत लक्ष्य चुनने देता है। ChatGPT Web अलग है: योग्य ऐप तैयार हो सकते हैं, लेकिन कनेक्शन ChatGPT में पूरा होता है।",
       "oneStepRemainsInChatgpt": "ChatGPT में एक कदम बाकी है.",
       "noSingleSourceServesThisTargetSet": "कोई एक स्रोत इन सभी चुने टार्गेट का समर्थन नहीं करता।",
       "theCliWillFailBeforeMutationAndSuggestCompatibleTargetSourceCombinationsItNeverMixesDistributionsAcrossClients": "CLI कोई बदलाव करने से पहले रुक जाता है और संगत टार्गेट/स्रोत संयोजन सुझाता है। वह अलग-अलग क्लाइंट के लिए अलग वितरण नहीं मिलाता।",
-      "theCliChecksEverySelectedAgentBeforeChangingFilesAndShowsAnySignInOrActivationStepOauthCredentialsStayWithTheAgent": "CLI फ़ाइलें बदलने से पहले प्रत्येक चयनित एजेंट की जाँच करता है और कोई भी साइन-इन या सक्रियण चरण दिखाता है। OAuth क्रेडेंशियल एजेंट के पास रहते हैं।",
+      "theCliChecksEverySelectedAgentBeforeChangingFilesAndShowsAnySignInOrActivationStepOauthCredentialsStayWithTheAgent": "फ़ाइलें बदलने से पहले CLI एजेंट जाँचता है और सेटअप चरण दिखाता है। OAuth क्रेडेंशियल एजेंट के पास रहते हैं।",
       "chatgptFinish": "ChatGPT खोलें, ऐप्स या प्लगइन्स में {name} चुनें, इसे कनेक्ट करें और एक नई चैट शुरू करें। उपलब्धता आपके खाते और कार्यक्षेत्र पर निर्भर करती है।",
       "expectedFallback": "अपेक्षित स्रोत फ़ॉलबैक: {source}।",
       "dependencySaving": {
@@ -738,9 +802,14 @@
         "project": "यह प्रोजेक्ट",
         "projectHint": "ये कमांड अपने प्रोजेक्ट फ़ोल्डर से चलाएँ। आपका एजेंट प्रोजेक्ट पर भरोसा करने या उसे सक्रिय करने के लिए कह सकता है।",
         "projectUnavailable": "इस पैकेज को प्रोजेक्ट में इंस्टॉल करना उपलब्ध नहीं है।",
+        "marketingKitProjectUnavailable": "Marketing Kit अभी Project में उपलब्ध नहीं है: Notion, HubSpot और Playwright की प्रत्येक आवश्यक निर्भरता को Project इंस्टॉलेशन का समर्थन करना होगा।",
+        "pinnedGitFallbackInfo": "यह समीक्षा किया हुआ सटीक-कमिट Git स्रोत पुनरुत्पादन योग्य इंस्टॉलेशन का विकल्प है। प्रकाशित CLI भी उपयुक्त क्लाइंट और सभी आवश्यक घटकों के लिए Project स्कोप में हस्ताक्षरित Directory के छोटे नाम स्वीकार करती है।",
         "selectionUnavailable": "एजेंट और इंस्टॉल स्थान का यह संयोजन उपलब्ध नहीं है। कोई दूसरा एजेंट या स्थान चुनें।"
       },
       "outcome": {
+        "projectPreview": "प्रोजेक्ट पूर्वावलोकन: CLI स्रोत, MCP ट्रांसपोर्ट और आवश्यक निर्भरताओं की जाँच करता है। एजेंट सक्रियण अलग है।",
+        "projectSupported": "इंस्टॉल किया जा सकता है",
+        "projectUnsupported": "इस प्रोजेक्ट में समर्थित नहीं",
         "includes": "इसमें शामिल हैं:",
         "label": "इंस्टॉलेशन और अगले चरण",
         "managed": "CLI इंस्टॉल की गई फ़ाइलें प्रबंधित करता है।",
@@ -756,7 +825,8 @@
           "mcp": "MCP टूल्स",
           "extensions": "एक्सटेंशन"
         }
-      }
+      },
+      "piNoCompatibleRelease": "Pi समर्थित है, लेकिन इस प्लगइन के हस्ताक्षरित रिलीज़ में Pi के लिए संगत लक्ष्य नहीं है।"
     },
     "authentication": {
       "not_required": "किसी खाते की आवश्यकता नहीं",
@@ -803,11 +873,11 @@
         "activation": "CLI के बताए सक्रियण चरण पूरे करें, फिर नया Codex सत्र शुरू करें।"
       },
       "chatgpt": {
-        "note": "सत्यापित ऐप बाइंडिंग और Context7 सेटअप के निर्देश",
-        "status": "ऐप में सेटअप",
-        "intro": "ChatGPT के लिए संगत Agent Plugins 1.0 तैयार करें। ऐप सक्रियण और खाते की सहमति ChatGPT में ही पूरी होती है।",
-        "delivery": "CLI प्रकाशक की ऐप बाइंडिंग वैलिडेट करता है। वह Context7 के सार्वजनिक, प्रमाणीकरण-रहित MCP एंडपॉइंट से व्यक्तिगत marketplace पैकेज भी तैयार कर सकता है।",
-        "activation": "Developer Mode में ऐप बनाएँ या कनेक्ट करें, तैयार व्यक्तिगत प्लगइन इंस्टॉल करें और उसे नई चैट में चुनें।"
+        "note": "Desktop: Codex CLI से स्वचालित; Web: ChatGPT में सेटअप",
+        "status": "समर्थित",
+        "intro": "ChatGPT Desktop और Web दोनों पर प्लगइन का समर्थन करता है। Desktop के स्थानीय प्लगइन Codex CLI मार्केटप्लेस का उपयोग करते हैं, जबकि Web के लिए संगत क्लाउड ऐप या मार्केटप्लेस कनेक्शन चाहिए।",
+        "delivery": "UAP Codex CLI से संगत स्थानीय Desktop प्लगइन इंस्टॉल करता है और सत्यापित Web ऐप कनेक्शन तैयार करता है। स्थानीय CLI आपके ChatGPT खाते में अपने आप क्लाउड प्लगइन इंस्टॉल नहीं कर सकता।",
+        "activation": "Desktop: नई स्थानीय चैट खोलकर प्लगइन जाँचें। Web: ChatGPT में ऐप कनेक्ट या इंस्टॉल करें और आवश्यक अनुमतियाँ दें।"
       },
       "cursor": {
         "note": "नेटिव Agent Plugin पैकेज",
@@ -893,12 +963,26 @@
         "delivery": "CLI नेटिव .qoder-plugin मेनिफ़ेस्ट लिखता है। Qoder CLI उपलब्ध हो तो उसके ज़रिए प्रबंधित पैकेज पंजीकृत करता है।",
         "activation": "इंस्टॉलेशन के बाद Qoder प्लगइन रीलोड करें या Qoder रीस्टार्ट करें। MCP रनटाइम कनेक्शन और प्रदाता का प्रमाणीकरण अब भी Qoder में जाँचना आवश्यक है।"
       },
-      "pi": {
-        "note": "केवल प्रबंधित नेटिव Pi एक्सटेंशन",
+      "hermes": {
+        "note": "यूज़र Skills/MCP और प्रोजेक्ट Skills; प्रोजेक्ट MCP समर्थित नहीं",
         "status": "समर्थित",
-        "intro": "नेटिव Pi एक्सटेंशन घोषित करने वाले Agent Plugins 1.0 पैकेज इंस्टॉल करें। पोर्टेबल स्किल्स और MCP प्रोजेक्शन अभी इस एडाप्टर के दायरे में नहीं हैं।",
-        "delivery": "CLI घोषित Pi एक्सटेंशन को आपकी Pi एजेंट डायरेक्टरी में इंस्टॉल करता है और अपडेट, मरम्मत तथा हटाने के लिए प्रबंधित पैकेज का रिकॉर्ड रखता है।",
-        "activation": "इंस्टॉलेशन के बाद प्रबंधित एक्सटेंशन लोड करने के लिए संसाधन फिर से लोड करें या Pi को पुनः शुरू करें।"
+        "intro": "अन्य सेटिंग बदले बिना अपने यूज़र या चुने हुए Git प्रोजेक्ट में Hermes Agent की मूल Skills और यूज़र-स्तरीय MCP सर्वर इंस्टॉल करें।",
+        "delivery": "UAP अपने स्वामित्व वाले Skills फ़ोल्डर और यूज़र के config.yaml में विशिष्ट MCP प्रविष्टियाँ प्रबंधित करता है। प्रोजेक्ट इंस्टॉल यूज़र MCP कॉन्फ़िगरेशन नहीं बदलता।",
+        "activation": "इंटीग्रेशन फिर लोड करने के लिए Hermes पुनः शुरू करें। प्रोजेक्ट Skills इस्तेमाल करने से पहले रिपॉज़िटरी की विश्वसनीयता जाँचें; रनटाइम पहचान और प्रमाणीकरण की अलग पुष्टि ज़रूरी है।"
+      },
+      "antigravity": {
+        "note": "मूल यूज़र/प्रोजेक्ट प्लगइन; सक्रियण की पुष्टि आवश्यक",
+        "status": "CLI द्वारा तैयार",
+        "intro": "चुने हुए यूज़र या प्रोजेक्ट दायरे में समर्थित Skills और MCP सर्वर वाले Google Antigravity के मूल प्लगइन तैयार करें।",
+        "delivery": "UAP चुने हुए यूज़र या प्रोजेक्ट कॉन्फ़िगरेशन में प्रबंधित प्लगइन फ़ोल्डर तैयार करता है, दूसरे प्लगइन सुरक्षित रखता है और hooks स्वतः सक्रिय नहीं करता।",
+        "activation": "Antigravity खोलें या फिर लोड करें और जाँचें कि प्लगइन पहचाना तथा सक्रिय किया गया है। तैयार फ़ाइलें मॉडल सत्र, प्रमाणीकरण या वास्तविक MCP निष्पादन का प्रमाण नहीं हैं।"
+      },
+      "pi": {
+        "note": "Pi के नेटिव एक्सटेंशन, Skills और MCP",
+        "status": "समर्थित",
+        "intro": "यूज़र या प्रोजेक्ट के लिए संगत Pi एक्सटेंशन, Skills और MCP (stdio/Streamable HTTP) इंस्टॉल करें। कैटलॉग पैकेज के लिए संगत हस्ताक्षरित रिलीज़ चाहिए; CLI सीधे स्रोतों की अलग से जाँच करता है।",
+        "delivery": "CLI चुने हुए Pi प्रोफ़ाइल या प्रोजेक्ट में योग्य घटक इंस्टॉल करता है और अपडेट, मरम्मत और हटाने का प्रबंधन करता है।",
+        "activation": "Pi संसाधन रीलोड करें या Pi पुनः चालू करें। ज़रूरत पर प्रोजेक्ट ट्रस्ट और MCP अनुमतियाँ जाँचें।"
       }
     },
     "directoryPage": {
@@ -911,7 +995,7 @@
       "breadcrumb": "नेविगेशन पथ",
       "plugins": "प्लगइन्स",
       "agentPlugins10": "Agent Plugins 1.0",
-      "theListingAndMetadataWereReviewedAnAutomatedSecurityAssessmentWhenPresentAppliesOnlyToTheExactScannedRevisionRuntimeBehaviorIsNotAudited": "लिस्टिंग और मेटाडेटा की समीक्षा की गई। एक स्वचालित सुरक्षा मूल्यांकन, जब मौजूद होता है, केवल सटीक स्कैन किए गए संशोधन पर लागू होता है। रनटाइम व्यवहार का ऑडिट नहीं किया जाता है.",
+      "theListingAndMetadataWereReviewedAnAutomatedSecurityAssessmentWhenPresentAppliesOnlyToTheExactScannedRevisionRuntimeBehaviorIsNotAudited": "लिस्टिंग और मेटाडेटा की समीक्षा हुई। सुरक्षा स्कैन, यदि हो, केवल उस संस्करण पर लागू है; रनटाइम का ऑडिट नहीं हुआ।",
       "installPlugin": "प्लगइन इंस्टॉल करें",
       "viewSource": "स्रोत देखें",
       "pluginOverview": "प्लगइन का अवलोकन",
@@ -977,7 +1061,9 @@
       "availableFor": "{name} के लिए प्लगइन्स उपलब्ध हैं",
       "count": "{count} समीक्षा किया गया पैकेज इस क्लाइंट का समर्थन करता है। | {count} समीक्षा किए गए पैकेज इस क्लाइंट का समर्थन करते हैं।",
       "tryPlugin": "Context7 आज़माएँ या {source} की जगह किसी अन्य संगत प्लगइन का समीक्षित छोटा नाम या पूरे पैकेज का स्रोत दें।",
-      "localPackageHint": "./my-plugin को मान्य Agent Plugins 1.0 पैकेज के पथ से बदलें।"
+      "localPackageHint": "./my-plugin को मान्य Agent Plugins 1.0 पैकेज के पथ से बदलें।",
+      "piSignedCount": "Pi के लिए हस्ताक्षरित कैटलॉग पैकेज: {count}",
+      "piDirectSourceNote": "यहाँ केवल वे पैकेज दिखते हैं जिनके हस्ताक्षरित Directory रिलीज़ में Pi की अनुमति है। संगत Skills, MCP सर्वर और एक्सटेंशन स्थानीय पैकेज या निश्चित Git कमिट से भी इंस्टॉल किए जा सकते हैं; CLI उनकी अलग से जाँच करता है।"
     },
     "components": {
       "extensions": "एक्सटेंशन",
@@ -1005,13 +1091,14 @@
       "required": "प्रमाणीकरण आवश्यक है",
       "not_required": "प्रमाणीकरण आवश्यक नहीं है",
       "unknown": "प्रमाणीकरण की आवश्यकताएँ अज्ञात हैं",
-      "varies": "एजेंट पर निर्भर",
+      "varies": "एजेंट या रिलीज़ पर निर्भर",
       "automatic": "कमांड चलाने पर स्थापित एजेंट पहचाने जाते हैं। उनकी आवश्यकताएँ देखने के लिए इंस्टॉल में एजेंट चुनें।",
       "unresolved": "इन एजेंटों के लिए इंस्टॉल विकल्प निर्धारित नहीं है। आवश्यकताएँ जाँचने के लिए समर्थित एजेंट चुनें।",
       "release": "{id} · रिलीज़ {sequence}",
       "requiredDetail": "पैकेज को खाते, टोकन या साइन-इन की आवश्यकता हो सकती है; यह OAuth निर्दिष्ट नहीं करता या आपके साइन-इन की पुष्टि नहीं करता।",
       "not_requiredDetail": "इन एजेंटों के लिए प्रमाणीकरण घोषित नहीं है। सेवा सीमाएँ और अन्य सेटअप आवश्यकताएँ लागू हो सकती हैं।",
-      "unknownDetail": "कनेक्ट करने से पहले पैकेज की आवश्यकताएँ जाँचें।"
+      "unknownDetail": "कनेक्ट करने से पहले पैकेज की आवश्यकताएँ जाँचें।",
+      "variesDetail": "एक ही एजेंट के संगत रिलीज़ में लॉगिन की ज़रूरत अलग हो सकती है। लक्ष्य चुनें और इंस्टॉलेशन योजना देखें।"
     }
   },
   "pluginAuthoring": {
@@ -1019,7 +1106,7 @@
     "title": "प्लगइन इस्तेमाल करें / प्लगइन बनाएँ",
     "subtitle": "मानक पैकेज स्थापित और प्रबंधित करें, या अपना plugin.json पैकेज लिखकर उचित उपकरणों से जाँचें।",
     "use": {
-      "badge": "CLI 0.1.95",
+      "badge": "स्थिर CLI",
       "title": "प्लगइन इस्तेमाल करें",
       "description": "प्रकाशित इंस्टॉलर से पैकेज खोजें, पूर्वावलोकन करें, स्थापित करें और रखरखाव करें।",
       "cta": "उपयोग गाइड खोलें"

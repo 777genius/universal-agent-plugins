@@ -12,12 +12,18 @@ export type DependencySaveMode = 'saved' | 'noSave' | 'local' | 'discovery' | 'c
 export function dependencySaveMode(source: string, targets: readonly string[]): DependencySaveMode {
   if (/^(?:\.{1,2}[\\/]|[\\/]|~[\\/]|[A-Za-z]:[\\/])/.test(source)) return 'local';
   if (source.startsWith('discovery:')) return 'discovery';
-  if (targets.length === 1 && targets[0] === 'chatgpt') return 'chatgpt';
+  if (targets.length === 1 && targets[0] === 'chatgptweb')
+    return 'chatgpt';
   // Community selectors are already validated and may be shell-quoted paths.
   const github = isPinnedGitSource(source);
   const directory = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(source) && !source.startsWith('.');
   if (!github && !directory) return 'noSave';
-  return targets.every((target) => savedDependencyTargets.has(target)) ? 'saved' : 'noSave';
+  // The Desktop surface uses the same saved Codex dependency; no duplicate
+  // native plugin identity or special no-save route is introduced.
+  return targets.every((target) =>
+    savedDependencyTargets.has(target === 'chatgpt' ? 'codex' : target))
+    ? 'saved'
+    : 'noSave';
 }
 
 export function dependencyAddFlag(mode: DependencySaveMode, released: boolean): string {

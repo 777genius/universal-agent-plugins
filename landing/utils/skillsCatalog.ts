@@ -1,4 +1,5 @@
 import type { SkillsView, SkillListing } from '../types/skillsCatalog.ts';
+import type { InstallScope } from '../types/registry.ts';
 import { skillClients } from '../data/skillClients.ts';
 
 const skillTargetIds = new Set<string>(skillClients.map((client) => client.id));
@@ -22,6 +23,28 @@ export function restoreSkillsQuery(query: Record<string, unknown>) {
     query: queryValue(query.q),
     view: (view === 'trending' || view === 'hot' ? view : 'popular') as SkillsView,
   };
+}
+export interface SkillsFilters {
+  scannedOnly: boolean;
+  noRemarksOnly: boolean;
+}
+/** Only explicit single values enable evidence filters; old all links stay unfiltered. */
+export function restoreSkillsFilters(query: Record<string, unknown>): SkillsFilters {
+  return {
+    scannedOnly: query.skillScan === 'scanned',
+    noRemarksOnly: query.skillRemarks === 'none',
+  };
+}
+export function skillsFiltersQuery(
+  existing: Record<string, string | string[] | null | undefined>,
+  filters: SkillsFilters,
+) {
+  const next = { ...existing };
+  if (filters.scannedOnly) next.skillScan = 'scanned';
+  else delete next.skillScan;
+  if (filters.noRemarksOnly) next.skillRemarks = 'none';
+  else delete next.skillRemarks;
+  return next;
 }
 export function skillsCatalogQuery(
   query: string,
@@ -300,7 +323,9 @@ function unavailablePublisherSkill(source: string, name: string): boolean {
 export function skillInstallCommand(
   skill: SkillListing,
   targets?: readonly string[],
+  scope: InstallScope = 'user',
 ): string | undefined {
+  if (scope !== 'user' && scope !== 'project') return undefined;
   if (!skill || typeof skill !== 'object' || !skill.source ||
       typeof skill.id !== 'string' || typeof skill.source.kind !== 'string')
     return undefined;
@@ -320,6 +345,7 @@ export function skillInstallCommand(
     if (!ids.length || ids.some((id) => !skillTargetIds.has(id))) return undefined;
     tokens.push('--target', ids.join(','));
   }
+  if (scope === 'project') tokens.push('--scope', 'project');
   // Every dynamic token is a validated repository, normative name or known
   // target ID. Unverified names open the CLI picker instead of being guessed.
   // Double quotes preserve Unicode in CMD and CSV in PowerShell; these

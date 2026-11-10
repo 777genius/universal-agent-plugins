@@ -1,0 +1,15 @@
+{
+  "shell": {
+    "restoreDemo": {
+      "scopeLabel": "Escopo da instalação",
+      "projectLabel": "Projeto",
+      "globalLabel": "Global (usuário)",
+      "projectSubtitle": "Exemplo do Marketing Kit: mantenha as mesmas versões de plugins no projeto.",
+      "globalSubtitle": "Exemplo do Marketing Kit: leve sua configuração global de plugins para outro computador.",
+      "projectHandoff": "Inclua uap.toml e uap.lock no Git. Seu colega executa install no projeto.",
+      "globalHandoff": "Exporte e compartilhe os dois arquivos. A importação substitui a configuração global após a confirmação.",
+      "projectUnavailable": "Este é apenas um exemplo de projeto: a versão atual do Marketing Kit só permite instalação global.",
+      "exportLabel": "Exportar estes arquivos"
+    }
+  }
+}

@@ -140,6 +140,7 @@ func (detector Detector) detect(ctx context.Context, probeVersion bool, selected
 			client.Surfaces = nil
 			client.ExecutablePath = ""
 			client.ConfigRoot = ""
+			client.NativeConfigRoot = ""
 			client.DetectionError = fmt.Errorf("detect %s: %w", adapter.ID(), err)
 		}
 		result = append(result, client)
@@ -170,6 +171,7 @@ func (detector Detector) detectClient(ctx context.Context, host clients.Host, ad
 	client.Surfaces = detection.Surfaces
 	client.ExecutablePath = detection.ExecutablePath
 	client.ConfigRoot = detection.ConfigRoot
+	client.NativeConfigRoot = detection.NativeConfigRoot
 	client.Status = detectionStatus(detection)
 	if probeVersion && client.Status == domain.DetectionDetected && client.ExecutablePath != "" && (detector.ProbeVersion != nil || detector.ProbeVersionWithEnvironment != nil) {
 		timeout := detector.VersionTimeout
@@ -178,23 +180,25 @@ func (detector Detector) detectClient(ctx context.Context, host clients.Host, ad
 		}
 		ctx, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
-		var environment []string
+		var (
+			environment []string
+			version     string
+			err         error
+		)
 		switch profile := adapter.(type) {
 		case clients.VersionProbeEnvironment:
-			var err error
-			environment, err = profile.VersionProbeEnvironment(client.ConfigRoot)
+			var cleanup func()
+			environment, cleanup, err = versionProbeEnvironment(adapter, profile, client.ConfigRoot)
 			if err != nil {
 				return client, err
 			}
+			defer cleanup()
 		case clients.HostVersionProbeEnvironment:
-			var err error
 			environment, err = profile.VersionProbeEnvironmentForHost(host, client)
 			if err != nil {
 				return client, err
 			}
 		}
-		var version string
-		var err error
 		if detector.ProbeVersion != nil {
 			if len(environment) == 0 {
 				version, err = detector.ProbeVersion(ctx, client.ExecutablePath)
@@ -236,6 +240,7 @@ func environmentSnapshot() map[string]string {
 		"APPDATA", "LOCALAPPDATA", "ProgramFiles", "ProgramW6432", "ProgramFiles(x86)",
 		"XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME",
 		"CODEX_HOME", "CLAUDE_CONFIG_DIR", "GEMINI_CLI_HOME", "QODER_CONFIG_DIR", "CLINE_DATA_DIR", "CLINE_MCP_SETTINGS_PATH", "PI_CODING_AGENT_DIR",
+		"HERMES_HOME", "HERMES_DATA_DIR_SUFFIX",
 	} {
 		if value, ok := os.LookupEnv(name); ok {
 			values[name] = value

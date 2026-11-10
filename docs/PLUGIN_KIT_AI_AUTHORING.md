@@ -162,7 +162,7 @@ ChatGPT packages with a verified publisher app binding are prepared directly.
 Canonical Directory Context7 also has a guided personal-registration path:
 
 ```bash
-npx universal-agent-plugins add context7 --target chatgpt
+npx universal-agent-plugins add context7 --target chatgptweb
 ```
 
 The CLI selects this guided lane automatically. The first run prints the public

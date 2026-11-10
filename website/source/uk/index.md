@@ -27,7 +27,17 @@ translationRequired: true
     <h2>Створення плагінів</h2>
     <p>Напишіть стандартний пакет із plugin.json, Skills та конфігурацією MCP. Ознайомтеся з інструментами розробки, доступними у збірці з вихідного коду.</p>
   </a>
+  <a class="docs-card" href="./sdk/">
+    <h2>Інтегрувати UAP</h2>
+    <p>Hooks, визначення агента, Go installer і керування з TypeScript.</p>
+  </a>
 </div>
+
+## Інші можливості UAP
+
+- Установлюйте для кількох агентів, обирайте окремі Skills, підписаний каталог, Git/SSH та архіви. [Установлення](./use/install).
+- Відокремлюйте проєкт і користувача через `uap.toml` / `uap.lock`; оновлюйте й перевіряйте стан. [Керування](./use/manage).
+- Створюйте переносні пакети Skills/MCP та інтегруйте SDK Go і TypeScript. [SDK](./sdk/) · [Створення](./build/).
 
 ## Установіть свій перший плагін {#install-your-first-plugin}
 
@@ -44,9 +54,9 @@ CLI запитає, які сумісні агенти використовув�
 
 ## Що доступно зараз {#what-is-available}
 
-[CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95)
-— поточний нативний випуск інсталятора від 29 жовтня 2026 року. Він додає
-локальний API керування та нативні розширення Pi в області користувача.
+[CLI](https://github.com/777genius/universal-agent-plugins/releases/latest)
+— поточний нативний випуск інсталятора. Він додає
+локальний API керування та нативні розширення Pi в області користувача та сумісного проєкту.
 Див. [локальне керування](./use/manage#local-management-api) та
 [сумісність із Pi](./reference/client-compatibility#pi-native-extensions).
 

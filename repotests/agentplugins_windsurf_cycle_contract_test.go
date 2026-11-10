@@ -19,10 +19,10 @@ func windCycleInert(t *testing.T) *windProjectCycle {
 	return &windProjectCycle{w: w, aggregates: map[string][]byte{}, removed: map[string]bool{}, markers: map[string][]byte{}, cacheKeys: map[string]bool{}, completed: []string{}, proofs: []string{}}
 }
 
-func TestWindsurfCycleKeepsLiteralFortySevenCallsAndOriginalPrefix(t *testing.T) {
+func TestWindsurfCycleKeepsLiteralFortyThreeProjectCallsAndOriginalPrefix(t *testing.T) {
 	c := windCycleInert(t)
-	want := strings.Fields("git-a git-b version empty-user-skills empty-user-mcp empty-a-skills empty-a-mcp empty-b-skills empty-b-mcp add-user user-skills user-mcp user-get add-a a-skills a-mcp a-get b-before-skills b-before-mcp add-b b-skills b-mcp b-get repeat-add-a unchanged-update-a intact-repair-a stable-a-skills stable-b-skills update-a updated-a-skills updated-a-get updated-b-skills damaged-a-skills missing-repair-a repaired-a-skills repaired-a-get remove-a removed-a-skills removed-a-mcp remaining-b-skills remaining-b-mcp repeat-remove-a remove-b final-a-skills final-a-mcp final-b-skills final-b-mcp")
-	if len(want) != 47 || !reflect.DeepEqual(windCycleLabels, want) || !reflect.DeepEqual(want[:23], windComponentLabels) {
+	want := strings.Fields("git-a git-b version empty-user-skills empty-user-mcp empty-a-skills empty-a-mcp empty-b-skills empty-b-mcp add-a a-skills a-mcp a-get b-before-skills b-before-mcp add-b b-skills b-mcp b-get repeat-add-a unchanged-update-a intact-repair-a stable-a-skills stable-b-skills update-a updated-a-skills updated-a-get updated-b-skills damaged-a-skills missing-repair-a repaired-a-skills repaired-a-get remove-a removed-a-skills removed-a-mcp remaining-b-skills remaining-b-mcp repeat-remove-a remove-b final-a-skills final-a-mcp final-b-skills final-b-mcp")
+	if len(want) != 43 || !reflect.DeepEqual(windCycleLabels, want) || !reflect.DeepEqual(want[:len(windProjectComponentLabels())], windProjectComponentLabels()) {
 		t.Fatal("Windsurf literal stage recipe")
 	}
 	c.w.recipes["a"].Installation.InstallationID = "held-a"
@@ -48,7 +48,7 @@ func TestWindsurfCycleKeepsLiteralFortySevenCallsAndOriginalPrefix(t *testing.T)
 			t.Fatal("exact held UUID update")
 		}
 	}
-	if public != 11 || native != 34 {
+	if public != 10 || native != 31 {
 		t.Fatal("exact public/native/Git cardinality", public, native)
 	}
 	if _, err := c.selectCommand("approve-all"); err == nil {

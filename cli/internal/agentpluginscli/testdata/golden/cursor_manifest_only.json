@@ -22,11 +22,13 @@
         "output": {
           "operation_id": "op-<operation>",
           "plugin": "demo",
+          "scope": "user",
           "version": "1.0.0",
           "source": "direct local source",
           "tree_digest": "sha256:1ce739f697d75678ab78146eecebca7a466c5f5db8255afb8d6a3c3043995f38",
           "manifest_digest": "sha256:cd880f5b873e6011aac32306232152d06761ce00a469321f0c83813945f0a295",
           "next_action": "verify the plugin's authentication requirements before using it",
+          "readiness": "unknown",
           "dry_run": true,
           "result": {
             "installation_id": "<uuid>",
@@ -63,7 +65,9 @@
     ],
     "environment": {
       "reason": "local_source_not_portable",
-      "saved": false
+      "saved": false,
+      "scope": "user",
+      "scope_selection_reason": "default_user"
     }
   }
 }

@@ -105,7 +105,7 @@ class QoderCycleContracts(unittest.TestCase):
             with self.subTest(fault=fault), self.assertRaises(ValueError): cycle.members(bodies, SOURCE)
 
     def test_source_state_payload_absence_retention_and_noop_bytes_refuse(self):
-        for fault in ("source", "caller", "foreign", "registry", "profile-extra", "anonymous-mode", "binding", "view", "digest", "data-allocated", "owner", "missing-path", "missing-receipt", "noop-bytes", "noop-retained-bytes", "state-extra", "receipt"):
+        for fault in ("source", "caller", "foreign", "registry", "profile-extra", "anonymous-mode", "binding", "view", "digest", "data-allocated", "owner", "native-skill", "missing-path", "missing-receipt", "noop-bytes", "noop-retained-bytes", "state-extra", "receipt"):
             bodies = container()
             def change(rows):
                 p = {row["stage"]: row["value"] for row in rows}
@@ -120,6 +120,7 @@ class QoderCycleContracts(unittest.TestCase):
                 elif fault == "digest": p["add-a"]["binding"]["native_objects"][0]["managed_digest"] = "sha256:" + "0" * 64
                 elif fault == "data-allocated": p["add-b"]["data"]["allocated"] = True
                 elif fault == "owner": p["remove-a"]["data"]["owner"] = stream(b"{}")
+                elif fault == "native-skill": p["add-a"]["delivery"]["native_skill"] = stream(b"wrong")
                 elif fault == "missing-path": p["missing-a"]["path"] += "/skills"
                 elif fault == "missing-receipt": p["missing-a"]["object"]["path"] = "/foreign"
                 elif fault == "noop-bytes": p["repeat-add-a"]["state"] = stream(base64.b64decode(p["repeat-add-a"]["state"]["body"]) + b" ")
@@ -199,6 +200,27 @@ class QoderCycleContracts(unittest.TestCase):
                 value["stdout"] = stream(raw(actual))
             aggregate(bodies, 0, change)
             with self.subTest(fault=fault), self.assertRaises(ValueError): cycle.members(bodies, SOURCE)
+
+    def test_project_guidance_accepted_but_unscoped_or_malformed_guidance_refused(self):
+        for stage in ("add-a", "repeat-add-a"):
+            bodies = container()
+            def transform(rows, changes):
+                value = next(row["value"] for row in rows if row["stage"] == stage)
+                result = json.loads(base64.b64decode(value["stdout"]["body"]))
+                output = result["data"] if stage == "repeat-add-a" else result["data"]["targets"][0]["output"]
+                output.update(changes)
+                value["stdout"] = stream(raw(result))
+            guidance = dict(scope="project", readiness="needs_action",
+                            next_actions=[dict(code="verify_native", actor="native_client", message="Restart Qoder in this project")])
+            aggregate(bodies, 0, lambda rows: transform(rows, guidance))
+            self.assertTrue(cycle.members(bodies, SOURCE)["runtime_attempt_complete"])
+            for field, invalid in (("scope", "user"), ("readiness", "activated"),
+                                   ("next_actions", {"code": "verify_native"}),
+                                   ("next_actions", [dict(code=True, actor="native_client", message="Restart Qoder")])):
+                refused = copy.deepcopy(bodies)
+                aggregate(refused, 0, lambda rows: transform(rows, {field: invalid}))
+                with self.subTest(stage=stage, field=field, invalid=repr(invalid)), self.assertRaises(ValueError):
+                    cycle.members(refused, SOURCE)
 
     def test_measured_single_noop_and_grouped_lifecycle_sources_do_not_mix(self):
         for fault in ("grouped-repeat", "single-add", "single-operation", "single-nochange", "repeat-source", "repair-source", "remove-source"):

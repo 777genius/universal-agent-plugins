@@ -13,6 +13,12 @@ import { useInstallPreferencesStore } from '../stores/installPreferences.ts';
 import { usePluginInstallSelection } from '../composables/usePluginInstallSelection.ts';
 import { useCatalogUiStore } from '../stores/catalogUi.ts';
 import { clients } from '../data/clients.ts';
+import {
+  installTargets,
+  canonicalInstallTarget,
+  canonicalInstallTargets,
+  cliInstallTargets,
+} from '../data/installTargets.ts';
 import * as registryDomain from '../utils/registry.ts';
 import * as filters from '../utils/filter.ts';
 import { pluginCommands } from '../utils/commands.ts';
@@ -39,6 +45,10 @@ const common = {
   ref,
   watch,
   clients,
+  installTargets,
+  canonicalInstallTarget,
+  canonicalInstallTargets,
+  cliInstallTargets,
   ...registryDomain,
   authenticationIndicator,
   ...filters,
@@ -86,6 +96,84 @@ function card(props = packageProps()) {
   );
 }
 
+
+
+test('hidden VS Code stays unavailable in stale project choices without erasing other clients', () => {
+  setActivePinia(createPinia());
+  const preferences = useInstallPreferencesStore();
+  assert.ok(!clients.some((client) => client.id === 'vscode'));
+  assert.ok(!installTargets.some((client) => client.id === 'vscode'));
+
+  // Project state from an older site version may contain a now-hidden target.
+  preferences.package = {
+    identity: 'context7', targetIds: ['vscode'], autoDetect: false, expanded: true,
+    scope: 'project',
+  };
+  const stale = preferences.readPackage('context7', ['cursor', 'copilot']);
+  assert.deepEqual(stale.targetIds, []);
+  assert.equal(stale.autoDetect, true);
+  assert.equal(stale.scope, 'project');
+  preferences.reconcilePackage('context7', ['cursor', 'copilot']);
+  assert.equal(preferences.package.identity, 'context7');
+  assert.deepEqual(preferences.package.targetIds, []);
+  assert.equal(preferences.package.scope, 'project');
+
+  preferences.selectPackage('context7', {
+    targetIds: ['vscode'], autoDetect: false, expanded: true, scope: 'project',
+  }, ['cursor', 'copilot']);
+  assert.deepEqual(preferences.package.targetIds, []);
+  assert.equal(preferences.package.scope, 'project');
+  assert.equal(preferences.package.autoDetect, true);
+
+  // A mixed old selection must preserve the user's valid target and project intent.
+  preferences.package = {
+    identity: 'context7', targetIds: ['cursor', 'vscode'],
+    autoDetect: false, expanded: true, scope: 'project',
+  };
+  const mixed = preferences.readPackage('context7', ['cursor', 'copilot']);
+  assert.deepEqual(mixed.targetIds, ['cursor']);
+  assert.equal(mixed.scope, 'project');
+  assert.equal(mixed.autoDetect, false);
+  preferences.reconcilePackage('context7', ['cursor', 'copilot']);
+  assert.deepEqual(preferences.package.targetIds, ['cursor']);
+  assert.equal(preferences.package.scope, 'project');
+  preferences.selectPackage('context7', {
+    targetIds: ['cursor', 'vscode'], autoDetect: false, expanded: true, scope: 'project',
+  }, ['cursor', 'copilot']);
+  assert.deepEqual(preferences.package.targetIds, ['cursor']);
+  assert.equal(preferences.package.scope, 'project');
+
+  // Preserve existing project-scope behavior for a supported but ineligible
+  // target; only the hidden presentation choice is retired.
+  preferences.selectPackage('context7', {
+    targetIds: ['kiro'], autoDetect: false, expanded: true, scope: 'project',
+  }, ['cursor']);
+  assert.deepEqual(preferences.readPackage('context7', ['cursor']).targetIds, ['kiro']);
+});
+
+test('Desktop has its own picker command, shares Codex backend, and keeps Web separate', () => {
+  setActivePinia(createPinia());
+  const instance = card();
+  instance.state.updateTargets(['chatgpt']);
+  instance.state.updateAutoDetect(false);
+  assert.deepEqual(Array.from(canonicalInstallTargets(instance.state.targets.value)), ['codex']);
+  assert.match(instance.state.command.value, /--target chatgpt$/);
+  assert.equal(instance.state.deliverySummary.value.includes('1 automatic setup'), true);
+  instance.state.updateTargets(['chatgpt', 'codex']);
+  assert.deepEqual(Array.from(instance.state.targets.value), ['codex']);
+  assert.match(instance.state.command.value, /--target codex$/);
+  instance.state.updateTargets(['codex', 'chatgpt']);
+  assert.deepEqual(Array.from(instance.state.targets.value), ['chatgpt']);
+  assert.match(instance.state.command.value, /--target chatgpt$/);
+  instance.stop();
+  assert.deepEqual(cliInstallTargets(['chatgptweb', 'chatgpt']), ['chatgptweb', 'chatgpt']);
+  assert.equal(canonicalInstallTarget('chatgptweb'), 'chatgpt');
+  assert.equal(canonicalInstallTarget('chatgpt'), 'codex');
+  assert.equal(installTargets.find((x) => x.id === 'chatgptweb')?.name, 'ChatGPT Web');
+  assert.equal(installTargets.find((x) => x.id === 'chatgpt')?.name, 'ChatGPT Desktop');
+  assert.equal(installTargets.find((x) => x.id === 'codex')?.name, 'Codex CLI');
+});
+
 test('explicit card delivery summary follows the winning scoped release rather than default aggregate', () => {
   setActivePinia(createPinia());
   const plugin = structuredClone(fixture);
@@ -102,6 +190,9 @@ test('explicit card delivery summary follows the winning scoped release rather t
   instance.state.updateTargets(['codex']);
   instance.state.updateAutoDetect(false);
   instance.state.updateScope('project');
+  assert.equal(instance.state.deliverySummary.value, '', 'entering project restores CLI-side detection');
+  assert.equal(instance.state.command.value, 'npx -y universal-agent-plugins add gitlab --scope project');
+  instance.state.updateAutoDetect(false);
   assert.equal(instance.state.deliverySummary.value, 'Agents: 0 automatic setup · 1 need follow-up');
   assert.match(instance.state.command.value, /--target codex --scope project$/);
   instance.state.updateScope('user');
@@ -282,14 +373,14 @@ test('catalog Show more survives language remount and filter changes replace its
   assert.equal(store.home, null);
   assert.equal(store.catalog, null);
   first.state.showMore();
-  assert.equal(first.state.displayLimit.value, 96);
+  assert.equal(first.state.displayLimit.value, 30);
   first.stop();
   route.path = '/uk/plugins/';
   const remount = mount();
-  assert.equal(remount.state.displayLimit.value, 96);
+  assert.equal(remount.state.displayLimit.value, 30);
   remount.state.query.value = 'gitlab';
   await nextTick();
-  assert.equal(remount.state.displayLimit.value, 48);
+  assert.equal(remount.state.displayLimit.value, 15);
   assert.equal(route.query.q, 'gitlab');
   assert.equal(route.query.ref, 'launch');
   assert.equal(navigations.length, 1);
@@ -299,16 +390,16 @@ test('catalog Show more survives language remount and filter changes replace its
   remount.stop();
   const again = mount();
   assert.equal(again.state.query.value, 'gitlab');
-  assert.equal(again.state.displayLimit.value, 48);
+  assert.equal(again.state.displayLimit.value, 15);
   again.state.showMore();
   again.stop();
   route.query = { q: 'different', ref: 'launch' };
   route.hash = '#plugins';
   const changedInitial = mount();
-  assert.equal(changedInitial.state.displayLimit.value, 48);
+  assert.equal(changedInitial.state.displayLimit.value, 15);
   changedInitial.state.query.value = 'gitlab';
   await nextTick();
-  assert.equal(changedInitial.state.displayLimit.value, 48);
+  assert.equal(changedInitial.state.displayLimit.value, 15);
   assert.equal(navigations.length, 2);
   assert.equal(navigations[1].hash, '');
   assert.equal(route.hash, '');
@@ -414,7 +505,7 @@ test('distribution captions use stable kind and authentication visibility ignore
   instance.stop();
 });
 
-test('saved unsupported Marketing Kit project intent never emits Cursor command and recovers to auto detection', () => {
+test('saved Marketing Kit Project selection keeps explicit user intent without cross-scope fallback', () => {
   setActivePinia(createPinia());
   const item = structuredClone(fixture);
   item.name = 'marketing-kit';
@@ -424,6 +515,9 @@ test('saved unsupported Marketing Kit project intent never emits Cursor command 
   for (const distribution of item.distributions) {
     for (const release of distribution.releases) {
       for (const target of release.targets) target.scopes = ['user'];
+      // The signed snapshot binds this immutable Marketing Kit source, but
+      // its mandatory Registry dependencies remain user-only.
+      release.source.revision = 'c5bcedd4ecf12585a8a50401852e57a44891ebec';
     }
   }
   const preferences = useInstallPreferencesStore();
@@ -434,11 +528,38 @@ test('saved unsupported Marketing Kit project intent never emits Cursor command 
   );
   const instance = card(packageProps(item));
   assert.equal(instance.state.scope.value, 'project');
-  assert.equal(instance.state.projectAvailable.value, false);
-  assert.equal(instance.state.command.value, '', 'invalid saved project must never yield user-scope command');
+  assert.equal(instance.state.projectAvailable.value, true);
+  assert.equal(instance.state.command.value,
+    'npx -y universal-agent-plugins add marketing-kit --target cursor --scope project');
   instance.state.updateScope('user');
   assert.equal(instance.state.scope.value, 'user');
-  assert.equal(instance.state.autoDetect.value, true, 'no silent Cursor choice after recovering');
-  assert.equal(instance.state.command.value, 'npx -y universal-agent-plugins add marketing-kit');
+  assert.equal(instance.state.autoDetect.value, false, 'explicit manual Cursor intent is preserved');
+  assert.equal(instance.state.command.value,
+    'npx -y universal-agent-plugins add marketing-kit --target cursor');
+  instance.stop();
+});
+
+test('Marketing Kit project unlocks from signed project policy without hardcoded client bundle', () => {
+  setActivePinia(createPinia());
+  const item = structuredClone(fixture);
+  item.name = 'marketing-kit';
+  item.install_source = 'marketing-kit';
+  item.trust_state = 'reviewed';
+  item.installable = true;
+  for (const distribution of item.distributions) {
+    for (const release of distribution.releases) {
+      release.source.revision = null;
+      for (const target of release.targets) {
+        target.scopes = target.client === 'codex' ? ['user', 'project'] : ['user'];
+      }
+    }
+  }
+  const instance = card(packageProps(item));
+  assert.equal(instance.state.projectAvailable.value, true);
+  instance.state.updateScope('project');
+  assert.equal(instance.state.autoDetect.value, true);
+  assert.equal(instance.state.command.value,
+    'npx -y universal-agent-plugins add marketing-kit --scope project');
+  assert.doesNotMatch(instance.state.command.value, /--target cursor/);
   instance.stop();
 });

@@ -1,14 +1,19 @@
 package agentpluginscli
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
+
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/skillspicker"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 )
 
@@ -48,7 +53,7 @@ func TestSkillsReviewTimeoutPreservesSpecificRefusal(t *testing.T) {
 }
 
 func TestSkillsReviewForeignDestinationSafeGuidance(t *testing.T) {
-	for _, cause := range []error{nativeconfig.ErrCollision, nativeconfig.ErrNotOwned} {
+	for _, cause := range []error{nativeconfig.ErrCollision, nativeconfig.ErrNotOwned, installer.ErrForeignSkillDestination} {
 		// A lower-level adapter may embed arbitrary provider paths or secrets.
 		unsafe := fmt.Errorf("private-secret: /private/home: %w", cause)
 		var refusal *skillspicker.ReviewRefusal
@@ -77,5 +82,72 @@ func TestSkillsReviewManagedSkillChanged(t *testing.T) {
 	}
 	if strings.Contains(refusal.Message, "secret plugin path") || !strings.Contains(refusal.Message, "edited outside UAP") {
 		t.Fatalf("unsafe or unhelpful managed-edits refusal: %+v", refusal)
+	}
+}
+
+// The public HTTPS and terminal paths reuse the same refusal adapter. A
+// provider error must never reach structured output with its private details.
+func TestSkillsPreparationRefusalJSONAndCancellation(t *testing.T) {
+	cmd := &cobra.Command{}
+	cmd.SetContext(context.Background())
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+	cause := fmt.Errorf("opaque-private-provider-detail: %w", installer.ErrForeignSkillDestination)
+	err := reportSkillsPreparationRefusal(cmd, &options{format: "json"}, &skillsCatalogSession{}, cause)
+	if !errors.Is(err, installer.ErrForeignSkillDestination) {
+		t.Fatalf("foreign destination lost its internal error identity: %v", err)
+	}
+	if bytes.Contains(stdout.Bytes(), []byte("opaque-private-provider-detail")) {
+		t.Fatal("private cause was serialized into the public JSON response")
+	}
+	var result struct{ Code, Message string }
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Code != "FOREIGN_DESTINATION" || strings.Contains(result.Message, "opaque-private-provider-detail") {
+		t.Fatalf("public preparation diagnostic was not safe: %+v", result)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	cmd.SetContext(ctx)
+	if err := reportSkillsPreparationRefusal(cmd, &options{format: "json"}, &skillsCatalogSession{}, cause); !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled preparation unexpectedly emitted a review refusal: %v", err)
+	}
+}
+
+func TestSkillsReviewForeignDestinationCannotOverrideRecovery(t *testing.T) {
+	cause := fmt.Errorf("%w: %w", installer.ErrRecoveryRequired,
+		&domain.ForeignSkillDestinationError{RelativePath: ".agents/skills/docs/SKILL.md"})
+	refusal := (&skillsCatalogSession{}).reviewRefusal(cause)
+	if refusal.Code != "RECOVERY_REQUIRED" || strings.Contains(refusal.Message, ".agents/skills/") {
+		t.Fatalf("collision guidance overrode a more urgent recovery refusal: %+v", refusal)
+	}
+}
+
+func TestSkillsReviewForeignDestinationRelativePath(t *testing.T) {
+	for _, tc := range []struct {
+		name, relative string
+		safe           bool
+	}{
+		{"valid", ".agents/skills/docs/SKILL.md", true},
+		{"absolute", "/private/secret/SKILL.md", false},
+		{"traversal", ".agents/skills/../SKILL.md", false},
+		{"nested", ".agents/skills/docs/private/SKILL.md", false},
+		{"malformed", ".agents/skills/private\\secret/SKILL.md", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := fmt.Errorf("private-provider-secret: %w", &domain.ForeignSkillDestinationError{RelativePath: tc.relative})
+			var refusal *skillspicker.ReviewRefusal
+			if !errors.As((&skillsCatalogSession{}).reviewRefusal(err), &refusal) {
+				t.Fatal("expected a public refusal")
+			}
+			if refusal.Code != "FOREIGN_DESTINATION" || strings.Contains(refusal.Message, "private-provider-secret") {
+				t.Fatalf("unsafe public refusal: %+v", refusal)
+			}
+			hasPath := strings.Contains(refusal.Message, ".agents/skills/docs/SKILL.md")
+			if hasPath != tc.safe || (!tc.safe && strings.Contains(refusal.Message, tc.relative)) {
+				t.Fatalf("unexpected relative path disclosure: %+v", refusal)
+			}
+		})
 	}
 }

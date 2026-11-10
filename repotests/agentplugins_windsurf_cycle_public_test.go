@@ -59,16 +59,22 @@ func (c *windProjectCycle) publicDTO(label string, r *windComponentRecipe, raw [
 		if windCycleMutated(label) && data["operation_id"] != r.Installation.OperationGroupID {
 			return refused
 		}
-		if verb == "add" && !reflect.DeepEqual(data["environment"], map[string]any{"reason": "no_save_requested", "saved": false}) {
+		if verb == "add" && !reflect.DeepEqual(data["environment"], map[string]any{"reason": "no_save_requested", "saved": false, "scope": r.scopeName(), "scope_selection_reason": "explicit"}) {
 			return refused
 		}
 		if verb == "remove" && (data["data_retained"] != true || data["plugin_data_preserved"] != true) {
 			return refused
 		}
 	}
-	optional := "operation_id next_action"
+	optional := "operation_id next_action security"
 	if label == "repeat-add-a" {
 		optional = "next_action security"
+	}
+	switch verb {
+	case "add", "update":
+		optional += " scope readiness next_actions"
+	case "remove":
+		optional += " scope"
 	}
 	if projectNativeRuntimeKeys(output, "plugin version source tree_digest manifest_digest dry_run result", optional) != nil {
 		return refused
@@ -79,6 +85,33 @@ func (c *windProjectCycle) publicDTO(label string, r *windComponentRecipe, raw [
 	}
 	for key, want := range map[string]any{"plugin": windComponentName, "version": windCycleVersion(r), "source": source, "tree_digest": r.Digest, "manifest_digest": r.Installation.Package.ManifestDigest, "dry_run": false} {
 		if output[key] != want {
+			return refused
+		}
+	}
+	if scope, present := output["scope"]; present && scope != r.scopeName() {
+		return refused
+	}
+	// Only add/update use addResultData. Repair carries legacy next_action;
+	// removal carries its separately verified deactivation result.
+	if verb == "repair" {
+		if next, ok := output["next_action"].(string); !ok || next == "" {
+			return refused
+		}
+	}
+	if verb == "add" || verb == "update" {
+		if output["scope"] != r.scopeName() || output["readiness"] != "needs_action" {
+			return refused
+		}
+		actions, ok := output["next_actions"].([]any)
+		if !ok || len(actions) != 1 {
+			return refused
+		}
+		action, ok := actions[0].(map[string]any)
+		message, _ := action["message"].(string)
+		next, _ := output["next_action"].(string)
+		if !ok || projectNativeRuntimeKeys(action, "code actor message", "") != nil ||
+			action["code"] != "verify_native" || action["actor"] != "native_client" ||
+			message == "" || next != message {
 			return refused
 		}
 	}

@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/antigravity"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/chatgpt"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/claude"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/cline"
@@ -17,6 +18,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/cursor"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/gemini"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/grok"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/hermes"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/kimi"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/kiro"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/opencode"
@@ -46,11 +48,10 @@ var projectRegistry = sync.OnceValue(func() *clients.Registry { return buildRegi
 func buildRegistry(project bool) *clients.Registry {
 	var workspace clients.Adapter = vscode.New()
 	var cursorComponents clients.Adapter = cursor.New()
-	var piComponents clients.Adapter = pi.New()
+	var piComponents clients.Adapter = pi.NewProject()
 	if project {
 		workspace = vscode.NewProject()
 		cursorComponents = cursor.NewProject()
-		piComponents = pi.NewProject()
 	}
 	registry, err := clients.NewRegistry(
 		piComponents,
@@ -66,6 +67,8 @@ func buildRegistry(project bool) *clients.Registry {
 		cline.New(),
 		windsurf.New(),
 		grok.New(),
+		hermes.New(),
+		antigravity.New(),
 		kimi.New(),
 		qoder.New(),
 	)

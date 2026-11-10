@@ -14,13 +14,16 @@ import (
 // a fictitious plan ID or zero expiry timestamp that could suggest otherwise.
 func renderSkillsDryRun(cmd *cobra.Command, review skillspicker.Plan) error {
 	output := struct {
-		Status      string                    `json:"status"`
-		DryRun      bool                      `json:"dryRun"`
-		Actions     []skillspicker.Action     `json:"actions"`
-		Conflicts   []skillspicker.Diagnostic `json:"conflicts"`
-		Warnings    []skillspicker.Diagnostic `json:"warnings"`
-		Confirmable bool                      `json:"confirmable"`
-	}{Status: "planned", DryRun: true, Actions: review.Actions, Conflicts: review.Conflicts, Warnings: review.Warnings, Confirmable: review.Confirmable}
+		SchemaVersion int                       `json:"schema_version"`
+		Command       string                    `json:"command"`
+		Result        string                    `json:"result"`
+		Status        string                    `json:"status"`
+		DryRun        bool                      `json:"dryRun"`
+		Actions       []skillspicker.Action     `json:"actions"`
+		Conflicts     []skillspicker.Diagnostic `json:"conflicts"`
+		Warnings      []skillspicker.Diagnostic `json:"warnings"`
+		Confirmable   bool                      `json:"confirmable"`
+	}{SchemaVersion: outputSchemaVersion, Command: "skills add", Result: outputResultSuccess, Status: "planned", DryRun: true, Actions: review.Actions, Conflicts: review.Conflicts, Warnings: review.Warnings, Confirmable: review.Confirmable}
 	return json.NewEncoder(cmd.OutOrStdout()).Encode(output)
 }
 func renderHumanSkillsReview(cmd *cobra.Command, review skillspicker.Plan) error {

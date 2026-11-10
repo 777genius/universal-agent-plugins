@@ -3,6 +3,8 @@ name: Dependency Review
 on:
   pull_request:
     branches: [main, master]
+  push:
+    branches: [main, master]
 
 # Replace ordinary CI for the same PR/ref; keep manual runs independent.
 concurrency:
@@ -18,7 +20,16 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Refuse an unavailable push comparison base
+        if: github.event_name == 'push'
+        env:
+          BASE: ${{ github.event.before }}
+        run: |
+          [[ "${BASE}" =~ ^[0-9a-f]{40}$ && "${BASE}" != 0000000000000000000000000000000000000000 ]]
+
       - name: Dependency review
         uses: actions/dependency-review-action@v4
         with:
           config-file: ./.github/dependency-review-config.yml
+          base-ref: ${{ github.event_name == 'push' && github.event.before || '' }}
+          head-ref: ${{ github.event_name == 'push' && github.sha || '' }}

@@ -157,7 +157,7 @@ O escopo de projeto explícito está disponível na
 [CLI 0.1.93 e posteriores](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.93).
 Escolha um diretório existente e selecione o escopo em cada comando:
 
-Para uma entrada revisada e compatível do catálogo, copie a origem Git fixada em um SHA completo e o cliente adequado. Os aliases do Directory v1, como `context7`, continuam limitados ao escopo do usuário. Substitua `OWNER/REPOSITORY`, `FULL_COMMIT_SHA` e `PACKAGE_PATH`; se o pacote estiver na raiz do repositório, omita `//PACKAGE_PATH`.
+Para uma entrada revisada e compatível do catálogo, a CLI publicada aceita o nome curto do Directory assinado com escopo Project explícito quando o cliente suporta todos os componentes obrigatórios (por exemplo, `agentplugins add context7 --target codex --scope project --dry-run`). Como alternativa, use a origem Git revisada e fixada em um SHA completo, com um cliente compatível. Substitua `OWNER/REPOSITORY`, `FULL_COMMIT_SHA` e `PACKAGE_PATH`; se o pacote estiver na raiz do repositório, omita `//PACKAGE_PATH`.
 
 Modelo: `github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH`. O comando abaixo usa um commit histórico real do GitLab, não uma confirmação de revisão atual no catálogo. Para uma nova instalação, copie a origem verificada atual do catálogo.
 
@@ -178,12 +178,10 @@ argumento de origem seleciona o escopo de projeto quando existe um arquivo regul
 [regras de restauração](./manage) para o comportamento estrito do lock.
 
 O destino precisa oferecer suporte aos componentes de projeto solicitados.
-A instalação em projetos do ChatGPT é explicitamente incompatível. O VS Code
-prepara `.github/skills` e os membros `servers` sob sua responsabilidade em
-`.vscode/mcp.json` para uma única pasta local. O resultado continua Prepared:
-revise a confiança no espaço de trabalho e no servidor e inspecione as
-configurações do cliente. Essa observação de metadados não comprova inicialização
-MCP, chamadas de ferramentas ou uso do modelo.
+A instalação em projetos do ChatGPT é explicitamente incompatível. Se o
+resultado for **Prepared**, revise a confiança necessária no espaço de trabalho
+e nos servidores, além das configurações do cliente. Os arquivos instalados
+por si só não comprovam inicialização MCP, chamadas de ferramentas ou uso do modelo.
 
 Leia o [guia de instalação em projetos](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_INSTALLATION.md)
 e os [limites de projeto por cliente](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)

@@ -19,15 +19,15 @@ func TestProjectChatGPTCLIRefusesAllTargetedIntentsBeforeEffects(t *testing.T) {
 	}
 	before := []map[string]string{securityFixtureTree(t, app.UserHome), securityFixtureTree(t, a), securityFixtureTree(t, b)}
 	for _, args := range [][]string{
-		{"add", "acme/docs", "--target", "chatgpt"},
-		{"add", source, "--no-save", "--target", "chatgpt"},
-		{"add", "context7", "--target", "chatgpt", "--chatgpt-app-id", "plugin_asdk_app_0123456789abcdef0123456789abcdef"},
-		{"add", source, "--no-save", "--target", "chatgpt", "--activation-complete", "--auth-complete"},
-		{"add", source, "--no-save", "--target", "gemini,chatgpt"},
-		{"install", source, "--no-save", "--target", "chatgpt"},
-		{"update", "00000000-0000-4000-8000-000000000001", "--target", "chatgpt"},
-		{"repair", "00000000-0000-4000-8000-000000000001", "--target", "chatgpt"},
-		{"remove", "00000000-0000-4000-8000-000000000001", "--target", "chatgpt", "--external-uninstalled"},
+		{"add", "acme/docs", "--target", "chatgptweb"},
+		{"add", source, "--no-save", "--target", "chatgptweb"},
+		{"add", "context7", "--target", "chatgptweb", "--chatgpt-app-id", "plugin_asdk_app_0123456789abcdef0123456789abcdef"},
+		{"add", source, "--no-save", "--target", "chatgptweb", "--activation-complete", "--auth-complete"},
+		{"add", source, "--no-save", "--target", "gemini,chatgptweb"},
+		{"install", source, "--no-save", "--target", "chatgptweb"},
+		{"update", "00000000-0000-4000-8000-000000000001", "--target", "chatgptweb"},
+		{"repair", "00000000-0000-4000-8000-000000000001", "--target", "chatgptweb"},
+		{"remove", "00000000-0000-4000-8000-000000000001", "--target", "chatgptweb", "--external-uninstalled"},
 	} {
 		output, err := projectChatGPTExecute(app, a, args...)
 		if err == nil || err.Error() != "chatgpt does not support project scope" || strings.Contains(output, "success") {
@@ -35,7 +35,7 @@ func TestProjectChatGPTCLIRefusesAllTargetedIntentsBeforeEffects(t *testing.T) {
 		}
 	}
 	t.Chdir(a)
-	if _, err := projectChatGPTExecute(app, "", "add", source, "--target", "chatgpt", "--no-save"); err == nil || err.Error() != "chatgpt does not support project scope" {
+	if _, err := projectChatGPTExecute(app, "", "add", source, "--target", "chatgptweb", "--no-save"); err == nil || err.Error() != "chatgpt does not support project scope" {
 		t.Fatalf("invocation-directory default bypassed project refusal: %v", err)
 	}
 	for index, root := range []string{app.UserHome, a, b} {
@@ -44,6 +44,34 @@ func TestProjectChatGPTCLIRefusesAllTargetedIntentsBeforeEffects(t *testing.T) {
 		}
 	}
 	projectChatGPTAssertNoEffects(t, spy, user, a)
+}
+
+// The public chatgpt spelling means Desktop; unlike canonical chatgpt Web,
+// it must fail before project acquisition rather than fall through to Codex.
+func TestPublicChatGPTDesktopProjectAliasRefusesBeforeEffects(t *testing.T) {
+	app, user, project, _ := projectCompositionFixture(t)
+	spy := &projectChatGPTBoundaries{}
+	app = projectChatGPTApp(app, spy)
+	source := filepath.Join(t.TempDir(), "package")
+	projectChatGPTWrite(t, filepath.Join(source, "plugin.json"), `{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"chatgpt-desktop-scope-proof"}`)
+	before := securityFixtureTree(t, project)
+	for _, args := range [][]string{
+		{"add", source, "--no-save", "--target", "chatgpt"},
+		{"install", source, "--no-save", "--target", "chatgpt"},
+		{"update", "missing", "--target", "chatgpt"},
+		{"repair", "missing", "--target", "chatgpt"},
+		{"remove", "missing", "--target", "chatgpt"},
+		{"skills", "add", "https://invalid.example/no-acquisition", "--skill", "docs", "--target", "chatgpt", "--yes"},
+	} {
+		out, err := projectChatGPTExecute(app, project, args...)
+		if err == nil || !strings.Contains(err.Error(), "chatgpt (Desktop) supports only --scope user") || strings.Contains(out, "success") {
+			t.Fatalf("Desktop project alias must refuse before effects %v: %s %v", args, out, err)
+		}
+	}
+	if !reflect.DeepEqual(before, securityFixtureTree(t, project)) {
+		t.Fatal("Desktop project alias changed project files")
+	}
+	projectChatGPTAssertNoEffects(t, spy, user, project)
 }
 
 func TestProjectChatGPTSavedTargetRefusesBeforeLockAndAcquisition(t *testing.T) {

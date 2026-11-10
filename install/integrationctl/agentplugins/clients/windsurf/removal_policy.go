@@ -11,7 +11,7 @@ var _ clients.RemovalAttestationPolicy = (*Adapter)(nil)
 
 // RequiresExternalUninstalled preserves both existing manual-removal branches.
 func (*Adapter) RequiresExternalUninstalled(_ clients.Env, request domain.DeactivationRequest) bool {
-	if request.TargetContext.Scope == domain.ScopeProject {
+	if request.TargetContext.Scope == domain.ScopeProject || hasDevinGlobalObjects(request.NativeObjects) {
 		return false
 	}
 	return len(WindsurfObjects(request.NativeObjects)) == 0 || strings.TrimSpace(request.Client.ConfigRoot) == ""
