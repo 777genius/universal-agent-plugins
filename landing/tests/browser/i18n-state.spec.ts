@@ -1,8 +1,37 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import {
   automatic, downloadChannelTitle, downloadHeading, hydrated, deferred, delayedMirror, exactCommands, locales, navigate, offline,
   projections, registryFixture, setSignedMirrorTestTime, targets, wording,
 } from './i18n-state.helpers';
+
+// Read the same staged signed snapshot files that the app verifies. The test
+// never substitutes a fake signed assessment or assumes that a discovery
+// subject still matches a later independently published security snapshot.
+async function stagedSecurityJoinEvidence(page: Page) {
+  const snapshot = async (kind: 'discovery' | 'security') => {
+    const latest = await page.request.get(`./${kind}/latest.json`);
+    expect(latest.ok(), `${kind} pointer in Pages artifact`).toBe(true);
+    const pointer = await latest.json() as { snapshot_path: string };
+    const result = await page.request.get(`./${kind}/${pointer.snapshot_path}`);
+    expect(result.ok(), `${kind} snapshot in Pages artifact`).toBe(true);
+    return result.json();
+  };
+  const [discovery, security] = await Promise.all([snapshot('discovery'), snapshot('security')]) as [
+    { records: Array<{ slug: string; name: string; availability: string; manifest_digest: string; tree_digest: string }> },
+    { records: Array<{ subject: { manifest_digest: string; tree_digest: string }; outcome: string }> },
+  ];
+  const checked = new Set(security.records
+    .filter(record => record.outcome !== 'check_unavailable')
+    .map(record => `${record.subject.manifest_digest}:${record.subject.tree_digest}`));
+  const hasReview = (record: (typeof discovery.records)[number]) =>
+    checked.has(`${record.manifest_digest}:${record.tree_digest}`);
+  const matching = discovery.records.find(record => record.availability === 'available' && hasReview(record));
+  const hindsight = discovery.records.find(record =>
+    record.slug === 'discovery:vectorize-io/hindsight//hindsight-integrations/agent-plugin');
+  expect(matching, 'staged feeds contain at least one matching reviewed community subject').toBeDefined();
+  expect(hindsight, 'Hindsight exists in staged discovery').toBeDefined();
+  return { matching: matching!, hindsightHasReview: hasReview(hindsight!) };
+}
 
 // Real parent v-model wiring, installed Nuxt router, public DOM; no store access.
 // The publication manifest activates reviewed RU/UK without copying dictionaries.
@@ -183,6 +212,7 @@ for (const outcome of ['success', 'error', 'security'] as const) {
       const locale = itinerary === 'locale' ? locales[1]! : 'en';
       const t = wording(locale);
       await setSignedMirrorTestTime(page);
+      const evidence = outcome === 'error' ? null : await stagedSecurityJoinEvidence(page);
       const errors = await offline(page);
       const discovery = await delayedMirror(page, 'discovery', outcome === 'error');
       const security = await delayedMirror(page, 'security');
@@ -234,20 +264,25 @@ for (const outcome of ['success', 'error', 'security'] as const) {
         if (outcome === 'error') await expect(page.locator('.discovery-status')).toHaveText(t('registryUi.catalog.communityResultsAreTemporarilyUnavailableReviewedListingsRemainAvailable'));
         if (outcome !== 'error') {
           await page.getByRole('button', { name: t('registryUi.catalog.resetFilters'), exact: true }).click();
-          await page.getByRole('searchbox', { name: t('registryUi.catalog.searchPlugins') }).fill('hindsight');
-          await page.getByRole('searchbox', { name: t('registryUi.catalog.searchPlugins') }).blur();
+          const search = page.getByRole('searchbox', { name: t('registryUi.catalog.searchPlugins') });
+          // A positive match proves the delayed security join has settled
+          // before the subsequent negative or positive Hindsight assertion.
+          await search.fill(evidence!.matching.name);
+          await search.blur();
+          const matchingCard = page.locator(`.plugin-card[data-install-source="${evidence!.matching.slug}"]`);
+          await expect(matchingCard.locator('.plugin-card__security')).toBeVisible({ timeout: 15_000 });
+          await search.fill('hindsight');
+          await search.blur();
           const community = page.locator('.plugin-card[data-install-source="discovery:vectorize-io/hindsight//hindsight-integrations/agent-plugin"]');
           await expect(community).toBeVisible();
-          // A community discovery record can be valid without a matching
-          // signed security assessment. Never invent a security badge; the
-          // independently reported Skill scan remains visible.
           await expect(community.locator('.skillspector')).toBeVisible();
           const badge = community.locator('.plugin-card__security');
-          if (await badge.count()) {
+          if (evidence!.hindsightHasReview) {
             await expect(badge).toBeVisible();
             await badge.hover();
             await expect(page.locator('.app-tooltip__disclaimer')).toHaveText(t('registryUi.security.tooltipDisclaimer'));
           } else {
+            // A mismatched signed subject must not inherit a security badge.
             await expect(badge).toHaveCount(0);
           }
         }
