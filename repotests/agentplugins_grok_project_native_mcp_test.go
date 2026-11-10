@@ -199,8 +199,12 @@ func grokProjectMCPInventory(plugins []any, name, active string, present bool) e
 			return fmt.Errorf("real Grok MCP project entry is foreign, duplicated or unexpectedly trusted")
 		}
 		provides, ok := entry["provides"].(map[string]any)
-		if !ok || fmt.Sprint(provides["mcpServers"]) != "1" {
-			return fmt.Errorf("real Grok did not discover exactly one plugin MCP server")
+		if !ok {
+			return fmt.Errorf("real Grok did not report plugin MCP discovery")
+		}
+		count, ok := provides["mcpServers"].(json.Number)
+		if !ok || count != "1" {
+			return fmt.Errorf("real Grok did not discover exactly one numeric plugin MCP server")
 		}
 		matched = true
 	}
@@ -235,6 +239,10 @@ func TestGrokProjectMCPInventoryRejectsFoldedAliasesAndUnexpectedTrust(t *testin
 		{"missing native name", []any{map[string]any{"scope": "project"}}, false, true},
 		{"unexpected trust", []any{map[string]any{"name": name, "scope": "project", "path": active,
 			"enabled": true, "provides": map[string]any{"mcpServers": json.Number("1")}}}, true, true},
+		{"quoted MCP count", []any{map[string]any{"name": name, "scope": "project", "path": active,
+			"enabled": false, "provides": map[string]any{"mcpServers": "1"}}}, true, true},
+		{"fractional MCP count", []any{map[string]any{"name": name, "scope": "project", "path": active,
+			"enabled": false, "provides": map[string]any{"mcpServers": json.Number("1.0")}}}, true, true},
 		{"missing MCP discovery", []any{map[string]any{"name": name, "scope": "project", "path": active,
 			"enabled": false, "provides": map[string]any{}}}, true, true},
 	} {
