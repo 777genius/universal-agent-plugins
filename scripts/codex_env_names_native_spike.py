@@ -207,6 +207,9 @@ def main():
     codex = Path(sys.argv[1]).resolve(strict=True)
     report_path = Path(sys.argv[2]).resolve()
     report_path.parent.mkdir(parents=True, exist_ok=True)
+    mode = sys.argv[3] if len(sys.argv) > 3 else "default"
+    if mode not in ("default", "filtered"):
+        raise ValueError("unsupported native shell policy control mode")
     secret = "uap_spike_" + secrets.token_hex(24)
     Model.expected_digest = hashlib.sha256(secret.encode()).hexdigest()
     root = Path(tempfile.mkdtemp(prefix="uap-codex-spike-"))
@@ -237,6 +240,14 @@ def main():
         f'args = [{json.dumps(str(child))}, {json.dumps(str(receipt))}]\n'
         f'env_vars = ["{ENV_NAME}"]\n'
     )
+    # Research-only per-project control. It tests whether a native Codex
+    # shell policy could protect the shell while stdio MCP receives env_vars.
+    # Never install this policy in real user files without foreign-policy proof.
+    if mode == "filtered":
+        project_server += (
+            '[shell_environment_policy.filters]\n'
+            f'{json.dumps(ENV_NAME)} = "exclude"\n'
+        )
     (project / ".codex" / "config.toml").write_text(project_server)
     env = {"HOME": str(home), "CODEX_HOME": str(home / ".codex"),
            "TMPDIR": str(root / "tmp"), "TEMP": str(root / "tmp"),
@@ -246,7 +257,7 @@ def main():
         str(codex), "exec", "--skip-git-repo-check",
         "--sandbox", "read-only", "Call the available shell tool once and then confirm_env."
     ]
-    report = {"version": "", "real_codex_shell_called": False,
+    report = {"policy_mode": mode, "version": "", "real_codex_shell_called": False,
               "real_codex_mcp_called": False, "mcp_child_saw_secret": False,
               "leak": False, "secrecy_pass": False, "failure": None}
     try:
