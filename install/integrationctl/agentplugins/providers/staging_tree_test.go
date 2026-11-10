@@ -27,6 +27,19 @@ func TestStagerGoldenTreesAcrossClients(t *testing.T) {
 			t.Parallel()
 			envelope := stagingEnvelope(t)
 			plan := stagingPlan(t, definition.ID, domain.PackageProjection)
+			// The legacy snapshot selects an unsupported extension. New native
+			// adapters must receive only explicitly qualified Skills and MCP.
+			if definition.ID == domain.ClientAntigravity {
+				plan.PackageMode = domain.PackageNative
+				plan.Components = plan.Components[:2]
+				for i := range plan.Components {
+					plan.Components[i].Support = domain.SupportNative
+				}
+				plan.NativeRegistryRoot = filepath.Join(t.TempDir(), ".gemini", "config")
+				plan.TargetRoot = filepath.Join(plan.NativeRegistryRoot, "plugins")
+				plan.ActivePath = filepath.Join(plan.TargetRoot, "demo-0123456789ab")
+				plan.TargetContext = domain.TargetContext{Scope: domain.ScopeUser, UserConfigRoot: plan.NativeRegistryRoot}
+			}
 			dataRoot := ""
 			if domain.ClientTraitsFor(definition.ID).VerifiesNativeDirectory {
 				envelope, plan, dataRoot = piGoldenStagingFixture(t, envelope, plan)
