@@ -34,8 +34,9 @@ Primary docs:
 - **Compatibility:** leave User Grok CLI install/uninstall behavior unchanged; project old Skills behavior retained.
 - **Proof:** project delivery + native plugin discovery + MCP initialize/`tools/list`/`tools/call` are different gates, not interchangeable.
 
-Production publication remains on accepted deployed source `001ca0385618ac47d6404e25d6fa8fc408cbadd5`
-through the shared immutable production source pin. Both publishers retain normal
+Production publication uses the accepted source `33c2fca0e5ee9c83e3909d220c817b65a64b38b7`
+through the shared immutable production source pin, preserving the Pi FAQ correction
+while Grok MCP awaits a compatible CLI release. Both publishers retain normal
 signed-feed verification and refresh. Release capability checks use exactly the
 public client identities from that selected tree, excluding unadvertised backend
 adapters; the current Grok MCP candidate remains refused against npm 0.1.102.

@@ -458,7 +458,7 @@
       "items": {
         "0": {
           "question": "कौन से AI एजेंट समर्थित हैं?",
-          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder: हर क्लाइंट के लिए स्थापना या तैयारी का अपना तरीका है। संगतता पैकेज के घटकों, स्थापना के दायरे और सक्रियण की आवश्यकताओं पर निर्भर करती है।"
+          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder, Pi: हर क्लाइंट के लिए स्थापना या तैयारी का अपना तरीका है। संगतता पैकेज के घटकों, स्थापना के दायरे और सक्रियण की आवश्यकताओं पर निर्भर करती है।"
         },
         "1": {
           "question": "क्या एक कमांड से सभी एजेंटों में इंस्टॉल होता है?",
