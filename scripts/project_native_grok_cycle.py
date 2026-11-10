@@ -348,8 +348,15 @@ def public_result(raw, stage, verb, selected):
     name, digest = "uap-grok-cycle-" + scope, selected["source_digest"]
     data = row["data"]
     if stage == "repeat-add-a":
-        required = {"plugin", "version", "source", "tree_digest", "manifest_digest", "dry_run", "result"}
-        require(verb == "add" and type(data) is dict and required <= set(data) <= required | {"security", "next_action"})
+        required = {"plugin", "scope", "version", "source", "tree_digest", "manifest_digest", "dry_run", "result", "readiness", "next_action", "next_actions"}
+        require(verb == "add" and type(data) is dict and required <= set(data) <= required | {"security"})
+        require(data["scope"] == "project" and data["readiness"] == "needs_action")
+        actions = data["next_actions"]
+        require(type(actions) is list and len(actions) == 1 and type(actions[0]) is dict)
+        action = actions[0]
+        require(set(action) == {"code", "actor", "message"} and action["code"] == "verify_native"
+                and action["actor"] == "native_client" and type(action["message"]) is str
+                and bool(action["message"]) and data["next_action"] == action["message"])
         output, group = data, ""
     else:
         required = {"batch", "status", "succeeded", "failed", "plugin", "dry_run", "targets"}
