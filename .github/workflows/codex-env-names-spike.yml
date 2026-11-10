@@ -6,6 +6,7 @@ on:
       - feat/codex-mcp-env-names-safe-20261110
     paths:
       - scripts/codex_env_names_native_spike.py
+      - scripts/codex_env_names_appserver_spike.py
       - .github/workflows/codex-env-names-spike.yml
   workflow_dispatch:
 
@@ -21,6 +22,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Install verified official Codex 0.167.0 executable
+        id: native-binary
         shell: bash
         run: |
           set -euo pipefail
@@ -35,16 +37,38 @@ jobs:
           test -s "$RUNNER_TEMP/codex-native/codex-x86_64-unknown-linux-musl"
           chmod 0755 "$RUNNER_TEMP/codex-native/codex-x86_64-unknown-linux-musl"
           echo "CODEX_BINARY=$RUNNER_TEMP/codex-native/codex-x86_64-unknown-linux-musl" >> "$GITHUB_ENV"
-      - name: Run genuine native Codex shell plus MCP canary / nonpersistence E2E
+      # Keep both independent results, even if one E2E fails. Never infer PASS
+      # from the other; artifacts record only redacted boolean/hash facts.
+      - name: Run real Codex CLI shell and MCP names-only proof
+        if: steps.native-binary.outcome == 'success'
+        id: native-cli-spike
         shell: bash
         run: |
           python3 -m py_compile scripts/codex_env_names_native_spike.py
           python3 scripts/codex_env_names_native_spike.py "$CODEX_BINARY" "$RUNNER_TEMP/codex-env-spike-report.json"
+      - name: Run real Codex app-server MCP and shell snapshot proof
+        if: always() && steps.native-binary.outcome == 'success'
+        id: native-appserver-spike
+        shell: bash
+        run: |
+          python3 -m py_compile scripts/codex_env_names_appserver_spike.py
+          python3 scripts/codex_env_names_appserver_spike.py "$CODEX_BINARY" "$RUNNER_TEMP/codex-appserver-spike-report.json"
+      - name: Enforce both independently successful native proofs
+        if: always()
+        shell: bash
+        env:
+          CLI_OUTCOME: ${{ steps.native-cli-spike.outcome }}
+          APPSERVER_OUTCOME: ${{ steps.native-appserver-spike.outcome }}
+        run: |
+          test "$CLI_OUTCOME" = success
+          test "$APPSERVER_OUTCOME" = success
       - name: Preserve only bounded, redacted proof (no native home or child output)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
           name: codex-env-name-native-linux-synthetic-proof
-          path: ${{ runner.temp }}/codex-env-spike-report.json
+          path: |
+            ${{ runner.temp }}/codex-env-spike-report.json
+            ${{ runner.temp }}/codex-appserver-spike-report.json
           if-no-files-found: warn
           retention-days: 7
