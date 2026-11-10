@@ -65,7 +65,11 @@ for line in sys.stdin:
 
 def isolated_env(root, home, secret, foreign_secret):
     """Disposable Codex profile: no real runner secrets are inherited."""
-    env = isolated_env(root, home, secret, foreign_secret)
+    env = {"HOME": str(home), "CODEX_HOME": str(home / ".codex"),
+           "TMPDIR": str(root / "tmp"), "TEMP": str(root / "tmp"),
+           "TMP": str(root / "tmp"), "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+           "LANG": "C.UTF-8", "NO_COLOR": "1", ENV_NAME: secret,
+           FOREIGN_ENV_NAME: foreign_secret}
     if os.name == "nt":
         # Only necessary nonsecret OS process/shell fields on Windows.
         env.update({key: os.environ[key] for key in
@@ -377,11 +381,7 @@ def main():
             'inherit = "core"\n'
         )
     (project / ".codex" / "config.toml").write_text(project_server)
-    env = {"HOME": str(home), "CODEX_HOME": str(home / ".codex"),
-           "TMPDIR": str(root / "tmp"), "TEMP": str(root / "tmp"),
-           "TMP": str(root / "tmp"), "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
-           "LANG": "C.UTF-8", "NO_COLOR": "1", ENV_NAME: secret,
-           FOREIGN_ENV_NAME: foreign_secret}
+    env = isolated_env(root, home, secret, foreign_secret)
     commands = [
         str(codex), "exec", "--skip-git-repo-check",
         "--sandbox", "read-only", "Call the available shell tool once and then confirm_env."
