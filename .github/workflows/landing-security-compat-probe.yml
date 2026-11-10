@@ -1,0 +1,70 @@
+name: Temporary landing dependency compatibility proof
+
+on:
+  push:
+    branches:
+      - test/landing-security-major-compat-20261110
+    paths:
+      - landing/pnpm-workspace.yaml
+      - .github/workflows/landing-security-compat-probe.yml
+
+permissions:
+  contents: read
+
+jobs:
+  resolve-and-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@a8198c4bff370c8506180b035930dea56dbd5288 # v5
+        with:
+          package_json_file: landing/package.json
+          dest: ${{ runner.temp }}/pnpm-landing
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.21.1'
+          cache: false
+      - name: Generate real pnpm lockfile for compatibility test
+        working-directory: landing
+        run: |
+          pnpm --version
+          pnpm install --lockfile-only --no-frozen-lockfile --ignore-scripts
+      - name: Verify frozen install of generated lockfile
+        working-directory: landing
+        run: pnpm install --frozen-lockfile
+      - name: Record actual resolved dependency graph
+        working-directory: landing
+        run: pnpm why glob minimatch > dependency-why.txt
+      - name: Run site static type and lint checks
+        working-directory: landing
+        run: |
+          pnpm exec nuxt prepare
+          pnpm exec vue-tsc --noEmit
+          pnpm run lint
+          pnpm run test:registry
+      - name: Capture full security audit without suppressing failure
+        working-directory: landing
+        run: |
+          set +e
+          pnpm audit --json > dependency-audit.json
+          result=$?
+          set -e
+          printf '%s\\n' "$result" > dependency-audit.exit
+          cat dependency-audit.json
+          exit "$result"
+      - name: Preserve original lockfile and proof for independent audit
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: landing-security-compat-lock-and-audit
+          path: |
+            landing/pnpm-lock.yaml
+            landing/pnpm-workspace.yaml
+            landing/dependency-why.txt
+            landing/dependency-audit.json
+            landing/dependency-audit.exit
+          if-no-files-found: warn
+          retention-days: 7
