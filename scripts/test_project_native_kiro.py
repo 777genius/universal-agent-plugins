@@ -445,6 +445,30 @@ class KiroCollectorTests(unittest.TestCase):
                 kiro.collect(ctx)
             self.assertEqual(len(ctx.calls), 11)
 
+    def test_version_help_and_agent_inventory_have_exact_read_only_routes(self):
+        routes = [
+            ("version", ("--version",)),
+            *[(label, args) for label, args, _ in kiro.HELP],
+            ("a-agent-raw-list", ("agent", "list")),
+        ]
+        for label, arguments in routes:
+            for changed, project in (
+                    (arguments + ("--extra",), "a"),
+                    (("chat", "login"), "a"),
+                    (arguments, "b"),
+                    (arguments, "user")):
+                ctx = self.context()
+                with self.subTest(label=label, argv=changed, project=project):
+                    with self.assertRaisesRegex(ValueError, "exact argv/project"):
+                        kiro._probe(ctx, {}, label, changed, project)
+                    self.assertEqual(ctx.calls, [])
+        for label in ("unknown-probe", "native-install", "agent-login"):
+            ctx = self.context()
+            with self.subTest(label=label):
+                with self.assertRaisesRegex(ValueError, "exact argv/project"):
+                    kiro._probe(ctx, {}, label, ("--help",))
+                self.assertEqual(ctx.calls, [])
+
     def test_every_mcp_list_route_refuses_wrong_scope_or_command_before_child(self):
         # No unreviewed native command may run through a read-only capture label.
         # The successful six-route traversal is already covered by
