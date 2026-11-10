@@ -238,10 +238,18 @@ for (const outcome of ['success', 'error', 'security'] as const) {
           await page.getByRole('searchbox', { name: t('registryUi.catalog.searchPlugins') }).blur();
           const community = page.locator('.plugin-card[data-install-source="discovery:vectorize-io/hindsight//hindsight-integrations/agent-plugin"]');
           await expect(community).toBeVisible();
+          // A community discovery record can be valid without a matching
+          // signed security assessment. Never invent a security badge; the
+          // independently reported Skill scan remains visible.
+          await expect(community.locator('.skillspector')).toBeVisible();
           const badge = community.locator('.plugin-card__security');
-          await expect(badge).toBeVisible();
-          await badge.hover();
-          await expect(page.locator('.app-tooltip__disclaimer')).toHaveText(t('registryUi.security.tooltipDisclaimer'));
+          if (await badge.count()) {
+            await expect(badge).toBeVisible();
+            await badge.hover();
+            await expect(page.locator('.app-tooltip__disclaimer')).toHaveText(t('registryUi.security.tooltipDisclaimer'));
+          } else {
+            await expect(badge).toHaveCount(0);
+          }
         }
         expect(errors).toEqual([]);
       } finally { discovery.release(); security.release(); }

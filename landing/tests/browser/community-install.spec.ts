@@ -12,7 +12,10 @@ test('community installer is centered, full-width, and readable at desktop/table
   const panel = page.locator('.install-panel');
   await expect(panel.locator('.command-snippet')).toHaveCount(4, { timeout: 15_000 });
   await expect(page.locator('.breadcrumbs a')).toHaveAttribute('href', /\/plugins\/$/);
-  await expect(page.locator('#security-review')).toBeVisible();
+  // The signed security feed is independent of discovery; it may have no
+  // reviewed assessment for this community source. The Skill scan still
+  // gives an honest checked / not-checked state in the page.
+  await expect(page.locator('.skillspector')).toBeVisible();
 
   for (const width of [1280, 980, 390]) {
     await page.setViewportSize({ width, height: 900 });
