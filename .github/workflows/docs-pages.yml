@@ -214,3 +214,65 @@ jobs:
         uses: actions/deploy-pages@v5
         with:
           timeout: 1200000
+
+      - name: Verify live SEO routes after deploy
+        run: |
+          set -euo pipefail
+          site=https://universal-agent-plugins.com
+          tmp=$(mktemp -d)
+          trap 'rm -rf "$tmp"' EXIT
+          for pair in \
+            "/ root.html" \
+            "/agent-skills/ skills.html" \
+            "/llms.txt llms.txt" \
+            "/.well-known/ai-catalog.json ai-catalog.json" \
+            "/.well-known/ard.json ard.json" \
+            "/sitemap.xml sitemap.xml"; do
+            read -r route name <<< "$pair"
+            curl --fail --silent --show-error --location \
+              --retry 6 --retry-delay 5 --retry-all-errors --max-time 30 \
+              "$site$route" --output "$tmp/$name"
+            test -s "$tmp/$name"
+          done
+          python3 - "$tmp" <<'PY'
+          import json
+          import sys
+          from html.parser import HTMLParser
+          from pathlib import Path
+          from xml.etree import ElementTree
+
+          root = Path(sys.argv[1])
+          site = "https://universal-agent-plugins.com"
+
+          class Links(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.links = []
+                  self.robots = []
+              def handle_starttag(self, tag, attrs):
+                  values = dict(attrs)
+                  if tag == "link":
+                      self.links.append(values)
+                  elif tag == "meta" and values.get("name") == "robots":
+                      self.robots.append(values.get("content", ""))
+
+          for name, path in [("root.html", "/"), ("skills.html", "/agent-skills/")]:
+              html = (root / name).read_text(encoding="utf-8")
+              head = Links()
+              head.feed(html)
+              expected = site + path
+              assert [tag.get("href") for tag in head.links if tag.get("rel") == "canonical"] == [expected], f"{path}: canonical"
+              assert any(tag.get("hreflang") == "x-default" for tag in head.links), f"{path}: hreflang"
+              assert all("noindex" not in value for value in head.robots), f"{path}: noindex"
+
+          llms = (root / "llms.txt").read_text(encoding="utf-8")
+          assert llms.startswith("# Universal Agent Plugins\n")
+          assert "independent SKILL.md Skills" in llms
+          catalog = json.loads((root / "ai-catalog.json").read_text(encoding="utf-8"))
+          assert catalog == json.loads((root / "ard.json").read_text(encoding="utf-8"))
+          assert catalog.get("specVersion") == "1.0" and len(catalog.get("entries", [])) >= 2
+          locs = {loc.text for loc in ElementTree.parse(root / "sitemap.xml").getroot().findall(".//{*}loc")}
+          assert site + "/" in locs and site + "/agent-skills/" in locs
+          assert len(locs) >= 100, f"Unexpectedly small sitemap: {len(locs)}"
+          print(f"Live Pages SEO acceptance passed: canonical/hreflang, catalogs, llms.txt, sitemap ({len(locs)} URLs).")
+          PY
