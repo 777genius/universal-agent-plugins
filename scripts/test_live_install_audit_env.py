@@ -1139,10 +1139,13 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 runner["check_foreign"](pinned, case)
                 for skill, original in skills:
                     with self.subTest(skill=str(skill)):
+                        original_stat = skill.stat()
                         skill.write_text(original + "rewritten\n", encoding="utf-8")
                         with self.assertRaisesRegex(AssertionError, "foreign content modified"):
                             runner["check_foreign"](pinned, case)
                         skill.write_text(original, encoding="utf-8")
+                        os.utime(skill, ns=(original_stat.st_atime_ns,
+                                            original_stat.st_mtime_ns))
                         runner["check_foreign"](pinned, case)
                         injected = skill.parent / "unexpected-native-file.txt"
                         injected.write_text("unexpected", encoding="utf-8")
@@ -1155,11 +1158,14 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                         runner["check_foreign"](pinned, case)
                 for reference, original in references:
                     with self.subTest(reference=str(reference)):
+                        original_stat = reference.stat()
                         reference.write_text("tampered\n", encoding="utf-8")
                         with self.assertRaisesRegex(
                                 AssertionError, "foreign content modified"):
                             runner["check_foreign"](pinned, case)
                         reference.write_text(original, encoding="utf-8")
+                        os.utime(reference, ns=(original_stat.st_atime_ns,
+                                                original_stat.st_mtime_ns))
                         runner["check_foreign"](pinned, case)
                         injected = reference.parent / "unmanaged-extra.md"
                         injected.write_text("unexpected\n", encoding="utf-8")
@@ -1404,10 +1410,13 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "original isolated profile changed"):
                 runner["check_profile_unchanged"](env, project, before, "restore B")
             after = runner["profile_snapshot"](env, project)
+            original_stat = native.stat()
             native.write_bytes(b"after")
             with self.assertRaisesRegex(AssertionError, "original isolated profile changed"):
                 runner["check_profile_unchanged"](env, project, after, "remove B")
             native.write_bytes(b"before")
+            os.utime(native, ns=(original_stat.st_atime_ns,
+                                  original_stat.st_mtime_ns))
             runner["check_profile_unchanged"](env, project, after, "remove B")
 
             # Changes outside the selected client's native roots must fail too.
@@ -1675,10 +1684,13 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 check(project, baseline, "User add")
             untracked.unlink()
 
+            original_stat = foreign.stat()
             foreign.write_text("overwritten by User scope", encoding="utf-8")
             with self.assertRaisesRegex(AssertionError, "User lifecycle modified Project A"):
                 check(project, baseline, "User remove")
             foreign.write_text("owned by another tool", encoding="utf-8")
+            os.utime(foreign, ns=(original_stat.st_atime_ns,
+                                   original_stat.st_mtime_ns))
             check(project, baseline, "User remove")
 
             empty = project / "unexpected-empty-user-dir"
