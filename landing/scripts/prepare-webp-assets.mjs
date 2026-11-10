@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 const landing = fileURLToPath(new URL('..', import.meta.url));
 const imageRoot = path.join(landing, 'assets/images');
+const seoLogo = path.join(landing, 'assets/logo-192.png');
 const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 
 async function* sources(dir) {
@@ -24,7 +25,10 @@ let webpBytes = 0;
 
 try {
   const page = await browser.newPage();
-  for await (const source of sources(imageRoot)) {
+  for await (const source of (async function* () {
+    yield* sources(imageRoot);
+    yield seoLogo;
+  })()) {
     const png = await readFile(source);
     if (!png.subarray(0, signature.length).equals(signature)) {
       throw new Error(`Invalid PNG source: ${source}`);
@@ -57,9 +61,11 @@ try {
     }
     // The public showcase asset is generated from a private source so Pages
     // never ships an unused 500KB PNG alongside the actual WebP.
-    const target = relative === 'showcase/agent-notifications.png'
-      ? path.join(landing, 'public/showcase/agent-notifications.webp')
-      : source.replace(/\.png$/i, '.webp');
+    const target = source === seoLogo
+      ? path.join(landing, 'public/logo-192.webp')
+      : relative === 'showcase/agent-notifications.png'
+        ? path.join(landing, 'public/showcase/agent-notifications.webp')
+        : source.replace(/\.png$/i, '.webp');
     await mkdir(path.dirname(target), { recursive: true });
     await writeFile(target, webp);
     count++;
