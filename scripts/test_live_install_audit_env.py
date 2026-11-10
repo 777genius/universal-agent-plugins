@@ -69,6 +69,10 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         envelope = {"result": "success", "data": closure}
         wrapped = {"exit_code": 0, "timeout": False, "_json": envelope}
         self.assertEqual(check(wrapped, "add", "add", "codex", "project"), envelope)
+        # A public wrapper may itself report completed, but not pending/failure.
+        completed = {**envelope, "outcome": "completed"}
+        self.assertEqual(check({**wrapped, "_json": completed},
+                               "add", "add", "codex", "project"), completed)
         # Repeated add can legitimately converge without active actions.
         no_op = {**closure, "actions": [{**a, "action": "unchanged"} for a in actions],
                  "results": []}
@@ -76,6 +80,8 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                                "repeat add", "add", "codex", "project"),
                          {**envelope, "data": no_op})
         for bad in (
+                *({**envelope, "outcome": status} for status in
+                  ("failure", "pending", "manual_action_required", "unexpected", 42)),
                 {"result": "success", "data": {}},
                 {"result": "success"},
                 {**envelope, "data": {**closure, "outcome": "partial"}},

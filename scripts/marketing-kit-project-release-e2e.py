@@ -107,6 +107,8 @@ def verified(result, stage, operation=None, target=None, scope=None):
         # An outer generic success cannot certify a missing/partial closure.
         nested = envelope.get("data", envelope)
         if (envelope.get("result") == "success"
+                # A nested success must not mask an explicit outer refusal.
+                and envelope.get("outcome") in (None, "completed")
                 and isinstance(nested, dict)
                 and valid_legacy_dependency_result(nested, "add", target, scope)):
             return envelope
