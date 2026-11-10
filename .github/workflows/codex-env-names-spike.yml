@@ -70,7 +70,7 @@ jobs:
             fi
             echo "sandbox_probe_backend=$backend"
             if timeout 15s env -i HOME="$probe" CODEX_HOME="$probe/.codex" PATH="/usr/bin:/bin" \
-                "$CODEX_BINARY" "${args[@]}" sandbox linux /usr/bin/true > "$probe/sandbox-log" 2>&1; then
+                "$CODEX_BINARY" sandbox "${args[@]}" -- /usr/bin/true > "$probe/sandbox-log" 2>&1; then
               echo "sandbox_probe_pass=true"
             else
               echo "sandbox_probe_pass=false"
