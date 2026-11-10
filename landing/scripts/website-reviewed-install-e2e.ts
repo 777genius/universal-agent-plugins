@@ -49,7 +49,6 @@ function receipt(output: ReturnType<typeof execute>) {
   return { exit_code: output.exit_code, timeout: output.timeout, error: output.error,
     stdout_tail: output.stdout_tail, stderr_tail: output.stderr_tail };
 }
-}
 // Codex User plugin removal deliberately asks for an external-uninstall
 // confirmation. Verify that exact documented refusal rather than pretending
 // the partial result was an automatic removal; other clients must still remove.
