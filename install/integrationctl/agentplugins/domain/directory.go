@@ -7,10 +7,10 @@ import (
 	"strings"
 )
 
-// ResolveDirectory is deterministic and side-effect free. It selects one
+// resolveDirectory is deterministic and side-effect free. It selects one
 // distribution and one release for the complete target set; acquisition
 // failure is intentionally not a fallback input.
-func ResolveDirectory(snapshot DirectorySnapshot, request DirectoryResolveRequest) (DirectorySelection, error) {
+func resolveDirectory(snapshot DirectorySnapshot, request DirectoryResolveRequest, affectedScope InstallScope) (DirectorySelection, error) {
 	if err := validateDirectoryResolvePurpose(snapshot, request); err != nil {
 		return DirectorySelection{}, err
 	}
@@ -69,7 +69,7 @@ func ResolveDirectory(snapshot DirectorySnapshot, request DirectoryResolveReques
 		if err := validateRecordedDirectoryRelease(*distribution, request.Recorded); err != nil {
 			return DirectorySelection{}, err
 		}
-		release, reasons := chooseDirectoryRelease(snapshot, product, *distribution, request)
+		release, reasons := chooseDirectoryRelease(snapshot, product, *distribution, request, affectedScope)
 		if release == nil {
 			return DirectorySelection{}, ineligibleError(distribution.ID, reasons)
 		}
@@ -77,7 +77,7 @@ func ResolveDirectory(snapshot DirectorySnapshot, request DirectoryResolveReques
 	}
 	diagnostics := []DirectoryDiagnostic{}
 	for index, distribution := range orderedDistributions(snapshot, product) {
-		release, reasons := chooseDirectoryRelease(snapshot, product, distribution, request)
+		release, reasons := chooseDirectoryRelease(snapshot, product, distribution, request, affectedScope)
 		if release != nil {
 			return selectionFrom(snapshot, product, distribution, *release, index > 0, diagnostics), nil
 		}
@@ -88,7 +88,7 @@ func ResolveDirectory(snapshot DirectorySnapshot, request DirectoryResolveReques
 	return DirectorySelection{}, fmt.Errorf("%w for %q: %s", ErrDirectoryIneligible, selector, joinDiagnosticMessages(diagnostics))
 }
 
-func chooseDirectoryRelease(snapshot DirectorySnapshot, product DirectoryProduct, distribution DirectoryDistribution, request DirectoryResolveRequest) (*DirectoryRelease, []eligibilityReason) {
+func chooseDirectoryRelease(snapshot DirectorySnapshot, product DirectoryProduct, distribution DirectoryDistribution, request DirectoryResolveRequest, affectedScope InstallScope) (*DirectoryRelease, []eligibilityReason) {
 	policies := map[uint64]DirectoryReleasePolicy{}
 	for _, p := range distribution.ReleasePolicies {
 		policies[p.ReleaseSequence] = p
@@ -143,7 +143,7 @@ func chooseDirectoryRelease(snapshot DirectorySnapshot, product DirectoryProduct
 		if policy.Status != ReleaseActive && policy.Status != ReleaseSuperseded {
 			continue
 		}
-		if reason := releaseEligibility(snapshot, product, distribution, *release, policy, request); reason != nil {
+		if reason := releaseEligibility(snapshot, product, distribution, *release, policy, request, affectedScope); reason != nil {
 			reasons = append(reasons, *reason)
 			continue
 		}
@@ -155,7 +155,7 @@ func chooseDirectoryRelease(snapshot DirectorySnapshot, product DirectoryProduct
 	return nil, reasons
 }
 
-func releaseEligibility(snapshot DirectorySnapshot, product DirectoryProduct, distribution DirectoryDistribution, release DirectoryRelease, policy DirectoryReleasePolicy, request DirectoryResolveRequest) *eligibilityReason {
+func releaseEligibility(snapshot DirectorySnapshot, product DirectoryProduct, distribution DirectoryDistribution, release DirectoryRelease, policy DirectoryReleasePolicy, request DirectoryResolveRequest, affectedScope InstallScope) *eligibilityReason {
 	if release.ManifestName != product.ManifestName {
 		return &eligibilityReason{"manifest_mismatch", "release manifest identity differs from product"}
 	}
@@ -179,7 +179,7 @@ func releaseEligibility(snapshot DirectorySnapshot, product DirectoryProduct, di
 	if request.Purpose == DirectoryResolveContext7ChatGPTPreparation && !hasContext7PreparationPromotion(snapshot, distribution, release, policy) {
 		return &eligibilityReason{"upstream_materialization_required", "Context7 preparation requires trusted materialization on a declared supported target"}
 	}
-	for _, target := range directoryEligibilityTargets(request.Targets, request.Scope) {
+	for _, target := range directoryEligibilityTargets(request.Targets, affectedScope) {
 		entry := targetByClientScope(policy.Targets, target, request.Scope, snapshot.SnapshotSchemaVersion)
 		// Only absence of signed ChatGPT support can use the source-only lane.
 		if !(entry == nil && request.Purpose == DirectoryResolveContext7ChatGPTPreparation) {
