@@ -158,6 +158,53 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                                 execute("agentplugins", {}, Path.cwd(), "codex",
                                         "add", *args)
 
+    def test_marketing_kit_unchanged_dependency_actions_match_scoped_inventory(self):
+        # A no-op command must not claim four foreign durable receipts while
+        # the real selected-scope inventory and signed lock remain unchanged.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        execute = runner["execute"]
+        aliases = tuple(runner["REQUIRED_DISTRIBUTIONS"])
+        installed = {distribution: alias + "-id"
+                     for alias, distribution in runner["REQUIRED_DISTRIBUTIONS"].items()}
+        actions = [{"alias": alias, "client_id": "codex", "action": "unchanged",
+                    "installation_id": alias + "-id"} for alias in aliases]
+        for scope in ("user", "project"):
+            for operation in ("add", "update"):
+                with self.subTest(scope=scope, operation=operation):
+                    data = {"result": "success", "outcome": "completed",
+                            "scope": scope, "actions": actions, "results": []}
+                    envelope = ({"result": "success", "data": data}
+                                if operation == "add" else data)
+                    response = {"exit_code": 0, "timeout": False, "_json": envelope}
+                    args = (operation, "marketing-kit", "--target", "codex",
+                            "--scope", scope)
+                    if scope == "project":
+                        args += ("--project-root", str(Path.cwd()),)
+                    with patch.dict(execute.__globals__, {
+                            "invoke": lambda *argv: response,
+                            "inventory": lambda *argv: [],
+                            "identities": lambda *argv: installed}):
+                        self.assertEqual(execute(
+                            "agentplugins", {}, Path.cwd(), "codex",
+                            "no-op", *args)["result"], "passed")
+                        for wrong_id in (None, "", "foreign-installation",
+                                         actions[0]["installation_id"]):
+                            changed = [dict(action) for action in actions]
+                            changed[1]["installation_id"] = wrong_id
+                            changed_data = {**data, "actions": changed}
+                            bad = ({"result": "success", "data": changed_data}
+                                   if operation == "add" else changed_data)
+                            with patch.dict(execute.__globals__, {
+                                    "invoke": lambda *argv: {
+                                        **response, "_json": bad}}):
+                                with self.assertRaisesRegex(
+                                        AssertionError, "unchanged action does not match"):
+                                    execute("agentplugins", {}, Path.cwd(),
+                                            "codex", "no-op", *args)
+
     def test_marketing_kit_lock_requires_real_selected_scope_dependency_graph(self):
         # Four correct source keys can still conceal detached mandatory children.
         from copy import deepcopy

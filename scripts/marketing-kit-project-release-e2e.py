@@ -108,8 +108,17 @@ def valid_legacy_dependency_result(envelope, operation, target=None, scope=None)
 
 
 def verify_applied_receipt_inventory(envelope, observed):
-    """Bind applied dependency receipts to the actual selected-scope inventory."""
+    """Bind applied and unchanged actions to actual selected-scope inventory."""
     data = envelope.get("data", envelope)
+    for action in data["actions"]:
+        if action["action"] != "unchanged":
+            continue
+        distribution = REQUIRED_DISTRIBUTIONS[action["alias"]]
+        saved_id = action.get("installation_id")
+        if (not isinstance(saved_id, str) or not saved_id.strip()
+                or observed.get(distribution) != saved_id):
+            raise AssertionError(
+                f"unchanged action does not match installed {distribution} identity")
     active = [action for action in data["actions"] if action["action"] != "unchanged"]
     for action, receipt in zip(active, data["results"]):
         distribution = REQUIRED_DISTRIBUTIONS[action["alias"]]
@@ -624,15 +633,13 @@ def execute(cli, env, project, target, label, *args):
         raise AssertionError(f"{label}: invalid explicit scope")
     result = invoke([cli, *args, "--format", "json"], env, project, 180)
     envelope = verified(result, label, args[0], target, args[selected])
-    if args[0] in ("add", "install", "repair"):
-        # The released result DTO has no alias. Bind applied receipts to live
-        # inventory, including repairs; cold install actions may omit IDs.
-        data = envelope.get("data", envelope)
-        if any(action["action"] != "unchanged" for action in data["actions"]):
-            current = identities(
-                inventory(cli, env, project, target, args[selected]),
-                target, args[selected])
-            verify_applied_receipt_inventory(envelope, current)
+    if args[0] in ("add", "update", "install", "repair"):
+        # Active results and retained no-op action IDs both belong to the
+        # selected client/scope. Cold planned installs may omit action IDs.
+        current = identities(
+            inventory(cli, env, project, target, args[selected]),
+            target, args[selected])
+        verify_applied_receipt_inventory(envelope, current)
     return {"stage": label, "exit_code": result["exit_code"], "result": "passed"}
 
 
