@@ -39,6 +39,9 @@ type DirectoryOrigin struct {
 	DistributionID         string           `json:"distribution_id"`
 	DistributionKind       DistributionKind `json:"distribution_kind"`
 	DesiredReleaseSequence uint64           `json:"desired_release_sequence"`
+	// FeedID binds signed provenance to a specific trusted publication lineage.
+	// Empty means the historical Directory feed; existing receipts remain valid.
+	FeedID                 string           `json:"feed_id,omitempty"`
 	SnapshotSchema         int              `json:"snapshot_schema,omitempty"`
 	SnapshotSequence       uint64           `json:"snapshot_sequence,omitempty"`
 	SnapshotDigest         string           `json:"snapshot_digest,omitempty"`
