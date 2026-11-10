@@ -34,6 +34,10 @@ landing/public/MIRROR_METADATA.json
 landing/public/discovery/
 landing/public/registry/
 landing/public/security/
+# Generated raster variants: PNG originals are retained for repeatable builds.
+landing/assets/images/**/*.webp
+landing/public/showcase/*.webp
+landing/public/logo-192.webp
 landing/.e2e-pages/
 landing/test-results/
 .dist/
