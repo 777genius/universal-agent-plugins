@@ -64,6 +64,8 @@ class Model(http.server.BaseHTTPRequestHandler):
     search_requested = False
     mcp_output_seen = False
     mcp_digest_verified = False
+    mcp_output_indicators = []
+    mcp_output_type = "not_observed"
     expected_digest = None
     shell_output_seen = False
     shell_execution_verified = False
@@ -132,7 +134,24 @@ class Model(http.server.BaseHTTPRequestHandler):
                 # SHA256 of a fresh synthetic-only canary, never real credentials.
                 # Correlate the ACTUAL native tool result rather than relying
                 # on a sandbox-blocked child sidecar receipt.
-                rendered = json.dumps(response.get("output"), sort_keys=True)
+                output = response.get("output")
+                rendered = json.dumps(output, sort_keys=True)
+                cls.mcp_output_type = (
+                    "text" if isinstance(output, str) else
+                    "object" if isinstance(output, dict) else
+                    "array" if isinstance(output, list) else
+                    "other"
+                )
+                # Fixed vocabulary only: never record the child's output,
+                # synthetic canary, digest string, process paths or argv.
+                cls.mcp_output_indicators = [
+                    term for term in (
+                        "sha256", "observed", "unknown", "not found", "unsupported",
+                        "not registered", "unavailable", "not connected", "failed",
+                        "error", "permission denied", "denied", "namespace",
+                        "server", "mcp", "tool", "timeout", "call", "result",
+                    ) if term in rendered.lower()
+                ]
                 if cls.expected_digest and cls.expected_digest in rendered:
                     cls.mcp_digest_verified = True
         tools = req.get("tools", [])
@@ -361,6 +380,8 @@ def main():
         report["real_codex_shell_called"] = Model.shell_requested and Model.shell_execution_verified
         report["real_codex_mcp_called"] = Model.mcp_requested and Model.mcp_output_seen
         report["native_mcp_digest_seen"] = Model.mcp_digest_verified
+        report["mcp_output_type"] = Model.mcp_output_type
+        report["mcp_output_indicators"] = Model.mcp_output_indicators
         report["requests"] = Model.requests
         report["advertised_tool_names"] = sorted(Model.advertised_tool_names)[:35]
         report["mcp_child_saw_secret"] = Model.mcp_digest_verified
