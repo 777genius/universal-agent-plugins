@@ -402,7 +402,7 @@ For Go Hooks, host detection, installation, and TypeScript management, see the
 <table>
   <tr>
     <td width="104" align="center">
-      <a href="https://github.com/777genius/agent-notifications"><img src="landing/public/showcase/agent-notifications.png" width="80" height="80" alt="Agent Notifications logo" /></a>
+      <a href="https://github.com/777genius/agent-notifications"><img src="landing/assets/images/showcase/agent-notifications.png" width="80" height="80" alt="Agent Notifications logo" /></a>
     </td>
     <td>
       <strong><a href="https://github.com/777genius/agent-notifications">Agent Notifications</a></strong><br />

@@ -88,6 +88,7 @@ jobs:
       - name: Prepare Nuxt tooling
         working-directory: landing
         run: |
+          node ./scripts/prepare-webp-assets.mjs
           pnpm exec nuxt prepare
           pnpm exec vue-tsc --noEmit
 
