@@ -1,6 +1,8 @@
 # Hermes native E2E completion
 
-Date: 2026-11-10. Follow-up to merged #814; production behavior is unchanged.
+Date: 2026-11-10. Follow-up to merged #814. The initial Linux extension changed
+only the test harness. Cross-platform qualification also exposed the profile
+selection defects covered by the [profile correction plan](2026-11-10-hermes-windows-profile.md).
 
 ## Scope and estimates
 
@@ -12,7 +14,8 @@ Use the existing bounded Pi HTTP MCP fixture with `hermes mcp test` to prove
 native initialize/tools/list without a model or account.
 
 Complexity: 4/10. Expected reliability after native CI: 9/10. Change size:
-approximately 200-300 test-only lines (4/10). No new framework or production API.
+approximately 700-900 test/workflow/documentation lines (5/10), plus a narrow
+profile-selection correction and its regressions. No new framework or production API.
 
 ## Evidence contract
 
@@ -38,17 +41,18 @@ approximately 200-300 test-only lines (4/10). No new framework or production API
   `mutated: false`; an unrelated nonzero exit is a test failure.
 - Keep stage output in the runner's disposable evidence directory; only mark
   this complete after the exact follow-up commit passes native CI.
-- On lifecycle timeout, terminate its dedicated Linux process group, including
-  surviving descendants, and write the summary with observed MCP methods in
-  `finally`. Report `tools_call` from the captured protocol rather than a constant.
+- On lifecycle timeout, terminate its dedicated POSIX process group, including
+  surviving descendants, or the owned Windows process tree with bounded
+  `taskkill /T /F`. Write the summary with observed MCP methods in `finally`. Report `tools_call` from the captured protocol rather than a constant.
 
 ## Review before implementation
 
 1. Source review: Hermes `hermes_cli/mcp_config.py::cmd_mcp_test` connects and
    enumerates native tools; `tools/skills_tool.py::skill_view` reads the native
    catalog. Both APIs exist at the pinned commit.
-2. Scope review: no model/auth, no change to client adapters, no trust grant,
-   no arbitrary host profile. All mutable data belongs to RUNNER_TEMP.
+2. Initial Linux scope review: no model/auth or trust grant, no arbitrary host
+   profile. All mutable test data belongs to RUNNER_TEMP. The later adapter
+   correction is reviewed separately in the profile correction plan.
 3. Failure review: missing native runtime, version drift, silent discovery
    failure, foreign-state mutation or absent MCP methods must fail the lane.
 
@@ -64,3 +68,45 @@ Pinned source references:
 - [Skills listing and reading](https://github.com/NousResearch/hermes-agent/blob/2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19/tools/skills_tool.py)
 - [Project discovery and trust](https://github.com/NousResearch/hermes-agent/blob/2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19/agent/skill_utils.py)
 - [Native MCP connection probe](https://github.com/NousResearch/hermes-agent/blob/2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19/hermes_cli/mcp_config.py)
+
+## Platform qualification addendum
+
+The first extended Linux native run passed at UAP head
+`b3ed848effaca7d436c1306e06f2d24e67b9e0b2`:
+[run 42802367363](https://github.com/777genius/universal-agent-plugins/actions/runs/42802367363).
+Its retained summary reports four initialize/tools/list exchanges, no tools/call,
+no model turn and lifecycle exit 0. This is evidence for that Linux revision.
+
+The pinned Hermes [README](https://github.com/NousResearch/hermes-agent/blob/2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19/README.md#quick-install)
+documents macOS and native Windows as well as Linux. Its
+[POSIX installer](https://github.com/NousResearch/hermes-agent/blob/2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19/scripts/install.sh)
+contains both Darwin architecture pins. Native Windows is supported through a
+separate PowerShell installer; it must not be described as WSL-only.
+
+Before implementation: reuse the current lifecycle unchanged on Ubuntu 24.04
+and macOS 15, make the negative Project MCP snapshot comparison portable with
+Python byte equality, and include OS/architecture in evidence names. Keep the source pin,
+native observer, real MCP exchanges and all ownership/trust assertions. Update
+the stale draft documentation with the exact Linux evidence and retain pending
+native-platform and release gates. This initial matrix plan did not require a new framework.
+
+Self-review ratings: scope 10/10 (existing smoke only), source confidence 10/10
+(pinned official installer), complexity 2/10 (matrix and portable comparison),
+qualification confidence pending actual macOS CI. A queued lane is not proof;
+native Windows and complete cross-platform support remain unqualified here.
+
+Integration decision after Windows source review: require the same lifecycle
+on all three operating systems. Move the existing shell sequence to a small
+shared Python test driver, use Hermes' native PowerShell installer on Windows,
+and retain POSIX/Windows-specific process cleanup only at the process boundary.
+This removes shell-path conversion and duplicate lifecycle scenarios without
+adding production APIs. macOS and Windows remain pending until actual native
+CI passes; released-package and Directory qualification remain separate gates.
+
+Cross-platform source review then found that UAP dropped `HERMES_HOME` and
+`HERMES_DATA_DIR_SUFFIX` from its environment snapshot and selected the POSIX
+default on Windows. The adapter and environment-capture correction is scoped
+in the separate profile plan above. Every native lane now selects the explicit
+nondefault `<fixtureHome>/selected-profile`; coinciding with the vendor default
+can no longer hide an ignored override. Injected platform-default and NewOS
+composition tests cover the complementary default selection contract.

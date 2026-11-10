@@ -36,9 +36,9 @@ var (
 )
 
 func (*Adapter) DetectSurfaces(host clients.Host) clients.Detection {
-	root := host.Env("HERMES_HOME")
-	if root == "" {
-		root = filepath.Join(host.HomeDir(), ".hermes")
+	root, err := selectedProfileRoot(host)
+	if err != nil {
+		return clients.Detection{Err: err}
 	}
 	if !cleanRoot(root) {
 		return clients.Detection{Err: fmt.Errorf("hermes home must be an explicit clean absolute directory")}
@@ -56,6 +56,27 @@ func (*Adapter) DetectSurfaces(host clients.Host) clients.Detection {
 		},
 		SelectionSurfaceIDs: []string{"hermes_cli"},
 	}
+}
+
+// Hermes 0.23 hermes_constants.py selects the platform default independently
+// of existing directories. A legacy Windows ~/.hermes is not a fallback.
+func selectedProfileRoot(host clients.Host) (string, error) {
+	if root := host.Env("HERMES_HOME"); root != "" {
+		return root, nil
+	}
+	base, name := host.HomeDir(), ".hermes"
+	if host.GOOS() == "windows" {
+		base = strings.TrimSpace(host.Env("LOCALAPPDATA"))
+		if base == "" {
+			base = filepath.Join(host.HomeDir(), "AppData", "Local")
+		}
+		name = "hermes"
+	}
+	name += host.Env("HERMES_DATA_DIR_SUFFIX")
+	if err := pathpolicy.ValidatePortablePathSegment(name); err != nil {
+		return "", fmt.Errorf("hermes data directory suffix is invalid: %w", err)
+	}
+	return filepath.Join(base, name), nil
 }
 
 func cleanRoot(path string) bool {

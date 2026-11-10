@@ -70,9 +70,13 @@ def invoke_skills(user_marker, project_count):
     sys.path.insert(0, str(source))
     from hermes_cli._launchers import runtime_command
 
-    native_argv = json.loads(subprocess.check_output(
-        [os.environ["HERMES_BIN"], "--print-runtime-command"],
-        text=True, timeout=30))
+    runtime_file = os.environ.get("HERMES_NATIVE_RUNTIME_COMMAND_FILE")
+    if runtime_file:
+        native_argv = json.loads(Path(runtime_file).read_text(encoding="utf-8-sig"))
+    else:
+        native_argv = json.loads(subprocess.check_output(
+            [os.environ["HERMES_BIN"], "--print-runtime-command"],
+            text=True, timeout=30))
     require(isinstance(native_argv, list) and len(native_argv) >= 4
             and isinstance(native_argv[0], str) and Path(native_argv[0]).is_absolute(),
             "Hermes did not resolve its installation-bound interpreter")
@@ -99,7 +103,15 @@ def check_project_refusal(path):
 
 
 def stop_lifecycle(child):
-    # The child owns a new Linux process group. Also kill surviving descendants
+    if os.name == "nt":
+        # This process owns the child PID and its disposable native test tree.
+        # taskkill handles descendants when a Windows CLI starts subprocesses.
+        subprocess.run(["taskkill", "/PID", str(child.pid), "/T", "/F"],
+                       check=False, timeout=15, stdout=subprocess.DEVNULL,
+                       stderr=subprocess.DEVNULL)
+        child.wait(timeout=5)
+        return
+    # The child owns a new POSIX process group. Also kill surviving descendants
     # when the shell leader exits promptly after SIGTERM.
     for signum in (signal.SIGTERM, signal.SIGKILL):
         with suppress(ProcessLookupError):
@@ -129,11 +141,19 @@ def run_lifecycle(script):
     evidence = Path(tempfile.mkdtemp(prefix="hermes-native-evidence-", dir=runner))
     with PiHTTPMCPProbe() as probe:
         env = dict(os.environ, HERMES_NATIVE_MCP_URL=probe.url,
-                   HERMES_NATIVE_EVIDENCE=str(evidence))
+                   HERMES_NATIVE_EVIDENCE=str(evidence), HOME=str(profile.parent))
+        env["PATH"] = str(Path(env["HERMES_BIN"]).parent) + os.pathsep + env.get("PATH", "")
+        if os.name == "nt":
+            env["USERPROFILE"] = str(profile.parent)
+            for key, folder in (("APPDATA", "Roaming"), ("LOCALAPPDATA", "Local")):
+                path = profile.parent / "AppData" / folder
+                path.mkdir(parents=True, exist_ok=True)
+                env[key] = str(path)
         child, timed_out = None, False
         try:
-            child = subprocess.Popen(["bash", str(script), "--lifecycle"], env=env,
-                                     start_new_session=True)
+            options = ({"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+                       if os.name == "nt" else {"start_new_session": True})
+            child = subprocess.Popen([sys.executable, str(script)], env=env, **options)
             try:
                 child.wait(timeout=600)
             except subprocess.TimeoutExpired:
@@ -144,6 +164,8 @@ def run_lifecycle(script):
             proof = {"hermes_sha": actual, "uap_checkout_sha": checkout_sha,
                      "uap_head_sha": os.environ.get("HERMES_NATIVE_UAP_HEAD", checkout_sha),
                      "github_sha": os.environ.get("GITHUB_SHA"), "timed_out": timed_out,
+                     "runner_os": os.environ.get("RUNNER_OS", sys.platform),
+                     "runner_arch": os.environ.get("RUNNER_ARCH"),
                      "lifecycle_exit": child.returncode if child else None,
                      "mcp_methods": methods, "model_turn": False,
                      "tools_call": "tools/call" in methods}
