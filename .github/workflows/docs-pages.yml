@@ -271,7 +271,7 @@ jobs:
           catalog = json.loads((root / "ai-catalog.json").read_text(encoding="utf-8"))
           assert catalog == json.loads((root / "ard.json").read_text(encoding="utf-8"))
           assert catalog.get("specVersion") == "1.0" and len(catalog.get("entries", [])) >= 2
-          locs = {loc.text for loc in ElementTree.parse(root / "sitemap.xml").iter("{*}loc")}
+          locs = {loc.text for loc in ElementTree.parse(root / "sitemap.xml").getroot().findall(".//{*}loc")}
           assert site + "/" in locs and site + "/agent-skills/" in locs
           assert len(locs) >= 100, f"Unexpectedly small sitemap: {len(locs)}"
           print(f"Live Pages SEO acceptance passed: canonical/hreflang, catalogs, llms.txt, sitemap ({len(locs)} URLs).")
