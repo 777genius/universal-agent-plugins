@@ -133,15 +133,22 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     with self.assertRaisesRegex(AssertionError, "CLI did not succeed"):
                         check({**valid, "_json": invalid}, operation, operation, "codex")
                 if results:
-                    # A planned active action cannot claim successful execution
-                    # using only unchanged/no-op receipts, even with a zero exit.
+                    # The released installer legitimately returns "unchanged"
+                    # when an active repair/install/remove converges with no
+                    # filesystem mutation. Preserve this exact public contract,
+                    # but never accept an unrelated client's unchanged receipt.
                     no_op_receipts = {**envelope, "results": [
                         {**result, "outcome": "unchanged"} for result in results]}
                     for output in (no_op_receipts,
                                    {**no_op_receipts, "result": "success"}):
+                        self.assertEqual(check({**valid, "_json": output},
+                                               operation, operation, "codex"), output)
+                        foreign_no_op = {**output, "results": [
+                            {**result, "client_id": "claude"}
+                            for result in output["results"]]}
                         with self.assertRaisesRegex(AssertionError,
                                                     "CLI did not succeed"):
-                            check({**valid, "_json": output},
+                            check({**valid, "_json": foreign_no_op},
                                   operation, operation, "codex")
 
     def test_marketing_kit_noop_update_rejects_rekey_and_lock_rewrite(self):
