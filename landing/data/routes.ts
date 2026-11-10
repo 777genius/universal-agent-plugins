@@ -10,6 +10,7 @@ export const routeFamilies = [
   { family: 'home', path: '/', indexable: true },
   { family: 'catalog', path: '/plugins/', indexable: true },
   { family: 'skills', path: '/skills/', indexable: false },
+  { family: 'skills-overview', path: '/agent-skills/', indexable: true },
   { family: 'download', path: '/download/', indexable: true },
   { family: 'create', path: '/create-plugin/', indexable: false },
   { family: 'community', path: '/plugins/community/', indexable: false },

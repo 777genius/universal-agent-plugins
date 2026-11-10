@@ -108,6 +108,23 @@
         "moreCandidatesHelp": "No hay coincidencias en este grupo. Muestra más para revisar los candidatos restantes.",
         "noMatches": "Ninguna Skill coincide con estos filtros",
         "noMatchesHelp": "Modifica la búsqueda o restablece los filtros para ver todas las Skills."
+      },
+      "discoveryNotice": "La página estática muestra primero los plugins revisados. El navegador puede añadir entradas de la comunidad tras verificar el catálogo firmado; si no está disponible, permanece el conjunto revisado.",
+      "overview": {
+        "seoTitle": "Agent Skills independientes — Universal Agent Plugins",
+        "metaDescription": "Descubre, revisa e instala instrucciones SKILL.md independientes para agentes de IA compatibles sin crear un paquete plugin.json.",
+        "title": "Agent Skills, sin envoltorio de plugin.",
+        "lead": "Busca instrucciones SKILL.md reutilizables, elige agentes compatibles e instala para tu usuario o proyecto. Los Skills independientes no requieren un paquete Agent Plugins 1.0.",
+        "standaloneTitle": "Archivos Skills independientes",
+        "standaloneDescription": "Instala Skills desde un repositorio de GitHub que hayas revisado o desde un editor compatible, sin manifiesto plugin.json.",
+        "scopeTitle": "Agentes y ámbito explícitos",
+        "scopeDescription": "Elige los agentes en la terminal o indica los destinos. Usa --scope para instalar en tu perfil o en un proyecto compatible.",
+        "reviewTitle": "Revisa el origen antes de instalar",
+        "reviewDescription": "Las entradas del catálogo y los análisis estáticos de SkillSpector no garantizan seguridad, activación ni ejecución correcta.",
+        "browse": "Explorar el catálogo de Skills",
+        "installGuide": "Leer la guía de instalación",
+        "learnMore": "Cómo funcionan los Skills independientes",
+        "exampleCaption": "Ejemplo: sustituye owner/repository por un origen real"
       }
     },
     "directoryPage": {

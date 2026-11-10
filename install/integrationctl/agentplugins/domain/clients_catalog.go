@@ -29,6 +29,7 @@ const (
 	ClientKimi     ClientID = "kimi"
 	ClientQoder    ClientID = "qoder"
 	ClientPi       ClientID = "pi"
+	ClientHermes   ClientID = "hermes"
 
 	DetectionNotDetected DetectionStatus = "not_detected"
 	DetectionDetected    DetectionStatus = "detected"
@@ -153,9 +154,9 @@ var clientDefinitions = []ClientDefinition{
 		LifecycleKind:  LifecycleNativeConfig,
 	}), ActivationAutomatic), LifecycleNativeConfig),
 	withProjectScope(clientDefinition(ClientWindsurf, "Windsurf / Devin", "windsurf", "prepared", "prepared", false, PackagePrepared, SupportPrepared, SupportPrepared, SupportPrepared, SupportUnsupported, SupportPrepared, ClientTraits{
-		InstallIntents:           []InstallIntent{InstallIntentAutomatic},
-		LifecycleKind:            LifecycleNativeConfig,
-		UsesManagedStdioLauncher: true,
+		InstallIntents:                    []InstallIntent{InstallIntentAutomatic},
+		LifecycleKind:                     LifecycleNativeConfig,
+		UsesManagedStdioLauncher:          true,
 		RecordsSelectedNativeRootOnCreate: true,
 	}), LifecycleNativeConfig),
 	withProjectComponentSupport(withProjectScope(clientDefinition(ClientGrok, "Grok Build", "grok", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
@@ -174,6 +175,13 @@ var clientDefinitions = []ClientDefinition{
 		HonorsOpenAIMCPAuthHints:            true,
 		LegacyPreparedProjectPackageReceipt: true,
 	}), LifecycleNativeConfig), SupportNative, SupportNative),
+	withProjectComponents(withProjectScope(clientDefinition(ClientHermes, "Hermes Agent", "hermes", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
+		InstallIntents:           []InstallIntent{InstallIntentAutomatic},
+		LifecycleKind:            LifecycleNativeConfig,
+		BindsNativeProfileRoot:   true,
+		TracksNativeEffects:      true,
+		SupportsPreparedRecovery: true,
+	}), LifecycleNativeConfig), SupportNative, SupportUnsupported),
 	withProjectComponents(withProjectScope(withActivation(withoutCommands(clientDefinition(ClientPi, "Pi", "pi", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportNative, ClientTraits{
 		InstallIntents: []InstallIntent{InstallIntentAutomatic}, LifecycleKind: LifecyclePrepared,
 		BindsNativeProfileRoot: true, RequiresPluginData: true, VerifiesNativeDirectory: true, ProtectsModifiedPackage: true,

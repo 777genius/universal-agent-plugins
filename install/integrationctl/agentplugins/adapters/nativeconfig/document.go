@@ -12,11 +12,12 @@ import (
 )
 
 type document struct {
-	ast           hujson.Value
-	root          *hujson.Object
-	jsonc         bool
-	commentsOnly  bool
-	codexDocument CodexDocument
+	ast            hujson.Value
+	root           *hujson.Object
+	jsonc          bool
+	commentsOnly   bool
+	codexDocument  CodexDocument
+	hermesDocument CodexDocument
 }
 
 func parseDocument(body []byte, jsonc bool) (*document, error) {
@@ -153,7 +154,7 @@ func removeEntry(obj *hujson.Object, name string) bool {
 }
 
 func (doc *document) render() ([]byte, error) {
-	if doc.codexDocument != nil {
+	if doc.codexDocument != nil || doc.hermesDocument != nil {
 		return doc.renderCodexDocument()
 	}
 	if doc.commentsOnly {

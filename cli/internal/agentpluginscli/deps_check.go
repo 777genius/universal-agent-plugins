@@ -25,7 +25,7 @@ type dependencyCheckReport struct {
 }
 
 func newDependencyCheckCommand(app App, opts *options) *cobra.Command {
-	return &cobra.Command{
+	command := &cobra.Command{
 		Use: "check", Short: "Check local agreement and cached package integrity without fetching or changing files",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -50,9 +50,12 @@ func newDependencyCheckCommand(app App, opts *options) *cobra.Command {
 				return finishDependencyCheck(cmd, opts, report)
 			}
 			report = inspectLocalDependencies(cmd.Context(), selected)
+			report = appendLocalPolicyAudit(cmd.Context(), selected, opts.dependencyPolicyFile, report)
 			return finishDependencyCheck(cmd, opts, report)
 		},
 	}
+	command.Flags().StringVar(&opts.dependencyPolicyFile, "policy", "", "optional offline local source/MCP policy")
+	return command
 }
 
 func inspectLocalDependencies(ctx context.Context, app App) dependencyCheckReport {

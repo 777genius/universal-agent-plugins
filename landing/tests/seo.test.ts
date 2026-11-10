@@ -86,6 +86,30 @@ describe('manifest-driven localized SEO', () => {
       }
     });
   }
+  it('indexes a stable standalone Skills overview, never dynamic third-party Skill details', () => {
+    for (const base of ['/', '/universal-agent-plugins/']) {
+      const routes = productRoutes(['context7'], ['codex']);
+      const root = `https://example.test${base}`;
+      const overview = pageRouteSeo('/agent-skills/', routes, root, base);
+      const russian = pageRouteSeo('/ru/agent-skills/', routes, root, base);
+      assert.equal(overview.canonical, root + 'agent-skills/');
+      assert.equal(russian.canonical, root + 'ru/agent-skills/');
+      assert.equal(overview.current?.indexable, true);
+      assert.deepEqual(
+        overview.alternates.map(({ hreflang }) => hreflang),
+        [...candidateLocales, 'x-default'],
+      );
+      assert.equal(isIndexablePath('/ru/agent-skills/', routes), true);
+      assert.equal(isIndexablePath('/agent-skills/', routes), true);
+      // The existing query-driven third-party SKILL.md viewer remains noindex,
+      // even if callers supply a specific external source or name.
+      const details = pageRouteSeo('/skills/?id=skills-sh:someone/repo:skill', routes, root, base);
+      assert.equal(details.current?.indexable, false);
+      assert.deepEqual(details.alternates, []);
+      assert.equal(isIndexablePath('/skills/', routes), false);
+    }
+  });
+
   it('preserves canonical distinctions without inventing routes or publishing drafts', () => {
     const get = (path: string) => pageRouteSeo(path, routes, 'https://example.test', '/');
     assert.equal(get('/create-plugin/').canonical, 'https://example.test/create-plugin/');

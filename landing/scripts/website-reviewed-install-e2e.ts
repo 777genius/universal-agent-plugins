@@ -42,15 +42,20 @@ function execute(args: string[], env: NodeJS.ProcessEnv, cwd: string) {
   return { exit_code: child.status,
     timeout: (child.error as NodeJS.ErrnoException | undefined)?.code === 'ETIMEDOUT',
     error: child.error?.message ?? null,
+    stdout: child.stdout || '',
     stdout_tail: (child.stdout || '').slice(-1400), stderr_tail: (child.stderr || '').slice(-1400) };
+}
+function receipt(output: ReturnType<typeof execute>) {
+  return { exit_code: output.exit_code, timeout: output.timeout, error: output.error,
+    stdout_tail: output.stdout_tail, stderr_tail: output.stderr_tail };
 }
 // Codex User plugin removal deliberately asks for an external-uninstall
 // confirmation. Verify that exact documented refusal rather than pretending
 // the partial result was an automatic removal; other clients must still remove.
-function guidedCodexUserRemoval(output: { exit_code: number | null; stdout_tail: string }) {
+function guidedCodexUserRemoval(output: ReturnType<typeof execute>) {
   if (output.exit_code !== 1) return false;
   try {
-    const payload: unknown = JSON.parse(output.stdout_tail);
+    const payload: unknown = JSON.parse(output.stdout);
     if (!payload || typeof payload !== 'object') return false;
     const value = payload as Record<string, unknown>;
     if (value.command !== 'agentplugins remove' || value.result !== 'failure' ||
@@ -138,19 +143,19 @@ try {
     for (const key of ['GITHUB_TOKEN', 'GH_TOKEN', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY',
       'NPM_TOKEN', 'GIT_ASKPASS']) delete env[key];
     const addArgs = ['add', source, '--target', selectedClient, '--scope', 'user', '--format', 'json'];
-    row.install = execute(addArgs, env, project);
+    row.install = receipt(execute(addArgs, env, project));
     if ((row.install as { exit_code: number | null }).exit_code !== 0) {
       row.status = 'install-not-qualified';
       errors.push(plugin.name + ': real installation failed; inspect receipt');
       continue;
     }
-    row.list = execute(['list', '--target', selectedClient, '--format', 'json'], env, project);
-    row.repeat = execute(addArgs, env, project);
-    row.remove = execute(['remove', plugin.name, '--target', selectedClient,
+    row.list = receipt(execute(['list', '--target', selectedClient, '--format', 'json'], env, project));
+    row.repeat = receipt(execute(addArgs, env, project));
+    const observed = execute(['remove', plugin.name, '--target', selectedClient,
       '--scope', 'user', '--format', 'json'], env, project);
+    row.remove = receipt(observed);
     row.sentinel_preserved = existsSync(sentinel) &&
       readFileSync(sentinel, 'utf8') === 'must be preserved\n';
-    const observed = row.remove as { exit_code: number | null; stdout_tail: string };
     const listAndRepeat = (row.list as { exit_code: number | null }).exit_code === 0 &&
       (row.repeat as { exit_code: number | null }).exit_code === 0;
     if (!listAndRepeat || !row.sentinel_preserved) {

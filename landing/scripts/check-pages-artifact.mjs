@@ -265,7 +265,26 @@ export async function checkPagesArtifact({
     assert(!('data' in entry), 'Referenced catalog entries must not also inline data');
     assert.equal(new URL(entry.url).origin, new URL(siteUrl).origin);
   }
-  assert((await read('llms.txt')).toString().startsWith('# Universal Agent Plugins\n'));
+  const llmsIndex = (await read('llms.txt')).toString();
+  assert(llmsIndex.startsWith('# Universal Agent Plugins\n'), 'Missing UAP AI index');
+  for (const phrase of [
+    'independent SKILL.md Skills',
+    'initial HTML shows the reviewed',
+    'HTML-only crawlers do not see those additional records',
+    'Go Installer/Hooks and TypeScript Management SDKs',
+    'docs/PRODUCT_CAPABILITIES.md',
+  ]) {
+    assert(llmsIndex.includes(phrase), `Missing product evidence in llms.txt: ${phrase}`);
+  }
+  const rootUrl = productRootUrl(siteUrl, base);
+  for (const [label, relative] of [
+    ['Standalone Agent Skills', 'agent-skills/'],
+    ['Browse standalone Skills', 'plugins/?tab=skills'],
+  ]) {
+    const entry = catalog.entries.find((item) => item.displayName === label);
+    assert(entry, `Missing discovery resource: ${label}`);
+    assert.equal(entry.url, new URL(relative, rootUrl).href);
+  }
   requireFile('docs/index.html');
   requireFile('docs/sitemap.xml');
   // Compare every byte of both assembled inputs, including signed metadata/icons and docs aliases.

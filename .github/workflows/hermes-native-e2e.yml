@@ -1,0 +1,67 @@
+name: Hermes Native Skills and MCP E2E
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'install/integrationctl/agentplugins/clients/hermes/**'
+      - 'install/integrationctl/agentplugins/adapters/nativeconfig/hermes_yaml*'
+      - 'scripts/e2e/hermes-native.sh'
+      - '.github/workflows/hermes-native-e2e.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hermes-native-e2e-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-linux-x64:
+    name: pinned Hermes 0.23 + UAP User MCP/Project Skills lifecycle
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - name: Build this PR's exact UAP executable
+        working-directory: cli
+        shell: bash
+        run: |
+          set -euo pipefail
+          go build -o "$RUNNER_TEMP/agentplugins" ./cmd/agentplugins
+          echo "UAP_BIN=$RUNNER_TEMP/agentplugins" >> "$GITHUB_ENV"
+      - name: Install pinned Hermes from the official committed source
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha=2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19
+          source="$RUNNER_TEMP/hermes-agent"
+          home="$RUNNER_TEMP/hermes-native-home"
+          mkdir -p "$home"
+          # Fetch the commit graph without executing a mutable remote installer;
+          # bootstrap itself lives at this pinned official Hermes tag's commit.
+          git clone --filter=blob:none --no-checkout \
+            https://github.com/NousResearch/hermes-agent.git "$source"
+          git -C "$source" checkout --force --detach "$sha"
+          test "$(git -C "$source" rev-parse HEAD)" = "$sha"
+          export HOME="$home"
+          export HERMES_HOME="$home/.hermes"
+          bash "$source/scripts/install.sh" --commit "$sha" \
+            --dir "$source" --hermes-home "$HERMES_HOME" \
+            --non-interactive --skip-browser --skip-computer-use
+          hermes="$home/.local/bin/hermes"
+          test -x "$hermes"
+          "$hermes" --version
+          echo "HERMES_BIN=$hermes" >> "$GITHUB_ENV"
+          echo "HERMES_HOME=$HERMES_HOME" >> "$GITHUB_ENV"
+          echo "HOME=$home" >> "$GITHUB_ENV"
+      - name: Real Hermes User Skills/MCP and project trust boundary
+        shell: bash
+        run: bash scripts/e2e/hermes-native.sh
