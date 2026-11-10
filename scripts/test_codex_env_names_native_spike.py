@@ -129,7 +129,7 @@ class TestSyntheticMcpChild(unittest.TestCase):
     def test_name_only_fixture_exposes_inert_read_only_tool(self):
         # This child receives NO inherited or synthetic token in this unit test.
         proc = subprocess.run([sys.executable, "-c", CHILD], input=(
-            json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/list"}) + "\\n"
+            json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/list"}) + "\n"
         ), capture_output=True, text=True, timeout=5, env={"PATH": "/usr/bin:/bin"})
         self.assertEqual(proc.returncode, 0)
         tool = json.loads(proc.stdout.strip())["result"]["tools"][0]
