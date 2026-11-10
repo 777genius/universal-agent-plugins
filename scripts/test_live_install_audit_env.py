@@ -394,14 +394,20 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     locked.write_text(json.dumps(original) + "\n", encoding="utf-8")
                     foreign = Path(external) / "foreign.json"
                     foreign.write_bytes(b"foreign must remain intact")
+                    # Skip before invoking the guard: its finally block must
+                    # never mask a requested test skip on symlink-hostile OSes.
+                    probe = root / "symlink-probe"
+                    try:
+                        probe.symlink_to(foreign)
+                    except (OSError, NotImplementedError) as error:
+                        self.skipTest(f"host cannot create file symlinks: {error}")
+                    else:
+                        probe.unlink()
                     guards = []
 
                     def attacker(*_):
                         locked.unlink()
-                        try:
-                            locked.symlink_to(foreign)
-                        except (OSError, NotImplementedError) as error:
-                            self.skipTest(f"host cannot create file symlinks: {error}")
+                        locked.symlink_to(foreign)
                         return {"exit_code": 1, "timeout": False,
                                 "stderr_tail": "signed lock digest mismatch"}
 
