@@ -362,6 +362,58 @@
     "buildGuideLink": "Open the Build guide"
   },
   "shell": {
+    "clientSupport": {
+      "eyebrow": "Compatibility",
+      "title": "Supported agents and installation scopes",
+      "description": "User installs into your agent profile; Project installs into one selected workspace. UAP handles supported files and configuration. Your agent may still ask for trust, sign-in, or a restart.",
+      "tableLabel": "Agent installation support table",
+      "tableCaption": "User and project installation support, setup automation, and actions after installing.",
+      "columns": {
+        "agent": "Agent",
+        "user": "User scope",
+        "project": "Project scope",
+        "setup": "Setup",
+        "nextStep": "What you do after installing"
+      },
+      "scrollHint": "Scroll sideways to see every column.",
+      "note": "Automatic = UAP installs the supported components; Guided = follow client prompts; Prepared = files are ready but need activation; Manual = complete setup in the app. Installing never signs you in or grants trust. These are current source capabilities; the published CLI may be older. Availability depends on the plugin and client version.",
+      "details": "Check compatibility details",
+      "capabilities": {
+        "pluginsSkillsMcp": "Plugins, Skills, MCP",
+        "skillsMcp": "Skills, MCP",
+        "pluginsSkillsMcpHooks": "Plugins, Skills, MCP, hooks",
+        "extensionsSkillsMcp": "Extensions, Skills, MCP",
+        "copilotPackage": "Copilot-backed package",
+        "desktopLocalPluginsWebConnectedApps": "Desktop local plugins; Web connected apps",
+        "personalAppSetup": "Personal app setup",
+        "skillsOnly": "Skills only",
+        "skillsMcpPrepared": "Skills, MCP (prepared)",
+        "notSupported": "Not supported"
+      },
+      "setup": {
+        "automatic": "Automatic",
+        "guided": "Guided",
+        "prepared": "Prepared",
+        "manual": "Manual"
+      },
+      "nextSteps": {
+        "claude": "Trust the workspace and reload Claude Code if prompted.",
+        "codex": "Open a new session; approve project MCP access if prompted.",
+        "opencode": "Start a new session and review effective project settings.",
+        "cursor": "Reload Cursor; enable plugins or MCP servers if requested.",
+        "copilot": "Restart Copilot CLI if requested.",
+        "gemini": "Reload Gemini CLI and approve tool access if prompted.",
+        "qoder": "Restart Qoder and review MCP permissions.",
+        "pi": "Trust the project and reload Pi resources.",
+        "windsurf": "Open or restart Devin in the selected project; review access.",
+        "kimi": "Run /reload or /new and review MCP permissions.",
+        "cline": "Select the project MCP settings path and reload Cline.",
+        "kiro": "Sign in, approve access, and restart Kiro if prompted.",
+        "grok": "Open the selected project in Grok; enable and trust the plugin, reload, then verify Skills and MCP.",
+        "vscode": "Open and trust the folder; review and enable MCP servers.",
+        "chatgpt": "Desktop: local install via Codex CLI; Web: connect or install in ChatGPT."
+      }
+    },
     "dependencies": {
       "eyebrow": "Dependencies, connected",
       "title": "Two plugins. One shared dependency.",
@@ -423,7 +475,7 @@
       "items": {
         "0": {
           "question": "Which AI agents are supported?",
-          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, VS Code, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder: each has a client-specific installation or preparation path. Package components, scope and activation requirements determine compatibility."
+          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder, Pi: each has a client-specific installation or preparation path. Package components, scope and activation requirements determine compatibility."
         },
         "1": {
           "question": "Does one command install into every agent?",
@@ -601,6 +653,10 @@
       "disclaimer": "Automated checks reduce risk; they do not prove that a plugin is safe. Review the source and permissions before installing software you do not trust."
     },
     "catalog": {
+      "sortLabel": "Sort plugins",
+      "sortRecommended": "Recommended",
+      "sortName": "Name A–Z",
+      "curationNote": "Recommended for everyday agent workflows, not a safety rating.",
       "staleCommunityResults": "Showing {count} community listings from the last signed catalog, generated {generated}, expired {expired}. Community installation commands are paused until a fresh catalog is available. Reviewed listings remain available.",
       "staleCommunityListing": "Historical signed listing; catalog expired {expired}.",
       "staleCommunityCommands": "Community installation commands are paused because the signed catalog has expired. You can still browse its listings and source.",
@@ -674,8 +730,8 @@
       "unavailableAtItsIndexedSource": "Unavailable at its indexed source",
       "checkedAgainBeforeInstallation": "Checked again before installation",
       "reviewedListing": "Reviewed",
-      "notAvailableForChatgpt": "No verified ChatGPT app connection in this release",
-      "verifiedConnectionFinishSetupInChatgpt": "Verified connection; finish setup in ChatGPT",
+      "notAvailableForChatgpt": "No verified ChatGPT Web app binding for this plugin. Connect Web apps inside ChatGPT.",
+      "verifiedConnectionFinishSetupInChatgpt": "Verified ChatGPT Web app binding; complete the connection inside ChatGPT.",
       "allInstalledAgents": "Choose agents in terminal",
       "commandsDisabledInPreview": "Commands disabled in preview.",
       "allInstalledAgentsRecommended": "Choose agents in terminal",
@@ -713,12 +769,12 @@
       "notReadyToInstall": "Not ready to install",
       "detectedWhenYouRunTheCommand": "The command lets you choose agents before installation.",
       "thisPackageIsNoLongerAvailableFromItsSource": "This package is no longer available from its source.",
-      "notAvailableForChatgpt": "No verified ChatGPT app connection in this release",
+      "notAvailableForChatgpt": "No verified ChatGPT Web app binding for this plugin. Connect Web apps inside ChatGPT.",
       "unavailableSignedDirectorySnapshotExpired": "Unavailable: signed Directory snapshot expired",
       "noActiveReleaseSupportsThisClient": "No active release supports this client",
       "unavailableReviewDataIsNotInstallationAuthority": "Unavailable: review data is not installation authority",
       "thisPackageDoesNotSupportAnyOfTheAgentsAvailableInTheInstallerYet": "This package does not support any of the agents available in the installer yet.",
-      "verifiedConnectionFinishSetupInChatgpt": "Verified connection; finish setup in ChatGPT",
+      "verifiedConnectionFinishSetupInChatgpt": "Verified ChatGPT Web app binding; complete the connection inside ChatGPT.",
       "allInstalledAgents": "Choose agents in terminal",
       "weFoundThisProjectButItDoesnTIncludeAnyToolsTheInstallerCanAddYet": "We found this project, but it doesn't include any tools the installer can add yet.",
       "chooseTargetAgents": "Choose target agents",
@@ -742,7 +798,7 @@
       "unresolvedDataIsForReviewOnlyProductionCommandsRequireAPublishedSignedDirectorySnapshot": "Unresolved data is for review only; production commands require a published signed Directory snapshot.",
       "commandsUnavailable": "Commands unavailable.",
       "automaticDetection": "Choose agents in terminal",
-      "theCliChecksThisPluginAgainstInstalledAgentsSkipsIncompatibleOnesAndLetsYouConfirmTheTargetsChatgptIsIncludedOnlyWhenThisPluginProvidesAVerifiedConnection": "The CLI detects compatible agents for confirmation. ChatGPT requires a verified connection.",
+      "theCliChecksThisPluginAgainstInstalledAgentsSkipsIncompatibleOnesAndLetsYouConfirmTheTargetsChatgptIsIncludedOnlyWhenThisPluginProvidesAVerifiedConnection": "The CLI checks installed local agents and lets you confirm compatible targets. ChatGPT Web is separate: eligible apps can be prepared, but the connection is completed inside ChatGPT.",
       "oneStepRemainsInChatgpt": "One step remains in ChatGPT.",
       "noSingleSourceServesThisTargetSet": "No single source serves this target set.",
       "theCliWillFailBeforeMutationAndSuggestCompatibleTargetSourceCombinationsItNeverMixesDistributionsAcrossClients": "The CLI will fail before mutation and suggest compatible target/source combinations; it never mixes distributions across clients.",
@@ -786,7 +842,8 @@
           "mcp": "MCP tools",
           "extensions": "Extensions"
         }
-      }
+      },
+      "piNoCompatibleRelease": "Pi is supported, but this plugin's signed release has no compatible Pi target."
     },
     "authentication": {
       "not_required": "No account required",
@@ -833,11 +890,11 @@
         "activation": "Follow any activation hint printed by the CLI, then start a new Codex session."
       },
       "chatgpt": {
-        "note": "Verified app bindings and guided Context7 setup",
-        "status": "Setup in app",
-        "intro": "Prepare compatible Agent Plugins 1.0 for ChatGPT while keeping app activation and account consent inside ChatGPT.",
-        "delivery": "The CLI validates publisher app bindings and can prepare a personal marketplace package for Context7 using its public no-auth MCP endpoint.",
-        "activation": "Create or connect the app in Developer Mode, install the prepared personal plugin, and select it in a new chat."
+        "note": "Desktop: automatic via Codex CLI; Web: setup in ChatGPT",
+        "status": "Supported",
+        "intro": "ChatGPT supports plugins on Desktop and Web. Desktop local plugins use the Codex CLI marketplace, while Web plugins require a compatible cloud app or marketplace connection.",
+        "delivery": "UAP installs eligible local Desktop packages through the Codex CLI and prepares qualified Web app bindings; it cannot silently install a cloud plugin into a ChatGPT account.",
+        "activation": "Desktop: open a new local thread and verify the plugin. Web: connect or install the app in ChatGPT and grant any required permissions."
       },
       "cursor": {
         "note": "Native Agent Plugin package",
@@ -923,12 +980,26 @@
         "delivery": "The CLI writes a native .qoder-plugin manifest and registers the managed package through the Qoder CLI when available.",
         "activation": "Reload Qoder plugins or restart Qoder after installation. Runtime MCP connections and provider authentication still need confirmation in Qoder."
       },
-      "pi": {
-        "note": "Managed native Pi extensions only",
+      "hermes": {
+        "note": "User Skills/MCP and Project Skills; Project MCP is unsupported",
         "status": "Supported",
-        "intro": "Install Agent Plugins 1.0 packages that declare a native Pi extension. Portable skills and MCP projection are outside this adapter’s current scope.",
-        "delivery": "The CLI installs the declared Pi extension in your Pi agent directory and tracks the managed package for update, repair, and removal.",
-        "activation": "Reload resources or restart Pi after installation to load the managed extension."
+        "intro": "Install native Hermes Agent Skills for your user or a selected Git project, plus user-scoped MCP servers, without changing unrelated settings.",
+        "delivery": "UAP manages owned Skills directories and exact User MCP entries in config.yaml. Project installation never modifies User MCP configuration.",
+        "activation": "Restart Hermes to reload the integration. Review project trust before using Project Skills; runtime discovery and authentication still need confirmation."
+      },
+      "antigravity": {
+        "note": "Native User/Project plugins; activation requires verification",
+        "status": "Prepared by CLI",
+        "intro": "Prepare native Google Antigravity plugins with supported Skills and MCP servers in the selected User or Project scope.",
+        "delivery": "UAP prepares a managed plugin folder under the selected user or project configuration, preserves unrelated plugins, and does not enable hooks implicitly.",
+        "activation": "Open or reload Antigravity and verify the plugin is discovered and enabled. Prepared files do not prove a model session, authentication, or live MCP execution."
+      },
+      "pi": {
+        "note": "Native Pi extensions, Skills and MCP",
+        "status": "Supported",
+        "intro": "Install compatible Pi extensions, Skills, and stdio/Streamable HTTP MCP servers in user or project scope. Catalog packages require a compatible signed release; direct sources are validated by the CLI.",
+        "delivery": "The CLI installs eligible components in the selected Pi profile or project and tracks updates, repair, and removal.",
+        "activation": "Reload resources or restart Pi; trust the project and review MCP permissions if prompted."
       }
     },
     "directoryPage": {
@@ -1007,7 +1078,9 @@
       "availableFor": "Plugins available for {name}",
       "count": "{count} reviewed package supports this client. | {count} reviewed packages support this client.",
       "tryPlugin": "Try Context7, or replace {source} with another compatible plugin’s reviewed short name or complete package source.",
-      "localPackageHint": "Replace ./my-plugin with the path to a valid Agent Plugins 1.0 package."
+      "localPackageHint": "Replace ./my-plugin with the path to a valid Agent Plugins 1.0 package.",
+      "piSignedCount": "Signed catalog packages for Pi: {count}",
+      "piDirectSourceNote": "Only packages whose signed Directory release explicitly supports Pi appear here. Compatible Skills, MCP servers and extensions can also be installed from a local package or a pinned Git commit; the CLI validates those sources separately."
     },
     "components": {
       "extensions": "extensions",
@@ -1035,13 +1108,14 @@
       "required": "Authentication required",
       "not_required": "No authentication required",
       "unknown": "Authentication requirements unknown",
-      "varies": "Depends on the agent",
+      "varies": "Depends on agent or release",
       "automatic": "Installed agents are detected when you run the command. Select agents in Install to see their resolved requirements.",
       "unresolved": "No install candidate is resolved for these agents. Select a supported agent to check its requirements.",
       "release": "{id} · release {sequence}",
       "requiredDetail": "The package may require an account, token, or sign-in; this does not specify OAuth or confirm that you are signed in.",
       "not_requiredDetail": "No authentication is declared for these agents. Service limits and other setup requirements may still apply.",
-      "unknownDetail": "Check the package requirements before connecting."
+      "unknownDetail": "Check the package requirements before connecting.",
+      "variesDetail": "The same agent may have different sign-in requirements across eligible releases. Choose a target and review its resolved installation plan."
     }
   }
 }

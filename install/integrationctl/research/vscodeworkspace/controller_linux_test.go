@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -35,7 +36,24 @@ func testController(t *testing.T, runner strictRunner) *controller {
 	t.Helper()
 	work, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
-	return &controller{request: sealedRequest{Base: "/tmp/uap-vscode-sealed-inert", Input: inputRequest{UID: 1001, GID: 1001}}, parentNS: 1, work: work, cancelWork: cancel, runner: runner, files: map[string][]byte{}}
+	return &controller{request: sealedRequest{Base: "/tmp/uap-vscode-sealed-inert", Input: inputRequest{UID: 1001, GID: 1001}}, parentNS: 1, work: work, cancelWork: cancel, runner: runner, checkExec: func(string) error { return nil }, files: map[string][]byte{}}
+}
+func TestUntrustedSystemExecutableBlocksInertRunnerBeforeDispatch(t *testing.T) {
+	runner := &inertDuplexRunner{body: testProof()}
+	c := testController(t, runner)
+	c.checkExec = func(path string) error {
+		if path != "/usr/bin/unshare" {
+			t.Fatalf("unexpected first executable check: %s", path)
+		}
+		return errors.New("inert executable refused")
+	}
+	record, err := c.strict(t.Context(), "A", []string{"inert"}, "/", nil, func(context.Context, isolationProof) error {
+		t.Fatal("exchange must never run when executable trust fails")
+		return nil
+	})
+	if err == nil || runner.calls != 0 || record.PlannedStop || record.TreeReaped {
+		t.Fatalf("untrusted executable dispatched: %+v err=%v calls=%d", record, err, runner.calls)
+	}
 }
 func TestInertStrictExchangeKeepsVerifierFirstLiteralIsolationAndRedaction(t *testing.T) {
 	runner := &inertDuplexRunner{body: testProof() + "cookie-value\n"}

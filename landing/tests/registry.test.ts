@@ -411,14 +411,18 @@ describe('unified registry landing', () => {
       'codex',
       'none',
       'example',
+      'name',
     ];
     const query = catalogQuery(values, { campaign: 'launch' });
     assert.deepEqual(restoreCatalogQuery(query), values);
     assert.equal(query.campaign, 'launch');
-    assert.deepEqual(catalogQuery(['', ...Array(7).fill('all')], query), { campaign: 'launch' });
+    assert.equal(query.sort, 'name');
+    assert.equal(restoreCatalogQuery({ sort: 'untrusted' }).at(-1), 'recommended');
+    assert.deepEqual(catalogQuery(['', ...Array(7).fill('all'), 'recommended'], query), { campaign: 'launch' });
     assert.deepEqual(restoreCatalogQuery({ q: ['calendar', 'ignored'], owner: null }), [
       'calendar',
       ...Array(7).fill('all'),
+      'recommended',
     ]);
   });
   it('loads the signed reviewed directory used by the site', () => {

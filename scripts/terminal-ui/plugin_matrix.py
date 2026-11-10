@@ -410,6 +410,17 @@ def run_case(case, binary, evidence, timeout=8):
                 check(requests == [], 'installation unexpectedly contacted HTTP endpoint')
 
 
+def uploadable_evidence_hashes(root):
+    """Separate uploaded bytes from hidden fixtures excluded by upload-artifact."""
+    visible, omitted = {}, {}
+    for name, digest in hashes(root).items():
+        if any(part.startswith('.') for part in Path(name).parts):
+            omitted[name] = digest
+        else:
+            visible[name] = digest
+    return visible, omitted
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--binary', type=Path, required=True)
@@ -446,7 +457,7 @@ def main():
             entry.update(status='fail', error=str(error), fix_owner='Unassigned; coordinating owner to triage. Production files outside lane scope.')
         report['cases'].append(entry)
         print(f"{entry['status']}: {case}: {entry.get('error', '')}", flush=True)
-    report['evidence_hashes'] = hashes(args.artifacts)
+    report['evidence_hashes'], report['omitted_hidden_evidence'] = uploadable_evidence_hashes(args.artifacts)
     report['source_files'] = {name: hashlib.sha256((Path(__file__).parent / name).read_bytes()).hexdigest()
                               for name in ('plugin_matrix.py', 'test_plugin_matrix.py', 'harness.py', 'pty_owner.py')}
     (args.artifacts / 'report.json').write_text(json.dumps(report, indent=2))

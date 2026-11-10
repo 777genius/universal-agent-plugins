@@ -134,13 +134,28 @@ func grokCycleRepeatAdd(stage, scope string, mutated bool, document map[string]a
 		return refused
 	}
 	data, ok := document["data"].(map[string]any)
-	if !ok || projectNativeRuntimeKeys(data, "plugin version source tree_digest manifest_digest dry_run result", "security next_action") != nil {
+	if !ok || projectNativeRuntimeKeys(data, "plugin scope version source tree_digest manifest_digest dry_run result readiness next_action next_actions", "security") != nil {
 		return refused
 	}
-	for key, value := range map[string]any{"plugin": r.Name, "version": "1.0.0", "source": "direct local source", "tree_digest": r.Digest, "manifest_digest": r.Installation.Package.ManifestDigest, "dry_run": false} {
+	for key, value := range map[string]any{"plugin": r.Name, "scope": "project", "version": "1.0.0", "source": "direct local source", "tree_digest": r.Digest, "manifest_digest": r.Installation.Package.ManifestDigest, "dry_run": false, "readiness": "needs_action"} {
 		if data[key] != value {
 			return refused
 		}
+	}
+	// Repeat is a no-op; the native trust/verification step must remain
+	// explicit. Neither an updated action sentence nor a successful file
+	// receipt may be mistaken for runtime MCP activation.
+	actions, ok := data["next_actions"].([]any)
+	if !ok || len(actions) != 1 {
+		return refused
+	}
+	action, ok := actions[0].(map[string]any)
+	next, _ := data["next_action"].(string)
+	message, _ := action["message"].(string)
+	if !ok || projectNativeRuntimeKeys(action, "code actor message", "") != nil ||
+		action["code"] != "verify_native" || action["actor"] != "native_client" ||
+		message == "" || next != message {
+		return refused
 	}
 	outcome, ok := data["result"].(map[string]any)
 	if !ok || projectNativeRuntimeKeys(outcome, "installation_id plan activation requires_confirmation mutated", "") != nil || outcome["installation_id"] != r.Installation.InstallationID || outcome["requires_confirmation"] != false || outcome["mutated"] != false {
@@ -328,5 +343,8 @@ func TestAgentpluginsGrokNativeProjectCompleteCycle(t *testing.T) {
 	}
 	c.append(t, "grok-cycle-proof.jsonl", "final", map[string]any{"preserved": c.preserved(t), "retained_a": c.guards[c.recipes["a"].Data], "retained_b": c.guards[c.recipes["b"].Data], "absent_a": c.recipes["a"].Active, "absent_b": c.recipes["b"].Active})
 	c.proofs = append(c.proofs, "final")
+	// The original pinned Skills lifecycle is complete; independently verify
+	// Grok's real Project MCP plugin discovery without granting trust.
+	grokProjectNativeMCPCycle(t, c)
 	c.complete = true
 }

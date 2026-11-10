@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { chromium, expect } from '@playwright/test';
 import type { SkillListing, SkillsCatalogPage } from '../types/skillsCatalog.ts';
 import { skillInstallCommand } from '../utils/skillsCatalog.ts';
+import { sortSkillsForCatalog } from '../data/catalogCuration.ts';
 import { createSkillSpectorClient } from '../utils/skillSpectorCatalog.ts';
 import { hasNoPublishedRemarks, publishedScanSubject } from '../utils/skillSpectorCurrent.ts';
 
@@ -68,12 +69,13 @@ try {
 
   const renderedIds = await cards.evaluateAll(nodes =>
     nodes.map(node => node.getAttribute('data-skill-id')));
-  expect(renderedIds).toEqual(data.items.map(item => item.id));
+  const ranked = sortSkillsForCatalog(data.items);
+  expect(renderedIds).toEqual(ranked.map(item => item.id));
 
   report.checked = data.items.length;
   report.installable = eligible.length;
   report.unsupported = unavailable.length;
-  for (const [index, item] of data.items.entries()) {
+  for (const [index, item] of ranked.entries()) {
     const command = skillInstallCommand(item);
     const install = cards.nth(index).getByRole('button', { name: `Install ${item.title}`, exact: true });
     if (!command) {
@@ -84,8 +86,8 @@ try {
       await expect(install, `Missing installation action: ${item.id}`).toHaveCount(1);
     }
   }
-  const firstInstall = data.items.findIndex(item => Boolean(skillInstallCommand(item)));
-  const selected = data.items[firstInstall]!;
+  const firstInstall = ranked.findIndex(item => Boolean(skillInstallCommand(item)));
+  const selected = ranked[firstInstall]!;
   await cards.nth(firstInstall).getByRole('button', {
     name: `Install ${selected.title}`, exact: true,
   }).click();
@@ -117,11 +119,20 @@ try {
   // *immutable, signed-by-content* v3 shard evidence, never badge text alone.
   const publicationRefUrl =
     'https://api.github.com/repos/777genius/universal-agent-plugins-registry/git/ref/heads/skillspector-reports';
+  // GitHub-hosted runners share unauthenticated API limits. Use only the scoped
+  // read-only CI token for this fixed GitHub host; never send it on redirects.
+  const publicationRefHeaders: Record<string, string> = { Accept: 'application/vnd.github+json' };
+  const publicationToken = process.env.UAP_GITHUB_READ_TOKEN;
+  if (publicationToken) publicationRefHeaders.Authorization = `Bearer ${publicationToken}`;
   // Retry only transient GitHub availability failures; never accept a bad ref or stale fixture.
   async function readPublicationRef(): Promise<Response> {
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        const response = await fetch(publicationRefUrl, { signal: AbortSignal.timeout(15000) });
+        const response = await fetch(publicationRefUrl, {
+          headers: publicationRefHeaders,
+          redirect: 'error',
+          signal: AbortSignal.timeout(15000),
+        });
         if (response.status === 200 || (response.status !== 429 && response.status < 500) ||
             attempt === 2) return response;
         await response.body?.cancel();
@@ -136,7 +147,10 @@ try {
     throw new Error('Unreachable publication ref retry limit');
   }
   const publicationRef = await readPublicationRef();
-  assert.equal(publicationRef.status, 200, 'Published report branch must be readable');
+  assert.equal(
+    publicationRef.status, 200,
+    `Published report branch must be readable (HTTP ${publicationRef.status}; GitHub rate remaining ${publicationRef.headers.get('x-ratelimit-remaining') ?? 'unknown'})`,
+  );
   const publicationSha = (await publicationRef.json() as { object?: { sha?: string } }).object?.sha;
   assert.match(publicationSha || '', /^[0-9a-f]{40}$/, 'Immutable publication SHA');
   report.immutable_publication = publicationSha!;

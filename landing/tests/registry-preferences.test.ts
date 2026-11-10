@@ -13,6 +13,12 @@ import { useInstallPreferencesStore } from '../stores/installPreferences.ts';
 import { usePluginInstallSelection } from '../composables/usePluginInstallSelection.ts';
 import { useCatalogUiStore } from '../stores/catalogUi.ts';
 import { clients } from '../data/clients.ts';
+import {
+  installTargets,
+  canonicalInstallTarget,
+  canonicalInstallTargets,
+  cliInstallTargets,
+} from '../data/installTargets.ts';
 import * as registryDomain from '../utils/registry.ts';
 import * as filters from '../utils/filter.ts';
 import { pluginCommands } from '../utils/commands.ts';
@@ -39,6 +45,10 @@ const common = {
   ref,
   watch,
   clients,
+  installTargets,
+  canonicalInstallTarget,
+  canonicalInstallTargets,
+  cliInstallTargets,
   ...registryDomain,
   authenticationIndicator,
   ...filters,
@@ -85,6 +95,84 @@ function card(props = packageProps()) {
     'targets, autoDetect, scope, projectAvailable, installExpanded, command, updateTargets, updateAutoDetect, showAuthentication, authentication, toggleInstall, deliverySummary, updateScope',
   );
 }
+
+
+
+test('hidden VS Code stays unavailable in stale project choices without erasing other clients', () => {
+  setActivePinia(createPinia());
+  const preferences = useInstallPreferencesStore();
+  assert.ok(!clients.some((client) => client.id === 'vscode'));
+  assert.ok(!installTargets.some((client) => client.id === 'vscode'));
+
+  // Project state from an older site version may contain a now-hidden target.
+  preferences.package = {
+    identity: 'context7', targetIds: ['vscode'], autoDetect: false, expanded: true,
+    scope: 'project',
+  };
+  const stale = preferences.readPackage('context7', ['cursor', 'copilot']);
+  assert.deepEqual(stale.targetIds, []);
+  assert.equal(stale.autoDetect, true);
+  assert.equal(stale.scope, 'project');
+  preferences.reconcilePackage('context7', ['cursor', 'copilot']);
+  assert.equal(preferences.package.identity, 'context7');
+  assert.deepEqual(preferences.package.targetIds, []);
+  assert.equal(preferences.package.scope, 'project');
+
+  preferences.selectPackage('context7', {
+    targetIds: ['vscode'], autoDetect: false, expanded: true, scope: 'project',
+  }, ['cursor', 'copilot']);
+  assert.deepEqual(preferences.package.targetIds, []);
+  assert.equal(preferences.package.scope, 'project');
+  assert.equal(preferences.package.autoDetect, true);
+
+  // A mixed old selection must preserve the user's valid target and project intent.
+  preferences.package = {
+    identity: 'context7', targetIds: ['cursor', 'vscode'],
+    autoDetect: false, expanded: true, scope: 'project',
+  };
+  const mixed = preferences.readPackage('context7', ['cursor', 'copilot']);
+  assert.deepEqual(mixed.targetIds, ['cursor']);
+  assert.equal(mixed.scope, 'project');
+  assert.equal(mixed.autoDetect, false);
+  preferences.reconcilePackage('context7', ['cursor', 'copilot']);
+  assert.deepEqual(preferences.package.targetIds, ['cursor']);
+  assert.equal(preferences.package.scope, 'project');
+  preferences.selectPackage('context7', {
+    targetIds: ['cursor', 'vscode'], autoDetect: false, expanded: true, scope: 'project',
+  }, ['cursor', 'copilot']);
+  assert.deepEqual(preferences.package.targetIds, ['cursor']);
+  assert.equal(preferences.package.scope, 'project');
+
+  // Preserve existing project-scope behavior for a supported but ineligible
+  // target; only the hidden presentation choice is retired.
+  preferences.selectPackage('context7', {
+    targetIds: ['kiro'], autoDetect: false, expanded: true, scope: 'project',
+  }, ['cursor']);
+  assert.deepEqual(preferences.readPackage('context7', ['cursor']).targetIds, ['kiro']);
+});
+
+test('Desktop has its own picker command, shares Codex backend, and keeps Web separate', () => {
+  setActivePinia(createPinia());
+  const instance = card();
+  instance.state.updateTargets(['chatgpt']);
+  instance.state.updateAutoDetect(false);
+  assert.deepEqual(Array.from(canonicalInstallTargets(instance.state.targets.value)), ['codex']);
+  assert.match(instance.state.command.value, /--target chatgpt$/);
+  assert.equal(instance.state.deliverySummary.value.includes('1 automatic setup'), true);
+  instance.state.updateTargets(['chatgpt', 'codex']);
+  assert.deepEqual(Array.from(instance.state.targets.value), ['codex']);
+  assert.match(instance.state.command.value, /--target codex$/);
+  instance.state.updateTargets(['codex', 'chatgpt']);
+  assert.deepEqual(Array.from(instance.state.targets.value), ['chatgpt']);
+  assert.match(instance.state.command.value, /--target chatgpt$/);
+  instance.stop();
+  assert.deepEqual(cliInstallTargets(['chatgptweb', 'chatgpt']), ['chatgptweb', 'chatgpt']);
+  assert.equal(canonicalInstallTarget('chatgptweb'), 'chatgpt');
+  assert.equal(canonicalInstallTarget('chatgpt'), 'codex');
+  assert.equal(installTargets.find((x) => x.id === 'chatgptweb')?.name, 'ChatGPT Web');
+  assert.equal(installTargets.find((x) => x.id === 'chatgpt')?.name, 'ChatGPT Desktop');
+  assert.equal(installTargets.find((x) => x.id === 'codex')?.name, 'Codex CLI');
+});
 
 test('explicit card delivery summary follows the winning scoped release rather than default aggregate', () => {
   setActivePinia(createPinia());

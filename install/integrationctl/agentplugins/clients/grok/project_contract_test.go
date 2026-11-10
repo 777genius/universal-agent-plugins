@@ -56,6 +56,8 @@ type projectTestRunner struct {
 	enabled bool
 	bad     string
 	version string
+
+	omitMCPDiscovery bool
 }
 
 func (runner *projectTestRunner) Run(_ context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
@@ -68,7 +70,17 @@ func (runner *projectTestRunner) Run(_ context.Context, command legacyports.Comm
 	if version == "" {
 		version = "1.0.67"
 	}
-	body, _ := json.Marshal(map[string]any{"grokVersion": version, "cwd": command.Dir, "projectRoot": command.Dir + string(filepath.Separator), "projectTrusted": false, "skills": []any{}, "plugins": []any{map[string]any{"name": "demo", "scope": "project", "path": plan.ActivePath, "enabled": runner.enabled}}})
+	mcpCount := 0
+	for _, component := range plan.Components {
+		if component.Kind == domain.ComponentMCPServer && component.Support == domain.SupportNative {
+			mcpCount++
+		}
+	}
+	provides := map[string]any{"mcpServers": mcpCount}
+	if runner.omitMCPDiscovery {
+		delete(provides, "mcpServers")
+	}
+	body, _ := json.Marshal(map[string]any{"grokVersion": version, "cwd": command.Dir, "projectRoot": command.Dir + string(filepath.Separator), "projectTrusted": false, "skills": []any{}, "plugins": []any{map[string]any{"name": "demo", "scope": "project", "path": plan.ActivePath, "enabled": runner.enabled, "provides": provides}}})
 	if runner.bad != "" {
 		body = []byte(runner.bad)
 	}
@@ -146,7 +158,8 @@ func testProjectGrokStrictObservedInspectShape(t *testing.T, version string) {
 			t.Fatal("observed root spelling refused", err)
 		}
 	}
-	invalid := make([]string, 0, 12)
+	invalid := make([]string, 0, 14)
+	invalid = append(invalid, strings.Replace(body, `"provides":`, `"Provides":`, 1), strings.Replace(body, `"provides":`, `"provides":{},"Provides":`, 1))
 	for _, unsupported := range []string{"1.0.68", "1.0.71", "1.0.70-dev"} {
 		invalid = append(invalid, strings.Replace(body, `"grokVersion":"`+version+`"`, `"grokVersion":"`+unsupported+`"`, 1))
 	}
@@ -328,5 +341,154 @@ func TestProjectGrokSelectedSkillNameCollidesAcrossNativeSources(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestProjectGrokPreparationGuidanceMatchesComponents(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		components []domain.ComponentDecision
+		contains   string
+		excludes   string
+	}{
+		{"skills-only", []domain.ComponentDecision{{Kind: domain.ComponentSkill, Support: domain.SupportNative}}, "Skills discovery", "Project MCP requires"},
+		{"mcp-only", []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Support: domain.SupportNative}}, "Grok project MCP delivery", "Skills/MCP"},
+		{"both", []domain.ComponentDecision{{Kind: domain.ComponentSkill, Support: domain.SupportNative}, {Kind: domain.ComponentMCPServer, Support: domain.SupportNative}}, "Grok project Skills/MCP delivery", ""},
+		{"mcp-with-unsupported-skill", []domain.ComponentDecision{{Kind: domain.ComponentSkill, Support: domain.SupportUnsupported}, {Kind: domain.ComponentMCPServer, Support: domain.SupportNative}}, "Grok project MCP delivery", "Skills/MCP"},
+		{"skills-with-unsupported-mcp", []domain.ComponentDecision{{Kind: domain.ComponentSkill, Support: domain.SupportNative}, {Kind: domain.ComponentMCPServer, Support: domain.SupportUnsupported}}, "Skills discovery", "Project MCP requires"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			guidance := projectPreparationAction(tc.components)
+			if !strings.Contains(guidance, tc.contains) || (tc.excludes != "" && strings.Contains(guidance, tc.excludes)) {
+				t.Fatalf("incorrect selected-component native guidance: %s", guidance)
+			}
+		})
+	}
+}
+
+func TestProjectGrokMCPOnlyPreflightAndConservativeActivation(t *testing.T) {
+	request := projectTestRequest(t)
+	request.Plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "probe", Support: domain.SupportNative}}
+	if err := New().PreflightActivation(clients.Env{}, request); err != nil {
+		t.Fatalf("MCP-only project should be admitted: %v", err)
+	}
+	projectTestWrite(t, filepath.Join(request.Plan.ActivePath, ".grok-plugin", "plugin.json"), `{"name":"demo","mcpServers":"./.mcp.json"}`)
+	projectTestWrite(t, filepath.Join(request.Plan.ActivePath, ".mcp.json"), `{"mcpServers":{"probe":{"command":"node","args":["server.js"]}}}`)
+	runner := &projectTestRunner{request: request, enabled: true, version: "1.0.70"}
+	out, err := New().Activate(t.Context(), clients.Env{Runner: runner}, request)
+	if err != nil || out.Activation != domain.ActivationPrepared || out.Verification != domain.VerificationPackageValid ||
+		out.AuthoritativeObservation || runner.calls != 1 {
+		t.Fatalf("MCP project promoted native execution: %+v %v calls=%d", out, err, runner.calls)
+	}
+	runner.version, runner.calls = "1.0.67", 0
+	if _, err := New().Activate(t.Context(), clients.Env{Runner: runner}, request); err == nil ||
+		!strings.Contains(err.Error(), "requires qualified Grok 1.0.70") || runner.calls != 1 {
+		t.Fatalf("unqualified Grok MCP version admitted: %v calls=%d", err, runner.calls)
+	}
+	runner.version, runner.calls, runner.omitMCPDiscovery = "1.0.70", 0, true
+	binding := domain.ClientBinding{ClientID: "grok", Scope: "project", NativeProfileRoot: request.Plan.NativeRegistryRoot,
+		PhysicalArtifact: request.Plan.PhysicalArtifactID, TargetLocator: request.Plan.ActivePath}
+	finding, err := New().InspectNativeRegistry(t.Context(), clients.Env{Runner: runner}, request.Client, request.Plan, &binding)
+	if err != nil || finding != clients.RegistryExpected || runner.calls != 1 {
+		t.Fatalf("missing MCP discovery blocked owned repair preflight: %v %v calls=%d", finding, err, runner.calls)
+	}
+	runner.calls = 0
+	if _, err := New().Activate(t.Context(), clients.Env{Runner: runner}, request); err == nil ||
+		!strings.Contains(err.Error(), "did not report the selected project MCP servers") || runner.calls != 1 {
+		t.Fatalf("plugin inventory was mistaken for native MCP discovery: %v calls=%d", err, runner.calls)
+	}
+	empty, _ := json.Marshal(map[string]any{"grokVersion": "1.0.70", "cwd": request.Plan.TargetContext.ProjectRoot,
+		"projectRoot": request.Plan.TargetContext.ProjectRoot + string(filepath.Separator), "projectTrusted": false,
+		"plugins": []any{}, "skills": []any{}})
+	runner.bad, runner.calls = string(empty), 0
+	finding, err = New().InspectNativeRegistry(t.Context(), clients.Env{Runner: runner}, request.Client, request.Plan, &binding)
+	if err != nil || finding != clients.RegistryExpected || runner.calls != 1 {
+		t.Fatalf("empty native inventory blocked owned repair preflight: %v %v calls=%d", finding, err, runner.calls)
+	}
+	runner.calls = 0
+	if _, err := New().Activate(t.Context(), clients.Env{Runner: runner}, request); err == nil ||
+		!strings.Contains(err.Error(), "did not report the selected project MCP plugin") || runner.calls != 1 {
+		t.Fatalf("filesystem receipt was mistaken for native MCP discovery: %v calls=%d", err, runner.calls)
+	}
+	request.Plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentApp, Name: "app", Support: domain.SupportNative}}
+	if err := New().PreflightActivation(clients.Env{}, request); err == nil {
+		t.Fatal("unsupported application component bypassed project refusal")
+	}
+}
+
+// Native plugin inventory identity must stay unambiguous even when the native
+// client reports spellings that fold to the same name.
+func TestProjectGrokRejectsFoldedNativePluginCollisions(t *testing.T) {
+	request := projectTestRequest(t)
+	project := request.Plan.TargetContext.ProjectRoot
+	for _, names := range [][2]string{{"demo", "DEMO"}, {"K", "K"}} {
+		t.Run(names[0]+"-"+names[1], func(t *testing.T) {
+			plugins := make([]any, 0, len(names))
+			for i, name := range names {
+				path := request.Plan.ActivePath
+				if i == 1 {
+					path = filepath.Join(filepath.Dir(path), "foreign")
+				}
+				plugins = append(plugins, map[string]any{
+					"name": name, "scope": "project", "path": path,
+					"enabled": false, "provides": map[string]any{"mcpServers": 0},
+				})
+			}
+			inventory := map[string]any{
+				"grokVersion": "1.0.70", "cwd": project,
+				"projectRoot":    project + string(filepath.Separator),
+				"projectTrusted": false, "skills": []any{},
+				"plugins": plugins,
+			}
+			other := plugins[1].(map[string]any)
+			other["name"] = "foreign"
+			payload, err := json.Marshal(inventory)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := parseProjectInspect(payload, project); err != nil {
+				t.Fatalf("distinct native plugin identities were refused: %v", err)
+			}
+			other["name"] = names[1]
+			payload, err = json.Marshal(inventory)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := parseProjectInspect(payload, project); err == nil {
+				t.Fatalf("folded native identity collision accepted: %q and %q", names[0], names[1])
+			}
+		})
+	}
+}
+
+func TestProjectGrokNativeAliasCannotImpersonateOwnedPlugin(t *testing.T) {
+	request := projectTestRequest(t)
+	for _, alias := range []string{"DEMO", "DeMo"} {
+		for _, owned := range []bool{false, true} {
+			for _, requireDiscovery := range []bool{false, true} {
+				native := projectInspection{
+					version: "1.0.70",
+					plugins: []projectPlugin{{
+						name: alias, scope: "project",
+						path: request.Plan.ActivePath, enabled: false,
+					}},
+				}
+				finding, err := matchProjectInspection(native, request.Plan, clients.RegistryExpected, owned, requireDiscovery)
+				if err != nil || finding != clients.RegistryCollision {
+					t.Fatalf("folded native alias %q became owned=%t discovery=%t: %v %v", alias, owned, requireDiscovery, finding, err)
+				}
+			}
+		}
+	}
+	native := projectInspection{
+		version: "1.0.70",
+		plugins: []projectPlugin{{
+			name: request.Plan.DeclaredName, scope: "project",
+			path: request.Plan.ActivePath, enabled: false,
+		}},
+	}
+	finding, err := matchProjectInspection(native, request.Plan, clients.RegistryExpected, true, false)
+	if err != nil || finding != clients.RegistryExpected {
+		t.Fatalf("exact native owned plugin was refused: %v %v", finding, err)
 	}
 }

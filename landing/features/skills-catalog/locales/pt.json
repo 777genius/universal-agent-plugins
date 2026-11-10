@@ -1,6 +1,18 @@
 {
   "registryUi": {
     "skills": {
+      "featured": {
+        "title": "Recomendados para agentes de programação",
+        "explanation": "Selecionados para tarefas comuns. Não garantem segurança nem compatibilidade; confira a fonte e os requisitos.",
+        "items": {
+          "agent-browser": "Automatize o navegador depois de instalar a CLI separadamente.",
+          "frontend-design": "Crie interfaces frontend mais cuidadas e refinadas.",
+          "find-skills": "Encontre Skills reutilizáveis para sua tarefa.",
+          "tdd": "Desenvolva e corrija código com testes: vermelho, verde e refatoração.",
+          "vercel-optimize": "Analise custos e desempenho da Vercel com métricas de produção.",
+          "web-design-guidelines": "Revise a usabilidade e a acessibilidade de interfaces web."
+        }
+      },
       "catalogType": "Tipo de catálogo",
       "plugins": "Extensões",
       "skills": "Habilidades",
@@ -96,6 +108,23 @@
         "moreCandidatesHelp": "Nenhum resultado neste grupo. Mostre mais para verificar os candidatos restantes.",
         "noMatches": "Nenhuma Skill corresponde aos filtros",
         "noMatchesHelp": "Altere a busca ou redefina os filtros para ver todas as Skills."
+      },
+      "discoveryNotice": "A página estática começa com plugins revisados. O navegador pode adicionar entradas da comunidade após verificar o feed assinado; se ele estiver indisponível, o conjunto revisado permanece visível.",
+      "overview": {
+        "seoTitle": "Agent Skills independentes — Universal Agent Plugins",
+        "metaDescription": "Encontre, inspecione e instale instruções SKILL.md independentes para agentes de IA compatíveis, sem pacote plugin.json.",
+        "title": "Agent Skills sem pacote de plugin.",
+        "lead": "Encontre instruções SKILL.md reutilizáveis, escolha os agentes compatíveis e instale no perfil do usuário ou em um projeto. Skills independentes não exigem um pacote Agent Plugins 1.0.",
+        "standaloneTitle": "Arquivos Skills independentes",
+        "standaloneDescription": "Instale Skills diretamente de um repositório GitHub que você revisou ou de um publicador compatível, sem manifesto plugin.json.",
+        "scopeTitle": "Agentes e escopo explícitos",
+        "scopeDescription": "Escolha agentes no terminal ou especifique os destinos. Use --scope para instalar no perfil do usuário ou em um projeto compatível.",
+        "reviewTitle": "Verifique a origem antes de usar",
+        "reviewDescription": "Listagens do catálogo e análises estáticas do SkillSpector não garantem segurança, ativação ou uso bem-sucedido pelo agente.",
+        "browse": "Explorar catálogo de Skills",
+        "installGuide": "Ler guia de instalação",
+        "learnMore": "Como funcionam Skills independentes",
+        "exampleCaption": "Exemplo de comando — troque owner/repository pela origem real"
       }
     },
     "directoryPage": {

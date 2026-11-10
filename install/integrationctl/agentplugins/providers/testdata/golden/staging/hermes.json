@@ -1,0 +1,73 @@
+{
+  "Digests": {
+    "bin/": "dir",
+    "bin/run": "a8076d3d28d21e02012b20eaf7dbf75409a6277134439025f282e368e3305abf",
+    "mcp.json": "8cf2989c891e877c31d89c5ee099ddffd18664ef1e0fd4e7a75359900b476197",
+    "plugin.json": "020cd4772c3dc55648dd96a02d0fcc81617aa9eb0b4c7ffd205eb730f0240317",
+    "skills/": "dir",
+    "skills/good/": "dir",
+    "skills/good/SKILL.md": "3c58ae530ad65c3d3a468eb051e1c761687903c4f722529196d369d3d74a40ce"
+  },
+  "Objects": [
+    {
+      "BeforeDigest": "",
+      "CursorReceipt": {
+        "EntryDigest": "",
+        "Event": "",
+        "Executable": "",
+        "RemainderDigest": "",
+        "Selector": "",
+        "Shell": "",
+        "Version": 0
+      },
+      "Kind": "managed_package_directory",
+      "LogicalName": "demo",
+      "ManagedDigest": "${ARTIFACT}",
+      "ObjectID": "package:hermes:demo-0123456789ab",
+      "Path": "${ACTIVE}",
+      "ProtectionClass": "managed",
+      "SourceRelative": "",
+      "UserModified": false
+    },
+    {
+      "BeforeDigest": "",
+      "CursorReceipt": {
+        "EntryDigest": "",
+        "Event": "",
+        "Executable": "",
+        "RemainderDigest": "",
+        "Selector": "",
+        "Shell": "",
+        "Version": 0
+      },
+      "Kind": "hermes_user_mcp",
+      "LogicalName": "notion",
+      "ManagedDigest": "sha256:e19e4621db5b67384e162c2b8b62cd102ea084dfcfb59760ea1203a9869113d2",
+      "ObjectID": "hermes_user_mcp:notion",
+      "Path": "${CONFIG}/config.yaml",
+      "ProtectionClass": "managed",
+      "SourceRelative": "",
+      "UserModified": false
+    },
+    {
+      "BeforeDigest": "",
+      "CursorReceipt": {
+        "EntryDigest": "",
+        "Event": "",
+        "Executable": "",
+        "RemainderDigest": "",
+        "Selector": "",
+        "Shell": "",
+        "Version": 0
+      },
+      "Kind": "hermes_user_skill",
+      "LogicalName": "good",
+      "ManagedDigest": "sha256:0ff5f701bc7b96b22b654f61883ffa11bc7582422b293c495159b78d4607ba07",
+      "ObjectID": "hermes_user_skill:good",
+      "Path": "${CONFIG}/skills/good",
+      "ProtectionClass": "managed",
+      "SourceRelative": "skills/good",
+      "UserModified": false
+    }
+  ]
+}

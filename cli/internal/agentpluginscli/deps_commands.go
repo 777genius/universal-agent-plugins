@@ -25,7 +25,7 @@ func newDepsCommand(app App, opts *options) *cobra.Command {
 	var locked, yes bool
 	command.AddCommand(newDependencyInitCommand(app, opts), newDependencyLockCommand(app, opts, false), newDependencyLockCommand(app, opts, true), newDependencyStatusCommand(app, opts), newDependencySyncCommand(app, opts, &locked, &yes))
 	command.AddCommand(newDependencyTransferCommand(app, opts, "export"), newDependencyTransferCommand(app, opts, "import"), newDependencyTreeCommand(app, opts), newDependencyRecoverCommand(app, opts, &yes))
-	command.AddCommand(newDependencyCheckCommand(app, opts))
+	command.AddCommand(newDependencyCheckCommand(app, opts), newDependencySBOMCommand(app, opts))
 	return command
 }
 
