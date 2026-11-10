@@ -9,7 +9,7 @@ on:
       - .github/workflows/landing-security-compat-probe.yml
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   resolve-and-test:
@@ -18,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          persist-credentials: false
+          persist-credentials: true
       - uses: pnpm/action-setup@a8198c4bff370c8506180b035930dea56dbd5288 # v5
         with:
           package_json_file: landing/package.json
@@ -26,6 +26,18 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22.21.1'
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - name: Stage genuinely verified signed registry mirror
+        run: |
+          go run ./cmd/agentplugins-registry-mirror \
+            --registry-repository 777genius/universal-agent-plugins-registry \
+            --pages-origin https://777genius.github.io/universal-agent-plugins-registry/ \
+            --output "${RUNNER_TEMP}/uap-registry-mirror"
+          mkdir -p landing/public
+          cp -a "${RUNNER_TEMP}/uap-registry-mirror/." landing/public/
       - name: Generate real pnpm lockfile for compatibility test
         working-directory: landing
         run: |
@@ -37,13 +49,6 @@ jobs:
       - name: Record actual resolved dependency graph
         working-directory: landing
         run: pnpm why glob minimatch > dependency-why.txt
-      - name: Run site static type and lint checks
-        working-directory: landing
-        run: |
-          pnpm exec nuxt prepare
-          pnpm exec vue-tsc --noEmit
-          pnpm run lint
-          pnpm run test:registry
       - name: Capture full security audit without suppressing failure
         working-directory: landing
         run: |
@@ -54,6 +59,30 @@ jobs:
           printf '%s\\n' "$result" > dependency-audit.exit
           cat dependency-audit.json
           exit "$result"
+      - name: Install Chromium and qualify source site
+        working-directory: landing
+        run: pnpm exec playwright install --with-deps --only-shell chromium
+      - name: Run site static type and lint checks
+        working-directory: landing
+        run: |
+          pnpm exec nuxt prepare
+          pnpm exec vue-tsc --noEmit
+          pnpm run lint
+          pnpm run test:registry
+          pnpm run check:i18n
+          pnpm run generate
+      - name: Commit generated and fully checked pnpm lock to this isolated proof branch
+        run: |
+          set -euo pipefail
+          git add landing/pnpm-lock.yaml
+          if git diff --cached --quiet; then
+            echo "No lockfile change; resolution did not replace vulnerable tree" >&2
+            exit 1
+          fi
+          git config user.name "uap-security-proof[bot]"
+          git config user.email "uap-security-proof@users.noreply.github.com"
+          git commit -m "fix(security): generate tested glob 14 and minimatch 11 lockfile"
+          git push origin HEAD:refs/heads/test/landing-security-major-compat-20261110
       - name: Preserve original lockfile and proof for independent audit
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
