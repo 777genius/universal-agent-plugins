@@ -172,7 +172,8 @@ def main():
             if proc.poll() is not None:
                 raise RuntimeError("codex_ended_while_turn_active")
             time.sleep(.05)
-        report["real_codex_shell_called"] = Model.shell_requested and Model.shell_output_seen
+        report["shell_tool_output_seen"] = Model.shell_output_seen
+        report["real_codex_shell_called"] = Model.shell_requested and Model.shell_execution_verified
         report["real_codex_mcp_called"] = Model.mcp_requested and Model.mcp_output_seen
         report["mcp_native_connected"] = Model.mcp_digest_verified
         report["native_mcp_digest_seen"] = Model.mcp_digest_verified
