@@ -213,3 +213,30 @@ test('rejects explicit YAML dependency categories instead of dropping all child 
   assert.notEqual(explicitCategory, fixture);
   assert.throws(() => auditLock(explicitCategory), /Unsupported explicit pnpm YAML mapping/);
 });
+
+
+test('preserves vulnerable boot importer reachability for YAML-valid top-level comments and quoted keys', () => {
+  const boot = [
+    "lockfileVersion: '9.0'", 'importers:', '  .:', '    packageManagerDependencies:',
+    '      boot-tool:', '        version: 1.0.0', 'snapshots:', '  boot-tool@1.0.0:',
+    '    dependencies:', '      glob: 13.0.6', '  glob@13.0.6: {}', '',
+  ].join('\n');
+  const project = [
+    '---', "lockfileVersion: '9.0'", 'importers:', '  .:', '    dependencies:',
+    '      clean-app:', '        version: 1.0.0', 'snapshots:', '  clean-app@1.0.0: {}', '',
+  ].join('\n');
+  for (const declaration of [
+    'importers: # boot graph', 'importers :', "'importers':", '"importers":',
+    'snapshots: # boot graph', 'snapshots :',
+  ]) {
+    const target = declaration.startsWith('snapshots') ? 'snapshots:' : 'importers:';
+    const document = boot.replace(target, declaration) + project;
+    assert.ok(auditLock(document).some(({ scope, package: pkg }) =>
+      scope === 'packageManagerDependencies' && pkg === 'glob@13.0.6'), declaration);
+  }
+});
+
+test('fails closed on unsupported pnpm section anchors instead of hiding the boot graph', () => {
+  const anchored = fixture.replace('importers:\n', 'importers: &boot\n');
+  assert.throws(() => auditLock(anchored), /Unsupported pnpm section declaration/);
+});

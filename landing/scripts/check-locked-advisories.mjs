@@ -36,9 +36,12 @@ function parsePnpmDocument(source) {
     if (pendingRoot) throw new Error(`Missing pnpm importer version: ${pendingRoot}`);
   };
   for (const line of source.split(/\r?\n/)) {
-    if (/^(importers|snapshots):\s*$/.test(line)) {
+    const header = line.match(/^(?:(importers|snapshots)|'(importers|snapshots)'|"(importers|snapshots)")\s*:\s*(.*)$/);
+    if (header) {
+      const suffix = header[4].trim();
+      if (suffix && !suffix.startsWith('#')) throw new Error('Unsupported pnpm section declaration');
       requireResolvedRoot();
-      section = line.slice(0, -1); importer = ''; category = '';
+      section = header[1] ?? header[2] ?? header[3]; importer = ''; category = '';
       currentNode = ''; edgeCategory = '';
       continue;
     }
