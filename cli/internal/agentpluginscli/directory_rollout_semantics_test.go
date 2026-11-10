@@ -308,12 +308,92 @@ func TestSingleVSCodeAddRequiresDirectoryCompatibilityForCopilotSurface(t *testi
 	}
 }
 
+func TestCopilotDirectoryGrantDoesNotRequireVSCodeGrant(t *testing.T) {
+	rollout := newRolloutDirectoryFixture(t,
+		[]domain.ClientID{domain.ClientCopilot, domain.ClientVSCode},
+		[]domain.ClientID{domain.ClientCopilot})
+	rollout.directory.bundle.Snapshot.Distributions[0].ReleasePolicies[0].Targets = []domain.DirectoryTarget{{
+		Client: domain.ClientCopilot, Scopes: []domain.InstallScope{domain.ScopeUser}, Delivery: "managed",
+	}}
+	if _, _, err := rollout.cli.execute(false, "add", "--no-save", "rollout-demo", "--target", "copilot"); err != nil {
+		t.Fatalf("Copilot-only signed grant rejected: %v", err)
+	}
+	state, err := rollout.cli.store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	binding := onlyCLIClient(state.Installations[0])
+	if binding.ClientID != string(domain.ClientCopilot) || !reflect.DeepEqual(binding.AffectedSurfaces, []string{"copilot", "vscode"}) {
+		t.Fatalf("shared physical effect was not retained: %+v", binding)
+	}
+	rollout.publishV2()
+	outdated, _, err := rollout.cli.execute(false, "outdated", "demo", "--format", "json")
+	if err != nil || !strings.Contains(outdated, "shared affected surfaces are not separately qualified") {
+		t.Fatalf("Copilot update check must disclose shared surfaces: %q %v", outdated, err)
+	}
+	if _, _, err := rollout.cli.execute(false, "update", "demo", "--target", "copilot"); err != nil {
+		t.Fatalf("Copilot-only update rejected: %v", err)
+	}
+	if _, _, err := rollout.cli.execute(false, "update", "demo"); err != nil {
+		t.Fatalf("default Copilot update rejected: %v", err)
+	}
+	if _, _, err := rollout.cli.execute(false, "repair", "demo", "--target", "copilot"); err != nil {
+		t.Fatalf("Copilot-only repair rejected: %v", err)
+	}
+	if _, _, err := rollout.cli.execute(false, "repair", "demo"); err != nil {
+		t.Fatalf("default Copilot repair rejected: %v", err)
+	}
+}
+
+func TestExplicitVSCodeStillRequiresItsOwnDirectoryGrant(t *testing.T) {
+	for _, targets := range []string{"vscode", "copilot,vscode"} {
+		t.Run(targets, func(t *testing.T) {
+			rollout := newRolloutDirectoryFixture(t,
+				[]domain.ClientID{domain.ClientCopilot, domain.ClientVSCode},
+				[]domain.ClientID{domain.ClientCopilot})
+			rollout.directory.bundle.Snapshot.Distributions[0].ReleasePolicies[0].Targets = []domain.DirectoryTarget{{
+				Client: domain.ClientCopilot, Scopes: []domain.InstallScope{domain.ScopeUser}, Delivery: "managed",
+			}}
+			if _, _, err := rollout.cli.execute(false, "add", "--no-save", "rollout-demo", "--target", targets); err == nil || !strings.Contains(err.Error(), "missing vscode") {
+				t.Fatalf("explicit VS Code without its signed grant: %v", err)
+			}
+			state, err := rollout.cli.store.Load()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if rollout.acquirer.verifiedCalls != 0 || len(state.Installations) != 0 {
+				t.Fatalf("refused target acquired or mutated state: calls=%d state=%+v", rollout.acquirer.verifiedCalls, state.Installations)
+			}
+		})
+	}
+}
+
+func TestCopilotUpdateRetainsExistingVSCodeOwnerGrant(t *testing.T) {
+	rollout := newRolloutDirectoryFixture(t,
+		[]domain.ClientID{domain.ClientCopilot, domain.ClientVSCode},
+		[]domain.ClientID{domain.ClientCopilot})
+	if _, _, err := rollout.cli.execute(false, "add", "--no-save", "rollout-demo", "--target", "vscode"); err != nil {
+		t.Fatal(err)
+	}
+	rollout.publishV2()
+	if _, _, err := rollout.cli.execute(false, "update", "demo", "--target", "copilot"); err == nil || !strings.Contains(err.Error(), "missing vscode") {
+		t.Fatalf("update dropped existing VS Code owner's signed grant: %v", err)
+	}
+	state, err := rollout.cli.store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	binding := onlyCLIClient(state.Installations[0])
+	if binding.ClientID != string(domain.ClientVSCode) || binding.PackageRevision.ReleaseSequence != 1 || len(binding.Receipts) != 1 {
+		t.Fatalf("refused update changed existing owner or receipt: %+v", binding)
+	}
+}
+
 func TestInteractiveSharedSurfaceAddRequiresSignedPeerEligibilityBeforeAcquisition(t *testing.T) {
 	for _, test := range []struct {
 		name, input       string
 		selected, missing domain.ClientID
 	}{
-		{name: "copilot only", input: "1\n", selected: domain.ClientCopilot, missing: domain.ClientVSCode},
 		{name: "vscode only", input: "2\n", selected: domain.ClientVSCode, missing: domain.ClientCopilot},
 	} {
 		t.Run(test.name, func(t *testing.T) {

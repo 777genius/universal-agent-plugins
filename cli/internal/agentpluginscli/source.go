@@ -177,9 +177,10 @@ func (app App) acquireDirectory(ctx context.Context, selector string, request pa
 		resolveSelector = request.Selector
 	}
 	productID, _ := directorySelectorProductID(bundle.Snapshot, resolveSelector)
-	affectedTargets := expandAffectedSurfaceTargets(request.Targets, app.scope())
+	requestedTargets := request.Targets
+	affectedTargets := expandAffectedSurfaceTargets(requestedTargets, app.scope())
 	resolveRequest := domain.DirectoryResolveRequest{
-		Selector: resolveSelector, Targets: affectedTargets, Scope: app.scope(),
+		Selector: resolveSelector, Targets: requestedTargets, Scope: app.scope(),
 		InstallerVersion: app.Version, ClientVersions: environment.ClientVersions, OS: environment.OS, Architecture: environment.Architecture,
 		DependencyIdentity: environment.DependencyIdentity,
 		SchemaVersion:      "1.0.0", Operation: operation, Recorded: request.Recorded,
@@ -189,13 +190,13 @@ func (app App) acquireDirectory(ctx context.Context, selector string, request pa
 	var retainedMapping *domain.ChatGPTLocalMapping
 	installation, _ := locallyMatchedInstallation(state, resolveSelector)
 	intents := lifecycleInstallIntents(installation, string(app.scope()), nil)
-	for _, target := range affectedTargets {
+	for _, target := range requestedTargets {
 		if requiresPersonalMapping(target) && (productID == "context7" || app.chatGPTPreparation || intents[target] == domain.InstallIntentPrepare) {
 			preparingChatGPT = true
 		}
 	}
 	if preparingChatGPT {
-		if id, purpose, ok := directoryPreparationClient(affectedTargets); ok {
+		if id, purpose, ok := directoryPreparationClient(requestedTargets); ok {
 			resolveRequest.Purpose = purpose
 			resolveRequest.Targets = []domain.ClientID{id}
 		}
@@ -270,7 +271,7 @@ func (app App) acquireDirectory(ctx context.Context, selector string, request pa
 	// normal signed eligibility; never acquire another target's substitute package.
 	if preparingChatGPT {
 		var peers []domain.ClientID
-		for _, target := range affectedTargets {
+		for _, target := range requestedTargets {
 			if !requiresPersonalMapping(target) {
 				peers = append(peers, target)
 			}

@@ -84,7 +84,10 @@ func resolveDirectoryOutdated(
 	item outdatedInstallation,
 	scopes ...domain.InstallScope,
 ) outdatedInstallation {
-	_, clientMap, err := preflightSelectedTargets(context.Background(), App{Detector: staticDetectedClientSource(detected)}, item.Targets, detectedClientValues(detected), false)
+	// Keep reported affected surfaces intact while distinguishing independently
+	// selected targets from implicit shared-backend surfaces.
+	authorizationTargets := directoryInstallationTargets(installation, string(selectedScope(scopes)))
+	_, clientMap, err := preflightSelectedTargets(context.Background(), App{Detector: staticDetectedClientSource(detected)}, authorizationTargets, detectedClientValues(detected), false)
 	if err != nil {
 		item.Status, item.Reason = "blocked", err.Error()
 		return item
@@ -92,7 +95,7 @@ func resolveDirectoryOutdated(
 	environment := directoryEnvironment(clientMap)
 	environment.InstallerVersion = installerVersion
 	selection, err := selectDirectorySourceForPlacement(bundle.Snapshot, domain.DirectoryResolveRequest{
-		Selector: origin.ProductID, Targets: expandAffectedSurfaceTargets(item.Targets, selectedScope(scopes)), Scope: selectedScope(scopes),
+		Selector: origin.ProductID, Targets: authorizationTargets, Scope: selectedScope(scopes),
 		InstallerVersion: installerVersion, ClientVersions: environment.ClientVersions, OS: environment.OS,
 		Architecture: environment.Architecture, DependencyIdentity: environment.DependencyIdentity,
 		SchemaVersion: "1.0.0", Operation: domain.DirectoryUpdate,
@@ -100,6 +103,9 @@ func resolveDirectoryOutdated(
 	})
 	if err == nil {
 		item.Status, item.Reason = "outdated", "a later eligible immutable release is available"
+		if len(item.Targets) > len(authorizationTargets) {
+			item.Reason = "a later release is eligible for recorded binding owners; shared affected surfaces are not separately qualified"
+		}
 		item.Available = &outdatedReleaseIdentity{
 			DistributionID: selection.DistributionID, ReleaseSequence: selection.ReleaseSequence,
 			PackageVersion: selection.PackageVersion, Revision: selection.Source.Revision,

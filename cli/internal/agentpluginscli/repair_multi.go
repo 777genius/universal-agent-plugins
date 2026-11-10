@@ -125,11 +125,12 @@ func (session *repairManySession) recordTargetRevision(target domain.ClientID) e
 		return err
 	}
 	session.targetRevision[target] = key
+	authorizationTargets := append(directoryBindingTargets(binding), target)
 	if existing := session.requests[key]; existing != nil {
-		existing.targets = expandAffectedSurfaceTargets(append(existing.targets, bindingSurfaceTargets(binding)...), session.app.scope())
+		existing.targets = append(existing.targets, authorizationTargets...)
 		return nil
 	}
-	request.targets = expandAffectedSurfaceTargets(bindingSurfaceTargets(binding), session.app.scope())
+	request.targets = authorizationTargets
 	session.requests[key] = &request
 	return nil
 }
