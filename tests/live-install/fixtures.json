@@ -371,10 +371,10 @@
       "distribution": "777genius/firebase",
       "repository": "777genius/universal-agent-plugins-registry",
       "path": "plugins/firebase",
-      "revision": "70813b60f87d0022457189efae5365d7c17cd3a1",
-      "sequence": 6,
-      "tree_digest": "sha256:685949b123f14739cefee527a3db4723f7444407c4b718023513f25af03d7523",
-      "manifest_digest": "sha256:ddf8c3ef2689d58aa8f6b78fd36af1d8733d2a56a9bad8ee19b1a78c10ec01b4"
+      "revision": "d9c8d778200d51ae941d86bb69af23534cd1c8f7",
+      "sequence": 8,
+      "tree_digest": "sha256:023f63215112b322f30ed694b6611258ba04d059654a1b0155a8867226dfe4c3",
+      "manifest_digest": "sha256:a6438b9ba1ab794020b8dd463a80d03bbd6e797bc8b7d3d1551ce97190a3cedc"
     },
     "firecrawl": {
       "distribution": "777genius/firecrawl-bridge",
@@ -452,9 +452,9 @@
       "distribution": "777genius/playwright-bridge",
       "repository": "777genius/universal-agent-plugins-registry",
       "path": "plugins/playwright",
-      "revision": "128b01ff2b4f7242ad061ad823d5e4018af6b2e4",
-      "sequence": 1,
-      "tree_digest": "sha256:8f0c8ac610974293c4f91f1ecb782fbe9d740f79f84cafe40fdfed1db234d103",
+      "revision": "d9c8d778200d51ae941d86bb69af23534cd1c8f7",
+      "sequence": 2,
+      "tree_digest": "sha256:ff3c74bb5760fea47003130f3984d48234892330325a7cad35a7bc973acc9cf6",
       "manifest_digest": "sha256:8419b5c9e67894c2312048c4fe30e3ea920d00101d02641230183dd7ab4d3b31"
     },
     "sentry": {
