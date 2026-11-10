@@ -45,7 +45,7 @@ def main():
     evidence = Path(sys.argv[2]).resolve()
     evidence.parent.mkdir(parents=True, exist_ok=True)
     mode = sys.argv[3] if len(sys.argv) > 3 else "default"
-    if mode not in ("default", "filtered"):
+    if mode not in ("default", "filtered", "default_excludes"):
         raise ValueError("unsupported native shell policy control mode")
     secret = "uap_appserver_spike_" + secrets.token_hex(24)
     Model.expected_digest = hashlib.sha256(secret.encode()).hexdigest()
@@ -80,6 +80,14 @@ def main():
         project_server += (
             '[shell_environment_policy.filters]\n'
             f'{json.dumps(ENV_NAME)} = "exclude"\n'
+        )
+    # Research-only stricter native shell policy: requires a credential-like
+    # variable NAME and deliberately does not replace lower-layer legacy
+    # exclude/include_only arrays. Never install without scoped consent/proof.
+    if mode == "default_excludes":
+        project_server += (
+            '[shell_environment_policy]\n'
+            'ignore_default_excludes = false\n'
         )
     (project / ".codex" / "config.toml").write_text(project_server)
     env = {"HOME": str(home), "CODEX_HOME": str(home / ".codex"),

@@ -70,6 +70,20 @@ jobs:
         shell: bash
         run: |
           python3 scripts/codex_env_names_appserver_spike.py "$CODEX_BINARY" "$RUNNER_TEMP/codex-env-filtered-appserver.json" filtered
+      # Research-only stricter built-in Codex KEY/SECRET/TOKEN filter.
+      # Does not replace project/global legacy exclude/include_only arrays.
+      - name: Test Codex built-in exclusion policy in isolated CLI control
+        if: always() && steps.native-binary.outcome == 'success'
+        id: native-default-excludes-cli
+        shell: bash
+        run: |
+          python3 scripts/codex_env_names_native_spike.py "$CODEX_BINARY" "$RUNNER_TEMP/codex-default-excludes-cli.json" default_excludes
+      - name: Test Codex built-in exclusion policy in isolated app-server control
+        if: always() && steps.native-binary.outcome == 'success'
+        id: native-default-excludes-appserver
+        shell: bash
+        run: |
+          python3 scripts/codex_env_names_appserver_spike.py "$CODEX_BINARY" "$RUNNER_TEMP/codex-default-excludes-appserver.json" default_excludes
       - name: Enforce both independently successful native proofs
         if: always()
         shell: bash
@@ -78,11 +92,15 @@ jobs:
           APPSERVER_OUTCOME: ${{ steps.native-appserver-spike.outcome }}
           FILTERED_CLI_OUTCOME: ${{ steps.native-filtered-cli.outcome }}
           FILTERED_APPSERVER_OUTCOME: ${{ steps.native-filtered-appserver.outcome }}
+          DEFAULT_EXCLUDES_CLI_OUTCOME: ${{ steps.native-default-excludes-cli.outcome }}
+          DEFAULT_EXCLUDES_APPSERVER_OUTCOME: ${{ steps.native-default-excludes-appserver.outcome }}
         run: |
           test "$CLI_OUTCOME" = success
           test "$APPSERVER_OUTCOME" = success
           test "$FILTERED_CLI_OUTCOME" = success
           test "$FILTERED_APPSERVER_OUTCOME" = success
+          test "$DEFAULT_EXCLUDES_CLI_OUTCOME" = success
+          test "$DEFAULT_EXCLUDES_APPSERVER_OUTCOME" = success
       - name: Preserve only bounded, redacted proof (no native home or child output)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
@@ -93,5 +111,7 @@ jobs:
             ${{ runner.temp }}/codex-appserver-spike-report.json
             ${{ runner.temp }}/codex-env-filtered-cli.json
             ${{ runner.temp }}/codex-env-filtered-appserver.json
+            ${{ runner.temp }}/codex-default-excludes-cli.json
+            ${{ runner.temp }}/codex-default-excludes-appserver.json
           if-no-files-found: warn
           retention-days: 7
