@@ -68,6 +68,7 @@ class Model(http.server.BaseHTTPRequestHandler):
     shell_output_seen = False
     shell_execution_verified = False
     shell_response_category = "not_observed"
+    shell_response_indicators = []
     shell_requested_at = 0.0
     error = ""
     advertised_tool_names = set()
@@ -105,6 +106,19 @@ class Model(http.server.BaseHTTPRequestHandler):
                     # Only fixed categories leave this synthetic-only harness;
                     # never persist raw native tool responses or environment.
                     lower = rendered.lower()
+                    # Bounded, fixed-vocabulary diagnostics. Never persist the
+                    # native response, command output, paths or synthetic value.
+                    indicators = (
+                        "sandbox", "permission denied", "operation not permitted",
+                        "read-only", "landlock", "bwrap", "seccomp", "namespace",
+                        "not supported", "not found", "invalid", "unrecognized",
+                        "failed", "error", "denied", "session id", "session_id",
+                        "running", "yield_time_ms", "tool_call", "exec_command",
+                        "expected", "arguments", "json", "timeout", "exited",
+                    )
+                    cls.shell_response_indicators = [
+                        word for word in indicators if word in lower
+                    ]
                     cls.shell_response_category = (
                         "sandbox_error" if "sandbox" in lower else
                         "permission_error" if "permission" in lower else
@@ -335,6 +349,7 @@ def main():
         report["live_scan_errors"] = live["errors"]
         report["shell_tool_output_seen"] = Model.shell_output_seen
         report["shell_response_category"] = Model.shell_response_category
+        report["shell_response_indicators"] = Model.shell_response_indicators
         report["real_codex_shell_called"] = Model.shell_requested and Model.shell_execution_verified
         report["real_codex_mcp_called"] = Model.mcp_requested and Model.mcp_output_seen
         report["native_mcp_digest_seen"] = Model.mcp_digest_verified
