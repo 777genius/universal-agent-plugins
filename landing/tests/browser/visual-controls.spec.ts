@@ -122,6 +122,27 @@ test('the Plugins tab does not show a crawler notice or an unrelated Skills guid
   await expect(page.getByRole('link', { name: 'How standalone Skills work' })).toBeVisible();
 });
 
+test('translated desktop filter labels do not collide with dropdown arrows', async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.setViewportSize({ width: 1521, height: 900 });
+  for (const locale of ['ru', 'es', 'pt', 'fr']) {
+    await page.goto(`./${locale}/plugins/`);
+    await hydrated(page);
+    const controls = page.locator('.catalog-controls--plugins');
+    const collisions = await controls.locator('.app-select__trigger').evaluateAll((triggers) =>
+      triggers.flatMap((trigger) => {
+        const value = trigger.querySelector('.app-select__value > span:last-child');
+        const arrow = trigger.querySelector('.app-select__chevron');
+        if (!value || !arrow || !trigger.getBoundingClientRect().width) return [];
+        return value.getBoundingClientRect().right > arrow.getBoundingClientRect().left - 1
+          ? [trigger.getAttribute('aria-label') ?? value.textContent ?? 'unknown']
+          : [];
+      }),
+    );
+    expect(collisions, `Clipped desktop filters in ${locale}`).toEqual([]);
+  }
+});
+
 test('numbered benefits remain readable in both themes and responsive layouts', async ({
   page,
 }) => {
