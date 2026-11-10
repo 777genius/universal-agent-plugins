@@ -151,6 +151,45 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                             check({**valid, "_json": foreign_no_op},
                                   operation, operation, "codex")
 
+    def test_marketing_kit_dependency_execution_checks_reported_scope(self):
+        # Native/portable state can already exist, so a successful command
+        # targeting the wrong scope must be rejected from its own JSON receipt.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        execute = runner["execute"]
+        actions = [{"alias": alias, "client_id": "codex", "action": "unchanged"}
+                   for alias in ("marketing-kit", "notion", "hubspot-crm", "playwright")]
+        original = {"result": "success", "outcome": "completed",
+                    "actions": actions, "results": []}
+        for scope in ("user", "project"):
+            with self.subTest(scope=scope):
+                for reported in (scope, "project" if scope == "user" else "user",
+                                 None, "unexpected"):
+                    receipt = {**original, "scope": reported}
+                    response = {"exit_code": 0, "timeout": False, "_json": receipt}
+                    with patch.dict(execute.__globals__,
+                                    {"invoke": lambda *a: response}):
+                        command = ("update", "marketing-kit", "--scope", scope)
+                        if reported == scope:
+                            self.assertEqual(
+                                execute("agentplugins", {}, Path.cwd(), "codex",
+                                        "update", *command)["result"], "passed")
+                        else:
+                            with self.assertRaisesRegex(
+                                    AssertionError, "CLI did not succeed"):
+                                execute("agentplugins", {}, Path.cwd(), "codex",
+                                        "update", *command)
+                for malformed in (("update", "marketing-kit"),
+                                  ("update", "marketing-kit", "--scope", "invalid"),
+                                  ("update", "marketing-kit", "--scope", "user",
+                                   "--scope", "project")):
+                    with self.assertRaisesRegex(
+                            AssertionError, "explicit scope"):
+                        execute("agentplugins", {}, Path.cwd(), "codex",
+                                "update", *malformed)
+
     def test_marketing_kit_noop_update_rejects_rekey_and_lock_rewrite(self):
         # Released 0.1.102 reports unchanged; do not trust that envelope alone.
         from runpy import run_path

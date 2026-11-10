@@ -48,9 +48,10 @@ LEGACY_ACTIONS = {
 }
 
 
-def valid_legacy_dependency_result(envelope, operation, target=None):
+def valid_legacy_dependency_result(envelope, operation, target=None, scope=None):
     """Validate real published dependency receipts for the selected client."""
     if (operation not in LEGACY_ACTIONS
+            or (scope is not None and envelope.get("scope") != scope)
             or ("result" in envelope and envelope["result"] != "success")
             or envelope.get("outcome") != "completed"):
         return False
@@ -90,7 +91,7 @@ def valid_legacy_dependency_result(envelope, operation, target=None):
     return True
 
 
-def verified(result, stage, operation=None, target=None):
+def verified(result, stage, operation=None, target=None, scope=None):
     envelope = result.get("_json")
     if (result.get("exit_code") != 0 or result.get("timeout")
             or not isinstance(envelope, dict)):
@@ -98,7 +99,7 @@ def verified(result, stage, operation=None, target=None):
     # The pinned 0.1.102 dependency commands must report explicit actions
     # and results even when they also emit result=success.
     if operation in LEGACY_ACTIONS:
-        if valid_legacy_dependency_result(envelope, operation, target):
+        if valid_legacy_dependency_result(envelope, operation, target, scope):
             return envelope
     elif (envelope.get("result") == "success"
           and envelope.get("outcome") in (None, "completed")):
@@ -499,8 +500,15 @@ def bind_pinned_launcher_cache(env, cache, sandbox):
 
 
 def execute(cli, env, project, target, label, *args):
+    # Published dependency JSON includes the resolved scope. A wrong-scope
+    # success receipt cannot qualify the caller's explicit User/Project request.
+    if args.count("--scope") != 1:
+        raise AssertionError(f"{label}: missing or ambiguous explicit scope")
+    selected = args.index("--scope") + 1
+    if selected >= len(args) or args[selected] not in ("user", "project"):
+        raise AssertionError(f"{label}: invalid explicit scope")
     result = invoke([cli, *args, "--format", "json"], env, project, 180)
-    verified(result, label, args[0], target)
+    verified(result, label, args[0], target, args[selected])
     return {"stage": label, "exit_code": result["exit_code"], "result": "passed"}
 
 
