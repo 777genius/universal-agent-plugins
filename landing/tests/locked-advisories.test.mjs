@@ -274,3 +274,26 @@ test('rejects explicit YAML top-level keys in boot graph', () => {
   assert.throws(() => auditLock(boot.replace('snapshots:', '? snapshots\n:') + project),
     /Unsupported pnpm top-level YAML mapping/);
 });
+
+test('rejects YAML-tagged or anchored mapping keys that conceal installed boot dependencies', () => {
+  const boot = [
+    "lockfileVersion: '9.0'", 'importers:', '  .:', '    packageManagerDependencies:',
+    '      boot-tool:', '        version: 1.0.0', 'snapshots:', '  boot-tool@1.0.0:',
+    '    dependencies:', '      glob: 13.0.6', '  glob@13.0.6: {}', '',
+  ].join('\n');
+  const cleanProject = [
+    '---', "lockfileVersion: '9.0'", 'importers:', '  .:', '    dependencies:',
+    '      clean-app:', '        version: 1.0.0', 'snapshots:', '  clean-app@1.0.0: {}', '',
+  ].join('\n');
+  assert.ok(auditLock(boot + cleanProject).some(({ package: name }) => name === 'glob@13.0.6'));
+  for (const [original, disguised] of [
+    ['importers:', '!!str importers:'],
+    ['importers:', '&boot importers:'],
+    ['snapshots:', '!!str snapshots:'],
+    ['    packageManagerDependencies:', '    !!str packageManagerDependencies:'],
+    ['    dependencies:', '    &edges dependencies:'],
+  ]) {
+    const input = boot.replace(original, disguised) + cleanProject;
+    assert.throws(() => auditLock(input), /Unsupported pnpm YAML tag\/anchor key/, disguised);
+  }
+});

@@ -45,6 +45,9 @@ function parsePnpmDocument(source) {
       currentNode = ''; edgeCategory = '';
       continue;
     }
+    // YAML tags and anchors before mapping keys can denote ordinary importers,
+    // categories or snapshots. Reject them rather than silently dropping a graph.
+    if (/^\s*[!&*]/.test(line)) throw new Error('Unsupported pnpm YAML tag/anchor key');
     // Only recognised quoted section keys above are supported. Reject unknown
     // quoted/explicit top-level YAML keys rather than silently dropping a graph.
     if (/^(?:["']|[?:](?:\s|$))/.test(line)) throw new Error('Unsupported pnpm top-level YAML mapping');
