@@ -547,6 +547,35 @@ class KiroCollectorTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "authored fixture"):
             kiro.collect(ctx)
 
+    def test_alias_and_nested_project_roots_refuse_before_native_probes(self):
+        for kind in ("project-symlink", "project-parent-symlink",
+                     "home-symlink", "nested-project-a", "nested-project-b",
+                     "relative-project"):
+            ctx = self.context()
+            if kind == "project-symlink":
+                target = ctx.root / "a-original"
+                ctx.projects["a"].rename(target)
+                ctx.projects["a"].symlink_to(target, target_is_directory=True)
+            elif kind == "project-parent-symlink":
+                alias = ctx.root / "alias"
+                alias.symlink_to(ctx.root, target_is_directory=True)
+                ctx.projects["a"] = alias / "a"
+            elif kind == "home-symlink":
+                target = ctx.root / "home-original"
+                ctx.home.rename(target)
+                ctx.home.symlink_to(target, target_is_directory=True)
+            elif kind == "nested-project-a":
+                ctx.projects["a"] = ctx.projects["b"] / "nested"
+            elif kind == "nested-project-b":
+                ctx.projects["b"] = ctx.projects["a"] / "nested"
+            else:
+                ctx.projects["a"] = Path("relative-project")
+            with self.subTest(kind=kind), self.assertRaisesRegex(
+                    ValueError, "canonical home and project roots|disjoint projects"):
+                kiro.collect(ctx)
+            self.assertEqual(ctx.calls, [])
+            self.assertEqual(list(ctx.root.rglob(".kiro")), [])
+
     def test_original_user_home_cannot_be_project(self):
         ctx = self.context()
         ctx.projects["a"] = ctx.home

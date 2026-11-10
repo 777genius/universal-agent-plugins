@@ -130,12 +130,22 @@ def _probe(ctx, owned, label, arguments, project="a"):
 
 
 def collect(ctx):
-    root, home = Path(ctx.root).resolve(), Path(ctx.home).resolve()
-    projects = {name: Path(ctx.projects[name]).resolve() for name in ("a", "b", "user")}
-    if (len(set(projects.values())) != 3 or not home.is_relative_to(root)
-            or any(not path.is_relative_to(root) or home.is_relative_to(path) or path.is_relative_to(home)
+    root, home = Path(ctx.root).resolve(), Path(ctx.home)
+    projects = {name: Path(ctx.projects[name]) for name in ("a", "b", "user")}
+    # Resolving source roots silently would adopt a symlinked foreign tree as a
+    # research fixture. Refuse aliases before launching any native child.
+    if (not home.is_absolute() or home.resolve() != home
+            or any(not path.is_absolute() or path.resolve() != path
                    for path in projects.values())):
-        raise ValueError("Kiro requires distinct projects and original user home")
+        raise ValueError("Kiro requires canonical home and project roots without aliases")
+    project_roots = tuple(projects.values())
+    if (len(set(project_roots)) != 3 or not home.is_relative_to(root)
+            or any(not path.is_relative_to(root) or home.is_relative_to(path) or path.is_relative_to(home)
+                   for path in project_roots)
+            or any(first.is_relative_to(second) or second.is_relative_to(first)
+                   for i, first in enumerate(project_roots)
+                   for second in project_roots[i + 1:])):
+        raise ValueError("Kiro requires disjoint projects and original user home")
     owned = {}
     directory = _runtime_bin(ctx)
     if ctx.env.get("PATH") != "/usr/bin:/bin":
