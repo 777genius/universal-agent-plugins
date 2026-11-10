@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { auditLock, parsePnpmLock, vulnerabilityFor } from '../scripts/check-locked-advisories.mjs';
 
@@ -319,4 +320,10 @@ test('rejects YAML merge aliases that hide boot importer roots', () => {
     'snapshots:', '  safe@1.0.0: {}', '',
   ].join('\n');
   assert.throws(() => auditLock(mergedBoot), /Unsupported pnpm YAML merge mapping/);
+});
+
+// Test the checked-in lock as well as synthetic adversarial pnpm graph fixtures.
+test('checked-in frozen landing lock contains no scoped advisory paths', () => {
+  const lockfile = new URL('../pnpm-lock.yaml', import.meta.url);
+  assert.deepEqual(auditLock(readFileSync(lockfile, 'utf8')), []);
 });
