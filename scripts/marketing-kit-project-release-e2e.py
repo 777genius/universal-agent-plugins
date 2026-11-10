@@ -122,7 +122,11 @@ def verified(result, stage, operation=None, target=None, scope=None):
         # Published 'add' wraps actual scoped dependency receipts in data.
         # An outer generic success cannot certify a missing/partial closure.
         nested = envelope.get("data", envelope)
-        if (envelope.get("result") == "success"
+        # A signed add must be bound to an explicitly selected client/scope;
+        # otherwise an unrelated successful dependency report can qualify it.
+        if (isinstance(target, str) and bool(target)
+                and scope in ("user", "project")
+                and envelope.get("result") == "success"
                 # A nested success must not mask an explicit outer refusal.
                 and envelope.get("outcome") in (None, "completed")
                 and isinstance(nested, dict)

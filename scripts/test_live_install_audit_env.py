@@ -69,6 +69,13 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         envelope = {"result": "success", "data": closure}
         wrapped = {"exit_code": 0, "timeout": False, "_json": envelope}
         self.assertEqual(check(wrapped, "add", "add", "codex", "project"), envelope)
+        # A caller-less or scope-less result cannot qualify an add even if
+        # every nested signed dependency action otherwise looks complete.
+        for chosen_target, chosen_scope in ((None, None), ("codex", None),
+                                            (None, "project")):
+            with self.subTest(target=chosen_target, scope=chosen_scope):
+                with self.assertRaisesRegex(AssertionError, "CLI did not succeed"):
+                    check(wrapped, "add", "add", chosen_target, chosen_scope)
         # A public wrapper may itself report completed, but not pending/failure.
         completed = {**envelope, "outcome": "completed"}
         self.assertEqual(check({**wrapped, "_json": completed},
