@@ -1,7 +1,7 @@
 {
   "antigravity": {
     "Commands": [],
-    "Error": "Antigravity plugin must live beneath the exact selected native root",
+    "Error": "antigravity plugin must live beneath the exact selected native root",
     "Outcome": {
       "Activation": "",
       "ActivationAttested": false,
