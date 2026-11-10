@@ -1170,7 +1170,7 @@ img {
 }
 /* Five equally usable columns on wide desktops: trust no longer consumes
    the search-sized slot, and Source / Owner each get an independent column. */
-@media (min-width: 1381px) {
+@media (min-width: 1521px) {
   .catalog-controls--plugins {
     grid-template-columns: repeat(5, minmax(0, 1fr));
   }
@@ -1182,7 +1182,7 @@ img {
   }
 }
 /* On smaller desktops use two readable columns instead of five clipped ones. */
-@media (min-width: 981px) and (max-width: 1380px) {
+@media (min-width: 981px) and (max-width: 1520px) {
   .catalog-controls--plugins {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
