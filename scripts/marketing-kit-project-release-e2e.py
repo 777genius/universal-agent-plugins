@@ -324,9 +324,11 @@ def corrupt_locked_child_digest(lock_file):
     if not isinstance(original, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", original):
         raise AssertionError("invalid signed child digest in negative test")
     replacement = "1" if original[7] == "0" else "0"
-    matches[0]["tree_digest"] = "sha256:" + replacement + original[8:]
+    corrupted = "sha256:" + replacement + original[8:]
+    matches[0]["tree_digest"] = corrupted
     lock_file.write_text(json.dumps(document, ensure_ascii=False) + "\n",
                          encoding="utf-8")
+    return original, corrupted
 
 
 def verify_corrupt_lock_refusal(cli, env, project, target, scope, guards):
@@ -341,7 +343,7 @@ def verify_corrupt_lock_refusal(cli, env, project, target, scope, guards):
     original_identity = lock_file.lstat()
     if not stat.S_ISREG(original_identity.st_mode):
         raise AssertionError("invalid original signed lock path")
-    corrupt_locked_child_digest(lock_file)
+    original_digest, corrupted_digest = corrupt_locked_child_digest(lock_file)
     before = profile_snapshot(env, project)
     scope_args = ["--scope", scope]
     if scope == "project":
@@ -353,10 +355,19 @@ def verify_corrupt_lock_refusal(cli, env, project, target, scope, guards):
             raise AssertionError("corrupt signed lock did not fail closed")
         reason = (str(refused.get("stderr_tail") or "") + " " +
                   str(refused.get("_json") or "")).lower()
-        # The actual released CLI must identify the corrupted Notion pin,
-        # not merely mention a launcher cache lock or an unrelated digest.
-        if ("verify notion pinned manifest" not in reason
-                or "signed directory publication differs from exact lock" not in reason):
+        # Released 0.1.102 verifies the acquired immutable Git tree against
+        # the lock digest *before* comparing it to the signed Directory. Bind
+        # both digests to this fixture so a remote/lock timeout or another
+        # package's error cannot masquerade as an integrity refusal.
+        acquisition_refusal = (
+            f"acquired package tree digest {original_digest} "
+            f"does not match expected {corrupted_digest}"
+        )
+        signed_refusal = (
+            "verify notion pinned manifest" in reason
+            and "signed directory publication differs from exact lock" in reason
+        )
+        if acquisition_refusal not in reason and not signed_refusal:
             raise AssertionError("corrupt child digest did not receive signed-pin refusal")
         check_profile_unchanged(env, project, before, f"corrupt {scope} locked restore")
         if identities(inventory(cli, env, project, target, scope), target, scope):

@@ -342,8 +342,10 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     self.assertEqual(json.loads(lock_file.read_text())["packages"][1][
                         "tree_digest"], "sha256:0" + "b" * 63)
                     return {"exit_code": 1, "timeout": False,
-                            "stderr_tail": ("verify notion pinned manifest; run agentplugins deps lock: "
-                                            "signed Directory publication differs from exact lock")}
+                            "stderr_tail": (
+                                "preflight notion/codex: acquired package tree digest "
+                                + "sha256:" + "b" * 64 + " does not match expected "
+                                + "sha256:0" + "b" * 63)}
 
                 def preserved():
                     checked.append(lock_file.read_bytes())
@@ -367,7 +369,15 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                             {"exit_code": 1, "stderr_tail": "launcher cache lock timed out"},
                             {"exit_code": 1, "stderr_tail": "signed lock digest mismatch"},
                             {"exit_code": 1, "stderr_tail": "verify notion pinned manifest: remote download failed"},
-                            {"exit_code": 1, "stderr_tail": "verify hubspot-crm pinned manifest; signed Directory publication differs from exact lock"}):
+                            {"exit_code": 1, "stderr_tail": "verify hubspot-crm pinned manifest; signed Directory publication differs from exact lock"},
+                            {"exit_code": 1, "stderr_tail": (
+                                "preflight notion/codex: acquired package tree digest "
+                                + "sha256:" + "a" * 64 + " does not match expected "
+                                + "sha256:0" + "b" * 63)},
+                            {"exit_code": 1, "stderr_tail": (
+                                "preflight notion/codex: acquired package tree digest "
+                                + "sha256:" + "b" * 64 + " does not match expected "
+                                + "sha256:1" + "b" * 63)}):
                         with self.subTest(failed=failed), patch.dict(
                                 verify.__globals__, {
                                     "invoke": lambda *args: failed}):
@@ -375,7 +385,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                                 verify("agentplugins", env, project, "codex",
                                        scope, (preserved,))
                             self.assertEqual(lock_file.read_bytes(), original_bytes)
-                    self.assertEqual(len(checked), 8)
+                    self.assertEqual(len(checked), 10)
 
     def test_marketing_kit_corrupt_lock_restore_rejects_foreign_symlink(self):
         # A malicious native invocation may swap the fixture lock for a link to
