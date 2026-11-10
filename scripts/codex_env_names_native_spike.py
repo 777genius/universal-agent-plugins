@@ -290,7 +290,7 @@ def main():
     report_path = Path(sys.argv[2]).resolve()
     report_path.parent.mkdir(parents=True, exist_ok=True)
     mode = sys.argv[3] if len(sys.argv) > 3 else "default"
-    if mode not in ("default", "filtered", "default_excludes"):
+    if mode not in ("default", "filtered", "default_excludes", "core_inherit"):
         raise ValueError("unsupported native shell policy control mode")
     if len(sys.argv) > 4:
         raise ValueError("unexpected native spike parameter")
@@ -340,6 +340,14 @@ def main():
         project_server += (
             '[shell_environment_policy]\n'
             'ignore_default_excludes = false\n'
+        )
+    # Research-only scalar inheritance control. It preserves standard core
+    # shell variables but prevents arbitrary parent environment forwarding to
+    # shell tools; stdio MCP env_vars must continue to work independently.
+    if mode == "core_inherit":
+        project_server += (
+            '[shell_environment_policy]\\n'
+            'inherit = "core"\\n'
         )
     (project / ".codex" / "config.toml").write_text(project_server)
     env = {"HOME": str(home), "CODEX_HOME": str(home / ".codex"),
