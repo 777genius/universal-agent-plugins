@@ -310,6 +310,25 @@ def lock_ids(project, target=None):
     return set(keys)
 
 
+def corrupt_locked_child_digest(lock_file):
+    """Mutate exactly one child digest for a genuine locked-restore refusal."""
+    document = json.loads(lock_file.read_text(encoding="utf-8"))
+    packages = document.get("packages")
+    if not isinstance(packages, list):
+        raise AssertionError("invalid negative-test lock fixture")
+    matches = [item for item in packages
+               if isinstance(item, dict) and item.get("alias") == "notion"]
+    if len(matches) != 1:
+        raise AssertionError("missing unique Notion child for negative test")
+    original = matches[0].get("tree_digest")
+    if not isinstance(original, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", original):
+        raise AssertionError("invalid signed child digest in negative test")
+    replacement = "1" if original[7] == "0" else "0"
+    matches[0]["tree_digest"] = "sha256:" + replacement + original[8:]
+    lock_file.write_text(json.dumps(document, ensure_ascii=False) + "\n",
+                         encoding="utf-8")
+
+
 def run_case(cli, target, root, name, portable=None):
     case = root / name
     # B and C are created *after* untrusted package execution in A. Refuse a
@@ -756,6 +775,34 @@ def main():
                                            *native_foreign_b], root)
             foreign_files.extend(foreign_b_files)
             scoped_b = ("--scope", "project", "--project-root", str(project_b))
+            # The genuine published CLI must refuse a corrupted child pin
+            # without modifying native or durable state in cold Project B.
+            b_lock = project_b / "uap.lock"
+            original_b_lock = b_lock.read_bytes()
+            corrupt_locked_child_digest(b_lock)
+            before_bad_restore = profile_snapshot(env_b, project_b)
+            try:
+                refused = invoke([options.cli, "install", "--locked", "--yes",
+                                  *scoped_b, "--format", "json"],
+                                 env_b, project_b, 180)
+                if refused.get("exit_code") in (None, 0) or refused.get("timeout"):
+                    raise AssertionError("corrupt signed lock did not fail closed")
+                reason = (str(refused.get("stderr_tail") or "") + " " +
+                          str(refused.get("_json") or "")).lower()
+                if "lock" not in reason and "digest" not in reason:
+                    raise AssertionError(
+                        "corrupt lock rejection was not attributable to lock integrity")
+                check_profile_unchanged(
+                    env_b, project_b, before_bad_restore, "corrupt locked restore")
+                if identities(inventory(options.cli, env_b, project_b, options.target),
+                              options.target):
+                    raise AssertionError("corrupt locked restore installed a dependency")
+                report["steps"].append({
+                    "stage": "corrupt signed lock refused before install",
+                    "exit_code": refused["exit_code"], "result": "passed"})
+            finally:
+                b_lock.write_bytes(original_b_lock)
+                check_foreign(foreign_files, root)
             run(env_b, project_b, "cold locked restore", "install", "--locked", "--yes", *scoped_b)
             check_profile_unchanged(env, project_a, native_a_before_b, "cold restore B")
             restored = identities(inventory(options.cli, env_b, project_b, options.target), options.target)

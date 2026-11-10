@@ -285,6 +285,35 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "signed lock pin"):
                 check(pins, "claude")
 
+    def test_marketing_kit_negative_locked_restore_fixture_changes_one_digest(self):
+        # The refusal must originate from a genuinely corrupt pin, not a
+        # missing lock, invalid command or unavailable upstream package.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        alter = runner["corrupt_locked_child_digest"]
+        original = {"packages": [
+            {"alias": "marketing-kit", "tree_digest": "sha256:" + "a" * 64},
+            {"alias": "notion", "tree_digest": "sha256:" + "b" * 64},
+            {"alias": "hubspot-crm", "tree_digest": "sha256:" + "c" * 64},
+            {"alias": "playwright", "tree_digest": "sha256:" + "d" * 64}]}
+        with TemporaryDirectory() as temp:
+            locked = Path(temp) / "uap.lock"
+            locked.write_text(json.dumps(original) + "\n", encoding="utf-8")
+            alter(locked)
+            changed = json.loads(locked.read_text(encoding="utf-8"))
+            self.assertEqual(
+                changed["packages"][1]["tree_digest"], "sha256:0" + "b" * 63)
+            self.assertEqual(changed["packages"][0], original["packages"][0])
+            self.assertEqual(changed["packages"][2:], original["packages"][2:])
+            for bad in ({"packages": []}, {"packages": [
+                    {"alias": "notion", "tree_digest": "not-sha256"}]}):
+                locked.write_text(json.dumps(bad), encoding="utf-8")
+                with self.assertRaisesRegex(AssertionError, "negative.test|signed child"):
+                    alter(locked)
+
+
     def test_marketing_kit_cold_locked_restore_receipts_match_installed_scope(self):
         # A real cold restore must bind each reported applied result to the
         # installed distribution, not merely return four plausible IDs.
