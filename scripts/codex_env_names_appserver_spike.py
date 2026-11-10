@@ -45,6 +45,7 @@ def main():
     evidence = Path(sys.argv[2]).resolve()
     evidence.parent.mkdir(parents=True, exist_ok=True)
     secret = "uap_appserver_spike_" + secrets.token_hex(24)
+    Model.expected_digest = hashlib.sha256(secret.encode()).hexdigest()
     root = Path(tempfile.mkdtemp(prefix="uap-codex-appserver-"))
     home, project = root / "home", root / "project"
     (home / ".codex").mkdir(parents=True)
@@ -161,10 +162,12 @@ def main():
             time.sleep(.05)
         report["real_codex_shell_called"] = Model.shell_requested and Model.shell_output_seen
         report["real_codex_mcp_called"] = Model.mcp_requested and Model.mcp_output_seen
+        report["native_mcp_digest_seen"] = Model.mcp_digest_verified
         if receipt.exists():
             raw = json.loads(receipt.read_text())
             report["mcp_child_saw_secret"] = (raw.get("observed") is True
                 and raw.get("sha256") == hashlib.sha256(secret.encode()).hexdigest())
+        report["mcp_child_saw_secret"] |= Model.mcp_digest_verified
         if not (report["real_codex_shell_called"] and report["real_codex_mcp_called"]
                 and report["mcp_child_saw_secret"]):
             raise RuntimeError("native_runtime_or_child_receipt_unproven")
