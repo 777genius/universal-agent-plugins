@@ -41,7 +41,7 @@ func cleanAbsolute(path string) bool {
 
 func (*Adapter) DetectSurfaces(host clients.Host) clients.Detection {
 	if !cleanAbsolute(host.HomeDir()) {
-		return clients.Detection{Err: fmt.Errorf("Antigravity requires an unambiguous absolute home directory")}
+		return clients.Detection{Err: fmt.Errorf("antigravity requires an unambiguous absolute home directory")}
 	}
 	root, err := host.CanonicalDirectory(filepath.Join(host.HomeDir(), ".gemini", "config"))
 	if err != nil {
@@ -60,17 +60,17 @@ func (*Adapter) DetectSurfaces(host clients.Host) clients.Detection {
 
 func (*Adapter) ResolveProfileRoot(root string) (string, error) {
 	if !cleanAbsolute(root) {
-		return "", fmt.Errorf("Antigravity native profile must be a clean absolute directory")
+		return "", fmt.Errorf("antigravity native profile must be a clean absolute directory")
 	}
 	canonical, err := clients.CanonicalDirectory(root, os.Lstat, filepath.EvalSymlinks)
 	if err != nil { return "", fmt.Errorf("resolve Antigravity native profile: %w", err) }
-	if !cleanAbsolute(canonical) { return "", fmt.Errorf("Antigravity resolved profile is not a clean absolute path") }
+	if !cleanAbsolute(canonical) { return "", fmt.Errorf("antigravity resolved profile is not a clean absolute path") }
 	return canonical, nil
 }
 
 func (*Adapter) TargetRoot(client domain.DetectedClient, _ domain.PackageMode, _ string) (string, string, error) {
 	if !cleanAbsolute(client.ConfigRoot) {
-		return "", "", fmt.Errorf("Antigravity user profile is not selected")
+		return "", "", fmt.Errorf("antigravity user profile is not selected")
 	}
 	root := filepath.Join(client.ConfigRoot, "plugins")
 	return client.ConfigRoot, root, nil
@@ -85,7 +85,7 @@ func (*Adapter) NativeRegistry(in clients.PlanInput) (string, string) {
 
 func (*Adapter) ProjectTargetRoot(_ domain.DetectedClient, _ domain.PackageMode, managedRoot string, target domain.TargetContext) (string, string, error) {
 	if target.Scope != domain.ScopeProject || !cleanAbsolute(target.ProjectRoot) {
-		return "", "", fmt.Errorf("Antigravity project scope must specify a real project root")
+		return "", "", fmt.Errorf("antigravity project scope must specify a real project root")
 	}
 	if err := pathpolicy.RequireContainedChild(target.ProjectRoot, managedRoot); err != nil {
 		return "", "", err
@@ -139,7 +139,7 @@ func (*Adapter) RefinePlan(ctx context.Context, _ clients.PlanInput, plan *domai
 		return nil
 	}
 	if !cleanAbsolute(plan.NativeRegistryRoot) {
-		return fmt.Errorf("Antigravity native registry root is unavailable")
+		return fmt.Errorf("antigravity native registry root is unavailable")
 	}
 	shared.PromoteNativeReady(plan, plan.NativeRegistryRoot, shared.OnlyNativeComponents(plan.Components))
 	plan.Activation = domain.ActivationPrepared

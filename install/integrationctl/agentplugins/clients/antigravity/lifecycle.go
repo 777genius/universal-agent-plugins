@@ -26,41 +26,41 @@ func (*Adapter) PreflightActivation(_ clients.Env, request domain.ActivationRequ
 	// absent delivery is not a mismatched one, but a partially identified or
 	// already staged delivery must match exactly.
 	if request.Plan.ClientID != domain.ClientAntigravity || request.Client.ClientID != domain.ClientAntigravity {
-		return fmt.Errorf("Antigravity selected client identity changed")
+		return fmt.Errorf("antigravity selected client identity changed")
 	}
 	if request.Delivery.ClientID != "" || request.Delivery.ActivePath != "" {
 		if err := shared.ActivationIdentityMismatch(request); err != nil { return err }
 		if request.Delivery.ActivePath != request.Plan.ActivePath {
-			return fmt.Errorf("Antigravity activation delivery identity changed")
+			return fmt.Errorf("antigravity activation delivery identity changed")
 		}
 	}
 	if request.ActivationComplete {
-		return fmt.Errorf("Antigravity activation cannot be attested without native client evidence")
+		return fmt.Errorf("antigravity activation cannot be attested without native client evidence")
 	}
 	return selectedNativePluginRoot(request.Plan)
 }
 
 func selectedNativePluginRoot(plan domain.DeliveryPlan) error {
 	if !cleanAbsolute(plan.NativeRegistryRoot) || !cleanAbsolute(plan.ActivePath) {
-		return fmt.Errorf("Antigravity selected native plugin path is invalid")
+		return fmt.Errorf("antigravity selected native plugin path is invalid")
 	}
 	expected := filepath.Join(plan.NativeRegistryRoot, "plugins")
 	if plan.TargetRoot != expected || filepath.Dir(plan.ActivePath) != expected {
-		return fmt.Errorf("Antigravity plugin must live beneath the exact selected native root")
+		return fmt.Errorf("antigravity plugin must live beneath the exact selected native root")
 	}
 	switch plan.Scope {
 	case domain.ScopeUser:
 		// User native config is separate from the selected project path.
 		if plan.TargetContext.Scope == domain.ScopeProject {
-			return fmt.Errorf("Antigravity project request cannot use user scope")
+			return fmt.Errorf("antigravity project request cannot use user scope")
 		}
 	case domain.ScopeProject:
 		if !cleanAbsolute(plan.TargetContext.ProjectRoot) ||
 			filepath.Join(plan.TargetContext.ProjectRoot, ".agents") != plan.NativeRegistryRoot {
-			return fmt.Errorf("Antigravity plugin cannot cross project scope")
+			return fmt.Errorf("antigravity plugin cannot cross project scope")
 		}
 	default:
-		return fmt.Errorf("Antigravity requires an explicit User or Project scope")
+		return fmt.Errorf("antigravity requires an explicit User or Project scope")
 	}
 	return nil
 }
@@ -80,10 +80,10 @@ func verifyPreparedNativePlugin(plan domain.DeliveryPlan, name string) error {
 	}
 	nativeName, ok := document["name"].(string)
 	if !ok || nativeName == "" || nativeName != name {
-		return fmt.Errorf("Antigravity native plugin name differs from selected package")
+		return fmt.Errorf("antigravity native plugin name differs from selected package")
 	}
 	if document["$schema"] != "https://antigravity.google/schemas/v1/plugin.json" {
-		return fmt.Errorf("Antigravity prepared native schema is not recognized")
+		return fmt.Errorf("antigravity prepared native schema is not recognized")
 	}
 	return nil
 }
@@ -96,7 +96,7 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 		return domain.ActivationOutcome{}, err
 	}
 	if request.Delivery.ActivePath != request.Plan.ActivePath {
-		return domain.ActivationOutcome{}, fmt.Errorf("Antigravity staged delivery path changed")
+		return domain.ActivationOutcome{}, fmt.Errorf("antigravity staged delivery path changed")
 	}
 	if err := New().PreflightActivation(env, request); err != nil {
 		return domain.ActivationOutcome{}, err

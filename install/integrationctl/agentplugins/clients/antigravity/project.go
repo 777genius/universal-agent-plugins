@@ -37,7 +37,7 @@ func (*Adapter) ProjectActiveNative(ctx context.Context, root string, envelope d
 		return nil, err
 	}
 	if root != plan.ActivePath || !cleanAbsolute(root) {
-		return nil, fmt.Errorf("Antigravity native package path differs from committed delivery")
+		return nil, fmt.Errorf("antigravity native package path differs from committed delivery")
 	}
 	// No separate native member edits: the entire plugin directory is
 	// already owned by the shared verified directory transaction.
@@ -81,10 +81,10 @@ func projectPlugin(root string, envelope domain.PackageEnvelope, plan domain.Del
 
 func validateAntigravityProjection(root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan) error {
 	if !cleanAbsolute(root) || !cleanAbsolute(plan.ActivePath) {
-		return fmt.Errorf("Antigravity projection root must be absolute")
+		return fmt.Errorf("antigravity projection root must be absolute")
 	}
 	if !nativePluginID.MatchString(envelope.Manifest.Name) {
-		return fmt.Errorf("Antigravity plugin requires a lowercase kebab-case name")
+		return fmt.Errorf("antigravity plugin requires a lowercase kebab-case name")
 	}
 	// Do not silently authorize preexisting vendor hook, script, agent, or
 	// raw MCP config files copied from an arbitrary source package.
@@ -97,7 +97,7 @@ func validateAntigravityProjection(root string, envelope domain.PackageEnvelope,
 			return err
 		}
 		if _, err := os.Lstat(path); err == nil {
-			return fmt.Errorf("Antigravity native %s requires a separate capability review", name)
+			return fmt.Errorf("antigravity native %s requires a separate capability review", name)
 		} else if !os.IsNotExist(err) {
 			return err
 		}
@@ -112,7 +112,7 @@ func validateAntigravityProjection(root string, envelope domain.PackageEnvelope,
 	// executable surface when no selected stdio MCP can reference it.
 	if info, err := os.Lstat(filepath.Join(root, "scripts")); err == nil {
 		if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-			return fmt.Errorf("Antigravity MCP helper scripts must be a real source directory")
+			return fmt.Errorf("antigravity MCP helper scripts must be a real source directory")
 		}
 		stdio := false
 		for _, component := range plan.Components {
@@ -122,7 +122,7 @@ func validateAntigravityProjection(root string, envelope domain.PackageEnvelope,
 			}
 		}
 		if !stdio {
-			return fmt.Errorf("Antigravity scripts directory requires an explicitly selected stdio MCP")
+			return fmt.Errorf("antigravity scripts directory requires an explicitly selected stdio MCP")
 		}
 	} else if !os.IsNotExist(err) {
 		return err
@@ -132,12 +132,12 @@ func validateAntigravityProjection(root string, envelope domain.PackageEnvelope,
 
 func validateAntigravityComponent(root string, envelope domain.PackageEnvelope, component domain.ComponentDecision) error {
 	if component.Support == domain.SupportUnsupported {
-		return fmt.Errorf("Antigravity refuses unqualified required components")
+		return fmt.Errorf("antigravity refuses unqualified required components")
 	}
 	switch component.Kind {
 	case domain.ComponentMCPServer:
 		if strings.TrimSpace(component.Name) == "" {
-			return fmt.Errorf("Antigravity MCP server name is empty")
+			return fmt.Errorf("antigravity MCP server name is empty")
 		}
 	case domain.ComponentSkill:
 		if err := pathpolicy.ValidateLeafID(component.Name); err != nil {
@@ -145,7 +145,7 @@ func validateAntigravityComponent(root string, envelope domain.PackageEnvelope, 
 		}
 		skill, ok := envelope.Skills[component.Name]
 		if !ok {
-			return fmt.Errorf("Antigravity selected skill %q is not in the verified package", component.Name)
+			return fmt.Errorf("antigravity selected skill %q is not in the verified package", component.Name)
 		}
 		relative := skill.RelativePath
 		if relative == "" {
@@ -157,10 +157,10 @@ func validateAntigravityComponent(root string, envelope domain.PackageEnvelope, 
 		}
 		info, err := os.Lstat(path)
 		if err != nil || !info.Mode().IsRegular() {
-			return fmt.Errorf("Antigravity native skill file is missing or invalid")
+			return fmt.Errorf("antigravity native skill file is missing or invalid")
 		}
 	default:
-		return fmt.Errorf("Antigravity cannot silently convert unsupported native components")
+		return fmt.Errorf("antigravity cannot silently convert unsupported native components")
 	}
 	return nil
 }
@@ -168,14 +168,14 @@ func validateAntigravityComponent(root string, envelope domain.PackageEnvelope, 
 func appendNativeServer(out map[string]map[string]any, name string, envelope domain.PackageEnvelope, staged, active, dataRoot string) error {
 	server, found := envelope.MCP.Servers[name]
 	if !found || server.Decoded == nil {
-		return fmt.Errorf("Antigravity MCP server %q is missing from verified package", name)
+		return fmt.Errorf("antigravity MCP server %q is missing from verified package", name)
 	}
 	config := shared.CloneObject(server.Decoded)
 	switch server.Type {
 	case "stdio":
 		delete(config, "type")
 		if err := shared.ApplyStdioDataContract(config, active, dataRoot, staged); err != nil {
-			return fmt.Errorf("Antigravity stdio MCP %q is invalid: %w", name, err)
+			return fmt.Errorf("antigravity stdio MCP %q is invalid: %w", name, err)
 		}
 	case "streamable-http":
 		raw, ok := config["serverUrl"].(string)
@@ -183,22 +183,22 @@ func appendNativeServer(out map[string]map[string]any, name string, envelope dom
 			raw, ok = config["url"].(string)
 		}
 		if !ok || raw == "" {
-			return fmt.Errorf("Antigravity remote MCP %q requires serverUrl", name)
+			return fmt.Errorf("antigravity remote MCP %q requires serverUrl", name)
 		}
 		endpoint, err := url.Parse(raw)
 		if err != nil || endpoint == nil || endpoint.Host == "" ||
 			(endpoint.Scheme != "https" && !(endpoint.Scheme == "http" &&
 				(endpoint.Hostname() == "localhost" || endpoint.Hostname() == "127.0.0.1"))) {
-			return fmt.Errorf("Antigravity remote MCP %q has an unsafe endpoint", name)
+			return fmt.Errorf("antigravity remote MCP %q has an unsafe endpoint", name)
 		}
 		delete(config, "url")
 		delete(config, "type")
 		config["serverUrl"] = raw
 	default:
-		return fmt.Errorf("Antigravity MCP %q transport %q is unsupported", name, server.Type)
+		return fmt.Errorf("antigravity MCP %q transport %q is unsupported", name, server.Type)
 	}
 	if strings.TrimSpace(name) == "" {
-		return fmt.Errorf("Antigravity MCP selector is empty")
+		return fmt.Errorf("antigravity MCP selector is empty")
 	}
 	out[name] = config
 	return nil
