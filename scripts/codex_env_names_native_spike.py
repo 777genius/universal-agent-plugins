@@ -40,7 +40,9 @@ for line in sys.stdin:
         elif method == "tools/list":
             out = {"tools": [{"name": "confirm_env",
                   "description": "Return inert value-presence proof, no plaintext",
-                  "inputSchema": {"type": "object", "properties": {}}}]}
+                  "inputSchema": {"type": "object", "properties": {}},
+                  "annotations": {"readOnlyHint": True, "destructiveHint": False,
+                                  "idempotentHint": True, "openWorldHint": False}}]}
         elif method == "tools/call":
             value = os.environ.get(name)
             evidence = {"observed": bool(value),
