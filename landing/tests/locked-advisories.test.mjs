@@ -240,3 +240,37 @@ test('fails closed on unsupported pnpm section anchors instead of hiding the boo
   const anchored = fixture.replace('importers:\n', 'importers: &boot\n');
   assert.throws(() => auditLock(anchored), /Unsupported pnpm section declaration/);
 });
+
+test('rejects escaped YAML top-level keys in boot graph', () => {
+  const boot = [
+    "lockfileVersion: '9.0'", 'importers:', '  .:', '    packageManagerDependencies:',
+    '      boot-tool:', '        version: 1.0.0', 'snapshots:', '  boot-tool@1.0.0:',
+    '    dependencies:', '      glob: 13.0.6', '  glob@13.0.6: {}', '',
+  ].join('\n');
+  const project = [
+    '---', "lockfileVersion: '9.0'", 'importers:', '  .:', '    dependencies:',
+    '      clean-app:', '        version: 1.0.0', 'snapshots:', '  clean-app@1.0.0: {}', '',
+  ].join('\n');
+  const key = '"import' + String.fromCharCode(92) + 'u0065rs":';
+  assert.throws(() => auditLock(boot.replace('importers:', key) + project),
+    /Unsupported pnpm top-level YAML mapping/);
+  const snapKey = '"snapsh' + String.fromCharCode(92) + 'u006fts":';
+  assert.throws(() => auditLock(boot.replace('snapshots:', snapKey) + project),
+    /Unsupported pnpm top-level YAML mapping/);
+});
+
+test('rejects explicit YAML top-level keys in boot graph', () => {
+  const boot = [
+    "lockfileVersion: '9.0'", 'importers:', '  .:', '    packageManagerDependencies:',
+    '      boot-tool:', '        version: 1.0.0', 'snapshots:', '  boot-tool@1.0.0:',
+    '    dependencies:', '      glob: 13.0.6', '  glob@13.0.6: {}', '',
+  ].join('\n');
+  const project = [
+    '---', "lockfileVersion: '9.0'", 'importers:', '  .:', '    dependencies:',
+    '      clean-app:', '        version: 1.0.0', 'snapshots:', '  clean-app@1.0.0: {}', '',
+  ].join('\n');
+  assert.throws(() => auditLock(boot.replace('importers:', '? importers\n:') + project),
+    /Unsupported pnpm top-level YAML mapping/);
+  assert.throws(() => auditLock(boot.replace('snapshots:', '? snapshots\n:') + project),
+    /Unsupported pnpm top-level YAML mapping/);
+});
