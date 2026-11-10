@@ -17,10 +17,12 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import urllib.parse
 
 ENV_NAME = "UAP_E2E_SYNTHETIC_TOKEN"
 SHELL_CALL = "call_uap_shell_snapshot"
+SHELL_MARKER = "UAP_SHELL_COMPLETED"
 MCP_CALL = "call_uap_env_mcp"
 SEARCH_CALL = "call_uap_tool_search"
 
@@ -64,6 +66,8 @@ class Model(http.server.BaseHTTPRequestHandler):
     mcp_digest_verified = False
     expected_digest = None
     shell_output_seen = False
+    shell_execution_verified = False
+    shell_requested_at = 0.0
     error = ""
     advertised_tool_names = set()
 
@@ -86,10 +90,15 @@ class Model(http.server.BaseHTTPRequestHandler):
         cls = type(self)
         cls.requests += 1
         outputs = [x for x in req.get("input", []) if isinstance(x, dict)]
-        cls.shell_output_seen |= any(
-            x.get("type") == "function_call_output" and x.get("call_id") == SHELL_CALL
-            for x in outputs
-        )
+        for response in outputs:
+            if response.get("type") == "function_call_output" and response.get("call_id") == SHELL_CALL:
+                cls.shell_output_seen = True
+                # A native tool returning an error is not proof the command ran.
+                # Require an execution-only sentinel AND elapsed sleep time.
+                rendered = json.dumps(response.get("output"), sort_keys=True)
+                if (SHELL_MARKER in rendered and
+                        time.monotonic() - cls.shell_requested_at >= 6.0):
+                    cls.shell_execution_verified = True
         for response in outputs:
             if (response.get("type") == "function_call_output"
                     and response.get("call_id") == MCP_CALL):
@@ -127,10 +136,12 @@ class Model(http.server.BaseHTTPRequestHandler):
                 cls.error = "no advertised shell tool"
                 self.send_error(409)
                 return
-            args = {"cmd": "sleep 7; pwd"} if shell == "exec_command" else {"command": "sleep 7; pwd"}
+            command = f"sleep 7; printf {SHELL_MARKER}"
+            args = {"cmd": command} if shell == "exec_command" else {"command": command}
             item = {"type": "function_call", "name": shell,
                     "call_id": SHELL_CALL, "arguments": json.dumps(args)}
             cls.shell_requested = True
+            cls.shell_requested_at = time.monotonic()
         elif not cls.shell_output_seen:
             cls.error = "shell tool output missing"
             self.send_error(409)
@@ -297,7 +308,8 @@ def main():
         report["live_scan_samples"] = live["samples"]
         report["live_snapshot_files_seen"] = live["snapshot_files_seen"]
         report["live_scan_errors"] = live["errors"]
-        report["real_codex_shell_called"] = Model.shell_requested and Model.shell_output_seen
+        report["shell_tool_output_seen"] = Model.shell_output_seen
+        report["real_codex_shell_called"] = Model.shell_requested and Model.shell_execution_verified
         report["real_codex_mcp_called"] = Model.mcp_requested and Model.mcp_output_seen
         report["native_mcp_digest_seen"] = Model.mcp_digest_verified
         report["requests"] = Model.requests
