@@ -151,6 +151,30 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                             check({**valid, "_json": foreign_no_op},
                                   operation, operation, "codex")
 
+    def test_marketing_kit_future_profiles_refuse_preplanted_paths(self):
+        # A third-party package can access sibling paths under the temporary
+        # case root. It must not redirect a later cold B/C bootstrap.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        with TemporaryDirectory() as temporary, TemporaryDirectory() as external:
+            root = Path(temporary).resolve()
+            outside = Path(external).resolve()
+            occupied = root / "B"
+            occupied.mkdir()
+            with self.assertRaisesRegex(AssertionError, "isolated profile root"):
+                runner["run_case"]("agentplugins", "codex", root, "B")
+            self.assertEqual(list(occupied.iterdir()), [])
+            occupied.rmdir()
+            try:
+                occupied.symlink_to(outside, target_is_directory=True)
+            except (OSError, NotImplementedError) as error:
+                self.skipTest(f"host cannot create directory symlinks: {error}")
+            with self.assertRaisesRegex(AssertionError, "isolated profile root"):
+                runner["run_case"]("agentplugins", "codex", root, "B")
+            self.assertEqual(list(outside.iterdir()), [])
+
     def test_marketing_kit_project_git_init_uses_pinned_audit_prerequisite(self):
         # The second profile is created after running untrusted packages; it
         # must not start PATH-resolved Git or use ambient Git hooks/config.

@@ -202,9 +202,19 @@ def lock_ids(project):
 
 def run_case(cli, target, root, name, portable=None):
     case = root / name
+    # B and C are created *after* untrusted package execution in A. Refuse a
+    # pre-planted directory or symlink rather than following it during mkdir.
+    if (not root.is_dir() or root.is_symlink()
+            or case.exists() or case.is_symlink()):
+        raise AssertionError("isolated profile root already occupied or unsafe")
+    case.mkdir()  # no parents/exist_ok: another writer cannot silently win
+    if not audit["path_inside_case"](case, root):
+        raise AssertionError("isolated profile root escaped disposable case")
     home, data, project = case / "home", case / "data", case / "project"
     for directory in (home, data, project):
-        directory.mkdir(parents=True)
+        directory.mkdir()
+        if not audit["path_inside_case"](directory, case):
+            raise AssertionError("isolated profile directory escaped disposable case")
     # Reuse the existing published audit's native-profile root inventory.
     foreign_skill = "---\nname: unmanaged-uap-foreign-skill\ndescription: keep unchanged\n---\n"
     native_foreign = []
