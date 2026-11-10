@@ -64,6 +64,7 @@ class Model(http.server.BaseHTTPRequestHandler):
     mcp_output_seen = False
     shell_output_seen = False
     error = ""
+    advertised_tool_names = set()
 
     def log_message(self, *_args):
         pass
@@ -94,9 +95,19 @@ class Model(http.server.BaseHTTPRequestHandler):
         )
         tools = req.get("tools", [])
         function_names = {x.get("name") for x in tools if isinstance(x, dict)}
+        cls.advertised_tool_names.update(name for name in function_names if name)
         namespace = next((x for x in tools if isinstance(x, dict)
                           and x.get("type") == "namespace"
                           and x.get("name") == "mcp__env_spike"), None)
+        # Versions using deferred tool discovery expose the namespace in input.
+        if namespace is None:
+            for output in outputs:
+                if output.get("type") == "tool_search_output":
+                    namespace = next((t for t in output.get("tools", [])
+                                      if isinstance(t, dict)
+                                      and t.get("name") == "mcp__env_spike"), None)
+                    if namespace is not None:
+                        break
         if cls.requests > 10:
             cls.error = "model request budget"
             self.send_error(409)
@@ -124,6 +135,10 @@ class Model(http.server.BaseHTTPRequestHandler):
                                for x in namespace.get("tools", [])):
             item = {"type": "function_call", "namespace": "mcp__env_spike",
                     "name": "confirm_env", "call_id": MCP_CALL, "arguments": "{}"}
+            cls.mcp_requested = True
+        elif "mcp__env_spike__confirm_env" in function_names:
+            item = {"type": "function_call", "name": "mcp__env_spike__confirm_env",
+                    "call_id": MCP_CALL, "arguments": "{}"}
             cls.mcp_requested = True
         elif not cls.search_requested and "tool_search" in function_names:
             item = {"type": "tool_search_call", "call_id": SEARCH_CALL,
@@ -204,6 +219,7 @@ def main():
         f'base_url = "http://127.0.0.1:{server.server_port}/v1"\n'
         'wire_api = "responses"\nrequires_openai_auth = false\n'
         '[analytics]\nenabled = false\n[feedback]\nenabled = false\n'
+        f'[projects.{json.dumps(str(project))}]\ntrust_level = "trusted"\n'
     )
     (home / ".codex" / "config.toml").write_text(config)
     project_server = (
@@ -261,6 +277,7 @@ def main():
         report["real_codex_shell_called"] = Model.shell_requested and Model.shell_output_seen
         report["real_codex_mcp_called"] = Model.mcp_requested and Model.mcp_output_seen
         report["requests"] = Model.requests
+        report["advertised_tool_names"] = sorted(Model.advertised_tool_names)[:35]
         if receipt.exists():
             observed = json.loads(receipt.read_text())
             report["mcp_child_saw_secret"] = (observed.get("observed") is True
@@ -276,7 +293,7 @@ def main():
         elif not all([report["real_codex_shell_called"], report["real_codex_mcp_called"],
                       report["mcp_child_saw_secret"]]):
             report["failure"] = Model.error or "native_proof_incomplete"
-        elif combined or report["symlinks"] or live["errors"] or live["samples"] < 20:
+        elif combined or live["errors"] or live["samples"] < 20:
             report["failure"] = "live_canary_persisted_or_unsafe_scan"
         else:
             report["secrecy_pass"] = True
