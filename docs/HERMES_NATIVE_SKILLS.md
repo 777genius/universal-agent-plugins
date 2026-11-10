@@ -71,9 +71,9 @@ native Windows, with the pinned official installer for each platform:
 
 | Native platform | Evidence |
 | --- | --- |
-| Linux x64 | PASS in [run 42813277862](https://github.com/777genius/universal-agent-plugins/actions/runs/42813277862), at the exact UAP head above. |
-| macOS arm64 | PASS in the same run and at the same UAP head. |
-| Native Windows x64 | PASS through the pinned native PowerShell installation in the same run and at the same UAP head. |
+| Linux x64 | PASS in [run 42813277862](https://github.com/777genius/universal-agent-plugins/actions/runs/42813277862), at the exact UAP head above; [Linux evidence](https://github.com/777genius/universal-agent-plugins/actions/runs/42813277862/artifacts/13762793764). |
+| macOS arm64 | PASS in the same run and at the same UAP head; [macOS evidence](https://github.com/777genius/universal-agent-plugins/actions/runs/42813277862/artifacts/13763179484). |
+| Native Windows x64 | PASS through the pinned native PowerShell installation in the same run and at the same UAP head; [Windows evidence](https://github.com/777genius/universal-agent-plugins/actions/runs/42813277862/artifacts/13763404124). |
 
 Each OS passed User Skills/MCP first and repeated add, update, repair and
 removal, Project Skills untrusted discovery and A/B isolation, and four native
