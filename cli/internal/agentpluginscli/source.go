@@ -223,7 +223,7 @@ func (app App) acquireDirectory(ctx context.Context, selector string, request pa
 	snapshot.Source.SourceBindingHint = fmt.Sprintf("directory-v%d", bundle.Snapshot.SnapshotSchemaVersion)
 	origin := &domain.DirectoryOrigin{
 		ProductID: selection.ProductID, DistributionID: selection.DistributionID, DistributionKind: selection.DistributionKind,
-		DesiredReleaseSequence: selection.ReleaseSequence, SnapshotSchema: bundle.Snapshot.SnapshotSchemaVersion,
+		DesiredReleaseSequence: selection.ReleaseSequence, FeedID: directoryFeedForClient(app.DirectoryClient), SnapshotSchema: bundle.Snapshot.SnapshotSchemaVersion,
 		SnapshotSequence: selection.SnapshotSequence, SnapshotDigest: bundle.Digest,
 	}
 	load := app.loadSnapshot
