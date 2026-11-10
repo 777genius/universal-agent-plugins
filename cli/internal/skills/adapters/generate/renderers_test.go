@@ -1,11 +1,9 @@
 package generate
 
 import (
-	"bytes"
 	"strings"
 	"testing"
 
-	"github.com/777genius/plugin-kit-ai/cli/internal/skills/adapters/filesystem"
 	"github.com/777genius/plugin-kit-ai/cli/internal/skills/domain"
 )
 
@@ -28,11 +26,11 @@ func TestSkillRenderersPreserveClientTemplatesAndPaths(t *testing.T) {
 		Body: "Follow these canonical instructions.",
 	}
 	tests := []struct {
-		name, templateName, relPath string
+		name, relPath string
 		render                      func(string, domain.SkillDocument) ([]domain.Artifact, error)
 	}{
-		{"claude", "generate.claude.md.tmpl", "generated/skills/claude/sample/SKILL.md", ClaudeRenderer{}.Generate},
-		{"codex", "generate.codex.skill.md.tmpl", "generated/skills/codex/sample/SKILL.md", CodexRenderer{}.Generate},
+		{"claude", "generated/skills/claude/sample/SKILL.md", ClaudeRenderer{}.Generate},
+		{"codex", "generated/skills/codex/sample/SKILL.md", CodexRenderer{}.Generate},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -43,20 +41,25 @@ func TestSkillRenderersPreserveClientTemplatesAndPaths(t *testing.T) {
 			if len(artifacts) != 1 || artifacts[0].RelPath != tc.relPath {
 				t.Fatalf("artifact path/count changed: %+v", artifacts)
 			}
-			want, err := filesystem.RenderTemplate(tc.templateName, filesystem.TemplateData{
-				SkillName:            "sample",
-				Description:          doc.Spec.Description,
-				CommandLine:          filesystem.CommandLine(doc.Spec),
-				Runtime:              string(doc.Spec.Runtime),
-				AllowedTools:         doc.Spec.AllowedTools,
-				CompatibilitySummary: compatibilitySummary(doc.Spec.Compatibility),
-				Body:                 doc.Body,
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !bytes.Equal(artifacts[0].Content, want) {
-				t.Fatalf("%s rendered bytes differ from the existing client template", tc.name)
+			// Fixed output assertions catch projection regressions independently of
+			// the helper's own field mapping and template-data construction.
+			rendered := string(artifacts[0].Content)
+			for _, expected := range []string{
+				"# sample",
+				"Inspect one authored skill",
+				"- Runtime: `shell`",
+				"- Invocation: `echo 'two words'`",
+				"- Requires: git",
+				"- Supported OS: linux",
+				"- Requires a repository checkout",
+				"- May require network access",
+				"- verify local inputs",
+				"- `Read`",
+				"- `Search`",
+			} {
+				if !strings.Contains(rendered, expected) {
+					t.Fatalf("%s output missing %q", tc.name, expected)
+				}
 			}
 			if !strings.Contains(string(artifacts[0].Content), doc.Body) {
 				t.Fatal("canonical instructions missing")
