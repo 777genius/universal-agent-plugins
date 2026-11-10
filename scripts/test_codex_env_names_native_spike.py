@@ -1,6 +1,7 @@
 """Unit negative controls for Codex native secrecy evidence, no network/vendor client."""
 import http.client
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -12,7 +13,7 @@ import http.server
 
 from codex_env_names_native_spike import (CHILD, Model, MCP_CALL, SHELL_CALL, SHELL_MARKER,
                                         SHELL_ENV_PRESENT, SHELL_FOREIGN_PRESENT,
-                                        ENV_NAME, FOREIGN_ENV_NAME, inspect)
+                                        ENV_NAME, FOREIGN_ENV_NAME, inspect, windows_shell_command, isolated_env)
 
 
 class TestSyntheticModelOracle(unittest.TestCase):
@@ -86,6 +87,24 @@ class TestSyntheticModelOracle(unittest.TestCase):
         self.assertEqual(complete["type"], "message")
         self.assertTrue(Model.mcp_digest_verified)
         self.assertTrue(Model.mcp_output_seen)
+
+    def test_windows_shell_command_only_emits_fixed_markers(self):
+        command = windows_shell_command()
+        self.assertIn("Start-Sleep -Seconds 7", command)
+        self.assertIn("Test-Path Env:" + ENV_NAME, command)
+        self.assertIn("Test-Path Env:" + FOREIGN_ENV_NAME, command)
+        self.assertIn(SHELL_ENV_PRESENT, command)
+        self.assertNotIn("not_a_real_secret_fixture_123", command)
+
+    def test_isolated_env_contains_no_runner_auth(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, home = Path(tmp), Path(tmp) / "home"
+            env = isolated_env(root, home, "synthetic_only", "other_synthetic")
+            self.assertEqual(env[ENV_NAME], "synthetic_only")
+            self.assertEqual(env[FOREIGN_ENV_NAME], "other_synthetic")
+            self.assertEqual(env["CODEX_HOME"], str(home / ".codex"))
+            self.assertNotIn("GITHUB_TOKEN", env)
+            self.assertNotIn("GH_TOKEN", env)
 
     def test_wrong_digest_is_never_treated_as_receipt(self):
         self.call({"tools": [{"type": "function", "name": "exec_command"}]})
@@ -168,7 +187,7 @@ class TestSyntheticMcpChild(unittest.TestCase):
         # This child receives NO inherited or synthetic token in this unit test.
         proc = subprocess.run([sys.executable, "-c", CHILD], input=(
             json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/list"}) + "\n"
-        ), capture_output=True, text=True, timeout=5, env={"PATH": "/usr/bin:/bin"})
+        ), capture_output=True, text=True, timeout=5, env={"PATH": os.environ.get("PATH", ""), **({"SYSTEMROOT": os.environ.get("SYSTEMROOT", "C:\\Windows")} if os.name == "nt" else {})})
         self.assertEqual(proc.returncode, 0)
         tool = json.loads(proc.stdout.strip())["result"]["tools"][0]
         self.assertEqual(tool["name"], "confirm_env")

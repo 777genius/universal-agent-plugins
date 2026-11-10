@@ -19,7 +19,7 @@ import tempfile
 import threading
 import time
 
-from codex_env_names_native_spike import CHILD, ENV_NAME, FOREIGN_ENV_NAME, Model, inspect
+from codex_env_names_native_spike import CHILD, ENV_NAME, FOREIGN_ENV_NAME, Model, inspect, isolated_env
 
 def rpc_send(proc, q, serial, method, params, timeout=35):
     proc.stdin.write((json.dumps({"id": serial, "method": method,
@@ -75,7 +75,8 @@ def main():
     )
     (home / ".codex" / "config.toml").write_text(user_config)
     project_server = (
-        '[mcp_servers.env_spike]\ncommand = "python3"\n'
+        '[mcp_servers.env_spike]\n'
+        f'command = {json.dumps(sys.executable)}\n'
         f'args = [{json.dumps(str(child))}]\n'
         f'env_vars = ["{ENV_NAME}"]\n'
     )
@@ -100,12 +101,8 @@ def main():
             'inherit = "core"\n'
         )
     (project / ".codex" / "config.toml").write_text(project_server)
-    env = {"HOME": str(home), "CODEX_HOME": str(home / ".codex"),
-           "TMPDIR": str(root / "tmp"), "TEMP": str(root / "tmp"),
-           "TMP": str(root / "tmp"), "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
-           "LANG": "C.UTF-8", "NO_COLOR": "1", ENV_NAME: secret,
-           FOREIGN_ENV_NAME: foreign_secret}
-    report = {"policy_mode": mode, "sandbox_backend": "bwrap", "version": "", "real_codex_shell_called": False,
+    env = isolated_env(root, home, secret, foreign_secret)
+    report = {"policy_mode": mode, "sandbox_backend": ("bwrap" if sys.platform.startswith("linux") else "native"), "version": "", "real_codex_shell_called": False,
               "mcp_native_connected": False, "real_codex_mcp_called": False,
               "mcp_child_saw_secret": False, "leak": False,
               "secrecy_pass": False, "failure": None}

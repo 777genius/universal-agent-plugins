@@ -62,6 +62,30 @@ for line in sys.stdin:
         break
 '''
 
+
+def isolated_env(root, home, secret, foreign_secret):
+    """Disposable Codex profile: no real runner secrets are inherited."""
+    env = isolated_env(root, home, secret, foreign_secret)
+    if os.name == "nt":
+        # Only necessary nonsecret OS process/shell fields on Windows.
+        env.update({key: os.environ[key] for key in
+                    ("SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT", "OS")
+                    if key in os.environ})
+        env["USERPROFILE"] = str(home)
+        env["APPDATA"] = str(home / "AppData" / "Roaming")
+        env["LOCALAPPDATA"] = str(home / "AppData" / "Local")
+        (home / "AppData" / "Roaming").mkdir(parents=True, exist_ok=True)
+        (home / "AppData" / "Local").mkdir(parents=True, exist_ok=True)
+    return env
+
+
+def windows_shell_command():
+    """PowerShell checks name presence only, never reads a canary value."""
+    return ("Start-Sleep -Seconds 7; "
+            f"if (Test-Path Env:{ENV_NAME}) {{ Write-Output '{SHELL_ENV_PRESENT}' }}; "
+            f"if (Test-Path Env:{FOREIGN_ENV_NAME}) {{ Write-Output '{SHELL_FOREIGN_PRESENT}' }}; "
+            f"Write-Output '{SHELL_MARKER}'")
+
 class Model(http.server.BaseHTTPRequestHandler):
     requests = 0
     shell_requested = False
@@ -197,6 +221,8 @@ class Model(http.server.BaseHTTPRequestHandler):
                        + SHELL_ENV_PRESENT + "; fi; if test -n \"${"
                        + FOREIGN_ENV_NAME + "+x}\"; then printf "
                        + SHELL_FOREIGN_PRESENT + "; fi; printf " + SHELL_MARKER)
+            if os.name == "nt":
+                command = windows_shell_command()
             # Codex exec_command can yield before a long command has finished.
             # Request a full bounded wait so the completion marker is observed
             # from the real native shell rather than mistaking an async
@@ -321,7 +347,8 @@ def main():
     )
     (home / ".codex" / "config.toml").write_text(config)
     project_server = (
-        '[mcp_servers.env_spike]\ncommand = "python3"\n'
+        '[mcp_servers.env_spike]\n'
+        f'command = {json.dumps(sys.executable)}\n'
         f'args = [{json.dumps(str(child))}]\n'
         f'env_vars = ["{ENV_NAME}"]\n'
     )
@@ -359,7 +386,7 @@ def main():
         str(codex), "exec", "--skip-git-repo-check",
         "--sandbox", "read-only", "Call the available shell tool once and then confirm_env."
     ]
-    report = {"policy_mode": mode, "sandbox_backend": "bwrap", "version": "", "real_codex_shell_called": False,
+    report = {"policy_mode": mode, "sandbox_backend": ("bwrap" if sys.platform.startswith("linux") else "native"), "version": "", "real_codex_shell_called": False,
               "real_codex_mcp_called": False, "mcp_child_saw_secret": False,
               "leak": False, "secrecy_pass": False, "failure": None}
     try:
