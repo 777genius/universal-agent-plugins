@@ -24,6 +24,13 @@ unexpected raw `mcp_config.json` and unsafe remote MCP destinations.
 Never silently execute downloaded hook scripts or copy foreign native files.
 An Antigravity plugin folder being present does not prove it was indexed,
 enabled, trusted or authenticated. Report **Prepared**, not Active.
+A pinned `agy 1.5.3` User-scope smoke confirms that native validation can
+succeed while `agy plugin list --json` does **not** show the UAP-prepared User
+bundle. UAP does not silently invoke `agy plugin install`: that vendor
+registration can have additional, separately owned side effects and must
+remain a deliberate user-managed action until a safe transactional lifecycle
+is independently qualified. Do not report automatic User activation from a
+successful UAP file install; UAP removes only the directory it owns.
 
 **Still to qualify before Ready:** pinned real `agy plugin validate --strict`,
 separate CLI local import/list/uninstall in a disposable profile,

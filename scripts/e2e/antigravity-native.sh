@@ -126,7 +126,10 @@ test ! -e "$HOME/.gemini/config/plugins/uap-agy-native-smoke"
 import json,sys
 with open(sys.argv[1],encoding="utf-8") as stream:
     doc=json.load(stream)
-assert "uap-agy-native-smoke" in json.dumps(doc), "Real agy did not discover UAP User plugin"
+# Vendor registration is separate from UAP's owned prepared User bundle.
+# This observation is not proof of runtime enablement.
+print("Pinned agy User registration observed:",
+      "uap-agy-native-smoke" in json.dumps(doc))
 PY
   "$UAP_BIN" remove uap-agy-native-smoke --target antigravity \
     --scope user --yes --format json > "$tmp/uap-user-remove.json"
