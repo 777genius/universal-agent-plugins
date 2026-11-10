@@ -64,6 +64,15 @@ func readLocalDependencyPolicy(path string) (localDependencyPolicy, error) {
 	if err != nil {
 		return policy, fmt.Errorf("read local dependency policy: %w", err)
 	}
+	// yaml.v3 skips custom decoders for explicit null values. Reject them
+	// before KnownFields decoding so null cannot silently disable policy.
+	var syntax yaml.Node
+	if err := yaml.Unmarshal(body, &syntax); err != nil {
+		return policy, fmt.Errorf("parse local dependency policy: %w", err)
+	}
+	if err := rejectNullPolicyNode(&syntax); err != nil {
+		return policy, err
+	}
 	decoder := yaml.NewDecoder(bytes.NewReader(body))
 	decoder.KnownFields(true)
 	if err := decoder.Decode(&policy); err != nil {
@@ -94,6 +103,19 @@ func readLocalDependencyPolicy(path string) (localDependencyPolicy, error) {
 		}
 	}
 	return policy, nil
+}
+
+// Explicit null is never an opt-out: omit optional keys instead.
+func rejectNullPolicyNode(node *yaml.Node) error {
+	if node.Tag == "!!null" {
+		return errors.New("local dependency policy must not contain explicit null values")
+	}
+	for _, child := range node.Content {
+		if err := rejectNullPolicyNode(child); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func validPolicyHost(host string) bool {

@@ -74,6 +74,9 @@ func TestLocalDependencyPolicyExplicitOptInAndStrictParsing(t *testing.T) {
 	}
 	for name, body := range map[string]string{
 		"unknown":               "schema_version: 1\nunsafe: true\n",
+		"null-allowed-hosts":    "schema_version: 1\nsources:\n  allow_hosts: null\n",
+		"null-allowed-mcp":      "schema_version: 1\nmcp:\n  allowed_transports: null\n",
+		"null-source-section":   "schema_version: 1\nsources: null\n",
 		"two-docs":              "schema_version: 1\n---\nschema_version: 1\n",
 		"invalid-host":          "schema_version: 1\nsources:\n  allow_hosts: [GitHub.com]\n",
 		"wrong-version":         "schema_version: 99\n",

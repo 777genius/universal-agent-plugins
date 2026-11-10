@@ -54,7 +54,9 @@ func TestDependencySBOMRefusesMissingCacheAndUnknownFormat(t *testing.T) {
 }
 
 func TestDependencyPolicyDenialOccursBeforeSyncMutation(t *testing.T) {
-	f := newDependencyCheckFixture(t)
+	// Include the real typed SDK, while retaining forbidden acquisition and
+	// detection stubs. A policy denial must run before any client mutation.
+	f := newDependencyStatusIntegrityFixture(t)
 	pin := seedDependencyCheckPackage(t, f, "demo", "")
 	writeDependencyCheckAgreement(t, f, []environment.LockedPackage{pin}, "demo")
 	policy := filepath.Join(f.root, "deny-sources.yml")
