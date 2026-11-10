@@ -151,6 +151,20 @@ jobs:
         with:
           go-version: '1.26.10'
           cache: false
+      - name: Verify pinned embedded schema bytes survive Windows checkout
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = Join-Path $env:GITHUB_WORKSPACE 'install/integrationctl/agentplugins/adapters/specregistry/schemas/1.0.0'
+          $digests = @{
+            'plugin.schema.json' = '0a4aad95ce337878ad38802ebf0daa3fde76abe3f65400c86bcbb1ec0b3ab883'
+            'mcp.schema.json' = '6539175bfcdf43085855183e86da40ea94b166547a72b47ae9a0a390516d3acb'
+          }
+          foreach ($name in $digests.Keys) {
+            $path = Join-Path $root $name
+            $actual = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($actual -ne $digests[$name]) { throw "Embedded $name changed during Windows checkout" }
+          }
       - name: Download pinned Windows x64 agy and verify vendor SHA256
         shell: pwsh
         run: |
