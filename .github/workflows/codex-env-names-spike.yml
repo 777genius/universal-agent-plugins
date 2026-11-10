@@ -115,6 +115,22 @@ jobs:
         shell: bash
         run: |
           python3 scripts/codex_env_names_appserver_spike.py "$CODEX_BINARY" "$RUNNER_TEMP/codex-default-excludes-appserver.json" default_excludes
+      # Experimental scalar core inherit policy: retain only ordinary launch
+      # basics for shell; the real native MCP subprocess must still receive
+      # explicitly named env_vars. Verify older global exclusions too.
+      # Never rewrite an existing user's inherited shell policy.
+      - name: Research core-only inherited shell environment with real Codex CLI
+        if: always() && steps.native-binary.outcome == 'success'
+        id: native-core-inherit-cli
+        shell: bash
+        run: |
+          python3 scripts/codex_env_names_native_spike.py "$CODEX_BINARY" "$RUNNER_TEMP/codex-core-inherit-cli.json" core_inherit
+      - name: Research core-only inherited shell environment with real Codex app-server
+        if: always() && steps.native-binary.outcome == 'success'
+        id: native-core-inherit-appserver
+        shell: bash
+        run: |
+          python3 scripts/codex_env_names_appserver_spike.py "$CODEX_BINARY" "$RUNNER_TEMP/codex-core-inherit-appserver.json" core_inherit
       - name: Enforce both independently successful native proofs
         if: always()
         shell: bash
@@ -125,6 +141,8 @@ jobs:
           FILTERED_APPSERVER_OUTCOME: ${{ steps.native-filtered-appserver.outcome }}
           DEFAULT_EXCLUDES_CLI_OUTCOME: ${{ steps.native-default-excludes-cli.outcome }}
           DEFAULT_EXCLUDES_APPSERVER_OUTCOME: ${{ steps.native-default-excludes-appserver.outcome }}
+          CORE_INHERIT_CLI_OUTCOME: ${{ steps.native-core-inherit-cli.outcome }}
+          CORE_INHERIT_APPSERVER_OUTCOME: ${{ steps.native-core-inherit-appserver.outcome }}
         run: |
           test "$CLI_OUTCOME" = success
           test "$APPSERVER_OUTCOME" = success
@@ -132,6 +150,8 @@ jobs:
           test "$FILTERED_APPSERVER_OUTCOME" = success
           test "$DEFAULT_EXCLUDES_CLI_OUTCOME" = success
           test "$DEFAULT_EXCLUDES_APPSERVER_OUTCOME" = success
+          test "$CORE_INHERIT_CLI_OUTCOME" = success
+          test "$CORE_INHERIT_APPSERVER_OUTCOME" = success
       - name: Preserve only bounded, redacted proof (no native home or child output)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
@@ -144,5 +164,7 @@ jobs:
             ${{ runner.temp }}/codex-env-filtered-appserver.json
             ${{ runner.temp }}/codex-default-excludes-cli.json
             ${{ runner.temp }}/codex-default-excludes-appserver.json
+            ${{ runner.temp }}/codex-core-inherit-cli.json
+            ${{ runner.temp }}/codex-core-inherit-appserver.json
           if-no-files-found: warn
           retention-days: 7
