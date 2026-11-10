@@ -19,8 +19,11 @@ func projectPreparationAction(components []domain.ComponentDecision) string {
 		return "Grok project Skills are prepared; open the selected project, review trust in Grok, then reload and verify native Skills discovery; UAP has not activated them"
 	}
 	label := "MCP"
-	if shared.ComponentKindPresent(components, domain.ComponentSkill) {
-		label = "Skills/MCP"
+	for _, component := range components {
+		if component.Kind == domain.ComponentSkill && component.Support != domain.SupportUnsupported {
+			label = "Skills/MCP"
+			break
+		}
 	}
 	return "Grok project " + label + " delivery is prepared; Project MCP requires Grok 1.0.70; open the selected project, enable and trust the plugin in Grok, then reload and verify effective MCP discovery; UAP has not activated it"
 }

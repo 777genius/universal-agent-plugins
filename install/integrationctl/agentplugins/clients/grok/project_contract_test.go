@@ -354,6 +354,8 @@ func TestProjectGrokPreparationGuidanceMatchesComponents(t *testing.T) {
 		{"skills-only", []domain.ComponentDecision{{Kind: domain.ComponentSkill, Support: domain.SupportNative}}, "Skills discovery", "Project MCP requires"},
 		{"mcp-only", []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Support: domain.SupportNative}}, "Grok project MCP delivery", "Skills/MCP"},
 		{"both", []domain.ComponentDecision{{Kind: domain.ComponentSkill, Support: domain.SupportNative}, {Kind: domain.ComponentMCPServer, Support: domain.SupportNative}}, "Grok project Skills/MCP delivery", ""},
+		{"mcp-with-unsupported-skill", []domain.ComponentDecision{{Kind: domain.ComponentSkill, Support: domain.SupportUnsupported}, {Kind: domain.ComponentMCPServer, Support: domain.SupportNative}}, "Grok project MCP delivery", "Skills/MCP"},
+		{"skills-with-unsupported-mcp", []domain.ComponentDecision{{Kind: domain.ComponentSkill, Support: domain.SupportNative}, {Kind: domain.ComponentMCPServer, Support: domain.SupportUnsupported}}, "Skills discovery", "Project MCP requires"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			guidance := projectPreparationAction(tc.components)
