@@ -178,9 +178,18 @@ func grokProjectMCPNativeInspect(t *testing.T, cycle *grokProjectCycle, project,
 	}
 	// Preserve the original, bounded native inspect bytes in the admitted ZIP.
 	// This is observation of an untrusted, inactive project, not MCP activation.
-	cycle.append(t, "grok-cycle-mcp-inspect.jsonl", stage, map[string]any{
-		"cwd": project, "stdout": cycle.stream(t, body),
-	})
+	// Archive the original UAP ownership state alongside the installed native
+	// observation so the independent reader can join the exact selected path.
+	// Removal uses the held installed-state receipt, not a rewritten receipt.
+	observed := map[string]any{"cwd": project, "stdout": cycle.stream(t, body)}
+	if present {
+		state, err := projectNativeRuntimeRead(filepath.Join(project, ".uap", "state-v2.json"), 1<<20)
+		if err != nil {
+			t.Fatal(err)
+		}
+		observed["owned_state"] = cycle.stream(t, state)
+	}
+	cycle.append(t, "grok-cycle-mcp-inspect.jsonl", stage, observed)
 }
 
 // Native identity fields must not have Unicode-folded aliases. Unknown fields

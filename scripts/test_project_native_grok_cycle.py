@@ -199,12 +199,21 @@ def container():
     mcp_active = mcp_project + "/.grok/plugins/uap-grok-mcp-only-abcdef123456"
     mcp_plugin = {"name": mcp_name, "scope": "project", "path": mcp_active,
                   "enabled": False, "provides": {"mcpServers": 1}}
+    # Synthetic contract fixture, not a claim of native installed-state evidence.
+    mcp_state = {"schema_version": 5, "installations": [{
+        "declared_name": mcp_name, "clients": {"owned": {
+            "client_id": "grok", "scope": "project", "target_locator": mcp_active,
+            "native_profile_root": mcp_project + "/.grok",
+            "activation": "prepared", "verification": "package_validated"}}}]}
     mcp_rows = []
     for stage in cycle.MCP_INSPECT:
         observed = {"grokVersion": "1.0.70", "cwd": mcp_project,
                     "projectRoot": mcp_project + "/", "projectTrusted": False,
                     "mcpServers": [], "plugins": [mcp_plugin] if stage == "installed" else []}
-        mcp_rows.append({"stage": stage, "value": {"cwd": mcp_project, "stdout": stream(raw(observed))}})
+        value = {"cwd": mcp_project, "stdout": stream(raw(observed))}
+        if stage == "installed":
+            value["owned_state"] = stream(raw(mcp_state))
+        mcp_rows.append({"stage": stage, "value": value})
     bodies[cycle.MEMBERS[3]] = b"".join(raw(row) + b"\n" for row in mcp_rows)
     bodies["runtime-attempt.json"] = raw(result)
     return bodies
@@ -223,7 +232,9 @@ class GrokCycleContracts(unittest.TestCase):
     def test_mcp_only_original_native_inspect_requires_untrusted_discovery_and_removal(self):
         for fault in ("missing", "trusted", "active", "wrong-version", "missing-owned",
                       "folded-alias", "quoted-count", "retained", "root-field-alias",
-                      "plugin-field-alias", "foreign-field-alias", "provides-field-alias", "empty-foreign-name"):
+                      "plugin-field-alias", "foreign-field-alias", "provides-field-alias", "empty-foreign-name",
+                      "owned-missing", "owned-other-path", "owned-activated", "owned-user",
+                      "owned-duplicate", "owned-wrong-name"):
             bodies = container()
             name = cycle.MEMBERS[3]
             rows = [cycle.load(line) for line in bodies[name].splitlines()]
@@ -254,6 +265,23 @@ class GrokCycleContracts(unittest.TestCase):
                 native["plugins"].append({"name": " "})
             elif fault == "retained":
                 native["plugins"] = [cycle.load(cycle.stream(rows[0]["value"]["stdout"]))["plugins"][0]]
+            elif fault == "owned-missing":
+                rows[0]["value"].pop("owned_state")
+            elif fault.startswith("owned-"):
+                state = cycle.load(cycle.stream(rows[0]["value"]["owned_state"]))
+                installation = state["installations"][0]
+                binding = installation["clients"]["owned"]
+                if fault == "owned-other-path":
+                    binding["target_locator"] = native["plugins"][0]["path"][:-12] + "eeeeeeeeeeee"
+                elif fault == "owned-activated":
+                    binding["activation"] = "activated"
+                elif fault == "owned-user":
+                    binding["scope"] = "user"
+                elif fault == "owned-duplicate":
+                    installation["clients"]["foreign"] = dict(binding)
+                elif fault == "owned-wrong-name":
+                    installation["declared_name"] = "foreign"
+                rows[0]["value"]["owned_state"] = stream(raw(state))
             if fault != "missing":
                 rows[0 if fault != "retained" else 1]["value"]["stdout"] = stream(raw(native))
             bodies[name] = b"".join(raw(row) + b"\n" for row in rows)

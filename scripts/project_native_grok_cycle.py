@@ -483,9 +483,28 @@ def mcp_inspections(rows, paths):
     name = "uap-grok-mcp-only"
     prefix = project + "/.grok/plugins/"
     require(len(rows) == len(MCP_INSPECT))
+    installed = rows[0]["value"]
+    require(set(installed) == {"cwd", "stdout", "owned_state"})
+    state = load(stream(installed["owned_state"]))
+    require(type(state) is dict and state.get("schema_version") == 5
+            and type(state.get("installations")) is list and len(state["installations"]) == 1)
+    installation = state["installations"][0]
+    require(type(installation) is dict and installation.get("declared_name") == name
+            and type(installation.get("clients")) is dict and len(installation["clients"]) == 1)
+    binding = next(iter(installation["clients"].values()))
+    require(type(binding) is dict and binding.get("client_id") == "grok"
+            and binding.get("scope") == "project"
+            and binding.get("native_profile_root") == project + "/.grok"
+            and binding.get("activation") == "prepared"
+            and binding.get("verification") == "package_validated")
+    active = binding.get("target_locator")
+    require(type(active) is str and active.startswith(prefix)
+            and re.fullmatch(r"uap-grok-mcp-only-[0-9a-f]{12}", active[len(prefix):]))
+    canonical(active)
     for row, stage in zip(rows, MCP_INSPECT):
         observed = row["value"]
-        require(set(observed) == {"cwd", "stdout"} and observed["cwd"] == project)
+        expected_keys = {"cwd", "stdout", "owned_state"} if stage == "installed" else {"cwd", "stdout"}
+        require(set(observed) == expected_keys and observed["cwd"] == project)
         native = load(stream(observed["stdout"]))
         require(type(native) is dict
                 and grok_selection_identity_keys(native, "grokVersion cwd projectRoot projectTrusted mcpServers plugins")
@@ -503,8 +522,7 @@ def mcp_inspections(rows, paths):
                 continue
             require(plugin["name"] == name and plugin.get("scope") == "project"
                     and plugin.get("enabled") is False and type(plugin.get("path")) is str
-                    and plugin["path"].startswith(prefix)
-                    and re.fullmatch(r"uap-grok-mcp-only-[0-9a-f]{12}", plugin["path"][len(prefix):]))
+                    and plugin["path"] == active)
             provides = plugin.get("provides")
             require(type(provides) is dict and grok_selection_identity_keys(provides, "mcpServers")
                     and type(provides.get("mcpServers")) is int
