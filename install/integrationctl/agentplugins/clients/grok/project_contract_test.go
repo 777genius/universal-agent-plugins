@@ -423,7 +423,7 @@ func TestProjectGrokRejectsFoldedNativePluginCollisions(t *testing.T) {
 	project := request.Plan.TargetContext.ProjectRoot
 	for _, names := range [][2]string{{"demo", "DEMO"}, {"K", "K"}} {
 		t.Run(names[0]+"-"+names[1], func(t *testing.T) {
-			plugins := []any{}
+			plugins := make([]any, 0, len(names))
 			for i, name := range names {
 				path := request.Plan.ActivePath
 				if i == 1 {
@@ -436,7 +436,7 @@ func TestProjectGrokRejectsFoldedNativePluginCollisions(t *testing.T) {
 			}
 			inventory := map[string]any{
 				"grokVersion": "1.0.70", "cwd": project,
-				"projectRoot": project + string(filepath.Separator),
+				"projectRoot":    project + string(filepath.Separator),
 				"projectTrusted": false, "skills": []any{},
 				"plugins": plugins,
 			}

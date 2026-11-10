@@ -135,6 +135,11 @@ func inspectProject(ctx context.Context, env clients.Env, client domain.Detected
 	if err != nil {
 		return clients.RegistryIndeterminate, err
 	}
+	return matchProjectInspection(native, plan, finding, owned, requireMCPDiscovery)
+}
+
+// matchProjectInspection classifies the native inventory independently of invoking the pinned CLI.
+func matchProjectInspection(native projectInspection, plan domain.DeliveryPlan, finding clients.RegistryFinding, owned, requireMCPDiscovery bool) (clients.RegistryFinding, error) {
 	if shared.HasSupportedMCP(plan.Components) && native.version != "1.0.70" {
 		return clients.RegistryIndeterminate, fmt.Errorf("grok project MCP preparation requires qualified Grok 1.0.70; 1.0.67 remains qualified for Skills preparation only")
 	}
