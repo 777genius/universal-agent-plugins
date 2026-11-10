@@ -78,9 +78,9 @@ func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, clie
 	if binding != nil {
 		owned, err := ownedObjects(plan.Scope, binding.NativeObjects)
 		if err != nil { return clients.RegistryIndeterminate, err }
-		copy := *binding
-		copy.NativeObjects = owned
-		binding = &copy
+		snapshot := *binding
+		snapshot.NativeObjects = owned
+		binding = &snapshot
 	}
 	return layout.Inspect(plan.Components, binding, env.NativeConfig)
 }
