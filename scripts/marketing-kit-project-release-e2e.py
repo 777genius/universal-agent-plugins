@@ -242,6 +242,7 @@ def lock_ids(project, target=None):
             if (alias not in REQUIRED_DISTRIBUTIONS or alias in by_alias
                     or not isinstance(registry, dict)
                     or registry.get("distribution") != REQUIRED_DISTRIBUTIONS[alias]
+                    or item["source_key"] != "directory:" + REQUIRED_DISTRIBUTIONS[alias]
                     or not isinstance(item.get("targets"), list)
                     or target not in item["targets"]
                     or any(not isinstance(item.get(field), str)

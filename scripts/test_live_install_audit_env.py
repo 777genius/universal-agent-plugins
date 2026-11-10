@@ -189,7 +189,15 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
 
             self.assertEqual(check(pins),
                              {"directory:" + d for d in required.values()})
+
+            def swap_source_keys(rows):
+                # The overall set remains correct, but each signed pin points
+                # to a different distribution than its declared alias/source.
+                rows[0]["source_key"], rows[1]["source_key"] = (
+                    rows[1]["source_key"], rows[0]["source_key"])
+
             for mutate in (
+                    swap_source_keys,
                     lambda rows: rows[1].update(required_by=[]),
                     lambda rows: rows[1].update(targets=["claude"]),
                     lambda rows: rows[1]["source"]["registry"].update(
