@@ -233,6 +233,9 @@ class KiroCollectorTests(unittest.TestCase):
         for field in ("st_dev", "st_ino", "st_mode", "st_uid", "st_gid", "st_nlink",
                       "st_size", "st_mtime_ns", "st_ctime_ns"):
             self.assertEqual(getattr(after, field), getattr(before, field))
+        # A late user-config conflict must not leave earlier project fixtures.
+        for project in ("a", "b"):
+            self.assertFalse((ctx.projects[project] / ".kiro").exists())
 
     def test_agent_help_wrong_route_refuses_before_any_child(self):
         routes = [(("agent", "list"), "a"), (("chat", "--help"), "a"),

@@ -178,8 +178,18 @@ def collect(ctx):
                          "kind": "authentication-required", "exit": 1,
                          "remaining_list_commands_unobserved": 6}
     else:
+        # Reject a foreign marker in *any* disposable root before writing the
+        # first fixture, so a late conflict cannot leave partial research state.
+        destinations = {
+            scope: (home if scope == "user" else projects[scope]) / ".kiro/settings/mcp.json"
+            for scope in ("a", "b", "user")
+        }
+        for native in destinations.values():
+            _parents(native)
+            if native.exists() or native.is_symlink():
+                raise FileExistsError("Kiro research fixture already exists: " + str(native))
         for scope in ("a", "b", "user"):
-            native = (home if scope == "user" else projects[scope]) / ".kiro/settings/mcp.json"
+            native = destinations[scope]
             _parents(native)
             native.parent.mkdir(parents=True, exist_ok=True)
             _parents(native)
