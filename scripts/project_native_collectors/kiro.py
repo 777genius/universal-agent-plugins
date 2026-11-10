@@ -183,10 +183,17 @@ def collect(ctx):
         # A read-only authentication refusal cannot conceal native config
         # created by an earlier version/help/list probe. Preserve any files
         # for forensic review; never classify the refusal as a clean boundary.
-        for selected_root in (home, *project_roots):
+        selected_roots = (("home", home), *((scope, projects[scope]) for scope in ("a", "b", "user")))
+        unexpected = []
+        for scope, selected_root in selected_roots:
             marker = selected_root / ".kiro"
             if marker.exists() or marker.is_symlink():
-                raise ValueError("Kiro authentication refusal left unexpected native config")
+                unexpected.append(scope)
+        if unexpected:
+            # Only record synthetic disposable root labels, never private
+            # native file names, bytes, environment variables or credentials.
+            raise ValueError("Kiro authentication refusal left unexpected native config in: "
+                             + ", ".join(unexpected))
         auth_boundary = {"probe": "a-agent-raw-list", "cwd_selection": "a",
                          "arguments": ["agent", "list"],
                          "kind": "authentication-required", "exit": 1,
