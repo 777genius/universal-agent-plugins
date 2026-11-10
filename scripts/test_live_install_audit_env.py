@@ -204,6 +204,14 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "direct required dependencies"):
                 check(chained)
 
+            # A redundant child-to-child edge still leaves all three signed
+            # children direct under Marketing Kit; reachability alone passes.
+            extra_edge = deepcopy(pins)
+            extra_edge[2]["required_by"].append({"alias": "notion", "selector": {
+                "kind": "release", "value": "1"}})
+            with self.assertRaisesRegex(AssertionError, "child dependency edge"):
+                check(extra_edge)
+
             for mutate in (
                     swap_source_keys,
                     lambda rows: rows[1].update(required_by=[]),

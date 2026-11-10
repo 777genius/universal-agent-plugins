@@ -268,6 +268,10 @@ def lock_ids(project, target=None):
         # as the unchanged four-node closure during cold lock restoration.
         if children["marketing-kit"] != set(by_alias) - {"marketing-kit"}:
             raise AssertionError("signed Marketing Kit direct required dependencies changed")
+        # These three released MCP children have no dependency declarations.
+        # Extra child-to-child edges misstate the signed four-package closure.
+        if any(children[alias] for alias in children if alias != "marketing-kit"):
+            raise AssertionError("unexpected signed Marketing Kit child dependency edge")
         visited, visiting = set(), set()
 
         def visit(alias):
