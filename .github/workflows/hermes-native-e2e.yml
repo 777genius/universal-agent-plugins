@@ -7,6 +7,8 @@ on:
       - 'install/integrationctl/agentplugins/clients/hermes/**'
       - 'install/integrationctl/agentplugins/adapters/nativeconfig/hermes_yaml*'
       - 'scripts/e2e/hermes-native.sh'
+      - 'scripts/e2e/hermes-native.py'
+      - 'scripts/pi_project_components_native_e2e.py'
       - '.github/workflows/hermes-native-e2e.yml'
   workflow_dispatch:
 
@@ -64,4 +66,14 @@ jobs:
           echo "HOME=$home" >> "$GITHUB_ENV"
       - name: Real Hermes User Skills/MCP and project trust boundary
         shell: bash
+        env:
+          HERMES_NATIVE_UAP_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
         run: bash scripts/e2e/hermes-native.sh
+      - name: Retain native lifecycle and MCP discovery evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: hermes-native-lifecycle-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/hermes-native-evidence-*/
+          if-no-files-found: warn
+          retention-days: 14
