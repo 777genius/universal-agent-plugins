@@ -186,6 +186,12 @@ def collect(ctx):
         }
         for native in destinations.values():
             _parents(native)
+            # This research profile owns the entire disposable .kiro subtree.
+            # A foreign parent directory (even without mcp.json), or a file
+            # blocking mkdir, must fail before *any* project fixture is written.
+            marker = native.parent.parent
+            if marker.exists() or marker.is_symlink():
+                raise FileExistsError("Kiro research fixture root already exists: " + str(marker))
             if native.exists() or native.is_symlink():
                 raise FileExistsError("Kiro research fixture already exists: " + str(native))
         for scope in ("a", "b", "user"):
