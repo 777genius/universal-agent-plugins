@@ -1,5 +1,5 @@
 {
-  "status": "BLOCKED_OWNER_SIGN_IN",
+  "status": "BLOCKED_OFFICIAL_OAUTH_NETWORK",
   "observed_utc": "2026-11-10T22:10:55.803654+00:00",
   "ide": {
     "version": "2.6.0",
@@ -24,20 +24,24 @@
     "Initial Agent view: Could not load this view; official updater manifest fetch failed ECONNREFUSED/ENETUNREACH.",
     "After official backend provisioning and native Try again: Antigravity branded view with Continue with Google and Having trouble signing in?",
     "Command palette search Customizations: No matching commands.",
-    "Final native view left at Continue with Google."
+    "Initial checkpoint ended at Continue with Google.",
+    "Follow-up: idle IDE renderer had terminated (killed, code 9); used ordinary New Window recovery and Get Started.",
+    "Clicked native Continue with Google. UI showed spinner, Copy sign-in link, and Trouble signing in? Enter the authorization code.",
+    "Official flow automatically opened Chromium at accounts.google.com OAuth authorization endpoint. Browser displayed This site can\u2019t be reached, accounts.google.com refused to connect, ERR_CONNECTION_REFUSED. No account choice, credential form or consent page was observed."
   ],
   "proof_limits": [
-    "No sign-in attempted, credentials entered, legal terms accepted or ambient auth copied.",
+    "Native Continue with Google was clicked in the official login flow; no credentials entered or copied, legal terms accepted, or consent approved.",
     "No Customizations plugin/skill/scope discovery, enablement, A/B isolation, update/restart or remove oracle observed.",
     "No UAP source or release binary used in actual IDE lifecycle.",
     "No model turn or tools/call claimed."
   ],
-  "owner_action": "Complete legitimate Google sign-in in the isolated Antigravity IDE session, then resume native Customizations lifecycle qualification.",
+  "owner_action": "Restore ordinary network reachability to official accounts.google.com OAuth in this environment, then resume the vendor login flow. Owner credentials/account choice may be required subsequently, but no login form or existing-session result was reached.",
   "platform": "linux-x64",
   "auth_state": "signedOut",
   "source_links": {
     "download": "https://antigravity.google/download",
     "discovery": "https://antigravity.google/docs/customization-discovery",
     "plugins": "https://antigravity.google/docs/build-plugins"
-  }
+  },
+  "followup_utc": "2026-11-10T22:34:21.338672+00:00"
 }

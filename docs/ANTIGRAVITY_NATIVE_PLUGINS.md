@@ -77,7 +77,7 @@ changing their bytes, and exact-revision recovery of an entirely missing owned
 bundle. A partial digest mismatch remains an ownership refusal; the smoke does
 not weaken that gate or report partial-file repair as supported.
 
-### Actual IDE checkpoint: sign-in boundary (2026-11-10)
+### Actual IDE checkpoint: authentication reachability (2026-11-10)
 
 A disposable Linux x64 session using the [official IDE download](https://antigravity.google/download)
 reached the native **Continue with Google** view. The exact observed product was
@@ -96,10 +96,18 @@ matching commands. No vendor patch, authentication bypass, disabled TLS or
 credentials were used. A UAP source binary was available but was **not executed**
 in this IDE session; this checkpoint is not a UAP installation failure.
 
-**Result: blocked on legitimate owner Google sign-in.** No User or Project
-plugin discovery, enablement, A/B isolation, update/restart or removal lifecycle
-was observed. No MCP tool call or model turn is qualified. After sign-in, actual
-IDE observations must separately exercise the documented
+In a follow-up, clicking the native **Continue with Google** action caused the
+vendor flow to open an official `accounts.google.com` OAuth window in Chromium.
+The browser reported **ERR_CONNECTION_REFUSED**. No account chooser, credential
+form or consent page was reached; the observation does not establish that owner
+credentials are the current blocker.
+
+**Result: blocked on official OAuth network reachability.** Resume with an
+ordinarily reachable legitimate session, then complete any required vendor
+authentication before testing the IDE surfaces. No User or Project plugin
+discovery, enablement, A/B isolation, update/restart or removal lifecycle was
+observed. No MCP tool call or model turn is qualified. Actual IDE observations
+must separately exercise the documented
 [Customization discovery](https://antigravity.google/docs/customization-discovery)
 and [plugin](https://antigravity.google/docs/build-plugins) surfaces in both
 scopes. This Linux IDE checkpoint does not extend to macOS or Windows.
