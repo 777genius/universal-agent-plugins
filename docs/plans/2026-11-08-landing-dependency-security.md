@@ -1,5 +1,8 @@
 # P1 — Fix real /landing glob and minimatch dependency blockers
 
+> **Status (2026-11-10):** Issue #692's vulnerable dependency graph was fixed separately by merged [PR #829](https://github.com/777genius/universal-agent-plugins/pull/829) (main lock has patched glob@14.0.4 and minimatch@11.0.5). This PR #792 is **preventive regression enforcement only**: retain a fail-closed lockfile graph check for the two scoped advisories and run it in both Landing validation paths. No dependency remediation, override, security waiver, or release occurs here. The historical triage below describes the pre-#829 state.
+
+
 ## Evidence
 [Issue #692](https://github.com/777genius/universal-agent-plugins/issues/692): Dependabot reported `glob` / `minimatch` `security_update_not_possible` because the lockfile resolves old majors. This may be **transitive** build tooling; advisory existence does not automatically establish runtime exploitability. The published website and CLI E2E gates do not certify this separately.
 
