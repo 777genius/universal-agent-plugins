@@ -57,7 +57,8 @@ test -d "$native" || { echo "UAP did not create native project plugin root" >&2;
 mapfile -t paths < <(find "$native" -mindepth 1 -maxdepth 1 -type d ! -name '.agentplugins-staging-*' -print)
 test "${#paths[@]}" -eq 1 || { echo "Expected one owned plugin, got ${#paths[@]}" >&2; exit 1; }
 plugin="${paths[0]}"
-test -f "$plugin/.antigravity-plugin/plugin.json"
+test -f "$plugin/plugin.json"
+test ! -e "$plugin/.antigravity-plugin" || { echo "Duplicate native manifest remained" >&2; exit 1; }
 test -f "$plugin/skills/native-smoke/SKILL.md"
 
 # Only this native executable can establish vendor format compatibility.

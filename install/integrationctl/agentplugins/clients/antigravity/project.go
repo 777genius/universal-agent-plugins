@@ -70,7 +70,7 @@ func projectPlugin(root string, envelope domain.PackageEnvelope, plan domain.Del
 	if envelope.Manifest.Description != "" {
 		manifest["description"] = envelope.Manifest.Description
 	}
-	if err := shared.WriteJSON(filepath.Join(root, ".antigravity-plugin", "plugin.json"), manifest); err != nil {
+	if err := shared.WriteJSON(filepath.Join(root, "plugin.json"), manifest); err != nil {
 		return fmt.Errorf("write Antigravity native manifest: %w", err)
 	}
 	if len(servers) > 0 {

@@ -11,10 +11,12 @@ rather than calling `agy plugin install` with untracked filesystem effects:
 | User | `~/.gemini/config/plugins/<managed-artifact>/` |
 | Project | `<project>/.agents/plugins/<managed-artifact>/` |
 
-Inside the verified staged plugin it writes a schema-tagged
-`.antigravity-plugin/plugin.json` and `mcp_config.json` with
+Inside the isolated verified staging copy it projects the portable `plugin.json`
+into one schema-tagged native root `plugin.json`, and writes `mcp_config.json` with
 `mcpServers` (stdio or Streamable HTTP with `serverUrl`).
-Portable Skills remain in `skills/<name>/SKILL.md`.
+Portable Skills remain in `skills/<name>/SKILL.md`. The immutable source
+package is not modified. One native manifest avoids strict validation warnings
+about a second, ignored root manifest.
 No Project command falls back to mutating User configuration.
 
 **Security:** Reject unqualified hooks, rules, subagents, unknown components,

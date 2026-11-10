@@ -71,7 +71,7 @@ func verifyPreparedNativePlugin(plan domain.DeliveryPlan, name string) error {
 	if err := selectedNativePluginRoot(plan); err != nil {
 		return err
 	}
-	manifestPath := filepath.Join(plan.ActivePath, ".antigravity-plugin", "plugin.json")
+	manifestPath := filepath.Join(plan.ActivePath, "plugin.json")
 	body, err := atomicfile.ReadBoundedRegularFile(manifestPath, maxNativeManifestBytes)
 	if err != nil {
 		return fmt.Errorf("inspect Antigravity prepared native manifest: %w", err)

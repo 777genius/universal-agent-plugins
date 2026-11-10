@@ -52,6 +52,10 @@ func TestAntigravityNativeManifestAndMCPProjection(t *testing.T) {
 	if err := os.MkdirAll(root, 0o700); err != nil {
 		t.Fatal(err)
 	}
+	// Real source staging has a portable manifest; only the staged copy becomes native.
+	if err := os.WriteFile(filepath.Join(root, "plugin.json"), []byte(`{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"test-plugin"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	envelope := domain.PackageEnvelope{
 		Manifest: domain.PluginManifest{Name: "test-plugin", Version: "1.2.3"},
 		MCP: domain.MCPComponent{Servers: map[string]domain.MCPServer{
@@ -68,12 +72,13 @@ func TestAntigravityNativeManifestAndMCPProjection(t *testing.T) {
 	if err := projectPlugin(root, envelope, plan, ""); err != nil {
 		t.Fatal(err)
 	}
-	raw, err := os.ReadFile(filepath.Join(root, ".antigravity-plugin", "plugin.json"))
+	raw, err := os.ReadFile(filepath.Join(root, "plugin.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	var manifest map[string]any
-	if err := json.Unmarshal(raw, &manifest); err != nil || manifest["name"] != "test-plugin" {
+	if err := json.Unmarshal(raw, &manifest); err != nil || manifest["name"] != "test-plugin" ||
+		manifest["$schema"] != "https://antigravity.google/schemas/v1/plugin.json" {
 		t.Fatalf("unexpected native manifest: %v, %v", manifest, err)
 	}
 	raw, err = os.ReadFile(filepath.Join(root, "mcp_config.json"))
@@ -131,7 +136,7 @@ func TestAntigravityRefusesUnselectedHookAndMCPFiles(t *testing.T) {
 			if err := projectPlugin(root, envelope, plan, ""); err == nil {
 				t.Fatalf("unselected %s must not be installed natively", raw)
 			}
-			if _, err := os.Stat(filepath.Join(root, ".antigravity-plugin", "plugin.json")); !os.IsNotExist(err) && raw == "hooks.json" {
+			if _, err := os.Stat(filepath.Join(root, "plugin.json")); !os.IsNotExist(err) && raw == "hooks.json" {
 				t.Fatalf("hook preflight must not create native manifest: %v", err)
 			}
 		})

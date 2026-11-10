@@ -19,7 +19,7 @@ func TestAntigravityPreparedNativeLifecycleDoesNotClaimActive(t *testing.T) {
 	if err := os.MkdirAll(active, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := shared.WriteJSON(filepath.Join(active, ".antigravity-plugin", "plugin.json"),
+	if err := shared.WriteJSON(filepath.Join(active, "plugin.json"),
 		map[string]any{"$schema": "https://antigravity.google/schemas/v1/plugin.json", "name": "test-plugin"}); err != nil {
 		t.Fatal(err)
 	}
