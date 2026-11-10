@@ -44,7 +44,7 @@ signed Directory short-name Project installs require the current stable CLI.
 [CLI](https://github.com/777genius/universal-agent-plugins/releases/latest)
 retains explicit project scope and the automatic `install` selection introduced
 in 0.1.94. It also adds a [local management API](../use/manage#local-management-api)
-and [native Pi extensions](../reference/client-compatibility#pi-native-extensions).
+and [Pi extensions, Skills and MCP](../reference/client-compatibility#pi-native-extensions).
 To preview adding a package to a project:
 
 For an eligible reviewed catalog entry, the published CLI accepts its signed Directory short name with explicit Project scope when the client supports all required components (for example, `agentplugins add context7 --target codex --scope project --dry-run`). Alternatively, use the reviewed exact commit-pinned Git source and compatible target. Replace `OWNER/REPOSITORY`, `FULL_COMMIT_SHA`, and `PACKAGE_PATH`; omit `//PACKAGE_PATH` for a repository-root package.

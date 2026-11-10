@@ -1,7 +1,7 @@
 import type { ClientID, DistributionView, TargetAuthentication } from '../types/registry.ts';
 
 export interface AuthenticationPolicyGroup {
-  authentication: TargetAuthentication;
+  authentication: TargetAuthentication | 'varies';
   label: string;
   clients: ClientID[];
 }
@@ -18,7 +18,8 @@ export interface AuthenticationIndicator {
 type Translate = (key: string, params?: Record<string, string | number>) => string;
 
 // Groups render most-consequential first so a mixed answer reads at a glance.
-const SEVERITY: TargetAuthentication[] = ['required', 'unknown', 'not_required'];
+type DisplayPolicy = TargetAuthentication | 'varies';
+const SEVERITY: DisplayPolicy[] = ['required', 'varies', 'unknown', 'not_required'];
 
 /** Resolved release targets are authoritative; legacy product hints are not. */
 export function authenticationIndicator(
@@ -30,10 +31,22 @@ export function authenticationIndicator(
   const label = (state: TargetAuthentication | 'varies') =>
     t(`registryUi.authenticationIndicator.${state}`);
   const text = (reason: string) => t(`registryUi.authenticationIndicator.${reason}`);
-  // Auto mode installs into whatever agents the command detects, so every
-  // reachable target policy counts; a single known answer needs all to agree.
-  const entries = autoDetect
-    ? (distribution?.targets ?? [])
+  // Auto mode can resolve different signed releases for the same client.
+  // Keep every policy but render each client once, as release-dependent when
+  // the eligible candidates disagree. Never suggest simultaneous sign-in states.
+  const policies = new Map<ClientID, Set<TargetAuthentication>>();
+  if (autoDetect) {
+    for (const target of distribution?.targets ?? []) {
+      const values = policies.get(target.client) ?? new Set<TargetAuthentication>();
+      values.add(target.authentication);
+      policies.set(target.client, values);
+    }
+  }
+  const entries: { client: ClientID; authentication: DisplayPolicy }[] = autoDetect
+    ? [...policies].map(([client, values]) => ({
+        client,
+        authentication: values.size === 1 ? [...values][0]! : 'varies',
+      }))
     : selectedClients.map((client) => ({
         client,
         authentication:
@@ -50,9 +63,13 @@ export function authenticationIndicator(
       summary: text(autoDetect ? 'automatic' : 'unresolved'),
       note: '',
     };
-  const varies = new Set(entries.map((entry) => entry.authentication)).size > 1;
-  const state = varies ? 'unknown' : entries[0]!.authentication;
-  const byPolicy = new Map<TargetAuthentication, ClientID[]>();
+  const hasReleasePolicyConflict = entries.some((entry) => entry.authentication === 'varies');
+  const varies = hasReleasePolicyConflict ||
+    new Set(entries.map((entry) => entry.authentication)).size > 1;
+  const selectedState = entries[0]!.authentication;
+  const state: TargetAuthentication =
+    varies || selectedState === 'varies' ? 'unknown' : selectedState;
+  const byPolicy = new Map<DisplayPolicy, ClientID[]>();
   for (const entry of entries) {
     const clients = byPolicy.get(entry.authentication) ?? [];
     if (!clients.includes(entry.client)) clients.push(entry.client);
@@ -74,7 +91,7 @@ export function authenticationIndicator(
       label: label(policy),
       clients: byPolicy.get(policy)!,
     })),
-    summary: text(`${state}Detail`),
+    summary: text(hasReleasePolicyConflict ? 'variesDetail' : varies ? 'unknownDetail' : `${state}Detail`),
     note: autoDetect ? text('automatic') : '',
   };
 }

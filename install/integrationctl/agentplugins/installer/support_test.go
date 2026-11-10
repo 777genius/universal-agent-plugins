@@ -28,6 +28,8 @@ func TestLocalClientSupportAndExecutableAuthority(t *testing.T) {
 	}{
 		{"codex", true}, {"claude", true}, {"cursor", true}, {"copilot", true}, {"kiro", true}, {"grok", true}, {"opencode", true},
 		{"gemini", false}, {"cline", false}, {"windsurf", false}, {"kimi", false}, {"pi", false},
+		{"hermes", false},
+		{"antigravity", false},
 	}
 	for _, test := range tests {
 		t.Run(test.id, func(t *testing.T) {
@@ -82,7 +84,7 @@ func TestLocalClientSupportAndExecutableAuthority(t *testing.T) {
 		t.Fatal("nil registry broadened")
 	}
 	metadata := engine.Discover()
-	if len(metadata) != 15 {
+	if len(metadata) != 17 {
 		t.Fatalf("Discover clients=%d", len(metadata))
 	}
 	for _, meta := range metadata {

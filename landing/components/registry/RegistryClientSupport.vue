@@ -127,9 +127,11 @@ const monochromeIcons = new Set(['opencode', 'cline', 'windsurf', 'grok', 'kimi'
   }
 
   &__agent {
-    display: inline-flex;
+    display: flex;
     align-items: center;
+    justify-content: flex-start;
     gap: 9px;
+    width: 100%;
   }
   &__icon {
     width: 24px;
@@ -155,6 +157,11 @@ const monochromeIcons = new Set(['opencode', 'cline', 'windsurf', 'grok', 'kimi'
 
   thead {
     background: var(--surface-raised);
+  }
+
+  thead th:first-child,
+  tbody th:first-child {
+    text-align: start;
   }
 
   thead th {

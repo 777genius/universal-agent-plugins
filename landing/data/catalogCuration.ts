@@ -78,7 +78,7 @@ export const recommendedSkills: ReadonlyArray<{ repository: string; slug: string
   { repository: 'anthropics/skills', slug: 'frontend-design' },
   { repository: 'vercel-labs/skills', slug: 'find-skills' },
   { repository: 'mattpocock/skills', slug: 'tdd' },
-  { repository: 'vercel-labs/agent-skills', slug: 'vercel-react-best-practices' },
+  { repository: 'vercel-labs/agent-skills', slug: 'vercel-optimize' },
   { repository: 'vercel-labs/agent-skills', slug: 'web-design-guidelines' },
 ];
 
@@ -102,4 +102,26 @@ export function recommendedSkillDescription(
 ): string {
   if (!slug || !recommendedSkills.some((item) => item.slug === slug)) return '';
   return translate(`registryUi.skills.featured.items.${slug}`);
+}
+
+/**
+ * Keep original provider-backed Skill cards and metrics, only move the
+ * source-qualified editorial picks ahead of the provider's existing order.
+ * This is a presentation preference, never an installation or scan verdict.
+ */
+export function sortSkillsForCatalog(items: readonly SkillListing[]): SkillListing[] {
+  return items
+    .map((item, index) => ({
+      item,
+      index,
+      rank: recommendedSkills.findIndex((candidate) =>
+        candidate.slug === recommendedSkillKey(item),
+      ),
+    }))
+    .sort((a, b) =>
+      (a.rank < 0 ? Number.MAX_SAFE_INTEGER : a.rank) -
+        (b.rank < 0 ? Number.MAX_SAFE_INTEGER : b.rank) ||
+      a.index - b.index,
+    )
+    .map(({ item }) => item);
 }

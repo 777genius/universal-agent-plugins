@@ -272,8 +272,8 @@
       "skill_support": "native",
       "mcp_transports": {
         "sse": "unsupported",
-        "stdio": "unsupported",
-        "streamable-http": "unsupported"
+        "stdio": "native",
+        "streamable-http": "native"
       },
       "extension_support": "unsupported"
     }
@@ -305,6 +305,54 @@
   {
     "id": "qoder",
     "display_name": "Qoder",
+    "package_mode": "native",
+    "skill_support": "native",
+    "mcp_transports": {
+      "sse": "unsupported",
+      "stdio": "native",
+      "streamable-http": "native"
+    },
+    "app_support": "unsupported",
+    "extension_support": "unsupported",
+    "saved_dependency": true,
+    "excluded_reason": "",
+    "project": {
+      "skill_support": "native",
+      "mcp_transports": {
+        "sse": "unsupported",
+        "stdio": "native",
+        "streamable-http": "native"
+      },
+      "extension_support": "unsupported"
+    }
+  },
+  {
+    "id": "hermes",
+    "display_name": "Hermes Agent",
+    "package_mode": "native",
+    "skill_support": "native",
+    "mcp_transports": {
+      "sse": "unsupported",
+      "stdio": "native",
+      "streamable-http": "native"
+    },
+    "app_support": "unsupported",
+    "extension_support": "unsupported",
+    "saved_dependency": true,
+    "excluded_reason": "",
+    "project": {
+      "skill_support": "native",
+      "mcp_transports": {
+        "sse": "unsupported",
+        "stdio": "unsupported",
+        "streamable-http": "unsupported"
+      },
+      "extension_support": "unsupported"
+    }
+  },
+  {
+    "id": "antigravity",
+    "display_name": "Google Antigravity",
     "package_mode": "native",
     "skill_support": "native",
     "mcp_transports": {

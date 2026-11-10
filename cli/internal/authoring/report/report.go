@@ -8,10 +8,8 @@ import (
 	"encoding/json"
 	"sort"
 
-	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/project"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/readiness"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/conformance"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
 )
 
@@ -240,71 +238,11 @@ func (r Report) boundary(s State, location string) Assessment {
 	}
 	return a
 }
-func (r *Report) components(p project.Result) {
-	pkg := p.Facts.Package
-	for name, s := range pkg.MCP.Servers {
-		req := []string{}
-		if s.Type == "stdio" {
-			req = append(req, "executable_unresolved")
-			if s.StdioRequirement != nil {
-				req = append(req, "executable_"+string(s.StdioRequirement.Kind))
-				if s.StdioRequirement.UsesPluginRoot {
-					req = append(req, "plugin_root")
-				}
-				if s.StdioRequirement.UsesPluginData {
-					req = append(req, "plugin_data")
-				}
-			}
-			if env, ok := s.Decoded["env"].(map[string]any); ok && len(env) > 0 {
-				req = append(req, "environment_values_redacted")
-			}
-		} else {
-			req = append(req, "remote_endpoint_uncontacted")
-			if h, ok := s.Decoded["headers"].(map[string]any); ok && len(h) > 0 {
-				req = append(req, "header_values_redacted")
-			}
-		}
-		status := Pass
-		for _, finding := range p.Facts.Findings {
-			if finding.Code == "diagnostics_truncated" {
-				status = combine(status, NotEvaluated)
-			}
-			if finding.Boundary != domain.BoundaryMCPServer || finding.Item != opaque(name) {
-				continue
-			}
-			if finding.Layer == conformance.Normative {
-				status = Fail
-			} else {
-				status = combine(status, NotEvaluated)
-			}
-		}
-		r.Components = append(r.Components, Component{opaque("mcp:" + name), "mcp_" + s.Type, status, req})
-	}
-	for name := range pkg.MCP.InvalidServer {
-		r.Components = append(r.Components, Component{opaque("mcp:" + name), "mcp_server", Fail, []string{}})
-	}
-	for name, s := range pkg.Skills {
-		req := []string{}
-		if s.Compatibility != "" {
-			req = append(req, "declared_compatibility_unresolved")
-		}
-		if s.AllowedTools != "" {
-			req = append(req, "declared_tools_unresolved")
-		}
-		r.Components = append(r.Components, Component{opaque("skill:" + name), "skill", Pass, req})
-	}
-	for _, name := range pkg.Inventory.InvalidSkills {
-		r.Components = append(r.Components, Component{opaque("skill:" + name), "skill", Fail, []string{}})
-	}
-	for name := range pkg.Manifest.Extensions {
-		r.Components = append(r.Components, Component{opaque("extension:" + name), "opaque_extension", NotEvaluated, []string{}})
-	}
-}
 func (r *Report) finish() {
 	sort.Slice(r.Findings, func(i, j int) bool { return r.Findings[i].ID < r.Findings[j].ID })
 	sort.Slice(r.Components, func(i, j int) bool { return r.Components[i].ID < r.Components[j].ID })
 	r.SchemaIDs = unique(r.SchemaIDs)
-	for _, a := range []*Assessment{&r.Loadability, &r.Conformance, &r.HostSafety, &r.Readiness, &r.Release, &r.Runtime, &r.Compatibility, &r.Toolchain} {
+	for _, a := range r.policyAssessments() {
 		a.FindingIDs = unique(a.FindingIDs)
 	}
 	for i := range r.Checks {

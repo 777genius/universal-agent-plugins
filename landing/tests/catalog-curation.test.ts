@@ -9,6 +9,7 @@ import {
   recommendedSkillKey,
   recommendedSkillDescription,
   recommendedSkills,
+  sortSkillsForCatalog,
 } from '../data/catalogCuration.ts';
 import { filterPlugins } from '../utils/filter.ts';
 
@@ -129,4 +130,37 @@ test('all nine locale dictionaries resolve only genuine featured Skill keys', ()
   }
   assert.equal(recommendedSkillDescription('unknown', (key) => key), '');
   assert.equal(recommendedSkillDescription(undefined, (key) => key), '');
+});
+
+test('curated Skills sort in one source-backed list, preserving metrics and provider tail', () => {
+  const ordinary = skill('example/skills', 'ordinary');
+  const more = skill('example/skills', 'next');
+  const react = skill('vercel-labs/agent-skills', 'vercel-optimize');
+  const browser = skill('vercel-labs/agent-browser', 'agent-browser');
+  const frontend = skill('anthropics/skills', 'frontend-design');
+  const source = [ordinary, react, frontend, more, browser];
+  const sorted = sortSkillsForCatalog(source);
+  assert.deepEqual(
+    sorted.map((item) => item.id),
+    [browser.id, frontend.id, react.id, ordinary.id, more.id],
+  );
+  assert.deepEqual(source.map((item) => item.id), [
+    ordinary.id, react.id, frontend.id, more.id, browser.id,
+  ], 'sorting must not mutate the provider list');
+  assert.equal(sorted[0], browser, 'use real provider DTO including installs/availability');
+  assert.equal(sorted.length, source.length, 'do not add synthetic or duplicate cards');
+});
+
+test('lookalike publisher/title and unknown Skills never receive editorial rank', () => {
+  const real = skill('anthropics/skills', 'frontend-design');
+  const spoof = skill('unknown/skills', 'frontend-design');
+  const mismatched = skill('anthropics/skills', 'frontend-design',
+    'skills-sh:anthropics/skills:not-frontend');
+  const other = skill('unknown/skills', 'other');
+  assert.deepEqual(
+    sortSkillsForCatalog([spoof, other, real, mismatched]).map((item) => item.id),
+    [real.id, spoof.id, other.id, mismatched.id],
+  );
+  assert.deepEqual(sortSkillsForCatalog([other, spoof]), [other, spoof]);
+  assert.deepEqual(sortSkillsForCatalog([]), []);
 });

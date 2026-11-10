@@ -54,20 +54,20 @@ jobs:
     if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     uses: ./.github/workflows/agentplugins-published-version.yml
     with:
-      version: ${{ inputs.version }}
+      version: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.title, '[full-published-e2e]') && '0.1.102' || inputs.version }}
 
   windows-native-install:
     needs: resolve-release
     name: Windows npm stable / ${{ matrix.target }} / ${{ matrix.kind }}
     runs-on: windows-2025
-    timeout-minutes: ${{ github.event_name == 'pull_request' && 45 || 80 }}
+    timeout-minutes: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.title, '[full-published-e2e]') && 120 || github.event_name == 'pull_request' && 45 || 80 }}
     strategy:
       fail-fast: false
       max-parallel: 3
       matrix:
         # 5 native clients on every relevant PR; 9 clients (including Cline,
         # Kimi, Qoder and genuine Pi project Skills) weekly/manually.
-        target: ${{ fromJSON(github.event_name == 'pull_request' && github.event.pull_request.draft && '["codex","claude","opencode","gemini","copilot"]' || '["codex","claude","opencode","gemini","copilot","cline","kimi","qoder","pi"]') }}
+        target: ${{ fromJSON(github.event_name == 'pull_request' && github.event.pull_request.draft && !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.title, '[full-published-e2e]')) && '["codex","claude","opencode","gemini","copilot"]' || '["codex","claude","opencode","gemini","copilot","cline","kimi","qoder","pi"]') }}
         kind: [plugin, skill]
         exclude:
           - target: pi
@@ -216,7 +216,9 @@ jobs:
           AUDIT_VENDOR_OUTCOME: ${{ steps.bootstrap.outcome }}
           AUDIT_TARGET: ${{ matrix.target }}
           AUDIT_KIND: ${{ matrix.kind }}
-          AUDIT_LIMIT: ${{ github.event_name == 'pull_request' && '2' || github.event_name == 'push' && '30' || github.event_name == 'schedule' && '20' || inputs.cases || '20' }}
+          # Trusted, explicitly titled E2E PRs run all 30 frozen source cases.
+          # Ordinary PRs/forks retain the original cheap two-source smoke.
+          AUDIT_LIMIT: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.title, '[full-published-e2e]') && '30' || github.event_name == 'pull_request' && '2' || github.event_name == 'push' && '30' || github.event_name == 'schedule' && '20' || inputs.cases || '20' }}
         run: |
           $ErrorActionPreference = 'Stop'
           New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP\published-windows-proof" | Out-Null

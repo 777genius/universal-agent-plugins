@@ -392,7 +392,7 @@
         "kimi": "Виконайте /reload або /new і перевірте дозволи MCP.",
         "cline": "Виберіть шлях до налаштувань MCP проєкту та перезавантажте Cline.",
         "kiro": "Увійдіть, підтвердьте доступ і за потреби перезапустіть Kiro.",
-        "grok": "Перезавантажте Grok; перевірте навички проєкту та підказки CLI щодо налаштування.",
+        "grok": "Відкрийте вибраний проєкт у Grok, увімкніть плагін і надайте довіру, перезавантажте Grok, потім перевірте Skills і MCP.",
         "vscode": "Відкрийте папку, підтвердьте довіру та перевірте ввімкнення серверів MCP.",
         "chatgpt": "Desktop: локальне встановлення через Codex CLI; Web: під’єднайте або встановіть застосунок у ChatGPT."
       }
@@ -458,7 +458,7 @@
       "items": {
         "0": {
           "question": "Які AI-агенти підтримуються?",
-          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, VS Code, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder: кожен клієнт має власний шлях установлення або підготовки. Сумісність залежить від компонентів пакета, області встановлення та вимог активації."
+          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder, Pi: кожен клієнт має власний шлях установлення або підготовки. Сумісність залежить від компонентів пакета, області встановлення та вимог активації."
         },
         "1": {
           "question": "Чи одна команда встановлює плагін для кожного агента?",
@@ -713,8 +713,8 @@
       "unavailableAtItsIndexedSource": "Недоступно в індексованому джерелі",
       "checkedAgainBeforeInstallation": "Перевіряється повторно перед встановленням",
       "reviewedListing": "Перевірено",
-      "notAvailableForChatgpt": "У цьому релізі немає перевіреного підключення ChatGPT",
-      "verifiedConnectionFinishSetupInChatgpt": "Перевірене підключення; завершіть налаштування в ChatGPT",
+      "notAvailableForChatgpt": "Для цього плагіна немає підтвердженої прив’язки ChatGPT Web. Web-застосунки підключаються в ChatGPT.",
+      "verifiedConnectionFinishSetupInChatgpt": "Прив’язку застосунку ChatGPT Web підтверджено; підключення виконується всередині ChatGPT.",
       "allInstalledAgents": "Вибрати агентів у терміналі",
       "commandsDisabledInPreview": "Команди вимкнено в попередньому перегляді.",
       "allInstalledAgentsRecommended": "Вибрати агентів у терміналі",
@@ -752,12 +752,12 @@
       "notReadyToInstall": "Не готово до встановлення",
       "detectedWhenYouRunTheCommand": "Команда запропонує вибрати агентів перед встановленням.",
       "thisPackageIsNoLongerAvailableFromItsSource": "Цей пакет більше недоступний у своєму джерелі.",
-      "notAvailableForChatgpt": "У цьому релізі немає перевіреного підключення ChatGPT",
+      "notAvailableForChatgpt": "Для цього плагіна немає підтвердженої прив’язки ChatGPT Web. Web-застосунки підключаються в ChatGPT.",
       "unavailableSignedDirectorySnapshotExpired": "Недоступно: термін дії підписаного знімка Directory минув",
       "noActiveReleaseSupportsThisClient": "Жоден активний випуск не підтримує цього клієнта",
       "unavailableReviewDataIsNotInstallationAuthority": "Недоступно: дані перевірки не є підставою для встановлення",
       "thisPackageDoesNotSupportAnyOfTheAgentsAvailableInTheInstallerYet": "Цей пакет ще не підтримує жодного агента, доступного в інсталяторі.",
-      "verifiedConnectionFinishSetupInChatgpt": "Підключення перевірено; завершіть налаштування в ChatGPT",
+      "verifiedConnectionFinishSetupInChatgpt": "Прив’язку застосунку ChatGPT Web підтверджено; підключення виконується всередині ChatGPT.",
       "allInstalledAgents": "Вибрати агентів у терміналі",
       "weFoundThisProjectButItDoesnTIncludeAnyToolsTheInstallerCanAddYet": "Ми знайшли цей проєкт, але в ньому ще немає інструментів, які інсталятор може додати.",
       "chooseTargetAgents": "Виберіть цільових агентів",
@@ -781,7 +781,7 @@
       "unresolvedDataIsForReviewOnlyProductionCommandsRequireAPublishedSignedDirectorySnapshot": "Невирішені дані призначені лише для перевірки; робочі команди потребують опублікованого підписаного знімка Directory.",
       "commandsUnavailable": "Команди недоступні.",
       "automaticDetection": "Вибрати агентів у терміналі",
-      "theCliChecksThisPluginAgainstInstalledAgentsSkipsIncompatibleOnesAndLetsYouConfirmTheTargetsChatgptIsIncludedOnlyWhenThisPluginProvidesAVerifiedConnection": "CLI знаходить сумісних агентів і просить підтвердити вибір. ChatGPT потребує перевіреного підключення.",
+      "theCliChecksThisPluginAgainstInstalledAgentsSkipsIncompatibleOnesAndLetsYouConfirmTheTargetsChatgptIsIncludedOnlyWhenThisPluginProvidesAVerifiedConnection": "CLI перевіряє локальних агентів і пропонує підтвердити сумісні варіанти. ChatGPT Web налаштовується окремо: UAP може підготувати застосунок, але підключення завершується в ChatGPT.",
       "oneStepRemainsInChatgpt": "У ChatGPT залишився один крок.",
       "noSingleSourceServesThisTargetSet": "Жодне джерело не обслуговує цей набір цілей.",
       "theCliWillFailBeforeMutationAndSuggestCompatibleTargetSourceCombinationsItNeverMixesDistributionsAcrossClients": "CLI завершить роботу з помилкою до внесення змін і запропонує сумісні поєднання цілей та джерел; він ніколи не змішує дистрибутиви між клієнтами.",
@@ -825,7 +825,8 @@
           "mcp": "Інструменти MCP",
           "extensions": "Розширення"
         }
-      }
+      },
+      "piNoCompatibleRelease": "Pi підтримується, але підписаний реліз цього плагіна не має сумісного варіанта встановлення для Pi."
     },
     "authentication": {
       "not_required": "Обліковий запис не потрібен",
@@ -962,12 +963,26 @@
         "delivery": "CLI записує нативний маніфест .qoder-plugin і реєструє керований пакет через Qoder CLI, коли він доступний.",
         "activation": "Після встановлення перезавантажте плагіни Qoder або перезапустіть Qoder. З’єднання MCP під час виконання та автентифікацію постачальника все ще потрібно підтвердити в Qoder."
       },
-      "pi": {
-        "note": "Лише керовані нативні розширення Pi",
+      "hermes": {
+        "note": "Skills і MCP користувача; Skills проєкту без MCP проєкту",
         "status": "Підтримується",
-        "intro": "Встановлюйте пакети Agent Plugins 1.0 з оголошеним нативним розширенням Pi. Переносні навички та проєкція MCP поки не входять до можливостей цього адаптера.",
-        "delivery": "CLI встановлює оголошене розширення Pi в каталог агента Pi та відстежує керований пакет для оновлення, відновлення й видалення.",
-        "activation": "Після встановлення перезавантажте ресурси або перезапустіть Pi, щоб завантажити кероване розширення."
+        "intro": "Установлюйте нативні Skills Hermes Agent для користувача або вибраного Git-проєкту, а також MCP-сервери користувача, не змінюючи сторонніх налаштувань.",
+        "delivery": "UAP керує власними каталогами Skills і точковими записами MCP у користувацькому config.yaml. Установлення в проєкт не змінює користувацьку конфігурацію MCP.",
+        "activation": "Перезапустіть Hermes, щоб завантажити інтеграцію. Перед використанням Skills проєкту перевірте довіру до репозиторію; виявлення та авторизація потребують окремого підтвердження."
+      },
+      "antigravity": {
+        "note": "Нативні плагіни користувача й проєкту; активацію слід перевірити",
+        "status": "Підготовлено CLI",
+        "intro": "Готуйте нативні плагіни Google Antigravity з підтримуваними Skills та MCP-серверами для вибраної області користувача або проєкту.",
+        "delivery": "UAP готує керовану теку плагіна у вибраній користувацькій або проєктній конфігурації, зберігає сторонні плагіни та не вмикає hooks автоматично.",
+        "activation": "Відкрийте або перезавантажте Antigravity та перевірте, що плагін виявлено й увімкнено. Наявність файлів не підтверджує сеанс моделі, авторизацію чи виконання MCP."
+      },
+      "pi": {
+        "note": "Нативні розширення Pi, Skills і MCP",
+        "status": "Підтримується",
+        "intro": "Установлюйте сумісні розширення Pi, Skills і MCP (stdio/Streamable HTTP) для користувача або проєкту. Для пакетів каталогу потрібен сумісний підписаний реліз; прямі джерела CLI перевіряє окремо.",
+        "delivery": "CLI встановлює компоненти в обраний профіль Pi або проєкт і керує оновленням, відновленням та видаленням.",
+        "activation": "Перезавантажте ресурси або перезапустіть Pi. За потреби перевірте довіру до проєкту й дозволи MCP."
       }
     },
     "directoryPage": {
@@ -1046,7 +1061,9 @@
       "availableFor": "Плагіни, доступні для {name}",
       "count": "{count} перевірений пакет підтримує цього клієнта | {count} перевірені пакети підтримують цього клієнта | {count} перевірених пакетів підтримують цього клієнта",
       "tryPlugin": "Спробуйте Context7 або замініть {source} на перевірене коротке ім’я іншого сумісного плагіна чи джерело повного пакета.",
-      "localPackageHint": "Замініть ./my-plugin шляхом до чинного пакета Agent Plugins 1.0."
+      "localPackageHint": "Замініть ./my-plugin шляхом до чинного пакета Agent Plugins 1.0.",
+      "piSignedCount": "Пакетів Pi у підписаному каталозі: {count}",
+      "piDirectSourceNote": "Тут показано лише пакети, підписаний реліз яких дозволяє Pi. Сумісні Skills, MCP та розширення також можна встановити з локального пакета чи Git за точним комітом; CLI перевіряє такі джерела окремо."
     },
     "components": {
       "extensions": "розширення",
@@ -1074,13 +1091,14 @@
       "required": "Потрібна автентифікація",
       "not_required": "Автентифікація не потрібна",
       "unknown": "Вимоги автентифікації невідомі",
-      "varies": "Залежить від агента",
+      "varies": "Залежить від агента або релізу",
       "automatic": "Установлені агенти визначаються під час запуску команди. Виберіть агентів у розділі встановлення, щоб побачити їхні вимоги.",
       "unresolved": "Варіант встановлення для цих агентів не визначено. Виберіть підтримуваного агента, щоб перевірити вимоги.",
       "release": "{id} · випуск {sequence}",
       "requiredDetail": "Пакет може вимагати обліковий запис, токен або вхід. Це не вказує на OAuth і не підтверджує, що ви ввійшли.",
       "not_requiredDetail": "Для цих агентів автентифікацію не заявлено. Можливі обмеження сервісу та інші вимоги налаштування.",
-      "unknownDetail": "Перевірте вимоги пакета перед підключенням."
+      "unknownDetail": "Перевірте вимоги пакета перед підключенням.",
+      "variesDetail": "Для одного агента в різних сумісних релізах можуть бути різні вимоги до входу. Виберіть агент і перевірте план встановлення."
     }
   },
   "pluginAuthoring": {

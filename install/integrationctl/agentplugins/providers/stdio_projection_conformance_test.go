@@ -26,6 +26,7 @@ func TestProjectMCPPreservesOpaqueStandardPlaceholders(t *testing.T) {
 	}{
 		{"openai", shared.MCPDialectOpenAI, ".mcp.json"},
 		{"cursor", shared.MCPDialectCursor, "mcp.json"},
+		{"grok", shared.MCPDialectGrok, ".mcp.json"},
 		{"kiro", shared.MCPDialectKiro, "mcp.json"},
 	}
 	for _, tc := range cases {
@@ -111,4 +112,38 @@ func placeholderJSON(t *testing.T, value any) []byte {
 		t.Fatal(err)
 	}
 	return body
+}
+
+func TestGrokMCPProjectionKeepsClientSpecificHintsOut(t *testing.T) {
+	envelope := loadPlaceholderPackage(t)
+	stage := t.TempDir()
+	err := shared.ProjectMCPServers(shared.MCPProjection{
+		Root: stage, Envelope: envelope, Names: []string{"probe"},
+		Dialect: shared.MCPDialectGrok, PluginRoot: filepath.Join(t.TempDir(), "active"),
+		DataPath: t.TempDir(), Hints: domain.CompatibilityHints{
+			OpenAIMCPAuth: map[string]domain.OpenAIMCPAuthHint{
+				"probe": {OAuthResource: "openai-only", BearerTokenEnvVar: "OPENAI_ONLY"},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(filepath.Join(stage, ".mcp.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document struct {
+		Servers map[string]map[string]any `json:"mcpServers"`
+	}
+	if err := json.Unmarshal(body, &document); err != nil || len(document.Servers) != 1 {
+		t.Fatalf("Grok MCP projection differs: %s %v", body, err)
+	}
+	entry := document.Servers["probe"]
+	if _, exists := entry["oauth_resource"]; exists {
+		t.Fatal("OpenAI-only OAuth resource leaked into Grok MCP")
+	}
+	if _, exists := entry["bearer_token_env_var"]; exists {
+		t.Fatal("OpenAI-only token hint leaked into Grok MCP")
+	}
 }

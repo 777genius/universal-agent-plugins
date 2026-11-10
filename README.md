@@ -4,7 +4,6 @@
     <img src="landing/public/client-icons/openai.svg" width="32" height="32" alt="Codex and ChatGPT" />&nbsp;&nbsp;
     <img src="landing/public/client-icons/cursor.svg" width="32" height="32" alt="Cursor" />&nbsp;&nbsp;
     <img src="landing/public/client-icons/github-copilot.svg" width="32" height="32" alt="GitHub Copilot CLI" />&nbsp;&nbsp;
-    <img src="landing/public/client-icons/vscode.svg" width="32" height="32" alt="VS Code" />&nbsp;&nbsp;
     <img src="landing/public/client-icons/kiro.svg" width="32" height="32" alt="Kiro" />&nbsp;&nbsp;
     <img src="landing/public/client-icons/claude.svg" width="32" height="32" alt="Claude Code" />&nbsp;&nbsp;
     <img src="landing/public/client-icons/gemini.svg" width="32" height="32" alt="Gemini CLI" />&nbsp;&nbsp;
@@ -27,6 +26,10 @@
 Install and manage plugins and Skills across your AI agents with one CLI.
 Share `uap.toml` (package list) and `uap.lock` (exact versions) to restore your
 setup on another computer or with your team.
+
+**More than a one-time installer:** UAP combines a [searchable plugin directory](https://universal-agent-plugins.com/plugins/), independent [Agent Skills](https://universal-agent-plugins.com/agent-skills/) (no `plugin.json` wrapper needed), native multi-agent installation, managed repair/removal, portable dependency locks, and [Go/TypeScript SDKs](https://universal-agent-plugins.com/docs/en/sdk/). Review [product capabilities and release boundaries](docs/PRODUCT_CAPABILITIES.md) for evidence and limitations.
+
+The static website initially shows **reviewed** packages; after page load it can append additional community records from a signed discovery feed. The initial reviewed count is **not** the full discovered-catalog count, and discovery is not proof that every entry is installable or E2E-tested. See [how catalog discovery works](docs/PRODUCT_CAPABILITIES.md#how-the-public-catalog-works-important-for-crawlers).
 
 [Documentation](https://universal-agent-plugins.com/docs/) ·
 [Browse plugins](https://universal-agent-plugins.com/plugins/) ·
@@ -288,8 +291,7 @@ workspace. Agents may still ask you to trust the project, sign in, or restart.
 | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/kimi-dark.svg"><img src="landing/public/client-icons/kimi.svg" width="24" height="24" alt="" align="middle"></picture> **Kimi Code** | Skills, MCP | Skills, MCP | Automatic | Run /reload or /new and review MCP permissions. |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/cline-dark.svg"><img src="landing/public/client-icons/cline.svg" width="24" height="24" alt="" align="middle"></picture> **Cline** | Skills, MCP | Skills, MCP | Guided | Select the project MCP settings path and reload Cline. |
 | <img src="landing/public/client-icons/kiro.svg" width="24" height="24" alt="" align="middle"> **Kiro** | Skills, MCP | Skills, MCP | Guided | Sign in, approve access, and restart Kiro if prompted. |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/grok-dark.svg"><img src="landing/public/client-icons/grok.svg" width="24" height="24" alt="" align="middle"></picture> **Grok Build** | Skills, MCP | Skills only | Guided | Reload Grok; review project Skills and any CLI setup hint. |
-| <img src="landing/public/client-icons/vscode.svg" width="24" height="24" alt="" align="middle"> **VS Code** | Copilot-backed package | Skills, MCP (prepared) | Prepared | Open and trust the folder; review and enable MCP servers. |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/grok-dark.svg"><img src="landing/public/client-icons/grok.svg" width="24" height="24" alt="" align="middle"></picture> **Grok Build** | Skills, MCP | Skills, MCP (prepared) | Guided | Open the selected project in Grok; enable and trust the plugin, reload, then verify Skills and MCP. |
 | <img src="landing/public/client-icons/openai.svg" width="24" height="24" alt="" align="middle"> **ChatGPT** | Desktop local plugins; Web connected apps | Not supported | Guided | Desktop: local install via Codex CLI; Web: connect or install in ChatGPT. |
 
 <!-- AGENT_SUPPORT_MATRIX_END -->
@@ -305,9 +307,11 @@ for tested versions, platforms, and setup steps.
 <details>
 <summary>Client-specific setup and limits</summary>
 
-The stable CLI supports [native Pi extensions](docs/PI_NATIVE_EXTENSION_CONTRACT.md)
-for user scope and eligible project scope. Pi Skills and MCP have separate
-client-specific evidence and activation requirements; check the
+Published CLI 0.1.102 supports Pi [native extensions](docs/PI_NATIVE_EXTENSION_CONTRACT.md),
+Skills and stdio/Streamable HTTP MCP in user and eligible project scope.
+Each signed Directory release still needs an explicit Pi target; direct pinned
+Git sources use a separate CLI-validated installation path. For scoped trust,
+activation and native E2E limits, see the
 [project compatibility matrix](docs/PROJECT_CLIENT_SUPPORT.md).
 
 Grok Build, Kimi Code, and Qoder support stdio and Streamable HTTP MCP in user

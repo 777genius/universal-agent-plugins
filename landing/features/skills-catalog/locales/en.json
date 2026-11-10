@@ -9,7 +9,7 @@
           "frontend-design": "Create more intentional and polished frontend interfaces.",
           "find-skills": "Discover reusable skills that match your current task.",
           "tdd": "Build and fix software test-first with a red–green–refactor workflow.",
-          "vercel-react-best-practices": "Apply practical React and Next.js performance guidance.",
+          "vercel-optimize": "Investigate Vercel costs and performance with production metrics.",
           "web-design-guidelines": "Review web interfaces for usability and accessibility."
         }
       },
@@ -108,6 +108,23 @@
         "moreCandidatesHelp": "No matches in this window. Show more to check the remaining candidates.",
         "noMatches": "No Skills match these filters",
         "noMatchesHelp": "Try another search or reset filters to browse all Skills."
+      },
+      "discoveryNotice": "The static page starts with reviewed plugins. More community listings may appear after your browser loads and verifies the signed discovery feed; unavailable feeds leave the reviewed subset visible.",
+      "overview": {
+        "seoTitle": "Standalone Agent Skills — Universal Agent Plugins",
+        "metaDescription": "Discover, inspect and install standalone SKILL.md instructions for supported AI agents, without creating a plugin.json package.",
+        "title": "Agent Skills. No plugin wrapper needed.",
+        "lead": "Find reusable SKILL.md instructions, choose supported agents and install for your account or a project. Standalone Skills are separate from Agent Plugins 1.0 packages.",
+        "standaloneTitle": "Independent Skill files",
+        "standaloneDescription": "Install Skills directly from a reviewed GitHub repository or supported publisher. They do not require a plugin.json manifest.",
+        "scopeTitle": "Explicit targets and scope",
+        "scopeDescription": "Choose your agents in the terminal or explicitly select targets. Install for your user profile or a supported project with --scope.",
+        "reviewTitle": "Inspect the source first",
+        "reviewDescription": "Catalog listings and SkillSpector static-scan results are evidence to review, not a guarantee of safety, activation or successful agent use.",
+        "browse": "Browse the Skills catalog",
+        "installGuide": "Read the installation guide",
+        "learnMore": "How standalone Skills work",
+        "exampleCaption": "Example command — replace owner/repository with the real source"
       }
     },
     "directoryPage": {

@@ -42,9 +42,7 @@ npm/нативний інсталятор не містить `agentplugins auth
 
 Встановлення для проєкту часто залишається у стані **Prepared**, поки не виконано
 кроки довіри, перезавантаження, явного налаштування або сеансу. Встановлення для
-проєкту ChatGPT явно не підтримується. Область проєкту VS Code готує файли для
-однієї локальної папки; спостереження метаданих за закріпленою версією не є
-доказом запуску MCP чи виконання моделі. Див. [підтримку проєктів за клієнтами](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)
+проєкту ChatGPT явно не підтримується. Див. [підтримку проєктів за клієнтами](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)
 та [покажчик доказів проєктів](https://github.com/777genius/universal-agent-plugins/blob/main/docs/evidence/PROJECT_INSTALLATION.md).
 
 Наведені нижче записи зберігають точні історичні випуски, версії клієнтів,

@@ -45,7 +45,7 @@ npx universal-agent-plugins add context7 --target codex,cursor --dry-run
 [CLI](https://github.com/777genius/universal-agent-plugins/releases/latest)
 сохраняет явную область проекта и автоматический выбор для `install`, добавленный
 в 0.1.94. Также доступны [локальный API управления](../use/manage#local-management-api)
-и [нативные расширения Pi](../reference/client-compatibility#pi-native-extensions).
+и [расширения Pi, Skills и MCP](../reference/client-compatibility#pi-native-extensions).
 План добавления пакета в проект:
 
 Для совместимого проверенного пакета используйте короткое имя из подписанного Directory с явной областью Project, если выбранный агент поддерживает все обязательные компоненты (например, `agentplugins add context7 --target codex --scope project --dry-run`). Для воспроизводимой установки можно вместо этого указать Git-источник с полным SHA коммита. Замените `OWNER/REPOSITORY`, `FULL_COMMIT_SHA` и `PACKAGE_PATH`; для пакета в корне репозитория уберите `//PACKAGE_PATH`.
