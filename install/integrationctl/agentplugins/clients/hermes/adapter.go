@@ -1,6 +1,6 @@
-// Package hermes integrates the native Hermes Agent Skills directories.
-// MCP remains unqualified until the credential-bearing YAML document can be
-// changed with exact-member ownership and concurrency-safe rollback.
+// Package hermes integrates native Hermes Skills and user-scoped MCP.
+// Ownership-checked YAML changes preserve foreign config; project MCP remains
+// unsupported, and project Skills require native project trust.
 package hermes
 
 import (
