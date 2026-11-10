@@ -713,8 +713,8 @@
       "unavailableAtItsIndexedSource": "在其索引源中不可用",
       "checkedAgainBeforeInstallation": "安装前再次检查",
       "reviewedListing": "已审核",
-      "notAvailableForChatgpt": "此版本没有经过验证的 ChatGPT 应用连接",
-      "verifiedConnectionFinishSetupInChatgpt": "已验证连接；在 ChatGPT 中完成设置",
+      "notAvailableForChatgpt": "此插件没有经过验证的 ChatGPT Web 应用绑定。Web 应用需在 ChatGPT 内连接。",
+      "verifiedConnectionFinishSetupInChatgpt": "ChatGPT Web 应用绑定已验证；请在 ChatGPT 内完成连接。",
       "allInstalledAgents": "在终端中选择代理",
       "commandsDisabledInPreview": "预览期间不提供安装命令。",
       "allInstalledAgentsRecommended": "在终端中选择代理",
@@ -752,12 +752,12 @@
       "notReadyToInstall": "尚未准备好安装",
       "detectedWhenYouRunTheCommand": "命令会在安装前让你选择代理。",
       "thisPackageIsNoLongerAvailableFromItsSource": "该软件包的来源不再可用。",
-      "notAvailableForChatgpt": "此版本没有经过验证的 ChatGPT 应用连接",
+      "notAvailableForChatgpt": "此插件没有经过验证的 ChatGPT Web 应用绑定。Web 应用需在 ChatGPT 内连接。",
       "unavailableSignedDirectorySnapshotExpired": "不可用：签名的目录快照已过期",
       "noActiveReleaseSupportsThisClient": "没有活动版本支持此客户端",
       "unavailableReviewDataIsNotInstallationAuthority": "不可用：审核数据不能作为安装授权依据",
       "thisPackageDoesNotSupportAnyOfTheAgentsAvailableInTheInstallerYet": "此软件包尚不支持安装程序中可用的任何代理。",
-      "verifiedConnectionFinishSetupInChatgpt": "已验证连接；在 ChatGPT 中完成设置",
+      "verifiedConnectionFinishSetupInChatgpt": "ChatGPT Web 应用绑定已验证；请在 ChatGPT 内完成连接。",
       "allInstalledAgents": "在终端中选择代理",
       "weFoundThisProjectButItDoesnTIncludeAnyToolsTheInstallerCanAddYet": "我们找到了这个项目，但它不包含安装程序可以添加的任何工具。",
       "chooseTargetAgents": "选择目标客户端",
@@ -781,7 +781,7 @@
       "unresolvedDataIsForReviewOnlyProductionCommandsRequireAPublishedSignedDirectorySnapshot": "未解决的数据仅供审核；生产命令需要已发布的签名目录快照。",
       "commandsUnavailable": "命令不可用。",
       "automaticDetection": "在终端中选择代理",
-      "theCliChecksThisPluginAgainstInstalledAgentsSkipsIncompatibleOnesAndLetsYouConfirmTheTargetsChatgptIsIncludedOnlyWhenThisPluginProvidesAVerifiedConnection": "CLI 检测兼容的代理供您确认。ChatGPT 需要经过验证的连接。",
+      "theCliChecksThisPluginAgainstInstalledAgentsSkipsIncompatibleOnesAndLetsYouConfirmTheTargetsChatgptIsIncludedOnlyWhenThisPluginProvidesAVerifiedConnection": "CLI 会检查本地代理并让你确认兼容目标。ChatGPT Web 需要单独设置：UAP 可准备合格应用，但连接必须在 ChatGPT 内完成。",
       "oneStepRemainsInChatgpt": "ChatGPT 还剩下一步。",
       "noSingleSourceServesThisTargetSet": "没有任何一个来源支持全部选定的客户端。",
       "theCliWillFailBeforeMutationAndSuggestCompatibleTargetSourceCombinationsItNeverMixesDistributionsAcrossClients": "CLI 会在修改文件前停止，并建议兼容的客户端与来源组合；不会为不同客户端混用多个分发包。",
@@ -825,7 +825,8 @@
           "mcp": "MCP 工具",
           "extensions": "扩展"
         }
-      }
+      },
+      "piNoCompatibleRelease": "Pi 已获支持，但此插件的已签名发行版本不包含兼容 Pi 的安装目标。"
     },
     "authentication": {
       "not_required": "无需帐户",
@@ -963,11 +964,11 @@
         "activation": "安装后重新加载 Qoder 插件或重启 Qoder。MCP 运行时连接和服务提供方的身份验证仍需在 Qoder 中确认。"
       },
       "pi": {
-        "note": "仅支持受管理的 Pi 原生扩展",
+        "note": "Pi 原生扩展、Skills 和 MCP",
         "status": "已支持",
-        "intro": "安装声明了 Pi 原生扩展的 Agent Plugins 1.0 软件包。此适配器目前不支持可移植技能和 MCP 映射。",
-        "delivery": "CLI 将声明的 Pi 扩展安装到你的 Pi 代理目录，并跟踪受管理的软件包，以便更新、修复和删除。",
-        "activation": "安装后重新加载资源或重启 Pi，以加载受管理的扩展。"
+        "intro": "可在用户或项目范围安装兼容的 Pi 扩展、Skills 和 MCP（stdio/Streamable HTTP）。目录包需要兼容的已签名发行版本；CLI 会单独验证直接来源。",
+        "delivery": "CLI 将合格组件安装到选定的 Pi 用户配置或项目中，并管理更新、修复和移除。",
+        "activation": "重新加载 Pi 资源或重启 Pi；如有提示，请检查项目信任及 MCP 权限。"
       }
     },
     "directoryPage": {
@@ -1046,7 +1047,9 @@
       "availableFor": "适用于 {name} 的插件",
       "count": "{count} 个已审核的软件包支持此客户端。 | {count} 个已审核的软件包支持此客户端。",
       "tryPlugin": "可先试用 Context7，或将 {source} 替换为其他兼容插件经过审核的短名称或完整包的源地址。",
-      "localPackageHint": "将 ./my-plugin 替换为有效 Agent Plugins 1.0 包的路径。"
+      "localPackageHint": "将 ./my-plugin 替换为有效 Agent Plugins 1.0 包的路径。",
+      "piSignedCount": "Pi 已签名目录包：{count}",
+      "piDirectSourceNote": "此处仅显示已签名目录发行版明确支持 Pi 的包。兼容的 Skills、MCP 服务器和扩展也可从本地包或固定的 Git 提交安装；CLI 会独立验证这些来源。"
     },
     "components": {
       "extensions": "扩展",
@@ -1074,13 +1077,14 @@
       "required": "需要身份验证",
       "not_required": "无需身份验证",
       "unknown": "身份验证要求未知",
-      "varies": "取决于客户端",
+      "varies": "取决于代理或发行版本",
       "automatic": "运行命令时会检测已安装的客户端。请在“安装”中选择客户端，查看对应的身份验证要求。",
       "unresolved": "尚未确定这些客户端的安装方案。请选择受支持的客户端，查看对应要求。",
       "release": "{id} · 版本 {sequence}",
       "requiredDetail": "此包可能需要账户、令牌或登录；这并不指定 OAuth，也不确认您已登录。",
       "not_requiredDetail": "这些代理未声明身份验证要求。仍可能存在服务限制和其他设置要求。",
-      "unknownDetail": "连接前请检查包的要求。"
+      "unknownDetail": "连接前请检查包的要求。",
+      "variesDetail": "同一代理在不同兼容发行版本中的登录要求可能不同。请选择目标并检查实际安装计划。"
     }
   },
   "pluginAuthoring": {

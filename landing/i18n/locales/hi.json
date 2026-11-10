@@ -713,8 +713,8 @@
       "unavailableAtItsIndexedSource": "इसके अनुक्रमित स्रोत पर अनुपलब्ध है",
       "checkedAgainBeforeInstallation": "इंस्टॉलेशन से पहले फिर जाँचा जाता है",
       "reviewedListing": "समीक्षित",
-      "notAvailableForChatgpt": "इस रिलीज़ में सत्यापित ChatGPT ऐप कनेक्शन नहीं है",
-      "verifiedConnectionFinishSetupInChatgpt": "सत्यापित कनेक्शन; ChatGPT में सेटअप पूरा करें",
+      "notAvailableForChatgpt": "इस प्लगइन के लिए सत्यापित ChatGPT Web ऐप बाइंडिंग नहीं है। वेब ऐप ChatGPT में कनेक्ट होते हैं।",
+      "verifiedConnectionFinishSetupInChatgpt": "ChatGPT Web ऐप बाइंडिंग सत्यापित है; कनेक्शन ChatGPT के अंदर पूरा करें।",
       "allInstalledAgents": "टर्मिनल में एजेंट चुनें",
       "commandsDisabledInPreview": "पूर्वावलोकन में कमांड अक्षम हैं.",
       "allInstalledAgentsRecommended": "टर्मिनल में एजेंट चुनें",
@@ -752,12 +752,12 @@
       "notReadyToInstall": "स्थापित करने के लिए तैयार नहीं है",
       "detectedWhenYouRunTheCommand": "कमांड इंस्टॉल से पहले एजेंट चुनने देता है।",
       "thisPackageIsNoLongerAvailableFromItsSource": "यह पैकेज अब अपने स्रोत से उपलब्ध नहीं है.",
-      "notAvailableForChatgpt": "इस रिलीज़ में सत्यापित ChatGPT ऐप कनेक्शन नहीं है",
+      "notAvailableForChatgpt": "इस प्लगइन के लिए सत्यापित ChatGPT Web ऐप बाइंडिंग नहीं है। वेब ऐप ChatGPT में कनेक्ट होते हैं।",
       "unavailableSignedDirectorySnapshotExpired": "अनुपलब्ध: हस्ताक्षरित Directory स्नैपशॉट की अवधि समाप्त",
       "noActiveReleaseSupportsThisClient": "कोई भी सक्रिय रिलीज़ इस क्लाइंट का समर्थन नहीं करता है",
       "unavailableReviewDataIsNotInstallationAuthority": "अनुपलब्ध: केवल समीक्षा का डेटा इंस्टॉलेशन की अनुमति का आधार नहीं है",
       "thisPackageDoesNotSupportAnyOfTheAgentsAvailableInTheInstallerYet": "यह पैकेज अभी तक इंस्टॉलर में उपलब्ध किसी भी एजेंट का समर्थन नहीं करता है।",
-      "verifiedConnectionFinishSetupInChatgpt": "सत्यापित कनेक्शन; ChatGPT में सेटअप पूरा करें",
+      "verifiedConnectionFinishSetupInChatgpt": "ChatGPT Web ऐप बाइंडिंग सत्यापित है; कनेक्शन ChatGPT के अंदर पूरा करें।",
       "allInstalledAgents": "टर्मिनल में एजेंट चुनें",
       "weFoundThisProjectButItDoesnTIncludeAnyToolsTheInstallerCanAddYet": "हमें यह प्रोजेक्ट मिला, लेकिन इसमें इंस्टॉलर द्वारा जोड़ा जा सकने वाला कोई भी टूल शामिल नहीं है।",
       "chooseTargetAgents": "लक्ष्य एजेंट चुनें",
@@ -781,7 +781,7 @@
       "unresolvedDataIsForReviewOnlyProductionCommandsRequireAPublishedSignedDirectorySnapshot": "अनसुलझा डेटा केवल समीक्षा के लिए है; उत्पादन कमांडों के लिए एक प्रकाशित हस्ताक्षरित निर्देशिका स्नैपशॉट की आवश्यकता होती है।",
       "commandsUnavailable": "कमांड अनुपलब्ध.",
       "automaticDetection": "टर्मिनल में एजेंट चुनें",
-      "theCliChecksThisPluginAgainstInstalledAgentsSkipsIncompatibleOnesAndLetsYouConfirmTheTargetsChatgptIsIncludedOnlyWhenThisPluginProvidesAVerifiedConnection": "CLI संगत एजेंट पहचानकर पुष्टि माँगता है। ChatGPT को सत्यापित कनेक्शन चाहिए।",
+      "theCliChecksThisPluginAgainstInstalledAgentsSkipsIncompatibleOnesAndLetsYouConfirmTheTargetsChatgptIsIncludedOnlyWhenThisPluginProvidesAVerifiedConnection": "CLI स्थानीय एजेंट जाँचकर संगत लक्ष्य चुनने देता है। ChatGPT Web अलग है: योग्य ऐप तैयार हो सकते हैं, लेकिन कनेक्शन ChatGPT में पूरा होता है।",
       "oneStepRemainsInChatgpt": "ChatGPT में एक कदम बाकी है.",
       "noSingleSourceServesThisTargetSet": "कोई एक स्रोत इन सभी चुने टार्गेट का समर्थन नहीं करता।",
       "theCliWillFailBeforeMutationAndSuggestCompatibleTargetSourceCombinationsItNeverMixesDistributionsAcrossClients": "CLI कोई बदलाव करने से पहले रुक जाता है और संगत टार्गेट/स्रोत संयोजन सुझाता है। वह अलग-अलग क्लाइंट के लिए अलग वितरण नहीं मिलाता।",
@@ -825,7 +825,8 @@
           "mcp": "MCP टूल्स",
           "extensions": "एक्सटेंशन"
         }
-      }
+      },
+      "piNoCompatibleRelease": "Pi समर्थित है, लेकिन इस प्लगइन के हस्ताक्षरित रिलीज़ में Pi के लिए संगत लक्ष्य नहीं है।"
     },
     "authentication": {
       "not_required": "किसी खाते की आवश्यकता नहीं",
@@ -963,11 +964,11 @@
         "activation": "इंस्टॉलेशन के बाद Qoder प्लगइन रीलोड करें या Qoder रीस्टार्ट करें। MCP रनटाइम कनेक्शन और प्रदाता का प्रमाणीकरण अब भी Qoder में जाँचना आवश्यक है।"
       },
       "pi": {
-        "note": "केवल प्रबंधित नेटिव Pi एक्सटेंशन",
+        "note": "Pi के नेटिव एक्सटेंशन, Skills और MCP",
         "status": "समर्थित",
-        "intro": "नेटिव Pi एक्सटेंशन घोषित करने वाले Agent Plugins 1.0 पैकेज इंस्टॉल करें। पोर्टेबल स्किल्स और MCP प्रोजेक्शन अभी इस एडाप्टर के दायरे में नहीं हैं।",
-        "delivery": "CLI घोषित Pi एक्सटेंशन को आपकी Pi एजेंट डायरेक्टरी में इंस्टॉल करता है और अपडेट, मरम्मत तथा हटाने के लिए प्रबंधित पैकेज का रिकॉर्ड रखता है।",
-        "activation": "इंस्टॉलेशन के बाद प्रबंधित एक्सटेंशन लोड करने के लिए संसाधन फिर से लोड करें या Pi को पुनः शुरू करें।"
+        "intro": "यूज़र या प्रोजेक्ट के लिए संगत Pi एक्सटेंशन, Skills और MCP (stdio/Streamable HTTP) इंस्टॉल करें। कैटलॉग पैकेज के लिए संगत हस्ताक्षरित रिलीज़ चाहिए; CLI सीधे स्रोतों की अलग से जाँच करता है।",
+        "delivery": "CLI चुने हुए Pi प्रोफ़ाइल या प्रोजेक्ट में योग्य घटक इंस्टॉल करता है और अपडेट, मरम्मत और हटाने का प्रबंधन करता है।",
+        "activation": "Pi संसाधन रीलोड करें या Pi पुनः चालू करें। ज़रूरत पर प्रोजेक्ट ट्रस्ट और MCP अनुमतियाँ जाँचें।"
       }
     },
     "directoryPage": {
@@ -1046,7 +1047,9 @@
       "availableFor": "{name} के लिए प्लगइन्स उपलब्ध हैं",
       "count": "{count} समीक्षा किया गया पैकेज इस क्लाइंट का समर्थन करता है। | {count} समीक्षा किए गए पैकेज इस क्लाइंट का समर्थन करते हैं।",
       "tryPlugin": "Context7 आज़माएँ या {source} की जगह किसी अन्य संगत प्लगइन का समीक्षित छोटा नाम या पूरे पैकेज का स्रोत दें।",
-      "localPackageHint": "./my-plugin को मान्य Agent Plugins 1.0 पैकेज के पथ से बदलें।"
+      "localPackageHint": "./my-plugin को मान्य Agent Plugins 1.0 पैकेज के पथ से बदलें।",
+      "piSignedCount": "Pi के लिए हस्ताक्षरित कैटलॉग पैकेज: {count}",
+      "piDirectSourceNote": "यहाँ केवल वे पैकेज दिखते हैं जिनके हस्ताक्षरित Directory रिलीज़ में Pi की अनुमति है। संगत Skills, MCP सर्वर और एक्सटेंशन स्थानीय पैकेज या निश्चित Git कमिट से भी इंस्टॉल किए जा सकते हैं; CLI उनकी अलग से जाँच करता है।"
     },
     "components": {
       "extensions": "एक्सटेंशन",
@@ -1074,13 +1077,14 @@
       "required": "प्रमाणीकरण आवश्यक है",
       "not_required": "प्रमाणीकरण आवश्यक नहीं है",
       "unknown": "प्रमाणीकरण की आवश्यकताएँ अज्ञात हैं",
-      "varies": "एजेंट पर निर्भर",
+      "varies": "एजेंट या रिलीज़ पर निर्भर",
       "automatic": "कमांड चलाने पर स्थापित एजेंट पहचाने जाते हैं। उनकी आवश्यकताएँ देखने के लिए इंस्टॉल में एजेंट चुनें।",
       "unresolved": "इन एजेंटों के लिए इंस्टॉल विकल्प निर्धारित नहीं है। आवश्यकताएँ जाँचने के लिए समर्थित एजेंट चुनें।",
       "release": "{id} · रिलीज़ {sequence}",
       "requiredDetail": "पैकेज को खाते, टोकन या साइन-इन की आवश्यकता हो सकती है; यह OAuth निर्दिष्ट नहीं करता या आपके साइन-इन की पुष्टि नहीं करता।",
       "not_requiredDetail": "इन एजेंटों के लिए प्रमाणीकरण घोषित नहीं है। सेवा सीमाएँ और अन्य सेटअप आवश्यकताएँ लागू हो सकती हैं।",
-      "unknownDetail": "कनेक्ट करने से पहले पैकेज की आवश्यकताएँ जाँचें।"
+      "unknownDetail": "कनेक्ट करने से पहले पैकेज की आवश्यकताएँ जाँचें।",
+      "variesDetail": "एक ही एजेंट के संगत रिलीज़ में लॉगिन की ज़रूरत अलग हो सकती है। लक्ष्य चुनें और इंस्टॉलेशन योजना देखें।"
     }
   },
   "pluginAuthoring": {

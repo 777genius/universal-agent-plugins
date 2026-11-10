@@ -13,7 +13,7 @@ localeDisposition: "current-translation"
 
 ## Versión actual y alcance
 
-[CLI nativo](https://github.com/777genius/universal-agent-plugins/releases/latest) añade una API local de gestión con un proceso controlado por la aplicación, detección de clientes y perfiles sin cambios y un proveedor de extensiones nativas de Pi en el ámbito de usuario. Consulta [la gestión local](../use/manage#local-management-api). Los canales de los gestores de paquetes pueden actualizarse más tarde: comprueba `agentplugins version`.
+[CLI nativo](https://github.com/777genius/universal-agent-plugins/releases/latest) añade una API local de gestión con un proceso controlado por la aplicación, detección de clientes y perfiles sin cambios y extensiones Pi, Skills y MCP stdio/Streamable HTTP para usuario y proyecto elegible. Consulta [la gestión local](../use/manage#local-management-api). Los canales de los gestores de paquetes pueden actualizarse más tarde: comprueba `agentplugins version`.
 
 Desde CLI 0.1.94, `install` sin argumento de origen selecciona automáticamente el proyecto si existe un `uap.toml` regular en el directorio actual exacto. Un ámbito explícito tiene prioridad; no se buscan directorios superiores. Los archivos de bloqueo existentes se validan de forma estricta incluso sin `--locked`. La instalación de proyecto explícita se introdujo en 0.1.93. Las pruebas de publicación del instalador no acreditan la ejecución de todos los clientes nativos ni el ejecutable estándar de creación. El instalador actual npm o nativo no incluye `agentplugins author`; consulta [Crear plugins](../build/) para las herramientas del código fuente.
 
@@ -29,11 +29,13 @@ Interpreta la compatibilidad como comprobaciones independientes:
 
 La entrega de proyecto suele quedar **Prepared** mientras falten confianza, recarga, configuración explícita o una nueva sesión. ChatGPT rechaza la instalación de proyecto. Consulta [la compatibilidad por proyecto](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md) y [el índice de pruebas de proyecto](https://github.com/777genius/universal-agent-plugins/blob/main/docs/evidence/PROJECT_INSTALLATION.md).
 
-## Extensiones nativas de Pi {#pi-native-extensions}
+## Extensiones Pi, Skills y MCP {#pi-native-extensions}
 
-La CLI actual acepta `--target pi` para paquetes que declaran una [extensión nativa de Pi](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_CONTRACT.md). Este proveedor admite extensiones nativas en los ámbitos de usuario y de proyecto elegible; los Skills y MCP de proyecto tienen contratos de instalación, confianza y activación independientes (consulta la [compatibilidad de proyectos](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)). Recarga los recursos o reinicia Pi después de instalar.
+El CLI publicado `0.1.102` acepta `--target pi` para paquetes Agent Plugins 1.0 compatibles: [extensiones nativas de Pi](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_CONTRACT.md), Skills y MCP stdio/Streamable HTTP. Admite los ámbitos de usuario y proyecto elegible; no admite MCP SSE ni componentes App genéricos. En proyectos, las extensiones se preparan en `.pi/extensions`, Skills en `.pi/skills` y las entradas MCP administradas por UAP en `.pi/mcp.json`. Pi puede requerir confianza en el proyecto, recarga o nueva sesión.
 
-Las [pruebas nativas registradas](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_EVIDENCE.md) cubren Pi 1.4.0 en Linux: detección nativa y ejecución de la extensión seleccionada, actualización, reparación de un paquete ausente, eliminación y conservación de extensiones ajenas. No demuestran ejecución en macOS o Windows, notificaciones de escritorio, audio ni foco del terminal. Una instalación correcta, por sí sola, no prueba que una sesión de Pi en ejecución haya cargado la extensión.
+**La capacidad del CLI no equivale a autorización en el Directorio firmado.** A 9 de noviembre de 2026, ninguna de las 37 políticas activas del Directory incluye `pi`. Por eso `add context7 --target pi` con el nombre corto se rechaza correctamente. Una fuente exacta `github:owner/repo@FULL_SHA//path` es una ruta explícita distinta, que también valida el CLI; no reemplaza la autoridad del Directorio.
+
+Las [pruebas de proyecto](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md) y el [`tools/call` con Pi real (#656)](https://github.com/777genius/universal-agent-plugins/pull/656) cubren escenarios concretos de Skills/MCP con un modelo local programado en Linux, macOS y Windows. Las primeras [pruebas de extensiones](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_EVIDENCE.md) solo cubrían Linux; esa limitación histórica no describe las capacidades actuales. La instalación de archivos no demuestra OAuth, uso de modelos remotos ni activación.
 
 ## Cómo leer las pruebas históricas
 
