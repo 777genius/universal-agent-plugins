@@ -61,7 +61,7 @@ test('plugin filter widths keep Source and Owner readable on desktop and mobile'
   const owner = controls.getByRole('combobox', { name: 'Filter by owner' });
   const trust = controls.getByRole('combobox', { name: 'Filter by trust level' });
 
-  for (const width of [1600, 1440, 1100, 800, 390, 320]) {
+  for (const width of [1600, 1521, 1440, 1100, 800, 390, 320]) {
     await page.setViewportSize({ width, height: 900 });
     if (width <= 720) {
       const toggle = controls.getByRole('button', { name: /More filters|Hide filters/ });
@@ -90,7 +90,7 @@ test('plugin filter widths keep Source and Owner readable on desktop and mobile'
     const trustBounds = (await trust.boundingBox())!;
     expect(sourceBounds.x).toBeGreaterThanOrEqual(0);
     expect(ownerBounds.x + ownerBounds.width).toBeLessThanOrEqual(width);
-    if (width > 1380) {
+    if (width > 1520) {
       expect(Math.abs(sourceBounds.width - trustBounds.width)).toBeLessThan(3);
       expect(Math.abs(ownerBounds.y - trustBounds.y)).toBeLessThan(3);
     } else if (width <= 560) {
