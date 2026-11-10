@@ -143,6 +143,22 @@ def main():
         # for a genuine native tool/call. The only acceptable success oracle
         # remains a correlated native MCP function output + digest.
         # The model turn itself exercises the actual MCP child and shell.
+        # Independent current Codex app-server native stdio MCP call.
+        # The official API does not require a model tool search; this gives
+        # precise evidence if the scripted model path fails separately.
+        # The actual tool output is never saved, only a synthetic digest bool.
+        report["direct_mcp_call_verified"] = False
+        try:
+            direct = rpc_send(proc, messages, 99, "mcpServer/tool/call", {
+                "threadId": thread_id, "server": "env_spike",
+                "tool": "confirm_env", "arguments": {}
+            }, timeout=22)
+            report["direct_mcp_call_verified"] = (
+                direct.get("isError") is not True and
+                Model.expected_digest in json.dumps(direct, sort_keys=True)
+            )
+        except RuntimeError as exc:
+            report["direct_mcp_call_error"] = str(exc)[:96]
         rpc_send(proc, messages, 100, "turn/start", {
             "threadId": thread_id,
             "input": [{"type": "text",
