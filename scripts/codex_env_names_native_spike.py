@@ -190,11 +190,16 @@ def inspect(root, secret):
             if path.is_symlink():
                 symlinks += 1
                 continue
-            if path.stat().st_size > 32 * 1024 * 1024:
-                found.append({"path_sha256": hashlib.sha256(str(path.relative_to(root)).encode()).hexdigest(),
-                              "result": "unscanned_oversize"})
+            try:
+                if path.stat().st_size > 32 * 1024 * 1024:
+                    found.append({"path_sha256": hashlib.sha256(str(path.relative_to(root)).encode()).hexdigest(),
+                                  "result": "unscanned_oversize"})
+                    continue
+                data = path.read_bytes()
+            except FileNotFoundError:
+                # Codex atomically replaces/deletes temporary snapshot files.
+                # A vanished file is not an inaccessible persisted file.
                 continue
-            data = path.read_bytes()
             if any(p and p in data for p in patterns):
                 found.append({"path_sha256": hashlib.sha256(str(path.relative_to(root)).encode()).hexdigest(),
                               "result": "synthetic_value_persisted",
