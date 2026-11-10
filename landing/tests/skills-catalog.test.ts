@@ -306,17 +306,16 @@ test('Detail identity uses only a canonical source, never the listing-page URL',
   }
 });
 
-test('Skill agents are public clients with generated saved-dependency and skill support', () => {
-  // Generated capabilities can include qualified clients not yet listed publicly.
-  // Do not surface unreleased targets in Skills simply because their metadata exists.
-  const published = new Set<string>(clients.map((client) => client.id));
-  const expected = capabilities
-    .filter((client) => published.has(client.id) && client.saved_dependency && client.skill_support !== 'unsupported')
-    .map((client) => client.id);
-  assert.deepEqual(
-    skillClients.map((client) => client.id),
-    expected,
+test('Skill agents are the public subset of generated saved-dependency and skill capabilities', () => {
+  const eligible = new Set(
+    capabilities
+      .filter((client) => client.saved_dependency && client.skill_support !== 'unsupported')
+      .map((client) => client.id),
   );
+  // New CLI targets may be qualified before their public landing presentation.
+  const expected = clients.filter((client) => eligible.has(client.id)).map((client) => client.id);
+  assert.deepEqual(skillClients.map((client) => client.id), expected);
+  assert.ok(skillClients.every((client) => eligible.has(client.id)));
   assert.ok(!skillClients.some((client) => ['chatgpt', 'vscode'].includes(client.id)));
 });
 
