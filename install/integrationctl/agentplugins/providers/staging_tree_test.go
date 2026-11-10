@@ -36,6 +36,7 @@ func TestStagerGoldenTreesAcrossClients(t *testing.T) {
 					plan.Components[i].Support = domain.SupportNative
 				}
 				plan.NativeRegistryRoot = filepath.Join(t.TempDir(), ".gemini", "config")
+				plan.TargetAnchor = plan.NativeRegistryRoot
 				plan.TargetRoot = filepath.Join(plan.NativeRegistryRoot, "plugins")
 				plan.ActivePath = filepath.Join(plan.TargetRoot, "demo-0123456789ab")
 				plan.TargetContext = domain.TargetContext{Scope: domain.ScopeUser, UserConfigRoot: plan.NativeRegistryRoot}
