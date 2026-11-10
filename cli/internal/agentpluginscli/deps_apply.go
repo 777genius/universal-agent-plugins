@@ -18,16 +18,16 @@ import (
 )
 
 type dependencySyncRequest struct {
-	requirements environment.Requirements
-	lock         environment.Lock
-	intent       environmentapp.Intent
-	prepared     []dependencyAction
-	detected     map[domain.ClientID]domain.DetectedClient
-	consent      map[string]bool
-	aliases      []string
-	targets      []string
-	attestation  *environment.Attestation
-	repairOnly   bool
+	requirements      environment.Requirements
+	lock              environment.Lock
+	intent            environmentapp.Intent
+	prepared          []dependencyAction
+	detected          map[domain.ClientID]domain.DetectedClient
+	consent           map[string]bool
+	aliases           []string
+	targets           []string
+	attestation       *environment.Attestation
+	repairOnly        bool
 	policyFingerprint string
 }
 
@@ -72,7 +72,9 @@ func runDependencySyncConverge(cmd *cobra.Command, app App, opts *options, locke
 	// The opt-in gate runs after complete lock resolution and before
 	// convergence repairs or any managed client mutation.
 	policyFingerprint, err := evaluateLocalDependencyPolicy(cmd.Context(), app, opts.dependencyPolicyFile, request.lock)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	request.policyFingerprint = policyFingerprint
 	if converge != nil {
 		proceed, convergeErr := converge(app)
@@ -190,7 +192,9 @@ func applyDependencySync(cmd *cobra.Command, app App, opts *options, request dep
 		// final pre-write boundary, after input revalidation. A stale allowance
 		// must not authorize a different policy observed during actual apply.
 		observedPolicy, err := evaluateLocalDependencyPolicy(ctx, app, opts.dependencyPolicyFile, request.lock)
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 		if observedPolicy != request.policyFingerprint {
 			return fmt.Errorf("local dependency policy changed after confirmation: %w", installer.ErrPlanChanged)
 		}

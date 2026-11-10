@@ -73,11 +73,11 @@ func TestLocalDependencyPolicyExplicitOptInAndStrictParsing(t *testing.T) {
 		t.Fatalf("valid local policy not parsed: %+v, %v", policy, err)
 	}
 	for name, body := range map[string]string{
-		"unknown": "schema_version: 1\nunsafe: true\n",
-		"two-docs": "schema_version: 1\n---\nschema_version: 1\n",
-		"invalid-host": "schema_version: 1\nsources:\n  allow_hosts: [GitHub.com]\n",
-		"wrong-version": "schema_version: 99\n",
-		"duplicate": "schema_version: 1\nschema_version: 1\n",
+		"unknown":               "schema_version: 1\nunsafe: true\n",
+		"two-docs":              "schema_version: 1\n---\nschema_version: 1\n",
+		"invalid-host":          "schema_version: 1\nsources:\n  allow_hosts: [GitHub.com]\n",
+		"wrong-version":         "schema_version: 99\n",
+		"duplicate":             "schema_version: 1\nschema_version: 1\n",
 		"unknown-mcp-transport": "schema_version: 1\nmcp:\n  allowed_transports: [telnet]\n",
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -130,9 +130,13 @@ func TestExplicitEmptyPolicyAllowListsDenyRatherThanBypass(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
 	path := filepath.Join(root, "empty-policy.yaml")
-	if err := os.WriteFile(path, []byte("schema_version: 1\nsources:\n  allow_hosts: []\nmcp:\n  allowed_transports: []\n"), 0o600); err != nil { t.Fatal(err) }
+	if err := os.WriteFile(path, []byte("schema_version: 1\nsources:\n  allow_hosts: []\nmcp:\n  allowed_transports: []\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	policy, err := readLocalDependencyPolicy(path)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !policy.Sources.AllowHosts.Present || !policy.MCP.AllowedTransports.Present {
 		t.Fatal("explicit empty policy list silently became unrestricted")
 	}
@@ -142,19 +146,20 @@ func TestExplicitEmptyPolicyAllowListsDenyRatherThanBypass(t *testing.T) {
 	if err := policy.evaluate(locked); err == nil {
 		t.Fatal("empty source allow-list must deny all sources")
 	}
-	if err := os.WriteFile(path, []byte("schema_version: 1\nsources:\n  allow_hosts: null\n"), 0o600); err != nil { t.Fatal(err) }
+	if err := os.WriteFile(path, []byte("schema_version: 1\nsources:\n  allow_hosts: null\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := readLocalDependencyPolicy(path); err == nil {
 		t.Fatal("null source allow-list must not disable security policy")
 	}
 }
-
 
 func TestLocalPolicyUsesConcreteGitURLHostBeforeShorthand(t *testing.T) {
 	t.Parallel()
 	pin := environment.LockedPackage{
 		Alias: "custom-git",
 		Source: environment.LockedSource{Git: &environment.LockedGitSource{
-			URL: "https://git.example.test/acme/repo.git",
+			URL:        "https://git.example.test/acme/repo.git",
 			Repository: "acme/repo",
 		}},
 	}
@@ -170,21 +175,28 @@ func TestLocalPolicyUsesConcreteGitURLHostBeforeShorthand(t *testing.T) {
 	}
 }
 
-
 func TestLocalPolicyFingerprintChangesWithAdmissionRules(t *testing.T) {
 	t.Parallel()
 	path := filepath.Join(t.TempDir(), "policy.yml")
 	write := func(source string) {
 		t.Helper()
-		if err := os.WriteFile(path, []byte(source), 0o600); err != nil { t.Fatal(err) }
+		if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+			t.Fatal(err)
+		}
 	}
 	write("schema_version: 1\nsources:\n  allow_hosts: [github.com]\n")
 	approved, err := evaluateLocalDependencyPolicy(context.Background(), App{}, path, environment.Lock{})
-	if err != nil || approved == "" { t.Fatalf("valid policy fingerprint: %q %v", approved, err) }
+	if err != nil || approved == "" {
+		t.Fatalf("valid policy fingerprint: %q %v", approved, err)
+	}
 	write("# trivia change\nschema_version: 1\nsources:\n  allow_hosts: [github.com]\n")
 	same, err := evaluateLocalDependencyPolicy(context.Background(), App{}, path, environment.Lock{})
-	if err != nil || same != approved { t.Fatalf("nonsemantic comment changed policy: %q %q %v", approved, same, err) }
+	if err != nil || same != approved {
+		t.Fatalf("nonsemantic comment changed policy: %q %q %v", approved, same, err)
+	}
 	write("schema_version: 1\nsources:\n  deny_hosts: [github.com]\n")
 	modified, err := evaluateLocalDependencyPolicy(context.Background(), App{}, path, environment.Lock{})
-	if err != nil || modified == approved { t.Fatalf("changed policy escaped stable fingerprint: %q %q %v", approved, modified, err) }
+	if err != nil || modified == approved {
+		t.Fatalf("changed policy escaped stable fingerprint: %q %q %v", approved, modified, err)
+	}
 }

@@ -12,12 +12,12 @@ import (
 func testSBOMLock() environment.Lock {
 	pin := environment.LockedPackage{
 		Alias: "app_pkg", Version: "1.2.3",
-		Source: environment.LockedSource{Git: &environment.LockedGitSource{Repository: "example/app", Commit: strings.Repeat("a", 40)}},
+		Source:          environment.LockedSource{Git: &environment.LockedGitSource{Repository: "example/app", Commit: strings.Repeat("a", 40)}},
 		DigestAlgorithm: environment.TreeDigestAlgorithm, TreeDigest: "sha256:" + strings.Repeat("b", 64),
 	}
 	transitive := environment.LockedPackage{
 		Alias: "tool", Version: "2.0.0",
-		Source: environment.LockedSource{Git: &environment.LockedGitSource{Repository: "example/tool", Commit: strings.Repeat("c", 40)}},
+		Source:          environment.LockedSource{Git: &environment.LockedGitSource{Repository: "example/tool", Commit: strings.Repeat("c", 40)}},
 		DigestAlgorithm: environment.TreeDigestAlgorithm, TreeDigest: "sha256:" + strings.Repeat("d", 64),
 		RequiredBy: []environment.RequiredBy{{Alias: "app_pkg"}},
 	}

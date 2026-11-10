@@ -343,7 +343,9 @@ func TestDependencyCheckOfflinePolicyGateCLI(t *testing.T) {
 			found = true
 		}
 	}
-	if !found { t.Fatal("offline policy approval did not produce a policy check") }
+	if !found {
+		t.Fatal("offline policy approval did not produce a policy check")
+	}
 	assertDependencyCheckFilesUnchanged(t, f.root, before)
 
 	write("schema_version: 1\nsources:\n  deny_hosts: [github.com]\n")
@@ -352,7 +354,9 @@ func TestDependencyCheckOfflinePolicyGateCLI(t *testing.T) {
 	requireDependencyCheckCode(t, report, "policy_denied")
 	assertDependencyCheckFilesUnchanged(t, f.root, before)
 
-	if err := os.Remove(path); err != nil { t.Fatal(err) }
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
 	before = observeDependencyCheckFiles(t, f.root)
 	report, _ = executeDependencyCheck(t, f, dependencyCheckUnavailable, "--policy", path)
 	requireDependencyCheckCode(t, report, "policy_unavailable")

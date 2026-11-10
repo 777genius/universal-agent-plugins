@@ -19,9 +19,9 @@ import (
 func newDependencySBOMCommand(app App, opts *options) *cobra.Command {
 	var kind string
 	command := &cobra.Command{
-		Use: "sbom",
+		Use:   "sbom",
 		Short: "Export a deterministic CycloneDX or SPDX inventory of the verified local dependency lock",
-		Args: cobra.NoArgs,
+		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := validateDepsOptions(opts); err != nil {
 				return err
@@ -59,62 +59,62 @@ func newDependencySBOMCommand(app App, opts *options) *cobra.Command {
 }
 
 type sbomProperty struct {
-	Name string `json:"name"`
+	Name  string `json:"name"`
 	Value string `json:"value"`
 }
 
 type cdxComponent struct {
-	Type string `json:"type"`
-	Ref string `json:"bom-ref"`
-	Name string `json:"name"`
-	Version string `json:"version,omitempty"`
+	Type       string         `json:"type"`
+	Ref        string         `json:"bom-ref"`
+	Name       string         `json:"name"`
+	Version    string         `json:"version,omitempty"`
 	Properties []sbomProperty `json:"properties,omitempty"`
 }
 
 type cdxDependency struct {
-	Ref string `json:"ref"`
+	Ref       string   `json:"ref"`
 	DependsOn []string `json:"dependsOn"`
 }
 
 type cyclonedxDocument struct {
-	BOMFormat string `json:"bomFormat"`
-	SpecVersion string `json:"specVersion"`
-	Version int `json:"version"`
-	Components []cdxComponent `json:"components"`
+	BOMFormat    string          `json:"bomFormat"`
+	SpecVersion  string          `json:"specVersion"`
+	Version      int             `json:"version"`
+	Components   []cdxComponent  `json:"components"`
 	Dependencies []cdxDependency `json:"dependencies"`
 }
 
 type spdxCreationInfo struct {
 	Creators []string `json:"creators"`
-	Created string `json:"created"`
-	Comment string `json:"comment,omitempty"`
+	Created  string   `json:"created"`
+	Comment  string   `json:"comment,omitempty"`
 }
 
 type spdxPackage struct {
-	Name string `json:"name"`
-	ID string `json:"SPDXID"`
-	Version string `json:"versionInfo,omitempty"`
+	Name             string `json:"name"`
+	ID               string `json:"SPDXID"`
+	Version          string `json:"versionInfo,omitempty"`
 	DownloadLocation string `json:"downloadLocation"`
-	FilesAnalyzed bool `json:"filesAnalyzed"`
+	FilesAnalyzed    bool   `json:"filesAnalyzed"`
 	LicenseConcluded string `json:"licenseConcluded"`
-	LicenseDeclared string `json:"licenseDeclared"`
-	Comment string `json:"comment,omitempty"`
+	LicenseDeclared  string `json:"licenseDeclared"`
+	Comment          string `json:"comment,omitempty"`
 }
 
 type spdxRelationship struct {
 	Element string `json:"spdxElementId"`
-	Type string `json:"relationshipType"`
+	Type    string `json:"relationshipType"`
 	Related string `json:"relatedSpdxElement"`
 }
 
 type spdxDocument struct {
-	SPDXVersion string `json:"spdxVersion"`
-	DataLicense string `json:"dataLicense"`
-	ID string `json:"SPDXID"`
-	Name string `json:"name"`
-	Namespace string `json:"documentNamespace"`
-	CreationInfo spdxCreationInfo `json:"creationInfo"`
-	Packages []spdxPackage `json:"packages"`
+	SPDXVersion   string             `json:"spdxVersion"`
+	DataLicense   string             `json:"dataLicense"`
+	ID            string             `json:"SPDXID"`
+	Name          string             `json:"name"`
+	Namespace     string             `json:"documentNamespace"`
+	CreationInfo  spdxCreationInfo   `json:"creationInfo"`
+	Packages      []spdxPackage      `json:"packages"`
 	Relationships []spdxRelationship `json:"relationships"`
 }
 
@@ -140,7 +140,9 @@ func sbomDependencies(packages []environment.LockedPackage) map[string][]string 
 	return children
 }
 
-func spdxPackageID(alias string) string { return "SPDXRef-Package-" + hex.EncodeToString([]byte(alias)) }
+func spdxPackageID(alias string) string {
+	return "SPDXRef-Package-" + hex.EncodeToString([]byte(alias))
+}
 
 func sbomSource(pin environment.LockedPackage) string {
 	switch {
@@ -174,64 +176,64 @@ func marshalDependencySBOM(lock environment.Lock, kind string) ([]byte, error) {
 }
 
 func marshalCycloneDX(lock environment.Lock) ([]byte, error) {
-		doc := cyclonedxDocument{BOMFormat: "CycloneDX", SpecVersion: "1.5", Version: 1,
-			Components: []cdxComponent{}, Dependencies: []cdxDependency{}}
-		packages := orderedLockedPackages(lock)
-		children := sbomDependencies(packages)
-		for _, pin := range packages {
-			ref := "urn:uap:" + pin.Alias
-			doc.Components = append(doc.Components, cdxComponent{Type: "library", Ref: ref,
-				Name: pin.Alias, Version: pin.Version, Properties: []sbomProperty{
-					{Name: "uap:source", Value: sbomSource(pin)},
-					{Name: "uap:tree-digest", Value: pin.TreeDigest},
-					{Name: "uap:tree-digest-algorithm", Value: pin.DigestAlgorithm},
-				}})
-			dep := cdxDependency{Ref: ref, DependsOn: []string{}}
-			for _, alias := range children[pin.Alias] {
-				dep.DependsOn = append(dep.DependsOn, "urn:uap:"+alias)
-			}
-			doc.Dependencies = append(doc.Dependencies, dep)
+	doc := cyclonedxDocument{BOMFormat: "CycloneDX", SpecVersion: "1.5", Version: 1,
+		Components: []cdxComponent{}, Dependencies: []cdxDependency{}}
+	packages := orderedLockedPackages(lock)
+	children := sbomDependencies(packages)
+	for _, pin := range packages {
+		ref := "urn:uap:" + pin.Alias
+		doc.Components = append(doc.Components, cdxComponent{Type: "library", Ref: ref,
+			Name: pin.Alias, Version: pin.Version, Properties: []sbomProperty{
+				{Name: "uap:source", Value: sbomSource(pin)},
+				{Name: "uap:tree-digest", Value: pin.TreeDigest},
+				{Name: "uap:tree-digest-algorithm", Value: pin.DigestAlgorithm},
+			}})
+		dep := cdxDependency{Ref: ref, DependsOn: []string{}}
+		for _, alias := range children[pin.Alias] {
+			dep.DependsOn = append(dep.DependsOn, "urn:uap:"+alias)
 		}
-		return json.MarshalIndent(doc, "", "  ")
+		doc.Dependencies = append(doc.Dependencies, dep)
+	}
+	return json.MarshalIndent(doc, "", "  ")
 
 }
 
 func marshalSPDX(lock environment.Lock) ([]byte, error) {
-		// A fixed creation marker makes the inventory reproducible from its
-		// lock alone; it is not the time of scanning or of the source commit.
-		encoded, err := json.Marshal(struct {
-			ManifestDigest string `json:"manifest_digest"`
-			Packages []environment.LockedPackage `json:"packages"`
-		}{ManifestDigest: lock.ManifestDigest, Packages: orderedLockedPackages(lock)})
-		if err != nil {
-			return nil, err
-		}
-		hash := sha256.Sum256(encoded)
-		doc := spdxDocument{
-			SPDXVersion: "SPDX-2.3", DataLicense: "CC0-1.0",
-			ID: "SPDXRef-DOCUMENT", Name: "UAP dependency inventory",
-			Namespace: "https://universal-agent-plugins.com/spdx/sha256-" + hex.EncodeToString(hash[:]),
-			CreationInfo: spdxCreationInfo{Creators: []string{"Tool: universal-agent-plugins"},
-				Created: "1970-01-01T00:00:00Z", Comment: "Reproducible creation marker, not an assessment timestamp."},
-			Packages: []spdxPackage{}, Relationships: []spdxRelationship{},
-		}
-		packages := orderedLockedPackages(lock)
-		children := sbomDependencies(packages)
-		for _, pin := range packages {
-			id := spdxPackageID(pin.Alias)
-			doc.Packages = append(doc.Packages, spdxPackage{Name: pin.Alias, ID: id,
-				Version: pin.Version, DownloadLocation: "NOASSERTION", FilesAnalyzed: false,
-				LicenseConcluded: "NOASSERTION", LicenseDeclared: "NOASSERTION",
-				Comment: "Source: " + sbomSource(pin) + "; UAP canonical tree digest (" + pin.DigestAlgorithm + "): " + pin.TreeDigest})
+	// A fixed creation marker makes the inventory reproducible from its
+	// lock alone; it is not the time of scanning or of the source commit.
+	encoded, err := json.Marshal(struct {
+		ManifestDigest string                      `json:"manifest_digest"`
+		Packages       []environment.LockedPackage `json:"packages"`
+	}{ManifestDigest: lock.ManifestDigest, Packages: orderedLockedPackages(lock)})
+	if err != nil {
+		return nil, err
+	}
+	hash := sha256.Sum256(encoded)
+	doc := spdxDocument{
+		SPDXVersion: "SPDX-2.3", DataLicense: "CC0-1.0",
+		ID: "SPDXRef-DOCUMENT", Name: "UAP dependency inventory",
+		Namespace: "https://universal-agent-plugins.com/spdx/sha256-" + hex.EncodeToString(hash[:]),
+		CreationInfo: spdxCreationInfo{Creators: []string{"Tool: universal-agent-plugins"},
+			Created: "1970-01-01T00:00:00Z", Comment: "Reproducible creation marker, not an assessment timestamp."},
+		Packages: []spdxPackage{}, Relationships: []spdxRelationship{},
+	}
+	packages := orderedLockedPackages(lock)
+	children := sbomDependencies(packages)
+	for _, pin := range packages {
+		id := spdxPackageID(pin.Alias)
+		doc.Packages = append(doc.Packages, spdxPackage{Name: pin.Alias, ID: id,
+			Version: pin.Version, DownloadLocation: "NOASSERTION", FilesAnalyzed: false,
+			LicenseConcluded: "NOASSERTION", LicenseDeclared: "NOASSERTION",
+			Comment: "Source: " + sbomSource(pin) + "; UAP canonical tree digest (" + pin.DigestAlgorithm + "): " + pin.TreeDigest})
+		doc.Relationships = append(doc.Relationships, spdxRelationship{
+			Element: "SPDXRef-DOCUMENT", Type: "DESCRIBES", Related: id,
+		})
+		for _, child := range children[pin.Alias] {
 			doc.Relationships = append(doc.Relationships, spdxRelationship{
-				Element: "SPDXRef-DOCUMENT", Type: "DESCRIBES", Related: id,
+				Element: id, Type: "DEPENDS_ON", Related: spdxPackageID(child),
 			})
-			for _, child := range children[pin.Alias] {
-				doc.Relationships = append(doc.Relationships, spdxRelationship{
-					Element: id, Type: "DEPENDS_ON", Related: spdxPackageID(child),
-				})
-			}
 		}
-		return json.MarshalIndent(doc, "", "  ")
+	}
+	return json.MarshalIndent(doc, "", "  ")
 
 }

@@ -135,8 +135,8 @@ func (resolver dependencyResolver) DescribePinned(ctx context.Context, pin envir
 
 // Read pinned source facts locally, without checking eligibility for a new install.
 // inspectPinnedDependency invokes a read-only visitor on the same exact,
- // validated immutable package envelope as dependency integrity checks. This
- // keeps policy decisions from trusting a parallel parser or mutable source.
+// validated immutable package envelope as dependency integrity checks. This
+// keeps policy decisions from trusting a parallel parser or mutable source.
 func inspectPinnedDependency(ctx context.Context, app App, pin environment.LockedPackage, visitor func(domain.PackageEnvelope) error) (resolved environment.ResolvedPackage, resultErr error) {
 	snapshot, err := app.dependencyStore().Snapshot(ctx, pin.DigestAlgorithm, pin.TreeDigest)
 	if err != nil {

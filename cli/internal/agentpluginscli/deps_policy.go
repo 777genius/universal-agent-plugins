@@ -2,9 +2,9 @@ package agentpluginscli
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/json"
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -13,8 +13,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 )
 
 const maxLocalDependencyPolicyBytes int64 = 64 << 10
@@ -24,7 +24,7 @@ const maxLocalDependencyPolicyBytes int64 = 64 << 10
 // A present empty allow-list denies all. An omitted list imposes no restriction.
 // This distinction prevents "allow_hosts: []" from silently disabling policy.
 type policyAllowList struct {
-	Values []string
+	Values  []string
 	Present bool
 }
 
@@ -33,19 +33,21 @@ func (list *policyAllowList) UnmarshalYAML(node *yaml.Node) error {
 		return fmt.Errorf("policy allow-list must be a YAML sequence, not null or scalar")
 	}
 	var values []string
-	if err := node.Decode(&values); err != nil { return err }
+	if err := node.Decode(&values); err != nil {
+		return err
+	}
 	list.Values, list.Present = values, true
 	return nil
 }
 
 type localDependencyPolicy struct {
 	SchemaVersion int `yaml:"schema_version"`
-	Sources struct {
+	Sources       struct {
 		AllowHosts policyAllowList `yaml:"allow_hosts"`
-		DenyHosts []string `yaml:"deny_hosts"`
+		DenyHosts  []string        `yaml:"deny_hosts"`
 	} `yaml:"sources"`
 	Integrity struct {
-		RequirePinnedGit bool `yaml:"require_pinned_git"`
+		RequirePinnedGit     bool `yaml:"require_pinned_git"`
 		RequireArchiveSHA256 bool `yaml:"require_archive_sha256"`
 	} `yaml:"integrity"`
 	MCP struct {
@@ -223,7 +225,9 @@ func fingerprintLocalDependencyPolicy(policy localDependencyPolicy) (string, err
 	// All fields are explicit and serializable; a JSON digest prevents changing
 	// the rules after confirmation while ignoring inconsequential YAML trivia.
 	body, err := json.Marshal(policy)
-	if err != nil { return "", fmt.Errorf("encode local dependency policy: %w", err) }
+	if err != nil {
+		return "", fmt.Errorf("encode local dependency policy: %w", err)
+	}
 	sum := sha256.Sum256(body)
 	return fmt.Sprintf("%x", sum[:]), nil
 }
