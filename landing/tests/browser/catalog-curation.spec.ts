@@ -112,7 +112,7 @@ test('recommended Skills lead the original cards without changing provider data 
   ]);
 });
 
-test('plugin source and owner filters share a row without losing mobile usability', async ({
+test('plugin source and owner filters keep independent desktop slots and mobile usability', async ({
   page,
 }, testInfo) => {
   await page.goto('plugins/');
@@ -136,28 +136,32 @@ test('plugin source and owner filters share a row without losing mobile usabilit
     await expect(owner).toBeVisible();
     const sourceRect = await sourceControl.boundingBox();
     const ownerRect = await ownerControl.boundingBox();
-    const pairRect = await pair.boundingBox();
     expect(sourceRect).not.toBeNull();
     expect(ownerRect).not.toBeNull();
-    expect(pairRect).not.toBeNull();
 
-    if (width > 380) {
+    if (width >= 1381) {
+      // Separate full desktop columns for Source and Owner, with the same
+      // width and baseline as Authentication. The pair has display: contents.
+      const authRect = await authenticationControl.boundingBox();
+      expect(authRect).not.toBeNull();
+      expect(Math.abs(sourceRect!.y - authRect!.y)).toBeLessThan(2);
+      expect(Math.abs(ownerRect!.y - authRect!.y)).toBeLessThan(2);
+      expect(Math.abs(sourceRect!.width - authRect!.width)).toBeLessThan(4);
+      expect(Math.abs(ownerRect!.width - authRect!.width)).toBeLessThan(4);
+      expect(ownerRect!.x).toBeGreaterThan(sourceRect!.x + sourceRect!.width - 1);
+    } else if (width > 560) {
+      // Both controls share a full-width pair instead of squeezing into
+      // a single filter slot at tablet and narrow desktop widths.
       expect(Math.abs(sourceRect!.y - ownerRect!.y)).toBeLessThan(2);
       expect(Math.abs(sourceRect!.width - ownerRect!.width)).toBeLessThan(2);
     } else {
+      // Stack before labels truncate on small phones.
       expect(ownerRect!.y).toBeGreaterThan(sourceRect!.y + sourceRect!.height - 1);
     }
-    if (width > 980) {
-      // Sources and Owners together take one normal desktop filter slot,
-      // next to Authentication, not an entire extra full-width row.
-      const authRect = await authenticationControl.boundingBox();
-      expect(authRect).not.toBeNull();
-      expect(Math.abs(pairRect!.y - authRect!.y)).toBeLessThan(2);
-      expect(Math.abs(pairRect!.width - authRect!.width)).toBeLessThan(4);
-    } else if (width > 720) {
-      // A two-column tablet grid has an odd final filter slot; use both
-      // columns rather than leaving half the toolbar empty.
+    if (width <= 980) {
+      const pairRect = await pair.boundingBox();
       const toolbarRect = await toolbar.boundingBox();
+      expect(pairRect).not.toBeNull();
       expect(toolbarRect).not.toBeNull();
       expect(Math.abs(pairRect!.width - toolbarRect!.width)).toBeLessThan(4);
     }
