@@ -59,7 +59,7 @@ func installedBindingTargets(installation domain.Installation, scope string) []d
 func directoryBindingTargets(binding domain.ClientBinding) []domain.ClientID {
 	owner := domain.ClientID(binding.ClientID)
 	definition, known := domain.ClientDefinitionFor(owner)
-	result := make([]domain.ClientID, 0, len(binding.AffectedSurfaces)+1)
+	var result []domain.ClientID
 	for _, target := range bindingSurfaceTargets(binding) {
 		if !supportedTarget(target) {
 			continue
