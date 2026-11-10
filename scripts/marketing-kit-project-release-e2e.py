@@ -588,8 +588,18 @@ def profile_snapshot(env, project):
 
 def check_profile_unchanged(env, project, expected, stage):
     """A peer restore/remove must not alter the originating profile or Project."""
-    if profile_snapshot(env, project) != expected:
-        raise AssertionError(f"{stage}: original isolated profile changed")
+    observed = profile_snapshot(env, project)
+    if observed != expected:
+        # Report only bounded, sandbox-relative key names; never export values,
+        # file content, absolute paths, or untrusted diagnostics. A changed
+        # snapshot must remain a failure, not a permitted side effect.
+        differing = sorted(key for key in (observed.keys() | expected.keys())
+                           if observed.get(key) != expected.get(key))
+        names = [re.sub(r"[^A-Za-z0-9_./:-]", "?", key)[:120]
+                 for key in differing[:12]]
+        raise AssertionError(
+            f"{stage}: original isolated profile changed "
+            f"(entries={len(differing)}, keys={names})")
 
 
 def check_user_project_unchanged(project, expected, stage):
