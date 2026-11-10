@@ -33,7 +33,7 @@ test('static site advertises readable agent indexes and matching catalogs', asyn
   expect(catalogHtml).toContain('data-initial-catalog="reviewed-directory-snapshot"');
   expect(catalogHtml).toContain('data-catalog-augmentation="signed-client-side-discovery"');
   expect(catalogHtml).toContain('data-count-scope="initial-reviewed-subset-not-full-directory"');
-  expect(catalogHtml).toContain('The static page starts with reviewed plugins.');
+  expect(catalogHtml).not.toContain('The static page starts with reviewed plugins.');
 
   const indexLink = page.locator('head link[rel="describedby"][type="text/plain"]');
   await expect(indexLink).toHaveCount(1);
