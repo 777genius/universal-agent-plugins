@@ -342,7 +342,8 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     self.assertEqual(json.loads(lock_file.read_text())["packages"][1][
                         "tree_digest"], "sha256:0" + "b" * 63)
                     return {"exit_code": 1, "timeout": False,
-                            "stderr_tail": "signed lock digest mismatch"}
+                            "stderr_tail": ("verify notion pinned manifest; run agentplugins deps lock: "
+                                            "signed Directory publication differs from exact lock")}
 
                 def preserved():
                     checked.append(lock_file.read_bytes())
@@ -362,7 +363,11 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                             {"exit_code": 0, "stderr_tail": "digest mismatch"},
                             {"exit_code": 1, "timeout": True,
                              "stderr_tail": "digest mismatch"},
-                            {"exit_code": 1, "stderr_tail": "native client unavailable"}):
+                            {"exit_code": 1, "stderr_tail": "native client unavailable"},
+                            {"exit_code": 1, "stderr_tail": "launcher cache lock timed out"},
+                            {"exit_code": 1, "stderr_tail": "signed lock digest mismatch"},
+                            {"exit_code": 1, "stderr_tail": "verify notion pinned manifest: remote download failed"},
+                            {"exit_code": 1, "stderr_tail": "verify hubspot-crm pinned manifest; signed Directory publication differs from exact lock"}):
                         with self.subTest(failed=failed), patch.dict(
                                 verify.__globals__, {
                                     "invoke": lambda *args: failed}):
@@ -370,7 +375,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                                 verify("agentplugins", env, project, "codex",
                                        scope, (preserved,))
                             self.assertEqual(lock_file.read_bytes(), original_bytes)
-                    self.assertEqual(len(checked), 4)
+                    self.assertEqual(len(checked), 8)
 
     def test_marketing_kit_corrupt_lock_restore_rejects_foreign_symlink(self):
         # A malicious native invocation may swap the fixture lock for a link to
@@ -409,7 +414,8 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                         locked.unlink()
                         locked.symlink_to(foreign)
                         return {"exit_code": 1, "timeout": False,
-                                "stderr_tail": "signed lock digest mismatch"}
+                                "stderr_tail": ("verify notion pinned manifest; run agentplugins deps lock: "
+                                            "signed Directory publication differs from exact lock")}
 
                     with patch.dict(verify.__globals__, {"invoke": attacker}):
                         with self.assertRaisesRegex(AssertionError, "lock path replaced"):

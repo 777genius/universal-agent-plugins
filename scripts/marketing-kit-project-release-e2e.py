@@ -353,8 +353,11 @@ def verify_corrupt_lock_refusal(cli, env, project, target, scope, guards):
             raise AssertionError("corrupt signed lock did not fail closed")
         reason = (str(refused.get("stderr_tail") or "") + " " +
                   str(refused.get("_json") or "")).lower()
-        if "lock" not in reason and "digest" not in reason:
-            raise AssertionError("corrupt lock rejection was not attributable to lock integrity")
+        # The actual released CLI must identify the corrupted Notion pin,
+        # not merely mention a launcher cache lock or an unrelated digest.
+        if ("verify notion pinned manifest" not in reason
+                or "signed directory publication differs from exact lock" not in reason):
+            raise AssertionError("corrupt child digest did not receive signed-pin refusal")
         check_profile_unchanged(env, project, before, f"corrupt {scope} locked restore")
         if identities(inventory(cli, env, project, target, scope), target, scope):
             raise AssertionError("corrupt locked restore installed a dependency")
