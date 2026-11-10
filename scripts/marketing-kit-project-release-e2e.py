@@ -100,7 +100,7 @@ def valid_legacy_dependency_result(envelope, operation, target=None, scope=None)
     return True
 
 
-def verify_add_receipt_inventory(envelope, observed):
+def verify_applied_receipt_inventory(envelope, observed):
     """Bind applied dependency receipts to the actual selected-scope inventory."""
     data = envelope.get("data", envelope)
     active = [action for action in data["actions"] if action["action"] != "unchanged"]
@@ -108,7 +108,7 @@ def verify_add_receipt_inventory(envelope, observed):
         distribution = REQUIRED_DISTRIBUTIONS[action["alias"]]
         if observed.get(distribution) != receipt["installation_id"]:
             raise AssertionError(
-                f"add receipt does not match installed {distribution} identity")
+                f"applied receipt does not match installed {distribution} identity")
 
 
 def verified(result, stage, operation=None, target=None, scope=None):
@@ -602,15 +602,15 @@ def execute(cli, env, project, target, label, *args):
         raise AssertionError(f"{label}: invalid explicit scope")
     result = invoke([cli, *args, "--format", "json"], env, project, 180)
     envelope = verified(result, label, args[0], target, args[selected])
-    if args[0] == "add":
-        # The released result DTO has no alias. In a cold add planned IDs
+    if args[0] in ("add", "install"):
+        # The released result DTO has no alias. In a cold add/install planned IDs
         # can be absent, so match each applied result to fresh signed inventory.
         data = envelope.get("data", envelope)
         if any(action["action"] != "unchanged" for action in data["actions"]):
             current = identities(
                 inventory(cli, env, project, target, args[selected]),
                 target, args[selected])
-            verify_add_receipt_inventory(envelope, current)
+            verify_applied_receipt_inventory(envelope, current)
     return {"stage": label, "exit_code": result["exit_code"], "result": "passed"}
 
 

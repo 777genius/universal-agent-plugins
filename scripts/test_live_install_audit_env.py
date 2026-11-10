@@ -209,6 +209,52 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "signed lock pin"):
                 check(pins, "claude")
 
+    def test_marketing_kit_cold_locked_restore_receipts_match_installed_scope(self):
+        # A real cold restore must bind each reported applied result to the
+        # installed distribution, not merely return four plausible IDs.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        execute = runner["execute"]
+        required = runner["REQUIRED_DISTRIBUTIONS"]
+        aliases = tuple(required)
+        actions = [{"alias": alias, "client_id": "codex", "action": "install"}
+                   for alias in aliases]
+        results = [{"client_id": "codex", "operation": "install",
+                    "installation_id": alias + "-id", "outcome": "completed"}
+                   for alias in aliases]
+        installed = {required[alias]: alias + "-id" for alias in aliases}
+        for scope in ("project", "user"):
+            with self.subTest(scope=scope):
+                envelope = {"result": "success", "outcome": "completed",
+                            "scope": scope, "actions": actions, "results": results}
+                receipt = {"exit_code": 0, "timeout": False, "_json": envelope}
+                args = ("install", "--locked", "--yes", "--scope", scope)
+                if scope == "project":
+                    args += ("--project-root", str(Path.cwd()))
+                with patch.dict(execute.__globals__, {
+                        "invoke": lambda *argv: receipt,
+                        "inventory": lambda *argv: None,
+                        "identities": lambda *argv: installed}):
+                    self.assertEqual(
+                        execute("agentplugins", {}, Path.cwd(), "codex",
+                                "cold restore", *args)["result"], "passed")
+                    for incorrect in (
+                            # A swapped child identity was formerly accepted
+                            # because the inventory itself remained correct.
+                            [results[1], results[0], *results[2:]],
+                            [{**results[0], "installation_id": "other-profile-id"},
+                             *results[1:]]):
+                        malformed = {**receipt, "_json": {
+                            **envelope, "results": incorrect}}
+                        with patch.dict(execute.__globals__, {
+                                "invoke": lambda *argv: malformed}):
+                            with self.assertRaisesRegex(
+                                    AssertionError, "receipt does not match"):
+                                execute("agentplugins", {}, Path.cwd(), "codex",
+                                        "cold restore", *args)
+
     def test_marketing_kit_accepts_only_complete_legacy_noop_update(self):
         # Published 0.1.102 emits result=success alongside outcome/actions/results.
         from runpy import run_path
