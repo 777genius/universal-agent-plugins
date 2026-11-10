@@ -42,7 +42,6 @@ jobs:
     timeout-minutes: 20
     outputs:
       scope: ${{ steps.browser-scope.outputs.mode }}
-      matrix: ${{ steps.shard-matrix.outputs.value }}
       site-artifact-id: ${{ steps.upload-site.outputs.artifact-id }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -149,16 +148,8 @@ jobs:
           echo "Playwright coverage: $mode"
 
 
-      # Full for any landing/UI change, manual and scheduled runs; docs-only PRs get one smoke shard.
-      - name: Choose shard matrix
-        id: shard-matrix
-        run: |
-          if [[ "${{ steps.browser-scope.outputs.mode }}" == "smoke" ]]; then
-            echo 'value={"include":[{"index":1,"total":1}]}' >> "$GITHUB_OUTPUT"
-          else
-            echo 'value={"include":[{"index":1,"total":2},{"index":2,"total":2}]}' >> "$GITHUB_OUTPUT"
-          fi
-
+      # Browser work always uses two fixed shards. For docs-only PRs,
+      # each shard takes half of the existing smaller smoke suite.
       # One signed, typechecked, generated site for both shards in this exact workflow run.
       - name: Upload verified site and registry inputs for browser shards
         id: upload-site
@@ -182,7 +173,12 @@ jobs:
       contents: read
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(needs.prepare-browser.outputs.matrix) }}
+      matrix:
+        include:
+          - index: 1
+            total: 2
+          - index: 2
+            total: 2
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -322,7 +318,7 @@ jobs:
 
       - name: Verify shard report cardinality
         env:
-          EXPECTED_SHARDS: ${{ needs.prepare-browser.outputs.scope == 'smoke' && '1' || '2' }}
+          EXPECTED_SHARDS: '2'
         run: |
           test "$(find landing/merged-blob-reports -maxdepth 1 -type f -name '*.zip' | wc -l)" -eq "$EXPECTED_SHARDS"
 
