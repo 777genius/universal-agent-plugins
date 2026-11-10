@@ -383,7 +383,7 @@ def pin_foreign(entries, case_root):
         skill_children = (tuple(sorted(child.name for child in path.parent.iterdir()))
                           if any(skill_dir in path.parents for skill_dir in skill_dirs)
                           else None)
-        pinned.append((path, content, (identity.st_mode, identity.st_dev, identity.st_ino),
+        pinned.append((path, content, (identity.st_mode, identity.st_dev, identity.st_ino, identity.st_mtime_ns),
                        tuple(ancestors), skill_children))
     return pinned
 
@@ -407,7 +407,7 @@ def check_foreign(entries, case_root):
                     != skill_children):
                 raise AssertionError(f"foreign content modified: {path.name}")
             identity = path.lstat()
-            current_identity = (identity.st_mode, identity.st_dev, identity.st_ino)
+            current_identity = (identity.st_mode, identity.st_dev, identity.st_ino, identity.st_mtime_ns)
             data = path.read_bytes() if path.is_file() else None
         except OSError as error:
             raise AssertionError(f"foreign content modified: {path.name}") from error
@@ -445,9 +445,11 @@ def scoped_snapshot(roots):
             entry = path.lstat()
         except OSError as error:
             raise AssertionError("protected scope snapshot unreadable: metadata") from error
-        state[f"metadata:{index}:{relative}"] = (
-            entry.st_mode, entry.st_dev, entry.st_ino
-        )
+        identity = (entry.st_mode, entry.st_dev, entry.st_ino)
+        # Equal bytes and inode do not prove a peer left file timestamps alone.
+        if stat.S_ISREG(entry.st_mode):
+            identity += (entry.st_mtime_ns,)
+        state[f"metadata:{index}:{relative}"] = identity
 
     def refuse_walk_error(error):
         raise AssertionError(f"protected scope snapshot unreadable: {error}") from error

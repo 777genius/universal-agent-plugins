@@ -812,6 +812,18 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             # Even identical bytes must not excuse a chmod or inode swap of
             # unmanaged state in the profile being actively installed.
             marker.write_bytes(expected.encode("utf-8"))
+            # Re-pin after the deliberate byte-corruption case above.
+            pinned = runner["pin_foreign"]([(marker, expected)], root)
+            original_stat = marker.stat()
+            try:
+                os.utime(marker, ns=(original_stat.st_atime_ns,
+                                     original_stat.st_mtime_ns - 2_000_000_000))
+                with self.assertRaisesRegex(AssertionError, "foreign content modified"):
+                    runner["check_foreign"](pinned, root)
+            finally:
+                os.utime(marker, ns=(original_stat.st_atime_ns,
+                                     original_stat.st_mtime_ns))
+            runner["check_foreign"](pinned, root)
             original_mode = marker.stat().st_mode & 0o7777
             try:
                 marker.chmod(original_mode ^ 0o200)
@@ -1457,6 +1469,20 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             finally:
                 foreign.chmod(original_mode)
             check(env, project, before, "peer mode restored")
+
+            # A timestamp-only touch is a foreign change even with identical
+            # bytes, inode and permissions.
+            original_stat = foreign.stat()
+            try:
+                os.utime(foreign, ns=(original_stat.st_atime_ns,
+                                      original_stat.st_mtime_ns - 2_000_000_000))
+                with self.assertRaisesRegex(AssertionError,
+                                            "original isolated profile changed"):
+                    check(env, project, before, "peer timestamp changed")
+            finally:
+                os.utime(foreign, ns=(original_stat.st_atime_ns,
+                                      original_stat.st_mtime_ns))
+            check(env, project, before, "peer timestamp restored")
 
             # An atomically replaced file with identical bytes is not the
             # original foreign file, even when its permissions are equal.
