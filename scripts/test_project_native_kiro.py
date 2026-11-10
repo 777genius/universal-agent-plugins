@@ -198,6 +198,38 @@ class KiroCollectorTests(unittest.TestCase):
             self.assertFalse((root / ".kiro/settings/mcp.json").exists())
             self.assertFalse((root / ".kiro/agents").exists())
 
+    def test_agent_list_auth_refusal_cannot_hide_unexpected_native_config(self):
+        for scope in ("a", "b", "user"):
+            for kind in ("native-created", "preexisting"):
+                ctx = self.context()
+                root = ctx.home if scope == "user" else ctx.projects[scope]
+                marker = root / ".kiro"
+
+                if kind == "preexisting":
+                    marker.mkdir()
+                    (marker / "foreign.txt").write_text("foreign; preserve me\\n")
+
+                def refused():
+                    if kind == "native-created":
+                        marker.mkdir()
+                        (marker / "foreign.txt").write_text("created by native probe\\n")
+                    return {"exit": 1, "error": None}, b"", kiro._LIST_AUTH_STDERR
+
+                ctx.replace["a-agent-raw-list"] = refused
+                with self.subTest(scope=scope, kind=kind), self.assertRaisesRegex(
+                        ValueError, "unexpected native config"):
+                    kiro.collect(ctx)
+                self.assertEqual(len(ctx.calls), 10)
+                self.assertEqual(ctx.calls[-1][0], "a-agent-raw-list")
+                self.assertEqual((marker / "foreign.txt").read_text(),
+                                 "foreign; preserve me\\n" if kind == "preexisting"
+                                 else "created by native probe\\n")
+                # Detection must not remove a foreign or unexpected file.
+                for other in ("a", "b", "user"):
+                    if other != scope:
+                        other_root = ctx.home if other == "user" else ctx.projects[other]
+                        self.assertFalse((other_root / ".kiro").exists())
+
     def test_agent_list_rechecks_companions_and_path_before_markers(self):
         for mutation in ("companion", "path"):
             ctx = self.context()
