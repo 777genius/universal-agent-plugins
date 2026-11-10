@@ -155,6 +155,9 @@ def container():
                 if stage == "repeat-add-a":
                     del output["operation_id"]
                     output["result"]["no_change"] = True
+                    action = "Review Grok project trust and discovery"
+                    output.update(scope="project", readiness="needs_action", next_action=action,
+                                  next_actions=[{"code": "verify_native", "actor": "native_client", "message": action}])
                     data = output
                 if verb == "remove":
                     receipt = next(iter(ins["data_receipts"].values()))
@@ -344,6 +347,16 @@ class GrokCycleContracts(unittest.TestCase):
                     cycle.public_result(raw(bad), stage, verb, proof[stage])
         singleton = cycle.stream(rows["repeat-add-a"]["stdout"])
         with self.assertRaises(ValueError): cycle.public_result(singleton, "add-a", "add", proof["add-a"])
+        # Repeated preparation must not claim native activation or silently
+        # drop the user's explicit verification step.
+        original = cycle.load(singleton)
+        for key, value in (("scope", "user"), ("readiness", "ready"),
+                           ("next_action", "unlinked"), ("next_actions", []),
+                           ("next_actions", [{"code": "verify_native", "actor": "user", "message": original["data"]["next_action"]}])):
+            changed = copy.deepcopy(original)
+            changed["data"][key] = value
+            with self.subTest(key=key, value=value), self.assertRaises(ValueError):
+                cycle.public_result(raw(changed), "repeat-add-a", "add", proof["repeat-add-a"])
 
     def test_failed_prefix_retains_unknown_native_output_without_qualification(self):
         bodies = container()
