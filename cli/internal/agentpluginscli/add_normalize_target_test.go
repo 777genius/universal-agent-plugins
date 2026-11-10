@@ -14,22 +14,22 @@ import (
 func TestNormalizeTargetContract(t *testing.T) {
 	t.Parallel()
 	canonical := map[string]domain.ClientID{
-		"codex":    domain.ClientCodex,
-		"chatgpt":  domain.ClientChatGPT,
-		"cursor":   domain.ClientCursor,
-		"copilot":  domain.ClientCopilot,
-		"vscode":   domain.ClientVSCode,
-		"kiro":     domain.ClientKiro,
-		"claude":   domain.ClientClaude,
-		"gemini":   domain.ClientGemini,
-		"opencode": domain.ClientOpenCode,
-		"cline":    domain.ClientCline,
-		"windsurf": domain.ClientWindsurf,
-		"grok":     domain.ClientGrok,
-		"kimi":     domain.ClientKimi,
-		"qoder":    domain.ClientQoder,
+		"codex":       domain.ClientCodex,
+		"chatgpt":     domain.ClientChatGPT,
+		"cursor":      domain.ClientCursor,
+		"copilot":     domain.ClientCopilot,
+		"vscode":      domain.ClientVSCode,
+		"kiro":        domain.ClientKiro,
+		"claude":      domain.ClientClaude,
+		"gemini":      domain.ClientGemini,
+		"opencode":    domain.ClientOpenCode,
+		"cline":       domain.ClientCline,
+		"windsurf":    domain.ClientWindsurf,
+		"grok":        domain.ClientGrok,
+		"kimi":        domain.ClientKimi,
+		"qoder":       domain.ClientQoder,
 		"antigravity": domain.ClientAntigravity,
-		"pi":       domain.ClientPi,
+		"pi":          domain.ClientPi,
 	}
 	if len(canonical) != len(domain.SupportedClientIDs()) {
 		t.Fatalf("the table covers %d clients, the registry has %d", len(canonical), len(domain.SupportedClientIDs()))
