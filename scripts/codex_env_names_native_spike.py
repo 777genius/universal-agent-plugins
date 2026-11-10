@@ -346,8 +346,8 @@ def main():
     # shell tools; stdio MCP env_vars must continue to work independently.
     if mode == "core_inherit":
         project_server += (
-            '[shell_environment_policy]\\n'
-            'inherit = "core"\\n'
+            '[shell_environment_policy]\n'
+            'inherit = "core"\n'
         )
     (project / ".codex" / "config.toml").write_text(project_server)
     env = {"HOME": str(home), "CODEX_HOME": str(home / ".codex"),
