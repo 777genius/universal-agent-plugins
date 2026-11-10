@@ -11,7 +11,7 @@ func TestDirectoryTransitionCannotBorrowAnotherSignedFeed(t *testing.T) {
 	revision := strings.Repeat("a", 40)
 	current := domain.DirectoryOrigin{
 		ProductID: "demo", DistributionID: "owner/demo",
-		DistributionKind: domain.DistributionCommunity,
+		DistributionKind:       domain.DistributionCommunity,
 		DesiredReleaseSequence: 1, SnapshotSchema: 1,
 		SnapshotSequence: 43, SnapshotDigest: "sha256:legacy",
 	}
