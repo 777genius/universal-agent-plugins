@@ -109,7 +109,7 @@ class Model(http.server.BaseHTTPRequestHandler):
                 cls.error = "no advertised shell tool"
                 self.send_error(409)
                 return
-            args = {"cmd": "pwd"} if shell == "exec_command" else {"command": "pwd"}
+            args = {"cmd": "sleep 7; pwd"} if shell == "exec_command" else {"command": "sleep 7; pwd"}
             item = {"type": "function_call", "name": shell,
                     "call_id": SHELL_CALL, "arguments": json.dumps(args)}
             cls.shell_requested = True
@@ -227,9 +227,37 @@ def main():
         version = subprocess.run([str(codex), "--version"], env=env,
                                  capture_output=True, timeout=15, text=True)
         report["version"] = version.stdout.strip()[:100]
-        result = subprocess.run(commands, cwd=project, env=env,
-                                capture_output=True, timeout=115)
+        # Observe LIVE named snapshots during the deliberately held shell tool.
+        # Post-exit scans alone miss transient files deleted by normal cleanup.
+        monitor_stop = threading.Event()
+        live = {"samples": 0, "hits": {}, "symlinks": 0, "errors": 0,
+                "snapshot_files_seen": False}
+        def monitor():
+            while not monitor_stop.is_set():
+                try:
+                    matches, links = inspect(root, secret)
+                    live["samples"] += 1
+                    live["symlinks"] = max(live["symlinks"], links)
+                    for match in matches:
+                        live["hits"][match["path_sha256"]] = match
+                    snapshot_dir = home / ".codex" / "shell_snapshots"
+                    if snapshot_dir.is_dir() and any(snapshot_dir.iterdir()):
+                        live["snapshot_files_seen"] = True
+                except OSError:
+                    live["errors"] += 1
+                monitor_stop.wait(0.035)
+        observer = threading.Thread(target=monitor, daemon=True)
+        observer.start()
+        try:
+            result = subprocess.run(commands, cwd=project, env=env,
+                                    capture_output=True, timeout=115)
+        finally:
+            monitor_stop.set()
+            observer.join(timeout=3)
         report["codex_exit_code"] = result.returncode
+        report["live_scan_samples"] = live["samples"]
+        report["live_snapshot_files_seen"] = live["snapshot_files_seen"]
+        report["live_scan_errors"] = live["errors"]
         report["real_codex_shell_called"] = Model.shell_requested and Model.shell_output_seen
         report["real_codex_mcp_called"] = Model.mcp_requested and Model.mcp_output_seen
         report["requests"] = Model.requests
@@ -238,16 +266,18 @@ def main():
             report["mcp_child_saw_secret"] = (observed.get("observed") is True
                 and observed.get("sha256") == hashlib.sha256(secret.encode()).hexdigest())
         found, symlinks = inspect(root, secret)
-        report["leak"] = bool(found)
-        report["matches"] = found[:10]
-        report["symlinks"] = symlinks
+        combined = {entry["path_sha256"]: entry for entry in
+                    [*found, *live["hits"].values()]}
+        report["leak"] = bool(combined)
+        report["matches"] = list(combined.values())[:10]
+        report["symlinks"] = max(symlinks, live["symlinks"])
         if result.returncode != 0:
             report["failure"] = Model.error or "native_codex_exit_nonzero"
         elif not all([report["real_codex_shell_called"], report["real_codex_mcp_called"],
                       report["mcp_child_saw_secret"]]):
             report["failure"] = Model.error or "native_proof_incomplete"
-        elif found or symlinks:
-            report["failure"] = "synthetic_canary_persisted_or_unsafe_scan"
+        elif combined or report["symlinks"] or live["errors"] or live["samples"] < 20:
+            report["failure"] = "live_canary_persisted_or_unsafe_scan"
         else:
             report["secrecy_pass"] = True
     except (OSError, subprocess.TimeoutExpired, ValueError) as exc:
