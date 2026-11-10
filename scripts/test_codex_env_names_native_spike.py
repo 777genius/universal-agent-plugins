@@ -1,0 +1,123 @@
+"""Unit negative controls for Codex native secrecy evidence, no network/vendor client."""
+import http.client
+import json
+from pathlib import Path
+import tempfile
+import threading
+import unittest
+from unittest.mock import patch
+import http.server
+
+from codex_env_names_native_spike import Model, MCP_CALL, SHELL_CALL, inspect
+
+
+class TestSyntheticModelOracle(unittest.TestCase):
+    def setUp(self):
+        Model.requests = 0
+        Model.shell_requested = False
+        Model.mcp_requested = False
+        Model.search_requested = False
+        Model.mcp_output_seen = False
+        Model.mcp_digest_verified = False
+        Model.shell_output_seen = False
+        Model.error = ""
+        Model.expected_digest = "UNITTEST_SYNTHETIC_SHA_ONLY"
+        Model.advertised_tool_names = set()
+        self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Model)
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+
+    def tearDown(self):
+        self.server.shutdown()
+        self.server.server_close()
+        self.thread.join(timeout=3)
+
+    def call(self, data, status=200):
+        client = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=5)
+        try:
+            client.request("POST", "/v1/responses", json.dumps(data),
+                           {"Content-Type": "application/json"})
+            response = client.getresponse()
+            content = response.read().decode()
+            self.assertEqual(response.status, status)
+            if status != 200:
+                return None
+            events = [json.loads(line[6:]) for line in content.splitlines()
+                      if line.startswith("data: ")]
+            self.assertEqual(len(events), 3)
+            return events[1]["item"]
+        finally:
+            client.close()
+
+    def test_real_call_ids_and_matching_digest_must_be_observed(self):
+        shell = self.call({"tools": [{"type": "function", "name": "exec_command"}]})
+        self.assertEqual(shell["call_id"], SHELL_CALL)
+        self.assertEqual(shell["name"], "exec_command")
+        tool = self.call({
+            "tools": [{"type": "namespace", "name": "mcp__env_spike",
+                       "tools": [{"name": "confirm_env"}]}],
+            "input": [{"type": "function_call_output", "call_id": SHELL_CALL,
+                       "output": "bounded shell done"}],
+        })
+        self.assertEqual(tool["call_id"], MCP_CALL)
+        self.assertEqual(tool["namespace"], "mcp__env_spike")
+        self.assertFalse(Model.mcp_digest_verified)
+        complete = self.call({
+            "input": [{"type": "function_call_output", "call_id": MCP_CALL,
+                       "output": {"content": [{"type": "text",
+                                   "text": '{"sha256":"UNITTEST_SYNTHETIC_SHA_ONLY","observed":true}'}]}}],
+        })
+        self.assertEqual(complete["type"], "message")
+        self.assertTrue(Model.mcp_digest_verified)
+        self.assertTrue(Model.mcp_output_seen)
+
+    def test_wrong_digest_is_never_treated_as_receipt(self):
+        self.call({"tools": [{"type": "function", "name": "exec_command"}]})
+        self.call({"input": [{"type": "function_call_output", "call_id": SHELL_CALL,
+                             "output": "shell complete"}],
+                   "tools": [{"type": "namespace", "name": "mcp__env_spike",
+                              "tools": [{"name": "confirm_env"}]}]})
+        self.call({"input": [{"type": "function_call_output", "call_id": MCP_CALL,
+                              "output": {"content": [{"type": "text",
+                                        "text": '{"observed":false,"sha256":""}'}]}}]})
+        self.assertTrue(Model.mcp_output_seen)
+        self.assertFalse(Model.mcp_digest_verified)
+
+    def test_missing_mcp_advertisement_refuses(self):
+        self.call({"tools": [{"type": "function", "name": "exec_command"}]})
+        self.call({"input": [{"type": "function_call_output", "call_id": SHELL_CALL,
+                             "output": "shell complete"}]},
+                  status=409)
+        self.assertEqual(Model.error, "MCP tool not advertised")
+
+
+class TestSyntheticSnapshotScanner(unittest.TestCase):
+    def test_raw_and_common_encoded_canary_are_detected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            snapshot = root / "home" / ".codex" / "shell_snapshots" / "test.sh"
+            snapshot.parent.mkdir(parents=True)
+            token = "not_a_real_secret_fixture_123"
+            for content in [token, token.encode().hex()]:
+                snapshot.write_text(content)
+                findings, symlinks = inspect(root, token)
+                self.assertEqual(symlinks, 0)
+                self.assertEqual(len(findings), 1)
+                self.assertEqual(findings[0]["result"], "synthetic_value_persisted")
+                self.assertTrue(findings[0]["shell_snapshot_path"])
+                self.assertNotIn(token, str(findings))
+            snapshot.write_text("nonsecret")
+            self.assertEqual(inspect(root, token)[0], [])
+
+    def test_atomic_unlink_during_read_is_not_false_positive(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            file = root / "transient"
+            file.write_text("nonsecret")
+            with patch.object(Path, "read_bytes", side_effect=FileNotFoundError):
+                findings, _ = inspect(root, "synthetic_token")
+            self.assertEqual(findings, [])
+
+
+if __name__ == "__main__":
+    unittest.main()

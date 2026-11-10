@@ -7,6 +7,7 @@ on:
     paths:
       - scripts/codex_env_names_native_spike.py
       - scripts/codex_env_names_appserver_spike.py
+      - scripts/test_codex_env_names_native_spike.py
       - .github/workflows/codex-env-names-spike.yml
   workflow_dispatch:
 
@@ -21,6 +22,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Verify deterministic synthetic MCP and snapshot oracles
+        run: python3 -m unittest discover -s scripts -p 'test_codex_env_names_native_spike.py'
       - name: Install verified official Codex 0.167.0 executable
         id: native-binary
         shell: bash
