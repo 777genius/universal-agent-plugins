@@ -132,6 +132,17 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                                 {**envelope, "result": "failure"}):
                     with self.assertRaisesRegex(AssertionError, "CLI did not succeed"):
                         check({**valid, "_json": invalid}, operation, operation, "codex")
+                if results:
+                    # A planned active action cannot claim successful execution
+                    # using only unchanged/no-op receipts, even with a zero exit.
+                    no_op_receipts = {**envelope, "results": [
+                        {**result, "outcome": "unchanged"} for result in results]}
+                    for output in (no_op_receipts,
+                                   {**no_op_receipts, "result": "success"}):
+                        with self.assertRaisesRegex(AssertionError,
+                                                    "CLI did not succeed"):
+                            check({**valid, "_json": output},
+                                  operation, operation, "codex")
 
     def test_marketing_kit_noop_update_rejects_rekey_and_lock_rewrite(self):
         # Released 0.1.102 reports unchanged; do not trust that envelope alone.

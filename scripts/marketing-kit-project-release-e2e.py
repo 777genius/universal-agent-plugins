@@ -81,7 +81,10 @@ def valid_legacy_dependency_result(envelope, operation, target=None):
         return False
     for action, result in zip(active, results):
         if (not isinstance(result, dict)
-                or result.get("outcome") not in ("completed", "unchanged")
+                # A planned active action with a no-op receipt did not execute
+                # the stated repair/install/remove. Only explicit unchanged
+                # actions may omit execution results.
+                or result.get("outcome") != "completed"
                 or result.get("operation") != action["action"]
                 or result.get("client_id") != action["client_id"]
                 or (action.get("installation_id")
