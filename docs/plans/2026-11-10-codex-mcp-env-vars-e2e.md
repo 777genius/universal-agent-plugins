@@ -66,7 +66,7 @@ Unit/conformance: extension parsing, negative/missing/malicious names, stdio-onl
 | R2 | DONE — hostile package, child process, UX consent and audit oracle | See review log below |
 | R3 | DONE — reuse existing CLI preview/permissions; no parallel system | See review log below |
 | R4 | DONE — pinned native artifact, transient leak oracle, original evidence requirements | See review log below |
-| Native Linux spike | First iteration FAIL (genuine Codex ran shell; MCP not discovered); **not** a secrecy pass. Revised trusted-project + live-scan iteration queued | [run #42863491111](https://github.com/777genius/universal-agent-plugins/actions/runs/42863491111), follow-ups #42864100790 and #42864292953 |
+| Native Linux spike | **NEGATIVE SECURITY PROOF** on genuine Codex 0.167.0: synthetic value persisted in live shell snapshot; MCP child not yet observed | Original artifact #13789170153; see R6 |
 | Native 3-OS proof | Pending | Needed only if Linux proof and security acceptance pass |
 | Production implementation | NOT STARTED | Security gate first |
 | E2E / merge | NOT STARTED | No bypass if negative oracle |
@@ -132,3 +132,15 @@ Unit/conformance: extension parsing, negative/missing/malicious names, stdio-onl
 **Decision:** do NOT silently edit Codex shell policy, create a new migration, claim the filter is universally safe, or ship a feature using the filter without a separate exact-version, effective-configuration, foreign-policy-preservation and real 3-OS leak oracle. The simplest preferred safe shipping route remains an upstream native fix that does not persist the forwarded canary by default. No user credentials and no hidden changes to shell tool behavior.
 
 **Evidence:** Codex release `rust-v0.167.0` source `codex-rs/rmcp-client/src/utils.rs`, `codex-rs/shell-command/src/shell_snapshot_render.rs`, `codex-rs/protocol/src/shell_environment.rs`, `codex-rs/config/src/merge.rs` and its `merge_tests.rs`. The real synthetic native CI [run #42865962978](https://github.com/777genius/universal-agent-plugins/actions/runs/42865962978) is queued at this checkpoint; **no native secrecy PASS is inferred from source inspection**.
+
+### R6 — independent original-artifact native security review (2026-11-10)
+
+**NEGATIVE GATE — confirmed runtime persistence on latest pinned Codex 0.167.0 (Linux):**
+- [Native workflow #42864100790](https://github.com/777genius/universal-agent-plugins/actions/runs/42864100790) ran the **actual published Codex binary** with source-pinned SHA256. A scripted local model (no real credentials/model service) caused a native built-in shell tool call.
+- The oracle watched the disposable HOME/CODEX_HOME/project **while Codex ran**, not just after exit: `live_scan_samples=59`, `live_snapshot_files_seen=true`, `leak=true`; one synthetic value matched in a file under `CODEX_HOME/shell_snapshots` (`shell_snapshot_path=true`). Proof is redacted: only boolean and SHA256 of path, never the synthetic value.
+- The [original redacted artifact #13789170153](https://github.com/777genius/universal-agent-plugins/actions/runs/42864100790/artifacts/13789170153) was **independently downloaded**, GitHub-published ZIP SHA256 `e8cf053aa46af171d466de3b2cf437e61c2af18fd344902e7494d0813ca8fb59` verified, ZIP CRC clean, `codex-cli 0.167.0`, raw record explicitly `synthetic_value_persisted`. This is not a hypothetical static finding.
+- In this first live observation the MCP fixture was not advertised (`mcp_child_saw_secret=false`, `real_codex_mcp_called=false`), so **MCP forwarding remains unqualified**. The shell leak, however, independently demonstrates that arbitrary ambient synthetic values can be persisted by default. Do not claim a successful MCP E2E or mistake the failed workflow for a successful secrecy proof.
+
+**Decision:** STOP production Codex names-only forwarding for now. Merely emitting `env_vars` cannot prevent this upstream snapshot persistence; opt-in consent cannot substitute for the negative oracle. Keep this PR **Draft** and #642 **OPEN**, preserving only design/spikes. Continue the separately queued [current app-server + CLI negative oracle #42865962978](https://github.com/777genius/universal-agent-plugins/actions/runs/42865962978) for protocol diagnosis, but no product implementation or merge while this native gate is red. Do not silence snapshot scanning, force-disable vendor features, alter global shell policy, create a vault, or expand scope to upstream Codex internals.
+
+**Next safe release condition:** an upstream pinned Codex fix with full default-mode nonpersistence and real MCP child tools/call proven on 3 OS, **or** a separately reviewed, owner-approved, compatibility-safe effective-config approach that preserves all foreign shell policies and passes the same exact 3-OS negative oracle. No claim of an easy workaround is supported today.
