@@ -458,7 +458,7 @@
       "items": {
         "0": {
           "question": "Какие AI-агенты поддерживаются?",
-          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder: для каждого клиента предусмотрен свой путь установки или подготовки. Совместимость зависит от компонентов пакета, области установки и требований активации."
+          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder, Pi: для каждого клиента предусмотрен свой путь установки или подготовки. Совместимость зависит от компонентов пакета, области установки и требований активации."
         },
         "1": {
           "question": "Одна команда устанавливает во все агенты?",

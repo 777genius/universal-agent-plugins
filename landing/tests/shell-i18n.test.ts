@@ -62,6 +62,20 @@ test('shell English messages compile, interpolate and retain baseline FAQ facts'
   assert.equal(errors.mock.callCount(), 0);
 });
 
+test('supported-agent FAQ stays in sync with the 14 public clients across all locales', () => {
+  const expected = clientLandingPages.map((client) => client.name);
+  for (const locale of publishedLocales) {
+    const localized = JSON.parse(read(`i18n/locales/${locale}.json`)) as {
+      shell: { faq: { items: Array<{ answer: string }> } };
+    };
+    const listed = localized.shell.faq.items[0]!.answer
+      .split(/[:：]/, 1)[0]!
+      .split(',')
+      .map((name) => name.trim());
+    assert.deepEqual(listed, expected, `FAQ agents for ${locale}`);
+  }
+});
+
 test('narrow overlay preserves every active English field and technical byte', () => {
   const actual = assembleDownloadContent(overlay);
   assert.deepEqual(actual.download, legacy.download);

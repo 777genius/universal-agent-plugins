@@ -321,7 +321,7 @@
       "items": {
         "0": {
           "question": "Quais agentes de IA são compatíveis?",
-          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder: cada cliente tem seu próprio caminho de instalação ou preparação. A compatibilidade depende dos componentes, do escopo e dos requisitos de ativação."
+          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder, Pi: cada cliente tem seu próprio caminho de instalação ou preparação. A compatibilidade depende dos componentes, do escopo e dos requisitos de ativação."
         },
         "1": {
           "question": "Um comando instala em todos os agentes?",

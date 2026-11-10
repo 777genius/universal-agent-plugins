@@ -458,7 +458,7 @@
       "items": {
         "0": {
           "question": "支持哪些人工智能代理？",
-          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder：各客户端有自己的安装或准备流程。兼容性取决于包的组件、安装范围和激活要求。"
+          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder, Pi：各客户端有自己的安装或准备流程。兼容性取决于包的组件、安装范围和激活要求。"
         },
         "1": {
           "question": "一个命令就能为所有智能体安装插件吗？",
