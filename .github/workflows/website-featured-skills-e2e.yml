@@ -15,8 +15,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: website-featured-skills-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # Unrelated labels must not evict an already queued or running live audit.
+  group: website-featured-skills-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name != 'ci:live-skills' && github.run_id || 'active' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && (github.event.action != 'labeled' || github.event.label.name == 'ci:live-skills') }}
 
 jobs:
   published-linux:

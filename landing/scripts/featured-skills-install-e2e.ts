@@ -30,9 +30,12 @@ const run = (args: string[], cwd: string, env: NodeJS.ProcessEnv) => {
   });
   return {
     code: result.status, error: result.error?.message ?? null,
+    rawStdout: result.stdout || '',
     stdout: (result.stdout || '').slice(-1200), stderr: (result.stderr || '').slice(-1200),
   };
 };
+const receipt = ({ code, error, stdout, stderr }: ReturnType<typeof run>) =>
+  ({ code, error, stdout, stderr });
 const sha256 = (file: string) => createHash('sha256').update(readFileSync(file)).digest('hex');
 // Native clients choose their own project Skill directory names. Claude uses
 // managed physical skill IDs; Codex/OpenCode may expose the original slug.
@@ -163,8 +166,8 @@ try {
     const row: Record<string, unknown> = { repository, slug, command, target };
     evidence.push(row);
     const installed = run(addArgs, project, env);
-    row.install = installed;
-    const directory = installedDirectory(installed.stdout, slug, target);
+    row.install = receipt(installed);
+    const directory = installedDirectory(installed.rawStdout, slug, target);
     const ownedPath = nativeSkillFile(project, roots[target]!, directory, target, slug);
     row.native_skill_path = ownedPath;
     if (installed.code !== 0 || !ownedPath || !existsSync(lockPath)) {
@@ -176,14 +179,14 @@ try {
     if (!lockText.includes(slug)) errors.push(repository + '/' + slug + ': lock omits skill');
     row.installed_sha256 = originalHash;
     const repeated = run(addArgs, project, env);
-    row.repeat = repeated;
-    if (repeated.code !== 0 || installedDirectory(repeated.stdout, slug, target, true) !== directory ||
+    row.repeat = receipt(repeated);
+    if (repeated.code !== 0 || installedDirectory(repeated.rawStdout, slug, target, true) !== directory ||
         nativeSkillFile(project, roots[target]!, directory, target, slug) !== ownedPath ||
         sha256(ownedPath) !== originalHash)
       errors.push(repository + '/' + slug + ': repeat mutated native Skill');
     const removed = run(['remove', slug, '--target', target, '--scope', 'project',
       '--project-root', project, '--format', 'json'], project, env);
-    row.remove = removed;
+    row.remove = receipt(removed);
     row.native_removed = !existsSync(ownedPath) &&
       nativeSkillFile(project, roots[target]!, directory, target, slug) === null;
     row.sentinel_preserved = existsSync(sentinel) && readFileSync(sentinel, 'utf8') === 'do not touch this file\n';
