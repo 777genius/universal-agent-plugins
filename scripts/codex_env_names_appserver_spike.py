@@ -182,6 +182,7 @@ def main():
             time.sleep(.05)
         report["shell_tool_output_seen"] = Model.shell_output_seen
         report["shell_response_category"] = Model.shell_response_category
+        report["shell_response_indicators"] = Model.shell_response_indicators
         report["real_codex_shell_called"] = Model.shell_requested and Model.shell_execution_verified
         # Do not conflate genuine vendor app-server MCP tool receipt with
         # model-turn tool routing. Both results are reported independently;
