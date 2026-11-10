@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Actual public npm 0.1.102 + signed Marketing Kit Project lifecycle, no mocks."""
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -47,6 +48,14 @@ COMPAT_SKILL_ROOTS = {
 # Copilot CLI also discovers .claude/skills in repositories, but not as
 # a documented personal Skills path.
 PROJECT_ONLY_COMPAT_SKILL_ROOTS = {"copilot": (".claude",)}
+# Immutable 0.1.102 policy and the scanner used by this Ubuntu E2E workflow;
+# also independently pinned by project_native_windsurf_cycle.py.
+REFUSAL_CACHE_POLICY = {
+    "id": "agent-plugin-install", "version": 2,
+    "digest": "sha256:9cf869e299d847d7078aeca01f5a182fcdb0144bbf513c83290459991c79e037",
+}
+REFUSAL_SCANNER_PATH = "security/lintai/0.1.3/linux-amd64/lintai"
+REFUSAL_SCANNER_SHA256 = "b6723451f155eb49e84acb34d1f06de929bddfcff6238cd4e38cdc6519396fba"
 LEGACY_ACTIONS = {
     "update": {"unchanged"},
     "repair": {"repair"},
@@ -344,11 +353,11 @@ def verify_corrupt_lock_refusal(cli, env, project, target, scope, guards):
     if not stat.S_ISREG(original_identity.st_mode):
         raise AssertionError("invalid original signed lock path")
     original_digest, corrupted_digest = corrupt_locked_child_digest(lock_file)
-    before = profile_snapshot(env, project)
     scope_args = ["--scope", scope]
     if scope == "project":
         scope_args.extend(["--project-root", str(project)])
     try:
+        before = refusal_profile_snapshot(env, project, json.loads(original))
         refused = invoke([cli, "install", "--locked", "--yes",
                           *scope_args, "--format", "json"], env, project, 180)
         if refused.get("exit_code") in (None, 0) or refused.get("timeout"):
@@ -369,10 +378,12 @@ def verify_corrupt_lock_refusal(cli, env, project, target, scope, guards):
         )
         if acquisition_refusal not in reason and not signed_refusal:
             raise AssertionError("corrupt child digest did not receive signed-pin refusal")
-        check_profile_unchanged(env, project, before, f"corrupt {scope} locked restore")
+        check_refusal_profile_unchanged(env, project, before)
+        after_refusal = profile_snapshot(env, project)
         if identities(inventory(cli, env, project, target, scope), target, scope):
             raise AssertionError("corrupt locked restore installed a dependency")
-        check_profile_unchanged(env, project, before, f"corrupt {scope} locked restore inventory")
+        check_profile_unchanged(env, project, after_refusal,
+                                f"corrupt {scope} locked restore inventory")
         return refused["exit_code"]
     finally:
         try:
@@ -407,7 +418,7 @@ def run_case(cli, target, root, name, portable=None):
         raise AssertionError("isolated profile root escaped disposable case")
     home, data, project = case / "home", case / "data", case / "project"
     for directory in (home, data, project):
-        directory.mkdir()
+        directory.mkdir(mode=0o700)
         if not audit["path_inside_case"](directory, case):
             raise AssertionError("isolated profile directory escaped disposable case")
     # Reuse the existing published audit's native-profile root inventory.
@@ -593,6 +604,93 @@ def scoped_snapshot(roots):
                 else:
                     record_metadata(index, path, path.relative_to(root).as_posix())
     return state
+
+
+def refusal_profile_snapshot(env, project, lock):
+    """Protect own durable/native state while deriving finite cold-cache names."""
+    data = Path(env["AGENTPLUGINS_HOME"])
+    if not audit["path_inside_case"](data, data.parent) or not data.parent.is_dir():
+        raise AssertionError("corrupt restore cache root unsafe")
+    parent = data.parent.lstat()
+    subjects = {}
+    for pin in lock.get("packages", []):
+        subject = {name: pin.get(name) for name in ("tree_digest", "manifest_digest")}
+        if not all(isinstance(value, str) and re.fullmatch(r"sha256:[0-9a-f]{64}", value)
+                   for value in subject.values()):
+            continue
+        key = hashlib.sha256("\0".join((
+            subject["tree_digest"], subject["manifest_digest"], "lintai", "0.1.3",
+            REFUSAL_CACHE_POLICY["id"], "2", REFUSAL_CACHE_POLICY["digest"],
+        )).encode()).hexdigest()
+        subjects[f"security/assessments/{key}.json"] = subject
+    return {
+        "protected": scoped_snapshot([Path(env["HOME"]), project]),
+        "data": scoped_snapshot([data]),
+        "parent": (parent.st_mode, parent.st_dev, parent.st_ino),
+        "subjects": subjects,
+    }
+
+
+def check_refusal_profile_unchanged(env, project, before):
+    """Only this refused command may add its own exact released cache files."""
+    data = Path(env["AGENTPLUGINS_HOME"])
+    current = refusal_profile_snapshot(env, project, {})
+    if current["protected"] != before["protected"] or current["parent"] != before["parent"]:
+        raise AssertionError("corrupt restore changed protected native/Project state")
+    previous, observed = before["data"], current["data"]
+    created_root = (previous.get("root-kind:0") == "absent"
+                    and observed.get("root-kind:0") == "directory")
+    for key, value in previous.items():
+        if created_root and key == "root-kind:0":
+            continue
+        if observed.get(key) != value:
+            raise AssertionError("corrupt restore changed existing data entry")
+    files = {"directory-v1-cache.json", "directory-v1-cache.json.lock",
+             REFUSAL_SCANNER_PATH, *before["subjects"]}
+    directories = {parent.as_posix() for name in files
+                   for parent in Path(name).parents if parent != Path(".")}
+    allowed = set()
+    if created_root:
+        entry = data.lstat()
+        if not stat.S_ISDIR(entry.st_mode) or stat.S_IMODE(entry.st_mode) != 0o700:
+            raise AssertionError("corrupt restore created unsafe data root")
+        allowed.update(("root-kind:0", "metadata:0:."))
+    for key in observed.keys() - previous.keys():
+        if not key.startswith("metadata:0:") or key == "metadata:0:.":
+            continue
+        relative = key.removeprefix("metadata:0:")
+        path = data / relative
+        entry = path.lstat()
+        if stat.S_ISDIR(entry.st_mode) and relative in directories:
+            if stat.S_IMODE(entry.st_mode) != 0o700:
+                raise AssertionError("corrupt restore created unsafe cache directory")
+            allowed.update((key, f"directory:0:{relative}"))
+        elif (stat.S_ISREG(entry.st_mode) and entry.st_nlink == 1
+              and relative in files):
+            mode = 0o700 if relative == REFUSAL_SCANNER_PATH else 0o600
+            if stat.S_IMODE(entry.st_mode) != mode:
+                raise AssertionError("corrupt restore created unsafe cache file")
+            digest_key = f"{data.name}/{Path(relative)}"
+            if relative == REFUSAL_SCANNER_PATH:
+                if observed.get(digest_key) != REFUSAL_SCANNER_SHA256:
+                    raise AssertionError("corrupt restore created unpinned scanner")
+            elif relative in before["subjects"]:
+                if entry.st_size > 1 << 20:
+                    raise AssertionError("corrupt restore created oversized assessment")
+                assessment = json.loads(path.read_text(encoding="utf-8"))
+                if (not isinstance(assessment, dict)
+                        or assessment.get("subject") != before["subjects"][relative]
+                        or assessment.get("scanner") != {"id": "lintai", "version": "0.1.3"}
+                        or assessment.get("policy") != REFUSAL_CACHE_POLICY
+                        or assessment.get("schema_version") != 1):
+                    raise AssertionError("corrupt restore created unrelated assessment")
+            elif relative.endswith(".lock") and entry.st_size != 0:
+                raise AssertionError("corrupt restore created invalid Directory cache lock")
+            allowed.update((key, digest_key))
+        else:
+            raise AssertionError("corrupt restore created unexpected cache/data entry")
+    if (observed.keys() - previous.keys()) - allowed:
+        raise AssertionError("corrupt restore created unexpected data state")
 
 
 def profile_snapshot(env, project):

@@ -387,6 +387,149 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                             self.assertEqual(lock_file.read_bytes(), original_bytes)
                     self.assertEqual(len(checked), 10)
 
+    def test_marketing_kit_refusal_allows_only_derived_own_cache_additions(self):
+        from runpy import run_path
+        import hashlib
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        snapshot, check = runner["refusal_profile_snapshot"], runner["check_refusal_profile_unchanged"]
+        for absent in (False, True):
+            with self.subTest(absent_data=absent), TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                home, data, project = (root / name for name in ("home", "data", "project"))
+                home.mkdir()
+                project.mkdir()
+                if not absent:
+                    data.mkdir(mode=0o700)
+                env = {"HOME": str(home), "AGENTPLUGINS_HOME": str(data)}
+                pin = {"tree_digest": "sha256:" + "b" * 64,
+                       "manifest_digest": "sha256:" + "c" * 64}
+                before = snapshot(env, project, {"packages": [pin]})
+                own_before = runner["profile_snapshot"](env, project)
+                if absent:
+                    data.mkdir(mode=0o700)
+                name, subject = next(iter(before["subjects"].items()))
+                assessment = {"schema_version": 1, "subject": subject,
+                              "scanner": {"id": "lintai", "version": "0.1.3"},
+                              "policy": runner["REFUSAL_CACHE_POLICY"]}
+                scanner = data / runner["REFUSAL_SCANNER_PATH"]
+                files = {data / "directory-v1-cache.json": b"verified signed cache",
+                         data / "directory-v1-cache.json.lock": b"",
+                         data / name: json.dumps(assessment).encode(), scanner: b"pinned test binary"}
+                for path, body in files.items():
+                    for parent in reversed(path.relative_to(data).parents):
+                        (data / parent).mkdir(mode=0o700, exist_ok=True)
+                    path.write_bytes(body)
+                    path.chmod(0o700 if path == scanner else 0o600)
+                with patch.dict(check.__globals__, {
+                        "REFUSAL_SCANNER_SHA256": hashlib.sha256(files[scanner]).hexdigest()}):
+                    check(env, project, before)
+                    # The peer guard keeps its full snapshot contract; even
+                    # legitimate additions must fail if attributed to a peer.
+                    with self.assertRaisesRegex(AssertionError, "isolated profile changed"):
+                        runner["check_profile_unchanged"](env, project, own_before, "peer")
+                    protected = snapshot(env, project, {"packages": [pin]})
+                    cache = data / name
+                    replacement = data / "replacement"
+                    replacement.write_bytes(cache.read_bytes())
+                    replacement.chmod(0o600)
+                    replacement.replace(cache)
+                    with self.assertRaisesRegex(AssertionError, "existing data entry"):
+                        check(env, project, protected)
+
+    def test_marketing_kit_refusal_rejects_state_native_foreign_and_unknown_cache(self):
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        mutations = (
+            "data/state-v2.json", "data/store/package", "data/managed/package",
+            "data/operations-v2/receipt", "data/uap.toml", "data/uap.lock",
+            "home/.codex/config.toml", "project/.uap/state-v2.json",
+            "home/foreign.txt", "project/foreign.txt",
+            "data/security/unknown", "data/security/assessments/" + "a" * 64 + ".json",
+            "data/security/assessments/.assessment-temp.tmp",
+            "data/security/lintai/0.1.4/linux-amd64/lintai",
+        )
+        for relative in mutations:
+            with self.subTest(path=relative), TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                home, data, project = (root / name for name in ("home", "data", "project"))
+                for directory in (home, data, project):
+                    directory.mkdir(mode=0o700)
+                env = {"HOME": str(home), "AGENTPLUGINS_HOME": str(data)}
+                path = root / relative
+                if path.name in ("foreign.txt", "uap.toml", "uap.lock"):
+                    path.write_text("original")
+                before = runner["refusal_profile_snapshot"](env, project, {})
+                path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+                path.write_text("unexpected")
+                path.chmod(0o600)
+                with self.assertRaises(AssertionError):
+                    runner["check_refusal_profile_unchanged"](env, project, before)
+
+    def test_marketing_kit_refusal_rejects_unsafe_cache_entries(self):
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        for mutation in ("symlink-file", "symlink-directory", "fifo", "scanner",
+                         "assessment-subject", "assessment-policy", "mode", "root-mode"):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                home, data, project = (root / name for name in ("home", "data", "project"))
+                for directory in (home, data, project):
+                    directory.mkdir(mode=0o700)
+                env = {"HOME": str(home), "AGENTPLUGINS_HOME": str(data)}
+                pin = {"tree_digest": "sha256:" + "b" * 64,
+                       "manifest_digest": "sha256:" + "c" * 64}
+                before = runner["refusal_profile_snapshot"](env, project, {"packages": [pin]})
+                if mutation == "root-mode":
+                    data.chmod(0o755)
+                elif mutation == "symlink-directory":
+                    outside = root / "outside"
+                    outside.mkdir()
+                    try:
+                        (data / "security").symlink_to(outside, target_is_directory=True)
+                    except (OSError, NotImplementedError) as error:
+                        self.skipTest(f"host cannot create symlinks: {error}")
+                elif mutation.startswith("assessment-"):
+                    name, subject = next(iter(before["subjects"].items()))
+                    path = data / name
+                    for parent in reversed(path.relative_to(data).parents):
+                        (data / parent).mkdir(mode=0o700, exist_ok=True)
+                    body = {"schema_version": 1, "subject": subject,
+                            "scanner": {"id": "lintai", "version": "0.1.3"},
+                            "policy": dict(runner["REFUSAL_CACHE_POLICY"])}
+                    if mutation == "assessment-subject":
+                        body["subject"] = {**subject, "tree_digest": "sha256:" + "d" * 64}
+                    else:
+                        body["policy"]["version"] = 99
+                    path.write_text(json.dumps(body))
+                    path.chmod(0o600)
+                else:
+                    path = data / (runner["REFUSAL_SCANNER_PATH"] if mutation == "scanner"
+                                   else "directory-v1-cache.json")
+                    for parent in reversed(path.relative_to(data).parents):
+                        (data / parent).mkdir(mode=0o700, exist_ok=True)
+                    if mutation == "symlink-file":
+                        outside = root / "outside"
+                        outside.write_text("foreign")
+                        try:
+                            path.symlink_to(outside)
+                        except (OSError, NotImplementedError) as error:
+                            self.skipTest(f"host cannot create symlinks: {error}")
+                    elif mutation == "fifo":
+                        if not hasattr(os, "mkfifo"):
+                            self.skipTest("host cannot create FIFO")
+                        os.mkfifo(path, mode=0o600)
+                    else:
+                        path.write_text("untrusted")
+                        path.chmod(0o700 if mutation == "scanner" else 0o644)
+                with self.assertRaises(AssertionError):
+                    runner["check_refusal_profile_unchanged"](env, project, before)
+
     def test_marketing_kit_corrupt_lock_restore_rejects_foreign_symlink(self):
         # A malicious native invocation may swap the fixture lock for a link to
         # an outside file. Cleanup must not follow it to write original bytes.

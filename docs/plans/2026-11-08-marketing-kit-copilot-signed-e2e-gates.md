@@ -12,3 +12,39 @@ Continue existing draft PR #775. Five signed Marketing Kit Project client routes
 
 ## Non-goals
 No scanner bypass, no forced positive expectation for unsupported Copilot, no new public grants automatically, no duplicate PR replacing #775.
+
+## Cold refusal cache correction (2026-11-10)
+
+Source audit against immutable `agentplugins-v0.1.102` shows that locked declaration
+replay visits valid packages before the corrupted Notion pin
+(`deps_replay.go:44–70`). Materialization with `publish=false` still scans and
+checks the signed Directory (`deps_sync.go:27–63`): the production evaluator
+stores assessments synchronously and the Directory client persists authenticated
+last-known-good bytes. These own-profile cache additions explain the current
+negative-test failure; they do not establish a native installation or a write to
+another profile.
+
+Keep peer snapshots and all refusal/digest, inventory, lock-restoration and foreign
+guards unchanged. Give only the negative command's own snapshot a finite cache
+addition validator: preserve every existing entry, HOME and Project; accept only
+new regular Directory cache/lock, 64-hex assessment files and the pinned scanner
+for this host, plus their exact parent directories. Reject symlinks, special
+files, changed/replaced entries and unknown paths. Permit an initially absent
+data root only as a real directory under its unchanged real parent.
+
+Expected implementation is roughly 90–130 Python lines plus 120–180 regression
+lines. This adds a bounded path/type check rather than a second cache or security
+authority; cache contents remain subject to production signature/checksum checks.
+Filesystem snapshots have observation windows, so this does not promise detection
+of transient writes undone before inspection. Run the complete focused Marketing
+Kit suite and retain genuine released-client CI as the release evidence.
+
+Implemented with the exact policy/key and Linux scanner binary pins already used
+by `project_native_windsurf_cycle.py`. Fixture directories start with private
+permissions so Directory cache-parent normalization does not alter the baseline.
+After validating the refused command's additions, inventory uses a new strict
+full snapshot, preserving even those newly created caches during the read.
+The focused Marketing Kit suite passes 56 tests, including both scopes' refusal
+and lock restoration, valid cold-cache additions with existing/absent data roots,
+preexisting cache replacement, state/native/foreign writes, unknown cache paths,
+symlinks, a FIFO, incorrect scanner bytes and assessment identity/policy mismatch.
