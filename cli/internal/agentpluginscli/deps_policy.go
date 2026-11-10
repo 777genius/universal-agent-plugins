@@ -70,7 +70,7 @@ func readLocalDependencyPolicy(path string) (localDependencyPolicy, error) {
 		return policy, fmt.Errorf("decode local dependency policy: %w", err)
 	}
 	var extra yaml.Node
-	if err := decoder.Decode(&extra); err != io.EOF {
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
 		if err == nil {
 			return policy, errors.New("local dependency policy must have exactly one YAML document")
 		}
@@ -101,7 +101,7 @@ func validPolicyHost(host string) bool {
 		return false
 	}
 	for _, label := range strings.Split(host, ".") {
-		if len(label) == 0 || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+		if label == "" || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
 			return false
 		}
 		for _, r := range label {
@@ -127,7 +127,7 @@ func lockedSourceHost(pin environment.LockedPackage) (string, error) {
 		if pin.Source.Git.Repository != "" {
 			return "github.com", nil
 		}
-		return "", errors.New("Git dependency source has no origin authority")
+		return "", errors.New("git dependency source has no origin authority")
 	case pin.Source.Registry != nil:
 		// Registry coordinates bind a signed Directory publication to a
 		// GitHub owner/repository + exact commit.

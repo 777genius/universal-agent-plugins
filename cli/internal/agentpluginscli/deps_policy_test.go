@@ -92,12 +92,12 @@ func TestLocalDependencyPolicyExplicitOptInAndStrictParsing(t *testing.T) {
 func TestLocalDependencyPolicyRejectsSymlinkAndUnsupportedOrigins(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
-	real := filepath.Join(root, "policy.yaml")
-	if err := os.WriteFile(real, []byte("schema_version: 1\n"), 0o600); err != nil {
+	actualPath := filepath.Join(root, "policy.yaml")
+	if err := os.WriteFile(actualPath, []byte("schema_version: 1\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	link := filepath.Join(root, "policy-link.yaml")
-	if err := os.Symlink(real, link); err == nil {
+	if err := os.Symlink(actualPath, link); err == nil {
 		if _, err := readLocalDependencyPolicy(link); err == nil {
 			t.Fatal("policy symlink must not be followed")
 		}
