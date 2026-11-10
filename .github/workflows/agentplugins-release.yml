@@ -391,9 +391,33 @@ jobs:
       expected_asset_set_digest: ${{ needs.stage-draft.outputs.asset_set_digest }}
       release_assets_artifact: ${{ needs.stage-draft.outputs.assets_artifact }}
 
-  verified-draft:
+  hermes-native-proof:
     if: ${{ inputs.publish_release != true }}
     needs: [validate, stage-draft, platform-proof]
+    uses: ./.github/workflows/hermes-native-e2e.yml
+    permissions:
+      contents: read
+    with:
+      release_tag: ${{ inputs.tag }}
+      frozen_commit: ${{ needs.validate.outputs.commit }}
+      release_assets_artifact: ${{ needs.stage-draft.outputs.assets_artifact }}
+      expected_checksums_sha256: ${{ needs.stage-draft.outputs.asset_set_digest }}
+
+  antigravity-native-proof:
+    if: ${{ inputs.publish_release != true }}
+    needs: [validate, stage-draft, platform-proof]
+    uses: ./.github/workflows/antigravity-native-e2e.yml
+    permissions:
+      contents: read
+    with:
+      release_tag: ${{ inputs.tag }}
+      frozen_commit: ${{ needs.validate.outputs.commit }}
+      release_assets_artifact: ${{ needs.stage-draft.outputs.assets_artifact }}
+      expected_checksums_sha256: ${{ needs.stage-draft.outputs.asset_set_digest }}
+
+  verified-draft:
+    if: ${{ inputs.publish_release != true }}
+    needs: [validate, stage-draft, platform-proof, hermes-native-proof, antigravity-native-proof]
     runs-on: ubuntu-24.04
     permissions:
       # GitHub draft visibility requires push capability; contents: read can return null.
@@ -466,7 +490,7 @@ jobs:
           python3 scripts/reuse-agentplugins-verified-draft.py \
             --repository "${GITHUB_REPOSITORY}" --tag "${TAG}" --commit "${FROZEN_COMMIT}" \
             --run-id "${QUALIFIED_RUN_ID}" --run-attempt "${QUALIFIED_RUN_ATTEMPT}" \
-            --source "${GITHUB_WORKSPACE}"
+            --source "${GITHUB_WORKSPACE}" --require-hermes-antigravity
 
   promote-release:
     if: ${{ inputs.publish_release == true }}
@@ -497,7 +521,7 @@ jobs:
           release_id="$(python3 scripts/reuse-agentplugins-verified-draft.py \
             --repository "${GITHUB_REPOSITORY}" --tag "${TAG}" --commit "${FROZEN_COMMIT}" \
             --run-id "${QUALIFIED_RUN_ID}" --run-attempt "${QUALIFIED_RUN_ATTEMPT}" \
-            --source "${GITHUB_WORKSPACE}")"
+            --source "${GITHUB_WORKSPACE}" --require-hermes-antigravity)"
           [[ "${release_id}" =~ ^[1-9][0-9]*$ ]]
           gh api -X PATCH "repos/${GITHUB_REPOSITORY}/releases/${release_id}" \
             -F draft=false | jq -e --arg tag "${TAG}" --argjson id "${release_id}" \
