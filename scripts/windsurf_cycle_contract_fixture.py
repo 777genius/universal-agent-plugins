@@ -170,12 +170,18 @@ def build():
                     if stage!="repeat-add-a":outcome["group_phase"]="external_completed"
                     if stage in ("repeat-add-a","unchanged-update-a"):outcome["no_change"]=True
                 output={"plugin":cycle.NAME,"version":version,"source":"local" if verb in ("repair","remove") else "direct local source","tree_digest":digest,"manifest_digest":package["manifest_digest"],"dry_run":False,"result":outcome}
+                if verb in ("add","update"):
+                    guidance="Verify the selected Windsurf/Devin native client configuration"
+                    output.update(scope=scope_name,readiness="needs_action",next_action=guidance,
+                                  next_actions=[{"code":"verify_native","actor":"native_client","message":guidance}])
+                elif verb=="repair":
+                    output["next_action"]="Verify the selected Windsurf/Devin native client configuration"
                 data_out=output
                 if stage!="repeat-add-a":
                     output["operation_id"]=group;target={"target":"windsurf","status":"external_completed","output":output}
                     if verb=="update":target["selected"]=True
                     data_out={"operation_id":group,"batch":True,"status":"data_retained" if removed else "completed","succeeded":1,"failed":0,"plugin":cycle.NAME,"dry_run":False,"targets":[target]}
-                    if verb=="add":data_out["environment"]={"reason":"no_save_requested","saved":False}
+                    if verb=="add":data_out["environment"]={"reason":"no_save_requested","saved":False,"scope":scope_name,"scope_selection_reason":"explicit"}
                     if removed:data_out.update(data_retained=True,plugin_data_preserved=True)
                 if stage in ("add-user","add-a","add-b","repeat-add-a"):data_out["security"]={**assessment,"evidence_source":"cache" if stage=="repeat-add-a" else "local_scan"}
                 out=cycle.compact({"schema_version":1,"command":verb,"result":"success","data":data_out});err=cycle.progress(stage)
