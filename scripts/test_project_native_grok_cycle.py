@@ -193,20 +193,61 @@ def container():
                   "members": [{"Name": "grok", "Kind": "file", "Bytes": 195700192, "sha256": "22d281c5964c5444147328096ba2a221f3f0874c6858e27c825656a80f6e58e9"}]}, "runtime_files": [{"path": "/held/grok", "sha256": "22d281c5964c5444147328096ba2a221f3f0874c6858e27c825656a80f6e58e9"}]},
               "scanner": {"archive_sha256": "2b3d176db752433b904a4b42375543ff398f4841d22e48f7d4f23ded925b72da", "binary_sha256": "b6723451f155eb49e84acb34d1f06de929bddfcff6238cd4e38cdc6519396fba", "platform": "linux-amd64", "route": "prepopulated supported scanner cache; ordinary CLI security assessment", "source_tag": "v0.1.3", "version": "0.1.3"}}
     rows = public, inspections, [{"stage": stage, "value": proof[stage]} for stage in cycle.PROOF]
-    bodies = {name: b"".join(raw(row) + b"\n" for row in captured) for name, captured in zip(cycle.MEMBERS, rows)}
+    bodies = {name: b"".join(raw(row) + b"\n" for row in captured) for name, captured in zip(cycle.MEMBERS[:3], rows)}
+    mcp_project = ROOT + "/grok-project-mcp-only"
+    mcp_name = "uap-grok-mcp-only"
+    mcp_active = mcp_project + "/.grok/plugins/uap-grok-mcp-only-abcdef123456"
+    mcp_plugin = {"name": mcp_name, "scope": "project", "path": mcp_active,
+                  "enabled": False, "provides": {"mcpServers": 1}}
+    mcp_rows = []
+    for stage in cycle.MCP_INSPECT:
+        observed = {"grokVersion": "1.0.70", "cwd": mcp_project,
+                    "projectRoot": mcp_project + "/", "projectTrusted": False,
+                    "mcpServers": [], "plugins": [mcp_plugin] if stage == "installed" else []}
+        mcp_rows.append({"stage": stage, "value": {"cwd": mcp_project, "stdout": stream(raw(observed))}})
+    bodies[cycle.MEMBERS[3]] = b"".join(raw(row) + b"\n" for row in mcp_rows)
     bodies["runtime-attempt.json"] = raw(result)
     return bodies
 
 
 class GrokCycleContracts(unittest.TestCase):
-    def test_complete_four_member_parser_input_closes_only_two_flags(self):
+    def test_complete_five_member_parser_input_closes_only_two_flags(self):
         bodies = container()
         result = runtime.cli_attempt_members(bodies, SOURCE, "grok")
         self.assertTrue(result["runtime_attempt_complete"])
         self.assertEqual(sum(result["qualification"].values()), 2)
-        self.assertEqual(len(bodies), 4)
+        self.assertEqual(len(bodies), 5)
         self.assertFalse(result["real_model_qualified"])
         self.assertFalse(result["vendor_authentication_qualified"])
+
+    def test_mcp_only_original_native_inspect_requires_untrusted_discovery_and_removal(self):
+        for fault in ("missing", "trusted", "active", "wrong-version", "missing-owned",
+                      "folded-alias", "quoted-count", "retained"):
+            bodies = container()
+            name = cycle.MEMBERS[3]
+            rows = [cycle.load(line) for line in bodies[name].splitlines()]
+            native = cycle.load(cycle.stream(rows[0 if fault != "retained" else 1]["value"]["stdout"]))
+            if fault == "missing":
+                rows.pop()
+            elif fault == "trusted":
+                native["projectTrusted"] = True
+            elif fault == "active":
+                native["mcpServers"] = [{"name": "unexpected"}]
+            elif fault == "wrong-version":
+                native["grokVersion"] = "1.0.67"
+            elif fault == "missing-owned":
+                native["plugins"] = []
+            elif fault == "folded-alias":
+                native["plugins"][0]["name"] = "UAP-grok-mcp-only"
+            elif fault == "quoted-count":
+                native["plugins"][0]["provides"]["mcpServers"] = "1"
+            elif fault == "retained":
+                native["plugins"] = [cycle.load(cycle.stream(rows[0]["value"]["stdout"]))["plugins"][0]]
+            if fault != "missing":
+                rows[0 if fault != "retained" else 1]["value"]["stdout"] = stream(raw(native))
+            bodies[name] = b"".join(raw(row) + b"\n" for row in rows)
+            with self.subTest(fault=fault), self.assertRaises(ValueError):
+                runtime.cli_attempt_members(bodies, SOURCE, "grok")
 
     def test_empty_outside_requires_exact_provisional_allow_without_durable_grant(self):
         paths, proof = inputs()

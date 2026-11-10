@@ -55,7 +55,7 @@ func grokProjectNativeMCPCycle(t *testing.T, cycle *grokProjectCycle) {
 		t.Fatal("real Grok Project MCP-only installation response invalid", err)
 	}
 	active := grokProjectMCPReceipt(t, project, name)
-	grokProjectMCPNativeInspect(t, f, project, name, active, true)
+	grokProjectMCPNativeInspect(t, cycle, project, name, active, true, "installed")
 	cycle.check(t)
 	remove := grokProjectMCPRun(t, f, project, f.installer, "remove", name, "--target", "grok",
 		"--scope", "project", "--project-root", project, "--format", "json")
@@ -65,7 +65,7 @@ func grokProjectNativeMCPCycle(t *testing.T, cycle *grokProjectCycle) {
 	if _, err := os.Lstat(active); !os.IsNotExist(err) {
 		t.Fatalf("removed MCP-only project artifact survives: %v", err)
 	}
-	grokProjectMCPNativeInspect(t, f, project, name, active, false)
+	grokProjectMCPNativeInspect(t, cycle, project, name, active, false, "removed")
 	cycle.check(t)
 	t.Log("real Grok 1.0.70: Project MCP source installed, native candidate observed and removed; MCP tools/call not qualified")
 }
@@ -147,8 +147,9 @@ func mapsEqualProjectGrokMCP(actual, expected map[string]any) bool {
 	return true
 }
 
-func grokProjectMCPNativeInspect(t *testing.T, f *projectNativeCLIAttempt, project, name, active string, present bool) {
+func grokProjectMCPNativeInspect(t *testing.T, cycle *grokProjectCycle, project, name, active string, present bool, stage string) {
 	t.Helper()
+	f := cycle.f
 	body := grokProjectMCPRun(t, f, project, f.client, "inspect", "--json")
 	value, err := projectNativeRuntimeJSON(body)
 	if err != nil {
@@ -175,6 +176,11 @@ func grokProjectMCPNativeInspect(t *testing.T, f *projectNativeCLIAttempt, proje
 	if err := grokProjectMCPInventory(plugins, name, active, present); err != nil {
 		t.Fatal(err)
 	}
+	// Preserve the original, bounded native inspect bytes in the admitted ZIP.
+	// This is observation of an untrusted, inactive project, not MCP activation.
+	cycle.append(t, "grok-cycle-mcp-inspect.jsonl", stage, map[string]any{
+		"cwd": project, "stdout": cycle.stream(t, body),
+	})
 }
 
 // Native identity fields must not have Unicode-folded aliases. Unknown fields
