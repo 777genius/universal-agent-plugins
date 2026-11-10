@@ -21,9 +21,11 @@ import time
 import urllib.parse
 
 ENV_NAME = "UAP_E2E_SYNTHETIC_TOKEN"
+FOREIGN_ENV_NAME = "UAP_E2E_FOREIGN_PASSWORD"
 SHELL_CALL = "call_uap_shell_snapshot"
 SHELL_MARKER = "UAP_SHELL_COMPLETED"
 SHELL_ENV_PRESENT = "UAP_SHELL_ENV_PRESENT"
+SHELL_FOREIGN_PRESENT = "UAP_SHELL_FOREIGN_PRESENT"
 MCP_CALL = "call_uap_env_mcp"
 SEARCH_CALL = "call_uap_tool_search"
 
@@ -73,6 +75,7 @@ class Model(http.server.BaseHTTPRequestHandler):
     shell_output_seen = False
     shell_execution_verified = False
     shell_secret_visible = False
+    shell_foreign_visible = False
     shell_response_category = "not_observed"
     shell_response_indicators = []
     shell_requested_at = 0.0
@@ -108,6 +111,7 @@ class Model(http.server.BaseHTTPRequestHandler):
                 # never the canary value. A successful shell with access to
                 # the forwarded credential is unsafe even without a snapshot.
                 cls.shell_secret_visible |= SHELL_ENV_PRESENT in rendered
+                cls.shell_foreign_visible |= SHELL_FOREIGN_PRESENT in rendered
                 if (SHELL_MARKER in rendered and
                         time.monotonic() - cls.shell_requested_at >= 6.0):
                     cls.shell_execution_verified = True
@@ -190,7 +194,9 @@ class Model(http.server.BaseHTTPRequestHandler):
                 self.send_error(409)
                 return
             command = ("sleep 7; if test -n \"${" + ENV_NAME + "+x}\"; then printf "
-                       + SHELL_ENV_PRESENT + "; fi; printf " + SHELL_MARKER)
+                       + SHELL_ENV_PRESENT + "; fi; if test -n \"${"
+                       + FOREIGN_ENV_NAME + "+x}\"; then printf "
+                       + SHELL_FOREIGN_PRESENT + "; fi; printf " + SHELL_MARKER)
             # Codex exec_command can yield before a long command has finished.
             # Request a full bounded wait so the completion marker is observed
             # from the real native shell rather than mistaking an async
@@ -245,10 +251,13 @@ class Model(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-def inspect(root, secret):
-    patterns = [secret.encode(), secret.encode().hex().encode(),
-                base64.b64encode(secret.encode()),
-                urllib.parse.quote(secret).encode()]
+def inspect(root, (secret, foreign_secret)):
+    values = (secret,) if isinstance(secret, str) else secret
+    patterns = []
+    for value in values:
+        patterns.extend([value.encode(), value.encode().hex().encode(),
+                         base64.b64encode(value.encode()),
+                         urllib.parse.quote(value).encode()])
     found, symlinks = [], 0
     for directory, subdirs, files in os.walk(root, followlinks=False):
         for name in list(subdirs):
@@ -286,6 +295,7 @@ def main():
     if len(sys.argv) > 4:
         raise ValueError("unexpected native spike parameter")
     secret = "uap_spike_" + secrets.token_hex(24)
+    foreign_secret = "uap_foreign_spike_" + secrets.token_hex(24)
     Model.expected_digest = hashlib.sha256(secret.encode()).hexdigest()
     root = Path(tempfile.mkdtemp(prefix="uap-codex-spike-"))
     home, project = root / "home", root / "project"
@@ -307,6 +317,7 @@ def main():
         'wire_api = "responses"\nrequires_openai_auth = false\n'
         '[analytics]\nenabled = false\n[feedback]\nenabled = false\n'
         f'[projects.{json.dumps(str(project))}]\ntrust_level = "trusted"\n'
+        f'[shell_environment_policy]\nexclude = ["{FOREIGN_ENV_NAME}"]\n'
     )
     (home / ".codex" / "config.toml").write_text(config)
     project_server = (
@@ -334,7 +345,8 @@ def main():
     env = {"HOME": str(home), "CODEX_HOME": str(home / ".codex"),
            "TMPDIR": str(root / "tmp"), "TEMP": str(root / "tmp"),
            "TMP": str(root / "tmp"), "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
-           "LANG": "C.UTF-8", "NO_COLOR": "1", ENV_NAME: secret}
+           "LANG": "C.UTF-8", "NO_COLOR": "1", ENV_NAME: secret,
+           FOREIGN_ENV_NAME: foreign_secret}
     commands = [
         str(codex), "exec", "--skip-git-repo-check",
         "--sandbox", "read-only", "Call the available shell tool once and then confirm_env."
@@ -354,7 +366,7 @@ def main():
         def monitor():
             while not monitor_stop.is_set():
                 try:
-                    matches, links = inspect(root, secret)
+                    matches, links = inspect(root, (secret, foreign_secret))
                     live["samples"] += 1
                     live["symlinks"] = max(live["symlinks"], links)
                     for match in matches:
@@ -379,6 +391,7 @@ def main():
         report["live_scan_errors"] = live["errors"]
         report["shell_tool_output_seen"] = Model.shell_output_seen
         report["shell_secret_visible"] = Model.shell_secret_visible
+        report["shell_foreign_visible"] = Model.shell_foreign_visible
         report["shell_response_category"] = Model.shell_response_category
         report["shell_response_indicators"] = Model.shell_response_indicators
         report["real_codex_shell_called"] = Model.shell_requested and Model.shell_execution_verified
@@ -389,7 +402,7 @@ def main():
         report["requests"] = Model.requests
         report["advertised_tool_names"] = sorted(Model.advertised_tool_names)[:35]
         report["mcp_child_saw_secret"] = Model.mcp_digest_verified
-        found, symlinks = inspect(root, secret)
+        found, symlinks = inspect(root, (secret, foreign_secret))
         combined = {entry["path_sha256"]: entry for entry in
                     [*found, *live["hits"].values()]}
         report["leak"] = bool(combined)
@@ -401,7 +414,7 @@ def main():
                       report["mcp_child_saw_secret"]]):
             report["failure"] = Model.error or "native_proof_incomplete"
         elif (combined or live["errors"] or live["samples"] < 20
-              or Model.shell_secret_visible):
+              or Model.shell_secret_visible or Model.shell_foreign_visible):
             report["failure"] = "live_canary_persisted_or_unsafe_scan"
         else:
             report["secrecy_pass"] = True
