@@ -478,7 +478,8 @@ def complete(public, inspections, proof_rows):
 
 def mcp_inspections(rows, paths):
     """Admit source-bound, original MCP-only Grok inspect output, not activation."""
-    project = paths["root"] + "/grok-project-mcp-only"
+    from project_native_runtime import grok_selection_identity_keys
+    project = str(PurePosixPath(paths["project_a"]).parent) + "/grok-project-mcp-only"
     name = "uap-grok-mcp-only"
     prefix = project + "/.grok/plugins/"
     require(len(rows) == len(MCP_INSPECT))
@@ -486,14 +487,18 @@ def mcp_inspections(rows, paths):
         observed = row["value"]
         require(set(observed) == {"cwd", "stdout"} and observed["cwd"] == project)
         native = load(stream(observed["stdout"]))
-        require(type(native) is dict and native.get("grokVersion") == "1.0.70"
+        require(type(native) is dict
+                and grok_selection_identity_keys(native, "grokVersion cwd projectRoot projectTrusted mcpServers plugins")
+                and native.get("grokVersion") == "1.0.70"
                 and native.get("cwd") == project
                 and native.get("projectRoot") in (project, project + "/")
                 and native.get("projectTrusted") is False
                 and native.get("mcpServers") == [] and type(native.get("plugins")) is list)
         found = 0
         for plugin in native["plugins"]:
-            require(type(plugin) is dict and type(plugin.get("name")) is str)
+            require(type(plugin) is dict
+                    and grok_selection_identity_keys(plugin, "name scope path enabled provides")
+                    and type(plugin.get("name")) is str and bool(plugin["name"].strip()))
             if plugin["name"].casefold() != name.casefold():
                 continue
             require(plugin["name"] == name and plugin.get("scope") == "project"
@@ -501,7 +506,8 @@ def mcp_inspections(rows, paths):
                     and plugin["path"].startswith(prefix)
                     and re.fullmatch(r"uap-grok-mcp-only-[0-9a-f]{12}", plugin["path"][len(prefix):]))
             provides = plugin.get("provides")
-            require(type(provides) is dict and type(provides.get("mcpServers")) is int
+            require(type(provides) is dict and grok_selection_identity_keys(provides, "mcpServers")
+                    and type(provides.get("mcpServers")) is int
                     and provides["mcpServers"] == 1)
             found += 1
         require(found == (1 if stage == "installed" else 0))

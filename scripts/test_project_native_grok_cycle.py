@@ -222,7 +222,8 @@ class GrokCycleContracts(unittest.TestCase):
 
     def test_mcp_only_original_native_inspect_requires_untrusted_discovery_and_removal(self):
         for fault in ("missing", "trusted", "active", "wrong-version", "missing-owned",
-                      "folded-alias", "quoted-count", "retained"):
+                      "folded-alias", "quoted-count", "retained", "root-field-alias",
+                      "plugin-field-alias", "foreign-field-alias", "provides-field-alias", "empty-foreign-name"):
             bodies = container()
             name = cycle.MEMBERS[3]
             rows = [cycle.load(line) for line in bodies[name].splitlines()]
@@ -241,6 +242,16 @@ class GrokCycleContracts(unittest.TestCase):
                 native["plugins"][0]["name"] = "UAP-grok-mcp-only"
             elif fault == "quoted-count":
                 native["plugins"][0]["provides"]["mcpServers"] = "1"
+            elif fault == "root-field-alias":
+                native["ProjectTrusted"] = True
+            elif fault == "plugin-field-alias":
+                native["plugins"][0]["Name"] = "foreign"
+            elif fault == "foreign-field-alias":
+                native["plugins"].append({"name": "foreign", "Scope": "project"})
+            elif fault == "provides-field-alias":
+                native["plugins"][0]["provides"]["McpServers"] = 2
+            elif fault == "empty-foreign-name":
+                native["plugins"].append({"name": " "})
             elif fault == "retained":
                 native["plugins"] = [cycle.load(cycle.stream(rows[0]["value"]["stdout"]))["plugins"][0]]
             if fault != "missing":
@@ -248,6 +259,17 @@ class GrokCycleContracts(unittest.TestCase):
             bodies[name] = b"".join(raw(row) + b"\n" for row in rows)
             with self.subTest(fault=fault), self.assertRaises(ValueError):
                 runtime.cli_attempt_members(bodies, SOURCE, "grok")
+
+    def test_mcp_inspect_allows_unrelated_future_metadata(self):
+        bodies = container()
+        name = cycle.MEMBERS[3]
+        rows = [cycle.load(line) for line in bodies[name].splitlines()]
+        native = cycle.load(cycle.stream(rows[0]["value"]["stdout"]))
+        native["futureVendorField"] = {"state": "observed"}
+        native["plugins"][0]["futureVendorField"] = True
+        rows[0]["value"]["stdout"] = stream(raw(native))
+        bodies[name] = b"".join(raw(row) + b"\n" for row in rows)
+        self.assertTrue(runtime.cli_attempt_members(bodies, SOURCE, "grok")["runtime_attempt_complete"])
 
     def test_empty_outside_requires_exact_provisional_allow_without_durable_grant(self):
         paths, proof = inputs()

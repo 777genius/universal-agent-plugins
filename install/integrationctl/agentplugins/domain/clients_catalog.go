@@ -14,22 +14,23 @@ type PlanStatus string
 type ComponentKind string
 
 const (
-	ClientCodex    ClientID = "codex"
-	ClientChatGPT  ClientID = "chatgpt"
-	ClientCursor   ClientID = "cursor"
-	ClientCopilot  ClientID = "copilot"
-	ClientVSCode   ClientID = "vscode"
-	ClientKiro     ClientID = "kiro"
-	ClientClaude   ClientID = "claude"
-	ClientGemini   ClientID = "gemini"
-	ClientOpenCode ClientID = "opencode"
-	ClientCline    ClientID = "cline"
-	ClientWindsurf ClientID = "windsurf"
-	ClientGrok     ClientID = "grok"
-	ClientKimi     ClientID = "kimi"
-	ClientQoder    ClientID = "qoder"
-	ClientPi       ClientID = "pi"
-	ClientHermes   ClientID = "hermes"
+	ClientCodex       ClientID = "codex"
+	ClientChatGPT     ClientID = "chatgpt"
+	ClientCursor      ClientID = "cursor"
+	ClientCopilot     ClientID = "copilot"
+	ClientVSCode      ClientID = "vscode"
+	ClientKiro        ClientID = "kiro"
+	ClientClaude      ClientID = "claude"
+	ClientGemini      ClientID = "gemini"
+	ClientOpenCode    ClientID = "opencode"
+	ClientCline       ClientID = "cline"
+	ClientWindsurf    ClientID = "windsurf"
+	ClientGrok        ClientID = "grok"
+	ClientKimi        ClientID = "kimi"
+	ClientQoder       ClientID = "qoder"
+	ClientPi          ClientID = "pi"
+	ClientAntigravity ClientID = "antigravity"
+	ClientHermes      ClientID = "hermes"
 
 	DetectionNotDetected DetectionStatus = "not_detected"
 	DetectionDetected    DetectionStatus = "detected"
@@ -182,6 +183,10 @@ var clientDefinitions = []ClientDefinition{
 		TracksNativeEffects:      true,
 		SupportsPreparedRecovery: true,
 	}), LifecycleNativeConfig), SupportNative, SupportUnsupported),
+	withProjectScope(clientDefinition(ClientAntigravity, "Google Antigravity", "antigravity", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
+		InstallIntents: []InstallIntent{InstallIntentAutomatic},
+		LifecycleKind:  LifecyclePrepared,
+	}), LifecyclePrepared),
 	withProjectComponents(withProjectScope(withActivation(withoutCommands(clientDefinition(ClientPi, "Pi", "pi", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportNative, ClientTraits{
 		InstallIntents: []InstallIntent{InstallIntentAutomatic}, LifecycleKind: LifecyclePrepared,
 		BindsNativeProfileRoot: true, RequiresPluginData: true, VerifiesNativeDirectory: true, ProtectsModifiedPackage: true,
