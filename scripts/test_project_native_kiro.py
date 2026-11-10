@@ -571,7 +571,25 @@ class KiroCollectorTests(unittest.TestCase):
             else:
                 ctx.projects["a"] = Path("relative-project")
             with self.subTest(kind=kind), self.assertRaisesRegex(
-                    ValueError, "canonical home and project roots|disjoint projects"):
+                    ValueError, "canonical home and project (roots|directories)|disjoint projects"):
+                kiro.collect(ctx)
+            self.assertEqual(ctx.calls, [])
+            self.assertEqual(list(ctx.root.rglob(".kiro")), [])
+
+    def test_absent_or_non_directory_roots_refuse_before_native_probes(self):
+        # A typo or removed temporary project must never create a new
+        # workspace, nor run a native child in an implicitly-created HOME.
+        for kind in ("missing-home", "missing-project", "file-home", "file-project"):
+            ctx = self.context()
+            if kind.endswith("home"):
+                target = ctx.home
+            else:
+                target = ctx.projects["b"]
+            target.rmdir()
+            if kind.startswith("file"):
+                target.write_text("foreign sentinel; not a directory\\n")
+            with self.subTest(kind=kind), self.assertRaisesRegex(
+                    ValueError, "existing canonical home and project directories"):
                 kiro.collect(ctx)
             self.assertEqual(ctx.calls, [])
             self.assertEqual(list(ctx.root.rglob(".kiro")), [])
