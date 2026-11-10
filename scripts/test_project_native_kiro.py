@@ -445,6 +445,38 @@ class KiroCollectorTests(unittest.TestCase):
                 kiro.collect(ctx)
             self.assertEqual(len(ctx.calls), 11)
 
+    def test_every_mcp_list_route_refuses_wrong_scope_or_command_before_child(self):
+        # No unreviewed native command may run through a read-only capture label.
+        # The successful six-route traversal is already covered by
+        # test_only_help_is_passed_and_source_text_never_qualifies.
+        for project in ("a", "b", "user"):
+            for scope in ("workspace", "global"):
+                label = project + "-" + scope + "-raw-list"
+                other_scope = "global" if scope == "workspace" else "workspace"
+                other_project = "b" if project == "a" else "a"
+                bad = (
+                    (("mcp", "list", other_scope), project),
+                    (("mcp", "list", scope, "--extra"), project),
+                    (("mcp", "add", scope), project),
+                    (("chat", "--help"), project),
+                    (("mcp", "list", scope), other_project),
+                    (("mcp", "list", scope), "outside"),
+                )
+                for arguments, selected_project in bad:
+                    ctx = self.context()
+                    with self.subTest(label=label, argv=arguments, project=selected_project):
+                        with self.assertRaisesRegex(ValueError, "exact argv/project"):
+                            kiro._probe(ctx, {}, label, arguments, selected_project)
+                        self.assertEqual(ctx.calls, [])
+
+    def test_unregistered_read_only_list_label_cannot_launch_child(self):
+        for label in ("unknown-raw-list", "a-agent-other-raw-list", "b-user-raw-list"):
+            ctx = self.context()
+            with self.subTest(label=label):
+                with self.assertRaisesRegex(ValueError, "exact argv/project"):
+                    kiro._probe(ctx, {}, label, ("mcp", "list", "workspace"), "a")
+                self.assertEqual(ctx.calls, [])
+
     def test_authentication_tuple_cannot_be_misrouted_to_other_operations(self):
         for label in ("version", "top-help", "all-help", "mcp-help",
                       "agent-help", "a-global-raw-list", "b-workspace-raw-list", "user-global-raw-list"):
