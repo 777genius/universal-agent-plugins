@@ -303,7 +303,7 @@ func bootstrapFailure(err error) (string, string) {
 // it directly so completed cycles are visible without waiting for cancellation.
 func writePrivateHuman(w io.Writer, r report.Report) error {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s: readiness %s; conformance %s; host %s; compatibility %s; toolchain %s; runtime %s\n", r.Command, r.Readiness.Status, r.Conformance.Status, r.HostSafety.Status, r.Compatibility.Status, r.Toolchain.Status, r.Runtime.Status)
+	b.WriteString(privateReportSummary(r))
 	if document := r.JSONDocument; document != nil {
 		fmt.Fprintf(&b, "json document: %s; changed %t; before %s; after %s\n", document.Path, document.Changed, document.BeforeSHA256, document.AfterSHA256)
 	}
