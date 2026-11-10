@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { spawnSync } from 'node:child_process';
+import { clients } from '../data/clients.ts';
 import { skillClients } from '../data/skillClients.ts';
 import { sortSkillsForCatalog } from '../data/catalogCuration.ts';
 import capabilities from '../data/clientCapabilities.generated.json' with { type: 'json' };
@@ -305,8 +306,12 @@ test('Detail identity uses only a canonical source, never the listing-page URL',
   }
 });
 
-test('Skill agents come only from generated saved-dependency and skill capabilities', () => {
+test('Skill agents require an explicit published landing entry and generated capability', () => {
+  // A newly registered SDK client must not automatically appear on the public
+  // site before its installation guidance and published CLI are qualified.
+  const publishedClients = new Set(clients.map((client) => client.id));
   const expected = capabilities
+    .filter((client) => publishedClients.has(client.id))
     .filter((client) => client.saved_dependency && client.skill_support !== 'unsupported')
     .map((client) => client.id);
   assert.deepEqual(
