@@ -111,6 +111,15 @@ func (session *repairManySession) collectRevisionRequests() error {
 	return nil
 }
 
+// repairSourceTargets preserves local/Git shared-backend compatibility while
+// separately authorizing only recorded owners for a signed Directory source.
+func repairSourceTargets(installation domain.Installation, binding domain.ClientBinding, selected domain.ClientID, scope domain.InstallScope) []domain.ClientID {
+	if installation.OriginMode != domain.OriginModeDirectory {
+		return expandAffectedSurfaceTargets(bindingSurfaceTargets(binding), scope)
+	}
+	return append(directoryBindingTargets(binding), selected)
+}
+
 func (session *repairManySession) recordTargetRevision(target domain.ClientID) error {
 	binding, err := selectedRepairBinding(session.installation, target, session.app.scope())
 	if err != nil {
