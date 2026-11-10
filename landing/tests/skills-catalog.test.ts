@@ -309,7 +309,7 @@ test('Detail identity uses only a canonical source, never the listing-page URL',
 test('Skill agents are public clients with generated saved-dependency and skill support', () => {
   // Generated capabilities can include qualified clients not yet listed publicly.
   // Do not surface unreleased targets in Skills simply because their metadata exists.
-  const published = new Set(clients.map((client) => client.id));
+  const published = new Set<string>(clients.map((client) => client.id));
   const expected = capabilities
     .filter((client) => published.has(client.id) && client.saved_dependency && client.skill_support !== 'unsupported')
     .map((client) => client.id);
