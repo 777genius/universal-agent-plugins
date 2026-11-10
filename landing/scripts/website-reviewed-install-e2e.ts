@@ -39,7 +39,8 @@ function execute(args: string[], env: NodeJS.ProcessEnv, cwd: string) {
     encoding: 'utf8', timeout: 140_000, maxBuffer: 2 * 1024 * 1024,
     cwd, env,
   });
-  return { exit_code: child.status, timeout: child.error?.name === 'ETIMEDOUT',
+  return { exit_code: child.status,
+    timeout: (child.error as NodeJS.ErrnoException | undefined)?.code === 'ETIMEDOUT',
     error: child.error?.message ?? null,
     stdout_tail: (child.stdout || '').slice(-1400), stderr_tail: (child.stderr || '').slice(-1400) };
 }

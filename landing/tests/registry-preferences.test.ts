@@ -112,13 +112,36 @@ test('hidden VS Code stays unavailable in stale project choices without erasing 
   const stale = preferences.readPackage('context7', ['cursor', 'copilot']);
   assert.deepEqual(stale.targetIds, []);
   assert.equal(stale.autoDetect, true);
+  assert.equal(stale.scope, 'project');
   preferences.reconcilePackage('context7', ['cursor', 'copilot']);
-  assert.equal(preferences.package.identity, '');
+  assert.equal(preferences.package.identity, 'context7');
+  assert.deepEqual(preferences.package.targetIds, []);
+  assert.equal(preferences.package.scope, 'project');
 
   preferences.selectPackage('context7', {
     targetIds: ['vscode'], autoDetect: false, expanded: true, scope: 'project',
   }, ['cursor', 'copilot']);
-  assert.equal(preferences.package.identity, ''); // No newly saved invalid choice.
+  assert.deepEqual(preferences.package.targetIds, []);
+  assert.equal(preferences.package.scope, 'project');
+  assert.equal(preferences.package.autoDetect, true);
+
+  // A mixed old selection must preserve the user's valid target and project intent.
+  preferences.package = {
+    identity: 'context7', targetIds: ['cursor', 'vscode'],
+    autoDetect: false, expanded: true, scope: 'project',
+  };
+  const mixed = preferences.readPackage('context7', ['cursor', 'copilot']);
+  assert.deepEqual(mixed.targetIds, ['cursor']);
+  assert.equal(mixed.scope, 'project');
+  assert.equal(mixed.autoDetect, false);
+  preferences.reconcilePackage('context7', ['cursor', 'copilot']);
+  assert.deepEqual(preferences.package.targetIds, ['cursor']);
+  assert.equal(preferences.package.scope, 'project');
+  preferences.selectPackage('context7', {
+    targetIds: ['cursor', 'vscode'], autoDetect: false, expanded: true, scope: 'project',
+  }, ['cursor', 'copilot']);
+  assert.deepEqual(preferences.package.targetIds, ['cursor']);
+  assert.equal(preferences.package.scope, 'project');
 
   // Preserve existing project-scope behavior for a supported but ineligible
   // target; only the hidden presentation choice is retired.
