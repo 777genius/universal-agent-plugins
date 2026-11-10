@@ -157,7 +157,7 @@ test('homepage installs with auto-detection and exposes the full directory', asy
   await expect
     .poll(
       async () => {
-        const intro = await page.locator('.unified-catalog__heading > p').innerText();
+        const intro = await page.locator('.unified-catalog__heading > p:first-of-type').innerText();
         return [...intro.matchAll(/([\d,]+) (?:reviewed plugins?|community packages?)/g)]
           .map((match) => Number(match[1].replaceAll(',', '')))
           .reduce((sum, count) => sum + count, 0);

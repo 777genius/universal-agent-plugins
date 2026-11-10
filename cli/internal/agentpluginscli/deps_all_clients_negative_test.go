@@ -23,7 +23,7 @@ func TestDependencyAllClientsManualAndDetectionRefusals(t *testing.T) {
 	if err := json.Unmarshal([]byte(status), &report); err != nil {
 		t.Fatal(err)
 	}
-	if len(report.SupportedTargets) != 14 || report.SupportedTargets[12] != "antigravity" || report.SupportedTargets[13] != "pi" || len(report.ExcludedTargets) != 2 || report.ExcludedTargets[0].ID != "chatgpt" || report.ExcludedTargets[0].Reason != "manual_preparation_only" || report.ExcludedTargets[1].ID != "vscode" || report.ExcludedTargets[1].Reason != "dependency_management_deferred" {
+	if len(report.SupportedTargets) != 15 || report.SupportedTargets[12] != "hermes" || report.SupportedTargets[13] != "antigravity" || report.SupportedTargets[14] != "pi" || len(report.ExcludedTargets) != 2 || report.ExcludedTargets[0].ID != "chatgpt" || report.ExcludedTargets[0].Reason != "manual_preparation_only" || report.ExcludedTargets[1].ID != "vscode" || report.ExcludedTargets[1].Reason != "dependency_management_deferred" {
 		t.Fatal(status)
 	}
 	mp, lp := f.app.dependencyPaths()

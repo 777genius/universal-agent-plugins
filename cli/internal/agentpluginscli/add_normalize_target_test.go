@@ -6,7 +6,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
-// TestNormalizeTargetContract pins the exact --target vocabulary: sixteen
+// TestNormalizeTargetContract pins the exact --target vocabulary: seventeen
 // canonical ids, documented aliases, case and whitespace folding, and the lenient
 // pass-through that turns an unknown name into a lowercased ClientID instead of
 // an error. Part 10 replaces this function with domain.ParseClientID, which has
@@ -28,6 +28,7 @@ func TestNormalizeTargetContract(t *testing.T) {
 		"grok":        domain.ClientGrok,
 		"kimi":        domain.ClientKimi,
 		"qoder":       domain.ClientQoder,
+		"hermes":      domain.ClientHermes,
 		"antigravity": domain.ClientAntigravity,
 		"pi":          domain.ClientPi,
 	}

@@ -108,6 +108,23 @@
         "moreCandidatesHelp": "此批次没有匹配项。显示更多以检查剩余候选项。",
         "noMatches": "没有符合筛选条件的技能",
         "noMatchesHelp": "调整搜索或重置筛选条件以查看所有技能。"
+      },
+      "discoveryNotice": "静态页面首先显示经过审核的插件。浏览器加载并验证已签名的发现数据后，可能添加更多社区条目；如果数据不可用，仍会显示审核子集。",
+      "overview": {
+        "seoTitle": "独立 Agent Skills — Universal Agent Plugins",
+        "metaDescription": "查找、检查并安装独立的 SKILL.md 指令，无需创建 plugin.json 插件包。",
+        "title": "Agent Skills，无需插件封装。",
+        "lead": "查找可复用的 SKILL.md 指令，为所支持的 AI 代理选择安装目标，可安装到用户配置或项目中。独立 Skills 不需要 Agent Plugins 1.0 插件包。",
+        "standaloneTitle": "独立的 Skill 文件",
+        "standaloneDescription": "从您已检查的 GitHub 仓库或受支持的发布方直接安装 Skills，无需 plugin.json 清单。",
+        "scopeTitle": "明确选择代理和范围",
+        "scopeDescription": "在终端中选择代理，或明确指定目标。使用 --scope 安装到用户配置或受支持的项目。",
+        "reviewTitle": "先检查来源",
+        "reviewDescription": "目录条目及 SkillSpector 静态扫描结果不保证安全、激活成功或代理能正确使用。",
+        "browse": "浏览 Skills 目录",
+        "installGuide": "阅读安装指南",
+        "learnMore": "了解独立 Skills",
+        "exampleCaption": "示例命令：请将 owner/repository 替换为真实来源"
       }
     },
     "directoryPage": {

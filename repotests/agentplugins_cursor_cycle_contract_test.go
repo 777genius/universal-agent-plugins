@@ -201,3 +201,54 @@ func TestCursorCyclePublicOutcomeRequiresMeasuredStageShape(t *testing.T) {
 		})
 	}
 }
+
+func TestCursorCyclePreparedReadinessIsClosed(t *testing.T) {
+	valid := map[string]any{"scope": "project", "readiness": "needs_action", "next_action": "Review project", "next_actions": []any{map[string]any{"code": "verify_native", "actor": "native_client", "message": "Review project"}}}
+	if !cursorCyclePreparedReadiness(valid) {
+		t.Fatal("current prepared readiness refused")
+	}
+	for key, wrong := range map[string]any{"scope": "user", "readiness": "ready", "next_action": "", "next_actions": []any{map[string]any{"code": "verify_native", "actor": "user", "message": "Review project"}}} {
+		before := valid[key]
+		valid[key] = wrong
+		if cursorCyclePreparedReadiness(valid) {
+			t.Fatal("foreign readiness accepted", key)
+		}
+		delete(valid, key)
+		if cursorCyclePreparedReadiness(valid) {
+			t.Fatal("missing readiness accepted", key)
+		}
+		valid[key] = before
+	}
+}
+
+func TestCursorCycleRepairAndRemoveRefuseReadinessFields(t *testing.T) {
+	r := &cursorCycleRecipe{Version: "1.0.0", Digest: "held-tree", Installation: domain.Installation{OperationGroupID: "held-group", Package: domain.PackageBinding{ManifestDigest: "held-manifest"}}, Data: domain.DataReceipt{DataReceiptID: "held-data", PhysicalBackend: "held-physical"}}
+	output := map[string]any{"operation_id": "held-group", "plugin": cursorCycleName, "version": "1.0.0", "source": "local", "scope": "project", "tree_digest": "held-tree", "manifest_digest": "held-manifest", "dry_run": false, "result": map[string]any{}}
+	document := map[string]any{"command": "remove", "data": map[string]any{"operation_id": "held-group", "batch": true, "status": "data_retained", "succeeded": json.Number("1"), "failed": json.Number("0"), "plugin": cursorCycleName, "dry_run": false, "plugin_data_preserved": true, "data_retained": true, "retained_data": []any{map[string]any{"data_receipt_id": "held-data", "physical_backend_id": "held-physical", "scope": "project", "state": "owned"}}, "targets": []any{map[string]any{"target": "cursor", "status": "external_completed", "output": output}}}}
+	for _, verb := range []string{"remove", "repair"} {
+		document["command"] = verb
+		data := document["data"].(map[string]any)
+		data["status"] = "data_retained"
+		if verb == "repair" {
+			data["status"] = "completed"
+			delete(output, "scope")
+		}
+		step := cursorCycleStep{verb + "-a", "a", verb}
+		if _, err := cursorCyclePublicOutput(document, step, r); err != nil {
+			t.Fatal("valid lifecycle DTO refused", verb, err)
+		}
+		for field, wrong := range map[string]any{"readiness": map[string]any{"malformed": true}, "next_actions": []any{map[string]any{"unknown": true}}} {
+			output[field] = wrong
+			if _, err := cursorCyclePublicOutput(document, step, r); err == nil {
+				t.Fatal("lifecycle accepted unrelated readiness", verb, field)
+			}
+			delete(output, field)
+		}
+		if verb == "repair" {
+			output["scope"] = "project"
+			if _, err := cursorCyclePublicOutput(document, step, r); err == nil {
+				t.Fatal("repair accepted add-only scope field")
+			}
+		}
+	}
+}

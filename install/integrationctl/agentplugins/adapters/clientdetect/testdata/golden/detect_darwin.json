@@ -250,6 +250,31 @@
     "Version": ""
   },
   {
+    "ClientID": "hermes",
+    "ConfigRoot": "\u003chome\u003e/.hermes",
+    "DetectionError": null,
+    "DisplayName": "Hermes Agent",
+    "ExecutablePath": "",
+    "NativeConfigRoot": "",
+    "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
+    "Status": "not_detected",
+    "Surfaces": [
+      {
+        "Detected": false,
+        "Evidence": "",
+        "ID": "hermes_cli"
+      },
+      {
+        "Detected": false,
+        "Evidence": "",
+        "ID": "hermes_config"
+      }
+    ],
+    "Version": ""
+  },
+  {
     "ClientID": "kimi",
     "ConfigRoot": "\u003chome\u003e/.kimi-code",
     "DetectionError": null,

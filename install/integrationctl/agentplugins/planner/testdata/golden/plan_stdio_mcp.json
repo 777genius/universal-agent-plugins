@@ -231,7 +231,7 @@
       "TargetRoot": "\u003croot\u003e/managed/clients/cline",
       "UserActions": [
         "verify the plugin's authentication requirements before using it",
-        "agentplugins will install and verify Cline skills and MCP servers automatically; VS Code reloads MCP settings, while Cline CLI reads them on its next process"
+        "agentplugins will install and verify Cline skills and MCP entries in the selected native profile automatically; Cline CLI reads its selected MCP settings on its next process. For a Cline IDE extension, open MCP Servers \u003e Configure \u003e Configure MCP Servers and confirm the settings file matches the selected profile before expecting those entries"
       ],
       "Verification": "package_validated",
       "Warnings": [
@@ -533,6 +533,66 @@
       "UserActions": [
         "verify the plugin's authentication requirements before using it",
         "agentplugins will register and verify the plugin through Grok Build CLI; reload Grok Build to use it"
+      ],
+      "Verification": "package_validated",
+      "Warnings": [
+        "authentication_not_catalog_verified"
+      ]
+    }
+  },
+  "hermes": {
+    "Error": "",
+    "Plan": {
+      "Activation": "prepared",
+      "ActivePath": "\u003croot\u003e/managed/clients/hermes/demo-0123456789ab",
+      "Authentication": "not_checked",
+      "ClientID": "hermes",
+      "Components": [
+        {
+          "Kind": "skill",
+          "Name": "docs",
+          "Reason": "",
+          "Source": "",
+          "SourceName": "",
+          "Support": "native"
+        },
+        {
+          "Kind": "mcp_server",
+          "Name": "local",
+          "Reason": "",
+          "Source": "",
+          "SourceName": "",
+          "Support": "native"
+        }
+      ],
+      "DeclaredName": "demo",
+      "DeclaredVersion": "1.0.0",
+      "Diagnostics": null,
+      "InstallIntent": "",
+      "LocalActions": null,
+      "LocalEntryObservation": null,
+      "LocalPreparationAuthorized": false,
+      "NativeRegistryExecutable": "\u003croot\u003e/bin/hermes",
+      "NativeRegistryRoot": "\u003croot\u003e/clients/hermes",
+      "OpenCodeHost": null,
+      "PackageMode": "native",
+      "PersonalChatGPTPreparation": false,
+      "PhysicalArtifactID": "demo-0123456789ab",
+      "Policy": "allowed",
+      "PreviousNativeObjects": null,
+      "Scope": "user",
+      "SelectedDelivery": {},
+      "Status": "ready",
+      "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/hermes"
+      },
+      "TargetRoot": "\u003croot\u003e/managed/clients/hermes",
+      "UserActions": [
+        "verify the plugin's authentication requirements before using it",
+        "Reload or restart Hermes and verify managed Skills are visible; copied files alone do not prove native activation"
       ],
       "Verification": "package_validated",
       "Warnings": [

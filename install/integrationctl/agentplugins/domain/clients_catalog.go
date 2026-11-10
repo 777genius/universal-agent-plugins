@@ -30,6 +30,7 @@ const (
 	ClientQoder       ClientID = "qoder"
 	ClientPi          ClientID = "pi"
 	ClientAntigravity ClientID = "antigravity"
+	ClientHermes      ClientID = "hermes"
 
 	DetectionNotDetected DetectionStatus = "not_detected"
 	DetectionDetected    DetectionStatus = "detected"
@@ -175,6 +176,13 @@ var clientDefinitions = []ClientDefinition{
 		HonorsOpenAIMCPAuthHints:            true,
 		LegacyPreparedProjectPackageReceipt: true,
 	}), LifecycleNativeConfig), SupportNative, SupportNative),
+	withProjectComponents(withProjectScope(clientDefinition(ClientHermes, "Hermes Agent", "hermes", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
+		InstallIntents:           []InstallIntent{InstallIntentAutomatic},
+		LifecycleKind:            LifecycleNativeConfig,
+		BindsNativeProfileRoot:   true,
+		TracksNativeEffects:      true,
+		SupportsPreparedRecovery: true,
+	}), LifecycleNativeConfig), SupportNative, SupportUnsupported),
 	withProjectScope(clientDefinition(ClientAntigravity, "Google Antigravity", "antigravity", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
 		InstallIntents: []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:  LifecyclePrepared,

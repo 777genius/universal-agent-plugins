@@ -100,3 +100,70 @@ test('recommended Skills lead the original cards without changing provider data 
     original[7]!.id, original[1]!.id, original[0]!.id, original[4]!.id,
   ]);
 });
+
+test('plugin source and owner filters share a row without losing mobile usability', async ({
+  page,
+}, testInfo) => {
+  await page.goto('plugins/');
+
+  const toolbar = page.locator('.catalog-controls--plugins');
+  const source = toolbar.getByRole('combobox', { name: 'Filter by source' });
+  const owner = toolbar.getByRole('combobox', { name: 'Filter by owner' });
+  const sourceControl = toolbar.locator('.catalog-filter-pair .app-select__trigger');
+  const ownerControl = toolbar.locator('.catalog-filter-pair .app-combobox__anchor');
+  const pair = toolbar.locator('.catalog-filter-pair');
+  const authenticationControl = toolbar.getByRole('combobox', { name: 'Filter by authentication' });
+  const toggle = toolbar.locator('.catalog-filter-toggle');
+
+  for (const width of [1440, 820, 600, 390, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    if (width <= 720 && (await toggle.getAttribute('aria-expanded')) !== 'true') {
+      await toggle.click();
+    }
+
+    await expect(source).toBeVisible();
+    await expect(owner).toBeVisible();
+    const sourceRect = await sourceControl.boundingBox();
+    const ownerRect = await ownerControl.boundingBox();
+    const pairRect = await pair.boundingBox();
+    expect(sourceRect).not.toBeNull();
+    expect(ownerRect).not.toBeNull();
+    expect(pairRect).not.toBeNull();
+
+    if (width > 380) {
+      expect(Math.abs(sourceRect!.y - ownerRect!.y)).toBeLessThan(2);
+      expect(Math.abs(sourceRect!.width - ownerRect!.width)).toBeLessThan(2);
+    } else {
+      expect(ownerRect!.y).toBeGreaterThan(sourceRect!.y + sourceRect!.height - 1);
+    }
+    if (width > 980) {
+      // Sources and Owners together take one normal desktop filter slot,
+      // next to Authentication, not an entire extra full-width row.
+      const authRect = await authenticationControl.boundingBox();
+      expect(authRect).not.toBeNull();
+      expect(Math.abs(pairRect!.y - authRect!.y)).toBeLessThan(2);
+      expect(Math.abs(pairRect!.width - authRect!.width)).toBeLessThan(4);
+    } else if (width > 720) {
+      // A two-column tablet grid has an odd final filter slot; use both
+      // columns rather than leaving half the toolbar empty.
+      const toolbarRect = await toolbar.boundingBox();
+      expect(toolbarRect).not.toBeNull();
+      expect(Math.abs(pairRect!.width - toolbarRect!.width)).toBeLessThan(4);
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+      .toBe(true);
+
+    if (width === 1440 || width === 390) {
+      await testInfo.attach(`source-owner-filters-${width}`, {
+        body: await toolbar.screenshot({ animations: 'disabled' }),
+        contentType: 'image/png',
+      });
+    }
+  }
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await source.click();
+  await page.getByRole('option', { name: 'Upstream packages' }).click();
+  await expect.poll(() => new URL(page.url()).searchParams.get('source')).toBe('upstream');
+  await expect(owner).toBeVisible();
+});

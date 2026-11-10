@@ -238,6 +238,26 @@
       "Verification": "package_validated"
     }
   },
+  "hermes": {
+    "Commands": [],
+    "Error": "",
+    "Outcome": {
+      "Activation": "prepared",
+      "ActivationAttested": false,
+      "Authentication": "not_checked",
+      "AuthenticationAttested": false,
+      "AuthoritativeObservation": false,
+      "LocalActions": null,
+      "LocalEntryObservation": null,
+      "NativeEffect": "committed",
+      "NativeObjects": null,
+      "Policy": "allowed",
+      "UserActions": [
+        "Restart Hermes and review project trust before using installed Skills"
+      ],
+      "Verification": "installation_verified"
+    }
+  },
   "kimi": {
     "Commands": [],
     "Error": "",
