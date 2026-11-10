@@ -550,6 +550,38 @@ class KiroCollectorTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "authored fixture"):
             kiro.collect(ctx)
 
+    def test_foreign_kiro_parent_cannot_be_adopted_or_partially_written(self):
+        # Even when mcp.json itself is absent, an existing .kiro tree belongs
+        # to something else. The last (User) conflict must not leave earlier
+        # Project A/B research markers behind.
+        for scope in ("a", "b", "user"):
+            for kind in ("kiro-file", "foreign-directory", "settings-file"):
+                ctx = self.context()
+                selected = ctx.home if scope == "user" else ctx.projects[scope]
+                marker = selected / ".kiro"
+                if kind == "kiro-file":
+                    sentinel = marker
+                    sentinel.write_bytes(b"foreign marker file\\n")
+                else:
+                    marker.mkdir()
+                    sentinel = marker / ("foreign.json" if kind == "foreign-directory" else "settings")
+                    sentinel.write_bytes(b"foreign settings; do not modify\\n")
+                before = sentinel.stat()
+                with self.subTest(scope=scope, kind=kind), self.assertRaises(FileExistsError):
+                    kiro.collect(ctx)
+                self.assertEqual(len(ctx.calls), 10)
+                self.assertEqual(sentinel.read_bytes(),
+                                 b"foreign marker file\\n" if kind == "kiro-file"
+                                 else b"foreign settings; do not modify\\n")
+                after = sentinel.stat()
+                for field in ("st_dev", "st_ino", "st_mode", "st_uid", "st_gid",
+                              "st_nlink", "st_size", "st_mtime_ns", "st_ctime_ns"):
+                    self.assertEqual(getattr(after, field), getattr(before, field))
+                for other in ("a", "b", "user"):
+                    if other != scope:
+                        root = ctx.home if other == "user" else ctx.projects[other]
+                        self.assertFalse((root / ".kiro").exists())
+
     def test_alias_and_nested_project_roots_refuse_before_native_probes(self):
         for kind in ("project-symlink", "project-parent-symlink",
                      "home-symlink", "nested-project-a", "nested-project-b",
