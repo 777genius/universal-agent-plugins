@@ -113,6 +113,12 @@ def _probe(ctx, owned, label, arguments, project="a"):
                 or info.st_uid != os.getuid() or (info.st_dev, info.st_ino) != (device, inode)
                 or stat.S_IMODE(info.st_mode) != 0o600 or path.read_bytes() != body):
             raise ValueError("Kiro changed authored fixture identity/bytes/mode")
+        # A native inventory command must not quietly author a second settings
+        # member or agent directory. This disposable tree belongs to the test,
+        # but only the single inert MCP marker was approved for each scope.
+        if ({entry.name for entry in path.parent.parent.iterdir()} != {"settings"}
+                or {entry.name for entry in path.parent.iterdir()} != {path.name}):
+            raise ValueError("Kiro native probe added an unowned fixture tree member")
     if (label in ("a-workspace-raw-list", "a-agent-raw-list") and isinstance(record, dict)
             and type(record.get("exit")) is int and record["exit"] == 1
             and "error" in record and record["error"] is None
