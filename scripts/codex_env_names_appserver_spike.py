@@ -201,6 +201,8 @@ def main():
                                            or report["direct_mcp_call_verified"])
         report["mcp_native_connected"] = report["direct_mcp_call_verified"]
         report["native_mcp_digest_seen"] = Model.mcp_digest_verified
+        report["mcp_output_type"] = Model.mcp_output_type
+        report["mcp_output_indicators"] = Model.mcp_output_indicators
         report["mcp_child_saw_secret"] = (report["direct_mcp_call_verified"]
                                            or Model.mcp_digest_verified)
         if not (report["real_codex_shell_called"] and report["mcp_child_saw_secret"]):
