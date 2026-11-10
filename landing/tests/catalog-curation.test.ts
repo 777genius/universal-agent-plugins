@@ -135,7 +135,7 @@ test('all nine locale dictionaries resolve only genuine featured Skill keys', ()
 test('curated Skills sort in one source-backed list, preserving metrics and provider tail', () => {
   const ordinary = skill('example/skills', 'ordinary');
   const more = skill('example/skills', 'next');
-  const react = skill('vercel-labs/agent-skills', 'vercel-react-best-practices');
+  const react = skill('vercel-labs/agent-skills', 'vercel-optimize');
   const browser = skill('vercel-labs/agent-browser', 'agent-browser');
   const frontend = skill('anthropics/skills', 'frontend-design');
   const source = [ordinary, react, frontend, more, browser];

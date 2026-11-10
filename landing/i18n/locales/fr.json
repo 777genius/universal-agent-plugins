@@ -458,7 +458,7 @@
       "items": {
         "0": {
           "question": "Quels agents IA sont pris en charge ?",
-          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, VS Code, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder : chaque client dispose de son propre parcours d’installation ou de préparation. La compatibilité dépend des composants, de la portée et des conditions d’activation."
+          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder : chaque client dispose de son propre parcours d’installation ou de préparation. La compatibilité dépend des composants, de la portée et des conditions d’activation."
         },
         "1": {
           "question": "Une seule commande installe-t-elle le plugin dans tous les agents ?",

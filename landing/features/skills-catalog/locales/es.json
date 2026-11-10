@@ -9,7 +9,7 @@
           "frontend-design": "Crea interfaces frontend más cuidadas y profesionales.",
           "find-skills": "Encuentra Skills reutilizables para tu tarea.",
           "tdd": "Desarrolla y corrige código con pruebas: rojo, verde y refactorización.",
-          "vercel-react-best-practices": "Aplica recomendaciones de rendimiento para React y Next.js.",
+          "vercel-optimize": "Analiza costes y rendimiento de Vercel con métricas de producción.",
           "web-design-guidelines": "Revisa la usabilidad y la accesibilidad de las interfaces web."
         }
       },

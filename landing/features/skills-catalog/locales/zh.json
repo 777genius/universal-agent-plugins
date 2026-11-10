@@ -9,7 +9,7 @@
           "frontend-design": "创建更精致、更有设计感的前端界面。",
           "find-skills": "为当前任务找到合适的可复用 Skills。",
           "tdd": "遵循红灯、绿灯、重构流程，以测试驱动开发。",
-          "vercel-react-best-practices": "应用 React 和 Next.js 的性能最佳实践。",
+          "vercel-optimize": "根据生产环境指标分析 Vercel 成本与性能。",
           "web-design-guidelines": "检查网页的易用性与无障碍体验。"
         }
       },
