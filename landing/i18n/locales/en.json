@@ -409,7 +409,7 @@
         "kimi": "Run /reload or /new and review MCP permissions.",
         "cline": "Select the project MCP settings path and reload Cline.",
         "kiro": "Sign in, approve access, and restart Kiro if prompted.",
-        "grok": "Reload Grok; review project Skills and any CLI setup hint.",
+        "grok": "Open the selected project in Grok; enable and trust the plugin, reload, then verify Skills and MCP.",
         "vscode": "Open and trust the folder; review and enable MCP servers.",
         "chatgpt": "Desktop: local install via Codex CLI; Web: connect or install in ChatGPT."
       }

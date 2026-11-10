@@ -130,9 +130,9 @@ const publishedClientSupportRows: ClientSupport[] = [
     id: 'grok',
     name: 'Grok Build',
     user: 'Skills, MCP',
-    project: 'Skills only',
+    project: 'Skills, MCP (prepared)',
     setup: 'Guided',
-    nextStep: 'Reload Grok; review project Skills and any CLI setup hint.',
+    nextStep: 'Open the selected project in Grok; enable and trust the plugin, reload, then verify Skills and MCP.',
   },
   {
     id: 'vscode',

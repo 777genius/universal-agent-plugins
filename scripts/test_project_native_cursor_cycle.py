@@ -178,6 +178,20 @@ def synthetic_cycle():
 
 
 class CursorCycleContracts(unittest.TestCase):
+    def test_command_wall_clock_boundary_and_strict_refusals(self):
+        value = {"argv": ["/held/client", "--version"], "cwd": "/owned", "exit": 0,
+                 "error": False, "deadline": False, "elapsed_ms": 1, "cleanup": cycle.CLEANUP,
+                 "started_at": "2026-11-10T00:00:00.000999999Z",
+                 "ended_at": "2026-11-10T00:00:00.002000000Z",
+                 "stdout": wire(b""), "stderr": wire(b"")}
+        cycle.command(value, True)
+        for change in ({"elapsed_ms": 2},
+                       {"ended_at": "2026-11-10T00:00:35.001000000Z", "elapsed_ms": 35000},
+                       {"ended_at": "2026-11-10T00:00:00.000999998Z", "elapsed_ms": 0},
+                       {"deadline": True}, {"error": True}):
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                cycle.command({**value, **change}, True)
+
     def test_failed_prefix_stays_false_and_cannot_forge_completion(self):
         source = {"source_commit": "a" * 40, "source_tree": "b" * 40}
         summary = {"client": "cursor", "version": "2026.10.22-27dcf5f", "capture_mode": cycle.MODE, "activation": "prepared", "runtime_attempt_complete": False, "test_failed": True, "cycle_observed_complete": False, "vendor_authentication_qualified": False, "real_model_qualified": False, "qualification": {key: False for key in cycle.FLAGS}, "qualification_scope": cycle.SCOPE, "source_identity": {"installer_base_commit": "a" * 40, "installer_tree": "b" * 40, "installer_source_state": "committed", "installer_patch_sha256": []}, "acquisition": {}, "scanner": {}, "elapsed_ms": 0, "cycle_command_stages": [], "cycle_proof_stages": [], "cycle_probe": {"bytes": 0, "sha256": sha(b""), "sessions": 0}}

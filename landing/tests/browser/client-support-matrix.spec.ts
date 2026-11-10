@@ -31,7 +31,7 @@ test('home lists the complete scope matrix immediately before FAQ', async ({ pag
     'What you do after installing',
   ]);
   await expect(table.getByRole('row', { name: /^ChatGPT / })).toContainText('Not supported');
-  await expect(table.getByRole('row', { name: /^Grok Build / })).toContainText('Skills only');
+  await expect(table.getByRole('row', { name: /^Grok Build / })).toContainText('Skills, MCP (prepared)');
   await expect(table.getByRole('row', { name: /^Pi / })).toContainText(
     'Extensions, Skills, MCP',
   );

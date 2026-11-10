@@ -272,8 +272,8 @@
       "skill_support": "native",
       "mcp_transports": {
         "sse": "unsupported",
-        "stdio": "unsupported",
-        "streamable-http": "unsupported"
+        "stdio": "native",
+        "streamable-http": "native"
       },
       "extension_support": "unsupported"
     }

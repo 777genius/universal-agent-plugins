@@ -10,7 +10,8 @@ MODE = "grok-complete-skills-cycle"
 PUBLIC = tuple("git-a git-b git-outside version add-a add-b repeat-add-a unchanged-update-a intact-repair-a update-a missing-repair-a remove-a repeat-remove-a remove-b".split())
 INSPECT = tuple("empty-outside empty-a empty-b installed-a installed-b installed-outside stable-a updated-a updated-b updated-outside damaged-a repaired-a removed-a remaining-b removed-outside repeat-removed-a removed-b final-a final-b final-outside".split())
 PROOF = tuple("source-a-a-one source-b-b-one fixture add-a add-b repeat-add-a unchanged-update-a intact-repair-a before-source-revision-a source-a-a-two update-a before-missing-a damaged-a missing-repair-a remove-a repeat-remove-a remove-b final".split())
-MEMBERS = ("grok-cycle-public.jsonl", "grok-cycle-inspect.jsonl", "grok-cycle-proof.jsonl")
+MEMBERS = ("grok-cycle-public.jsonl", "grok-cycle-inspect.jsonl", "grok-cycle-proof.jsonl", "grok-cycle-mcp-inspect.jsonl")
+MCP_INSPECT = ("installed", "removed")
 FLAGS = tuple("project-lifecycle native-restart-removal mcp-initialize mcp-tools-list mcp-tools-call".split())
 SCHEMA = "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json"
 CLEANUP = "full descendant supervision; forced cleanup fails"
@@ -348,8 +349,15 @@ def public_result(raw, stage, verb, selected):
     name, digest = "uap-grok-cycle-" + scope, selected["source_digest"]
     data = row["data"]
     if stage == "repeat-add-a":
-        required = {"plugin", "version", "source", "tree_digest", "manifest_digest", "dry_run", "result"}
-        require(verb == "add" and type(data) is dict and required <= set(data) <= required | {"security", "next_action"})
+        required = {"plugin", "scope", "version", "source", "tree_digest", "manifest_digest", "dry_run", "result", "readiness", "next_action", "next_actions"}
+        require(verb == "add" and type(data) is dict and required <= set(data) <= required | {"security"})
+        require(data["scope"] == "project" and data["readiness"] == "needs_action")
+        actions = data["next_actions"]
+        require(type(actions) is list and len(actions) == 1 and type(actions[0]) is dict)
+        action = actions[0]
+        require(set(action) == {"code", "actor", "message"} and action["code"] == "verify_native"
+                and action["actor"] == "native_client" and type(action["message"]) is str
+                and bool(action["message"]) and data["next_action"] == action["message"])
         output, group = data, ""
     else:
         required = {"batch", "status", "succeeded", "failed", "plugin", "dry_run", "targets"}
@@ -465,7 +473,62 @@ def complete(public, inspections, proof_rows):
         # separately validated durable trust-store recipe still contains A/B only.
         inspect(raw, cwd, True, expected)
         elapsed += row["elapsed_ms"]
-    return client, elapsed
+    return client, elapsed, paths
+
+
+def mcp_inspections(rows, paths):
+    """Admit source-bound, original MCP-only Grok inspect output, not activation."""
+    from project_native_runtime import grok_selection_identity_keys
+    project = str(PurePosixPath(paths["project_a"]).parent) + "/grok-project-mcp-only"
+    name = "uap-grok-mcp-only"
+    prefix = project + "/.grok/plugins/"
+    require(len(rows) == len(MCP_INSPECT))
+    installed = rows[0]["value"]
+    require(set(installed) == {"cwd", "stdout", "owned_state"})
+    state = load(stream(installed["owned_state"]))
+    require(type(state) is dict and state.get("schema_version") == 5
+            and type(state.get("installations")) is list and len(state["installations"]) == 1)
+    installation = state["installations"][0]
+    require(type(installation) is dict and installation.get("declared_name") == name
+            and type(installation.get("clients")) is dict and len(installation["clients"]) == 1)
+    binding = next(iter(installation["clients"].values()))
+    require(type(binding) is dict and binding.get("client_id") == "grok"
+            and binding.get("scope") == "project"
+            and binding.get("native_profile_root") == project + "/.grok"
+            and binding.get("activation") == "prepared"
+            and binding.get("verification") == "package_validated")
+    active = binding.get("target_locator")
+    require(type(active) is str and active.startswith(prefix)
+            and re.fullmatch(r"uap-grok-mcp-only-[0-9a-f]{12}", active[len(prefix):]))
+    canonical(active)
+    for row, stage in zip(rows, MCP_INSPECT):
+        observed = row["value"]
+        expected_keys = {"cwd", "stdout", "owned_state"} if stage == "installed" else {"cwd", "stdout"}
+        require(set(observed) == expected_keys and observed["cwd"] == project)
+        native = load(stream(observed["stdout"]))
+        require(type(native) is dict
+                and grok_selection_identity_keys(native, "grokVersion cwd projectRoot projectTrusted mcpServers plugins")
+                and native.get("grokVersion") == "1.0.70"
+                and native.get("cwd") == project
+                and native.get("projectRoot") in (project, project + "/")
+                and native.get("projectTrusted") is False
+                and native.get("mcpServers") == [] and type(native.get("plugins")) is list)
+        found = 0
+        for plugin in native["plugins"]:
+            require(type(plugin) is dict
+                    and grok_selection_identity_keys(plugin, "name scope path enabled provides")
+                    and type(plugin.get("name")) is str and bool(plugin["name"].strip()))
+            if plugin["name"].casefold() != name.casefold():
+                continue
+            require(plugin["name"] == name and plugin.get("scope") == "project"
+                    and plugin.get("enabled") is False and type(plugin.get("path")) is str
+                    and plugin["path"] == active)
+            provides = plugin.get("provides")
+            require(type(provides) is dict and grok_selection_identity_keys(provides, "mcpServers")
+                    and type(provides.get("mcpServers")) is int
+                    and provides["mcpServers"] == 1)
+            found += 1
+        require(found == (1 if stage == "installed" else 0))
 
 
 def members(bodies, source):
@@ -487,7 +550,8 @@ def admit(bodies, source):
             and type(result["elapsed_ms"]) is int and 0 <= result["elapsed_ms"] <= 195000)
     require(same(result["source_identity"], {"installer_base_commit": source["source_commit"], "installer_tree": source["source_tree"], "installer_source_state": "committed", "installer_patch_sha256": []}))
     require(same(result["qualification"], {key: complete_flag and key in FLAGS[:2] for key in FLAGS}))
-    rows = [records(bodies[name], order) for name, order in zip(MEMBERS, (PUBLIC, INSPECT, PROOF))]
+    rows = [records(bodies[name], order) for name, order in zip(MEMBERS[:3], (PUBLIC, INSPECT, PROOF))]
+    mcp_rows = records(bodies[MEMBERS[3]], MCP_INSPECT)
     for key, captured in zip(("cycle_public_stages", "cycle_inspect_stages", "cycle_proof_stages"), rows):
         require(same(result[key], [row["stage"] for row in captured]))
     for captured in rows[:2]:
@@ -498,7 +562,8 @@ def admit(bodies, source):
         return result
     require(result["test_failed"] is False and result["cycle_observed_complete"] is True and result["elapsed_ms"] < 150000
             and all(len(captured) == len(order) for captured, order in zip(rows, (PUBLIC, INSPECT, PROOF))))
-    client, elapsed = complete(*rows)
+    client, elapsed, paths = complete(*rows)
+    mcp_inspections(mcp_rows, paths)
     require(elapsed <= result["elapsed_ms"])
     acquisition = result["acquisition"]
     require(same(acquisition, {"client": "grok", "acquisition": {"sha256": "11d27a30adfb75c4b9b180072ab27412a1916f054ff5497ab70fb9a77d304bcc", "pin_verified": True,
