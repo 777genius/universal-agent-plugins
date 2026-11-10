@@ -53,7 +53,7 @@ def valid_legacy_dependency_result(envelope, operation, target=None, scope=None)
     """Validate real published dependency receipts for the selected client."""
     if (operation not in LEGACY_ACTIONS
             or (scope is not None and envelope.get("scope") != scope)
-            or ("result" in envelope and envelope["result"] != "success")
+            or envelope.get("result") != "success"
             or envelope.get("outcome") != "completed"):
         return False
     actions, results = envelope.get("actions"), envelope.get("results")

@@ -163,17 +163,22 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     "installation_id": alias + "-installation",
                     "binding_id": alias + "-binding", "action": "unchanged"}
                    for alias in aliases]
-        envelope = {"outcome": "completed", "actions": actions, "results": []}
+        envelope = {"result": "success", "outcome": "completed",
+                    "actions": actions, "results": []}
         valid = {"exit_code": 0, "timeout": False, "_json": envelope}
         with_success = {**envelope, "result": "success"}
         self.assertEqual(check({**valid, "_json": with_success},
                                "update", "update", "codex"), with_success)
         for stage in ("update", "User update"):
             self.assertEqual(check(valid, stage, "update"), envelope)
-        for operation in (None, "add", "list", "repair", "install", "remove"):
+        for operation in ("add", "repair", "install", "remove"):
             with self.subTest(operation=operation), self.assertRaisesRegex(
                     AssertionError, "CLI did not succeed"):
                 check(valid, "update", operation)
+        missing_status = {key: value for key, value in envelope.items()
+                          if key != "result"}
+        with self.assertRaisesRegex(AssertionError, "CLI did not succeed"):
+            check({**valid, "_json": missing_status}, "update", "update")
         for changed in (
                 {"outcome": "partial"},
                 {"outcome": "failure"},
@@ -214,8 +219,8 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                             "installation_id": action["installation_id"],
                             "outcome": "completed"}
                            for action in actions if action_type != "unchanged"]
-                envelope = {"outcome": "completed", "actions": actions,
-                            "results": results}
+                envelope = {"result": "success", "outcome": "completed",
+                            "actions": actions, "results": results}
                 valid = {"exit_code": 0, "timeout": False, "_json": envelope}
                 self.assertEqual(check(valid, operation, operation, "codex"), envelope)
                 released = {**envelope, "result": "success"}
@@ -228,6 +233,8 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                            "results": [{**result, "client_id": "claude"} for result in results]}
                 for invalid in (foreign, {**foreign, "result": "success"},
                                 {"result": "success"},
+                                {key: value for key, value in envelope.items()
+                                 if key != "result"},
                                 {**envelope, "result": "partial"},
                                 {**envelope, "result": "failure"}):
                     with self.assertRaisesRegex(AssertionError, "CLI did not succeed"):
@@ -393,7 +400,8 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     "client_id": action["client_id"],
                     "operation": action["action"], "outcome": "completed"}
         def accepted(operation, planned, results):
-            envelope = {"outcome": "completed", "actions": planned, "results": results}
+            envelope = {"result": "success", "outcome": "completed",
+                        "actions": planned, "results": results}
             wrapped = {"exit_code": 0, "timeout": False, "_json": envelope}
             self.assertEqual(check(wrapped, operation, operation), envelope)
             return wrapped
@@ -405,6 +413,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         removal = {**actions[0], "action": "remove"}
         accepted("remove", [removal], [report(removal)])
         for changed in (
+                {"result": None},
                 {"outcome": "partial"},
                 {"results": []},
                 {"results": [{**report(actions[0]), "outcome": "incomplete"},
