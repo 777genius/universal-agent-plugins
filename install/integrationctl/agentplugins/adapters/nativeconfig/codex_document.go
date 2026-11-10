@@ -111,7 +111,9 @@ func (doc *document) renderCodexDocument() ([]byte, error) {
 		return nil, err
 	}
 	native := doc.codexDocument
-	if doc.hermesDocument != nil { native = doc.hermesDocument }
+	if doc.hermesDocument != nil {
+		native = doc.hermesDocument
+	}
 	body, err := native.RenderMCPEntries(cloneCodexEntries(entries))
 	return bytes.Clone(body), err
 }

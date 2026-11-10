@@ -13,10 +13,10 @@ import (
 )
 
 type hermesSkillFixture struct {
-	plan domain.DeliveryPlan
+	plan    domain.DeliveryPlan
 	objects []domain.NativeObjectOwnership
-	layout shared.ProjectComponents
-	skill string
+	layout  shared.ProjectComponents
+	skill   string
 	foreign string
 }
 

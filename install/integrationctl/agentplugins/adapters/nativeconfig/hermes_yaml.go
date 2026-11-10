@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"sort"
 	"runtime"
+	"sort"
 
 	"gopkg.in/yaml.v3"
 )
@@ -17,7 +17,7 @@ import (
 // Reject aliases, custom tags and duplicate keys rather than normalize a
 // credential-bearing user config whose semantics cannot be proven.
 type hermesYAMLDocument struct {
-	root yaml.Node
+	root     yaml.Node
 	original []byte
 }
 
@@ -28,13 +28,21 @@ func parseHermesDocument(body []byte, jsonc bool) (*document, error) {
 		return nil, fmt.Errorf("%w: Hermes accepts only config.yaml", ErrMalformed)
 	}
 	native, err := parseHermesYAML(body)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	entries, err := native.MCPEntries()
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	neutral, err := json.Marshal(map[string]any{"mcp_servers": entries})
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	doc, err := parseDocument(neutral, false)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	doc.hermesDocument = native
 	return doc, nil
 }
@@ -58,7 +66,9 @@ func parseHermesYAML(body []byte) (*hermesYAMLDocument, error) {
 	if root.Kind != yaml.DocumentNode || len(root.Content) != 1 || root.Content[0].Kind != yaml.MappingNode {
 		return nil, fmt.Errorf("%w: Hermes config root must be a YAML mapping", ErrMalformed)
 	}
-	if err := validateHermesYAMLNode(&root); err != nil { return nil, err }
+	if err := validateHermesYAMLNode(&root); err != nil {
+		return nil, err
+	}
 	return &hermesYAMLDocument{root: root, original: bytes.Clone(body)}, nil
 }
 
@@ -75,7 +85,9 @@ func validateHermesYAMLNode(node *yaml.Node) error {
 	}
 	if node.Kind == yaml.MappingNode {
 		seen := map[string]bool{}
-		if len(node.Content)%2 != 0 { return fmt.Errorf("%w: invalid Hermes mapping", ErrMalformed) }
+		if len(node.Content)%2 != 0 {
+			return fmt.Errorf("%w: invalid Hermes mapping", ErrMalformed)
+		}
 		for i := 0; i < len(node.Content); i += 2 {
 			key := node.Content[i]
 			if key.Kind != yaml.ScalarNode || key.Tag != "!!str" || seen[key.Value] {
@@ -85,14 +97,18 @@ func validateHermesYAMLNode(node *yaml.Node) error {
 		}
 	}
 	for _, child := range node.Content {
-		if err := validateHermesYAMLNode(child); err != nil { return err }
+		if err := validateHermesYAMLNode(child); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
 func hermesMappingValue(mapping *yaml.Node, key string) (*yaml.Node, int) {
 	for i := 0; i+1 < len(mapping.Content); i += 2 {
-		if mapping.Content[i].Value == key { return mapping.Content[i+1], i }
+		if mapping.Content[i].Value == key {
+			return mapping.Content[i+1], i
+		}
 	}
 	return nil, -1
 }
@@ -101,7 +117,9 @@ func (doc *hermesYAMLDocument) collection(create bool) (*yaml.Node, error) {
 	parent := doc.root.Content[0]
 	collection, _ := hermesMappingValue(parent, "mcp_servers")
 	if collection == nil {
-		if !create { return nil, nil }
+		if !create {
+			return nil, nil
+		}
 		key := &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "mcp_servers"}
 		collection = &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
 		parent.Content = append(parent.Content, key, collection)
@@ -115,86 +133,120 @@ func (doc *hermesYAMLDocument) collection(create bool) (*yaml.Node, error) {
 func (doc *hermesYAMLDocument) MCPEntries() (map[string]json.RawMessage, error) {
 	result := map[string]json.RawMessage{}
 	list, err := doc.collection(false)
-	if err != nil || list == nil { return result, err }
+	if err != nil || list == nil {
+		return result, err
+	}
 	for i := 0; i+1 < len(list.Content); i += 2 {
 		key, value := list.Content[i], list.Content[i+1]
 		if value.Kind != yaml.MappingNode {
 			return nil, fmt.Errorf("%w: Hermes MCP server is not a mapping", ErrMalformed)
 		}
 		var decoded map[string]any
-		if err := value.Decode(&decoded); err != nil { return nil, fmt.Errorf("%w: invalid Hermes MCP entry", ErrMalformed) }
+		if err := value.Decode(&decoded); err != nil {
+			return nil, fmt.Errorf("%w: invalid Hermes MCP entry", ErrMalformed)
+		}
 		encoded, err := json.Marshal(decoded)
-		if err != nil { return nil, fmt.Errorf("%w: invalid Hermes MCP entry values", ErrMalformed) }
+		if err != nil {
+			return nil, fmt.Errorf("%w: invalid Hermes MCP entry values", ErrMalformed)
+		}
 		result[key.Value] = encoded
 	}
 	return result, nil
 }
 
 func (doc *hermesYAMLDocument) RenderMCPEntries(desired map[string]json.RawMessage) ([]byte, error) {
-    previous, err := doc.MCPEntries()
-    if err != nil { return nil, err }
-    if equalHermesMCPEntries(previous, desired) {
-        return bytes.Clone(doc.original), nil
-    }
-    list, err := doc.collection(true)
-    if err != nil { return nil, err }
-    list.Content, err = replaceHermesMCPEntryNodes(list.Content, previous, desired)
-    if err != nil { return nil, err }
-    return doc.encodeVerifiedMCPEntries(desired)
+	previous, err := doc.MCPEntries()
+	if err != nil {
+		return nil, err
+	}
+	if equalHermesMCPEntries(previous, desired) {
+		return bytes.Clone(doc.original), nil
+	}
+	list, err := doc.collection(true)
+	if err != nil {
+		return nil, err
+	}
+	list.Content, err = replaceHermesMCPEntryNodes(list.Content, previous, desired)
+	if err != nil {
+		return nil, err
+	}
+	return doc.encodeVerifiedMCPEntries(desired)
 }
 
 func equalHermesMCPEntries(previous, desired map[string]json.RawMessage) bool {
-    if len(previous) != len(desired) { return false }
-    for name, value := range desired {
-        if !bytes.Equal(value, previous[name]) { return false }
-    }
-    return true
+	if len(previous) != len(desired) {
+		return false
+	}
+	for name, value := range desired {
+		if !bytes.Equal(value, previous[name]) {
+			return false
+		}
+	}
+	return true
 }
 
 func replaceHermesMCPEntryNodes(
-    original []*yaml.Node, previous, desired map[string]json.RawMessage,
+	original []*yaml.Node, previous, desired map[string]json.RawMessage,
 ) ([]*yaml.Node, error) {
-    remaining := make(map[string]json.RawMessage, len(desired))
-    for name, value := range desired { remaining[name] = value }
-    nodes := make([]*yaml.Node, 0, len(desired)*2)
-    for i := 0; i+1 < len(original); i += 2 {
-        key, value := original[i], original[i+1]
-        encoded, keep := remaining[key.Value]
-        if !keep { continue }
-        if !bytes.Equal(previous[key.Value], encoded) {
-            next, err := hermesValueNode(encoded)
-            if err != nil { return nil, err }
-            next.HeadComment, next.LineComment, next.FootComment = value.HeadComment, value.LineComment, value.FootComment
-            value = next
-        }
-        nodes = append(nodes, key, value)
-        delete(remaining, key.Value)
-    }
-    names := make([]string, 0, len(remaining))
-    for name := range remaining { names = append(names, name) }
-    sort.Strings(names)
-    for _, name := range names {
-        value, err := hermesValueNode(remaining[name])
-        if err != nil { return nil, err }
-        nodes = append(nodes, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: name}, value)
-    }
-    return nodes, nil
+	remaining := make(map[string]json.RawMessage, len(desired))
+	for name, value := range desired {
+		remaining[name] = value
+	}
+	nodes := make([]*yaml.Node, 0, len(desired)*2)
+	for i := 0; i+1 < len(original); i += 2 {
+		key, value := original[i], original[i+1]
+		encoded, keep := remaining[key.Value]
+		if !keep {
+			continue
+		}
+		if !bytes.Equal(previous[key.Value], encoded) {
+			next, err := hermesValueNode(encoded)
+			if err != nil {
+				return nil, err
+			}
+			next.HeadComment, next.LineComment, next.FootComment = value.HeadComment, value.LineComment, value.FootComment
+			value = next
+		}
+		nodes = append(nodes, key, value)
+		delete(remaining, key.Value)
+	}
+	names := make([]string, 0, len(remaining))
+	for name := range remaining {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		value, err := hermesValueNode(remaining[name])
+		if err != nil {
+			return nil, err
+		}
+		nodes = append(nodes, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: name}, value)
+	}
+	return nodes, nil
 }
 
 func (doc *hermesYAMLDocument) encodeVerifiedMCPEntries(desired map[string]json.RawMessage) ([]byte, error) {
-    var out bytes.Buffer
-    encoder := yaml.NewEncoder(&out)
-    encoder.SetIndent(2)
-    if err := encoder.Encode(&doc.root); err != nil { return nil, err }
-    if err := encoder.Close(); err != nil { return nil, err }
-    check, err := parseHermesYAML(out.Bytes())
-    if err != nil { return nil, err }
-    actual, err := check.MCPEntries()
-    if err != nil { return nil, err }
-    if !equalHermesMCPEntries(actual, desired) {
-        return nil, fmt.Errorf("%w: hermes YAML rendered different MCP entries", ErrMalformed)
-    }
-    return out.Bytes(), nil
+	var out bytes.Buffer
+	encoder := yaml.NewEncoder(&out)
+	encoder.SetIndent(2)
+	if err := encoder.Encode(&doc.root); err != nil {
+		return nil, err
+	}
+	if err := encoder.Close(); err != nil {
+		return nil, err
+	}
+	check, err := parseHermesYAML(out.Bytes())
+	if err != nil {
+		return nil, err
+	}
+	actual, err := check.MCPEntries()
+	if err != nil {
+		return nil, err
+	}
+	if !equalHermesMCPEntries(actual, desired) {
+		return nil, fmt.Errorf("%w: hermes YAML rendered different MCP entries", ErrMalformed)
+	}
+	return out.Bytes(), nil
 }
 
 func hermesValueNode(encoded json.RawMessage) (*yaml.Node, error) {
@@ -203,28 +255,32 @@ func hermesValueNode(encoded json.RawMessage) (*yaml.Node, error) {
 		return nil, fmt.Errorf("%w: Hermes MCP entry must be a JSON object", ErrMalformed)
 	}
 	var value yaml.Node
-	if err := value.Encode(object); err != nil { return nil, err }
+	if err := value.Encode(object); err != nil {
+		return nil, err
+	}
 	return &value, nil
 }
 
- // Refuse to mutate an existing provider config that is readable by another
- // local Unix user. The mutation kernel retains existing file modes by design,
- // so writing credentials into a pre-existing 0644 file would preserve the leak.
- // Windows uses ACLs rather than meaningful POSIX permission bits.
- func requireHermesPrivateConfig(file resolvedFile, codec Codec) error {
- 	if codec != CodecHermes || !file.exists || runtime.GOOS == "windows" {
- 		return nil
- 	}
- 	if file.mode.Perm()&0o077 != 0 {
- 		return fmt.Errorf("hermes config.yaml must have owner-only permissions before UAP manages MCP entries")
- 	}
- 	return nil
- }
+// Refuse to mutate an existing provider config that is readable by another
+// local Unix user. The mutation kernel retains existing file modes by design,
+// so writing credentials into a pre-existing 0644 file would preserve the leak.
+// Windows uses ACLs rather than meaningful POSIX permission bits.
+func requireHermesPrivateConfig(file resolvedFile, codec Codec) error {
+	if codec != CodecHermes || !file.exists || runtime.GOOS == "windows" {
+		return nil
+	}
+	if file.mode.Perm()&0o077 != 0 {
+		return fmt.Errorf("hermes config.yaml must have owner-only permissions before UAP manages MCP entries")
+	}
+	return nil
+}
 
 // resolveForCodec applies codec-specific safety invariants at the shared read boundary.
 // The generic kernel remains agnostic of Hermes YAML semantics and permissions.
 func (kernel Kernel) resolveForCodec(paths Paths, codec Codec) (resolvedFile, error) {
-    file, err := kernel.resolve(paths)
-    if err != nil { return file, err }
-    return file, requireHermesPrivateConfig(file, codec)
+	file, err := kernel.resolve(paths)
+	if err != nil {
+		return file, err
+	}
+	return file, requireHermesPrivateConfig(file, codec)
 }

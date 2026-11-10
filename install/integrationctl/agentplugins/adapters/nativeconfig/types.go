@@ -237,7 +237,9 @@ func supportedCodec(codec Codec) bool {
 }
 
 func codecCollectionKey(codec Codec) string {
-	if codec == CodecHermes { return "mcp_servers" }
+	if codec == CodecHermes {
+		return "mcp_servers"
+	}
 	if codec == CodecVSCode {
 		return "servers"
 	}

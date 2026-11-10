@@ -20,19 +20,19 @@ import (
 
 type Adapter struct{}
 
-func New() *Adapter { return &Adapter{} }
+func New() *Adapter                  { return &Adapter{} }
 func (*Adapter) ID() domain.ClientID { return domain.ClientHermes }
 
 var (
-	_ clients.Adapter = (*Adapter)(nil)
-	_ clients.HostDetector = (*Adapter)(nil)
-	_ clients.ProfileResolver = (*Adapter)(nil)
+	_ clients.Adapter                 = (*Adapter)(nil)
+	_ clients.HostDetector            = (*Adapter)(nil)
+	_ clients.ProfileResolver         = (*Adapter)(nil)
 	_ clients.ProfileBindingValidator = (*Adapter)(nil)
-	_ clients.ProjectTargetLayout = (*Adapter)(nil)
-	_ clients.NativeRegistryLayout = (*Adapter)(nil)
-	_ clients.PlanPrecondition = (*Adapter)(nil)
-	_ clients.PlanQualifier = (*Adapter)(nil)
-	_ clients.PlanRefiner = (*Adapter)(nil)
+	_ clients.ProjectTargetLayout     = (*Adapter)(nil)
+	_ clients.NativeRegistryLayout    = (*Adapter)(nil)
+	_ clients.PlanPrecondition        = (*Adapter)(nil)
+	_ clients.PlanQualifier           = (*Adapter)(nil)
+	_ clients.PlanRefiner             = (*Adapter)(nil)
 )
 
 func (*Adapter) DetectSurfaces(host clients.Host) clients.Detection {
@@ -85,12 +85,16 @@ func (*Adapter) ValidateBindingProfile(root string, binding domain.ClientBinding
 		return fmt.Errorf("hermes recorded binding has different client or profile authority")
 	}
 	selected, err := New().ResolveProfileRoot(root)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	if selected != root || binding.NativeProfileRoot != root {
 		return fmt.Errorf("hermes binding has no exact native profile proof")
 	}
 	for _, item := range binding.NativeObjects {
-		if item.Kind == "managed_package_directory" { continue }
+		if item.Kind == "managed_package_directory" {
+			continue
+		}
 		switch domain.InstallScope(binding.Scope) {
 		case domain.ScopeUser:
 			if item.Kind != userSkillKind && item.Kind != userMCPKind {
@@ -142,18 +146,24 @@ func (*Adapter) ProjectTargetRoot(client domain.DetectedClient, mode domain.Pack
 // false success. Require an explicit repository root; support ordinary .git
 // directories and regular worktree pointer files without following symlinks.
 func (*Adapter) CheckPlanPrecondition(in clients.PlanInput, plan *domain.DeliveryPlan) error {
- if in.TargetContext.Scope != domain.ScopeProject && plan.Scope != domain.ScopeProject {
-  return nil
- }
- root := plan.TargetContext.ProjectRoot
- if root == "" { root = in.TargetContext.ProjectRoot }
- if !cleanRoot(root) { return fmt.Errorf("hermes project Skills require an exact Git repository root") }
- meta, err := os.Lstat(filepath.Join(root, ".git"))
- if err != nil { return fmt.Errorf("hermes project Skills require a Git root at the selected project: %w", err) }
- if meta.Mode()&os.ModeSymlink != 0 || (!meta.IsDir() && !meta.Mode().IsRegular()) {
-  return fmt.Errorf("hermes project Git root marker must be a real directory or worktree pointer")
- }
- return nil
+	if in.TargetContext.Scope != domain.ScopeProject && plan.Scope != domain.ScopeProject {
+		return nil
+	}
+	root := plan.TargetContext.ProjectRoot
+	if root == "" {
+		root = in.TargetContext.ProjectRoot
+	}
+	if !cleanRoot(root) {
+		return fmt.Errorf("hermes project Skills require an exact Git repository root")
+	}
+	meta, err := os.Lstat(filepath.Join(root, ".git"))
+	if err != nil {
+		return fmt.Errorf("hermes project Skills require a Git root at the selected project: %w", err)
+	}
+	if meta.Mode()&os.ModeSymlink != 0 || (!meta.IsDir() && !meta.Mode().IsRegular()) {
+		return fmt.Errorf("hermes project Git root marker must be a real directory or worktree pointer")
+	}
+	return nil
 }
 
 // A package with required MCP/hooks/extensions must not silently become

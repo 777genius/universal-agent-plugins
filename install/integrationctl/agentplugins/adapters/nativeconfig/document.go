@@ -12,11 +12,11 @@ import (
 )
 
 type document struct {
-	ast           hujson.Value
-	root          *hujson.Object
-	jsonc         bool
-	commentsOnly  bool
-	codexDocument CodexDocument
+	ast            hujson.Value
+	root           *hujson.Object
+	jsonc          bool
+	commentsOnly   bool
+	codexDocument  CodexDocument
 	hermesDocument CodexDocument
 }
 

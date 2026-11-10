@@ -2,11 +2,11 @@ package hermes
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
-	"os"
-	"encoding/json"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
@@ -15,16 +15,16 @@ import (
 )
 
 const (
-	userSkillKind = "hermes_user_skill"
+	userSkillKind    = "hermes_user_skill"
 	projectSkillKind = "hermes_project_skill"
-	neverMCPKind = "hermes_mcp_not_supported"
-	userMCPKind = "hermes_user_mcp"
+	neverMCPKind     = "hermes_mcp_not_supported"
+	userMCPKind      = "hermes_user_mcp"
 )
 
 var (
-	_ clients.Projector = (*Adapter)(nil)
+	_ clients.Projector             = (*Adapter)(nil)
 	_ clients.ActiveNativeProjector = (*Adapter)(nil)
-	_ clients.ReadOnlyVerifier = (*Adapter)(nil)
+	_ clients.ReadOnlyVerifier      = (*Adapter)(nil)
 )
 
 func components(plan domain.DeliveryPlan, selectedPackage string) (shared.ProjectComponents, error) {
@@ -36,10 +36,10 @@ func components(plan domain.DeliveryPlan, selectedPackage string) (shared.Projec
 		SkillsRoot: filepath.Join(authority, "skills"),
 		// There is no project-local Hermes MCP authority. The sentinel path
 		// is never written: this layout admits Skills alone.
-		ConfigPaths: nativeconfig.Paths{JSON: filepath.Join(authority, "config.yaml")},
-		Codec: nativeconfig.CodecHermes,
-		SkillKind: userSkillKind,
-		MCPKind: userMCPKind,
+		ConfigPaths:        nativeconfig.Paths{JSON: filepath.Join(authority, "config.yaml")},
+		Codec:              nativeconfig.CodecHermes,
+		SkillKind:          userSkillKind,
+		MCPKind:            userMCPKind,
 		ManagedPackagePath: selectedPackage,
 	}
 	switch plan.Scope {
@@ -78,9 +78,13 @@ func buildSkillObjects(ctx context.Context, staged string, envelope domain.Packa
 				return nil, fmt.Errorf("hermes MCP has User authority only")
 			}
 			server, err := readHermesMCPServer(staged, component.Name)
-			if err != nil { return nil, err }
+			if err != nil {
+				return nil, err
+			}
 			object, err := layout.MCPObject(component.Name, server, layout.ConfigPaths.JSON)
-			if err != nil { return nil, err }
+			if err != nil {
+				return nil, err
+			}
 			objects = append(objects, object)
 			continue
 		}
@@ -109,10 +113,12 @@ func (*Adapter) Project(ctx context.Context, in clients.ProjectionInput) ([]doma
 	if in.Plan.Scope == domain.ScopeUser {
 		if err := shared.ProjectMCPServers(shared.MCPProjection{
 			Root: in.StagingPath, Envelope: in.Envelope,
-			Names: shared.SupportedMCPNames(in.Plan),
+			Names:   shared.SupportedMCPNames(in.Plan),
 			Dialect: shared.MCPDialectKiro, PluginRoot: in.Plan.ActivePath,
 			DataPath: in.PluginDataPath,
-		}); err != nil { return nil, err }
+		}); err != nil {
+			return nil, err
+		}
 	}
 	return buildSkillObjects(ctx, in.StagingPath, in.Envelope, in.Plan)
 }
@@ -156,21 +162,33 @@ func ownedObjects(scope domain.InstallScope, objects []domain.NativeObjectOwners
 func readHermesMCPServer(root, name string) (nativeconfig.Server, error) {
 	path := filepath.Join(root, "mcp.json")
 	body, err := os.ReadFile(path)
-	if err != nil { return nativeconfig.Server{}, fmt.Errorf("read Hermes staged MCP selection: %w", err) }
+	if err != nil {
+		return nativeconfig.Server{}, fmt.Errorf("read Hermes staged MCP selection: %w", err)
+	}
 	doc, err := shared.DecodeStrictJSONObject(body)
-	if err != nil { return nativeconfig.Server{}, err }
+	if err != nil {
+		return nativeconfig.Server{}, err
+	}
 	collection, ok := doc["mcpServers"].(map[string]any)
-	if !ok { return nativeconfig.Server{}, fmt.Errorf("hermes staged MCP selection is missing mcpServers") }
+	if !ok {
+		return nativeconfig.Server{}, fmt.Errorf("hermes staged MCP selection is missing mcpServers")
+	}
 	entry, ok := collection[name].(map[string]any)
-	if !ok { return nativeconfig.Server{}, fmt.Errorf("hermes MCP server %q is absent from staged selection", name) }
+	if !ok {
+		return nativeconfig.Server{}, fmt.Errorf("hermes MCP server %q is absent from staged selection", name)
+	}
 	typ, _ := entry["type"].(string)
 	if typ != "stdio" && typ != "streamable-http" {
 		return nativeconfig.Server{}, fmt.Errorf("hermes MCP server %q transport is unsupported", name)
 	}
 	raw, err := json.Marshal(entry)
-	if err != nil { return nativeconfig.Server{}, err }
+	if err != nil {
+		return nativeconfig.Server{}, err
+	}
 	var server nativeconfig.Server
-	if err := json.Unmarshal(raw, &server); err != nil { return server, err }
+	if err := json.Unmarshal(raw, &server); err != nil {
+		return server, err
+	}
 	if typ == "streamable-http" {
 		server.Type = "remote"
 		// Hermes supports remote HTTP through a url field, no transport tag.
@@ -183,9 +201,13 @@ func readHermesMCPServer(root, name string) (nativeconfig.Server, error) {
 func hermesDesiredServers(root string, objects []domain.NativeObjectOwnership) (map[string]nativeconfig.Server, error) {
 	out := make(map[string]nativeconfig.Server)
 	for _, object := range objects {
-		if object.Kind != userMCPKind { continue }
+		if object.Kind != userMCPKind {
+			continue
+		}
 		server, err := readHermesMCPServer(root, object.LogicalName)
-		if err != nil { return nil, err }
+		if err != nil {
+			return nil, err
+		}
 		out[object.LogicalName] = server
 	}
 	return out, nil
