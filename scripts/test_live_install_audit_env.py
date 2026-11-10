@@ -550,7 +550,10 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         runner = run_path(str(Path(__file__).resolve().parent /
                               "marketing-kit-project-release-e2e.py"))
         execute = runner["execute"]
-        actions = [{"alias": alias, "client_id": "codex", "action": "unchanged"}
+        stable = {distribution: alias + "-stable-id"
+                  for alias, distribution in runner["REQUIRED_DISTRIBUTIONS"].items()}
+        actions = [{"alias": alias, "client_id": "codex", "action": "unchanged",
+                    "installation_id": alias + "-stable-id"}
                    for alias in ("marketing-kit", "notion", "hubspot-crm", "playwright")]
         original = {"result": "success", "outcome": "completed",
                     "actions": actions, "results": []}
@@ -561,7 +564,9 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     receipt = {**original, "scope": reported}
                     response = {"exit_code": 0, "timeout": False, "_json": receipt}
                     with patch.dict(execute.__globals__,
-                                    {"invoke": lambda *a: response}):
+                                    {"invoke": lambda *a: response,
+                                     "inventory": lambda *a: [],
+                                     "identities": lambda *a: stable}):
                         command = ("update", "marketing-kit", "--scope", scope)
                         if reported == scope:
                             self.assertEqual(
