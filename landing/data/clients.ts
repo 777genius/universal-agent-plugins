@@ -9,8 +9,10 @@ export interface ClientLandingPage extends ClientTarget {
   vendorDocsUrl?: string;
 }
 
-/** Public presentation only: keep technical compatibility and previously installed profiles intact. */
-export const hiddenPublicClientIds: ReadonlySet<string> = new Set(['vscode']);
+/** Public presentation only: keep technical compatibility and previously installed profiles intact.
+ * Hermes and Antigravity require a qualified CLI release before public install actions are exposed.
+ */
+export const hiddenPublicClientIds: ReadonlySet<string> = new Set(['vscode', 'hermes', 'antigravity']);
 
 const allClientLandingPages: ClientLandingPage[] = [
   {
@@ -209,6 +211,36 @@ const allClientLandingPages: ClientLandingPage[] = [
       'The CLI writes a native .qoder-plugin manifest and registers the managed package through the Qoder CLI when available.',
     activation:
       'Reload Qoder plugins or restart Qoder after installation. Runtime MCP connections and provider authentication still need confirmation in Qoder.',
+  },
+  {
+    id: 'hermes',
+    slug: 'hermes',
+    name: 'Hermes Agent',
+    icon: 'terminal.svg',
+    note: 'User Skills/MCP and Project Skills; Project MCP is unsupported',
+    status: 'Supported',
+    intro:
+      'Install native Hermes Agent Skills for your user or a selected Git project, plus user-scoped MCP servers, without changing unrelated settings.',
+    delivery:
+      'UAP manages owned Skills directories and exact User MCP entries in config.yaml. Project installation never modifies User MCP configuration.',
+    activation:
+      'Restart Hermes to reload the integration. Review project trust before using Project Skills; runtime discovery and authentication still need confirmation.',
+    vendorDocsUrl: 'https://github.com/NousResearch/hermes-agent',
+  },
+  {
+    id: 'antigravity',
+    slug: 'antigravity',
+    name: 'Google Antigravity',
+    icon: 'terminal.svg',
+    note: 'Native User/Project plugins; activation requires verification',
+    status: 'Prepared by CLI',
+    intro:
+      'Prepare native Google Antigravity plugins with supported Skills and MCP servers in the selected User or Project scope.',
+    delivery:
+      'UAP prepares a managed plugin folder under the selected user or project configuration, preserves unrelated plugins, and does not enable hooks implicitly.',
+    activation:
+      'Open or reload Antigravity and verify the plugin is discovered and enabled. Prepared files do not prove a model session, authentication, or live MCP execution.',
+    vendorDocsUrl: 'https://antigravity.google/docs/build-plugins',
   },
   {
     id: 'pi',

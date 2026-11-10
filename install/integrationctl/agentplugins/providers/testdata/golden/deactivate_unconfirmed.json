@@ -1,4 +1,18 @@
 {
+  "antigravity": {
+    "Commands": [],
+    "Error": "",
+    "Outcome": {
+      "Activation": "not_required",
+      "ArtifactRemovalAllowed": true,
+      "ExternalRemovalComplete": false,
+      "LocalActions": null,
+      "NativeEffect": "",
+      "UserActions": [
+        "Only the exact UAP-owned Antigravity plugin directory may be removed"
+      ]
+    }
+  },
   "chatgpt": {
     "Commands": [],
     "Error": "",

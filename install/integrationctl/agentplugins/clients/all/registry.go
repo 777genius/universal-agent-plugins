@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/antigravity"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/chatgpt"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/claude"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/cline"
@@ -67,6 +68,7 @@ func buildRegistry(project bool) *clients.Registry {
 		windsurf.New(),
 		grok.New(),
 		hermes.New(),
+		antigravity.New(),
 		kimi.New(),
 		qoder.New(),
 	)

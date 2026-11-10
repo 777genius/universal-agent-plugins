@@ -963,6 +963,20 @@
         "delivery": "CLI 会写入原生 .qoder-plugin 清单，并在 Qoder CLI 可用时通过它注册托管软件包。",
         "activation": "安装后重新加载 Qoder 插件或重启 Qoder。MCP 运行时连接和服务提供方的身份验证仍需在 Qoder 中确认。"
       },
+      "hermes": {
+        "note": "用户级 Skills/MCP 和项目级 Skills；不支持项目级 MCP",
+        "status": "支持",
+        "intro": "为当前用户或选定的 Git 项目安装 Hermes Agent 原生 Skills，并配置用户级 MCP 服务器，同时保留其他设置。",
+        "delivery": "UAP 管理自身安装的 Skills 目录和用户 config.yaml 中的特定 MCP 条目。项目安装不会修改用户级 MCP 配置。",
+        "activation": "重启 Hermes 以重新加载集成。使用项目 Skills 前请确认仓库信任；运行时发现和身份认证仍需单独验证。"
+      },
+      "antigravity": {
+        "note": "原生用户/项目插件；需验证激活状态",
+        "status": "已由 CLI 准备",
+        "intro": "为所选用户或项目范围准备含受支持 Skills 和 MCP 服务器的 Google Antigravity 原生插件。",
+        "delivery": "UAP 在所选用户或项目配置中准备受管理的插件目录，保留其他插件，且不会自动启用 hooks。",
+        "activation": "打开或重新加载 Antigravity，确认插件已被发现并启用。仅有准备好的文件不能证明模型会话、身份认证或 MCP 实际执行。"
+      },
       "pi": {
         "note": "Pi 原生扩展、Skills 和 MCP",
         "status": "已支持",

@@ -2,6 +2,51 @@
   {
     "Capabilities": {
       "ActivationMode": "manual",
+      "AppSupport": "unsupported",
+      "ClientID": "antigravity",
+      "ExtensionSupport": "unsupported",
+      "MCPTransports": {
+        "sse": "unsupported",
+        "stdio": "native",
+        "streamable-http": "native"
+      },
+      "PackageMode": "native",
+      "Scopes": [
+        "user",
+        "project"
+      ],
+      "SkillSupport": "native"
+    },
+    "ClientID": "antigravity",
+    "Components": [
+      {
+        "Index": 1,
+        "Kind": "mcp_server",
+        "Limitations": null,
+        "Source": "",
+        "Support": "native"
+      },
+      {
+        "Index": 1,
+        "Kind": "skill",
+        "Limitations": null,
+        "Source": "",
+        "Support": "native"
+      }
+    ],
+    "Limitations": [
+      "authentication_not_checked",
+      "catalog_publication_not_checked",
+      "client_version_not_checked",
+      "installation_not_checked",
+      "manual_activation_required",
+      "runtime_not_checked",
+      "static_adapter_support_only"
+    ]
+  },
+  {
+    "Capabilities": {
+      "ActivationMode": "manual",
       "AppSupport": "projected",
       "ClientID": "chatgpt",
       "ExtensionSupport": "unsupported",

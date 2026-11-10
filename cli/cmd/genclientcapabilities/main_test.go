@@ -46,7 +46,7 @@ func TestProjectMetadataMatchesAdmittedComponentContracts(t *testing.T) {
 	if byClient["chatgpt"].Project != nil {
 		t.Fatal("remote ChatGPT has no native Project filesystem route")
 	}
-	for _, client := range []string{"codex", "grok", "qoder", "windsurf", "pi"} {
+	for _, client := range []string{"codex", "grok", "qoder", "windsurf", "hermes", "antigravity", "pi"} {
 		if byClient[client].Project == nil {
 			t.Fatal(client, "lost scoped client adapter metadata")
 		}
@@ -57,6 +57,11 @@ func TestProjectMetadataMatchesAdmittedComponentContracts(t *testing.T) {
 		if got := string(byClient[client].Project.MCPTransports["stdio"]); got != support {
 			t.Fatalf("%s project MCP support = %s, expected %s", client, got, support)
 		}
+	}
+	if byClient["hermes"].Project.MCPTransports["stdio"] != "unsupported" ||
+		byClient["antigravity"].Project.MCPTransports["stdio"] != "native" ||
+		byClient["antigravity"].Project.MCPTransports["streamable-http"] != "native" {
+		t.Fatal("Hermes/Antigravity Project metadata diverged from scoped native contracts")
 	}
 	if byClient["pi"].Project.ExtensionSupport != "native" ||
 		byClient["codex"].Project.ExtensionSupport != "unsupported" {

@@ -1,4 +1,56 @@
 {
+  "antigravity": {
+    "Error": "",
+    "Plan": {
+      "Activation": "prepared",
+      "ActivePath": "\u003croot\u003e/clients/antigravity/plugins/demo-0123456789ab",
+      "Authentication": "not_checked",
+      "ClientID": "antigravity",
+      "Components": [
+        {
+          "Kind": "skill",
+          "Name": "docs",
+          "Reason": "",
+          "Source": "",
+          "SourceName": "",
+          "Support": "native"
+        }
+      ],
+      "DeclaredName": "demo",
+      "DeclaredVersion": "1.0.0",
+      "Diagnostics": null,
+      "InstallIntent": "",
+      "LocalActions": null,
+      "LocalEntryObservation": null,
+      "LocalPreparationAuthorized": false,
+      "NativeRegistryExecutable": "\u003croot\u003e/bin/antigravity",
+      "NativeRegistryRoot": "\u003croot\u003e/clients/antigravity",
+      "OpenCodeHost": null,
+      "PackageMode": "native",
+      "PersonalChatGPTPreparation": false,
+      "PhysicalArtifactID": "demo-0123456789ab",
+      "Policy": "allowed",
+      "PreviousNativeObjects": null,
+      "Scope": "user",
+      "SelectedDelivery": {},
+      "Status": "ready",
+      "TargetAnchor": "\u003croot\u003e/clients/antigravity",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/antigravity"
+      },
+      "TargetRoot": "\u003croot\u003e/clients/antigravity/plugins",
+      "UserActions": [
+        "verify the plugin's authentication requirements before using it",
+        "Open or restart Antigravity and verify the UAP-owned plugin in Customizations/Installed or with agy plugin list; native enablement and model access are not asserted"
+      ],
+      "Verification": "package_validated",
+      "Warnings": [
+        "authentication_not_catalog_verified"
+      ]
+    }
+  },
   "chatgpt": {
     "Error": "",
     "Plan": {

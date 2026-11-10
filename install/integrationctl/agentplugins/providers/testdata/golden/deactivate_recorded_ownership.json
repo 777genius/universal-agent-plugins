@@ -1,4 +1,18 @@
 {
+  "antigravity": {
+    "Commands": [],
+    "Error": "",
+    "Outcome": {
+      "Activation": "not_required",
+      "ArtifactRemovalAllowed": true,
+      "ExternalRemovalComplete": true,
+      "LocalActions": null,
+      "NativeEffect": "unchanged",
+      "UserActions": [
+        "Reload Antigravity to clear the plugin from a running session"
+      ]
+    }
+  },
   "chatgpt": {
     "Commands": [],
     "Error": "",
