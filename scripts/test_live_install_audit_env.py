@@ -530,6 +530,233 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 with self.assertRaises(AssertionError):
                     runner["check_refusal_profile_unchanged"](env, project, before)
 
+    def test_marketing_kit_copilot_user_policy_refusal_requires_exact_diagnostic(self):
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        verify = runner["verify_copilot_user_policy_refusal"]
+        diagnostic = ('agentplugins: no eligible directory release for "marketing-kit": '
+                      '777genius/marketing-kit: release does not support complete '
+                      'target set; missing vscode')
+        accepted = {"exit_code": 1, "timeout": False, "stderr_tail": diagnostic + "\n",
+                    "stdout_tail": "", "_json": None}
+        with TemporaryDirectory() as temporary:
+            case = Path(temporary)
+            home, data, project = (case / name for name in ("home", "data", "project"))
+            for directory in (home, data, project):
+                directory.mkdir(mode=0o700)
+            (project / "uap.toml").write_text("retained Project agreement")
+            (project / "uap.lock").write_text("retained exact Project lock")
+            env = {"HOME": str(home), "AGENTPLUGINS_HOME": str(data)}
+            before = runner["profile_snapshot"](env, project)
+            commands, guards = [], []
+
+            def invoke(command, *_):
+                commands.append(command)
+                return accepted
+
+            with patch.dict(verify.__globals__, {"invoke": invoke,
+                    "inventory": lambda *_: []}):
+                stage = verify("agentplugins", env, project,
+                               (lambda: guards.append("checked"),))
+            self.assertEqual(commands, [["agentplugins", "add", "marketing-kit",
+                "--target", "copilot", "--scope", "user", "--yes", "--format", "json"]])
+            self.assertEqual(stage["scope"], "user")
+            self.assertEqual(stage["contract"], "negative_policy")
+            self.assertEqual(stage["result"], "expected_refusal")
+            self.assertNotEqual(stage["result"], "passed")
+            self.assertEqual(guards, ["checked"])
+            self.assertEqual(runner["profile_snapshot"](env, project), before)
+            for ending in ("", "\r\n"):
+                with patch.dict(verify.__globals__, {
+                        "invoke": lambda *_: {**accepted, "stderr_tail": diagnostic + ending},
+                        "inventory": lambda *_: []}):
+                    self.assertEqual(verify("agentplugins", env, project, ())["result"], "expected_refusal")
+            for invalid in ({"exit_code": 0}, {"exit_code": -9}, {"exit_code": None},
+                            {"exit_code": True}, {"timeout": True}, {"timeout": None},
+                            {"stderr_tail": "network unavailable"},
+                            {"stderr_tail": diagnostic.replace("vscode", "copilot")},
+                            {"stderr_tail": diagnostic.replace('"marketing-kit"', '"notion"')},
+                            {"stderr_tail": diagnostic + "\nremote download failed"},
+                            {"stderr_tail": " " + diagnostic},
+                            {"stderr_tail": diagnostic + " "},
+                            {"stdout_tail": '{"result":"success"}'},
+                            {"stdout_tail": " "}, {"stdout_tail": None},
+                            {"_json": {"result": "success"}}):
+                with self.subTest(invalid=invalid), patch.dict(verify.__globals__, {
+                        "invoke": lambda *_: {**accepted, **invalid},
+                        "inventory": lambda *_: []}):
+                    checked = []
+                    with self.assertRaisesRegex(AssertionError, "exact missing-vscode"):
+                        verify("agentplugins", env, project, (lambda: checked.append(True),))
+                    self.assertEqual(checked, [True])
+                    self.assertEqual(runner["profile_snapshot"](env, project), before)
+
+    def test_marketing_kit_copilot_user_policy_refusal_rejects_own_mutations(self):
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        verify = runner["verify_copilot_user_policy_refusal"]
+        response = {"exit_code": 1, "timeout": False, "stdout_tail": "", "stderr_tail": (
+            'agentplugins: no eligible directory release for "marketing-kit": '
+            '777genius/marketing-kit: release does not support complete target set; missing vscode')}
+        for relative in ("home/.copilot/settings.json", "home/foreign.txt", "project/uap.lock",
+                         "data/uap.toml", "data/uap.lock", "data/state-v2.json",
+                         "data/managed/plugin", "data/store/package", "data/operations-v2/receipt",
+                         "data/directory-v1-cache.json"):
+            for during_inventory in (False, True):
+                with self.subTest(path=relative, inventory=during_inventory), TemporaryDirectory() as temporary:
+                    case = Path(temporary)
+                    home, data, project = (case / name for name in ("home", "data", "project"))
+                    for directory in (home, data, project):
+                        directory.mkdir(mode=0o700)
+                    env = {"HOME": str(home), "AGENTPLUGINS_HOME": str(data)}
+                    path = case / relative
+                    if path.name in ("foreign.txt", "uap.lock", "state-v2.json"):
+                        path.write_text("original")
+                    checked = []
+
+                    def change():
+                        path.parent.mkdir(parents=True, exist_ok=True)
+                        path.write_text("unexpected")
+
+                    def invoke(*_):
+                        if not during_inventory:
+                            change()
+                        return response
+
+                    def inventory(*_):
+                        if during_inventory:
+                            change()
+                        return []
+
+                    with patch.dict(verify.__globals__, {"invoke": invoke, "inventory": inventory}):
+                        with self.assertRaisesRegex(AssertionError, "isolated profile changed"):
+                            verify("agentplugins", env, project, (lambda: checked.append(True),))
+                    self.assertEqual(checked, [True])
+
+    def test_marketing_kit_copilot_user_policy_refusal_checks_inventory_and_peers(self):
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        verify = runner["verify_copilot_user_policy_refusal"]
+        response = {"exit_code": 1, "timeout": False, "stdout_tail": "", "stderr_tail": (
+            'agentplugins: no eligible directory release for "marketing-kit": '
+            '777genius/marketing-kit: release does not support complete target set; missing vscode')}
+        with TemporaryDirectory() as temporary:
+            case = Path(temporary)
+            env, project, foreign, *_ = runner["run_case"]("unused", "copilot", case, "A")
+            peer_env, peer_project, *_ = runner["run_case"]("unused", "copilot", case, "B")
+            peer_before = runner["profile_snapshot"](peer_env, peer_project)
+            pinned = runner["pin_foreign"]([(foreign, "unmanaged user data\n")], case)
+            with patch.dict(verify.__globals__, {"invoke": lambda *_: response,
+                    "inventory": lambda *_: ["unexpected"], "identities": lambda *_: {"installed": "id"}}):
+                with self.assertRaisesRegex(AssertionError, "retained an installation"):
+                    verify("agentplugins", env, project, ())
+            marker = Path(peer_env["HOME"]) / "unexpected-native.json"
+
+            def mutate_peer(*_):
+                marker.write_text("changed")
+                return response
+
+            with patch.dict(verify.__globals__, {"invoke": mutate_peer, "inventory": lambda *_: []}):
+                with self.assertRaisesRegex(AssertionError, "isolated profile changed"):
+                    verify("agentplugins", env, project, (
+                        lambda: runner["check_foreign"](pinned, case),
+                        lambda: runner["check_profile_unchanged"](
+                            peer_env, peer_project, peer_before, "User refusal"),))
+
+    def test_marketing_kit_copilot_user_refusal_rejects_padded_real_capture(self):
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        verify = runner["verify_copilot_user_policy_refusal"]
+        diagnostic = ('agentplugins: no eligible directory release for "marketing-kit": '
+                      '777genius/marketing-kit: release does not support complete '
+                      'target set; missing vscode')
+        padded_stdout = 'unrelated prefix {"result":"success"}' + " " * 2200
+        padded_stderr = "unrelated error\n" + " " * 2200 + diagnostic
+        with TemporaryDirectory() as temporary:
+            case = Path(temporary)
+            home, data, project = (case / name for name in ("home", "data", "project"))
+            for directory in (home, data, project):
+                directory.mkdir(mode=0o700)
+            env = {"HOME": str(home), "AGENTPLUGINS_HOME": str(data)}
+            for stdout, stderr in ((padded_stdout, padded_stderr),
+                                   ("", padded_stderr), (padded_stdout, diagnostic)):
+                with self.subTest(stdout=bool(stdout), stderr_padded=stderr != diagnostic):
+                    command = [sys.executable, "-c", "import sys; "
+                               f"sys.stdout.write({stdout!r}); sys.stderr.write({stderr!r}); sys.exit(1)"]
+                    captured = runner["audit"]["call"](command, env, project, 10)
+                    self.assertEqual(captured["exit_code"], 1)
+                    self.assertIsNone(captured["_json"])
+                    if stdout:
+                        self.assertEqual(captured["stdout_tail"], " " * 1800)
+                    if stderr == padded_stderr:
+                        self.assertEqual(len(captured["stderr_tail"]), 1800)
+                        self.assertTrue(captured["stderr_tail"].startswith(" "))
+                    with patch.dict(verify.__globals__, {"invoke": lambda *_: captured,
+                            "inventory": lambda *_: []}):
+                        with self.assertRaisesRegex(AssertionError, "exact missing-vscode"):
+                            verify("agentplugins", env, project, ())
+
+    def test_marketing_kit_cleanup_exception_overrides_successful_report(self):
+        from io import StringIO
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        main = runner["main"]
+        installed = {}
+
+        class FailedCleanup:
+            def __init__(self, **kwargs):
+                self.inner = TemporaryDirectory(**kwargs)
+
+            def __enter__(self):
+                return self.inner.__enter__()
+
+            def __exit__(self, *args):
+                self.inner.__exit__(*args)
+                raise OSError("disposable cleanup failed")
+
+        def execute(_cli, _env, project, _target, label, *args):
+            if args[0] in ("add", "install"):
+                for name in ("uap.toml", "uap.lock"):
+                    if not (project / name).exists():
+                        (project / name).write_text("retained portable agreement")
+                installed[project] = {name: project.parent.name + name for name in runner["EXPECTED"]}
+            elif args[0] == "remove":
+                installed[project] = {}
+            return {"stage": label, "exit_code": 0, "result": "passed"}
+
+        with TemporaryDirectory() as output:
+            report_path = Path(output) / "report.json"
+            with patch.dict(main.__globals__, {
+                    "execute": execute, "verify_pinned_launcher": lambda *_: None,
+                    "inventory": lambda _cli, _env, project, *_: installed.get(project, {}),
+                    "identities": lambda items, *_: items,
+                    "lock_ids": lambda *_: {"directory:" + name for name in runner["EXPECTED"]},
+                    "settled_profile_snapshot": runner["profile_snapshot"],
+                    "verify_corrupt_lock_refusal": lambda *_: 1,
+                    "verify_copilot_user_policy_refusal": lambda *_: {
+                        "stage": "User negative contract", "reason": "missing_vscode_grant"},
+                    }), patch.object(main.__globals__["tempfile"], "TemporaryDirectory", FailedCleanup), \
+                    patch.object(sys, "argv", ["runner", "--target", "copilot", "--cli", "unused",
+                                               "--report", str(report_path)]), \
+                    patch.object(sys, "stdout", StringIO()), patch.object(sys, "stderr", StringIO()):
+                self.assertEqual(main(), 1)
+            report = json.loads(report_path.read_text())
+            self.assertEqual(report["scope_results"]["project"]["status"], "passed")
+            self.assertEqual(report["scope_results"]["user"]["status"], "refused_as_expected")
+            self.assertFalse(report["two_scope_lifecycle_qualified"])
+            self.assertEqual(report["status"], "failed")
+            self.assertEqual(report["failure"], "disposable cleanup failed")
+
     def test_marketing_kit_corrupt_lock_restore_rejects_foreign_symlink(self):
         # A malicious native invocation may swap the fixture lock for a link to
         # an outside file. Cleanup must not follow it to write original bytes.

@@ -48,3 +48,34 @@ The focused Marketing Kit suite passes 56 tests, including both scopes' refusal
 and lock restoration, valid cold-cache additions with existing/absent data roots,
 preexisting cache replacement, state/native/foreign writes, unknown cache paths,
 symlinks, a FIFO, incorrect scanner bytes and assessment identity/policy mismatch.
+
+## Project qualification and Copilot User policy boundary
+
+The release goal is six positive Project A/B lifecycles. Retain the five existing
+positive User lifecycles. Copilot User placement shares a physical backend and
+must still refuse this signed closure's missing VS Code authorization; Project
+placement uses independent qualified native backends. After completing Copilot's
+positive Project lifecycle, run a real User add and require the exact signed
+`missing vscode` refusal, a nonzero exit without timeout, empty User inventory,
+and unchanged own/peer/foreign profiles and portable/native/installed state.
+Report this as a separate negative User policy contract, never a positive User
+lifecycle or completion of the full two-scope program. No VS Code grant or
+implementation change is authorized by this boundary.
+
+Immutable CLI `0.1.102` incorrectly recomputes User backend siblings while
+selecting a v1 source for explicit Project placement. The source correction is
+separate PR #836 and requires a genuinely published executable release before
+Copilot Project qualification can pass. Keep the existing `0.1.102` version and
+artifact pins until corrected immutable release metadata actually exists; do not
+guess a new version/hash or count source-built evidence as published qualification.
+
+Preparation validation: 65 focused Marketing Kit regressions pass. Refusal checks
+require an exactly empty raw stdout tail and the exact raw stderr diagnostic
+with at most its normal LF/CRLF; real-capture padding/truncation regressions
+reject hidden mixed output. A cleanup exception after successful lifecycle
+steps resets the overall report to failed and returns nonzero. The unchanged
+published `0.1.102` binary also passes the new exact User-negative helper against
+the immutable signed sequence-45 feed after a read-only `info` warms its own
+authenticated cache: exit 1, exact missing-VS-Code refusal, empty User inventory,
+and strict own/foreign snapshots unchanged. This is negative User evidence only;
+it does not qualify a positive Copilot Project lifecycle on `0.1.102`.

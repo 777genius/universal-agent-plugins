@@ -932,6 +932,39 @@ def codex_user_native_remove_attestation(env, project):
     return ("--external-uninstalled",)
 
 
+def verify_copilot_user_policy_refusal(cli, env, project, guards):
+    """User Copilot shares a backend whose missing signed grant must refuse."""
+    before = profile_snapshot(env, project)
+    try:
+        refused = invoke([cli, "add", "marketing-kit", "--target", "copilot",
+                          "--scope", "user", "--yes", "--format", "json"],
+                         env, project, 180)
+        expected = ('agentplugins: no eligible directory release for "marketing-kit": '
+                    '777genius/marketing-kit: release does not support complete '
+                    'target set; missing vscode')
+        code = refused.get("exit_code")
+        if (type(code) is not int or code <= 0 or refused.get("timeout") is not False
+                or refused.get("stderr_tail") not in (expected, expected + "\n", expected + "\r\n")
+                or refused.get("_json") is not None
+                or refused.get("stdout_tail") != ""):
+            raise AssertionError("Copilot User add did not receive exact missing-vscode policy refusal")
+        check_profile_unchanged(env, project, before, "Copilot User policy refusal")
+        if identities(inventory(cli, env, project, "copilot", "user"), "copilot", "user"):
+            raise AssertionError("Copilot User refusal retained an installation")
+        return {"stage": "Copilot User add refused by shared-backend signed policy",
+                "scope": "user", "contract": "negative_policy", "exit_code": code,
+                "result": "expected_refusal", "reason": "missing_vscode_grant"}
+    finally:
+        try:
+            # The refusal occurs before package acquisition. Reuse a strict
+            # full snapshot: neither the command nor inventory may add caches,
+            # agreement files, native state, receipts or installed state.
+            check_profile_unchanged(env, project, before, "Copilot User refusal inventory")
+        finally:
+            for guard in guards:
+                guard()
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--target", required=True, choices=["codex", "cursor", "claude", "gemini", "opencode", "copilot"])
@@ -940,7 +973,11 @@ def main():
     options = parser.parse_args()
     report_path = Path(options.report)
     report_path.parent.mkdir(parents=True, exist_ok=True)
-    report = {"cli_version": "0.1.102", "target": options.target, "source": "real signed marketing-kit", "steps": [], "status": "failed"}
+    report = {"cli_version": "0.1.102", "target": options.target, "source": "real signed marketing-kit", "steps": [], "status": "failed",
+              "qualification_scope": "project", "two_scope_lifecycle_qualified": False,
+              "scope_results": {"project": {"expectation": "positive_lifecycle", "status": "not_run"},
+                                "user": {"expectation": "policy_refusal" if options.target == "copilot" else "positive_lifecycle",
+                                         "status": "not_run"}}}
     try:
         with tempfile.TemporaryDirectory(prefix="uap-real-marketing-kit-") as location:
             root = Path(location)
@@ -1076,6 +1113,23 @@ def main():
             for e in (env, env_b):
                 if (Path(e["AGENTPLUGINS_HOME"]) / "uap.toml").exists():
                     raise AssertionError("Project installation unexpectedly wrote User manifest")
+            check_foreign(foreign_files, root)
+            check_profile_unchanged(env_b, project_b, protected_b, "Project final inventory")
+            report["scope_results"]["project"]["status"] = "passed"
+            if options.target == "copilot":
+                # Project placement has independent native backends. User
+                # placement retains its real shared-backend signed refusal;
+                # this negative contract is not a positive User lifecycle.
+                step = verify_copilot_user_policy_refusal(options.cli, env, project_a, (
+                    lambda: check_foreign(foreign_files, root),
+                    lambda: check_profile_unchanged(
+                        env_b, project_b, protected_b, "Copilot User policy refusal"),
+                ))
+                report["steps"].append(step)
+                report["scope_results"]["user"].update(
+                    status="refused_as_expected", reason=step["reason"])
+                report["status"] = "passed"
+                return 0
             # Check the same signed closure through a real, separate User lifecycle.
             # Every User command must preserve all of Project A, not just the
             # portable agreement or known foreign sentinels.
@@ -1253,8 +1307,11 @@ def main():
             check_user_project_unchanged(project_c, protected_c_project, "User final inventory")
             check_profile_unchanged(env_c, project_c, protected_c_profile,
                                     "User final inventory")
+            report["scope_results"]["user"]["status"] = "passed"
+            report["two_scope_lifecycle_qualified"] = True
             report["status"] = "passed"
     except Exception as error:
+        report["status"] = "failed"
         report["failure"] = str(error)[:2500]
         traceback.print_exc()
     finally:
