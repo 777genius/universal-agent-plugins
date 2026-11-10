@@ -1,6 +1,8 @@
 """Unit negative controls for Codex native secrecy evidence, no network/vendor client."""
 import http.client
 import json
+import subprocess
+import sys
 from pathlib import Path
 import tempfile
 import threading
@@ -8,7 +10,7 @@ import unittest
 from unittest.mock import patch
 import http.server
 
-from codex_env_names_native_spike import Model, MCP_CALL, SHELL_CALL, SHELL_MARKER, inspect
+from codex_env_names_native_spike import CHILD, Model, MCP_CALL, SHELL_CALL, SHELL_MARKER, inspect
 
 
 class TestSyntheticModelOracle(unittest.TestCase):
@@ -121,6 +123,19 @@ class TestSyntheticModelOracle(unittest.TestCase):
                              "output": "shell complete"}]},
                   status=409)
         self.assertEqual(Model.error, "MCP tool not advertised")
+
+
+class TestSyntheticMcpChild(unittest.TestCase):
+    def test_name_only_fixture_exposes_inert_read_only_tool(self):
+        # This child receives NO inherited or synthetic token in this unit test.
+        proc = subprocess.run([sys.executable, "-c", CHILD], input=(
+            json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/list"}) + "\\n"
+        ), capture_output=True, text=True, timeout=5, env={"PATH": "/usr/bin:/bin"})
+        self.assertEqual(proc.returncode, 0)
+        tool = json.loads(proc.stdout.strip())["result"]["tools"][0]
+        self.assertEqual(tool["name"], "confirm_env")
+        self.assertEqual(tool["annotations"]["readOnlyHint"], True)
+        self.assertEqual(tool["annotations"]["destructiveHint"], False)
 
 
 class TestSyntheticSnapshotScanner(unittest.TestCase):
