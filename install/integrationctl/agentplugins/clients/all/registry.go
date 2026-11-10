@@ -17,6 +17,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/cursor"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/gemini"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/grok"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/hermes"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/kimi"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/kiro"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/opencode"
@@ -65,6 +66,7 @@ func buildRegistry(project bool) *clients.Registry {
 		cline.New(),
 		windsurf.New(),
 		grok.New(),
+		hermes.New(),
 		kimi.New(),
 		qoder.New(),
 	)
