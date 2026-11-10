@@ -61,6 +61,22 @@ test -f "$plugin/plugin.json"
 test ! -e "$plugin/.antigravity-plugin" || { echo "Duplicate native manifest remained" >&2; exit 1; }
 test -f "$plugin/skills/native-smoke/SKILL.md"
 
+# Exercise public no-save update and exact-revision repair on the REAL installed
+# project bundle, before asking agy to validate it. Neither operation may
+# affect a foreign User plugin or silently change the portable source.
+baseline_manifest="$(sha256sum "$plugin/plugin.json" | cut -d' ' -f1)"
+"$UAP_BIN" update uap-agy-native-smoke --target antigravity \
+  --scope project --project-root "$project" --yes --format json > "$tmp/uap-project-update.json"
+python3 -m json.tool "$tmp/uap-project-update.json" > /dev/null
+test "$(sha256sum "$plugin/plugin.json" | cut -d' ' -f1)" = "$baseline_manifest"
+rm "$plugin/skills/native-smoke/SKILL.md"
+"$UAP_BIN" repair uap-agy-native-smoke --target antigravity \
+  --scope project --project-root "$project" --yes --format json > "$tmp/uap-project-repair.json"
+python3 -m json.tool "$tmp/uap-project-repair.json" > /dev/null
+cmp "$source/skills/native-smoke/SKILL.md" "$plugin/skills/native-smoke/SKILL.md"
+test "$(sha256sum "$plugin/plugin.json" | cut -d' ' -f1)" = "$baseline_manifest"
+test "$(cat "$foreign/sentinel")" = "foreign must survive"
+
 # Only this native executable can establish vendor format compatibility.
 if ! "$AGY_BIN" plugin validate --strict "$plugin" > "$tmp/agy-validation.txt" 2>&1; then
   cat "$tmp/agy-validation.txt" >&2

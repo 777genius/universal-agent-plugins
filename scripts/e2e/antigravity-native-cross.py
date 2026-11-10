@@ -127,6 +127,32 @@ def main():
             raise AssertionError("Selected native Skill was not staged")
         projected_hash = hashlib.sha256(vendor_manifest.read_bytes()).hexdigest()
 
+        # Use the public CLI with a genuine tracked native Project installation.
+        # Repeated update must preserve the exact source and native manifest.
+        updated = run(
+            uap, "update", NAME, "--target", "antigravity", "--scope", "project",
+            "--project-root", project, "--yes", "--format", "json",
+            env=user_env, cwd=project,
+        )
+        if not json.loads(updated):
+            raise AssertionError("UAP update produced no structured result")
+        if hashlib.sha256(vendor_manifest.read_bytes()).hexdigest() != projected_hash:
+            raise AssertionError("Idempotent Project update changed the native manifest")
+        skill_path = plugin / "skills" / "native-smoke" / "SKILL.md"
+        original_skill = (source / "skills" / "native-smoke" / "SKILL.md").read_bytes()
+        skill_path.unlink()
+        repaired = run(
+            uap, "repair", NAME, "--target", "antigravity", "--scope", "project",
+            "--project-root", project, "--yes", "--format", "json",
+            env=user_env, cwd=project,
+        )
+        if not json.loads(repaired) or skill_path.read_bytes() != original_skill:
+            raise AssertionError("Exact-revision Project repair did not restore owned Skill bytes")
+        if hashlib.sha256(vendor_manifest.read_bytes()).hexdigest() != projected_hash:
+            raise AssertionError("Project repair changed the native manifest")
+        if sentinel.read_text(encoding="utf-8") != "foreign must survive\n":
+            raise AssertionError("Update or repair changed a foreign User plugin")
+
         run(agy, "plugin", "validate", "--strict", plugin, env=user_env, cwd=project)
         if NAME in checked_list(agy, vendor_env, project):
             raise AssertionError("CLI profile unexpectedly owns a project-only plugin")
