@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 import { publishedLocales } from '../../data/i18n';
+import { clientSupportRows } from '../../data/clientSupport.ts';
 import { localizedPath } from '../../utils/localizedRoutes';
 
 type HeaderCopy = {
@@ -44,7 +45,7 @@ for (const locale of publishedLocales) {
       tableCopy.columns.agent, tableCopy.columns.user, tableCopy.columns.project,
       tableCopy.columns.setup, tableCopy.columns.nextStep,
     ]);
-    await expect(support.locator('tbody tr')).toHaveCount(15);
+    await expect(support.locator('tbody tr')).toHaveCount(clientSupportRows.length);
     await expect(support.locator('tbody tr').first().locator('td').first())
       .toHaveText(tableCopy.capabilities.pluginsSkillsMcp);
     await expect(support.locator('tbody tr').first().locator('td').nth(2))
