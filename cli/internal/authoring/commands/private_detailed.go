@@ -10,6 +10,12 @@ import (
 	"github.com/777genius/plugin-kit-ai/cli/internal/exitx"
 )
 
+// privateReportSummary owns the shared private status line. Human formats
+// retain their separate write/flush contracts while using identical fields.
+func privateReportSummary(r report.Report) string {
+	return fmt.Sprintf("%s: readiness %s; conformance %s; host %s; compatibility %s; toolchain %s; runtime %s\n", r.Command, r.Readiness.Status, r.Conformance.Status, r.HostSafety.Status, r.Compatibility.Status, r.Toolchain.Status, r.Runtime.Status)
+}
+
 // writePrivateDetailed keeps the private CLI's line-by-line output behavior.
 // It is separate from Execute so Cobra routing and status mapping remain
 // independent of human presentation. Do not use raw fields for public output.
@@ -24,7 +30,7 @@ func writePrivateDetailed(w io.Writer, r report.Report) error {
 }
 
 func writePrivateDetailedSummary(w io.Writer, r report.Report) error {
-	if _, e := fmt.Fprintf(w, "%s: readiness %s; conformance %s; host %s; compatibility %s; toolchain %s; runtime %s\n", r.Command, r.Readiness.Status, r.Conformance.Status, r.HostSafety.Status, r.Compatibility.Status, r.Toolchain.Status, r.Runtime.Status); e != nil {
+	if _, e := io.WriteString(w, privateReportSummary(r)); e != nil {
 		return exitx.Wrap(errors.New("authoring output failed"), 1)
 	}
 	for _, f := range r.Findings {
