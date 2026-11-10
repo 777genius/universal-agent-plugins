@@ -1,5 +1,6 @@
 """Unit negative controls for Codex native secrecy evidence, no network/vendor client."""
 import http.client
+import base64
 import json
 import os
 import subprocess
@@ -202,8 +203,10 @@ class TestSyntheticSnapshotScanner(unittest.TestCase):
             snapshot = root / "home" / ".codex" / "shell_snapshots" / "test.sh"
             snapshot.parent.mkdir(parents=True)
             token = "not_a_real_secret_fixture_123"
-            for content in [token, token.encode().hex()]:
-                snapshot.write_text(content)
+            for content in [token.encode(), token.encode().hex().encode(),
+                            token.encode("utf-16le"), token.encode("utf-16be"),
+                            base64.b64encode(token.encode("utf-16le"))]:
+                snapshot.write_bytes(content)
                 findings, symlinks = inspect(root, token)
                 self.assertEqual(symlinks, 0)
                 self.assertEqual(len(findings), 1)

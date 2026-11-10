@@ -285,9 +285,14 @@ def inspect(root, secret):
     values = (secret,) if isinstance(secret, str) else secret
     patterns = []
     for value in values:
-        patterns.extend([value.encode(), value.encode().hex().encode(),
-                         base64.b64encode(value.encode()),
-                         urllib.parse.quote(value).encode()])
+        raw = value.encode()
+        # PowerShell and Windows snapshots may persist UTF-16, including
+        # UTF-16LE-encoded Base64 strings, not just UTF-8 plaintext.
+        patterns.extend([raw, raw.hex().encode(), base64.b64encode(raw),
+                         base64.urlsafe_b64encode(raw),
+                         urllib.parse.quote(value).encode(),
+                         value.encode("utf-16le"), value.encode("utf-16be"),
+                         base64.b64encode(value.encode("utf-16le"))])
     found, symlinks = [], 0
     root_path = Path(root).resolve(strict=True)
 
