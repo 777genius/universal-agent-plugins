@@ -55,7 +55,7 @@ def main():
     (project / ".codex").mkdir(parents=True)
     (project / ".git").mkdir()
     (root / "tmp").mkdir()
-    child, receipt = root / "child.py", root / "child-result.json"
+    child = root / "child.py"
     child.write_text(CHILD)
     model = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Model)
     model_thread = threading.Thread(target=model.serve_forever, daemon=True)
@@ -72,7 +72,7 @@ def main():
     (home / ".codex" / "config.toml").write_text(user_config)
     project_server = (
         '[mcp_servers.env_spike]\ncommand = "python3"\n'
-        f'args = [{json.dumps(str(child))}, {json.dumps(str(receipt))}]\n'
+        f'args = [{json.dumps(str(child))}]\n'
         f'env_vars = ["{ENV_NAME}"]\n'
     )
     if mode == "filtered":
@@ -173,11 +173,7 @@ def main():
         report["real_codex_shell_called"] = Model.shell_requested and Model.shell_output_seen
         report["real_codex_mcp_called"] = Model.mcp_requested and Model.mcp_output_seen
         report["native_mcp_digest_seen"] = Model.mcp_digest_verified
-        if receipt.exists():
-            raw = json.loads(receipt.read_text())
-            report["mcp_child_saw_secret"] = (raw.get("observed") is True
-                and raw.get("sha256") == hashlib.sha256(secret.encode()).hexdigest())
-        report["mcp_child_saw_secret"] |= Model.mcp_digest_verified
+        report["mcp_child_saw_secret"] = Model.mcp_digest_verified
         if not (report["real_codex_shell_called"] and report["real_codex_mcp_called"]
                 and report["mcp_child_saw_secret"]):
             raise RuntimeError("native_runtime_or_child_receipt_unproven")
