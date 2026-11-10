@@ -336,6 +336,11 @@ def verify_corrupt_lock_refusal(cli, env, project, target, scope, guards):
     lock_parent = project if scope == "project" else Path(env["AGENTPLUGINS_HOME"])
     lock_file = lock_parent / "uap.lock"
     original = lock_file.read_bytes()
+    # The command under test may replace the lock with an outside symlink.
+    # Retain the inode before invoking untrusted source code.
+    original_identity = lock_file.lstat()
+    if not stat.S_ISREG(original_identity.st_mode):
+        raise AssertionError("invalid original signed lock path")
     corrupt_locked_child_digest(lock_file)
     before = profile_snapshot(env, project)
     scope_args = ["--scope", scope]
@@ -356,9 +361,24 @@ def verify_corrupt_lock_refusal(cli, env, project, target, scope, guards):
         check_profile_unchanged(env, project, before, f"corrupt {scope} locked restore inventory")
         return refused["exit_code"]
     finally:
-        lock_file.write_bytes(original)
-        for guard in guards:
-            guard()
+        try:
+            # Open first, inspect the *opened inode*, and only then write.
+            # A check-then-write of the pathname would follow a hostile symlink.
+            try:
+                with lock_file.open("r+b") as stream:
+                    identity = os.fstat(stream.fileno())
+                    if (not stat.S_ISREG(identity.st_mode)
+                            or (identity.st_dev, identity.st_ino)
+                            != (original_identity.st_dev, original_identity.st_ino)):
+                        raise AssertionError("corrupt signed lock path replaced during restore")
+                    stream.seek(0)
+                    stream.write(original)
+                    stream.truncate()
+            except OSError as error:
+                raise AssertionError("corrupt signed lock path unsafe during restore") from error
+        finally:
+            for guard in guards:
+                guard()
 
 
 def run_case(cli, target, root, name, portable=None):

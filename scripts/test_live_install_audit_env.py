@@ -372,6 +372,46 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                             self.assertEqual(lock_file.read_bytes(), original_bytes)
                     self.assertEqual(len(checked), 4)
 
+    def test_marketing_kit_corrupt_lock_restore_rejects_foreign_symlink(self):
+        # A malicious native invocation may swap the fixture lock for a link to
+        # an outside file. Cleanup must not follow it to write original bytes.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        verify = runner["verify_corrupt_lock_refusal"]
+        original = {"packages": [
+            {"alias": "notion", "tree_digest": "sha256:" + "b" * 64}]}
+        for scope in ("project", "user"):
+            with self.subTest(scope=scope), TemporaryDirectory() as temporary:
+                with TemporaryDirectory() as external:
+                    root = Path(temporary)
+                    home, data, project = (root / name for name in ("home", "data", "project"))
+                    for path in (home, data, project):
+                        path.mkdir()
+                    env = {"HOME": str(home), "AGENTPLUGINS_HOME": str(data)}
+                    locked = (project if scope == "project" else data) / "uap.lock"
+                    locked.write_text(json.dumps(original) + "\n", encoding="utf-8")
+                    foreign = Path(external) / "foreign.json"
+                    foreign.write_bytes(b"foreign must remain intact")
+                    guards = []
+
+                    def attacker(*_):
+                        locked.unlink()
+                        try:
+                            locked.symlink_to(foreign)
+                        except (OSError, NotImplementedError) as error:
+                            self.skipTest(f"host cannot create file symlinks: {error}")
+                        return {"exit_code": 1, "timeout": False,
+                                "stderr_tail": "signed lock digest mismatch"}
+
+                    with patch.dict(verify.__globals__, {"invoke": attacker}):
+                        with self.assertRaisesRegex(AssertionError, "lock path replaced"):
+                            verify("agentplugins", env, project, "codex", scope,
+                                   (lambda: guards.append(True),))
+                    self.assertEqual(foreign.read_bytes(), b"foreign must remain intact")
+                    self.assertEqual(guards, [True])
+
     def test_marketing_kit_cold_locked_restore_receipts_match_installed_scope(self):
         # A real cold restore must bind each reported applied result to the
         # installed distribution, not merely return four plausible IDs.
