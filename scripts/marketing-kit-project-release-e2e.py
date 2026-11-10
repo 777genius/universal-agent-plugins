@@ -43,6 +43,7 @@ LEGACY_ACTIONS = {
     "update": {"unchanged"},
     "repair": {"repair"},
     "install": {"install", "repair", "unchanged"},
+    "add": {"install", "repair", "unchanged"},
     "remove": {"remove", "unchanged"},
 }
 
@@ -68,7 +69,7 @@ def valid_legacy_dependency_result(envelope, operation, target=None, scope=None)
     aliases = [action["alias"] for action in actions]
     if len(set(aliases)) != len(aliases):
         return False
-    if operation in ("update", "install") and set(aliases) != UPDATE_ALIASES:
+    if operation in ("update", "install", "add") and set(aliases) != UPDATE_ALIASES:
         return False
     if operation == "repair" and aliases != ["marketing-kit"]:
         return False
@@ -101,7 +102,15 @@ def verified(result, stage, operation=None, target=None, scope=None):
         raise AssertionError(f"{stage}: CLI did not succeed with JSON: {result}")
     # The pinned 0.1.102 dependency commands must report explicit actions
     # and results even when they also emit result=success.
-    if operation in LEGACY_ACTIONS:
+    if operation == "add":
+        # Published 'add' wraps actual scoped dependency receipts in data.
+        # An outer generic success cannot certify a missing/partial closure.
+        nested = envelope.get("data", envelope)
+        if (envelope.get("result") == "success"
+                and isinstance(nested, dict)
+                and valid_legacy_dependency_result(nested, "add", target, scope)):
+            return envelope
+    elif operation in LEGACY_ACTIONS:
         if valid_legacy_dependency_result(envelope, operation, target, scope):
             return envelope
     elif (envelope.get("result") == "success"

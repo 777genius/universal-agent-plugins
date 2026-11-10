@@ -30,11 +30,10 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         check = runner["verified"]
         accepted = {"exit_code": 0, "timeout": False,
                     "_json": {"result": "success", "data": {}}}
-        for command in ("add", "list"):
-            self.assertEqual(check(accepted, command, command), accepted["_json"])
-            completed = {**accepted, "_json": {"result": "success",
-                                              "outcome": "completed", "data": {}}}
-            self.assertEqual(check(completed, command, command), completed["_json"])
+        self.assertEqual(check(accepted, "list", "list"), accepted["_json"])
+        completed = {**accepted, "_json": {"result": "success",
+                                          "outcome": "completed", "data": {}}}
+        self.assertEqual(check(completed, "list", "list"), completed["_json"])
         for invalid in (
                 {"exit_code": 1},
                 {"timeout": True},
@@ -50,6 +49,46 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             with self.subTest(invalid=invalid):
                 with self.assertRaisesRegex(AssertionError, "CLI did not succeed"):
                     check({**accepted, **invalid}, "add")
+
+    def test_marketing_kit_add_requires_scoped_dependency_receipts(self):
+        # A published add response has two JSON layers. The outer success is
+        # not proof that the inner signed dependency closure was applied.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        check = runner["verified"]
+        aliases = ("marketing-kit", "notion", "hubspot-crm", "playwright")
+        actions = [{"alias": alias, "client_id": "codex", "action": "install"}
+                   for alias in aliases]
+        results = [{"client_id": "codex", "operation": "install",
+                    "installation_id": alias + "-id", "outcome": "completed"}
+                   for alias in aliases]
+        closure = {"result": "success", "outcome": "completed",
+                   "scope": "project", "actions": actions, "results": results}
+        envelope = {"result": "success", "data": closure}
+        wrapped = {"exit_code": 0, "timeout": False, "_json": envelope}
+        self.assertEqual(check(wrapped, "add", "add", "codex", "project"), envelope)
+        # Repeated add can legitimately converge without active actions.
+        no_op = {**closure, "actions": [{**a, "action": "unchanged"} for a in actions],
+                 "results": []}
+        self.assertEqual(check({**wrapped, "_json": {**envelope, "data": no_op}},
+                               "repeat add", "add", "codex", "project"),
+                         {**envelope, "data": no_op})
+        for bad in (
+                {"result": "success", "data": {}},
+                {"result": "success"},
+                {**envelope, "data": {**closure, "outcome": "partial"}},
+                {**envelope, "data": {**closure, "result": "failure"}},
+                {**envelope, "data": {**closure, "scope": "user"}},
+                {**envelope, "data": {**closure, "results": results[:-1]}},
+                {**envelope, "data": {**closure, "actions": actions[:-1]}},
+                {**envelope, "data": {**closure, "actions": [
+                    {**actions[0], "client_id": "claude"}, *actions[1:]]}},
+        ):
+            with self.subTest(bad=bad), self.assertRaisesRegex(
+                    AssertionError, "CLI did not succeed"):
+                check({**wrapped, "_json": bad}, "add", "add", "codex", "project")
 
     def test_marketing_kit_accepts_only_complete_legacy_noop_update(self):
         # Published 0.1.102 emits result=success alongside outcome/actions/results.
