@@ -67,16 +67,39 @@ if ! "$AGY_BIN" plugin validate --strict "$plugin" > "$tmp/agy-validation.txt" 2
   echo "Pinned agy rejected the native plugin in strict mode" >&2
   exit 1
 fi
-cd "$project"
-"$AGY_BIN" plugin list --json > "$tmp/agy-list.json"
+# The IDE discovers project .agents/plugins directories. In contrast,
+# "agy plugin list" lists CLI-installed packages, not arbitrary workspace
+# directories. Test native CLI import/list independently in a second disposable
+# profile; never confuse this with project activation or mutate the UAP profile.
+vendor_home="$tmp/vendor-cli-home"
+vendor_config="$tmp/vendor-cli-config"
+vendor_cache="$tmp/vendor-cli-cache"
+mkdir -p "$vendor_home" "$vendor_config" "$vendor_cache"
+native_digest="$(sha256sum "$plugin/plugin.json" | cut -d' ' -f1)"
+if ! HOME="$vendor_home" XDG_CONFIG_HOME="$vendor_config" XDG_CACHE_HOME="$vendor_cache" \
+    "$AGY_BIN" plugin install "$plugin" > "$tmp/agy-install.txt" 2>&1; then
+  cat "$tmp/agy-install.txt" >&2
+  echo "Native CLI local import did not accept the strictly validated plugin" >&2
+  exit 1
+fi
+HOME="$vendor_home" XDG_CONFIG_HOME="$vendor_config" XDG_CACHE_HOME="$vendor_cache" \
+  "$AGY_BIN" plugin list --json > "$tmp/agy-list.json"
 python3 - "$tmp/agy-list.json" <<'PY'
 import json,sys
 with open(sys.argv[1],encoding="utf-8") as stream:
     doc=json.load(stream)
-assert "uap-agy-native-smoke" in json.dumps(doc), (
-    "Native agy did not discover the generated project plugin"
-)
+assert isinstance(doc,list) and any(
+    isinstance(entry,dict) and entry.get("name")=="uap-agy-native-smoke"
+    for entry in doc
+), "Native CLI did not list its explicitly installed local test plugin"
 PY
+if ! HOME="$vendor_home" XDG_CONFIG_HOME="$vendor_config" XDG_CACHE_HOME="$vendor_cache" \
+    "$AGY_BIN" plugin uninstall uap-agy-native-smoke > "$tmp/agy-uninstall.txt" 2>&1; then
+  cat "$tmp/agy-uninstall.txt" >&2
+  echo "Native CLI failed to uninstall its disposable imported plugin" >&2
+  exit 1
+fi
+test "$(sha256sum "$plugin/plugin.json" | cut -d' ' -f1)" = "$native_digest"
 test "$(cat "$foreign/sentinel")" = "foreign must survive"
 test ! -e "$HOME/.gemini/config/plugins/uap-agy-native-smoke"
 
@@ -87,4 +110,4 @@ test ! -e "$HOME/.gemini/config/plugins/uap-agy-native-smoke"
   --yes --format json > "$tmp/uap-remove.json"
 test ! -e "$plugin" || { echo "Owned project plugin survived remove" >&2; exit 1; }
 test "$(cat "$foreign/sentinel")" = "foreign must survive"
-echo "Antigravity native discovery, strict validation and project removal passed."
+echo "Antigravity strict validation, separate native CLI import/list/uninstall, and isolated UAP project removal passed."
