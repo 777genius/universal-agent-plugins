@@ -314,6 +314,50 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     alter(locked)
 
 
+    def test_marketing_kit_negative_lock_corruption_rejects_replaced_paths(self):
+        # The fixture itself must not overwrite a foreign file between its
+        # preflight lstat and the deliberate one-digest corruption.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        alter = runner["corrupt_locked_child_digest"]
+        original = json.dumps({"packages": [
+            {"alias": "notion", "tree_digest": "sha256:" + "b" * 64}]}) + "\n"
+        for scope in ("user", "project"):
+            for variant in ("replaced", "symlink", "hardlink"):
+                with self.subTest(scope=scope, variant=variant), TemporaryDirectory() as temp:
+                    root = Path(temp)
+                    locked = root / scope / "uap.lock"
+                    locked.parent.mkdir()
+                    locked.write_text(original, encoding="utf-8")
+                    expected_identity = locked.lstat()
+                    foreign = root / "foreign"
+                    if variant == "replaced":
+                        locked.replace(root / "old-lock")
+                        locked.write_text(original, encoding="utf-8")
+                    elif variant == "symlink":
+                        locked.replace(root / "old-lock")
+                        foreign.write_text("foreign bytes", encoding="utf-8")
+                        try:
+                            locked.symlink_to(foreign)
+                        except (OSError, NotImplementedError) as error:
+                            self.skipTest(f"host cannot create symlinks: {error}")
+                    else:
+                        try:
+                            os.link(locked, foreign)
+                        except (OSError, NotImplementedError) as error:
+                            self.skipTest(f"host cannot create hardlinks: {error}")
+                    with self.assertRaisesRegex(AssertionError, "negative-test lock path"):
+                        alter(locked, expected_identity)
+                    if variant == "symlink":
+                        self.assertEqual(foreign.read_text(encoding="utf-8"), "foreign bytes")
+                    else:
+                        self.assertEqual(locked.read_text(encoding="utf-8"), original)
+                        if variant == "hardlink":
+                            self.assertEqual(foreign.read_text(encoding="utf-8"), original)
+
+
     def test_marketing_kit_corrupt_locked_restore_refuses_user_and_project(self):
         # Both scopes must reach the real locked CLI refusal (not an invented
         # missing-file error), restore exact portable bytes, and run guards.

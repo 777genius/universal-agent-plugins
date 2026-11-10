@@ -319,25 +319,47 @@ def lock_ids(project, target=None):
     return set(keys)
 
 
-def corrupt_locked_child_digest(lock_file):
-    """Mutate exactly one child digest for a genuine locked-restore refusal."""
-    document = json.loads(lock_file.read_text(encoding="utf-8"))
-    packages = document.get("packages")
-    if not isinstance(packages, list):
-        raise AssertionError("invalid negative-test lock fixture")
-    matches = [item for item in packages
-               if isinstance(item, dict) and item.get("alias") == "notion"]
-    if len(matches) != 1:
-        raise AssertionError("missing unique Notion child for negative test")
-    original = matches[0].get("tree_digest")
-    if not isinstance(original, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", original):
-        raise AssertionError("invalid signed child digest in negative test")
-    replacement = "1" if original[7] == "0" else "0"
-    corrupted = "sha256:" + replacement + original[8:]
-    matches[0]["tree_digest"] = corrupted
-    lock_file.write_text(json.dumps(document, ensure_ascii=False) + "\n",
-                         encoding="utf-8")
-    return original, corrupted
+def corrupt_locked_child_digest(lock_file, expected_identity=None):
+    """Mutate one child digest on a verified file descriptor, never through a swapped path."""
+    try:
+        before = lock_file.lstat()
+        descriptor = os.open(lock_file, os.O_RDWR | getattr(os, "O_NOFOLLOW", 0))
+    except OSError as error:
+        raise AssertionError("invalid negative-test lock path") from error
+    with os.fdopen(descriptor, "r+b") as stream:
+        opened = os.fstat(stream.fileno())
+        try:
+            current = lock_file.lstat()
+        except OSError as error:
+            raise AssertionError("invalid negative-test lock path") from error
+        identity = (opened.st_dev, opened.st_ino)
+        if (not stat.S_ISREG(before.st_mode)
+                or not stat.S_ISREG(current.st_mode)
+                or not stat.S_ISREG(opened.st_mode)
+                or opened.st_nlink != 1 or current.st_nlink != 1
+                or identity != (before.st_dev, before.st_ino)
+                or identity != (current.st_dev, current.st_ino)
+                or (expected_identity is not None
+                    and identity != (expected_identity.st_dev, expected_identity.st_ino))):
+            raise AssertionError("invalid negative-test lock path")
+        document = json.loads(stream.read().decode("utf-8"))
+        packages = document.get("packages")
+        if not isinstance(packages, list):
+            raise AssertionError("invalid negative-test lock fixture")
+        matches = [item for item in packages
+                   if isinstance(item, dict) and item.get("alias") == "notion"]
+        if len(matches) != 1:
+            raise AssertionError("missing unique Notion child for negative test")
+        original = matches[0].get("tree_digest")
+        if not isinstance(original, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", original):
+            raise AssertionError("invalid signed child digest in negative test")
+        replacement = "1" if original[7] == "0" else "0"
+        corrupted = "sha256:" + replacement + original[8:]
+        matches[0]["tree_digest"] = corrupted
+        stream.seek(0)
+        stream.write((json.dumps(document, ensure_ascii=False) + "\n").encode("utf-8"))
+        stream.truncate()
+        return original, corrupted
 
 
 def verify_corrupt_lock_refusal(cli, env, project, target, scope, guards):
@@ -352,7 +374,7 @@ def verify_corrupt_lock_refusal(cli, env, project, target, scope, guards):
     original_identity = lock_file.lstat()
     if not stat.S_ISREG(original_identity.st_mode) or original_identity.st_nlink != 1:
         raise AssertionError("invalid original signed lock path")
-    original_digest, corrupted_digest = corrupt_locked_child_digest(lock_file)
+    original_digest, corrupted_digest = corrupt_locked_child_digest(lock_file, original_identity)
     scope_args = ["--scope", scope]
     if scope == "project":
         scope_args.extend(["--project-root", str(project)])
