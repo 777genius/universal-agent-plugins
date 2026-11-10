@@ -21,6 +21,7 @@ class TestSyntheticModelOracle(unittest.TestCase):
         Model.mcp_digest_verified = False
         Model.shell_output_seen = False
         Model.shell_execution_verified = False
+        Model.shell_response_category = "not_observed"
         Model.shell_requested_at = 0.0
         Model.error = ""
         Model.expected_digest = "UNITTEST_SYNTHETIC_SHA_ONLY"
@@ -93,6 +94,7 @@ class TestSyntheticModelOracle(unittest.TestCase):
                               "tools": [{"name": "confirm_env"}]}]})
         self.assertTrue(Model.shell_output_seen)
         self.assertFalse(Model.shell_execution_verified)
+        self.assertIn(Model.shell_response_category, ("tool_error", "completion_unverified", "sandbox_error", "permission_error"))
 
     def test_shell_marker_only_counts_after_bounded_execution(self):
         self.call({"tools": [{"type": "function", "name": "exec_command"}]})

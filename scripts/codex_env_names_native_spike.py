@@ -67,6 +67,7 @@ class Model(http.server.BaseHTTPRequestHandler):
     expected_digest = None
     shell_output_seen = False
     shell_execution_verified = False
+    shell_response_category = "not_observed"
     shell_requested_at = 0.0
     error = ""
     advertised_tool_names = set()
@@ -99,6 +100,17 @@ class Model(http.server.BaseHTTPRequestHandler):
                 if (SHELL_MARKER in rendered and
                         time.monotonic() - cls.shell_requested_at >= 6.0):
                     cls.shell_execution_verified = True
+                    cls.shell_response_category = "completed"
+                else:
+                    # Only fixed categories leave this synthetic-only harness;
+                    # never persist raw native tool responses or environment.
+                    lower = rendered.lower()
+                    cls.shell_response_category = (
+                        "sandbox_error" if "sandbox" in lower else
+                        "permission_error" if "permission" in lower else
+                        "tool_error" if "error" in lower or "failed" in lower else
+                        "completion_unverified"
+                    )
         for response in outputs:
             if (response.get("type") == "function_call_output"
                     and response.get("call_id") == MCP_CALL):
@@ -317,6 +329,7 @@ def main():
         report["live_snapshot_files_seen"] = live["snapshot_files_seen"]
         report["live_scan_errors"] = live["errors"]
         report["shell_tool_output_seen"] = Model.shell_output_seen
+        report["shell_response_category"] = Model.shell_response_category
         report["real_codex_shell_called"] = Model.shell_requested and Model.shell_execution_verified
         report["real_codex_mcp_called"] = Model.mcp_requested and Model.mcp_output_seen
         report["native_mcp_digest_seen"] = Model.mcp_digest_verified

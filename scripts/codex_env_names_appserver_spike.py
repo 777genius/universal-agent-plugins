@@ -181,14 +181,21 @@ def main():
                 raise RuntimeError("codex_ended_while_turn_active")
             time.sleep(.05)
         report["shell_tool_output_seen"] = Model.shell_output_seen
+        report["shell_response_category"] = Model.shell_response_category
         report["real_codex_shell_called"] = Model.shell_requested and Model.shell_execution_verified
-        report["real_codex_mcp_called"] = Model.mcp_requested and Model.mcp_output_seen
-        report["mcp_native_connected"] = Model.mcp_digest_verified
+        # Do not conflate genuine vendor app-server MCP tool receipt with
+        # model-turn tool routing. Both results are reported independently;
+        # either real MCP response can prove native child delivery, never
+        # shell nonpersistence.
+        report["model_mcp_tool_called"] = Model.mcp_requested and Model.mcp_output_seen
+        report["real_codex_mcp_called"] = (report["model_mcp_tool_called"]
+                                           or report["direct_mcp_call_verified"])
+        report["mcp_native_connected"] = report["direct_mcp_call_verified"]
         report["native_mcp_digest_seen"] = Model.mcp_digest_verified
-        report["mcp_child_saw_secret"] = Model.mcp_digest_verified
-        if not (report["real_codex_shell_called"] and report["real_codex_mcp_called"]
-                and report["mcp_child_saw_secret"]):
-            raise RuntimeError("native_runtime_or_child_receipt_unproven")
+        report["mcp_child_saw_secret"] = (report["direct_mcp_call_verified"]
+                                           or Model.mcp_digest_verified)
+        if not (report["real_codex_shell_called"] and report["mcp_child_saw_secret"]):
+            raise RuntimeError("native_shell_or_mcp_delivery_unproven")
     except (OSError, RuntimeError, subprocess.TimeoutExpired, ValueError) as exc:
         report["failure"] = str(exc) if isinstance(exc, RuntimeError) else type(exc).__name__
     finally:
