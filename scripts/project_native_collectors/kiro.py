@@ -37,6 +37,10 @@ HELP = (
 NAMES = {scope: "uap-kiro-research-" + scope for scope in ("a", "b", "user")}
 _ALL_HELP_STDERR = b"\nUSAGE:\n    kiro-cli [OPTIONS] [SUBCOMMAND]\n\n"
 _LIST_AUTH_STDERR = b"error: You are not logged in, please log in with kiro-cli login\n"
+_MCP_LIST_ROUTES = {
+    project + "-" + scope + "-raw-list": (project, ("mcp", "list", scope))
+    for project in ("a", "b", "user") for scope in ("workspace", "global")
+}
 _RUNTIME_MEMBERS = {
     "kiro-cli": "94cae7e349f76869a19eae335a5b392fba8515743b1c2822b9ea33128c067cc6",
     "kiro-cli-chat": "596c48b3cba6db1f5c043434c20a5fd1d23ea7d35eb0b70e3bcfe4144d93a79c",
@@ -90,9 +94,10 @@ def _probe(ctx, owned, label, arguments, project="a"):
         raise ValueError("Kiro agent-list requires exact argv/project")
     if label == "all-help" and tuple(arguments) != ("--help-all",):
         raise ValueError("Kiro all-help stderr exception requires exact argv")
-    if label == "a-workspace-raw-list" and (
-            tuple(arguments) != ("mcp", "list", "workspace") or project != "a"):
-        raise ValueError("Kiro first read-only list requires exact argv/project")
+    if label.endswith("-raw-list") and label != "a-agent-raw-list":
+        route = _MCP_LIST_ROUTES.get(label)
+        if route is None or (project, tuple(arguments)) != route:
+            raise ValueError("Kiro read-only MCP list requires exact argv/project")
     directory = _runtime_bin(ctx)
     if ctx.env.get("PATH") != str(directory) + ":/usr/bin:/bin":
         raise ValueError("Kiro acquired companion PATH changed")
