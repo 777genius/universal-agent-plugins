@@ -75,3 +75,23 @@ func TestPrivateHumanStatusSummaryParity(t *testing.T) {
 		t.Fatalf("private renderers disagree: detailed %q, dev %q", got, want)
 	}
 }
+
+type failPrivateDetailedAfterHeader struct{ writes int }
+
+func (w *failPrivateDetailedAfterHeader) Write(b []byte) (int, error) {
+	w.writes++
+	if w.writes > 1 {
+		return 0, errors.New("capability writer refused")
+	}
+	return len(b), nil
+}
+
+func TestWritePrivateDetailedPreservesCapabilityWriterFailure(t *testing.T) {
+	r := report.New("capabilities", "test")
+	r.Capabilities = &readiness.Capabilities{Commands: []string{"validate"}}
+	w := &failPrivateDetailedAfterHeader{}
+	err := writePrivateDetailed(w, r)
+	if err == nil || exitx.Code(err) != 1 || !strings.Contains(err.Error(), "capability writer refused") {
+		t.Fatalf("unexpected capability write error: %v", err)
+	}
+}
