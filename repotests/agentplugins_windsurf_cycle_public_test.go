@@ -67,6 +67,9 @@ func (c *windProjectCycle) publicDTO(label string, r *windComponentRecipe, raw [
 		}
 	}
 	optional := "operation_id next_action security"
+	if label == "repeat-add-a" {
+		optional = "next_action security"
+	}
 	switch verb {
 	case "add", "update":
 		optional += " scope readiness next_actions"
