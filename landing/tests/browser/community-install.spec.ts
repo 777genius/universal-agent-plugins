@@ -15,7 +15,7 @@ test('community installer is centered, full-width, and readable at desktop/table
   // The signed security feed is independent of discovery; it may have no
   // reviewed assessment for this community source. The Skill scan still
   // gives an honest checked / not-checked state in the page.
-  await expect(page.locator('.skillspector')).toBeVisible();
+  await expect(page.locator('.skillspector--notChecked > summary')).toContainText('Not checked', { timeout: 15_000 });
 
   for (const width of [1280, 980, 390]) {
     await page.setViewportSize({ width, height: 900 });
