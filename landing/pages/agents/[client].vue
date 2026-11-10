@@ -34,7 +34,8 @@ const pageUrl = computed(() => localizedUrl(`/agents/${client.slug}/`));
 const breadcrumbId = computed(() => `${pageUrl.value}#breadcrumb`);
 const listId = computed(() => `${pageUrl.value}#plugin-list`);
 const title = computed(() => t('registryUi.agentPage.title', { name: client.name }));
-const needsLocalExample = client.id === 'grok' || client.id === 'kimi' || client.id === 'pi';
+// Catalog examples require a signed target grant; these clients use a local package example.
+const needsLocalExample = ['grok', 'kimi', 'pi', 'hermes', 'antigravity'].includes(client.id);
 const installCommand = `npx -y universal-agent-plugins add ${needsLocalExample ? './my-plugin' : 'context7'} --target ${client.id}`;
 
 usePageSeo(title, () => t(`${client.presentationKey}.intro`), {

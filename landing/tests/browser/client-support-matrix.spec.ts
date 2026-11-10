@@ -93,3 +93,25 @@ test('dark agent icon contrast never filters the app or breaks the fixed orbit',
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
   }
 });
+
+for (const client of ['hermes', 'antigravity']) {
+  for (const width of [1440, 390]) {
+    test(`${client} route copies a local package command at ${width}px`, async ({ page, context }) => {
+      await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(`./agents/${client}/`);
+      const command = `npx -y universal-agent-plugins add ./my-plugin --target ${client}`;
+      const install = page.locator('.agent-page__install');
+      await expect(install.locator('code')).toHaveText(command);
+      await expect(install).toContainText('valid Agent Plugins 1.0 package');
+      await install.getByRole('button', { name: 'Copy command', exact: true }).click();
+      await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(command);
+      const icon = page.locator('.agent-page__icon img');
+      await expect(icon).toHaveAttribute('src', new RegExp(`/client-icons/${client}\\.svg$`));
+      await expect.poll(() => icon.evaluate((image) => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+      if (client === 'hermes') await expect(page.locator('.agent-page__flow')).toContainText('Project installation never modifies User MCP configuration');
+      else await expect(page.locator('.agent-page__status')).toHaveText('Prepared by CLI');
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    });
+  }
+}
