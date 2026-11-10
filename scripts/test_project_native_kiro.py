@@ -230,6 +230,40 @@ class KiroCollectorTests(unittest.TestCase):
                         other_root = ctx.home if other == "user" else ctx.projects[other]
                         self.assertFalse((other_root / ".kiro").exists())
 
+    def test_auth_refusal_reports_only_isolated_roots_not_native_file_names(self):
+        # Real 2.34.0 can create .kiro during an unauthenticated agent list.
+        # Keep the run failed, but identify which disposable root changed
+        # without leaking native filenames or config contents into evidence.
+        for roots, expected in (
+                (("home",), "home"),
+                (("user",), "user"),
+                (("home", "a"), "home, a")):
+            ctx = self.context()
+            markers = []
+            for scope in roots:
+                root = ctx.home if scope == "home" else ctx.projects[scope]
+                marker = root / ".kiro"
+                markers.append(marker)
+
+            def refused():
+                for marker in markers:
+                    marker.mkdir()
+                    (marker / "private-native-output.json").write_text("private fixture secret")
+                return {"exit": 1, "error": None}, b"", kiro._LIST_AUTH_STDERR
+
+            ctx.replace["a-agent-raw-list"] = refused
+            with self.subTest(roots=roots), self.assertRaises(ValueError) as result:
+                kiro.collect(ctx)
+            self.assertEqual(str(result.exception),
+                             "Kiro authentication refusal left unexpected native config in: "
+                             + expected)
+            self.assertNotIn("private-native-output", str(result.exception))
+            self.assertNotIn("private fixture secret", str(result.exception))
+            self.assertEqual(len(ctx.calls), 10)
+            for marker in markers:
+                self.assertEqual((marker / "private-native-output.json").read_text(),
+                                 "private fixture secret")
+
     def test_agent_list_rechecks_companions_and_path_before_markers(self):
         for mutation in ("companion", "path"):
             ctx = self.context()
