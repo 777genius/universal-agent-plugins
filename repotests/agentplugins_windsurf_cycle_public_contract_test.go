@@ -95,3 +95,62 @@ func TestWindsurfCycleRepairAndRemovalUseProductionOutputShapes(t *testing.T) {
 		})
 	}
 }
+
+func TestWindsurfCycleRepeatAddRefusesForeignOperationID(t *testing.T) {
+	c := windCycleInert(t)
+	r := c.w.recipes["a"]
+	r.Installation.InstallationID = "held-installation"
+	guidance := "Review the selected native client"
+	output := map[string]any{
+		"plugin":          windComponentName,
+		"version":         windCycleVersion(r),
+		"source":          "direct local source",
+		"tree_digest":     r.Digest,
+		"manifest_digest": r.Installation.Package.ManifestDigest,
+		"dry_run":         false,
+		"next_action":     guidance,
+		"scope":           r.scopeName(),
+		"readiness":       "needs_action",
+		"next_actions":    []any{map[string]any{"code": "verify_native", "actor": "native_client", "message": guidance}},
+		"result": map[string]any{
+			"installation_id":       "held-installation",
+			"requires_confirmation": false,
+			"mutated":               false,
+			"no_change":             true,
+			"plan": map[string]any{
+				"client_id": "windsurf", "scope": r.scopeName(), "status": "ready",
+				"package_mode": "prepared_package", "activation": "prepared", "authentication": "not_checked",
+				"policy": "allowed", "verification": "package_validated",
+				"physical_artifact_id": r.Binding.PhysicalArtifact,
+				"components": []any{
+					map[string]any{"kind": "skill", "name": windComponentName, "support": "prepared"},
+					map[string]any{"kind": "mcp_server", "name": windComponentName, "support": "prepared"},
+				},
+			},
+			"activation": map[string]any{
+				"activation": "prepared", "authentication": "not_checked",
+				"policy": "allowed", "verification": "installation_verified",
+			},
+		},
+	}
+	check := func() error {
+		raw, err := json.Marshal(map[string]any{
+			"schema_version": 1, "command": "add", "result": "success", "data": output,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c.publicDTO("repeat-add-a", r, raw)
+	}
+	if err := check(); err != nil {
+		t.Fatal("valid scoped repeated add refused", err)
+	}
+	output["operation_id"] = "injected-group"
+	if err := check(); err == nil {
+		t.Fatal("foreign operation ID accepted in singleton repeated add")
+	}
+	delete(output, "operation_id")
+	if err := check(); err != nil {
+		t.Fatal("repeat-add fixture was not restored", err)
+	}
+}
