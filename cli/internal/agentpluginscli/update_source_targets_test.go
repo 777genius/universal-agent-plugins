@@ -27,10 +27,16 @@ func TestUpdateSourceTargetsKeepsLocalCopilotVSCodeSurface(t *testing.T) {
 		}
 	}
 	selectedCopilot := []domain.ClientID{domain.ClientCopilot}
-	check("local source", updateSourceTargets(installation, "user", selectedCopilot),
+	check("local update", updateSourceTargets(installation, "user", selectedCopilot),
+		[]domain.ClientID{domain.ClientCopilot, domain.ClientVSCode})
+	check("local repair", repairSourceTargets(installation, installation.Clients[0],
+		domain.ClientCopilot, domain.ScopeUser),
 		[]domain.ClientID{domain.ClientCopilot, domain.ClientVSCode})
 
 	installation.OriginMode = domain.OriginModeDirectory
+	check("signed Copilot repair", repairSourceTargets(installation, installation.Clients[0],
+		domain.ClientCopilot, domain.ScopeUser),
+		[]domain.ClientID{domain.ClientCopilot})
 	check("signed Copilot owner", updateSourceTargets(installation, "user", selectedCopilot),
 		[]domain.ClientID{domain.ClientCopilot})
 	check("explicit signed sibling", updateSourceTargets(installation, "user",
