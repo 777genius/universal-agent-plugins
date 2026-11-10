@@ -21,3 +21,8 @@ overrides:
   fast-uri@>=3.0.0 <3.1.8: 3.1.8
   js-yaml@>=4.0.0 <4.3.2: 4.3.2
   nanoid@>=3.0.0 <3.3.18: 3.3.18
+  # DRAFT COMPATIBILITY PROBE ONLY (issue #692). These *cross* the major
+  # ranges declared by upstream consumers: do not merge without verifying
+  # real pnpm lock resolution, audit, build, lint and browser E2E.
+  'glob@>=10.0.0 <14.0.3': 14.0.4
+  'minimatch@>=7.0.0 <11.0.1': 11.0.5
