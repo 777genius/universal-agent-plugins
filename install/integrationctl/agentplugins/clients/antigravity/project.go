@@ -173,11 +173,17 @@ func appendNativeServer(out map[string]map[string]any, name string, envelope dom
 	config := shared.CloneObject(server.Decoded)
 	switch server.Type {
 	case "stdio":
+		if err := rejectAntigravityTransportFields(config, "url", "serverUrl", "headers"); err != nil {
+			return err
+		}
 		delete(config, "type")
 		if err := shared.ApplyStdioDataContract(config, active, dataRoot, staged); err != nil {
 			return fmt.Errorf("antigravity stdio MCP %q is invalid: %w", name, err)
 		}
 	case "streamable-http":
+		if err := rejectAntigravityTransportFields(config, "command", "args", "env", "cwd"); err != nil {
+			return err
+		}
 		raw, ok := config["serverUrl"].(string)
 		if !ok || raw == "" {
 			raw, ok = config["url"].(string)
@@ -201,5 +207,17 @@ func appendNativeServer(out map[string]map[string]any, name string, envelope dom
 		return fmt.Errorf("antigravity MCP selector is empty")
 	}
 	out[name] = config
+	return nil
+}
+
+// A compatible package can reach this adapter without the portable loader's
+// strict schema check. Refuse incompatible transport fields rather than
+// generating an ambiguous native MCP declaration or silently dropping intent.
+func rejectAntigravityTransportFields(config map[string]any, forbidden ...string) error {
+	for _, field := range forbidden {
+		if _, exists := config[field]; exists {
+			return fmt.Errorf("antigravity MCP entry contains conflicting transport field %q", field)
+		}
+	}
 	return nil
 }

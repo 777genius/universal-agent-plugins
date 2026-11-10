@@ -206,3 +206,34 @@ func TestAntigravityRejectsInvalidNativeIdentityBeforeStaging(t *testing.T) {
 		})
 	}
 }
+
+func TestAntigravityMCPRejectsMixedTransportFields(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		kind string
+		entry map[string]any
+	}{
+		{"remote-command", "streamable-http", map[string]any{"type": "streamable-http", "url": "https://example.test/mcp", "command": "node"}},
+		{"remote-args", "streamable-http", map[string]any{"type": "streamable-http", "url": "https://example.test/mcp", "args": []any{"run"}}},
+		{"remote-env", "streamable-http", map[string]any{"type": "streamable-http", "url": "https://example.test/mcp", "env": map[string]any{"TOKEN": "private"}}},
+		{"stdio-url", "stdio", map[string]any{"type": "stdio", "command": "node", "url": "https://example.test/mcp"}},
+		{"stdio-server-url", "stdio", map[string]any{"type": "stdio", "command": "node", "serverUrl": "https://example.test/mcp"}},
+		{"stdio-headers", "stdio", map[string]any{"type": "stdio", "command": "node", "headers": map[string]any{"Secret": "private"}}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			result := make(map[string]map[string]any)
+			envelope := domain.PackageEnvelope{MCP: domain.MCPComponent{Servers: map[string]domain.MCPServer{
+				"mixed": {Name: "mixed", Type: tc.kind, Decoded: tc.entry},
+			}}}
+			if err := appendNativeServer(result, "mixed", envelope, t.TempDir(), t.TempDir(), ""); err == nil {
+				t.Fatal("conflicting MCP transport was admitted")
+			}
+			if len(result) != 0 {
+				t.Fatal("refused transport leaked native server configuration")
+			}
+		})
+	}
+}
