@@ -216,7 +216,7 @@ func hermesValueNode(encoded json.RawMessage) (*yaml.Node, error) {
  		return nil
  	}
  	if file.mode.Perm()&0o077 != 0 {
- 		return fmt.Errorf("Hermes config.yaml must have owner-only permissions before UAP manages MCP entries")
+ 		return fmt.Errorf("hermes config.yaml must have owner-only permissions before UAP manages MCP entries")
  	}
  	return nil
  }

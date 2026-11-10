@@ -195,7 +195,7 @@ func NewWithLockAcquirer(acquireLocks func(Paths, Codec) (func() error, error)) 
 
 func validateRequest(req Request) error {
 	if req.Codec == CodecHermes && (req.Paths.JSONC != "" || filepath.Base(req.Paths.JSON) != "config.yaml") {
-		return fmt.Errorf("Hermes YAML requires one selected config.yaml path")
+		return fmt.Errorf("hermes YAML requires one selected config.yaml path")
 	}
 	if req.Codec == CodecCodex && req.Paths.JSONC != "" {
 		return fmt.Errorf("codex requires one TOML config path")

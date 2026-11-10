@@ -26,18 +26,18 @@ func (*Adapter) PreflightActivation(env clients.Env, req domain.ActivationReques
 	// yet. Validate the selected client and plan now; demand exact delivery
 	// identity only once a staged delivery actually exists.
 	if req.Plan.ClientID != domain.ClientHermes || req.Client.ClientID != domain.ClientHermes {
-		return fmt.Errorf("Hermes selected client identity differs")
+		return fmt.Errorf("hermes selected client identity differs")
 	}
 	if req.Delivery.ClientID != "" || req.Delivery.ActivePath != "" {
 		if err := shared.ActivationIdentityMismatch(req); err != nil {
 			return err
 		}
 		if req.Delivery.ActivePath != req.Plan.ActivePath {
-			return fmt.Errorf("Hermes staged delivery path differs")
+			return fmt.Errorf("hermes staged delivery path differs")
 		}
 	}
 	if req.ActivationComplete {
-		return fmt.Errorf("Hermes runtime activation cannot be attested by installer")
+		return fmt.Errorf("hermes runtime activation cannot be attested by installer")
 	}
 	layout, err := components(req.Plan, req.Delivery.ActivePath)
 	if err != nil {
@@ -59,21 +59,21 @@ func (*Adapter) UsesNativeRegistryExecutable() bool { return false }
 func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, client domain.DetectedClient, plan domain.DeliveryPlan, binding *domain.ClientBinding) (clients.RegistryFinding, error) {
 	if err := ctx.Err(); err != nil { return clients.RegistryIndeterminate, err }
 	if client.ClientID != domain.ClientHermes || plan.ClientID != domain.ClientHermes {
-		return clients.RegistryIndeterminate, fmt.Errorf("Hermes native observation client identity differs")
+		return clients.RegistryIndeterminate, fmt.Errorf("hermes native observation client identity differs")
 	}
 	if plan.Scope == domain.ScopeUser && client.ConfigRoot != plan.NativeRegistryRoot {
-		return clients.RegistryIndeterminate, fmt.Errorf("Hermes User profile authority differs from native registry")
+		return clients.RegistryIndeterminate, fmt.Errorf("hermes User profile authority differs from native registry")
 	}
 	if plan.Scope == domain.ScopeProject && plan.TargetContext.UserConfigRoot != "" &&
 		client.ConfigRoot != plan.TargetContext.UserConfigRoot {
-		return clients.RegistryIndeterminate, fmt.Errorf("Hermes Project request changed selected User profile")
+		return clients.RegistryIndeterminate, fmt.Errorf("hermes Project request changed selected User profile")
 	}
 	layout, err := components(plan, "")
 	if err != nil { return clients.RegistryIndeterminate, err }
 	for _, component := range plan.Components {
 		if component.Kind == domain.ComponentSkill { continue }
 		if component.Kind == domain.ComponentMCPServer && plan.Scope == domain.ScopeUser && component.Support != domain.SupportUnsupported { continue }
-		return clients.RegistryIndeterminate, fmt.Errorf("Hermes native observation cannot inspect an unsupported component")
+		return clients.RegistryIndeterminate, fmt.Errorf("hermes native observation cannot inspect an unsupported component")
 	}
 	if binding != nil {
 		owned, err := ownedObjects(plan.Scope, binding.NativeObjects)
@@ -93,13 +93,13 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, req domain.Activa
 		return domain.ActivationOutcome{}, err
 	}
 	if req.Delivery.ActivePath != req.Plan.ActivePath {
-		return domain.ActivationOutcome{}, fmt.Errorf("Hermes staged delivery path differs")
+		return domain.ActivationOutcome{}, fmt.Errorf("hermes staged delivery path differs")
 	}
 	if err := New().PreflightActivation(env, req); err != nil {
 		return domain.ActivationOutcome{}, err
 	}
 	if req.ActivationComplete {
-		return domain.ActivationOutcome{}, fmt.Errorf("Hermes runtime activation cannot be attested by installer")
+		return domain.ActivationOutcome{}, fmt.Errorf("hermes runtime activation cannot be attested by installer")
 	}
 	layout, err := components(req.Plan, req.Delivery.ActivePath)
 	if err != nil {

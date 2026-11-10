@@ -41,7 +41,7 @@ func (*Adapter) DetectSurfaces(host clients.Host) clients.Detection {
 		root = filepath.Join(host.HomeDir(), ".hermes")
 	}
 	if !cleanRoot(root) {
-		return clients.Detection{Err: fmt.Errorf("Hermes home must be an explicit clean absolute directory")}
+		return clients.Detection{Err: fmt.Errorf("hermes home must be an explicit clean absolute directory")}
 	}
 	canonical, err := host.CanonicalDirectory(root)
 	if err != nil {
@@ -66,14 +66,14 @@ func cleanRoot(path string) bool {
 
 func (*Adapter) ResolveProfileRoot(root string) (string, error) {
 	if !cleanRoot(root) {
-		return "", fmt.Errorf("Hermes profile root is not a clean absolute directory")
+		return "", fmt.Errorf("hermes profile root is not a clean absolute directory")
 	}
 	canonical, err := clients.CanonicalDirectory(root, os.Lstat, filepath.EvalSymlinks)
 	if err != nil {
 		return "", err
 	}
 	if !cleanRoot(canonical) {
-		return "", fmt.Errorf("Hermes canonical profile root is invalid")
+		return "", fmt.Errorf("hermes canonical profile root is invalid")
 	}
 	return canonical, nil
 }
@@ -82,26 +82,26 @@ func (*Adapter) ResolveProfileRoot(root string) (string, error) {
 // into a different selected native profile. No legacy Hermes migrations exist.
 func (*Adapter) ValidateBindingProfile(root string, binding domain.ClientBinding) error {
 	if binding.ClientID != string(domain.ClientHermes) || !cleanRoot(root) {
-		return fmt.Errorf("Hermes recorded binding has different client or profile authority")
+		return fmt.Errorf("hermes recorded binding has different client or profile authority")
 	}
 	selected, err := New().ResolveProfileRoot(root)
 	if err != nil { return err }
 	if selected != root || binding.NativeProfileRoot != root {
-		return fmt.Errorf("Hermes binding has no exact native profile proof")
+		return fmt.Errorf("hermes binding has no exact native profile proof")
 	}
 	for _, item := range binding.NativeObjects {
 		if item.Kind == "managed_package_directory" { continue }
 		switch domain.InstallScope(binding.Scope) {
 		case domain.ScopeUser:
 			if item.Kind != userSkillKind && item.Kind != userMCPKind {
-				return fmt.Errorf("Hermes user binding contains foreign scope ownership")
+				return fmt.Errorf("hermes user binding contains foreign scope ownership")
 			}
 		case domain.ScopeProject:
 			if item.Kind != projectSkillKind {
-				return fmt.Errorf("Hermes project binding contains a User native entry")
+				return fmt.Errorf("hermes project binding contains a User native entry")
 			}
 		default:
-			return fmt.Errorf("Hermes binding has unsupported scope")
+			return fmt.Errorf("hermes binding has unsupported scope")
 		}
 		expected := filepath.Join(root, "skills", item.LogicalName)
 		if item.Kind == userMCPKind {
@@ -110,7 +110,7 @@ func (*Adapter) ValidateBindingProfile(root string, binding domain.ClientBinding
 			return err
 		}
 		if item.Path != expected {
-			return fmt.Errorf("Hermes binding owns a path outside the selected native scope")
+			return fmt.Errorf("hermes binding owns a path outside the selected native scope")
 		}
 	}
 	return nil
@@ -125,7 +125,7 @@ func (*Adapter) NativeRegistry(in clients.PlanInput) (string, string) {
 
 func (*Adapter) ProjectTargetRoot(client domain.DetectedClient, mode domain.PackageMode, managedRoot string, target domain.TargetContext) (string, string, error) {
 	if target.Scope != domain.ScopeProject || !cleanRoot(target.ProjectRoot) {
-		return "", "", fmt.Errorf("Hermes project root is unavailable")
+		return "", "", fmt.Errorf("hermes project root is unavailable")
 	}
 	anchor, root, err := shared.ManagedTargetRoot(client, mode, managedRoot)
 	if err != nil {
@@ -147,11 +147,11 @@ func (*Adapter) CheckPlanPrecondition(in clients.PlanInput, plan *domain.Deliver
  }
  root := plan.TargetContext.ProjectRoot
  if root == "" { root = in.TargetContext.ProjectRoot }
- if !cleanRoot(root) { return fmt.Errorf("Hermes project Skills require an exact Git repository root") }
+ if !cleanRoot(root) { return fmt.Errorf("hermes project Skills require an exact Git repository root") }
  meta, err := os.Lstat(filepath.Join(root, ".git"))
- if err != nil { return fmt.Errorf("Hermes project Skills require a Git root at the selected project: %w", err) }
+ if err != nil { return fmt.Errorf("hermes project Skills require a Git root at the selected project: %w", err) }
  if meta.Mode()&os.ModeSymlink != 0 || (!meta.IsDir() && !meta.Mode().IsRegular()) {
-  return fmt.Errorf("Hermes project Git root marker must be a real directory or worktree pointer")
+  return fmt.Errorf("hermes project Git root marker must be a real directory or worktree pointer")
  }
  return nil
 }
@@ -183,7 +183,7 @@ func (*Adapter) RefinePlan(ctx context.Context, _ clients.PlanInput, plan *domai
 	}
 	root := plan.NativeRegistryRoot
 	if !cleanRoot(root) {
-		return fmt.Errorf("Hermes native Skills root is unavailable")
+		return fmt.Errorf("hermes native Skills root is unavailable")
 	}
 	shared.PromoteNativeReady(plan, root, shared.OnlyNativeComponents(plan.Components))
 	plan.Activation = domain.ActivationPrepared

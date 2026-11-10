@@ -30,7 +30,7 @@ var (
 func components(plan domain.DeliveryPlan, selectedPackage string) (shared.ProjectComponents, error) {
 	authority := plan.NativeRegistryRoot
 	if !cleanRoot(authority) {
-		return shared.ProjectComponents{}, fmt.Errorf("Hermes native root must be canonical and absolute")
+		return shared.ProjectComponents{}, fmt.Errorf("hermes native root must be canonical and absolute")
 	}
 	layout := shared.ProjectComponents{
 		SkillsRoot: filepath.Join(authority, "skills"),
@@ -45,20 +45,20 @@ func components(plan domain.DeliveryPlan, selectedPackage string) (shared.Projec
 	switch plan.Scope {
 	case domain.ScopeUser:
 		if plan.TargetContext.UserConfigRoot != "" && plan.TargetContext.UserConfigRoot != authority {
-			return layout, fmt.Errorf("Hermes user profile authority differs")
+			return layout, fmt.Errorf("hermes user profile authority differs")
 		}
 		layout.ProjectRoot = authority
 	case domain.ScopeProject:
 		if !cleanRoot(plan.TargetContext.ProjectRoot) ||
 			filepath.Join(plan.TargetContext.ProjectRoot, ".hermes") != authority {
-			return layout, fmt.Errorf("Hermes project Skills root must be the exact selected project")
+			return layout, fmt.Errorf("hermes project Skills root must be the exact selected project")
 		}
 		layout.ProjectRoot = plan.TargetContext.ProjectRoot
 		layout.SkillKind = projectSkillKind
 		layout.ConfigPaths.JSON = filepath.Join(authority, ".uap-no-mcp.json")
 		layout.Codec = nativeconfig.CodecMCPServers
 	default:
-		return layout, fmt.Errorf("Hermes does not support this installation scope")
+		return layout, fmt.Errorf("hermes does not support this installation scope")
 	}
 	return layout, nil
 }
@@ -75,7 +75,7 @@ func buildSkillObjects(ctx context.Context, staged string, envelope domain.Packa
 		}
 		if component.Kind == domain.ComponentMCPServer {
 			if plan.Scope != domain.ScopeUser || component.Support == domain.SupportUnsupported {
-				return nil, fmt.Errorf("Hermes MCP has User authority only")
+				return nil, fmt.Errorf("hermes MCP has User authority only")
 			}
 			server, err := readHermesMCPServer(staged, component.Name)
 			if err != nil { return nil, err }
@@ -85,11 +85,11 @@ func buildSkillObjects(ctx context.Context, staged string, envelope domain.Packa
 			continue
 		}
 		if component.Kind != domain.ComponentSkill || component.Support == domain.SupportUnsupported {
-			return nil, fmt.Errorf("Hermes package contains an unsupported component")
+			return nil, fmt.Errorf("hermes package contains an unsupported component")
 		}
 		skill, ok := envelope.Skills[component.Name]
 		if !ok {
-			return nil, fmt.Errorf("Hermes selected skill %q is missing from verified package", component.Name)
+			return nil, fmt.Errorf("hermes selected skill %q is missing from verified package", component.Name)
 		}
 		relative := filepath.ToSlash(filepath.Join("skills", component.Name))
 		if skill.RelativePath != "" {
@@ -119,7 +119,7 @@ func (*Adapter) Project(ctx context.Context, in clients.ProjectionInput) ([]doma
 
 func (*Adapter) ProjectActiveNative(ctx context.Context, root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, _ string) ([]domain.NativeObjectOwnership, error) {
 	if root != plan.ActivePath {
-		return nil, fmt.Errorf("Hermes active package differs from recorded installation")
+		return nil, fmt.Errorf("hermes active package differs from recorded installation")
 	}
 	return buildSkillObjects(ctx, root, envelope, plan)
 }
@@ -143,7 +143,7 @@ func ownedObjects(scope domain.InstallScope, objects []domain.NativeObjectOwners
 			continue
 		}
 		if object.Kind != kind {
-			return nil, fmt.Errorf("Hermes refused foreign native ownership type")
+			return nil, fmt.Errorf("hermes refused foreign native ownership type")
 		}
 		result = append(result, object)
 	}
@@ -160,12 +160,12 @@ func readHermesMCPServer(root, name string) (nativeconfig.Server, error) {
 	doc, err := shared.DecodeStrictJSONObject(body)
 	if err != nil { return nativeconfig.Server{}, err }
 	collection, ok := doc["mcpServers"].(map[string]any)
-	if !ok { return nativeconfig.Server{}, fmt.Errorf("Hermes staged MCP selection is missing mcpServers") }
+	if !ok { return nativeconfig.Server{}, fmt.Errorf("hermes staged MCP selection is missing mcpServers") }
 	entry, ok := collection[name].(map[string]any)
-	if !ok { return nativeconfig.Server{}, fmt.Errorf("Hermes MCP server %q is absent from staged selection", name) }
+	if !ok { return nativeconfig.Server{}, fmt.Errorf("hermes MCP server %q is absent from staged selection", name) }
 	typ, _ := entry["type"].(string)
 	if typ != "stdio" && typ != "streamable-http" {
-		return nativeconfig.Server{}, fmt.Errorf("Hermes MCP server %q transport is unsupported", name)
+		return nativeconfig.Server{}, fmt.Errorf("hermes MCP server %q transport is unsupported", name)
 	}
 	raw, err := json.Marshal(entry)
 	if err != nil { return nativeconfig.Server{}, err }
