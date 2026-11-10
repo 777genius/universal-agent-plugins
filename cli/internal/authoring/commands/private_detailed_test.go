@@ -56,3 +56,22 @@ func TestWritePrivateDetailedPreservesHeaderFailureExit(t *testing.T) {
 		t.Fatalf("unexpected write failure: %v", err)
 	}
 }
+
+func TestPrivateHumanStatusSummaryParity(t *testing.T) {
+	r := report.New("validate", "test")
+	r.Readiness.Status = report.Fail
+	r.Toolchain.Status = report.Pass
+	var detailed, dev bytes.Buffer
+	if err := writePrivateDetailed(&detailed, r); err != nil {
+		t.Fatal(err)
+	}
+	if err := writePrivateHuman(&dev, r); err != nil {
+		t.Fatal(err)
+	}
+	firstLine := func(s string) string {
+		return strings.SplitN(s, "\n", 2)[0]
+	}
+	if got, want := firstLine(detailed.String()), firstLine(dev.String()); got != want {
+		t.Fatalf("private renderers disagree: detailed %q, dev %q", got, want)
+	}
+}
