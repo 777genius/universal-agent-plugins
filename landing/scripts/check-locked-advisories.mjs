@@ -48,6 +48,8 @@ function parsePnpmDocument(source) {
     // YAML tags and anchors before mapping keys can denote ordinary importers,
     // categories or snapshots. Reject them rather than silently dropping a graph.
     if (/^\s*[!&*]/.test(line)) throw new Error('Unsupported pnpm YAML tag/anchor key');
+    // YAML merge keys inherit dependency mappings we do not expand. Fail closed.
+    if (/^\s*<<\s*:/.test(line)) throw new Error('Unsupported pnpm YAML merge mapping');
     // Only recognised quoted section keys above are supported. Reject unknown
     // quoted/explicit top-level YAML keys rather than silently dropping a graph.
     if (/^(?:["']|[?:](?:\s|$))/.test(line)) throw new Error('Unsupported pnpm top-level YAML mapping');

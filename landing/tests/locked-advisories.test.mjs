@@ -297,3 +297,26 @@ test('rejects YAML-tagged or anchored mapping keys that conceal installed boot d
     assert.throws(() => auditLock(input), /Unsupported pnpm YAML tag\/anchor key/, disguised);
   }
 });
+
+test('rejects YAML merge aliases that hide reachable snapshot children', () => {
+  const mergedSnapshot = [
+    "lockfileVersion: '9.0'", 'importers:', '  .:', '    dependencies:',
+    '      app:', '        version: 1.0.0',
+    'shared: &vulnerable', '  dependencies:', '    glob: 13.0.6',
+    'snapshots:', '  app@1.0.0:', '    <<: *vulnerable', '  glob@13.0.6: {}', '',
+  ].join('\n');
+  assert.throws(() => auditLock(mergedSnapshot), /Unsupported pnpm YAML merge mapping/);
+});
+
+test('rejects YAML merge aliases that hide boot importer roots', () => {
+  const mergedBoot = [
+    "lockfileVersion: '9.0'", 'defaults: &vulnerable', '  dependencies:',
+    '    app:', '      version: 1.0.0', 'importers:', '  .:',
+    '    << : *vulnerable', 'snapshots:', '  app@1.0.0:',
+    '    dependencies:', '      glob: 13.0.6', '  glob@13.0.6: {}',
+    '---', "lockfileVersion: '9.0'", 'importers:', '  .:',
+    '    dependencies:', '      safe:', '        version: 1.0.0',
+    'snapshots:', '  safe@1.0.0: {}', '',
+  ].join('\n');
+  assert.throws(() => auditLock(mergedBoot), /Unsupported pnpm YAML merge mapping/);
+});
