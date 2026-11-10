@@ -21,7 +21,7 @@ class ReleasedNativeProofTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix="TEST-release-native-")
         self.addCleanup(self.temp.cleanup)
-        self.root = Path(self.temp.name)
+        self.root = Path(self.temp.name).resolve()
         self.source = self.root / "source"
         self.source.mkdir()
         self.env = {**os.environ, "GITHUB_REPOSITORY": proof.REPOSITORY,
