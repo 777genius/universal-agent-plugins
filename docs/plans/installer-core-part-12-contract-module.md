@@ -120,6 +120,8 @@ Test-файлов в ядре контракта — **11**: 10 `_test.go` в `d
 добавляется `golang.org/x/sys` (см. `(b'')`). Версия `hujson` в `install/integrationctl/go.mod`:
 `v0.0.0-20260302212456-ecc657c15afd`.
 
+**Срез после Hermes Native (PR #814, 2026-11-10).** Прямой YAML codec для сохранения чужих ключей, комментариев и приватных MCP-настроек добавил в транзитивное замыкание контрактного слоя `gopkg.in/yaml.v3` через уже разрешённое ребро `clients → adapters/nativeconfig`. Этот модуль **уже присутствует в integrationctl/go.mod**; новое разрешение зафиксировано в тесте `TestContractLayerDependencyClosure` и не объявляет его независимым runtime-контрактом. Вынесение `clients.Env.NativeConfig` из реализации в DTO-интерфейс по §12.2.A должно снова убрать YAML из замыкания. Перемещение YAML-парсера сейчас не входит в scoped PR #814: оно затронуло бы общий kernel и создало риск регрессии ownership-транзакций.
+
 **(b') Внешние модули, приходящие через ТЕСТЫ:** `golang.org/x/text/transform`, `golang.org/x/text/unicode/norm`
 (через `adapters/pathpolicy`, Находка 4).
 
