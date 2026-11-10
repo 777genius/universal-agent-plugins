@@ -2,7 +2,6 @@
   "Digests": {
     "bin/": "dir",
     "bin/run": "a8076d3d28d21e02012b20eaf7dbf75409a6277134439025f282e368e3305abf",
-    "mcp.json": "8cf2989c891e877c31d89c5ee099ddffd18664ef1e0fd4e7a75359900b476197",
     "mcp_config.json": "43cb3c946b8392542d14df31b19cdba1489b368b67de96b07c7fe03f2b327a49",
     "plugin.json": "a258347d3344d02ddac923f95b8c5920ad51e0a5069e86a2116873ebfaa9d771",
     "skills/": "dir",
