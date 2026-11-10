@@ -150,6 +150,13 @@ export function auditLock(source) {
         const id = `${scope}:${key}`;
         findings.set(id, { scope, package: key, advisory: vulnerabilityFor(key), path });
       }
+      // Peer-qualified snapshots can install peers absent from child dependency mappings.
+      // Preserve reachability of both scoped advisory targets through those peer qualifiers.
+      for (const [, name, version] of key.matchAll(/\((glob|minimatch)@([^()]+)(?=[()])/g)) {
+        const peer = `${name}@${version}`;
+        const advisory = vulnerabilityFor(peer);
+        if (advisory) findings.set(`${scope}:${peer}`, { scope, package: peer, advisory, path: [...path, peer] });
+      }
       for (const child of nodes.get(key) ?? []) pending.push([child, [...path, child]]);
     }
   }

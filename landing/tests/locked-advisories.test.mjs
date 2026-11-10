@@ -327,3 +327,36 @@ test('checked-in frozen landing lock contains no scoped advisory paths', () => {
   const lockfile = new URL('../pnpm-lock.yaml', import.meta.url);
   assert.deepEqual(auditLock(readFileSync(lockfile, 'utf8')), []);
 });
+
+
+test('finds scoped advisories in resolved peer qualifiers without child edges', () => {
+  const withPeers = `lockfileVersion: '9.0'
+importers:
+  .:
+    dependencies:
+      consumer:
+        version: 1.0.0(glob@13.0.6)(minimatch@9.0.9)
+snapshots:
+  consumer@1.0.0(glob@13.0.6)(minimatch@9.0.9): {}
+  glob@13.0.6: {}
+  minimatch@9.0.9: {}
+`;
+  assert.deepEqual(auditLock(withPeers).map((f) => [f.scope, f.package]), [
+    ['dependencies', 'glob@13.0.6'],
+    ['dependencies', 'minimatch@9.0.9'],
+  ]);
+});
+test('includes nested peer qualifiers and does not flag patched peer packages', () => {
+  const nested = `lockfileVersion: '9.0'
+importers:
+  .:
+    dependencies:
+      consumer:
+        version: 1.0.0(another@2.0.0(minimatch@9.0.9))
+snapshots:
+  consumer@1.0.0(another@2.0.0(minimatch@9.0.9)): {}
+  minimatch@9.0.9: {}
+`;
+  assert.deepEqual(auditLock(nested).map((f) => f.package), ['minimatch@9.0.9']);
+  assert.deepEqual(auditLock(nested.replaceAll('minimatch@9.0.9', 'minimatch@11.0.5')), []);
+});
