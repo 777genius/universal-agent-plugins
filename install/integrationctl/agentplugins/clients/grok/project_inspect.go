@@ -144,7 +144,12 @@ func matchProjectInspection(native projectInspection, plan domain.DeliveryPlan, 
 		return clients.RegistryIndeterminate, fmt.Errorf("grok project MCP preparation requires qualified Grok 1.0.70; 1.0.67 remains qualified for Skills preparation only")
 	}
 	for _, entry := range native.plugins {
-		if entry.name == plan.DeclaredName {
+		// A native plugin whose name folds to our selected name but differs
+		// in spelling is a collision, not proof of the owned project plugin.
+		if shared.FoldJSONKey(entry.name) == shared.FoldJSONKey(plan.DeclaredName) {
+			if entry.name != plan.DeclaredName {
+				return clients.RegistryCollision, nil
+			}
 			if owned && entry.scope == "project" && entry.path == plan.ActivePath {
 				if finding != clients.RegistryExpected {
 					return clients.RegistryIndeterminate, fmt.Errorf("grok project source lacks its exact prepared manifest")

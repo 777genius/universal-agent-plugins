@@ -460,3 +460,35 @@ func TestProjectGrokRejectsFoldedNativePluginCollisions(t *testing.T) {
 		})
 	}
 }
+
+func TestProjectGrokNativeAliasCannotImpersonateOwnedPlugin(t *testing.T) {
+	request := projectTestRequest(t)
+	for _, alias := range []string{"DEMO", "DeMo"} {
+		for _, owned := range []bool{false, true} {
+			for _, requireDiscovery := range []bool{false, true} {
+				native := projectInspection{
+					version: "1.0.70",
+					plugins: []projectPlugin{{
+						name: alias, scope: "project",
+						path: request.Plan.ActivePath, enabled: false,
+					}},
+				}
+				finding, err := matchProjectInspection(native, request.Plan, clients.RegistryExpected, owned, requireDiscovery)
+				if err != nil || finding != clients.RegistryCollision {
+					t.Fatalf("folded native alias %q became owned=%t discovery=%t: %v %v", alias, owned, requireDiscovery, finding, err)
+				}
+			}
+		}
+	}
+	native := projectInspection{
+		version: "1.0.70",
+		plugins: []projectPlugin{{
+			name: request.Plan.DeclaredName, scope: "project",
+			path: request.Plan.ActivePath, enabled: false,
+		}},
+	}
+	finding, err := matchProjectInspection(native, request.Plan, clients.RegistryExpected, true, false)
+	if err != nil || finding != clients.RegistryExpected {
+		t.Fatalf("exact native owned plugin was refused: %v %v", finding, err)
+	}
+}
