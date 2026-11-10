@@ -74,9 +74,29 @@ func projectPlugin(root string, envelope domain.PackageEnvelope, plan domain.Del
 		return fmt.Errorf("write Antigravity native manifest: %w", err)
 	}
 	if len(servers) > 0 {
-		return shared.WriteJSON(filepath.Join(root, "mcp_config.json"), map[string]any{"mcpServers": servers})
+		if err := shared.WriteJSON(filepath.Join(root, "mcp_config.json"), map[string]any{"mcpServers": servers}); err != nil {
+			return err
+		}
 	}
-	return nil
+	return removeAntigravityPortableMCP(root)
+}
+
+// The native manifest loads mcp_config.json. A remaining portable mcp.json is
+// ignored by agy and fails its strict validation. Remove only the staged file;
+// the verified source snapshot and its portable manifest remain unchanged.
+func removeAntigravityPortableMCP(root string) error {
+	path := filepath.Join(root, "mcp.json")
+	info, err := os.Lstat(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("antigravity staged portable MCP must be a regular file")
+	}
+	return os.Remove(path)
 }
 
 func validateAntigravityProjection(root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan) error {
@@ -186,6 +206,7 @@ func appendNativeServer(out map[string]map[string]any, name string, envelope dom
 		if err := shared.ApplyStdioDataContract(config, active, dataRoot, staged); err != nil {
 			return fmt.Errorf("antigravity stdio MCP %q is invalid: %w", name, err)
 		}
+		omitAntigravityManagedEnvironment(config)
 	case "streamable-http":
 		if err := rejectAntigravityTransportFields(config, "command", "args", "env", "cwd"); err != nil {
 			return err
@@ -212,6 +233,20 @@ func appendNativeServer(out map[string]map[string]any, name string, envelope dom
 	}
 	out[name] = config
 	return nil
+}
+
+// agy supplies these process variables itself and warns if native config sets
+// them. Keep the validated UAP expansions in args, cwd and custom env values;
+// only remove the reserved declarations injected by ApplyStdioDataContract.
+func omitAntigravityManagedEnvironment(config map[string]any) {
+	switch env := config["env"].(type) {
+	case map[string]any:
+		delete(env, "PLUGIN_ROOT")
+		delete(env, "PLUGIN_DATA")
+	case map[string]string:
+		delete(env, "PLUGIN_ROOT")
+		delete(env, "PLUGIN_DATA")
+	}
 }
 
 // Compatibility imports can retain both endpoint aliases. They must agree

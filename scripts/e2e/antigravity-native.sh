@@ -34,10 +34,10 @@ assert set(servers)=={"native-stdio","native-http"}, "Selected MCP servers diffe
 stdio=servers["native-stdio"]
 assert stdio.get("command")=="node" and not {"type","url","serverUrl"}.intersection(stdio)
 assert Path(stdio["cwd"]).resolve()==plugin.resolve(), "MCP cwd retained staging path"
-assert Path(stdio["env"]["PLUGIN_ROOT"]).resolve()==plugin.resolve()
-data=Path(stdio["env"]["PLUGIN_DATA"])
+assert not {"PLUGIN_ROOT","PLUGIN_DATA"}.intersection(stdio["env"]), "Native config overrides vendor-managed environment"
+data=Path(stdio["env"]["UAP_SMOKE_DATA"])
 assert data.is_absolute() and data.is_dir() and fixture.resolve() in data.resolve().parents
-assert stdio["env"]["UAP_SMOKE_DATA"]==str(data), "MCP data variable was not expanded"
+assert not (plugin/"mcp.json").exists(), "Ignored portable MCP manifest remained in native package"
 args=stdio.get("args",[])
 assert len(args)==3 and Path(args[0]).resolve()==(plugin/"scripts"/"mcp-smoke.cjs").resolve()
 assert args[1]=="--data-dir" and Path(args[2]).resolve()==data.resolve()

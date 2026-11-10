@@ -14,10 +14,22 @@ rather than calling `agy plugin install` with untracked filesystem effects:
 Inside the isolated verified staging copy it projects the portable `plugin.json`
 into one schema-tagged native root `plugin.json`, and writes `mcp_config.json` with
 `mcpServers` (stdio or Streamable HTTP with `serverUrl`).
+The staged portable `mcp.json` is removed after native projection because the
+native manifest loads only `mcp_config.json`; retaining both fails strict vendor
+validation. The original portable MCP file remains in the verified source.
 Portable Skills remain in `skills/<name>/SKILL.md`. The immutable source
 package is not modified. One native manifest avoids strict validation warnings
 about a second, ignored root manifest.
 No Project command falls back to mutating User configuration.
+
+For stdio MCP, UAP validates and expands authored `${PLUGIN_ROOT}` and
+`${PLUGIN_DATA}` references in arguments, working directory and custom
+environment values to its committed plugin and owned data paths. Native
+configuration omits reserved `PLUGIN_ROOT` / `PLUGIN_DATA` environment entries:
+Antigravity supplies those process variables itself and ignores overrides.
+Its runtime `PLUGIN_DATA` identifies a vendor-managed persistent directory,
+which is separate from UAP's explicitly expanded data paths. UAP does not claim
+that these directories are identical or manage the vendor's runtime data.
 
 These targets remain source capabilities until a qualified CLI release includes
 them. Public install actions retain the released target set; the SDK-generated

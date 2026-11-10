@@ -84,13 +84,13 @@ def assert_native_mcp(plugin, fixture_root):
         raise AssertionError("Native stdio transport was not projected unambiguously")
     if Path(stdio["cwd"]).resolve() != plugin.resolve():
         raise AssertionError("Native stdio working directory is not the active plugin")
-    if Path(stdio["env"]["PLUGIN_ROOT"]).resolve() != plugin.resolve():
-        raise AssertionError("Native stdio environment retained a staging path")
-    data = Path(stdio["env"]["PLUGIN_DATA"])
+    if {"PLUGIN_ROOT", "PLUGIN_DATA"}.intersection(stdio["env"]):
+        raise AssertionError("Native config overrides vendor-managed process environment")
+    data = Path(stdio["env"]["UAP_SMOKE_DATA"])
     if not data.is_absolute() or not data.is_dir() or fixture_root.resolve() not in data.resolve().parents:
         raise AssertionError("Native stdio data directory is not an owned disposable directory")
-    if stdio["env"]["UAP_SMOKE_DATA"] != str(data):
-        raise AssertionError("Native stdio plugin data variable was not expanded")
+    if (plugin / "mcp.json").exists():
+        raise AssertionError("Ignored portable MCP manifest remained in native package")
     args = stdio.get("args", [])
     if (len(args) != 3 or Path(args[0]).resolve() != (plugin / "scripts" / "mcp-smoke.cjs").resolve()
             or args[1] != "--data-dir" or Path(args[2]).resolve() != data.resolve()):
