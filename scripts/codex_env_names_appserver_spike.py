@@ -207,8 +207,12 @@ def main():
         report["mcp_output_indicators"] = Model.mcp_output_indicators
         report["mcp_child_saw_secret"] = (report["direct_mcp_call_verified"]
                                            or Model.mcp_digest_verified)
-        if not (report["real_codex_shell_called"] and report["mcp_child_saw_secret"]):
-            raise RuntimeError("native_shell_or_mcp_delivery_unproven")
+        # Both independent native MCP routes must prove the same synthetic
+        # digest. A direct-only success cannot conceal a failed model turn.
+        if not (report["real_codex_shell_called"] and
+                report["direct_mcp_call_verified"] and
+                Model.mcp_digest_verified):
+            raise RuntimeError("native_shell_or_both_mcp_routes_unproven")
     except (OSError, RuntimeError, subprocess.TimeoutExpired, ValueError) as exc:
         report["failure"] = str(exc) if isinstance(exc, RuntimeError) else type(exc).__name__
     finally:

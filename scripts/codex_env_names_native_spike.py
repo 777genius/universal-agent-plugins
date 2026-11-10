@@ -289,15 +289,33 @@ def inspect(root, secret):
                          base64.b64encode(value.encode()),
                          urllib.parse.quote(value).encode()])
     found, symlinks = [], 0
+    root_path = Path(root).resolve(strict=True)
+
+    def record_symlink(path):
+        nonlocal symlinks
+        symlinks += 1
+        try:
+            outside = not path.resolve(strict=False).is_relative_to(root_path)
+        except (OSError, RuntimeError, ValueError):
+            outside = True
+        if outside:
+            # An outside or unresolvable link cannot be proved safe by our
+            # no-follow scanner. Fail closed; never read or log its target.
+            found.append({
+                "path_sha256": hashlib.sha256(
+                    str(path.relative_to(root)).encode()).hexdigest(),
+                "result": "unscanned_external_symlink",
+            })
+
     for directory, subdirs, files in os.walk(root, followlinks=False):
         for name in list(subdirs):
             if (Path(directory) / name).is_symlink():
-                symlinks += 1
+                record_symlink(Path(directory) / name)
                 subdirs.remove(name)
         for name in files:
             path = Path(directory) / name
             if path.is_symlink():
-                symlinks += 1
+                record_symlink(path)
                 continue
             try:
                 if path.stat().st_size > 32 * 1024 * 1024:

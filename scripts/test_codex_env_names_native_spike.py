@@ -225,6 +225,36 @@ class TestSyntheticSnapshotScanner(unittest.TestCase):
             self.assertEqual(findings[0]["result"], "synthetic_value_persisted")
             self.assertNotIn(second, str(findings))
 
+    def test_external_symlink_fails_closed_without_following_target(self):
+        with tempfile.TemporaryDirectory() as temp, tempfile.TemporaryDirectory() as foreign:
+            root = Path(temp)
+            outside = Path(foreign) / "synthetic_outside"
+            outside.write_text("secret_in_unscanned_external_target")
+            link = root / "external_link"
+            try:
+                link.symlink_to(outside)
+            except (OSError, NotImplementedError):
+                self.skipTest("Symlink creation not supported on this runner")
+            hits, symlinks = inspect(root, "secret_in_unscanned_external_target")
+            self.assertEqual(symlinks, 1)
+            self.assertEqual(len(hits), 1)
+            self.assertEqual(hits[0]["result"], "unscanned_external_symlink")
+            self.assertNotIn(str(outside), str(hits))
+
+    def test_internal_symlink_is_not_followed_or_false_positive(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root / "safe"
+            source.write_text("not the canary")
+            link = root / "in_tree"
+            try:
+                link.symlink_to(source)
+            except (OSError, NotImplementedError):
+                self.skipTest("Symlink creation not supported on this runner")
+            hits, symlinks = inspect(root, "canary_value")
+            self.assertEqual(symlinks, 1)
+            self.assertEqual(hits, [])
+
     def test_atomic_unlink_during_read_is_not_false_positive(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
