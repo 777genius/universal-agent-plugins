@@ -238,11 +238,20 @@ func (r Report) boundary(s State, location string) Assessment {
 	}
 	return a
 }
+// policyAssessments is the single ordered set of report policy lanes. Both
+// normalization and public ID projection must visit every one of them.
+func (r *Report) policyAssessments() []*Assessment {
+	return []*Assessment{
+		&r.Loadability, &r.Conformance, &r.HostSafety, &r.Readiness,
+		&r.Release, &r.Runtime, &r.Compatibility, &r.Toolchain,
+	}
+}
+
 func (r *Report) finish() {
 	sort.Slice(r.Findings, func(i, j int) bool { return r.Findings[i].ID < r.Findings[j].ID })
 	sort.Slice(r.Components, func(i, j int) bool { return r.Components[i].ID < r.Components[j].ID })
 	r.SchemaIDs = unique(r.SchemaIDs)
-	for _, a := range []*Assessment{&r.Loadability, &r.Conformance, &r.HostSafety, &r.Readiness, &r.Release, &r.Runtime, &r.Compatibility, &r.Toolchain} {
+	for _, a := range r.policyAssessments() {
 		a.FindingIDs = unique(a.FindingIDs)
 	}
 	for i := range r.Checks {
