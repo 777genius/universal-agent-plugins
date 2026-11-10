@@ -23,6 +23,7 @@ import urllib.parse
 ENV_NAME = "UAP_E2E_SYNTHETIC_TOKEN"
 SHELL_CALL = "call_uap_shell_snapshot"
 SHELL_MARKER = "UAP_SHELL_COMPLETED"
+SHELL_ENV_PRESENT = "UAP_SHELL_ENV_PRESENT"
 MCP_CALL = "call_uap_env_mcp"
 SEARCH_CALL = "call_uap_tool_search"
 
@@ -71,6 +72,7 @@ class Model(http.server.BaseHTTPRequestHandler):
     expected_digest = None
     shell_output_seen = False
     shell_execution_verified = False
+    shell_secret_visible = False
     shell_response_category = "not_observed"
     shell_response_indicators = []
     shell_requested_at = 0.0
@@ -102,6 +104,10 @@ class Model(http.server.BaseHTTPRequestHandler):
                 # A native tool returning an error is not proof the command ran.
                 # Require an execution-only sentinel AND elapsed sleep time.
                 rendered = json.dumps(response.get("output"), sort_keys=True)
+                # Marker reveals only whether the shell received the name,
+                # never the canary value. A successful shell with access to
+                # the forwarded credential is unsafe even without a snapshot.
+                cls.shell_secret_visible |= SHELL_ENV_PRESENT in rendered
                 if (SHELL_MARKER in rendered and
                         time.monotonic() - cls.shell_requested_at >= 6.0):
                     cls.shell_execution_verified = True
@@ -183,7 +189,8 @@ class Model(http.server.BaseHTTPRequestHandler):
                 cls.error = "no advertised shell tool"
                 self.send_error(409)
                 return
-            command = f"sleep 7; printf {SHELL_MARKER}"
+            command = ("sleep 7; if test -n \"${" + ENV_NAME + "+x}\"; then printf "
+                       + SHELL_ENV_PRESENT + "; fi; printf " + SHELL_MARKER)
             # Codex exec_command can yield before a long command has finished.
             # Request a full bounded wait so the completion marker is observed
             # from the real native shell rather than mistaking an async
@@ -371,6 +378,7 @@ def main():
         report["live_snapshot_files_seen"] = live["snapshot_files_seen"]
         report["live_scan_errors"] = live["errors"]
         report["shell_tool_output_seen"] = Model.shell_output_seen
+        report["shell_secret_visible"] = Model.shell_secret_visible
         report["shell_response_category"] = Model.shell_response_category
         report["shell_response_indicators"] = Model.shell_response_indicators
         report["real_codex_shell_called"] = Model.shell_requested and Model.shell_execution_verified
@@ -392,7 +400,8 @@ def main():
         elif not all([report["real_codex_shell_called"], report["real_codex_mcp_called"],
                       report["mcp_child_saw_secret"]]):
             report["failure"] = Model.error or "native_proof_incomplete"
-        elif combined or live["errors"] or live["samples"] < 20:
+        elif (combined or live["errors"] or live["samples"] < 20
+              or Model.shell_secret_visible):
             report["failure"] = "live_canary_persisted_or_unsafe_scan"
         else:
             report["secrecy_pass"] = True
