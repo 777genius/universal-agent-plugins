@@ -44,6 +44,9 @@ def main():
     codex = Path(sys.argv[1]).resolve(strict=True)
     evidence = Path(sys.argv[2]).resolve()
     evidence.parent.mkdir(parents=True, exist_ok=True)
+    mode = sys.argv[3] if len(sys.argv) > 3 else "default"
+    if mode not in ("default", "filtered"):
+        raise ValueError("unsupported native shell policy control mode")
     secret = "uap_appserver_spike_" + secrets.token_hex(24)
     Model.expected_digest = hashlib.sha256(secret.encode()).hexdigest()
     root = Path(tempfile.mkdtemp(prefix="uap-codex-appserver-"))
@@ -67,16 +70,23 @@ def main():
         f'[projects.{json.dumps(str(project))}]\ntrust_level = "trusted"\n'
     )
     (home / ".codex" / "config.toml").write_text(user_config)
-    (project / ".codex" / "config.toml").write_text(
+    project_server = (
         '[mcp_servers.env_spike]\ncommand = "python3"\n'
         f'args = [{json.dumps(str(child))}, {json.dumps(str(receipt))}]\n'
         f'env_vars = ["{ENV_NAME}"]\n'
     )
+    if mode == "filtered":
+        # Research-only comparison; this is NOT an approved UAP auto-mutation.
+        project_server += (
+            '[shell_environment_policy.filters]\n'
+            f'{json.dumps(ENV_NAME)} = "exclude"\n'
+        )
+    (project / ".codex" / "config.toml").write_text(project_server)
     env = {"HOME": str(home), "CODEX_HOME": str(home / ".codex"),
            "TMPDIR": str(root / "tmp"), "TEMP": str(root / "tmp"),
            "TMP": str(root / "tmp"), "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
            "LANG": "C.UTF-8", "NO_COLOR": "1", ENV_NAME: secret}
-    report = {"version": "", "real_codex_shell_called": False,
+    report = {"policy_mode": mode, "version": "", "real_codex_shell_called": False,
               "mcp_native_connected": False, "real_codex_mcp_called": False,
               "mcp_child_saw_secret": False, "leak": False,
               "secrecy_pass": False, "failure": None}
