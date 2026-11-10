@@ -111,7 +111,7 @@
   },
   "hermes": {
     "Commands": [],
-    "Error": "Hermes native root must be canonical and absolute",
+    "Error": "hermes native root must be canonical and absolute",
     "Outcome": {
       "Activation": "not_required",
       "ArtifactRemovalAllowed": true,
