@@ -761,6 +761,51 @@ def check_scope_id_isolation(selected, other_scopes, stage):
         raise AssertionError(f"{stage}: reused installation IDs across scopes")
 
 
+def copilot_project_mcp_residuals(project, identities, stage):
+    """Inspect Copilot's two exact Project MCP locations by server member name."""
+    def reject_constant(_):
+        raise ValueError("invalid JSON constant")
+
+    leftovers = set()
+    for relative in (".github/mcp.json", ".mcp.json"):
+        path = project / relative
+        if not audit["path_inside_case"](path, project):
+            raise AssertionError(f"{stage}: unsafe Copilot Project MCP config")
+        try:
+            identity = path.lstat()
+        except FileNotFoundError:
+            continue
+        except OSError as error:
+            raise AssertionError(f"{stage}: unreadable Copilot Project MCP config") from error
+        if not stat.S_ISREG(identity.st_mode) or identity.st_size > 1 << 20:
+            raise AssertionError(f"{stage}: invalid Copilot Project MCP config")
+        try:
+            with path.open("rb") as stream:
+                opened = os.fstat(stream.fileno())
+                if (opened.st_dev, opened.st_ino) != (identity.st_dev, identity.st_ino):
+                    raise AssertionError(f"{stage}: replaced Copilot Project MCP config")
+                body = stream.read((1 << 20) + 1)
+            if len(body) > 1 << 20:
+                raise ValueError("oversized MCP config")
+            document = json.loads(body.decode("utf-8"),
+                                  object_pairs_hook=audit["_unique_json_object"],
+                                  parse_constant=reject_constant)
+            if (not isinstance(document, dict)
+                    or document and not isinstance(document.get("mcpServers"), dict)):
+                raise ValueError("expected nested MCP server object")
+            servers = document.get("mcpServers", {})
+            if any(not name or not isinstance(server, dict) for name, server in servers.items()):
+                raise ValueError("invalid MCP server member")
+        except (OSError, UnicodeError, ValueError) as error:
+            raise AssertionError(f"{stage}: malformed Copilot Project MCP config") from error
+        for name in servers:
+            if (name.casefold() in identities
+                    or any(re.fullmatch(re.escape(alias) + r"@agentplugins-[0-9a-f]{12}",
+                                        name, re.IGNORECASE) for alias in identities)):
+                leftovers.add(f"{relative}: MCP server {name}")
+    return leftovers
+
+
 def check_removed_native_components(target, home, case_root, stage, project_scope=False):
     """Refuse native MCP and Skill remnants after an empty scoped inventory."""
     if not audit["path_inside_case"](home, case_root):
@@ -801,6 +846,8 @@ def check_removed_native_components(target, home, case_root, stage, project_scop
     identities = UPDATE_ALIASES | {
         distribution.rsplit("/", 1)[-1] for distribution in EXPECTED
     }
+    if target == "copilot" and project_scope:
+        leftovers.update(copilot_project_mcp_residuals(home, identities, stage))
     for identity in sorted(identities):
         leftovers.update(audit["native_identity_residuals"](
             roots, identity, observed, target))

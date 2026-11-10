@@ -1672,6 +1672,103 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     owned_skill.rmdir()
                     check("copilot", project, case, "Project remove", project_scope=True)
 
+    def test_marketing_kit_copilot_project_mcp_cleanup_checks_both_locations(self):
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        check = runner["check_removed_native_components"]
+        with TemporaryDirectory() as temporary:
+            case = Path(temporary).resolve()
+            project = case / "project"
+            (project / ".github").mkdir(parents=True)
+            paths = [project / name for name in (".github/mcp.json", ".mcp.json")]
+            # Foreign members may refer to a closure alias in their own values;
+            # server member identity, rather than whole-file text, is decisive.
+            foreign = {"mcpServers": {"foreign-neighbor": {
+                "command": "notion", "args": ["playwright", "marketing-kit"]}}}
+            original = json.dumps(foreign).encode()
+            for path in paths:
+                path.write_bytes(original)
+            check("copilot", project, case, "remove", project_scope=True)
+            for path in paths:
+                for alias in ("notion", "playwright", "playwright-bridge",
+                              "playwright@agentplugins-aaaaaaaaaaaa"):
+                    with self.subTest(path=path.name, alias=alias):
+                        changed = {"mcpServers": {**foreign["mcpServers"], alias: {"command": "probe"}}}
+                        path.write_text(json.dumps(changed))
+                        with self.assertRaisesRegex(AssertionError, "native Marketing Kit remnants"):
+                            check("copilot", project, case, "remove", project_scope=True)
+                        path.write_bytes(original)
+                        check("copilot", project, case, "remove", project_scope=True)
+                        self.assertTrue(all(item.read_bytes() == original for item in paths))
+            for path in paths:
+                for clean in ({}, {"mcpServers": {}}):
+                    path.write_text(json.dumps(clean))
+                    check("copilot", project, case, "remove", project_scope=True)
+                path.unlink()
+            check("copilot", project, case, "remove", project_scope=True)
+
+    def test_marketing_kit_copilot_project_mcp_cleanup_rejects_malformed_config(self):
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        with TemporaryDirectory() as temporary:
+            case = Path(temporary).resolve()
+            project = case / "project"
+            (project / ".github").mkdir(parents=True)
+            for relative in (".github/mcp.json", ".mcp.json"):
+                path = project / relative
+                for body in ('invalid', '[]', '{"mcpServers":[]}',
+                             '{"notion":{}}', '{"mcpServers":{"foreign":null}}',
+                             '{"mcpServers":{"foreign":{"value":NaN}}}',
+                             '{"mcpServers":{"notion":{},"notion":{}}}',
+                             '{"mcpServers":{"notion":{}},"mcpServers":{}}',
+                             '{"mcpServers":{}} trailing'):
+                    with self.subTest(relative=relative, body=body):
+                        path.write_text(body)
+                        with self.assertRaisesRegex(AssertionError, "malformed Copilot Project MCP"):
+                            runner["check_removed_native_components"](
+                                "copilot", project, case, "remove", project_scope=True)
+                path.unlink()
+
+    def test_marketing_kit_copilot_project_mcp_cleanup_rejects_unsafe_paths(self):
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        for relative in (".github/mcp.json", ".mcp.json"):
+            with self.subTest(relative=relative), TemporaryDirectory() as temporary:
+                case = Path(temporary).resolve()
+                project, outside = case / "project", case / "outside"
+                (project / ".github").mkdir(parents=True)
+                outside.mkdir()
+                external = outside / "foreign.json"
+                original = b'{"mcpServers":{"foreign":{}}}'
+                external.write_bytes(original)
+                path = project / relative
+                try:
+                    path.symlink_to(external)
+                except (OSError, NotImplementedError) as error:
+                    self.skipTest(f"host cannot create symlinks: {error}")
+                with self.assertRaisesRegex(AssertionError, "unsafe Copilot Project MCP"):
+                    runner["check_removed_native_components"](
+                        "copilot", project, case, "remove", project_scope=True)
+                self.assertEqual(external.read_bytes(), original)
+                path.unlink()
+                path.mkdir()
+                with self.assertRaisesRegex(AssertionError, "invalid Copilot Project MCP"):
+                    runner["check_removed_native_components"](
+                        "copilot", project, case, "remove", project_scope=True)
+                path.rmdir()
+                if relative.startswith(".github/"):
+                    (project / ".github").rmdir()
+                    (project / ".github").symlink_to(outside, target_is_directory=True)
+                    with self.assertRaisesRegex(AssertionError, "unsafe native client root"):
+                        runner["check_removed_native_components"](
+                            "copilot", project, case, "remove", project_scope=True)
+
     def test_marketing_kit_copilot_personal_agents_skill_cleanup(self):
         # GitHub's Copilot CLI documents ~/.agents/skills as a personal root.
         from runpy import run_path
