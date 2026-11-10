@@ -88,6 +88,12 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 {**envelope, "data": {**closure, "result": "failure"}},
                 {**envelope, "data": {**closure, "scope": "user"}},
                 {**envelope, "data": {**closure, "results": results[:-1]}},
+                # Duplicate receipts for two different signed child aliases
+                # cannot establish that each dependency was actually applied.
+                {**envelope, "data": {**closure, "results": [
+                    results[0], {**results[1],
+                                 "installation_id": results[0]["installation_id"]},
+                    *results[2:]]}},
                 {**envelope, "data": {**closure, "actions": actions[:-1]}},
                 {**envelope, "data": {**closure, "actions": [
                     {**actions[0], "client_id": "claude"}, *actions[1:]]}},

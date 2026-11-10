@@ -92,6 +92,10 @@ def valid_legacy_dependency_result(envelope, operation, target=None, scope=None)
                 or (action.get("installation_id")
                     and result["installation_id"] != action["installation_id"])):
             return False
+    # A full dependency closure needs distinct durable receipts for its
+    # independent aliases, not repeated evidence from one installation.
+    if len({row["installation_id"] for row in results}) != len(results):
+        return False
     return True
 
 
