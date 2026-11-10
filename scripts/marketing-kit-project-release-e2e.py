@@ -600,7 +600,7 @@ def profile_snapshot(env, project):
     return scoped_snapshot([Path(env["HOME"]), Path(env["AGENTPLUGINS_HOME"]), project])
 
 
-def settled_profile_snapshot(env, project, *, attempts=12, interval=2):
+def settled_profile_snapshot(env, project, *, attempts=12, interval=5):
     """Bounded *own-profile* cache/scanner settling before peer operations.
 
     The released installer can finish its own security cache writes after the
@@ -871,6 +871,11 @@ def main():
                                            (project_foreign_b, "unmanaged project data\n"),
                                            *native_foreign_b], root)
             foreign_files.extend(foreign_b_files)
+            # A new disposable B fixture cannot change an already-settled A.
+            # Check before B's first CLI call to distinguish fixture drift from
+            # a genuine cross-profile mutation by B's locked restore.
+            check_profile_unchanged(env, project_a, native_a_before_b,
+                                    "Project B fixture preparation")
             scoped_b = ("--scope", "project", "--project-root", str(project_b))
             # The genuine published CLI must refuse a corrupted child pin
             # without modifying native or durable state in cold Project B.
