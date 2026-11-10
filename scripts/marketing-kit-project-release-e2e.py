@@ -350,7 +350,7 @@ def verify_corrupt_lock_refusal(cli, env, project, target, scope, guards):
     # The command under test may replace the lock with an outside symlink.
     # Retain the inode before invoking untrusted source code.
     original_identity = lock_file.lstat()
-    if not stat.S_ISREG(original_identity.st_mode):
+    if not stat.S_ISREG(original_identity.st_mode) or original_identity.st_nlink != 1:
         raise AssertionError("invalid original signed lock path")
     original_digest, corrupted_digest = corrupt_locked_child_digest(lock_file)
     scope_args = ["--scope", scope]
@@ -393,6 +393,7 @@ def verify_corrupt_lock_refusal(cli, env, project, target, scope, guards):
                 with lock_file.open("r+b") as stream:
                     identity = os.fstat(stream.fileno())
                     if (not stat.S_ISREG(identity.st_mode)
+                            or identity.st_nlink != 1
                             or (identity.st_dev, identity.st_ino)
                             != (original_identity.st_dev, original_identity.st_ino)):
                         raise AssertionError("corrupt signed lock path replaced during restore")
