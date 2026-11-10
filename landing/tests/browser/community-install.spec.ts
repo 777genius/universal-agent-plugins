@@ -15,7 +15,7 @@ test('community installer is centered, full-width, and readable at desktop/table
   // SkillSpector has its own signed feed: a current, historical, or unchecked
   // result is valid. On this expanded page the loading state is a paragraph,
   // so the details summary proves the scan has settled without inventing a result.
-  await expect(page.locator('.plugin-profile details.skillspector > summary')).toContainText(
+  await expect(page.locator('.plugin-profile details.skillspector > summary > span')).toHaveText(
     /^Skill scan · \S/,
     { timeout: 15_000 },
   );
