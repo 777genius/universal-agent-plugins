@@ -169,7 +169,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-native-macos-arm64-core-research:
+  native-macos-arm64-core-research:
     # Research only; default-mode Linux vendor leak remains a failed release gate.
     runs-on: macos-15-arm64
     timeout-minutes: 18
