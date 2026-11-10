@@ -210,8 +210,8 @@ func TestAntigravityRejectsInvalidNativeIdentityBeforeStaging(t *testing.T) {
 func TestAntigravityMCPRejectsMixedTransportFields(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name string
-		kind string
+		name  string
+		kind  string
 		entry map[string]any
 	}{
 		{"remote-command", "streamable-http", map[string]any{"type": "streamable-http", "url": "https://example.test/mcp", "command": "node"}},

@@ -107,27 +107,33 @@ func validateAntigravityProjection(root string, envelope domain.PackageEnvelope,
 			return err
 		}
 	}
-	// A verified source package can carry stdio MCP helper binaries under
-	// scripts/, but this directory must not be activated as an unrelated
-	// executable surface when no selected stdio MCP can reference it.
-	if info, err := os.Lstat(filepath.Join(root, "scripts")); err == nil {
-		if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-			return fmt.Errorf("antigravity MCP helper scripts must be a real source directory")
-		}
-		stdio := false
-		for _, component := range plan.Components {
-			if component.Kind == domain.ComponentMCPServer && component.Support != domain.SupportUnsupported {
-				server, ok := envelope.MCP.Servers[component.Name]
-				stdio = stdio || ok && server.Type == "stdio"
-			}
-		}
-		if !stdio {
-			return fmt.Errorf("antigravity scripts directory requires an explicitly selected stdio MCP")
-		}
-	} else if !os.IsNotExist(err) {
+	return validateAntigravityHelperScripts(root, envelope, plan)
+}
+
+// A verified source package may carry stdio MCP helpers under scripts/.
+// Refuse this autoload surface unless the selected component explicitly
+// requires it. Keep the check separate from core projection admission.
+func validateAntigravityHelperScripts(root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan) error {
+	info, err := os.Lstat(filepath.Join(root, "scripts"))
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
 		return err
 	}
-	return nil
+	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("antigravity MCP helper scripts must be a real source directory")
+	}
+	for _, component := range plan.Components {
+		if component.Kind != domain.ComponentMCPServer || component.Support == domain.SupportUnsupported {
+			continue
+		}
+		server, ok := envelope.MCP.Servers[component.Name]
+		if ok && server.Type == "stdio" {
+			return nil
+		}
+	}
+	return fmt.Errorf("antigravity scripts directory requires an explicitly selected stdio MCP")
 }
 
 func validateAntigravityComponent(root string, envelope domain.PackageEnvelope, component domain.ComponentDecision) error {
@@ -192,9 +198,10 @@ func appendNativeServer(out map[string]map[string]any, name string, envelope dom
 			return fmt.Errorf("antigravity remote MCP %q requires serverUrl", name)
 		}
 		endpoint, err := url.Parse(raw)
-		if err != nil || endpoint == nil || endpoint.Host == "" ||
-			(endpoint.Scheme != "https" && !(endpoint.Scheme == "http" &&
-				(endpoint.Hostname() == "localhost" || endpoint.Hostname() == "127.0.0.1"))) {
+		allowed := endpoint != nil && endpoint.Host != "" &&
+			(endpoint.Scheme == "https" || endpoint.Scheme == "http" &&
+				(endpoint.Hostname() == "localhost" || endpoint.Hostname() == "127.0.0.1"))
+		if err != nil || !allowed {
 			return fmt.Errorf("antigravity remote MCP %q has an unsafe endpoint", name)
 		}
 		delete(config, "url")
