@@ -17,7 +17,7 @@ import (
 
 // auditedAncestorFixtureTrees models the audited ancestor facts for tests of the
 // historical source fixture. It is not a rebuilt historical binary and is never
-// a production exporter loader. Only the three reviewed live ancestor differences
+// a production exporter loader. Only the three historical live differences (plus explicitly admitted Hermes)
 // are admitted; the unchanged projection golden rejects every other visible fact.
 func auditedAncestorFixtureTrees() ([]*cobra.Command, error) {
 	roots, err := trees()
@@ -57,11 +57,19 @@ func modelAuditedAncestorFacts(roots []*cobra.Command) error {
 	for _, want := range []flagFact{
 		{Name: "scope", Type: "string", Default: "user", Usage: "installation scope: user or project"},
 		{Name: "project-root", Type: "string", Default: "", Usage: "existing project directory (project scope only; default: current directory)"},
-		{Name: "target", Type: "string", Default: "", Usage: "target client(s), comma-separated: codex, chatgpt, cursor, copilot, vscode, kiro, claude, gemini, opencode, cline, windsurf, grok, kimi, qoder, pi, chatgptweb (chatgpt=Desktop, chatgptweb=Web)"},
 	} {
 		if got := live[want.Name]; got != want {
 			return fmt.Errorf("audited ancestor fixture does not admit changed %s facts", want.Name)
 		}
+	}
+	// Hermes is a reviewed new client on main but not in the historical
+	// projection. Accept only the two exact current target sets; restore
+	// the unchanged historical flag below before fingerprint validation.
+	oldTarget := flagFact{Name: "target", Type: "string", Default: "", Usage: "target client(s), comma-separated: codex, chatgpt, cursor, copilot, vscode, kiro, claude, gemini, opencode, cline, windsurf, grok, kimi, qoder, pi, chatgptweb (chatgpt=Desktop, chatgptweb=Web)"}
+	hermesTarget := oldTarget
+	hermesTarget.Usage = strings.Replace(oldTarget.Usage, ", pi, chatgptweb", ", hermes, pi, chatgptweb", 1)
+	if got := live["target"]; got != oldTarget && got != hermesTarget {
+		return fmt.Errorf("audited ancestor fixture does not admit changed target facts")
 	}
 	installer.PersistentFlags().Lookup("scope").Usage = "installation scope (user only in this release)"
 	installer.PersistentFlags().Lookup("project-root").Hidden = true
