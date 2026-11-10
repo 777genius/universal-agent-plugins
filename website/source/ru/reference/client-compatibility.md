@@ -41,8 +41,7 @@ localeDisposition: "current-translation"
 
 Проектный результат часто остаётся **Prepared**, пока нужны доверие, перезапуск,
 явная конфигурация или новый сеанс. Проектная установка ChatGPT не поддерживается.
-VS Code подготавливает файлы одной локальной папки; наблюдение метаданных
-не доказывает запуск MCP или модели. См.
+См.
 [поддержку проектов по клиентам](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)
 и [указатель проектных проверок](https://github.com/777genius/universal-agent-plugins/blob/main/docs/evidence/PROJECT_INSTALLATION.md).
 

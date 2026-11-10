@@ -26,7 +26,7 @@ localeDisposition: "current-translation"
 | 认证和模型使用 | 只有明确执行过相应流程的证据才能证明。 |
 
 项目交付通常保持 **Prepared**，因为仍可能需要信任、重新加载、明确配置或新会话。
-ChatGPT 明确不支持原生项目安装。VS Code 项目范围为单个本地文件夹准备文件；固定版本元数据观察不能证明 MCP 启动或模型执行。
+ChatGPT 明确不支持原生项目安装。
 请参阅[逐客户端项目支持](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)和
 [项目证据索引](https://github.com/777genius/universal-agent-plugins/blob/main/docs/evidence/PROJECT_INSTALLATION.md)。
 

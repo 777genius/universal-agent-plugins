@@ -147,7 +147,7 @@
       "TargetRoot": "\u003croot\u003e/managed/clients/cline",
       "UserActions": [
         "verify the plugin's authentication requirements before using it",
-        "agentplugins will install and verify Cline skills and MCP servers automatically; VS Code reloads MCP settings, while Cline CLI reads them on its next process"
+        "agentplugins will install and verify Cline skills in the selected native profile automatically; verify Skills discovery in the selected Cline CLI or IDE session"
       ],
       "Verification": "package_validated",
       "Warnings": [

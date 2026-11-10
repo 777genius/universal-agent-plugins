@@ -38,8 +38,7 @@ Read compatibility as several separate questions:
 
 Project delivery commonly remains **Prepared** while trust, reload, explicit
 configuration or session work remains. ChatGPT project installation is explicitly
-unsupported. VS Code project scope prepares files for a single local folder;
-its pinned metadata observation is not MCP startup or model-execution evidence.
+unsupported.
 See [project support by client](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)
 and the [project evidence index](https://github.com/777genius/universal-agent-plugins/blob/main/docs/evidence/PROJECT_INSTALLATION.md).
 
