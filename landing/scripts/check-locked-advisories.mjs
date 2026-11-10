@@ -50,6 +50,9 @@ function parsePnpmDocument(source) {
       const depths = section === 'importers' ? [2, 4, 6, 8] : section === 'snapshots' ? [2, 4, 6] : null;
       if (depths && !depths.includes(indent)) throw new Error(`Unsupported pnpm indentation in ${section}`);
     }
+    // YAML explicit mapping keys are valid but are not interpreted by this narrow reader.
+    // Never return a clean audit when one can conceal dependency edges.
+    if (section && /^ +[?:](?:\s|$)/.test(line)) throw new Error('Unsupported explicit pnpm YAML mapping');
     // Reject a sequence where pnpm requires a dependency mapping; otherwise
     // the scanner can silently miss the only vulnerable edge.
     if (/^ {6}-(?:\s|$)/.test(line) && (

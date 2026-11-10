@@ -200,3 +200,16 @@ test('rejects YAML-escaped minimatch package names instead of omitting the vulne
     .replace('  minimatch@10.2.6:', String.raw`  "minim\u0061tch@10.2.6":`);
   assert.throws(() => auditLock(disguised), /Unsupported escaped YAML scalar/);
 });
+
+test('rejects explicit YAML dependency keys instead of silently reporting a clean graph', () => {
+  const explicitChild = fixture.replace('      glob: 13.0.6\n', '      ? glob\n      : 13.0.6\n');
+  assert.notEqual(explicitChild, fixture);
+  assert.throws(() => auditLock(explicitChild), /Unsupported explicit pnpm YAML mapping/);
+});
+
+test('rejects explicit YAML dependency categories instead of dropping all child edges', () => {
+  const explicitCategory = fixture.replace('    dependencies:\n      glob: 13.0.6\n',
+    '    ? dependencies\n    :\n      glob: 13.0.6\n');
+  assert.notEqual(explicitCategory, fixture);
+  assert.throws(() => auditLock(explicitCategory), /Unsupported explicit pnpm YAML mapping/);
+});
