@@ -290,10 +290,10 @@ func TestGrokProjectMCPUnambiguousInspectIdentity(t *testing.T) {
 		{"canonical", map[string]any{"projectTrusted": false, "plugins": []any{}}, true},
 		{"unrelated extension", map[string]any{"projectTrusted": false, "futureVendorField": 1}, true},
 		{"ASCII alias", map[string]any{"projectTrusted": false, "ProjectTrusted": true}, false},
-		{"Unicode folded alias", map[string]any{"plugins": []any{}, "plu\u212ains": []any{}}, true},
+		{"Unicode folded alias", map[string]any{"K": true, "K": false}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got := grokProjectMCPUnambiguousFields(tc.fields, "projectTrusted", "plugins")
+			got := grokProjectMCPUnambiguousFields(tc.fields, "projectTrusted", "plugins", "K")
 			if got != tc.valid {
 				t.Fatalf("canonical inspect field admission: got %t, want %t", got, tc.valid)
 			}
