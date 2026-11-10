@@ -10,7 +10,9 @@ import unittest
 from unittest.mock import patch
 import http.server
 
-from codex_env_names_native_spike import CHILD, Model, MCP_CALL, SHELL_CALL, SHELL_MARKER, SHELL_ENV_PRESENT, ENV_NAME, inspect
+from codex_env_names_native_spike import (CHILD, Model, MCP_CALL, SHELL_CALL, SHELL_MARKER,
+                                        SHELL_ENV_PRESENT, SHELL_FOREIGN_PRESENT,
+                                        ENV_NAME, FOREIGN_ENV_NAME, inspect)
 
 
 class TestSyntheticModelOracle(unittest.TestCase):
@@ -26,6 +28,7 @@ class TestSyntheticModelOracle(unittest.TestCase):
         Model.shell_output_seen = False
         Model.shell_execution_verified = False
         Model.shell_secret_visible = False
+        Model.shell_foreign_visible = False
         Model.shell_response_category = "not_observed"
         Model.shell_response_indicators = []
         Model.shell_requested_at = 0.0
@@ -65,6 +68,7 @@ class TestSyntheticModelOracle(unittest.TestCase):
         # A native async session result is not a completed shell invocation.
         self.assertEqual(json.loads(shell["arguments"])["yield_time_ms"], 10000)
         self.assertIn(ENV_NAME, json.loads(shell["arguments"])["cmd"])
+        self.assertIn(FOREIGN_ENV_NAME, json.loads(shell["arguments"])["cmd"])
         tool = self.call({
             "tools": [{"type": "namespace", "name": "mcp__env_spike",
                        "tools": [{"name": "confirm_env"}]}],
@@ -138,6 +142,18 @@ class TestSyntheticModelOracle(unittest.TestCase):
                               "tools": [{"name": "confirm_env"}]}]})
         self.assertTrue(Model.shell_execution_verified)
         self.assertFalse(Model.shell_secret_visible)
+        self.assertFalse(Model.shell_foreign_visible)
+
+    def test_legacy_global_exclusion_is_visible_to_the_oracle(self):
+        self.call({"tools": [{"type": "function", "name": "exec_command"}]})
+        Model.shell_requested_at -= 7.0
+        self.call({"input": [{"type": "function_call_output", "call_id": SHELL_CALL,
+                             "output": SHELL_FOREIGN_PRESENT + SHELL_MARKER}],
+                   "tools": [{"type": "namespace", "name": "mcp__env_spike",
+                              "tools": [{"name": "confirm_env"}]}]})
+        self.assertTrue(Model.shell_execution_verified)
+        self.assertFalse(Model.shell_secret_visible)
+        self.assertTrue(Model.shell_foreign_visible)
 
     def test_missing_mcp_advertisement_refuses(self):
         self.call({"tools": [{"type": "function", "name": "exec_command"}]})
@@ -177,6 +193,18 @@ class TestSyntheticSnapshotScanner(unittest.TestCase):
                 self.assertNotIn(token, str(findings))
             snapshot.write_text("nonsecret")
             self.assertEqual(inspect(root, token)[0], [])
+
+    def test_second_independent_synthetic_value_is_scanned(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            first, second = "synthetic_one_value", "synthetic_other_value"
+            file = root / "foreign_snapshot"
+            file.write_text(second)
+            findings, symlinks = inspect(root, (first, second))
+            self.assertEqual(symlinks, 0)
+            self.assertEqual(len(findings), 1)
+            self.assertEqual(findings[0]["result"], "synthetic_value_persisted")
+            self.assertNotIn(second, str(findings))
 
     def test_atomic_unlink_during_read_is_not_false_positive(self):
         with tempfile.TemporaryDirectory() as temp:
