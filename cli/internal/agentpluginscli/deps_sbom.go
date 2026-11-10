@@ -98,7 +98,7 @@ type spdxPackage struct {
 	FilesAnalyzed    bool   `json:"filesAnalyzed"`
 	LicenseConcluded string `json:"licenseConcluded"`
 	LicenseDeclared  string `json:"licenseDeclared"`
-	CopyrightText   string `json:"copyrightText"`
+	CopyrightText    string `json:"copyrightText"`
 	Comment          string `json:"comment,omitempty"`
 }
 
