@@ -679,6 +679,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         # These expected paths are independent of the harness root selector:
         # otherwise the test could replicate an incorrect native mapping.
         for target, project_root, user_roots in (
+                ("claude", ".claude/skills", (".claude/skills",)),
                 ("copilot", ".github/skills", (".copilot/skills", ".agents/skills")),
                 ("codex", ".agents/skills", (".codex/skills", ".agents/skills")),
                 ("opencode", ".opencode/skills",
@@ -711,6 +712,12 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 skills = [(path, content) for path, content in entries
                           if path.name == "SKILL.md"]
                 self.assertEqual({path for path, _ in skills}, expected_skills)
+                references = [(path, content) for path, content in entries
+                              if path.name == "unmanaged-context.md"]
+                self.assertEqual(
+                    {path for path, _ in references},
+                    {skill.parent / "references" / "unmanaged-context.md"
+                     for skill in expected_skills})
                 pinned = runner["pin_foreign"](entries, case)
                 runner["check_foreign"](pinned, case)
                 for skill, original in skills:
@@ -722,6 +729,23 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                         runner["check_foreign"](pinned, case)
                         injected = skill.parent / "unexpected-native-file.txt"
                         injected.write_text("unexpected", encoding="utf-8")
+                        try:
+                            with self.assertRaisesRegex(
+                                    AssertionError, "foreign content modified"):
+                                runner["check_foreign"](pinned, case)
+                        finally:
+                            injected.unlink()
+                        runner["check_foreign"](pinned, case)
+                for reference, original in references:
+                    with self.subTest(reference=str(reference)):
+                        reference.write_text("tampered\n", encoding="utf-8")
+                        with self.assertRaisesRegex(
+                                AssertionError, "foreign content modified"):
+                            runner["check_foreign"](pinned, case)
+                        reference.write_text(original, encoding="utf-8")
+                        runner["check_foreign"](pinned, case)
+                        injected = reference.parent / "unmanaged-extra.md"
+                        injected.write_text("unexpected\n", encoding="utf-8")
                         try:
                             with self.assertRaisesRegex(
                                     AssertionError, "foreign content modified"):

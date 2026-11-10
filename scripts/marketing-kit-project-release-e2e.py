@@ -208,6 +208,18 @@ def run_case(cli, target, root, name, portable=None):
     # Reuse the existing published audit's native-profile root inventory.
     foreign_skill = "---\nname: unmanaged-uap-foreign-skill\ndescription: keep unchanged\n---\n"
     native_foreign = []
+
+    def add_foreign_skill(skill):
+        skill.parent.mkdir(parents=True, exist_ok=True)
+        skill.write_text(foreign_skill, encoding="utf-8")
+        native_foreign.append((skill, foreign_skill))
+        # Skills may contain references/assets beyond SKILL.md. Preserve those
+        # foreign bytes and directory entries through both scope lifecycles.
+        reference = skill.parent / "references" / "unmanaged-context.md"
+        reference.parent.mkdir(parents=True, exist_ok=True)
+        reference.write_text("unmanaged reference\n", encoding="utf-8")
+        native_foreign.append((reference, "unmanaged reference\n"))
+
     for relative in audit["NATIVE_ROOTS"][target]:
         native_root = home / relative
         native_root.mkdir(parents=True, exist_ok=True)
@@ -221,16 +233,12 @@ def run_case(cli, target, root, name, portable=None):
         if (relative == audit["NATIVE_ROOTS"][target][0]
                 or (target == "codex" and relative == ".agents")):
             user_skill = native_root / "skills" / "unmanaged-uap-foreign-skill" / "SKILL.md"
-            user_skill.parent.mkdir(parents=True, exist_ok=True)
-            user_skill.write_text(foreign_skill, encoding="utf-8")
-            native_foreign.append((user_skill, foreign_skill))
+            add_foreign_skill(user_skill)
     # Protect compatible User Skills outside the primary client config root.
     # Cursor also discovers ~/.agents, ~/.claude and ~/.codex Skills.
     for relative in COMPAT_SKILL_ROOTS.get(target, ()):
         skill = home / relative / "skills" / "unmanaged-uap-foreign-skill" / "SKILL.md"
-        skill.parent.mkdir(parents=True, exist_ok=True)
-        skill.write_text(foreign_skill, encoding="utf-8")
-        native_foreign.append((skill, foreign_skill))
+        add_foreign_skill(skill)
     # Exercise independent Project Skills too. Copilot's .github/skills lies
     # outside its native MCP roots, as do compatibility Skills.
     project_skill_roots = list(audit["PROJECT_SKILL_ROOTS"].get(target, ()))
@@ -238,9 +246,7 @@ def run_case(cli, target, root, name, portable=None):
     project_skill_roots.extend(root + "/skills" for root in PROJECT_ONLY_COMPAT_SKILL_ROOTS.get(target, ()))
     for relative in project_skill_roots:
         skill = project / relative / "unmanaged-uap-foreign-skill" / "SKILL.md"
-        skill.parent.mkdir(parents=True, exist_ok=True)
-        skill.write_text(foreign_skill, encoding="utf-8")
-        native_foreign.append((skill, foreign_skill))
+        add_foreign_skill(skill)
     # The fixture must never read or modify the operator's home or native config.
     user_foreign = home / "foreign-user-do-not-change.txt"
     user_foreign.write_text("unmanaged user data\n", encoding="utf-8")
@@ -257,6 +263,7 @@ def run_case(cli, target, root, name, portable=None):
 def pin_foreign(entries, case_root):
     """Pin unmanaged file identities and the directories containing them."""
     pinned = []
+    skill_dirs = {path.parent for path, _ in entries if path.name == "SKILL.md"}
     for path, content in entries:
         if (not audit["path_inside_case"](path, case_root)
                 or path.is_symlink() or not path.is_file()
@@ -271,10 +278,11 @@ def pin_foreign(entries, case_root):
                 raise AssertionError(f"invalid foreign fixture ancestor: {parent.name}")
             ancestors.append((parent, (directory.st_mode, directory.st_dev, directory.st_ino)))
             parent = parent.parent
-        # A foreign SKILL.md also owns its containing directory: silently
-        # adding a sibling file is not preservation of the foreign Skill.
+        # Pin child names at every recorded foreign-Skill depth, including
+        # references/assets; an untracked nested addition is also a mutation.
         skill_children = (tuple(sorted(child.name for child in path.parent.iterdir()))
-                          if path.name == "SKILL.md" else None)
+                          if any(skill_dir in path.parents for skill_dir in skill_dirs)
+                          else None)
         pinned.append((path, content, (identity.st_mode, identity.st_dev, identity.st_ino),
                        tuple(ancestors), skill_children))
     return pinned
