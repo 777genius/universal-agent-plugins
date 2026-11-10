@@ -566,8 +566,10 @@ class KiroCollectorTests(unittest.TestCase):
                 ctx.home.symlink_to(target, target_is_directory=True)
             elif kind == "nested-project-a":
                 ctx.projects["a"] = ctx.projects["b"] / "nested"
+                ctx.projects["a"].mkdir()
             elif kind == "nested-project-b":
                 ctx.projects["b"] = ctx.projects["a"] / "nested"
+                ctx.projects["b"].mkdir()
             else:
                 ctx.projects["a"] = Path("relative-project")
             with self.subTest(kind=kind), self.assertRaisesRegex(
@@ -593,6 +595,8 @@ class KiroCollectorTests(unittest.TestCase):
                 kiro.collect(ctx)
             self.assertEqual(ctx.calls, [])
             self.assertEqual(list(ctx.root.rglob(".kiro")), [])
+            if kind.startswith("file"):
+                self.assertTrue(target.read_text().startswith("foreign sentinel;"))
 
     def test_original_user_home_cannot_be_project(self):
         ctx = self.context()
