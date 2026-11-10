@@ -43,8 +43,6 @@ for line in sys.stdin:
             value = os.environ.get(name)
             evidence = {"observed": bool(value),
                         "sha256": hashlib.sha256(value.encode()).hexdigest() if value else ""}
-            with open(sys.argv[1], "w", encoding="utf-8") as f:
-                json.dump(evidence, f)
             out = {"content": [{"type": "text",
                         "text": json.dumps(evidence, sort_keys=True)}]}
         elif method == "ping":
@@ -220,7 +218,6 @@ def main():
     (root / "tmp").mkdir()
     child = root / "child.py"
     child.write_text(CHILD)
-    receipt = root / "child-result.json"
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Model)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -237,7 +234,7 @@ def main():
     (home / ".codex" / "config.toml").write_text(config)
     project_server = (
         '[mcp_servers.env_spike]\ncommand = "python3"\n'
-        f'args = [{json.dumps(str(child))}, {json.dumps(str(receipt))}]\n'
+        f'args = [{json.dumps(str(child))}]\n'
         f'env_vars = ["{ENV_NAME}"]\n'
     )
     # Research-only per-project control. It tests whether a native Codex
@@ -300,11 +297,7 @@ def main():
         report["native_mcp_digest_seen"] = Model.mcp_digest_verified
         report["requests"] = Model.requests
         report["advertised_tool_names"] = sorted(Model.advertised_tool_names)[:35]
-        if receipt.exists():
-            observed = json.loads(receipt.read_text())
-            report["mcp_child_saw_secret"] = (observed.get("observed") is True
-                and observed.get("sha256") == hashlib.sha256(secret.encode()).hexdigest())
-        report["mcp_child_saw_secret"] |= Model.mcp_digest_verified
+        report["mcp_child_saw_secret"] = Model.mcp_digest_verified
         found, symlinks = inspect(root, secret)
         combined = {entry["path_sha256"]: entry for entry in
                     [*found, *live["hits"].values()]}
