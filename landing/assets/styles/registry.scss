@@ -1181,8 +1181,19 @@ img {
     display: contents;
   }
 }
-/* On smaller desktops use two readable columns instead of five clipped ones. */
-@media (min-width: 981px) and (max-width: 1520px) {
+/* Medium desktops fit three readable controls per row; smaller screens use two. */
+@media (min-width: 1121px) and (max-width: 1520px) {
+  .catalog-controls--plugins {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .catalog-controls--plugins > .search-field {
+    grid-column: 1 / -1;
+  }
+  .catalog-controls--plugins .catalog-filter-pair {
+    display: contents;
+  }
+}
+@media (min-width: 981px) and (max-width: 1120px) {
   .catalog-controls--plugins {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
