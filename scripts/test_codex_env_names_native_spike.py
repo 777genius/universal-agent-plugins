@@ -341,6 +341,22 @@ class TestSyntheticSnapshotScanner(unittest.TestCase):
             self.assertEqual(symlinks, 1)
             self.assertEqual(hits, [])
 
+    def test_locked_file_is_fail_closed_without_logging_sensitive_metadata(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            protected = root / "private_canary_test"
+            protected.write_text("only_a_test")
+            with patch.object(Path, "read_bytes",
+                              side_effect=PermissionError(13, "test_denied", str(protected))):
+                findings, symlinks = inspect(root, "synthetic_only")
+            self.assertEqual(symlinks, 0)
+            self.assertEqual(len(findings), 1)
+            self.assertEqual(findings[0]["result"], "unscanned_file")
+            self.assertEqual(len(findings[0]["path_sha256"]), 64)
+            self.assertNotIn("private_canary_test", str(findings))
+            self.assertNotIn("test_denied", str(findings))
+            self.assertNotIn("synthetic_only", str(findings))
+
     def test_atomic_unlink_during_read_is_not_false_positive(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

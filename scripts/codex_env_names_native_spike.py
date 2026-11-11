@@ -356,6 +356,16 @@ def inspect(root, secret):
                 # Codex atomically replaces/deletes temporary snapshot files.
                 # A vanished file is not an inaccessible persisted file.
                 continue
+            except OSError:
+                # A locked/inaccessible file is not evidence of no leak.
+                # Keep a hashed-path failure instead of aborting this scan;
+                # do not log raw paths, OS errors or secret values.
+                found.append({
+                    "path_sha256": hashlib.sha256(
+                        str(path.relative_to(root)).encode()).hexdigest(),
+                    "result": "unscanned_file",
+                })
+                continue
             if any(p and p in data for p in patterns):
                 found.append({"path_sha256": hashlib.sha256(str(path.relative_to(root)).encode()).hexdigest(),
                               "result": "synthetic_value_persisted",
