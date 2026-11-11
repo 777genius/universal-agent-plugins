@@ -125,13 +125,18 @@ class KiroCollectorTests(unittest.TestCase):
 
         def native_help():
             self.assertEqual(ctx.calls[-1][3], {"KIRO_HOME": str(profile)})
+            # Native help must not touch User HOME before fixture setup.
+            self.assertFalse((ctx.home / ".kiro").exists())
             (profile / "mcp-native-cache").mkdir()
             return {"exit": 0, "error": None}, b"Usage: kiro-cli mcp list\n", b""
 
         ctx.replace["mcp-help"] = native_help
         result = kiro.collect(ctx)
         self.assertTrue((profile / "mcp-native-cache").is_dir())
-        self.assertFalse((ctx.home / ".kiro").exists())
+        # collect() intentionally authors the disabled User MCP fixture later.
+        self.assertEqual(
+            set(json.loads((ctx.home / ".kiro/settings/mcp.json").read_text())["mcpServers"]),
+            {kiro.NAMES["user"]})
         self.assertNotIn("mcp-native-cache", str(ctx.summary))
         self.assertFalse(any(value for key, value in result["observations"].items()
                              if key.endswith("_qualified")))
