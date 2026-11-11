@@ -173,3 +173,32 @@ func TestLegacyRegistryLockRejectsUnknownSigningClient(t *testing.T) {
 		t.Fatalf("missing trusted signing client accepted: %v", err)
 	}
 }
+
+func TestCrossFeedRepairHydrationAndReplayRefuseBeforeCache(t *testing.T) {
+	for _, tc := range []struct{ name, lockedFeed, clientFeed string }{
+		{"legacy_locked_modern_client", "", "modern-v1"},
+		{"modern_locked_legacy_client", "modern-v1", ""},
+		{"different_modern_feeds", "modern-v1", "modern-next"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := &fixedDirectoryClient{}
+			app := App{DirectoryClient: lockedFeedTestClient{
+				fixedDirectoryClient: client, feedID: tc.clientFeed,
+			}}
+			pin := environment.LockedPackage{Source: environment.LockedSource{
+				Registry: &environment.LockedRegistrySource{FeedID: tc.lockedFeed},
+			}}
+			_, hydrateErr := hydrateRecordedDependencyInventory(context.Background(), app, pin)
+			if hydrateErr == nil || !strings.Contains(hydrateErr.Error(), "feed differs from locked source") {
+				t.Fatalf("repair hydration crossed feed boundary: %v", hydrateErr)
+			}
+			_, replayErr := readReplayDependency(context.Background(), app, pin)
+			if replayErr == nil || !strings.Contains(replayErr.Error(), "feed differs from locked source") {
+				t.Fatalf("dependency replay crossed feed boundary: %v", replayErr)
+			}
+			if client.calls != 0 {
+				t.Fatalf("cross-feed guard consulted Directory: %d calls", client.calls)
+			}
+		})
+	}
+}
