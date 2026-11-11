@@ -37,7 +37,7 @@ func materializeLockedPackage(ctx context.Context, app App, locked environment.L
 		origin = domain.OriginModeDirectory
 		source := locked.Source.Registry
 		directory = &domain.DirectoryOrigin{ProductID: source.ProductID, DistributionID: source.DistributionID,
-			DistributionKind: domain.DistributionCommunity, DesiredReleaseSequence: source.ReleaseSequence}
+			FeedID: source.FeedID, DistributionKind: domain.DistributionCommunity, DesiredReleaseSequence: source.ReleaseSequence}
 	}
 	loaded, err := app.loadStandardSnapshot(ctx, snapshot, origin, directory, nil)
 	if err != nil {
@@ -135,7 +135,7 @@ func loadStoredDependency(ctx context.Context, app App, pkg environmentstore.Pac
 		origin = domain.OriginModeDirectory
 		source := locked.Source.Registry
 		directory = &domain.DirectoryOrigin{ProductID: source.ProductID, DistributionID: source.DistributionID,
-			DistributionKind: domain.DistributionCommunity, DesiredReleaseSequence: source.ReleaseSequence}
+			FeedID: source.FeedID, DistributionKind: domain.DistributionCommunity, DesiredReleaseSequence: source.ReleaseSequence}
 	}
 	return verifyLockedDirectory(ctx, app, loadedPackage{envelope: envelope, security: assessment, origin: origin, directory: directory}, locked, recorded, operation...)
 }
