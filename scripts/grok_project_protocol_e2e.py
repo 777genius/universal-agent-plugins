@@ -67,6 +67,24 @@ def observed_protocol(rows, nonce, methods):
             for key, sequence in sessions.items()]
 
 
+def repair_refusal(body, stderr):
+    """Accept only the existing non-mutating ownership refusal, not any failure."""
+    value = document(body)
+    require(isinstance(value, dict) and value.get("schema_version") == 1
+            and value.get("command") == "repair" and value.get("result") == "failure",
+            "repair refusal envelope differs")
+    data = value.get("data", {})
+    require(data.get("status") == "preflight_failed" and data.get("succeeded") == 0
+            and data.get("failed") == 1, "repair refusal outcome differs")
+    targets = data.get("targets", [])
+    require(len(targets) == 1 and targets[0].get("target") == "grok"
+            and targets[0].get("output", {}).get("result", {}).get("mutated") is False,
+            "repair refusal changed a target")
+    require(stderr.endswith("native identity ownership is indeterminate; refusing repair\n"),
+            "repair failed for an unrelated reason")
+    return value
+
+
 class Journey:
     def __init__(self, root, installer, probe, evidence):
         self.root, self.installer, self.probe, self.evidence = root, installer, probe, evidence
@@ -182,6 +200,51 @@ class Journey:
             "direct_client": direct, "direct_original_events": direct_rows})
         return installation, binding, active, data
 
+    def repair_owned(self, active, data, installation):
+        # Partial edits intentionally invalidate package ownership. Prove the
+        # no-effect refusal before testing recovery of a wholly absent package.
+        self.check()
+        identity = active.lstat()
+        require(active.resolve() == active and stat.S_ISDIR(identity.st_mode)
+                and identity.st_uid == os.getuid(), "repair fixture root differs")
+        intact, data_before, source_before = snapshot(active), snapshot(data), snapshot(self.source)
+        state_path = self.a / ".uap/state-v2.json"
+        state_before = read_owned(state_path, self.root)
+        read_owned(active / ".mcp.json", self.root)
+        (active / ".mcp.json").unlink()
+        damaged = dict(intact)
+        del damaged[".mcp.json"]
+        require(snapshot(active) == damaged, "partial repair fault changed unrelated files")
+        self.run("damaged-inspect", [self.grok, "inspect", "--json"])
+        before_events = events(self.log, self.root)
+        argv = [self.installer, "repair", installation["installation_id"], "--scope", "project",
+                "--project-root", self.a, "--target", "grok", "--format", "json"]
+        refusal = self.run("partial-repair-refusal", argv, expected=(1,), timeout=120)
+        repair_refusal(refusal, self.evidence["commands"][-1]["stderr"])
+        require(read_owned(state_path, self.root) == state_before and snapshot(active) == damaged
+                and snapshot(data) == data_before and snapshot(self.source) == source_before
+                and events(self.log, self.root) == before_events, "refused repair had side effects")
+        # Only the test moves its exact held artifact into a fresh private
+        # quarantine. UAP does not delete or adopt the partially edited tree.
+        current = active.lstat()
+        require((current.st_dev, current.st_ino) == (identity.st_dev, identity.st_ino)
+                and active.resolve() == active, "owned repair artifact was replaced")
+        quarantine = self.root / "repair-quarantine"
+        quarantine.mkdir(mode=0o700)
+        saved = quarantine / "package"
+        active.rename(saved)
+        require(not os.path.lexists(active) and snapshot(saved) == damaged, "absence fault differs")
+        self.inspect("missing-package-inspect", active, False, True)
+        self.cli("repair-missing-package", "repair", installation["installation_id"])
+        require(snapshot(active) == intact and snapshot(saved) == damaged
+                and snapshot(data) == data_before and snapshot(self.source) == source_before,
+                "repair did not restore exact package or preserved data")
+        self.evidence["repair"] = {"partial_change_refused_without_mutation": True,
+            "missing_owned_package_restored": True, "intact_inventory": intact,
+            "quarantined_inventory": damaged,
+            "original_state_sha256": hashlib.sha256(state_before).hexdigest()}
+        self.check()
+
     def execute(self):
         self.run("git-a", ["/usr/bin/git", "-c", "core.hooksPath=/dev/null", "init", "--quiet"])
         self.run("git-b", ["/usr/bin/git", "-c", "core.hooksPath=/dev/null", "init", "--quiet"], self.b)
@@ -215,13 +278,7 @@ class Journey:
         require(replacement == active and binding["client_binding_id"] == first_binding["client_binding_id"]
                 and updated["source"]["tree_digest"] != first["source"]["tree_digest"],
                 "update identity or source pin differs")
-        # Delete only the held owned sidecar; ordinary UAP repair must restore it.
-        read_owned(active / ".mcp.json", self.root)
-        (active / ".mcp.json").unlink()
-        # Retain the original read-only vendor diagnostic before UAP's strict
-        # repair preflight; a nonzero result here is evidence, never a pass.
-        self.run("damaged-inspect", [self.grok, "inspect", "--json"], expected=(0, 1))
-        self.cli("repair", "repair", updated["installation_id"])
+        self.repair_owned(active, data, updated)
         repaired, _, _, _ = self.protocol("repaired", "1", marker)
         self.evidence["pre_removal_data_receipts"] = repaired["data_receipts"]
         self.cli("remove", "remove", NAME)

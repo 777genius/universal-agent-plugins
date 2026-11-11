@@ -9,7 +9,7 @@ import unittest
 
 from grok_project_protocol_client import (document, exercise, installed_server,
                                           read_owned, selected_installation, retained_data, STATE_SCHEMA)
-from grok_project_protocol_e2e import observed_protocol
+from grok_project_protocol_e2e import observed_protocol, repair_refusal, Journey, snapshot
 
 
 class ContractTests(unittest.TestCase):
@@ -143,6 +143,61 @@ class ContractTests(unittest.TestCase):
                     [good[0], dict(good[1], nonce="wrong")]):
             with self.subTest(rows=bad), self.assertRaises(ValueError):
                 observed_protocol(bad, "n", ("initialize", "tools/list"))
+
+    def test_partial_repair_refusal_requires_exact_failure(self):
+        value = {"schema_version": 1, "command": "repair", "result": "failure", "data": {
+            "status": "preflight_failed", "succeeded": 0, "failed": 1,
+            "targets": [{"target": "grok", "output": {"result": {"mutated": False}}}]}}
+        stderr = "native identity ownership is indeterminate; refusing repair\n"
+        self.assertEqual(repair_refusal(json.dumps(value).encode(), stderr), value)
+        for kind in ("success", "mutated", "wrong-target", "unrelated", "missing-target"):
+            bad, diagnostic = copy.deepcopy(value), stderr
+            if kind == "success":
+                bad["result"] = "success"
+            elif kind == "mutated":
+                bad["data"]["targets"][0]["output"]["result"]["mutated"] = True
+            elif kind == "wrong-target":
+                bad["data"]["targets"][0]["target"] = "codex"
+            elif kind == "unrelated":
+                diagnostic = "network unavailable\n"
+            else:
+                bad["data"]["targets"] = []
+            with self.subTest(kind=kind), self.assertRaises(ValueError):
+                repair_refusal(json.dumps(bad).encode(), diagnostic)
+
+    def test_missing_repair_restores_package_without_adopting_partial_changes(self):
+        # Inert lifecycle contract only; hosted E2E must invoke the real UAP/Grok.
+        (self.root / "journey").mkdir()
+        journey = Journey(self.root / "journey", Path("/unused"), Path("/unused"), {"commands": []})
+        active, data = journey.a / ".grok/plugins/owned", journey.a / ".uap/plugin-data/owned"
+        active.mkdir(parents=True)
+        data.mkdir(parents=True)
+        original = {".mcp.json": b'{"mcpServers":{}}', "plugin.json": b'{"name":"fixture"}'}
+        for name, body in original.items():
+            (active / name).write_bytes(body)
+        (data / "marker").write_text("preserved")
+        state = journey.a / ".uap/state-v2.json"
+        state.write_text('{"schema_version":5}')
+        journey.inspect = lambda *args: None
+        refusal = {"schema_version": 1, "command": "repair", "result": "failure", "data": {
+            "status": "preflight_failed", "succeeded": 0, "failed": 1,
+            "targets": [{"target": "grok", "output": {"result": {"mutated": False}}}]}}
+        def run(label, *args, **kwargs):
+            if label == "partial-repair-refusal":
+                journey.evidence["commands"].append({"stderr":
+                    "native identity ownership is indeterminate; refusing repair\n"})
+                return json.dumps(refusal).encode()
+            return b"{}"
+        journey.run = run
+        def restore(*args):
+            active.mkdir()
+            for name, body in original.items():
+                (active / name).write_bytes(body)
+        journey.cli = restore
+        journey.repair_owned(active, data, {"installation_id": "held"})
+        self.assertTrue(journey.evidence["repair"]["missing_owned_package_restored"])
+        self.assertEqual(set(snapshot(journey.root / "repair-quarantine/package")), {"plugin.json"})
+        self.assertEqual((data / "marker").read_text(), "preserved")
 
     def test_sequential_direct_protocol_and_bad_nonce(self):
         # Contract responder only; the genuine hosted E2E uses the unchanged Go probe.

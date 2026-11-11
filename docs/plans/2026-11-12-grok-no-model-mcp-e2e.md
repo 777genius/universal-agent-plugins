@@ -42,6 +42,22 @@ installation, publish a release, widen version admission or change the site.
    only with an existing reusable loopback server, not a second test platform.
    Do not claim HTTP execution from a stdio-only proof.
 
+## Observed repair contract
+
+Original hosted runs at `6fa8f03` and `00103e7` proved native doctor and direct
+installed-config MCP after installation and update, but failed an incorrect
+expectation that repair may overwrite a partially edited package. The existing
+`NativeIdentityObserver.verifyOwnedPackage` intentionally refuses a mismatched
+package digest; native inspect itself returned valid output with zero MCP servers.
+
+Preserve this safety contract. Delete only the held test sidecar and require the
+exact ownership refusal with unchanged state, remaining package, source and data.
+Then the test moves its own verified artifact into a fresh private quarantine
+(outside native discovery), creating the independently supported missing-package
+fault. Ordinary UAP repair must rebuild the exact package from its pinned source;
+repeat native doctor and direct MCP calls afterward. Keep the quarantined bytes
+and user data unchanged. This is not automatic adoption of partial user changes.
+
 ## Architecture and implementation
 
 Keep changes in focused test scripts/fixtures and a path-scoped GitHub Actions
@@ -49,7 +65,7 @@ job. Reuse native acquisition, bounded process capture and the existing MCP
 probe. No product adapter changes unless an actual observed bug requires one;
 then fix it at the existing client boundary with a regression test.
 
-Expected size: roughly 450–800 test/workflow lines, zero production lines absent
+Expected size: roughly 800–1,100 test/workflow lines, zero production lines absent
 an observed defect. Complexity 5/10; initial confidence 7/10 until native output
 is observed. No new third-party runtime dependency or feature flag.
 
