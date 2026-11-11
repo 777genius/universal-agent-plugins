@@ -19,8 +19,8 @@ class KimiStableProjectMcpSmokeTests(unittest.TestCase):
         events = []
         for name in LIFECYCLE_CASES:
             for root in ("original", "cold"):
-                events.append({"Test": name, "Action": "output", "Output": "KIMI_GENUINE_PROBE " + json.dumps({"version": "2.5.2", "executable": "/owned/kimi", "config_root": root}) + "\\n"})
-                events.append({"Test": name, "Action": "output", "Output": "KIMI_PREPARED_SOURCE " + json.dumps({"source_binding_id": "pin", "tree_digest": "digest", "native_profile_root": root}) + "\\n"})
+                events.append({"Test": name, "Action": "output", "Output": "KIMI_GENUINE_PROBE " + json.dumps({"version": "2.5.2", "executable": "/owned/kimi", "config_root": root}) + "\n"})
+                events.append({"Test": name, "Action": "output", "Output": "KIMI_PREPARED_SOURCE " + json.dumps({"source_binding_id": "pin", "tree_digest": "digest", "native_profile_root": root}) + "\n"})
             events.append({"Test": name, "Action": "pass"})
         with tempfile.TemporaryDirectory() as root:
             report = Path(root).resolve() / "go.json"
@@ -60,14 +60,14 @@ class KimiStableProjectMcpSmokeTests(unittest.TestCase):
                     ("KIMI_PREPARED_SOURCE ", {"source_binding_id": "pin", "tree_digest": "digest",
                                               "native_profile_root": root, "source": "x" * 2400}),
                 ):
-                    output = "    project_kimi_fixture_test.go:163: " + marker + json.dumps(record) + "\\n"
+                    output = "    project_kimi_fixture_test.go:163: " + marker + json.dumps(record) + "\n"
                     fragments = [output[:46]] + [output[i:i + 207] for i in range(46, len(output), 207)]
                     events.extend({"Test": name, "Action": "output", "Output": part} for part in fragments)
             events.append({"Test": name, "Action": "pass"})
         with tempfile.TemporaryDirectory() as root:
             report = Path(root).resolve() / "go.json"
             def check(rows):
-                report.write_text("\\n".join(json.dumps(row) for row in rows))
+                report.write_text("\n".join(json.dumps(row) for row in rows))
                 return validate_lifecycle_json(report, "/owned/kimi")
             cases = check(events)
             self.assertEqual(set(cases), set(LIFECYCLE_CASES))
@@ -80,7 +80,7 @@ class KimiStableProjectMcpSmokeTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "incomplete"):
                 check(truncated)
             malformed = [dict(row) for row in events]
-            malformed[0]["Output"] = "KIMI_GENUINE_PROBE {invalid}\\n"
+            malformed[0]["Output"] = "KIMI_GENUINE_PROBE {invalid}\n"
             with self.assertRaisesRegex(ValueError, "malformed"):
                 check(malformed)
 
