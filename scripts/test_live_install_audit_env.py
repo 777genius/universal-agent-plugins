@@ -1965,7 +1965,8 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         runner = run_path(str(Path(__file__).resolve().parent / "marketing-kit-project-release-e2e.py"))
         read = runner["copilot_signed_user_versions"]
         for mutation in ("list", "dict", "missing", "empty-version", "duplicate", "state-source", "state-revision",
-                         "state-extra-owner", "uncommitted", "receipt-replay", "missing-receipt", "wrong-receipt", "manifest-source", "snapshot"):
+                         "state-extra-owner", "binding-distribution", "binding-sequence", "binding-sequence-bool",
+                         "uncommitted", "receipt-replay", "missing-receipt", "wrong-receipt", "manifest-source", "snapshot"):
             with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
                 env, project, policy, expected, state, rows = self._marketing_kit_copilot_owner_fixture(runner, Path(temporary))
                 rows = deepcopy(rows)
@@ -1976,6 +1977,9 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 elif mutation == "duplicate": rows[0]["clients"].append(deepcopy(rows[0]["clients"][0]))
                 elif mutation == "state-source": state["installations"][0]["source"]["repository"] = "foreign/repo"
                 elif mutation == "state-revision": state["installations"][0]["source"]["resolved_revision"] = "f" * 40
+                elif mutation == "binding-distribution": next(iter(state["installations"][0]["clients"].values()))["package_revision"]["distribution_id"] = "foreign/package"
+                elif mutation == "binding-sequence": next(iter(state["installations"][0]["clients"].values()))["package_revision"]["release_sequence"] = 999
+                elif mutation == "binding-sequence-bool": next(iter(state["installations"][0]["clients"].values()))["package_revision"]["release_sequence"] = True
                 elif mutation == "state-extra-owner":
                     bindings = state["installations"][0]["clients"]
                     bindings["vscode-owner"] = {**next(iter(bindings.values())), "client_id": "vscode"}
@@ -5744,6 +5748,9 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 for revision_owner in (nodes[index]["clients"][0], binding):
                     revision = revision_owner["package_revision"]
                     for field, bad in (("version", "9.9.9"),
+                                       ("distribution_id", "foreign/package"),
+                                       ("release_sequence", 999),
+                                       ("release_sequence", True),
                                        ("resolved_revision", "f" * 40),
                                        ("tree_digest", "sha256:" + "f" * 64),
                                        ("manifest_digest", "sha256:" + "f" * 64)):
@@ -5973,6 +5980,45 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 else:
                     self.assertFalse(result["removal_verified"])
                     self.assertEqual(result["status"], "cleanup-failed")
+
+    def test_marketing_kit_copilot_native_inventory_queries_are_read_only(self):
+        """Only two bounded new process logs may accompany a native inventory read."""
+        audit = load_audit()
+        for mutation in ("bounded-log", "rewrite", "excess-logs"):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve(strict=True)
+                home = root / "home"
+                profile = home / ".copilot"
+                (profile / "logs").mkdir(parents=True)
+                settings = profile / "settings.json"
+                settings.write_text('{"foreign":true}', encoding="utf-8")
+                native = str(root / "trusted-copilot")
+
+                def observe(argv, _env, _cwd, _timeout, **kwargs):
+                    self.assertTrue(kwargs.get("capture_full"))
+                    if "--json" in argv:
+                        if mutation == "rewrite":
+                            settings.write_text('{"foreign":false}', encoding="utf-8")
+                        else:
+                            count = 1 if mutation == "bounded-log" else 3
+                            for index in range(count):
+                                (profile / "logs" / f"process-123-{index}.log").write_text(
+                                    "native process log", encoding="utf-8")
+                    body = (json.dumps(audit.COPILOT_BUILTIN_JSON) if "--json" in argv else
+                            audit.COPILOT_EMPTY_TEXT + audit.COPILOT_BUILTIN_TEXT)
+                    return {"exit_code": 0, "timeout": False, "stderr_full": "",
+                            "stdout_full": body}
+
+                with patch.dict(audit.AGENT_BINARIES, {"copilot": native}, clear=True):
+                    with patch.object(audit, "call", side_effect=observe):
+                        if mutation == "bounded-log":
+                            result = audit.copilot_native_plugin_state(
+                                home, {"HOME": str(home)}, root, "marketing-kit", owners={})
+                            self.assertEqual(result["status"], "absent")
+                        else:
+                            with self.assertRaisesRegex(AssertionError, "modified protected profile"):
+                                audit.copilot_native_plugin_state(
+                                    home, {"HOME": str(home)}, root, "marketing-kit", owners={})
 
     def test_marketing_kit_copilot_native_guard_failure_stops_before_text(self):
         audit = load_audit()

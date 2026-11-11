@@ -631,7 +631,9 @@ def copilot_signed_kit_owners(list_json, pins, data, case_root):
             version = MARKETING_KIT_SIGNED_CLOSURE[pin["distribution"]]["package_version"]
             public_revision = public_clients[0]["package_revision"]
             if (public_revision.get("version") != version
-                    or type(public_revision.get("release_sequence")) is not int):
+                    or public_revision.get("distribution_id") != pin["distribution"]
+                    or type(public_revision.get("release_sequence")) is not int
+                    or public_revision["release_sequence"] != pin["sequence"]):
                 return None
             selected = [v for v in records if v["directory"].get("distribution_id") == pin["distribution"]]
             if len(selected) != 1:
@@ -666,7 +668,10 @@ def copilot_signed_kit_owners(list_json, pins, data, case_root):
                     or physical in (".", "..") or Path(physical).name != physical
                     or not target.is_absolute() or not target.is_dir()
                     or not path_inside_case(target, case_root)
+                    or type(revision.get("release_sequence")) is not int
                     or any(revision.get(key) != expected for key, expected in (
+                        ("distribution_id", pin["distribution"]),
+                        ("release_sequence", pin["sequence"]),
                         ("version", version), ("resolved_revision", pin["revision"]),
                         ("tree_digest", pin["tree_digest"]),
                         ("manifest_digest", pin["manifest_digest"])))):
@@ -747,6 +752,33 @@ def copilot_signed_kit_settings(home, case_root, owners, enabled):
         return False
 
 
+def copilot_native_list_read_unchanged(profile, home, before):
+    """Reject native read mutations except at most two bounded new process logs."""
+    after = snapshot([profile])
+    unsafe = ("symlink", "unreadable", "non-regular")
+    if any(value in unsafe for value in (*before.values(), *after.values())):
+        return False
+    added = [name for name in after if name not in before]
+    if len(added) > 2:
+        return False
+    prefix = profile.name + "/logs/"
+    for name in added:
+        if not name.startswith(prefix):
+            return False
+        path = profile / name[len(profile.name) + 1:]
+        try:
+            metadata = path.lstat()
+        except OSError:
+            return False
+        if (path.parent != profile / "logs"
+                or re.fullmatch(r"process-[0-9]+-[0-9]+\.log", path.name) is None
+                or not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1
+                or metadata.st_size > (1 << 20) or not path_inside_case(path, home)):
+            return False
+        after.pop(name)
+    return after == before
+
+
 def copilot_native_plugin_state(home, env, cwd, identity, expected_version=None,
                                 owners=None, owned_call=None):
     """Read the original profile; signed kits require complete JSON and TEXT."""
@@ -761,26 +793,31 @@ def copilot_native_plugin_state(home, env, cwd, identity, expected_version=None,
         if (not isinstance(owners, dict)
                 or (owners and set(owners) != set(MARKETING_KIT_DISTRIBUTIONS))):
             return {"status": "unqualified-signed-closure"}
-        responses = []
-        invoke_owned = call if owned_call is None else owned_call
-        for suffix in (["--json"], []):
-            if (not profile.is_dir() or profile.is_symlink()
-                    or not path_inside_case(profile, home)):
-                return {"status": "unqualified-prerequisites"}
-            result = invoke_owned([executable, "plugin", "list", *suffix],
-                                  native_env, cwd, 30, capture_full=True)
-            if (type(result.get("exit_code")) is not int or result["exit_code"] != 0
-                    or result.get("timeout") is not False or result.get("stderr_full") != ""
-                    or not isinstance(result.get("stdout_full"), str)
-                    or len(result["stdout_full"].encode("utf-8")) > 1 << 20):
-                return {"status": "unqualified-list"}
-            responses.append(result["stdout_full"])
+        before_native_query = snapshot([profile])
         try:
-            state = copilot_native_entries_state(copilot_json_document(responses[0]), owners)
-            copilot_native_text_state(responses[1], owners)
-            return state
-        except (AssertionError, ValueError, TypeError, KeyError, AttributeError):
-            return {"status": "unqualified-signed-closure"}
+            responses = []
+            invoke_owned = call if owned_call is None else owned_call
+            for suffix in (["--json"], []):
+                if (not profile.is_dir() or profile.is_symlink()
+                        or not path_inside_case(profile, home)):
+                    return {"status": "unqualified-prerequisites"}
+                result = invoke_owned([executable, "plugin", "list", *suffix],
+                                      native_env, cwd, 30, capture_full=True)
+                if (type(result.get("exit_code")) is not int or result["exit_code"] != 0
+                        or result.get("timeout") is not False or result.get("stderr_full") != ""
+                        or not isinstance(result.get("stdout_full"), str)
+                        or len(result["stdout_full"].encode("utf-8")) > 1 << 20):
+                    return {"status": "unqualified-list"}
+                responses.append(result["stdout_full"])
+            try:
+                state = copilot_native_entries_state(copilot_json_document(responses[0]), owners)
+                copilot_native_text_state(responses[1], owners)
+                return state
+            except (AssertionError, ValueError, TypeError, KeyError, AttributeError):
+                return {"status": "unqualified-signed-closure"}
+        finally:
+            if not copilot_native_list_read_unchanged(profile, home, before_native_query):
+                raise AssertionError("Copilot native list modified protected profile")
     observed = call([executable, "plugin", "list", "--json"], native_env, cwd, 30)
     entries = observed.get("_json")
     if observed.get("exit_code") != 0 or not isinstance(entries, list) or len(entries) > 1024:

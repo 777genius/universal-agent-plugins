@@ -1000,6 +1000,9 @@ def copilot_signed_user_versions(cli, env, project, policy):
                 or physical in (".", "..") or Path(physical).name != physical
                 or not target.is_absolute() or not target.is_dir()
                 or not audit["path_inside_case"](target, project.parent.resolve(strict=True))
+                or revision.get("distribution_id") != distribution
+                or type(revision.get("release_sequence")) is not int
+                or revision["release_sequence"] != pin["release_sequence"]
                 or any(revision.get(key) != pin[field] for key, field in (
                     ("version", "package_version"), ("resolved_revision", "resolved_revision"),
                     ("tree_digest", "tree_digest"), ("manifest_digest", "manifest_digest")))):
