@@ -406,6 +406,8 @@ class TestSyntheticSnapshotScanner(unittest.TestCase):
             self.assertEqual(symlinks, 0)
             self.assertEqual(len(findings), 1)
             self.assertEqual(findings[0]["result"], "unscanned_directory")
+            self.assertEqual(findings[0]["io_reason"], "access_denied")
+            self.assertEqual(findings[0]["scope"], "other")
             self.assertEqual(len(findings[0]["path_sha256"]), 64)
             self.assertNotIn(unreadable, str(findings))
             self.assertNotIn("synthetic_only", str(findings))
@@ -568,6 +570,42 @@ class TestSyntheticSnapshotScanner(unittest.TestCase):
             self.assertNotIn("private_canary_test", str(findings))
             self.assertNotIn("test_denied", str(findings))
             self.assertNotIn("synthetic_only", str(findings))
+
+    def test_unreadable_sqlite_shm_still_fails_closed(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            db_dir = root / "home" / ".codex"
+            db_dir.mkdir(parents=True)
+            locked = db_dir / "state_5.sqlite-shm"
+            locked.write_bytes(b"benign")
+            with patch.object(Path, "read_bytes",
+                              side_effect=OSError(13, "sensitive path and message", str(locked))):
+                findings, links = inspect(root, "synthetic_token")
+            self.assertEqual(links, 0)
+            self.assertEqual(len(findings), 1)
+            item = findings[0]
+            self.assertEqual(item["result"], "unscanned_file")
+            self.assertEqual(item["io_reason"], "access_denied")
+            self.assertEqual(item["scope"], "codex_home")
+            self.assertTrue(item["sqlite_shm_candidate"])
+            self.assertNotIn(str(locked), str(findings))
+            self.assertNotIn("sensitive path and message", str(findings))
+            self.assertNotIn("synthetic_token", str(findings))
+
+    def test_unreadable_project_file_does_not_mislabel_sqlite(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            project = root / "project"
+            project.mkdir()
+            blocked = project / "report.txt"
+            blocked.write_text("benign")
+            with patch.object(Path, "read_bytes",
+                              side_effect=OSError(5, "do not serialize this")):
+                findings, _ = inspect(root, "synthetic_token")
+            self.assertEqual(findings[0]["io_reason"], "other_io_error")
+            self.assertEqual(findings[0]["scope"], "project")
+            self.assertFalse(findings[0]["sqlite_shm_candidate"])
+            self.assertNotIn("do not serialize this", str(findings))
 
     def test_atomic_unlink_during_read_is_not_false_positive(self):
         with tempfile.TemporaryDirectory() as temp:

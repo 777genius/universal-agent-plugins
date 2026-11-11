@@ -6,6 +6,7 @@ through name-only env_vars; inspect the entire isolated Codex/home/project tree.
 This is not a product feature, and never reads real user credentials.
 """
 import base64
+import errno
 import hashlib
 import http.server
 import json
@@ -413,6 +414,30 @@ def inspect(root, secret):
     found, symlinks = [], 0
     root_path = Path(root).resolve(strict=True)
 
+    def bounded_io_reason(exc):
+        # Fixed categories only: never serialize file paths or OS messages.
+        winerror = getattr(exc, "winerror", None)
+        if winerror in (32, 33):
+            return "sharing_violation"
+        if winerror == 5 or getattr(exc, "errno", None) in (errno.EACCES, errno.EPERM):
+            return "access_denied"
+        if winerror in (2, 3) or getattr(exc, "errno", None) == errno.ENOENT:
+            return "vanished_during_walk"
+        return "other_io_error"
+
+    def bounded_scan_scope(path):
+        try:
+            parts = Path(path).relative_to(root_path).parts
+        except (TypeError, ValueError, OSError):
+            return "unknown"
+        if parts[:2] == ("home", ".codex"):
+            return "codex_home"
+        if parts[:1] == ("project",):
+            return "project"
+        if parts[:1] == ("tmp",):
+            return "temporary"
+        return "other"
+
     def record_symlink(path):
         nonlocal symlinks
         symlinks += 1
@@ -441,6 +466,8 @@ def inspect(root, secret):
         found.append({
             "path_sha256": hashlib.sha256(str(relative).encode()).hexdigest(),
             "result": "unscanned_directory",
+            "io_reason": bounded_io_reason(exc),
+            "scope": bounded_scan_scope(failed),
         })
 
     # Older Windows Python lacks junction detection. Missing proof is FAIL.
@@ -486,14 +513,16 @@ def inspect(root, secret):
                 # Codex atomically replaces/deletes temporary snapshot files.
                 # A vanished file is not an inaccessible persisted file.
                 continue
-            except OSError:
-                # A locked/inaccessible file is not evidence of no leak.
-                # Keep a hashed-path failure instead of aborting this scan;
-                # do not log raw paths, OS errors or secret values.
+            except OSError as exc:
+                # Locked files still fail closed: never exempt SQLite -shm.
+                # Expose only fixed diagnostics, not messages or pathnames.
                 found.append({
                     "path_sha256": hashlib.sha256(
                         str(path.relative_to(root)).encode()).hexdigest(),
                     "result": "unscanned_file",
+                    "io_reason": bounded_io_reason(exc),
+                    "scope": bounded_scan_scope(path),
+                    "sqlite_shm_candidate": path.name.lower().endswith(".sqlite-shm"),
                 })
                 continue
             if any(p and p in data for p in patterns):
