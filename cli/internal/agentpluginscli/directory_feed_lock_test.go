@@ -115,3 +115,31 @@ func TestSavedRegistryUpdateCannotChangeSigningLineage(t *testing.T) {
 		})
 	}
 }
+
+func TestSavedRegistryUpdateRejectsOtherFeedBeforeDependencyDetection(t *testing.T) {
+	for _, tc := range []struct{ name, lockedFeed, clientFeed string }{
+		{"legacy lock modern client", "", "modern-v1"},
+		{"modern lock legacy client", "modern-v1", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := &fixedDirectoryClient{}
+			app := App{DirectoryClient: lockedFeedTestClient{
+				fixedDirectoryClient: client, feedID: tc.clientFeed,
+			}}
+			snapshot := environmentSnapshot{Lock: environment.Lock{
+				Packages: []environment.LockedPackage{{
+					Alias: "crm", Source: environment.LockedSource{Registry: &environment.LockedRegistrySource{
+						FeedID: tc.lockedFeed,
+					}},
+				}},
+			}}
+			_, changed, err := prepareSavedRegistryUpdate(context.Background(), app, true, snapshot, "crm", nil)
+			if changed || err == nil || !strings.Contains(err.Error(), "feed differs from locked source") {
+				t.Fatalf("cross-feed update crossed preflight: changed=%t err=%v", changed, err)
+			}
+			if client.calls != 0 {
+				t.Fatalf("cross-feed update fetched Directory: calls=%d", client.calls)
+			}
+		})
+	}
+}
