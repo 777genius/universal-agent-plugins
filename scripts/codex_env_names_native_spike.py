@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import secrets
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -347,7 +348,17 @@ def inspect(root, secret):
                 record_symlink(path)
                 continue
             try:
-                if path.stat().st_size > 32 * 1024 * 1024:
+                metadata = path.lstat()
+                # A FIFO/device/socket can block indefinitely or be unreadable.
+                # Never open nonregular filesystem objects; lack of proof is FAIL.
+                if not stat.S_ISREG(metadata.st_mode):
+                    found.append({
+                        "path_sha256": hashlib.sha256(
+                            str(path.relative_to(root)).encode()).hexdigest(),
+                        "result": "unscanned_special_file",
+                    })
+                    continue
+                if metadata.st_size > 32 * 1024 * 1024:
                     found.append({"path_sha256": hashlib.sha256(str(path.relative_to(root)).encode()).hexdigest(),
                                   "result": "unscanned_oversize"})
                     continue

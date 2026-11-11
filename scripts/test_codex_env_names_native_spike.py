@@ -341,6 +341,26 @@ class TestSyntheticSnapshotScanner(unittest.TestCase):
             self.assertEqual(symlinks, 1)
             self.assertEqual(hits, [])
 
+    def test_fifo_is_fail_closed_without_blocking_on_read(self):
+        if not hasattr(os, "mkfifo"):
+            self.skipTest("Named pipes unavailable on this OS")
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            fifo = root / "synthetic_nonregular_fixture"
+            try:
+                os.mkfifo(fifo)
+            except OSError:
+                self.skipTest("Named pipe creation unavailable on this runner")
+            with patch.object(Path, "read_bytes",
+                              side_effect=AssertionError("special file must not be opened")):
+                findings, symlinks = inspect(root, "only_a_synthetic_test_value")
+            self.assertEqual(symlinks, 0)
+            self.assertEqual(len(findings), 1)
+            self.assertEqual(findings[0]["result"], "unscanned_special_file")
+            self.assertEqual(len(findings[0]["path_sha256"]), 64)
+            self.assertNotIn(str(fifo), str(findings))
+            self.assertNotIn("only_a_synthetic_test_value", str(findings))
+
     def test_locked_file_is_fail_closed_without_logging_sensitive_metadata(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
