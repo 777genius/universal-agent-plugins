@@ -411,7 +411,9 @@
         "kiro": "Sign in, approve access, and restart Kiro if prompted.",
         "grok": "Open the selected project in Grok; enable and trust the plugin, reload, then verify Skills and MCP.",
         "vscode": "Open and trust the folder; review and enable MCP servers.",
-        "chatgpt": "Desktop: local install via Codex CLI; Web: connect or install in ChatGPT."
+        "chatgpt": "Desktop: local install via Codex CLI; Web: connect or install in ChatGPT.",
+        "hermes": "Restart Hermes, trust the selected Git project, and verify Skills and User MCP; Project MCP is unsupported.",
+        "antigravity": "Open or reload Antigravity; review trust and verify the prepared plugin is discovered and enabled in the selected scope."
       }
     },
     "dependencies": {
@@ -475,7 +477,7 @@
       "items": {
         "0": {
           "question": "Which AI agents are supported?",
-          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder, Pi: each has a client-specific installation or preparation path. Package components, scope and activation requirements determine compatibility."
+          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder, Hermes Agent, Google Antigravity, Pi: each has a client-specific installation or preparation path. Package components, scope and activation requirements determine compatibility."
         },
         "1": {
           "question": "Does one command install into every agent?",

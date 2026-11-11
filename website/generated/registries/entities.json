@@ -794,14 +794,17 @@
     "sourceRef": "reference/client-compatibility.md",
     "anchorsByLocale": {
       "en": [
+        "hermes-antigravity-source",
         "pi-native-extensions"
       ],
       "ru": [
+        "hermes-antigravity-source",
         "pi-native-extensions"
       ],
       "uk": [
         "uap-client-compatibility-evidence",
         "current-release-and-scope",
+        "hermes-antigravity-source",
         "pi-native-extensions",
         "historical-draft-installer-0155",
         "released-installer-0153",
@@ -815,14 +818,17 @@
         "project-scope-evidence"
       ],
       "zh": [
+        "hermes-antigravity-source",
         "pi-native-extensions"
       ],
       "es": [
+        "hermes-antigravity-source",
         "pi-native-extensions"
       ],
       "hi": [
         "uap-client-compatibility-evidence",
         "current-release-and-scope",
+        "hermes-antigravity-source",
         "pi-native-extensions",
         "historical-draft-installer-0155",
         "released-installer-0153",
@@ -838,6 +844,7 @@
       "ar": [
         "uap-client-compatibility-evidence",
         "current-release-and-scope",
+        "hermes-antigravity-source",
         "pi-native-extensions",
         "historical-draft-installer-0155",
         "released-installer-0153",
@@ -853,6 +860,7 @@
       "pt": [
         "uap-client-compatibility-evidence",
         "current-release-and-scope",
+        "hermes-antigravity-source",
         "pi-native-extensions",
         "historical-draft-installer-0155",
         "released-installer-0153",
@@ -866,6 +874,7 @@
         "project-scope-evidence"
       ],
       "fr": [
+        "hermes-antigravity-source",
         "pi-native-extensions"
       ]
     },

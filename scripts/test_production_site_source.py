@@ -37,6 +37,8 @@ class ProductionSourceTests(unittest.TestCase):
             for name in ['website', 'scripts', 'landing/scripts', 'landing/public']:
                 (root / name).mkdir(parents=True, exist_ok=True)
             (root / 'old-site').write_text('previously published')
+            accepted_module = 'module fixture\n\ngo 1.25.0\n\ntoolchain go1.26.10\n'
+            (root / 'go.mod').write_text(accepted_module)
             (root / 'landing/public/og-image.png').write_bytes(b'committed PNG')
             git('add', '.')
             git('commit', '-qm', 'accepted site')
@@ -44,6 +46,7 @@ class ProductionSourceTests(unittest.TestCase):
             (root / 'website/production-source.json').write_text(json.dumps(pin))
             (root / 'landing/scripts/check-published-capabilities.mjs').write_text('control guard')
             (root / 'new-cli').write_text('unreleased')
+            (root / 'go.mod').write_text(accepted_module.replace('go1.26.10', 'go1.26.11'))
             git('add', '.')
             git('commit', '-qm', 'control')
             control_commit = git('rev-parse', 'HEAD')
@@ -54,6 +57,8 @@ class ProductionSourceTests(unittest.TestCase):
                 source.select(root, Path(directory) / 'control', expected_control=control_commit)
             self.assertEqual(git('rev-parse', 'HEAD'), pin['source_commit'])
             self.assertFalse((root / 'new-cli').exists())
+            self.assertEqual((root / 'go.mod').read_text(), accepted_module)
+            self.assertIn('toolchain go1.26.11', git('show', control_commit + ':go.mod'))
             self.assertEqual((Path(directory) / 'control/check-published-capabilities.mjs').read_text(), 'control guard')
             (root / '.pages-dist').mkdir()
             (root / '.pages-dist/MIRROR_METADATA.json').write_text('{"signed":"fresh"}')
@@ -105,6 +110,26 @@ class ProductionSourceTests(unittest.TestCase):
             text = (REPO / '.github/workflows' / name).read_text()
             self.assertLess(text.index('production_site_source.py select'), text.index('actions/setup-'))
             self.assertLess(text.index('production_site_source.py select'), text.index('pnpm/action-setup'))
+            go_blocks = text.split('      - uses: actions/setup-go@')[1:]
+            self.assertEqual(len(go_blocks), 2)
+            network_go, docs_go = [block.split('\n      - ', 1)[0] for block in go_blocks]
+            self.assertIn('          go-version: "1.26.11"\n', network_go)
+            self.assertNotIn('go-version-file:', network_go)
+            self.assertIn('          go-version-file: go.mod\n', docs_go)
+            self.assertNotIn('go-version:', docs_go)
+            # setup-go exports local after parsing; the next action must reset
+            # that inherited value to honor the accepted toolchain directive.
+            self.assertIn('        env:\n          GOTOOLCHAIN: auto\n', docs_go)
+            self.assertNotIn('GOTOOLCHAIN: auto', network_go)
+            feed = text.split('      - name: Verify and stage signed', 1)[1].split('\n      # Offline docs', 1)[0]
+            self.assertIn('          GOTOOLCHAIN: local\n', feed)
+            self.assertIn('test "$(go env GOVERSION)" = go1.26.11', feed)
+            self.assertLess(text.index('go-version: "1.26.11"'), text.index('go run ./cmd/agentplugins-registry-mirror'))
+            self.assertLess(text.index('cp -a "${RUNNER_TEMP}/uap-registry-mirror/." landing/public/'), text.index('go-version-file: go.mod'))
+            self.assertLess(text.index('go-version-file: go.mod'), text.index('pnpm/action-setup'))
+            self.assertLess(text.index('go-version-file: go.mod'), text.index('Install pinned docs generators'))
+            if name == 'registry-compatibility-mirror.yml':
+                self.assertLess(text.index('Resolve registry source'), text.index('Verify and stage signed feeds'))
             self.assertIn('go run ./cmd/agentplugins-registry-mirror', text)
             self.assertIn('--previous-marker "$previous"', text)
             self.assertIn('cp -a "${RUNNER_TEMP}/uap-registry-mirror/." landing/public/', text)

@@ -1,10 +1,13 @@
 # Hermes Agent integration
 
-**Source status:** [PR #814](https://github.com/777genius/universal-agent-plugins/pull/814)
-is merged. The extended native lifecycle passed on Linux at UAP head
-`b3ed848effaca7d436c1306e06f2d24e67b9e0b2` with Hermes 0.23.0; exact evidence and
-platform acceptance criteria are recorded below. This source result does not establish
-qualification of released packages or full Directory compatibility.
+**Source status (2026-11-10):** the native lifecycle passed on Linux x64,
+macOS arm64 and native Windows x64 with Hermes 0.23.0 at UAP head
+`a50c8a245f1c273efb3d171f4c54ed540475336a` in
+[run 42813277862](https://github.com/777genius/universal-agent-plugins/actions/runs/42813277862).
+This is source-qualified evidence. Published CLI `0.1.102` does not contain
+Hermes or Antigravity. Qualification of an immutable public release artifact
+and signed Directory eligibility remain separate, pending boundaries; native
+CI does not authorize additional Directory targets.
 
 The Hermes Agent target ID is `hermes`. This first implementation preserves UAP's
 immutable-pinned package source, transaction journal and exact ownership while
@@ -35,14 +38,15 @@ An ambiguous YAML document, foreign edit, symlink, unknown tag/anchor or
 unsupported transport fails closed. No user YAML is ever changed by Project
 MCP. Packages requiring hooks or unqualified components are refused.
 
-**Source acceptance gate:** the same native lifecycle must pass on Linux,
-macOS and Windows at the candidate head. End-user release and full Directory
-compatibility remain separate qualification gates before promoting or
-advertising complete Hermes support; native CI alone does not satisfy them.
-The native smoke proves MCP listing, connection and tool discovery; it does not
-perform a tool call, a model turn or an authenticated provider session. Project
-discovery is observed without granting trust, so it does not establish trusted
-Project Skill execution.
+**Source acceptance gate:** the recorded three-platform run satisfies the native
+lifecycle gate for its exact UAP head only. A later candidate and the frozen
+release binary need their own applicable qualification. The native smoke proves
+MCP listing, connection and tool discovery over loopback Streamable HTTP; it
+does not perform `tools/call`, a model turn or an authenticated provider session.
+Project discovery is observed without granting trust, so it does not establish
+trusted Project Skill execution. Portable commands are projected as Skills;
+explicit-only commands are withheld because Hermes cannot enforce explicit
+invocation. SSE and hooks remain unsupported.
 
 Sources: Hermes [Skills system](https://hermes-agent.nousresearch.com/docs/user-guide/features/skills/)
 and [MCP](https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp/).
@@ -67,9 +71,23 @@ native Windows, with the pinned official installer for each platform:
 
 | Native platform | Evidence |
 | --- | --- |
-| Linux x64 | [Run 42802367363](https://github.com/777genius/universal-agent-plugins/actions/runs/42802367363) passed at the UAP head above; [retained evidence](https://github.com/777genius/universal-agent-plugins/actions/runs/42802367363/artifacts/13757427815) records 13 native Skill observations and four MCP initialize/tools/list exchanges. |
-| macOS arm64 | The same pinned lifecycle is included in the workflow; qualification requires its successful run at the candidate head. |
-| Native Windows | Qualification requires the same lifecycle through Hermes' native PowerShell installation at the candidate head; WSL or POSIX-lane success is not Windows evidence. |
+| Linux x64 | PASS in [run 42813277862](https://github.com/777genius/universal-agent-plugins/actions/runs/42813277862), at the exact UAP head above; [Linux evidence](https://github.com/777genius/universal-agent-plugins/actions/runs/42813277862/artifacts/13762793764). |
+| macOS arm64 | PASS in the same run and at the same UAP head; [macOS evidence](https://github.com/777genius/universal-agent-plugins/actions/runs/42813277862/artifacts/13763179484). |
+| Native Windows x64 | PASS through the pinned native PowerShell installation in the same run and at the same UAP head; [Windows evidence](https://github.com/777genius/universal-agent-plugins/actions/runs/42813277862/artifacts/13763404124). |
+
+Each OS passed User Skills/MCP first and repeated add, update, repair and
+removal, Project Skills untrusted discovery and A/B isolation, and four native
+loopback HTTP `initialize`/`tools/list` exchanges. The result does not extend
+to Project MCP, trusted execution, tool calls, model use or provider login.
+
+### Earlier Linux checkpoint
+
+[Run 42802367363](https://github.com/777genius/universal-agent-plugins/actions/runs/42802367363)
+passed on Linux at `b3ed848effaca7d436c1306e06f2d24e67b9e0b2` with Hermes 0.23.0;
+its [retained evidence](https://github.com/777genius/universal-agent-plugins/actions/runs/42802367363/artifacts/13757427815)
+records 13 native Skill observations and four MCP initialize/tools/list
+exchanges. This historical result retains its original identity; the newer
+three-platform run supplies the current source checkpoint.
 
 The pinned Hermes [installation documentation](https://github.com/NousResearch/hermes-agent/blob/2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19/README.md#quick-install)
 supports Linux, macOS and native Windows; Windows is not WSL-only. Matrix artifacts

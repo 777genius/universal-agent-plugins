@@ -10,9 +10,9 @@ export interface ClientLandingPage extends ClientTarget {
 }
 
 /** Public presentation only: keep technical compatibility and previously installed profiles intact.
- * Hermes and Antigravity require a qualified CLI release before public install actions are exposed.
+ * Public activation must pass the published-capability guard against the qualified CLI release.
  */
-export const hiddenPublicClientIds: ReadonlySet<string> = new Set(['vscode', 'hermes', 'antigravity']);
+export const hiddenPublicClientIds: ReadonlySet<string> = new Set(['vscode']);
 
 const allClientLandingPages: ClientLandingPage[] = [
   {
@@ -216,7 +216,7 @@ const allClientLandingPages: ClientLandingPage[] = [
     id: 'hermes',
     slug: 'hermes',
     name: 'Hermes Agent',
-    icon: 'terminal.svg',
+    icon: 'hermes.svg',
     note: 'User Skills/MCP and Project Skills; Project MCP is unsupported',
     status: 'Supported',
     intro:
@@ -231,7 +231,7 @@ const allClientLandingPages: ClientLandingPage[] = [
     id: 'antigravity',
     slug: 'antigravity',
     name: 'Google Antigravity',
-    icon: 'terminal.svg',
+    icon: 'antigravity.svg',
     note: 'Native User/Project plugins; activation requires verification',
     status: 'Prepared by CLI',
     intro:

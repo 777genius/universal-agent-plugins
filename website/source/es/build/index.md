@@ -69,7 +69,7 @@ Revisa el plan y consulta [Usar plugins](../use/install) cuando quieras aplicarl
 
 ## Prepara las herramientas de creación desde el código fuente {#build-from-source}
 
-Los siguientes comandos compilan el CLI actual con las herramientas de creación habilitadas. Necesitas Git y la versión de Go declarada por el repositorio, actualmente Go 1.26.10. Anota el commit que hayas descargado cuando compartas resultados.
+Los siguientes comandos compilan el CLI actual con las herramientas de creación habilitadas. Necesitas Git y la versión de Go declarada por el repositorio, actualmente Go 1.26.11. Anota el commit que hayas descargado cuando compartas resultados.
 
 ```bash
 git clone https://github.com/777genius/universal-agent-plugins.git

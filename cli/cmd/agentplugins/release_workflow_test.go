@@ -17,6 +17,34 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+type releaseActionStatusNames struct {
+	Success  string
+	Always   string
+	Failure  string
+	Canceled string
+	Skipped  string
+}
+
+func releaseActionStatuses(t *testing.T) releaseActionStatusNames {
+	t.Helper()
+	body, err := os.ReadFile("testdata/github-actions-status.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var status releaseActionStatusNames
+	if err := yaml.Unmarshal(body, &status); err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]bool{}
+	for _, name := range []string{status.Success, status.Always, status.Failure, status.Canceled, status.Skipped} {
+		if name == "" || seen[name] {
+			t.Fatal("Actions status vocabulary must contain distinct nonempty names")
+		}
+		seen[name] = true
+	}
+	return status
+}
+
 func TestStableReleaseRequiresVerifiedReproducibleBootstrapBeforeBuild(t *testing.T) {
 	_, source, _, ok := runtime.Caller(0)
 	if !ok {
@@ -320,37 +348,43 @@ func TestCurrentReleaseGraphsAndConcurrency(t *testing.T) {
 
 func validateNativeReleaseBoundary(workflow releaseWorkflow) error {
 	expectedNeeds := map[string][]string{
-		"validate":             nil,
-		"build":                {"validate"},
-		"qualify-go":           {"validate"},
-		"qualify-npm":          {"validate"},
-		"stage-draft":          {"validate", "qualify-go", "qualify-npm", "build"},
-		"platform-proof":       {"validate", "stage-draft"},
-		"verified-draft":       {"validate", "stage-draft", "platform-proof"},
-		"reuse-verified-draft": {"validate"},
-		"promote-release":      {"validate", "reuse-verified-draft"},
+		"validate":                 nil,
+		"build":                    {"validate"},
+		"qualify-go":               {"validate"},
+		"qualify-npm":              {"validate"},
+		"stage-draft":              {"validate", "qualify-go", "qualify-npm", "build"},
+		"platform-proof":           {"validate", "stage-draft"},
+		"hermes-native-proof":      {"validate", "stage-draft", "platform-proof"},
+		"antigravity-native-proof": {"validate", "stage-draft", "platform-proof"},
+		"verified-draft":           {"validate", "stage-draft", "platform-proof", "hermes-native-proof", "antigravity-native-proof"},
+		"reuse-verified-draft":     {"validate"},
+		"promote-release":          {"validate", "reuse-verified-draft"},
 	}
 	expectedPermissions := map[string]map[string]string{
-		"validate":             {"checks": "read", "contents": "read", "pull-requests": "read"},
-		"build":                {"contents": "read"},
-		"qualify-go":           {"contents": "read"},
-		"qualify-npm":          {"contents": "read"},
-		"stage-draft":          {"contents": "write", "id-token": "write", "attestations": "write", "artifact-metadata": "write"},
-		"platform-proof":       {"contents": "read", "attestations": "read"},
-		"verified-draft":       {"contents": "write", "actions": "read", "attestations": "read"},
-		"reuse-verified-draft": {"contents": "write", "actions": "read", "attestations": "read"},
-		"promote-release":      {"contents": "write", "actions": "write", "attestations": "read"},
+		"validate":                 {"checks": "read", "contents": "read", "pull-requests": "read"},
+		"build":                    {"contents": "read"},
+		"qualify-go":               {"contents": "read"},
+		"qualify-npm":              {"contents": "read"},
+		"stage-draft":              {"contents": "write", "id-token": "write", "attestations": "write", "artifact-metadata": "write"},
+		"platform-proof":           {"contents": "read", "attestations": "read"},
+		"hermes-native-proof":      {"contents": "read"},
+		"antigravity-native-proof": {"contents": "read"},
+		"verified-draft":           {"contents": "write", "actions": "read", "attestations": "read"},
+		"reuse-verified-draft":     {"contents": "write", "actions": "read", "attestations": "read"},
+		"promote-release":          {"contents": "write", "actions": "write", "attestations": "read"},
 	}
 	expectedConditions := map[string]string{
-		"validate":             "",
-		"build":                "${{ inputs.publish_release != true }}",
-		"qualify-go":           "${{ inputs.publish_release != true }}",
-		"qualify-npm":          "${{ inputs.publish_release != true }}",
-		"stage-draft":          "${{ inputs.publish_release != true }}",
-		"platform-proof":       "${{ inputs.publish_release != true }}",
-		"verified-draft":       "${{ inputs.publish_release != true }}",
-		"reuse-verified-draft": "${{ inputs.publish_release == true }}",
-		"promote-release":      "${{ inputs.publish_release == true }}",
+		"validate":                 "",
+		"build":                    "${{ inputs.publish_release != true }}",
+		"qualify-go":               "${{ inputs.publish_release != true }}",
+		"qualify-npm":              "${{ inputs.publish_release != true }}",
+		"stage-draft":              "${{ inputs.publish_release != true }}",
+		"platform-proof":           "${{ inputs.publish_release != true }}",
+		"hermes-native-proof":      "${{ inputs.publish_release != true }}",
+		"antigravity-native-proof": "${{ inputs.publish_release != true }}",
+		"verified-draft":           "${{ inputs.publish_release != true }}",
+		"reuse-verified-draft":     "${{ inputs.publish_release == true }}",
+		"promote-release":          "${{ inputs.publish_release == true }}",
 	}
 	for name, needs := range expectedNeeds {
 		job, ok := workflow.Jobs[name]
@@ -419,24 +453,30 @@ func validateNativeReleaseBoundary(workflow releaseWorkflow) error {
 	if !stageDownload || !stageUpload || workflow.Jobs["platform-proof"].With["release_assets_artifact"] != "${{ needs.stage-draft.outputs.assets_artifact }}" {
 		return fmt.Errorf("native artifact handoff")
 	}
+	for _, client := range []string{"hermes", "antigravity"} {
+		job := workflow.Jobs[client+"-native-proof"]
+		if job.Uses != "./.github/workflows/"+client+"-native-e2e.yml" || job.RunsOn != nil || len(job.Steps) != 0 || job.Environment != nil {
+			return fmt.Errorf("%s reusable native proof", client)
+		}
+		if !reflect.DeepEqual(job.With, map[string]any{
+			"release_tag":               "${{ inputs.tag }}",
+			"frozen_commit":             "${{ needs.validate.outputs.commit }}",
+			"release_assets_artifact":   "${{ needs.stage-draft.outputs.assets_artifact }}",
+			"expected_checksums_sha256": "${{ needs.stage-draft.outputs.asset_set_digest }}",
+		}) {
+			return fmt.Errorf("%s frozen native artifact handoff", client)
+		}
+	}
 	return nil
 }
 
 func TestNativeReleaseFailureReachabilityAndMutationControls(t *testing.T) {
+	statusNames := releaseActionStatuses(t)
 	workflow := parseReleaseWorkflow(t, "agentplugins-release.yml")
 	if err := validateNativeReleaseBoundary(workflow); err != nil {
 		t.Fatal(err)
 	}
-	for _, status := range []string{"failure", "cancelled", "skipped", ""} {
-		for _, name := range []string{"qualify-go", "qualify-npm", "build", "stage-draft", "platform-proof", "verified-draft", "reuse-verified-draft", "promote-release"} {
-			// None of these jobs has a status override. GitHub prepends implicit
-			// success(), so any non-success prerequisite keeps it unreachable.
-			job := workflow.Jobs[name]
-			if status != "success" && (strings.Contains(job.If, "always()") || strings.Contains(job.If, "failure()") || strings.Contains(job.If, "cancelled()")) {
-				t.Fatalf("%s reachable after %s", name, status)
-			}
-		}
-	}
+	assertNativeReleaseReachability(t, workflow)
 	mutations := map[string]func(*releaseWorkflow){
 		"build needs": func(w *releaseWorkflow) { job := w.Jobs["build"]; job.Needs = nil; w.Jobs["build"] = job },
 		"stage needs": func(w *releaseWorkflow) {
@@ -505,13 +545,131 @@ func TestNativeReleaseFailureReachabilityAndMutationControls(t *testing.T) {
 			w.Jobs["stage-draft"] = job
 		},
 	}
-	for name, mutate := range mutations {
-		mutated := parseReleaseWorkflow(t, "agentplugins-release.yml")
-		mutate(&mutated)
-		if validateNativeReleaseBoundary(mutated) == nil {
-			t.Fatalf("negative control accepted %s mutation", name)
+	for _, client := range []string{"hermes", "antigravity"} {
+		name := client + "-native-proof"
+		mutations[name+" missing"] = func(w *releaseWorkflow) { delete(w.Jobs, name) }
+		mutations[name+" bypassed by verified draft"] = func(w *releaseWorkflow) {
+			job := w.Jobs["verified-draft"]
+			kept := []any{}
+			for _, need := range releaseNeeds(job.Needs) {
+				if need != name {
+					kept = append(kept, need)
+				}
+			}
+			job.Needs = kept
+			w.Jobs["verified-draft"] = job
+		}
+		for _, dependency := range []string{"validate", "stage-draft", "platform-proof"} {
+			mutations[name+" missing "+dependency+" edge"] = func(w *releaseWorkflow) {
+				job := w.Jobs[name]
+				kept := []any{}
+				for _, need := range releaseNeeds(job.Needs) {
+					if need != dependency {
+						kept = append(kept, need)
+					}
+				}
+				job.Needs = kept
+				w.Jobs[name] = job
+			}
+		}
+		mutations[name+" permissions"] = func(w *releaseWorkflow) {
+			job := w.Jobs[name]
+			job.Permissions = map[string]string{"contents": "write"}
+			w.Jobs[name] = job
+		}
+		mutations[name+" promotion mode bypass"] = func(w *releaseWorkflow) {
+			job := w.Jobs[name]
+			job.If = ""
+			w.Jobs[name] = job
+		}
+		for _, status := range []string{statusNames.Always, statusNames.Failure, statusNames.Canceled} {
+			mutations[name+" "+status+" override"] = func(w *releaseWorkflow) {
+				job := w.Jobs[name]
+				job.If = "${{ " + status + "() }}"
+				w.Jobs[name] = job
+			}
+		}
+		mutations[name+" workflow substitution"] = func(w *releaseWorkflow) {
+			job := w.Jobs[name]
+			job.Uses = "./.github/workflows/agentplugins-platform-proof.yml"
+			w.Jobs[name] = job
+		}
+		for _, input := range []string{"release_tag", "frozen_commit", "release_assets_artifact", "expected_checksums_sha256"} {
+			mutations[name+" changed "+input] = func(w *releaseWorkflow) {
+				job := w.Jobs[name]
+				job.With[input] = "unqualified"
+				w.Jobs[name] = job
+			}
 		}
 	}
+	for name, mutate := range mutations {
+		t.Run(name, func(t *testing.T) {
+			mutated := parseReleaseWorkflow(t, "agentplugins-release.yml")
+			mutate(&mutated)
+			if validateNativeReleaseBoundary(mutated) == nil {
+				t.Fatalf("negative control accepted %s mutation", name)
+			}
+		})
+	}
+}
+
+func assertNativeReleaseReachability(t *testing.T, workflow releaseWorkflow) {
+	t.Helper()
+	statusNames := releaseActionStatuses(t)
+	for _, name := range []string{"qualify-go", "qualify-npm", "build", "stage-draft", "platform-proof", "hermes-native-proof", "antigravity-native-proof", "verified-draft", "reuse-verified-draft", "promote-release"} {
+		job := workflow.Jobs[name]
+		promotion := name == "reuse-verified-draft" || name == "promote-release"
+		results := map[string]string{}
+		for _, dependency := range releaseNeeds(job.Needs) {
+			results[dependency] = "success"
+		}
+		if !evaluateNativeReleaseJob(t, job, results, promotion) {
+			t.Fatalf("%s unreachable after successful prerequisites in its intended mode", name)
+		}
+		if evaluateNativeReleaseJob(t, job, results, !promotion) {
+			t.Fatalf("%s reachable in the wrong release mode", name)
+		}
+		for _, need := range releaseNeeds(job.Needs) {
+			for _, status := range []string{statusNames.Failure, statusNames.Canceled, statusNames.Skipped, ""} {
+				if status == "" {
+					delete(results, need)
+				} else {
+					results[need] = status
+				}
+				if evaluateNativeReleaseJob(t, job, results, promotion) {
+					t.Fatalf("%s reachable after %s prerequisite %q", name, need, status)
+				}
+			}
+			results[need] = "success"
+		}
+	}
+}
+
+// Model the Actions default status check against the parsed job's real needs
+// and condition. An explicit status function replaces implicit success().
+func evaluateNativeReleaseJob(t *testing.T, job releaseJob, results map[string]string, publish bool) bool {
+	t.Helper()
+	statusNames := releaseActionStatuses(t)
+	values := map[string]any{statusNames.Success: true, statusNames.Failure: false, statusNames.Canceled: false, statusNames.Always: true, "inputs.publish_release": publish}
+	for _, need := range releaseNeeds(job.Needs) {
+		status := results[need]
+		values["needs."+need+".result"] = status
+		if status != "success" {
+			values["success"] = false
+		}
+		if status == statusNames.Failure || status == statusNames.Canceled {
+			values[status] = true
+		}
+	}
+	condition := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(job.If, "${{"), "}}"))
+	if condition == "" {
+		condition = "true"
+	}
+	functions := []string{statusNames.Success, statusNames.Always, statusNames.Failure, statusNames.Canceled}
+	if !regexp.MustCompile(`\b(` + strings.Join(functions, "|") + `)\s*\(`).MatchString(condition) {
+		condition = "success() && (" + condition + ")"
+	}
+	return evaluateReleaseCondition(t, condition, values)
 }
 
 func validateNPMReleaseBoundary(workflow releaseWorkflow) error {
@@ -650,7 +808,8 @@ func TestNPMReleaseBoundaryMutationNegativeControls(t *testing.T) {
 func evaluateReleaseCondition(t *testing.T, expression string, values map[string]any) bool {
 	t.Helper()
 	expression = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(expression), "${{"), "}}"))
-	for _, fn := range []string{"success", "always", "failure", "cancelled"} {
+	statusNames := releaseActionStatuses(t)
+	for _, fn := range []string{statusNames.Success, statusNames.Always, statusNames.Failure, statusNames.Canceled} {
 		if value, ok := values[fn]; ok {
 			expression = strings.ReplaceAll(expression, fn+"()", strconv.FormatBool(value.(bool)))
 		}

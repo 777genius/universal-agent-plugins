@@ -50,7 +50,7 @@ jobs:
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.10"
+          go-version: "1.26.11"
           cache: false
 
       - uses: pnpm/action-setup@a8198c4bff370c8506180b035930dea56dbd5288 # v5
@@ -80,6 +80,12 @@ jobs:
       - name: Install landing dependencies
         working-directory: landing
         run: pnpm install --frozen-lockfile
+
+      - name: Prefer configured canonical Ubuntu package mirrors
+        working-directory: .
+        run: |
+          python3 -m unittest discover -s scripts -p 'test_ci_ubuntu_apt_mirrors.py'
+          sudo python3 scripts/ci_ubuntu_apt_mirrors.py
 
       - name: Install Chromium for static social preview
         working-directory: landing
@@ -212,6 +218,12 @@ jobs:
         run: |
           test -s .e2e-pages/universal-agent-plugins/index.html
           test -s public/registry/schemas/1/latest.json
+
+      - name: Prefer configured canonical Ubuntu package mirrors
+        working-directory: .
+        run: |
+          python3 -m unittest discover -s scripts -p 'test_ci_ubuntu_apt_mirrors.py'
+          sudo python3 scripts/ci_ubuntu_apt_mirrors.py
 
       - name: Install Chromium browser
         working-directory: landing
@@ -405,7 +417,7 @@ jobs:
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.10"
+          go-version: "1.26.11"
           cache: false
 
       # Keep docs on its own packageManager; landing uses a newer lockfile format.
@@ -456,6 +468,12 @@ jobs:
           "${RUNNER_TEMP}/docs-tools-root/python-venv/bin/pip" install --require-hashes -r "${GITHUB_WORKSPACE}/website/tools/pydoc-markdown-requirements.txt"
           mkdir -p "${RUNNER_TEMP}/docs-tools-root/bin"
           GOBIN="${RUNNER_TEMP}/docs-tools-root/bin" go install github.com/princjef/gomarkdoc/cmd/gomarkdoc@v1.1.0
+
+      - name: Prefer configured canonical Ubuntu package mirrors
+        working-directory: .
+        run: |
+          python3 -m unittest discover -s scripts -p 'test_ci_ubuntu_apt_mirrors.py'
+          sudo python3 scripts/ci_ubuntu_apt_mirrors.py
 
       - name: Install browser
         working-directory: landing

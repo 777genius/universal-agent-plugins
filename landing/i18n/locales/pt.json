@@ -257,7 +257,9 @@
         "kiro": "Faça login, autorize o acesso e reinicie o Kiro se solicitado.",
         "grok": "Abra o projeto no Grok, ative o plugin e conceda confiança; recarregue e verifique Skills e MCP.",
         "vscode": "Abra a pasta, confie nela e revise e habilite os servidores MCP.",
-        "chatgpt": "Desktop: instalação local via Codex CLI; Web: conecte ou instale o aplicativo no ChatGPT."
+        "chatgpt": "Desktop: instalação local via Codex CLI; Web: conecte ou instale o aplicativo no ChatGPT.",
+        "hermes": "Reinicie o Hermes, confie no projeto Git selecionado e verifique Skills e MCP do usuário; MCP de projeto não é compatível.",
+        "antigravity": "Abra ou recarregue o Antigravity; revise a confiança e verifique se o plugin preparado foi descoberto e ativado no escopo selecionado."
       }
     },
     "dependencies": {
@@ -321,7 +323,7 @@
       "items": {
         "0": {
           "question": "Quais agentes de IA são compatíveis?",
-          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder, Pi: cada cliente tem seu próprio caminho de instalação ou preparação. A compatibilidade depende dos componentes, do escopo e dos requisitos de ativação."
+          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder, Hermes Agent, Google Antigravity, Pi: cada cliente tem seu próprio caminho de instalação ou preparação. A compatibilidade depende dos componentes, do escopo e dos requisitos de ativação."
         },
         "1": {
           "question": "Um comando instala em todos os agentes?",
