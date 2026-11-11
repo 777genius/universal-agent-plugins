@@ -7,6 +7,13 @@ on:
       - 'scripts/test_grok_project_protocol.py'
       - 'repotests/testdata/agentplugins_native_probe/**'
       - 'install/integrationctl/agentplugins/clients/grok/**'
+      - 'cli/**'
+      - 'install/integrationctl/agentplugins/clients/shared/**'
+      - 'scripts/native_client_research.py'
+      - 'scripts/project_native_research.py'
+      - 'scripts/project_native_collectors/grok.py'
+      - 'go.work'
+      - 'go.work.sum'
   push:
     branches: [main]
     paths:
@@ -15,6 +22,13 @@ on:
       - 'scripts/test_grok_project_protocol.py'
       - 'repotests/testdata/agentplugins_native_probe/**'
       - 'install/integrationctl/agentplugins/clients/grok/**'
+      - 'cli/**'
+      - 'install/integrationctl/agentplugins/clients/shared/**'
+      - 'scripts/native_client_research.py'
+      - 'scripts/project_native_research.py'
+      - 'scripts/project_native_collectors/grok.py'
+      - 'go.work'
+      - 'go.work.sum'
   workflow_dispatch:
 permissions:
   contents: read

@@ -1,4 +1,5 @@
 """Inert contracts; these tests do not claim native Grok acceptance."""
+import copy
 import json
 import os
 from pathlib import Path
@@ -7,7 +8,7 @@ import tempfile
 import unittest
 
 from grok_project_protocol_client import (document, exercise, installed_server,
-                                          read_owned, selected_installation, STATE_SCHEMA)
+                                          read_owned, selected_installation, retained_data, STATE_SCHEMA)
 from grok_project_protocol_e2e import observed_protocol
 
 
@@ -73,6 +74,33 @@ class ContractTests(unittest.TestCase):
                 self.state["installations"] = entries
                 with self.assertRaises(ValueError):
                     self.select()
+
+    def test_removed_installation_retains_exact_data_authority(self):
+        held = copy.deepcopy(self.installation)
+        self.installation["clients"] = {}
+        self.installation["data_retained"] = True
+        self.write_state()
+        self.assertEqual(retained_data(self.root, held)["data_receipts"], held["data_receipts"])
+        with self.assertRaises(ValueError):
+            selected_installation(self.root, "fixture")
+
+    def test_removed_data_loss_substitution_and_malformed_state_refused(self):
+        held = copy.deepcopy(self.installation)
+        removed = dict(copy.deepcopy(held), clients={}, data_retained=True)
+        for key, replacement in (("data_receipts", {}), ("data_retained", False),
+                                 ("clients", held["clients"]), ("installation_id", "foreign")):
+            with self.subTest(key=key):
+                self.state["installations"] = [dict(removed, **{key: replacement})]
+                self.write_state()
+                with self.assertRaises(ValueError):
+                    retained_data(self.root, held)
+        self.state["installations"] = []
+        self.write_state()
+        with self.assertRaises(ValueError):
+            retained_data(self.root, held)
+        self.state_path.write_text("{malformed")
+        with self.assertRaises(ValueError):
+            retained_data(self.root, held)
 
     def test_json_duplicates_nonfinite_and_limit_refused(self):
         for body in (b'{"a":1,"a":2}', b'{"a":NaN}', b'{"a":Infinity}', b"", b"a" * ((1 << 20) + 1)):

@@ -66,13 +66,37 @@ def read_owned(path, root):
     return b"".join(chunks)
 
 
-def selected_installation(project, name):
+def installation_state(project):
     project = Path(project)
     state = document(read_owned(project / ".uap/state-v2.json", project))
     require(isinstance(state, dict) and type(state.get("schema_version")) is int
             and state["schema_version"] == STATE_SCHEMA, "state schema")
-    installs = state.get("installations")
-    require(isinstance(installs, list), "installation inventory")
+    require(isinstance(state.get("installations"), list)
+            and all(isinstance(item, dict) for item in state["installations"]),
+            "installation inventory")
+    return state
+
+
+def retained_data(project, held):
+    require(held.get("data_retained", False) is False and bool(held.get("data_receipts")),
+            "missing pre-removal owned data receipt")
+    state = installation_state(project)
+    matches = [item for item in state["installations"]
+               if item.get("installation_id") == held.get("installation_id")
+               or item.get("declared_name") == held.get("declared_name")]
+    require(len(matches) == 1, "retained installation missing or ambiguous")
+    retained = matches[0]
+    require(retained.get("installation_id") == held["installation_id"]
+            and retained.get("declared_name") == held["declared_name"]
+            and retained.get("clients") == {} and retained.get("data_retained") is True
+            and retained.get("data_receipts") == held["data_receipts"],
+            "retained data identity or ownership changed")
+    return retained
+
+
+def selected_installation(project, name):
+    project = Path(project)
+    installs = installation_state(project)["installations"]
     matches = [item for item in installs if item.get("declared_name") == name]
     require(len(matches) == 1, "exact selected installation missing or duplicated")
     installation = matches[0]

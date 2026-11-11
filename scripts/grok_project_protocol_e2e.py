@@ -13,7 +13,7 @@ import subprocess
 import tempfile
 
 from grok_project_protocol_client import (document, exercise, installed_server,
-                                          read_owned, require, selected_installation)
+                                          read_owned, require, selected_installation, retained_data)
 
 NAME = "uap-grok-no-model"
 SERVER = "uap_probe"
@@ -200,8 +200,11 @@ class Journey:
         self.run("untrusted-doctor", [self.grok, "mcp", "doctor", "--json"], expected=(0, 1))
         require(events(self.log, self.root) == before, "untrusted native doctor started the fixture")
         initial = snapshot(active)
+        initial_receipt = read_owned(self.a / ".uap/state-v2.json", self.root)
         self.cli("repeat-install", "add", self.source)
         require(snapshot(active) == initial, "repeat installation changed package bytes")
+        require(read_owned(self.a / ".uap/state-v2.json", self.root) == initial_receipt,
+                "repeat installation changed ownership state")
         self.enable_fixture()
         self.inspect("trusted-inspect", active, True, True)
         marker = "persisted-" + self.nonce
@@ -215,20 +218,19 @@ class Journey:
         # Delete only the held owned sidecar; ordinary UAP repair must restore it.
         read_owned(active / ".mcp.json", self.root)
         (active / ".mcp.json").unlink()
+        # Retain the original read-only vendor diagnostic before UAP's strict
+        # repair preflight; a nonzero result here is evidence, never a pass.
+        self.run("damaged-inspect", [self.grok, "inspect", "--json"], expected=(0, 1))
         self.cli("repair", "repair", updated["installation_id"])
-        self.protocol("repaired", "1", marker)
+        repaired, _, _, _ = self.protocol("repaired", "1", marker)
+        self.evidence["pre_removal_data_receipts"] = repaired["data_receipts"]
         self.cli("remove", "remove", NAME)
         require(not active.exists(), "owned package survives removal")
         self.inspect("removed-inspect", active, False, True)
         before = events(self.log, self.root)
         self.run("removed-doctor", [self.grok, "mcp", "doctor", "--json"], expected=(0, 1))
         require(events(self.log, self.root) == before, "removed native plugin still starts MCP")
-        try:
-            selected_installation(self.a, NAME)
-        except (ValueError, FileNotFoundError):
-            pass
-        else:
-            raise ValueError("removed receipt still selects an installed MCP")
+        self.evidence["post_removal_installation"] = retained_data(self.a, repaired)
         require(snapshot(self.b) == untouched_b, "Project B changed")
         require(read_owned(data / "native-marker.txt", self.root).decode() == marker,
                 "persistent user data lost on removal")
