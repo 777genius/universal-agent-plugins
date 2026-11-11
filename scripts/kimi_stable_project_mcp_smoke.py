@@ -240,7 +240,10 @@ def validate_lifecycle_json(filename, selected_executable):
         body = stream.read(8 * MAX_OUTPUT + 1)
     if len(body) > 8 * MAX_OUTPUT:
         raise ValueError("Go lifecycle evidence exceeded bound")
-    cases = {name: {"outcomes": [], "probes": [], "sources": []} for name in LIFECYCLE_CASES}
+    # go test -json may split a long t.Logf line across several Output events
+    # (including in the middle of a JSON string). Reassemble complete lines per
+    # test before decoding evidence; never accept a truncated marker at EOF.
+    cases = {name: {"outcomes": [], "probes": [], "sources": [], "_pending": ""} for name in LIFECYCLE_CASES}
     for line in body.splitlines():
         event = json.loads(line)
         if event.get("Test") not in cases:
@@ -249,10 +252,25 @@ def validate_lifecycle_json(filename, selected_executable):
         if event.get("Action") in ("pass", "fail", "skip"):
             row["outcomes"].append(event["Action"])
         output = event.get("Output", "")
-        for marker, key in (("KIMI_GENUINE_PROBE ", "probes"), ("KIMI_PREPARED_SOURCE ", "sources")):
-            if marker in output:
-                row[key].append(json.loads(output.split(marker, 1)[1]))
+        if not isinstance(output, str):
+            raise ValueError("invalid Go lifecycle Output field")
+        pending = row["_pending"] + output
+        if len(pending) > MAX_OUTPUT:
+            raise ValueError("Go lifecycle output line exceeded bound")
+        *complete_lines, row["_pending"] = pending.split("\n")
+        for complete_line in complete_lines:
+            for marker, key in (("KIMI_GENUINE_PROBE ", "probes"), ("KIMI_PREPARED_SOURCE ", "sources")):
+                if marker in complete_line:
+                    try:
+                        record = json.loads(complete_line.split(marker, 1)[1])
+                    except json.JSONDecodeError as exc:
+                        raise ValueError("malformed genuine lifecycle evidence") from exc
+                    if not isinstance(record, dict):
+                        raise ValueError("genuine lifecycle evidence must be an object")
+                    row[key].append(record)
     for name, row in cases.items():
+        if row.pop("_pending"):
+            raise ValueError("incomplete Go lifecycle output line: " + name)
         if row["outcomes"] != ["pass"] or not row["probes"] or not row["sources"]:
             raise ValueError("missing genuine lifecycle PASS/probe/source: " + name)
         if any(probe.get("version") != "2.5.2" or not selected_executable or probe.get("executable") != selected_executable or not probe.get("config_root") for probe in row["probes"]):
