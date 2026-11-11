@@ -1965,7 +1965,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         runner = run_path(str(Path(__file__).resolve().parent / "marketing-kit-project-release-e2e.py"))
         read = runner["copilot_signed_user_versions"]
         for mutation in ("list", "dict", "missing", "empty-version", "duplicate", "state-source", "state-revision",
-                         "state-extra-owner", "uncommitted", "missing-receipt", "wrong-receipt", "manifest-source", "snapshot"):
+                         "state-extra-owner", "uncommitted", "receipt-replay", "missing-receipt", "wrong-receipt", "manifest-source", "snapshot"):
             with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
                 env, project, policy, expected, state, rows = self._marketing_kit_copilot_owner_fixture(runner, Path(temporary))
                 rows = deepcopy(rows)
@@ -1980,6 +1980,9 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     bindings = state["installations"][0]["clients"]
                     bindings["vscode-owner"] = {**next(iter(bindings.values())), "client_id": "vscode"}
                 elif mutation == "uncommitted": next(iter(state["installations"][0]["clients"].values()))["receipts"][0]["phase"] = "planned"
+                elif mutation == "receipt-replay":
+                    receipts = next(iter(state["installations"][0]["clients"].values()))["receipts"]
+                    receipts.append(dict(receipts[0]))
                 elif mutation == "missing-receipt": state["environment_receipts"].pop()
                 elif mutation == "wrong-receipt": state["environment_receipts"][0]["package_digest"] = "sha256:" + "0" * 64
                 elif mutation == "snapshot": state["installations"][0]["directory"]["snapshot_digest"] = "sha256:" + "0" * 64

@@ -1059,6 +1059,8 @@ def copilot_signed_user_versions(cli, env, project, policy):
                 or item.get("active_path") != str(target)
                 or not isinstance(item.get("operation_id"), str) or not item["operation_id"] for item in receipts)):
             raise AssertionError("Copilot User committed physical receipts missing")
+        if len({item["operation_id"] for item in receipts}) != len(receipts):
+            raise AssertionError("Copilot User physical receipt replay detected")
         marketplace = "agentplugins-" + hashlib.sha256(physical.strip().encode()).hexdigest()[:12]
         manifest, _ = copilot_owned_json(target / ".github/plugin/marketplace.json", project.parent)
         if (not isinstance(manifest, dict) or manifest.get("name") != marketplace
