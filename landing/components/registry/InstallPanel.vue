@@ -9,7 +9,7 @@ import {
 } from '~/data/installTargets';
 import type { RegistryDiagnostic, RegistryPlugin } from '~/types/registry';
 import { pluginCommands } from '~/utils/commands';
-import { projectCatalogCommands } from '~/utils/projectCatalogSource';
+import { projectCatalogCommands, pinnedPiProjectCommands } from '~/utils/projectCatalogSource';
 import { isFullyRetired } from '~/utils/filter';
 import { vendorInstallSource } from '~/utils/registry';
 const { t } = useI18n();
@@ -25,6 +25,8 @@ const selection = usePluginInstallSelection(() => props.plugin, { targets, autoD
 const {
   scope,
   targetDistributions,
+  pinnedPiSource,
+  pinnedPiSelected,
   projectAvailable,
   projectAutomatic,
   updateTargets,
@@ -44,6 +46,7 @@ const targetOptions = computed(() =>
     // Keep invalid explicitly saved selections visible for recovery, but an
     // auto-detected project must never make a stale Cursor placeholder selectable.
     disabled: !targetDistributions.value.get(client.id) &&
+      !(client.id === 'pi' && pinnedPiSource.value && current.value) &&
       (autoDetect.value || !targets.value.includes(client.id)),
     description: (() => {
       if (isDiscovered.value)
@@ -65,7 +68,10 @@ const targetOptions = computed(() =>
         return target?.app_binding
           ? t('registryUi.install.verifiedConnectionFinishSetupInChatgpt')
           : t('registryUi.install.notAvailableForChatgpt');
-      if (client.id === 'pi' && !target) return t('registryUi.install.piNoCompatibleRelease');
+      if (client.id === 'pi' && !target)
+        return pinnedPiSource.value && current.value
+          ? t('registryUi.install.piPinnedProjectSource')
+          : t('registryUi.install.piNoCompatibleRelease');
       if (target) return t(`registryUi.delivery.${target.delivery}`);
       return t('registryUi.install.noActiveReleaseSupportsThisClient');
     })(),
@@ -86,9 +92,11 @@ const commands = computed(() =>
   props.plugin.discovery?.availability !== 'unavailable' &&
   canUseSource.value &&
   (autoDetect.value || (targets.value.length > 0 && hasCompleteSource.value))
-    ? (scope.value === 'project'
-        ? projectCatalogCommands(props.plugin, autoDetect.value ? undefined : canonicalInstallTargets(targets.value))
-        : pluginCommands(props.plugin, autoDetect.value ? undefined : cliInstallTargets(targets.value))
+    ? (pinnedPiSelected.value
+        ? pinnedPiProjectCommands(props.plugin)
+        : scope.value === 'project'
+          ? projectCatalogCommands(props.plugin, autoDetect.value ? undefined : canonicalInstallTargets(targets.value))
+          : pluginCommands(props.plugin, autoDetect.value ? undefined : cliInstallTargets(targets.value))
       )
     : undefined,
 );
@@ -113,7 +121,7 @@ const expectedSource = computed(() =>
 const expectedSourceLabel = computed(() =>
   expectedSource.value ? t(`registryUi.distribution.${expectedSource.value.kind}`) : '',
 );
-const hasCompleteSource = computed(() => Boolean(expectedSource.value));
+const hasCompleteSource = computed(() => Boolean(expectedSource.value || pinnedPiSelected.value));
 const selectedTargets = computed(
   () =>
     expectedSource.value?.targets.filter((target) =>
@@ -211,6 +219,9 @@ const vendorInstall = computed(() =>
             @update:model-value="updateTargets"
           />
         </div>
+        <p v-if="pinnedPiSelected && commands" class="install-panel__notice" role="status">
+          {{ t('registryUi.install.piPinnedProjectSource') }}
+        </p>
         <CommandSnippet
           v-if="commands"
           :label="t('registryUi.install.add')"
