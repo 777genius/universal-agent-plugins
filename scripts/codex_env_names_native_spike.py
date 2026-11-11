@@ -319,12 +319,21 @@ class Model(http.server.BaseHTTPRequestHandler):
                 cls.error = "no advertised shell tool"
                 self.send_error(409)
                 return
-            command = ("sleep 7; "
-                       f'if test -n "${{{ENV_NAME}+x}}"; then {_sh_print_marker(SHELL_ENV_PRESENT)}; fi; '
-                       f'if test -n "${{{FOREIGN_ENV_NAME}+x}}"; then {_sh_print_marker(SHELL_FOREIGN_PRESENT)}; fi; '
-                       f'{_sh_print_marker(SHELL_MARKER)}')
-            if os.name == "nt":
-                command = windows_shell_command()
+            if cls.shell_only:
+                # Genuinely credential-name-free Windows/Unix control:
+                # do not even mention TOKEN/PASSWORD env names in tool args.
+                command = (
+                    "Start-Sleep -Seconds 7; " + _ps_print_marker(SHELL_MARKER)
+                    if os.name == "nt" else
+                    "sleep 7; " + _sh_print_marker(SHELL_MARKER)
+                )
+            else:
+                command = ("sleep 7; "
+                           f'if test -n "${{{ENV_NAME}+x}}"; then {_sh_print_marker(SHELL_ENV_PRESENT)}; fi; '
+                           f'if test -n "${{{FOREIGN_ENV_NAME}+x}}"; then {_sh_print_marker(SHELL_FOREIGN_PRESENT)}; fi; '
+                           f'{_sh_print_marker(SHELL_MARKER)}')
+                if os.name == "nt":
+                    command = windows_shell_command()
             # Codex exec_command can yield before a long command has finished.
             # Request a full bounded wait so the completion marker is observed
             # from the real native shell rather than mistaking an async

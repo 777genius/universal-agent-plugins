@@ -102,6 +102,20 @@ class TestSyntheticModelOracle(unittest.TestCase):
         self.assertFalse(Model.shell_execution_verified)
         self.assertFalse(Model.mcp_requested)
 
+    def test_shell_only_probe_does_not_mention_any_credential_name(self):
+        Model.shell_only = True
+        shell = self.call({"tools": [{"type": "function", "name": "exec_command"}]})
+        cmd = json.loads(shell["arguments"])["cmd"]
+        self.assertIn("7", cmd)
+        self.assertNotIn(ENV_NAME, cmd)
+        self.assertNotIn(FOREIGN_ENV_NAME, cmd)
+        self.assertNotIn("PASSWORD", cmd.upper())
+        self.assertNotIn("TOKEN", cmd.upper())
+        self.assertNotIn(SHELL_MARKER, cmd)
+        self.assertNotIn(SHELL_ENV_PRESENT, cmd)
+        self.assertNotIn(SHELL_FOREIGN_PRESENT, cmd)
+        self.assertIn("Write-Output" if os.name == "nt" else "printf", cmd)
+
     def test_typed_vendor_failure_diagnostics_never_log_raw_message(self):
         Model.shell_only = True
         self.call({"tools": [{"type": "function", "name": "exec_command"}]})
