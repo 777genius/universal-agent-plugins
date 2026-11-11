@@ -161,7 +161,7 @@ dispatch, coordinate a handoff of only that queued run. Do not cancel active or
 unrelated publication work, change repository-wide runner variables, or replace
 the workflow's freshly built artifact with a local artifact.
 
-Rollback: set `CI_LINUX_RUNNER` to the prior provider (`ubuntu-latest` for
-review-router-ai, `ubicloud-standard-4` for universal-agent-plugins), or unset it
-to restore each workflow's original GitHub-hosted label. Restore any architecture
+To return Linux execution to GitHub-hosted runners, unset `CI_LINUX_RUNNER`
+to restore each workflow's original GitHub-hosted label. Do not restore retired
+Ubicloud labels. Restore any architecture
 specific overrides separately. No source or test logic changes are needed.
