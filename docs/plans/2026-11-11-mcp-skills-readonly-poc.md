@@ -96,3 +96,17 @@ Findings and corrections:
 - Public CLI uses an explicitly constructed, credential-free, no-redirect HTTPS client with **public-address-only dial policy** (same security boundary as existing publisher previews); tests use a deliberately injected loopback client. Never forward ambient proxy settings, cookies or credentials. Errors are reduced to typed safe categories before JSON or human output.
 
 **Disposition:** R1 passed after narrowing the module boundary and removing the speculative application/port layer. No code implemented yet.
+
+## Review R2 — wire protocol / SDK lifecycle (2026-11-11)
+
+**Independent references:** MCP Skills Beta specification; MCP base `2026-07-28` Streamable HTTP, versioning and server/discover; TypeScript SDK 2.4.0 SkillsClient; official Go SDK v1.8.0 and pending Go Skills extension PR #1238. Distinguish the **Final SEP** from the still-**Beta extension**. Do not claim that a speculative `skills/list` handler is a complete MCP client.
+
+Corrections to implementation contract:
+- Limit this experiment to `2026-07-28` stateless messages. `server/discover` is capability discovery (not a handshake), and `initialize`/`notifications/initialized` would be wrong. Reject a server whose `supportedVersions` does not include the pinned version.
+- `server/discover`, `skills/list`, `skills/get` and `resources/read` must be called through the **same bounded modern JSON-RPC POST transport**. All requests use `params._meta` and mirrored HTTP headers. A server returning `resultType: input_required` is outside the read-only PoC and must be refused; never perform automatic elicitation.
+- Both `application/json` and `text/event-stream` are valid response types. The test fixture must send notifications then the matching ID result in the SSE case; ignore only request-related notifications, reject a competing ID, duplicate final responses, truncated stream and oversized event/body. `Mcp-Name` equals the exact URI for `resources/read`; encode non-ASCII header values according to protocol rather than skipping the header.
+- Require `resultType=complete` plus `ttlMs`/`cacheScope` from the modern discover, list, get and read results. Discard freshness hints in the PoC: **no caching**, avoids stale permission/context confusion.
+- Do **not** fetch `SKILL.md` on list; get-only inspect returns its manifest and on explicit inspect may read the one entry. The proposed CLI inspect is explicitly a user-initiated read, never host activation. Dynamic entries remain discoverable and get-only but unverified.
+- Do not add an external Go SDK dependency just to depend on pending typed extension support. A narrow, test-covered, modern-only transport is temporary PoC code; production replacement with official Go Skills client is a follow-up decision, not an API migration in this PR.
+
+**Disposition:** protocol review exposes no blocker for the limited PoC. Implementation must be verified against concrete modern wire fixtures, not old `initialize` samples.
