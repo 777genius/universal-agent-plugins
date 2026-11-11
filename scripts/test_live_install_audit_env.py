@@ -1563,7 +1563,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         original_open, original_fdopen = os.open, os.fdopen
         for mutation in ("final-before-open", "ancestor-before-open", "final-after-open"):
             with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
-                root = Path(temporary)
+                root = Path(temporary).resolve(strict=True)
                 case, foreign_root = root / "case", root / "foreign"
                 home = case / "home"
                 settings = home / ".copilot/settings.json"
@@ -1684,7 +1684,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                             audit.copilot_settings_windows_name(r"C:\CASE\settings.json"))
         for outcome in ("valid", "foreign", "zero", "oversized"):
             with self.subTest(outcome=outcome), TemporaryDirectory() as temporary:
-                case = Path(temporary)
+                case = Path(temporary).resolve(strict=True)
                 home = case / "home"
                 path = home / ".copilot/settings.json"
                 path.parent.mkdir(parents=True)
@@ -1714,6 +1714,29 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 self.assertEqual(shape["status"], "parsed" if outcome == "valid" else "unsafe-path")
                 if outcome == "valid":
                     self.assertEqual(shape["enabled_plugin_value_counts"]["false"], 1)
+
+    def test_marketing_kit_copilot_reader_fixtures_support_trusted_temporary_root_alias(self):
+        # Reproduce macOS /var -> /private/var on any POSIX test host. Only the
+        # fixture root is canonicalized, before candidates or races are created.
+        from contextlib import contextmanager
+        original_directory = TemporaryDirectory
+        @contextmanager
+        def aliased_directory(**kwargs):
+            with original_directory(**kwargs) as temporary:
+                base = Path(temporary).resolve(strict=True)
+                actual, alias = base / "actual", base / "alias"
+                actual.mkdir()
+                try:
+                    alias.symlink_to(actual, target_is_directory=True)
+                except (OSError, NotImplementedError) as error:
+                    self.skipTest(f"host cannot create trusted directory alias: {error}")
+                yield str(alias)
+        methods = (self.test_marketing_kit_copilot_c_diagnostic_never_reads_late_symlink_replacements,
+                   self.test_marketing_kit_copilot_settings_windows_handle_names_and_close_ownership)
+        for method in methods:
+            with self.subTest(fixture=method.__name__), \
+                    patch.dict(method.__globals__, {"TemporaryDirectory": aliased_directory}):
+                method()
 
     def test_marketing_kit_copilot_settings_windows_rejects_foreign_ancestor_before_lstat(self):
         import ctypes
