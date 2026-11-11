@@ -234,11 +234,11 @@ func TestDependencyLockedShortNameDoesNotRecheckInstallEligibility(t *testing.T)
 	if _, err := readDependencyLock(path, canonical); err != nil {
 		t.Fatal(err)
 	}
-	// Resolving commands must reuse lock identity before Directory lookup.
+	// Lock replay must preserve the pinned identity without a Directory lookup
+	// or source acquisition. The trusted client remains available solely for
+	// validating the recorded signing lineage before any cache access.
 	directoryCalls := fixture.directory.calls
 	sourceCalls := fixture.acquirer.revisionCalls[release.PackageSource.Revision]
-	previousClient := fixture.cli.app.DirectoryClient
-	fixture.cli.app.DirectoryClient = nil
 	requirements.Dependencies["docs"].Registry.Distribution = distribution.ProductID
 	resolved, _, next, err := resolveDependencyLock(context.Background(), fixture.cli.app, &options{dryRun: true}, requirements, []byte(dependencyRead(t, path)), "")
 	if err != nil || resolved.Dependencies["docs"].Registry.Distribution != "owner/rollout" || next.Packages[0].TreeDigest != lock.Packages[0].TreeDigest {
@@ -247,7 +247,6 @@ func TestDependencyLockedShortNameDoesNotRecheckInstallEligibility(t *testing.T)
 	if fixture.directory.calls != directoryCalls || fixture.acquirer.revisionCalls[release.PackageSource.Revision] != sourceCalls {
 		t.Fatal("local pinned replay performed a Directory lookup or source acquisition")
 	}
-	fixture.cli.app.DirectoryClient = previousClient
 	// Exact locked restore permits supersession without claiming installed history.
 	loaded, err := fixture.cli.app.acquireLocal(context.Background(), fixture.v1.root)
 	if err != nil {
