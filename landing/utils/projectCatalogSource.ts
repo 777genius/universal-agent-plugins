@@ -107,6 +107,11 @@ export function projectCatalogCommands(plugin: RegistryPlugin, targets?: readonl
 export function pinnedPiProjectSource(plugin: RegistryPlugin): string | undefined {
   if (plugin.trust_state !== 'reviewed' || !plugin.installable ||
       projectCatalogSelection(plugin, ['pi']).resolution.distribution) return undefined;
+  // A signed explicit Pi denial, even on an earlier release, is not a grant to
+  // reinterpret as a different install channel. Likewise v2 scoped closure.
+  if (plugin.distributions.some((distribution) => distribution.releases.some((release) =>
+    release.targets.some((target) =>
+      target.client === 'pi' || target.canonical_closure !== undefined)))) return undefined;
 
   // Reuse the signed resolver for an ACTIVE source. Do not synthesize source
   // availability from an expired, revoked, blocked or review-only release.
