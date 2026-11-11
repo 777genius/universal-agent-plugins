@@ -110,6 +110,7 @@ export function pinnedPiProjectSource(plugin: RegistryPlugin): string | undefine
   // A signed explicit Pi denial, even on an earlier release, is not a grant to
   // reinterpret as a different install channel. Likewise v2 scoped closure.
   if (plugin.distributions.some((distribution) => distribution.releases.some((release) =>
+    release.blocking_clients.includes('pi') ||
     release.targets.some((target) =>
       target.client === 'pi' || target.canonical_closure !== undefined)))) return undefined;
 
