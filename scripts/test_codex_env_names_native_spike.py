@@ -14,7 +14,7 @@ import http.server
 
 from codex_env_names_native_spike import (CHILD, Model, MCP_CALL, SHELL_CALL, SHELL_MARKER,
                                         SHELL_ENV_PRESENT, SHELL_FOREIGN_PRESENT,
-                                        ENV_NAME, FOREIGN_ENV_NAME, inspect, aggregate_findings, windows_shell_command, isolated_env, structured_mcp_receipt_matches)
+                                        ENV_NAME, FOREIGN_ENV_NAME, inspect, aggregate_findings, windows_shell_command, isolated_env, structured_mcp_receipt_matches, fixed_windows_spawn_error_category)
 
 
 class TestSyntheticModelOracle(unittest.TestCase):
@@ -34,6 +34,7 @@ class TestSyntheticModelOracle(unittest.TestCase):
         Model.shell_foreign_visible = False
         Model.shell_response_category = "not_observed"
         Model.shell_response_indicators = []
+        Model.shell_win32_failure_category = "not_reported"
         Model.shell_requested_at = 0.0
         Model.error = ""
         Model.expected_digest = "UNITTEST_SYNTHETIC_SHA_ONLY"
@@ -110,6 +111,38 @@ class TestSyntheticModelOracle(unittest.TestCase):
         self.assertIn("createprocess", Model.shell_response_indicators)
         self.assertFalse(Model.shell_execution_verified)
         self.assertNotIn("SYNTHETIC_PRIVATE_PATH", str(Model.shell_response_indicators))
+
+    def test_windows_spawn_os_error_category_is_bounded_and_redacted(self):
+        text = ('exec_command failed: CreateProcess { message: '
+                'The system cannot find the file specified. (os error 2) '
+                'C:\\\\synthetic-private-path\\\\never-log }')
+        self.assertEqual(fixed_windows_spawn_error_category(text),
+                         "file_not_found")
+        self.assertNotIn("synthetic-private-path",
+                         fixed_windows_spawn_error_category(text))
+
+    def test_windows_spawn_unlabelled_numbers_are_not_vendor_evidence(self):
+        self.assertEqual(
+            fixed_windows_spawn_error_category(
+                "exec_command failed: CreateProcess at synthetic path 267"),
+            "not_reported")
+        self.assertEqual(
+            fixed_windows_spawn_error_category(
+                "exec_command failed: CreateProcess: (os error 99999)"),
+            "other_win32_error")
+
+    def test_windows_spawn_os_error_is_reported_without_raw_output(self):
+        Model.shell_only = True
+        self.call({"tools": [{"type": "function", "name": "exec_command"}]})
+        self.call({"input": [{"type": "function_call_output",
+                             "call_id": SHELL_CALL,
+                             "output": ("exec_command failed: CreateProcess "
+                                        "os error 5 at SYNTHETIC_PRIVATE_PATH")}]})
+        self.assertEqual(Model.shell_win32_failure_category, "access_denied")
+        self.assertFalse(Model.shell_execution_verified)
+        self.assertNotIn("SYNTHETIC_PRIVATE_PATH",
+                         str((Model.shell_response_indicators,
+                              Model.shell_win32_failure_category)))
 
     def test_windows_shell_command_only_emits_fixed_markers(self):
         command = windows_shell_command()

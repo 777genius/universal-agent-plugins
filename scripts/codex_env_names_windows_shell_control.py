@@ -31,6 +31,7 @@ class ShellOnlyModel(Model):
     shell_foreign_visible = False
     shell_response_category = "not_observed"
     shell_response_indicators = []
+    shell_win32_failure_category = "not_reported"
     advertised_tool_names = set()
     error = ""
 
@@ -95,6 +96,7 @@ def main():
         )
         report["shell_response_category"] = ShellOnlyModel.shell_response_category
         report["shell_response_indicators"] = ShellOnlyModel.shell_response_indicators[:24]
+        report["shell_win32_failure_category"] = ShellOnlyModel.shell_win32_failure_category
         report["model_requests"] = ShellOnlyModel.requests
         report["pass"] = (
             report["codex_exit_zero"] and report["shell_completed"]

@@ -10,6 +10,7 @@ import hashlib
 import http.server
 import json
 import os
+import re
 from pathlib import Path
 import secrets
 import shutil
@@ -102,6 +103,29 @@ def structured_mcp_receipt_matches(payload, expected_digest):
     return visit(payload, 0)
 
 
+def fixed_windows_spawn_error_category(response):
+    """Return only a fixed Win32 error class, never the native tool response."""
+    if not isinstance(response, str):
+        return "not_reported"
+    text = response.lower()
+    # Only parse numeric codes labelled as operating-system errors. A number
+    # elsewhere in model output is NOT vendor evidence.
+    match = re.search(r"\\b(?:os error|win32 error|error code)\\s*[:=]?\\s*(\\d{1,5})\\b", text)
+    if match is None:
+        return "not_reported"
+    return {
+        "2": "file_not_found",
+        "3": "path_not_found",
+        "5": "access_denied",
+        "87": "invalid_parameter",
+        "123": "invalid_path_name",
+        "193": "invalid_executable",
+        "267": "invalid_directory",
+        "740": "elevation_required",
+        "1314": "privilege_not_held",
+    }.get(match.group(1), "other_win32_error")
+
+
 def isolated_env(root, home, secret, foreign_secret):
     """Disposable Codex profile: no real runner secrets are inherited."""
     env = {"HOME": str(home), "CODEX_HOME": str(home / ".codex"),
@@ -162,6 +186,7 @@ class Model(http.server.BaseHTTPRequestHandler):
     shell_foreign_visible = False
     shell_response_category = "not_observed"
     shell_response_indicators = []
+    shell_win32_failure_category = "not_reported"
     shell_requested_at = 0.0
     error = ""
     advertised_tool_names = set()
@@ -230,6 +255,7 @@ class Model(http.server.BaseHTTPRequestHandler):
                     cls.shell_response_indicators = [
                         word for word in indicators if word in lower
                     ]
+                    cls.shell_win32_failure_category = fixed_windows_spawn_error_category(rendered)
                     cls.shell_response_category = (
                         "sandbox_error" if "sandbox" in lower else
                         "permission_error" if "permission" in lower else
