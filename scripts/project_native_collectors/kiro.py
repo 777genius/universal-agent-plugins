@@ -130,15 +130,57 @@ def _require_clean_user_cwd(ctx):
         raise ValueError("Kiro selected user cwd has unowned native config")
 
 
+
+def _opaque_native_marker_metadata(marker):
+    """Forensic counts only: bounded, no names/contents, no symlink traversal."""
+    try:
+        info = marker.lstat()
+        if stat.S_ISLNK(info.st_mode):
+            return {"kind": "symlink"}
+        if not stat.S_ISDIR(info.st_mode):
+            return {"kind": "regular" if stat.S_ISREG(info.st_mode) else "special"}
+        fd = os.open(marker, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            held = os.fstat(fd)
+            if (held.st_dev, held.st_ino) != (info.st_dev, info.st_ino):
+                return {"kind": "changed"}
+            counts = {"regular": 0, "directory": 0, "symlink": 0, "special": 0}
+            truncated = False
+            with os.scandir(fd) as entries:
+                for index, entry in enumerate(entries):
+                    if index == 16:
+                        truncated = True
+                        break
+                    mode = entry.stat(follow_symlinks=False).st_mode
+                    kind = ("regular" if stat.S_ISREG(mode) else
+                            "directory" if stat.S_ISDIR(mode) else
+                            "symlink" if stat.S_ISLNK(mode) else "special")
+                    counts[kind] += 1
+            return {"kind": "directory", "direct_entries": counts, "truncated": truncated}
+        finally:
+            os.close(fd)
+    except OSError:
+        return {"kind": "unavailable"}
+
+
 def _require_clean_unowned_roots(ctx):
     """Before fixture creation, no native probe may seed unowned project or HOME config."""
     roots = (("home", Path(ctx.home)), ("a", Path(ctx.projects["a"])),
              ("b", Path(ctx.projects["b"])))
-    changed = [label for label, root in roots
+    changed = [(label, root / ".kiro") for label, root in roots
                if (root / ".kiro").exists() or (root / ".kiro").is_symlink()]
     if changed:
+        # Keep the refusal text stable. Only closed root labels and no-follow,
+        # bounded direct-child type counts enter the original evidence receipt.
+        summary = getattr(ctx, "summary", None)
+        if isinstance(summary, dict):
+            summary["kiro_unowned_native_metadata"] = [
+                {"root": label, **_opaque_native_marker_metadata(marker)}
+                for label, marker in changed
+            ]
         # Never print native filenames, contents, environment or credentials.
-        raise ValueError("Kiro native probe left unexpected config in: " + ", ".join(changed))
+        raise ValueError("Kiro native probe left unexpected config in: " +
+                         ", ".join(label for label, _ in changed))
 
 
 def _verify_owned_fixtures(owned):

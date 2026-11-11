@@ -271,6 +271,56 @@ class KiroCollectorTests(unittest.TestCase):
                 self.assertEqual((marker / "private-native-output.json").read_text(),
                                  "private fixture secret")
 
+    def test_native_marker_metadata_is_bounded_without_names_or_contents(self):
+        ctx = self.context()
+        ctx.summary = {}
+        marker = ctx.home / ".kiro"
+        marker.mkdir()
+        (marker / "private-native-output.json").write_text("secret fixture")
+        (marker / "child").mkdir()
+        outside = ctx.root / "foreign-secret"
+        outside.write_text("private outside bytes")
+        (marker / "linked-secret").symlink_to(outside)
+        with self.assertRaisesRegex(ValueError, "unexpected config in: home"):
+            kiro._require_clean_unowned_roots(ctx)
+        self.assertEqual(ctx.summary["kiro_unowned_native_metadata"], [{
+            "root": "home", "kind": "directory",
+            "direct_entries": {"regular": 1, "directory": 1, "symlink": 1, "special": 0},
+            "truncated": False,
+        }])
+        self.assertNotIn("private-native-output", str(ctx.summary))
+        self.assertNotIn("private outside", str(ctx.summary))
+        self.assertEqual(outside.read_text(), "private outside bytes")
+
+    def test_native_marker_metadata_refuses_symlink_without_following(self):
+        ctx = self.context()
+        ctx.summary = {}
+        outside = ctx.root / "external-private"
+        outside.mkdir()
+        (outside / "secret.json").write_text("foreign")
+        (ctx.home / ".kiro").symlink_to(outside, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, "unexpected config in: home"):
+            kiro._require_clean_unowned_roots(ctx)
+        self.assertEqual(ctx.summary["kiro_unowned_native_metadata"],
+                         [{"root": "home", "kind": "symlink"}])
+        self.assertEqual((outside / "secret.json").read_text(), "foreign")
+
+    def test_native_marker_metadata_limits_directory_enumeration(self):
+        ctx = self.context()
+        ctx.summary = {}
+        marker = ctx.home / ".kiro"
+        marker.mkdir()
+        for index in range(20):
+            (marker / ("private-" + str(index))).write_text("secret")
+        with self.assertRaisesRegex(ValueError, "unexpected config in: home"):
+            kiro._require_clean_unowned_roots(ctx)
+        self.assertEqual(ctx.summary["kiro_unowned_native_metadata"], [{
+            "root": "home", "kind": "directory",
+            "direct_entries": {"regular": 16, "directory": 0, "symlink": 0, "special": 0},
+            "truncated": True,
+        }])
+        self.assertNotIn("private-", str(ctx.summary))
+
     def test_pre_fixture_native_config_write_stops_before_next_read_only_command(self):
         # Version/help can also initialize a native profile. Detect the first
         # side effect rather than launching later native commands on that state.
