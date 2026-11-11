@@ -110,7 +110,7 @@ def fixed_windows_spawn_error_category(response):
     text = response.lower()
     # Only parse numeric codes labelled as operating-system errors. A number
     # elsewhere in model output is NOT vendor evidence.
-    match = re.search(r"\\b(?:os error|win32 error|error code)\\s*[:=]?\\s*(\\d{1,5})\\b", text)
+    match = re.search(r"\b(?:os error|win32 error|error code)\s*[:=]?\s*(\d{1,5})\b", text)
     if match is None:
         return "not_reported"
     return {
