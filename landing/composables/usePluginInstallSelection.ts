@@ -156,7 +156,15 @@ export function usePluginInstallSelection(
     );
     if (!next.length) return;
     choicePending = true;
-    const selected = [...new Set(next)];
+    let selected = [...new Set(next)];
+    // A pinned Git Pi Project install is its own command, not an extra target
+    // added to another package's signed Directory selection.
+    if (scope.value === 'project' && pinnedPiSource.value && selected.includes('pi') &&
+        selected.length > 1) {
+      selected = targets.value.includes('pi')
+        ? selected.filter((id) => id !== 'pi')
+        : ['pi'];
+    }
     targets.value = reconcileLocalChatGPTTargets(selected, targets.value);
     saveUnboundChoice();
   }
