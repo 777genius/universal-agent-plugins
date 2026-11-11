@@ -45,6 +45,22 @@ func piMarketingCohortFixture(t *testing.T, scope domain.InstallScope) (freshRes
 	} {
 		freshRestorePackage(t, fixture, repo, pkg.alias, pkg.version, pkg.alias, "", 1, true)
 	}
+	// Exercise Pi-compatible HTTP and stdio MCP manifests in the mandatory
+	// children, rather than an artificial Skills-only dependency graph.
+	for _, child := range []struct{ alias, server string }{
+		{"notion", `{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"notion":{"type":"streamable-http","url":"https://notion.example.test/mcp"}}}`},
+		{"hubspot-crm", `{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"hubspot":{"type":"streamable-http","url":"https://hubspot.example.test/mcp"}}}`},
+		{"playwright-bridge", `{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"playwright":{"type":"stdio","command":"go","args":["version"]}}}`},
+	} {
+		for _, distribution := range directory.bundle.Snapshot.Distributions {
+			if distribution.ID != "acme/"+child.alias {
+				continue
+			}
+			dependencyReviewReviseRelease(t, fixture, repo, distribution.Releases[0], func(root string) {
+				dependencyWrite(t, filepath.Join(root, "mcp.json"), child.server)
+			})
+		}
+	}
 	root := directory.bundle.Snapshot.Distributions[3].Releases[0]
 	dependencyReviewReviseRelease(t, fixture, repo, root, func(root string) {
 		dependencyWrite(t, filepath.Join(root, "uap.toml"), `schema_version = 1
@@ -101,9 +117,16 @@ func signPiModernTestOnlyCohort(t *testing.T, snapshot domain.DirectorySnapshot)
 	snapshot.ExpiresAt = "2026-12-11T00:00:00Z"
 	snapshot.Revocations = []domain.DirectoryRevocation{}
 	for i := range snapshot.Products {
-		snapshot.Products[i].Categories = []string{"tools"}
-		snapshot.Products[i].MinimumCapabilities = domain.DirectoryMinimumCapabilities{
-			Skills: "required", MCP: "optional",
+		p := &snapshot.Products[i]
+		p.Categories = []string{"tools"}
+		if p.ID == "marketing-kit" {
+			p.MinimumCapabilities = domain.DirectoryMinimumCapabilities{
+				Skills: "required", MCP: "optional",
+			}
+		} else {
+			p.MinimumCapabilities = domain.DirectoryMinimumCapabilities{
+				Skills: "optional", MCP: "required",
+			}
 		}
 	}
 	snapshotBytes, err := json.Marshal(snapshot)
