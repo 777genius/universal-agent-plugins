@@ -1,4 +1,4 @@
-import { pluginCommands } from './commands.ts';
+import { pluginCommands, installCommands } from './commands.ts';
 import capabilities from '../data/clientCapabilities.generated.json' with { type: 'json' };
 import { reachableTargetPolicies, resolveDistribution } from './registry.ts';
 import type { ClientID, ComponentID, DistributionResolution, RegistryPlugin } from '../types/registry.ts';
@@ -96,4 +96,47 @@ export function projectCatalogCommands(plugin: RegistryPlugin, targets?: readonl
     : projectCatalogSelection(plugin, targets);
   if (!choice?.resolution.distribution) throw new Error('No eligible project installation source');
   return pluginCommands(plugin, targets, undefined, 'project');
+}
+
+
+/**
+ * Explicit Pi-only Project alternative when a reviewed signed-v1 release does
+ * not grant Pi. This uses the separately supported, exact Git source route;
+ * it is never presented as a signed Directory target or used by auto-detect.
+ */
+export function pinnedPiProjectSource(plugin: RegistryPlugin): string | undefined {
+  if (plugin.trust_state !== 'reviewed' || !plugin.installable ||
+      projectCatalogSelection(plugin, ['pi']).resolution.distribution) return undefined;
+
+  // Reuse the signed resolver for an ACTIVE source. Do not synthesize source
+  // availability from an expired, revoked, blocked or review-only release.
+  const userTargets = reachableTargetPolicies(plugin.distributions, 'user');
+  for (const target of userTargets) {
+    const distribution = resolveDistribution(plugin, [target.client], 'user').distribution;
+    if (!distribution || !distribution.components.length ||
+        !distribution.components.every((component) =>
+          ['skills', 'mcp', 'extensions'].includes(component) &&
+          projectComponentSupported('pi', component))) continue;
+
+    const signedRelease = distribution.releases.find((release) =>
+      release.release_sequence === distribution.release_sequence);
+    // Never downgrade a v2 scoped closure into an alternate v1 grant.
+    if (!signedRelease?.selectable || signedRelease.release_status !== 'active' ||
+        signedRelease.targets.some((item) => item.canonical_closure !== undefined)) continue;
+
+    const { repository, revision, path } = distribution.source;
+    const safePath = path === '' || (path !== '.' && path.split('/').every((part) =>
+      /^[A-Za-z0-9._-]+$/.test(part) && part !== '.' && part !== '..'));
+    if (!GIT_REPOSITORY.test(repository) || !revision || !FULL_REVISION.test(revision) ||
+        !safePath || !/^sha256:[a-f0-9]{64}$/.test(distribution.source.tree_sha256) ||
+        !/^sha256:[a-f0-9]{64}$/.test(distribution.source.manifest_sha256)) continue;
+    return `github:${repository}@${revision}${path ? `//${path}` : ''}`;
+  }
+  return undefined;
+}
+
+export function pinnedPiProjectCommands(plugin: RegistryPlugin) {
+  const source = pinnedPiProjectSource(plugin);
+  if (!source) throw new Error('No eligible Pi Project exact-source installation');
+  return installCommands(source, plugin.name, ['pi'], undefined, 'project');
 }
