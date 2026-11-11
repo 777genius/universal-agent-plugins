@@ -58,6 +58,9 @@ func lockedDependencySnapshotKey(locked environment.LockedPackage) (dependencySn
 }
 
 func (app App) acquireLockedSnapshot(ctx context.Context, locked environment.LockedPackage) (domain.PackageSnapshot, error) {
+	if err := requireLockedDirectoryFeed(app, locked); err != nil {
+		return domain.PackageSnapshot{}, err
+	}
 	key, err := lockedDependencySnapshotKey(locked)
 	if err != nil {
 		return domain.PackageSnapshot{}, err
