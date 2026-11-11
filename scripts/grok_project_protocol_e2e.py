@@ -1,0 +1,291 @@
+"""Real Grok doctor + direct installed MCP calls; no model or account required."""
+import argparse
+import hashlib
+import json
+import os
+from pathlib import Path
+import platform
+import secrets
+import shutil
+import stat
+import subprocess
+import tempfile
+
+from grok_project_protocol_client import (document, exercise, installed_server,
+                                          read_owned, require, selected_installation)
+
+NAME = "uap-grok-no-model"
+SERVER = "uap_probe"
+SOURCE = Path(__file__).resolve().parent.parent
+
+
+def digest(path):
+    with Path(path).open("rb") as source:
+        return hashlib.file_digest(source, "sha256").hexdigest()
+
+
+def write(path, value):
+    path = Path(path)
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    body = value.encode() if isinstance(value, str) else json.dumps(value, sort_keys=True).encode()
+    with path.open("wb") as target:
+        target.write(body)
+    path.chmod(0o600)
+
+
+def snapshot(root):
+    result = {}
+    for path in sorted(Path(root).rglob("*")):
+        require(not path.is_symlink(), "snapshot contains an alias")
+        if path.is_file():
+            require(path.stat().st_size <= 256 << 20, "snapshot file bound")
+            result[str(path.relative_to(root))] = digest(path)
+    return result
+
+
+def events(path, root):
+    if not path.exists():
+        return []
+    return [document(line) for line in read_owned(path, root).splitlines() if line]
+
+
+def observed_protocol(rows, nonce, methods):
+    sessions = {}
+    for row in rows:
+        require(isinstance(row, dict) and row.get("nonce") == nonce
+                and isinstance(row.get("session"), str) and type(row.get("pid")) is int,
+                "uncorrelated MCP probe event")
+        sessions.setdefault((row["session"], row["pid"]), []).append(row.get("method"))
+    require(any(all(method in sequence for method in methods) for sequence in sessions.values()),
+            "missing same-session native MCP traffic")
+    return [{"session": key[0], "pid": key[1], "methods": sequence}
+            for key, sequence in sessions.items()]
+
+
+class Journey:
+    def __init__(self, root, installer, probe, evidence):
+        self.root, self.installer, self.probe, self.evidence = root, installer, probe, evidence
+        self.home, self.a, self.b = [root / name for name in ("home", "project-a", "project-b")]
+        self.source, self.log = root / "package", root / "mcp-events.jsonl"
+        self.nonce = secrets.token_hex(16)
+        for path in (self.home, self.a, self.b, self.source, root / "bin", root / "tmp"):
+            path.mkdir(mode=0o700)
+        self.env = {"HOME": str(self.home), "PATH": str(root / "bin") + ":/usr/bin:/bin",
+                    "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8", "NO_COLOR": "1",
+                    "TMPDIR": str(root / "tmp"), "AGENTPLUGINS_HOME": str(root / "installer-state"),
+                    "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null",
+                    "GIT_TERMINAL_PROMPT": "0", "GROK_DISABLE_AUTOUPDATER": "1"}
+        for suffix in ("CONFIG", "DATA", "CACHE", "STATE"):
+            path = root / ("xdg-" + suffix.lower())
+            path.mkdir(mode=0o700)
+            self.env["XDG_" + suffix + "_HOME"] = str(path)
+        self.grok = root / "bin/grok"
+        self.protected = {}
+
+    def run(self, label, argv, cwd=None, expected=(0,), timeout=60):
+        from native_client_research import run_probe
+        self.check()
+        record, stdout, stderr = run_probe([str(arg) for arg in argv], cwd or self.a,
+                                          self.env, self.root, label, timeout=timeout,
+                                          limit=1 << 20, memory_only=True)
+        self.evidence["commands"].append(dict(record, stdout=stdout.decode("utf-8", "replace"),
+                                               stderr=stderr.decode("utf-8", "replace")))
+        self.check()
+        require(record["error"] is None and record["exit"] in expected,
+                "command failed: " + label)
+        return stdout
+
+    def check(self):
+        for path, expected in self.protected.items():
+            require(path.resolve() == path and path.is_file() and digest(path) == expected,
+                    "protected fixture changed: " + str(path))
+
+    def author(self, revision):
+        write(self.source / "plugin.json", {
+            "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+            "name": NAME, "version": "1.0." + revision, "description": "Credential-free MCP E2E"})
+        target = self.source / "bin/probe"
+        target.parent.mkdir(mode=0o700, exist_ok=True)
+        if not target.exists():
+            shutil.copyfile(self.probe, target)
+            target.chmod(0o700)
+        write(self.source / "skills" / NAME / "SKILL.md",
+              "---\nname: " + NAME + "\ndescription: Local protocol fixture\n---\nNo model required.\n")
+        write(self.source / "mcp.json", {
+            "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+            "mcpServers": {SERVER: {"type": "stdio", "command": "./bin/probe", "args": [],
+                "env": {"UAP_TEST_ROOT": str(self.root), "UAP_TEST_EVENTS": str(self.log),
+                        "UAP_TEST_NONCE": self.nonce, "UAP_TEST_REVISION": revision}}}})
+
+    def cli(self, label, verb, selector):
+        argv = [self.installer, verb, selector, "--scope", "project", "--project-root", self.a,
+                "--target", "grok", "--format", "json"]
+        if verb == "add":
+            argv.append("--no-save")
+        value = document(self.run(label, argv, timeout=120))
+        require(value.get("result") == "success", "public UAP JSON is not success")
+        return value
+
+    def inspect(self, label, active, present, trusted):
+        value = document(self.run(label, [self.grok, "inspect", "--json"]))
+        require(value.get("grokVersion") == "1.0.70" and value.get("cwd") == str(self.a)
+                and value.get("projectRoot", "").rstrip("/") == str(self.a)
+                and value.get("projectTrusted") is trusted, "native project/version/trust differs")
+        selected = [p for p in value.get("plugins", []) if p.get("name", "").casefold() == NAME]
+        require(len(selected) == int(present), "native plugin presence differs")
+        if present:
+            item = selected[0]
+            require(item.get("name") == NAME and item.get("path") == str(active)
+                    and item.get("scope") == "project" and item.get("enabled") is trusted,
+                    "native selected plugin authority differs")
+        if not trusted:
+            require(value.get("mcpServers") == [], "untrusted project activated MCP")
+        return value
+
+    def enable_fixture(self):
+        # Explicit test fixture only: this is NOT an installer side effect.
+        config = self.home / ".grok/config.toml"
+        write(config, '[marketplace]\ndefault_skills_installs_purged = true\n'
+              '[features]\nturn_summary = false\n[plugins]\nenabled = ["' + NAME + '"]\n')
+        trust = self.home / ".grok/trusted_folders.toml"
+        write(trust, "[folders." + json.dumps(str(self.a)) + "]\ntrusted = true\n")
+        self.protected.update({config: digest(config), trust: digest(trust)})
+
+    def protocol(self, stage, revision, marker, create=False):
+        installation, binding, active, data = selected_installation(self.a, NAME)
+        server = installed_server(active, data, self.root, SERVER, self.nonce)
+        before = events(self.log, self.root)
+        self.run(stage + "-native-doctor", [self.grok, "mcp", "doctor", "--json"], timeout=45)
+        native_rows = events(self.log, self.root)[len(before):]
+        native = observed_protocol(native_rows, self.nonce, ("initialize", "tools/list"))
+        before = events(self.log, self.root)
+        self.check()
+        direct = exercise(server, self.env, self.nonce, revision, marker, create)
+        self.check()
+        direct_rows = events(self.log, self.root)[len(before):]
+        correlated = observed_protocol(direct_rows, self.nonce, ("initialize", "tools/list", "tools/call"))
+        require(any(row["session"] == direct["facts"]["session"] for row in correlated),
+                "tool result/session not in server events")
+        require(all(row["session"] != direct["facts"]["session"] for row in native),
+                "native and direct callers were conflated")
+        self.evidence["stages"].append({"stage": stage, "binding": binding,
+            "installed_native_config": document(read_owned(active / ".mcp.json", self.root)),
+            "native_doctor_sessions": native, "native_original_events": native_rows,
+            "direct_client": direct, "direct_original_events": direct_rows})
+        return installation, binding, active, data
+
+    def execute(self):
+        self.run("git-a", ["/usr/bin/git", "-c", "core.hooksPath=/dev/null", "init", "--quiet"])
+        self.run("git-b", ["/usr/bin/git", "-c", "core.hooksPath=/dev/null", "init", "--quiet"], self.b)
+        write(self.home / ".grok/config.toml", '[marketplace]\ndefault_skills_installs_purged = true\n'
+              '[features]\nturn_summary = false\n')
+        for path in (self.home / ".grok/foreign.txt", self.a / "foreign.txt", self.b / "foreign.txt"):
+            write(path, "never modify " + self.nonce)
+            self.protected[path] = digest(path)
+        untouched_b = snapshot(self.b)
+        self.author("0")
+        self.cli("install", "add", self.source)
+        first, first_binding, active, data = selected_installation(self.a, NAME)
+        self.evidence["prepared_owned_state"] = document(read_owned(self.a / ".uap/state-v2.json", self.root))
+        self.inspect("untrusted-inspect", active, True, False)
+        before = events(self.log, self.root)
+        self.run("untrusted-doctor", [self.grok, "mcp", "doctor", "--json"], expected=(0, 1))
+        require(events(self.log, self.root) == before, "untrusted native doctor started the fixture")
+        initial = snapshot(active)
+        self.cli("repeat-install", "add", self.source)
+        require(snapshot(active) == initial, "repeat installation changed package bytes")
+        self.enable_fixture()
+        self.inspect("trusted-inspect", active, True, True)
+        marker = "persisted-" + self.nonce
+        self.protocol("installed", "0", marker, create=True)
+        self.author("1")
+        self.cli("update", "update", self.source)
+        updated, binding, replacement, _ = self.protocol("updated", "1", marker)
+        require(replacement == active and binding["client_binding_id"] == first_binding["client_binding_id"]
+                and updated["source"]["tree_digest"] != first["source"]["tree_digest"],
+                "update identity or source pin differs")
+        # Delete only the held owned sidecar; ordinary UAP repair must restore it.
+        read_owned(active / ".mcp.json", self.root)
+        (active / ".mcp.json").unlink()
+        self.cli("repair", "repair", updated["installation_id"])
+        self.protocol("repaired", "1", marker)
+        self.cli("remove", "remove", NAME)
+        require(not active.exists(), "owned package survives removal")
+        self.inspect("removed-inspect", active, False, True)
+        before = events(self.log, self.root)
+        self.run("removed-doctor", [self.grok, "mcp", "doctor", "--json"], expected=(0, 1))
+        require(events(self.log, self.root) == before, "removed native plugin still starts MCP")
+        try:
+            selected_installation(self.a, NAME)
+        except (ValueError, FileNotFoundError):
+            pass
+        else:
+            raise ValueError("removed receipt still selects an installed MCP")
+        require(snapshot(self.b) == untouched_b, "Project B changed")
+        require(read_owned(data / "native-marker.txt", self.root).decode() == marker,
+                "persistent user data lost on removal")
+        self.check()
+        self.evidence.update({"project_b_unchanged": True, "protected_user_files_unchanged": True,
+                              "untrusted_refusal_verified": True, "removed_absent": True,
+                              "persistent_data_retained": True})
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--installer", required=True, type=Path)
+    parser.add_argument("--probe", required=True, type=Path)
+    parser.add_argument("--output", required=True, type=Path)
+    args = parser.parse_args()
+    require(os.environ.get("GITHUB_ACTIONS") == "true"
+            and os.environ.get("RUNNER_ENVIRONMENT") == "github-hosted"
+            and platform.system() == "Linux" and platform.machine() == "x86_64",
+            "actual disposable GitHub-hosted Linux x64 required")
+    for path in (args.installer, args.probe):
+        require(path.is_absolute() and path.resolve() == path and path.is_file()
+                and stat.S_ISREG(path.stat().st_mode) and path.stat().st_uid == os.getuid(),
+                "expected owned compiled binary")
+    expected = os.environ.get("EXPECTED_COMMIT", "")
+    git_env = {"PATH": "/usr/bin:/bin", "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null"}
+    def git(*argv):
+        return subprocess.check_output(["/usr/bin/git", *argv], cwd=SOURCE, env=git_env,
+                                       timeout=10).decode().strip()
+    require(len(expected) == 40 and git("rev-parse", "HEAD") == expected
+            and not git("status", "--porcelain", "--untracked-files=normal"), "clean exact source required")
+    args.output.mkdir(mode=0o700, parents=True, exist_ok=False)
+    evidence = {"schema_version": 1, "source_commit": expected,
+                "source_tree": git("rev-parse", "HEAD^{tree}"), "passed": False,
+                "commands": [], "stages": [], "model_invoked": False,
+                "vendor_authentication_used": False, "grok_tools_call_qualified": False,
+                "transport": "stdio", "installer_sha256": digest(args.installer),
+                "probe_sha256": digest(args.probe)}
+    try:
+        from project_native_research import Budget, acquire, materialize, verify_files
+        from project_native_collectors.grok import ACQUISITION
+        with tempfile.TemporaryDirectory(prefix="grok-no-model-", dir=os.environ["RUNNER_TEMP"]) as temporary:
+            root = Path(temporary).resolve()
+            journey = Journey(root, args.installer, args.probe, evidence)
+            budget = Budget(900)
+            receipt, contents = acquire(ACQUISITION, budget)
+            binary, identities = materialize(root / "bin", ACQUISITION, receipt, contents)
+            require(binary == journey.grok, "acquired Grok path differs")
+            evidence["acquisition"] = receipt
+            verify_files(identities, budget)
+            version = journey.run("grok-version", [binary, "--version"], root)
+            require(version == b"grok 1.0.70 (f50904eaee6c)\n", "pinned native Grok version differs")
+            journey.execute()
+            verify_files(identities, budget)
+            evidence["all_original_events"] = events(journey.log, root)
+        require(not git("status", "--porcelain", "--untracked-files=normal"), "source changed")
+        evidence["passed"] = True
+        evidence["native_doctor_initialize_and_list_qualified"] = True
+        evidence["direct_installed_config_tools_call_qualified"] = True
+    except Exception as error:
+        evidence["error"] = type(error).__name__ + ": " + str(error)
+        raise
+    finally:
+        write(args.output / "evidence.json", evidence)
+        print(json.dumps({"passed": evidence["passed"], "evidence": str(args.output / "evidence.json")}, sort_keys=True))
+
+
+if __name__ == "__main__":
+    main()
