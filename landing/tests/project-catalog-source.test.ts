@@ -120,7 +120,7 @@ test('Pi project uses an explicit immutable Git source instead of inventing a si
 
 test('Pi exact-source route refuses unsound or unsupported signed-source projections', () => {
   const variants = [
-    (p: RegistryPlugin) => { p.trust_state = undefined; },
+    (p: RegistryPlugin) => { delete p.trust_state; },
     (p: RegistryPlugin) => { p.trust_state = 'conformant_unreviewed'; },
     (p: RegistryPlugin) => { p.installable = false; },
     (p: RegistryPlugin) => { p.distributions[0]!.releases[0]!.source.revision = null; },
