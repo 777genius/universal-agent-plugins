@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { realpathSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const origin = 'https://universal-agent-plugins.com';
 const maxBytes = 8 * 1024 * 1024;
@@ -140,7 +141,7 @@ export async function live(root, filename, fetcher = fetch, pause = milliseconds
   return contract.routes.length;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
   const [mode, root, filename] = process.argv.slice(2);
   assert(root && filename && ['prepare', 'live'].includes(mode), 'usage: checker prepare|live ROOT CONTRACT');
   if (mode === 'prepare') await prepare(root, filename);

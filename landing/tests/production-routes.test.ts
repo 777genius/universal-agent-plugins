@@ -1,10 +1,33 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createHash } from 'node:crypto';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
+import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { builtHtmlPath, checkHtml, checkLiveBytes, getBytes, routePaths, validateContract, prepare, live } from '../scripts/check-production-routes.mjs';
+
+test('CLI invocation through a symlink does not silently skip validation', async t => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'uap-route-cli-'));
+  try {
+    const entry = path.join(root, 'checker.mjs');
+    try {
+      await symlink(fileURLToPath(new URL('../scripts/check-production-routes.mjs', import.meta.url)), entry);
+    } catch (error) {
+      if (process.platform === 'win32' && (error as NodeJS.ErrnoException).code === 'EPERM') {
+        t.skip('symlink creation requires Windows privileges');
+        return;
+      }
+      throw error;
+    }
+    const result = spawnSync(process.execPath, [entry], { encoding: 'utf8' });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /usage: checker prepare\|live ROOT CONTRACT/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 const locales = ['en', 'ru', 'uk', 'zh', 'es', 'hi', 'ar', 'pt', 'fr'];
 // Public catalogue of accepted source 55c2b820; H/A were not advertised there.
