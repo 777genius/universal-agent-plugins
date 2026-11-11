@@ -13,11 +13,12 @@ import (
 
 // Exercise the public App with an intact recorded artifact. The existing
 // damaged-pin repair regression deliberately takes a different selection path.
+// Hosted genuine mode probes only Kimi version; security remains inert.
 func TestProjectKimiPublicIntactRepairPreservesMCPSelection(t *testing.T) {
 	transport := newProjectJourneyTransport(t, "zip")
 	journey := newProjectJourney(t, transport)
 	user := filepath.Join(journey.home, ".kimi-code")
-	journey.app = configureProjectKimiJourney(journey.app, user, filepath.Join(journey.home, "kimi"))
+	journey.app = configureProjectKimiJourney(t, journey.app, user, filepath.Join(journey.home, "kimi"))
 	for _, project := range []string{journey.a, journey.b} {
 		if err := os.Mkdir(filepath.Join(project, ".git"), 0700); err != nil {
 			t.Fatal(err)
@@ -41,6 +42,7 @@ func TestProjectKimiPublicIntactRepairPreservesMCPSelection(t *testing.T) {
 		t.Fatal("intact public repair discarded recorded project MCP selection")
 	}
 	after, repaired := projectKimiVersionOwned(t, journey, projectJourneySkill, false)
+	projectKimiLogSource(t, after, repaired)
 	if after.InstallationID != installation.InstallationID || !reflect.DeepEqual(after.Source, installation.Source) || !reflect.DeepEqual(after.Package, installation.Package) || repaired.ClientBindingID != binding.ClientBindingID || repaired.PhysicalArtifact != binding.PhysicalArtifact || repaired.DataReceiptID != binding.DataReceiptID || !reflect.DeepEqual(repaired.NativeObjects, binding.NativeObjects) {
 		t.Fatal("intact repair changed held installation, binding, data or native ownership")
 	}

@@ -13,7 +13,7 @@ func TestProjectKimiImperativeLocalLifecyclePreservesUserAndB(t *testing.T) {
 	transport := newProjectJourneyTransport(t, "git")
 	journey := newProjectJourney(t, transport)
 	user := filepath.Join(journey.home, ".kimi-code")
-	journey.app = configureProjectKimiJourney(journey.app, user, filepath.Join(journey.home, "kimi"))
+	journey.app = configureProjectKimiJourney(t, journey.app, user, filepath.Join(journey.home, "kimi"))
 	for _, root := range []string{journey.a, journey.b} {
 		if err := os.Mkdir(filepath.Join(root, ".git"), 0700); err != nil {
 			t.Fatal(err)

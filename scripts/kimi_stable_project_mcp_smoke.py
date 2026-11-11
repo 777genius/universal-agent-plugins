@@ -226,6 +226,49 @@ def smoke(installer, client, report_dir):
         (report_dir / "kimi-mcp-prepared.json").write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
 
 
+
+LIFECYCLE_CASES = (
+    "TestProjectKimiComposedSavedLifecycle",
+    "TestProjectKimiPublicIntactRepairPreservesMCPSelection",
+    "TestProjectKimiColdSavedImportPreservesPinnedAgreement",
+)
+
+
+def validate_lifecycle_json(filename, selected_executable):
+    """Accept only three actual PASS cases with genuine probes and source records."""
+    with filename.open("rb") as stream:
+        body = stream.read(8 * MAX_OUTPUT + 1)
+    if len(body) > 8 * MAX_OUTPUT:
+        raise ValueError("Go lifecycle evidence exceeded bound")
+    cases = {name: {"outcomes": [], "probes": [], "sources": []} for name in LIFECYCLE_CASES}
+    for line in body.splitlines():
+        event = json.loads(line)
+        if event.get("Test") not in cases:
+            continue
+        row = cases[event["Test"]]
+        if event.get("Action") in ("pass", "fail", "skip"):
+            row["outcomes"].append(event["Action"])
+        output = event.get("Output", "")
+        for marker, key in (("KIMI_GENUINE_PROBE ", "probes"), ("KIMI_PREPARED_SOURCE ", "sources")):
+            if marker in output:
+                row[key].append(json.loads(output.split(marker, 1)[1]))
+    for name, row in cases.items():
+        if row["outcomes"] != ["pass"] or not row["probes"] or not row["sources"]:
+            raise ValueError("missing genuine lifecycle PASS/probe/source: " + name)
+        if any(probe.get("version") != "2.5.2" or not selected_executable or probe.get("executable") != selected_executable or not probe.get("config_root") for probe in row["probes"]):
+            raise ValueError("genuine lifecycle version/selection differs")
+        if any(not source.get("source_binding_id") or not source.get("tree_digest") or not source.get("native_profile_root") for source in row["sources"]):
+            raise ValueError("genuine lifecycle source attribution missing")
+    cold = cases[LIFECYCLE_CASES[2]]
+    if len({probe["config_root"] for probe in cold["probes"]}) < 2:
+        raise ValueError("cold lifecycle did not probe both private applications")
+    if len(cold["sources"]) < 2 or len({source["native_profile_root"] for source in cold["sources"]}) < 2:
+        raise ValueError("cold lifecycle did not retain both source records")
+    if len({(source["source_binding_id"], source["tree_digest"]) for source in cold["sources"]}) != 1:
+        raise ValueError("cold lifecycle source agreement differs")
+    return cases
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--cli", required=True, type=Path)

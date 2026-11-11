@@ -9,10 +9,45 @@ from unittest.mock import patch
 
 from kimi_stable_project_mcp_smoke import (
     FOREIGN_NAME, FOREIGN_SERVER, NAME, read_servers, safe_read, verify, verify_removed,
+    LIFECYCLE_CASES, validate_lifecycle_json,
 )
 
 
 class KimiStableProjectMcpSmokeTests(unittest.TestCase):
+
+    def test_lifecycle_json_requires_exact_pass_probes_sources_and_cold_pair(self):
+        events = []
+        for name in LIFECYCLE_CASES:
+            for root in ("original", "cold"):
+                events.append({"Test": name, "Action": "output", "Output": "KIMI_GENUINE_PROBE " + json.dumps({"version": "2.5.2", "executable": "/owned/kimi", "config_root": root})})
+                events.append({"Test": name, "Action": "output", "Output": "KIMI_PREPARED_SOURCE " + json.dumps({"source_binding_id": "pin", "tree_digest": "digest", "native_profile_root": root})})
+            events.append({"Test": name, "Action": "pass"})
+        with tempfile.TemporaryDirectory() as root:
+            report = Path(root).resolve() / "go.json"
+            def check(rows):
+                report.write_text("\n".join(json.dumps(row) for row in rows))
+                return validate_lifecycle_json(report, "/owned/kimi")
+            self.assertEqual(set(check(events)), set(LIFECYCLE_CASES))
+            for rows in ([], events[:-1], [{**row, "Action": "skip"} if row.get("Action") == "pass" else row for row in events], [row for row in events if "KIMI_PREPARED_SOURCE" not in row.get("Output", "")], [row for row in events if '"config_root": "cold"' not in row.get("Output", "")]):
+                with self.assertRaises(ValueError):
+                    check(rows)
+            wrong = [dict(row) for row in events]
+            wrong[0]["Output"] = wrong[0]["Output"].replace("2.5.2", "2.3.2")
+            with self.assertRaisesRegex(ValueError, "version"):
+                check(wrong)
+            for replacement in ('"executable": "/other/kimi"',):
+                wrong_path = [dict(row) for row in events]
+                wrong_path[0]["Output"] = wrong_path[0]["Output"].replace('"executable": "/owned/kimi"', replacement)
+                with self.assertRaisesRegex(ValueError, "selection"):
+                    check(wrong_path)
+            cold_sources = [i for i, row in enumerate(events) if row["Test"] == LIFECYCLE_CASES[2] and "KIMI_PREPARED_SOURCE" in row.get("Output", "")]
+            with self.assertRaisesRegex(ValueError, "both source"):
+                check([row for i, row in enumerate(events) if i != cold_sources[-1]])
+            wrong_source = [dict(row) for row in events]
+            wrong_source[cold_sources[-1]]["Output"] = wrong_source[cold_sources[-1]]["Output"].replace('"digest"', '"changed"')
+            with self.assertRaisesRegex(ValueError, "agreement"):
+                check(wrong_source)
+
     def test_native_server_requires_selected_project_owned_command(self):
         with tempfile.TemporaryDirectory() as root:
             selected = Path(root).resolve() / "selected"
