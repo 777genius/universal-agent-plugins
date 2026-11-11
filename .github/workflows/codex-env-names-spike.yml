@@ -288,6 +288,7 @@ jobs:
         run: |
           @'
           from pathlib import Path
+          import shutil
           import subprocess
           import sys
           import tempfile
@@ -346,6 +347,53 @@ jobs:
                             "invalid", "timed out", "failed")
                   print("windows_no_secret_sandbox_probe_indicators=" +
                         ",".join(label for label in labels if label in observed))
+                  raise SystemExit(1)
+
+              # Codex normally discovers PowerShell first on Windows, even
+              # when a cmd.exe sandbox smoke succeeds. Diagnose the SAME
+              # executable family without synthetic env keys or real secrets.
+              powershell = (shutil.which("pwsh", path=env.get("PATH", ""))
+                            or shutil.which("powershell", path=env.get("PATH", "")))
+              if not powershell:
+                  print("windows_no_secret_powershell_available=false")
+                  raise SystemExit(1)
+              fixed_probe = "Write-Output 'UAP_WINDOWS_POWERSHELL_NO_SECRET_OK'"
+              powershell_args = [powershell, "-NoProfile", "-Command", fixed_probe]
+              try:
+                  direct = subprocess.run(
+                      powershell_args, cwd=root, env=env, capture_output=True,
+                      text=True, timeout=20)
+              except (OSError, subprocess.TimeoutExpired) as exc:
+                  print("windows_no_secret_powershell_direct_pass=false")
+                  print("windows_no_secret_powershell_direct_exception=" + type(exc).__name__)
+                  raise SystemExit(1)
+              direct_ok = (direct.returncode == 0
+                           and "UAP_WINDOWS_POWERSHELL_NO_SECRET_OK" in direct.stdout)
+              print("windows_no_secret_powershell_direct_pass=" + str(direct_ok).lower())
+              if not direct_ok:
+                  raise SystemExit(1)
+              native_command = [sys.argv[1], "sandbox", "--permission-profile",
+                                ":read-only", "--"] + powershell_args
+              try:
+                  native = subprocess.run(
+                      native_command, cwd=root, env=env, capture_output=True,
+                      text=True, timeout=60)
+              except (OSError, subprocess.TimeoutExpired) as exc:
+                  print("windows_no_secret_powershell_sandbox_pass=false")
+                  print("windows_no_secret_powershell_sandbox_exception=" + type(exc).__name__)
+                  raise SystemExit(1)
+              native_ok = (native.returncode == 0
+                           and "UAP_WINDOWS_POWERSHELL_NO_SECRET_OK" in native.stdout)
+              print("windows_no_secret_powershell_sandbox_pass=" + str(native_ok).lower())
+              if not native_ok:
+                  native_report = (native.stdout + native.stderr).lower()
+                  patterns = ("windows sandbox failed", "sandbox", "permission",
+                              "access denied", "not found", "failed", "pwsh",
+                              "powershell", "helper", "createprocessasuserw",
+                              "not supported", "invalid", "unrecognized")
+                  print("windows_no_secret_powershell_sandbox_indicators=" +
+                        ",".join(pattern for pattern in patterns
+                                 if pattern in native_report))
                   raise SystemExit(1)
           '@ | python - "$env:CODEX_BINARY"
       - name: Qualify genuine CLI core-inherit shell/MCP
