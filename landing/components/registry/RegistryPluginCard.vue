@@ -36,6 +36,8 @@ const {
   targetDistributions,
   pinnedPiSource,
   pinnedPiSelected,
+  pinnedPiReleaseSource,
+  pinnedPiReleaseComponents,
   projectAvailable,
   projectAutomatic,
   updateTargets,
@@ -179,8 +181,19 @@ const repositoryStars = computed(() =>
     maximumFractionDigits: 1,
   }).format(props.plugin.discovery?.stars ?? 0),
 );
+const assessmentSource = computed(() => pinnedPiReleaseSource.value ?? props.plugin.source);
+const assessedRevisionMatches = computed(() => {
+  if (!pinnedPiSelected.value) return true;
+  const selected = pinnedPiReleaseSource.value;
+  const assessed = props.plugin.source;
+  return Boolean(selected &&
+    selected.repository === assessed.repository &&
+    selected.revision === assessed.revision &&
+    selected.path === assessed.path &&
+    selected.tree_sha256 === assessed.tree_sha256);
+});
 const provenanceURL = computed(() => {
-  const source = selectedDistribution.value?.source ?? props.plugin.source;
+  const source = pinnedPiReleaseSource.value ?? selectedDistribution.value?.source ?? props.plugin.source;
   if (!source?.revision) return '';
   const suffix = source.path ? `/${source.path}` : '';
   return `https://github.com/${source.repository}/tree/${source.revision}${suffix}`;
@@ -284,17 +297,17 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
     </p>
     <div class="plugin-card__assessments">
       <SecurityAssessmentBadge
-        v-if="plugin.security && !discoveryStale"
+        v-if="plugin.security && !discoveryStale && assessedRevisionMatches"
         :plugin="plugin"
         :details-to="securityDetailURL"
       />
       <SkillSpectorAssessment
-        :applicable="plugin.components.includes('skills')"
+        :applicable="(pinnedPiReleaseComponents ?? plugin.components).includes('skills')"
         :subject="{
           kind: 'plugin',
-          repository: plugin.source.repository,
-          path: plugin.source.path,
-          revision: plugin.source.revision,
+          repository: assessmentSource.repository,
+          path: assessmentSource.path,
+          revision: assessmentSource.revision,
         }"
         :name="plugin.display_name"
         scope="plugin"
@@ -422,6 +435,9 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
             />
             <p v-if="pinnedPiSelected && canInstall" class="plugin-card__author" role="status">
               {{ t('registryUi.install.piPinnedProjectSource') }}
+              <a :href="provenanceURL" target="_blank" rel="noreferrer">
+                {{ t('registryUi.card.viewSource') }}
+              </a>
             </p>
             <CommandSnippet
               v-if="canInstall"
