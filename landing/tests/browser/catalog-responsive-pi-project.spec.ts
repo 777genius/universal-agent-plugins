@@ -95,6 +95,17 @@ for (const width of [1440, 390]) {
     const add = `npx -y universal-agent-plugins add ${direct} --target pi --scope project`;
     await expect(card.locator('.plugin-card__install .command-snippet--add code')).toHaveText(add);
     await expect(card).toContainText('not a signed Pi target');
+
+    // Switching routes must not combine an unsigned Pi option with signed Codex.
+    await card.locator('.app-multiselect__trigger').click();
+    await page.getByRole('checkbox', { name: /^Codex(?:\\s|$)/ }).click();
+    await page.keyboard.press('Escape');
+    await expect(card.locator('.plugin-card__install .command-snippet--add code')).toHaveText(
+      'npx -y universal-agent-plugins add sentry --target codex --scope project');
+    await card.locator('.app-multiselect__trigger').click();
+    await pi.click();
+    await page.keyboard.press('Escape');
+    await expect(card.locator('.plugin-card__install .command-snippet--add code')).toHaveText(add);
     await card.locator('.plugin-card__install .command-snippet--add button').click();
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(add);
 
