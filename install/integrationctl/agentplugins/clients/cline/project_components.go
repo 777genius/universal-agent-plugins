@@ -34,6 +34,7 @@ func clineProjectOwned(objects []domain.NativeObjectOwnership) []domain.NativeOb
 func clineProjectObjects(staging string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan) ([]domain.NativeObjectOwnership, error) {
 	layout := clineProjectComponents(plan.TargetContext.ProjectRoot)
 	objects := []domain.NativeObjectOwnership{}
+	var projection *ClineProjection
 	for _, component := range plan.Components {
 		if component.Support == domain.SupportUnsupported {
 			continue
@@ -52,15 +53,20 @@ func clineProjectObjects(staging string, envelope domain.PackageEnvelope, plan d
 			}
 			object, err = layout.SkillObject(component.Name, relative, staging)
 		case domain.ComponentMCPServer:
-			var projection ClineProjection
-			projection, err = ReadClineProjection(staging)
-			if err == nil {
-				server, ok := projection.Servers[component.Name]
-				if !ok {
-					return nil, fmt.Errorf("projected Cline MCP server is missing")
+			if projection == nil {
+				// Ownership receipts for all selected MCP members must refer to
+				// the same staged source revision.
+				loaded, readErr := ReadClineProjection(staging)
+				if readErr != nil {
+					return nil, readErr
 				}
-				object, err = layout.MCPObject(component.Name, server, layout.ConfigPaths.JSON)
+				projection = &loaded
 			}
+			server, ok := projection.Servers[component.Name]
+			if !ok {
+				return nil, fmt.Errorf("projected Cline MCP server is missing")
+			}
+			object, err = layout.MCPObject(component.Name, server, layout.ConfigPaths.JSON)
 		default:
 			return nil, fmt.Errorf("unsupported Cline project component %q", component.Kind)
 		}

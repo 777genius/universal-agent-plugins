@@ -79,3 +79,84 @@ func TestClineProjectServersRefusesMissingOrIncompleteMCPProjection(t *testing.T
 		t.Fatal("rejected selection changed foreign projection")
 	}
 }
+
+func TestClineProjectObjectsUsesSingleStagedMCPProjectionForSelectedMembers(t *testing.T) {
+	project := t.TempDir()
+	staging := filepath.Join(project, ".uap", "package")
+	if err := os.MkdirAll(staging, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	projection := ClineProjection{Servers: map[string]nativeconfig.Server{
+		"first":   {Type: "stdio", Command: "first-command"},
+		"second":  {Type: "stdio", Command: "second-command"},
+		"foreign": {Type: "stdio", Command: "foreign-command"},
+	}}
+	body, err := json.Marshal(projection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(staging, ClineProjectionFile)
+	if err := os.WriteFile(path, body, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	plan := domain.DeliveryPlan{
+		TargetContext: domain.TargetContext{ProjectRoot: project},
+		Components: []domain.ComponentDecision{
+			{Kind: domain.ComponentMCPServer, Name: "first", Support: domain.SupportPrepared},
+			{Kind: domain.ComponentMCPServer, Name: "second", Support: domain.SupportPrepared},
+		},
+	}
+	objects, err := clineProjectObjects(staging, domain.PackageEnvelope{}, plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(objects) != 2 {
+		t.Fatalf("expected only the two selected MCP ownership receipts, got %#v", objects)
+	}
+	for i, name := range []string{"first", "second"} {
+		object := objects[i]
+		if object.LogicalName != name || object.Kind != clineProjectMCPKind ||
+			object.ObjectID != clineProjectMCPKind+":"+name || object.ManagedDigest == "" ||
+			object.Path != filepath.Join(project, ".uap", "clients", "cline", "mcp.json") {
+			t.Fatalf("invalid selected MCP ownership receipt: %#v", object)
+		}
+	}
+	unchanged, err := os.ReadFile(path)
+	if err != nil || string(unchanged) != string(body) {
+		t.Fatalf("owned receipt projection modified its staged source: %v", err)
+	}
+}
+
+func TestClineProjectObjectsMissingSelectedMCPRefusesWithoutWritingConfig(t *testing.T) {
+	project := t.TempDir()
+	staging := filepath.Join(project, ".uap", "package")
+	if err := os.MkdirAll(staging, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	body, err := json.Marshal(ClineProjection{Servers: map[string]nativeconfig.Server{
+		"foreign": {Type: "stdio", Command: "foreign-command"},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(staging, ClineProjectionFile)
+	if err := os.WriteFile(path, body, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	plan := domain.DeliveryPlan{
+		TargetContext: domain.TargetContext{ProjectRoot: project},
+		Components: []domain.ComponentDecision{{
+			Kind: domain.ComponentMCPServer, Name: "selected", Support: domain.SupportPrepared,
+		}},
+	}
+	if _, err := clineProjectObjects(staging, domain.PackageEnvelope{}, plan); err == nil {
+		t.Fatal("missing selected source MCP member must fail closed")
+	}
+	unchanged, err := os.ReadFile(path)
+	if err != nil || string(unchanged) != string(body) {
+		t.Fatalf("refused ownership changed foreign source projection: %v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(project, ".uap", "clients", "cline", "mcp.json")); !os.IsNotExist(err) {
+		t.Fatalf("refused ownership created native configuration: %v", err)
+	}
+}
