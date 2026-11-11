@@ -252,13 +252,60 @@ jobs:
           $found = @(Get-ChildItem -LiteralPath $dir -Recurse -File -Filter 'codex-x86_64-pc-windows-msvc.exe')
           if ($found.Count -ne 1) { throw 'Expected exactly one native Codex Windows binary' }
           "CODEX_BINARY=$($found[0].FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-      - name: Qualify genuine CLI core-inherit shell/MCP
+      # A no-secret, real sandbox smoke test. Passing is not native secrecy
+      # evidence; failure must block all canary-bearing Windows probes.
+      - name: Preflight genuine Windows read-only sandbox without credentials
         if: steps.install.outcome == 'success'
+        id: windows-sandbox-preflight
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+          import subprocess
+          import sys
+          import tempfile
+
+          sys.path.insert(0, str(Path.cwd() / "scripts"))
+          from codex_env_names_native_spike import isolated_env, ENV_NAME, FOREIGN_ENV_NAME
+
+          with tempfile.TemporaryDirectory(prefix="uap-win-sandbox-no-secret-") as tmp:
+              root = Path(tmp)
+              (root / "tmp").mkdir()
+              env = isolated_env(root, root / "home", "", "")
+              env.pop(ENV_NAME, None)
+              env.pop(FOREIGN_ENV_NAME, None)
+              command = [sys.argv[1], "sandbox", "--permission-profile",
+                         ":read-only", "--", env.get("COMSPEC", "cmd.exe"),
+                         "/d", "/c", "echo UAP_WINDOWS_NO_SECRET_SANDBOX_OK"]
+              try:
+                  result = subprocess.run(
+                      command, cwd=root, env=env, capture_output=True,
+                      text=True, timeout=60)
+              except (OSError, subprocess.TimeoutExpired) as exc:
+                  print("windows_no_secret_sandbox_probe_pass=false")
+                  print("windows_no_secret_sandbox_probe_exception=" + type(exc).__name__)
+                  raise SystemExit(1)
+              passed = (result.returncode == 0
+                        and "UAP_WINDOWS_NO_SECRET_SANDBOX_OK" in result.stdout)
+              print("windows_no_secret_sandbox_probe_pass=" + str(passed).lower())
+              if not passed:
+                  # Print only fixed labels, never raw native output or paths.
+                  observed = (result.stdout + result.stderr).lower()
+                  labels = ("helper_unknown_error", "setup refresh", "access denied",
+                            "blocked by policy", "createprocessasuserw", "sandbox",
+                            "permission", "unrecognized", "not supported",
+                            "invalid", "timed out", "failed")
+                  print("windows_no_secret_sandbox_probe_indicators=" +
+                        ",".join(label for label in labels if label in observed))
+                  raise SystemExit(1)
+          '@ | python - "$env:CODEX_BINARY"
+      - name: Qualify genuine CLI core-inherit shell/MCP
+        if: steps.windows-sandbox-preflight.outcome == 'success'
         id: core-cli
         shell: pwsh
         run: python scripts/codex_env_names_native_spike.py "$env:CODEX_BINARY" "$env:RUNNER_TEMP\codex-win-core-cli.json" core_inherit
       - name: Qualify genuine app-server core-inherit shell/MCP
-        if: always() && steps.install.outcome == 'success'
+        if: always() && steps.windows-sandbox-preflight.outcome == 'success'
         id: core-appserver
         shell: pwsh
         run: python scripts/codex_env_names_appserver_spike.py "$env:CODEX_BINARY" "$env:RUNNER_TEMP\codex-win-core-appserver.json" core_inherit
