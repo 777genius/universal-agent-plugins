@@ -835,6 +835,95 @@ def copilot_user_c_settings_shape(env, case_root):
         for identity in sorted(UPDATE_ALIASES)}
 
 
+
+def copilot_signed_user_versions(cli, env, project):
+    """Read exact installed signed versions, not guessed native plugin versions."""
+    versions = {}
+    for row in inventory(cli, env, project, "copilot", "user"):
+        distribution = (row.get("directory") or {}).get("recorded_distribution")
+        alias = next((name for name, source in REQUIRED_DISTRIBUTIONS.items()
+                      if source == distribution), None)
+        if alias is None or alias in versions:
+            raise AssertionError("Copilot User signed native version identity changed")
+        bindings = row.get("clients") or []
+        if not isinstance(bindings, list):
+            raise AssertionError("Copilot User native version bindings invalid")
+        selected = [entry for entry in bindings if isinstance(entry, dict)
+                    and entry.get("client_id") == "copilot"
+                    and entry.get("scope") == "user"]
+        if len(selected) != 1 or not isinstance(selected[0].get("package_revision"), dict):
+            raise AssertionError("Copilot User native version binding ambiguous")
+        version = selected[0]["package_revision"].get("version")
+        if not isinstance(version, str) or not version.strip():
+            raise AssertionError("Copilot User signed version missing")
+        versions[alias] = version
+    if set(versions) != UPDATE_ALIASES:
+        raise AssertionError("Copilot User signed native closure incomplete")
+    return versions
+
+
+def copilot_native_entries_state(entries, expected_versions):
+    """Reject reminted/foreign managed registrations, not only known names."""
+    if not isinstance(entries, list) or len(entries) > 1024:
+        raise AssertionError("Copilot native plugin listing malformed")
+    found = set()
+    for entry in entries:
+        if (not isinstance(entry, dict) or not isinstance(entry.get("name"), str)
+                or not entry["name"] or type(entry.get("enabled")) is not bool
+                or not isinstance(entry.get("source"), str)
+                or ("version" in entry and entry["version"] is not None
+                    and not isinstance(entry["version"], str))
+                or ("marketplace" in entry and entry["marketplace"] is not None
+                    and not isinstance(entry["marketplace"], str))):
+            raise AssertionError("Copilot native plugin entry malformed")
+        name, marketplace = entry["name"], entry.get("marketplace")
+        managed = isinstance(marketplace, str) and re.fullmatch(
+            r"agentplugins-[0-9a-f]{12}", marketplace) is not None
+        if not managed and name not in UPDATE_ALIASES:
+            continue
+        if not managed or name not in UPDATE_ALIASES or name in found:
+            raise AssertionError("Copilot native managed identity is foreign or duplicated")
+        if (name not in expected_versions or not entry["enabled"]
+                or (entry.get("version") is not None
+                    and entry["version"] != expected_versions[name])):
+            raise AssertionError("Copilot native registration remained or has wrong version")
+        found.add(name)
+    if found != set(expected_versions):
+        raise AssertionError("Copilot native managed closure differs from signed receipts")
+    return {"status": "installed" if expected_versions else "absent",
+            "managed_count": len(found)}
+
+
+def copilot_native_scope_state(env, project, expected_versions):
+    """Read documented native CLI JSON in this case; never export its contents."""
+    home = Path(env["HOME"])
+    profile = home / ".copilot"
+    executable = audit["AGENT_BINARIES"].get("copilot")
+    if (not executable or not Path(executable).is_absolute()
+            or not profile.is_dir() or profile.is_symlink()
+            or not audit["path_inside_case"](profile, project.parent)):
+        raise AssertionError("Copilot native inventory prerequisites unqualified")
+    response = invoke([executable, "plugin", "list", "--json"],
+                      {**env, "COPILOT_HOME": str(profile)}, project, 30)
+    if response.get("exit_code") != 0 or response.get("timeout"):
+        raise AssertionError("Copilot native plugin list did not succeed")
+    return copilot_native_entries_state(response.get("_json"), expected_versions)
+
+
+def copilot_disabled_closure_only(shapes, native_before, native_after):
+    """Permit only proven disabled vendor preferences, never active registrations."""
+    if (native_before != {"status": "installed", "managed_count": 4}
+            or native_after != {"status": "absent", "managed_count": 0}
+            or not isinstance(shapes, dict)
+            or set(shapes) != {"before", "after_restore", "after_remove"}
+            or any(not isinstance(shapes[phase], dict)
+                   or set(shapes[phase]) != UPDATE_ALIASES for phase in shapes)):
+        return False
+    return all(audit["copilot_disabled_preference_only"](
+        shapes["before"][name], shapes["after_restore"][name],
+        shapes["after_remove"][name], native_before, native_after,
+        [".copilot/settings.json"]) for name in UPDATE_ALIASES)
+
 def copilot_project_mcp_residuals(project, identities, stage):
     """Inspect Copilot's two exact Project MCP locations by server member name."""
     def reject_constant(_):
@@ -880,7 +969,7 @@ def copilot_project_mcp_residuals(project, identities, stage):
     return leftovers
 
 
-def check_removed_native_components(target, home, case_root, stage, project_scope=False):
+def check_removed_native_components(target, home, case_root, stage, project_scope=False,\n                                    copilot_disabled_proof=False):
     """Refuse native MCP and Skill remnants after an empty scoped inventory."""
     # isolated_client_env() canonicalizes HOME. On macOS TemporaryDirectory
     # can return /var/... while canonical HOME is /private/var/... . Accept
@@ -962,6 +1051,12 @@ def check_removed_native_components(target, home, case_root, stage, project_scop
                             name, re.IGNORECASE) for alias in identities)):
                     leftovers.add(f"{root.name}/{relative}: directory")
     if leftovers:
+        # BUG-045: vendor-disabled preferences are not active registrations,
+        # but only a separate, exact native CLI absence + four-key proof can
+        # permit this single retained file. All other roots remain strict.
+        if (target == "copilot" and not project_scope and copilot_disabled_proof
+                and leftovers == {".copilot/settings.json"}):
+            return
         raise AssertionError(f"{stage}: native Marketing Kit remnants: {sorted(leftovers)}")
 
 
@@ -1225,6 +1320,8 @@ def main():
                 name: (project_a / name).read_bytes() if (project_a / name).exists() else None
                 for name in ("uap.toml", "uap.lock")
             }
+            copilot_a_shapes = ({"before": copilot_user_c_settings_shape(env, root)}
+                                if options.target == "copilot" else None)
             user_scoped = ("--scope", "user")
             def user_inventory():
                 return identities(inventory(options.cli, env, project_a, options.target, "user"),
@@ -1267,6 +1364,8 @@ def main():
                 raise AssertionError("User repair changed installation identities")
             if (user_portable / "uap.lock").read_bytes() != user_lock_after_update:
                 raise AssertionError("User repair modified signed lock")
+            if copilot_a_shapes is not None:
+                copilot_a_shapes["after_restore"] = copilot_user_c_settings_shape(env, root)
 
             # Project B has previously installed packages; a true cold User
             # restore needs a third HOME with no prior installs or native state.
@@ -1343,6 +1442,9 @@ def main():
                     "stage": "User C native HubSpot uninstall",
                     "exit_code": 0, "result": "passed",
                 })
+            native_c_before = (copilot_native_scope_state(
+                env_c, project_c, copilot_signed_user_versions(options.cli, env_c, project_c))
+                if copilot_c_shapes is not None else None)
             run(env_c, project_c, "User remove C", "remove", "marketing-kit",
                 *user_scoped, *remove_c_attestation)
             check_profile_unchanged(env, project_a, user_a_native_before_c,
@@ -1350,11 +1452,19 @@ def main():
             if identities(inventory(options.cli, env_c, project_c, options.target, "user"),
                           options.target, "user"):
                 raise AssertionError("User C remove retained required closure")
+            copilot_c_disabled = False
             if copilot_c_shapes is not None:
                 copilot_c_shapes["after_remove"] = copilot_user_c_settings_shape(env_c, root)
+                native_c_after = copilot_native_scope_state(env_c, project_c, {})
+                copilot_c_disabled = copilot_disabled_closure_only(
+                    copilot_c_shapes, native_c_before, native_c_after)
                 report["copilot_user_c_settings_shape"] = copilot_c_shapes
+                report["copilot_user_c_native_state"] = {
+                    "before": native_c_before, "after": native_c_after,
+                    "disabled_only": copilot_c_disabled}
             check_removed_native_components(options.target, Path(env_c["HOME"]),
-                                            root, "User C remove")
+                                            root, "User C remove",
+                                            copilot_disabled_proof=copilot_c_disabled)
             if user_inventory() != user_after_update:
                 raise AssertionError("User C remove mutated User A installations")
             if (user_portable / "uap.lock").read_bytes() != user_lock_after_update:
@@ -1385,12 +1495,25 @@ def main():
                     "stage": "User native HubSpot uninstall",
                     "exit_code": 0, "result": "passed",
                 })
+            native_a_before = (copilot_native_scope_state(
+                env, project_a, copilot_signed_user_versions(options.cli, env, project_a))
+                if copilot_a_shapes is not None else None)
             run(env, project_a, "User remove", "remove", "marketing-kit",
                 *user_scoped, *user_remove_attestation)
             if user_inventory():
                 raise AssertionError("User removal retained Marketing Kit or mandatory children")
+            copilot_a_disabled = False
+            if copilot_a_shapes is not None:
+                copilot_a_shapes["after_remove"] = copilot_user_c_settings_shape(env, root)
+                native_a_after = copilot_native_scope_state(env, project_a, {})
+                copilot_a_disabled = copilot_disabled_closure_only(
+                    copilot_a_shapes, native_a_before, native_a_after)
+                report["copilot_user_a_native_state"] = {
+                    "before": native_a_before, "after": native_a_after,
+                    "disabled_only": copilot_a_disabled}
             check_removed_native_components(options.target, Path(env["HOME"]),
-                                            root, "User A remove")
+                                            root, "User A remove",
+                                            copilot_disabled_proof=copilot_a_disabled)
             for name, expected_bytes in project_files.items():
                 path = project_a / name
                 current_bytes = path.read_bytes() if path.exists() else None

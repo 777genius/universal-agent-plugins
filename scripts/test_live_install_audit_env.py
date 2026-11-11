@@ -21,6 +21,63 @@ def load_audit():
 
 class IsolatedClientEnvironmentTest(unittest.TestCase):
 
+
+    def test_marketing_kit_copilot_native_closure_and_disabled_preferences(self):
+        from runpy import run_path
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        native = runner["copilot_native_entries_state"]
+        disabled = runner["copilot_disabled_closure_only"]
+        aliases = runner["UPDATE_ALIASES"]
+        versions = {name: "0.1.0" for name in aliases}
+        entries = [{"name": name, "marketplace": "agentplugins-123456abcdef",
+                    "enabled": True, "source": "local", "version": "0.1.0"}
+                   for name in sorted(aliases)]
+        installed = native(entries, versions)
+        absent = native([], {})
+        self.assertEqual(installed, {"status": "installed", "managed_count": 4})
+        self.assertEqual(absent, {"status": "absent", "managed_count": 0})
+        before = {"status": "absent"}
+        active = {"status": "parsed", "allowed_sections": ["enabledPlugins"],
+                  "enabled_plugin_value_counts": {"true": 1, "false": 0,
+                                                  "non_boolean": 0}}
+        inactive = {"status": "parsed", "allowed_sections": ["enabledPlugins"],
+                    "enabled_plugin_value_counts": {"true": 0, "false": 1,
+                                                    "non_boolean": 0},
+                    "match_counts": {"exact_key": 0, "qualified_key": 1,
+                                     "reference_key": 0, "exact_value": 0,
+                                     "qualified_value": 0, "reference_value": 0}}
+        shapes = {"before": {name: before for name in aliases},
+                  "after_restore": {name: active for name in aliases},
+                  "after_remove": {name: inactive for name in aliases}}
+        self.assertTrue(disabled(shapes, installed, absent))
+        for bad in (
+                entries + [dict(entries[0])],
+                [{**entries[0], "enabled": False}, *entries[1:]],
+                [{**entries[0], "version": "9.9.9"}, *entries[1:]],
+                [{**entries[0], "marketplace": "foreign"}, *entries[1:]],
+                [{**entries[0], "name": "reminted"}, *entries[1:]],
+                [{**entries[0], "enabled": "true"}, *entries[1:]],
+                entries[:-1]):
+            with self.subTest(bad=bad), self.assertRaises(AssertionError):
+                native(bad, versions)
+        with self.assertRaises(AssertionError):
+            native(entries, {})
+        for bad_state in (
+                {"status": "unqualified", "managed_count": 4},
+                {"status": "installed", "managed_count": 3}):
+            self.assertFalse(disabled(shapes, bad_state, absent))
+        for change in (
+                {**inactive, "enabled_plugin_value_counts":
+                    {"true": 1, "false": 0, "non_boolean": 0}},
+                {**inactive, "match_counts":
+                    {**inactive["match_counts"], "reference_value": 1}},
+                {**inactive, "allowed_sections": ["enabledPlugins", "mcpServers"]}):
+            changed = dict(shapes)
+            changed["after_remove"] = {**shapes["after_remove"],
+                                       "marketing-kit": change}
+            self.assertFalse(disabled(changed, installed, absent))
+
     def test_marketing_kit_rejects_non_success_json_even_with_zero_exit(self):
         # A zero process exit with a refusal/partial response is not lifecycle PASS.
         from runpy import run_path
