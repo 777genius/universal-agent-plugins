@@ -12,7 +12,16 @@
     "app_support": "unsupported",
     "extension_support": "unsupported",
     "saved_dependency": true,
-    "excluded_reason": ""
+    "excluded_reason": "",
+    "project": {
+      "skill_support": "projected",
+      "mcp_transports": {
+        "sse": "unsupported",
+        "stdio": "projected",
+        "streamable-http": "projected"
+      },
+      "extension_support": "unsupported"
+    }
   },
   {
     "id": "chatgpt",
@@ -42,7 +51,16 @@
     "app_support": "unsupported",
     "extension_support": "native",
     "saved_dependency": true,
-    "excluded_reason": ""
+    "excluded_reason": "",
+    "project": {
+      "skill_support": "native",
+      "mcp_transports": {
+        "sse": "native",
+        "stdio": "native",
+        "streamable-http": "native"
+      },
+      "extension_support": "unsupported"
+    }
   },
   {
     "id": "copilot",
@@ -57,7 +75,16 @@
     "app_support": "unsupported",
     "extension_support": "native",
     "saved_dependency": true,
-    "excluded_reason": ""
+    "excluded_reason": "",
+    "project": {
+      "skill_support": "native",
+      "mcp_transports": {
+        "sse": "native",
+        "stdio": "native",
+        "streamable-http": "native"
+      },
+      "extension_support": "unsupported"
+    }
   },
   {
     "id": "vscode",
@@ -72,7 +99,16 @@
     "app_support": "unsupported",
     "extension_support": "prepared",
     "saved_dependency": false,
-    "excluded_reason": "dependency_management_deferred"
+    "excluded_reason": "dependency_management_deferred",
+    "project": {
+      "skill_support": "prepared",
+      "mcp_transports": {
+        "sse": "prepared",
+        "stdio": "prepared",
+        "streamable-http": "prepared"
+      },
+      "extension_support": "unsupported"
+    }
   },
   {
     "id": "kiro",
@@ -87,7 +123,16 @@
     "app_support": "unsupported",
     "extension_support": "unsupported",
     "saved_dependency": true,
-    "excluded_reason": ""
+    "excluded_reason": "",
+    "project": {
+      "skill_support": "native",
+      "mcp_transports": {
+        "sse": "native",
+        "stdio": "native",
+        "streamable-http": "native"
+      },
+      "extension_support": "unsupported"
+    }
   },
   {
     "id": "claude",
@@ -102,7 +147,16 @@
     "app_support": "unsupported",
     "extension_support": "unsupported",
     "saved_dependency": true,
-    "excluded_reason": ""
+    "excluded_reason": "",
+    "project": {
+      "skill_support": "projected",
+      "mcp_transports": {
+        "sse": "projected",
+        "stdio": "projected",
+        "streamable-http": "projected"
+      },
+      "extension_support": "unsupported"
+    }
   },
   {
     "id": "gemini",
@@ -117,7 +171,16 @@
     "app_support": "unsupported",
     "extension_support": "unsupported",
     "saved_dependency": true,
-    "excluded_reason": ""
+    "excluded_reason": "",
+    "project": {
+      "skill_support": "native",
+      "mcp_transports": {
+        "sse": "native",
+        "stdio": "native",
+        "streamable-http": "native"
+      },
+      "extension_support": "unsupported"
+    }
   },
   {
     "id": "opencode",
@@ -132,7 +195,16 @@
     "app_support": "unsupported",
     "extension_support": "unsupported",
     "saved_dependency": true,
-    "excluded_reason": ""
+    "excluded_reason": "",
+    "project": {
+      "skill_support": "prepared",
+      "mcp_transports": {
+        "sse": "unsupported",
+        "stdio": "prepared",
+        "streamable-http": "prepared"
+      },
+      "extension_support": "unsupported"
+    }
   },
   {
     "id": "cline",
@@ -147,7 +219,16 @@
     "app_support": "unsupported",
     "extension_support": "unsupported",
     "saved_dependency": true,
-    "excluded_reason": ""
+    "excluded_reason": "",
+    "project": {
+      "skill_support": "native",
+      "mcp_transports": {
+        "sse": "native",
+        "stdio": "native",
+        "streamable-http": "native"
+      },
+      "extension_support": "unsupported"
+    }
   },
   {
     "id": "windsurf",
@@ -162,7 +243,16 @@
     "app_support": "unsupported",
     "extension_support": "prepared",
     "saved_dependency": true,
-    "excluded_reason": ""
+    "excluded_reason": "",
+    "project": {
+      "skill_support": "prepared",
+      "mcp_transports": {
+        "sse": "prepared",
+        "stdio": "prepared",
+        "streamable-http": "prepared"
+      },
+      "extension_support": "unsupported"
+    }
   },
   {
     "id": "grok",
@@ -177,7 +267,16 @@
     "app_support": "unsupported",
     "extension_support": "unsupported",
     "saved_dependency": true,
-    "excluded_reason": ""
+    "excluded_reason": "",
+    "project": {
+      "skill_support": "native",
+      "mcp_transports": {
+        "sse": "unsupported",
+        "stdio": "native",
+        "streamable-http": "native"
+      },
+      "extension_support": "unsupported"
+    }
   },
   {
     "id": "kimi",
@@ -192,7 +291,16 @@
     "app_support": "unsupported",
     "extension_support": "unsupported",
     "saved_dependency": true,
-    "excluded_reason": ""
+    "excluded_reason": "",
+    "project": {
+      "skill_support": "native",
+      "mcp_transports": {
+        "sse": "unsupported",
+        "stdio": "native",
+        "streamable-http": "native"
+      },
+      "extension_support": "unsupported"
+    }
   },
   {
     "id": "qoder",
@@ -207,7 +315,64 @@
     "app_support": "unsupported",
     "extension_support": "unsupported",
     "saved_dependency": true,
-    "excluded_reason": ""
+    "excluded_reason": "",
+    "project": {
+      "skill_support": "native",
+      "mcp_transports": {
+        "sse": "unsupported",
+        "stdio": "native",
+        "streamable-http": "native"
+      },
+      "extension_support": "unsupported"
+    }
+  },
+  {
+    "id": "hermes",
+    "display_name": "Hermes Agent",
+    "package_mode": "native",
+    "skill_support": "native",
+    "mcp_transports": {
+      "sse": "unsupported",
+      "stdio": "native",
+      "streamable-http": "native"
+    },
+    "app_support": "unsupported",
+    "extension_support": "unsupported",
+    "saved_dependency": true,
+    "excluded_reason": "",
+    "project": {
+      "skill_support": "native",
+      "mcp_transports": {
+        "sse": "unsupported",
+        "stdio": "unsupported",
+        "streamable-http": "unsupported"
+      },
+      "extension_support": "unsupported"
+    }
+  },
+  {
+    "id": "antigravity",
+    "display_name": "Google Antigravity",
+    "package_mode": "native",
+    "skill_support": "native",
+    "mcp_transports": {
+      "sse": "unsupported",
+      "stdio": "native",
+      "streamable-http": "native"
+    },
+    "app_support": "unsupported",
+    "extension_support": "unsupported",
+    "saved_dependency": true,
+    "excluded_reason": "",
+    "project": {
+      "skill_support": "native",
+      "mcp_transports": {
+        "sse": "unsupported",
+        "stdio": "native",
+        "streamable-http": "native"
+      },
+      "extension_support": "unsupported"
+    }
   },
   {
     "id": "pi",
@@ -222,6 +387,15 @@
     "app_support": "unsupported",
     "extension_support": "native",
     "saved_dependency": true,
-    "excluded_reason": ""
+    "excluded_reason": "",
+    "project": {
+      "skill_support": "native",
+      "mcp_transports": {
+        "sse": "unsupported",
+        "stdio": "native",
+        "streamable-http": "native"
+      },
+      "extension_support": "native"
+    }
   }
 ]

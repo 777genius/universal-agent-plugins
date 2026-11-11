@@ -273,29 +273,7 @@ func TestEffectiveDependencyDrift(t *testing.T) {
 	for _, control := range []string{"go.work", "install/integrationctl/go.mod"} {
 		t.Run(control, func(t *testing.T) {
 			dir := newSourceFixture(t)
-			// This historical fixture predates the patched TOML parser.
-			// Align its module graph before querying with GOPROXY=off.
-			for _, module := range []string{
-				"go.mod", "cli/go.mod", "cli/go.sum", "go.work.sum",
-				"install/integrationctl/go.mod", "install/integrationctl/go.sum",
-				"install/integrationctl/agentplugins/go.mod", "install/integrationctl/agentplugins/go.sum",
-			} {
-				path := filepath.Join(dir, module)
-				data, err := os.ReadFile(path)
-				if err != nil {
-					t.Fatal(err)
-				}
-				updated := bytes.ReplaceAll(data,
-					[]byte("github.com/pelletier/go-toml/v2 v2.3.0 h1:k59bC/lIZREW0/iVaQR8nDHxVq8OVlIzYCOJf421CaM="),
-					[]byte("github.com/pelletier/go-toml/v2 v2.4.3 h1:GTRvJQutkOSftxIFD5xw9aepkYNuPWmVJpffdDPYVpY="))
-				updated = bytes.ReplaceAll(updated,
-					[]byte("github.com/pelletier/go-toml/v2 v2.3.0/go.mod"),
-					[]byte("github.com/pelletier/go-toml/v2 v2.4.3/go.mod"))
-				updated = bytes.ReplaceAll(updated,
-					[]byte("github.com/pelletier/go-toml/v2 v2.3.0"),
-					[]byte("github.com/pelletier/go-toml/v2 v2.4.3"))
-				writeFixture(t, dir, module, updated)
-			}
+			alignOfflineFixtureDependencies(t, dir)
 			replacement := filepath.Join(filepath.Dir(control), "docs-pflag-replacement")
 			writeFixture(t, dir, filepath.ToSlash(filepath.Join(replacement, "go.mod")), []byte("module github.com/spf13/pflag\n\ngo 1.22\n"))
 			path := filepath.Join(dir, control)
@@ -325,5 +303,41 @@ func TestEffectiveDependencyDrift(t *testing.T) {
 			}
 			rejectedBeforeOutput(t, dir, sha, "source input mismatch", trees)
 		})
+	}
+}
+
+func alignOfflineFixtureDependencies(t *testing.T, dir string) {
+	t.Helper()
+	// Align historical test metadata with the dependencies warmed by current CI.
+	// Production source fingerprints and the offline query remain unchanged.
+	for _, module := range []string{
+		"go.mod", "cli/go.mod", "cli/go.sum", "go.work.sum",
+		"install/integrationctl/go.mod", "install/integrationctl/go.sum",
+		"install/integrationctl/agentplugins/go.mod", "install/integrationctl/agentplugins/go.sum",
+	} {
+		path := filepath.Join(dir, module)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		updated := bytes.ReplaceAll(data,
+			[]byte("github.com/pelletier/go-toml/v2 v2.3.0 h1:k59bC/lIZREW0/iVaQR8nDHxVq8OVlIzYCOJf421CaM="),
+			[]byte("github.com/pelletier/go-toml/v2 v2.4.3 h1:GTRvJQutkOSftxIFD5xw9aepkYNuPWmVJpffdDPYVpY="))
+		updated = bytes.ReplaceAll(updated,
+			[]byte("github.com/pelletier/go-toml/v2 v2.3.0/go.mod"),
+			[]byte("github.com/pelletier/go-toml/v2 v2.4.3/go.mod"))
+		updated = bytes.ReplaceAll(updated,
+			[]byte("github.com/pelletier/go-toml/v2 v2.3.0"),
+			[]byte("github.com/pelletier/go-toml/v2 v2.4.3"))
+		updated = bytes.ReplaceAll(updated,
+			[]byte("golang.org/x/text v0.40.0 h1:Ub2Z6/xjgF1WrYQz2nuITOEegKFtiIy+rieRJ5lHZKs="),
+			[]byte("golang.org/x/text v0.41.0 h1:vz/seA0lnX87Othu2f/0L24RcgrXD9/YFTSuGjj3rH8="))
+		updated = bytes.ReplaceAll(updated,
+			[]byte("golang.org/x/text v0.40.0/go.mod h1:hpnzDAfGV753zIKo+wk3u1bVKCGPbrnF7+7LBF/UHVY="),
+			[]byte("golang.org/x/text v0.41.0/go.mod h1:jvf1O8ajNzZqhSrQBPbutR/EB83Cc0CFrezNQIwbb5M="))
+		updated = bytes.ReplaceAll(updated,
+			[]byte("golang.org/x/text v0.40.0"),
+			[]byte("golang.org/x/text v0.41.0"))
+		writeFixture(t, dir, module, updated)
 	}
 }

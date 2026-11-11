@@ -43,9 +43,7 @@ Interprete a compatibilidade como várias perguntas separadas:
 
 A entrega em projetos costuma permanecer **Prepared** enquanto faltam confiança,
 recarga, configuração explícita ou etapas de sessão. A instalação em projetos
-do ChatGPT é explicitamente incompatível. O escopo de projeto do VS Code prepara
-arquivos para uma única pasta local; a observação de metadados de sua versão
-fixada não é evidência de inicialização MCP nem de execução do modelo. Consulte
+do ChatGPT é explicitamente incompatível. Consulte
 [suporte a projetos por cliente](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md) e o [índice de evidências de projetos](https://github.com/777genius/universal-agent-plugins/blob/main/docs/evidence/PROJECT_INSTALLATION.md).
 
 Os registros abaixo preservam versões históricas exatas, versões dos clientes,
@@ -54,6 +52,14 @@ automaticamente à versão atual, a uma versão posterior de cliente, a outro es
 a um pacote não testado. UAP é uma ferramenta independente da comunidade; estas
 são observações delimitadas dos mantenedores, não certificação de fornecedores
 nem uma afirmação de prontidão universal para produção.
+
+## Hermes e Antigravity: verificação do código-fonte {#hermes-antigravity-source}
+
+No ponto de verificação de 2026-11-10, a CLI publicada `0.1.102` não inclui Hermes nem Antigravity. Os resultados abaixo qualificam o código-fonte, não um artefato publicado. A verificação do binário imutável da versão e a elegibilidade no Directory assinado continuam pendentes e separadas. A capacidade do cliente não autoriza um pacote do Directory para esse destino.
+
+**Hermes 0.23.0:** Skills do usuário e configuração MCP stdio/Streamable HTTP pertencente ao UAP; em projetos, apenas Skills. Project MCP é recusado sem redirecionamento para a configuração do usuário. Linux x64, macOS arm64 e Windows x64 nativo passaram pela primeira adição e repetição, atualização, reparo, remoção, descoberta em projeto sem confiança e isolamento A/B: [42813277862](https://github.com/777genius/universal-agent-plugins/actions/runs/42813277862), UAP `a50c8a245f1c273efb3d171f4c54ed540475336a`. Quatro trocas HTTP de loopback `initialize`/`tools/list` por sistema comprovam conexão e descoberta de ferramentas; não comprovam `tools/call`, uso de modelos, autenticação ou execução em projeto confiável. SSE e hooks não são compatíveis. Comandos portáteis são projetados como Skills; comandos de invocação exclusivamente explícita são retidos quando o cliente não consegue impor essa restrição.
+
+**Antigravity:** os pacotes de plugins nativos pertencentes ao UAP, com Skills e MCP stdio/Streamable HTTP nos escopos de usuário e projeto, permanecem **Prepared**. O `agy` 1.5.3 real passou pela validação estrita e por CLI import/list/uninstall isolados no Linux, macOS e Windows: [42804680737](https://github.com/777genius/universal-agent-plugins/actions/runs/42804680737). Essas observações não comprovam descoberta ou habilitação no IDE real, inicialização de MCP, execução de ferramentas ou autenticação; a verificação do IDE continua separada. O UAP não concede confiança ao projeto.
 
 ## Extensões nativas do Pi {#pi-native-extensions}
 

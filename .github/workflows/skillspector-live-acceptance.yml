@@ -82,6 +82,15 @@ jobs:
         with:
           persist-credentials: false
           ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Select the source actually published by Pages
+        id: production-source
+        env:
+          EXPECTED_CONTROL_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          python3 scripts/production_site_source.py select "$GITHUB_WORKSPACE" "$RUNNER_TEMP/production-site-control" --expected-control "$EXPECTED_CONTROL_SHA"
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - uses: pnpm/action-setup@a8198c4bff370c8506180b035930dea56dbd5288 # v5
         with:
@@ -106,7 +115,7 @@ jobs:
         timeout-minutes: 20
         env:
           UAP_E2E_LIVE_SKILLSPECTOR: "1"
-          UAP_LANDING_DEPLOYMENT_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          UAP_LANDING_DEPLOYMENT_SHA: ${{ steps.production-source.outputs.commit }}
           UAP_LANDING_SCREENSHOT_DIR: ${{ runner.temp }}/uap-skillspector-live
         run: node --experimental-strip-types scripts/skillspector-live-smoke.mjs
 
@@ -115,8 +124,9 @@ jobs:
         timeout-minutes: 10
         env:
           UAP_E2E_LIVE_SKILLS: '1'
-          UAP_LANDING_DEPLOYMENT_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          UAP_LANDING_DEPLOYMENT_SHA: ${{ steps.production-source.outputs.commit }}
           UAP_SKILLS_INSTALL_REPORT_DIR: ${{ runner.temp }}/uap-skills-install-live
+          UAP_GITHUB_READ_TOKEN: ${{ github.token }}
         run: node --experimental-strip-types scripts/skills-install-live-smoke.ts
 
       - name: Retain evidence and screenshots
@@ -127,5 +137,6 @@ jobs:
           path: |
             ${{ runner.temp }}/uap-skillspector-live/
             ${{ runner.temp }}/uap-skills-install-live/
+            ${{ runner.temp }}/production-site-control/receipt.json
           if-no-files-found: warn
           retention-days: 7

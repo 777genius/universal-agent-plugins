@@ -118,6 +118,29 @@ func TestDependencyShortDirectoryNameProjectPlacementKeepsSignedSource(t *testin
 	}
 }
 
+func TestSavedCopilotDirectoryGrantDoesNotRequireVSCodeGrant(t *testing.T) {
+	fixture := newRolloutDirectoryFixture(t, []domain.ClientID{domain.ClientCopilot}, nil)
+	requirements := environment.Requirements{
+		SchemaVersion: 1,
+		Dependencies: map[string]environment.Requirement{
+			"docs": {Alias: "docs", Registry: &environment.RegistrySource{
+				Distribution: "rollout-demo",
+				Selector:     environment.Selector{Kind: environment.SelectorRelease, Value: "1"},
+			}},
+		},
+		Targets: map[string][]string{"copilot": {"docs"}},
+	}
+	canonical, err := fixture.cli.app.canonicalizeDependencyRequirements(context.Background(), requirements)
+	if err != nil || canonical.Dependencies["docs"].Registry.Distribution != "owner/rollout" {
+		t.Fatalf("saved Copilot source: %+v %v", canonical, err)
+	}
+	requirements.Dependencies["docs"].Registry.Distribution = "rollout-demo"
+	requirements.Targets["vscode"] = []string{"docs"}
+	if _, err := fixture.cli.app.canonicalizeDependencyRequirements(context.Background(), requirements); !errors.Is(err, domain.ErrDirectoryIneligible) {
+		t.Fatalf("explicit VS Code target without signed grant was accepted: %v", err)
+	}
+}
+
 func TestDependencyDirectoryRepairUsesInstalledReceiptNotLockEligibility(t *testing.T) {
 	fixture := newRolloutDirectoryFixture(t, []domain.ClientID{domain.ClientCodex}, []domain.ClientID{domain.ClientCodex})
 	loaded, err := fixture.cli.app.acquireLocal(context.Background(), fixture.v1.root)
@@ -211,11 +234,11 @@ func TestDependencyLockedShortNameDoesNotRecheckInstallEligibility(t *testing.T)
 	if _, err := readDependencyLock(path, canonical); err != nil {
 		t.Fatal(err)
 	}
-	// Resolving commands must reuse lock identity before Directory lookup.
+	// Lock replay must preserve the pinned identity without a Directory lookup
+	// or source acquisition. The trusted client remains available solely for
+	// validating the recorded signing lineage before any cache access.
 	directoryCalls := fixture.directory.calls
 	sourceCalls := fixture.acquirer.revisionCalls[release.PackageSource.Revision]
-	previousClient := fixture.cli.app.DirectoryClient
-	fixture.cli.app.DirectoryClient = nil
 	requirements.Dependencies["docs"].Registry.Distribution = distribution.ProductID
 	resolved, _, next, err := resolveDependencyLock(context.Background(), fixture.cli.app, &options{dryRun: true}, requirements, []byte(dependencyRead(t, path)), "")
 	if err != nil || resolved.Dependencies["docs"].Registry.Distribution != "owner/rollout" || next.Packages[0].TreeDigest != lock.Packages[0].TreeDigest {
@@ -224,7 +247,6 @@ func TestDependencyLockedShortNameDoesNotRecheckInstallEligibility(t *testing.T)
 	if fixture.directory.calls != directoryCalls || fixture.acquirer.revisionCalls[release.PackageSource.Revision] != sourceCalls {
 		t.Fatal("local pinned replay performed a Directory lookup or source acquisition")
 	}
-	fixture.cli.app.DirectoryClient = previousClient
 	// Exact locked restore permits supersession without claiming installed history.
 	loaded, err := fixture.cli.app.acquireLocal(context.Background(), fixture.v1.root)
 	if err != nil {

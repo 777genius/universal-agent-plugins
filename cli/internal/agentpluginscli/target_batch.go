@@ -23,6 +23,53 @@ type batchTargetResult struct {
 	Error  string `json:"error,omitempty"`
 }
 
+// Public --target names describe products. Durable receipts and signed Directory
+// records retain canonical IDs: codex (local) and chatgpt (remote Web).
+// Normalize only actual CLI flag input, never state-derived canonical targets.
+// Public target names are not persistent client IDs. Keep this conversion
+// at user-facing command boundaries and never apply it to state/Directory IDs.
+func canonicalPublicTargetName(raw string) string {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "chatgpt", "chatgpt-desktop":
+		return "codex"
+	case "chatgptweb", "chatgpt-web":
+		return "chatgpt"
+	default:
+		return raw
+	}
+}
+
+func publicCLITargetName(id domain.ClientID) string {
+	return domain.PublicTargetFlagName(id)
+}
+
+type targetFlagValue struct {
+	target *string
+	input  *string
+}
+
+func (flag targetFlagValue) String() string {
+	if flag.input == nil {
+		return ""
+	}
+	return *flag.input
+}
+
+func (targetFlagValue) Type() string { return "string" }
+
+func (flag targetFlagValue) Set(raw string) error {
+	if flag.target == nil || flag.input == nil {
+		return fmt.Errorf("target flag is not initialized")
+	}
+	*flag.input = raw
+	parts := strings.Split(raw, ",")
+	for i, part := range parts {
+		parts[i] = canonicalPublicTargetName(part)
+	}
+	*flag.target = strings.Join(parts, ",")
+	return nil
+}
+
 func parseTargetOption(value string) ([]domain.ClientID, error) {
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" {
@@ -41,7 +88,7 @@ func parseTargetOption(value string) ([]domain.ClientID, error) {
 			return nil, fmt.Errorf("--target all is not supported; choose clients explicitly")
 		}
 		if strings.EqualFold(raw, "openai") {
-			return nil, fmt.Errorf("target %q is ambiguous; use codex, chatgpt, or both", raw)
+			return nil, fmt.Errorf("target %q is ambiguous; use codex, chatgpt (Desktop), or chatgptweb (Web)", raw)
 		}
 
 		target := normalizeTarget(raw)
@@ -87,7 +134,7 @@ func supportedTargetHelp() string {
 	for index, id := range ids {
 		values[index] = string(id)
 	}
-	return strings.Join(values, ", ")
+	return strings.Join(values, ", ") + ", chatgptweb (chatgpt=Desktop, chatgptweb=Web)"
 }
 
 func joinTargets(targets []domain.ClientID) string {

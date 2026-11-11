@@ -22,13 +22,13 @@ func chatGPTRegistrationResumeAction(cmd *cobra.Command, source string, targets 
 		args = append(args, "--"+flag.Name+"="+quoteResumeArgument(flag.Value.String()))
 	})
 	args = append(args, "--chatgpt-app-id", "<ID>")
-	return strings.Replace(domain.ChatGPTRegistrationAction, "add context7 --target chatgpt --chatgpt-app-id <ID>", strings.Join(args, " "), 1)
+	return strings.Replace(domain.ChatGPTRegistrationAction, "add context7 --target chatgptweb --chatgpt-app-id <ID>", strings.Join(args, " "), 1)
 }
 
 func clientIDStrings(targets []domain.ClientID) []string {
 	values := make([]string, len(targets))
 	for i, target := range targets {
-		values[i] = string(target)
+		values[i] = publicCLITargetName(target)
 	}
 	return values
 }

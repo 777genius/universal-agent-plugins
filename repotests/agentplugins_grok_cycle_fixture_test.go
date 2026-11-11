@@ -19,7 +19,7 @@ import (
 var grokCyclePublic = []string{"git-a", "git-b", "git-outside", "version", "add-a", "add-b", "repeat-add-a", "unchanged-update-a", "intact-repair-a", "update-a", "missing-repair-a", "remove-a", "repeat-remove-a", "remove-b"}
 var grokCycleInspections = []string{"empty-outside", "empty-a", "empty-b", "installed-a", "installed-b", "installed-outside", "stable-a", "updated-a", "updated-b", "updated-outside", "damaged-a", "repaired-a", "removed-a", "remaining-b", "removed-outside", "repeat-removed-a", "removed-b", "final-a", "final-b", "final-outside"}
 var grokCycleProofs = []string{"source-a-a-one", "source-b-b-one", "fixture", "add-a", "add-b", "repeat-add-a", "unchanged-update-a", "intact-repair-a", "before-source-revision-a", "source-a-a-two", "update-a", "before-missing-a", "damaged-a", "missing-repair-a", "remove-a", "repeat-remove-a", "remove-b", "final"}
-var grokCycleMembers = []string{"grok-cycle-public.jsonl", "grok-cycle-inspect.jsonl", "grok-cycle-proof.jsonl"}
+var grokCycleMembers = []string{"grok-cycle-public.jsonl", "grok-cycle-inspect.jsonl", "grok-cycle-proof.jsonl", "grok-cycle-mcp-inspect.jsonl"}
 
 type grokCycleRecipe struct {
 	Scope, Project, Source, Name, Revision, Digest string

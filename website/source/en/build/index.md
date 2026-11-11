@@ -82,7 +82,7 @@ See [package layout](./layout) for the responsibility of each file.
 
 The following commands build the current CLI from source with authoring enabled.
 They require Git and the Go toolchain declared by the repository
-(currently Go 1.26.10). Record the checked-out commit when sharing results.
+(currently Go 1.26.11). Record the checked-out commit when sharing results.
 
 ```bash
 git clone https://github.com/777genius/universal-agent-plugins.git

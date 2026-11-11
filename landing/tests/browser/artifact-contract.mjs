@@ -163,6 +163,8 @@ test('final artifact gate rejects missing, altered, draft and mis-scoped output 
       await mutation('og-image.png', Buffer.alloc(24), /Social preview must be PNG/);
       await mutation('.well-known/ai-catalog.json', null, /Missing final artifact/);
       await mutation('.well-known/ard.json', null, /Missing final artifact/);
+      await mutation('.well-known/secret.json', 'secret', /Unexpected hidden Pages artifact file/);
+      await mutation('docs/.env', 'secret', /Unexpected hidden Pages artifact file/);
       await mutation('download/index.html', null, /Missing final artifact/);
       await mutation('download/_payload.json', null, /Missing final artifact/);
       await mutation(

@@ -242,3 +242,10 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.skill-card__benefit {
+  margin: 6px 0 10px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}

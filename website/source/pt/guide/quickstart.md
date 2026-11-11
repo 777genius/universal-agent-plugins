@@ -48,7 +48,7 @@ A [CLI](https://github.com/777genius/universal-agent-plugins/releases/latest)
 mantém o escopo de projeto explícito e a seleção automática de `install`,
 introduzida na 0.1.94. Ela também adiciona uma
 [API local de gerenciamento](../use/manage#local-management-api) e
-[extensões nativas do Pi](../reference/client-compatibility#pi-native-extensions).
+[extensões do Pi, Skills e MCP](../reference/client-compatibility#pi-native-extensions).
 Para conferir o plano de adição de um pacote a um projeto:
 
 Para uma entrada revisada e compatível do catálogo, a CLI publicada aceita o nome curto do Directory assinado com escopo Project explícito quando o cliente suporta todos os componentes obrigatórios (por exemplo, `agentplugins add context7 --target codex --scope project --dry-run`). Como alternativa, use a origem Git revisada e fixada em um SHA completo, com um cliente compatível. Substitua `OWNER/REPOSITORY`, `FULL_COMMIT_SHA` e `PACKAGE_PATH`; se o pacote estiver na raiz do repositório, omita `//PACKAGE_PATH`.

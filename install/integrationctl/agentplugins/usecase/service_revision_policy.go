@@ -194,6 +194,12 @@ func validateDirectoryTransition(installation domain.Installation, input AddInpu
 		return fmt.Errorf("Directory lifecycle operation is missing immutable release provenance")
 	}
 	current, incoming := installation.Directory, input.DirectoryResolution
+	// A verified release from a distinct signing lineage cannot silently
+	// replace an installed release, even if product, revision and bytes match.
+	// Require an explicit source switch instead of borrowing another feed's trust.
+	if current.FeedID != incoming.FeedID {
+		return fmt.Errorf("signed Directory feed change requires switch")
+	}
 	if current.ProductID != incoming.ProductID || current.DistributionID != incoming.DistributionID {
 		return fmt.Errorf("distribution change requires switch")
 	}

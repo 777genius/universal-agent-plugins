@@ -556,3 +556,78 @@ test("default facade delegates canonical primitives without selecting private me
   await fsp.writeFile(file, BINARY, { mode: 0o600 });
   assert.equal(await facade.validCachedBinary(file, crypto.createHash("sha256").update(BINARY).digest("hex")), true);
 });
+
+test("published immutable npm binary retries two transient gateway failures and preserves exact SHA", async (t) => {
+  const fixture = await fixturePackage(t);
+  const cache = await fsp.mkdtemp(path.join(os.tmpdir(), "agentplugins-retry-cache-"));
+  t.after(() => fsp.rm(cache, { recursive: true, force: true }));
+  let requests = 0;
+  const endpoint = await listen(t, (_req, response) => {
+    requests++;
+    if (requests < 3) {
+      response.writeHead(504);
+      response.end();
+      return;
+    }
+    response.writeHead(200, { "content-length": fixture.binary.length });
+    response.end(fixture.binary);
+  });
+  const options = { packageRoot: fixture.root, cacheRoot: cache,
+    request: requestThrough(endpoint.url), platform: "linux", arch: "x64" };
+  const resolved = await ensureBinary(options);
+  assert.deepEqual(await fsp.readFile(resolved.binaryPath), fixture.binary);
+  assert.equal(requests, 3, "only two bounded retries may precede verified success");
+  const warm = await ensureBinary(options);
+  assert.equal(warm.cacheHit, true);
+  assert.equal(requests, 3, "verified cache needs no download");
+});
+
+test("npm binary download fails closed on persistent 504, forbidden and corrupt pinned bytes", async (t) => {
+  for (const { status, expected, maxRequests } of [
+    { status: 504, expected: /HTTP 504/, maxRequests: 3 },
+    { status: 403, expected: /HTTP 403/, maxRequests: 1 },
+    { status: 200, expected: /embedded SHA-256/, maxRequests: 1 }
+  ]) {
+    const fixture = await fixturePackage(t);
+    const cache = await fsp.mkdtemp(path.join(os.tmpdir(), "agentplugins-retry-fail-"));
+    t.after(() => fsp.rm(cache, { recursive: true, force: true }));
+    let requests = 0;
+    const endpoint = await listen(t, (_req, response) => {
+      requests++;
+      if (status === 200) {
+        response.writeHead(200, { "content-length": fixture.binary.length });
+        response.end(Buffer.alloc(fixture.binary.length, 42));
+      } else {
+        response.writeHead(status);
+        response.end();
+      }
+    });
+    await assert.rejects(ensureBinary({
+      packageRoot: fixture.root, cacheRoot: cache,
+      request: requestThrough(endpoint.url), platform: "linux", arch: "x64"
+    }), expected);
+    assert.equal(requests, maxRequests, "wrong status or digest must never trigger a fallback");
+    const platform = detectPlatform("linux", "x64");
+    const binary = path.join(cache, VERSION, platform.key, platform.binaryName);
+    assert.equal(fs.existsSync(binary), false, "failed acquisition did not publish a binary");
+  }
+});
+
+test("npm binary gateway retry obeys cancellation without a second request", async (t) => {
+  const fixture = await fixturePackage(t);
+  const cache = await fsp.mkdtemp(path.join(os.tmpdir(), "agentplugins-retry-abort-"));
+  t.after(() => fsp.rm(cache, { recursive: true, force: true }));
+  const controller = new AbortController();
+  let requests = 0;
+  const endpoint = await listen(t, (_req, response) => {
+    requests++;
+    response.writeHead(503);
+    response.end();
+    controller.abort();
+  });
+  await assert.rejects(ensureBinary({
+    packageRoot: fixture.root, cacheRoot: cache, signal: controller.signal,
+    request: requestThrough(endpoint.url), platform: "linux", arch: "x64"
+  }), /aborted|cancelled/i);
+  assert.equal(requests, 1);
+});

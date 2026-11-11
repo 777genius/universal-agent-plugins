@@ -2,6 +2,7 @@ package grok
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -15,8 +16,12 @@ import (
 type projectPlugin struct {
 	name, scope, path string
 	enabled           bool
+	mcpServers        int64
 }
-type projectInspection struct{ plugins []projectPlugin }
+type projectInspection struct {
+	version string
+	plugins []projectPlugin
+}
 
 func parseProjectInspect(body []byte, project string) (projectInspection, error) {
 	fail := func() (projectInspection, error) {
@@ -42,14 +47,21 @@ func parseProjectInspect(body []byte, project string) (projectInspection, error)
 	if !ok {
 		return fail()
 	}
-	out := projectInspection{}
+	version, _ := value["grokVersion"].(string)
+	out := projectInspection{version: version}
 	seen := map[string]bool{}
 	for _, entry := range entries {
 		parsed, err := parseProjectPlugin(entry)
-		if err != nil || seen[parsed.name] {
+		if err != nil {
 			return fail()
 		}
-		seen[parsed.name] = true
+		// A case-folded alias cannot represent an independent native plugin
+		// identity, including on case-insensitive project filesystems.
+		identity := shared.FoldJSONKey(parsed.name)
+		if seen[identity] {
+			return fail()
+		}
+		seen[identity] = true
 		out.plugins = append(out.plugins, parsed)
 	}
 	return out, nil
@@ -66,7 +78,7 @@ func exactProjectFields(object map[string]any, fields []string) bool {
 }
 func parseProjectPlugin(entry any) (projectPlugin, error) {
 	object, ok := entry.(map[string]any)
-	if !ok || !exactProjectFields(object, []string{"name", "scope", "path", "enabled"}) {
+	if !ok || !exactProjectFields(object, []string{"name", "scope", "path", "enabled", "provides"}) {
 		return projectPlugin{}, fmt.Errorf("grok plugin inspect identity is not recognized")
 	}
 	name, n := object["name"].(string)
@@ -76,9 +88,29 @@ func parseProjectPlugin(entry any) (projectPlugin, error) {
 	if !n || !s || !p || !e || strings.TrimSpace(name) == "" || !filepath.IsAbs(path) || filepath.Clean(path) != path || (scope != "project" && scope != "user") {
 		return projectPlugin{}, fmt.Errorf("grok plugin inspect identity is not recognized")
 	}
-	return projectPlugin{name, scope, path, enabled}, nil
+	// Directory discovery and MCP discovery are separate native observations.
+	// Unreported MCP servers must never be treated as loaded or available.
+	var mcpServers int64
+	if raw, present := object["provides"]; present {
+		provides, valid := raw.(map[string]any)
+		if !valid || !exactProjectFields(provides, []string{"mcpServers"}) {
+			return projectPlugin{}, fmt.Errorf("grok plugin provides contract is not recognized")
+		}
+		if count, present := provides["mcpServers"]; present {
+			number, valid := count.(json.Number)
+			if !valid {
+				return projectPlugin{}, fmt.Errorf("grok plugin MCP count is not numeric")
+			}
+			parsed, err := number.Int64()
+			if err != nil || parsed < 0 {
+				return projectPlugin{}, fmt.Errorf("grok plugin MCP count is invalid")
+			}
+			mcpServers = parsed
+		}
+	}
+	return projectPlugin{name: name, scope: scope, path: path, enabled: enabled, mcpServers: mcpServers}, nil
 }
-func inspectProject(ctx context.Context, env clients.Env, client domain.DetectedClient, plan domain.DeliveryPlan, owned bool) (clients.RegistryFinding, error) {
+func inspectProject(ctx context.Context, env clients.Env, client domain.DetectedClient, plan domain.DeliveryPlan, owned, requireMCPDiscovery bool) (clients.RegistryFinding, error) {
 	root, err := grokPlanRoot(client, plan)
 	if err != nil {
 		return clients.RegistryIndeterminate, err
@@ -103,16 +135,35 @@ func inspectProject(ctx context.Context, env clients.Env, client domain.Detected
 	if err != nil {
 		return clients.RegistryIndeterminate, err
 	}
+	return matchProjectInspection(native, plan, finding, owned, requireMCPDiscovery)
+}
+
+// matchProjectInspection classifies the native inventory independently of invoking the pinned CLI.
+func matchProjectInspection(native projectInspection, plan domain.DeliveryPlan, finding clients.RegistryFinding, owned, requireMCPDiscovery bool) (clients.RegistryFinding, error) {
+	if shared.HasSupportedMCP(plan.Components) && native.version != "1.0.70" {
+		return clients.RegistryIndeterminate, fmt.Errorf("grok project MCP preparation requires qualified Grok 1.0.70; 1.0.67 remains qualified for Skills preparation only")
+	}
 	for _, entry := range native.plugins {
-		if entry.name == plan.DeclaredName {
+		// A native plugin whose name folds to our selected name but differs
+		// in spelling is a collision, not proof of the owned project plugin.
+		if shared.FoldJSONKey(entry.name) == shared.FoldJSONKey(plan.DeclaredName) {
+			if entry.name != plan.DeclaredName {
+				return clients.RegistryCollision, nil
+			}
 			if owned && entry.scope == "project" && entry.path == plan.ActivePath {
 				if finding != clients.RegistryExpected {
 					return clients.RegistryIndeterminate, fmt.Errorf("grok project source lacks its exact prepared manifest")
+				}
+				if requireMCPDiscovery && shared.HasSupportedMCP(plan.Components) && entry.mcpServers != int64(len(shared.SupportedMCPNames(plan))) {
+					return clients.RegistryIndeterminate, fmt.Errorf("grok native inspect did not report the selected project MCP servers")
 				}
 				return clients.RegistryExpected, nil
 			}
 			return clients.RegistryCollision, nil
 		}
+	}
+	if requireMCPDiscovery && shared.HasSupportedMCP(plan.Components) {
+		return clients.RegistryIndeterminate, fmt.Errorf("grok native inspect did not report the selected project MCP plugin")
 	}
 	return finding, nil
 }

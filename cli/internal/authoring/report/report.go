@@ -8,12 +8,8 @@ import (
 	"encoding/json"
 	"sort"
 
-	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/project"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/readiness"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packageview"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/conformance"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
 )
 
@@ -212,119 +208,6 @@ func (r *Report) AddError(code, action string) {
 	r.finish()
 }
 
-func Build(command, revision string, p project.Result, release bool) Report {
-	r := New(command, revision)
-	v, f := p.Input, p.Facts
-	r.Display, r.Legacy = inspection(p), string(v.Legacy)
-	r.Identity = Identity{ScopeAlgorithm: v.Identity.ScopeID, ScopeDigest: v.Identity.Digest, TreeAlgorithm: v.Identity.TreeAlgorithm, TreeDigest: v.Identity.TreeDigest, ReadProfile: packageview.ReadProfile, TreeExclusions: []string{"root .git", "root non-directory .uap-integrations.lock"}}
-	c := f.Coverage
-	r.Coverage = Coverage{v.Coverage.ComponentsRequested, v.Coverage.SkillsEnumerated, v.Coverage.InventoryComplete, v.Coverage.TreeComplete, state(c.Plugin), state(c.MCP), state(c.Skills), state(c.Filesystem), c.Complete}
-	for _, p := range f.Profiles {
-		r.Profiles = append(r.Profiles, Profile{p.ID, p.Revision, p.Digest})
-	}
-	r.SchemaIDs = append(r.SchemaIDs, f.SchemaIDs...)
-	r.Conformance = assessment(state(f.Conformance))
-	r.HostSafety = assessment(Pass)
-	// Translate retained canonical identities within their component boundary.
-	serverIDs := map[string]string{}
-	skillIDs := map[string]string{}
-	if f.Package != nil {
-		for name := range f.Package.MCP.Servers {
-			serverIDs[opaque(name)] = opaque("mcp:" + name)
-		}
-		for name := range f.Package.MCP.InvalidServer {
-			serverIDs[opaque(name)] = opaque("mcp:" + name)
-		}
-		for name := range f.Package.Skills {
-			skillIDs[opaque(name)] = opaque("skill:" + name)
-		}
-		for _, name := range f.Package.Inventory.InvalidSkills {
-			skillIDs[opaque(name)] = opaque("skill:" + name)
-		}
-	}
-	for _, f := range f.Findings {
-		switch f.Boundary {
-		case domain.BoundarySkill:
-			if id, ok := skillIDs[f.Item]; ok {
-				f.Item = id
-			}
-		case domain.BoundaryMCPServer:
-			if id, ok := serverIDs[f.Item]; ok {
-				f.Item = id
-			}
-		}
-		id := r.add(Finding{Code: f.Code, Layer: string(f.Layer), Rule: f.RuleRef, Location: f.Path, ItemID: f.Item, Severity: string(f.Severity)})
-		if f.Layer == conformance.Normative {
-			r.Conformance.FindingIDs = append(r.Conformance.FindingIDs, id)
-		} else {
-			r.HostSafety.Status = Fail
-			r.HostSafety.FindingIDs = append(r.HostSafety.FindingIDs, id)
-		}
-	}
-	for _, f := range v.Findings {
-		severity := "error"
-		if f.Code == "legacy_manifest_ignored" || f.Code == "complete_tree_identity_unavailable" {
-			severity = "warning"
-		}
-		// Even escaped relative filesystem names may carry opaque values. Expose
-		// their stable identity, never arbitrary names/link targets from inventory.
-		id := r.add(Finding{Code: f.Code, Layer: "host_safety", Rule: "packageview/acquisition", ItemID: opaque(f.Location), Severity: severity})
-		r.HostSafety.FindingIDs = append(r.HostSafety.FindingIDs, id)
-		if severity == "error" {
-			r.HostSafety.Status = Fail
-		}
-	}
-	if !v.Coverage.InventoryComplete && r.HostSafety.Status == Pass {
-		r.HostSafety.Status = NotEvaluated
-	}
-	if f.Package != nil {
-		r.Loadability.Status = Pass
-		r.Identity.ManifestDigest = f.Package.ManifestDigest
-		if pathpolicy.ValidateLeafID(domain.ComputePhysicalArtifactID(f.Package.Manifest.Name, "authoring-preview")) != nil {
-			id := r.add(Finding{Code: "physical_name_unsafe", Layer: "host_safety", Rule: "host/portable-leaf", Location: "plugin.json", Severity: "error"})
-			r.HostSafety.Status = Fail
-			r.HostSafety.FindingIDs = append(r.HostSafety.FindingIDs, id)
-		}
-		r.components(p)
-	} else {
-		r.Loadability.Status = Fail
-		for _, f := range r.Findings {
-			r.Loadability.FindingIDs = append(r.Loadability.FindingIDs, f.ID)
-		}
-	}
-	dependencies := assessment(Pass)
-	for _, diagnostic := range p.DependencyDiagnostics {
-		id := r.add(Finding{Code: diagnostic.Code, Layer: "package_management", Rule: "uap/package-dependencies", Location: diagnostic.Location, Severity: "error"})
-		dependencies.Status = Fail
-		dependencies.FindingIDs = append(dependencies.FindingIDs, id)
-	}
-	commands := r.commandsAssessment(f.Package)
-	r.Readiness.Status = combine(r.Loadability.Status, r.Conformance.Status, r.HostSafety.Status, commands.Status, dependencies.Status)
-	if r.Readiness.Status == Pass && (!c.Complete || !v.Coverage.TreeComplete) {
-		r.Readiness.Status = NotEvaluated
-	}
-	r.Readiness.FindingIDs = append(r.Readiness.FindingIDs, dependencies.FindingIDs...)
-	r.Readiness.FindingIDs = append(r.Readiness.FindingIDs, commands.FindingIDs...)
-	r.Readiness.FindingIDs = append(r.Readiness.FindingIDs, r.Loadability.FindingIDs...)
-	r.Readiness.FindingIDs = append(r.Readiness.FindingIDs, r.Conformance.FindingIDs...)
-	r.Readiness.FindingIDs = append(r.Readiness.FindingIDs, r.HostSafety.FindingIDs...)
-	if release {
-		r.Release = r.Readiness
-		r.Release.FindingIDs = append([]string{}, r.Readiness.FindingIDs...)
-		if v.Legacy != "absent" {
-			id := r.add(Finding{Code: "legacy_release_rejected", Layer: "release_policy", Rule: "authoring/release-hygiene-v1", Location: "plugin/plugin.yaml", Severity: "error"})
-			r.Release.Status = Fail
-			r.Release.FindingIDs = append(r.Release.FindingIDs, id)
-		}
-	}
-	if command == "test" {
-		r.Checks = []Check{{"portable_configuration", r.Conformance}, {"package_hygiene", r.HostSafety},
-			{"static_skills", r.boundary(r.Coverage.Skills, "skills")}, {"static_mcp", r.boundary(r.Coverage.MCP, "mcp.json")},
-			{"runtime", r.Runtime}}
-	}
-	r.finish()
-	return r
-}
 func state(s conformance.Outcome) State {
 	if s == conformance.Pass {
 		return Pass
@@ -355,71 +238,11 @@ func (r Report) boundary(s State, location string) Assessment {
 	}
 	return a
 }
-func (r *Report) components(p project.Result) {
-	pkg := p.Facts.Package
-	for name, s := range pkg.MCP.Servers {
-		req := []string{}
-		if s.Type == "stdio" {
-			req = append(req, "executable_unresolved")
-			if s.StdioRequirement != nil {
-				req = append(req, "executable_"+string(s.StdioRequirement.Kind))
-				if s.StdioRequirement.UsesPluginRoot {
-					req = append(req, "plugin_root")
-				}
-				if s.StdioRequirement.UsesPluginData {
-					req = append(req, "plugin_data")
-				}
-			}
-			if env, ok := s.Decoded["env"].(map[string]any); ok && len(env) > 0 {
-				req = append(req, "environment_values_redacted")
-			}
-		} else {
-			req = append(req, "remote_endpoint_uncontacted")
-			if h, ok := s.Decoded["headers"].(map[string]any); ok && len(h) > 0 {
-				req = append(req, "header_values_redacted")
-			}
-		}
-		status := Pass
-		for _, finding := range p.Facts.Findings {
-			if finding.Code == "diagnostics_truncated" {
-				status = combine(status, NotEvaluated)
-			}
-			if finding.Boundary != domain.BoundaryMCPServer || finding.Item != opaque(name) {
-				continue
-			}
-			if finding.Layer == conformance.Normative {
-				status = Fail
-			} else {
-				status = combine(status, NotEvaluated)
-			}
-		}
-		r.Components = append(r.Components, Component{opaque("mcp:" + name), "mcp_" + s.Type, status, req})
-	}
-	for name := range pkg.MCP.InvalidServer {
-		r.Components = append(r.Components, Component{opaque("mcp:" + name), "mcp_server", Fail, []string{}})
-	}
-	for name, s := range pkg.Skills {
-		req := []string{}
-		if s.Compatibility != "" {
-			req = append(req, "declared_compatibility_unresolved")
-		}
-		if s.AllowedTools != "" {
-			req = append(req, "declared_tools_unresolved")
-		}
-		r.Components = append(r.Components, Component{opaque("skill:" + name), "skill", Pass, req})
-	}
-	for _, name := range pkg.Inventory.InvalidSkills {
-		r.Components = append(r.Components, Component{opaque("skill:" + name), "skill", Fail, []string{}})
-	}
-	for name := range pkg.Manifest.Extensions {
-		r.Components = append(r.Components, Component{opaque("extension:" + name), "opaque_extension", NotEvaluated, []string{}})
-	}
-}
 func (r *Report) finish() {
 	sort.Slice(r.Findings, func(i, j int) bool { return r.Findings[i].ID < r.Findings[j].ID })
 	sort.Slice(r.Components, func(i, j int) bool { return r.Components[i].ID < r.Components[j].ID })
 	r.SchemaIDs = unique(r.SchemaIDs)
-	for _, a := range []*Assessment{&r.Loadability, &r.Conformance, &r.HostSafety, &r.Readiness, &r.Release, &r.Runtime, &r.Compatibility, &r.Toolchain} {
+	for _, a := range r.policyAssessments() {
 		a.FindingIDs = unique(a.FindingIDs)
 	}
 	for i := range r.Checks {

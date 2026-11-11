@@ -157,8 +157,8 @@ export const usePageSeo = (
         url: `${siteUrl}/`,
         logo: {
           '@type': 'ImageObject',
-          url: `${siteUrl}/logo-192.png`,
-          contentUrl: `${siteUrl}/logo-192.png`,
+          url: `${siteUrl}/logo-192.webp`,
+          contentUrl: `${siteUrl}/logo-192.webp`,
           width: 192,
           height: 192,
         },
@@ -171,6 +171,7 @@ export const usePageSeo = (
     return {
       htmlAttrs: {
         lang: locale.value || 'en',
+        dir: locale.value === 'ar' ? 'rtl' : 'ltr',
       },
       link: includeCanonical.value
         ? [

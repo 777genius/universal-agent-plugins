@@ -328,6 +328,7 @@ def public_result(raw,stage,selected,assessment_body):
     verb="repair" if "repair" in stage else "update" if "update" in stage else "remove" if stage.startswith("remove") else "add"
     require(type(d["schema_version"]) is int and d["schema_version"]==1 and d["command"]==verb and d["result"]=="success")
     data=d["data"];require(type(data) is dict)
+    scope_name="user" if selected["scope"]=="user" else "project"
     security=[]
     def walk(value):
         if type(value) is dict:
@@ -353,9 +354,21 @@ def public_result(raw,stage,selected,assessment_body):
         output=target["output"]
         require(output.get("operation_id")==data["operation_id"])
         if stage not in NOOPS:require(data["operation_id"]==selected["installation"]["operation_group_id"])
-        if verb=="add":require(same(data.get("environment"),{"reason":"no_save_requested","saved":False}))
+        if verb=="add":require(same(data.get("environment"),{"reason":"no_save_requested","saved":False,"scope":scope_name,"scope_selection_reason":"explicit"}))
         if verb=="remove":require(data["data_retained"] is True and data["plugin_data_preserved"] is True)
-    obj(output,"plugin version source tree_digest manifest_digest dry_run result","next_action security" if stage=="repeat-add-a" else "operation_id next_action")
+    optional="next_action security" if stage=="repeat-add-a" else "operation_id next_action security"
+    if verb in ("add","update"):optional+=" scope readiness next_actions"
+    elif verb=="remove":optional+=" scope"
+    obj(output,"plugin version source tree_digest manifest_digest dry_run result",optional)
+    if "scope" in output:require(output["scope"]==scope_name)
+    if verb in ("add","update"):
+        require(output.get("scope")==scope_name and output.get("readiness")=="needs_action")
+        actions=output.get("next_actions")
+        require(type(actions) is list and len(actions)==1)
+        action=actions[0];obj(action,"code actor message")
+        require(action["code"]=="verify_native" and action["actor"]=="native_client"
+                and type(action["message"]) is str and bool(action["message"]) and output.get("next_action")==action["message"])
+    elif verb=="repair":require(type(output.get("next_action")) is str and bool(output["next_action"]))
     label="local" if verb in ("repair","remove") else "direct local source"
     require(output["plugin"]==NAME and output["version"]==selected["version"] and output["source"]==label and output["tree_digest"]==selected["source_digest"] and output["manifest_digest"]==selected["installation"]["package"]["manifest_digest"] and output["dry_run"] is False)
     row=output["result"]

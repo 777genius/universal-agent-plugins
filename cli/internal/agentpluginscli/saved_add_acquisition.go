@@ -30,9 +30,12 @@ func acquireSavedAdd(ctx context.Context, app App, opts *options, source string,
 		}
 	}
 	if loaded.directorySelection != nil {
+		if loaded.directory == nil {
+			return environment.Requirement{}, environment.LockedPackage{}, errors.New("signed Directory selection lacks authenticated feed identity")
+		}
 		selection := loaded.directorySelection
 		requirement = environment.Requirement{Registry: &environment.RegistrySource{Distribution: selection.DistributionID, Selector: environment.Selector{Kind: environment.SelectorRelease, Value: fmt.Sprint(selection.ReleaseSequence)}}}
-		pin.Source.Registry = &environment.LockedRegistrySource{Distribution: selection.DistributionID, DistributionID: selection.DistributionID, ProductID: selection.ProductID, ReleaseSequence: selection.ReleaseSequence, Requested: requirement.Registry.Selector, Repository: selection.Source.Repository, Path: selection.Source.Path, Commit: selection.Source.Revision}
+		pin.Source.Registry = &environment.LockedRegistrySource{FeedID: loaded.directory.FeedID, Distribution: selection.DistributionID, DistributionID: selection.DistributionID, ProductID: selection.ProductID, ReleaseSequence: selection.ReleaseSequence, Requested: requirement.Registry.Selector, Repository: selection.Source.Repository, Path: selection.Source.Path, Commit: selection.Source.Revision}
 	} else {
 		pin.Source.Git = &environment.LockedGitSource{Repository: requirement.Git.Repository, Path: requirement.Git.Path, Commit: requirement.Git.Selector.Value, Requested: requirement.Git.Selector}
 	}
@@ -128,10 +131,10 @@ func validateSavedAddTargets(app App, opts *options, source string, targets []do
 	}
 	for _, target := range targets {
 		if domain.ClientTraitsFor(target).RequiresPersonalMappingForPrepare && len(targets) > 1 {
-			return nil, errors.New("ChatGPT is prepared manually; run agentplugins add <source> --target chatgpt separately, or use --no-save for the mixed imperative workflow")
+			return nil, errors.New("ChatGPT Web is prepared manually; run agentplugins add <source> --target chatgptweb separately, or use --no-save for the mixed imperative workflow")
 		}
 		if !supportsDependencyTarget(app, string(target)) {
-			return nil, fmt.Errorf("target %s cannot be saved; retry agentplugins add %s --target %s --no-save", target, source, opts.target)
+			return nil, fmt.Errorf("target %s cannot be saved; retry agentplugins add %s --target %s --no-save", publicCLITargetName(target), source, strings.Join(clientIDStrings(targets), ","))
 		}
 	}
 	if opts.scope != "user" && opts.scope != "project" {

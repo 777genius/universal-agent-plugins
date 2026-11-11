@@ -52,7 +52,7 @@ func context7GuidedFixture(t *testing.T) (cliFixture, *fixedDirectoryClient, *lo
 
 func TestContext7GuidedMissingRegistrationAndResume(t *testing.T) {
 	f, directory, acquirer := context7GuidedFixture(t)
-	out, _, err := f.execute(false, "add", "--no-save", "context7", "--target", "kiro,chatgpt", "--format", "json")
+	out, _, err := f.execute(false, "add", "--no-save", "context7", "--target", "kiro,chatgptweb", "--format", "json")
 	if err != nil {
 		t.Fatalf("install peers before ChatGPT setup: %s %v", out, err)
 	}
@@ -73,7 +73,7 @@ func TestContext7GuidedMissingRegistrationAndResume(t *testing.T) {
 		t.Fatalf("acquisition %#v", acquirer)
 	}
 	before, _ := json.Marshal(directory.bundle)
-	out, _, err = f.execute(false, "add", "context7", "--target", "chatgpt", "--chatgpt-app-id", fixturePersonalAppID, "--format", "json")
+	out, _, err = f.execute(false, "add", "context7", "--target", "chatgptweb", "--chatgpt-app-id", fixturePersonalAppID, "--format", "json")
 	if err != nil {
 		t.Fatalf("resume: %s %v", out, err)
 	}
@@ -149,11 +149,11 @@ func TestContext7GuidedLifecycleRetainsReceipt(t *testing.T) {
 					t.Fatalf("%v: %s %v", args, out, err)
 				}
 			}
-			run("add", "context7", "--target", "chatgpt", "--chatgpt-app-id", fixturePersonalAppID)
-			run("add", "context7-alias", "--target", "chatgpt")
-			run("update", "context7", "--target", "chatgpt")
-			run("repair", "context7", "--target", "chatgpt")
-			run("add", "context7", "--target", "chatgpt", "--activation-complete", "--auth-complete")
+			run("add", "context7", "--target", "chatgptweb", "--chatgpt-app-id", fixturePersonalAppID)
+			run("add", "context7-alias", "--target", "chatgptweb")
+			run("update", "context7", "--target", "chatgptweb")
+			run("repair", "context7", "--target", "chatgptweb")
+			run("add", "context7", "--target", "chatgptweb", "--activation-complete", "--auth-complete")
 			state, err := f.store.Load()
 			if err != nil {
 				t.Fatal(err)
@@ -165,8 +165,8 @@ func TestContext7GuidedLifecycleRetainsReceipt(t *testing.T) {
 			if err := os.RemoveAll(b.TargetLocator); err != nil {
 				t.Fatal(err)
 			}
-			run("repair", "context7", "--target", "chatgpt")
-			args := []string{"remove", "context7", "--target", "chatgpt", "--external-uninstalled"}
+			run("repair", "context7", "--target", "chatgptweb")
+			args := []string{"remove", "context7", "--target", "chatgptweb", "--external-uninstalled"}
 			if purge {
 				args = append(args, "--purge-data")
 			}
@@ -175,7 +175,7 @@ func TestContext7GuidedLifecycleRetainsReceipt(t *testing.T) {
 			if err != nil || len(state.Installations) != 1 || state.Installations[0].LocalChatGPTMapping == nil {
 				t.Fatalf("receipt lost: %+v %v", state, err)
 			}
-			run("add", "context7", "--target", "chatgpt")
+			run("add", "context7", "--target", "chatgptweb")
 		})
 	}
 }
@@ -184,7 +184,7 @@ func TestContext7GuidedRejectsInvalidIDsAndUnverifiedSource(t *testing.T) {
 	for _, id := range []string{"connector_old", "asdk_app_", "asdk_app_short", "asdk_app_bad/id", " asdk_app_abc", "plugin_asdk_app_"} {
 		t.Run(id, func(t *testing.T) {
 			f, _, a := context7GuidedFixture(t)
-			_, _, err := f.execute(false, "add", "context7", "--target", "chatgpt", "--chatgpt-app-id", id)
+			_, _, err := f.execute(false, "add", "context7", "--target", "chatgptweb", "--chatgpt-app-id", id)
 			if err == nil || a.verifiedCalls != 0 {
 				t.Fatalf("invalid ID reached acquisition: %v", err)
 			}
@@ -206,7 +206,7 @@ func TestContext7GuidedRejectsInvalidIDsAndUnverifiedSource(t *testing.T) {
 			case "mixed-peer":
 				d.bundle.Snapshot.Distributions[0].ReleasePolicies[0].Targets[0].Scopes = []domain.InstallScope{domain.ScopeProject}
 			}
-			_, _, err := f.execute(false, "add", "context7", "--target", "kiro,chatgpt", "--chatgpt-app-id", fixturePersonalAppID)
+			_, _, err := f.execute(false, "add", "context7", "--target", "kiro,chatgptweb", "--chatgpt-app-id", fixturePersonalAppID)
 			if err == nil {
 				t.Fatal("accepted invalid source")
 			}
@@ -220,11 +220,11 @@ func TestContext7GuidedRejectsInvalidIDsAndUnverifiedSource(t *testing.T) {
 
 func TestContext7GuidedReceiptRejectsChangedRegistrationAndSignedEndpoint(t *testing.T) {
 	f, d, a := context7GuidedFixture(t)
-	if out, _, err := f.execute(false, "add", "context7", "--target", "chatgpt", "--chatgpt-app-id", fixturePersonalAppID); err != nil {
+	if out, _, err := f.execute(false, "add", "context7", "--target", "chatgptweb", "--chatgpt-app-id", fixturePersonalAppID); err != nil {
 		t.Fatalf("%s %v", out, err)
 	}
 	before, _ := os.ReadFile(f.store.Path)
-	_, _, err := f.execute(false, "add", "context7", "--target", "chatgpt", "--chatgpt-app-id", "asdk_app_ffffffffffffffffffffffffffffffff")
+	_, _, err := f.execute(false, "add", "context7", "--target", "chatgptweb", "--chatgpt-app-id", "asdk_app_ffffffffffffffffffffffffffffffff")
 	if err == nil || !strings.Contains(err.Error(), "conflicts with retained") {
 		t.Fatalf("replaced receipt: %v", err)
 	}
@@ -251,7 +251,7 @@ func TestContext7GuidedReceiptRejectsChangedRegistrationAndSignedEndpoint(t *tes
 	dist.Releases = append(dist.Releases, release)
 	dist.ReleasePolicies = append(dist.ReleasePolicies, policy)
 	d.bundle.Snapshot.Evidence = append(d.bundle.Snapshot.Evidence, intendedTrustedDirectoryEvidence(domain.DirectoryEvidence{ID: policy.CurrentEvidence[0], DistributionID: dist.ID, ReleaseSequence: 2, PackageTreeDigest: release.TreeDigest, Level: "materialization", Outcome: "passed", Client: domain.ClientKiro}))
-	_, _, err = f.execute(false, "update", "context7", "--target", "chatgpt")
+	_, _, err = f.execute(false, "update", "context7", "--target", "chatgptweb")
 	if err == nil || !strings.Contains(err.Error(), "canonical Context7 package") {
 		t.Fatalf("rebound endpoint: %v", err)
 	}
@@ -263,7 +263,7 @@ func TestContext7GuidedReceiptRejectsChangedRegistrationAndSignedEndpoint(t *tes
 
 func TestContext7GuidedReceiptMigratesLegacyRegistrationOnlyWithExplicitID(t *testing.T) {
 	f, _, _ := context7GuidedFixture(t)
-	if out, _, err := f.execute(false, "add", "context7", "--target", "chatgpt", "--chatgpt-app-id", fixturePersonalAppID); err != nil {
+	if out, _, err := f.execute(false, "add", "context7", "--target", "chatgptweb", "--chatgpt-app-id", fixturePersonalAppID); err != nil {
 		t.Fatalf("initial preparation failed: %s %v", out, err)
 	}
 	state, err := f.store.Load()
@@ -275,7 +275,7 @@ func TestContext7GuidedReceiptMigratesLegacyRegistrationOnlyWithExplicitID(t *te
 	if err := f.store.Save(state); err != nil {
 		t.Fatal(err)
 	}
-	out, _, err := f.execute(false, "add", "context7", "--target", "chatgpt", "--format", "json")
+	out, _, err := f.execute(false, "add", "context7", "--target", "chatgptweb", "--format", "json")
 	if err != nil || !strings.Contains(out, `"result":"success"`) || !strings.Contains(out, `"status":"action_required"`) {
 		t.Fatalf("legacy receipt did not require a new explicit ID via action_required success: %s %v", out, err)
 	}
@@ -283,7 +283,7 @@ func TestContext7GuidedReceiptMigratesLegacyRegistrationOnlyWithExplicitID(t *te
 	if loadErr != nil || mid.Installations[0].LocalChatGPTMapping == nil || mid.Installations[0].LocalChatGPTMapping.URL != domain.Context7OAuthURL {
 		t.Fatalf("action_required setup mutated legacy receipt early: %+v %v", mid.Installations, loadErr)
 	}
-	if out, _, err := f.execute(false, "add", "context7", "--target", "chatgpt", "--chatgpt-app-id", fixturePersonalAppID); err != nil {
+	if out, _, err := f.execute(false, "add", "context7", "--target", "chatgptweb", "--chatgpt-app-id", fixturePersonalAppID); err != nil {
 		t.Fatalf("legacy receipt migration failed: %s %v", out, err)
 	}
 	got, err := f.store.Load()
@@ -305,7 +305,7 @@ func TestContext7GuidedForeignFilesAndCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	command := NewRoot(f.app)
-	command.SetArgs([]string{"add", "context7", "--target", "chatgpt", "--chatgpt-app-id", fixturePersonalAppID})
+	command.SetArgs([]string{"add", "context7", "--target", "chatgptweb", "--chatgpt-app-id", fixturePersonalAppID})
 	if err := command.ExecuteContext(ctx); err == nil {
 		t.Fatal("cancelled command completed")
 	}
@@ -314,8 +314,8 @@ func TestContext7GuidedForeignFilesAndCancellation(t *testing.T) {
 		t.Fatalf("cancel mutated state %+v %v", state, err)
 	}
 	for _, args := range [][]string{
-		{"add", "context7", "--target", "chatgpt", "--chatgpt-app-id", fixturePersonalAppID},
-		{"remove", "context7", "--target", "chatgpt", "--external-uninstalled", "--purge-data"},
+		{"add", "context7", "--target", "chatgptweb", "--chatgpt-app-id", fixturePersonalAppID},
+		{"remove", "context7", "--target", "chatgptweb", "--external-uninstalled", "--purge-data"},
 	} {
 		if out, _, err := f.execute(false, args...); err != nil {
 			t.Fatalf("%v: %s %v", args, out, err)
@@ -329,7 +329,7 @@ func TestContext7GuidedForeignFilesAndCancellation(t *testing.T) {
 
 func TestContext7GuidedMixedUpdateUsesOneNewImmutableRelease(t *testing.T) {
 	f, d, a := context7GuidedFixture(t)
-	if out, _, err := f.execute(false, "add", "--no-save", "context7", "--target", "kiro,chatgpt", "--chatgpt-app-id", fixturePersonalAppID); err != nil {
+	if out, _, err := f.execute(false, "add", "--no-save", "context7", "--target", "kiro,chatgptweb", "--chatgpt-app-id", fixturePersonalAppID); err != nil {
 		t.Fatalf("%s %v", out, err)
 	}
 	raw, err := os.ReadFile(filepath.Join(a.root, "plugin.json"))
@@ -358,7 +358,7 @@ func TestContext7GuidedMixedUpdateUsesOneNewImmutableRelease(t *testing.T) {
 	dist.ReleasePolicies = append(dist.ReleasePolicies, policy)
 	d.bundle.Snapshot.Evidence = append(d.bundle.Snapshot.Evidence, intendedTrustedDirectoryEvidence(domain.DirectoryEvidence{ID: policy.CurrentEvidence[0], DistributionID: dist.ID, ReleaseSequence: 2, PackageTreeDigest: release.TreeDigest, Level: "materialization", Outcome: "passed", Client: domain.ClientKiro}))
 	beforeCalls := a.verifiedCalls
-	out, _, err := f.execute(false, "update", "context7", "--target", "kiro,chatgpt")
+	out, _, err := f.execute(false, "update", "context7", "--target", "kiro,chatgptweb")
 	if err != nil {
 		t.Fatalf("%s %v", out, err)
 	}
@@ -383,14 +383,14 @@ func TestContext7GuidedMixedUpdateUsesOneNewImmutableRelease(t *testing.T) {
 func TestContext7GuidedDoesNotBypassSignatureOrScope(t *testing.T) {
 	f, d, a := context7GuidedFixture(t)
 	d.err = fmt.Errorf("signed Directory signature verification failed")
-	out, _, err := f.execute(false, "add", "context7", "--target", "chatgpt", "--format", "json")
+	out, _, err := f.execute(false, "add", "context7", "--target", "chatgptweb", "--format", "json")
 	if err == nil || a.verifiedCalls != 0 || strings.Contains(out, "action_required") {
 		t.Fatalf("signature failure hidden: %s %v", out, err)
 	}
 	for _, args := range [][]string{
-		{"add", a.root, "--target", "chatgpt"},
-		{"add", "context7", "--target", "chatgpt", "--scope", "project"},
-		{"add", "context7", "--target", "chatgpt", "--chatgpt-app-id", fixturePersonalAppID},
+		{"add", a.root, "--target", "chatgptweb"},
+		{"add", "context7", "--target", "chatgptweb", "--scope", "project"},
+		{"add", "context7", "--target", "chatgptweb", "--chatgpt-app-id", fixturePersonalAppID},
 	} {
 		if _, _, err := f.execute(false, args...); err == nil {
 			t.Fatalf("accepted invalid preparation request %v", args)

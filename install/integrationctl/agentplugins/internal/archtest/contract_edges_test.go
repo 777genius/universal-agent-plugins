@@ -76,6 +76,7 @@ var contractExternalModules = []string{
 	"github.com/tailscale/hujson",
 	"golang.org/x/sys",
 	"golang.org/x/text",
+	"gopkg.in/yaml.v3",
 }
 
 // platformSweep lists every GOOS the closure is recomputed under.

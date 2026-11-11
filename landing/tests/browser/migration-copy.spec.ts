@@ -85,7 +85,7 @@ test('download has one title, a readable version, and current client support', a
       new RegExp(`/agents/${client.slug}/$`),
     );
   }
-  await expect(support).toContainText('Setup in app');
+  await expect(support).toContainText('Desktop: automatic via Codex CLI; Web: setup in ChatGPT');
   await expect(support).toContainText('Prepared by CLI');
 });
 
@@ -107,7 +107,9 @@ for (const client of clientLandingPages) {
     });
     await page.goto(`./agents/${client.slug}/`);
     await hydrated(page);
-    const source = client.id === 'grok' || client.id === 'kimi' || client.id === 'pi' ? './my-plugin' : 'context7';
+    const source = ['grok', 'kimi', 'pi', 'hermes', 'antigravity'].includes(client.id)
+      ? './my-plugin'
+      : 'context7';
     const command = `npx -y universal-agent-plugins add ${source} --target ${client.id}`;
     const install = page.locator('.agent-page__install');
     await expect(install.locator('code').first()).toHaveText(command);

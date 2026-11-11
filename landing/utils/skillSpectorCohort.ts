@@ -16,15 +16,17 @@ const expectedProfile = {
   id: 'static-cohort-2.13.3-v1',
   digest: 'sha256:ad4477fa9f9d61952c5fa929fc6810b0792433a1494102308a1e8e183ba6fe74',
 };
-const sourcePins = new Map<string, readonly string[]>([
+const sourcePins = new Map<string, readonly [string, readonly string[], string]>([
   ['plugin:community:3b7213be12f01b1365846d8ba375d59f/sitemap-manager',
-    ['indranilbanerjee/digital-marketing-pro', 'cc45ca06eaf48abde3bb60fb79d31c41229c58db', 'skills/sitemap-manager']],
+    ['indranilbanerjee/digital-marketing-pro',
+      ['cc45ca06eaf48abde3bb60fb79d31c41229c58db', 'be4142b25bba6d424962a7788432dd813e6b768c'],
+      'skills/sitemap-manager']],
   ['plugin:community:4d73239dc1cf321957d109bdf29c27dd/sitemap-manager',
-    ['teachskillofskills-ai/digitalmarketingpro-techshu', 'e97a5bdd91601024a9cfa870807a8d3c81dc3caf', 'skills/sitemap-manager']],
+    ['teachskillofskills-ai/digitalmarketingpro-techshu', ['e97a5bdd91601024a9cfa870807a8d3c81dc3caf'], 'skills/sitemap-manager']],
   ...['braids', 'braids-audit', 'braids-claims', 'braids-depth', 'braids-help', 'braids-review', 'braids-risk']
-    .map((name): [string, string[]] => [
+    .map((name): [string, readonly [string, readonly string[], string]] => [
       'plugin:community:b0fa2f8fff3c4570b38ffe3e0c1401a7/' + name,
-      ['vyas-devgna/braids', '79c913e9d27854d88c7ee58aa9906bd2b45001b4', 'skills/' + name],
+      ['vyas-devgna/braids', ['79c913e9d27854d88c7ee58aa9906bd2b45001b4'], 'skills/' + name],
     ]),
 ]);
 
@@ -162,7 +164,8 @@ function validateRecords(release: Json, pointer: Json): VerifiedCohort {
         raw.kind !== 'plugin_skill' || raw.plugin_path !== '' ||
         raw.status !== 'complete' || coverage.status !== 'complete' ||
         !same(raw.scanner, expectedScanner) || !same(raw.profile, expectedProfile) ||
-        source.repository !== expected[0] || source.revision !== expected[1] ||
+        source.repository !== expected[0] || typeof source.revision !== 'string' ||
+        !expected[1].includes(source.revision) ||
         source.path !== expected[2] || !digestPattern.test(String(source.content_digest)) ||
         pin.id !== raw.id ||
         !/^community:[0-9a-f]{32}$/.test(String(pin.signed_package_id)) ||
@@ -269,6 +272,35 @@ export async function readVerifiedSkillSpectorCohort(
   return validateRecords(release, pointer);
 }
 
+/** An older signature cannot erase source-identical risk groups found by a newer v3 scan. */
+function preservesRiskEvidence(old: SkillSpectorRecord, signed: SkillSpectorRecord): boolean {
+  if (!Array.isArray(old.findings) || !Array.isArray(signed.findings)) return false;
+  const identity = (finding: SkillSpectorRecord['findings'][number]) => canonical([
+    finding.rule, finding.path, finding.line ?? null, finding.severity,
+    finding.match_fingerprint ?? null,
+    // Without a stable fingerprint, retain the observed message and positions.
+    finding.match_fingerprint ? null : finding.message,
+    // Scanner versions generate different finding_id values for the same
+    // occurrence. Compare immutable source coordinates, never ephemeral IDs.
+    finding.match_fingerprint ? null : (finding.occurrences ?? []).map(occurrence => [
+      occurrence.path, occurrence.line ?? null, occurrence.end_line ?? null,
+      occurrence.start_column ?? null, occurrence.end_column ?? null,
+    ]),
+  ]);
+  const available = new Map<string, number>();
+  for (const finding of signed.findings) {
+    const key = identity(finding);
+    available.set(key, (available.get(key) ?? 0) + 1);
+  }
+  for (const finding of old.findings) {
+    const key = identity(finding);
+    const count = available.get(key) ?? 0;
+    if (!count) return false;
+    available.set(key, count - 1);
+  }
+  return true;
+}
+
 /** Promote only byte-identical, currently resolved sources from an Ed25519 release. */
 export function applyVerifiedSkillSpectorCohort(
   report: SkillSpectorDisplayReport,
@@ -285,7 +317,17 @@ export function applyVerifiedSkillSpectorCohort(
       report.schema_version !== 3) return report;
   const records = report.records.map(old => {
     const updated = cohort.records.get(old.id);
+    // A valid older signature must never hide fresh recovery conflicts or
+    // truncated evidence for that same immutable source. In those states the
+    // canonical v3 Partial remains authoritative until a new qualification.
     if (!updated || old.status !== 'partial' || old.coverage?.status !== 'partial' ||
+        old.findings_truncated !== false || old.coverage.grouping_complete !== true ||
+        old.coverage.reference_evidence_truncated !== false ||
+        !Array.isArray(old.coverage.reasons) || old.coverage.reasons.length === 0 ||
+        old.coverage.reasons.some(reason => reason.code !== 'reference_missing') ||
+        !Array.isArray(old.errors) || old.errors.length === 0 ||
+        old.errors.some(error => error.code !== 'reference_missing') ||
+        !preservesRiskEvidence(old, updated) ||
         old.freshness !== 'current' || old.target_revision !== old.source.revision ||
         old.scanner?.version !== '2.13.1' ||
         !same(old.source, updated.source) || old.plugin_path !== updated.plugin_path ||

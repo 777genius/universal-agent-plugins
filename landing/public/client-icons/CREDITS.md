@@ -6,3 +6,9 @@ The Qoder mark in `qoder.svg` is the unmodified square brand mark published on [
 
 The Pi mark in `pi.svg` is the unmodified [official Pi SVG](https://pi.dev/logo-auto.svg), referenced by the [upstream Pi README](https://github.com/earendil-works/pi/blob/main/README.md) and retrieved on 2026-10-28. Pi marks remain the property of their owners; use identifies the supported client and does not imply endorsement.
 SHA-256: `abd66e7868b2d24f0f0895f9237ee8a6dcb22337583b0dc54aeb595acecb4d6b`.
+
+The Hermes wing in `hermes.svg` is the unmodified [official Nous Research homepage asset](https://web-assets.nousresearch.com/marketing/7769355cb680994415a51a745c8fd0ad3ffd3fad/assets/hermes-landing/teams/hermes-wing.svg), published by [Nous Research](https://nousresearch.com/), retrieved on 2026-11-10. SHA-256: `6ee276e9bff5a166c41bc8e80c6717c525cb9b9e81a1111348559452a711e8cd`.
+
+The Antigravity mark in `antigravity.svg` is the unmodified [official full-color SVG](https://antigravity.google/assets/image/brand/antigravity-icon__full-color.svg) published in the [Google Antigravity press assets](https://antigravity.google/press), retrieved on 2026-11-10. SHA-256: `d775965ea1f8060538c15f758a3e22487317211fcb6051333b5e023f35aa726f`.
+
+Hermes and Antigravity names and marks remain the property of their owners. These marks identify supported clients and do not imply endorsement.

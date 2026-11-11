@@ -306,9 +306,9 @@ func TestResolveDirectoryRejectsEveryRecordedImmutableReleaseRebind(t *testing.T
 	}
 }
 
-// Copilot's project registry is independent of the user's shared Copilot/VS Code
-// backend. Project grants must not require VS Code; user grants still must.
-func TestResolveDirectoryProjectCopilotDoesNotBorrowUserBackend(t *testing.T) {
+// Copilot has its own signed grant in either scope, while physical ownership
+// and affected-surface tracking remain shared in user scope.
+func TestResolveDirectoryCopilotUsesOwnSignedGrant(t *testing.T) {
 	release := testRelease(1, "1.0.0")
 	policy := testPolicy(1, ClientCopilot)
 	policy.Targets[0].Scope, policy.Targets[0].Scopes = ScopeProject, nil
@@ -326,8 +326,8 @@ func TestResolveDirectoryProjectCopilotDoesNotBorrowUserBackend(t *testing.T) {
 	}
 	user := request("tool", ClientCopilot)
 	snapshot.Distributions[0].ReleasePolicies[0].Targets[0].Scope = ScopeUser
-	if _, err := ResolveDirectory(snapshot, user); !errors.Is(err, ErrDirectoryIneligible) {
-		t.Fatalf("user Copilot no longer requires shared VS Code grant: %v", err)
+	if got, err := ResolveDirectory(snapshot, user); err != nil || got.DistributionID != distribution.ID {
+		t.Fatalf("user Copilot inherited unrelated VS Code grant: %+v %v", got, err)
 	}
 }
 
@@ -427,8 +427,8 @@ func TestResolveDirectoryScopeSpecificGrantsFloorAndEvidence(t *testing.T) {
 	}
 }
 
-func TestResolveDirectoryRequiresCompleteSharedSurfaceEligibility(t *testing.T) {
-	for _, selected := range []ClientID{ClientCopilot, ClientVSCode} {
+func TestResolveDirectoryRequiresExplicitAndDependentSurfaceEligibility(t *testing.T) {
+	for _, selected := range []ClientID{ClientVSCode} {
 		t.Run(string(selected), func(t *testing.T) {
 			release := testRelease(1, "1.0.0")
 			distribution := testDistribution("owner/tool", DistributionCommunity, []DirectoryRelease{release}, []DirectoryReleasePolicy{testPolicy(1, selected)})
@@ -437,6 +437,12 @@ func TestResolveDirectoryRequiresCompleteSharedSurfaceEligibility(t *testing.T) 
 				t.Fatalf("single %s shared-surface policy was accepted: %v", selected, err)
 			}
 		})
+	}
+	release := testRelease(1, "1.0.0")
+	distribution := testDistribution("owner/tool", DistributionCommunity, []DirectoryRelease{release}, []DirectoryReleasePolicy{testPolicy(1, ClientCopilot)})
+	snapshot := DirectorySnapshot{Sequence: 1, Products: []DirectoryProduct{{ID: "tool", ManifestName: "tool", DefaultDistribution: distribution.ID, Distributions: []string{distribution.ID}}}, Distributions: []DirectoryDistribution{distribution}}
+	if _, err := ResolveDirectory(snapshot, request("tool", ClientCopilot, ClientVSCode)); !errors.Is(err, ErrDirectoryIneligible) {
+		t.Fatalf("explicit VS Code target without its own grant was accepted: %v", err)
 	}
 }
 

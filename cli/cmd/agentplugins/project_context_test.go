@@ -98,7 +98,7 @@ func TestProjectCLIUnsupportedTargetRejectsBeforeSourceAcquisition(t *testing.T)
 	root := agentpluginscli.NewRoot(app)
 	root.SetOut(&bytes.Buffer{})
 	root.SetErr(&bytes.Buffer{})
-	root.SetArgs([]string{"add", "https://invalid.example/never-acquire", "--target", "chatgpt", "--no-save", "--scope", "project", "--project-root", a})
+	root.SetArgs([]string{"add", "https://invalid.example/never-acquire", "--target", "chatgptweb", "--no-save", "--scope", "project", "--project-root", a})
 	if err := root.Execute(); err == nil || !strings.Contains(err.Error(), "does not support project scope") {
 		t.Fatalf("unsupported project boundary = %v", err)
 	}

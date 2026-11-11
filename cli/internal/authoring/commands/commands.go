@@ -16,10 +16,8 @@ import (
 	authorbootstrap "github.com/777genius/plugin-kit-ai/cli/internal/authoring/bootstrap"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/mcpruntime"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/project"
-	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/readiness"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/report"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/scaffold"
-	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/skills"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoringcli"
 	"github.com/777genius/plugin-kit-ai/cli/internal/exitx"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packageview"
@@ -145,58 +143,8 @@ func (a App) Execute(ctx context.Context, args []string, streams authoringcli.St
 			return exitx.Wrap(errors.New("authoring output failed"), 1)
 		}
 	} else {
-		if _, e := fmt.Fprintf(streams.Out, "%s: readiness %s; conformance %s; host %s; compatibility %s; toolchain %s; runtime %s\n", captured.Command, captured.Readiness.Status, captured.Conformance.Status, captured.HostSafety.Status, captured.Compatibility.Status, captured.Toolchain.Status, captured.Runtime.Status); e != nil {
-			return exitx.Wrap(errors.New("authoring output failed"), 1)
-		}
-		for _, f := range captured.Findings {
-			if _, e := fmt.Fprintf(streams.Out, "%s: %s (%s)\n", f.Severity, f.Code, f.Layer); e != nil {
-				return exitx.Wrap(errors.New("authoring output failed"), 1)
-			}
-		}
-		for _, component := range captured.Components {
-			if _, e := fmt.Fprintf(streams.Out, "%s %s: %s; requirements %s\n", component.Type, component.ID, component.Status, strings.Join(component.Requirements, ", ")); e != nil {
-				return exitx.Wrap(errors.New("authoring output failed"), 1)
-			}
-		}
-		if captured.Capabilities != nil {
-			if _, e := fmt.Fprintf(streams.Out, "commands: %s\n", strings.Join(captured.Capabilities.Commands, ", ")); e != nil {
-				return exitx.Wrap(e, 1)
-			}
-			for _, s := range captured.Capabilities.Schemas {
-				if _, e := fmt.Fprintf(streams.Out, "schema: %s; %s\n", s.ID, s.Digest); e != nil {
-					return exitx.Wrap(e, 1)
-				}
-			}
-			for _, p := range captured.Capabilities.Profiles {
-				if _, e := fmt.Fprintf(streams.Out, "profile: %s; revision %s; %s\n", p.ID, p.Revision, p.Digest); e != nil {
-					return exitx.Wrap(e, 1)
-				}
-			}
-			for _, c := range captured.Capabilities.Clients {
-				if _, e := fmt.Fprintf(streams.Out, "client: %s; activation: %s\n", c.ClientID, c.ActivationMode); e != nil {
-					return exitx.Wrap(e, 1)
-				}
-			}
-		}
-		for _, c := range captured.Clients {
-			if _, e := fmt.Fprintf(streams.Out, "target %s: static support only; %s\n", c.ClientID, strings.Join(c.Limitations, ", ")); e != nil {
-				return exitx.Wrap(e, 1)
-			}
-			for _, v := range c.Components {
-				if _, e := fmt.Fprintf(streams.Out, "  %s %d: %s\n", v.Kind, v.Index, v.Support); e != nil {
-					return exitx.Wrap(e, 1)
-				}
-			}
-		}
-		for _, c := range captured.DoctorChecks {
-			if _, e := fmt.Fprintf(streams.Out, "%s: %s; %s\n", c.ID, c.Status, c.Action); e != nil {
-				return exitx.Wrap(e, 1)
-			}
-		}
-		if captured.Error != nil {
-			if _, e := fmt.Fprintln(streams.Out, captured.Error.Action); e != nil {
-				return exitx.Wrap(errors.New("authoring output failed"), 1)
-			}
+		if e := writePrivateDetailed(streams.Out, *captured); e != nil {
+			return e
 		}
 	}
 	if err != nil {
@@ -236,208 +184,12 @@ func (a App) command(name string, capture func(report.Report), cycleOutput func(
 	}
 	return authoringcli.NewCommand(authoringcli.Spec[request, report.Report]{Use: use, Short: summary(name), Args: args,
 		Support: authoringcli.Support{Format: true, NoColor: true, DryRun: name == "bootstrap", Target: name == "compat" || name == "inspect"},
-		Configure: func(c *cobra.Command) {
-			f := c.Flags()
-			if name == "capabilities" {
-				return
-			}
-			f.Bool("include-root", false, "disclose the explicitly selected root in this report")
-			if name == "init" {
-				for _, v := range []struct{ name, help string }{
-					{"template", "skill, mcp-remote, mcp-stdio, or hybrid"}, {"name", "exact plugin identity"}, {"description", "explicit package description"},
-					{"skill-name", "explicit Skill identity"}, {"mcp", "hybrid MCP choice: mcp-remote or mcp-stdio"}, {"runtime", "stdio template runtime: node"},
-					{"url", "explicit remote MCP URL"}, {"author-name", "optional explicit author"}, {"license", "optional MIT or ISC license"},
-					{"copyright-holder", "explicit license holder"}, {"copyright-year", "explicit four-digit license year"},
-				} {
-					if a.PublicContract && v.name == "mcp" {
-						v.name = "mcp-template"
-					}
-					f.String(v.name, "", v.help)
-				}
-			} else {
-				f.Bool("release-policy", false, "also evaluate bounded release hygiene (not publication approval)")
-				if a.MCPRuntime && (name == "test" || name == "dev") {
-					if name == "test" {
-						f.String("runtime", "", "explicit runtime mode: mcp")
-					}
-					f.String("server", "", "exact MCP server name")
-					f.String("tool", "", "exact tool name; requires --fixture")
-					f.String("fixture", "", "package-relative JSON object; requires --tool")
-					f.Bool("allow-network", false, "allow the selected streamable HTTP endpoint")
-					f.Duration("deadline", 10*time.Second, "per-cycle runtime deadline (maximum 1m)")
-					if name == "dev" {
-						f.Bool("once", false, "run one bounded development cycle")
-					}
-				}
-			}
-		},
+		Configure: func(c *cobra.Command) { a.configureCommand(name, c) },
 		Decode: func(c *cobra.Command, opts authoringcli.Options, args []string) (request, error) {
-			if name == "capabilities" {
-				return request{inventory: implementedLeaves(c.Root())}, nil
-			}
-			get := func(n string) string { v, _ := c.Flags().GetString(n); return v }
-			disclose, _ := c.Flags().GetBool("include-root")
-			root := ""
-			if len(args) > 0 {
-				root = args[0]
-			}
-			req := request{root: root, disclose: disclose, cycleOutput: cycleOutput}
-			if name == "bootstrap" {
-				req.dryRun = opts.DryRun
-			}
-			if a.PublicContract {
-				var err error
-				req.root, err = skills.ExactRoot(filepath.FromSlash(root))
-				if err != nil {
-					return request{}, err
-				}
-			}
-			if name == "compat" || name == "inspect" && (opts.Target != "" || c.Flags().Changed("target")) {
-				ids, err := readiness.Targets(opts.Target)
-				if err != nil {
-					return request{}, err
-				}
-				req.targets = ids
-			}
-			if name == "init" {
-				mcpFlag := "mcp"
-				if a.PublicContract {
-					mcpFlag = "mcp-template"
-				}
-				req.template = scaffold.Options{Template: scaffold.Template(get("template")), Name: get("name"), Description: get("description"), SkillName: get("skill-name"), MCPChoice: scaffold.Template(get(mcpFlag)), Runtime: get("runtime"), RemoteURL: get("url"), AuthorName: get("author-name"), License: get("license"), CopyrightHolder: get("copyright-holder"), CopyrightYear: get("copyright-year")}
-				if a.PublicContract {
-					if !c.Flags().Changed("name") && !strings.ContainsAny(root, `/\`) && root != "." && root != ".." {
-						req.template.Name = root
-					}
-					if !c.Flags().Changed("description") {
-						req.template.Description = scaffold.DefaultDescription(req.template.Template)
-					}
-					if _, err := scaffold.BuildPlan(req.template); err != nil {
-						return request{}, publicInputError(err)
-					}
-				}
-			} else {
-				req.release, _ = c.Flags().GetBool("release-policy")
-				if a.MCPRuntime && (name == "test" || name == "dev") {
-					req.server, req.tool, req.fixture = get("server"), get("tool"), get("fixture")
-					req.allowNetwork, _ = c.Flags().GetBool("allow-network")
-					req.deadline, _ = c.Flags().GetDuration("deadline")
-					if name == "test" {
-						req.runtime = get("runtime")
-					} else {
-						req.runtime = "mcp"
-						req.once, _ = c.Flags().GetBool("once")
-					}
-					invalid := (req.tool == "") != (req.fixture == "") || req.deadline <= 0 || req.deadline > time.Minute
-					invalid = invalid || len(req.server) > 128 || len(req.tool) > 128 || len(req.fixture) > 4096
-					invalid = invalid || name == "test" && req.runtime != "" && req.runtime != "mcp"
-					invalid = invalid || name == "test" && c.Flags().Changed("runtime") && req.runtime == ""
-					runtimeFlagsChanged := c.Flags().Changed("server") || c.Flags().Changed("tool") ||
-						c.Flags().Changed("fixture") || c.Flags().Changed("allow-network") || c.Flags().Changed("deadline")
-					invalid = invalid || name == "test" && req.runtime == "" && runtimeFlagsChanged
-					invalid = invalid || req.runtime == "mcp" && req.server == "" || name == "dev" && opts.Format == "json" && !req.once
-					if invalid {
-						return request{}, &inputError{"runtime_arguments_invalid", "Use test --runtime=mcp --server <name>, or dev --server <name>. --tool and --fixture are required together; deadlines are positive and at most 1m. Continuous dev requires human output; use --once with JSON."}
-					}
-				}
-			}
-			return req, nil
+			return a.decodeRequest(name, c, opts, args, cycleOutput)
 		},
 		Runner: authoringcli.RunnerFunc[request, report.Report](func(ctx context.Context, req request) (report.Report, error) {
-			if name == "capabilities" {
-				r := report.New(name, a.Revision)
-				names := a.commandNames()
-				if a.PublicContract {
-					names = req.inventory
-				}
-				c, err := readiness.Engine(names)
-				r.Capabilities = c
-				if err != nil {
-					r.AddError("capabilities_unavailable", "Check the embedded engine metadata.")
-				}
-				return r, err
-			}
-			if name == "init" {
-				return a.init(ctx, req)
-			}
-			if name == "dev" && !req.once {
-				return a.dev(ctx, req)
-			}
-			p, e := a.Projects.Read(ctx, req.root)
-			r := report.Build(name, a.Revision, p, req.release)
-			if req.disclose {
-				r.Root = req.root
-			}
-			if e != nil {
-				code, action := failure(e, "read")
-				r.AddError(code, action)
-				return r, e
-			}
-			if name == "bootstrap" {
-				if req.dryRun {
-					r.Mode = "read"
-				} else {
-					r.Mode = "local_mutation"
-				}
-				if !r.Successful() {
-					planErr := &authorbootstrap.Error{Code: "bootstrap_template_unrecognized"}
-					code, action := bootstrapFailure(planErr)
-					r.AddError(code, action)
-					return r, planErr
-				}
-				plan, planErr := (authorbootstrap.Service{Runner: a.BootstrapRunner}).Plan(req.root, p)
-				r.Bootstrap = &report.BootstrapDetail{Runtime: plan.Runtime, Manager: plan.Manager, Argv: append([]string{}, plan.Command...), Planned: planErr == nil}
-				if planErr != nil {
-					code, action := bootstrapFailure(planErr)
-					r.AddError(code, action)
-					return r, planErr
-				}
-				if req.dryRun {
-					closeErr := plan.Close()
-					if closeErr != nil {
-						code, action := bootstrapFailure(closeErr)
-						r.AddError(code, action)
-					}
-					return r, closeErr
-				}
-				committed, applyErr := (authorbootstrap.Service{Runner: a.BootstrapRunner}).Apply(ctx, req.root, plan)
-				r.Committed = committed
-				if committed {
-					r.Paths = append(r.Paths, "node_modules")
-				}
-				if applyErr != nil {
-					code, action := bootstrapFailure(applyErr)
-					if errors.Is(applyErr, context.Canceled) || errors.Is(applyErr, context.DeadlineExceeded) {
-						code, action = failure(applyErr, "bootstrap")
-					}
-					r.AddError(code, action)
-					return r, applyErr
-				}
-				return r, nil
-			}
-			if len(req.targets) > 0 {
-				compatibility, err := readiness.Compatibility(a.ClientRegistry, p, req.targets)
-				if err != nil {
-					r.AddError("compatibility_unavailable", "Select explicit supported clients.")
-					return r, err
-				}
-				r.AddCompatibility(compatibility)
-			}
-			if name == "doctor" {
-				r.AddDoctor(readiness.Doctor(p))
-			}
-			if req.runtime == "mcp" {
-				evidence, runtimeErr := mcpruntime.Run(ctx, mcpruntime.Options{SourceRoot: req.root, Scratch: a.Projects.Scratch, Project: p, Server: req.server, Tool: req.tool, Fixture: req.fixture, AllowNetwork: req.allowNetwork, Deadline: req.deadline, Projects: a.Projects})
-				code := runtimeErrorCode(runtimeErr)
-				r.SetRuntime(evidence.Transport, evidence.Initialize, evidence.ListTools, evidence.ToolCall, evidence.ToolCount, evidence.Cleanup, code)
-				if runtimeErr != nil {
-					return r, runtimeErr
-				}
-			}
-			if !r.Successful() {
-				return r, errors.New("authoring checks incomplete or failed")
-			}
-			return r, nil
+			return a.runCommand(ctx, name, req)
 		}),
 		Render: func(_ authoringcli.Streams, _ authoringcli.Options, r report.Report, _ error) error {
 			capture(r)
@@ -551,7 +303,7 @@ func bootstrapFailure(err error) (string, string) {
 // it directly so completed cycles are visible without waiting for cancellation.
 func writePrivateHuman(w io.Writer, r report.Report) error {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s: readiness %s; conformance %s; host %s; compatibility %s; toolchain %s; runtime %s\n", r.Command, r.Readiness.Status, r.Conformance.Status, r.HostSafety.Status, r.Compatibility.Status, r.Toolchain.Status, r.Runtime.Status)
+	b.WriteString(privateReportSummary(r))
 	if document := r.JSONDocument; document != nil {
 		fmt.Fprintf(&b, "json document: %s; changed %t; before %s; after %s\n", document.Path, document.Changed, document.BeforeSHA256, document.AfterSHA256)
 	}

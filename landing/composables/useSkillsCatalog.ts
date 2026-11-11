@@ -1,4 +1,5 @@
 import type { SkillsCatalogPage, SkillsView, SkillListing } from '~/types/skillsCatalog';
+import { sortSkillsForCatalog } from '~/data/catalogCuration';
 import type { SkillsFilters } from '~/utils/skillsCatalog';
 import {
   hasCurrentPublishedScan,
@@ -39,7 +40,17 @@ export function useSkillsCatalog(
   const requiresReport = computed(() =>
     Boolean(filters?.value.scannedOnly || filters?.value.noRemarksOnly),
   );
-  const displayed = computed(() => items.value.slice(0, displayLimit.value));
+  const displayed = computed(() => {
+    // Apply curation to actual provider listings, not a separate list of
+    // synthetic cards. Search, Trending/Hot, and scan-filtered modes keep
+    // their existing upstream order.
+    const editorial =
+      !query.value.trim() && view.value === 'popular' && !requiresReport.value;
+    return (editorial ? sortSkillsForCatalog(items.value) : items.value).slice(
+      0,
+      displayLimit.value,
+    );
+  });
   const remaining = computed(() => Math.max(0, items.value.length - displayLimit.value));
   const hasMore = computed(
     () => remaining.value > 0 || pending.value.length > 0 || upstreamMore.value,

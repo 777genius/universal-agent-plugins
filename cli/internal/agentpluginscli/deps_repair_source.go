@@ -14,6 +14,9 @@ import (
 // repair-only route recovers it from exact verified bytes before the ordinary
 // strict pin/materialization checks; lock replay never calls this helper.
 func hydrateRecordedDependencyInventory(ctx context.Context, app App, pin environment.LockedPackage) (environment.LockedPackage, error) {
+	if err := requireLockedDirectoryFeed(app, pin); err != nil {
+		return environment.LockedPackage{}, err
+	}
 	snapshot, err := app.dependencyStore().Snapshot(ctx, pin.DigestAlgorithm, pin.TreeDigest)
 	if errors.Is(err, environmentstore.ErrMissing) {
 		snapshot, err = app.acquireLockedSnapshot(ctx, pin)

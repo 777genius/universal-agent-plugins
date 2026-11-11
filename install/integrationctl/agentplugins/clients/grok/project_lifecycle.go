@@ -12,7 +12,18 @@ import (
 
 var _ clients.ActivationPreflighter = (*Adapter)(nil)
 
-const projectPreparationAction = "Grok project plugin is prepared; review the selected project and plugin in Grok, make any trust decision there, and separately verify native discovery; skills execution and bundled MCP remain unqualified"
+// Project guidance must describe only components actually delivered. A
+// Skills-only project remains qualified on Grok 1.0.67.
+func projectPreparationAction(components []domain.ComponentDecision) string {
+	if !shared.HasSupportedMCP(components) {
+		return "Grok project Skills are prepared; open the selected project, review trust in Grok, then reload and verify native Skills discovery; UAP has not activated them"
+	}
+	label := "MCP"
+	if shared.ComponentKindPresent(components, domain.ComponentSkill) {
+		label = "Skills/MCP"
+	}
+	return "Grok project " + label + " delivery is prepared; Project MCP requires Grok 1.0.70; open the selected project, enable and trust the plugin in Grok, then reload and verify effective MCP discovery; UAP has not activated it"
+}
 
 func (*Adapter) PreflightActivation(_ clients.Env, request domain.ActivationRequest) error {
 	if request.Plan.Scope != domain.ScopeProject && request.Plan.TargetContext.Scope != domain.ScopeProject && request.Plan.TargetContext.ProjectRoot == "" {
@@ -33,11 +44,11 @@ func (*Adapter) PreflightActivation(_ clients.Env, request domain.ActivationRequ
 	if (request.Delivery.ActivePath != "" && request.Delivery.ActivePath != request.Plan.ActivePath) || (request.Delivery.OwnedBase != "" && request.Delivery.OwnedBase != request.Plan.TargetRoot) || (request.DeclaredName != "" && request.DeclaredName != request.Plan.DeclaredName) {
 		return fmt.Errorf("grok project delivered identity differs from plan")
 	}
-	if !shared.ComponentKindPresent(request.Plan.Components, domain.ComponentSkill) {
-		return fmt.Errorf("grok project preparation requires a supported skill")
+	if !shared.OnlyNativeComponents(request.Plan.Components) {
+		return fmt.Errorf("grok project preparation requires supported Skills or MCP")
 	}
 	for _, component := range request.Plan.Components {
-		if component.Support != domain.SupportUnsupported && component.Kind != domain.ComponentSkill {
+		if component.Support != domain.SupportUnsupported && component.Kind != domain.ComponentSkill && component.Kind != domain.ComponentMCPServer {
 			return fmt.Errorf("grok project component is unqualified")
 		}
 	}
@@ -50,7 +61,7 @@ func activateProject(ctx context.Context, env clients.Env, request domain.Activa
 	if request.Delivery.ClientID != domain.ClientGrok || request.Delivery.ActivePath != request.Plan.ActivePath || request.Delivery.OwnedBase != request.Plan.TargetRoot || request.DeclaredName != request.Plan.DeclaredName {
 		return domain.ActivationOutcome{}, fmt.Errorf("grok project delivered identity differs from plan")
 	}
-	finding, err := inspectProject(ctx, env, request.Client, request.Plan, true)
+	finding, err := inspectProject(ctx, env, request.Client, request.Plan, true, true)
 	if err != nil {
 		return domain.ActivationOutcome{}, err
 	}
@@ -59,7 +70,7 @@ func activateProject(ctx context.Context, env clients.Env, request domain.Activa
 	}
 	outcome := shared.StartedActivation(request)
 	outcome.Activation = domain.ActivationPrepared
-	outcome.UserActions = []string{projectPreparationAction}
+	outcome.UserActions = []string{projectPreparationAction(request.Plan.Components)}
 	return outcome, nil
 }
 func deactivateProject(_ context.Context, _ clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {

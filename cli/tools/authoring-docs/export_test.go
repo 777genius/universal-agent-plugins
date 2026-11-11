@@ -57,7 +57,7 @@ func modelAuditedAncestorFacts(roots []*cobra.Command) error {
 	for _, want := range []flagFact{
 		{Name: "scope", Type: "string", Default: "user", Usage: "installation scope: user or project"},
 		{Name: "project-root", Type: "string", Default: "", Usage: "existing project directory (project scope only; default: current directory)"},
-		{Name: "target", Type: "string", Default: "", Usage: "target client(s), comma-separated: codex, chatgpt, cursor, copilot, vscode, kiro, claude, gemini, opencode, cline, windsurf, grok, kimi, qoder, pi"},
+		{Name: "target", Type: "string", Default: "", Usage: "target client(s), comma-separated: codex, chatgpt, cursor, copilot, vscode, kiro, claude, gemini, opencode, cline, windsurf, grok, kimi, qoder, hermes, antigravity, pi, chatgptweb (chatgpt=Desktop, chatgptweb=Web)"},
 	} {
 		if got := live[want.Name]; got != want {
 			return fmt.Errorf("audited ancestor fixture does not admit changed %s facts", want.Name)

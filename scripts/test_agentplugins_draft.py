@@ -282,7 +282,7 @@ class ProducerPermissionTests(unittest.TestCase):
         header = self.workflow.split("\njobs:\n", 1)[0]
         self.assertIn("\npermissions:\n  contents: read\n", header)
         self.assertNotIn(": write", header)
-        for name in ("validate", "build", "platform-proof"):
+        for name in ("validate", "build", "platform-proof", "hermes-native-proof", "antigravity-native-proof"):
             self.assertNotIn(": write", self.job(name))
         platform = (SOURCE / ".github/workflows/agentplugins-platform-proof.yml").read_text()
         self.assertNotIn(": write", platform)
@@ -315,7 +315,8 @@ class ProducerPermissionTests(unittest.TestCase):
                       '.merged_at != null and .base.ref == "main"',
                       'require_check dependency-review', 'require_check "${name}"'):
             self.assertIn(guard, validate)
-        self.assertIn("needs: [validate, stage-draft, platform-proof]", self.job("verified-draft"))
+        self.assertIn("needs: [validate, stage-draft, platform-proof, hermes-native-proof, antigravity-native-proof]",
+                      self.job("verified-draft"))
         promote = self.job("promote-release")
         self.assertIn("if: ${{ inputs.publish_release == true }}", promote)
         self.assertIn("needs: [validate, reuse-verified-draft]", promote)
@@ -323,6 +324,28 @@ class ProducerPermissionTests(unittest.TestCase):
         self.assertIn("if: ${{ inputs.publish_release != true }}", self.job("platform-proof"))
         self.assertIn("if: ${{ inputs.publish_release != true }}", self.job("verified-draft"))
         self.assertIn("scripts/reuse-agentplugins-verified-draft.py", promote)
+        for name in ("reuse-verified-draft", "promote-release"):
+            self.assertEqual(self.job(name).count("--require-hermes-antigravity"), 1)
+        for client in ("hermes", "antigravity"):
+            native = self.job(client + "-native-proof")
+            self.assertIn("needs: [validate, stage-draft, platform-proof]", native)
+            self.assertIn(f"uses: ./.github/workflows/{client}-native-e2e.yml", native)
+            self.assertIn("release_assets_artifact: ${{ needs.stage-draft.outputs.assets_artifact }}", native)
+            self.assertIn("expected_checksums_sha256: ${{ needs.stage-draft.outputs.asset_set_digest }}", native)
+            workflow = (SOURCE / f".github/workflows/{client}-native-e2e.yml").read_text()
+            self.assertIn("  workflow_call:\n", workflow)
+            self.assertIn("cancel-in-progress: ${{ inputs.release_tag == '' }}", workflow)
+            self.assertNotIn("GH_TOKEN:", workflow)
+            self.assertNotIn("GITHUB_TOKEN:", workflow)
+            aggregate = workflow.split("\n  aggregate-release-native:\n")[1]
+            self.assertIn("Verify exactly three artifact-bound native receipts", aggregate)
+            self.assertNotIn("continue-on-error:", aggregate)
+            self.assertEqual(aggregate.count("\n        if:"), 0)
+            windows = workflow.split("\n  native-windows" , 1)[1].split("\n  aggregate-release-native:", 1)[0]
+            self.assertLess(windows.index("git config --global core.autocrlf false"),
+                            windows.index("uses: actions/checkout@"))
+            for build in re.findall(r"(?ms)^      - name: Build .*?(?=^      -|\Z)", workflow):
+                self.assertIn("if: ${{ inputs.release_tag == '' }}", build)
         for name in ("stage-draft", "verified-draft", "reuse-verified-draft", "promote-release"):
             self.assertNotRegex(self.job(name), r"always\(\)|!cancelled\(\)|failure\(\)|continue-on-error:")
 

@@ -69,27 +69,46 @@ the publishable version from the approved tag; do not manually bump it.
    launcher or released binary. It then proves a warm-cache invocation with
    the local proof source removed. Until the matrix aggregates successfully,
    no public GitHub Release may exist.
-6. Confirm `verified-draft` succeeds after all six proofs, reverifying the live
+6. Confirm the reusable Hermes and Antigravity native workflows succeed after
+   `platform-proof`. Each uses the same-run complete nine-asset artifact from
+   `stage-draft`, with the exact frozen checkout and `checksums.txt` SHA-256.
+   `release-assets.js` verifies the full bundle before the selected binary runs;
+   source compilation is disabled for these release lanes. The existing real
+   Hermes 0.23.0 and `agy` 1.5.3 lifecycle harnesses run on Linux amd64, macOS
+   arm64 and Windows amd64. Each client aggregate requires exactly these three
+   passing receipts, with no duplicate or mixed source/run/asset identities.
+   Receipts bind the filename, size, binary SHA-256 before and after execution,
+   actual UAP version, manifest/checksums digests, harness hashes, vendor pin,
+   launcher/runtime hashes, vendor version and transcript SHA-256. Receipts and
+   transcripts are retained as same-run artifacts for 14 days; a pass receipt
+   is written only after successful native execution. GitHub/npm credentials
+   are removed from the environment before the client or released binary runs.
+   These three vendor platforms supplement the six mandatory UAP platform
+   proofs; they do not establish six-platform vendor support or Antigravity
+   IDE activation.
+7. Confirm `verified-draft` succeeds after all six UAP proofs and both new-client
+   aggregates, reverifying the live
    draft identity, manifest, all nine assets, and attestations, and uploads
    `verified-draft.json`. With `publish_release=false`, promotion is skipped
    in this run. With `auto_publish=false`, the verified draft remains non-public.
    Schema2 receipts also bind the exact npm artifact ID, ZIP SHA-256, tarball
    filename, SHA-512 SRI and SHA-1 already exercised by all six native jobs.
-7. When the owner request authorizes publication,
+8. When the owner request authorizes publication,
    dispatch the existing producer with `publish_release=true`, plus
    `qualified_run_id` and `qualified_run_attempt` from the successful
    `publish_release=false` run; use `--ref <exact-tag>`. With `auto_publish=true`,
    the successful qualification dispatches this phase for you, and the promotion
    waits for that exact producer run to complete successfully. The frozen
    tag/source-ref/`main` ancestry and required commit gates still run. Promotion authenticates the prior successful
-   draft-only workflow attempt, all six native platform proofs, its verified
+   draft-only workflow attempt, all six native platform proofs, both successful
+   Hermes/Antigravity aggregate jobs (including every aggregate step), its verified
    receipt artifact and ZIP SHA-256, then compares that receipt with a fresh
    verification of the live nine-asset draft and attestations. Approve the
    promotion environment deployment only after this check succeeds. The job
    repeats the same verification immediately before publishing by the verified
    numeric release ID, then confirms that the tag still resolves to that ID.
    It does not rebuild binaries or rerun native platform proofs.
-8. After authorized promotion, verify the resulting public release contains six platform binaries,
+9. After authorized promotion, verify the resulting public release contains six platform binaries,
    `checksums.txt`, `release-manifest.json`, and `THIRD_PARTY_NOTICES.txt`, and
    verify GitHub attestations for every file, including the notices.
    This exact stable public release is the immutable producer handoff consumed
@@ -115,10 +134,18 @@ A workflow-dispatch ref of current `main` still has to equal the candidate SHA.
 Go and source npm qualification run in parallel with the six binary builds.
 Draft staging requires all three lanes. Go compilation/dependency caching is
 allowed, while `-count=1` forces the release's Go tests to execute. Staged npm
-contract tests and all six native platform proofs remain mandatory. Publication
+contract tests, all six native platform proofs and both three-platform
+Hermes/Antigravity release-native aggregates remain mandatory. Publication
 reuses their exact archived npm tarball instead of staging, testing and packing
 it again. Only postpublish signature/provenance and real registry lifecycle
 checks are deferred until the package is public.
+
+Current producer promotion passes the narrow `--require-hermes-antigravity`
+option at both archived-receipt verification calls. It requires the exact two
+new aggregate job names to succeed; missing, failed, skipped, cancelled or
+incomplete aggregates refuse promotion. The producer's immutable verified-draft
+receipt and existing nine-asset authority remain unchanged. Historical receipt
+schemas and callers that audit older releases retain their original contract.
 
 For a schema-v1 historical platform audit, dispatch `Agentplugins Platform
 Proof` with `--ref <exact-tag>` and `allow_legacy_manifest=true`. The workflow
@@ -258,3 +285,15 @@ throwaway Git repositories, real npm archives and a read-only GitHub API fixture
 Negative controls cover missing/failed qualification jobs, changed tags or
 artifacts, stale attempts, archive traversal and changed public asset identities.
 This tests orchestration and custody, not new real-client/runtime qualification.
+
+### Production site source activation
+
+Both Pages publishers select `website/production-source.json` before installing
+build tools. The accepted immutable commit/tree keeps CLI source changes separate
+from public site activation while signed feeds continue refreshing normally.
+Advance this pin only after reviewing the selected site source and qualifying its
+public client capabilities against the actual published stable npm CLI. Manual
+Pages `expected_sha` still identifies the workflow/control commit. The final
+`BUILD_PROVENANCE.json` records both commits, the source tree, pin digest and
+mirrored feed marker digest. Source or release checks fail closed; no fallback
+source or alternative feed publisher is used.

@@ -71,6 +71,27 @@ class PackageManagerCIPolicyTests(unittest.TestCase):
                 self.assertIn("scripts/live-install-audit.py", body)
                 self.assertNotIn("universal-agent-plugins@0.1.101", body)
 
+    def test_deep_macos_docker_hub_has_genuine_cli_prerequisite(self):
+        macos = (WORKFLOW.parent / "agentplugins-published-macos-audit.yml").read_text(
+            encoding="utf-8")
+        # Docker Hub's frozen manifest demands an actual docker executable.
+        # The restricted older workflow and trusted full-evidence PR expansion
+        # are both fail-closed: ordinary PRs cannot install Docker.
+        original_guard = "if: ${{ github.event_name != 'pull_request' && matrix.kind == 'plugin' }}"
+        trusted_guard = (
+            "if: ${{ matrix.kind == 'plugin' && (github.event_name != 'pull_request' || "
+            "(github.event.pull_request.head.repo.full_name == github.repository && "
+            "contains(github.event.pull_request.title, '[full-published-e2e]'))) }}"
+        )
+        self.assertTrue(
+            original_guard in macos or trusted_guard in macos,
+            "Docker CLI must be restricted to deep published plugin E2E",
+        )
+        self.assertIn("brew install docker", macos)
+        self.assertIn("command -v docker", macos)
+        self.assertIn("docker --version", macos)
+        self.assertNotIn("continue-on-error: true", macos)
+
     def test_draft_only_runs_disposable_harness_preflight(self):
         self.assertIn("github.event_name == 'pull_request' && github.event.pull_request.draft", self.body)
         self.assertIn("name: draft evidence preflight", self.body)

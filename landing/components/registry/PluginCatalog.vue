@@ -34,9 +34,10 @@ const trust = ref('all');
 const client = ref('all');
 const authentication = ref('all');
 const owner = ref('all');
+const sort = ref('recommended');
 const route = useRoute();
 const router = useRouter();
-const filterRefs = [query, category, component, source, trust, client, authentication, owner];
+const filterRefs = [query, category, component, source, trust, client, authentication, owner, sort];
 let pendingFilterValues: string[] | undefined;
 let syncingFilters = false;
 let disposed = false;
@@ -135,6 +136,10 @@ const ownerOptions = computed(() => [
   { value: 'all', label: t('registryUi.catalog.allOwners') },
   ...filters.value.owners.map((item) => ({ value: item, label: item })),
 ]);
+const sortOptions = computed(() => [
+  { value: 'recommended', label: t('registryUi.catalog.sortRecommended') },
+  { value: 'name', label: t('registryUi.catalog.sortName') },
+]);
 const visible = computed(() =>
   groupCatalogPlugins(
     filterPlugins(catalogPlugins.value, {
@@ -149,6 +154,7 @@ const visible = computed(() =>
       client: client.value as 'all' | RegistryPlugin['client_support']['clients'][number],
       authentication: authentication.value as 'all' | 'none' | 'required_or_unknown',
       owner: owner.value === 'all' ? '' : owner.value,
+      order: sort.value === 'name' ? 'name' : 'recommended',
     }),
   ),
 );
@@ -181,7 +187,7 @@ const activeChips = computed(() => {
     authenticationOptions.value,
     ownerOptions.value,
   ];
-  return filterRefs.flatMap((filter, index) =>
+  return filterRefs.slice(0, 8).flatMap((filter, index) =>
     filter.value !== (index === 0 ? '' : 'all')
       ? [
           {
@@ -215,6 +221,7 @@ function clearFilters() {
   client.value = 'all';
   authentication.value = 'all';
   owner.value = 'all';
+  sort.value = 'recommended';
   mobileFiltersOpen.value = false;
 }
 
@@ -243,7 +250,7 @@ async function syncCatalogQuery() {
   }
 }
 
-watch([query, category, component, source, trust, client, authentication, owner], () => {
+watch([query, category, component, source, trust, client, authentication, owner, sort], () => {
   catalogUi.reconcile(family.value, fingerprint.value);
   void syncCatalogQuery();
 });
@@ -271,12 +278,19 @@ watch([query, category, component, source, trust, client, authentication, owner]
       </div>
       <p>{{ intro ?? t('registryUi.catalog.searchByCapabilityComponentOrSource') }}</p>
     </div>
-    <div class="catalog-controls" role="search" :aria-label="t('registryUi.catalog.filterPlugins')">
+    <div class="catalog-controls catalog-controls--plugins" role="search" :aria-label="t('registryUi.catalog.filterPlugins')">
       <CatalogSearchField
         v-model="query"
         :label="t('registryUi.catalog.searchPlugins')"
         :placeholder="t('registryUi.catalog.searchByNameAuthorOrCapability')"
         :clear-label="t('registryUi.catalog.clearPluginSearch')"
+      />
+      <AppSelect
+        v-if="!query.trim()"
+        v-model="sort"
+        leading-icon="category"
+        :label="t('registryUi.catalog.sortLabel')"
+        :options="sortOptions"
       />
       <button
         class="catalog-filter-toggle"
@@ -315,12 +329,6 @@ watch([query, category, component, source, trust, client, authentication, owner]
           :options="stableComponentOptions"
         />
         <AppSelect
-          v-model="source"
-          leading-icon="source"
-          :label="t('registryUi.catalog.filterBySource')"
-          :options="sourceOptions"
-        />
-        <AppSelect
           v-model="trust"
           leading-icon="trust"
           :label="t('registryUi.catalog.filterByTrustLevel')"
@@ -338,13 +346,21 @@ watch([query, category, component, source, trust, client, authentication, owner]
           :label="t('registryUi.catalog.filterByAuthentication')"
           :options="authenticationOptions"
         />
-        <AppCombobox
-          v-model="owner"
-          leading-icon="owner"
-          :label="t('registryUi.catalog.filterByOwner')"
-          :search-placeholder="t('registryUi.catalog.searchOwners')"
-          :options="ownerOptions"
-        />
+        <div class="catalog-filter-pair">
+          <AppSelect
+            v-model="source"
+            leading-icon="source"
+            :label="t('registryUi.catalog.filterBySource')"
+            :options="sourceOptions"
+          />
+          <AppCombobox
+            v-model="owner"
+            leading-icon="owner"
+            :label="t('registryUi.catalog.filterByOwner')"
+            :search-placeholder="t('registryUi.catalog.searchOwners')"
+            :options="ownerOptions"
+          />
+        </div>
       </div>
     </div>
     <div v-if="activeChips.length" class="catalog-active-filters" :aria-label="t('registryUi.catalog.activeFilters')">
@@ -369,6 +385,9 @@ watch([query, category, component, source, trust, client, authentication, owner]
     <div class="catalog-meta">
       <div>
         <div class="catalog-count" aria-live="polite">{{ catalogSummary }}</div>
+        <p v-if="!query.trim() && sort === 'recommended'" class="catalog-curation-note">
+          {{ t('registryUi.catalog.curationNote') }}
+        </p>
         <p
           v-if="['loading', 'unavailable'].includes(discovery.state)"
           class="discovery-status"
@@ -377,6 +396,8 @@ watch([query, category, component, source, trust, client, authentication, owner]
           <template v-if="discovery.state === 'loading'">{{
             t('registryUi.catalog.findingMoreCommunityPluginsOnGithub')
           }}</template>
+
+
           <template v-else-if="discovery.state === 'unavailable'">{{
             t(
               'registryUi.catalog.communityResultsAreTemporarilyUnavailableReviewedListingsRemainAvailable',
@@ -418,3 +439,11 @@ watch([query, category, component, source, trust, client, authentication, owner]
     </div>
   </section>
 </template>
+
+<style scoped>
+.catalog-curation-note {
+  margin-top: 5px;
+  color: var(--subtle);
+  font-size: 0.75rem;
+}
+</style>

@@ -1,4 +1,5 @@
 """Fixture validation plus opt-in actual PTY integration (never mocked CLI)."""
+import hashlib
 import json
 import http.client
 from urllib.parse import urlsplit
@@ -13,6 +14,51 @@ import plugin_matrix as lane
 
 
 class FixtureValidation(unittest.TestCase):
+    def test_uploaded_evidence_manifest_does_not_claim_hidden_fixture_bytes(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / 'visible.txt').write_bytes(b'public evidence')
+            hidden = root / 'foreign' / '.cursor-plugin'
+            hidden.mkdir(parents=True)
+            (hidden / 'plugin.json').write_bytes(b'{"synthetic": true}')
+            uploaded, omitted = lane.uploadable_evidence_hashes(root)
+            self.assertEqual(uploaded['visible.txt'], hashlib.sha256(b'public evidence').hexdigest())
+            self.assertNotIn('foreign/.cursor-plugin/plugin.json', uploaded)
+            self.assertEqual(omitted['foreign/.cursor-plugin'], 'directory')
+            self.assertEqual(omitted['foreign/.cursor-plugin/plugin.json'],
+                             hashlib.sha256(b'{"synthetic": true}').hexdigest())
+
+    @unittest.skipUnless(os.name == 'posix', 'plugin matrix is POSIX-only')
+    def test_generated_plugin_report_omits_hidden_fixture(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            binary = root / 'binary'
+            binary.write_bytes(b'synthetic executable')
+            artifacts = root / 'artifacts'
+
+            def record_case(_case, _binary, evidence, _timeout):
+                evidence.mkdir(parents=True)
+                (evidence / 'visible.txt').write_bytes(b'public evidence')
+                hidden = evidence / 'foreign' / '.cursor-plugin'
+                hidden.mkdir(parents=True)
+                (hidden / 'plugin.json').write_bytes(b'{"synthetic": true}')
+
+            argv = ['plugin_matrix.py', '--binary', str(binary),
+                    '--artifacts', str(artifacts), '--case', 'collision:cancel']
+            with patch('sys.argv', argv), \
+                 patch.object(lane, 'run_case', side_effect=record_case), \
+                 patch.object(lane.subprocess, 'check_output', return_value='test-sha\n'):
+                self.assertEqual(lane.main(), 0)
+
+            report = json.loads((artifacts / 'report.json').read_text())
+            visible = 'collision-cancel/visible.txt'
+            hidden = 'collision-cancel/foreign/.cursor-plugin/plugin.json'
+            self.assertEqual(report['evidence_hashes'][visible],
+                             hashlib.sha256(b'public evidence').hexdigest())
+            self.assertNotIn(hidden, report['evidence_hashes'])
+            self.assertEqual(report['omitted_hidden_evidence'][hidden],
+                             hashlib.sha256(b'{"synthetic": true}').hexdigest())
+
     def test_platform_discovery_paths(self):
         for system, editor in (('Linux', 'config'), ('Darwin', 'Library/Application Support')):
             with self.subTest(system=system), tempfile.TemporaryDirectory() as tmp:

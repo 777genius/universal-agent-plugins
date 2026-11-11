@@ -91,7 +91,7 @@ func runAddManyWithClients(ctx context.Context, cmd *cobra.Command, app App, opt
 		return err
 	}
 	writeProgress(app, opts.format, "Resolving and validating one Agent Plugin package for every selected target...")
-	loaded, err := app.loadPackageFor(ctx, source, withDetectedClients(app.addResolutionRequest(source, expandAffectedSurfaceTargets(targets, app.scope())), detected))
+	loaded, err := app.loadPackageFor(ctx, source, withDetectedClients(app.addResolutionRequest(source, targets), detected))
 	if err != nil {
 		return err
 	}
@@ -111,7 +111,7 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 		return err
 	}
 	if opts.chatGPTAppID != "" && !loaded.chatGPTPreparation {
-		return fmt.Errorf("--chatgpt-app-id requires the signed Context7 Directory source and --target chatgpt")
+		return fmt.Errorf("--chatgpt-app-id requires the signed Context7 Directory source and --target chatgptweb")
 	}
 	if err := authorizeSecurityAssessment(cmd, app, opts, &loaded); err != nil {
 		return err

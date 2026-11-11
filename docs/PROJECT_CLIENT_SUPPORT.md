@@ -20,6 +20,25 @@ authority. Client paths below are relative to the selected project. Configuratio
 ownership and native discovery are separate: Prepared means further client
 selection, reload, trust or session work can remain.
 
+## Hermes and Antigravity: source-qualified additions {#hermes-antigravity-source}
+
+As of 2026-11-10, published CLI `0.1.102` does not include these targets.
+The following evidence qualifies source only, not the current public binary.
+Qualification against the immutable release artifact and signed Directory
+eligibility are separate pending checks; client capability does not grant a
+Directory package permission for another target.
+
+| Client | Component delivery and scope | Native evidence and remaining boundary |
+| --- | --- | --- |
+| Hermes | User Skills in `$HERMES_HOME/skills` and owned stdio/Streamable HTTP MCP members in user `config.yaml`; Project Skills in `.hermes/skills`. Project MCP is refused without redirecting to User configuration. | Hermes 0.23.0 passed Linux x64/macOS arm64/Windows x64 in [run 42813277862](https://github.com/777genius/universal-agent-plugins/actions/runs/42813277862), UAP `a50c8a245f1c273efb3d171f4c54ed540475336a`: first/repeated add, update, repair, removal, untrusted Project discovery and A/B isolation. Four loopback HTTP `initialize`/`tools/list` exchanges per OS prove connection/tool discovery; no `tools/call`, model turn, provider authentication or trusted Project execution. |
+| Antigravity | Owned native plugin bundle with Skills and stdio/Streamable HTTP MCP in User and Project scope; **Prepared**. | Actual `agy` 1.5.3 strict validation and isolated CLI import/list/uninstall passed on Linux/macOS/Windows in [run 42804680737](https://github.com/777genius/universal-agent-plugins/actions/runs/42804680737). CLI validation and registration do not establish IDE discovery, enablement, MCP startup, tool execution or authentication; actual IDE qualification remains separate. |
+
+For Hermes, SSE and hooks are unsupported. Portable commands follow Skills
+projection; explicit-only commands are withheld when the host cannot enforce
+explicit invocation. UAP does not grant project trust. See the
+[Hermes native guide](HERMES_NATIVE_SKILLS.md) and
+[release completion plan](plans/2026-11-10-hermes-antigravity-public-release.md).
+
 ## Delivery by client
 
 | Client | Project files or preparation | Result and native boundary |
@@ -31,11 +50,11 @@ selection, reload, trust or session work can remain.
 | OpenCode | `.opencode/skills` and root `opencode.json` or `opencode.jsonc` | Prepared; simultaneous competing config files are refused. User, ancestor and explicit settings can affect effective selection. See [OpenCode guidance](OPENCODE_PROJECT_SCOPE.md). |
 | Copilot CLI | `.github/skills`; existing ordinary `.mcp.json`, otherwise `.github/mcp.json` | Prepared. Project MCP ownership is distinct from VS Code; overlapping skill names require exact ownership and cannot be adopted silently. |
 | Kiro | `.kiro/skills` and `.kiro/settings/mcp.json` | Prepared. Custom-agent resource selection can change which workspace configuration is loaded. |
-| Grok Build | Skills-only prepared plugin in `.grok/plugins/<artifact>` | Prepared with package validation; project MCP is unsupported. Disabled/untrusted native evidence cannot become Active by attestation. |
-| Qoder | Managed bundle in `.uap/managed/clients/qoder/<artifact>` with a closed `.agentplugins-qoder-native` manual import view | Prepared skills only. Explicit native import creates a separate globally cached copy; UAP removal removes only its owned preparation. See [Qoder guidance](QODER_PROJECT_INSTALLATION.md). |
+| Grok Build | Prepared Skills (Grok 1.0.67/1.0.70) and stdio/HTTP MCP (1.0.70 only) plugin in `.grok/plugins/<artifact>` with managed `.mcp.json` | UAP prepares and verifies owned package files. Grok must separately enable and trust the plugin; neither project delivery nor `--activation-complete` proves MCP startup or tool execution. |
+| Qoder | Managed `.uap/managed/clients/qoder/<artifact>`; Project Skills in `.qoder/skills`, owned stdio/HTTP MCP entries in `.mcp.json`, plus legacy manual import view | Prepared native Project Skills/MCP configuration. Restart and review session trust/activation; MCP listing is not `tools/call`. Independently imported User-native cache remains outside UAP ownership. See [Qoder guidance](QODER_PROJECT_INSTALLATION.md). |
 | Cline | `.cline/skills`; prepared `.uap/clients/cline/mcp.json` | Always Prepared. Explicit `CLINE_MCP_SETTINGS_PATH` selects the whole MCP file for one process; a process without that override uses its ordinary selection. The observed same-name user skill shadows project copies. See [Cline guidance and exact-source evidence](CLINE_PROJECT_INSTALLATION.md). |
 | Windsurf / Devin | Current observed Devin Local: `.devin/skills` and `.devin/mcp_config.json` | Prepared; new delivery requires the observed `devin` 3000.11.205 harness. Legacy Cascade and an unrelated UI executable are not substitutes. |
-| Kimi Code | `.kimi-code/skills` and `.kimi-code/mcp.json` | Prepared; new delivery requires observed `kimi` 2.3.1 and the selected skill directory's nearest Git root. The user plugin registry stays separate. |
+| Kimi Code | `.kimi-code/skills` and `.kimi-code/mcp.json` | Prepared; new delivery admits selected `kimi` 2.3.1, 2.3.2 or source-qualified stable 2.5.2 with its nearest Git-root project Skills/MCP. Version 2.5.2 has 30/30 genuine source-backed Project Skills add/repeat/remove evidence in [#811](https://github.com/777genius/universal-agent-plugins/pull/811); MCP native startup on 2.5.2 is not independently proven by that Skills audit. The separate user plugin registry is unchanged. |
 | ChatGPT | No supported native project filesystem installation | Explicit refusal before source acquisition, including `--no-save`; the existing user/manual path is preserved. See [ChatGPT scope](CHATGPT_PROJECT_SCOPE.md). |
 | VS Code | `.github/skills` and exact `servers` members in `.vscode/mcp.json`, including native JSONC syntax | Prepared with installed-file verification for one local folder. Open that folder and review workspace/server trust; observed metadata does not prove MCP startup or model execution. See [VS Code preparation](PROJECT_INSTALLATION.md#vs-code-project-preparation) and [pinned metadata evidence](evidence/project-scope-research/vscode-1.143.1-untrusted-workspace-linux-amd64-40188310034/README.md). |
 | Pi | `.pi/extensions/<artifact>`, managed `.pi/skills/<skill>`, exact owned `mcpServers` members in `.pi/mcp.json` | Project-scoped Extensions, Skills and stdio/Streamable HTTP MCP preparation, preserving user/project B and foreign entries; **Prepared** until Pi separately grants trust. Native `tools/call` is now qualified only with a local scripted model, not vendor authentication. [Extensions #631](https://github.com/777genius/universal-agent-plugins/pull/631), [Skills/MCP #640](https://github.com/777genius/universal-agent-plugins/pull/640), [real Pi call #656](https://github.com/777genius/universal-agent-plugins/pull/656). |
@@ -60,8 +79,8 @@ the actual client executable, not a live vendor model or general-purpose access.
 | GitHub Copilot CLI | Yes | Qualified A/B lifecycle, restart and removal | Initialize, tools/list, tools/call qualified with scripted loopback provider | [#527](https://github.com/777genius/universal-agent-plugins/pull/527) |
 | Kimi Code | Yes | Qualified A/B lifecycle, restart and removal | Initialize, tools/list, tools/call qualified across **two separate same-source native lanes** | [#524](https://github.com/777genius/universal-agent-plugins/pull/524) |
 | Cline | Yes | Qualified A/B lifecycle, restart and removal | Initialize, tools/list, tools/call qualified under explicit process-wide MCP path selection | [#525](https://github.com/777genius/universal-agent-plugins/pull/525); default IDE forwarding not qualified |
-| Grok Build | Skills only | Qualified supported skills lifecycle, restart and removal | Project MCP unsupported | [#522](https://github.com/777genius/universal-agent-plugins/pull/522) |
-| Qoder | Prepared skills bundle, explicit native import | Qualified explicit skills lifecycle and restart/removal | Project MCP unsupported by this UAP route | [#523](https://github.com/777genius/universal-agent-plugins/pull/523); global native import has separate ownership |
+| Grok Build | Skills and MCP (Prepared) | Pinned Skills lifecycle, restart and removal qualified; MCP-only and mixed composed install/repair/remove under review | Project MCP native discovery under qualification; scripted-model `tools/call` not yet established | [Skills #522](https://github.com/777genius/universal-agent-plugins/pull/522), [MCP PR #810](https://github.com/777genius/universal-agent-plugins/pull/810) |
+| Qoder | Project Skills and stdio/HTTP MCP | Composed A/B add/update/repair/remove; pinned native MCP list observation is supported | MCP `tools/call` is not qualified; native import cache is separate | [Composed E2E](../cli/cmd/agentplugins/project_qoder_e2e_test.go), [native collector](../scripts/project_native_qoder_installed_mcp.py), [guide](QODER_PROJECT_INSTALLATION.md) |
 | Windsurf / Devin | Yes | Qualified supported project skills lifecycle, restart and removal | Not qualified | [#528](https://github.com/777genius/universal-agent-plugins/pull/528); separate strict cache-frame follow-up [#611](https://github.com/777genius/universal-agent-plugins/pull/611) |
 | Kiro | Prepared | Authenticated native lifecycle **not qualified** | Not qualified | [Draft #529](https://github.com/777genius/universal-agent-plugins/pull/529); dedicated test authentication needed |
 | VS Code | Prepared | Trusted native project lifecycle **not qualified** | Not qualified | [Deferred Draft #530](https://github.com/777genius/universal-agent-plugins/pull/530) |

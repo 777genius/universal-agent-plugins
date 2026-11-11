@@ -102,6 +102,7 @@ type options struct {
 	installIntents       map[domain.ClientID]domain.InstallIntent
 	color                terminaltheme.Policy
 	target               string
+	targetInput          string
 	projectRoot          string
 	scope                string
 	dryRun               bool
@@ -113,6 +114,7 @@ type options struct {
 	purgeData            bool
 	acceptSecurityRisk   bool
 	securityDetails      bool
+	dependencyPolicyFile string
 }
 
 func (app App) input() io.Reader {

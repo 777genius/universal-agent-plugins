@@ -1,0 +1,126 @@
+name: Kimi stable Project native installation E2E
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'install/integrationctl/agentplugins/clients/kimi/**'
+      - 'install/integrationctl/agentplugins/providers/project_kimi_*'
+      - 'cli/cmd/agentplugins/project_kimi_*'
+      - '.github/workflows/kimi-stable-project-native-e2e.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kimi-stable-project-e2e-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  native-project:
+    name: Official Kimi 2.5.2 / 30 project Skills (no model)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Audit the PR's exact HEAD, never the default synthetic PR merge commit.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.11'
+          cache: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - name: Install genuine pinned stable Kimi and observe version without user profile
+        id: native-install
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global @moonshot-ai/kimi-code@2.5.2
+          command -v kimi
+          mkdir -p "$RUNNER_TEMP/kimi-version-home/cache"
+          observed="$(KIMI_CODE_HOME="$RUNNER_TEMP/kimi-version-home" \
+            KIMI_CODE_CACHE_DIR="$RUNNER_TEMP/kimi-version-home/cache" \
+            KIMI_CODE_NO_AUTO_UPDATE=1 timeout 45s kimi --version)"
+          test "$observed" = '2.5.2'
+
+      - name: Run the real project admission and ownership regressions
+        run: |
+          go test ./install/integrationctl/agentplugins/providers -run '^TestProjectKimi' -count=1
+          go test ./install/integrationctl/agentplugins/clients/kimi -count=1
+
+      - name: Exercise stable 2.5.2 saved Project Skills/MCP lifecycle (inert client)
+        run: |
+          go test ./cli/cmd/agentplugins -run '^TestProjectKimi' -count=1
+
+      - name: Build current PR source CLI with published policy version
+        run: go build -trimpath -ldflags='-X main.version=0.1.102' -o "$RUNNER_TEMP/agentplugins-kimi-source" ./cli/cmd/agentplugins
+
+      - name: Audit 30 source-backed Project Skills, repeated installs and removal
+        if: ${{ !cancelled() }}
+        env:
+          AUDIT_VENDOR_OUTCOME: ${{ steps.native-install.outcome }}
+          AUDIT_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          AUDIT_REPORT_DIR: ${{ runner.temp }}/kimi-stable-project-proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$AUDIT_REPORT_DIR"
+          python3 scripts/live-install-audit.py \
+            --cli "$RUNNER_TEMP/agentplugins-kimi-source" \
+            --target kimi --kind skill --limit 30 \
+            --report-dir "$AUDIT_REPORT_DIR"
+          # The shared audit accepts documented negative cases as coverage.
+          # Stable admission requires 30 genuine positive passes, not 30 attempts.
+          python3 - "$AUDIT_REPORT_DIR/kimi-skill.json" "$AUDIT_PR_HEAD_SHA" <<'PY'
+          import json, pathlib, sys
+          evidence = json.loads(pathlib.Path(sys.argv[1]).read_text())
+          expected_head = sys.argv[2]
+          rows = evidence.get("results", [])
+          # A summary-only PASS is insufficient: independently require the
+          # observable source/owned-byte, pin, repeat, removal and isolation proofs.
+          required_positive = (
+              "skill_bytes_match", "lock_written", "lock_contains_identity",
+              "lock_exact_source_pinned", "listed_identity", "repeat_verified",
+              "repeat_native_unchanged", "repeat_lock_unchanged",
+              "removal_verified", "sentinels_preserved", "post_list_schema_valid",
+          )
+          failures = []
+          for index, row in enumerate(rows):
+              if not isinstance(row, dict):
+                  failures.append(f"{index}: malformed evidence")
+                  continue
+              missing = [key for key in required_positive if row.get(key) is not True]
+              if (row.get("status") != "passed"
+                      or row.get("post_remove_identity_registered") is not False
+                      or missing):
+                  failures.append(
+                      f"{index}: status={row.get('status')}, missing={missing}, "
+                      f"remaining={row.get('post_remove_identity_registered')}")
+          if (evidence.get("pr_head_sha") != expected_head
+                  or evidence.get("passed") != 30
+                  or evidence.get("verified_negative_coverage") != 0
+                  or evidence.get("cases_attempted") != 30
+                  or evidence.get("full_coverage") is not True
+                  or evidence.get("source_selection_complete") is not True
+                  or evidence.get("client_version", {}).get("status") != "reported"
+                  or evidence.get("client_version", {}).get("value") != "2.5.2"
+                  or len(rows) != 30 or failures):
+              raise SystemExit(f"Exact-head real native Kimi Skill qualification failed: {failures}")
+          print(f"QUALIFIED: 30/30 source-backed Kimi 2.5.2 project Skills at {expected_head}")
+          PY
+
+      - name: Preserve exact-head source/native E2E results, even on failure
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: kimi-stable-2.5.2-native-project-skills
+          path: ${{ runner.temp }}/kimi-stable-project-proof/
+          if-no-files-found: warn
+          retention-days: 14

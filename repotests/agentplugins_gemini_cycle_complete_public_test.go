@@ -166,6 +166,10 @@ func geminiCompletePublicData(r *geminiCycleRecipe, label, operation string) map
 	if !strings.HasPrefix(label, "remove-") {
 		output["next_action"] = geminiCompleteNext
 	}
+	if strings.HasPrefix(label, "add-") || label == "repeat-add-a" || label == "update-a" || label == "unchanged-update-a" {
+		output["scope"], output["readiness"] = r.scopeName(), "needs_action"
+		output["next_actions"] = []any{map[string]any{"code": "verify_native", "actor": "native_client", "message": geminiCompleteNext}}
+	}
 	if label == "repeat-add-a" {
 		output["security"] = geminiCompleteSecurity(r, true)
 		return output
@@ -184,7 +188,7 @@ func geminiCompletePublicData(r *geminiCycleRecipe, label, operation string) map
 	}
 	if strings.HasPrefix(label, "add-") {
 		data["action_required"], data["manifest_digest"] = 1, output["manifest_digest"]
-		data["security"], data["environment"] = geminiCompleteSecurity(r, false), map[string]any{"reason": "no_save_requested", "saved": false}
+		data["security"], data["environment"] = geminiCompleteSecurity(r, false), map[string]any{"reason": "no_save_requested", "saved": false, "scope": r.scopeName(), "scope_selection_reason": "explicit"}
 	}
 	if strings.HasPrefix(label, "remove-") {
 		data["status"], data["plugin_data_preserved"], data["data_retained"] = "data_retained", true, true

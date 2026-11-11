@@ -14,7 +14,8 @@ translationRequired: false
 
 The [currently published native CLI](https://github.com/777genius/universal-agent-plugins/releases/latest)
 provides an owned local management API, read-only client/profile discovery
-and native Pi extensions in user and eligible project scope. See [local management](../use/manage#local-management-api).
+and Pi native extensions, Skills and stdio/Streamable HTTP MCP in user and
+eligible project scope. See [local management](../use/manage#local-management-api).
 Package-manager channels may lag; check `agentplugins version`.
 
 Since CLI 0.1.94, an `install` without a source argument automatically selects
@@ -37,8 +38,7 @@ Read compatibility as several separate questions:
 
 Project delivery commonly remains **Prepared** while trust, reload, explicit
 configuration or session work remains. ChatGPT project installation is explicitly
-unsupported. VS Code project scope prepares files for a single local folder;
-its pinned metadata observation is not MCP startup or model-execution evidence.
+unsupported.
 See [project support by client](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)
 and the [project evidence index](https://github.com/777genius/universal-agent-plugins/blob/main/docs/evidence/PROJECT_INSTALLATION.md).
 
@@ -48,15 +48,34 @@ a later client version, another scope or an untested package. UAP is independent
 community tooling; these are bounded maintainer observations, not vendor
 certification or a claim of universal production readiness.
 
-## Pi native extensions {#pi-native-extensions}
+## Hermes and Antigravity: source qualification {#hermes-antigravity-source}
 
-The current CLI accepts `--target pi` for packages declaring a
-[native Pi extension](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_CONTRACT.md).
-Native Pi extensions support user scope and eligible **project-scoped** installation
-under `.pi/extensions/<artifact>` (see [project E2E #631](https://github.com/777genius/universal-agent-plugins/pull/631)).
-For a project, select `--scope project --project-root /path/to/workspace`,
-then review Pi's project trust prompt and reload or restart. UAP never
-grants project trust automatically or reports a prepared extension as loaded.
+At the 2026-11-10 checkpoint, published CLI `0.1.102` does not include Hermes or Antigravity. The following results qualify source, not a published artifact. Qualification against the immutable release binary and signed Directory eligibility remain separate pending checks. Client capability does not authorize a Directory package for that target.
+
+**Hermes 0.23.0:** User Skills and owned stdio/Streamable HTTP MCP configuration; Project Skills only. Project MCP is refused without redirecting to User configuration. Linux x64, macOS arm64 and native Windows x64 passed first/repeated add, update, repair, removal, untrusted Project discovery and A/B isolation in [42813277862](https://github.com/777genius/universal-agent-plugins/actions/runs/42813277862) at UAP `a50c8a245f1c273efb3d171f4c54ed540475336a`. Four loopback HTTP `initialize`/`tools/list` exchanges per OS prove connection and tool discovery, not `tools/call`, model use, authentication or trusted Project execution. SSE and hooks are unsupported. Portable commands are projected as Skills; explicit-only commands are withheld when explicit invocation cannot be enforced.
+
+**Antigravity:** owned native plugin bundles with Skills and stdio/Streamable HTTP MCP in User and Project scopes remain **Prepared**. Actual `agy` 1.5.3 passed strict validation and isolated CLI import/list/uninstall on Linux, macOS and Windows in [42804680737](https://github.com/777genius/universal-agent-plugins/actions/runs/42804680737). These CLI observations do not prove actual IDE discovery or enablement, MCP startup, tool execution or authentication; IDE qualification remains separate. UAP does not grant project trust.
+
+## Pi extensions, Skills and MCP {#pi-native-extensions}
+
+Published CLI `0.1.102` accepts `--target pi` for compatible Agent Plugins 1.0
+packages containing native [Pi extensions](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_CONTRACT.md),
+Skills and/or stdio/Streamable HTTP MCP servers. User and eligible **project**
+scopes are supported; SSE and generic app components are not. Project extension
+files live under `.pi/extensions/<artifact>`, Skills under `.pi/skills`, and
+owned MCP entries in `.pi/mcp.json`. For a project, select
+`--scope project --project-root /path/to/workspace`, then review Pi's trust
+prompt and reload or restart. UAP does not grant trust or claim runtime activation.
+
+**Installer capability is not signed Directory eligibility.** At the
+2026-11-09 checkpoint, none of the 37 active signed Directory release policies
+included Pi, even though the current CLI can prepare compatible direct Git
+packages. A short-name install such as `add context7 --target pi` therefore
+correctly refuses to invent an authorized Pi target. An immutable
+`github:owner/repo@FULL_SHA//package/path` selector is an explicit *different*
+source-acquisition path, still subject to UAP's package and adapter checks.
+Use disposable profiles for qualification; do not treat source validity, package
+installation, MCP tool execution or OAuth as interchangeable evidence.
 
 The [project E2E matrix](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)
 records real Pi v1.4.0 Linux, macOS and Windows project A/B loading, update

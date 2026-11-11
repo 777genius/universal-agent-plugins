@@ -34,7 +34,7 @@ npx universal-agent-plugins add context7 --target codex,cursor --dry-run
 
 يوفر [دليل التثبيت الأصلي](https://github.com/777genius/universal-agent-plugins/blob/main/docs/NATIVE_INSTALL.md) أيضًا ملفات تنفيذية لأنظمة macOS وLinux وWindows. لا يحتاج المدير الأصلي إلى Node.js، لكن الإضافات قد تحتاج إلى بيئات تشغيل خاصة بها. تحقّق من `npx universal-agent-plugins version` عند استخدام npm، فقد توفر قناة مدير الحزم CLI أقدم. يتطلب الاختيار التلقائي أدناه 0.1.94؛ استخدم المثبّت الأصلي عند الحاجة. يعمل مثال Project بمصدر Git مثبت بمعرّف commit كامل مع 0.1.93؛ أما استخدام الاسم المختصر من Directory في Project فيتطلب CLI المستقرة الحالية.
 
-يحتفظ [CLI](https://github.com/777genius/universal-agent-plugins/releases/latest) بنطاق المشروع الصريح والاختيار التلقائي في `install` الذي أُضيف في 0.1.94. ويضيف أيضًا [واجهة API للإدارة المحلية](../use/manage#local-management-api) و[امتدادات Pi الأصلية](../reference/client-compatibility#pi-native-extensions). لمعاينة إضافة حزمة إلى مشروع:
+يحتفظ [CLI](https://github.com/777genius/universal-agent-plugins/releases/latest) بنطاق المشروع الصريح والاختيار التلقائي في `install` الذي أُضيف في 0.1.94. ويضيف أيضًا [واجهة API للإدارة المحلية](../use/manage#local-management-api) و[امتدادات Pi والمهارات وMCP](../reference/client-compatibility#pi-native-extensions). لمعاينة إضافة حزمة إلى مشروع:
 
 للحزمة المتوافقة والمراجَعة في الفهرس، تقبل CLI المنشورة الاسم المختصر من Directory الموقّع ضمن نطاق Project الصريح عندما يدعم العميل جميع المكوّنات المطلوبة (مثل `agentplugins add context7 --target codex --scope project --dry-run`). أو استخدم مصدر Git مُراجعًا ومثبتًا بمعرّف commit كامل مع العميل المتوافق. استبدل `OWNER/REPOSITORY` و`FULL_COMMIT_SHA` و`PACKAGE_PATH`؛ وإذا كانت الحزمة في جذر المستودع فاحذف `//PACKAGE_PATH`.
 
