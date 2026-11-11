@@ -45,7 +45,13 @@ const modeLink = (skills: boolean) => ({
 
 <template>
   <div class="unified-catalog">
-    <div class="unified-catalog__heading" :class="directoryPage ? 'page-intro' : 'section-heading'">
+    <div
+      class="unified-catalog__heading"
+      :class="directoryPage ? 'page-intro' : 'section-heading'"
+      :data-initial-catalog="!skillsActive ? 'reviewed-directory-snapshot' : undefined"
+      :data-catalog-augmentation="!skillsActive ? 'signed-client-side-discovery' : undefined"
+      :data-count-scope="!skillsActive ? 'initial-reviewed-subset-not-full-directory' : undefined"
+    >
       <div class="catalog-heading-row">
         <component
           :is="directoryPage ? 'h1' : 'h2'"
@@ -85,19 +91,10 @@ const modeLink = (skills: boolean) => ({
         </a>
       </div>
       <p>{{ catalogIntro }}</p>
-      <!-- Crawler/AI note: prerendered HTML contains the reviewed Directory seed.
-           The browser augments it with a verified signed community feed after hydration;
-           an HTML-only crawler MUST NOT treat the seed count as the full Directory. -->
-      <p
-        v-if="!skillsActive"
-        class="unified-catalog__discovery-note"
-        data-initial-catalog="reviewed-directory-snapshot"
-        data-catalog-augmentation="signed-client-side-discovery"
-        data-count-scope="initial-reviewed-subset-not-full-directory"
-      >
-        {{ t('registryUi.skills.discoveryNotice') }}
-      </p>
-      <p class="unified-catalog__skills-guide">
+      <!-- The reviewed seed is augmented by a verified signed community feed.
+           Count-scope metadata remains available to crawlers without a user-facing
+           implementation notice. -->
+      <p v-if="skillsActive" class="unified-catalog__skills-guide">
         <NuxtLink :to="localePath('/agent-skills/')">{{ t('registryUi.skills.overview.learnMore') }}</NuxtLink>
       </p>
     </div>
@@ -119,7 +116,6 @@ const modeLink = (skills: boolean) => ({
 <style lang="scss" src="../../features/skills-catalog/catalog.scss"></style>
 
 <style scoped>
-.unified-catalog__discovery-note,
 .unified-catalog__skills-guide { margin-top: .5rem; color: var(--muted); font-size: .92rem; line-height: 1.5; }
 .unified-catalog__skills-guide a { color: var(--cyan); text-underline-offset: .2em; }
 .unified-catalog__skills-guide a:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }

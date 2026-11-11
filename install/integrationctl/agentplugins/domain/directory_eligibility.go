@@ -8,6 +8,10 @@ import (
 func directoryEligibilityTargets(targets []ClientID, scope InstallScope) []ClientID {
 	complete := append([]ClientID(nil), targets...)
 	for _, target := range targets {
+		definition, ok := ClientDefinitionFor(target)
+		if ok && definition.Traits.DirectoryOwnGrant {
+			continue
+		}
 		complete = append(complete, BackendSiblingsForScope(target, scope)...)
 	}
 	return uniqueClients(complete)

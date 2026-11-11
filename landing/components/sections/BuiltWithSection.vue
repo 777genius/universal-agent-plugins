@@ -26,7 +26,7 @@ const sdkGuideLabel = computed(() =>
     >
       <img
         class="built-with__logo"
-        :src="asset('showcase/agent-notifications.png')"
+        :src="asset('showcase/agent-notifications.webp')"
         alt=""
         width="96"
         height="96"

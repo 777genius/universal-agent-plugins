@@ -33,6 +33,57 @@ REQUIRED_CHILD_SELECTORS = {
 }
 
 
+# Exact unchanged signed45 bytes, not a policy synthesized for this test.
+# Source: Registry ledger commit 3509baaac8e4f7ee3d565440f8c0d0bd1f928fba,
+# registry/schemas/1/snapshots/00000000000000000045.json.
+FIXED_REFUSAL_LEDGER = "3509baaac8e4f7ee3d565440f8c0d0bd1f928fba"
+FIXED_REFUSAL_ORIGIN = (
+    "https://raw.githubusercontent.com/777genius/universal-agent-plugins-registry/"
+    + FIXED_REFUSAL_LEDGER + "/registry/schemas/1/")
+FIXED_REFUSAL_POLICY = {
+    "snapshot_sequence": 45,
+    "snapshot_digest": "sha256:2aba9b0d97556ac0756dff5f974aa7377914e0d8d1d9b735b46c5bc804b81f50",
+}
+FIXED_SIGNED_CLOSURE = {
+    "777genius/marketing-kit": {
+        "release_sequence": 1,
+        "package_version": "0.1.0",
+        "repository": "777genius/universal-agent-plugins-registry",
+        "package_path": "plugins/marketing-kit",
+        "resolved_revision": "c5bcedd4ecf12585a8a50401852e57a44891ebec",
+        "tree_digest": "sha256:8918c0f0222bd735fd0eef3cacf90b5a9351fb213483d1558a65b9911624e68a",
+        "manifest_digest": "sha256:40b18a6b33c6392134aff7beafb9a91eaeecf46ce765e0e888cdc743dd284ea2"
+    },
+    "777genius/notion": {
+        "release_sequence": 1,
+        "package_version": "0.1.0",
+        "repository": "777genius/universal-agent-plugins",
+        "package_path": "plugins/notion",
+        "resolved_revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+        "tree_digest": "sha256:860fa6dd1830d0da2b8fed38195fa6ad6307082ac12d708118e5eb1c5d10f9b7",
+        "manifest_digest": "sha256:bbab30a4f062218d7a5fce2f6c818680d3c7adfaebdbaa3e523e15942a2f57e5"
+    },
+    "777genius/hubspot-crm": {
+        "release_sequence": 1,
+        "package_version": "0.1.0",
+        "repository": "777genius/universal-agent-plugins",
+        "package_path": "plugins/hubspot-crm",
+        "resolved_revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+        "tree_digest": "sha256:09a0b151c384235c3d7b3929398695d24cd7b07c75993a0a73f1a218198ededd",
+        "manifest_digest": "sha256:20334e86a1b599d2759e04bfaef37dc2ddb7f6b0f3994b5d66d4eca12fbec941"
+    },
+    "777genius/playwright-bridge": {
+        "release_sequence": 2,
+        "package_version": "0.0.80",
+        "repository": "777genius/universal-agent-plugins-registry",
+        "package_path": "plugins/playwright",
+        "resolved_revision": "d9c8d778200d51ae941d86bb69af23534cd1c8f7",
+        "tree_digest": "sha256:ff3c74bb5760fea47003130f3984d48234892330325a7cad35a7bc973acc9cf6",
+        "manifest_digest": "sha256:8419b5c9e67894c2312048c4fe30e3ea920d00101d02641230183dd7ab4d3b31"
+    }
+}
+
+
 # Published npm 0.1.102 dependency operations include result=success AND
 # outcome/actions/results. Require exact action evidence; process exit 0 or
 # result=success alone is not sufficient.
@@ -187,6 +238,81 @@ def verify_pinned_launcher(cli, env, project):
     require_exact_published_version(result)
 
 
+def inspect_signed_closure(cli, env, project, target, expected_policy=None):
+    """Use released CLI trust/expiry checks; compare its public info identities."""
+    policy = None
+    root_targets = None
+    for distribution, pinned in FIXED_SIGNED_CLOSURE.items():
+        result = invoke([cli, "info", distribution, "--target", target,
+                         "--scope", "user", "--format", "json"], env, project, 35)
+        if type(result.get("exit_code")) is not int or result.get("timeout") is not False:
+            raise AssertionError("signed Directory info process result invalid")
+        envelope = verified(result, "signed Directory info")
+        data = envelope.get("data")
+        if envelope.get("command") != "info" or not isinstance(data, dict):
+            raise AssertionError("signed Directory info envelope invalid")
+        sequence, digest = data.get("snapshot_sequence"), data.get("snapshot_digest")
+        if (type(sequence) is not int or sequence <= 0 or not isinstance(digest, str)
+                or not re.fullmatch(r"sha256:[0-9a-f]{64}", digest)):
+            raise AssertionError("signed Directory policy identity invalid")
+        identity = {"snapshot_sequence": sequence, "snapshot_digest": digest}
+        if ((expected_policy is not None and identity != expected_policy)
+                or (policy is not None and identity != policy)):
+            raise AssertionError("signed Directory policy identity changed")
+        release = data.get("selected_release")
+        if (data.get("selected_distribution") != distribution
+                or not isinstance(release, dict) or release.get("id") != distribution
+                or release.get("release_status") != "active"
+                or type(release.get("release_sequence")) is not int
+                or any(release.get(field) != value for field, value in pinned.items())):
+            raise AssertionError("signed Directory immutable source identity changed")
+        if target == "vscode":
+            targets = release.get("target_compatibility")
+            if (not isinstance(targets, list) or any(not isinstance(item, dict) for item in targets)
+                    or [{key: item.get(key) for key in ("client", "scopes", "delivery")}
+                        for item in targets if item.get("client") == "vscode"]
+                    != [{"client": "vscode", "scopes": ["user"], "delivery": "prepared"}]):
+                raise AssertionError("signed Directory VS Code preparation metadata changed")
+        if distribution == REQUIRED_DISTRIBUTIONS["marketing-kit"]:
+            targets = release.get("target_compatibility")
+            if (not isinstance(targets, list) or not targets
+                    or any(not isinstance(item, dict) or not isinstance(item.get("client"), str)
+                           or not item["client"] or item.get("scopes") != ["user"]
+                           or not isinstance(item.get("delivery"), str) or not item["delivery"]
+                           for item in targets)
+                    or len({item["client"] for item in targets}) != len(targets)):
+                raise AssertionError("signed Directory root packaging metadata invalid")
+            root_targets = {item["client"]: {"scopes": item["scopes"], "delivery": item["delivery"]}
+                            for item in targets}
+            for client, delivery in (("copilot", "managed"), ("vscode", "prepared")):
+                if client in root_targets and root_targets[client]["delivery"] != delivery:
+                    raise AssertionError("signed Directory root packaging contract changed")
+        policy = identity
+    return {**policy, "root_target_compatibility": root_targets,
+            "closure": {key: dict(value) for key, value in FIXED_SIGNED_CLOSURE.items()}}
+
+
+def observe_production_policy(cli, env, project, target, expected=None, guards=()):
+    """Observe production defaults without inheriting or selecting another origin."""
+    before = refusal_profile_snapshot(env, project, {}, directory_only=True)
+    try:
+        if "AGENTPLUGINS_DIRECTORY_ORIGIN" in env:
+            raise AssertionError("positive lifecycle must use production default origin")
+        identity = None if expected is None else {
+            key: expected[key] for key in ("snapshot_sequence", "snapshot_digest")}
+        policy = {"source_mode": "production_default",
+                  **inspect_signed_closure(cli, env, project, target, identity)}
+        if expected is not None and policy != expected:
+            raise AssertionError("production policy observation changed")
+        return policy
+    finally:
+        try:
+            check_refusal_profile_unchanged(env, project, before)
+        finally:
+            for guard in guards:
+                guard()
+
+
 def inventory(cli, env, project, target, scope="project"):
     if scope not in ("user", "project"):
         raise ValueError(f"unsupported scope: {scope}")
@@ -218,6 +344,11 @@ def identities(items, target, scope="project"):
                           and b.get("client_id") == target and b.get("scope") == scope]
         if not scope_bindings:
             raise AssertionError(f"{dist}: missing {scope} binding for {target}")
+        if target == "copilot" and scope == "user":
+            if len(bindings) != 1 or len(scope_bindings) != 1:
+                raise AssertionError(f"{dist}: User installation must have one logical Copilot owner")
+            if scope_bindings[0].get("affected_surfaces") != ["copilot", "vscode"]:
+                raise AssertionError(f"{dist}: Copilot User shared physical surfaces changed")
         if not all(audit["recorded_signed_release_matches"](
                 directory, b.get("package_revision")) for b in scope_bindings):
             raise AssertionError(f"{dist}: {scope} binding lacks exact signed release provenance")
@@ -245,7 +376,7 @@ def identities(items, target, scope="project"):
     return result
 
 
-def lock_ids(project, target=None):
+def lock_ids(project, target=None, *, expected_sources=None):
     lock = json.loads((project / "uap.lock").read_text(encoding="utf-8"))
     packages = lock.get("packages")
     if not isinstance(packages, list):
@@ -274,6 +405,10 @@ def lock_ids(project, target=None):
                            or not re.fullmatch(r"sha256:[0-9a-f]{64}", item[field])
                            for field in ("tree_digest", "manifest_digest"))):
                 raise AssertionError("invalid selected-client signed lock pin")
+            if expected_sources is not None:
+                pinned = expected_sources[REQUIRED_DISTRIBUTIONS[alias]]
+                if any(item[field] != pinned[field] for field in ("tree_digest", "manifest_digest")):
+                    raise AssertionError("locked package differs from observed immutable source")
             by_alias[alias] = item
         if set(by_alias) != set(REQUIRED_DISTRIBUTIONS):
             raise AssertionError("mandatory signed lock aliases incomplete")
@@ -836,101 +971,287 @@ def copilot_user_c_settings_shape(env, case_root):
 
 
 
-def copilot_signed_user_versions(cli, env, project):
-    """Read exact installed signed versions, not guessed native plugin versions."""
-    versions = {}
-    for row in inventory(cli, env, project, "copilot", "user"):
-        distribution = (row.get("directory") or {}).get("recorded_distribution")
-        alias = next((name for name, source in REQUIRED_DISTRIBUTIONS.items()
-                      if source == distribution), None)
-        if alias is None or alias in versions:
-            raise AssertionError("Copilot User signed native version identity changed")
-        bindings = row.get("clients") or []
+def copilot_json_document(text):
+    def unique(pairs):
+        if len({key for key, _ in pairs}) != len(pairs):
+            raise ValueError("ambiguous Copilot JSON object")
+        return dict(pairs)
+    def reject_constant(_):
+        raise ValueError("invalid Copilot JSON constant")
+    return json.loads(text, object_pairs_hook=unique, parse_constant=reject_constant)
+
+
+def copilot_owned_json(path, root):
+    body, status = audit["copilot_settings_read"](path, root.resolve(strict=True))
+    if status == "absent":
+        return None, None
+    if status is not None:
+        raise AssertionError("Copilot owned JSON path unavailable or unsafe")
+    return copilot_json_document(body), "sha256:" + hashlib.sha256(body.encode()).hexdigest()
+
+
+def copilot_signed_user_versions(cli, env, project, policy):
+    """Bind all four native identities to signed state and committed receipts."""
+    current_vscode_boundary_kind(policy)
+    rows = inventory(cli, env, project, "copilot", "user")
+    public = identities(rows, "copilot", "user")
+    if set(public) != EXPECTED:
+        raise AssertionError("Copilot User public signed closure incomplete")
+    for row in rows:
+        bindings = row["clients"]
         if isinstance(bindings, dict):
             bindings = list(bindings.values())
-        if not isinstance(bindings, list):
-            raise AssertionError("Copilot User native version bindings invalid")
-        selected = [entry for entry in bindings if isinstance(entry, dict)
-                    and entry.get("client_id") == "copilot"
-                    and entry.get("scope") == "user"]
-        if len(selected) != 1 or not isinstance(selected[0].get("package_revision"), dict):
-            raise AssertionError("Copilot User native version binding ambiguous")
-        version = selected[0]["package_revision"].get("version")
-        if not isinstance(version, str) or not version.strip():
-            raise AssertionError("Copilot User signed version missing")
-        versions[alias] = version
-    if set(versions) != UPDATE_ALIASES:
-        raise AssertionError("Copilot User signed native closure incomplete")
-    return versions
+        pin = FIXED_SIGNED_CLOSURE[row["directory"]["recorded_distribution"]]
+        if bindings[0]["package_revision"].get("version") != pin["package_version"]:
+            raise AssertionError("Copilot User public signed version changed")
+    state, _ = copilot_owned_json(Path(env["AGENTPLUGINS_HOME"]) / "state-v2.json", project.parent)
+    if not isinstance(state, dict) or not isinstance(state.get("installations"), list):
+        raise AssertionError("Copilot User owned state unavailable")
+    owners, expected_receipts, physical_ids, binding_ids = {}, set(), set(), set()
+    for installation in state["installations"]:
+        if not isinstance(installation, dict) or not isinstance(installation.get("clients"), dict):
+            raise AssertionError("Copilot User state installation malformed")
+        if not installation["clients"]:
+            continue  # Previously removed Project data has no active binding.
+        directory, source, package = (installation.get(key, {}) for key in ("directory", "source", "package"))
+        distribution = directory.get("distribution_id")
+        alias = next((name for name, item in REQUIRED_DISTRIBUTIONS.items() if item == distribution), None)
+        if alias is None or alias in owners or installation.get("installation_id") != public.get(distribution):
+            raise AssertionError("Copilot User state identity differs from public inventory")
+        pin = FIXED_SIGNED_CLOSURE[distribution]
+        if (installation.get("origin_mode") != "directory"
+                or type(directory.get("desired_release_sequence")) is not int
+                or directory["desired_release_sequence"] != pin["release_sequence"]
+                or type(directory.get("snapshot_sequence")) is not int
+                or directory["snapshot_sequence"] != policy["snapshot_sequence"]
+                or directory.get("snapshot_digest") != policy["snapshot_digest"]
+                or package.get("version") != pin["package_version"]
+                or package.get("manifest_digest") != pin["manifest_digest"]
+                or any(source.get(key) != pin[field] for key, field in (
+                    ("repository", "repository"), ("package_subpath", "package_path"),
+                    ("resolved_revision", "resolved_revision"), ("tree_digest", "tree_digest")))):
+            raise AssertionError("Copilot User owned immutable source changed")
+        bindings = installation["clients"]
+        if len(bindings) != 1:
+            raise AssertionError("Copilot User must retain one logical owner")
+        binding_id, binding = next(iter(bindings.items()))
+        if not isinstance(binding, dict):
+            raise AssertionError("Copilot User physical binding malformed")
+        physical = binding.get("physical_artifact_id")
+        target = Path(binding.get("target_locator", ""))
+        revision = binding.get("package_revision", {})
+        if (not isinstance(binding_id, str) or not binding_id or binding_id in binding_ids
+                or binding.get("client_binding_id") != binding_id
+                or binding.get("client_id") != "copilot" or binding.get("scope") != "user"
+                or binding.get("materialization") != "materialized" or binding.get("verification") != "installation_verified"
+                or binding.get("affected_surfaces") != ["copilot", "vscode"]
+                or not isinstance(physical, str) or not physical.strip() or physical != physical.strip() or physical in physical_ids
+                or physical in (".", "..") or Path(physical).name != physical
+                or not target.is_absolute() or not target.is_dir()
+                or not audit["path_inside_case"](target, project.parent.resolve(strict=True))
+                or any(revision.get(key) != pin[field] for key, field in (
+                    ("version", "package_version"), ("resolved_revision", "resolved_revision"),
+                    ("tree_digest", "tree_digest"), ("manifest_digest", "manifest_digest")))):
+            raise AssertionError("Copilot User physical binding is unqualified")
+        receipts = binding.get("receipts")
+        if (not isinstance(receipts, list) or not receipts or any(not isinstance(item, dict)
+                or item.get("client_binding_id") != binding_id or item.get("phase") != "committed"
+                or item.get("active_path") != str(target)
+                or not isinstance(item.get("operation_id"), str) or not item["operation_id"] for item in receipts)):
+            raise AssertionError("Copilot User committed physical receipts missing")
+        marketplace = "agentplugins-" + hashlib.sha256(physical.strip().encode()).hexdigest()[:12]
+        manifest, _ = copilot_owned_json(target / ".github/plugin/marketplace.json", project.parent)
+        if (not isinstance(manifest, dict) or manifest.get("name") != marketplace
+                or not isinstance(manifest.get("plugins"), list) or len(manifest["plugins"]) != 1
+                or any(manifest["plugins"][0].get(key) != value for key, value in
+                       (("name", alias), ("version", pin["package_version"]), ("source", ".")))):
+            raise AssertionError("Copilot native marketplace differs from owned source")
+        owners[alias] = {"version": pin["package_version"], "marketplace": marketplace,
+                         "target_locator": str(target), "physical_artifact_id": physical}
+        physical_ids.add(physical)
+        binding_ids.add(binding_id)
+        expected_receipts.add((alias, "copilot", public[distribution], binding_id,
+                               "directory:" + distribution, pin["tree_digest"]))
+    receipts = state.get("environment_receipts")
+    if (set(owners) != UPDATE_ALIASES or not isinstance(receipts, list) or len(receipts) != 4
+            or any(not isinstance(item, dict) or item.get("phase") != "committed"
+                   or item.get("environment_id") != "user-default"
+                   or not isinstance(item.get("receipt_id"), str) or not item["receipt_id"] for item in receipts)
+            or len({item["receipt_id"] for item in receipts}) != 4
+            or {tuple(item.get(key) for key in ("alias", "client_id", "installation_id", "client_binding_id", "source_key", "package_digest"))
+                for item in receipts} != expected_receipts):
+        raise AssertionError("Copilot User environment receipts differ from signed closure")
+    return owners
 
 
-def copilot_native_entries_state(entries, expected_versions):
-    """Reject reminted/foreign managed registrations, not only known names."""
-    if not isinstance(entries, list) or len(entries) > 1024:
-        raise AssertionError("Copilot native plugin listing malformed")
-    found = set()
+COPILOT_BUILTIN_JSON = [{"name": "browser-use", "marketplace": "", "version": "0.0.4",
+                         "enabled": False, "source": "builtin"}]
+COPILOT_BUILTIN_TEXT = "Built-in plugins:\n  • browser-use (v0.0.4) [disabled]\n"
+COPILOT_EMPTY_TEXT = "No plugins installed.\n\nUse 'copilot plugin install <source>' to install a plugin.\n"
+
+
+def copilot_native_entries_state(entries, owners):
+    """Check the complete observed .105 live JSON identity and source schema."""
+    if not isinstance(entries, list) or len(entries) != len(owners) + 1:
+        raise AssertionError("Copilot native plugin listing malformed or incomplete")
+    found, builtin = set(), []
     for entry in entries:
         if (not isinstance(entry, dict) or not isinstance(entry.get("name"), str)
-                or not entry["name"] or type(entry.get("enabled")) is not bool
-                or not isinstance(entry.get("source"), str)
-                or ("version" in entry and entry["version"] is not None
-                    and not isinstance(entry["version"], str))
-                or ("marketplace" in entry and entry["marketplace"] is not None
-                    and not isinstance(entry["marketplace"], str))):
+                or type(entry.get("enabled")) is not bool or not isinstance(entry.get("source"), str)
+                or (entry.get("version") is not None and not isinstance(entry["version"], str))):
             raise AssertionError("Copilot native plugin entry malformed")
-        name, marketplace = entry["name"], entry.get("marketplace")
-        managed = isinstance(marketplace, str) and re.fullmatch(
-            r"agentplugins-[0-9a-f]{12}", marketplace) is not None
-        # A malformed or case-shifted UAP marketplace must not disappear
-        # from a supposedly empty native registration inventory.
-        if (isinstance(marketplace, str)
-                and marketplace.casefold().startswith("agentplugins-")
-                and not managed):
-            raise AssertionError("Copilot native managed marketplace malformed")
-        if not managed and name not in UPDATE_ALIASES:
+        name = entry["name"]
+        if name == "browser-use":
+            builtin.append(entry)
             continue
-        if not managed or name not in UPDATE_ALIASES or name in found:
+        if (name not in owners or name in found or entry.get("marketplace") != owners[name]["marketplace"]
+                or entry["enabled"] is not True
+                or entry.get("version") != owners[name]["version"]
+                or entry["source"] != "live" or entry.get("installedFrom") != owners[name]["target_locator"]):
             raise AssertionError("Copilot native managed identity is foreign or duplicated")
-        if (name not in expected_versions or not entry["enabled"]
-                or (entry.get("version") is not None
-                    and entry["version"] != expected_versions[name])):
-            raise AssertionError("Copilot native registration remained or has wrong version")
         found.add(name)
-    if found != set(expected_versions):
-        raise AssertionError("Copilot native managed closure differs from signed receipts")
-    return {"status": "installed" if expected_versions else "absent",
-            "managed_count": len(found)}
+    if builtin != COPILOT_BUILTIN_JSON or found != set(owners):
+        raise AssertionError("Copilot native closure or observed builtin baseline changed")
+    return {"status": "installed" if owners else "absent", "managed_count": len(found)}
 
 
-def copilot_native_scope_state(env, project, expected_versions):
-    """Read documented native CLI JSON in this case; never export its contents."""
+def copilot_native_text_state(text, owners):
+    """Consume complete .105 live listing, including each exact physical path."""
+    document = text.replace("\r\n", "\n")
+    if not owners:
+        if document != COPILOT_EMPTY_TEXT + COPILOT_BUILTIN_TEXT:
+            raise AssertionError("Copilot native empty text differs from observed baseline")
+        return
+    if not document.startswith(COPILOT_BUILTIN_TEXT):
+        raise AssertionError("Copilot native builtin prefix changed")
+    document = document[len(COPILOT_BUILTIN_TEXT):].removesuffix("\n")
+    lines = document.split("\n")
+    if (not lines or lines[0] != "Live Plugins (loaded from a local marketplace directory, never copied):"
+            or len(lines) != 1 + 2 * len(owners)):
+        raise AssertionError("Copilot native full live listing incomplete")
+    found = set()
+    for index in range(1, len(lines), 2):
+        entry = re.fullmatch(r"  • ([A-Za-z0-9][A-Za-z0-9._-]*)@(agentplugins-[0-9a-f]{12}) \(v([^() ]+)\) \(enabled\)", lines[index])
+        if (entry is None or entry[1] not in owners or entry[1] in found
+                or entry[2] != owners[entry[1]]["marketplace"] or entry[3] != owners[entry[1]]["version"]
+                or lines[index + 1] != "      from " + owners[entry[1]]["target_locator"]):
+            raise AssertionError("Copilot native physical identity/version/source differs")
+        found.add(entry[1])
+    if found != set(owners):
+        raise AssertionError("Copilot native physical closure incomplete")
+
+
+def copilot_native_scope_state(env, project, owners):
+    """Always obtain complete JSON and text from the same isolated real CLI."""
     home = Path(env["HOME"])
     profile = home / ".copilot"
     executable = audit["AGENT_BINARIES"].get("copilot")
-    if (not executable or not Path(executable).is_absolute()
-            or not profile.is_dir() or profile.is_symlink()
-            or not audit["path_inside_case"](profile, project.parent)):
+    if (not executable or not Path(executable).is_absolute() or not profile.is_dir()
+            or not audit["path_inside_case"](profile, project.parent.resolve(strict=True))):
         raise AssertionError("Copilot native inventory prerequisites unqualified")
-    response = invoke([executable, "plugin", "list", "--json"],
-                      {**env, "COPILOT_HOME": str(profile)}, project, 30)
-    if response.get("exit_code") != 0 or response.get("timeout"):
-        raise AssertionError("Copilot native plugin list did not succeed")
-    return copilot_native_entries_state(response.get("_json"), expected_versions)
+    before = profile_snapshot(env, project)
+    try:
+        responses = []
+        for suffix in (["--json"], []):
+            result = audit["call"]([executable, "plugin", "list", *suffix],
+                {**env, "COPILOT_HOME": str(profile)}, project, 30, capture_full=True)
+            if (type(result.get("exit_code")) is not int or result["exit_code"] != 0
+                    or result.get("timeout") is not False or result.get("stderr_full") != ""
+                    or not isinstance(result.get("stdout_full"), str)
+                    or len(result["stdout_full"].encode("utf-8")) > 1 << 20):
+                raise AssertionError("Copilot complete native listing did not succeed")
+            responses.append(result["stdout_full"])
+        state = copilot_native_entries_state(copilot_json_document(responses[0]), owners)
+        copilot_native_text_state(responses[1], owners)
+        if owners:
+            settings, _ = copilot_owned_json(home / ".copilot/settings.json", project.parent)
+            enabled = settings.get("enabledPlugins") if isinstance(settings, dict) else None
+            qualified = {name + "@" + owner["marketplace"] for name, owner in owners.items()}
+            if (not isinstance(enabled, dict) or set(enabled) != qualified
+                    or any(value is not True for value in enabled.values())):
+                raise AssertionError("Copilot native active settings differ from physical owners")
+        return {**state, "profile": str(home.resolve(strict=True)), "owners": owners}
+    finally:
+        check_copilot_read_unchanged(env, project, before, "Copilot native read-only query", 2)
 
 
-def copilot_disabled_closure_only(shapes, native_before, native_after):
-    """Permit only proven disabled vendor preferences, never active registrations."""
-    if (native_before != {"status": "installed", "managed_count": 4}
-            or native_after != {"status": "absent", "managed_count": 0}
-            or not isinstance(shapes, dict)
+def check_copilot_read_unchanged(env, project, before, stage, log_limit):
+    """Only this real read may create bounded new vendor process logs."""
+    after = profile_snapshot(env, project)
+    home = Path(env["HOME"])
+    prefix = home.name + "/" + str(Path(".copilot") / "logs") + os.sep
+    created = [key for key in after if key not in before and key.startswith(prefix)]
+    if len(created) > log_limit:
+        raise AssertionError(stage + ": excessive new Copilot process logs")
+    for key in created:
+        relative = key[len(home.name) + 1:]
+        path = home / relative
+        info = path.lstat()
+        if (not re.fullmatch(r"process-[0-9]+-[0-9]+\.log", path.name)
+                or path.parent != home / ".copilot/logs"
+                or not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size > 1 << 20
+                or not audit["path_inside_case"](path, project.parent.resolve(strict=True))):
+            raise AssertionError(stage + ": unsafe new Copilot process log")
+        after.pop(key)
+        after.pop("metadata:0:" + Path(relative).as_posix(), None)
+    if after != before:
+        raise AssertionError(stage + ": native query modified protected state")
+
+
+def copilot_disabled_closure_only(shapes, native_before, native_after, env=None, case_root=None):
+    """Bind the narrow BUG-045 predicate to actual profile and exact file bytes."""
+    if (env is None or case_root is None or not isinstance(native_before, dict)
+            or not isinstance(native_after, dict) or native_before.get("status") != "installed"
+            or native_before.get("managed_count") != 4 or native_after.get("status") != "absent"
+            or native_after.get("managed_count") != 0 or not isinstance(shapes, dict)
             or set(shapes) != {"before", "after_restore", "after_remove"}
-            or any(not isinstance(shapes[phase], dict)
-                   or set(shapes[phase]) != UPDATE_ALIASES for phase in shapes)):
+            or any(not isinstance(shapes[phase], dict) or set(shapes[phase]) != UPDATE_ALIASES for phase in shapes)):
+        return None
+    home = str(Path(env["HOME"]).resolve(strict=True))
+    owners = native_before.get("owners", {})
+    if (native_before.get("profile") != home or native_after.get("profile") != home
+            or set(owners) != UPDATE_ALIASES or native_after.get("owners") != {}):
+        return None
+    document, digest = copilot_owned_json(Path(env["HOME"]) / ".copilot/settings.json", case_root)
+    expected = {name + "@" + owners[name]["marketplace"]: False for name in owners}
+    if not copilot_disabled_document_matches(document, expected):
+        return None
+    if not all(audit["copilot_disabled_preference_only"](
+            shapes["before"][name], shapes["after_restore"][name], shapes["after_remove"][name],
+            native_before, native_after, [".copilot/settings.json"]) for name in UPDATE_ALIASES):
+        return None
+    return {"profile": home, "settings_digest": digest, "qualified_ids": sorted(expected)}
+
+
+def copilot_disabled_document_matches(document, expected):
+    """Only the two genuinely observed disabled preference documents qualify."""
+    if not isinstance(document, dict) or set(document) not in (
+            {"enabledPlugins"}, {"enabledPlugins", "extraKnownMarketplaces"}):
         return False
-    return all(audit["copilot_disabled_preference_only"](
-        shapes["before"][name], shapes["after_restore"][name],
-        shapes["after_remove"][name], native_before, native_after,
-        [".copilot/settings.json"]) for name in UPDATE_ALIASES)
+    if "extraKnownMarketplaces" in document and (
+            type(document["extraKnownMarketplaces"]) is not dict or document["extraKnownMarketplaces"]):
+        return False
+    return (document.get("enabledPlugins") == expected
+            and isinstance(document["enabledPlugins"], dict)
+            and all(value is False for value in document["enabledPlugins"].values()))
+
+
+def copilot_disabled_proof_matches(proof, home, case_root):
+    if (not isinstance(proof, dict) or proof.get("profile") != str(home.resolve(strict=True))
+            or not isinstance(proof.get("qualified_ids"), list) or len(proof["qualified_ids"]) != 4
+            or any(not isinstance(item, str) or not re.fullmatch(r"[A-Za-z0-9._-]+@agentplugins-[0-9a-f]{12}", item)
+                   for item in proof["qualified_ids"])
+            or {item.split("@", 1)[0] for item in proof["qualified_ids"] if isinstance(item, str)} != UPDATE_ALIASES):
+        return False
+    document, digest = copilot_owned_json(home / ".copilot/settings.json", case_root)
+    return (digest == proof.get("settings_digest")
+            and copilot_disabled_document_matches(document, dict.fromkeys(proof["qualified_ids"], False)))
+
+
+def copilot_native_public_state(state):
+    """Keep ownership and physical paths private; export prior aggregate fields."""
+    return {"status": state["status"], "managed_count": state["managed_count"]}
+
 
 def copilot_project_mcp_residuals(project, identities, stage):
     """Inspect Copilot's two exact Project MCP locations by server member name."""
@@ -978,7 +1299,7 @@ def copilot_project_mcp_residuals(project, identities, stage):
 
 
 def check_removed_native_components(target, home, case_root, stage, project_scope=False,
-                                    copilot_disabled_proof=False):
+                                    copilot_disabled_proof=None):
     """Refuse native MCP and Skill remnants after an empty scoped inventory."""
     # isolated_client_env() canonicalizes HOME. On macOS TemporaryDirectory
     # can return /var/... while canonical HOME is /private/var/... . Accept
@@ -1063,7 +1384,7 @@ def check_removed_native_components(target, home, case_root, stage, project_scop
         # BUG-045: vendor-disabled preferences are not active registrations,
         # but only a separate, exact native CLI absence + four-key proof can
         # permit this single retained file. All other roots remain strict.
-        if (target == "copilot" and not project_scope and copilot_disabled_proof
+        if (target == "copilot" and not project_scope and copilot_disabled_proof_matches(copilot_disabled_proof, home, case_root)
                 and leftovers == {".copilot/settings.json"}):
             return
         raise AssertionError(f"{stage}: native Marketing Kit remnants: {sorted(leftovers)}")
@@ -1124,6 +1445,52 @@ def codex_user_native_remove_attestation(env, project):
     return ("--external-uninstalled",)
 
 
+def verify_vscode_user_policy_refusal(cli, env, project, guards):
+    """Explicit VS Code still needs its own signed grant, before acquisition."""
+    before = refusal_profile_snapshot(env, project, {}, directory_only=True)
+    inventory_before = None
+    try:
+        refused = invoke([cli, "add", "marketing-kit", "--target", "vscode",
+                          "--scope", "user", "--no-save", "--yes", "--format", "json"],
+                         env, project, 180)
+        # Frozen VS Code uses its documented direct --no-save route.
+        expected = ('Resolving and validating one Agent Plugin package for every selected target...\n'
+                    'agentplugins: no eligible directory release for "marketing-kit": '
+                    '777genius/marketing-kit: release does not support complete '
+                    'target set; missing vscode')
+        code = refused.get("exit_code")
+        # call() preserves the last 1800 raw characters without stripping.
+        # This shorter exact diagnostic and empty stdout cannot be a truncated
+        # tail: any truncated nonempty output has length 1800.
+        if (type(code) is not int or code <= 0 or refused.get("timeout") is not False
+                or refused.get("stderr_tail") not in (expected, expected + "\n",
+                    expected.replace("\n", "\r\n") + "\r\n")
+                or refused.get("_json") is not None
+                or refused.get("stdout_tail") != ""):
+            raise AssertionError("VS Code User add did not receive exact missing-vscode policy refusal")
+        # The genuine CLI authenticates the Directory before this exact signed
+        # eligibility refusal. A cold read may persist only its cache and empty
+        # lock; scanners/assessments are unnecessary before package acquisition.
+        check_refusal_profile_unchanged(env, project, before)
+        inventory_before = profile_snapshot(env, project)
+        for target in ("copilot", "vscode"):
+            if inventory(cli, env, project, target, "user"):
+                raise AssertionError("VS Code User refusal retained an installation")
+        return {"stage": "Explicit VS Code User add refused by signed policy",
+                "target": "vscode", "scope": "user", "contract": "negative_policy",
+                "exit_code": code, "result": "expected_refusal",
+                "reason": "missing_vscode_grant"}
+    finally:
+        try:
+            check_refusal_profile_unchanged(env, project, before)
+            if inventory_before is not None:
+                check_profile_unchanged(env, project, inventory_before,
+                                        "VS Code User refusal inventory")
+        finally:
+            for guard in guards:
+                guard()
+
+
 def verify_vscode_user_saved_refusal(cli, env, project, guards):
     """Refuse VS Code saved management independently of signed prepared grants."""
     before = refusal_profile_snapshot(env, project, {}, directory_only=True)
@@ -1139,7 +1506,7 @@ def verify_vscode_user_saved_refusal(cli, env, project, guards):
         # call() preserves the last 1800 raw characters without stripping.
         # This shorter exact diagnostic and empty stdout cannot be a truncated
         # tail: any truncated nonempty output has length 1800.
-        if (type(code) is not int or code <= 0 or refused.get("timeout") is not False
+        if (type(code) is not int or code != 1 or refused.get("timeout") is not False
                 or refused.get("stderr_tail") not in (expected, expected + "\n",
                     expected.replace("\n", "\r\n") + "\r\n")
                 or refused.get("_json") is not None
@@ -1168,6 +1535,90 @@ def verify_vscode_user_saved_refusal(cli, env, project, guards):
                 guard()
 
 
+def current_vscode_boundary_kind(policy):
+    """Select an oracle from authenticated policy facts, never date or sequence."""
+    managed = {client: {"scopes": ["user"], "delivery": "managed"}
+               for client in ("codex", "cursor", "copilot", "claude", "gemini", "opencode")}
+    if (not isinstance(policy, dict) or policy.get("source_mode") != "production_default"
+            or type(policy.get("snapshot_sequence")) is not int or policy["snapshot_sequence"] <= 0
+            or not isinstance(policy.get("snapshot_digest"), str)
+            or not re.fullmatch(r"sha256:[0-9a-f]{64}", policy["snapshot_digest"])
+            or policy.get("closure") != FIXED_SIGNED_CLOSURE):
+        raise AssertionError("current VS Code boundary requires authenticated positive policy")
+    targets = policy.get("root_target_compatibility")
+    if targets == managed:
+        return "signed_grant_refusal"
+    if targets == {**managed, "vscode": {"scopes": ["user"], "delivery": "prepared"}}:
+        return "saved_management_capability"
+    raise AssertionError("current VS Code boundary has unqualified signed target shape")
+
+
+def verify_current_vscode_user_boundary(cli, env, project, expected_policy, guards):
+    """Reauthenticate current policy in a fresh profile before its mandatory oracle."""
+    before = refusal_profile_snapshot(env, project, {}, directory_only=True)
+    warmed = None
+    try:
+        kind = current_vscode_boundary_kind(expected_policy)
+        if "AGENTPLUGINS_DIRECTORY_ORIGIN" in env or any(Path(env["AGENTPLUGINS_HOME"]).iterdir()):
+            raise AssertionError("current boundary requires fresh production profile")
+        verify_pinned_launcher(cli, env, project)
+        policy = observe_production_policy(cli, env, project,
+            "vscode" if kind == "saved_management_capability" else "codex", expected_policy)
+        if current_vscode_boundary_kind(policy) != kind:
+            raise AssertionError("current VS Code boundary policy changed")
+        check_refusal_profile_unchanged(env, project, before)
+        warmed = profile_snapshot(env, project)
+        for guard in guards:
+            guard()
+        verify = (verify_vscode_user_saved_refusal if kind == "saved_management_capability"
+                  else verify_vscode_user_policy_refusal)
+        refused = verify(cli, env, project, ())
+        if type(refused.get("exit_code")) is not int or refused["exit_code"] != 1:
+            raise AssertionError("current VS Code boundary requires exact integer exit1")
+        check_profile_unchanged(env, project, warmed, "current VS Code boundary refusal")
+        return {"stage": "Current-production VS Code User boundary: " + kind,
+                "target": "vscode", "scope": "user", "contract": kind,
+                "exit_code": refused["exit_code"], "result": "expected_refusal", "reason": refused["reason"],
+                "policy": policy, "native_editor_runtime": "not_qualified"}
+    finally:
+        try:
+            check_refusal_profile_unchanged(env, project, before)
+            if warmed is not None:
+                check_profile_unchanged(env, project, warmed, "current boundary final inventory")
+        finally:
+            for guard in guards:
+                guard()
+
+
+def verify_fixed_vscode_user_policy_refusal(cli, env, project, guards):
+    """Authenticate unchanged45 in a fresh profile, then freeze its warmed state."""
+    before = refusal_profile_snapshot(env, project, {}, directory_only=True)
+    warmed = None
+    try:
+        if env.get("AGENTPLUGINS_DIRECTORY_ORIGIN") != FIXED_REFUSAL_ORIGIN:
+            raise AssertionError("fixed45 refusal origin differs")
+        if any(Path(env["AGENTPLUGINS_HOME"]).iterdir()):
+            raise AssertionError("fixed45 refusal requires a fresh empty data profile")
+        verify_pinned_launcher(cli, env, project)
+        policy = inspect_signed_closure(cli, env, project, "codex", FIXED_REFUSAL_POLICY)
+        check_refusal_profile_unchanged(env, project, before)
+        warmed = profile_snapshot(env, project)
+        for guard in guards:
+            guard()
+        step = verify_vscode_user_policy_refusal(cli, env, project, ())
+        step["policy"] = {"source_mode": "fixed_immutable", "ledger_commit": FIXED_REFUSAL_LEDGER,
+                          "origin": FIXED_REFUSAL_ORIGIN, **policy}
+        return step
+    finally:
+        try:
+            check_refusal_profile_unchanged(env, project, before)
+            if warmed is not None:
+                check_profile_unchanged(env, project, warmed, "fixed45 warmed refusal")
+        finally:
+            for guard in guards:
+                guard()
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--target", required=True, choices=["codex", "cursor", "claude", "gemini", "opencode", "copilot"])
@@ -1178,11 +1629,14 @@ def main():
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report = {"cli_version": "0.1.102", "target": options.target, "source": "real signed marketing-kit", "steps": [], "status": "failed",
               "qualification_scope": "user_and_project", "two_scope_lifecycle_qualified": False,
+              "positive_policy": None, "logical_owner_evidence": None,
+              "current_vscode_user_boundary": {
+                  "expectation": "authenticated_current_policy_boundary",
+                  "status": "not_run" if options.target == "copilot" else "not_applicable"},
               "scope_results": {"project": {"expectation": "positive_lifecycle", "status": "not_run"},
                                 "user": {"expectation": "positive_lifecycle", "status": "not_run"}},
-              "negative_capability_results": {"vscode_user": {
-                  "expectation": "unsupported_saved_target",
-                  "status": "not_run" if options.target == "copilot" else "not_applicable"}}}
+              "historical_policy_results": {"signed45": {
+                  "status": "separate_point_in_time_audit", "required_for_current_qualification": False}}}
     try:
         with tempfile.TemporaryDirectory(prefix="uap-real-marketing-kit-") as location:
             root = Path(location)
@@ -1202,6 +1656,9 @@ def main():
             protected_c_project = None
             protected_c_profile = None
             verify_pinned_launcher(options.cli, env, project_a)
+            report["positive_policy"] = observe_production_policy(
+                options.cli, env, project_a, options.target,
+                guards=(lambda: check_foreign(foreign_files, root),))
             def run(e, p, label, *args):
                 try:
                     report["steps"].append(execute(options.cli, e, p, options.target, label, *args))
@@ -1216,6 +1673,28 @@ def main():
                         check_user_project_unchanged(project_c, protected_c_project, label)
                     if protected_c_profile is not None:
                         check_profile_unchanged(env_c, project_c, protected_c_profile, label)
+            def copilot_read(e, p, action, native_commands=0):
+                own = settled_profile_snapshot(e, p)
+                peers = [(other_env, other_project, profile_snapshot(other_env, other_project))
+                         for other_env, other_project in ((env, project_a), (env_b, project_b), (env_c, project_c))
+                         if other_env is not e]
+                try:
+                    return action()
+                finally:
+                    checks = [lambda: check_copilot_read_unchanged(e, p, own, "Copilot native proof read", native_commands),
+                              lambda: check_foreign(foreign_files, root),
+                              lambda: check_user_project_unchanged(project_a, project_before_user, "Copilot native proof Project")]
+                    checks.extend(lambda pe=pe, pp=pp, before=before: check_profile_unchanged(
+                        pe, pp, before, "Copilot native proof peer") for pe, pp, before in peers)
+                    failures = []
+                    for check in checks:
+                        try:
+                            check()
+                        except (AssertionError, OSError) as error:
+                            failures.append(error)
+                    if failures:
+                        raise failures[0]
+
             scoped = ("--scope", "project", "--project-root", str(project_a))
             run(env, project_a, "add", "add", "marketing-kit", "--target", options.target, *scoped)
             first = identities(inventory(options.cli, env, project_a, options.target), options.target)
@@ -1225,8 +1704,9 @@ def main():
                 if not (project_a / name).is_file():
                     raise AssertionError(f"missing Project agreement: {name}")
             expected_pins = {"directory:" + item for item in EXPECTED}
-            if lock_ids(project_a, options.target) != expected_pins:
-                raise AssertionError(f"wrong locked signed source set: {sorted(lock_ids(project_a, options.target))}")
+            project_pins = lock_ids(project_a, options.target, expected_sources=FIXED_SIGNED_CLOSURE)
+            if project_pins != expected_pins:
+                raise AssertionError(f"wrong locked signed source set: {sorted(project_pins)}")
             portable_lock = (project_a / "uap.lock").read_bytes()
             run(env, project_a, "repeat add", "add", "marketing-kit", "--target", options.target, *scoped)
             if identities(inventory(options.cli, env, project_a, options.target), options.target) != first:
@@ -1264,6 +1744,11 @@ def main():
             # a genuine cross-profile mutation by B's locked restore.
             check_profile_unchanged(env, project_a, native_a_before_b,
                                     "Project B fixture preparation")
+            observe_production_policy(options.cli, env_b, project_b, options.target,
+                report["positive_policy"], (
+                    lambda: check_foreign(foreign_files, root),
+                    lambda: check_profile_unchanged(env, project_a, native_a_before_b, "Project B policy"),
+                ))
             scoped_b = ("--scope", "project", "--project-root", str(project_b))
             # The genuine published CLI must refuse a corrupted child pin
             # without modifying native or durable state in cold Project B.
@@ -1345,7 +1830,7 @@ def main():
             for name in ("uap.toml", "uap.lock"):
                 if not (user_portable / name).is_file():
                     raise AssertionError(f"User add did not persist portable {name}")
-            if lock_ids(user_portable, options.target) != expected_pins:
+            if lock_ids(user_portable, options.target, expected_sources=FIXED_SIGNED_CLOSURE) != expected_pins:
                 raise AssertionError("User add did not pin complete signed closure")
             user_initial_lock = (user_portable / "uap.lock").read_bytes()
             if identities(inventory(options.cli, env, project_a, options.target), options.target):
@@ -1360,7 +1845,7 @@ def main():
             user_after_update = user_inventory()
             if set(user_after_update) != EXPECTED:
                 raise AssertionError("User update lost mandatory signed closure")
-            if lock_ids(user_portable, options.target) != expected_pins:
+            if lock_ids(user_portable, options.target, expected_sources=FIXED_SIGNED_CLOSURE) != expected_pins:
                 raise AssertionError("User update changed mandatory signed pins")
             check_noop_update(user_after_update, user_first,
                               (user_portable / "uap.lock").read_bytes(), user_initial_lock,
@@ -1397,6 +1882,13 @@ def main():
             for name in ("uap.toml", "uap.lock"):
                 shutil.copyfile(user_portable / name, user_portable_c / name)
             user_a_native_before_c = settled_profile_snapshot(env, project_a)
+            observe_production_policy(options.cli, env_c, project_c, options.target,
+                report["positive_policy"], (
+                    lambda: check_foreign(foreign_files, root),
+                    lambda: check_profile_unchanged(env, project_a, user_a_native_before_c, "User C policy"),
+                    lambda: check_profile_unchanged(env_b, project_b, protected_b, "User C policy"),
+                    lambda: check_user_project_unchanged(project_c, protected_c_project, "User C policy"),
+                ))
             negative_exit = verify_corrupt_lock_refusal(
                 options.cli, env_c, project_c, options.target, "user", (
                     lambda: check_foreign(foreign_files, root),
@@ -1451,8 +1943,10 @@ def main():
                     "stage": "User C native HubSpot uninstall",
                     "exit_code": 0, "result": "passed",
                 })
-            native_c_before = (copilot_native_scope_state(
-                env_c, project_c, copilot_signed_user_versions(options.cli, env_c, project_c))
+            owners_c = (copilot_read(env_c, project_c, lambda: copilot_signed_user_versions(
+                options.cli, env_c, project_c, report["positive_policy"])) if copilot_c_shapes is not None else None)
+            native_c_before = (copilot_read(env_c, project_c,
+                lambda: copilot_native_scope_state(env_c, project_c, owners_c), 2)
                 if copilot_c_shapes is not None else None)
             run(env_c, project_c, "User remove C", "remove", "marketing-kit",
                 *user_scoped, *remove_c_attestation)
@@ -1464,13 +1958,14 @@ def main():
             copilot_c_disabled = False
             if copilot_c_shapes is not None:
                 copilot_c_shapes["after_remove"] = copilot_user_c_settings_shape(env_c, root)
-                native_c_after = copilot_native_scope_state(env_c, project_c, {})
+                native_c_after = copilot_read(env_c, project_c, lambda: copilot_native_scope_state(env_c, project_c, {}), 2)
                 copilot_c_disabled = copilot_disabled_closure_only(
-                    copilot_c_shapes, native_c_before, native_c_after)
+                    copilot_c_shapes, native_c_before, native_c_after, env_c, root)
                 report["copilot_user_c_settings_shape"] = copilot_c_shapes
                 report["copilot_user_c_native_state"] = {
-                    "before": native_c_before, "after": native_c_after,
-                    "disabled_only": copilot_c_disabled}
+                    "before": copilot_native_public_state(native_c_before),
+                    "after": copilot_native_public_state(native_c_after),
+                    "disabled_only": bool(copilot_c_disabled)}
             check_removed_native_components(options.target, Path(env_c["HOME"]),
                                             root, "User C remove",
                                             copilot_disabled_proof=copilot_c_disabled)
@@ -1504,8 +1999,10 @@ def main():
                     "stage": "User native HubSpot uninstall",
                     "exit_code": 0, "result": "passed",
                 })
-            native_a_before = (copilot_native_scope_state(
-                env, project_a, copilot_signed_user_versions(options.cli, env, project_a))
+            owners_a = (copilot_read(env, project_a, lambda: copilot_signed_user_versions(
+                options.cli, env, project_a, report["positive_policy"])) if copilot_a_shapes is not None else None)
+            native_a_before = (copilot_read(env, project_a,
+                lambda: copilot_native_scope_state(env, project_a, owners_a), 2)
                 if copilot_a_shapes is not None else None)
             run(env, project_a, "User remove", "remove", "marketing-kit",
                 *user_scoped, *user_remove_attestation)
@@ -1514,12 +2011,14 @@ def main():
             copilot_a_disabled = False
             if copilot_a_shapes is not None:
                 copilot_a_shapes["after_remove"] = copilot_user_c_settings_shape(env, root)
-                native_a_after = copilot_native_scope_state(env, project_a, {})
+                native_a_after = copilot_read(env, project_a, lambda: copilot_native_scope_state(env, project_a, {}), 2)
                 copilot_a_disabled = copilot_disabled_closure_only(
-                    copilot_a_shapes, native_a_before, native_a_after)
+                    copilot_a_shapes, native_a_before, native_a_after, env, root)
                 report["copilot_user_a_native_state"] = {
-                    "before": native_a_before, "after": native_a_after,
-                    "disabled_only": copilot_a_disabled}
+                    "before": copilot_native_public_state(native_a_before),
+                    "after": copilot_native_public_state(native_a_after),
+                    "disabled_only": bool(copilot_a_disabled)}
+                report["copilot_user_a_settings_shape"] = copilot_a_shapes
             check_removed_native_components(options.target, Path(env["HOME"]),
                                             root, "User A remove",
                                             copilot_disabled_proof=copilot_a_disabled)
@@ -1535,22 +2034,44 @@ def main():
             check_user_project_unchanged(project_c, protected_c_project, "User final inventory")
             check_profile_unchanged(env_c, project_c, protected_c_profile,
                                     "User final inventory")
+            # Check every independent production profile against the same policy;
+            # an advancing feed cannot silently combine different publications.
+            for e, p in ((env, project_a), (env_b, project_b), (env_c, project_c)):
+                observe_production_policy(options.cli, e, p, options.target,
+                    report["positive_policy"], (
+                        lambda: check_foreign(foreign_files, root),
+                        lambda: check_user_project_unchanged(project_a, project_before_user, "final production policy"),
+                        lambda: check_profile_unchanged(env_b, project_b, protected_b, "final production policy"),
+                        lambda: check_profile_unchanged(env_c, project_c, protected_c_profile, "final production policy"),
+                    ))
             report["scope_results"]["user"]["status"] = "passed"
             if options.target == "copilot":
-                # A separate explicit VS Code request must still fail. Never
-                # count this negative contract as either positive lifecycle.
-                step = verify_vscode_user_saved_refusal(options.cli, env, project_a, (
+                # Never change a production profile's origin or downgrade its cache.
+                # E is a fresh current-policy case, using the same exact CLI.
+                report["logical_owner_evidence"] = {
+                    "scope": "user", "logical_owner": "copilot", "packages": sorted(EXPECTED),
+                    "affected_surfaces": ["copilot", "vscode"], "separate_vscode_binding": False,
+                    "native_editor_runtime": "not_qualified"}
+                protected_a = settled_profile_snapshot(env, project_a)
+                env_e, project_e, foreign_e, project_foreign_e, native_foreign_e = (
+                    run_case(options.cli, options.target, root, "E"))
+                bind_pinned_launcher_cache(env_e, launcher_cache, root)
+                foreign_files.extend(pin_foreign([(foreign_e, "unmanaged user data\n"),
+                    (project_foreign_e, "unmanaged project data\n"), *native_foreign_e], root))
+                guards = (
                     lambda: check_foreign(foreign_files, root),
-                    lambda: check_user_project_unchanged(
-                        project_a, project_before_user, "VS Code User saved refusal"),
-                    lambda: check_profile_unchanged(
-                        env_b, project_b, protected_b, "VS Code User saved refusal"),
-                    lambda: check_profile_unchanged(
-                        env_c, project_c, protected_c_profile, "VS Code User saved refusal"),
-                ))
-                report["steps"].append(step)
-                report["negative_capability_results"]["vscode_user"].update(
-                    status="refused_as_expected", reason=step["reason"])
+                    lambda: check_profile_unchanged(env, project_a, protected_a, "current boundary"),
+                    lambda: check_profile_unchanged(env_b, project_b, protected_b, "current boundary"),
+                    lambda: check_profile_unchanged(env_c, project_c, protected_c_profile, "current boundary"),
+                )
+                for guard in guards:
+                    guard()
+                boundary = verify_current_vscode_user_boundary(
+                    options.cli, env_e, project_e, report["positive_policy"], guards)
+                report["steps"].append(boundary)
+                report["current_vscode_user_boundary"].update(
+                    status="refused_as_expected", contract=boundary["contract"],
+                    reason=boundary["reason"], policy=boundary["policy"])
         # TemporaryDirectory cleanup is part of qualification; exceptions from
         # its __exit__ must never leave a successful two-scope result behind.
         report["two_scope_lifecycle_qualified"] = True

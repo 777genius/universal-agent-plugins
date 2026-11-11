@@ -109,7 +109,6 @@
         "noMatches": "Nenhuma Skill corresponde aos filtros",
         "noMatchesHelp": "Altere a busca ou redefina os filtros para ver todas as Skills."
       },
-      "discoveryNotice": "A página estática começa com plugins revisados. O navegador pode adicionar entradas da comunidade após verificar o feed assinado; se ele estiver indisponível, o conjunto revisado permanece visível.",
       "overview": {
         "seoTitle": "Agent Skills independentes — Universal Agent Plugins",
         "metaDescription": "Encontre, inspecione e instale instruções SKILL.md independentes para agentes de IA compatíveis, sem pacote plugin.json.",

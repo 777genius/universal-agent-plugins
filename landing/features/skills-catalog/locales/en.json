@@ -109,7 +109,6 @@
         "noMatches": "No Skills match these filters",
         "noMatchesHelp": "Try another search or reset filters to browse all Skills."
       },
-      "discoveryNotice": "The static page starts with reviewed plugins. More community listings may appear after your browser loads and verifies the signed discovery feed; unavailable feeds leave the reviewed subset visible.",
       "overview": {
         "seoTitle": "Standalone Agent Skills — Universal Agent Plugins",
         "metaDescription": "Discover, inspect and install standalone SKILL.md instructions for supported AI agents, without creating a plugin.json package.",

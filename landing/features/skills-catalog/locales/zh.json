@@ -109,7 +109,6 @@
         "noMatches": "没有符合筛选条件的技能",
         "noMatchesHelp": "调整搜索或重置筛选条件以查看所有技能。"
       },
-      "discoveryNotice": "静态页面首先显示经过审核的插件。浏览器加载并验证已签名的发现数据后，可能添加更多社区条目；如果数据不可用，仍会显示审核子集。",
       "overview": {
         "seoTitle": "独立 Agent Skills — Universal Agent Plugins",
         "metaDescription": "查找、检查并安装独立的 SKILL.md 指令，无需创建 plugin.json 插件包。",

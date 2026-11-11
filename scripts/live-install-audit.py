@@ -111,9 +111,9 @@ def validate_fixtures(doc):
         raise ValueError("Insufficiently diverse publishers")
 
 
-def call(argv, env, cwd, timeout=105, capture_files=False):
+def call(argv, env, cwd, timeout=105, capture_files=False, capture_full=False):
     try:
-        if capture_files:
+        if capture_files or capture_full:
             # A Windows native client may spawn a child which inherits stdout
             # or stderr. Pipes stay open after the UAP process exits, causing
             # subprocess.run(capture_output=True) to time out after a real add.
@@ -134,7 +134,8 @@ def call(argv, env, cwd, timeout=105, capture_files=False):
                 return {"exit_code": None, "stdout_tail": "",
                         "stderr_tail": "bounded native output capture exceeded",
                         "timeout": False, "_json": None}
-            stdout, stderr = output.decode("utf-8", errors="replace"), errors.decode("utf-8", errors="replace")
+            decoding = "strict" if capture_full else "replace"
+            stdout, stderr = output.decode("utf-8", errors=decoding), errors.decode("utf-8", errors=decoding)
         else:
             p = subprocess.run(argv, cwd=cwd, env=env, capture_output=True,
                                text=True, errors="replace", stdin=subprocess.DEVNULL,
@@ -144,7 +145,7 @@ def call(argv, env, cwd, timeout=105, capture_files=False):
             parsed_json = json.loads(stdout)
         except ValueError:
             parsed_json = None
-        if (capture_files and p.returncode == 0
+        if (capture_files and not capture_full and p.returncode == 0
                 and (not isinstance(parsed_json, dict)
                      or parsed_json.get("result") != "success")):
             # An inherited child may append to the file after UAP exits.
@@ -152,9 +153,13 @@ def call(argv, env, cwd, timeout=105, capture_files=False):
             return {"exit_code": None, "stdout_tail": stdout[-1800:],
                     "stderr_tail": "native add success JSON unavailable",
                     "timeout": False, "_json": None}
+        complete = {"stdout_full": stdout, "stderr_full": stderr} if capture_full else {}
         return {"exit_code": p.returncode, "stdout_tail": stdout[-1800:],
                 "stderr_tail": stderr[-1800:], "timeout": False,
-                "_json": parsed_json}
+                "_json": parsed_json, **complete}
+    except UnicodeError:
+        return {"exit_code": None, "stdout_tail": "", "stderr_tail": "native output capture was not UTF-8",
+                "timeout": False, "_json": None}
     except subprocess.TimeoutExpired as e:
         return {"exit_code": None, "stdout_tail": "", "stderr_tail": str(e)[-1800:], "timeout": True}
     except OSError as e:
@@ -1123,6 +1128,112 @@ def preserved_regular_text(path, expected, case_root):
 
 
 
+def copilot_settings_windows_name(value):
+    """Normalize only Win32 drive/UNC prefixes, never resolve a candidate path."""
+    import ntpath
+    value = str(value).replace("/", "\\")
+    if value.startswith("\\\\?\\UNC\\"):
+        value = "\\\\" + value[8:]
+    elif value.startswith("\\\\?\\"):
+        value = value[4:]
+    value = ntpath.normpath(value)
+    # Preserve component case, Unicode and short-name aliases exactly. Only a
+    # drive letter is normalized; do not invent filesystem equivalence keys.
+    return value[0].upper() + value[1:] if len(value) >= 2 and value[1] == ":" else value
+
+
+def copilot_settings_windows_descriptor(path, initial, expected):
+    """Reuse the owned Win32 handle seam and verify its final name before bytes."""
+    import ctypes
+    from ctypes import wintypes
+    import msvcrt
+    from runpy import run_path
+    helpers = run_path(str(ROOT / "scripts/native_client_project_artifacts.py"))
+    descriptor = helpers["open_member"](path)
+    try:
+        if not helpers["same_opened"](initial, os.fstat(descriptor)):
+            raise ValueError("Windows settings identity changed")
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        query = kernel.GetFinalPathNameByHandleW
+        query.argtypes = [wintypes.HANDLE, wintypes.LPWSTR, wintypes.DWORD, wintypes.DWORD]
+        query.restype = wintypes.DWORD
+        buffer = ctypes.create_unicode_buffer(4101)
+        size = query(msvcrt.get_osfhandle(descriptor), buffer, len(buffer), 0)
+        if (size == 0 or size >= len(buffer)
+                or copilot_settings_windows_name(buffer.value) != copilot_settings_windows_name(expected)):
+            raise ValueError("Windows settings handle left canonical case path")
+        return descriptor
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
+def copilot_settings_read(path, case_root):
+    """Read bounded owned bytes through descriptors, never a replaced symlink."""
+    descriptors = []
+    try:
+        # Resolve only the trusted root, before inspecting candidate metadata.
+        # Windows compares the actual held-handle name with this lexical path.
+        relative = path.relative_to(case_root)
+        canonical_root = case_root.resolve(strict=True)
+        root_stat = canonical_root.lstat()
+        if not stat.S_ISDIR(root_stat.st_mode):
+            return None, "unsafe-path"
+        expected = canonical_root / relative
+        initial = path.lstat()
+        if not stat.S_ISREG(initial.st_mode) or initial.st_size > 1024 * 1024:
+            return None, "not-regular-or-too-large"
+        if initial.st_nlink != 1 or not path_inside_case(path, case_root):
+            return None, "unsafe-path"
+        flags = (os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+                 | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_CLOEXEC", 0))
+        # POSIX walks verified directory descriptors. A renamed ancestor cannot
+        # redirect the final open, and no candidate component is resolved.
+        if (os.open in os.supports_dir_fd and hasattr(os, "O_DIRECTORY")
+                and hasattr(os, "O_NOFOLLOW")):
+            parent = os.open(canonical_root, flags | os.O_DIRECTORY)
+            descriptors.append(parent)
+            opened_root = os.fstat(parent)
+            if (not stat.S_ISDIR(root_stat.st_mode) or not stat.S_ISDIR(opened_root.st_mode)
+                    or (root_stat.st_dev, root_stat.st_ino) != (opened_root.st_dev, opened_root.st_ino)):
+                return None, "unsafe-path"
+            for name in relative.parts[:-1]:
+                parent = os.open(name, flags | os.O_DIRECTORY, dir_fd=parent)
+                descriptors.append(parent)
+            descriptor = os.open(path.name, flags, dir_fd=parent)
+        elif os.name == "nt":
+            descriptor = copilot_settings_windows_descriptor(path, initial, expected)
+        else:
+            return None, "unsafe-path"  # No pathname-only read fallback.
+        descriptors.append(descriptor)
+        opened = os.fstat(descriptor)
+        current = path.lstat()
+        current_root = canonical_root.lstat()
+        identity = (initial.st_dev, initial.st_ino)
+        if (not stat.S_ISREG(opened.st_mode) or not stat.S_ISREG(current.st_mode)
+                or not stat.S_ISDIR(current_root.st_mode)
+                or (root_stat.st_dev, root_stat.st_ino) != (current_root.st_dev, current_root.st_ino)
+                or opened.st_nlink != 1 or current.st_nlink != 1
+                or identity != (opened.st_dev, opened.st_ino)
+                or identity != (current.st_dev, current.st_ino)
+                or not path_inside_case(path, case_root)):
+            return None, "unsafe-path"
+        if opened.st_size > 1024 * 1024:
+            return None, "not-regular-or-too-large"
+        with os.fdopen(os.dup(descriptor), "rb") as stream:
+            body = stream.read(1024 * 1024 + 1)
+        if len(body) > 1024 * 1024:
+            return None, "not-regular-or-too-large"
+        return body.decode("utf-8"), None
+    except FileNotFoundError:
+        return None, "absent"
+    except (OSError, RuntimeError, UnicodeError, ValueError):
+        return None, "unsafe-path"
+    finally:
+        for descriptor in reversed(descriptors):
+            os.close(descriptor)
+
+
 def copilot_settings_sanitized_shape(home, case_root, identity):
     """Observe *only* token shape, never export raw client settings or secrets."""
     path = home / ".copilot/settings.json"
@@ -1131,9 +1242,10 @@ def copilot_settings_sanitized_shape(home, case_root, identity):
     if not path.exists():
         return {"status": "absent"}
     try:
-        if not path.is_file() or path.stat().st_size > 1024 * 1024:
-            return {"status": "not-regular-or-too-large"}
-        doc = json.loads(path.read_text(encoding="utf-8"))
+        text, status = copilot_settings_read(path, case_root)
+        if status is not None:
+            return {"status": status}
+        doc = json.loads(text)
     except (OSError, UnicodeError, ValueError):
         return {"status": "unreadable-or-invalid-json"}
     if not isinstance(doc, (dict, list)):

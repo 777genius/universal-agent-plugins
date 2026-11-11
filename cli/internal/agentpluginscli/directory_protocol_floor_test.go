@@ -12,6 +12,8 @@ func TestScopedDirectoryHighWaterMarksNeverBorrowAnotherProtocol(t *testing.T) {
 		{Directory: &domain.DirectoryOrigin{SnapshotSchema: 1, SnapshotSequence: 43}},
 		{Directory: &domain.DirectoryOrigin{SnapshotSchema: 2, SnapshotSequence: 1}},
 		{Directory: &domain.DirectoryOrigin{SnapshotSchema: 2, SnapshotSequence: 3}},
+		{Directory: &domain.DirectoryOrigin{SnapshotSchema: 1, FeedID: "modern-v1", SnapshotSequence: 2}},
+		{Directory: &domain.DirectoryOrigin{SnapshotSchema: 1, FeedID: "modern-v1", SnapshotSequence: 5}},
 	}}
 	if floor := installedDirectoryFloor(state); floor != 43 {
 		t.Fatalf("v1 floor was changed: %d", floor)
@@ -21,6 +23,12 @@ func TestScopedDirectoryHighWaterMarksNeverBorrowAnotherProtocol(t *testing.T) {
 	}
 	if floor := directoryFloorForClient(state, nil); floor != 43 {
 		t.Fatalf("default v1 client changed: %d", floor)
+	}
+	if floor := directoryFloorForClient(state, &directoryv1.Client{FeedID: "modern-v1"}); floor != 5 {
+		t.Fatalf("modern schema-1 client borrowed legacy floor or lost modern floor: %d", floor)
+	}
+	if floor := directoryFloorForClient(state, &directoryv1.Client{FeedID: "unrecognized-v1"}); floor != 0 {
+		t.Fatalf("unrelated schema-1 feed borrowed signed sequence floor: %d", floor)
 	}
 	if floor := installedDirectoryFloorForSchema(state, 2); floor != 3 {
 		t.Fatalf("explicit v2 receipt floor mismatch: %d", floor)

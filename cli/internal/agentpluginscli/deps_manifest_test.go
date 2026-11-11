@@ -118,6 +118,29 @@ func TestDependencyShortDirectoryNameProjectPlacementKeepsSignedSource(t *testin
 	}
 }
 
+func TestSavedCopilotDirectoryGrantDoesNotRequireVSCodeGrant(t *testing.T) {
+	fixture := newRolloutDirectoryFixture(t, []domain.ClientID{domain.ClientCopilot}, nil)
+	requirements := environment.Requirements{
+		SchemaVersion: 1,
+		Dependencies: map[string]environment.Requirement{
+			"docs": {Alias: "docs", Registry: &environment.RegistrySource{
+				Distribution: "rollout-demo",
+				Selector:     environment.Selector{Kind: environment.SelectorRelease, Value: "1"},
+			}},
+		},
+		Targets: map[string][]string{"copilot": {"docs"}},
+	}
+	canonical, err := fixture.cli.app.canonicalizeDependencyRequirements(context.Background(), requirements)
+	if err != nil || canonical.Dependencies["docs"].Registry.Distribution != "owner/rollout" {
+		t.Fatalf("saved Copilot source: %+v %v", canonical, err)
+	}
+	requirements.Dependencies["docs"].Registry.Distribution = "rollout-demo"
+	requirements.Targets["vscode"] = []string{"docs"}
+	if _, err := fixture.cli.app.canonicalizeDependencyRequirements(context.Background(), requirements); !errors.Is(err, domain.ErrDirectoryIneligible) {
+		t.Fatalf("explicit VS Code target without signed grant was accepted: %v", err)
+	}
+}
+
 func TestDependencyDirectoryRepairUsesInstalledReceiptNotLockEligibility(t *testing.T) {
 	fixture := newRolloutDirectoryFixture(t, []domain.ClientID{domain.ClientCodex}, []domain.ClientID{domain.ClientCodex})
 	loaded, err := fixture.cli.app.acquireLocal(context.Background(), fixture.v1.root)

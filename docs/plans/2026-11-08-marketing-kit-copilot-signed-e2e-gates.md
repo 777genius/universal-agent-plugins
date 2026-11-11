@@ -1,5 +1,142 @@
 # P1 — Marketing Kit Project/Copilot release qualification
 
+## Current acceptance — authenticated current policy (2026-11-11)
+
+This section supersedes the permanent paired45 runtime requirement recorded
+below. The earlier implementation and genuine evidence remain historical
+checkpoints. The final goal is still six positive User and six positive Project
+lifecycles on one genuinely corrected public executable and one observed current
+production policy, with four exact immutable source tuples and full native,
+ownership, receipt, lock, foreign/peer-state and cleanup checks.
+
+The [owner's original release criterion](https://github.com/777genius/universal-agent-plugins-registry/pull/461#issuecomment-6781163730)
+requires a separate explicit VS Code negative with unchanged state, not a
+perpetual snapshot45 dependency. The selected
+[policy-preserving first path](https://github.com/777genius/universal-agent-plugins-registry/pull/461#issuecomment-6784328958)
+keeps the prepared VS Code grant and verifies its truthful intent/capability
+boundary instead of asserting an absent grant. The
+[CodeRabbit expiry finding and owner follow-up](https://github.com/777genius/universal-agent-plugins-registry/pull/461#issuecomment-6785888155)
+identify why immutable45 cannot remain mandatory for recurring publication:
+it expires on 2026-12-10 at 19:55:45 UTC. Nothing extends or bypasses that expiry.
+
+Select the mandatory current boundary from the already authenticated positive
+root metadata, never from a date, sequence number or failed-command fallback:
+
+| Exact current root shape | Mandatory explicit User request | Oracle |
+| --- | --- | --- |
+| Six managed clients: Codex, Cursor, Copilot, Claude, Gemini, OpenCode | `add marketing-kit --target vscode --scope user --no-save --yes --format json` | Exact complete signed `missing vscode` refusal |
+| The same six plus `vscode / user / prepared` | `add marketing-kit --target vscode --scope user --yes --format json` | Exact unsupported-saved-target capability refusal |
+
+Every grant must have exactly User scope and its stated delivery. An unknown,
+missing or extra client, changed delivery/scope, wrong policy or changed closure
+fails before the boundary operation. A saved-capability refusal never substitutes
+for the six-grant signed refusal, and a historical45 refusal never certifies a
+current seven-grant policy.
+
+After positive cleanup, create fresh isolated E using the production default,
+without any inherited origin. Verify the same released CLI and reauthenticate
+all four immutable source identities against the complete positive policy.
+For seven grants, use ordinary `info --target vscode --scope user` and require
+one public `user/prepared` VS Code entry on each selected release. For six grants,
+warm through the authorized Codex target before testing explicit VS Code.
+Permit only the finite authenticated Directory warm-cache additions, then freeze
+the full warmed profile. Both oracles require exactly integer exit1, literally
+empty raw stdout, the exact full diagnostic without padding, no timeout/JSON
+false positive, empty scoped inventory and unchanged native/portable/durable/
+cache/foreign state. Protect settled A/B/C during warmup, refusal and failure
+cleanup. The qualifier waits for both positive scopes, this mandatory current
+branch and TemporaryDirectory cleanup.
+
+Reports identify `positive_policy`, `current_vscode_user_boundary.contract` and
+that boundary's identical current policy. Copilot's one logical owner and exact
+`affected_surfaces=[copilot,vscode]` stay mandatory; no extra VS Code binding,
+native absence claim or standalone Editor lifecycle is introduced.
+
+Immutable45 constants, helpers, fixtures, full raw diagnostic regressions and
+previous genuine proof remain available for a separately labeled point-in-time
+audit. `historical_policy_results.signed45` explicitly says it is separate and
+not required for current qualification; main does not invoke it. A genuine final
+CLI can still qualify that historical case before expiry. Afterwards its older
+timestamped evidence is historical evidence, not a fresh accepted expired feed.
+No clock, trust, floor or baseline expiry exception is added. The published `.102`
+pin remains unchanged pending the actual corrected public release; prior `.102`
+metadata/refusal preflights do not qualify final positive6+6.
+
+The owner's Copilot C cleanup diagnostics retain only allowlisted section names,
+token counts and aggregate boolean buckets, never native settings values. Their
+shared loader uses bounded descriptor reads with identity checks; supported POSIX
+systems walk no-follow directory descriptors so late ancestor/file symlink
+replacement cannot redirect a read. Capture the canonical root and its physical
+identity before candidate metadata; a later outside-root alias substitution
+cannot redefine that authority. Windows reuses the existing typed
+`open_member` handle ownership/identity seam and checks the held handle's final
+name against the canonical trusted root plus the original lexical relative path
+before reading bytes. Normalize only drive/extended-UNC prefixes, not component
+case, Unicode or short-name aliases. There is no pathname-only read fallback.
+Local mocked Win32 contract tests are not actual Windows execution; the existing
+Windows native audit remains required. Redacted diagnostics never relax strict
+native cleanup or turn retained settings into lifecycle success.
+
+### Copilot User A/C disabled preferences: proof before classification
+
+The genuine f867 run passed Project and reached User C removal, then correctly
+failed strict cleanup on `.copilot/settings.json`. Redacted counts showed four
+disabled preferences but did not prove native absence or an exact whole-file
+shape. That failure is not reclassified retrospectively as a lifecycle PASS.
+
+Preserve the owner's A/C native probes and telemetry, but require receipt-bound
+proof before accepting this one vendor preference file. Read the bounded owned
+state and public inventory; check all four signed source coordinates/digests,
+versions, one logical Copilot User owner, physical IDs, target paths and committed
+mutation/environment receipts. The `.102` source contract is immutable commit
+`1717381d88cea9eef2cbf3ecf481dbe37188cde2`; its `ClientBinding`,
+`EnvironmentReceipt` and `ManagedMarketplaceName` define these fields and the
+`agentplugins-` plus first12 SHA256 hex of the trimmed physical-ID namespace.
+The generated local marketplace must name that namespace and exact plugin
+name/version with source `.`. Public list has no physical-ID field; none is invented.
+
+Both real native observations are mandatory at each before/after-removal point:
+complete JSON and complete text from the same pinned `.105` profile. Use the
+existing private-file capture with a one-MiB bound, strict UTF-8 and explicit
+complete fields; never treat the last1800 characters as a whole listing. Reject
+duplicate JSON keys/constants and consume the entire text document. Require
+exactly four managed identities, exact receipt-bound marketplace/version/path,
+enabled status, and the exact observed disabled `browser-use/0.0.4` builtin.
+JSON requires observed `source:live` and `installedFrom` equal to the owned path;
+text independently binds the same four live entries and paths. Removal must
+return only the exact builtin JSON and exact observed empty text document.
+No arbitrary foreign, malformed, reminted, duplicated or extra managed row is
+ignored. The text grammar follows UAP's measured builtin prefix and shared live
+listing parser, not Registry's different native `.82` pin.
+
+Apply unchanged BUG-045 `copilot_disabled_preference_only` per identity only
+after these native proofs. The retained whole JSON must contain exactly the
+four receipt-bound qualified keys with boolean false, either under the sole
+`enabledPlugins` member or with one additional **empty dictionary**
+`extraKnownMarketplaces`. The latter variant was genuinely observed in the
+coordinator's credential-free `.105` four-local-fixture probe. Unknown members,
+nonempty/wrong-type maps, extra or wrong-market keys and non-boolean values fail.
+The initially absent file and active four true keys are also checked. Carry a
+profile-and-current-file-digest proof into strict cleanup; a Boolean flag or
+another profile's proof cannot exempt a file. Recheck exact bytes immediately
+at cleanup. All other remnants and Project cleanup remain strict.
+
+Native JSON/text reads genuinely create two new process logs. Only the native
+pair may add at most two direct `.copilot/logs/process-DIGITS-DIGITS.log` regular,
+single-link files bounded by one MiB; no ancestor link, nested path, cache/new
+directory, old-log overwrite or other state mutation is allowed. Public inventory
+has a separate zero-log budget: the published `.102` list command reads stored
+state without native observation. Every own, peer, foreign and Project guard
+runs on success and failure. This allowance does not alter current-policy E,
+fixed45 refusal guards, shared snapshots or cleanup-residue classification.
+
+The new code parses the genuine four-inert-local-fixture protocol successfully;
+that probe did not exercise signed Marketing Kit or the UAP lifecycle. A local
+genuine `.102` Marketing Kit attempt failed at contained Git initialization
+before installation. Native format evidence and local regressions therefore
+do not establish the new receipt-bound A/C lifecycle: exact-head genuine CI
+must run it, and the final corrected-release six+six gate remains outstanding.
+
 ## Context
 Continue existing draft PR #775. Five signed Marketing Kit Project client routes have historical E2E evidence; a genuine published `0.1.101` Copilot install fails **before** lifecycle because the signed Directory root lacks Copilot authorization. Latest six-client real run also reported immutable binary/scanner HTTP 504. HTTP 504 is an acquisition failure, not evidence that native lifecycle passed or failed.
 
@@ -98,3 +235,112 @@ exit 1, exact complete two-line stderr, empty stdout, empty Copilot/VS Code User
 inventories, and an exactly unchanged warmed HOME/data/Project snapshot. This is
 negative policy evidence only. It does not qualify either positive Copilot
 lifecycle on the unchanged published `0.1.102` executable.
+
+## Production positives and the immutable45 VS Code boundary
+
+The positive six User and six Project cases keep the production Directory default;
+they never inherit a caller's `AGENTPLUGINS_DIRECTORY_ORIGIN`. The runner observes
+all four exact signed source identities through ordinary released-CLI `info`,
+records the authenticated snapshot sequence/digest, and requires the same policy
+in A/B/C, including final observations. Existing lock checks also bind tree and
+manifest digests to those immutable sources. A production policy advance cannot
+silently combine publications. The six original reports still need final audit
+against the actual production marker and the same corrected immutable executable;
+a default URL alone is not proof of current production freshness.
+
+The separate explicit VS Code refusal belongs to unchanged signed45. Production
+may independently authorize the prepared VS Code sibling; this report must never
+claim that a refusal on45 proves a refusal on a newer production policy. After
+both positive lifecycles and native cleanup, create a fresh disposable D through
+`run_case`. Set only D's fixed origin after environment isolation. Share only the
+SHA-checked released executable cache, never production state or Directory caches.
+Verify the same exact public CLI version in D.
+
+Four namespaced `info` calls in D must succeed through the real CLI's normal
+signature/trust, floor and expiry checks and return sequence45 with snapshot
+digest `sha256:2aba9b0d97556ac0756dff5f974aa7377914e0d8d1d9b735b46c5bc804b81f50`.
+The fixed metadata is taken from immutable Registry ledger
+`3509baaac8e4f7ee3d565440f8c0d0bd1f928fba`,
+`registry/schemas/1/snapshots/00000000000000000045.json`, publication42888897655.
+Check distribution, active release sequence, package version, repository/path,
+revision, tree digest and manifest digest for root, Notion, HubSpot CRM and
+Playwright Bridge. Playwright is active release2 at revision
+`d9c8d778200d51ae941d86bb69af23534cd1c8f7`, not its historical release1.
+The signed45 expiry remains `2026-12-10T19:55:45Z`; no time, trust or floor override
+is permitted if the genuine executable later refuses it.
+
+Warmup permits only the existing finite own Directory cache/empty-lock additions.
+Then freeze the complete warmed D snapshot: the original exact two-line
+`--target vscode --scope user --no-save` negative and its inventory cannot change
+any D entry. Protect settled A and existing B/C profiles plus every foreign
+sentinel during warmup, negative and failure cleanup. Report `positive_policy`
+as production-default observed identity and the negative's separate
+`fixed_immutable` origin/ledger/sequence/digest/closure. Neither a failed metadata
+probe, missing fourth source, policy/tuple mismatch, native mutation, peer write,
+wrong negative or cleanup failure can leave the report qualified.
+
+The active executable pin remains published `0.1.102` pending a genuinely corrected
+release. This preparation does not qualify either positive Copilot scope or
+invent a new release, grant, signature, fixture, resolver or VS Code behavior.
+
+Local preparation validation:75 focused Marketing Kit regressions and all160 tests
+in the changed file pass. The full new fixed45 authentication/negative wrapper
+also passes against the genuine SHA-checked published.102 binary: four exact info
+identities, signed45 sequence/digest, exact missing-VS-Code refusal, empty scoped
+inventories and unchanged independent peer profile. A separate read-only.102
+production observation returns sequence44/digest
+`sha256:2eefc9887470b955009540c098a9d94d4e8703cd8fc4d7bc23a81425c3827e8b`,
+with the same four exact sources and consistent repeated observations. These are
+metadata and negative-only checks, not final corrected-release positive6+6 proof.
+
+## Current production: source packaging, logical owners and saved capability
+
+Keep three observations separate. Ordinary authenticated `info` exposes the
+root's signed `selected_release.target_compatibility`: record each client,
+scope and delivery with the production snapshot and all four immutable source
+identities. If present, Copilot delivery must be `managed` and VS Code delivery
+must be `prepared`. Require the same complete observation in every positive
+profile and subsequent current-production probe; do not invent a sequence46
+pin before actual production observation. Packaging metadata does not establish
+an Editor runtime or prohibit the frozen adapter's existing shared activation.
+
+The positive Copilot User inventory must show exactly one logical Copilot
+binding per package, no additional VS Code binding, and exactly
+`affected_surfaces: [copilot, vscode]`. Preserve the existing materialized source,
+installation identity, native verification, peer isolation, restore and cleanup
+checks. Report this as Copilot ownership with shared physical effects; the
+separate native Editor runtime remains `not_qualified`.
+
+After both positive lifecycle cleanups, create fresh production-default profile
+E through the same isolated environment seam and verify the same released CLI.
+Authenticate four ordinary info results against the complete positive policy,
+allow only the finite own Directory warm-cache additions, then freeze E's full
+warmed snapshot. Run exactly
+`add marketing-kit --target vscode --scope user --yes --format json`, without
+`--no-save`. The saved-target gate in
+`cli/internal/agentpluginscli/saved_add_acquisition.go` must refuse with empty
+raw stdout and the exact complete diagnostic:
+
+```text
+agentplugins: target vscode cannot be saved; retry agentplugins add marketing-kit --target vscode --no-save
+```
+
+Require exactly integer exit1, no timeout or JSON result, no extra stderr
+prefix/suffix, and unchanged complete E state before and after empty Copilot
+and VS Code User inventories. Protect every settled production profile and
+foreign sentinel throughout warmup, refusal and failure cleanup. This is a
+`saved_management_capability` result under the current positive policy, not a
+signed-grant refusal. It creates no standalone Editor installation lifecycle.
+
+Then run unchanged fixed45 D as its separately labeled signed-policy negative;
+protect warmed E as an additional peer. Both distinct probes and temporary
+profile cleanup must succeed before `two_scope_lifecycle_qualified` becomes
+true. A failed capability/context check must not be replaced by D's legitimate
+missing-VS-Code refusal or count as a positive lifecycle.
+
+The genuine SHA-checked published `.102` format preflight observes actual
+production44, authenticates the four immutable sources, returns exit1 with
+exactly empty stdout and the one-line saved-target diagnostic plus terminal LF,
+and preserves warmed own/peer state. It is diagnostic-format evidence only;
+the active `.102` pin remains unchanged and final corrected-release six+six
+qualification is still required.
