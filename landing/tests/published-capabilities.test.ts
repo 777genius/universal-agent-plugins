@@ -33,10 +33,11 @@ test('closed support schema refuses malformed or missing release fields; prose i
 
 test('only actual public clients advertise capabilities; identities must resolve exactly', () => {
   const publicClients = clients;
-  assert.ok(!publicClients.some(client => ['hermes', 'vscode'].includes(client.id)));
+  assert.ok(!publicClients.some(client => client.id === 'vscode'));
   const released = structuredClone(source);
   released.find(row => row.id === 'hermes')!.skill_support = 'unsupported';
-  requireReleasedCapabilities(publicCapabilities(source, publicClients), released);
+  assert.throws(() => requireReleasedCapabilities(publicCapabilities(source, publicClients), released), /hermes/);
+  released.find(row => row.id === 'hermes')!.skill_support = source.find(row => row.id === 'hermes')!.skill_support;
   released.find(row => row.id === 'grok')!.project!.mcp_transports.stdio = 'unsupported';
   assert.throws(() => requireReleasedCapabilities(publicCapabilities(source, publicClients), released), /grok\/project\/mcp/);
   for (const clients of [[], [{ id: 'missing' }], [{ id: 'grok' }, { id: 'grok' }], [{ id: '../grok' }]])
