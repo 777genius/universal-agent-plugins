@@ -15,6 +15,8 @@ import subprocess
 import tempfile
 
 NAME = "uap-kimi-stable-mcp-proof"
+FOREIGN_NAME = "foreign-sentinel"
+FOREIGN_SERVER = {"transport": "http", "url": "https://foreign.invalid/mcp"}
 MAX_OUTPUT = 1 << 20
 
 
@@ -97,9 +99,14 @@ def _unique_pairs(rows):
     return result
 
 
-def verify(path):
+def verify(path, *, foreign=None):
     servers = read_servers(path)
-    if set(servers) != {NAME}:
+    expected = {NAME}
+    if foreign is not None:
+        expected.add(FOREIGN_NAME)
+        if servers.get(FOREIGN_NAME) != foreign:
+            raise ValueError("Kimi foreign MCP entry changed during installation")
+    if set(servers) != expected:
         raise ValueError("Kimi MCP not exactly the selected owned server")
     server = servers[NAME]
     if not isinstance(server, dict) or server.get("transport") != "stdio":
@@ -116,16 +123,21 @@ def verify(path):
     return sha(safe_read(path))
 
 
-def verify_removed(path):
-    """Require absence or a readable foreign-only native MCP config after removal."""
+def verify_removed(path, *, foreign=None):
+    """Require owned removal and preservation of any preexisting foreign server."""
     try:
         path.lstat()
     except FileNotFoundError:
+        if foreign is not None:
+            raise ValueError("Kimi removal lost the foreign MCP configuration")
         return
     if not path.is_file():
         raise ValueError("Kimi removal left unexpected native MCP object")
-    if NAME in read_servers(path):
+    remaining = read_servers(path)
+    if NAME in remaining:
         raise ValueError("Kimi owned MCP member persisted after removal")
+    if foreign is not None and remaining != {FOREIGN_NAME: foreign}:
+        raise ValueError("Kimi removal changed the foreign MCP configuration")
 
 
 def smoke(installer, client, report_dir):
@@ -173,6 +185,12 @@ def smoke(installer, client, report_dir):
         before_b = (b / ".kimi-code").exists()
         if before_b or (a / ".kimi-code").exists():
             raise ValueError("disposable native project already contains Kimi state")
+        # Exercise the real native merge path: UAP must preserve this existing
+        # non-owned Project MCP entry through add, repeat and removal.
+        native_mcp = a / ".kimi-code" / "mcp.json"
+        native_mcp.parent.mkdir(mode=0o700)
+        native_mcp.write_text(json.dumps({"mcpServers": {FOREIGN_NAME: FOREIGN_SERVER}}), encoding="utf-8")
+        user_mcp = home / ".kimi-code" / "mcp.json"
         events = []
         for label, command in (("first", [str(installer), "add", str(source), "--no-save", *base[1:]]),
                                ("repeat", [str(installer), "add", str(source), "--no-save", *base[1:]])):
@@ -180,7 +198,9 @@ def smoke(installer, client, report_dir):
             reply = json.loads(out)
             if not isinstance(reply, dict) or reply.get("result") != "success":
                 raise ValueError("UAP native MCP add did not report success")
-            digest = verify(a / ".kimi-code" / "mcp.json")
+            digest = verify(native_mcp, foreign=FOREIGN_SERVER)
+            if user_mcp.exists() or user_mcp.is_symlink():
+                raise ValueError("Kimi Project add modified User MCP configuration")
             events.append({"stage": label, "mcp_sha256": digest})
         if events[0]["mcp_sha256"] != events[1]["mcp_sha256"]:
             raise ValueError("Kimi repeat add mutated native MCP config")
@@ -189,14 +209,15 @@ def smoke(installer, client, report_dir):
         # No login, trust override, session, MCP tool execution or model API.
         _, _ = run([str(installer), "remove", NAME, *base[1:]], cwd=a, env=env)
         remaining = a / ".kimi-code" / "mcp.json"
-        verify_removed(remaining)
-        if (home / ".kimi-code" / "mcp.json").exists():
+        verify_removed(remaining, foreign=FOREIGN_SERVER)
+        if user_mcp.exists() or user_mcp.is_symlink():
             raise ValueError("Kimi Project-only install modified User MCP config")
         if (b / ".kimi-code").exists():
             raise ValueError("Kimi removal changed Project B")
         evidence = {"schema_version": 1, "client": "kimi", "real_client_version": "2.5.2",
                     "selected_scope": "project", "stages": events,
                     "native_mcp_config_prepared": True, "project_b_untouched": True,
+                    "foreign_native_mcp_preserved": True,
                     "native_mcp_started": False, "tools_list": False, "tools_call": False,
                     "authentication_proven": False, "workspace_trust_granted": False}
         (report_dir / "kimi-mcp-prepared.json").write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")

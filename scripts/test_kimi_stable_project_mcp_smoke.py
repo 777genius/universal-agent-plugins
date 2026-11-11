@@ -4,7 +4,9 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from kimi_stable_project_mcp_smoke import NAME, read_servers, safe_read, verify, verify_removed
+from kimi_stable_project_mcp_smoke import (
+    FOREIGN_NAME, FOREIGN_SERVER, NAME, read_servers, safe_read, verify, verify_removed,
+)
 
 
 class KimiStableProjectMcpSmokeTests(unittest.TestCase):
@@ -62,6 +64,29 @@ class KimiStableProjectMcpSmokeTests(unittest.TestCase):
                 with self.subTest(contents=contents), self.assertRaises(ValueError):
                     config.write_text(json.dumps(contents))
                     verify(config)
+
+    def test_native_foreign_mcp_preservation(self):
+        with tempfile.TemporaryDirectory() as root:
+            selected = Path(root) / "selected"
+            config = selected / ".kimi-code" / "mcp.json"
+            launcher = selected / ".uap" / "bin" / "probe"
+            config.parent.mkdir(parents=True)
+            launcher.parent.mkdir(parents=True)
+            launcher.write_text("inert")
+            owned = {"transport": "stdio", "command": str(launcher)}
+            config.write_text(json.dumps({"mcpServers": {NAME: owned, FOREIGN_NAME: FOREIGN_SERVER}}))
+            self.assertEqual(len(verify(config, foreign=FOREIGN_SERVER)), 64)
+            config.write_text(json.dumps({"mcpServers": {NAME: owned, FOREIGN_NAME: {"transport": "http", "url": "https://changed.invalid/mcp"}}}))
+            with self.assertRaisesRegex(ValueError, "foreign MCP entry changed"):
+                verify(config, foreign=FOREIGN_SERVER)
+            config.write_text(json.dumps({"mcpServers": {FOREIGN_NAME: FOREIGN_SERVER}}))
+            verify_removed(config, foreign=FOREIGN_SERVER)
+            config.unlink()
+            with self.assertRaisesRegex(ValueError, "lost the foreign"):
+                verify_removed(config, foreign=FOREIGN_SERVER)
+            config.write_text(json.dumps({"mcpServers": {FOREIGN_NAME: {"transport": "http", "url": "https://changed.invalid/mcp"}}}))
+            with self.assertRaisesRegex(ValueError, "changed the foreign"):
+                verify_removed(config, foreign=FOREIGN_SERVER)
 
     def test_removal_refuses_replaced_or_owned_native_config(self):
         with tempfile.TemporaryDirectory() as root:
