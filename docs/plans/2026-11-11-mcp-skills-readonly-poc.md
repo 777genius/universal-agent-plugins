@@ -82,3 +82,17 @@ A future *separate* design would add explicit reviewed snapshot import using exi
 - [MCP 2026 Streamable HTTP](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http)
 - [MCP versioning](https://modelcontextprotocol.io/specification/2026-07-28/basic/versioning)
 - [UAP existing Skills installer](../AGENT_SKILLS_INSTALLER.md)
+
+## Review R1 — actual source and Clean Architecture (2026-11-11)
+
+**Evidence checked:** `AGENTS.md`, `docs/ARCHITECTURE.md`, `cli/internal/agentpluginscli/skills.go` and `root.go`, `install/integrationctl/agentplugins/conformance/{skills.go,author_skills.go}`, `domain/web_skill_policy.go` and HTTPS acquisition. These are existing authorities, not inferred abstractions.
+
+Findings and corrections:
+
+- Register one explicit `newSkillsMCPCommand` under the existing `skills` group. Never call `app.forOptions` for the no-state probe: it can open or validate environment roots and would contradict the zero-mutation promise. Instead validate only compatible global flags (`--target`/project-specific flags refused; `--format` reused).
+- Reuse **`domain.ValidSkillName`** and **`conformance.DecodeFrontmatter`** to parse the actual bounded YAML frontmatter; pass the full set of entry keys as its requested root fields, check that the decoded key set exactly equals the advertised object and compare canonical JSON values. Do not write a second YAML grammar or hardcode the six known fields; unknown future keys must still be compared field-by-field.
+- Keep transport and manifest checks in one cohesive `adapters/mcpskills` Go package in the nested core module. For this sole consumer, an exported `Client` with `List/Get/Inspect` methods is sufficient: **do not create a speculative interface/use-case package** or a new domain model. Network parsing and pure verification should live in separate small files in that package. Tests inject a private `http.Client` and do not need an exported mockable framework.
+- Do not reuse `sourceacquisition`'s HTTPS publisher discovery as MCP Skills: its `.well-known` index is a different protocol, and no repository/lock changes are justified by this PoC.
+- Public CLI uses an explicitly constructed, credential-free, no-redirect HTTPS client with **public-address-only dial policy** (same security boundary as existing publisher previews); tests use a deliberately injected loopback client. Never forward ambient proxy settings, cookies or credentials. Errors are reduced to typed safe categories before JSON or human output.
+
+**Disposition:** R1 passed after narrowing the module boundary and removing the speculative application/port layer. No code implemented yet.
