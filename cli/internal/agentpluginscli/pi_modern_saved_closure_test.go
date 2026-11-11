@@ -191,9 +191,17 @@ func TestPiModernFixtureRefusesMissingSignedHubSpotTarget(t *testing.T) {
 		t.Run(string(scope), func(t *testing.T) {
 			fixture, directory, requirements := piMarketingCohortFixture(t, scope)
 			// Re-sign a different, internally valid test-only publication.
-			// A missing Pi grant must not be simulated by mutating a
-			// previously verified bundle after its signature was checked.
-			snapshot := directory.bundle.Snapshot
+			// Deep-copy all nested slices before mutating: no post-verification
+			// mutation of the original authenticated bundle is permitted.
+			original := directory.bundle
+			copyBytes, marshalErr := json.Marshal(original.Snapshot)
+			if marshalErr != nil {
+				t.Fatal(marshalErr)
+			}
+			var snapshot domain.DirectorySnapshot
+			if err := json.Unmarshal(copyBytes, &snapshot); err != nil {
+				t.Fatal(err)
+			}
 			for i := range snapshot.Distributions {
 				distribution := &snapshot.Distributions[i]
 				if distribution.ID == "acme/hubspot-crm" {
@@ -206,6 +214,9 @@ func TestPiModernFixtureRefusesMissingSignedHubSpotTarget(t *testing.T) {
 				}
 			}
 			directory.bundle = signPiModernTestOnlyCohort(t, snapshot)
+			if !bytes.Equal(original.SnapshotBytes, copyBytes) || directory.bundle.Digest == original.Digest {
+				t.Fatal("negative test mutated original signed snapshot or did not change signed policy")
+			}
 			_, err := resolveProjectSourceGraph(context.Background(), fixture.app, requirements)
 			if err == nil {
 				t.Fatal("Marketing Kit accepted a mandatory HubSpot child without a Pi target")
