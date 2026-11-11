@@ -3649,6 +3649,55 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                         runner["check_removed_native_components"](
                             "copilot", project, case, "remove", project_scope=True)
 
+    def test_marketing_kit_copilot_project_mcp_cleanup_rejects_hardlinks_and_open_swap(self):
+        # A native child can substitute the MCP path after lstat; never read a
+        # same-inode symlink or shared hardlink outside the disposable profile.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        check = runner["copilot_project_mcp_residuals"]
+        for relative in (".github/mcp.json", ".mcp.json"):
+            with self.subTest(relative=relative), TemporaryDirectory() as temporary:
+                case = Path(temporary).resolve()
+                project = case / "project"
+                (project / ".github").mkdir(parents=True)
+                path = project / relative
+                original = b'{"mcpServers":{"foreign-neighbor":{}}}'
+                path.write_bytes(original)
+                linked = case / "linked.json"
+                try:
+                    os.link(path, linked)
+                except (OSError, NotImplementedError) as error:
+                    self.skipTest(f"hardlinks unavailable: {error}")
+                with self.assertRaisesRegex(AssertionError, "invalid Copilot Project MCP"):
+                    check(project, {"notion"}, "remove")
+                linked.unlink()
+                probe = case / "symlink-probe"
+                try:
+                    probe.symlink_to(path)
+                except (OSError, NotImplementedError) as error:
+                    self.skipTest(f"symlinks unavailable: {error}")
+                probe.unlink()
+                moved = case / "original.json"
+                real_open = os.open
+                swapped = False
+
+                def racing_open(candidate, flags, *args, **kwargs):
+                    nonlocal swapped
+                    if Path(candidate) == path and not swapped:
+                        swapped = True
+                        path.rename(moved)
+                        path.symlink_to(moved)
+                    return real_open(candidate, flags, *args, **kwargs)
+
+                with patch.object(os, "open", side_effect=racing_open):
+                    with self.assertRaisesRegex(AssertionError, "malformed Copilot Project MCP"):
+                        check(project, {"notion"}, "remove")
+                self.assertTrue(swapped)
+                self.assertTrue(path.is_symlink())
+                self.assertEqual(moved.read_bytes(), original)
+
     def test_marketing_kit_copilot_personal_agents_skill_cleanup(self):
         # GitHub's Copilot CLI documents ~/.agents/skills as a personal root.
         from runpy import run_path

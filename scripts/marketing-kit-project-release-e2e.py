@@ -1269,12 +1269,19 @@ def copilot_project_mcp_residuals(project, identities, stage):
             continue
         except OSError as error:
             raise AssertionError(f"{stage}: unreadable Copilot Project MCP config") from error
-        if not stat.S_ISREG(identity.st_mode) or identity.st_size > 1 << 20:
+        if (not stat.S_ISREG(identity.st_mode) or identity.st_nlink != 1
+                or identity.st_size > 1 << 20):
             raise AssertionError(f"{stage}: invalid Copilot Project MCP config")
         try:
-            with path.open("rb") as stream:
+            flags = (os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+                     | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_CLOEXEC", 0))
+            with os.fdopen(os.open(path, flags), "rb") as stream:
                 opened = os.fstat(stream.fileno())
-                if (opened.st_dev, opened.st_ino) != (identity.st_dev, identity.st_ino):
+                current = path.lstat()
+                if (not stat.S_ISREG(opened.st_mode) or opened.st_nlink != 1
+                        or not stat.S_ISREG(current.st_mode) or current.st_nlink != 1
+                        or (opened.st_dev, opened.st_ino) != (identity.st_dev, identity.st_ino)
+                        or (current.st_dev, current.st_ino) != (identity.st_dev, identity.st_ino)):
                     raise AssertionError(f"{stage}: replaced Copilot Project MCP config")
                 body = stream.read((1 << 20) + 1)
             if len(body) > 1 << 20:
