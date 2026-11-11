@@ -359,7 +359,7 @@ var nativeObserverQualifiedEntries = [...]NativeObserverDescriptor{
 // Custody input SHA256: 28c63700240d3fbdbbae33dbc0b2ca734e52c3f5965263e2500b74bbad491d5c.
 // These custody-only candidates remain separate from reviewed qualifications.
 // Candidate mappings cannot substitute for the exact qualified evidence tuple.
-func nativeObserverCandidates() [10]NativeObserverDescriptor {
+func nativeObserverCandidates() [11]NativeObserverDescriptor {
 	images := [...]NativeObserverTuple{
 		{Version: "1.18.33", GOOS: "linux", GOARCH: "arm64", ImageSHA256: "986fef2069a03b5181a9ec920786836f98fe3e4950c630941908687854e42757"},
 		{Version: "2.0.21", GOOS: "linux", GOARCH: "arm64", ImageSHA256: "d2f4c9ee106d9930d20ca5cf5f2c2216aab6fed836992cf24979d9481242c01c"},
@@ -372,8 +372,10 @@ func nativeObserverCandidates() [10]NativeObserverDescriptor {
 		{Version: "2.2.6", GOOS: "darwin", GOARCH: "arm64", ImageSHA256: "90e4d03597b03d2051b65b4d793467764e55bacd8e22bf4824479c7233ea0e15"},
 		{Version: "1.18.33", GOOS: "windows", GOARCH: "amd64", ImageSHA256: "52f60248a576b34c9a6dcaa27e0a7f08089af35bcdc0dfb10c04d3e00a98314c"},
 		{Version: "2.0.21", GOOS: "windows", GOARCH: "amd64", ImageSHA256: "ec7a3909bad41ef88e4650f737ab6f0b0c402a7f49a588812d0a79820c2dfc1f"},
+		// Verified official Windows x64 2.2.6 source image; no native/clock grant.
+		{Version: "2.2.6", GOOS: "windows", GOARCH: "amd64", ImageSHA256: "98cb0aa854c7c015cf6febafa7afb872c359bfe5a823a526f3b4fd347a9e9677"},
 	}
-	var candidates [10]NativeObserverDescriptor
+	var candidates [11]NativeObserverDescriptor
 	for i, tuple := range images {
 		tuple.Entry = "official_native_serve_default_dual_autoload"
 		tuple.NativeAdapterSHA256 = "d2d75185eb6283d6f8a34d2019aa201ada9ec9ea9db578b4f2f28dd7d9d8d901"
