@@ -94,6 +94,12 @@ jobs:
           GOENV: "off"
         run: pnpm run docs:check
 
+      - name: Prefer configured canonical Ubuntu package mirrors
+        working-directory: .
+        run: |
+          python3 -m unittest discover -s scripts -p 'test_ci_ubuntu_apt_mirrors.py'
+          sudo python3 scripts/ci_ubuntu_apt_mirrors.py
+
       - name: Install Chromium for docs smoke
         run: pnpm exec playwright install --with-deps chromium
 

@@ -33,6 +33,14 @@ ChatGPT 明确不支持原生项目安装。
 下列历史观察对应精确的安装器、客户端、平台和测试范围。结果不会自动延伸到当前发布版本、其他客户端版本、其他安装范围或未经测试的包。
 UAP 是独立社区工具；这些是维护者进行的有限观察，不是厂商认证或通用的生产就绪保证。
 
+## Hermes 与 Antigravity：源码验证 {#hermes-antigravity-source}
+
+截至 2026-11-10，已发布的 CLI `0.1.102` 尚未包含 Hermes 或 Antigravity。以下结果仅验证源码，不代表已发布产物。不可变发布二进制文件的验证和签名 Directory 的目标资格仍须分别完成。客户端具备某项能力，并不意味着 Directory 中的包已获准用于该目标。
+
+**Hermes 0.23.0：**支持用户范围的 Skills 及由 UAP 管理的 stdio/Streamable HTTP MCP 配置；项目范围仅支持 Skills。项目 MCP 会被拒绝，不会转而修改用户配置。Linux x64、macOS arm64 和原生 Windows x64 均通过首次及重复添加、更新、修复、移除、未授信项目中的发现和 A/B 隔离测试：[42813277862](https://github.com/777genius/universal-agent-plugins/actions/runs/42813277862)，UAP 提交为 `a50c8a245f1c273efb3d171f4c54ed540475336a`。每个操作系统上的四次回环 HTTP `initialize`/`tools/list` 交互证明了连接和工具发现，并未证明 `tools/call`、模型使用、身份验证或受信任的项目执行。不支持 SSE 和钩子。可移植命令映射为 Skills；若客户端无法强制显式调用，则不交付仅允许显式调用的命令。
+
+**Antigravity：**用户和项目范围内由 UAP 管理的原生插件包包含 Skills 及 stdio/Streamable HTTP MCP，状态仍为 **Prepared**。真实的 `agy` 1.5.3 在 Linux、macOS 和 Windows 上通过严格校验及隔离的 CLI import/list/uninstall：[42804680737](https://github.com/777genius/universal-agent-plugins/actions/runs/42804680737)。这些 CLI 观察并未证明实际 IDE 中的发现或启用、MCP 启动、工具执行或身份验证；IDE 验证仍需单独完成。UAP 不会授予项目信任。
+
 ## Pi 扩展、Skills 与 MCP {#pi-native-extensions}
 
 已发布的 CLI `0.1.102` 支持使用 `--target pi` 安装兼容的 Agent Plugins 1.0 包，包括 [Pi 原生扩展](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_CONTRACT.md)、Skills，以及 stdio 和 Streamable HTTP MCP。支持用户范围和符合条件的项目范围；不支持 MCP SSE 或通用 App 组件。项目扩展位于 `.pi/extensions`，Skills 位于 `.pi/skills`，由 UAP 管理的 MCP 配置位于 `.pi/mcp.json`。安装后仍可能需要信任项目、重新加载资源或创建新会话。
