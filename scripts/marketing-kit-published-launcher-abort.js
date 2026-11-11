@@ -9,7 +9,7 @@ const npmRoot = process.env.UAP_GLOBAL_NPM_ROOT;
 assert.ok(npmRoot, "UAP_GLOBAL_NPM_ROOT must point to the global npm root");
 const packageRoot = path.join(npmRoot, "universal-agent-plugins");
 const pkg = JSON.parse(fs.readFileSync(path.join(packageRoot, "package.json"), "utf8"));
-assert.equal(pkg.version, "0.1.102", "must test the exact public npm package");
+assert.equal(pkg.version, "0.1.104", "must test the exact public npm package");
 const { ensureBinary, acquireLock } = require(path.join(packageRoot, "lib/bootstrap.js"));
 const cacheRoot = fs.mkdtempSync(path.join(os.tmpdir(), "uap-published-abort-"));
 
@@ -116,7 +116,7 @@ async function verifyLockWaitCancellation() {
     await abortOnce();
     await abortOnce(); // Two real published downloader aborts against a stalled request.
     await withWatchdog(verifyLockWaitCancellation(), "published lock proof");
-    console.log("Published npm 0.1.102 abort/lock cleanup: PASS (2 downloads; lock wait/reacquire)");
+    console.log("Published npm 0.1.104 abort/lock cleanup: PASS (2 downloads; lock wait/reacquire)");
   } finally {
     fs.rmSync(cacheRoot, { recursive: true, force: true });
   }

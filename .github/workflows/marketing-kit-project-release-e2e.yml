@@ -9,6 +9,15 @@ on:
       - 'scripts/test_live_install_audit_env.py'
       - 'scripts/live-install-audit.py'
       - '.github/workflows/marketing-kit-project-release-e2e.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'landing/**'
+      - 'scripts/marketing-kit-project-release-e2e.py'
+      - 'scripts/marketing-kit-published-launcher-abort.js'
+      - 'scripts/test_live_install_audit_env.py'
+      - 'scripts/live-install-audit.py'
+      - '.github/workflows/marketing-kit-project-release-e2e.yml'
   workflow_dispatch:
 
 permissions:
@@ -20,7 +29,7 @@ concurrency:
 
 jobs:
   marketing-kit-project:
-    name: npm 0.1.102 / ${{ matrix.target }} / real Project lifecycle
+    name: npm 0.1.104 / ${{ matrix.target }} / real Project lifecycle
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     strategy:
@@ -51,7 +60,7 @@ jobs:
           TARGET: ${{ matrix.target }}
         run: |
           set -euo pipefail
-          npm install --global universal-agent-plugins@0.1.102
+          npm install --global universal-agent-plugins@0.1.104
           if [[ "$TARGET" == cursor ]]; then
             curl --fail --show-error --silent --location --retry 2 \
               'https://downloads.cursor.com/lab/2026.10.22-27dcf5f/linux/x64/agent-cli-package.tar.gz' \
@@ -101,7 +110,7 @@ jobs:
           else
             npm install --global "$NATIVE_PACKAGE"
           fi
-          # The immutable npm launcher fetches the exact 0.1.102 GitHub binary
+          # The immutable npm launcher fetches the exact 0.1.104 GitHub binary
           # on first use. A transient release-asset HTTP 504 must not turn all
           # six genuine lifecycle lanes into unexecuted noise. Never fall back
           # to latest, skip version validation or accept a different version.
@@ -122,14 +131,14 @@ jobs:
             try {
               const release = await ensureBinary({ packageRoot, signal: abort.signal });
               if (abort.signal.aborted) throw new Error("pinned launcher acquisition timed out");
-              if (release.version !== "0.1.102") {
+              if (release.version !== "0.1.104") {
                 throw Object.assign(new Error("unexpected pinned release version"), { noRetry: true });
               }
               const result = spawnSync("agentplugins", ["version"], { encoding: "utf8", timeout: 15_000 });
               if (result.error || result.signal || result.status !== 0) {
                 throw new Error("published agentplugins version probe failed");
               }
-              if (result.stdout.replace(/\n+$/, "") !== "agentplugins 0.1.102") {
+              if (result.stdout.replace(/\n+$/, "") !== "agentplugins 0.1.104") {
                 throw Object.assign(new Error("wrong published agentplugins version"), { noRetry: true });
               }
             } finally {
@@ -151,7 +160,7 @@ jobs:
               fi
             fi
             if (( attempt == 3 )); then
-              echo 'exact agentplugins 0.1.102 unavailable after three attempts' >&2
+              echo 'exact agentplugins 0.1.104 unavailable after three attempts' >&2
               exit 1
             fi
             sleep "$((attempt * 5))"
@@ -160,7 +169,7 @@ jobs:
         if: matrix.target == 'codex'
         run: |
           set -euo pipefail
-          # Real pinned npm 0.1.102 module, with only the HTTPS request stalled.
+          # Real pinned npm 0.1.104 module, with only the HTTPS request stalled.
           # A mock transport here proves cleanup, not a native-client tools/call.
           UAP_GLOBAL_NPM_ROOT="$(npm root -g)" timeout 20s node scripts/marketing-kit-published-launcher-abort.js
       - name: Verify published ChatGPT target safety fences
@@ -202,7 +211,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
-          name: marketing-kit-0.1.102-${{ matrix.target }}
+          name: marketing-kit-0.1.104-${{ matrix.target }}
           path: ${{ runner.temp }}/marketing-kit-project/
           if-no-files-found: warn
           retention-days: 14

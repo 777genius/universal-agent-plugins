@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Actual public npm 0.1.102 + signed Marketing Kit Project lifecycle, no mocks."""
+"""Actual public npm 0.1.104 + signed Marketing Kit Project lifecycle, no mocks."""
 import argparse
 import hashlib
 import json
@@ -150,7 +150,7 @@ def verified(result, stage, operation=None, target=None, scope=None):
     if (result.get("exit_code") != 0 or result.get("timeout")
             or not isinstance(envelope, dict)):
         raise AssertionError(f"{stage}: CLI did not succeed with JSON: {result}")
-    # The pinned 0.1.102 dependency commands must report explicit actions
+    # The pinned published dependency commands must report explicit actions
     # and results even when they also emit result=success.
     if operation == "add":
         # Published 'add' wraps actual scoped dependency receipts in data.
@@ -180,8 +180,8 @@ def require_exact_published_version(result):
     stdout = result.get("stdout_tail")
     if (result.get("exit_code") != 0 or result.get("timeout")
             or not isinstance(stdout, str)
-            or stdout.strip() != "agentplugins 0.1.102"):
-        raise AssertionError("not exact published agentplugins 0.1.102")
+            or stdout.strip() != "agentplugins 0.1.104"):
+        raise AssertionError("not exact published agentplugins 0.1.104")
 
 
 def verify_pinned_launcher(cli, env, project):
@@ -1527,7 +1527,7 @@ def main():
     options = parser.parse_args()
     report_path = Path(options.report)
     report_path.parent.mkdir(parents=True, exist_ok=True)
-    report = {"cli_version": "0.1.102", "target": options.target, "source": "real signed marketing-kit", "steps": [], "status": "failed",
+    report = {"cli_version": "0.1.104", "target": options.target, "source": "real signed marketing-kit", "steps": [], "status": "failed",
               "qualification_scope": "user_and_project", "two_scope_lifecycle_qualified": False,
               "positive_policy": None, "logical_owner_evidence": None,
               "final_policy_observation": {"status": "not_run", "source_profile": "E",
@@ -1542,7 +1542,7 @@ def main():
     try:
         with tempfile.TemporaryDirectory(prefix="uap-real-marketing-kit-") as location:
             root = Path(location)
-            # The npm 0.1.102 launcher validates the SHA-256 on every cache hit.
+            # The pinned npm launcher validates the SHA-256 on every cache hit.
             # Keep one private executable cache for A/B: cold restore is still
             # independent in lock, receipts, clients and native HOME/profile.
             launcher_cache = root / "released-cli-cache"
