@@ -33,6 +33,20 @@ type Resource struct {
 	Size   int64  `json:"size"`
 }
 
+// A missing size is not the same as an explicitly declared zero-length file.
+func (r *Resource) UnmarshalJSON(data []byte) error {
+	var wire struct {
+		URI    string `json:"uri"`
+		Digest string `json:"digest"`
+		Size   *int64 `json:"size"`
+	}
+	if err := json.Unmarshal(data, &wire); err != nil || wire.Size == nil {
+		return ErrInvalidEntry
+	}
+	*r = Resource{URI: wire.URI, Digest: wire.Digest, Size: *wire.Size}
+	return nil
+}
+
 // Skill identifies one remote Skill by its exact URI *within its MCP server*.
 // Resources is either a complete Resource array or the string "dynamic".
 type Skill struct {
