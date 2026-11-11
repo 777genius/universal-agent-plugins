@@ -827,6 +827,14 @@ def check_scope_id_isolation(selected, other_scopes, stage):
         raise AssertionError(f"{stage}: reused installation IDs across scopes")
 
 
+def copilot_user_c_settings_shape(env, case_root):
+    """Read only bounded, redacted Copilot setting counts; never export native config."""
+    # The fresh C profile is independent of A/B and already sandboxed.
+    return {identity: audit["copilot_settings_sanitized_shape"](
+        Path(env["HOME"]), case_root.resolve(strict=True), identity)
+        for identity in sorted(UPDATE_ALIASES)}
+
+
 def copilot_project_mcp_residuals(project, identities, stage):
     """Inspect Copilot's two exact Project MCP locations by server member name."""
     def reject_constant(_):
@@ -1270,6 +1278,10 @@ def main():
             foreign_files.extend(pin_foreign([(foreign_c, "unmanaged user data\n"),
                                               (project_foreign_c, "unmanaged project data\n"),
                                               *native_foreign_c], root))
+            # Read-only forensic baseline: native Copilot may retain disabled
+            # settings after uninstall. Never treat a residue as a PASS here.
+            copilot_c_shapes = ({"before": copilot_user_c_settings_shape(env_c, root)}
+                                if options.target == "copilot" else None)
             # Transfer only portable manifest and signed lock, not User A's
             # receipts, native config, store, or installation IDs.
             user_portable_c = Path(env_c["AGENTPLUGINS_HOME"])
@@ -1301,6 +1313,8 @@ def main():
                                (user_portable_c / "uap.lock").read_bytes(),
                                user_manifest_after_update, (user_portable_c / "uap.toml").read_bytes(),
                                "User C")
+            if copilot_c_shapes is not None:
+                copilot_c_shapes["after_restore"] = copilot_user_c_settings_shape(env_c, root)
             check_scope_id_isolation(restored_user_c, (first, restored),
                                      "User C cold restore")
             if (user_portable / "uap.toml").read_bytes() != user_manifest_after_update:
@@ -1336,6 +1350,9 @@ def main():
             if identities(inventory(options.cli, env_c, project_c, options.target, "user"),
                           options.target, "user"):
                 raise AssertionError("User C remove retained required closure")
+            if copilot_c_shapes is not None:
+                copilot_c_shapes["after_remove"] = copilot_user_c_settings_shape(env_c, root)
+                report["copilot_user_c_settings_shape"] = copilot_c_shapes
             check_removed_native_components(options.target, Path(env_c["HOME"]),
                                             root, "User C remove")
             if user_inventory() != user_after_update:
