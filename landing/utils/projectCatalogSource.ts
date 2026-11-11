@@ -105,7 +105,7 @@ export function projectCatalogCommands(plugin: RegistryPlugin, targets?: readonl
  */
 export function pinnedPiProjectSelection(
   plugin: RegistryPlugin,
-): { selector: string; source: PluginSource } | undefined {
+): { selector: string; source: PluginSource; components: readonly ComponentID[] } | undefined {
   if (plugin.trust_state !== 'reviewed' || !plugin.installable ||
       projectCatalogSelection(plugin, ['pi']).resolution.distribution) return undefined;
   // A signed explicit Pi denial, even on an earlier release, is not a grant to
@@ -140,7 +140,11 @@ export function pinnedPiProjectSelection(
     if (!GIT_REPOSITORY.test(repository) || !revision || !FULL_REVISION.test(revision) ||
         !safePath || !/^sha256:[a-f0-9]{64}$/.test(distribution.source.tree_sha256) ||
         !/^sha256:[a-f0-9]{64}$/.test(distribution.source.manifest_sha256)) continue;
-    return { selector: `github:${repository}@${revision}${path ? `//${path}` : ''}`, source: distribution.source };
+    return {
+      selector: `github:${repository}@${revision}${path ? `//${path}` : ''}`,
+      source: distribution.source,
+      components: distribution.components,
+    };
   }
   return undefined;
 }
