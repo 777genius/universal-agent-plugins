@@ -39,6 +39,8 @@ HELP = (
 NAMES = {scope: "uap-kiro-research-" + scope for scope in ("a", "b", "user")}
 _ALL_HELP_STDERR = b"\nUSAGE:\n    kiro-cli [OPTIONS] [SUBCOMMAND]\n\n"
 _LIST_AUTH_STDERR = b"error: You are not logged in, please log in with kiro-cli login\n"
+# Only observed help probes may initialize an owned disposable KIRO_HOME.
+_HELP_PROFILE_LABELS = frozenset(("all-help", "mcp-help", "mcp-list-help"))
 _MCP_LIST_ROUTES = {
     project + "-" + scope + "-raw-list": (project, ("mcp", "list", scope))
     for project in ("a", "b", "user") for scope in ("workspace", "global")
@@ -281,9 +283,9 @@ def _probe(ctx, owned, label, arguments, project="a", root_identities=None, help
         raise ValueError("Kiro acquired companion PATH changed")
     key = getattr(ctx, "kiro_api_key", "")
     private_env = {"KIRO_API_KEY": key} if key and label.endswith("raw-list") else None
-    if label in ("all-help", "mcp-help"):
-        # Kiro 2.34 creates HOME state on both --help-all and mcp --help.
-        # Confine these exact help probes to an owned disposable vendor profile.
+    if label in _HELP_PROFILE_LABELS:
+        # Kiro 2.34 initializes HOME on --help-all, mcp --help, and
+        # mcp list --help. Confine only these observed help probes.
         # Never use that profile as Project/User config or activation proof.
         expected = Path(ctx.root) / "private" / "kiro-help-only"
         if (help_home != expected or root_identities is None
@@ -293,7 +295,7 @@ def _probe(ctx, owned, label, arguments, project="a", root_identities=None, help
     try:
         record, stdout, stderr = ctx.probe(label, list(arguments), project=project, extra_env=private_env, timeout=30)
     finally:
-        if label in ("all-help", "mcp-help") and isinstance(getattr(ctx, "summary", None), dict):
+        if label in _HELP_PROFILE_LABELS and isinstance(getattr(ctx, "summary", None), dict):
             # No native names or file bytes are included in the report.
             ctx.summary["kiro_help_private_metadata"] = _opaque_native_marker_metadata(help_home)
         # Also enforce after a timeout or raised probe, before any next child.
@@ -366,7 +368,7 @@ def collect(ctx):
     help_text = {}
     for label, arguments, token in HELP:
         value = _probe(ctx, owned, label, arguments, root_identities=root_identities,
-                       help_home=help_profile if label in ("all-help", "mcp-help") else None)
+                       help_home=help_profile if label in _HELP_PROFILE_LABELS else None)
         if (token not in value or (label == "all-help" and (
                 not re.search(r"(?m)^[ \t]+--help-all[ \t]*$", value)
                 or not re.search(r"(?m)^[ \t]+(?:-h,[ \t]+)?--help[ \t]*$", value)
