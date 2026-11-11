@@ -175,7 +175,7 @@ test('Pi direct install uses older release provenance without borrowing newer so
   await card.locator('.plugin-card__install-toggle').click();
   await card.getByRole('button', { name: 'This project', exact: true }).click();
   await card.locator('.app-multiselect__trigger').click();
-  await page.getByRole('checkbox', { name: /^Pi(?:\\s|$)/ }).click();
+  await page.getByRole('checkbox', { name: /^Pi(?:\s|$)/ }).click();
   await page.keyboard.press('Escape');
 
   const sourceUrl = 'https://github.com/777genius/universal-agent-plugins/tree/2ddbb99dd190c1792b79904f9875e6322bccd243/plugins/sentry';
