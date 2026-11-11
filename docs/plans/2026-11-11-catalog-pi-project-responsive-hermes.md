@@ -13,7 +13,7 @@ Date: 2026-11-11. Base: `784ade332a75c58e9849204f3ca9164a8bdd7827`. Owner goal: 
 
 ### A. Responsive filter grid and visual tests
 - Modify only `landing/assets/styles/registry.scss`: five columns on wide desktop, three on medium desktop (search spans the row; sort and filters flow normally), two on small desktop/tablet, one on narrow mobile; make source and owner separate grid items where three columns are available.
-- Add a narrow real-browser assertion around 1280–1440 px and around 900–1000 px. Check actual computed grid columns, search width, no horizontal overflow, both source/owner controls, with English and one RTL viewport.
+- Add a real-browser assertion at 1024 and 1280 CSS px (three columns), 900 and 768 px (two), and 390 px (one), including Retina-width screenshots. Check actual computed grid columns, search width, no horizontal overflow, both source/owner controls, with English and one RTL viewport.
 
 ### B. Pi explicit pinned-source Project route (no signature bypass)
 - Keep `resolveDistribution`, signed evidence decoding, v1/v2 grants, release eligibility, package identity, and actual CLI unchanged.
