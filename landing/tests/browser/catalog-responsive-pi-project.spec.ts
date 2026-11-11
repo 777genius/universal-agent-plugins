@@ -5,6 +5,7 @@ function sentryFixture() {
   const index = registryFixture();
   const plugin = index.plugins[0]!;
   index.plugins = [plugin];
+  plugin.trust_state = 'reviewed';
   plugin.name = 'sentry';
   plugin.display_name = 'Sentry';
   plugin.install_source = 'sentry';
