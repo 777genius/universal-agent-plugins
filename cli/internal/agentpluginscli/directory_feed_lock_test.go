@@ -143,3 +143,33 @@ func TestSavedRegistryUpdateRejectsOtherFeedBeforeDependencyDetection(t *testing
 		})
 	}
 }
+
+func TestLockedDirectoryFeedMismatchRefusesBeforeSourceCacheOrDisk(t *testing.T) {
+	client := &fixedDirectoryClient{}
+	app := App{DirectoryClient: lockedFeedTestClient{
+		fixedDirectoryClient: client, feedID: "modern-v1",
+	}}
+	pin := environment.LockedPackage{Source: environment.LockedSource{
+		Registry: &environment.LockedRegistrySource{FeedID: ""},
+	}}
+	_, err := app.acquireLockedSnapshot(context.Background(), pin)
+	if err == nil || !strings.Contains(err.Error(), "feed differs from locked source") {
+		t.Fatalf("cross-feed snapshot acquisition admitted: %v", err)
+	}
+	_, err = materializeLockedPackage(context.Background(), app, pin, false, nil)
+	if err == nil || !strings.Contains(err.Error(), "feed differs from locked source") {
+		t.Fatalf("cross-feed materialization admitted: %v", err)
+	}
+	if client.calls != 0 {
+		t.Fatalf("cross-feed source guard fetched Directory: %d calls", client.calls)
+	}
+}
+
+func TestLegacyRegistryLockRejectsUnknownSigningClient(t *testing.T) {
+	pin := environment.LockedPackage{Source: environment.LockedSource{
+		Registry: &environment.LockedRegistrySource{},
+	}}
+	if err := requireLockedDirectoryFeed(App{}, pin); err == nil || !strings.Contains(err.Error(), "signed Directory is unavailable") {
+		t.Fatalf("missing trusted signing client accepted: %v", err)
+	}
+}
