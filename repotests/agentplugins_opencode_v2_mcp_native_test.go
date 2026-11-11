@@ -339,7 +339,7 @@ func TestAgentpluginsOpenCodeV2NativeProjectMCPHandshake(t *testing.T) {
 	// Reuse one disposable, HOME-isolated managed service for bounded readiness
 	// observations. Each A/B/removal boundary shuts it down before starting
 	// another, so a cached project A location cannot stand in for fresh proof.
-	runService := func(project string, args ...string) string {
+	runService := func(project string, args ...string) projectNativeCaptureResult {
 		t.Helper()
 		ctx, cancel := context.WithTimeout(context.Background(), 32*time.Second)
 		defer cancel()
@@ -348,7 +348,7 @@ func TestAgentpluginsOpenCodeV2NativeProjectMCPHandshake(t *testing.T) {
 			result.StdoutLimit || result.StderrLimit {
 			t.Fatalf("native V2 managed service command failed (exit=%d error_kind=%s)", result.Exit, result.ErrorKind)
 		}
-		return strings.TrimSpace(string(result.Stdout))
+		return result
 	}
 	stopService := func() { runService(projectA, "service", "stop") }
 	t.Cleanup(func() {
@@ -359,7 +359,7 @@ func TestAgentpluginsOpenCodeV2NativeProjectMCPHandshake(t *testing.T) {
 		t.Helper()
 		var output string
 		for range 12 {
-			output = runService(project, "mcp", "list")
+			output = strings.TrimSpace(string(runService(project, "mcp", "list").Stdout))
 			if !requireConnected || openCodeV2MCPConnectedStatus(output) {
 				return output
 			}
@@ -406,10 +406,21 @@ func TestAgentpluginsOpenCodeV2NativeProjectMCPHandshake(t *testing.T) {
 	// definition from its connected server and issue the actual tools/call.
 	// A bounded local model emits one scripted native tool call after observing
 	// that exact definition; there is no vendor auth, API key or mock client.
-	_ = runService(projectA, "run", "--format", "json", "--model",
+	runCapture := runService(projectA, "run", "--format", "json", "--model",
 		"uap-fixture/uap-scripted", "Call uap_project_fixture_uap_ping exactly once.")
 	toolSeen, modelCalls, resultSeen, invalid := model.stats()
 	if toolSeen == 0 || modelCalls != 1 || resultSeen == 0 || invalid != 0 {
+		// Only this isolated fixture command is logged, on qualification failure.
+		// Quote control bytes, bound each stream, and hide disposable paths and
+		// the source-authored local provider key; no ambient credentials enter env.
+		redact := strings.NewReplacer(root, "<fixture-root>", model.baseURL(), "<fixture-model>",
+			"local-fixture-not-a-vendor-secret", "<fixture-key>")
+		const diagnosticLimit = 8 << 10
+		stdout, stderr := redact.Replace(string(runCapture.Stdout)), redact.Replace(string(runCapture.Stderr))
+		t.Logf("native V2 model run stdout (bytes=%d truncated=%t): %q", len(runCapture.Stdout),
+			len(stdout) > diagnosticLimit, stdout[:min(len(stdout), diagnosticLimit)])
+		t.Logf("native V2 model run stderr (bytes=%d truncated=%t): %q", len(runCapture.Stderr),
+			len(stderr) > diagnosticLimit, stderr[:min(len(stderr), diagnosticLimit)])
 		t.Fatalf("native model/session MCP dispatch not qualified: tool=%t calls=%d result=%t invalid=%d",
 			toolSeen > 0, modelCalls, resultSeen > 0, invalid)
 	}
