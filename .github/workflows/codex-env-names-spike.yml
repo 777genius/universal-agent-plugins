@@ -251,6 +251,33 @@ jobs:
           Expand-Archive -LiteralPath $archive -DestinationPath $dir -Force
           $found = @(Get-ChildItem -LiteralPath $dir -Recurse -File -Filter 'codex-x86_64-pc-windows-msvc.exe')
           if ($found.Count -ne 1) { throw 'Expected exactly one native Codex Windows binary' }
+          # A standalone codex.exe ZIP is not a complete Windows sandbox
+          # installation. The released native sandbox resolves both helpers
+          # beside the binary or in codex-resources. Use ONLY pinned official
+          # release bytes; missing/mismatched helpers must hard-fail CI.
+          $resources = Join-Path (Split-Path -Parent $found[0].FullName) 'codex-resources'
+          New-Item -ItemType Directory -Path $resources -Force | Out-Null
+          $helpers = @(
+            @{
+              Asset = 'codex-windows-sandbox-setup-x86_64-pc-windows-msvc.exe'
+              Name = 'codex-windows-sandbox-setup.exe'
+              Sha256 = '84ab20790942fcdeb6481779785dfdc746df61314a9d8ebd7389be94d0b8f7ae'
+            },
+            @{
+              Asset = 'codex-command-runner-x86_64-pc-windows-msvc.exe'
+              Name = 'codex-command-runner.exe'
+              Sha256 = '857ead038dc320e10d6aebbce5ca5b943f6c86ad3bb58a2b022c42da47f8b931'
+            }
+          )
+          foreach ($helper in $helpers) {
+            $target = Join-Path $resources $helper.Name
+            $source = "https://github.com/openai/codex/releases/download/rust-v0.167.1/$($helper.Asset)"
+            Invoke-WebRequest -Uri $source -OutFile $target
+            $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $target).Hash.ToLowerInvariant()
+            if ($actual -ne $helper.Sha256) {
+              throw "Pinned official Codex Windows sandbox helper digest mismatch"
+            }
+          }
           "CODEX_BINARY=$($found[0].FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       # A no-secret, real sandbox smoke test. Passing is not native secrecy
       # evidence; failure must block all canary-bearing Windows probes.
