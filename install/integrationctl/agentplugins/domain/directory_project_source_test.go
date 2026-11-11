@@ -3,7 +3,6 @@ package domain
 import (
 	"errors"
 	"reflect"
-	"strings"
 	"testing"
 )
 
@@ -30,8 +29,8 @@ func TestDirectoryV1ProjectSourceKeepsPublicationAndPlacementScopesSeparate(t *t
 	}
 	user := query
 	user.Scope = ScopeUser
-	if _, err := ResolveDirectory(snapshot, user); !errors.Is(err, ErrDirectoryIneligible) || !strings.Contains(err.Error(), "missing vscode") {
-		t.Fatalf("User shared-backend admission changed: %v", err)
+	if _, err := ResolveDirectory(snapshot, user); err != nil {
+		t.Fatalf("Copilot User requires only its own signed grant: %v", err)
 	}
 	if _, err := ResolveDirectory(snapshot, query); !errors.Is(err, ErrDirectoryIneligible) {
 		t.Fatalf("strict signed Project resolution fabricated a grant: %v", err)

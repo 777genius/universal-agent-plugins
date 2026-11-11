@@ -119,6 +119,7 @@ var clientDefinitions = []ClientDefinition{
 		LifecycleKind:  LifecycleCLIRegistry,
 	}), LifecycleNativeConfig),
 	withProjectScope(withoutCommands(clientDefinition(ClientCopilot, "GitHub Copilot CLI", "github-copilot", "managed", "native", true, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportNative, ClientTraits{
+		DirectoryOwnGrant:          true,
 		InstallIntents:             []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:              LifecycleCLIRegistry,
 		RecordsUserProfileOnCreate: true,

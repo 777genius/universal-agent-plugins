@@ -41,7 +41,7 @@ root and include its diff with the source change.
 ## Build and checks
 
 The authoritative CI setup is [`.github/workflows/docs.yml`](../.github/workflows/docs.yml).
-Full generation needs Node.js **22.21.1**, pnpm **8.15.1**, Go **1.26.10**,
+Full generation needs Node.js **22.21.1**, pnpm **8.15.1**, Go **1.26.11**,
 Python **3.12**, the hash-pinned Python requirements and gomarkdoc **v1.1.0**.
 Installing only the website's npm dependencies is insufficient.
 

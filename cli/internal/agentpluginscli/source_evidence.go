@@ -345,13 +345,29 @@ func directoryFloorForClient(state domain.StateFileV2, client DirectoryClient) u
 	if scoped, ok := client.(interface{ SnapshotSchema() int }); ok {
 		schema = scoped.SnapshotSchema()
 	}
-	return installedDirectoryFloorForSchema(state, schema)
+	return installedDirectoryFloorForFeed(state, schema, directoryFeedForClient(client))
+}
+
+// Legacy clients and saved receipts have no feed ID, preserving their floor.
+func directoryFeedForClient(client DirectoryClient) string {
+	if scoped, ok := client.(interface{ SignedFeedID() string }); ok {
+		return scoped.SignedFeedID()
+	}
+	return ""
 }
 
 func installedDirectoryFloorForSchema(state domain.StateFileV2, schema int) uint64 {
+	return installedDirectoryFloorForFeed(state, schema, "")
+}
+
+// Independent schema-1 signing lineages must never lend each other sequence
+// floors. In particular, a modern sequence 1 cannot be rejected by legacy
+// sequence 43, nor can legacy sequence 43 be lowered by modern receipts.
+func installedDirectoryFloorForFeed(state domain.StateFileV2, schema int, feedID string) uint64 {
 	var floor uint64
 	for _, installation := range state.Installations {
 		if installation.Directory != nil && installation.Directory.SnapshotSchema == schema &&
+			installation.Directory.FeedID == feedID &&
 			installation.Directory.SnapshotSequence > floor {
 			floor = installation.Directory.SnapshotSequence
 		}
