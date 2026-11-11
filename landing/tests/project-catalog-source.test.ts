@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { pinnedPiProjectCommands, pinnedPiProjectSource, projectCatalogAutomaticSelection, projectCatalogCommands, projectCatalogSelection } from '../utils/projectCatalogSource.ts';
+import { pinnedPiProjectCommands, pinnedPiProjectSelection, pinnedPiProjectSource, projectCatalogAutomaticSelection, projectCatalogCommands, projectCatalogSelection } from '../utils/projectCatalogSource.ts';
 import type { RegistryPlugin } from '../types/registry.ts';
 
 function reviewed(): RegistryPlugin {
@@ -181,4 +181,31 @@ test('an explicitly blocked signed Pi grant cannot be bypassed by a pinned-sourc
   assert.equal(projectCatalogSelection(plugin, ['pi']).resolution.distribution, undefined);
   assert.equal(pinnedPiProjectSource(plugin), undefined);
   assert.throws(() => pinnedPiProjectCommands(plugin), /No eligible Pi Project/);
+});
+
+
+test('Pi pinned source identity follows the selected older release, not newer ChatGPT-only product source', () => {
+  const plugin = reviewed();
+  const distribution = plugin.distributions[0]!;
+  const older = distribution.releases[0]!;
+  const newer = structuredClone(older);
+  newer.release_sequence += 1;
+  newer.source.revision = 'f'.repeat(40);
+  newer.targets = [{
+    client: 'chatgpt', delivery: 'manual_activation', authentication: 'required',
+    scopes: ['user'], app_binding: { app_key: 'reviewed-app', id: 'selected', mcp_server: 'remote' },
+  }];
+  distribution.releases = [newer, older];
+  distribution.source = newer.source;
+  distribution.targets = newer.targets;
+  plugin.source = newer.source;
+  const selected = pinnedPiProjectSelection(plugin);
+  assert.equal(selected?.selector,
+    'github:777genius/universal-agent-plugins@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/gitlab');
+  assert.equal(selected?.source.revision, older.source.revision);
+  assert.notEqual(selected?.source.revision, plugin.source.revision);
+  assert.deepEqual(selected?.components, ['mcp']);
+  assert.equal(pinnedPiProjectSource(plugin), selected?.selector);
+  assert.equal(pinnedPiProjectCommands(plugin).add,
+    `npx -y universal-agent-plugins add ${selected?.selector} --target pi --scope project`);
 });
