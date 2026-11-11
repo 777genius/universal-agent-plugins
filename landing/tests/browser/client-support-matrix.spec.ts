@@ -118,10 +118,39 @@ for (const { client, locale, theme, width } of nativeClientCases) {
     await expect(page.locator('html')).toHaveAttribute('lang', locale);
     await expect(page.locator('html')).toHaveAttribute('dir', direction);
     await expect(page.locator('.agent-page')).toHaveCSS('direction', direction);
+    const containers = page.locator('.agent-page .v-container');
+    await expect(containers).toHaveCount(3);
+    for (const container of await containers.all()) {
+      await expect(container).toHaveClass(new RegExp(`v-locale--is-${direction}`));
+      await expect(container).toHaveCSS('direction', direction);
+    }
+    for (const selector of ['.agent-page__hero-grid', '.agent-page__identity', '.agent-page__intro', '.agent-page__steps'])
+      await expect(page.locator(selector)).toHaveCSS('direction', direction);
+    const position = (selector: string) => page.locator(selector).evaluate((element) => {
+      const { x, y } = element.getBoundingClientRect();
+      return { x, y };
+    });
+    const copyPosition = await position('.agent-page__copy');
+    const installPosition = await position('.agent-page__install');
+    const firstStep = await position('.agent-page__steps article:first-child');
+    const lastStep = await position('.agent-page__steps article:last-child');
+    if (width === 1440) {
+      if (direction === 'rtl') {
+        expect(copyPosition.x).toBeGreaterThan(installPosition.x);
+        expect(firstStep.x).toBeGreaterThan(lastStep.x);
+      } else {
+        expect(copyPosition.x).toBeLessThan(installPosition.x);
+        expect(firstStep.x).toBeLessThan(lastStep.x);
+      }
+    } else {
+      expect(copyPosition.y).toBeLessThan(installPosition.y);
+      expect(firstStep.y).toBeLessThan(lastStep.y);
+    }
     await expect(page.locator('.v-application')).toHaveClass(new RegExp(`v-theme--${theme}`));
     const command = `npx -y universal-agent-plugins add ./my-plugin --target ${client}`;
     const install = page.locator('.agent-page__install');
     await expect(install.locator('code')).toHaveText(command);
+    await expect(install.locator('pre')).toHaveCSS('direction', 'ltr');
     await expect(install).toContainText(t('registryUi.agentPage.localPackageHint'));
     await install.getByRole('button', { name: t('registryUi.command.copyLabel'), exact: true }).click();
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(command);
