@@ -176,12 +176,20 @@ jobs:
 
   native-macos-arm64-core-research:
     # Research only; default-mode Linux vendor leak remains a failed release gate.
-    runs-on: macos-15-arm64
+    # GitHub's standard public Apple Silicon label is macos-15, NOT the
+    # runner-image repository/tag name macos-15-arm64 (never acquires a runner).
+    runs-on: macos-15
     timeout-minutes: 18
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Require genuine native Apple Silicon (no Intel fallback)
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -s)" = Darwin
+          test "$(uname -m)" = arm64
       - name: Verify synthetic-only Python oracles
         run: python3 -m unittest discover -s scripts -p 'test_codex_env_names_native_spike.py'
       - name: Install official SHA-pinned Codex 0.167.1 macOS ARM64
