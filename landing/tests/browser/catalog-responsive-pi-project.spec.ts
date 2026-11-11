@@ -20,7 +20,7 @@ function sentryFixture() {
   return index;
 }
 
-for (const [width, columns] of [[1280, 3], [1000, 2], [768, 2], [390, 1]] as const) {
+for (const [width, columns] of [[1280, 3], [1024, 3], [900, 2], [768, 2], [390, 1]] as const) {
   test(`catalog filters use ${columns} columns at ${width}px`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 920 });
     const errors = await offline(page);
@@ -42,10 +42,10 @@ for (const [width, columns] of [[1280, 3], [1000, 2], [768, 2], [390, 1]] as con
     });
     expect(geometry.columns).toBe(columns);
     expect(geometry.overflow).toBe(false);
-    if (width === 1280) {
+    if (width === 1280 || width === 1024) {
       expect(geometry.pairDisplay).toBe('contents');
       expect(geometry.searchWidth).toBeGreaterThan(geometry.controlsWidth - 3);
-    } else if (width === 1000) {
+    } else if (width === 900) {
       expect(geometry.pairDisplay).toBe('grid');
     }
     if (width > 720) {
