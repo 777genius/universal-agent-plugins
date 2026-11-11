@@ -987,6 +987,53 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     self.assertEqual(foreign.read_bytes(), b"foreign must remain intact")
                     self.assertEqual(guards, [True])
 
+    def test_marketing_kit_corrupt_lock_restore_rejects_same_inode_symlink(self):
+        # A renamed original inode has one link. A symlink to that inode
+        # passes fstat and single-link checks but leaves a hostile lock path.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        verify = runner["verify_corrupt_lock_refusal"]
+        original = {"packages": [
+            {"alias": "notion", "tree_digest": "sha256:" + "b" * 64}]}
+        for scope in ("project", "user"):
+            with self.subTest(scope=scope), TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                home, data, project = (root / name
+                                       for name in ("home", "data", "project"))
+                for path in (home, data, project):
+                    path.mkdir()
+                env = {"HOME": str(home), "AGENTPLUGINS_HOME": str(data)}
+                locked = (project if scope == "project" else data) / "uap.lock"
+                locked.write_text(json.dumps(original) + "\n", encoding="utf-8")
+                original_bytes = locked.read_bytes()
+                retained = locked.with_name("retained-original-lock")
+                probe = root / "symlink-probe"
+                try:
+                    probe.symlink_to(locked)
+                except (OSError, NotImplementedError) as error:
+                    self.skipTest(f"host cannot create file symlinks: {error}")
+                else:
+                    probe.unlink()
+                checked = []
+
+                def attacker(*_):
+                    locked.rename(retained)
+                    locked.symlink_to(retained)
+                    return {"exit_code": 1, "timeout": False,
+                            "stderr_tail": (
+                                "verify notion pinned manifest: "
+                                "signed Directory publication differs from exact lock")}
+
+                with patch.dict(verify.__globals__, {"invoke": attacker}):
+                    with self.assertRaisesRegex(AssertionError, "lock path replaced"):
+                        verify("agentplugins", env, project, "codex", scope,
+                               (lambda: checked.append(True),))
+                self.assertEqual(checked, [True])
+                self.assertTrue(locked.is_symlink())
+                self.assertNotEqual(retained.read_bytes(), original_bytes)
+
     def test_marketing_kit_corrupt_lock_restore_rejects_foreign_hardlink(self):
         # An outside hardlink to the original inode makes inode-only cleanup
         # overwrite a foreign path when the corrupt fixture is restored.

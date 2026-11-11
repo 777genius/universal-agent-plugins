@@ -414,7 +414,14 @@ def verify_corrupt_lock_refusal(cli, env, project, target, scope, guards):
             try:
                 with lock_file.open("r+b") as stream:
                     identity = os.fstat(stream.fileno())
-                    if (not stat.S_ISREG(identity.st_mode)
+                    # fstat alone accepts a symlink to the same moved inode.
+                    # The *pathname* must still name the original regular file.
+                    current = lock_file.lstat()
+                    if (not stat.S_ISREG(current.st_mode)
+                            or current.st_nlink != 1
+                            or (current.st_dev, current.st_ino)
+                            != (original_identity.st_dev, original_identity.st_ino)
+                            or not stat.S_ISREG(identity.st_mode)
                             or identity.st_nlink != 1
                             or (identity.st_dev, identity.st_ino)
                             != (original_identity.st_dev, original_identity.st_ino)):
