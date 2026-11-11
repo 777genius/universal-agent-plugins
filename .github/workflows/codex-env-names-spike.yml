@@ -271,9 +271,29 @@ jobs:
           with tempfile.TemporaryDirectory(prefix="uap-win-sandbox-no-secret-") as tmp:
               root = Path(tmp)
               (root / "tmp").mkdir()
-              env = isolated_env(root, root / "home", "", "")
+              home = root / "home"
+              (home / ".codex").mkdir(parents=True)
+              env = isolated_env(root, home, "", "")
               env.pop(ENV_NAME, None)
               env.pop(FOREIGN_ENV_NAME, None)
+              shell = env.get("COMSPEC", "cmd.exe")
+              # Baseline under the SAME restricted process environment.
+              # Distinguishes a missing OS executable from native Codex
+              # sandbox failure; this is NEVER a replacement for sandboxing.
+              try:
+                  control = subprocess.run(
+                      [shell, "/d", "/c", "echo UAP_WINDOWS_NO_SECRET_CONTROL_OK"],
+                      cwd=root, env=env, capture_output=True,
+                      text=True, timeout=15)
+              except (OSError, subprocess.TimeoutExpired) as exc:
+                  print("windows_no_secret_direct_control_pass=false")
+                  print("windows_no_secret_direct_control_exception=" + type(exc).__name__)
+                  raise SystemExit(1)
+              direct_ok = (control.returncode == 0
+                           and "UAP_WINDOWS_NO_SECRET_CONTROL_OK" in control.stdout)
+              print("windows_no_secret_direct_control_pass=" + str(direct_ok).lower())
+              if not direct_ok:
+                  raise SystemExit(1)
               command = [sys.argv[1], "sandbox", "--permission-profile",
                          ":read-only", "--", env.get("COMSPEC", "cmd.exe"),
                          "/d", "/c", "echo UAP_WINDOWS_NO_SECRET_SANDBOX_OK"]
@@ -292,8 +312,10 @@ jobs:
                   # Print only fixed labels, never raw native output or paths.
                   observed = (result.stdout + result.stderr).lower()
                   labels = ("helper_unknown_error", "setup refresh", "access denied",
-                            "blocked by policy", "createprocessasuserw", "sandbox",
-                            "permission", "unrecognized", "not supported",
+                            "blocked by policy", "createprocessasuserw",
+                            "windows sandbox failed", "failed to create",
+                            "sandbox token", "restricted token", "appcontainer",
+                            "sandbox", "permission", "unrecognized", "not supported",
                             "invalid", "timed out", "failed")
                   print("windows_no_secret_sandbox_probe_indicators=" +
                         ",".join(label for label in labels if label in observed))
