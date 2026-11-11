@@ -218,11 +218,16 @@ class KiroCollectorTests(unittest.TestCase):
                     return {"exit": 1, "error": None}, b"", kiro._LIST_AUTH_STDERR
 
                 ctx.replace["a-agent-raw-list"] = refused
-                with self.subTest(scope=scope, kind=kind), self.assertRaisesRegex(
-                        ValueError, "unexpected native config"):
-                    kiro.collect(ctx)
-                self.assertEqual(len(ctx.calls), 10)
-                self.assertEqual(ctx.calls[-1][0], "a-agent-raw-list")
+                with self.subTest(scope=scope, kind=kind):
+                    if kind == "preexisting":
+                        with self.assertRaisesRegex(FileExistsError, "preexisting native config"):
+                            kiro.collect(ctx)
+                        self.assertEqual(ctx.calls, [])
+                    else:
+                        with self.assertRaisesRegex(ValueError, "unexpected native config"):
+                            kiro.collect(ctx)
+                        self.assertEqual(len(ctx.calls), 10)
+                        self.assertEqual(ctx.calls[-1][0], "a-agent-raw-list")
                 self.assertEqual((marker / "foreign.txt").read_text(),
                                  "foreign; preserve me\\n" if kind == "preexisting"
                                  else "created by native probe\\n")
@@ -294,8 +299,7 @@ class KiroCollectorTests(unittest.TestCase):
         before = original.stat()
         with self.assertRaises(FileExistsError):
             kiro.collect(ctx)
-        self.assertEqual(len(ctx.calls), 10)
-        self.assertEqual(ctx.calls[-1][0], "a-agent-raw-list")
+        self.assertEqual(ctx.calls, [])
         self.assertEqual(original.read_bytes(), b"original user bytes\n")
         after = original.stat()
         for field in ("st_dev", "st_ino", "st_mode", "st_uid", "st_gid", "st_nlink",
@@ -710,7 +714,7 @@ class KiroCollectorTests(unittest.TestCase):
                 before = sentinel.stat()
                 with self.subTest(scope=scope, kind=kind), self.assertRaises(FileExistsError):
                     kiro.collect(ctx)
-                self.assertEqual(len(ctx.calls), 10)
+                self.assertEqual(ctx.calls, [])
                 self.assertEqual(sentinel.read_bytes(),
                                  b"foreign marker file\\n" if kind == "kiro-file"
                                  else b"foreign settings; do not modify\\n")
@@ -800,6 +804,18 @@ class KiroCollectorTests(unittest.TestCase):
             self.assertEqual(list(ctx.root.rglob(".kiro")), [])
             if kind.startswith("file"):
                 self.assertTrue(target.read_text().startswith("foreign sentinel;"))
+
+    def test_preexisting_native_config_symlink_fails_before_any_native_child(self):
+        for scope in ("a", "b", "user"):
+            ctx = self.context()
+            selected = ctx.home if scope == "user" else ctx.projects[scope]
+            marker = selected / ".kiro"
+            marker.symlink_to("absent-foreign-native-profile", target_is_directory=True)
+            with self.subTest(scope=scope), self.assertRaisesRegex(
+                    FileExistsError, "preexisting native config"):
+                kiro.collect(ctx)
+            self.assertEqual(ctx.calls, [])
+            self.assertTrue(marker.is_symlink())
 
     def test_original_user_home_cannot_be_project(self):
         ctx = self.context()

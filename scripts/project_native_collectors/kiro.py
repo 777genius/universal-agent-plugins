@@ -185,6 +185,14 @@ def collect(ctx):
                    for i, first in enumerate(project_roots)
                    for second in project_roots[i + 1:])):
         raise ValueError("Kiro requires disjoint projects and original user home")
+    # A preexisting native profile is foreign, even in disposable roots.
+    # Do not launch vendor help/list commands that might rewrite it before
+    # the later fixture-creation conflict check.
+    _require_clean_user_cwd(ctx)
+    for selected_root in (home, projects["a"], projects["b"]):
+        marker = selected_root / ".kiro"
+        if marker.exists() or marker.is_symlink():
+            raise FileExistsError("Kiro research refuses preexisting native config")
     owned = {}
     directory = _runtime_bin(ctx)
     if ctx.env.get("PATH") != "/usr/bin:/bin":
