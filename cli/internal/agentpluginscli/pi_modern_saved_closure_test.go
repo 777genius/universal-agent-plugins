@@ -21,13 +21,15 @@ const piModernFixtureFeed = "test-only-pi-modern-v1"
 
 // piMarketingCohortFixture models the exact four-package saved dependency shape
 // of Marketing Kit, with independently committed immutable Git sources.
-// Directory policies are TEST-ONLY preverified inputs. Cryptographic separation
-// is tested at the real signed-v1 client boundary in PR #868; these fixtures
+// Directory policies are TEST-ONLY synthetically reviewed and signed inputs.
+// Cryptographic separation is also tested at the v1 boundary in PR #868; these
 // must never become production publication/materialization evidence.
 func piMarketingCohortFixture(t *testing.T, scope domain.InstallScope) (freshRestoreEnvironment, *fixedDirectoryClient, environment.Requirements) {
 	t.Helper()
 	fixture, repo, directory := dependencyReviewFixture(t)
 	pi := fixtureClient(t, domain.ClientPi)
+	pi.Version = "1.5.0" // Test applicability only; not a real host process.
+	fixture.app.Version = "0.1.104" // Test installer identity, not a released-binary run.
 	fixture.client = pi
 	fixture.app.Detector = staticDetector{clients: []domain.DetectedClient{pi}}
 	fixture.app.Scope = scope
