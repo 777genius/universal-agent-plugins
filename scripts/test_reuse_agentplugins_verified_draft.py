@@ -142,6 +142,31 @@ class ReuseTests(unittest.TestCase):
                 self.reject()
                 job["steps"][0]["conclusion"] = "success"
 
+    def test_current_producer_requires_both_new_native_aggregates(self):
+        self.args.require_hermes_antigravity = True
+        self.reject()
+        gates = [{"name": name, "run_id": 42, "status": "completed",
+                  "conclusion": "success", "steps": [{"conclusion": "success"}]}
+                 for name in reuse.NEW_CLIENT_GATES]
+        self.jobs.extend(gates)
+        self.verify()
+        for job in gates:
+            for conclusion in ("failure", "skipped", "cancelled"):
+                with self.subTest(job=job["name"], conclusion=conclusion):
+                    job["conclusion"] = conclusion
+                    self.reject()
+            job["conclusion"] = "success"
+            job["steps"][0]["conclusion"] = "skipped"
+            self.reject()
+            job["steps"][0]["conclusion"] = "success"
+            self.jobs.remove(job)
+            self.reject()
+            self.jobs.append(job)
+        # Historical callers do not infer a new contract from an old schema.
+        self.args.require_hermes_antigravity = False
+        self.jobs = [job for job in self.jobs if job not in gates]
+        self.verify()
+
     def test_run_and_workflow_mismatch(self):
         for key, bad in (("head_sha", "b" * 40), ("head_branch", "feature"),
                          ("path", ".github/workflows/other.yml"),
