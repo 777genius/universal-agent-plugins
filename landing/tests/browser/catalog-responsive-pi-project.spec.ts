@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { navigate, offline, projections, registryFixture } from './i18n-state.helpers';
+import { navigate, offline, projections, registryFixture, wording } from './i18n-state.helpers';
 
 function sentryFixture() {
   const index = registryFixture();
@@ -133,7 +133,9 @@ for (const width of [1440, 390]) {
     await detail.getByRole('button', { name: 'This computer', exact: true }).click();
     await expect(detail.locator('.command-snippet--add code')).toHaveText(
       'npx -y universal-agent-plugins add sentry');
-    await expect(detail.locator('.app-multiselect__trigger')).toContainText('All installed agents');
+    await expect(detail.locator('.app-multiselect__trigger')).toContainText(
+      wording('en')('registryUi.install.allInstalledAgents'),
+    );
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     expect(errors).toEqual([]);
   });
