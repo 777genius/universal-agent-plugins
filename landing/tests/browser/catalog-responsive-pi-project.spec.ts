@@ -1,0 +1,109 @@
+import { expect, test } from '@playwright/test';
+import { navigate, offline, projections, registryFixture } from './i18n-state.helpers';
+
+function sentryFixture() {
+  const index = registryFixture();
+  const plugin = index.plugins[0]!;
+  index.plugins = [plugin];
+  plugin.name = 'sentry';
+  plugin.display_name = 'Sentry';
+  plugin.install_source = 'sentry';
+  plugin.source.path = 'plugins/sentry';
+  plugin.default_distribution = '777genius/sentry';
+  plugin.declared_default_distribution = plugin.default_distribution;
+  for (const distribution of plugin.distributions) {
+    distribution.id = plugin.default_distribution;
+    distribution.source.path = plugin.source.path;
+    for (const release of distribution.releases) release.source.path = plugin.source.path;
+  }
+  return index;
+}
+
+for (const [width, columns] of [[1280, 3], [1000, 2], [768, 2], [390, 1]] as const) {
+  test(`catalog filters use ${columns} columns at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 920 });
+    const errors = await offline(page);
+    await projections(page, sentryFixture());
+    await navigate(page, '/plugins/', 'en');
+    const controls = page.locator('.catalog-controls--plugins');
+    await expect(controls).toBeVisible();
+    const geometry = await controls.evaluate((element) => {
+      const columns = getComputedStyle(element).gridTemplateColumns.trim().split(/\s+/).length;
+      const pair = element.querySelector('.catalog-filter-pair');
+      const search = element.querySelector('.search-field');
+      return {
+        columns,
+        pairDisplay: pair ? getComputedStyle(pair).display : '',
+        searchWidth: search?.getBoundingClientRect().width ?? 0,
+        controlsWidth: element.getBoundingClientRect().width,
+        overflow: document.documentElement.scrollWidth > window.innerWidth,
+      };
+    });
+    expect(geometry.columns).toBe(columns);
+    expect(geometry.overflow).toBe(false);
+    if (width === 1280) {
+      expect(geometry.pairDisplay).toBe('contents');
+      expect(geometry.searchWidth).toBeGreaterThan(geometry.controlsWidth - 3);
+    } else if (width === 1000) {
+      expect(geometry.pairDisplay).toBe('grid');
+    }
+    if (width > 720) {
+      await expect(controls.locator('.catalog-filter-pair .app-select__trigger')).toBeVisible();
+      await expect(controls.locator('.catalog-filter-pair .app-combobox__anchor')).toBeVisible();
+    }
+    await controls.screenshot({ path: testInfo.outputPath(`catalog-filters-${width}.png`), animations: 'disabled' });
+    expect(errors).toEqual([]);
+  });
+}
+
+test('Arabic desktop catalog preserves three filter columns without clipping', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const errors = await offline(page);
+  await projections(page, sentryFixture());
+  await navigate(page, '/plugins/', 'ar');
+  const controls = page.locator('.catalog-controls--plugins');
+  await expect(controls).toBeVisible();
+  const columns = await controls.evaluate((element) =>
+    getComputedStyle(element).gridTemplateColumns.trim().split(/\s+/).length);
+  expect(columns).toBe(3);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+for (const width of [1440, 390]) {
+  test(`Pi Project uses pinned direct source, not a fabricated signed target, at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 950 });
+    const errors = await offline(page);
+    await projections(page, sentryFixture());
+    await navigate(page, '/', 'en', '?q=sentry');
+    const card = page.locator('.plugin-card[data-install-source="sentry"]');
+    await card.locator('.plugin-card__install-toggle').click();
+
+    await card.locator('.app-multiselect__trigger').click();
+    const pi = page.getByRole('checkbox', { name: /^Pi(?:\s|$)/ });
+    await expect(pi).toBeDisabled(); // User scope does not gain an ungranted signed Pi target.
+    await page.keyboard.press('Escape');
+
+    await card.getByRole('button', { name: 'This project', exact: true }).click();
+    await card.locator('.app-multiselect__trigger').click();
+    await expect(pi).toBeEnabled();
+    await expect(pi).toContainText('exact pinned Git source');
+    await pi.click();
+    await page.keyboard.press('Escape');
+    const direct = 'github:777genius/universal-agent-plugins@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/sentry';
+    const add = `npx -y universal-agent-plugins add ${direct} --target pi --scope project`;
+    await expect(card.locator('.plugin-card__install .command-snippet--add code')).toHaveText(add);
+    await expect(card).toContainText('not a signed Pi target');
+    await card.locator('.plugin-card__install .command-snippet--add button').click();
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(add);
+
+    await card.locator('.plugin-card__title-link').click();
+    const detail = page.locator('.install-panel');
+    await expect(detail.getByRole('button', { name: 'This project', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(detail.locator('.command-snippet--add code')).toHaveText(add);
+    await expect(detail).toContainText('not a signed Pi target');
+    await expect(detail.locator('.command-snippet--repair code')).toContainText('--target pi --scope project');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect(errors).toEqual([]);
+  });
+}
