@@ -156,6 +156,13 @@ test('signed Pi Project grant keeps the original signed short-name route', () =>
     'npx -y universal-agent-plugins add gitlab --target pi --scope project');
 });
 
+test('signed Pi blocking evidence forbids Git suggestion without a Pi target', () => {
+  const plugin = reviewed();
+  plugin.distributions[0]!.releases[0]!.blocking_clients.push('pi');
+  assert.equal(pinnedPiProjectSource(plugin), undefined);
+  assert.throws(() => pinnedPiProjectCommands(plugin), /No eligible Pi Project/);
+});
+
 test('an explicitly blocked signed Pi grant cannot be bypassed by a pinned-source suggestion', () => {
   const plugin = reviewed();
   const release = plugin.distributions[0]!.releases[0]!;
