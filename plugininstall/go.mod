@@ -2,4 +2,4 @@ module github.com/777genius/plugin-kit-ai/plugininstall
 
 go 1.22
 
-toolchain go1.26.10
+toolchain go1.26.11

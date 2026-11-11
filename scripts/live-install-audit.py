@@ -826,6 +826,51 @@ def copilot_signed_kit_settings(home, case_root, owners, enabled):
         return False
 
 
+def copilot_native_roots_guard(home, env, project):
+    """Capture owned root identities before native queries or protected reads."""
+    case = project.parent
+
+    def stamp(path):
+        value = path.lstat()
+        if not stat.S_ISDIR(value.st_mode):
+            raise AssertionError("Copilot native protected root is not a directory")
+        return value.st_mode, value.st_dev, value.st_ino
+
+    try:
+        if case.is_symlink():
+            raise AssertionError("Copilot native case is a symlink")
+        canonical = case.resolve(strict=True)
+        case_identity = stamp(case)
+        roots = (home, Path(env["AGENTPLUGINS_HOME"]), project, home / ".copilot")
+
+        def inside(path):
+            # A trusted macOS temporary ancestor may use /var or /private/var.
+            # Neither spelling may redefine the captured case authority.
+            return path_inside_case(path, case) or path_inside_case(path, canonical)
+
+        expected = []
+        for path in roots:
+            if not inside(path):
+                raise AssertionError("Copilot native protected root escaped case")
+            expected.append((path, stamp(path)))
+    except (OSError, RuntimeError, ValueError) as error:
+        raise AssertionError("Copilot native protected root unavailable") from error
+
+    def guard():
+        try:
+            if (case.is_symlink() or case.resolve(strict=True) != canonical
+                    or stamp(case) != case_identity or stamp(canonical) != case_identity):
+                raise AssertionError("Copilot native case redirected")
+            for path, identity in expected:
+                if not inside(path) or stamp(path) != identity:
+                    raise AssertionError("Copilot native protected root redirected")
+        except (OSError, RuntimeError, ValueError) as error:
+            raise AssertionError("Copilot native protected root unavailable") from error
+
+    guard()
+    return guard
+
+
 def copilot_native_plugin_state(home, env, cwd, identity, expected_version=None,
                                 owners=None, owned_call=None):
     """Read the original profile; signed kits require complete JSON and TEXT."""
@@ -842,14 +887,8 @@ def copilot_native_plugin_state(home, env, cwd, identity, expected_version=None,
             return {"status": "unqualified-signed-closure"}
         project = Path(cwd)
         case_root = project.parent
-        canonical_case = case_root.resolve(strict=True)
         roots = (home, Path(env["AGENTPLUGINS_HOME"]), project)
-
-        def assert_owned_roots():
-            if (case_root.is_symlink() or case_root.resolve(strict=True) != canonical_case
-                    or any(not root.is_dir() or not path_inside_case(root, case_root)
-                           for root in roots)):
-                raise AssertionError("Copilot native query redirected a protected root")
+        assert_owned_roots = copilot_native_roots_guard(home, env, project)
 
         def observe_owned():
             assert_owned_roots()
@@ -864,9 +903,11 @@ def copilot_native_plugin_state(home, env, cwd, identity, expected_version=None,
                 if (not profile.is_dir() or profile.is_symlink()
                         or not path_inside_case(profile, home)):
                     return {"status": "unqualified-prerequisites"}
-                result = invoke_owned([executable, "plugin", "list", *suffix],
-                                      native_env, cwd, 30, capture_full=True)
-                assert_owned_roots()
+                try:
+                    result = invoke_owned([executable, "plugin", "list", *suffix],
+                                          native_env, cwd, 30, capture_full=True)
+                finally:
+                    assert_owned_roots()
                 if (type(result.get("exit_code")) is not int or result["exit_code"] != 0
                         or result.get("timeout") is not False or result.get("stderr_full") != ""
                         or not isinstance(result.get("stdout_full"), str)
@@ -2013,12 +2054,14 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                             if copilot_before is not None and cleanup else None)
     remaining_ids = set()
     post_list_schema_valid = False
+    post_list_empty = False
     if isinstance(post_list_json, dict):
         try:
             entries = post_list_json["data"]["installations"]
             if isinstance(entries, list) and all(isinstance(v, dict) for v in entries):
-                post_list_schema_valid = True
                 remaining_ids = {entry.get("installation_id") for entry in entries}
+                post_list_schema_valid = True
+                post_list_empty = not entries
         except (KeyError, TypeError):
             pass
     old_ids = {entry["installation_id"] for entry in matching}
@@ -2069,6 +2112,9 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     removal_verified = bool(
         cleanup and cleanup["exit_code"] == 0 and post_list and post_list["exit_code"] == 0
         and post_list_schema_valid and old_ids.isdisjoint(remaining_ids)
+        # This fresh case owns the whole signed kit closure. An original or
+        # reminted child record must not survive even when native state is empty.
+        and (kind != "plugin" or item != "marketing-kit" or post_list_empty)
         and (target != "qoder" or kind != "plugin"
              or (qoder_native_after_remove is not None
                  and qoder_native_after_remove["status"] == "absent"))

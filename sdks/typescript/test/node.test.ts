@@ -64,7 +64,7 @@ test('reports external termination of the exact owned child after readiness', as
 
 for (const [mode, code] of [['version','UNSUPPORTED_API_VERSION'], ['remote','INVALID_BOOTSTRAP'], ['mismatch','SESSION_MISMATCH'], ['malformed','INVALID_BOOTSTRAP'], ['oversized','BOOTSTRAP_TOO_LARGE'], ['exit','PROCESS_EXITED'], ['timeout','STARTUP_TIMEOUT'], ['environment-missing','SESSION_MISMATCH'], ['environment-empty','SESSION_MISMATCH'], ['environment-number','SESSION_MISMATCH']] as const) {
   test(`rejects ${mode} startup without exposing private output`, async () => {
-    await assert.rejects(startUap({ ...options(mode), startupTimeoutMs: 300 }), (error: unknown) => {
+    await assert.rejects(startUap({ ...options(mode), ...(mode === 'timeout' ? { startupTimeoutMs: 300 } : {}) }), (error: unknown) => {
       assert.ok(error instanceof ManagementError);
       assert.equal(error.code, code);
       assert.equal(error.message.includes('a'.repeat(64)), false);

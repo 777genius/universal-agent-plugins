@@ -824,7 +824,7 @@ def profile_snapshot(env, project):
     return scoped_snapshot([Path(env["HOME"]), Path(env["AGENTPLUGINS_HOME"]), project])
 
 
-def settled_profile_snapshot(env, project, *, attempts=12, interval=5):
+def settled_profile_snapshot(env, project, *, attempts=12, interval=5, guard=None):
     """Bounded *own-profile* cache/scanner settling before peer operations.
 
     The released installer can finish its own security cache writes after the
@@ -835,7 +835,11 @@ def settled_profile_snapshot(env, project, *, attempts=12, interval=5):
     previous = None
     identical = 0
     for attempt in range(attempts):
+        if guard is not None:
+            guard()
         observed = profile_snapshot(env, project)
+        if guard is not None:
+            guard()
         identical = identical + 1 if observed == previous else 1
         if identical >= 3:
             return observed
@@ -1023,12 +1027,18 @@ def copilot_native_scope_state(env, project, owners):
     if (not executable or not Path(executable).is_absolute() or not profile.is_dir()
             or not audit["path_inside_case"](profile, project.parent.resolve(strict=True))):
         raise AssertionError("Copilot native inventory prerequisites unqualified")
+    assert_owned_roots = audit["copilot_native_roots_guard"](home, env, project)
     before = profile_snapshot(env, project)
+    assert_owned_roots()
     try:
         responses = []
         for suffix in (["--json"], []):
-            result = audit["call"]([executable, "plugin", "list", *suffix],
-                {**env, "COPILOT_HOME": str(profile)}, project, 30, capture_full=True)
+            assert_owned_roots()
+            try:
+                result = audit["call"]([executable, "plugin", "list", *suffix],
+                    {**env, "COPILOT_HOME": str(profile)}, project, 30, capture_full=True)
+            finally:
+                assert_owned_roots()
             if (type(result.get("exit_code")) is not int or result["exit_code"] != 0
                     or result.get("timeout") is not False or result.get("stderr_full") != ""
                     or not isinstance(result.get("stdout_full"), str)
@@ -1038,7 +1048,9 @@ def copilot_native_scope_state(env, project, owners):
         state = copilot_native_entries_state(copilot_json_document(responses[0]), owners)
         copilot_native_text_state(responses[1], owners)
         if owners:
+            assert_owned_roots()
             settings, _ = copilot_owned_json(home / ".copilot/settings.json", project.parent)
+            assert_owned_roots()
             enabled = settings.get("enabledPlugins") if isinstance(settings, dict) else None
             qualified = {name + "@" + owner["marketplace"] for name, owner in owners.items()}
             if (not isinstance(enabled, dict) or set(enabled) != qualified
@@ -1046,6 +1058,7 @@ def copilot_native_scope_state(env, project, owners):
                 raise AssertionError("Copilot native active settings differ from physical owners")
         return {**state, "profile": str(home.resolve(strict=True)), "owners": owners}
     finally:
+        assert_owned_roots()
         check_copilot_read_unchanged(env, project, before, "Copilot native read-only query", 2)
 
 
@@ -1563,23 +1576,47 @@ def main():
                     if protected_c_profile is not None:
                         check_profile_unchanged(env_c, project_c, protected_c_profile, label)
             def copilot_read(e, p, action, native_commands=0):
-                own = settled_profile_snapshot(e, p)
-                peers = [(other_env, other_project, profile_snapshot(other_env, other_project))
-                         for other_env, other_project in ((env, project_a), (env_b, project_b), (env_c, project_c))
-                         if other_env is not e]
+                make_guard = audit["copilot_native_roots_guard"]
+                own_guard = make_guard(Path(e["HOME"]), e, p)
+                own = settled_profile_snapshot(e, p, guard=own_guard)
+                peers = []
+                project_guard = own_guard if e is env else None
+                for pe, pp in ((env, project_a), (env_b, project_b), (env_c, project_c)):
+                    if pe is e:
+                        continue
+                    guard = make_guard(Path(pe["HOME"]), pe, pp)
+                    before = profile_snapshot(pe, pp)
+                    guard()
+                    peers.append((pe, pp, before, guard))
+                    if pe is env:
+                        project_guard = guard
+                if project_guard is None:
+                    raise AssertionError("Copilot native proof lacks originating Project guard")
+
+                def own_check():
+                    own_guard()
+                    check_copilot_read_unchanged(e, p, own, "Copilot native proof read", native_commands)
+
+                def project_check():
+                    project_guard()
+                    check_user_project_unchanged(project_a, project_before_user, "Copilot native proof Project")
+
+                def peer_check(pe, pp, before, guard):
+                    guard()
+                    check_profile_unchanged(pe, pp, before, "Copilot native proof peer")
+
                 try:
                     return action()
                 finally:
-                    checks = [lambda: check_copilot_read_unchanged(e, p, own, "Copilot native proof read", native_commands),
-                              lambda: check_foreign(foreign_files, root),
-                              lambda: check_user_project_unchanged(project_a, project_before_user, "Copilot native proof Project")]
-                    checks.extend(lambda pe=pe, pp=pp, before=before: check_profile_unchanged(
-                        pe, pp, before, "Copilot native proof peer") for pe, pp, before in peers)
+                    checks = [own_check, lambda: check_foreign(foreign_files, root), project_check]
+                    checks.extend(lambda pe=pe, pp=pp, before=before, guard=guard:
+                                  peer_check(pe, pp, before, guard)
+                                  for pe, pp, before, guard in peers)
                     failures = []
                     for check in checks:
                         try:
                             check()
-                        except (AssertionError, OSError) as error:
+                        except Exception as error:
                             failures.append(error)
                     if failures:
                         raise failures[0]

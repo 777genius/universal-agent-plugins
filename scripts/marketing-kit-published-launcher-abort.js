@@ -13,6 +13,22 @@ assert.equal(pkg.version, "0.1.102", "must test the exact public npm package");
 const { ensureBinary, acquireLock } = require(path.join(packageRoot, "lib/bootstrap.js"));
 const cacheRoot = fs.mkdtempSync(path.join(os.tmpdir(), "uap-published-abort-"));
 
+async function withWatchdog(proof, label) {
+  let watchdog;
+  try {
+    return await Promise.race([
+      proof,
+      new Promise((_, reject) => {
+        // Keep Node alive even if the proof strands an unresolved promise.
+        watchdog = setTimeout(() => reject(new Error(
+          `${label} watchdog deadline exceeded`)), 5_000);
+      })
+    ]);
+  } finally {
+    clearTimeout(watchdog);
+  }
+}
+
 async function abortOnce() {
   const controller = new AbortController();
   let requests = 0;
@@ -34,19 +50,7 @@ async function abortOnce() {
       return request;
     }
   }), /cancel|abort/i, "stalled published acquisition must reject on AbortSignal");
-  let watchdog;
-  try {
-    await Promise.race([
-      rejection,
-      new Promise((_, reject) => {
-        // Keep Node alive if cancellation leaves the acquisition pending.
-        watchdog = setTimeout(() => reject(new Error(
-          "published downloader watchdog deadline exceeded")), 5_000);
-      })
-    ]);
-  } finally {
-    clearTimeout(watchdog);
-  }
+  await withWatchdog(rejection, "published downloader");
   assert.equal(requests, 1, "must exercise the published downloader");
   assert.equal(destroyed, 1, "abort must destroy the pending request");
   assert.equal(controller.signal.aborted, true);
@@ -111,7 +115,7 @@ async function verifyLockWaitCancellation() {
   try {
     await abortOnce();
     await abortOnce(); // Two real published downloader aborts against a stalled request.
-    await verifyLockWaitCancellation();
+    await withWatchdog(verifyLockWaitCancellation(), "published lock proof");
     console.log("Published npm 0.1.102 abort/lock cleanup: PASS (2 downloads; lock wait/reacquire)");
   } finally {
     fs.rmSync(cacheRoot, { recursive: true, force: true });

@@ -1963,7 +1963,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         runner = run_path(str(Path(__file__).resolve().parent / "marketing-kit-project-release-e2e.py"))
         read = runner["copilot_signed_user_versions"]
         for mutation in ("list", "dict", "missing", "empty-version", "duplicate", "state-source", "state-revision",
-                         "private-distribution", "private-sequence", "private-sequence-bool", "private-sequence-float",
+                         "binding-distribution", "binding-sequence", "binding-sequence-bool", "binding-sequence-float",
                          "state-extra-owner", "uncommitted", "receipt-replay", "missing-receipt", "wrong-receipt", "manifest-source", "snapshot"):
             with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
                 env, project, policy, expected, state, rows = self._marketing_kit_copilot_owner_fixture(runner, Path(temporary))
@@ -1975,12 +1975,12 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 elif mutation == "duplicate": rows[0]["clients"].append(deepcopy(rows[0]["clients"][0]))
                 elif mutation == "state-source": state["installations"][0]["source"]["repository"] = "foreign/repo"
                 elif mutation == "state-revision": state["installations"][0]["source"]["resolved_revision"] = "f" * 40
-                elif mutation.startswith("private-"):
+                elif mutation.startswith("binding-"):
                     revision = next(iter(state["installations"][0]["clients"].values()))["package_revision"]
-                    key, value = {"private-distribution": ("distribution_id", "777genius/unreviewed"),
-                                  "private-sequence": ("release_sequence", 99),
-                                  "private-sequence-bool": ("release_sequence", True),
-                                  "private-sequence-float": ("release_sequence", 1.0)}[mutation]
+                    key, value = {"binding-distribution": ("distribution_id", "foreign/package"),
+                                  "binding-sequence": ("release_sequence", 999),
+                                  "binding-sequence-bool": ("release_sequence", True),
+                                  "binding-sequence-float": ("release_sequence", 1.0)}[mutation]
                     revision[key] = value
                 elif mutation == "state-extra-owner":
                     bindings = state["installations"][0]["clients"]
@@ -2116,6 +2116,106 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             with self.assertRaises(AssertionError):
                 check({"HOME": "C:/case/home"}, WindowsSnapshotPath("C:/case/project"), before, "zero-budget inventory", 0)
 
+    def test_marketing_kit_native_pair_reanchors_before_text_and_final_reads(self):
+        from runpy import run_path
+        import shutil
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        read = runner["copilot_native_scope_state"]
+        for mutation in ("unchanged", "trusted-alias", "home", "data", "project", "profile", "case"):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve(strict=True)
+                base = root / "canonical"
+                base.mkdir()
+                alias = root / "alias"
+                try:
+                    alias.symlink_to(base, target_is_directory=True)
+                except (OSError, NotImplementedError) as error:
+                    self.skipTest(f"host cannot create directory symlinks: {error}")
+                chosen = alias if mutation == "trusted-alias" else base
+                run_root = chosen / "runs"
+                run_root.mkdir()
+                env, project, *_ = runner["run_case"]("unused", "copilot", run_root, "A")
+                home, data = Path(env["HOME"]), Path(env["AGENTPLUGINS_HOME"])
+                victim = {"home": home, "data": data, "project": project,
+                          "profile": home / ".copilot", "case": project.parent}.get(mutation)
+                outside, saved = root / "outside", root / "saved-original"
+                if victim is not None:
+                    shutil.copytree(victim, outside)
+                    (outside / "foreign-sentinel.txt").write_text("must never read outside bytes")
+                native = str(root / "trusted-copilot")
+                calls, outside_reads = [], []
+                opened = Path.open
+                redirected = False
+
+                def checked_open(path, *args, **kwargs):
+                    mode = kwargs.get("mode", args[0] if args else "r")
+                    if (redirected and str(mode).startswith("r")
+                            and path.resolve().is_relative_to(outside)):
+                        outside_reads.append(str(path))
+                        raise AssertionError("outside content read after native redirect")
+                    return opened(path, *args, **kwargs)
+
+                def query(argv, *_args, **kwargs):
+                    nonlocal redirected
+                    self.assertTrue(kwargs.get("capture_full"))
+                    calls.append(argv)
+                    if len(calls) == 1 and victim is not None:
+                        victim.rename(saved)
+                        victim.symlink_to(outside, target_is_directory=True)
+                        redirected = True
+                    text = (json.dumps(runner["COPILOT_BUILTIN_JSON"]) if "--json" in argv
+                            else runner["COPILOT_EMPTY_TEXT"] + runner["COPILOT_BUILTIN_TEXT"])
+                    return {"exit_code": 0, "timeout": False,
+                            "stdout_full": text, "stderr_full": ""}
+
+                try:
+                    with (patch.dict(runner["audit"]["AGENT_BINARIES"], {"copilot": native}, clear=True),
+                          patch.dict(runner["audit"], {"call": query}),
+                          patch.object(Path, "open", checked_open)):
+                        if victim is None:
+                            self.assertEqual(read(env, project, {})["status"], "absent")
+                            self.assertEqual(len(calls), 2)
+                        else:
+                            with self.assertRaisesRegex(AssertionError, "redirected"):
+                                read(env, project, {})
+                            self.assertEqual(calls, [[native, "plugin", "list", "--json"]])
+                        self.assertEqual(outside_reads, [])
+                finally:
+                    if victim is not None and saved.exists():
+                        if victim.is_symlink():
+                            victim.unlink()
+                        saved.rename(victim)
+
+    def test_marketing_kit_outer_native_failure_guards_roots_before_content_checks(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            probe = root / "link-probe"
+            try:
+                probe.symlink_to(root, target_is_directory=True)
+            except (OSError, NotImplementedError) as error:
+                self.skipTest(f"host cannot create directory symlinks: {error}")
+            probe.unlink()
+        for case, peers in (("A", ("B", "C")), ("C", ("A", "B"))):
+            with self.subTest(case=case):
+                code, report, phases = self._exercise_marketing_kit_scope_report(
+                    "copilot", native_root_redirect=case)
+                self.assertEqual(code, 1)
+                self.assertFalse(report["two_scope_lifecycle_qualified"])
+                self.assertIn("redirected", report["failure"])
+                after = phases[phases.index("native-root-redirect:" + case) + 1:]
+                self.assertIn("guard-foreign-after-redirect", after)
+                for peer in peers:
+                    self.assertIn("guard-root:" + peer, after)
+                    self.assertIn("snapshot-after-redirect:" + peer, after)
+                self.assertNotIn("snapshot-after-redirect:" + case, after)
+                self.assertFalse(any(item.startswith("outside-read:") for item in after))
+                if case == "A":
+                    self.assertGreaterEqual(after.count("guard-root:A"), 2)
+                    self.assertNotIn("project-read-after-redirect:A", after)
+                else:
+                    self.assertIn("project-read-after-redirect:A", after)
+
     def test_marketing_kit_copilot_native_proof_failure_checks_peers_for_A_and_C(self):
         for case in ("A", "C"):
             for installed in (False, True):
@@ -2129,7 +2229,8 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
 
     def _exercise_marketing_kit_scope_report(self, target, *, cleanup_failure=False,
                                               boundary_error=False, grants=7, native_error=None, native_peer_mutation=False,
-                                              final_policy_error=False, final_peer_mutation=None):
+                                              final_policy_error=False, final_peer_mutation=None,
+                                              native_root_redirect=None):
         from io import StringIO
         from runpy import run_path
         from types import SimpleNamespace
@@ -2138,6 +2239,43 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                               "marketing-kit-project-release-e2e.py"))
         main = runner["main"]
         installed, phases = {}, []
+        outside_roots = []
+        original_open = Path.open
+        original_profile = runner["profile_snapshot"]
+        original_foreign = runner["check_foreign"]
+        original_project = runner["check_user_project_unchanged"]
+        original_guard = runner["audit"]["copilot_native_roots_guard"]
+
+        def checked_open(path, *args, **kwargs):
+            mode = kwargs.get("mode", args[0] if args else "r")
+            if (str(mode).startswith("r")
+                    and any(path.resolve().is_relative_to(root) for root in outside_roots)):
+                phases.append("outside-read:" + path.name)
+                raise AssertionError("outside content read after native redirect")
+            return original_open(path, *args, **kwargs)
+
+        def profile(env, project):
+            if outside_roots:
+                phases.append("snapshot-after-redirect:" + project.parent.name)
+            return original_profile(env, project)
+
+        def foreign(*args):
+            if outside_roots:
+                phases.append("guard-foreign-after-redirect")
+            return original_foreign(*args)
+
+        def project_check(project, *args):
+            if outside_roots:
+                phases.append("project-read-after-redirect:" + project.parent.name)
+            return original_project(project, *args)
+
+        def make_guard(home, env, project):
+            captured = original_guard(home, env, project)
+            def guard():
+                if outside_roots:
+                    phases.append("guard-root:" + project.parent.name)
+                captured()
+            return guard
 
         class CheckedCleanup:
             def __init__(self, **kwargs):
@@ -2203,6 +2341,18 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             return installed.get((env["AGENTPLUGINS_HOME"], scope), {})
 
         def native_scope(env, project, owners):
+            if native_root_redirect == project.parent.name and owners:
+                import shutil
+                case = project.parent
+                outside = case.parent / ("outside-native-" + case.name)
+                shutil.copytree(case, outside)
+                (outside / "foreign-sentinel.txt").write_text("must not read outside bytes")
+                saved = case.parent / ("saved-native-" + case.name)
+                case.rename(saved)
+                case.symlink_to(outside, target_is_directory=True)
+                outside_roots.append(outside)
+                phases.append("native-root-redirect:" + case.name)
+                raise AssertionError("native protected root redirected")
             if native_error == (project.parent.name, bool(owners)):
                 if native_peer_mutation:
                     (project.parent.parent / "B/home/forbidden-native-write").write_text("tampered")
@@ -2214,9 +2364,13 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             report_path = Path(output) / "report.json"
             with patch.dict(main.__globals__, {
                     "execute": execute, "verify_pinned_launcher": lambda *_: None,
+                    "profile_snapshot": profile, "check_foreign": foreign,
+                    "check_user_project_unchanged": project_check,
                     "inventory": inventory, "identities": lambda items, *_: items,
                     "lock_ids": lambda *_, **__: {"directory:" + name for name in runner["EXPECTED"]},
-                    "settled_profile_snapshot": runner["profile_snapshot"],
+                    "settled_profile_snapshot": lambda e, p, **kwargs: (
+                        kwargs["guard"]() if kwargs.get("guard") else None,
+                        runner["profile_snapshot"](e, p))[1],
                     "copilot_signed_user_versions": lambda *_: {name: {"version": "0.1.0", "marketplace": "agentplugins-123456abcdef", "target_locator": "unused"} for name in runner["UPDATE_ALIASES"]},
                     "copilot_native_scope_state": native_scope,
                     "verify_corrupt_lock_refusal": lambda *_: 1,
@@ -2227,6 +2381,8 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     # Patch the runner binding, preserving tempfile for setup helpers.
                     "tempfile": SimpleNamespace(TemporaryDirectory=CheckedCleanup),
                     }), \
+                    patch.dict(runner["audit"], {"copilot_native_roots_guard": make_guard}), \
+                    patch.object(Path, "open", checked_open), \
                     patch.object(sys, "argv", ["runner", "--target", target, "--cli", "unused",
                                                "--report", str(report_path)]), \
                     patch.object(sys, "stdout", StringIO()), patch.object(sys, "stderr", StringIO()):
@@ -2965,45 +3121,90 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 check({**installed, "_json": {**installed["_json"], **changed}},
                       "cold locked restore", "install")
 
-    def test_marketing_kit_published_abort_watchdog_refuses_stranded_acquisition(self):
-        # A broken acquisition promise must fail, not let Node exit zero
-        # before the published script's assertions and cache cleanup.
+    def test_marketing_kit_published_abort_watchdog_refuses_stranded_proof_phases(self):
+        # Run the actual script with an inert private bootstrap. A stranded
+        # downloader or lock waiter must fail instead of letting Node exit
+        # zero before its final assertions and trusted cache cleanup.
         import shutil
         import subprocess
         node = shutil.which("node")
-        self.assertIsNotNone(node, "Node.js is required for the launcher watchdog regression")
-        script = Path(__file__).resolve().parent / "marketing-kit-published-launcher-abort.js"
-        with TemporaryDirectory() as temporary:
-            root = Path(temporary).resolve(strict=True)
-            npm_root = root / "npm"
-            package = npm_root / "universal-agent-plugins"
-            (package / "lib").mkdir(parents=True)
-            (package / "package.json").write_text(
-                json.dumps({"version": "0.1.102"}), encoding="utf-8")
-            (package / "lib/bootstrap.js").write_text('''"use strict";
+        self.assertIsNotNone(
+            node, "Node.js is required for the launcher watchdog regression")
+        script = (Path(__file__).resolve().parent /
+                  "marketing-kit-published-launcher-abort.js")
+        bootstrap = r'''"use strict";
+const fs = require("node:fs");
+const path = require("node:path");
+const phase = __STRANDED_PHASE__;
+const trace = path.join(__dirname, "fixture-events.txt");
+function record(event) {
+  fs.appendFileSync(trace, event + "\n");
+}
 module.exports = {
   ensureBinary(options) {
-    const request = options.request();
-    request.on("error", () => {});
-    options.signal.addEventListener("abort", () => {
-      request.destroy(new Error("cancelled"));
-    }, { once: true });
-    return new Promise(() => {});
+    return new Promise((_resolve, reject) => {
+      const request = options.request();
+      request.on("error", error => {
+        if (phase === "lock") reject(error);
+      });
+      options.signal.addEventListener("abort", () => {
+        record("download-aborted");
+        request.destroy(new Error("cancelled"));
+      }, { once: true });
+    });
   },
-  acquireLock() { throw new Error("lock proof must not run after a stranded acquisition"); }
+  acquireLock(_target, options) {
+    if (phase !== "lock") {
+      throw new Error("lock proof must not run after a stranded acquisition");
+    }
+    if (options.signal) {
+      // The actual script supplies its 50 ms cancellation timer. After
+      // that timer fires, this waiter has no referenced handle of its own.
+      options.signal.addEventListener("abort", () => {
+        record("waiter-aborted");
+      }, { once: true });
+      return new Promise(() => {});
+    }
+    fs.mkdirSync(options.lockRoot, { recursive: true });
+    const ownerPath = path.join(options.lockRoot, "fixture-owner.lock");
+    fs.writeFileSync(ownerPath, "owned fixture nonce\n", { flag: "wx" });
+    record("owner-acquired");
+    return Promise.resolve(async () => {
+      record("owner-released");
+      fs.unlinkSync(ownerPath);
+    });
+  }
 };
-''', encoding="utf-8")
-            scratch = root / "private-tmp"
-            scratch.mkdir()
-            env = {**os.environ, "UAP_GLOBAL_NPM_ROOT": str(npm_root),
-                   "TMPDIR": str(scratch), "TMP": str(scratch), "TEMP": str(scratch)}
-            result = subprocess.run([node, str(script)], env=env, cwd=root,
-                                    capture_output=True, text=True, timeout=12, check=False)
-            self.assertEqual(result.returncode, 1, result.stderr)
-            self.assertIn("published downloader watchdog deadline exceeded", result.stderr)
-            self.assertNotIn("abort/lock cleanup: PASS", result.stdout + result.stderr)
-            self.assertEqual(list(scratch.iterdir()), [],
-                             "failed watchdog must run trusted cache cleanup")
+'''
+        for phase, label, expected_events in (
+                ("download", "published downloader", ["download-aborted"]),
+                ("lock", "published lock proof",
+                 ["download-aborted", "download-aborted",
+                  "owner-acquired", "waiter-aborted"])):
+            with self.subTest(phase=phase), TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve(strict=True)
+                npm_root = root / "npm"
+                package = npm_root / "universal-agent-plugins"
+                (package / "lib").mkdir(parents=True)
+                (package / "package.json").write_text(
+                    json.dumps({"version": "0.1.102"}), encoding="utf-8")
+                (package / "lib/bootstrap.js").write_text(
+                    bootstrap.replace("__STRANDED_PHASE__", json.dumps(phase)),
+                    encoding="utf-8")
+                scratch = root / "private-tmp"
+                scratch.mkdir()
+                env = {**os.environ, "UAP_GLOBAL_NPM_ROOT": str(npm_root),
+                       "TMPDIR": str(scratch), "TMP": str(scratch), "TEMP": str(scratch)}
+                result = subprocess.run([node, str(script)], env=env, cwd=root,
+                                        capture_output=True, text=True, timeout=12, check=False)
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertIn(f"{label} watchdog deadline exceeded", result.stderr)
+                self.assertNotIn("abort/lock cleanup: PASS", result.stdout + result.stderr)
+                self.assertEqual(
+                    (package / "lib/fixture-events.txt").read_text(encoding="utf-8").splitlines(),
+                    expected_events)
+                self.assertEqual(list(scratch.iterdir()), [],
+                                 "failed watchdog must run trusted cache cleanup")
 
     def test_marketing_kit_requires_exact_published_cli_version(self):
         # The substring "0.1.102" alone also matches prereleases and 0.1.1021.
@@ -5839,8 +6040,8 @@ module.exports = {
                 binding = record["clients"][f"binding-{index}"]
                 for revision_owner in (nodes[index]["clients"][0], binding):
                     revision = revision_owner["package_revision"]
-                    for field, bad in (("distribution_id", "777genius/unreviewed"),
-                                       ("release_sequence", 99), ("release_sequence", True),
+                    for field, bad in (("distribution_id", "foreign/package"),
+                                       ("release_sequence", 999), ("release_sequence", True),
                                        ("release_sequence", float(pins[alias]["sequence"])),
                                        ("version", "9.9.9"),
                                        ("resolved_revision", "f" * 40),
@@ -6001,7 +6202,13 @@ module.exports = {
         matched = {"name": identity, "installation_id": "owned-kit",
                    "clients": [{"client_id": "copilot",
                                 "verification": "installation_verified"}]}
-        for outcome in ("absent", "surviving-json", "surviving-text", "bad-text", "failed-list"):
+        children = [{"name": name, "installation_id": "owned-" + name,
+                     "clients": [{"client_id": "copilot", "verification": "installation_verified"}]}
+                    for name in ("notion", "hubspot-crm", "playwright")]
+        outcomes = ["absent", "surviving-json", "surviving-text", "bad-text", "failed-list"]
+        outcomes.extend("durable:" + child["name"] + ":" + mode
+                        for child in children for mode in ("original", "reminted", "list-id", "dict-id"))
+        for outcome in outcomes:
             with self.subTest(outcome=outcome), TemporaryDirectory() as temporary:
                 root = Path(temporary).resolve(strict=True)
                 runroot = root / "run"
@@ -6048,8 +6255,16 @@ module.exports = {
                     elif argv[1] == "remove":
                         managed.unlink()
                         state["removed"] = True
+                    remaining = [] if state["removed"] else [matched, *children]
+                    if state["removed"] and outcome.startswith("durable:"):
+                        _, name, mode = outcome.split(":")
+                        child = next(row for row in children if row["name"] == name)
+                        surviving_id = {"original": child["installation_id"],
+                                        "reminted": "reminted-" + name,
+                                        "list-id": [], "dict-id": {}}[mode]
+                        remaining = [dict(child, installation_id=surviving_id)]
                     return {"exit_code": 0, "timeout": False, "stdout_tail": "", "stderr_tail": "",
-                            "_json": {"data": {"installations": [] if state["removed"] else [matched]}}}
+                            "_json": {"data": {"installations": remaining}}}
                 with (patch.dict(audit.AGENT_BINARIES, {"copilot": native}, clear=True),
                       patch.object(audit, "call", side_effect=call),
                       patch.object(audit, "matching_installations", return_value=[matched]),
@@ -6061,7 +6276,8 @@ module.exports = {
                 self.assertTrue(result["native_identity_files"])
                 self.assertTrue(result["repeat_verified"])
                 self.assertTrue(result["sentinels_preserved"])
-                self.assertTrue(result["post_list_schema_valid"])
+                self.assertEqual(result["post_list_schema_valid"],
+                                 not outcome.endswith((":list-id", ":dict-id")))
                 self.assertFalse(result["post_remove_identity_registered"])
                 self.assertEqual(result["native_residuals"], [])
                 self.assertEqual(result["cleanup"]["exit_code"], 0)
@@ -6076,6 +6292,10 @@ module.exports = {
                 else:
                     self.assertFalse(result["removal_verified"])
                     self.assertEqual(result["status"], "cleanup-failed")
+                    if outcome.startswith("durable:"):
+                        self.assertEqual(result["copilot_native_after_remove"]["status"], "absent")
+                        self.assertEqual(observed, [(False, True), (False, False),
+                                                    (True, True), (True, False)])
 
     def test_marketing_kit_adjunct_native_read_preserves_all_owned_state(self):
         # Execute the actual adjunct JSON/TEXT path. Containment alone must
@@ -6135,11 +6355,55 @@ module.exports = {
                         self.assertEqual(len(calls), 2)
                     else:
                         with self.assertRaisesRegex(
-                                AssertionError, "modified protected state|excessive new|redirected"):
+                                AssertionError, "modified protected state|excessive new|redirected|not a directory"):
                             audit.copilot_native_plugin_state(
                                 home, env, project, "marketing-kit", owners={})
                         if mutation in ("failed-query", "call-error", "project-replaced"):
                             self.assertEqual(len(calls), 1)
+
+    def test_marketing_kit_copilot_native_inventory_queries_are_read_only(self):
+        """Only two bounded new process logs may accompany a native inventory read."""
+        audit = load_audit()
+        for mutation in ("bounded-log", "rewrite", "excess-logs"):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve(strict=True)
+                home = root / "home"
+                profile = home / ".copilot"
+                (profile / "logs").mkdir(parents=True)
+                settings = profile / "settings.json"
+                settings.write_text('{"foreign":true}', encoding="utf-8")
+                project, data = root / "project", root / "uap-data"
+                project.mkdir()
+                data.mkdir()
+                env = {"HOME": str(home), "AGENTPLUGINS_HOME": str(data)}
+                native = str(root / "trusted-copilot")
+
+                def observe(argv, _env, _cwd, _timeout, **kwargs):
+                    self.assertTrue(kwargs.get("capture_full"))
+                    if "--json" in argv:
+                        if mutation == "rewrite":
+                            settings.write_text('{"foreign":false}', encoding="utf-8")
+                        else:
+                            count = 1 if mutation == "bounded-log" else 3
+                            for index in range(count):
+                                (profile / "logs" / f"process-123-{index}.log").write_text(
+                                    "native process log", encoding="utf-8")
+                    body = (json.dumps(audit.COPILOT_BUILTIN_JSON) if "--json" in argv else
+                            audit.COPILOT_EMPTY_TEXT + audit.COPILOT_BUILTIN_TEXT)
+                    return {"exit_code": 0, "timeout": False, "stderr_full": "",
+                            "stdout_full": body}
+
+                with patch.dict(audit.AGENT_BINARIES, {"copilot": native}, clear=True):
+                    with patch.object(audit, "call", side_effect=observe):
+                        if mutation == "bounded-log":
+                            result = audit.copilot_native_plugin_state(
+                                home, env, project, "marketing-kit", owners={})
+                            self.assertEqual(result["status"], "absent")
+                        else:
+                            with self.assertRaisesRegex(
+                                    AssertionError, "modified protected state|excessive new"):
+                                audit.copilot_native_plugin_state(
+                                    home, env, project, "marketing-kit", owners={})
 
     def test_marketing_kit_copilot_native_guard_failure_stops_before_text(self):
         audit = load_audit()
