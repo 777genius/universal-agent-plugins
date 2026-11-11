@@ -141,6 +141,31 @@ def _require_clean_unowned_roots(ctx):
         raise ValueError("Kiro native probe left unexpected config in: " + ", ".join(changed))
 
 
+def _verify_owned_fixtures(owned):
+    """Check authored fixtures even if a child raises or times out."""
+    for path, (body, device, inode, created_ctime_ns, parents) in owned.items():
+        _parents(path)
+        info = path.lstat()
+        if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size != len(body)
+                or info.st_uid != os.getuid() or (info.st_dev, info.st_ino) != (device, inode)
+                or stat.S_IMODE(info.st_mode) != 0o600 or info.st_ctime_ns != created_ctime_ns
+                or path.read_bytes() != body):
+            raise ValueError("Kiro changed authored fixture identity/bytes/mode")
+        # Report an unexpected member before checking parent ctime: creating
+        # a new file also changes directory ctime, but is more precisely an
+        # unowned-tree violation. Both cases must still fail closed.
+        if ({entry.name for entry in path.parent.parent.iterdir()} != {"settings"}
+                or {entry.name for entry in path.parent.iterdir()} != {path.name}):
+            raise ValueError("Kiro native probe added an unowned fixture tree member")
+        # A native child must not silently relax or replace the directories
+        # holding the inert marker while leaving the file itself unchanged.
+        for parent, original_identity in parents:
+            if _directory_identity(parent) != original_identity:
+                raise ValueError("Kiro changed authored fixture directory identity/mode")
+        # ctime also catches in-place rewrites followed by restoring identical
+        # bytes, size, permissions and mtime without changing the inode.
+
+
 def _probe(ctx, owned, label, arguments, project="a", root_identities=None):
     route = _READ_ONLY_ROUTES.get(label)
     if route is None or (project, tuple(arguments)) != route:
@@ -165,30 +190,10 @@ def _probe(ctx, owned, label, arguments, project="a", root_identities=None):
         if not owned:
             _require_clean_unowned_roots(ctx)
         _require_clean_user_cwd(ctx)
+        _verify_owned_fixtures(owned)
     if ctx.env.get("PATH") != str(directory) + ":/usr/bin:/bin":
         raise ValueError("Kiro acquired companion PATH changed")
     _require_clean_user_cwd(ctx)
-    for path, (body, device, inode, created_ctime_ns, parents) in owned.items():
-        _parents(path)
-        info = path.lstat()
-        if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size != len(body)
-                or info.st_uid != os.getuid() or (info.st_dev, info.st_ino) != (device, inode)
-                or stat.S_IMODE(info.st_mode) != 0o600 or info.st_ctime_ns != created_ctime_ns
-                or path.read_bytes() != body):
-            raise ValueError("Kiro changed authored fixture identity/bytes/mode")
-        # Report an unexpected member before checking parent ctime: creating
-        # a new file also changes directory ctime, but is more precisely an
-        # unowned-tree violation. Both cases must still fail closed.
-        if ({entry.name for entry in path.parent.parent.iterdir()} != {"settings"}
-                or {entry.name for entry in path.parent.iterdir()} != {path.name}):
-            raise ValueError("Kiro native probe added an unowned fixture tree member")
-        # A native child must not silently relax or replace the directories
-        # holding the inert marker while leaving the file itself unchanged.
-        for parent, original_identity in parents:
-            if _directory_identity(parent) != original_identity:
-                raise ValueError("Kiro changed authored fixture directory identity/mode")
-        # ctime also catches in-place rewrites followed by restoring identical
-        # bytes, size, permissions and mtime without changing the inode.
     if (label in ("a-workspace-raw-list", "a-agent-raw-list") and isinstance(record, dict)
             and type(record.get("exit")) is int and record["exit"] == 1
             and "error" in record and record["error"] is None

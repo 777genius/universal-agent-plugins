@@ -667,6 +667,41 @@ class KiroCollectorTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "authored fixture"):
             kiro.collect(ctx)
 
+    def test_interrupted_probe_still_checks_all_authored_fixtures(self):
+        # A failed/terminated native child can also mutate an authored
+        # fixture. It must not skip the no-effect checks in that case.
+        for scope in ("a", "b", "user"):
+            for kind in ("file", "directory"):
+                ctx = self.context()
+                root = ctx.home if scope == "user" else ctx.projects[scope]
+                fixture = root / ".kiro/settings/mcp.json"
+
+                def interrupted():
+                    if kind == "file":
+                        fixture.write_text('{"private":"not part of the fixture"}')
+                    else:
+                        parent = fixture.parent
+                        parent.chmod(stat.S_IMODE(parent.stat().st_mode) ^ stat.S_IWGRP)
+                    raise RuntimeError("private terminated-native diagnostic")
+
+                ctx.replace["a-workspace-raw-list"] = interrupted
+                with self.subTest(scope=scope, kind=kind), self.assertRaisesRegex(
+                        ValueError, "Kiro changed authored fixture"):
+                    kiro.collect(ctx)
+                self.assertEqual(len(ctx.calls), 11)
+                self.assertEqual(ctx.calls[-1][0], "a-workspace-raw-list")
+
+        # Without mutation, the original process exception is still reported.
+        ctx = self.context()
+
+        def clean_interruption():
+            raise RuntimeError("transient native failure")
+
+        ctx.replace["a-workspace-raw-list"] = clean_interruption
+        with self.assertRaisesRegex(RuntimeError, "transient native failure"):
+            kiro.collect(ctx)
+        self.assertEqual(len(ctx.calls), 11)
+
     def test_native_probe_rejects_modified_authored_fixture_directory_modes(self):
         # A read-only native inventory must not relax or rewrite either parent
         # directory while preserving the exact owned mcp.json bytes and inode.
