@@ -1,0 +1,84 @@
+# MCP Skills over MCP — read-only UAP PoC
+
+**Date:** 2026-11-11  
+**Status:** Plan v1; design review before implementation  
+**Target:** `777genius/universal-agent-plugins`; one isolated, read-only experimental PoC.
+
+## Decision and exact scope
+
+UAP already installs local/GitHub/HTTPS-publisher Agent Skills and configures MCP servers. It does **not** thereby implement the distinct `io.modelcontextprotocol/skills` discovery extension. Codex app-server `skills/list` is not MCP Skills. SEP-2640 is Final but the extension specification itself is **Beta**. OpenAI `mcp-extensions` is a separate set of host-specific UI capabilities.
+
+Implement a **read-only discovery/inspection PoC**, not a replacement for existing UAP acquisition, package manager, lockfile, install or client adapters. The PoC accepts an explicitly supplied, credential-free HTTPS MCP Streamable HTTP endpoint, and optionally a full skill URI. It lists skill metadata, inspects one exact URI, and verifies the returned `SKILL.md` on explicit inspect. It must not execute scripts, send any file to an agent/model, install/activate Skills, modify `uap.toml` or `uap.lock`, register credentials, or persist a server. Supporting resources remain lazy. No scope/target/yes flag is appropriate to a read-only feature.
+
+## Architecture: reuse real UAP boundaries
+
+Read [AGENTS.md](../../AGENTS.md), [architecture](../ARCHITECTURE.md), and [contribution rules](../../CONTRIBUTING.md). Adopt existing Go Clean Architecture, SOLID and DRY. DDD is **pragmatic** here: skill URI + server origin and a validated resource manifest are value concepts; there is no mutable aggregate, repository, ubiquitous-language framework or database to introduce for read-only work.
+
+```text
+agentplugins skills mcp list|inspect (CLI only)
+           ↓
+small read-only application flow (no mutable state)
+           ↓
+MCP Skills reader boundary (only if it avoids a real dependency)
+           ↓
+adapters/mcpskills: modern Streamable HTTP and verification
+           ↓
+external MCP server (read-only calls)
+```
+
+Place the cohesive adapter under `install/integrationctl/agentplugins/adapters/mcpskills` using standard library plus existing relevant conformance parsing. The CLI in `cli/internal/agentpluginscli` wires the adapter, renders safe output and changes no installer state. Extract a pure `domain` type **only if shared outside this adapter**; domain must stay stdlib-only. Do not add a process supervisor, Node SDK sidecar, generalized provider framework, feature flag, second resolver or client-ID branches. Do not touch frozen VS Code or generated code. Limit Go files to 500 effective lines, functions to 60 lines/40 statements.
+
+### Protocol contract (MCP `2026-07-28` only)
+
+1. Modern protocol: use `server/discover`, **not** `initialize`; require advertised `capabilities.resources` and `capabilities.extensions["io.modelcontextprotocol/skills"]`. Fail closed on legacy servers; legacy fallback is not in PoC.
+2. Per-request `params._meta` includes `io.modelcontextprotocol/protocolVersion`, `clientInfo` and `clientCapabilities`. Streamable HTTP requires POST, `MCP-Protocol-Version`, `Mcp-Method`, `Mcp-Name` for `resources/read`, and `Accept: application/json, text/event-stream`. Support JSON and scoped SSE request responses, bounded by context, response size and time; do not follow redirects or call tools.
+3. `skills/list`: preserve exact URIs and origins, paginate `cursor`/`nextCursor` with cycle/count/size bounds, require `resultType=complete` and caching fields. Empty/partial list is **not** proof that no skill exists. `skills/get`: retrieve exact URI even if unlisted, with required metadata.
+4. Validate the manifest: `SKILL.md` resource present once, unique file URIs, `frontmatter.name` and `description`, file root containment (not DNS), all SHA-256 digests `sha256:<64 lowercase hex>`, sizes, max 512 resources and 16 MiB total. Alternative URI schemes are permitted by spec, so don't hardcode `skill://` as proof that a resource is a skill. `resources: "dynamic"` is discoverable but cannot be called verified.
+5. On explicit inspect, call `resources/read` for `SKILL.md` only, verify raw bytes, size and SHA-256, and compare all parsed YAML frontmatter fields to entry JSON (not just name/description). Other resources are never prefetched. Neither read nor inspect loads a Skill into an agent.
+6. Identity is `(UAP-assigned server reference, exact URI)`; two servers can share a URI/name without shadowing. Reject duplicate/conflicting resources, URI traversal, unexpected response URI and invalid/mismatched frontmatter; do not grant any permissions from `allowed-tools`. Hash verification is integrity against untrusted server assertions, **not signing or trust**.
+
+### Proposed PoC UX (unreleased examples)
+
+```bash
+agentplugins skills mcp list --endpoint https://mcp.example.com/mcp --format json
+agentplugins skills mcp inspect --endpoint https://mcp.example.com/mcp \
+  --uri skill://pdf-processing/SKILL.md --format json
+```
+
+Default responses summarize source origin, full URI, name, description, resource count and verification state without printing SKILL.md, secrets or raw network errors. Endpoint must be an explicit HTTPS URL without embedded credentials. Tests may inject a loopback HTTP test client; public CLI cannot accept plain HTTP. No special login/OAuth, auto-install or tool calls.
+
+## E2E and security gates
+
+- Disposable compliant modern `httptest` MCP server exercises `server/discover → skills/list` (pagination) `→ skills/get → resources/read`; test both JSON and SSE response paths and direct get of an unlisted URI.
+- Reject missing capability, old protocol, malformed response, bad result type, pagination loop, redirect, timeout, cancellations, oversized bodies, dynamic falsely labelled verified, digest/size mismatch, duplicate/unlisted/out-of-root paths, full frontmatter mismatch and cross-server name/URI ambiguity.
+- Assert no HOME, XDG, project or installer state effects; no subprocess/tool activation; redact errors/JSON. Fixture E2E must **not** claim real external-host activation.
+- Run focused Go tests in nested module and CLI, `go vet`, `make lint`, `make test-core`; check exact final HEAD CI, reviews, conflicts and post-merge main. Never count queued/skipped jobs as PASS.
+
+## Estimate and non-goals
+
+| Slice | Production LOC | Test LOC |
+| --- | ---: | ---: |
+| Modern HTTP JSON/SSE transport and negotiation | 230–350 | 180–260 |
+| Manifest URI/integrity + YAML/frontmatter verification | 190–270 | 230–310 |
+| list/get/inspect use case + CLI wiring | 100–170 | 120–180 |
+| Docs, fixtures and CI | 40–90 | 50–100 |
+| **Total** | **560–880** | **580–850** |
+
+**PoC planning envelope:** ~1,140–1,730 new/changed lines including tests and docs; complexity 4/10, correctness risk 5/10. These are estimates, not measured diff. No stdio, OAuth, automatic transport-version fallback, local snapshot import, dependency/lock migration, native host lazy-loading, new website UI or release publication.
+
+A future *separate* design would add explicit reviewed snapshot import using existing `skillsource.Normalize`, `environment` and `installer`. It needs a distinct trust, source-identity, approval and cold-restore design and must not be smuggled into this PoC.
+
+## Review rounds
+
+1. **Architecture/DDD:** retain existing package boundaries, reject generic frameworks, no second installer.
+2. **Protocol:** verify against Beta spec and modern 2026 transport (the 2025 handshake is NOT valid here), SSE/caching/metadata.
+3. **Security:** exact server+URI identities, hashes and YAML equality, no automatic trust elevation, redirects or writes.
+4. **UX/E2E:** honest read-only wording; negative tests; no incomplete/skipped CI counted as success.
+
+## Sources
+
+- [MCP Skills Beta specification](https://skills.extensions.modelcontextprotocol.io/specification/beta/skills)
+- [SEP-2640](https://modelcontextprotocol.io/seps/2640-skills-extension)
+- [MCP 2026 Streamable HTTP](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http)
+- [MCP versioning](https://modelcontextprotocol.io/specification/2026-07-28/basic/versioning)
+- [UAP existing Skills installer](../AGENT_SKILLS_INSTALLER.md)
