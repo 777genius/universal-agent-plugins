@@ -94,7 +94,7 @@ func TestSavedRegistryUpdateCannotChangeSigningLineage(t *testing.T) {
 	}
 	for _, tc := range []struct {
 		name, previousFeed string
-		wantError bool
+		wantError          bool
 	}{
 		{"same modern feed", "modern-v1", false},
 		{"legacy lock", "", true},
