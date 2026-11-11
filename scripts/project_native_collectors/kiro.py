@@ -91,6 +91,15 @@ def _runtime_bin(ctx):
     return directory
 
 
+def _directory_identity(path):
+    """Snapshot disposable fixture directory identity, owner, mode and ctime."""
+    info = path.lstat()
+    if not stat.S_ISDIR(info.st_mode):
+        raise ValueError("Kiro authored fixture directory is no longer a directory")
+    return (info.st_dev, info.st_ino, info.st_uid, info.st_gid,
+            stat.S_IMODE(info.st_mode), info.st_ctime_ns)
+
+
 def _require_clean_user_cwd(ctx):
     # Native MCP inventory also selects the "user" cwd, which is distinct
     # from the HOME-owned User fixture. Never adopt native output there.
@@ -119,7 +128,7 @@ def _probe(ctx, owned, label, arguments, project="a"):
     if ctx.env.get("PATH") != str(directory) + ":/usr/bin:/bin":
         raise ValueError("Kiro acquired companion PATH changed")
     _require_clean_user_cwd(ctx)
-    for path, (body, device, inode, created_ctime_ns) in owned.items():
+    for path, (body, device, inode, created_ctime_ns, parents) in owned.items():
         _parents(path)
         info = path.lstat()
         if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size != len(body)
@@ -127,6 +136,11 @@ def _probe(ctx, owned, label, arguments, project="a"):
                 or stat.S_IMODE(info.st_mode) != 0o600 or info.st_ctime_ns != created_ctime_ns
                 or path.read_bytes() != body):
             raise ValueError("Kiro changed authored fixture identity/bytes/mode")
+        # A native child must not silently relax or replace the directories
+        # holding the inert marker while leaving the file itself unchanged.
+        for parent, original_identity in parents:
+            if _directory_identity(parent) != original_identity:
+                raise ValueError("Kiro changed authored fixture directory identity/mode")
         # ctime also catches in-place rewrites followed by restoring identical
         # bytes, size, permissions and mtime without changing the inode.
         # A native inventory command must not quietly author a second settings
@@ -242,7 +256,9 @@ def collect(ctx):
                 stream.write(body)
             native.chmod(0o600)
             identity = native.lstat()
-            owned[native] = (body, identity.st_dev, identity.st_ino, identity.st_ctime_ns)
+            parents = tuple((parent, _directory_identity(parent))
+                            for parent in (native.parent.parent, native.parent))
+            owned[native] = (body, identity.st_dev, identity.st_ino, identity.st_ctime_ns, parents)
         for project in ("a", "b", "user"):
             for scope in ("workspace", "global"):
                 label = project + "-" + scope + "-raw-list"

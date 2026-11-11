@@ -2,6 +2,7 @@
 import json
 import os
 from pathlib import Path
+import stat
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -616,6 +617,28 @@ class KiroCollectorTests(unittest.TestCase):
         ctx.replace["a-workspace-raw-list"] = mutated
         with self.assertRaisesRegex(ValueError, "authored fixture"):
             kiro.collect(ctx)
+
+    def test_native_probe_rejects_modified_authored_fixture_directory_modes(self):
+        # A read-only native inventory must not relax or rewrite either parent
+        # directory while preserving the exact owned mcp.json bytes and inode.
+        for scope in ("a", "b", "user"):
+            for relative in (".kiro", ".kiro/settings"):
+                ctx = self.context()
+                root = ctx.home if scope == "user" else ctx.projects[scope]
+                parent = root / relative
+
+                def changed_directory():
+                    before = parent.lstat()
+                    parent.chmod(stat.S_IMODE(before.st_mode) ^ stat.S_IWGRP)
+                    return {"exit": 0, "error": None}, b"Opaque read-only listing.\\n", b""
+
+                ctx.replace["a-workspace-raw-list"] = changed_directory
+                with self.subTest(scope=scope, relative=relative), self.assertRaisesRegex(
+                        ValueError, "fixture directory identity/mode"):
+                    kiro.collect(ctx)
+                self.assertEqual(len(ctx.calls), 11)
+                self.assertEqual(ctx.calls[-1][0], "a-workspace-raw-list")
+                self.assertTrue((root / ".kiro/settings/mcp.json").exists())
 
     def test_replaced_fixture_with_identical_bytes_is_not_accepted_as_owned(self):
         # A native child must not substitute a different inode even when its
