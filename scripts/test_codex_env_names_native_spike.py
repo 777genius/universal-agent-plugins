@@ -156,6 +156,23 @@ class TestSyntheticModelOracle(unittest.TestCase):
         self.assertFalse(Model.shell_foreign_visible)
         self.assertEqual(Model.shell_response_category, "tool_error")
 
+    def test_delayed_failed_shell_echo_is_not_execution_or_exposure(self):
+        # Waiting long enough is NOT proof when Codex eventually rejects the
+        # shell tool and repeats its arguments (including every fixed marker).
+        self.call({"tools": [{"type": "function", "name": "exec_command"}]})
+        Model.shell_requested_at -= 7.0
+        echoed_command = ("failed exec_command: cmd contains " + SHELL_ENV_PRESENT
+                          + " " + SHELL_FOREIGN_PRESENT + " " + SHELL_MARKER)
+        self.call({"input": [{"type": "function_call_output", "call_id": SHELL_CALL,
+                             "output": echoed_command}],
+                   "tools": [{"type": "namespace", "name": "mcp__env_spike",
+                              "tools": [{"name": "confirm_env"}]}]})
+        self.assertTrue(Model.shell_output_seen)
+        self.assertFalse(Model.shell_execution_verified)
+        self.assertFalse(Model.shell_secret_visible)
+        self.assertFalse(Model.shell_foreign_visible)
+        self.assertEqual(Model.shell_response_category, "tool_error")
+
     def test_shell_credential_presence_is_recorded_without_secret_value(self):
         self.call({"tools": [{"type": "function", "name": "exec_command"}]})
         Model.shell_requested_at -= 7.0
