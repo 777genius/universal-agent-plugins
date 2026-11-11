@@ -574,16 +574,14 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 with self.assertRaises(AssertionError):
                     runner["check_refusal_profile_unchanged"](env, project, before)
 
-    def test_marketing_kit_vscode_user_policy_refusal_requires_exact_diagnostic(self):
+    def test_marketing_kit_vscode_user_saved_refusal_requires_exact_diagnostic(self):
         from runpy import run_path
 
         runner = run_path(str(Path(__file__).resolve().parent /
                               "marketing-kit-project-release-e2e.py"))
-        verify = runner["verify_vscode_user_policy_refusal"]
-        diagnostic = ('Resolving and validating one Agent Plugin package for every selected target...\n'
-                      'agentplugins: no eligible directory release for "marketing-kit": '
-                      '777genius/marketing-kit: release does not support complete '
-                      'target set; missing vscode')
+        verify = runner["verify_vscode_user_saved_refusal"]
+        diagnostic = ('agentplugins: target vscode cannot be saved; retry '
+            'agentplugins add marketing-kit --target vscode --no-save')
         accepted = {"exit_code": 1, "timeout": False, "stderr_tail": diagnostic + "\n",
                     "stdout_tail": "", "_json": None}
         with TemporaryDirectory() as temporary:
@@ -606,9 +604,9 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 stage = verify("agentplugins", env, project,
                                (lambda: guards.append("checked"),))
             self.assertEqual(commands, [["agentplugins", "add", "marketing-kit",
-                "--target", "vscode", "--scope", "user", "--no-save", "--yes", "--format", "json"]])
+                "--target", "vscode", "--scope", "user", "--yes", "--format", "json"]])
             self.assertEqual(stage["scope"], "user")
-            self.assertEqual(stage["contract"], "negative_policy")
+            self.assertEqual(stage["contract"], "negative_saved_target")
             self.assertEqual(stage["result"], "expected_refusal")
             self.assertNotEqual(stage["result"], "passed")
             self.assertEqual(guards, ["checked"])
@@ -622,7 +620,8 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                             {"exit_code": True}, {"timeout": True}, {"timeout": None},
                             {"stderr_tail": "network unavailable"},
                             {"stderr_tail": diagnostic.split("\n", 1)[1]},
-                            {"stderr_tail": 'agentplugins: target vscode cannot be saved; retry agentplugins add marketing-kit --target vscode --no-save\n'},
+                            {"stderr_tail": 'agentplugins: no eligible directory release for "marketing-kit": '
+                            '777genius/marketing-kit: release does not support complete target set; missing vscode\n'},
                             {"stderr_tail": diagnostic.replace("vscode", "copilot")},
                             {"stderr_tail": diagnostic.replace('"marketing-kit"', '"notion"')},
                             {"stderr_tail": diagnostic + "\nremote download failed"},
@@ -635,21 +634,20 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                         "invoke": lambda *_: {**accepted, **invalid},
                         "inventory": lambda *_: []}):
                     checked = []
-                    with self.assertRaisesRegex(AssertionError, "exact missing-vscode"):
+                    with self.assertRaisesRegex(AssertionError, "exact saved-target"):
                         verify("agentplugins", env, project, (lambda: checked.append(True),))
                     self.assertEqual(checked, [True])
                     self.assertEqual(runner["profile_snapshot"](env, project), before)
 
-    def test_marketing_kit_vscode_user_policy_refusal_rejects_own_mutations(self):
+    def test_marketing_kit_vscode_user_saved_refusal_rejects_own_mutations(self):
         from runpy import run_path
 
         runner = run_path(str(Path(__file__).resolve().parent /
                               "marketing-kit-project-release-e2e.py"))
-        verify = runner["verify_vscode_user_policy_refusal"]
+        verify = runner["verify_vscode_user_saved_refusal"]
         response = {"exit_code": 1, "timeout": False, "stdout_tail": "", "stderr_tail": (
-            'Resolving and validating one Agent Plugin package for every selected target...\n'
-            'agentplugins: no eligible directory release for "marketing-kit": '
-            '777genius/marketing-kit: release does not support complete target set; missing vscode')}
+            'agentplugins: target vscode cannot be saved; retry '
+            'agentplugins add marketing-kit --target vscode --no-save')}
         for relative in ("home/.copilot/settings.json", "home/foreign.txt", "project/uap.lock",
                          "data/uap.toml", "data/uap.lock", "data/state-v2.json",
                          "data/managed/plugin", "data/store/package", "data/operations-v2/receipt",
@@ -685,16 +683,15 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                             verify("agentplugins", env, project, (lambda: checked.append(True),))
                     self.assertEqual(checked, [True])
 
-    def test_marketing_kit_vscode_user_policy_refusal_checks_inventory_and_peers(self):
+    def test_marketing_kit_vscode_user_saved_refusal_checks_inventory_and_peers(self):
         from runpy import run_path
 
         runner = run_path(str(Path(__file__).resolve().parent /
                               "marketing-kit-project-release-e2e.py"))
-        verify = runner["verify_vscode_user_policy_refusal"]
+        verify = runner["verify_vscode_user_saved_refusal"]
         response = {"exit_code": 1, "timeout": False, "stdout_tail": "", "stderr_tail": (
-            'Resolving and validating one Agent Plugin package for every selected target...\n'
-            'agentplugins: no eligible directory release for "marketing-kit": '
-            '777genius/marketing-kit: release does not support complete target set; missing vscode')}
+            'agentplugins: target vscode cannot be saved; retry '
+            'agentplugins add marketing-kit --target vscode --no-save')}
         with TemporaryDirectory() as temporary:
             case = Path(temporary)
             env, project, foreign, *_ = runner["run_case"]("unused", "copilot", case, "A")
@@ -723,11 +720,9 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
 
         runner = run_path(str(Path(__file__).resolve().parent /
                               "marketing-kit-project-release-e2e.py"))
-        verify = runner["verify_vscode_user_policy_refusal"]
-        diagnostic = ('Resolving and validating one Agent Plugin package for every selected target...\n'
-                      'agentplugins: no eligible directory release for "marketing-kit": '
-                      '777genius/marketing-kit: release does not support complete '
-                      'target set; missing vscode')
+        verify = runner["verify_vscode_user_saved_refusal"]
+        diagnostic = ('agentplugins: target vscode cannot be saved; retry '
+            'agentplugins add marketing-kit --target vscode --no-save')
         padded_stdout = 'unrelated prefix {"result":"success"}' + " " * 2200
         padded_stderr = "unrelated error\n" + " " * 2200 + diagnostic
         with TemporaryDirectory() as temporary:
@@ -751,7 +746,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                         self.assertTrue(captured["stderr_tail"].startswith(" "))
                     with patch.dict(verify.__globals__, {"invoke": lambda *_: captured,
                             "inventory": lambda *_: []}):
-                        with self.assertRaisesRegex(AssertionError, "exact missing-vscode"):
+                        with self.assertRaisesRegex(AssertionError, "exact saved-target"):
                             verify("agentplugins", env, project, ())
 
     def test_marketing_kit_vscode_refusal_allows_only_own_finite_directory_cache(self):
@@ -759,11 +754,10 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
 
         runner = run_path(str(Path(__file__).resolve().parent /
                               "marketing-kit-project-release-e2e.py"))
-        verify = runner["verify_vscode_user_policy_refusal"]
+        verify = runner["verify_vscode_user_saved_refusal"]
         response = {"exit_code": 1, "timeout": False, "stdout_tail": "", "stderr_tail": (
-            'Resolving and validating one Agent Plugin package for every selected target...\n'
-            'agentplugins: no eligible directory release for "marketing-kit": '
-            '777genius/marketing-kit: release does not support complete target set; missing vscode')}
+            'agentplugins: target vscode cannot be saved; retry '
+            'agentplugins add marketing-kit --target vscode --no-save')}
         # Cache contents are authenticated by the genuine released command;
         # this audit constrains additions, ownership, type, mode and identity.
         for mutation in ("valid", "inventory-cache", "scanner", "assessment", "unknown",
@@ -867,9 +861,9 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         def negative(*_):
             phases.append("vscode-user-refusal")
             if negative_error:
-                raise AssertionError("required signed refusal failed")
+                raise AssertionError("required saved-target refusal failed")
             return {"stage": "Explicit VS Code User negative contract",
-                    "result": "expected_refusal", "reason": "missing_vscode_grant"}
+                    "result": "expected_refusal", "reason": "unsupported_saved_target"}
 
         def inventory(_cli, env, _project, _target, scope="project"):
             return installed.get((env["AGENTPLUGINS_HOME"], scope), {})
@@ -882,7 +876,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     "lock_ids": lambda *_: {"directory:" + name for name in runner["EXPECTED"]},
                     "settled_profile_snapshot": runner["profile_snapshot"],
                     "verify_corrupt_lock_refusal": lambda *_: 1,
-                    "verify_vscode_user_policy_refusal": negative,
+                    "verify_vscode_user_saved_refusal": negative,
                     "codex_user_native_remove_attestation": lambda *_: ("--external-uninstalled",),
                     # Patch the runner binding, preserving tempfile for setup helpers.
                     "tempfile": SimpleNamespace(TemporaryDirectory=CheckedCleanup),
@@ -908,7 +902,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                             "remove B", "remove A", "User add", "User repeat add", "User update",
                             "User repair intact", "User cold locked restore C", "User remove C", "User remove"]
                 self.assertEqual([phase for phase in phases if phase in required], required)
-                negative = report["negative_policy_results"]["vscode_user"]
+                negative = report["negative_capability_results"]["vscode_user"]
                 if target == "copilot":
                     self.assertEqual(phases[-1], "vscode-user-refusal")
                     self.assertEqual(negative["status"], "refused_as_expected")
@@ -925,7 +919,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         self.assertEqual(report["scope_results"]["user"]["status"], "passed")
         self.assertFalse(report["two_scope_lifecycle_qualified"])
         self.assertEqual(report["status"], "failed")
-        self.assertEqual(report["failure"], "required signed refusal failed")
+        self.assertEqual(report["failure"], "required saved-target refusal failed")
 
     def test_marketing_kit_cleanup_exception_overrides_successful_report(self):
         for target in ("copilot", "cursor"):

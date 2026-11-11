@@ -997,19 +997,17 @@ def codex_user_native_remove_attestation(env, project):
     return ("--external-uninstalled",)
 
 
-def verify_vscode_user_policy_refusal(cli, env, project, guards):
-    """Explicit VS Code still needs its own signed grant, before acquisition."""
+def verify_vscode_user_saved_refusal(cli, env, project, guards):
+    """Refuse VS Code saved management independently of signed prepared grants."""
     before = refusal_profile_snapshot(env, project, {}, directory_only=True)
     inventory_before = None
     try:
         refused = invoke([cli, "add", "marketing-kit", "--target", "vscode",
-                          "--scope", "user", "--no-save", "--yes", "--format", "json"],
+                          "--scope", "user", "--yes", "--format", "json"],
                          env, project, 180)
-        # Frozen VS Code uses its documented direct --no-save route.
-        expected = ('Resolving and validating one Agent Plugin package for every selected target...\n'
-                    'agentplugins: no eligible directory release for "marketing-kit": '
-                    '777genius/marketing-kit: release does not support complete '
-                    'target set; missing vscode')
+        # Prepared VS Code may be signed, but is not a supported saved target.
+        expected = ('agentplugins: target vscode cannot be saved; retry '
+                    'agentplugins add marketing-kit --target vscode --no-save')
         code = refused.get("exit_code")
         # call() preserves the last 1800 raw characters without stripping.
         # This shorter exact diagnostic and empty stdout cannot be a truncated
@@ -1019,19 +1017,19 @@ def verify_vscode_user_policy_refusal(cli, env, project, guards):
                     expected.replace("\n", "\r\n") + "\r\n")
                 or refused.get("_json") is not None
                 or refused.get("stdout_tail") != ""):
-            raise AssertionError("VS Code User add did not receive exact missing-vscode policy refusal")
-        # The genuine CLI authenticates the Directory before this exact signed
-        # eligibility refusal. A cold read may persist only its cache and empty
-        # lock; scanners/assessments are unnecessary before package acquisition.
+            raise AssertionError("VS Code User add did not receive exact saved-target refusal")
+        # Saved-target preflight refuses before Directory acquisition. Previously
+        # authenticated cache files must stay unchanged; the refused request
+        # must not create native, portable, or durable state.
         check_refusal_profile_unchanged(env, project, before)
         inventory_before = profile_snapshot(env, project)
         for target in ("copilot", "vscode"):
             if inventory(cli, env, project, target, "user"):
                 raise AssertionError("VS Code User refusal retained an installation")
-        return {"stage": "Explicit VS Code User add refused by signed policy",
-                "target": "vscode", "scope": "user", "contract": "negative_policy",
+        return {"stage": "Explicit VS Code User saved add refused",
+                "target": "vscode", "scope": "user", "contract": "negative_saved_target",
                 "exit_code": code, "result": "expected_refusal",
-                "reason": "missing_vscode_grant"}
+                "reason": "unsupported_saved_target"}
     finally:
         try:
             check_refusal_profile_unchanged(env, project, before)
@@ -1055,8 +1053,8 @@ def main():
               "qualification_scope": "user_and_project", "two_scope_lifecycle_qualified": False,
               "scope_results": {"project": {"expectation": "positive_lifecycle", "status": "not_run"},
                                 "user": {"expectation": "positive_lifecycle", "status": "not_run"}},
-              "negative_policy_results": {"vscode_user": {
-                  "expectation": "signed_grant_refusal",
+              "negative_capability_results": {"vscode_user": {
+                  "expectation": "unsupported_saved_target",
                   "status": "not_run" if options.target == "copilot" else "not_applicable"}}}
     try:
         with tempfile.TemporaryDirectory(prefix="uap-real-marketing-kit-") as location:
@@ -1377,17 +1375,17 @@ def main():
             if options.target == "copilot":
                 # A separate explicit VS Code request must still fail. Never
                 # count this negative contract as either positive lifecycle.
-                step = verify_vscode_user_policy_refusal(options.cli, env, project_a, (
+                step = verify_vscode_user_saved_refusal(options.cli, env, project_a, (
                     lambda: check_foreign(foreign_files, root),
                     lambda: check_user_project_unchanged(
-                        project_a, project_before_user, "VS Code User policy refusal"),
+                        project_a, project_before_user, "VS Code User saved refusal"),
                     lambda: check_profile_unchanged(
-                        env_b, project_b, protected_b, "VS Code User policy refusal"),
+                        env_b, project_b, protected_b, "VS Code User saved refusal"),
                     lambda: check_profile_unchanged(
-                        env_c, project_c, protected_c_profile, "VS Code User policy refusal"),
+                        env_c, project_c, protected_c_profile, "VS Code User saved refusal"),
                 ))
                 report["steps"].append(step)
-                report["negative_policy_results"]["vscode_user"].update(
+                report["negative_capability_results"]["vscode_user"].update(
                     status="refused_as_expected", reason=step["reason"])
         # TemporaryDirectory cleanup is part of qualification; exceptions from
         # its __exit__ must never leave a successful two-scope result behind.
