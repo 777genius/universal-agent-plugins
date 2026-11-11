@@ -60,6 +60,9 @@ func verifyDependencyDeclarations(ctx context.Context, app App, lock environment
 }
 
 func readReplayDependency(ctx context.Context, app App, pin environment.LockedPackage) (resolved environment.ResolvedPackage, resultErr error) {
+	if err := requireLockedDirectoryFeed(app, pin); err != nil {
+		return environment.ResolvedPackage{}, err
+	}
 	resolved, err := describePinnedDependency(ctx, app, pin)
 	if err == nil {
 		return resolved, nil
