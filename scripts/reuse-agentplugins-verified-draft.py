@@ -23,6 +23,10 @@ REPOSITORY = draft.REPOSITORY
 WORKFLOW = draft.WORKFLOW
 TARGETS = ("darwin-amd64", "darwin-arm64", "linux-amd64", "linux-arm64",
            "windows-amd64", "windows-arm64")
+NEW_CLIENT_GATES = (
+    "hermes-native-proof / Aggregate hermes release-native proofs",
+    "antigravity-native-proof / Aggregate antigravity release-native proofs",
+)
 
 
 def require(ok, message):
@@ -88,6 +92,13 @@ def authenticate(args):
                  "platform-proof / Aggregate all six native platform proofs", "verified-draft"):
         one_job(jobs, name, args.run_id, "success")
     one_job(jobs, "promote-release", args.run_id, "skipped")
+    # Only current producer promotion opts in. Historical v1/v2 receipts and
+    # the existing npm handoff retain their original authentication contract.
+    # Matrix source-build steps legitimately skip in release mode, so require
+    # the unconditional aggregate jobs that validate all three receipts.
+    if getattr(args, "require_hermes_antigravity", False):
+        for name in NEW_CLIENT_GATES:
+            one_job(jobs, name, args.run_id, "success")
     pages = api(f"{prefix}/runs/{args.run_id}/artifacts?per_page=100", "--paginate", "--slurp")
     name = f"agentplugins-verified-draft-{args.run_id}-{args.run_attempt}"
     matches = [artifact for page in pages for artifact in page["artifacts"]
@@ -176,6 +187,8 @@ def main():
         parser.add_argument(f"--{name}", required=True)
     for name in ("run-id", "run-attempt"):
         parser.add_argument(f"--{name}", required=True, type=int)
+    parser.add_argument("--require-hermes-antigravity", action="store_true",
+                        help="require both artifact-bound native aggregate gates for current producer promotion")
     live = verify(parser.parse_args())
     print(live["release"]["id"])
 

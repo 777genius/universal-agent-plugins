@@ -122,6 +122,8 @@ class ReleasePipelineE2E(unittest.TestCase):
                  'stage-draft', 'platform-proof / Verify release and pack exact npm tarball',
                  *(f'platform-proof / native runtime E2E ({target})' for target in TARGETS),
                  'platform-proof / Aggregate all six native platform proofs',
+                 'hermes-native-proof / Aggregate hermes release-native proofs',
+                 'antigravity-native-proof / Aggregate antigravity release-native proofs',
                  'qualify-go', 'qualify-npm', 'verified-draft']
         self.jobs = [{'name': name, 'run_id': 42, 'status': 'completed', 'conclusion': 'success',
                       'steps': [{'conclusion': 'success'}]} for name in names]
@@ -226,7 +228,8 @@ class ReleasePipelineE2E(unittest.TestCase):
 
     def test_receipt_authentication_restoration_and_exact_publish(self):
         receipt = self.qualify()
-        self.assertEqual(self.helper('reuse-agentplugins-verified-draft.py').stdout.strip(), b'123')
+        self.assertEqual(self.helper('reuse-agentplugins-verified-draft.py',
+                                     ['--require-hermes-antigravity']).stdout.strip(), b'123')
         self.release['draft'] = False  # fixture-only promotion, no API writes
         output = self.root / 'npm-tarball'
         output.mkdir(mode=0o700)
@@ -286,6 +289,25 @@ pathlib.Path(os.environ['PUBLISH_HASH']).write_text(hashlib.sha256(pathlib.Path(
                 path.write_bytes(replacement)
                 self.reject_reuse(output, 'ZIP digest mismatch')
             path.write_bytes(original_bytes)
+
+    def test_promotion_refuses_missing_failed_skipped_new_native_aggregates(self):
+        self.qualify()
+        original = copy.deepcopy(self.jobs)
+        for name in ('hermes-native-proof / Aggregate hermes release-native proofs',
+                     'antigravity-native-proof / Aggregate antigravity release-native proofs'):
+            for failure in ('missing', 'failure', 'skipped', 'cancelled'):
+                with self.subTest(name=name, failure=failure):
+                    self.jobs[:] = copy.deepcopy(original)
+                    job = next(job for job in self.jobs if job['name'] == name)
+                    if failure == 'missing':
+                        self.jobs.remove(job)
+                    else:
+                        job['conclusion'] = failure
+                    result = self.helper('reuse-agentplugins-verified-draft.py',
+                                         ['--require-hermes-antigravity'], check=False)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertEqual(result.stdout, b'')
+                    self.assertIn('missing or wrong qualification job: ' + name, result.stderr.decode())
 
     def reject_reuse(self, output, reason):
         result = self.helper('reuse-agentplugins-npm-artifact.py', ['--output-dir', str(output)], check=False)
