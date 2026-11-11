@@ -427,7 +427,11 @@ def inspect(root, secret):
 
     def bounded_scan_scope(path):
         try:
-            parts = Path(path).relative_to(root_path).parts
+            # Use the same traversal spelling as os.walk and path hashes.
+            # On Windows resolve() can canonicalize the temporary root into
+            # a different drive/alias representation; it is only needed for
+            # resolving external symlink targets, not fixed scope labels.
+            parts = Path(path).relative_to(Path(root)).parts
         except (TypeError, ValueError, OSError):
             return "unknown"
         if parts[:2] == ("home", ".codex"):
