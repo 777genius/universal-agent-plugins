@@ -79,6 +79,12 @@ func (c *Client) rpcCall(ctx context.Context, method string, params map[string]a
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			return nil, context.DeadlineExceeded
+		}
+		if errors.Is(err, context.Canceled) {
+			return nil, context.Canceled
+		}
 		return nil, ErrRemote
 	}
 	defer response.Body.Close()
