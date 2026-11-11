@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createHash } from 'node:crypto';
-import { checkHtml, checkLiveBytes, getBytes, routePaths, validateContract } from '../scripts/check-production-routes.mjs';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { checkHtml, checkLiveBytes, getBytes, routePaths, validateContract, prepare, live } from '../scripts/check-production-routes.mjs';
 
 const locales = ['en', 'ru', 'uk', 'zh', 'es', 'hi', 'ar', 'pt', 'fr'];
 // Public catalogue of accepted source 55c2b820; H/A were not advertised there.
@@ -77,19 +80,21 @@ test('HTML canonical must identify the requested route uniquely', () => {
 
 test('HTTP reader requires actual 200, exact URL, no redirect and bounded nonempty body', async () => {
   const url = 'https://universal-agent-plugins.com/agents/hermes/';
-  const response = (status = 200, final = url, redirected = false, body = Buffer.from('HTML')) => ({
-    status, url: final, redirected, body: (async function* () { yield body; })(),
-  });
-  const fetcher = async (_url: string, options: { redirect: string }) => {
-    assert.equal(options.redirect, 'error');
+  const response = (status = 200, final = url, redirected = false, body = 'HTML') => {
+    const result = new Response(body, { status });
+    Object.defineProperties(result, { url: { value: final }, redirected: { value: redirected } });
+    return result;
+  };
+  const fetcher: typeof fetch = async (_url, options) => {
+    assert.equal(options?.redirect, 'error');
     return response();
   };
   assert.equal((await getBytes(url, fetcher)).toString(), 'HTML');
   await assert.rejects(getBytes(url, async () => response(404)), /HTTP status/);
   await assert.rejects(getBytes(url, async () => response(200, 'https://universal-agent-plugins.com/')), /final URL/);
   await assert.rejects(getBytes(url, async () => response(200, url, true)), /redirect/);
-  await assert.rejects(getBytes(url, async () => response(200, url, false, Buffer.alloc(0))), /empty/);
-  await assert.rejects(getBytes(url, async () => response(200, url, false, Buffer.alloc(8 * 1024 * 1024 + 1))), /size limit/);
+  await assert.rejects(getBytes(url, async () => response(200, url, false, '')), /empty/);
+  await assert.rejects(getBytes(url, async () => response(200, url, false, 'x'.repeat(8 * 1024 * 1024 + 1))), /size limit/);
 });
 
 test('live HTML must match complete built bytes, including equal-size stale content', () => {
@@ -97,4 +102,75 @@ test('live HTML must match complete built bytes, including equal-size stale cont
   checkLiveBytes(html(entry.route), entry);
   assert.throws(() => checkLiveBytes(Buffer.from(html(entry.route).toString().replace('<body>', '<BODY>')), entry), /SHA256/);
   assert.throws(() => checkLiveBytes(Buffer.concat([html(entry.route), Buffer.from('stale')]), entry), /byte length/);
+});
+
+test('robots and canonical attributes are order independent and case insensitive', () => {
+  const route = '/agents/hermes/';
+  for (const tag of ['<meta content="noindex" name="robots">', '<META CONTENT="NOINDEX, FOLLOW" NAME="ROBOTS">']) {
+    assert.throws(() => checkHtml(Buffer.from(html(route).toString().replace('</head>', tag + '</head>')), route), /noindex/);
+  }
+  checkHtml(Buffer.from(html(route).toString().replace('link rel="canonical"', 'LINK REL="CANONICAL"')), route);
+});
+
+test('prepare and live bind selected modules, built HTML, provenance and environment end to end', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'uap-production-routes-'));
+  const envKeys = ['GITHUB_SHA', 'GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT'] as const;
+  const previous = Object.fromEntries(envKeys.map(key => [key, process.env[key]]));
+  const provenance = { ...identity };
+  const published = new Map<string, string>();
+  try {
+    process.env.GITHUB_SHA = identity.workflow_commit;
+    process.env.GITHUB_RUN_ID = identity.run_id;
+    process.env.GITHUB_RUN_ATTEMPT = identity.run_attempt;
+    for (const directory of ['landing/data', 'website/tools/config', '.pages-dist', 'website'])
+      await mkdir(path.join(root, directory), { recursive: true });
+    await writeFile(path.join(root, 'landing/data/clients.ts'), 'export const clientLandingPages = ' + JSON.stringify(nativeClients));
+    await writeFile(path.join(root, 'website/tools/config/locales.mjs'), 'export const docsLocales = ' + JSON.stringify(locales));
+    await writeFile(path.join(root, 'website/production-source.json'), JSON.stringify({ schema_version: 1, source_commit: identity.source_commit, source_tree: identity.source_tree }));
+    await writeFile(path.join(root, '.pages-dist/BUILD_PROVENANCE.json'), JSON.stringify(provenance));
+    published.set('/BUILD_PROVENANCE.json', JSON.stringify(provenance));
+    for (const entry of routePaths(nativeClients, locales)) {
+      let text = 'Hermes Antigravity compatibility';
+      if (entry.id === 'hermes') text = 'npx -y universal-agent-plugins add ./my-plugin --target hermes Project installation never modifies User MCP configuration';
+      if (entry.id === 'antigravity') text = 'npx -y universal-agent-plugins add ./my-plugin --target antigravity Prepared by CLI';
+      const bytes = html(entry.route, text);
+      const relative = entry.route.endsWith('/') ? entry.route.slice(1) + 'index.html' : entry.route.slice(1);
+      const filename = path.join(root, '.pages-dist', relative);
+      await mkdir(path.dirname(filename), { recursive: true });
+      await writeFile(filename, bytes);
+      published.set(entry.route, bytes.toString());
+    }
+    const contractPath = path.join(root, 'contract.json');
+    await prepare(root, contractPath);
+    const actual = JSON.parse(await readFile(contractPath, 'utf8'));
+    assert.equal(actual.routes.length, 25);
+    const requested: string[] = [];
+    const fetcher: typeof fetch = async (input, options) => {
+      const url = String(input);
+      assert.equal(options?.redirect, 'error');
+      const route = new URL(url).pathname;
+      requested.push(route);
+      const result = new Response(published.get(route) || '', { status: published.has(route) ? 200 : 404 });
+      Object.defineProperty(result, 'url', { value: url });
+      return result;
+    };
+    const noDelay = async () => {};
+    await live(root, contractPath, fetcher, noDelay);
+    assert.equal(requested.length, 26);
+    assert(requested.includes('/agents/hermes/'));
+    assert(requested.includes('/docs/ar/reference/client-compatibility.html'));
+    process.env.GITHUB_RUN_ATTEMPT = '3';
+    await assert.rejects(live(root, contractPath, fetcher, noDelay), /contract run_attempt/);
+    process.env.GITHUB_RUN_ATTEMPT = identity.run_attempt;
+    published.set('/agents/hermes/', published.get('/agents/hermes/')!.replace('Project installation', 'Project INSTALLATION'));
+    await assert.rejects(live(root, contractPath, fetcher, noDelay), /SHA256|byte length/);
+    published.set('/BUILD_PROVENANCE.json', JSON.stringify({ ...provenance, source_tree: 'd'.repeat(40) }));
+    await assert.rejects(live(root, contractPath, fetcher, noDelay), /live provenance source_tree/);
+  } finally {
+    for (const key of envKeys) {
+      if (previous[key] === undefined) delete process.env[key];
+      else process.env[key] = previous[key];
+    }
+    await rm(root, { recursive: true, force: true });
+  }
 });

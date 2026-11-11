@@ -30,10 +30,11 @@ export function routePaths(clients, locales) {
 export function checkHtml(bytes, route, id) {
   assert(bytes.length > 0 && bytes.length <= maxBytes, `${route}: HTML size`);
   const html = bytes.toString('utf8');
-  const links = [...html.matchAll(/<link\b[^>]*>/gi)].map(([tag]) =>
+  const tags = name => [...html.matchAll(new RegExp(`<${name}\\b[^>]*>`, 'gi'))].map(([tag]) =>
     Object.fromEntries([...tag.matchAll(/([\w-]+)\s*=\s*["']([^"']*)["']/g)].map(([, key, value]) => [key.toLowerCase(), value])));
-  assert.deepEqual(links.filter(link => link.rel === 'canonical').map(link => link.href), [origin + route], `${route}: canonical`);
-  assert(!/<meta\b[^>]*name=["']robots["'][^>]*content=["'][^"']*noindex/i.test(html), `${route}: noindex`);
+  assert.deepEqual(tags('link').filter(link => link.rel?.toLowerCase() === 'canonical').map(link => link.href), [origin + route], `${route}: canonical`);
+  assert(tags('meta').filter(meta => meta.name?.toLowerCase() === 'robots')
+    .every(meta => !/noindex/i.test(meta.content || '')), `${route}: noindex`);
   const text = normalize(html);
   if (id === 'hermes' || id === 'antigravity') {
     assert(text.includes(`npx -y universal-agent-plugins add ./my-plugin --target ${id}`), `${id}: local target command`);
@@ -108,7 +109,7 @@ export function checkLiveBytes(bytes, entry) {
   checkHtml(bytes, entry.route);
 }
 
-export async function live(root, filename, fetcher = fetch) {
+export async function live(root, filename, fetcher = fetch, pause = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds))) {
   const contract = JSON.parse(await readFile(filename, 'utf8'));
   const pin = JSON.parse(await readFile(path.join(root, 'website/production-source.json'), 'utf8'));
   validateContract(contract, environmentIdentity(pin));
@@ -125,7 +126,7 @@ export async function live(root, filename, fetcher = fetch) {
         break;
       } catch (error) {
         failure = error;
-        if (attempt < 5) await new Promise(resolve => setTimeout(resolve, 5000));
+        if (attempt < 5) await pause(5000);
       }
     }
     if (failure) throw failure;
