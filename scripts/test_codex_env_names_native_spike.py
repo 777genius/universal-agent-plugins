@@ -143,6 +143,19 @@ class TestSyntheticModelOracle(unittest.TestCase):
         self.call(payload)
         self.assertTrue(Model.shell_execution_verified)
 
+    def test_failed_shell_echo_of_marker_does_not_claim_environment_exposure(self):
+        self.call({"tools": [{"type": "function", "name": "exec_command"}]})
+        echoed_command = ("failed exec_command: cmd contains " + SHELL_ENV_PRESENT
+                          + " " + SHELL_FOREIGN_PRESENT + " " + SHELL_MARKER)
+        self.call({"input": [{"type": "function_call_output", "call_id": SHELL_CALL,
+                             "output": echoed_command}],
+                   "tools": [{"type": "namespace", "name": "mcp__env_spike",
+                              "tools": [{"name": "confirm_env"}]}]})
+        self.assertFalse(Model.shell_execution_verified)
+        self.assertFalse(Model.shell_secret_visible)
+        self.assertFalse(Model.shell_foreign_visible)
+        self.assertEqual(Model.shell_response_category, "tool_error")
+
     def test_shell_credential_presence_is_recorded_without_secret_value(self):
         self.call({"tools": [{"type": "function", "name": "exec_command"}]})
         Model.shell_requested_at -= 7.0

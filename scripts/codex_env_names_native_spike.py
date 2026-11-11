@@ -135,14 +135,15 @@ class Model(http.server.BaseHTTPRequestHandler):
                 # A native tool returning an error is not proof the command ran.
                 # Require an execution-only sentinel AND elapsed sleep time.
                 rendered = json.dumps(response.get("output"), sort_keys=True)
-                # Marker reveals only whether the shell received the name,
-                # never the canary value. A successful shell with access to
-                # the forwarded credential is unsafe even without a snapshot.
-                cls.shell_secret_visible |= SHELL_ENV_PRESENT in rendered
-                cls.shell_foreign_visible |= SHELL_FOREIGN_PRESENT in rendered
+                # Native tool errors may echo the command arguments, including
+                # our fixed presence markers. Only a *verified completed*
+                # seven-second command can prove observed shell environment.
+                # Missing shell proof is independently a hard FAIL, never PASS.
                 if (SHELL_MARKER in rendered and
                         time.monotonic() - cls.shell_requested_at >= 6.0):
                     cls.shell_execution_verified = True
+                    cls.shell_secret_visible |= SHELL_ENV_PRESENT in rendered
+                    cls.shell_foreign_visible |= SHELL_FOREIGN_PRESENT in rendered
                     cls.shell_response_category = "completed"
                 else:
                     # Only fixed categories leave this synthetic-only harness;
