@@ -275,10 +275,10 @@ class KiroCollectorTests(unittest.TestCase):
         # Version/help can also initialize a native profile. Detect the first
         # side effect rather than launching later native commands on that state.
         good = {
-            "version": ({"exit": 0, "error": None}, b"kiro-cli 2.34.0\\n", b""),
-            "top-help": ({"exit": 0, "error": None}, b"Usage: kiro-cli\\n", b""),
+            "version": ({"exit": 0, "error": None}, b"kiro-cli 2.34.0\n", b""),
+            "top-help": ({"exit": 0, "error": None}, b"Usage: kiro-cli\n", b""),
             "agent-help": ({"exit": 0, "error": None},
-                           b"Usage: kiro-cli agent\\n", b""),
+                           b"Usage: kiro-cli agent\n", b""),
         }
         for label, count in (("version", 1), ("top-help", 2), ("agent-help", 9)):
             for scopes in (("home",), ("a",), ("home", "b")):
