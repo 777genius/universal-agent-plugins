@@ -52,12 +52,15 @@ for (const [width, columns] of [[1280, 3], [1024, 3], [900, 2], [768, 2], [390, 
       await expect(controls.locator('.catalog-filter-pair .app-select__trigger')).toBeVisible();
       await expect(controls.locator('.catalog-filter-pair .app-combobox__anchor')).toBeVisible();
     }
-    await controls.screenshot({ path: testInfo.outputPath(`catalog-filters-${width}.png`), animations: 'disabled' });
+    await testInfo.attach(`catalog-filters-${width}.png`, {
+      body: await controls.screenshot({ animations: 'disabled' }),
+      contentType: 'image/png',
+    });
     expect(errors).toEqual([]);
   });
 }
 
-test('Arabic desktop catalog preserves three filter columns without clipping', async ({ page }) => {
+test('Arabic desktop catalog preserves three filter columns without clipping', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   const errors = await offline(page);
   await projections(page, sentryFixture());
@@ -68,11 +71,15 @@ test('Arabic desktop catalog preserves three filter columns without clipping', a
     getComputedStyle(element).gridTemplateColumns.trim().split(/\s+/).length);
   expect(columns).toBe(3);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await testInfo.attach('catalog-filters-ar-1280.png', {
+    body: await controls.screenshot({ animations: 'disabled' }),
+    contentType: 'image/png',
+  });
   expect(errors).toEqual([]);
 });
 
 for (const width of [1440, 390]) {
-  test(`Pi Project uses pinned direct source, not a fabricated signed target, at ${width}px`, async ({ page }) => {
+  test(`Pi Project uses pinned direct source, not a fabricated signed target, at ${width}px`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 950 });
     const errors = await offline(page);
     await projections(page, sentryFixture());
@@ -108,6 +115,10 @@ for (const width of [1440, 390]) {
     await expect(card.locator('.plugin-card__install .command-snippet--add code')).toHaveText(add);
     await card.locator('.plugin-card__install .command-snippet--add button').click();
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(add);
+    await testInfo.attach(`pi-project-card-${width}.png`, {
+      body: await card.screenshot({ animations: 'disabled' }),
+      contentType: 'image/png',
+    });
 
     await card.locator('.plugin-card__title-link').click();
     const detail = page.locator('.install-panel');
@@ -115,6 +126,10 @@ for (const width of [1440, 390]) {
     await expect(detail.locator('.command-snippet--add code')).toHaveText(add);
     await expect(detail).toContainText('not a signed Pi target');
     await expect(detail.locator('.command-snippet--repair code')).toContainText('--target pi --scope project');
+    await testInfo.attach(`pi-project-detail-${width}.png`, {
+      body: await detail.screenshot({ animations: 'disabled' }),
+      contentType: 'image/png',
+    });
     await detail.getByRole('button', { name: 'This computer', exact: true }).click();
     await expect(detail.locator('.command-snippet--add code')).toHaveText(
       'npx -y universal-agent-plugins add sentry');
