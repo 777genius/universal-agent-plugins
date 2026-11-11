@@ -17,12 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 audit = runpy.run_path(str(ROOT / "scripts/live-install-audit.py"))
 isolated_env = audit["isolated_client_env"]
 invoke = audit["call"]
-REQUIRED_DISTRIBUTIONS = {
-    "marketing-kit": "777genius/marketing-kit",
-    "notion": "777genius/notion",
-    "hubspot-crm": "777genius/hubspot-crm",
-    "playwright": "777genius/playwright-bridge",
-}
+REQUIRED_DISTRIBUTIONS = audit["MARKETING_KIT_DISTRIBUTIONS"]
 EXPECTED = set(REQUIRED_DISTRIBUTIONS.values())
 # Versions declared by the immutable, published Marketing Kit uap.toml.
 # Edge aliases alone cannot prove an unchanged locked selector.
@@ -44,44 +39,7 @@ FIXED_REFUSAL_POLICY = {
     "snapshot_sequence": 45,
     "snapshot_digest": "sha256:2aba9b0d97556ac0756dff5f974aa7377914e0d8d1d9b735b46c5bc804b81f50",
 }
-FIXED_SIGNED_CLOSURE = {
-    "777genius/marketing-kit": {
-        "release_sequence": 1,
-        "package_version": "0.1.0",
-        "repository": "777genius/universal-agent-plugins-registry",
-        "package_path": "plugins/marketing-kit",
-        "resolved_revision": "c5bcedd4ecf12585a8a50401852e57a44891ebec",
-        "tree_digest": "sha256:8918c0f0222bd735fd0eef3cacf90b5a9351fb213483d1558a65b9911624e68a",
-        "manifest_digest": "sha256:40b18a6b33c6392134aff7beafb9a91eaeecf46ce765e0e888cdc743dd284ea2"
-    },
-    "777genius/notion": {
-        "release_sequence": 1,
-        "package_version": "0.1.0",
-        "repository": "777genius/universal-agent-plugins",
-        "package_path": "plugins/notion",
-        "resolved_revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
-        "tree_digest": "sha256:860fa6dd1830d0da2b8fed38195fa6ad6307082ac12d708118e5eb1c5d10f9b7",
-        "manifest_digest": "sha256:bbab30a4f062218d7a5fce2f6c818680d3c7adfaebdbaa3e523e15942a2f57e5"
-    },
-    "777genius/hubspot-crm": {
-        "release_sequence": 1,
-        "package_version": "0.1.0",
-        "repository": "777genius/universal-agent-plugins",
-        "package_path": "plugins/hubspot-crm",
-        "resolved_revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
-        "tree_digest": "sha256:09a0b151c384235c3d7b3929398695d24cd7b07c75993a0a73f1a218198ededd",
-        "manifest_digest": "sha256:20334e86a1b599d2759e04bfaef37dc2ddb7f6b0f3994b5d66d4eca12fbec941"
-    },
-    "777genius/playwright-bridge": {
-        "release_sequence": 2,
-        "package_version": "0.0.80",
-        "repository": "777genius/universal-agent-plugins-registry",
-        "package_path": "plugins/playwright",
-        "resolved_revision": "d9c8d778200d51ae941d86bb69af23534cd1c8f7",
-        "tree_digest": "sha256:ff3c74bb5760fea47003130f3984d48234892330325a7cad35a7bc973acc9cf6",
-        "manifest_digest": "sha256:8419b5c9e67894c2312048c4fe30e3ea920d00101d02641230183dd7ab4d3b31"
-    }
-}
+FIXED_SIGNED_CLOSURE = audit["MARKETING_KIT_SIGNED_CLOSURE"]
 
 
 # Published npm 0.1.102 dependency operations include result=success AND
@@ -971,14 +929,7 @@ def copilot_user_c_settings_shape(env, case_root):
 
 
 
-def copilot_json_document(text):
-    def unique(pairs):
-        if len({key for key, _ in pairs}) != len(pairs):
-            raise ValueError("ambiguous Copilot JSON object")
-        return dict(pairs)
-    def reject_constant(_):
-        raise ValueError("invalid Copilot JSON constant")
-    return json.loads(text, object_pairs_hook=unique, parse_constant=reject_constant)
+copilot_json_document = audit["copilot_json_document"]
 
 
 def copilot_owned_json(path, root):
@@ -1086,61 +1037,11 @@ def copilot_signed_user_versions(cli, env, project, policy):
     return owners
 
 
-COPILOT_BUILTIN_JSON = [{"name": "browser-use", "marketplace": "", "version": "0.0.4",
-                         "enabled": False, "source": "builtin"}]
-COPILOT_BUILTIN_TEXT = "Built-in plugins:\n  • browser-use (v0.0.4) [disabled]\n"
-COPILOT_EMPTY_TEXT = "No plugins installed.\n\nUse 'copilot plugin install <source>' to install a plugin.\n"
-
-
-def copilot_native_entries_state(entries, owners):
-    """Check the complete observed .105 live JSON identity and source schema."""
-    if not isinstance(entries, list) or len(entries) != len(owners) + 1:
-        raise AssertionError("Copilot native plugin listing malformed or incomplete")
-    found, builtin = set(), []
-    for entry in entries:
-        if (not isinstance(entry, dict) or not isinstance(entry.get("name"), str)
-                or type(entry.get("enabled")) is not bool or not isinstance(entry.get("source"), str)
-                or (entry.get("version") is not None and not isinstance(entry["version"], str))):
-            raise AssertionError("Copilot native plugin entry malformed")
-        name = entry["name"]
-        if name == "browser-use":
-            builtin.append(entry)
-            continue
-        if (name not in owners or name in found or entry.get("marketplace") != owners[name]["marketplace"]
-                or entry["enabled"] is not True
-                or entry.get("version") != owners[name]["version"]
-                or entry["source"] != "live" or entry.get("installedFrom") != owners[name]["target_locator"]):
-            raise AssertionError("Copilot native managed identity is foreign or duplicated")
-        found.add(name)
-    if builtin != COPILOT_BUILTIN_JSON or found != set(owners):
-        raise AssertionError("Copilot native closure or observed builtin baseline changed")
-    return {"status": "installed" if owners else "absent", "managed_count": len(found)}
-
-
-def copilot_native_text_state(text, owners):
-    """Consume complete .105 live listing, including each exact physical path."""
-    document = text.replace("\r\n", "\n")
-    if not owners:
-        if document != COPILOT_EMPTY_TEXT + COPILOT_BUILTIN_TEXT:
-            raise AssertionError("Copilot native empty text differs from observed baseline")
-        return
-    if not document.startswith(COPILOT_BUILTIN_TEXT):
-        raise AssertionError("Copilot native builtin prefix changed")
-    document = document[len(COPILOT_BUILTIN_TEXT):].removesuffix("\n")
-    lines = document.split("\n")
-    if (not lines or lines[0] != "Live Plugins (loaded from a local marketplace directory, never copied):"
-            or len(lines) != 1 + 2 * len(owners)):
-        raise AssertionError("Copilot native full live listing incomplete")
-    found = set()
-    for index in range(1, len(lines), 2):
-        entry = re.fullmatch(r"  • ([A-Za-z0-9][A-Za-z0-9._-]*)@(agentplugins-[0-9a-f]{12}) \(v([^() ]+)\) \(enabled\)", lines[index])
-        if (entry is None or entry[1] not in owners or entry[1] in found
-                or entry[2] != owners[entry[1]]["marketplace"] or entry[3] != owners[entry[1]]["version"]
-                or lines[index + 1] != "      from " + owners[entry[1]]["target_locator"]):
-            raise AssertionError("Copilot native physical identity/version/source differs")
-        found.add(entry[1])
-    if found != set(owners):
-        raise AssertionError("Copilot native physical closure incomplete")
+COPILOT_BUILTIN_JSON = audit["COPILOT_BUILTIN_JSON"]
+COPILOT_BUILTIN_TEXT = audit["COPILOT_BUILTIN_TEXT"]
+COPILOT_EMPTY_TEXT = audit["COPILOT_EMPTY_TEXT"]
+copilot_native_entries_state = audit["copilot_native_entries_state"]
+copilot_native_text_state = audit["copilot_native_text_state"]
 
 
 def copilot_native_scope_state(env, project, owners):

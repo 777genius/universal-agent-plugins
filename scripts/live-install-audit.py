@@ -18,6 +18,53 @@ from urllib.parse import urlsplit, urlunsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests/live-install/fixtures.json"
+
+# One immutable authority for the signed Marketing Kit and its dependencies.
+MARKETING_KIT_DISTRIBUTIONS = {
+    "marketing-kit": "777genius/marketing-kit",
+    "notion": "777genius/notion",
+    "hubspot-crm": "777genius/hubspot-crm",
+    "playwright": "777genius/playwright-bridge",
+}
+MARKETING_KIT_SIGNED_CLOSURE = {
+    "777genius/marketing-kit": {
+        "release_sequence": 1,
+        "package_version": "0.1.0",
+        "repository": "777genius/universal-agent-plugins-registry",
+        "package_path": "plugins/marketing-kit",
+        "resolved_revision": "c5bcedd4ecf12585a8a50401852e57a44891ebec",
+        "tree_digest": "sha256:8918c0f0222bd735fd0eef3cacf90b5a9351fb213483d1558a65b9911624e68a",
+        "manifest_digest": "sha256:40b18a6b33c6392134aff7beafb9a91eaeecf46ce765e0e888cdc743dd284ea2"
+    },
+    "777genius/notion": {
+        "release_sequence": 1,
+        "package_version": "0.1.0",
+        "repository": "777genius/universal-agent-plugins",
+        "package_path": "plugins/notion",
+        "resolved_revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+        "tree_digest": "sha256:860fa6dd1830d0da2b8fed38195fa6ad6307082ac12d708118e5eb1c5d10f9b7",
+        "manifest_digest": "sha256:bbab30a4f062218d7a5fce2f6c818680d3c7adfaebdbaa3e523e15942a2f57e5"
+    },
+    "777genius/hubspot-crm": {
+        "release_sequence": 1,
+        "package_version": "0.1.0",
+        "repository": "777genius/universal-agent-plugins",
+        "package_path": "plugins/hubspot-crm",
+        "resolved_revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+        "tree_digest": "sha256:09a0b151c384235c3d7b3929398695d24cd7b07c75993a0a73f1a218198ededd",
+        "manifest_digest": "sha256:20334e86a1b599d2759e04bfaef37dc2ddb7f6b0f3994b5d66d4eca12fbec941"
+    },
+    "777genius/playwright-bridge": {
+        "release_sequence": 2,
+        "package_version": "0.0.80",
+        "repository": "777genius/universal-agent-plugins-registry",
+        "package_path": "plugins/playwright",
+        "resolved_revision": "d9c8d778200d51ae941d86bb69af23534cd1c8f7",
+        "tree_digest": "sha256:ff3c74bb5760fea47003130f3984d48234892330325a7cad35a7bc973acc9cf6",
+        "manifest_digest": "sha256:8419b5c9e67894c2312048c4fe30e3ea920d00101d02641230183dd7ab4d3b31"
+    }
+}
+
 NATIVE_ROOTS = {
     "codex": [".codex", ".agents"], "chatgpt": [],
     "cursor": [".cursor"], "copilot": [".copilot", ".config/copilot"],
@@ -465,9 +512,99 @@ def qoder_native_plugin_state(home, env, cwd, identity, expected_version=None):
     return {"status": "unqualified-identity-or-version"}
 
 
+def copilot_json_document(text):
+    def unique(pairs):
+        if len({key for key, _ in pairs}) != len(pairs):
+            raise ValueError("ambiguous Copilot JSON object")
+        return dict(pairs)
+    def reject_constant(_):
+        raise ValueError("invalid Copilot JSON constant")
+    return json.loads(text, object_pairs_hook=unique, parse_constant=reject_constant)
+
+COPILOT_BUILTIN_JSON = [{"name": "browser-use", "marketplace": "", "version": "0.0.4",
+                         "enabled": False, "source": "builtin"}]
+COPILOT_BUILTIN_TEXT = "Built-in plugins:\n  • browser-use (v0.0.4) [disabled]\n"
+COPILOT_EMPTY_TEXT = "No plugins installed.\n\nUse 'copilot plugin install <source>' to install a plugin.\n"
+
+
+def copilot_native_entries_state(entries, owners):
+    """Check the complete observed .105 live JSON identity and source schema."""
+    if not isinstance(entries, list) or len(entries) != len(owners) + 1:
+        raise AssertionError("Copilot native plugin listing malformed or incomplete")
+    found, builtin = set(), []
+    for entry in entries:
+        if (not isinstance(entry, dict) or not isinstance(entry.get("name"), str)
+                or type(entry.get("enabled")) is not bool or not isinstance(entry.get("source"), str)
+                or (entry.get("version") is not None and not isinstance(entry["version"], str))):
+            raise AssertionError("Copilot native plugin entry malformed")
+        name = entry["name"]
+        if name == "browser-use":
+            builtin.append(entry)
+            continue
+        if (name not in owners or name in found or entry.get("marketplace") != owners[name]["marketplace"]
+                or entry["enabled"] is not True
+                or entry.get("version") != owners[name]["version"]
+                or entry["source"] != "live" or entry.get("installedFrom") != owners[name]["target_locator"]):
+            raise AssertionError("Copilot native managed identity is foreign or duplicated")
+        found.add(name)
+    if builtin != COPILOT_BUILTIN_JSON or found != set(owners):
+        raise AssertionError("Copilot native closure or observed builtin baseline changed")
+    return {"status": "installed" if owners else "absent", "managed_count": len(found)}
+
+
+def copilot_native_text_state(text, owners):
+    """Consume complete .105 live listing, including each exact physical path."""
+    document = text.replace("\r\n", "\n")
+    if not owners:
+        if document != COPILOT_EMPTY_TEXT + COPILOT_BUILTIN_TEXT:
+            raise AssertionError("Copilot native empty text differs from observed baseline")
+        return
+    if not document.startswith(COPILOT_BUILTIN_TEXT):
+        raise AssertionError("Copilot native builtin prefix changed")
+    document = document[len(COPILOT_BUILTIN_TEXT):].removesuffix("\n")
+    lines = document.split("\n")
+    if (not lines or lines[0] != "Live Plugins (loaded from a local marketplace directory, never copied):"
+            or len(lines) != 1 + 2 * len(owners)):
+        raise AssertionError("Copilot native full live listing incomplete")
+    found = set()
+    for index in range(1, len(lines), 2):
+        entry = re.fullmatch(r"  • ([A-Za-z0-9][A-Za-z0-9._-]*)@(agentplugins-[0-9a-f]{12}) \(v([^() ]+)\) \(enabled\)", lines[index])
+        if (entry is None or entry[1] not in owners or entry[1] in found
+                or entry[2] != owners[entry[1]]["marketplace"] or entry[3] != owners[entry[1]]["version"]
+                or lines[index + 1] != "      from " + owners[entry[1]]["target_locator"]):
+            raise AssertionError("Copilot native physical identity/version/source differs")
+        found.add(entry[1])
+    if found != set(owners):
+        raise AssertionError("Copilot native physical closure incomplete")
+
+def marketing_kit_signed_pins(fixture_pins):
+    """Extend the reviewed 30-source catalogue only with its signed kit child."""
+    if not isinstance(fixture_pins, dict):
+        return None
+    pins = {}
+    for alias, distribution in MARKETING_KIT_DISTRIBUTIONS.items():
+        anchor = MARKETING_KIT_SIGNED_CLOSURE[distribution]
+        pin = {"distribution": distribution, "repository": anchor["repository"],
+               "path": anchor["package_path"], "revision": anchor["resolved_revision"],
+               "sequence": anchor["release_sequence"], "tree_digest": anchor["tree_digest"],
+               "manifest_digest": anchor["manifest_digest"]}
+        # HubSpot is a kit dependency, not a 31st top-level catalogue case.
+        # Never silently replace a changed or missing reviewed catalogue pin.
+        if alias != "hubspot-crm" or alias in fixture_pins:
+            supplied = fixture_pins.get(alias)
+            if (not isinstance(supplied, dict) or type(supplied.get("sequence")) is not int
+                    or supplied != pin):
+                return None
+        pins[alias] = pin
+    return pins
+
+
 def copilot_signed_kit_owners(list_json, pins, data, case_root):
     """Qualify all four signed User bindings before trusting native siblings."""
-    aliases = ("marketing-kit", "notion", "hubspot-crm", "playwright")
+    aliases = tuple(MARKETING_KIT_DISTRIBUTIONS)
+    pins = marketing_kit_signed_pins(pins)
+    if pins is None:
+        return None
     text, status = copilot_settings_read(data / "state-v2.json", case_root)
     if status is not None:
         return None
@@ -475,7 +612,9 @@ def copilot_signed_kit_owners(list_json, pins, data, case_root):
         state = json.loads(text, object_pairs_hook=_unique_json_object)
         records = state["installations"]
         receipts = state["environment_receipts"]
-        if (not isinstance(records, list) or len(records) != 4
+        public_records = list_json["data"]["installations"]
+        if (not isinstance(public_records, list) or len(public_records) != 4
+                or not isinstance(records, list) or len(records) != 4
                 or not isinstance(receipts, list) or len(receipts) != 4):
             return None
         owners, receipt_keys, physical_ids, binding_ids = {}, set(), set(), set()
@@ -485,11 +624,14 @@ def copilot_signed_kit_owners(list_json, pins, data, case_root):
             if len(matches) != 1:
                 return None
             public = matches[0]
-            public_clients = [v for v in public["clients"] if v.get("client_id") == "copilot"]
-            if len(public_clients) != 1:
+            public_clients = public["clients"]
+            if (not isinstance(public_clients, list) or len(public_clients) != 1
+                    or public_clients[0].get("client_id") != "copilot"):
                 return None
-            version = public_clients[0]["package_revision"]["version"]
-            if not isinstance(version, str) or not version:
+            version = MARKETING_KIT_SIGNED_CLOSURE[pin["distribution"]]["package_version"]
+            public_revision = public_clients[0]["package_revision"]
+            if (public_revision.get("version") != version
+                    or type(public_revision.get("release_sequence")) is not int):
                 return None
             selected = [v for v in records if v["directory"].get("distribution_id") == pin["distribution"]]
             if len(selected) != 1:
@@ -498,6 +640,7 @@ def copilot_signed_kit_owners(list_json, pins, data, case_root):
             directory, source, package = (record[k] for k in ("directory", "source", "package"))
             if (record["installation_id"] != public["installation_id"]
                     or record.get("origin_mode") != "directory"
+                    or type(directory.get("desired_release_sequence")) is not int
                     or directory.get("desired_release_sequence") != pin["sequence"]
                     or package.get("version") != version
                     or package.get("manifest_digest") != pin["manifest_digest"]
@@ -518,7 +661,8 @@ def copilot_signed_kit_owners(list_json, pins, data, case_root):
                     or binding.get("materialization") != "materialized"
                     or binding.get("verification") != "installation_verified"
                     or binding.get("affected_surfaces") != ["copilot", "vscode"]
-                    or not isinstance(physical, str) or not physical or physical in physical_ids
+                    or not isinstance(physical, str) or not physical.strip()
+                    or physical != physical.strip() or physical in physical_ids
                     or physical in (".", "..") or Path(physical).name != physical
                     or not target.is_absolute() or not target.is_dir()
                     or not path_inside_case(target, case_root)
@@ -569,29 +713,43 @@ def copilot_signed_kit_owners(list_json, pins, data, case_root):
 
 
 def copilot_signed_kit_settings(home, case_root, owners, enabled):
-    """Require exactly four physical qualified preferences, not merely one."""
-    if not isinstance(owners, dict) or set(owners) != {
+    """Require exactly four physical preferences and only owned marketplaces."""
+    if type(enabled) is not bool or not isinstance(owners, dict) or set(owners) != {
             "marketing-kit", "notion", "hubspot-crm", "playwright"}:
         return False
     text, status = copilot_settings_read(home / ".copilot/settings.json", case_root)
     if status is not None:
         return False
     try:
-        document = json.loads(text, object_pairs_hook=_unique_json_object)
-        expected = {name + "@" + owner["marketplace"]: enabled
-                    for name, owner in owners.items()}
-        return (isinstance(document, dict)
-                and set(document) in ({"enabledPlugins"},
-                                      {"enabledPlugins", "extraKnownMarketplaces"})
-                and ("extraKnownMarketplaces" not in document
-                     or document["extraKnownMarketplaces"] == {})
-                and document.get("enabledPlugins") == expected)
+        document = copilot_json_document(text)
+        expected = {name + "@" + owner["marketplace"] for name, owner in owners.items()}
+        preferences = document.get("enabledPlugins") if isinstance(document, dict) else None
+        if (not isinstance(document, dict)
+                or set(document) not in ({"enabledPlugins"},
+                                        {"enabledPlugins", "extraKnownMarketplaces"})
+                or not isinstance(preferences, dict) or set(preferences) != expected
+                or any(value is not enabled for value in preferences.values())):
+            return False
+        marketplaces = document.get("extraKnownMarketplaces", {})
+        if not isinstance(marketplaces, dict):
+            return False
+        if not enabled:
+            return marketplaces == {}
+        # Copilot .105 retains owned directory registrations while installed.
+        # Complete native JSON and TEXT independently require all four plugins.
+        expected_sources = {
+            owner["marketplace"]: {"source": {"source": "directory",
+                                               "path": owner["target_locator"]}}
+            for owner in owners.values()}
+        return all(name in expected_sources and value == expected_sources[name]
+                   for name, value in marketplaces.items())
     except (TypeError, ValueError, KeyError, AttributeError):
         return False
 
 
-def copilot_native_plugin_state(home, env, cwd, identity, expected_version=None, owners=None):
-    """Read documented Copilot plugin list JSON from the original isolated profile."""
+def copilot_native_plugin_state(home, env, cwd, identity, expected_version=None,
+                                owners=None, owned_call=None):
+    """Read the original profile; signed kits require complete JSON and TEXT."""
     profile = home / ".copilot"
     executable = AGENT_BINARIES.get("copilot")
     if (not executable or not Path(executable).is_absolute()
@@ -599,34 +757,34 @@ def copilot_native_plugin_state(home, env, cwd, identity, expected_version=None,
             or not path_inside_case(profile, home)):
         return {"status": "unqualified-prerequisites"}
     native_env = dict(env, COPILOT_HOME=str(profile))
+    if owners is not None:
+        if (not isinstance(owners, dict)
+                or (owners and set(owners) != set(MARKETING_KIT_DISTRIBUTIONS))):
+            return {"status": "unqualified-signed-closure"}
+        responses = []
+        invoke_owned = call if owned_call is None else owned_call
+        for suffix in (["--json"], []):
+            if (not profile.is_dir() or profile.is_symlink()
+                    or not path_inside_case(profile, home)):
+                return {"status": "unqualified-prerequisites"}
+            result = invoke_owned([executable, "plugin", "list", *suffix],
+                                  native_env, cwd, 30, capture_full=True)
+            if (type(result.get("exit_code")) is not int or result["exit_code"] != 0
+                    or result.get("timeout") is not False or result.get("stderr_full") != ""
+                    or not isinstance(result.get("stdout_full"), str)
+                    or len(result["stdout_full"].encode("utf-8")) > 1 << 20):
+                return {"status": "unqualified-list"}
+            responses.append(result["stdout_full"])
+        try:
+            state = copilot_native_entries_state(copilot_json_document(responses[0]), owners)
+            copilot_native_text_state(responses[1], owners)
+            return state
+        except (AssertionError, ValueError, TypeError, KeyError, AttributeError):
+            return {"status": "unqualified-signed-closure"}
     observed = call([executable, "plugin", "list", "--json"], native_env, cwd, 30)
     entries = observed.get("_json")
     if observed.get("exit_code") != 0 or not isinstance(entries, list) or len(entries) > 1024:
         return {"status": "unqualified-list"}
-    if owners is not None:
-        if (set(owners) != {"marketing-kit", "notion", "hubspot-crm", "playwright"}
-                or len(entries) != 5):
-            return {"status": "unqualified-signed-closure"}
-        found, builtin = set(), 0
-        for entry in entries:
-            if not isinstance(entry, dict):
-                return {"status": "unqualified-schema"}
-            if entry.get("name") == "browser-use":
-                if entry != {"name": "browser-use", "marketplace": "", "version": "0.0.4",
-                             "enabled": False, "source": "builtin"}:
-                    return {"status": "unqualified-signed-closure"}
-                builtin += 1
-                continue
-            owner = owners.get(entry.get("name"))
-            if (not isinstance(owner, dict) or entry["name"] in found
-                    or entry.get("marketplace") != owner["marketplace"]
-                    or entry.get("version") != owner["version"]
-                    or entry.get("enabled") is not True or entry.get("source") != "live"
-                    or entry.get("installedFrom") != owner["target_locator"]):
-                return {"status": "unqualified-signed-closure"}
-            found.add(entry["name"])
-        return ({"status": "installed"} if builtin == 1 and found == set(owners)
-                else {"status": "unqualified-signed-closure"})
     found = 0
     for entry in entries:
         if (not isinstance(entry, dict)
@@ -1700,7 +1858,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         else:
             copilot_native_before_remove = copilot_native_plugin_state(
                 home, env, project, identity, matching[0].get("version"),
-                owners=kit_owners)
+                owners=kit_owners, owned_call=audited_call)
         assert_case_unchanged()
     cleanup = None
     native_uninstall = None
@@ -1747,7 +1905,8 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     copilot_native_after_remove = None
     if target == "copilot" and kind == "plugin" and cleanup and cleanup["exit_code"] == 0:
         copilot_native_after_remove = copilot_native_plugin_state(
-            home, env, project, identity)
+            home, env, project, identity, owners={} if item == "marketing-kit" else None,
+            owned_call=audited_call)
         assert_case_unchanged()
     copilot_after_remove = (copilot_settings_sanitized_shape(home, case_root, identity)
                             if copilot_before is not None and cleanup else None)
@@ -1812,6 +1971,9 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         and (target != "qoder" or kind != "plugin"
              or (qoder_native_after_remove is not None
                  and qoder_native_after_remove["status"] == "absent"))
+        and (target != "copilot" or kind != "plugin" or item != "marketing-kit"
+             or (copilot_native_after_remove is not None
+                 and copilot_native_after_remove["status"] == "absent"))
         and not post_remove_identity_registered
         and (not native_residuals or copilot_disabled_setting_retained)
         and (kind != "skill" or (post_removal_skill is None

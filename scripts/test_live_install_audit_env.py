@@ -5623,18 +5623,56 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                         home, env, home, "atlassian")["status"], "unqualified-prerequisites")
 
 
+    def test_marketing_kit_signed_pins_keep_the_frozen_catalogue_and_reject_drift(self):
+        from copy import deepcopy
+        audit = load_audit()
+        fixtures = json.loads(audit.FIXTURES.read_text())
+        audit.validate_fixtures(fixtures)
+        original = deepcopy(fixtures)
+        supplied = fixtures["signed_release_pins"]
+        closure = audit.marketing_kit_signed_pins(supplied)
+        self.assertEqual(set(closure), {"marketing-kit", "notion", "hubspot-crm", "playwright"})
+        self.assertEqual(closure["hubspot-crm"], {
+            "distribution": "777genius/hubspot-crm",
+            "repository": "777genius/universal-agent-plugins",
+            "path": "plugins/hubspot-crm",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "sequence": 1,
+            "tree_digest": "sha256:09a0b151c384235c3d7b3929398695d24cd7b07c75993a0a73f1a218198ededd",
+            "manifest_digest": "sha256:20334e86a1b599d2759e04bfaef37dc2ddb7f6b0f3994b5d66d4eca12fbec941"})
+        self.assertEqual(fixtures, original)
+        self.assertEqual(len(fixtures["plugin_aliases"]), 30)
+        for alias in ("marketing-kit", "notion", "playwright"):
+            missing = deepcopy(supplied)
+            del missing[alias]
+            with self.subTest(alias=alias, missing=True):
+                self.assertIsNone(audit.marketing_kit_signed_pins(missing))
+        for alias in closure:
+            for field, bad in (("distribution", "foreign/package"),
+                               ("repository", "foreign/repository"), ("path", "foreign"),
+                               ("revision", "f" * 40), ("sequence", True),
+                               ("tree_digest", "sha256:" + "f" * 64),
+                               ("manifest_digest", "sha256:" + "f" * 64)):
+                changed = deepcopy({**supplied, "hubspot-crm": closure["hubspot-crm"]})
+                changed[alias][field] = bad
+                with self.subTest(alias=alias, field=field):
+                    self.assertIsNone(audit.marketing_kit_signed_pins(changed))
+        self.assertIsNone(audit.marketing_kit_signed_pins(None))
+
     def test_marketing_kit_copilot_owner_requires_signed_binding_and_receipts(self):
         audit = load_audit()
         aliases = ("marketing-kit", "notion", "hubspot-crm", "playwright")
-        pins = json.loads(audit.FIXTURES.read_text())["signed_release_pins"]
+        fixture_pins = json.loads(audit.FIXTURES.read_text())["signed_release_pins"]
+        self.assertNotIn("hubspot-crm", fixture_pins)
+        pins = audit.marketing_kit_signed_pins(fixture_pins)
         with TemporaryDirectory() as temporary:
-            root = Path(temporary)
+            root = Path(temporary).resolve(strict=True)
             data = root / "uap-data"
             data.mkdir()
             nodes, records, environment_receipts = [], [], []
             for index, alias in enumerate(aliases):
                 pin = pins[alias]
-                version = f"1.0.{index}"
+                version = audit.MARKETING_KIT_SIGNED_CLOSURE[pin["distribution"]]["package_version"]
                 installation_id, binding_id = f"install-{index}", f"binding-{index}"
                 revision = {"distribution_id": pin["distribution"],
                             "resolved_revision": pin["revision"],
@@ -5675,7 +5713,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                         "verification": "installation_verified",
                         "affected_surfaces": ["copilot", "vscode"],
                         "physical_artifact_id": physical, "target_locator": str(target),
-                        "package_revision": revision,
+                        "package_revision": dict(revision),
                         "receipts": [{"phase": "committed", "client_binding_id": binding_id,
                                       "active_path": str(target), "operation_id": f"op-{index}"}]}}})
                 environment_receipts.append({
@@ -5690,16 +5728,45 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             state_path = data / "state-v2.json"
             def check():
                 state_path.write_text(json.dumps(state), encoding="utf-8")
-                return audit.copilot_signed_kit_owners(response, pins, data, root)
+                return audit.copilot_signed_kit_owners(response, fixture_pins, data, root)
             owners = check()
             self.assertIsInstance(owners, dict)
             self.assertEqual(set(owners), set(aliases))
             self.assertEqual({v["version"] for v in owners.values()},
-                             {f"1.0.{i}" for i in range(4)})
+                             {"0.1.0", "0.0.80"})
             old_revision = nodes[1]["clients"][0]["package_revision"]["tree_digest"]
             nodes[1]["clients"][0]["package_revision"]["tree_digest"] = "sha256:" + "f" * 64
             self.assertIsNone(check())
             nodes[1]["clients"][0]["package_revision"]["tree_digest"] = old_revision
+            for index, alias in enumerate(aliases):
+                record = records[index]
+                binding = record["clients"][f"binding-{index}"]
+                for revision_owner in (nodes[index]["clients"][0], binding):
+                    revision = revision_owner["package_revision"]
+                    for field, bad in (("version", "9.9.9"),
+                                       ("resolved_revision", "f" * 40),
+                                       ("tree_digest", "sha256:" + "f" * 64),
+                                       ("manifest_digest", "sha256:" + "f" * 64)):
+                        original = revision[field]
+                        revision[field] = bad
+                        with self.subTest(alias=alias, field=field):
+                            self.assertIsNone(check())
+                        revision[field] = original
+                original = record["directory"]["desired_release_sequence"]
+                record["directory"]["desired_release_sequence"] = True
+                with self.subTest(alias=alias, field="sequence-bool"):
+                    self.assertIsNone(check())
+                record["directory"]["desired_release_sequence"] = original
+            nodes.append(dict(nodes[0], name="foreign", installation_id="foreign"))
+            self.assertIsNone(check())
+            nodes.pop()
+            nodes[0]["clients"].append(dict(nodes[0]["clients"][0], client_id="vscode"))
+            self.assertIsNone(check())
+            nodes[0]["clients"].pop()
+            nodes[0]["clients"][0]["package_revision"]["release_sequence"] = True
+            self.assertIsNone(check())
+            nodes[0]["clients"][0]["package_revision"]["release_sequence"] = 1
+            self.assertEqual(set(check()), set(aliases))
             replay = records[0]["clients"]["binding-0"]["receipts"][0].copy()
             records[0]["clients"]["binding-0"]["receipts"].append(replay)
             self.assertIsNone(check())
@@ -5716,14 +5783,14 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         audit = load_audit()
         aliases = ("marketing-kit", "notion", "hubspot-crm", "playwright")
         with TemporaryDirectory() as temporary:
-            case = Path(temporary)
+            case = Path(temporary).resolve(strict=True)
             home = case / "home"
             profile = home / ".copilot"
             profile.mkdir(parents=True)
             native = str(case / "trusted-copilot")
             owners = {name: {"marketplace": "agentplugins-" + str(index) * 12,
                               "version": "1.0." + str(index),
-                              "target_locator": str(case / name)}
+                              "target_locator": str(case / name) + "/" + "deep-directory-" * 40}
                       for index, name in enumerate(aliases, 1)}
             builtin = {"name": "browser-use", "marketplace": "",
                        "version": "0.0.4", "enabled": False, "source": "builtin"}
@@ -5732,14 +5799,57 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                  "version": owner["version"], "enabled": True, "source": "live",
                  "installedFrom": owner["target_locator"]}
                 for name, owner in owners.items()]
-            def probe(rows):
+            lines = [audit.COPILOT_BUILTIN_TEXT +
+                     "Live Plugins (loaded from a local marketplace directory, never copied):"]
+            for name, owner in owners.items():
+                lines.extend([f"  • {name}@{owner['marketplace']} (v{owner['version']}) (enabled)",
+                              "      from " + owner["target_locator"]])
+            complete_text = "\n".join(lines) + "\n"
+            self.assertGreater(len(complete_text), 1800)
+            empty_text = audit.COPILOT_EMPTY_TEXT + audit.COPILOT_BUILTIN_TEXT
+
+            def probe(rows, text=complete_text, observed_owners=owners, mutation=None):
+                calls = []
+                def call(argv, call_env, _cwd, timeout, **kwargs):
+                    self.assertEqual(timeout, 30)
+                    self.assertTrue(kwargs.get("capture_full"))
+                    self.assertEqual(call_env["COPILOT_HOME"], str(profile))
+                    calls.append(argv)
+                    body = json.dumps(rows) if "--json" in argv else text
+                    result = {"exit_code": 0, "timeout": False,
+                              "stdout_full": body, "stderr_full": "",
+                              "stdout_tail": body[-1800:]}
+                    if mutation == "tail-only":
+                        result.pop("stdout_full")
+                    elif mutation == "stderr":
+                        result["stderr_full"] = "warning"
+                    elif mutation == "timeout":
+                        result["timeout"] = True
+                    elif mutation == "exit":
+                        result["exit_code"] = 1
+                    elif mutation == "boolean-exit":
+                        result["exit_code"] = False
+                    elif mutation == "oversized":
+                        result["stdout_full"] = " " * ((1 << 20) + 1)
+                    elif mutation == "duplicate-json" and "--json" in argv:
+                        result["stdout_full"] = body.replace(
+                            '"name": "browser-use"', '"name": "browser-use", "name": "browser-use"', 1)
+                    elif mutation == "constant-json" and "--json" in argv:
+                        result["stdout_full"] = body.replace('"enabled": false', '"enabled": NaN', 1)
+                    return result
                 with patch.dict(audit.AGENT_BINARIES, {"copilot": native}, clear=True):
-                    with patch.object(audit, "call", return_value={
-                            "exit_code": 0, "_json": rows}):
-                        return audit.copilot_native_plugin_state(
+                    with patch.object(audit, "call", side_effect=call):
+                        state = audit.copilot_native_plugin_state(
                             home, {"HOME": str(home)}, case, "marketing-kit",
-                            "1.0.1", owners=owners)["status"]
+                            "1.0.1", owners=observed_owners)
+                if state["status"] in ("installed", "absent"):
+                    self.assertEqual(calls, [[native, "plugin", "list", "--json"],
+                                             [native, "plugin", "list"]])
+                return state["status"]
+
             self.assertEqual(probe(entries), "installed")
+            self.assertEqual(probe([builtin], empty_text, {}), "absent")
+            self.assertEqual(probe(entries, complete_text.replace("\n", "\r\n")), "installed")
             with patch.dict(audit.AGENT_BINARIES, {"copilot": native}, clear=True):
                 with patch.object(audit, "call", return_value={
                         "exit_code": 0, "_json": entries}):
@@ -5750,23 +5860,147 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 for field, bad in (("name", "reminted"), ("marketplace", "agentplugins-" + "f"*12),
                                    ("version", "9.9.9"), ("source", "cache"),
                                    ("installedFrom", str(case / "foreign")),
-                                   ("enabled", False)):
+                                   ("enabled", False), ("enabled", 1), ("enabled", 1.0)):
                     changed = json.loads(json.dumps(entries))
                     changed[index][field] = bad
-                    with self.subTest(index=index, field=field):
+                    with self.subTest(index=index, field=field, value=bad):
                         self.assertNotEqual(probe(changed), "installed")
             for rows in (entries[:-1], entries + [entries[-1]], entries + ["invalid"],
-                         [dict(builtin, version="9.9.9"), *entries[1:]]):
-                with self.subTest(rows=len(rows)):
+                         [dict(builtin, version="9.9.9"), *entries[1:]],
+                         [dict(builtin, enabled=0), *entries[1:]],
+                         [dict(builtin, enabled=0.0), *entries[1:]]):
+                with self.subTest(rows=rows):
                     self.assertNotEqual(probe(rows), "installed")
+            for changed in (
+                    complete_text[-1800:],
+                    complete_text.replace("      from ", "      from /foreign/", 1),
+                    complete_text.replace("(v1.0.1)", "(v9.9.9)", 1),
+                    complete_text + "\n".join(lines[1:3]) + "\n",
+                    complete_text + "unexpected output\n",
+                    empty_text):
+                with self.subTest(text=changed[:80]):
+                    self.assertNotEqual(probe(entries, changed), "installed")
+            for mutation in ("tail-only", "stderr", "timeout", "exit", "boolean-exit",
+                             "oversized", "duplicate-json", "constant-json"):
+                with self.subTest(mutation=mutation):
+                    self.assertNotEqual(probe(entries, mutation=mutation), "installed")
+                    self.assertNotEqual(probe([builtin], empty_text, {}, mutation), "absent")
+            for rows, text in ((entries, empty_text), ([builtin], complete_text),
+                               ([dict(builtin, enabled=0)], empty_text),
+                               ([builtin], empty_text + "unexpected output\n")):
+                with self.subTest(removal=True):
+                    self.assertNotEqual(probe(rows, text, {}), "absent")
+
+    def test_marketing_kit_copilot_removal_requires_native_absence_without_residual_files(self):
+        # A clean disk snapshot must not bypass the independent native observer.
+        audit = load_audit()
+        identity = "marketing-kit"
+        matched = {"name": identity, "installation_id": "owned-kit",
+                   "clients": [{"client_id": "copilot",
+                                "verification": "installation_verified"}]}
+        for outcome in ("absent", "surviving-json", "surviving-text", "bad-text", "failed-list"):
+            with self.subTest(outcome=outcome), TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve(strict=True)
+                runroot = root / "run"
+                native = str(root / "trusted-copilot")
+                owners = {name: {"marketplace": "agentplugins-" + str(index) * 12,
+                                  "version": audit.MARKETING_KIT_SIGNED_CLOSURE[
+                                      audit.MARKETING_KIT_DISTRIBUTIONS[name]]["package_version"],
+                                  "target_locator": str(root / "owned" / name)}
+                          for index, name in enumerate(
+                              ("marketing-kit", "notion", "hubspot-crm", "playwright"), 1)}
+                entries = [dict(audit.COPILOT_BUILTIN_JSON[0])] + [
+                    {"name": name, "marketplace": owner["marketplace"],
+                     "version": owner["version"], "enabled": True, "source": "live",
+                     "installedFrom": owner["target_locator"]}
+                    for name, owner in owners.items()]
+                lines = [audit.COPILOT_BUILTIN_TEXT +
+                         "Live Plugins (loaded from a local marketplace directory, never copied):"]
+                for name, owner in owners.items():
+                    lines.extend([f"  • {name}@{owner['marketplace']} (v{owner['version']}) (enabled)",
+                                  "      from " + owner["target_locator"]])
+                live_text = "\n".join(lines) + "\n"
+                empty_text = audit.COPILOT_EMPTY_TEXT + audit.COPILOT_BUILTIN_TEXT
+                state = {"removed": False}
+                observed = []
+                def call(argv, env, cwd, timeout=105, **kwargs):
+                    if argv[0] == native:
+                        self.assertTrue(kwargs.get("capture_full"))
+                        observed.append((state["removed"], "--json" in argv))
+                        rows = audit.COPILOT_BUILTIN_JSON if state["removed"] else entries
+                        text = empty_text if state["removed"] else live_text
+                        if state["removed"] and outcome == "surviving-json":
+                            rows = entries
+                        elif state["removed"] and outcome == "surviving-text":
+                            text = live_text
+                        elif state["removed"] and outcome == "bad-text":
+                            text += "unexpected native row\n"
+                        body = json.dumps(rows) if "--json" in argv else text
+                        return {"exit_code": 1 if state["removed"] and outcome == "failed-list" else 0,
+                                "timeout": False, "stdout_full": body, "stderr_full": "",
+                                "stdout_tail": body[-1800:], "stderr_tail": ""}
+                    managed = Path(env["HOME"]) / ".copilot/marketing-kit.json"
+                    if argv[1] == "add" and not managed.exists():
+                        managed.write_text('{"name":"marketing-kit"}', encoding="utf-8")
+                    elif argv[1] == "remove":
+                        managed.unlink()
+                        state["removed"] = True
+                    return {"exit_code": 0, "timeout": False, "stdout_tail": "", "stderr_tail": "",
+                            "_json": {"data": {"installations": [] if state["removed"] else [matched]}}}
+                with (patch.dict(audit.AGENT_BINARIES, {"copilot": native}, clear=True),
+                      patch.object(audit, "call", side_effect=call),
+                      patch.object(audit, "matching_installations", return_value=[matched]),
+                      patch.object(audit, "copilot_signed_kit_owners", return_value=owners),
+                      patch.object(audit, "copilot_signed_kit_settings", return_value=True)):
+                    result = audit.do_case("/unused/agentplugins", "copilot", "plugin",
+                                           identity, 0, runroot, {}, {})
+                self.assertTrue(result["listed_identity"])
+                self.assertTrue(result["native_identity_files"])
+                self.assertTrue(result["repeat_verified"])
+                self.assertTrue(result["sentinels_preserved"])
+                self.assertTrue(result["post_list_schema_valid"])
+                self.assertFalse(result["post_remove_identity_registered"])
+                self.assertEqual(result["native_residuals"], [])
+                self.assertEqual(result["cleanup"]["exit_code"], 0)
+                self.assertEqual(result["copilot_native_after_repeat"]["status"], "installed")
+                self.assertEqual(observed[:2], [(False, True), (False, False)])
+                self.assertIn((True, True), observed)
+                if outcome == "absent":
+                    self.assertEqual(observed, [(False, True), (False, False),
+                                                (True, True), (True, False)])
+                    self.assertTrue(result["removal_verified"])
+                    self.assertEqual(result["status"], "passed")
+                else:
+                    self.assertFalse(result["removal_verified"])
+                    self.assertEqual(result["status"], "cleanup-failed")
+
+    def test_marketing_kit_copilot_native_guard_failure_stops_before_text(self):
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve(strict=True)
+            home = root / "home"
+            (home / ".copilot").mkdir(parents=True)
+            native = str(root / "trusted-copilot")
+            calls = []
+            def guarded_call(argv, *_args, **_kwargs):
+                calls.append(argv)
+                raise ValueError("audit case root changed after external execution")
+            with patch.dict(audit.AGENT_BINARIES, {"copilot": native}, clear=True):
+                with patch.object(audit, "call", side_effect=AssertionError("unguarded query")):
+                    with self.assertRaisesRegex(ValueError, "case root changed"):
+                        audit.copilot_native_plugin_state(
+                            home, {"HOME": str(home)}, root, "marketing-kit",
+                            owners={}, owned_call=guarded_call)
+            self.assertEqual(calls, [[native, "plugin", "list", "--json"]])
 
     def test_marketing_kit_copilot_requires_four_exact_preference_keys(self):
         audit = load_audit()
         aliases = ("marketing-kit", "notion", "hubspot-crm", "playwright")
-        owners = {name: {"marketplace": "agentplugins-" + str(index) * 12}
+        owners = {name: {"marketplace": "agentplugins-" + str(index) * 12,
+                         "target_locator": "/owned/" + name}
                   for index, name in enumerate(aliases, 1)}
         with TemporaryDirectory() as temporary:
-            root = Path(temporary)
+            root = Path(temporary).resolve(strict=True)
             home = root / "home"
             (home / ".copilot").mkdir(parents=True)
             path = home / ".copilot/settings.json"
@@ -5775,12 +6009,47 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             path.write_text(json.dumps({"enabledPlugins": expected}), encoding="utf-8")
             self.assertTrue(audit.copilot_signed_kit_settings(home, root, owners, True))
             self.assertFalse(audit.copilot_signed_kit_settings(home, root, owners, False))
+            marketplaces = {owner["marketplace"]: {
+                "source": {"source": "directory", "path": owner["target_locator"]}}
+                for owner in owners.values()}
+            for active_markets in ({}, marketplaces, dict(list(marketplaces.items())[:1])):
+                path.write_text(json.dumps({"enabledPlugins": expected,
+                                            "extraKnownMarketplaces": active_markets}), encoding="utf-8")
+                self.assertTrue(audit.copilot_signed_kit_settings(home, root, owners, True))
+            known = next(iter(marketplaces))
+            for bad in (
+                    {**marketplaces, "foreign": marketplaces[known]},
+                    {known: {"source": {"source": "directory", "path": "/foreign"}}},
+                    {known: {"source": {"source": "directory", "path": "relative"}}},
+                    {known: {"source": {"source": "github", "path": "/owned/marketing-kit"}}},
+                    {known: {"source": {**marketplaces[known]["source"], "extra": True}}},
+                    {known: None}, [], None):
+                path.write_text(json.dumps({"enabledPlugins": expected,
+                                            "extraKnownMarketplaces": bad}), encoding="utf-8")
+                with self.subTest(marketplaces=bad):
+                    self.assertFalse(audit.copilot_signed_kit_settings(home, root, owners, True))
+            path.write_text(json.dumps({"enabledPlugins": dict.fromkeys(expected, False),
+                                        "extraKnownMarketplaces": marketplaces}), encoding="utf-8")
+            self.assertFalse(audit.copilot_signed_kit_settings(home, root, owners, False))
             for changed in (
                 dict(list(expected.items())[:-1]),
                 {**expected, "foreign@agentplugins-" + "f"*12: True},
                 {**expected, next(iter(expected)): False}):
                 path.write_text(json.dumps({"enabledPlugins": changed}), encoding="utf-8")
                 self.assertFalse(audit.copilot_signed_kit_settings(home, root, owners, True))
+            for enabled in (True, False):
+                baseline = dict.fromkeys(expected, enabled)
+                for key in expected:
+                    for bad in (0, 1, 0.0, 1.0, "true", "false", None):
+                        changed = {**baseline, key: bad}
+                        path.write_text(json.dumps({"enabledPlugins": changed}), encoding="utf-8")
+                        with self.subTest(enabled=enabled, key=key, bad=bad):
+                            self.assertFalse(audit.copilot_signed_kit_settings(
+                                home, root, owners, enabled))
+                path.write_text(json.dumps({"enabledPlugins": baseline}), encoding="utf-8")
+                self.assertTrue(audit.copilot_signed_kit_settings(home, root, owners, enabled))
+                self.assertFalse(audit.copilot_signed_kit_settings(
+                    home, root, owners, int(enabled)))
             path.write_text(json.dumps({"enabledPlugins": dict.fromkeys(expected, False),
                                         "extraKnownMarketplaces": {}}), encoding="utf-8")
             self.assertTrue(audit.copilot_signed_kit_settings(home, root, owners, False))
