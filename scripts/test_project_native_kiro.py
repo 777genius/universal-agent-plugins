@@ -242,11 +242,11 @@ class KiroCollectorTests(unittest.TestCase):
         # Keep the run failed, but identify which disposable root changed
         # without leaking native filenames or config contents into evidence.
         for roots, expected in (
-                (("home",), "Kiro authentication refusal left unexpected native config in: home"),
+                (("home",), "Kiro native probe left unexpected config in: home"),
                 # The post-child cwd guard rejects unexpected user config before
                 # collect can summarize the separate auth-refusal boundary.
                 (("user",), "Kiro selected user cwd has unowned native config"),
-                (("home", "a"), "Kiro authentication refusal left unexpected native config in: home, a")):
+                (("home", "a"), "Kiro native probe left unexpected config in: home, a")):
             ctx = self.context()
             markers = []
             for scope in roots:
@@ -270,6 +270,51 @@ class KiroCollectorTests(unittest.TestCase):
             for marker in markers:
                 self.assertEqual((marker / "private-native-output.json").read_text(),
                                  "private fixture secret")
+
+    def test_pre_fixture_native_config_write_stops_before_next_read_only_command(self):
+        # Version/help can also initialize a native profile. Detect the first
+        # side effect rather than launching later native commands on that state.
+        good = {
+            "version": ({"exit": 0, "error": None}, b"kiro-cli 2.34.0\\n", b""),
+            "top-help": ({"exit": 0, "error": None}, b"Usage: kiro-cli\\n", b""),
+            "agent-help": ({"exit": 0, "error": None},
+                           b"Usage: kiro-cli agent\\n", b""),
+        }
+        for label, count in (("version", 1), ("top-help", 2), ("agent-help", 9)):
+            for scopes in (("home",), ("a",), ("home", "b")):
+                ctx = self.context()
+                roots = [(ctx.home if scope == "home" else ctx.projects[scope]) / ".kiro"
+                         for scope in scopes]
+
+                def changed():
+                    for marker in roots:
+                        marker.mkdir()
+                        (marker / "private-native-output.json").write_text("secret fixture")
+                    return good[label]
+
+                ctx.replace[label] = changed
+                expected = "Kiro native probe left unexpected config in: " + ", ".join(scopes)
+                with self.subTest(label=label, scopes=scopes), self.assertRaises(ValueError) as result:
+                    kiro.collect(ctx)
+                self.assertEqual(str(result.exception), expected)
+                self.assertNotIn("private-native-output", str(result.exception))
+                self.assertEqual(len(ctx.calls), count)
+                self.assertEqual(ctx.calls[-1][0], label)
+                for marker in roots:
+                    self.assertEqual((marker / "private-native-output.json").read_text(), "secret fixture")
+
+    def test_native_probe_exception_still_checks_unowned_home(self):
+        ctx = self.context()
+
+        def interrupted():
+            (ctx.home / ".kiro").mkdir()
+            raise RuntimeError("simulated terminated native command")
+
+        ctx.replace["version"] = interrupted
+        with self.assertRaisesRegex(ValueError, "Kiro native probe left unexpected config in: home"):
+            kiro.collect(ctx)
+        self.assertEqual([call[0] for call in ctx.calls], ["version"])
+        self.assertTrue((ctx.home / ".kiro").is_dir())
 
     def test_agent_list_rechecks_companions_and_path_before_markers(self):
         for mutation in ("companion", "path"):
