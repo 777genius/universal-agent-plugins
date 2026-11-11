@@ -10,15 +10,39 @@ on:
       - 'scripts/e2e/hermes-native.py'
       - 'scripts/e2e/hermes-native-lifecycle.py'
       - 'scripts/pi_project_components_native_e2e.py'
+      - 'scripts/e2e/released-native-proof.py'
+      - 'scripts/test_released_native_proof.py'
+      - 'npm/agentplugins/scripts/release-assets.js'
+      - '.github/workflows/agentplugins-release.yml'
       - '.github/workflows/hermes-native-e2e.yml'
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      release_tag:
+        required: true
+        type: string
+      frozen_commit:
+        required: true
+        type: string
+      release_assets_artifact:
+        required: true
+        type: string
+      expected_checksums_sha256:
+        required: true
+        type: string
+
+env:
+  RELEASE_TAG: ${{ inputs.release_tag }}
+  FROZEN_COMMIT: ${{ inputs.frozen_commit }}
+  RELEASE_ASSETS_ARTIFACT: ${{ inputs.release_assets_artifact }}
+  EXPECTED_CHECKSUMS_SHA256: ${{ inputs.expected_checksums_sha256 }}
 
 permissions:
   contents: read
 
 concurrency:
-  group: hermes-native-e2e-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: hermes-native-e2e-${{ github.event.pull_request.number || github.ref }}-${{ inputs.release_tag || 'source' }}
+  cancel-in-progress: ${{ inputs.release_tag == '' }}
 
 jobs:
   native-platform:
@@ -26,18 +50,39 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-15]
+        include:
+          - os: ubuntu-24.04
+            target: linux-amd64
+          - os: macos-15
+            target: darwin-arm64
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+          ref: ${{ inputs.frozen_commit || github.sha }}
+      - name: Test release proof boundaries
+        shell: bash
+        run: ${{ runner.os == 'Windows' && 'python' || 'python3' }} scripts/test_released_native_proof.py
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: ${{ inputs.release_tag != '' }}
         with:
-          go-version: '1.26.10'
+          node-version: '22.21.1'
+          package-manager-cache: false
+      - name: Acquire the complete same-run frozen release bundle
+        if: ${{ inputs.release_tag != '' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ inputs.release_assets_artifact }}
+          path: ${{ runner.temp }}/released-native-assets
+      - if: ${{ inputs.release_tag == '' }}
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.11'
           cache: false
       - name: Build this PR's exact UAP executable
+        if: ${{ inputs.release_tag == '' }}
         working-directory: cli
         shell: bash
         run: |
@@ -72,8 +117,22 @@ jobs:
       - name: Real Hermes User Skills/MCP and project trust boundary
         shell: bash
         env:
-          HERMES_NATIVE_UAP_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: bash scripts/e2e/hermes-native.sh
+          HERMES_NATIVE_UAP_HEAD: ${{ inputs.frozen_commit || github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$RELEASE_TAG" ]]; then
+            python3 scripts/e2e/released-native-proof.py run --client hermes --target "${{ matrix.target }}" --tag "$RELEASE_TAG" --commit "$FROZEN_COMMIT" --checksums-sha256 "$EXPECTED_CHECKSUMS_SHA256" --assets-artifact "$RELEASE_ASSETS_ARTIFACT" --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" --source "$GITHUB_WORKSPACE" --assets "$RUNNER_TEMP/released-native-assets" --proofs "$RUNNER_TEMP/released-native-proof"
+          else
+            bash scripts/e2e/hermes-native.sh
+          fi
+      - name: Retain release-native receipt and transcript
+        if: ${{ always() && inputs.release_tag != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: hermes-release-native-${{ matrix.target }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/released-native-proof/
+          if-no-files-found: error
+          retention-days: 14
       - name: Retain native lifecycle and MCP discovery evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -99,11 +158,28 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+          ref: ${{ inputs.frozen_commit || github.sha }}
+      - name: Test release proof boundaries
+        shell: bash
+        run: ${{ runner.os == 'Windows' && 'python' || 'python3' }} scripts/test_released_native_proof.py
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: ${{ inputs.release_tag != '' }}
         with:
-          go-version: '1.26.10'
+          node-version: '22.21.1'
+          package-manager-cache: false
+      - name: Acquire the complete same-run frozen release bundle
+        if: ${{ inputs.release_tag != '' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ inputs.release_assets_artifact }}
+          path: ${{ runner.temp }}/released-native-assets
+      - if: ${{ inputs.release_tag == '' }}
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.11'
           cache: false
       - name: Build this PR's UAP Windows executable
+        if: ${{ inputs.release_tag == '' }}
         working-directory: cli
         shell: pwsh
         run: |
@@ -202,11 +278,23 @@ jobs:
       - name: Real Hermes native Windows lifecycle and trust boundary
         shell: pwsh
         env:
-          HERMES_NATIVE_UAP_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          HERMES_NATIVE_UAP_HEAD: ${{ inputs.frozen_commit || github.event.pull_request.head.sha || github.sha }}
         run: |
           $ErrorActionPreference = 'Stop'
-          python scripts/e2e/hermes-native.py run scripts/e2e/hermes-native-lifecycle.py
-          if ($LASTEXITCODE -ne 0) { throw 'Native Hermes lifecycle failed' }
+          if ($env:RELEASE_TAG) {
+            python scripts/e2e/released-native-proof.py run --client hermes --target "windows-amd64" --tag "$env:RELEASE_TAG" --commit "$env:FROZEN_COMMIT" --checksums-sha256 "$env:EXPECTED_CHECKSUMS_SHA256" --assets-artifact "$env:RELEASE_ASSETS_ARTIFACT" --run-id "$env:GITHUB_RUN_ID" --run-attempt "$env:GITHUB_RUN_ATTEMPT" --source "$env:GITHUB_WORKSPACE" --assets "$env:RUNNER_TEMP/released-native-assets" --proofs "$env:RUNNER_TEMP/released-native-proof"
+          } else {
+            python scripts/e2e/hermes-native.py run scripts/e2e/hermes-native-lifecycle.py
+          }
+          if ($LASTEXITCODE -ne 0) { throw 'Native lifecycle failed' }
+      - name: Retain release-native receipt and transcript
+        if: ${{ always() && inputs.release_tag != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: hermes-release-native-windows-amd64-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/released-native-proof/
+          if-no-files-found: error
+          retention-days: 14
       - name: Retain native Windows lifecycle and installation evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -215,3 +303,38 @@ jobs:
           path: ${{ runner.temp }}/hermes-native-evidence-*/
           if-no-files-found: warn
           retention-days: 14
+
+  aggregate-release-native:
+    name: Aggregate hermes release-native proofs
+    if: ${{ always() && inputs.release_tag != '' }}
+    needs: [native-platform, native-windows-x64]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require every native lane to succeed
+        env:
+          NATIVE_LANES_PASSED: ${{ needs.native-platform.result == 'success' && needs.native-windows-x64.result == 'success' }}
+        run: test "$NATIVE_LANES_PASSED" = true
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.frozen_commit }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.21.1'
+          package-manager-cache: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ inputs.release_assets_artifact }}
+          path: ${{ runner.temp }}/released-native-assets
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: hermes-release-native-*-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/released-native-receipts
+      - name: Verify exactly three artifact-bound native receipts
+        run: |
+          python3 scripts/e2e/released-native-proof.py aggregate \
+            --client hermes --tag "$RELEASE_TAG" --commit "$FROZEN_COMMIT" \
+            --checksums-sha256 "$EXPECTED_CHECKSUMS_SHA256" --assets-artifact "$RELEASE_ASSETS_ARTIFACT" \
+            --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --source "$GITHUB_WORKSPACE" --assets "$RUNNER_TEMP/released-native-assets" \
+            --proofs "$RUNNER_TEMP/released-native-receipts"

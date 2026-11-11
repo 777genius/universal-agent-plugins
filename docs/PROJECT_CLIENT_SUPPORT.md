@@ -20,6 +20,25 @@ authority. Client paths below are relative to the selected project. Configuratio
 ownership and native discovery are separate: Prepared means further client
 selection, reload, trust or session work can remain.
 
+## Hermes and Antigravity: source-qualified additions {#hermes-antigravity-source}
+
+As of 2026-11-10, published CLI `0.1.102` does not include these targets.
+The following evidence qualifies source only, not the current public binary.
+Qualification against the immutable release artifact and signed Directory
+eligibility are separate pending checks; client capability does not grant a
+Directory package permission for another target.
+
+| Client | Component delivery and scope | Native evidence and remaining boundary |
+| --- | --- | --- |
+| Hermes | User Skills in `$HERMES_HOME/skills` and owned stdio/Streamable HTTP MCP members in user `config.yaml`; Project Skills in `.hermes/skills`. Project MCP is refused without redirecting to User configuration. | Hermes 0.23.0 passed Linux x64/macOS arm64/Windows x64 in [run 42813277862](https://github.com/777genius/universal-agent-plugins/actions/runs/42813277862), UAP `a50c8a245f1c273efb3d171f4c54ed540475336a`: first/repeated add, update, repair, removal, untrusted Project discovery and A/B isolation. Four loopback HTTP `initialize`/`tools/list` exchanges per OS prove connection/tool discovery; no `tools/call`, model turn, provider authentication or trusted Project execution. |
+| Antigravity | Owned native plugin bundle with Skills and stdio/Streamable HTTP MCP in User and Project scope; **Prepared**. | Actual `agy` 1.5.3 strict validation and isolated CLI import/list/uninstall passed on Linux/macOS/Windows in [run 42804680737](https://github.com/777genius/universal-agent-plugins/actions/runs/42804680737). CLI validation and registration do not establish IDE discovery, enablement, MCP startup, tool execution or authentication; actual IDE qualification remains separate. |
+
+For Hermes, SSE and hooks are unsupported. Portable commands follow Skills
+projection; explicit-only commands are withheld when the host cannot enforce
+explicit invocation. UAP does not grant project trust. See the
+[Hermes native guide](HERMES_NATIVE_SKILLS.md) and
+[release completion plan](plans/2026-11-10-hermes-antigravity-public-release.md).
+
 ## Delivery by client
 
 | Client | Project files or preparation | Result and native boundary |

@@ -193,6 +193,10 @@ func (session *updateAllSession) classifyInstallation(installation domain.Instal
 		return
 	}
 	targets := installationTargets(installation, session.opts.scope)
+	if installation.OriginMode == domain.OriginModeDirectory {
+		// A batch selects recorded owners, not their implicit physical siblings.
+		targets = installedBindingTargets(installation, session.opts.scope)
+	}
 	// Keep every imperative preview process-inert until the complete mixed batch passes.
 	previewOpts := *session.opts
 	previewOpts.dryRun = true

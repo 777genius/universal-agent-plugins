@@ -68,6 +68,14 @@ activation or sign-in steps. Native Pi extensions support user scope and
 eligible project scope; Skills and MCP have separate client-specific contracts. Check the
 installed channel version and the version-bound native evidence before use.
 
+This source includes Hermes User Skills and stdio/Streamable HTTP MCP, plus
+Project Skills only; Project MCP is unsupported. It also prepares Antigravity
+User/Project native plugins with Skills and stdio/Streamable HTTP MCP.
+Antigravity remains **Prepared**: verify discovery, trust and enablement in the
+selected IDE scope. Availability depends on the exact installed CLI version;
+source presence does not establish a published release or IDE activation.
+Signed Directory eligibility is separate from client delivery capability.
+
 See the [client compatibility reference](https://universal-agent-plugins.com/docs/en/reference/client-compatibility.html)
 for version-bound evidence and limits.
 

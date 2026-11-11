@@ -120,10 +120,7 @@ func validateUpdateTargets(installation domain.Installation, scope string, targe
 }
 
 func loadUpdatePackage(ctx context.Context, app App, opts *options, installation domain.Installation, targets []domain.ClientID, probeVersion bool) (map[domain.ClientID]domain.DetectedClient, []domain.DetectedClient, loadedPackage, error) {
-	// Signed compatibility retains recorded independent targets and explicit
-	// selections. Implicit siblings of a native owner remain physically tracked
-	// but are not independently selected targets.
-	allTargets := append(directoryInstallationTargets(installation, opts.scope), targets...)
+	allTargets := updateSourceTargets(installation, opts.scope, targets)
 	_, detected, err := preflightProjectLifecycleTargets(ctx, app, opts, targets, nil, probeVersion && installation.OriginMode == domain.OriginModeDirectory, lifecycleInstallIntents(installation, opts.scope, nil))
 	if err != nil {
 		return nil, nil, loadedPackage{}, err

@@ -73,6 +73,16 @@ func directoryBindingTargets(binding domain.ClientBinding) []domain.ClientID {
 	return result
 }
 
+// updateSourceTargets preserves the physical compatibility set for local and
+// Git sources. Signed Directory eligibility can separately authorize native
+// owners without borrowing a grant for their implicit shared-backend sibling.
+func updateSourceTargets(installation domain.Installation, scope string, selected []domain.ClientID) []domain.ClientID {
+	if installation.OriginMode != domain.OriginModeDirectory {
+		return installationTargets(installation, scope)
+	}
+	return append(directoryInstallationTargets(installation, scope), selected...)
+}
+
 func directoryInstallationTargets(installation domain.Installation, scope string) []domain.ClientID {
 	var result []domain.ClientID
 	seen := make(map[domain.ClientID]bool)
