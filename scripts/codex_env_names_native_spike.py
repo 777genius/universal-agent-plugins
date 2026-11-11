@@ -134,9 +134,12 @@ def isolated_env(root, home, secret, foreign_secret):
            "LANG": "C.UTF-8", "NO_COLOR": "1", ENV_NAME: secret,
            FOREIGN_ENV_NAME: foreign_secret}
     if os.name == "nt":
-        # Only necessary nonsecret OS process/shell fields on Windows.
+        # Only vendor-documented nonsecret Windows core process fields.
+        # Never copy credentials or the runner's actual user profile paths.
         env.update({key: os.environ[key] for key in
-                    ("SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT", "OS")
+                    ("SYSTEMROOT", "WINDIR", "SYSTEMDRIVE", "COMSPEC", "PATHEXT",
+                     "OS", "PROGRAMFILES", "PROGRAMFILES(X86)", "PROGRAMW6432",
+                     "PROGRAMDATA", "USERNAME", "USERDOMAIN")
                     if key in os.environ})
         env["USERPROFILE"] = str(home)
         env["APPDATA"] = str(home / "AppData" / "Roaming")

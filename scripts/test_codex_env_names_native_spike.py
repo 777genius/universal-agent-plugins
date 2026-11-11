@@ -165,6 +165,23 @@ class TestSyntheticModelOracle(unittest.TestCase):
             self.assertNotIn("GITHUB_TOKEN", env)
             self.assertNotIn("GH_TOKEN", env)
 
+    def test_windows_core_fields_do_not_import_arbitrary_runner_env(self):
+        if os.name != "nt":
+            self.skipTest("Windows-only core environment contract")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with patch.dict(os.environ, {
+                "SYSTEMDRIVE": "Z:",
+                "PROGRAMDATA": "ProgramDataUnitFixture",
+                "UAP_FORBIDDEN_RUNNER_SECRET": "DO_NOT_IMPORT",
+            }):
+                env = isolated_env(root, root / "home", "synthetic", "foreign")
+            self.assertEqual(env.get("SYSTEMDRIVE"), "Z:")
+            self.assertEqual(env.get("PROGRAMDATA"), "ProgramDataUnitFixture")
+            self.assertNotIn("UAP_FORBIDDEN_RUNNER_SECRET", env)
+            self.assertNotIn("GH_TOKEN", env)
+            self.assertNotIn("GITHUB_TOKEN", env)
+
     def test_wrong_digest_is_never_treated_as_receipt(self):
         self.call({"tools": [{"type": "function", "name": "exec_command"}]})
         self.call({"input": [{"type": "function_call_output", "call_id": SHELL_CALL,
