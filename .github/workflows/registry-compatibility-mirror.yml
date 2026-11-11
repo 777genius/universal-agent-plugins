@@ -44,6 +44,47 @@ jobs:
       - name: Select immutable accepted production site source
         run: python3 scripts/production_site_source.py select "$GITHUB_WORKSPACE" "$RUNNER_TEMP/production-site-control"
 
+      - name: Resolve registry source
+        id: source
+        env:
+          EVENT_REGISTRY: ${{ github.event.client_payload.registry_repository }}
+          EVENT_ORIGIN: ${{ github.event.client_payload.pages_origin }}
+          INPUT_REGISTRY: ${{ inputs.registry_repository }}
+          INPUT_ORIGIN: ${{ inputs.pages_origin }}
+        run: |
+          registry="${EVENT_REGISTRY:-${INPUT_REGISTRY:-$DEFAULT_REGISTRY_REPOSITORY}}"
+          origin="${EVENT_ORIGIN:-${INPUT_ORIGIN:-$DEFAULT_PAGES_ORIGIN}}"
+          printf 'registry=%s\n' "$registry" >> "$GITHUB_OUTPUT"
+          printf 'origin=%s\n' "$origin" >> "$GITHUB_OUTPUT"
+
+      # Network-facing feed verification uses the patched control compiler.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.26.11"
+          cache: false
+
+      - name: Verify and stage signed feeds
+        env:
+          GOTOOLCHAIN: local
+          REGISTRY_REPOSITORY: ${{ steps.source.outputs.registry }}
+          PAGES_ORIGIN: ${{ steps.source.outputs.origin }}
+        run: |
+          go version
+          test "$(go env GOVERSION)" = go1.26.11
+          previous="${RUNNER_TEMP}/uap-previous-mirror.json"
+          if ! curl --fail --silent --show-error --location --max-time 30 \
+            "${PRODUCT_PAGES_ORIGIN%/}/MIRROR_METADATA.json" > "$previous"; then
+            rm -f "$previous"
+          fi
+          go run ./cmd/agentplugins-registry-mirror \
+            --registry-repository "$REGISTRY_REPOSITORY" \
+            --pages-origin "$PAGES_ORIGIN" \
+            --previous-marker "$previous" \
+            --output "${RUNNER_TEMP}/uap-registry-mirror"
+          mkdir -p landing/public
+          cp -a "${RUNNER_TEMP}/uap-registry-mirror/." landing/public/
+
+      # Offline docs retain the compiler declared by the accepted site source.
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
@@ -69,19 +110,6 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.0.0
         with:
           python-version: "3.12"
-
-      - name: Resolve registry source
-        id: source
-        env:
-          EVENT_REGISTRY: ${{ github.event.client_payload.registry_repository }}
-          EVENT_ORIGIN: ${{ github.event.client_payload.pages_origin }}
-          INPUT_REGISTRY: ${{ inputs.registry_repository }}
-          INPUT_ORIGIN: ${{ inputs.pages_origin }}
-        run: |
-          registry="${EVENT_REGISTRY:-${INPUT_REGISTRY:-$DEFAULT_REGISTRY_REPOSITORY}}"
-          origin="${EVENT_ORIGIN:-${INPUT_ORIGIN:-$DEFAULT_PAGES_ORIGIN}}"
-          printf 'registry=%s\n' "$registry" >> "$GITHUB_OUTPUT"
-          printf 'origin=%s\n' "$origin" >> "$GITHUB_OUTPUT"
 
       - name: Install landing toolchain
         working-directory: landing
@@ -115,24 +143,6 @@ jobs:
         run: |
           cd "$DOCS_AUTHORING_CHECKOUT"
           GOWORK="$DOCS_AUTHORING_CHECKOUT/go.work" go build -p 2 -o "$RUNNER_TEMP/docs-authoring-preflight" ./cli/plugin-kit-ai/tools/authoring-docs
-
-      - name: Verify and stage signed feeds
-        env:
-          REGISTRY_REPOSITORY: ${{ steps.source.outputs.registry }}
-          PAGES_ORIGIN: ${{ steps.source.outputs.origin }}
-        run: |
-          previous="${RUNNER_TEMP}/uap-previous-mirror.json"
-          if ! curl --fail --silent --show-error --location --max-time 30 \
-            "${PRODUCT_PAGES_ORIGIN%/}/MIRROR_METADATA.json" > "$previous"; then
-            rm -f "$previous"
-          fi
-          go run ./cmd/agentplugins-registry-mirror \
-            --registry-repository "$REGISTRY_REPOSITORY" \
-            --pages-origin "$PAGES_ORIGIN" \
-            --previous-marker "$previous" \
-            --output "${RUNNER_TEMP}/uap-registry-mirror"
-          mkdir -p landing/public
-          cp -a "${RUNNER_TEMP}/uap-registry-mirror/." landing/public/
 
       - name: Install Chromium for static social preview
         working-directory: landing
