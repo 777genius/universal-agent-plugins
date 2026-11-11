@@ -1,0 +1,253 @@
+name: Diagnostic pinned Remotion Windows Skill acquisition
+
+on:
+  pull_request:
+    paths: ['.github/workflows/remotion-windows-source-diagnostic.yml', 'scripts/remotion_published_windows_long_temp_e2e.py']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  remotion-windows:
+    runs-on: windows-2025
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - name: Install exact publicly released UAP and genuine native Codex
+        shell: pwsh
+        run: |
+          npm.cmd install --global universal-agent-plugins@0.1.101
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm.cmd install --global '@openai/codex@0.153.4'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          agentplugins version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          codex --version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Compare verified Git checkout and one genuine published Skill install
+        shell: pwsh
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+          GIT_TERMINAL_PROMPT: '0'
+          GIT_CONFIG_NOSYSTEM: '1'
+        run: |
+          @'
+          import json
+          import os
+          from pathlib import Path
+          import shutil
+          import subprocess
+          import tempfile
+
+          sha = 'c7cb2fdcacd134fb2ccb9b7a44f9ffa44e467271'
+          source_path = 'skills/remotion-best-practices'
+          fixtures = json.loads(Path('tests/live-install/fixtures.json').read_text(encoding='utf-8'))
+          item = fixtures['skills'][24]
+          assert item['name'] == 'remotion-best-practices'
+          assert sha in item['source'] and source_path in item['source']
+          root = Path(tempfile.mkdtemp(prefix='uap-remotion-windows-', dir=os.environ['RUNNER_TEMP']))
+          report = Path(os.environ['RUNNER_TEMP']) / 'remotion-windows-diagnostic.json'
+          (root / 'empty.gitconfig').write_bytes(b'')
+          env = {k: v for k, v in os.environ.items() if k in (
+              'PATH', 'PATHEXT', 'SystemRoot', 'SYSTEMROOT', 'WINDIR', 'COMSPEC',
+              'TEMP', 'TMP', 'LANG', 'HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY',
+              'SSL_CERT_FILE', 'GIT_SSL_CAINFO', 'NODE_EXTRA_CA_CERTS')}
+          env.update(GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL=str(root / 'empty.gitconfig'),
+                     GIT_TERMINAL_PROMPT='0', GCM_INTERACTIVE='never', CI='true')
+          outcomes = []
+          def run(label, cmd, cwd, timeout=120):
+              try:
+                  p = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True,
+                                     errors='replace', stdin=subprocess.DEVNULL, timeout=timeout)
+                  result = {'step': label, 'exit': p.returncode,
+                            'stdout_tail': p.stdout[-800:], 'stderr_tail': p.stderr[-1200:]}
+              except (OSError, subprocess.TimeoutExpired) as e:
+                  result = {'step': label, 'exit': None, 'error': type(e).__name__}
+              outcomes.append(result)
+              print(json.dumps({'step': label, 'exit': result.get('exit'), 'error': result.get('error'),
+                                'stderr_tail': result.get('stderr_tail', '')}, ensure_ascii=True))
+              return result.get('exit') == 0
+          for longpaths in ('false', 'true'):
+              workspace = root / ('git-longpaths-' + longpaths)
+              workspace.mkdir()
+              steps = [
+                  ('init', ['git', 'init', '--quiet', str(workspace)]),
+                  ('remote', ['git', '-C', str(workspace), 'remote', 'add', 'origin',
+                              'https://github.com/remotion-dev/skills.git']),
+                  ('autocrlf', ['git', '-C', str(workspace), 'config', 'core.autocrlf', 'false']),
+                  ('eol', ['git', '-C', str(workspace), 'config', 'core.eol', 'lf']),
+                  ('longpaths', ['git', '-C', str(workspace), 'config', 'core.longpaths', longpaths]),
+                  ('fetch', ['git', '-C', str(workspace), 'fetch', '--quiet', '--depth=1',
+                             '--no-tags', '--no-recurse-submodules', 'origin', sha]),
+                  ('sparse-init', ['git', '-C', str(workspace), 'sparse-checkout', 'init', '--cone']),
+                  ('sparse-set', ['git', '-C', str(workspace), 'sparse-checkout', 'set',
+                                  '--cone', '--', source_path]),
+                  ('checkout', ['git', '-C', str(workspace), 'checkout', '--quiet', '--detach', sha]),
+              ]
+              completed = True
+              for label, cmd in steps:
+                  if not run(longpaths + ':' + label, cmd, root, 120):
+                      completed = False
+                      break
+              target = workspace / source_path / 'remotion-markup/remotion-maps/techniques/maptiler/references/map-explainer-architecture.md'
+              outcomes.append({'step': longpaths + ':evidence', 'completed': completed,
+                               'deep_file_present': target.is_file(), 'deep_path_chars': len(str(target))})
+          profile = root / 'case'
+          home, project, data, temp = (profile / name for name in ('home', 'project', 'uap-data', 'tmp'))
+          for p in (home, project, data, temp):
+              p.mkdir(parents=True)
+          env.update(HOME=str(home), USERPROFILE=str(home),
+                     XDG_CONFIG_HOME=str(home / '.config'), XDG_CACHE_HOME=str(home / '.cache'),
+                     XDG_DATA_HOME=str(home / '.local/share'), XDG_STATE_HOME=str(home / '.local/state'),
+                     APPDATA=str(home / 'AppData/Roaming'), LOCALAPPDATA=str(home / 'AppData/Local'),
+                     CODEX_HOME=str(home / '.codex'), AGENTPLUGINS_HOME=str(data),
+                     TEMP=str(temp), TMP=str(temp), TMPDIR=str(temp))
+          cli = shutil.which('agentplugins', path=env['PATH'])
+          assert cli is not None
+          installed = run('public-0.1.101-remotion-codex-skill',
+                          [cli, 'skills', 'add', item['source'], '--skill', item['name'],
+                           '--target', 'codex', '--scope', 'project', '--project-root',
+                           str(project), '--no-ui', '--yes', '--format', 'json'],
+                          project, 180)
+          # The original 30-source CI uses Python's default Windows TEMP
+          # (C:\\Users\\runneradmin\\AppData\\Local\\Temp), rather than
+          # the shorter RUNNER_TEMP used by this positive control. Repeat the
+          # exact public command under the real default-temp-shaped profile.
+          original = Path(tempfile.mkdtemp(prefix='uap-live-30x30-'))
+          original_case = original / 'skill-24'
+          original_home, original_project, original_data, original_temp = (
+              original_case / n for n in ('home', 'project', 'uap-data', 'tmp'))
+          for p in (original_home, original_project, original_data, original_temp):
+              p.mkdir(parents=True)
+          (original_case / 'empty.gitconfig').write_bytes(b'')
+          env.update(HOME=str(original_home), USERPROFILE=str(original_home),
+                     XDG_CONFIG_HOME=str(original_home / '.config'),
+                     XDG_CACHE_HOME=str(original_home / '.cache'),
+                     XDG_DATA_HOME=str(original_home / '.local/share'),
+                     XDG_STATE_HOME=str(original_home / '.local/state'),
+                     APPDATA=str(original_home / 'AppData/Roaming'),
+                     LOCALAPPDATA=str(original_home / 'AppData/Local'),
+                     CODEX_HOME=str(original_home / '.codex'),
+                     AGENTPLUGINS_HOME=str(original_data),
+                     GIT_CONFIG_GLOBAL=str(original_case / 'empty.gitconfig'),
+                     TEMP=str(original_temp), TMP=str(original_temp),
+                     TMPDIR=str(original_temp))
+          installed_default_temp = run('public-0.1.101-remotion-original-temp-profile',
+                                       [cli, 'skills', 'add', item['source'], '--skill', item['name'],
+                                        '--target', 'codex', '--scope', 'project', '--project-root',
+                                        str(original_project), '--no-ui', '--yes', '--format', 'json'],
+                                       original_project, 180)
+          # Isolate project projection from acquisition/staging temp-path length.
+          # Both variants use fresh disposable profiles and the same immutable
+          # public source; never change digest validation or native conditions.
+          cross_results = {}
+          for label in ('long-project-only', 'long-temp-only'):
+              short_case = root / ('cross-' + label)
+              long_case = Path(tempfile.mkdtemp(prefix='uap-live-30x30-')) / 'skill-24'
+              short_home, short_data = short_case / 'home', short_case / 'uap-data'
+              short_project, short_temp = short_case / 'project', short_case / 'tmp'
+              long_project, long_temp = long_case / 'project', long_case / 'tmp'
+              for p in (short_home, short_data, short_project, short_temp, long_project, long_temp):
+                  p.mkdir(parents=True, exist_ok=True)
+              git_config = short_case / 'empty.gitconfig'
+              git_config.write_bytes(b'')
+              selected_project = (long_project if label == 'long-project-only' else short_project)
+              selected_temp = (long_temp if label == 'long-temp-only' else short_temp)
+              env.update(HOME=str(short_home), USERPROFILE=str(short_home),
+                         XDG_CONFIG_HOME=str(short_home / '.config'),
+                         XDG_CACHE_HOME=str(short_home / '.cache'),
+                         XDG_DATA_HOME=str(short_home / '.local/share'),
+                         XDG_STATE_HOME=str(short_home / '.local/state'),
+                         APPDATA=str(short_home / 'AppData/Roaming'),
+                         LOCALAPPDATA=str(short_home / 'AppData/Local'),
+                         CODEX_HOME=str(short_home / '.codex'),
+                         AGENTPLUGINS_HOME=str(short_data),
+                         GIT_CONFIG_GLOBAL=str(git_config),
+                         TEMP=str(selected_temp), TMP=str(selected_temp),
+                         TMPDIR=str(selected_temp))
+              success = run('cross:' + label,
+                            [cli, 'skills', 'add', item['source'], '--skill', item['name'],
+                             '--target', 'codex', '--scope', 'project', '--project-root',
+                             str(selected_project), '--no-ui', '--yes', '--format', 'json'],
+                            selected_project, 180)
+              cross_results[label] = {
+                  'installed': success, 'project_root_chars': len(str(selected_project)),
+                  'temp_root_chars': len(str(selected_temp))}
+          report.write_text(json.dumps({'sha': sha, 'source': item['source'],
+                                        'windows_only_diagnostic': True, 'published_cli': '0.1.101',
+                                        'short_temp_installed': installed,
+                                        'default_temp_installed': installed_default_temp,
+                                        'short_case_root_chars': len(str(profile)),
+                                        'default_case_root_chars': len(str(original_case)),
+                                        'cross_results': cross_results,
+                                        'steps': outcomes}, indent=2, ensure_ascii=True) + '\n',
+                            encoding='utf-8')
+          if not installed or installed_default_temp:
+              raise SystemExit('Immutable 0.1.101 negative control changed: expected short PASS, long refusal')
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Preserve refusal evidence, even on failure
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4.6.2
+        with:
+          name: remotion-windows-diagnostic
+          path: ${{ runner.temp }}/remotion-windows-diagnostic.json
+          if-no-files-found: warn
+          retention-days: 7
+
+  published-remotion-v0102:
+    name: Published npm 0.1.102 / Codex Remotion long TEMP
+    runs-on: windows-2025
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+        env:
+          GIT_CONFIG_COUNT: '1'
+          GIT_CONFIG_KEY_0: core.autocrlf
+          GIT_CONFIG_VALUE_0: 'false'
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.0.0
+        with:
+          python-version: '3.12'
+      - name: Install exact published npm CLI and pinned native Codex
+        shell: pwsh
+        run: |
+          npm.cmd install --global --ignore-scripts universal-agent-plugins@0.1.102
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm.cmd install --global '@openai/codex@0.153.4'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          agentplugins version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          codex --version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify published Remotion add, repeat, list, remove and foreign sentinels
+        shell: pwsh
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+          GIT_TERMINAL_PROMPT: '0'
+        run: |
+          python scripts/remotion_published_windows_long_temp_e2e.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Retain original published Windows evidence, including on failure
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4.6.2
+        with:
+          name: remotion-windows-published-0.1.102
+          path: ${{ runner.temp }}\remotion-windows-published-0.1.102.json
+          if-no-files-found: warn
+          retention-days: 7
