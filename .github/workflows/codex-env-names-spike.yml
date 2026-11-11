@@ -44,19 +44,21 @@ jobs:
       # codex-resources/bwrap. Install the normal Ubuntu sandbox dependency;
       # do not disable AppArmor, userns checks or native Codex sandboxing.
       - name: Install native Linux sandbox helper without relaxing host security
+        id: linux-sandbox-helper
         if: steps.native-binary.outcome == 'success'
         shell: bash
         run: |
           set -euo pipefail
-          sudo apt-get update -qq
-          sudo apt-get install --yes --no-install-recommends bubblewrap
+          sudo apt-get -o Acquire::Retries=3 update -qq
+          sudo apt-get -o Acquire::Retries=3 install --yes --no-install-recommends bubblewrap
           command -v bwrap
           bwrap --version
       # A minimal host-sandbox probe has NO canary or user credentials at all.
       # Raw sandbox diagnostics are permitted only in this env -i experiment.
       # Never log actual MCP/tool output from canary-bearing Codex processes.
       - name: Diagnose native sandbox with an empty environment and inert true
-        if: steps.native-binary.outcome == 'success'
+        id: sandbox-preflight
+        if: steps.linux-sandbox-helper.outcome == 'success'
         shell: bash
         run: |
           set -euo pipefail
@@ -70,18 +72,20 @@ jobs:
           else
             echo "sandbox_probe_pass=false"
             cat "$probe/sandbox-log"
+            echo "::error::Native Linux sandbox unavailable: refusing synthetic credential probes."
+            exit 1
           fi
       # Keep both independent results, even if one E2E fails. Never infer PASS
       # from the other; artifacts record only redacted boolean/hash facts.
       - name: Run real Codex CLI shell and MCP names-only proof
-        if: steps.native-binary.outcome == 'success'
+        if: steps.sandbox-preflight.outcome == 'success'
         id: native-cli-spike
         shell: bash
         run: |
           python3 -m py_compile scripts/codex_env_names_native_spike.py
           python3 scripts/codex_env_names_native_spike.py "$CODEX_BINARY" "$RUNNER_TEMP/codex-env-spike-report.json"
       - name: Run real Codex app-server MCP and shell snapshot proof
-        if: always() && steps.native-binary.outcome == 'success'
+        if: always() && steps.sandbox-preflight.outcome == 'success'
         id: native-appserver-spike
         shell: bash
         run: |
@@ -90,13 +94,13 @@ jobs:
       # Research-only mitigated control: no real user's Codex settings touched.
       # This cannot retroactively make the default-mode snapshot leak safe.
       - name: Compare isolated shell env filtering with real Codex CLI
-        if: always() && steps.native-binary.outcome == 'success'
+        if: always() && steps.sandbox-preflight.outcome == 'success'
         id: native-filtered-cli
         shell: bash
         run: |
           python3 scripts/codex_env_names_native_spike.py "$CODEX_BINARY" "$RUNNER_TEMP/codex-env-filtered-cli.json" filtered
       - name: Compare isolated shell env filtering with real Codex app-server
-        if: always() && steps.native-binary.outcome == 'success'
+        if: always() && steps.sandbox-preflight.outcome == 'success'
         id: native-filtered-appserver
         shell: bash
         run: |
@@ -104,13 +108,13 @@ jobs:
       # Research-only stricter built-in Codex KEY/SECRET/TOKEN filter.
       # Does not replace project/global legacy exclude/include_only arrays.
       - name: Test Codex built-in exclusion policy in isolated CLI control
-        if: always() && steps.native-binary.outcome == 'success'
+        if: always() && steps.sandbox-preflight.outcome == 'success'
         id: native-default-excludes-cli
         shell: bash
         run: |
           python3 scripts/codex_env_names_native_spike.py "$CODEX_BINARY" "$RUNNER_TEMP/codex-default-excludes-cli.json" default_excludes
       - name: Test Codex built-in exclusion policy in isolated app-server control
-        if: always() && steps.native-binary.outcome == 'success'
+        if: always() && steps.sandbox-preflight.outcome == 'success'
         id: native-default-excludes-appserver
         shell: bash
         run: |
@@ -120,13 +124,13 @@ jobs:
       # explicitly named env_vars. Verify older global exclusions too.
       # Never rewrite an existing user's inherited shell policy.
       - name: Research core-only inherited shell environment with real Codex CLI
-        if: always() && steps.native-binary.outcome == 'success'
+        if: always() && steps.sandbox-preflight.outcome == 'success'
         id: native-core-inherit-cli
         shell: bash
         run: |
           python3 scripts/codex_env_names_native_spike.py "$CODEX_BINARY" "$RUNNER_TEMP/codex-core-inherit-cli.json" core_inherit
       - name: Research core-only inherited shell environment with real Codex app-server
-        if: always() && steps.native-binary.outcome == 'success'
+        if: always() && steps.sandbox-preflight.outcome == 'success'
         id: native-core-inherit-appserver
         shell: bash
         run: |
