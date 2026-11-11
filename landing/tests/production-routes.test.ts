@@ -135,10 +135,40 @@ test('live HTML must match complete built bytes, including equal-size stale cont
 
 test('robots and canonical attributes are order independent and case insensitive', () => {
   const route = '/agents/hermes/';
-  for (const tag of ['<meta content="noindex" name="robots">', '<META CONTENT="NOINDEX, FOLLOW" NAME="ROBOTS">']) {
+  for (const tag of [
+    '<meta content="noindex" name="robots">', '<META CONTENT="NOINDEX, FOLLOW" NAME="ROBOTS">',
+    '<meta name=robots content=noindex>', '<meta name="robots" content=noindex>',
+    '<meta name=robots content="noindex">', '<meta name=robots content=none>',
+  ]) {
     assert.throws(() => checkHtml(Buffer.from(html(route).toString().replace('</head>', tag + '</head>')), route), /noindex/);
   }
   checkHtml(Buffer.from(html(route).toString().replace('link rel="canonical"', 'LINK REL="CANONICAL"')), route);
+});
+
+test('encoded and duplicate semantic attributes cannot hide robots or canonical metadata', () => {
+  const route = '/agents/hermes/';
+  for (const tag of [
+    '<meta name="robots" content="no&#105;ndex">', '<meta name="rob&#111;ts" content="noindex">',
+    '<meta name="robots" content="noindex" content="index">',
+    '<meta name="robots" NAME="other" content="noindex">',
+    '<link rel="can&#111;nical" href="https://wrong.example/">',
+    '<link rel="canonical" rel="alternate" href="https://wrong.example/">',
+  ]) {
+    assert.throws(() => checkHtml(Buffer.from(html(route).toString().replace('</head>', tag + '</head>')), route), /encoded|duplicate/);
+  }
+  const duplicateHref = html(route).toString().replace('rel="canonical"', 'href="https://wrong.example/" rel="canonical"');
+  assert.throws(() => checkHtml(Buffer.from(duplicateHref), route), /duplicate/);
+  assert.throws(() => checkHtml(Buffer.from(html(route).toString().replace('/agents/hermes/', '/agents/herm&#101;s/')), route), /canonical/);
+});
+
+test('HTML metadata consumes complete attributes while allowing ordinary generated values', () => {
+  const route = '/agents/hermes/';
+  const canonical = html(route).toString().replace('link rel="canonical"', 'link disabled data-note="a > b" rel="alternate canonical"');
+  checkHtml(Buffer.from(canonical.replace('</head>', '<meta name=description content="Plugins &amp; skills"><meta name=robots content="index,follow"></head>')), route);
+  checkHtml(Buffer.from(html(route).toString().replace('rel="canonical"', 'rel=canonical')), route);
+  for (const tag of ['<meta name="robots" content=>', '<meta name="robots" content="noindex>']) {
+    assert.throws(() => checkHtml(Buffer.from(html(route).toString().replace('</head>', tag + '</head>')), route), /malformed/);
+  }
 });
 
 test('prepare and live bind selected modules, built HTML, provenance and environment end to end', async () => {

@@ -34,14 +34,41 @@ export function builtHtmlPath(route) {
   return route.endsWith('/') ? route.slice(1) + 'index.html' : route.slice(1) + '.html';
 }
 
+function tags(html, name) {
+  const start = `<${name}(?=[\\s/>])`;
+  const found = [...html.matchAll(new RegExp(start + `((?:[^"'<>]|"[^"]*"|'[^']*')*)>`, 'gi'))];
+  assert.equal(found.length, [...html.matchAll(new RegExp(start, 'gi'))].length, `malformed ${name} tag`);
+  return found.map(([, source]) => {
+    const attributes = Object.create(null);
+    let rest = source;
+    while (rest.trim() && rest.trim() !== '/') {
+      const attribute = /^\s+([^\s"'<>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/.exec(rest);
+      assert(attribute, `malformed ${name} attributes`);
+      const [, rawName, doubleQuoted, singleQuoted, unquoted] = attribute;
+      const key = rawName.toLowerCase();
+      assert(!Object.hasOwn(attributes, key), `duplicate ${name} attribute ${key}`);
+      attributes[key] = doubleQuoted ?? singleQuoted ?? unquoted ?? '';
+      rest = rest.slice(attribute[0].length);
+    }
+    return attributes;
+  });
+}
+
 export function checkHtml(bytes, route, id) {
   assert(bytes.length > 0 && bytes.length <= maxBytes, `${route}: HTML size`);
   const html = bytes.toString('utf8');
-  const tags = name => [...html.matchAll(new RegExp(`<${name}\\b[^>]*>`, 'gi'))].map(([tag]) =>
-    Object.fromEntries([...tag.matchAll(/([\w-]+)\s*=\s*["']([^"']*)["']/g)].map(([, key, value]) => [key.toLowerCase(), value])));
-  assert.deepEqual(tags('link').filter(link => link.rel?.toLowerCase() === 'canonical').map(link => link.href), [origin + route], `${route}: canonical`);
-  assert(tags('meta').filter(meta => meta.name?.toLowerCase() === 'robots')
-    .every(meta => !/noindex/i.test(meta.content || '')), `${route}: noindex`);
+  const links = tags(html, 'link');
+  // Refuse encoded selectors instead of partially decoding HTML entities.
+  for (const link of links) assert(!link.rel?.includes('&'), `${route}: encoded link relation`);
+  assert.deepEqual(links.filter(link => link.rel?.toLowerCase().split(/\s+/).includes('canonical'))
+    .map(link => link.href), [origin + route], `${route}: canonical`);
+  for (const meta of tags(html, 'meta')) {
+    assert(!meta.name?.includes('&'), `${route}: encoded meta name`);
+    if (meta.name?.trim().toLowerCase() === 'robots') {
+      assert(!meta.content?.includes('&'), `${route}: encoded robots content`);
+      assert(!/noindex|\bnone\b/i.test(meta.content || ''), `${route}: noindex`);
+    }
+  }
   const text = normalize(html);
   if (id === 'hermes' || id === 'antigravity') {
     assert(text.includes(`npx -y universal-agent-plugins add ./my-plugin --target ${id}`), `${id}: local target command`);
