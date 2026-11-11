@@ -338,6 +338,28 @@ def inspect(root, secret):
                               "shell_snapshot_path": "shell_snapshots" in path.parts})
     return found, symlinks
 
+def aggregate_findings(*batches):
+    """Union observations by path AND finding category, preserving fail-closed proof.
+
+    Live and post-exit reports may describe the same path differently as it
+    changes. Never replace a canary finding with an unsafe-symlink finding (or
+    vice versa). Counts are untruncated; only presentation samples are bounded.
+    """
+    by_category = {}
+    for batch in batches:
+        for finding in batch:
+            key = (finding["path_sha256"], finding["result"])
+            if key not in by_category:
+                by_category[key] = dict(finding)
+            elif finding.get("shell_snapshot_path"):
+                by_category[key]["shell_snapshot_path"] = True
+    all_findings = [by_category[key] for key in sorted(by_category)]
+    counts = {}
+    for finding in all_findings:
+        category = finding["result"]
+        counts[category] = counts.get(category, 0) + 1
+    return all_findings, counts
+
 def main():
     codex = Path(sys.argv[1]).resolve(strict=True)
     report_path = Path(sys.argv[2]).resolve()
@@ -428,7 +450,7 @@ def main():
                     live["samples"] += 1
                     live["symlinks"] = max(live["symlinks"], links)
                     for match in matches:
-                        live["hits"][match["path_sha256"]] = match
+                        live["hits"][(match["path_sha256"], match["result"])] = match
                     snapshot_dir = home / ".codex" / "shell_snapshots"
                     if snapshot_dir.is_dir() and any(snapshot_dir.iterdir()):
                         live["snapshot_files_seen"] = True
@@ -461,10 +483,16 @@ def main():
         report["advertised_tool_names"] = sorted(Model.advertised_tool_names)[:35]
         report["mcp_child_saw_secret"] = Model.mcp_digest_verified
         found, symlinks = inspect(root, (secret, foreign_secret))
-        combined = {entry["path_sha256"]: entry for entry in
-                    [*found, *live["hits"].values()]}
-        report["leak"] = bool(combined)
-        report["matches"] = list(combined.values())[:10]
+        combined, counts = aggregate_findings(found, live["hits"].values())
+        report["leak"] = bool(combined)  # legacy name: any unsafe finding
+        report["canary_persistence_observed"] = counts.get("synthetic_value_persisted", 0) > 0
+        report["unsafe_scan_observed"] = any(
+            category.startswith("unscanned_") and total > 0
+            for category, total in counts.items()
+        )
+        report["finding_counts"] = counts
+        report["finding_total"] = len(combined)
+        report["matches"] = combined[:10]
         report["symlinks"] = max(symlinks, live["symlinks"])
         if result.returncode != 0:
             report["failure"] = Model.error or "native_codex_exit_nonzero"

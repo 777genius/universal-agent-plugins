@@ -19,7 +19,7 @@ import tempfile
 import threading
 import time
 
-from codex_env_names_native_spike import CHILD, ENV_NAME, FOREIGN_ENV_NAME, Model, inspect, isolated_env
+from codex_env_names_native_spike import CHILD, ENV_NAME, FOREIGN_ENV_NAME, Model, inspect, isolated_env, aggregate_findings
 
 def rpc_send(proc, q, serial, method, params, timeout=35):
     proc.stdin.write((json.dumps({"id": serial, "method": method,
@@ -115,7 +115,7 @@ def main():
                 hits, _ = inspect(root, (secret, foreign_secret))
                 live["samples"] += 1
                 for hit in hits:
-                    live["hits"][hit["path_sha256"]] = hit
+                    live["hits"][(hit["path_sha256"], hit["result"])] = hit
                 snap = home / ".codex" / "shell_snapshots"
                 if snap.is_dir() and any(snap.iterdir()):
                     live["snapshots_seen"] = True
@@ -226,9 +226,16 @@ def main():
         stop.set()
         watch.join(timeout=3)
         found, symlinks = inspect(root, (secret, foreign_secret))
-        all_hits = {x["path_sha256"]: x for x in [*found, *live["hits"].values()]}
-        report["leak"] = bool(all_hits)
-        report["matching_path_hashes"] = list(all_hits.values())[:12]
+        all_hits, counts = aggregate_findings(found, live["hits"].values())
+        report["leak"] = bool(all_hits)  # legacy name: any unsafe finding
+        report["canary_persistence_observed"] = counts.get("synthetic_value_persisted", 0) > 0
+        report["unsafe_scan_observed"] = any(
+            category.startswith("unscanned_") and total > 0
+            for category, total in counts.items()
+        )
+        report["finding_counts"] = counts
+        report["finding_total"] = len(all_hits)
+        report["matching_path_hashes"] = all_hits[:12]
         report["live_scans"] = live["samples"]
         report["live_snapshot_files_seen"] = live["snapshots_seen"]
         report["scan_errors"] = live["errors"]

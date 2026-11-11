@@ -14,7 +14,7 @@ import http.server
 
 from codex_env_names_native_spike import (CHILD, Model, MCP_CALL, SHELL_CALL, SHELL_MARKER,
                                         SHELL_ENV_PRESENT, SHELL_FOREIGN_PRESENT,
-                                        ENV_NAME, FOREIGN_ENV_NAME, inspect, windows_shell_command, isolated_env)
+                                        ENV_NAME, FOREIGN_ENV_NAME, inspect, aggregate_findings, windows_shell_command, isolated_env)
 
 
 class TestSyntheticModelOracle(unittest.TestCase):
@@ -197,6 +197,39 @@ class TestSyntheticMcpChild(unittest.TestCase):
 
 
 class TestSyntheticSnapshotScanner(unittest.TestCase):
+    def test_same_path_live_canary_then_external_symlink_keeps_both(self):
+        path_digest = "a" * 64
+        findings, counts = aggregate_findings(
+            [{"path_sha256": path_digest, "result": "synthetic_value_persisted",
+              "shell_snapshot_path": True}],
+            [{"path_sha256": path_digest, "result": "unscanned_external_symlink"}],
+        )
+        self.assertEqual(len(findings), 2)
+        self.assertEqual(counts["synthetic_value_persisted"], 1)
+        self.assertEqual(counts["unscanned_external_symlink"], 1)
+        self.assertTrue(next(f for f in findings
+                             if f["result"] == "synthetic_value_persisted")["shell_snapshot_path"])
+
+    def test_same_category_deduplicates_without_erasing_snapshot_origin(self):
+        digest = "b" * 64
+        findings, counts = aggregate_findings(
+            [{"path_sha256": digest, "result": "synthetic_value_persisted",
+              "shell_snapshot_path": False}],
+            [{"path_sha256": digest, "result": "synthetic_value_persisted",
+              "shell_snapshot_path": True}],
+        )
+        self.assertEqual(len(findings), 1)
+        self.assertTrue(findings[0]["shell_snapshot_path"])
+        self.assertEqual(counts, {"synthetic_value_persisted": 1})
+
+    def test_untruncated_counts_survive_bounded_evidence_samples(self):
+        observations = [{"path_sha256": f"{i:064x}",
+                         "result": "synthetic_value_persisted"} for i in range(17)]
+        findings, counts = aggregate_findings(observations)
+        self.assertEqual(len(findings[:10]), 10)
+        self.assertEqual(len(findings), 17)
+        self.assertEqual(counts["synthetic_value_persisted"], 17)
+
     def test_raw_and_common_encoded_canary_are_detected(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
