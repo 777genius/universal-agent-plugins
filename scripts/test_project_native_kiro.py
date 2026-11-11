@@ -909,7 +909,7 @@ class KiroCollectorTests(unittest.TestCase):
             return {"exit": 0, "error": None}, b"kiro-cli 2.34.0\\n", b""
 
         ctx.replace["version"] = changed
-        with self.assertRaisesRegex(ValueError, "selected user cwd changed"):
+        with self.assertRaisesRegex(ValueError, "disposable root alias refused"):
             kiro.collect(ctx)
         self.assertEqual(len(ctx.calls), 1)
         self.assertTrue(ctx.projects["user"].is_symlink())
