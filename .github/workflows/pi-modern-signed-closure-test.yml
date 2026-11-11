@@ -55,7 +55,7 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           git fetch --no-tags --depth=1 origin "$BASE_SHA"
-          git diff --name-only "$BASE_SHA" "$EXPECTED_HEAD" > "$RUNNER_TEMP/pi-changes.txt"
+          git diff --no-renames --name-only "$BASE_SHA" "$EXPECTED_HEAD" > "$RUNNER_TEMP/pi-changes.txt"
           while IFS= read -r changed; do
             case "$changed" in
               cli/internal/agentpluginscli/pi_modern_saved_closure_test.go|docs/plans/2026-11-12-pi-modern-saved-closure-fixture.md|.github/workflows/pi-modern-signed-closure-test.yml) ;;
