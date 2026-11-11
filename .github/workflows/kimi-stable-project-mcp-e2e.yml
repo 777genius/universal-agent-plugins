@@ -26,8 +26,12 @@ concurrency:
 
 jobs:
   native-prepared:
-    name: Pinned Kimi 2.5.2 project MCP-only add/repeat/remove (Prepared)
-    runs-on: ubuntu-24.04
+    name: Pinned Kimi 2.5.2 project MCP-only (${{ matrix.os }}, Prepared)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -68,7 +72,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
-          name: kimi-stable-252-project-mcp-prepared
+          name: kimi-stable-252-project-mcp-prepared-${{ matrix.os }}
           path: ${{ runner.temp }}/kimi-mcp-prepared-proof/
           if-no-files-found: warn
           retention-days: 14
