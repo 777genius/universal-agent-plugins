@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { projectCatalogAutomaticSelection, projectCatalogCommands, projectCatalogSelection } from '../utils/projectCatalogSource.ts';
+import { pinnedPiProjectCommands, pinnedPiProjectSource, projectCatalogAutomaticSelection, projectCatalogCommands, projectCatalogSelection } from '../utils/projectCatalogSource.ts';
 import type { RegistryPlugin } from '../types/registry.ts';
 
 function reviewed(): RegistryPlugin {
@@ -101,4 +101,57 @@ test('signed user source and original target scope are unchanged by selection', 
   assert.deepEqual(plugin.distributions[0]!.releases[0]!.targets.find(x => x.client === 'codex')!.scopes, ['user']);
   const result = projectCatalogSelection(plugin, ['codex']).resolution;
   assert.equal(result.distribution?.source.revision, plugin.source.revision);
+});
+
+
+test('Pi project uses an explicit immutable Git source instead of inventing a signed target', () => {
+  const plugin = reviewed();
+  const previous = structuredClone(plugin.distributions);
+  assert.equal(projectCatalogSelection(plugin, ['pi']).resolution.distribution, undefined);
+  const source = 'github:777genius/universal-agent-plugins@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/gitlab';
+  assert.equal(pinnedPiProjectSource(plugin), source);
+  const commands = pinnedPiProjectCommands(plugin);
+  assert.equal(commands.add, `npx -y universal-agent-plugins add ${source} --target pi --scope project`);
+  assert.equal(commands.update, `npx -y universal-agent-plugins add ${source} --target pi --scope project`);
+  assert.equal(commands.repair, 'npx -y universal-agent-plugins repair gitlab --target pi --scope project');
+  assert.equal(commands.remove, 'npx -y universal-agent-plugins remove gitlab --scope project');
+  assert.deepEqual(plugin.distributions, previous, 'The signed target list must not be rewritten');
+});
+
+test('Pi exact-source route refuses unsound or unsupported signed-source projections', () => {
+  const variants = [
+    (p: RegistryPlugin) => { p.trust_state = undefined; },
+    (p: RegistryPlugin) => { p.trust_state = 'conformant_unreviewed'; },
+    (p: RegistryPlugin) => { p.installable = false; },
+    (p: RegistryPlugin) => { p.distributions[0]!.releases[0]!.source.revision = null; },
+    (p: RegistryPlugin) => { p.distributions[0]!.releases[0]!.source.path = '../escape'; },
+    (p: RegistryPlugin) => { p.distributions[0]!.releases[0]!.source.tree_sha256 = 'sha256:bad'; },
+    (p: RegistryPlugin) => { p.distributions[0]!.releases[0]!.source.manifest_sha256 = 'bad'; },
+    (p: RegistryPlugin) => { p.distributions[0]!.releases[0]!.components = []; },
+    (p: RegistryPlugin) => { p.distributions[0]!.releases[0]!.components = ['hooks' as never]; },
+    (p: RegistryPlugin) => { p.distributions[0]!.releases[0]!.selectable = false; },
+    (p: RegistryPlugin) => { p.distributions[0]!.releases[0]!.release_status = 'revoked'; },
+    (p: RegistryPlugin) => { p.distributions[0]!.status = 'suspended'; },
+    (p: RegistryPlugin) => { p.distributions[0]!.kind = 'upstream'; },
+    (p: RegistryPlugin) => {
+      p.distributions[0]!.releases[0]!.targets[0]!.canonical_closure = { eligible: true, closure_digest: 'sha256:' + 'a'.repeat(64) };
+    },
+  ];
+  for (const change of variants) {
+    const plugin = reviewed();
+    change(plugin);
+    assert.equal(pinnedPiProjectSource(plugin), undefined, String(change));
+    assert.throws(() => pinnedPiProjectCommands(plugin), /No eligible Pi Project/);
+  }
+});
+
+test('signed Pi Project grant keeps the original signed short-name route', () => {
+  const plugin = reviewed();
+  plugin.distributions[0]!.releases[0]!.targets.push({
+    client: 'pi', authentication: 'required', delivery: 'managed', scopes: ['user', 'project'],
+  });
+  assert.ok(projectCatalogSelection(plugin, ['pi']).resolution.distribution);
+  assert.equal(pinnedPiProjectSource(plugin), undefined);
+  assert.equal(projectCatalogCommands(plugin, ['pi']).add,
+    'npx -y universal-agent-plugins add gitlab --target pi --scope project');
 });
