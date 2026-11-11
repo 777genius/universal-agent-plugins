@@ -525,7 +525,7 @@ def copilot_signed_kit_owners(list_json, pins, data, case_root):
                     or any(revision.get(key) != expected for key, expected in (
                         ("version", version), ("resolved_revision", pin["revision"]),
                         ("tree_digest", pin["tree_digest"]),
-                        ("manifest_digest", pin["manifest_digest"]))):
+                        ("manifest_digest", pin["manifest_digest"])))):
                 return None
             binding_receipts = binding.get("receipts")
             if (not isinstance(binding_receipts, list) or not binding_receipts
