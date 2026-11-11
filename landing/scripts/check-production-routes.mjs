@@ -27,12 +27,19 @@ export function routePaths(clients, locales) {
   return routes;
 }
 
+// VitePress toDocsPageUrl (shared.ts) removes the source extension;
+// the fetched compatibility HTML file and its canonical URL are distinct.
+export function canonicalPath(route) {
+  return /^\/docs\/[a-z]{2}\/reference\/client-compatibility\.html$/.test(route)
+    ? route.slice(0, -'.html'.length) : route;
+}
+
 export function checkHtml(bytes, route, id) {
   assert(bytes.length > 0 && bytes.length <= maxBytes, `${route}: HTML size`);
   const html = bytes.toString('utf8');
   const tags = name => [...html.matchAll(new RegExp(`<${name}\\b[^>]*>`, 'gi'))].map(([tag]) =>
     Object.fromEntries([...tag.matchAll(/([\w-]+)\s*=\s*["']([^"']*)["']/g)].map(([, key, value]) => [key.toLowerCase(), value])));
-  assert.deepEqual(tags('link').filter(link => link.rel?.toLowerCase() === 'canonical').map(link => link.href), [origin + route], `${route}: canonical`);
+  assert.deepEqual(tags('link').filter(link => link.rel?.toLowerCase() === 'canonical').map(link => link.href), [origin + canonicalPath(route)], `${route}: canonical`);
   assert(tags('meta').filter(meta => meta.name?.toLowerCase() === 'robots')
     .every(meta => !/noindex/i.test(meta.content || '')), `${route}: noindex`);
   const text = normalize(html);

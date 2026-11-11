@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { checkHtml, checkLiveBytes, getBytes, routePaths, validateContract, prepare, live } from '../scripts/check-production-routes.mjs';
+import { canonicalPath, checkHtml, checkLiveBytes, getBytes, routePaths, validateContract, prepare, live } from '../scripts/check-production-routes.mjs';
 
 const locales = ['en', 'ru', 'uk', 'zh', 'es', 'hi', 'ar', 'pt', 'fr'];
 // Public catalogue of accepted source 55c2b820; H/A were not advertised there.
@@ -17,7 +17,7 @@ const oldClients = [
 ].map(([id, slug]) => ({ id, slug }));
 const nativeClients = [...oldClients, { id: 'hermes', slug: 'hermes' }, { id: 'antigravity', slug: 'antigravity' }];
 const identity = { source_commit: 'a'.repeat(40), source_tree: 'b'.repeat(40), workflow_commit: 'c'.repeat(40), run_id: '123', run_attempt: '2' };
-const html = (route: string, text = '') => Buffer.from(`<html><head><link rel="canonical" href="https://universal-agent-plugins.com${route}"></head><body>${text}</body></html>`);
+const html = (route: string, text = '') => Buffer.from(`<html><head><link rel="canonical" href="https://universal-agent-plugins.com${canonicalPath(route)}"></head><body>${text}</body></html>`);
 const contract = () => ({ schema_version: 1, ...identity, routes: routePaths(nativeClients, locales).map(({ route }) => {
   const bytes = html(route);
   return { route, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') };
@@ -74,7 +74,7 @@ test('HTML canonical must identify the requested route uniquely', () => {
   const route = '/docs/ar/reference/client-compatibility.html';
   checkHtml(html(route), route);
   assert.throws(() => checkHtml(html('/'), route), /canonical/);
-  const twice = Buffer.from(html(route).toString().replace('</head>', `<link rel="canonical" href="https://universal-agent-plugins.com${route}"></head>`));
+  const twice = Buffer.from(html(route).toString().replace('</head>', `<link rel="canonical" href="https://universal-agent-plugins.com${canonicalPath(route)}"></head>`));
   assert.throws(() => checkHtml(twice, route), /canonical/);
 });
 
@@ -173,4 +173,13 @@ test('prepare and live bind selected modules, built HTML, provenance and environ
     }
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test('docs HTTP file path differs from its exact extensionless canonical', () => {
+  const route = '/docs/ar/reference/client-compatibility.html';
+  assert.equal(canonicalPath(route), '/docs/ar/reference/client-compatibility');
+  assert.equal(canonicalPath('/agents/hermes/'), '/agents/hermes/');
+  checkHtml(html(route), route);
+  const wrong = Buffer.from(html(route).toString().replace('client-compatibility"', 'client-compatibility.html"'));
+  assert.throws(() => checkHtml(wrong, route), /canonical/);
 });
