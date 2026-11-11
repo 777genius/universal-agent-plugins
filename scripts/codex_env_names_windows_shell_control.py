@@ -15,7 +15,8 @@ import tempfile
 import threading
 
 from codex_env_names_native_spike import (
-    ENV_NAME, FOREIGN_ENV_NAME, Model, isolated_env
+    ENV_NAME, FOREIGN_ENV_NAME, Model, isolated_env,
+    WINDOWS_NATIVE_SANDBOX_CONFIG
 )
 
 
@@ -78,6 +79,7 @@ def main():
             f'[projects.{json.dumps(str(project))}]\ntrust_level = "trusted"\n'
             f'[shell_environment_policy]\nexclude = ["{FOREIGN_ENV_NAME}"]\n'
         )
+        config += WINDOWS_NATIVE_SANDBOX_CONFIG
         (home / ".codex" / "config.toml").write_text(config)
         (project / ".codex" / "config.toml").write_text(
             '[shell_environment_policy]\ninherit = "core"\n'

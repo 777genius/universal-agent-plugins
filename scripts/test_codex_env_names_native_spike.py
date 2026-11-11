@@ -14,7 +14,7 @@ import http.server
 
 from codex_env_names_native_spike import (CHILD, Model, MCP_CALL, SHELL_CALL, SHELL_MARKER,
                                         SHELL_ENV_PRESENT, SHELL_FOREIGN_PRESENT,
-                                        ENV_NAME, FOREIGN_ENV_NAME, inspect, aggregate_findings, windows_shell_command, isolated_env, structured_mcp_receipt_matches, fixed_windows_spawn_error_category)
+                                        ENV_NAME, FOREIGN_ENV_NAME, inspect, aggregate_findings, windows_shell_command, isolated_env, structured_mcp_receipt_matches, fixed_windows_spawn_error_category, WINDOWS_NATIVE_SANDBOX_CONFIG)
 
 
 class TestSyntheticModelOracle(unittest.TestCase):
@@ -157,6 +157,12 @@ class TestSyntheticModelOracle(unittest.TestCase):
         self.assertNotIn("SYNTHETIC_PRIVATE_PATH",
                          str((Model.shell_response_indicators,
                               Model.shell_win32_failure_category)))
+
+    def test_native_windows_ci_fixture_requires_restricted_token_backend(self):
+        # Only a disposable research profile is modified, never the user's.
+        self.assertEqual(WINDOWS_NATIVE_SANDBOX_CONFIG,
+                         '[windows]\\nsandbox = "unelevated"\\n'.replace('\\\\n', '\\n'))
+        self.assertNotIn("danger-full-access", WINDOWS_NATIVE_SANDBOX_CONFIG)
 
     def test_windows_shell_command_only_emits_fixed_markers(self):
         command = windows_shell_command()

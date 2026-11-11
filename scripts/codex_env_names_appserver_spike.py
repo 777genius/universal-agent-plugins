@@ -19,7 +19,7 @@ import tempfile
 import threading
 import time
 
-from codex_env_names_native_spike import CHILD, ENV_NAME, FOREIGN_ENV_NAME, Model, inspect, isolated_env, aggregate_findings, structured_mcp_receipt_matches
+from codex_env_names_native_spike import CHILD, ENV_NAME, FOREIGN_ENV_NAME, Model, inspect, isolated_env, aggregate_findings, structured_mcp_receipt_matches, WINDOWS_NATIVE_SANDBOX_CONFIG
 
 def rpc_send(proc, q, serial, method, params, timeout=35):
     proc.stdin.write((json.dumps({"id": serial, "method": method,
@@ -73,6 +73,8 @@ def main():
         f'[projects.{json.dumps(str(project))}]\ntrust_level = "trusted"\n'
         f'[shell_environment_policy]\nexclude = ["{FOREIGN_ENV_NAME}"]\n'
     )
+    if os.name == "nt":
+        user_config += WINDOWS_NATIVE_SANDBOX_CONFIG
     (home / ".codex" / "config.toml").write_text(user_config)
     project_server = (
         '[mcp_servers.env_spike]\n'

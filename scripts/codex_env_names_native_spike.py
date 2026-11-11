@@ -24,6 +24,9 @@ import urllib.parse
 
 ENV_NAME = "UAP_E2E_SYNTHETIC_TOKEN"
 FOREIGN_ENV_NAME = "UAP_E2E_FOREIGN_PASSWORD"
+# Explicit restricted-token sandbox only for disposable native Windows CI.
+# Official Codex 0.167.1 package smoke tests use windows.sandbox="unelevated".
+WINDOWS_NATIVE_SANDBOX_CONFIG = '[windows]\nsandbox = "unelevated"\n'
 SHELL_CALL = "call_uap_shell_snapshot"
 SHELL_MARKER = "UAP_SHELL_COMPLETED"
 SHELL_ENV_PRESENT = "UAP_SHELL_ENV_PRESENT"
@@ -555,6 +558,8 @@ def main():
         f'[projects.{json.dumps(str(project))}]\ntrust_level = "trusted"\n'
         f'[shell_environment_policy]\nexclude = ["{FOREIGN_ENV_NAME}"]\n'
     )
+    if os.name == "nt":
+        config += WINDOWS_NATIVE_SANDBOX_CONFIG
     (home / ".codex" / "config.toml").write_text(config)
     project_server = (
         '[mcp_servers.env_spike]\n'
