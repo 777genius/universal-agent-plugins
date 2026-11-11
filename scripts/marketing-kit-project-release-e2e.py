@@ -874,7 +874,22 @@ def copilot_project_mcp_residuals(project, identities, stage):
 
 def check_removed_native_components(target, home, case_root, stage, project_scope=False):
     """Refuse native MCP and Skill remnants after an empty scoped inventory."""
-    if not audit["path_inside_case"](home, case_root):
+    # isolated_client_env() canonicalizes HOME. On macOS TemporaryDirectory
+    # can return /var/... while canonical HOME is /private/var/... . Accept
+    # either spelling of the *same disposable root*, without resolving a
+    # candidate path: that would hide a symlink inserted by a native client.
+    if not case_root.is_dir() or case_root.is_symlink():
+        raise AssertionError(f"{stage}: native HOME left disposable case")
+    try:
+        canonical_root = case_root.resolve(strict=True)
+    except (OSError, RuntimeError, ValueError) as error:
+        raise AssertionError(f"{stage}: native HOME left disposable case") from error
+
+    def inside_case(candidate):
+        return (audit["path_inside_case"](candidate, case_root)
+                or audit["path_inside_case"](candidate, canonical_root))
+
+    if not inside_case(home):
         raise AssertionError(f"{stage}: native HOME left disposable case")
     # Copilot Project Skills are under .github/skills, not its MCP config
     # roots (.copilot/.config/copilot). Reuse the audit's authoritative paths.
@@ -884,7 +899,7 @@ def check_removed_native_components(target, home, case_root, stage, project_scop
     if project_scope:
         relative_roots += PROJECT_ONLY_COMPAT_SKILL_ROOTS.get(target, ())
     roots = [home / relative for relative in relative_roots]
-    if any(not audit["path_inside_case"](root, case_root) for root in roots):
+    if any(not inside_case(root) for root in roots):
         raise AssertionError(f"{stage}: unsafe native client root")
     if not home.is_dir():
         raise AssertionError(f"{stage}: invalid native client HOME")

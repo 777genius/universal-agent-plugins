@@ -820,6 +820,42 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                             verify("agentplugins", env, project, (lambda: checked.append(True),))
                 self.assertEqual(checked, [True])
 
+    def test_marketing_kit_native_cleanup_accepts_canonical_home_only_without_trusting_links(self):
+        # macOS has a system /var -> /private/var alias. The native-isolated
+        # environment canonicalizes HOME, whereas our TemporaryDirectory may
+        # retain the alias. This must not be interpreted as a HOME escape.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        verify = runner["check_removed_native_components"]
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            actual = root / "canonical"
+            actual.mkdir()
+            alias = root / "alias"
+            try:
+                alias.symlink_to(actual, target_is_directory=True)
+            except (OSError, NotImplementedError) as error:
+                self.skipTest(f"host cannot create directory symlinks: {error}")
+            case = alias / "case"
+            case.mkdir()
+            home, project = case / "home", case / "project"
+            home.mkdir()
+            project.mkdir()
+            for target in ("codex", "copilot"):
+                with self.subTest(target=target):
+                    verify(target, home.resolve(strict=True), case, "canonical User cleanup")
+                    verify(target, project, case, "lexical Project cleanup", project_scope=True)
+            # The accepted alias is outside the disposable root. Neither
+            # lexical nor canonical *in-root* symlink substitution is allowed.
+            poisoned = case / "replaced-home"
+            poisoned.symlink_to(home.resolve(strict=True), target_is_directory=True)
+            for path in (poisoned, case.resolve(strict=True) / "replaced-home"):
+                with self.subTest(suspect=str(path)):
+                    with self.assertRaisesRegex(AssertionError, "native HOME left disposable case"):
+                        verify("codex", path, case, "unsafe HOME")
+
     def _exercise_marketing_kit_scope_report(self, target, *, cleanup_failure=False,
                                               negative_error=False):
         from io import StringIO
