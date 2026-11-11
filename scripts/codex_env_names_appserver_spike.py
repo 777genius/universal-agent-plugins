@@ -19,7 +19,7 @@ import tempfile
 import threading
 import time
 
-from codex_env_names_native_spike import CHILD, ENV_NAME, FOREIGN_ENV_NAME, Model, inspect, isolated_env, aggregate_findings
+from codex_env_names_native_spike import CHILD, ENV_NAME, FOREIGN_ENV_NAME, Model, inspect, isolated_env, aggregate_findings, structured_mcp_receipt_matches
 
 def rpc_send(proc, q, serial, method, params, timeout=35):
     proc.stdin.write((json.dumps({"id": serial, "method": method,
@@ -169,9 +169,8 @@ def main():
                 "threadId": thread_id, "server": "env_spike",
                 "tool": "confirm_env", "arguments": {}
             }, timeout=22)
-            report["direct_mcp_call_verified"] = (
-                direct.get("isError") is not True and
-                Model.expected_digest in json.dumps(direct, sort_keys=True)
+            report["direct_mcp_call_verified"] = structured_mcp_receipt_matches(
+                direct, Model.expected_digest
             )
         except RuntimeError as exc:
             report["direct_mcp_call_error"] = str(exc)[:96]

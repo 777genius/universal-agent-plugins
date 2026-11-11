@@ -14,7 +14,7 @@ import http.server
 
 from codex_env_names_native_spike import (CHILD, Model, MCP_CALL, SHELL_CALL, SHELL_MARKER,
                                         SHELL_ENV_PRESENT, SHELL_FOREIGN_PRESENT,
-                                        ENV_NAME, FOREIGN_ENV_NAME, inspect, aggregate_findings, windows_shell_command, isolated_env)
+                                        ENV_NAME, FOREIGN_ENV_NAME, inspect, aggregate_findings, windows_shell_command, isolated_env, structured_mcp_receipt_matches)
 
 
 class TestSyntheticModelOracle(unittest.TestCase):
@@ -243,6 +243,45 @@ class TestSyntheticModelOracle(unittest.TestCase):
                              "output": "shell complete"}]},
                   status=409)
         self.assertEqual(Model.error, "MCP tool not advertised")
+
+
+class TestStructuredMcpReceipt(unittest.TestCase):
+    def setUp(self):
+        # Deliberately synthetic and reproducible: no credentials or live MCP.
+        self.digest = "UNITTEST_SYNTHETIC_SHA_ONLY"
+
+    def proof(self, observed=True, digest=None):
+        return {"content": [{"type": "text", "text": json.dumps({
+            "observed": observed,
+            "sha256": self.digest if digest is None else digest,
+        })}]}
+
+    def test_genuine_nested_receipt_is_accepted(self):
+        self.assertTrue(structured_mcp_receipt_matches(self.proof(), self.digest))
+        self.assertTrue(structured_mcp_receipt_matches(
+            {"result": self.proof()}, self.digest))
+
+    def test_matching_digest_with_observed_false_is_rejected(self):
+        self.assertFalse(structured_mcp_receipt_matches(
+            self.proof(observed=False), self.digest))
+
+    def test_incidental_digest_in_plain_diagnostic_is_rejected(self):
+        text_only = {"content": [{"type": "text",
+                                  "text": "not connected; digest " + self.digest}]}
+        self.assertFalse(structured_mcp_receipt_matches(text_only, self.digest))
+
+    def test_error_wrapping_valid_receipt_is_rejected(self):
+        self.assertFalse(structured_mcp_receipt_matches(
+            {"isError": True, "content": self.proof()["content"]}, self.digest))
+        self.assertFalse(structured_mcp_receipt_matches(
+            {"error": "native tool refused", "result": self.proof()}, self.digest))
+
+    def test_wrong_or_missing_digest_is_rejected(self):
+        self.assertFalse(structured_mcp_receipt_matches(
+            self.proof(digest="incorrect"), self.digest))
+        self.assertFalse(structured_mcp_receipt_matches(self.proof(), ""))
+        self.assertFalse(structured_mcp_receipt_matches(
+            {"content": [{"type": "text", "text": "not-json"}]}, self.digest))
 
 
 class TestSyntheticMcpChild(unittest.TestCase):

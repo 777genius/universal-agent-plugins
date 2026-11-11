@@ -64,6 +64,44 @@ for line in sys.stdin:
 '''
 
 
+
+def structured_mcp_receipt_matches(payload, expected_digest):
+    """Require the child's structured observed=true + exact digest, not text hits.
+
+    The genuine Codex model/direct tool responses wrap an MCP text content
+    element in dicts/lists. Parse only complete bounded JSON strings. A raw
+    diagnostic, rejected tool response or incidental digest is never a PASS.
+    """
+    if not expected_digest:
+        return False
+
+    def visit(item, depth):
+        if depth > 8:
+            return False
+        if isinstance(item, dict):
+            if (item.get("isError") not in (None, False)
+                    or item.get("error") not in (None, False)):
+                return False
+            if "observed" in item or "sha256" in item:
+                return (item.get("observed") is True
+                        and item.get("sha256") == expected_digest)
+            return any(
+                visit(item[key], depth + 1)
+                for key in ("content", "output", "result", "text")
+                if key in item
+            )
+        if isinstance(item, list):
+            return any(visit(value, depth + 1) for value in item[:32])
+        if isinstance(item, str) and len(item) <= 65536:
+            try:
+                return visit(json.loads(item), depth + 1)
+            except (TypeError, ValueError):
+                return False
+        return False
+
+    return visit(payload, 0)
+
+
 def isolated_env(root, home, secret, foreign_secret):
     """Disposable Codex profile: no real runner secrets are inherited."""
     env = {"HOME": str(home), "CODEX_HOME": str(home / ".codex"),
@@ -218,7 +256,7 @@ class Model(http.server.BaseHTTPRequestHandler):
                         "server", "mcp", "tool", "timeout", "call", "result",
                     ) if term in rendered.lower()
                 ]
-                if cls.expected_digest and cls.expected_digest in rendered:
+                if structured_mcp_receipt_matches(output, cls.expected_digest):
                     cls.mcp_digest_verified = True
         tools = req.get("tools", [])
         function_names = {x.get("name") for x in tools if isinstance(x, dict)}
