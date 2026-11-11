@@ -319,6 +319,11 @@ func verifyLockedDirectory(ctx context.Context, app App, loaded loadedPackage, l
 	if app.DirectoryClient == nil {
 		return loadedPackage{}, errors.New("signed Directory is unavailable")
 	}
+	// Never reauthorize a lock from another Ed25519 publication lineage,
+	// even if product, release, source and digests happen to coincide.
+	if source.FeedID != directoryFeedForClient(app.DirectoryClient) {
+		return loadedPackage{}, errors.New("signed Directory feed differs from locked source; explicit source switch required")
+	}
 	bundle, err := app.loadAuthorizedDirectory(ctx)
 	if err != nil {
 		return loadedPackage{}, err
