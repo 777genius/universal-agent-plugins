@@ -97,7 +97,11 @@ def verify(path):
     command = server.get("command")
     if not isinstance(command, str) or not Path(command).is_absolute():
         raise ValueError("Kimi MCP lost its absolute source-bound command")
-    if not Path(command).is_relative_to(path.parents[1] / ".uap"):
+    # Lexical membership is insufficient: '..' and linked launchers can escape
+    # the UAP-owned package even though is_relative_to() returns true.
+    selected = Path(command)
+    if (not selected.is_relative_to(path.parents[1] / ".uap")
+            or selected.resolve() != selected or not selected.is_file()):
         raise ValueError("Kimi MCP command escaped selected UAP-managed project tree")
     return sha(safe_read(path))
 
