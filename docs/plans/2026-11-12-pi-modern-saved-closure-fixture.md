@@ -6,7 +6,7 @@ Date: 2026-11-12. Related: Registry [#451](https://github.com/777genius/universa
 
 The released CLI's historical signed feed has **no Pi target for HubSpot CRM**. Its Marketing Kit saved user/project plan fails honestly at 70/72; that negative result is not a flaky CI job. Direct `--no-save` Pi installs cannot substitute for a saved four-package graph.
 
-This PR adds a **test-only preverified** modern feed-lineage fixture covering the four exact package roles (Marketing Kit, Notion, HubSpot CRM, Playwright Bridge), a real disposable Git history with immutable source/tree/manifest pins, and the production saved dependency resolver and locked acquisition on both User and Project. Both positive complete four-node plans and negative HubSpot-Pi-grant denial are asserted before any production mutation. All four pins must retain the same isolated test `FeedID`.
+This PR adds a **synthetic, test-only Ed25519-signed Directory v1** modern feed-lineage fixture covering the four exact package roles (Marketing Kit, Notion, HubSpot CRM, Playwright Bridge), a real disposable Git history with immutable source/tree/manifest pins, and the production saved dependency resolver and locked acquisition on both User and Project. Both positive complete four-node plans and negative HubSpot-Pi-grant denial are asserted before any production mutation. All four pins must retain the same isolated test `FeedID`.
 
 ## Scope and review gates
 
@@ -16,7 +16,7 @@ This PR adds a **test-only preverified** modern feed-lineage fixture covering th
 - Architecture review: reuse the existing Directory/lock/acquisition/installer seams rather than adding an installer or a schema.
 - Scope review: no runtime/source changes; keep changes limited to one test and this plan.
 
-The real signed-v1 Ed25519/cross-key/cache tests remain separately covered by #868. Follow-up acceptance must combine a disposable independently signed modern-v1 **test cohort** with the **real native managed saved** four-package installation on Linux/macOS/Windows, then an editor-approved production signer/bootstrap/origin/ledger, released modern routing, and post-publish 72/72 receipts. Neither this preverified fixture nor signed test-only fixtures may become publication evidence.
+The synthetic snapshot is verified using production `directoryv1.VerifyBundle` with a deterministic **test-only signing seed** and a separately pinned test feed identity. A second negative case is independently re-signed after changing HubSpot's policy to a non-Pi target: mutating a verified snapshot after signature validation is explicitly forbidden. Cross-key/cache isolation tests remain separately covered by #868. Follow-up acceptance must combine a disposable independently signed modern-v1 **test cohort with independently reviewed real package evidence** with the **real native managed saved** four-package installation on Linux/macOS/Windows, then an editor-approved production signer/bootstrap/origin/ledger, released modern routing, and post-publish 72/72 receipts. Neither this preverified fixture nor signed test-only fixtures may become publication evidence.
 
 ## Execution
 
