@@ -39,9 +39,12 @@ HELP = (
 NAMES = {scope: "uap-kiro-research-" + scope for scope in ("a", "b", "user")}
 _ALL_HELP_STDERR = b"\nUSAGE:\n    kiro-cli [OPTIONS] [SUBCOMMAND]\n\n"
 _LIST_AUTH_STDERR = b"error: You are not logged in, please log in with kiro-cli login\n"
-# Official Kiro 2.34.0 also initializes HOME on mcp status --help.
-# These four read-only probes get an owned disposable KIRO_HOME.
-_HELP_PROFILE_LABELS = frozenset(("all-help", "mcp-help", "mcp-list-help", "mcp-status-help"))
+# Official Kiro 2.34.0 initialized HOME on --help-all, mcp --help,
+# mcp list --help, mcp status --help and acp --help in original native runs.
+# Isolate every fixed informational HELP route as a class; this does not
+# assert side effects for unobserved help routes or qualify native inventory.
+# Version and raw-list probes retain their original HOME/scope/key policy.
+_HELP_PROFILE_LABELS = frozenset(label for label, _, _ in HELP)
 _MCP_LIST_ROUTES = {
     project + "-" + scope + "-raw-list": (project, ("mcp", "list", scope))
     for project in ("a", "b", "user") for scope in ("workspace", "global")
@@ -189,7 +192,7 @@ def _require_clean_unowned_roots(ctx):
 
 
 def _private_help_home(ctx, identities):
-    """Reserve a fresh KIRO_HOME for selected help probes, disjoint from native scopes."""
+    """Reserve a fresh KIRO_HOME for informational help, disjoint from native scopes."""
     private = Path(ctx.root) / "private"
     if (_research_root_identity(private)[-1] != 0o700
             or private.lstat().st_uid != os.getuid()):
@@ -285,8 +288,8 @@ def _probe(ctx, owned, label, arguments, project="a", root_identities=None, help
     key = getattr(ctx, "kiro_api_key", "")
     private_env = {"KIRO_API_KEY": key} if key and label.endswith("raw-list") else None
     if label in _HELP_PROFILE_LABELS:
-        # Kiro 2.34 initializes HOME on --help-all and three MCP
-        # subcommand help probes. Confine only these observed probes.
+        # Every exact informational HELP route uses the disposable profile.
+        # Only the five observed routes above are known to initialize HOME.
         # Never use that profile as Project/User config or activation proof.
         expected = Path(ctx.root) / "private" / "kiro-help-only"
         if (help_home != expected or root_identities is None

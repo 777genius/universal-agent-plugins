@@ -60,7 +60,8 @@ class KiroCollectorTests(unittest.TestCase):
         result = kiro.collect(ctx)
         for label, _, _, extra, _ in ctx.calls:
             expected = ({"KIRO_HOME": str(ctx.root / "private" / "kiro-help-only")}
-                        if label in ("all-help", "mcp-help", "mcp-list-help", "mcp-status-help") else
+                        if label in ("top-help", "all-help", "mcp-help", "mcp-list-help",
+                                     "mcp-status-help", "acp-help", "chat-help", "agent-help") else
                         {"KIRO_API_KEY": ctx.kiro_api_key} if label.endswith("raw-list") else None)
             self.assertEqual(extra, expected)
         self.assertNotIn("KIRO_API_KEY", ctx.env)
@@ -83,8 +84,7 @@ class KiroCollectorTests(unittest.TestCase):
                                       ["agent", "list"],
                                       ["mcp", "list", "workspace"], ["mcp", "list", "global"]])
             expected = ({"KIRO_HOME": str(ctx.root / "private" / "kiro-help-only")}
-                        if arguments in (["--help-all"], ["mcp", "--help"], ["mcp", "list", "--help"],
-                                         ["mcp", "status", "--help"]) else None)
+                        if arguments in [list(args) for _, args, _ in kiro.HELP] else None)
             self.assertEqual(extra_env, expected)
             self.assertEqual(timeout, 30)
         for scope in ("a", "b", "user"):
@@ -118,23 +118,25 @@ class KiroCollectorTests(unittest.TestCase):
                              if key.endswith("_qualified")))
         self.assertEqual((profile / "native-secret").read_text(), "not a test report")
 
-    def test_mcp_subcommand_help_side_effect_stays_in_disposable_profile(self):
-        # All three observed MCP help probes can initialize HOME in pinned 2.34.
-        # The isolated profile cannot count as discovery or activation.
-        for label in ("mcp-help", "mcp-list-help", "mcp-status-help"):
+    def test_informational_help_stays_in_disposable_profile(self):
+        # Isolate every fixed help route without asserting that each native
+        # command has side effects. This is never discovery or activation.
+        for label, arguments, token in kiro.HELP:
             with self.subTest(label=label):
                 ctx = self.context()
                 profile = ctx.root / "private" / "kiro-help-only"
 
                 def native_help():
                     self.assertEqual(ctx.calls[-1][3], {"KIRO_HOME": str(profile)})
+                    self.assertEqual(ctx.calls[-1][1], list(arguments))
                     # Native help must not touch User HOME before fixture setup.
                     self.assertFalse((ctx.home / ".kiro").exists())
                     (profile / "mcp-native-cache").mkdir()
-                    body = (b"Usage: kiro-cli mcp status --name NAME\n"
-                            if label == "mcp-status-help"
-                            else b"Usage: kiro-cli mcp list workspace\n")
-                    return {"exit": 0, "error": None}, body, b""
+                    if label == "all-help":
+                        return ({"exit": 0, "error": None},
+                                b"Commands:\n  mcp\nOptions:\n --help-all\n --help\n",
+                                kiro._ALL_HELP_STDERR)
+                    return {"exit": 0, "error": None}, ("Usage: " + token + "\n").encode(), b""
 
                 ctx.replace[label] = native_help
                 result = kiro.collect(ctx)
@@ -147,8 +149,8 @@ class KiroCollectorTests(unittest.TestCase):
                 self.assertFalse(any(value for key, value in result["observations"].items()
                                      if key.endswith("_qualified")))
 
-    def test_mcp_subcommand_help_unowned_home_write_still_fails_closed(self):
-        for label in ("mcp-help", "mcp-list-help", "mcp-status-help"):
+    def test_informational_help_unowned_home_write_still_fails_closed(self):
+        for label, _, _ in kiro.HELP:
             with self.subTest(label=label):
                 ctx = self.context()
 
@@ -225,7 +227,8 @@ class KiroCollectorTests(unittest.TestCase):
 
         def agent_help():
             self.assertEqual(ctx.calls[-1], (
-                "agent-help", ["agent", "--help"], "a", None, 30))
+                "agent-help", ["agent", "--help"], "a",
+                {"KIRO_HOME": str(ctx.root / "private" / "kiro-help-only")}, 30))
             for root in (ctx.home, ctx.projects["a"], ctx.projects["b"]):
                 self.assertFalse((root / ".kiro/settings/mcp.json").exists())
             self.assertFalse(any("raw-list" in call[0] for call in ctx.calls))
@@ -236,7 +239,8 @@ class KiroCollectorTests(unittest.TestCase):
         result = kiro.collect(ctx)
         self.assertEqual(len(kiro.HELP), 8)
         self.assertEqual(ctx.calls[8], (
-            "agent-help", ["agent", "--help"], "a", None, 30))
+            "agent-help", ["agent", "--help"], "a",
+            {"KIRO_HOME": str(ctx.root / "private" / "kiro-help-only")}, 30))
         self.assertEqual(ctx.calls[9][0], "a-agent-raw-list")
         self.assertEqual(ctx.calls[10][0], "a-workspace-raw-list")
         self.assertEqual([case["id"] for case in result["cases"]], ["kiro.help"])
@@ -705,7 +709,8 @@ class KiroCollectorTests(unittest.TestCase):
         result = kiro.collect(ctx)
         self.assertEqual(len(ctx.calls), 11)
         self.assertEqual(ctx.calls[-3], (
-            "agent-help", ["agent", "--help"], "a", None, 30))
+            "agent-help", ["agent", "--help"], "a",
+            {"KIRO_HOME": str(ctx.root / "private" / "kiro-help-only")}, 30))
         self.assertEqual(ctx.calls[-2], (
             "a-agent-raw-list", ["agent", "list"], "a", None, 30))
         self.assertEqual(ctx.calls[-1], (
