@@ -227,6 +227,26 @@ class TestSyntheticMcpChild(unittest.TestCase):
 
 
 class TestSyntheticSnapshotScanner(unittest.TestCase):
+    def test_unreadable_walk_directory_is_a_fail_closed_finding(self):
+        # os.walk's default onerror=None drops unreadable subtrees silently.
+        # Simulate scandir failure without changing runner permissions.
+        with tempfile.TemporaryDirectory() as temp:
+            unreadable = str(Path(temp) / "unreadable")
+            def fake_walk(_root, *, followlinks, onerror):
+                self.assertFalse(followlinks)
+                self.assertIsNotNone(onerror)
+                onerror(PermissionError(13, "denied", unreadable))
+                return iter(())
+            with patch("codex_env_names_native_spike.os.walk",
+                       side_effect=fake_walk):
+                findings, symlinks = inspect(Path(temp), "synthetic_only")
+            self.assertEqual(symlinks, 0)
+            self.assertEqual(len(findings), 1)
+            self.assertEqual(findings[0]["result"], "unscanned_directory")
+            self.assertEqual(len(findings[0]["path_sha256"]), 64)
+            self.assertNotIn(unreadable, str(findings))
+            self.assertNotIn("synthetic_only", str(findings))
+
     def test_same_path_live_canary_then_external_symlink_keeps_both(self):
         path_digest = "a" * 64
         findings, counts = aggregate_findings(

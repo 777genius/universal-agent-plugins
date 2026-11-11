@@ -321,7 +321,22 @@ def inspect(root, secret):
                 "result": "unscanned_external_symlink",
             })
 
-    for directory, subdirs, files in os.walk(root, followlinks=False):
+    def record_walk_error(exc):
+        # os.walk otherwise silently drops unreadable directories. An omitted
+        # subtree invalidates a no-leak proof even if all scanned files pass.
+        # Record only a path digest and fixed category, never errno text/paths.
+        try:
+            failed = Path(exc.filename) if exc.filename else root_path
+            relative = failed.relative_to(root_path)
+        except (TypeError, ValueError, OSError):
+            relative = Path(".")
+        found.append({
+            "path_sha256": hashlib.sha256(str(relative).encode()).hexdigest(),
+            "result": "unscanned_directory",
+        })
+
+    for directory, subdirs, files in os.walk(
+            root, followlinks=False, onerror=record_walk_error):
         for name in list(subdirs):
             if (Path(directory) / name).is_symlink():
                 record_symlink(Path(directory) / name)
