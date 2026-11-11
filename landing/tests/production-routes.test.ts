@@ -29,6 +29,12 @@ test('CLI invocation through a symlink does not silently skip validation', async
   }
 });
 
+test('import ignores a non-file process argument', () => {
+  const script = new URL('../scripts/check-production-routes.mjs', import.meta.url).href;
+  const result = spawnSync(process.execPath, ['-e', `import(${JSON.stringify(script)})`, 'not-an-existing-file'], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+});
+
 const locales = ['en', 'ru', 'uk', 'zh', 'es', 'hi', 'ar', 'pt', 'fr'];
 // Public catalogue of accepted source 55c2b820; H/A were not advertised there.
 const oldClients = [
