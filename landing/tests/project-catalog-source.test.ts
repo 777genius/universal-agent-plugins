@@ -156,6 +156,16 @@ test('signed Pi Project grant keeps the original signed short-name route', () =>
     'npx -y universal-agent-plugins add gitlab --target pi --scope project');
 });
 
+test('ChatGPT app-only binding does not authorize portable Pi Project source', () => {
+  const plugin = reviewed();
+  plugin.distributions[0]!.releases[0]!.targets = [{
+    client: 'chatgpt', authentication: 'required', delivery: 'manual_activation',
+    scopes: ['user'], app_binding: { app_key: 'test', id: 'test-app', mcp_server: 'remote' },
+  }];
+  assert.equal(pinnedPiProjectSource(plugin), undefined);
+  assert.throws(() => pinnedPiProjectCommands(plugin), /No eligible Pi Project/);
+});
+
 test('signed Pi blocking evidence forbids Git suggestion without a Pi target', () => {
   const plugin = reviewed();
   plugin.distributions[0]!.releases[0]!.blocking_clients.push('pi');
