@@ -110,10 +110,22 @@ class ProductionSourceTests(unittest.TestCase):
             text = (REPO / '.github/workflows' / name).read_text()
             self.assertLess(text.index('production_site_source.py select'), text.index('actions/setup-'))
             self.assertLess(text.index('production_site_source.py select'), text.index('pnpm/action-setup'))
-            self.assertEqual(text.count('      - uses: actions/setup-go@'), 1)
-            go_setup = text.split('      - uses: actions/setup-go@', 1)[1].split('\n      - ', 1)[0]
-            self.assertIn('          go-version-file: go.mod\n', go_setup)
-            self.assertNotIn('go-version:', go_setup)
+            go_blocks = text.split('      - uses: actions/setup-go@')[1:]
+            self.assertEqual(len(go_blocks), 2)
+            network_go, docs_go = [block.split('\n      - ', 1)[0] for block in go_blocks]
+            self.assertIn('          go-version: "1.26.11"\n', network_go)
+            self.assertNotIn('go-version-file:', network_go)
+            self.assertIn('          go-version-file: go.mod\n', docs_go)
+            self.assertNotIn('go-version:', docs_go)
+            feed = text.split('      - name: Verify and stage signed', 1)[1].split('\n      # Offline docs', 1)[0]
+            self.assertIn('          GOTOOLCHAIN: local\n', feed)
+            self.assertIn('test "$(go env GOVERSION)" = go1.26.11', feed)
+            self.assertLess(text.index('go-version: "1.26.11"'), text.index('go run ./cmd/agentplugins-registry-mirror'))
+            self.assertLess(text.index('cp -a "${RUNNER_TEMP}/uap-registry-mirror/." landing/public/'), text.index('go-version-file: go.mod'))
+            self.assertLess(text.index('go-version-file: go.mod'), text.index('pnpm/action-setup'))
+            self.assertLess(text.index('go-version-file: go.mod'), text.index('Install pinned docs generators'))
+            if name == 'registry-compatibility-mirror.yml':
+                self.assertLess(text.index('Resolve registry source'), text.index('Verify and stage signed feeds'))
             self.assertIn('go run ./cmd/agentplugins-registry-mirror', text)
             self.assertIn('--previous-marker "$previous"', text)
             self.assertIn('cp -a "${RUNNER_TEMP}/uap-registry-mirror/." landing/public/', text)
