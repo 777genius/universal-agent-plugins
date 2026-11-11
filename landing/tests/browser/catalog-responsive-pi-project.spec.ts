@@ -98,7 +98,7 @@ for (const width of [1440, 390]) {
 
     // Switching routes must not combine an unsigned Pi option with signed Codex.
     await card.locator('.app-multiselect__trigger').click();
-    await page.getByRole('checkbox', { name: /^Codex(?:\\s|$)/ }).click();
+    await page.getByRole('checkbox', { name: /^Codex(?:\s|$)/ }).click();
     await page.keyboard.press('Escape');
     await expect(card.locator('.plugin-card__install .command-snippet--add code')).toHaveText(
       'npx -y universal-agent-plugins add sentry --target codex --scope project');
