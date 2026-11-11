@@ -748,6 +748,34 @@ class KiroCollectorTests(unittest.TestCase):
                 kiro.collect(ctx)
             self.assertEqual(len(ctx.calls), 11)
 
+    def test_authored_fixture_open_refuses_symlink_swap_between_lstat_and_read(self):
+        # The native child can replace the leaf *after* lstat. Its content
+        # must never be read through an unverified path-following open.
+        for scope in ("a", "b", "user"):
+            ctx = self.context()
+            root = ctx.home if scope == "user" else ctx.projects[scope]
+            fixture = root / ".kiro/settings/mcp.json"
+            foreign = ctx.root / ("foreign-" + scope + ".json")
+            foreign.write_bytes(b"private foreign data - must never be adopted")
+            original_open = os.open
+            swapped = False
+
+            def race(target, flags, *args, **kwargs):
+                nonlocal swapped
+                if not swapped and Path(target) == fixture and flags & os.O_NOFOLLOW:
+                    fixture.rename(fixture.with_name("original-owned.json"))
+                    fixture.symlink_to(foreign)
+                    swapped = True
+                return original_open(target, flags, *args, **kwargs)
+
+            with self.subTest(scope=scope), patch.object(kiro.os, "open", side_effect=race):
+                with self.assertRaisesRegex(ValueError, "authored fixture"):
+                    kiro.collect(ctx)
+            self.assertTrue(swapped)
+            self.assertEqual(len(ctx.calls), 11)
+            self.assertTrue(fixture.is_symlink())
+            self.assertEqual(foreign.read_bytes(), b"private foreign data - must never be adopted")
+
     def test_in_place_fixture_rewrite_cannot_pass_with_original_bytes_and_mtime(self):
         # An untrusted native child could rewrite the authored file in place
         # and restore its contents/mtime. The inode and bytes alone are not

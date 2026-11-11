@@ -148,8 +148,34 @@ def _verify_owned_fixtures(owned):
         info = path.lstat()
         if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size != len(body)
                 or info.st_uid != os.getuid() or (info.st_dev, info.st_ino) != (device, inode)
-                or stat.S_IMODE(info.st_mode) != 0o600 or info.st_ctime_ns != created_ctime_ns
-                or path.read_bytes() != body):
+                or stat.S_IMODE(info.st_mode) != 0o600 or info.st_ctime_ns != created_ctime_ns):
+            raise ValueError("Kiro changed authored fixture identity/bytes/mode")
+        # A path read after lstat can follow a native replacement symlink.
+        # Hold an O_NOFOLLOW descriptor, recheck its exact identity, and read
+        # the bounded original bytes from that descriptor, never the path.
+        try:
+            descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        except OSError as error:
+            raise ValueError("Kiro changed authored fixture identity/bytes/mode") from error
+        try:
+            opened = os.fstat(descriptor)
+            identity = (opened.st_dev, opened.st_ino, opened.st_uid, opened.st_gid,
+                        opened.st_nlink, stat.S_IMODE(opened.st_mode),
+                        opened.st_size, opened.st_ctime_ns)
+            expected = (device, inode, info.st_uid, info.st_gid,
+                        1, 0o600, len(body), created_ctime_ns)
+            if not stat.S_ISREG(opened.st_mode) or identity != expected:
+                raise ValueError("Kiro changed authored fixture identity/bytes/mode")
+            read = os.read(descriptor, len(body) + 1)
+            after = os.fstat(descriptor)
+            if read != body or (after.st_dev, after.st_ino, after.st_ctime_ns,
+                                after.st_size, stat.S_IMODE(after.st_mode)) != (
+                                device, inode, created_ctime_ns, len(body), 0o600):
+                raise ValueError("Kiro changed authored fixture identity/bytes/mode")
+        finally:
+            os.close(descriptor)
+        current = path.lstat()
+        if not stat.S_ISREG(current.st_mode) or (current.st_dev, current.st_ino) != (device, inode):
             raise ValueError("Kiro changed authored fixture identity/bytes/mode")
         # Report an unexpected member before checking parent ctime: creating
         # a new file also changes directory ctime, but is more precisely an
