@@ -412,7 +412,19 @@ def verify_corrupt_lock_refusal(cli, env, project, target, scope, guards):
             # Open first, inspect the *opened inode*, and only then write.
             # A check-then-write of the pathname would follow a hostile symlink.
             try:
-                with lock_file.open("r+b") as stream:
+                # Do not even open a swapped foreign/special-file pathname.
+                # O_NOFOLLOW and O_NONBLOCK also protect the lstat/open race.
+                current = lock_file.lstat()
+                if (not stat.S_ISREG(current.st_mode)
+                        or current.st_nlink != 1
+                        or (current.st_dev, current.st_ino)
+                        != (original_identity.st_dev, original_identity.st_ino)):
+                    raise AssertionError("corrupt signed lock path replaced during restore")
+                flags = (os.O_RDWR | getattr(os, "O_NOFOLLOW", 0)
+                         | getattr(os, "O_NONBLOCK", 0)
+                         | getattr(os, "O_CLOEXEC", 0))
+                descriptor = os.open(lock_file, flags)
+                with os.fdopen(descriptor, "r+b") as stream:
                     identity = os.fstat(stream.fileno())
                     # fstat alone accepts a symlink to the same moved inode.
                     # The *pathname* must still name the original regular file.

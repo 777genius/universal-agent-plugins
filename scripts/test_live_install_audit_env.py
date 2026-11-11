@@ -980,7 +980,17 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                                 "stderr_tail": ("verify notion pinned manifest; run agentplugins deps lock: "
                                             "signed Directory publication differs from exact lock")}
 
-                    with patch.dict(verify.__globals__, {"invoke": attacker}):
+                    # Opening the link is already unsafe even if inode checks
+                    # subsequently prevent a write. Catch that earlier hazard.
+                    real_open = Path.open
+
+                    def reject_swapped_open(path, *args, **kwargs):
+                        if path == locked and path.is_symlink():
+                            raise AssertionError("opened a swapped signed-lock symlink")
+                        return real_open(path, *args, **kwargs)
+
+                    with (patch.object(Path, "open", reject_swapped_open),
+                          patch.dict(verify.__globals__, {"invoke": attacker})):
                         with self.assertRaisesRegex(AssertionError, "lock path replaced"):
                             verify("agentplugins", env, project, "codex", scope,
                                    (lambda: guards.append(True),))
