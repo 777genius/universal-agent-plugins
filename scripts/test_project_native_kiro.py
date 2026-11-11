@@ -131,7 +131,10 @@ class KiroCollectorTests(unittest.TestCase):
                     # Native help must not touch User HOME before fixture setup.
                     self.assertFalse((ctx.home / ".kiro").exists())
                     (profile / "mcp-native-cache").mkdir()
-                    return {"exit": 0, "error": None}, b"Usage: kiro-cli mcp list workspace\n", b""
+                    body = (b"Usage: kiro-cli mcp status --name NAME\n"
+                            if label == "mcp-status-help"
+                            else b"Usage: kiro-cli mcp list workspace\n")
+                    return {"exit": 0, "error": None}, body, b""
 
                 ctx.replace[label] = native_help
                 result = kiro.collect(ctx)
