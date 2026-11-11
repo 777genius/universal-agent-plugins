@@ -1,5 +1,6 @@
 """Inert Kiro help/raw-list contracts, without native or hosted execution."""
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -637,6 +638,33 @@ class KiroCollectorTests(unittest.TestCase):
 
             ctx.replace["a-workspace-raw-list"] = substituted
             with self.subTest(scope=scope), self.assertRaisesRegex(ValueError, "fixture identity"):
+                kiro.collect(ctx)
+            self.assertEqual(len(ctx.calls), 11)
+
+    def test_in_place_fixture_rewrite_cannot_pass_with_original_bytes_and_mtime(self):
+        # An untrusted native child could rewrite the authored file in place
+        # and restore its contents/mtime. The inode and bytes alone are not
+        # sufficient evidence that the read-only probe left it untouched.
+        for scope in ("a", "b", "user"):
+            ctx = self.context()
+            root = ctx.home if scope == "user" else ctx.projects[scope]
+            fixture = root / ".kiro/settings/mcp.json"
+
+            def overwritten():
+                before = fixture.stat()
+                body = fixture.read_bytes()
+                fixture.write_bytes(body)
+                os.utime(fixture, ns=(before.st_atime_ns, before.st_mtime_ns))
+                after = fixture.stat()
+                self.assertEqual((before.st_dev, before.st_ino),
+                                 (after.st_dev, after.st_ino))
+                self.assertEqual(before.st_mtime_ns, after.st_mtime_ns)
+                self.assertEqual(fixture.read_bytes(), body)
+                return {"exit": 0, "error": None}, b"Opaque read-only listing.\\n", b""
+
+            ctx.replace["a-workspace-raw-list"] = overwritten
+            with self.subTest(scope=scope), self.assertRaisesRegex(
+                    ValueError, "authored fixture identity"):
                 kiro.collect(ctx)
             self.assertEqual(len(ctx.calls), 11)
 
