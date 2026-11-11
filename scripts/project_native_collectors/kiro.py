@@ -129,6 +129,7 @@ def _require_clean_user_cwd(ctx):
     if marker.exists() or marker.is_symlink():
         raise ValueError("Kiro selected user cwd has unowned native config")
 
+
 def _require_clean_unowned_roots(ctx):
     """Before fixture creation, no native probe may seed unowned project or HOME config."""
     roots = (("home", Path(ctx.home)), ("a", Path(ctx.projects["a"])),
