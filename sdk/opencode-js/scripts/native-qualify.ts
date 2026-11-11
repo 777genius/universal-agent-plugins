@@ -5,6 +5,7 @@ import { mkdir, writeFile, readFile, appendFile } from 'node:fs/promises';
 import { join, resolve, isAbsolute } from 'node:path';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { liveEvidenceRows } from './native-jsonl.ts';
 
 type Json = Record<string, any>;
 assert(process.argv[2]&&isAbsolute(process.argv[2])&&process.argv[2].includes('TEST-'),'An explicit absolute TEST scratch directory is required');
@@ -74,7 +75,7 @@ const api = async (path: string, body?: unknown, method = body === undefined ? '
  if (!response.ok) throw new Error(`${response.status} ${path} ${text}`);
  return text ? JSON.parse(text) : undefined;
 };
-const rows=async():Promise<Json[]> => (await readFile(evidence,'utf8')).trim().split('\n').filter(Boolean).map((line)=>JSON.parse(line));
+const rows=async():Promise<Json[]> => liveEvidenceRows(await readFile(evidence,'utf8'));
 const facts=async(sid:string,kind:string)=>(await rows()).filter((r)=>r.fact?.sessionID===sid&&r.fact?.kind===kind);
 const fenceProof=async(sid:string,rid:string,close:(row:Json)=>boolean) => {
  await wait(async()=> (await rows()).some((r)=>r.phase==='preparation-exit'&&r.requestID===rid));
@@ -102,7 +103,7 @@ try {
   const session=await client.session.create({location:{directory:project},model:{providerID:'qualification',id:'test'}});
   await record({phase:'session-created',session});
   await client.session.prompt({sessionID:session.id,text:'QUALIFY_completion'});
-  await wait(async()=> (await readFile(evidence,'utf8')).split('\n').some((line)=>{try{return JSON.parse(line).fact?.kind==='turn_idle_verified';}catch{return false;}}));
+  await wait(async()=> (await rows()).some((row)=>row.fact?.kind==='turn_idle_verified'));
   await record({phase:'completion-pass',sessionID:session.id});
   for(const scenario of ['question','permission','question-reply-fence','question-reject-fence','permission-reply-fence','error']) {
    const test=await client.session.create({location:{directory:project},model:{providerID:'qualification',id:'test'},title:scenario});
