@@ -281,6 +281,82 @@ def snapshot(root):
     return found
 
 
+def scoped_snapshot(roots, *, snapshotter=None):
+    """Record protected file and directory identities without following links."""
+    roots = tuple(Path(root) for root in roots)
+    state = (snapshot if snapshotter is None else snapshotter)(roots)
+    # The shared audit records failed file reads and walk errors as
+    # 'unreadable'. Identical failures before/after must not prove isolation.
+    if any(digest == "unreadable" for digest in state.values()):
+        raise AssertionError("protected scope snapshot unreadable: native entry")
+
+    def record_metadata(index, path, relative):
+        """Preserve directory and file inode identity, not only permissions."""
+        try:
+            entry = path.lstat()
+        except OSError as error:
+            raise AssertionError("protected scope snapshot unreadable: metadata") from error
+        identity = (entry.st_mode, entry.st_dev, entry.st_ino)
+        # Equal bytes and inode do not prove a peer left file timestamps alone.
+        if stat.S_ISREG(entry.st_mode):
+            identity += (entry.st_mtime_ns,)
+        state[f"metadata:{index}:{relative}"] = identity
+
+    def refuse_walk_error(error):
+        raise AssertionError(f"protected scope snapshot unreadable: {error}") from error
+
+    for index, root in enumerate(roots):
+        if root.is_symlink():
+            state[f"root-link:{index}"] = os.readlink(root)
+            record_metadata(index, root, ".")
+            continue
+        # An empty protected profile must not disappear or turn into a file
+        # unnoticed: audit.snapshot records children, not root existence.
+        if not root.is_dir():
+            state[f"root-kind:{index}"] = "file" if root.exists() else "absent"
+            continue
+        state[f"root-kind:{index}"] = "directory"
+        record_metadata(index, root, ".")
+        for directory, dirs, files in os.walk(root, followlinks=False, onerror=refuse_walk_error):
+            for name in dirs:
+                path = Path(directory) / name
+                relative = path.relative_to(root).as_posix()
+                if path.is_symlink():
+                    state[f"link:{index}:{relative}"] = os.readlink(path)
+                    record_metadata(index, path, relative)
+                else:
+                    state[f"directory:{index}:{relative}"] = "present"
+                    record_metadata(index, path, relative)
+            for name in files:
+                path = Path(directory) / name
+                if path.is_symlink():
+                    relative = path.relative_to(root).as_posix()
+                    state[f"link:{index}:{relative}"] = os.readlink(path)
+                    record_metadata(index, path, relative)
+                else:
+                    record_metadata(index, path, path.relative_to(root).as_posix())
+    return state
+
+def check_copilot_snapshot_unchanged(home, case_root, before, after, stage, log_limit):
+    """Only this real read may create bounded new vendor process logs."""
+    prefix = home.name + "/" + str(Path(".copilot") / "logs") + os.sep
+    created = [key for key in after if key not in before and key.startswith(prefix)]
+    if len(created) > log_limit:
+        raise AssertionError(stage + ": excessive new Copilot process logs")
+    for key in created:
+        relative = key[len(home.name) + 1:]
+        path = home / relative
+        info = path.lstat()
+        if (not re.fullmatch(r"process-[0-9]+-[0-9]+\.log", path.name)
+                or path.parent != home / ".copilot/logs"
+                or not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size > 1 << 20
+                or not path_inside_case(path, case_root)):
+            raise AssertionError(stage + ": unsafe new Copilot process log")
+        after.pop(key)
+        after.pop("metadata:0:" + Path(relative).as_posix(), None)
+    if after != before:
+        raise AssertionError(stage + ": native query modified protected state")
+
 def exact_native_identity(text, identity):
     """Recognize an identity token in native data, never a URL substring."""
     expected = identity.casefold()
@@ -631,9 +707,7 @@ def copilot_signed_kit_owners(list_json, pins, data, case_root):
             version = MARKETING_KIT_SIGNED_CLOSURE[pin["distribution"]]["package_version"]
             public_revision = public_clients[0]["package_revision"]
             if (public_revision.get("version") != version
-                    or public_revision.get("distribution_id") != pin["distribution"]
-                    or type(public_revision.get("release_sequence")) is not int
-                    or public_revision["release_sequence"] != pin["sequence"]):
+                    or type(public_revision.get("release_sequence")) is not int):
                 return None
             selected = [v for v in records if v["directory"].get("distribution_id") == pin["distribution"]]
             if len(selected) != 1:
@@ -668,10 +742,10 @@ def copilot_signed_kit_owners(list_json, pins, data, case_root):
                     or physical in (".", "..") or Path(physical).name != physical
                     or not target.is_absolute() or not target.is_dir()
                     or not path_inside_case(target, case_root)
+                    or not isinstance(revision, dict)
                     or type(revision.get("release_sequence")) is not int
                     or any(revision.get(key) != expected for key, expected in (
-                        ("distribution_id", pin["distribution"]),
-                        ("release_sequence", pin["sequence"]),
+                        ("distribution_id", pin["distribution"]), ("release_sequence", pin["sequence"]),
                         ("version", version), ("resolved_revision", pin["revision"]),
                         ("tree_digest", pin["tree_digest"]),
                         ("manifest_digest", pin["manifest_digest"])))):
@@ -752,33 +826,6 @@ def copilot_signed_kit_settings(home, case_root, owners, enabled):
         return False
 
 
-def copilot_native_list_read_unchanged(profile, home, before):
-    """Reject native read mutations except at most two bounded new process logs."""
-    after = snapshot([profile])
-    unsafe = ("symlink", "unreadable", "non-regular")
-    if any(value in unsafe for value in (*before.values(), *after.values())):
-        return False
-    added = [name for name in after if name not in before]
-    if len(added) > 2:
-        return False
-    prefix = profile.name + "/" + "logs" + os.sep
-    for name in added:
-        if not name.startswith(prefix):
-            return False
-        path = profile / name[len(profile.name) + 1:]
-        try:
-            metadata = path.lstat()
-        except OSError:
-            return False
-        if (path.parent != profile / "logs"
-                or re.fullmatch(r"process-[0-9]+-[0-9]+\.log", path.name) is None
-                or not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1
-                or metadata.st_size > (1 << 20) or not path_inside_case(path, home)):
-            return False
-        after.pop(name)
-    return after == before
-
-
 def copilot_native_plugin_state(home, env, cwd, identity, expected_version=None,
                                 owners=None, owned_call=None):
     """Read the original profile; signed kits require complete JSON and TEXT."""
@@ -793,16 +840,33 @@ def copilot_native_plugin_state(home, env, cwd, identity, expected_version=None,
         if (not isinstance(owners, dict)
                 or (owners and set(owners) != set(MARKETING_KIT_DISTRIBUTIONS))):
             return {"status": "unqualified-signed-closure"}
-        before_native_query = snapshot([profile])
+        project = Path(cwd)
+        case_root = project.parent
+        canonical_case = case_root.resolve(strict=True)
+        roots = (home, Path(env["AGENTPLUGINS_HOME"]), project)
+
+        def assert_owned_roots():
+            if (case_root.is_symlink() or case_root.resolve(strict=True) != canonical_case
+                    or any(not root.is_dir() or not path_inside_case(root, case_root)
+                           for root in roots)):
+                raise AssertionError("Copilot native query redirected a protected root")
+
+        def observe_owned():
+            assert_owned_roots()
+            return scoped_snapshot(roots)
+
+        before = observe_owned()
         try:
             responses = []
             invoke_owned = call if owned_call is None else owned_call
             for suffix in (["--json"], []):
+                assert_owned_roots()
                 if (not profile.is_dir() or profile.is_symlink()
                         or not path_inside_case(profile, home)):
                     return {"status": "unqualified-prerequisites"}
                 result = invoke_owned([executable, "plugin", "list", *suffix],
                                       native_env, cwd, 30, capture_full=True)
+                assert_owned_roots()
                 if (type(result.get("exit_code")) is not int or result["exit_code"] != 0
                         or result.get("timeout") is not False or result.get("stderr_full") != ""
                         or not isinstance(result.get("stdout_full"), str)
@@ -816,8 +880,8 @@ def copilot_native_plugin_state(home, env, cwd, identity, expected_version=None,
             except (AssertionError, ValueError, TypeError, KeyError, AttributeError):
                 return {"status": "unqualified-signed-closure"}
         finally:
-            if not copilot_native_list_read_unchanged(profile, home, before_native_query):
-                raise AssertionError("Copilot native list modified protected profile")
+            check_copilot_snapshot_unchanged(
+                home, case_root, before, observe_owned(), "Copilot native read-only query", 2)
     observed = call([executable, "plugin", "list", "--json"], native_env, cwd, 30)
     entries = observed.get("_json")
     if observed.get("exit_code") != 0 or not isinstance(entries, list) or len(entries) > 1024:

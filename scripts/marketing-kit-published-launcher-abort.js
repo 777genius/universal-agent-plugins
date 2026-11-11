@@ -17,33 +17,35 @@ async function abortOnce() {
   const controller = new AbortController();
   let requests = 0;
   let destroyed = 0;
-  let deadline;
+  const rejection = assert.rejects(ensureBinary({
+    packageRoot,
+    cacheRoot,
+    signal: controller.signal,
+    request: () => {
+      requests += 1;
+      const request = new EventEmitter();
+      request.setTimeout = () => request;
+      request.destroy = error => {
+        destroyed += 1;
+        queueMicrotask(() => request.emit("error", error));
+        return request;
+      };
+      setTimeout(() => controller.abort(), 100);
+      return request;
+    }
+  }), /cancel|abort/i, "stalled published acquisition must reject on AbortSignal");
+  let watchdog;
   try {
     await Promise.race([
-      assert.rejects(ensureBinary({
-        packageRoot,
-        cacheRoot,
-        signal: controller.signal,
-        request: () => {
-          requests += 1;
-          const request = new EventEmitter();
-          request.setTimeout = () => request;
-          request.destroy = error => {
-            destroyed += 1;
-            queueMicrotask(() => request.emit("error", error));
-            return request;
-          };
-          setTimeout(() => controller.abort(), 100);
-          return request;
-        }
-      }), /cancel|abort/i, "stalled published acquisition must reject on AbortSignal"),
+      rejection,
       new Promise((_, reject) => {
-        // Keep Node alive even if a broken downloader leaves no active handles.
-        deadline = setTimeout(() => reject(new Error("published downloader never settled before deadline")), 5_000);
+        // Keep Node alive if cancellation leaves the acquisition pending.
+        watchdog = setTimeout(() => reject(new Error(
+          "published downloader watchdog deadline exceeded")), 5_000);
       })
     ]);
   } finally {
-    clearTimeout(deadline);
+    clearTimeout(watchdog);
   }
   assert.equal(requests, 1, "must exercise the published downloader");
   assert.equal(destroyed, 1, "abort must destroy the pending request");

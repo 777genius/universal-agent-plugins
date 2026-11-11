@@ -1304,13 +1304,9 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         runner = run_path(str(Path(__file__).resolve().parent /
                               "marketing-kit-project-release-e2e.py"))
         distribution = "777genius/marketing-kit"
-        pin = runner["FIXED_SIGNED_CLOSURE"][distribution]
-        binding = {"client_id": "copilot", "scope": "user", "materialization": "materialized",
-                   "verification": "installation_verified", "affected_surfaces": ["copilot", "vscode"],
-                   "package_revision": {"distribution_id": distribution, **pin}}
-        row = {"installation_id": "owned", "directory": {"recorded_distribution": distribution,
-               "recorded_revision": pin["resolved_revision"], "recorded_release_sequence": pin["release_sequence"]},
-               "clients": [binding]}
+        row = self._marketing_kit_public_identity_row(
+            runner, distribution, target="copilot", scope="user")
+        binding = row["clients"][0]
         self.assertEqual(runner["identities"]([row], "copilot", "user"), {distribution: "owned"})
         for mutation in ("vscode-binding", "duplicate-owner", "missing-surface", "extra-surface", "reordered-surface"):
             with self.subTest(mutation=mutation):
@@ -1876,7 +1872,9 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 "package": {"version": pin["package_version"], "manifest_digest": pin["manifest_digest"]},
                 "directory": {"distribution_id": distribution, "desired_release_sequence": pin["release_sequence"],
                     **runner["FIXED_REFUSAL_POLICY"]}, "clients": {binding_id: binding}})
-            public.append({"installation_id": installation_id, "directory": {"recorded_distribution": distribution,
+            public.append({"installation_id": installation_id,
+                "source": pin["repository"] + "/" + pin["package_path"],
+                "directory": {"recorded_distribution": distribution,
                 "recorded_revision": pin["resolved_revision"], "recorded_release_sequence": pin["release_sequence"]},
                 "clients": [binding]})
             receipts.append({"receipt_id": "receipt-" + alias, "phase": "committed", "environment_id": "user-default",
@@ -1965,8 +1963,8 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         runner = run_path(str(Path(__file__).resolve().parent / "marketing-kit-project-release-e2e.py"))
         read = runner["copilot_signed_user_versions"]
         for mutation in ("list", "dict", "missing", "empty-version", "duplicate", "state-source", "state-revision",
-                         "state-extra-owner", "binding-distribution", "binding-sequence", "binding-sequence-bool",
-                         "uncommitted", "receipt-replay", "missing-receipt", "wrong-receipt", "manifest-source", "snapshot"):
+                         "private-distribution", "private-sequence", "private-sequence-bool", "private-sequence-float",
+                         "state-extra-owner", "uncommitted", "receipt-replay", "missing-receipt", "wrong-receipt", "manifest-source", "snapshot"):
             with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
                 env, project, policy, expected, state, rows = self._marketing_kit_copilot_owner_fixture(runner, Path(temporary))
                 rows = deepcopy(rows)
@@ -1977,9 +1975,13 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 elif mutation == "duplicate": rows[0]["clients"].append(deepcopy(rows[0]["clients"][0]))
                 elif mutation == "state-source": state["installations"][0]["source"]["repository"] = "foreign/repo"
                 elif mutation == "state-revision": state["installations"][0]["source"]["resolved_revision"] = "f" * 40
-                elif mutation == "binding-distribution": next(iter(state["installations"][0]["clients"].values()))["package_revision"]["distribution_id"] = "foreign/package"
-                elif mutation == "binding-sequence": next(iter(state["installations"][0]["clients"].values()))["package_revision"]["release_sequence"] = 999
-                elif mutation == "binding-sequence-bool": next(iter(state["installations"][0]["clients"].values()))["package_revision"]["release_sequence"] = True
+                elif mutation.startswith("private-"):
+                    revision = next(iter(state["installations"][0]["clients"].values()))["package_revision"]
+                    key, value = {"private-distribution": ("distribution_id", "777genius/unreviewed"),
+                                  "private-sequence": ("release_sequence", 99),
+                                  "private-sequence-bool": ("release_sequence", True),
+                                  "private-sequence-float": ("release_sequence", 1.0)}[mutation]
+                    revision[key] = value
                 elif mutation == "state-extra-owner":
                     bindings = state["installations"][0]["clients"]
                     bindings["vscode-owner"] = {**next(iter(bindings.values())), "client_id": "vscode"}
@@ -2105,8 +2107,11 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         before = {"metadata:0:.copilot/logs": (stat.S_IFDIR, 1, 2)}
         after = {**before, "home/.copilot\\logs\\process-123-456.log": "file-digest",
                  "metadata:0:.copilot/logs/process-123-456.log": (stat.S_IFREG, 1, 3)}
-        with patch.dict(check.__globals__, {"Path": WindowsSnapshotPath, "os": SimpleNamespace(sep="\\"),
-                "profile_snapshot": lambda *_: dict(after)}), patch.dict(runner["audit"], {"path_inside_case": lambda *_: True}):
+        shared_check = runner["audit"]["check_copilot_snapshot_unchanged"]
+        with patch.dict(check.__globals__, {"Path": WindowsSnapshotPath,
+                "profile_snapshot": lambda *_: dict(after)}), patch.dict(shared_check.__globals__, {
+                "Path": WindowsSnapshotPath, "os": SimpleNamespace(sep="\\"),
+                "path_inside_case": lambda *_: True}):
             check({"HOME": "C:/case/home"}, WindowsSnapshotPath("C:/case/project"), before, "Windows snapshot", 2)
             with self.assertRaises(AssertionError):
                 check({"HOME": "C:/case/home"}, WindowsSnapshotPath("C:/case/project"), before, "zero-budget inventory", 0)
@@ -2960,6 +2965,46 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 check({**installed, "_json": {**installed["_json"], **changed}},
                       "cold locked restore", "install")
 
+    def test_marketing_kit_published_abort_watchdog_refuses_stranded_acquisition(self):
+        # A broken acquisition promise must fail, not let Node exit zero
+        # before the published script's assertions and cache cleanup.
+        import shutil
+        import subprocess
+        node = shutil.which("node")
+        self.assertIsNotNone(node, "Node.js is required for the launcher watchdog regression")
+        script = Path(__file__).resolve().parent / "marketing-kit-published-launcher-abort.js"
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve(strict=True)
+            npm_root = root / "npm"
+            package = npm_root / "universal-agent-plugins"
+            (package / "lib").mkdir(parents=True)
+            (package / "package.json").write_text(
+                json.dumps({"version": "0.1.102"}), encoding="utf-8")
+            (package / "lib/bootstrap.js").write_text('''"use strict";
+module.exports = {
+  ensureBinary(options) {
+    const request = options.request();
+    request.on("error", () => {});
+    options.signal.addEventListener("abort", () => {
+      request.destroy(new Error("cancelled"));
+    }, { once: true });
+    return new Promise(() => {});
+  },
+  acquireLock() { throw new Error("lock proof must not run after a stranded acquisition"); }
+};
+''', encoding="utf-8")
+            scratch = root / "private-tmp"
+            scratch.mkdir()
+            env = {**os.environ, "UAP_GLOBAL_NPM_ROOT": str(npm_root),
+                   "TMPDIR": str(scratch), "TMP": str(scratch), "TEMP": str(scratch)}
+            result = subprocess.run([node, str(script)], env=env, cwd=root,
+                                    capture_output=True, text=True, timeout=12, check=False)
+            self.assertEqual(result.returncode, 1, result.stderr)
+            self.assertIn("published downloader watchdog deadline exceeded", result.stderr)
+            self.assertNotIn("abort/lock cleanup: PASS", result.stdout + result.stderr)
+            self.assertEqual(list(scratch.iterdir()), [],
+                             "failed watchdog must run trusted cache cleanup")
+
     def test_marketing_kit_requires_exact_published_cli_version(self):
         # The substring "0.1.102" alone also matches prereleases and 0.1.1021.
         from runpy import run_path
@@ -3220,139 +3265,186 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 saved.replace(marker)
             runner["check_foreign"](pinned, root)
 
+    def _marketing_kit_public_identity_row(self, runner, distribution,
+                                           target="codex", scope="project",
+                                           installation_id="owned"):
+        """Use the actual public list projection of the unchanged signed tuple."""
+        pin = runner["FIXED_SIGNED_CLOSURE"][distribution]
+        binding = {"client_id": target, "scope": scope,
+                   "verification": "installation_verified", "materialization": "materialized",
+                   "package_revision": {"distribution_id": distribution,
+                       "version": pin["package_version"],
+                       **{key: pin[key] for key in ("release_sequence", "resolved_revision",
+                                                   "tree_digest", "manifest_digest")}}}
+        if target == "copilot" and scope == "user":
+            binding["affected_surfaces"] = ["copilot", "vscode"]
+        return {"installation_id": installation_id,
+                "source": pin["repository"] + "/" + pin["package_path"],
+                "directory": {"recorded_distribution": distribution,
+                              "recorded_revision": pin["resolved_revision"],
+                              "recorded_release_sequence": pin["release_sequence"]},
+                "clients": [binding]}
+
+    def test_marketing_kit_installed_identity_requires_fixed_signed_tuple(self):
+        # Internally consistent public records must not replace the fixed
+        # release while independent info/lock observations remain unchanged.
+        from copy import deepcopy
+        from runpy import run_path
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        check = runner["identities"]
+        for target in ("codex", "cursor", "claude", "gemini", "opencode", "copilot"):
+            for scope in ("user", "project"):
+                for distribution in runner["FIXED_SIGNED_CLOSURE"]:
+                    original = self._marketing_kit_public_identity_row(
+                        runner, distribution, target, scope)
+                    expected = {distribution: "owned"}
+                    with self.subTest(target=target, scope=scope, distribution=distribution):
+                        self.assertEqual(check([original], target, scope), expected)
+                        keyed = deepcopy(original)
+                        keyed["clients"] = {"binding": keyed["clients"][0]}
+                        self.assertEqual(check([keyed], target, scope), expected)
+                    for mutation in ("source", "revision", "sequence", "version",
+                                     "tree", "manifest", "directory-bool", "directory-float",
+                                     "binding-bool", "binding-float", "foreign-distribution"):
+                        changed = deepcopy(original)
+                        directory, revision = changed["directory"], changed["clients"][0]["package_revision"]
+                        if mutation == "source": changed["source"] = "foreign/repository/plugins/marketing-kit"
+                        elif mutation == "revision":
+                            directory["recorded_revision"] = revision["resolved_revision"] = "f" * 40
+                        elif mutation == "sequence":
+                            directory["recorded_release_sequence"] = revision["release_sequence"] = 99
+                        elif mutation == "version": revision["version"] = "9.9.9"
+                        elif mutation == "tree": revision["tree_digest"] = "sha256:" + "f" * 64
+                        elif mutation == "manifest": revision["manifest_digest"] = "sha256:" + "f" * 64
+                        elif mutation == "directory-bool": directory["recorded_release_sequence"] = True
+                        elif mutation == "directory-float": directory["recorded_release_sequence"] = float(directory["recorded_release_sequence"])
+                        elif mutation == "binding-bool": revision["release_sequence"] = True
+                        elif mutation == "binding-float": revision["release_sequence"] = float(revision["release_sequence"])
+                        elif mutation == "foreign-distribution":
+                            directory["recorded_distribution"] = revision["distribution_id"] = "777genius/unreviewed"
+                        with self.subTest(target=target, scope=scope,
+                                          distribution=distribution, mutation=mutation):
+                            with self.assertRaises(AssertionError):
+                                check([changed], target, scope)
+
+    def test_marketing_kit_every_selected_binding_requires_fixed_release(self):
+        from copy import deepcopy
+        from runpy import run_path
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        for scope in ("user", "project"):
+            row = self._marketing_kit_public_identity_row(
+                runner, "777genius/marketing-kit", scope=scope)
+            row["clients"].append(deepcopy(row["clients"][0]))
+            row["clients"][1]["package_revision"]["tree_digest"] = "sha256:" + "f" * 64
+            with self.subTest(scope=scope), self.assertRaisesRegex(
+                    AssertionError, "binding differs from fixed signed release"):
+                runner["identities"]([row], "codex", scope)
+
     def test_marketing_kit_identity_guard_rejects_missing_or_shared_ids(self):
         # A missing ID can make the repeat/repair comparison falsely pass.
         # Distinct signed distributions must also retain distinct owned IDs.
         from runpy import run_path
-
         runner = run_path(str(Path(__file__).resolve().parent /
                               "marketing-kit-project-release-e2e.py"))
         def row(distribution, installation_id):
-            return {"installation_id": installation_id,
-                    "directory": {"recorded_distribution": distribution},
-                    "clients": [{"client_id": "codex", "scope": "project",
-                                 "verification": "installation_verified",
-                                 "materialization": "materialized",
-                                 "package_revision": "pinned"}]}
-
-        with patch.dict(runner["audit"],
-                        {"recorded_signed_release_matches": lambda *_: True}):
-            check = runner["identities"]
-            for bad in (None, "", "  "):
-                with self.assertRaisesRegex(AssertionError, "missing installation ID"):
-                    check([row("root", bad)], "codex")
-            with self.assertRaisesRegex(AssertionError, "duplicate installation ID"):
-                check([row("root", "same"), row("dependency", "same")], "codex")
-            self.assertEqual(check([row("root", "one"), row("dependency", "two")], "codex"),
-                             {"root": "one", "dependency": "two"})
+            return self._marketing_kit_public_identity_row(
+                runner, distribution, installation_id=installation_id)
+        root, child = "777genius/marketing-kit", "777genius/notion"
+        check = runner["identities"]
+        for bad in (None, "", "  "):
+            with self.assertRaisesRegex(AssertionError, "missing installation ID"):
+                check([row(root, bad)], "codex")
+        with self.assertRaisesRegex(AssertionError, "duplicate installation ID"):
+            check([row(root, "same"), row(child, "same")], "codex")
+        self.assertEqual(check([row(root, "one"), row(child, "two")], "codex"),
+                         {root: "one", child: "two"})
 
     def test_marketing_kit_identity_guard_rejects_cross_scope_provenance(self):
         # A signed User binding must never authorize an unsigned Project binding.
+        from copy import deepcopy
         from runpy import run_path
-
         runner = run_path(str(Path(__file__).resolve().parent /
                               "marketing-kit-project-release-e2e.py"))
-        def binding(scope, revision):
-            return {"client_id": "codex", "scope": scope,
-                    "verification": "installation_verified", "materialization": "materialized",
-                    "package_revision": revision}
-        row = {"installation_id": "owned", "directory": {"recorded_distribution": "root"},
-               "clients": [binding("project", "unsigned"), binding("user", "signed")]}
-
-        with patch.dict(runner["audit"],
-                        {"recorded_signed_release_matches":
-                         lambda _, revision: revision == "signed"}):
-            check = runner["identities"]
-            with self.assertRaisesRegex(AssertionError, "project binding lacks exact"):
-                check([row], "codex")
-            row["clients"] = [binding("project", "signed"), binding("user", "unsigned")]
-            self.assertEqual(check([row], "codex"), {"root": "owned"})
-            row["clients"].append(binding("project", "unsigned"))
-            with self.assertRaisesRegex(AssertionError, "project binding lacks exact"):
-                check([row], "codex")
+        distribution = "777genius/marketing-kit"
+        row = self._marketing_kit_public_identity_row(runner, distribution)
+        signed = deepcopy(row["clients"][0])
+        row["clients"][0]["package_revision"] = None
+        row["clients"].append({**deepcopy(signed), "scope": "user"})
+        check = runner["identities"]
+        with self.assertRaisesRegex(AssertionError, "project binding lacks exact"):
+            check([row], "codex")
+        row["clients"] = [signed, {**deepcopy(signed), "scope": "user", "package_revision": None}]
+        self.assertEqual(check([row], "codex"), {distribution: "owned"})
+        row["clients"].append({**deepcopy(signed), "package_revision": None})
+        with self.assertRaisesRegex(AssertionError, "project binding lacks exact"):
+            check([row], "codex")
 
     def test_marketing_kit_user_identity_guard_rejects_project_only_signature(self):
         # A signed Project binding cannot authorize an unsigned User binding.
+        from copy import deepcopy
         from runpy import run_path
-
         runner = run_path(str(Path(__file__).resolve().parent /
                               "marketing-kit-project-release-e2e.py"))
-        row = {"installation_id": "owned",
-               "directory": {"recorded_distribution": "root"},
-               "clients": [{"client_id": "codex", "scope": "user",
-                            "verification": "installation_verified",
-                            "materialization": "materialized",
-                            "package_revision": "unsigned"},
-                           {"client_id": "codex", "scope": "project",
-                            "verification": "installation_verified",
-                            "materialization": "materialized",
-                            "package_revision": "signed"}]}
-        with patch.dict(runner["audit"],
-                        {"recorded_signed_release_matches":
-                         lambda _, revision: revision == "signed"}):
-            with self.assertRaisesRegex(AssertionError, "user binding lacks exact"):
-                runner["identities"]([row], "codex", "user")
-            row["clients"][0]["package_revision"] = "signed"
-            self.assertEqual(runner["identities"]([row], "codex", "user"),
-                             {"root": "owned"})
+        distribution = "777genius/marketing-kit"
+        row = self._marketing_kit_public_identity_row(runner, distribution, scope="user")
+        signed = deepcopy(row["clients"][0])
+        row["clients"][0]["package_revision"] = None
+        row["clients"].append({**deepcopy(signed), "scope": "project"})
+        with self.assertRaisesRegex(AssertionError, "user binding lacks exact"):
+            runner["identities"]([row], "codex", "user")
+        row["clients"][0]["package_revision"] = signed["package_revision"]
+        self.assertEqual(runner["identities"]([row], "codex", "user"),
+                         {distribution: "owned"})
 
     def test_marketing_kit_requires_installed_verification_in_selected_scope(self):
         # Signed provenance and a persisted list entry do not prove delivery.
         # Prepared/package-only and failed bindings cannot qualify E2E.
         from runpy import run_path
-
         runner = run_path(str(Path(__file__).resolve().parent /
                               "marketing-kit-project-release-e2e.py"))
-        binding = {"client_id": "codex", "scope": "user",
-                   "package_revision": "signed",
-                   "verification": "installation_verified",
-                   "materialization": "materialized"}
-        row = {"installation_id": "owned",
-               "directory": {"recorded_distribution": "root"},
-               "clients": [binding]}
-        with patch.dict(runner["audit"],
-                        {"recorded_signed_release_matches":
-                         lambda _, revision: revision == "signed"}):
-            check = runner["identities"]
-            self.assertEqual(check([row], "codex", "user"), {"root": "owned"})
-            for invalid in (None, "", "package_validated", "not_checked",
-                            "verification_failed", "manual_activation_required"):
-                with self.subTest(verification=invalid):
-                    row["clients"] = [{**binding, "verification": invalid}]
-                    with self.assertRaisesRegex(AssertionError, "lacks installed verification"):
-                        check([row], "codex", "user")
-            row["clients"] = [binding, {**binding, "verification": "package_validated"}]
-            with self.assertRaisesRegex(AssertionError, "lacks installed verification"):
-                check([row], "codex", "user")
-            row["clients"] = [{**binding, "materialization": "staged"}]
-            with self.assertRaisesRegex(AssertionError, "lacks materialized delivery"):
-                check([row], "codex", "user")
-            # Cursor User deliberately prepares a package with an explicit
-            # manual-activation requirement, not an installed native MCP.
-            prepared = {**binding, "client_id": "cursor",
-                        "verification": "package_validated",
-                        "activation": "manual_activation_required",
-                        "policy": "allowed"}
-            row["clients"] = [prepared]
-            self.assertEqual(check([row], "cursor", "user"), {"root": "owned"})
-            for change in ({"activation": "prepared"}, {"policy": "blocked"},
-                           {"materialization": "degraded"},
-                           {"verification": "failed"}):
-                row["clients"] = [{**prepared, **change}]
-                with self.subTest(change=change), self.assertRaises(AssertionError):
-                    check([row], "cursor", "user")
-            # Only Cursor User can take the documented manual preparation path.
-            row["clients"] = [{**prepared, "client_id": "codex"}]
-            with self.assertRaisesRegex(AssertionError, "lacks installed verification"):
-                check([row], "codex", "user")
-            row["clients"] = [{**prepared, "scope": "project"}]
-            with self.assertRaisesRegex(AssertionError, "lacks installed verification"):
-                check([row], "cursor", "project")
-            # An unverified foreign scope must not overwrite the selected
-            # User binding's verified status.
-            row["clients"] = [binding, {**binding, "scope": "project",
-                                       "verification": "package_validated"}]
-            self.assertEqual(check([row], "codex", "user"), {"root": "owned"})
+        distribution = "777genius/marketing-kit"
+        row = self._marketing_kit_public_identity_row(runner, distribution, scope="user")
+        binding = row["clients"][0]
+        check = runner["identities"]
+        self.assertEqual(check([row], "codex", "user"), {distribution: "owned"})
+        for invalid in (None, "", "package_validated", "not_checked",
+                        "verification_failed", "manual_activation_required"):
+            with self.subTest(verification=invalid):
+                row["clients"] = [{**binding, "verification": invalid}]
+                with self.assertRaisesRegex(AssertionError, "lacks installed verification"):
+                    check([row], "codex", "user")
+        row["clients"] = [binding, {**binding, "verification": "package_validated"}]
+        with self.assertRaisesRegex(AssertionError, "lacks installed verification"):
+            check([row], "codex", "user")
+        row["clients"] = [{**binding, "materialization": "staged"}]
+        with self.assertRaisesRegex(AssertionError, "lacks materialized delivery"):
+            check([row], "codex", "user")
+        # Cursor User deliberately prepares a package with an explicit
+        # manual-activation requirement, not an installed native MCP.
+        prepared = {**binding, "client_id": "cursor",
+                    "verification": "package_validated",
+                    "activation": "manual_activation_required",
+                    "policy": "allowed"}
+        row["clients"] = [prepared]
+        self.assertEqual(check([row], "cursor", "user"), {distribution: "owned"})
+        for change in ({"activation": "prepared"}, {"policy": "blocked"},
+                       {"materialization": "degraded"}, {"verification": "failed"}):
+            row["clients"] = [{**prepared, **change}]
+            with self.subTest(change=change), self.assertRaises(AssertionError):
+                check([row], "cursor", "user")
+        # Only Cursor User can take the documented manual preparation path.
+        row["clients"] = [{**prepared, "client_id": "codex"}]
+        with self.assertRaisesRegex(AssertionError, "lacks installed verification"):
+            check([row], "codex", "user")
+        row["clients"] = [{**prepared, "scope": "project"}]
+        with self.assertRaisesRegex(AssertionError, "lacks installed verification"):
+            check([row], "cursor", "project")
+        # An unverified foreign scope must not overwrite the selected User proof.
+        row["clients"] = [binding, {**binding, "scope": "project",
+                                   "verification": "package_validated"}]
+        self.assertEqual(check([row], "codex", "user"), {distribution: "owned"})
 
     def test_marketing_kit_user_remove_rejects_active_native_residuals(self):
         # An empty CLI list alone cannot prove native client removal.
@@ -5747,10 +5839,10 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 binding = record["clients"][f"binding-{index}"]
                 for revision_owner in (nodes[index]["clients"][0], binding):
                     revision = revision_owner["package_revision"]
-                    for field, bad in (("version", "9.9.9"),
-                                       ("distribution_id", "foreign/package"),
-                                       ("release_sequence", 999),
-                                       ("release_sequence", True),
+                    for field, bad in (("distribution_id", "777genius/unreviewed"),
+                                       ("release_sequence", 99), ("release_sequence", True),
+                                       ("release_sequence", float(pins[alias]["sequence"])),
+                                       ("version", "9.9.9"),
                                        ("resolved_revision", "f" * 40),
                                        ("tree_digest", "sha256:" + "f" * 64),
                                        ("manifest_digest", "sha256:" + "f" * 64)):
@@ -5794,6 +5886,10 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             home = case / "home"
             profile = home / ".copilot"
             profile.mkdir(parents=True)
+            project, data = case / "project", case / "uap-data"
+            project.mkdir()
+            data.mkdir()
+            env = {"HOME": str(home), "AGENTPLUGINS_HOME": str(data)}
             native = str(case / "trusted-copilot")
             owners = {name: {"marketplace": "agentplugins-" + str(index) * 12,
                               "version": "1.0." + str(index),
@@ -5847,7 +5943,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 with patch.dict(audit.AGENT_BINARIES, {"copilot": native}, clear=True):
                     with patch.object(audit, "call", side_effect=call):
                         state = audit.copilot_native_plugin_state(
-                            home, {"HOME": str(home)}, case, "marketing-kit",
+                            home, env, project, "marketing-kit",
                             "1.0.1", owners=observed_owners)
                 if state["status"] in ("installed", "absent"):
                     self.assertEqual(calls, [[native, "plugin", "list", "--json"],
@@ -5861,7 +5957,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 with patch.object(audit, "call", return_value={
                         "exit_code": 0, "_json": entries}):
                     self.assertEqual(audit.copilot_native_plugin_state(
-                        home, {"HOME": str(home)}, case, "marketing-kit",
+                        home, env, project, "marketing-kit",
                         "1.0.1")["status"], "unqualified-reminted-managed")
             for index in range(1, 5):
                 for field, bad in (("name", "reminted"), ("marketplace", "agentplugins-" + "f"*12),
@@ -5981,44 +6077,69 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     self.assertFalse(result["removal_verified"])
                     self.assertEqual(result["status"], "cleanup-failed")
 
-    def test_marketing_kit_copilot_native_inventory_queries_are_read_only(self):
-        """Only two bounded new process logs may accompany a native inventory read."""
+    def test_marketing_kit_adjunct_native_read_preserves_all_owned_state(self):
+        # Execute the actual adjunct JSON/TEXT path. Containment alone must
+        # not accept mutations of unrelated files, metadata or excess logs.
         audit = load_audit()
-        for mutation in ("bounded-log", "rewrite", "excess-logs"):
+        for mutation in ("none", "two-new-logs", "home", "data", "project",
+                         "mtime-only", "replacement", "excess-logs",
+                         "failed-query", "call-error", "project-replaced"):
             with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
                 root = Path(temporary).resolve(strict=True)
-                home = root / "home"
-                profile = home / ".copilot"
-                (profile / "logs").mkdir(parents=True)
-                settings = profile / "settings.json"
-                settings.write_text('{"foreign":true}', encoding="utf-8")
+                home, data, project = root / "home", root / "uap-data", root / "project"
+                for directory in (home, data, project):
+                    directory.mkdir()
+                    (directory / "foreign.txt").write_text("keep exact", encoding="utf-8")
+                logs = home / ".copilot/logs"
+                logs.mkdir(parents=True)
+                (logs / "process-100-100.log").write_text("keep old log", encoding="utf-8")
+                env = {"HOME": str(home), "AGENTPLUGINS_HOME": str(data)}
                 native = str(root / "trusted-copilot")
-
-                def observe(argv, _env, _cwd, _timeout, **kwargs):
+                calls = []
+                def call(argv, *_args, **kwargs):
                     self.assertTrue(kwargs.get("capture_full"))
-                    if "--json" in argv:
-                        if mutation == "rewrite":
-                            settings.write_text('{"foreign":false}', encoding="utf-8")
-                        else:
-                            count = 1 if mutation == "bounded-log" else 3
-                            for index in range(count):
-                                (profile / "logs" / f"process-123-{index}.log").write_text(
-                                    "native process log", encoding="utf-8")
-                    body = (json.dumps(audit.COPILOT_BUILTIN_JSON) if "--json" in argv else
-                            audit.COPILOT_EMPTY_TEXT + audit.COPILOT_BUILTIN_TEXT)
-                    return {"exit_code": 0, "timeout": False, "stderr_full": "",
-                            "stdout_full": body}
-
-                with patch.dict(audit.AGENT_BINARIES, {"copilot": native}, clear=True):
-                    with patch.object(audit, "call", side_effect=observe):
-                        if mutation == "bounded-log":
-                            result = audit.copilot_native_plugin_state(
-                                home, {"HOME": str(home)}, root, "marketing-kit", owners={})
-                            self.assertEqual(result["status"], "absent")
-                        else:
-                            with self.assertRaisesRegex(AssertionError, "modified protected profile"):
-                                audit.copilot_native_plugin_state(
-                                    home, {"HOME": str(home)}, root, "marketing-kit", owners={})
+                    calls.append(argv)
+                    if mutation == "two-new-logs":
+                        (logs / f"process-200-{len(calls)}.log").write_text("new process log")
+                    if len(calls) == 1:
+                        if mutation in ("home", "data", "project"):
+                            target = {"home": home, "data": data, "project": project}[mutation]
+                            (target / "foreign.txt").write_text("changed")
+                        elif mutation == "mtime-only":
+                            target = home / "foreign.txt"
+                            old = target.stat()
+                            os.utime(target, ns=(old.st_atime_ns, old.st_mtime_ns + 1_000_000_000))
+                        elif mutation == "replacement":
+                            target = home / "foreign.txt"
+                            target.rename(home / "saved-original.txt")
+                            target.write_text("keep exact")
+                        elif mutation == "excess-logs":
+                            for index in range(3):
+                                (logs / f"process-300-{index}.log").write_text("extra process log")
+                        elif mutation in ("failed-query", "call-error"):
+                            (data / "foreign.txt").write_text("changed")
+                        elif mutation == "project-replaced":
+                            project.rename(root / "saved-project")
+                            project.write_text("not a directory")
+                    if mutation == "call-error":
+                        raise ValueError("native process failed after changing state")
+                    body = (json.dumps(audit.COPILOT_BUILTIN_JSON) if "--json" in argv
+                            else audit.COPILOT_EMPTY_TEXT + audit.COPILOT_BUILTIN_TEXT)
+                    return {"exit_code": 1 if mutation == "failed-query" else 0,
+                            "timeout": False, "stdout_full": body, "stderr_full": ""}
+                with patch.dict(audit.AGENT_BINARIES, {"copilot": native}, clear=True), \
+                        patch.object(audit, "call", side_effect=call):
+                    if mutation in ("none", "two-new-logs"):
+                        self.assertEqual(audit.copilot_native_plugin_state(
+                            home, env, project, "marketing-kit", owners={})["status"], "absent")
+                        self.assertEqual(len(calls), 2)
+                    else:
+                        with self.assertRaisesRegex(
+                                AssertionError, "modified protected state|excessive new|redirected"):
+                            audit.copilot_native_plugin_state(
+                                home, env, project, "marketing-kit", owners={})
+                        if mutation in ("failed-query", "call-error", "project-replaced"):
+                            self.assertEqual(len(calls), 1)
 
     def test_marketing_kit_copilot_native_guard_failure_stops_before_text(self):
         audit = load_audit()
@@ -6026,6 +6147,10 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             root = Path(temporary).resolve(strict=True)
             home = root / "home"
             (home / ".copilot").mkdir(parents=True)
+            project, data = root / "project", root / "uap-data"
+            project.mkdir()
+            data.mkdir()
+            env = {"HOME": str(home), "AGENTPLUGINS_HOME": str(data)}
             native = str(root / "trusted-copilot")
             calls = []
             def guarded_call(argv, *_args, **_kwargs):
@@ -6035,7 +6160,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 with patch.object(audit, "call", side_effect=AssertionError("unguarded query")):
                     with self.assertRaisesRegex(ValueError, "case root changed"):
                         audit.copilot_native_plugin_state(
-                            home, {"HOME": str(home)}, root, "marketing-kit",
+                            home, env, project, "marketing-kit",
                             owners={}, owned_call=guarded_call)
             self.assertEqual(calls, [[native, "plugin", "list", "--json"]])
 

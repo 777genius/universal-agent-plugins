@@ -286,15 +286,25 @@ def inventory(cli, env, project, target, scope="project"):
 
 
 def identities(items, target, scope="project"):
+    """Bind each selected installed record to the reviewed signed release."""
     result = {}
     for row in items:
         if not isinstance(row, dict):
             raise AssertionError("invalid installation record")
         directory = row.get("directory") or {}
+        if not isinstance(directory, dict):
+            raise AssertionError("invalid signed Directory record")
         dist = directory.get("recorded_distribution")
         if not dist:
             # Recorded signed-v1 identity uses recorded_distribution, not distribution_id.
             raise AssertionError(f"installation lacks signed Directory identity: {row.get('name')}; fields={sorted(directory)}")
+        pin = FIXED_SIGNED_CLOSURE.get(dist) if isinstance(dist, str) else None
+        if (pin is None
+                or row.get("source") != pin["repository"].strip("/") + "/" + pin["package_path"].strip("/")
+                or directory.get("recorded_revision") != pin["resolved_revision"]
+                or type(directory.get("recorded_release_sequence")) is not int
+                or directory["recorded_release_sequence"] != pin["release_sequence"]):
+            raise AssertionError(f"{dist}: installation differs from fixed signed source identity")
         bindings = row.get("clients") or []
         if isinstance(bindings, dict):
             bindings = list(bindings.values())
@@ -310,10 +320,18 @@ def identities(items, target, scope="project"):
         if not all(audit["recorded_signed_release_matches"](
                 directory, b.get("package_revision")) for b in scope_bindings):
             raise AssertionError(f"{dist}: {scope} binding lacks exact signed release provenance")
-        # Signed provenance alone cannot certify successful delivery. The
-        # Cursor User adapter deliberately prepares a package for manual Editor
-        # activation; that is not native discovery or MCP execution evidence.
         for binding in scope_bindings:
+            revision = binding["package_revision"]
+            if (type(revision.get("release_sequence")) is not int
+                    or revision.get("distribution_id") != dist
+                    or any(revision.get(key) != pin[field] for key, field in (
+                        ("version", "package_version"), ("release_sequence", "release_sequence"),
+                        ("resolved_revision", "resolved_revision"),
+                        ("tree_digest", "tree_digest"), ("manifest_digest", "manifest_digest")))):
+                raise AssertionError(f"{dist}: {scope} binding differs from fixed signed release")
+            # Signed provenance alone cannot certify successful delivery. The
+            # Cursor User adapter deliberately prepares a package for manual Editor
+            # activation; that is not native discovery or MCP execution evidence.
             if binding.get("materialization") != "materialized":
                 raise AssertionError(f"{dist}: {scope} binding lacks materialized delivery")
             if (target == "cursor" and scope == "user"
@@ -707,60 +725,9 @@ def check_noop_update(observed, expected, current_lock, expected_lock, stage):
         raise AssertionError(f"{stage}: no-op update changed signed lock")
 
 def scoped_snapshot(roots):
-    """Record protected file and directory identities without following links."""
-    roots = tuple(Path(root) for root in roots)
-    state = audit["snapshot"](roots)
-    # The shared audit records failed file reads and walk errors as
-    # 'unreadable'. Identical failures before/after must not prove isolation.
-    if any(digest == "unreadable" for digest in state.values()):
-        raise AssertionError("protected scope snapshot unreadable: native entry")
+    """Use the shared byte/metadata snapshot authority for every protected root."""
+    return audit["scoped_snapshot"](roots, snapshotter=audit["snapshot"])
 
-    def record_metadata(index, path, relative):
-        """Preserve directory and file inode identity, not only permissions."""
-        try:
-            entry = path.lstat()
-        except OSError as error:
-            raise AssertionError("protected scope snapshot unreadable: metadata") from error
-        identity = (entry.st_mode, entry.st_dev, entry.st_ino)
-        # Equal bytes and inode do not prove a peer left file timestamps alone.
-        if stat.S_ISREG(entry.st_mode):
-            identity += (entry.st_mtime_ns,)
-        state[f"metadata:{index}:{relative}"] = identity
-
-    def refuse_walk_error(error):
-        raise AssertionError(f"protected scope snapshot unreadable: {error}") from error
-
-    for index, root in enumerate(roots):
-        if root.is_symlink():
-            state[f"root-link:{index}"] = os.readlink(root)
-            record_metadata(index, root, ".")
-            continue
-        # An empty protected profile must not disappear or turn into a file
-        # unnoticed: audit.snapshot records children, not root existence.
-        if not root.is_dir():
-            state[f"root-kind:{index}"] = "file" if root.exists() else "absent"
-            continue
-        state[f"root-kind:{index}"] = "directory"
-        record_metadata(index, root, ".")
-        for directory, dirs, files in os.walk(root, followlinks=False, onerror=refuse_walk_error):
-            for name in dirs:
-                path = Path(directory) / name
-                relative = path.relative_to(root).as_posix()
-                if path.is_symlink():
-                    state[f"link:{index}:{relative}"] = os.readlink(path)
-                    record_metadata(index, path, relative)
-                else:
-                    state[f"directory:{index}:{relative}"] = "present"
-                    record_metadata(index, path, relative)
-            for name in files:
-                path = Path(directory) / name
-                if path.is_symlink():
-                    relative = path.relative_to(root).as_posix()
-                    state[f"link:{index}:{relative}"] = os.readlink(path)
-                    record_metadata(index, path, relative)
-                else:
-                    record_metadata(index, path, path.relative_to(root).as_posix())
-    return state
 
 
 def refusal_profile_snapshot(env, project, lock, *, directory_only=False):
@@ -1000,9 +967,10 @@ def copilot_signed_user_versions(cli, env, project, policy):
                 or physical in (".", "..") or Path(physical).name != physical
                 or not target.is_absolute() or not target.is_dir()
                 or not audit["path_inside_case"](target, project.parent.resolve(strict=True))
-                or revision.get("distribution_id") != distribution
+                or not isinstance(revision, dict)
                 or type(revision.get("release_sequence")) is not int
-                or revision["release_sequence"] != pin["release_sequence"]
+                or revision.get("distribution_id") != distribution
+                or revision.get("release_sequence") != pin["release_sequence"]
                 or any(revision.get(key) != pin[field] for key, field in (
                     ("version", "package_version"), ("resolved_revision", "resolved_revision"),
                     ("tree_digest", "tree_digest"), ("manifest_digest", "manifest_digest")))):
@@ -1082,26 +1050,11 @@ def copilot_native_scope_state(env, project, owners):
 
 
 def check_copilot_read_unchanged(env, project, before, stage, log_limit):
-    """Only this real read may create bounded new vendor process logs."""
-    after = profile_snapshot(env, project)
-    home = Path(env["HOME"])
-    prefix = home.name + "/" + str(Path(".copilot") / "logs") + os.sep
-    created = [key for key in after if key not in before and key.startswith(prefix)]
-    if len(created) > log_limit:
-        raise AssertionError(stage + ": excessive new Copilot process logs")
-    for key in created:
-        relative = key[len(home.name) + 1:]
-        path = home / relative
-        info = path.lstat()
-        if (not re.fullmatch(r"process-[0-9]+-[0-9]+\.log", path.name)
-                or path.parent != home / ".copilot/logs"
-                or not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size > 1 << 20
-                or not audit["path_inside_case"](path, project.parent.resolve(strict=True))):
-            raise AssertionError(stage + ": unsafe new Copilot process log")
-        after.pop(key)
-        after.pop("metadata:0:" + Path(relative).as_posix(), None)
-    if after != before:
-        raise AssertionError(stage + ": native query modified protected state")
+    """Share the exact bounded native-read comparison with the adjunct audit."""
+    audit["check_copilot_snapshot_unchanged"](
+        Path(env["HOME"]), project.parent.resolve(strict=True), before,
+        profile_snapshot(env, project), stage, log_limit)
+
 
 
 def copilot_disabled_closure_only(shapes, native_before, native_after, env=None, case_root=None):
