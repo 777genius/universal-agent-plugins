@@ -161,7 +161,7 @@ class TestSyntheticModelOracle(unittest.TestCase):
     def test_native_windows_ci_fixture_requires_restricted_token_backend(self):
         # Only a disposable research profile is modified, never the user's.
         self.assertEqual(WINDOWS_NATIVE_SANDBOX_CONFIG,
-                         '[windows]\\nsandbox = "unelevated"\\n'.replace('\\\\n', '\\n'))
+                         '[windows]\nsandbox = "unelevated"\n')
         self.assertNotIn("danger-full-access", WINDOWS_NATIVE_SANDBOX_CONFIG)
 
     def test_windows_shell_command_only_emits_fixed_markers(self):
