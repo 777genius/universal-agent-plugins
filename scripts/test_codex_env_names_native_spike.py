@@ -1,5 +1,6 @@
 """Unit negative controls for Codex native secrecy evidence, no network/vendor client."""
 import http.client
+import hashlib
 import base64
 import json
 import os
@@ -408,7 +409,8 @@ class TestSyntheticSnapshotScanner(unittest.TestCase):
             self.assertEqual(findings[0]["result"], "unscanned_directory")
             self.assertEqual(findings[0]["io_reason"], "access_denied")
             self.assertEqual(findings[0]["scope"], "other")
-            self.assertEqual(len(findings[0]["path_sha256"]), 64)
+            self.assertEqual(findings[0]["path_sha256"],
+                             hashlib.sha256(b"unreadable").hexdigest())
             self.assertNotIn(unreadable, str(findings))
             self.assertNotIn("synthetic_only", str(findings))
 

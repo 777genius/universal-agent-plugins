@@ -464,7 +464,9 @@ def inspect(root, secret):
         # Record only a path digest and fixed category, never errno text/paths.
         try:
             failed = Path(exc.filename) if exc.filename else root_path
-            relative = failed.relative_to(root_path)
+            # Match the original lexical os.walk root, not the resolved
+            # Windows drive/alias spelling (which can collapse path hashes).
+            relative = failed.relative_to(Path(root))
         except (TypeError, ValueError, OSError):
             relative = Path(".")
         found.append({
