@@ -1,7 +1,7 @@
 import { pluginCommands, installCommands } from './commands.ts';
 import capabilities from '../data/clientCapabilities.generated.json' with { type: 'json' };
 import { reachableTargetPolicies, resolveDistribution } from './registry.ts';
-import type { ClientID, ComponentID, DistributionResolution, RegistryPlugin } from '../types/registry.ts';
+import type { ClientID, ComponentID, DistributionResolution, PluginSource, RegistryPlugin } from '../types/registry.ts';
 
 // Published signed Directory v1 authenticates source identity. Released CLI
 // 0.1.101 separately checks explicit Project placement for every component
@@ -98,13 +98,14 @@ export function projectCatalogCommands(plugin: RegistryPlugin, targets?: readonl
   return pluginCommands(plugin, targets, undefined, 'project');
 }
 
-
 /**
  * Explicit Pi-only Project alternative when a reviewed signed-v1 release does
  * not grant Pi. This uses the separately supported, exact Git source route;
  * it is never presented as a signed Directory target or used by auto-detect.
  */
-export function pinnedPiProjectSource(plugin: RegistryPlugin): string | undefined {
+export function pinnedPiProjectSelection(
+  plugin: RegistryPlugin,
+): { selector: string; source: PluginSource } | undefined {
   if (plugin.trust_state !== 'reviewed' || !plugin.installable ||
       projectCatalogSelection(plugin, ['pi']).resolution.distribution) return undefined;
   // A signed explicit Pi denial, even on an earlier release, is not a grant to
@@ -139,13 +140,17 @@ export function pinnedPiProjectSource(plugin: RegistryPlugin): string | undefine
     if (!GIT_REPOSITORY.test(repository) || !revision || !FULL_REVISION.test(revision) ||
         !safePath || !/^sha256:[a-f0-9]{64}$/.test(distribution.source.tree_sha256) ||
         !/^sha256:[a-f0-9]{64}$/.test(distribution.source.manifest_sha256)) continue;
-    return `github:${repository}@${revision}${path ? `//${path}` : ''}`;
+    return { selector: `github:${repository}@${revision}${path ? `//${path}` : ''}`, source: distribution.source };
   }
   return undefined;
 }
 
+export function pinnedPiProjectSource(plugin: RegistryPlugin): string | undefined {
+  return pinnedPiProjectSelection(plugin)?.selector;
+}
+
 export function pinnedPiProjectCommands(plugin: RegistryPlugin) {
-  const source = pinnedPiProjectSource(plugin);
-  if (!source) throw new Error('No eligible Pi Project exact-source installation');
-  return installCommands(source, plugin.name, ['pi'], undefined, 'project');
+  const selection = pinnedPiProjectSelection(plugin);
+  if (!selection) throw new Error('No eligible Pi Project exact-source installation');
+  return installCommands(selection.selector, plugin.name, ['pi'], undefined, 'project');
 }
