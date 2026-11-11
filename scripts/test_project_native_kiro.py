@@ -236,9 +236,11 @@ class KiroCollectorTests(unittest.TestCase):
         # Keep the run failed, but identify which disposable root changed
         # without leaking native filenames or config contents into evidence.
         for roots, expected in (
-                (("home",), "home"),
-                (("user",), "user"),
-                (("home", "a"), "home, a")):
+                (("home",), "Kiro authentication refusal left unexpected native config in: home"),
+                # The post-child cwd guard rejects unexpected user config before
+                # collect can summarize the separate auth-refusal boundary.
+                (("user",), "Kiro selected user cwd has unowned native config"),
+                (("home", "a"), "Kiro authentication refusal left unexpected native config in: home, a")):
             ctx = self.context()
             markers = []
             for scope in roots:
@@ -255,9 +257,7 @@ class KiroCollectorTests(unittest.TestCase):
             ctx.replace["a-agent-raw-list"] = refused
             with self.subTest(roots=roots), self.assertRaises(ValueError) as result:
                 kiro.collect(ctx)
-            self.assertEqual(str(result.exception),
-                             "Kiro authentication refusal left unexpected native config in: "
-                             + expected)
+            self.assertEqual(str(result.exception), expected)
             self.assertNotIn("private-native-output", str(result.exception))
             self.assertNotIn("private fixture secret", str(result.exception))
             self.assertEqual(len(ctx.calls), 10)
