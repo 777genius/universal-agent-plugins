@@ -15,6 +15,9 @@ import (
 )
 
 func materializeLockedPackage(ctx context.Context, app App, locked environment.LockedPackage, publish bool, recorded *domain.RecordedDirectoryRelease, operation ...domain.DirectoryOperation) (loadedPackage, error) {
+	if err := requireLockedDirectoryFeed(app, locked); err != nil {
+		return loadedPackage{}, err
+	}
 	if source := locked.Source.Git; source != nil && source.Kind == environment.SkillKind && source.Normalizer != environment.SkillNormalizerV1 {
 		return loadedPackage{}, errors.New("unsupported locked skill normalizer")
 	}
@@ -316,13 +319,8 @@ func verifyLockedDirectory(ctx context.Context, app App, loaded loadedPackage, l
 	if source == nil {
 		return loaded, nil
 	}
-	if app.DirectoryClient == nil {
-		return loadedPackage{}, errors.New("signed Directory is unavailable")
-	}
-	// Never reauthorize a lock from another Ed25519 publication lineage,
-	// even if product, release, source and digests happen to coincide.
-	if source.FeedID != directoryFeedForClient(app.DirectoryClient) {
-		return loadedPackage{}, errors.New("signed Directory feed differs from locked source; explicit source switch required")
+	if err := requireLockedDirectoryFeed(app, locked); err != nil {
+		return loadedPackage{}, err
 	}
 	bundle, err := app.loadAuthorizedDirectory(ctx)
 	if err != nil {
