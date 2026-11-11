@@ -21,8 +21,11 @@ export function usePluginInstallSelection(
   const autoDetect = models.autoDetect ?? ref(true);
   const installExpanded = ref(false);
   const scope = ref<InstallScope>('user');
+  // Eligibility must be independent of the *current* scope so a saved Pi
+  // Project choice survives card -> detail navigation and enables the Project tab.
+  const eligiblePinnedPiSource = computed(() => pinnedPiProjectSource(plugin()));
   const pinnedPiSource = computed(() =>
-    scope.value === 'project' ? pinnedPiProjectSource(plugin()) : undefined,
+    scope.value === 'project' ? eligiblePinnedPiSource.value : undefined,
   );
   const pinnedPiSelected = computed(() =>
     Boolean(pinnedPiSource.value) && !autoDetect.value &&
@@ -40,7 +43,7 @@ export function usePluginInstallSelection(
           (target) => target.client === 'chatgpt' && Boolean(target.app_binding),
         ));
       }
-      return (client.id === 'pi' && Boolean(pinnedPiSource.value)) ||
+      return (client.id === 'pi' && Boolean(eligiblePinnedPiSource.value)) ||
         policies.some((policy) => policy.client === canonicalInstallTarget(client.id));
     });
   });
@@ -78,7 +81,7 @@ export function usePluginInstallSelection(
   // This must not broaden any signed release scope or assume local client state.
   const projectAutomatic = computed(() => projectCatalogAutomaticSelection(plugin()));
   const projectAvailable = computed(() =>
-    Boolean(projectAutomatic.value?.resolution.distribution || pinnedPiSource.value),
+    Boolean(projectAutomatic.value?.resolution.distribution || eligiblePinnedPiSource.value),
   );
   const resolution = computed(() => select(targets.value));
   let choicePending = false;
