@@ -139,8 +139,17 @@ class Model(http.server.BaseHTTPRequestHandler):
                 # our fixed presence markers. Only a *verified completed*
                 # seven-second command can prove observed shell environment.
                 # Missing shell proof is independently a hard FAIL, never PASS.
+                # A delayed native tool error can echo all fixed markers after
+                # the wait window; never promote that response to a shell proof.
+                # The fixed command produces no failure text on real completion.
+                lower = rendered.lower()
+                explicit_tool_failure = any(term in lower for term in (
+                    "failed", "error", "denied", "not supported",
+                    "operation not permitted", "timed out",
+                ))
                 if (SHELL_MARKER in rendered and
-                        time.monotonic() - cls.shell_requested_at >= 6.0):
+                        time.monotonic() - cls.shell_requested_at >= 6.0 and
+                        not explicit_tool_failure):
                     cls.shell_execution_verified = True
                     cls.shell_secret_visible |= SHELL_ENV_PRESENT in rendered
                     cls.shell_foreign_visible |= SHELL_FOREIGN_PRESENT in rendered
@@ -148,7 +157,6 @@ class Model(http.server.BaseHTTPRequestHandler):
                 else:
                     # Only fixed categories leave this synthetic-only harness;
                     # never persist raw native tool responses or environment.
-                    lower = rendered.lower()
                     # Bounded, fixed-vocabulary diagnostics. Never persist the
                     # native response, command output, paths or synthetic value.
                     indicators = (
