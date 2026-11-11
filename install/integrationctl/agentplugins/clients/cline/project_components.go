@@ -75,13 +75,19 @@ func clineProjectObjects(staging string, envelope domain.PackageEnvelope, plan d
 
 func clineProjectServers(active string, objects []domain.NativeObjectOwnership) (map[string]nativeconfig.Server, error) {
 	servers := map[string]nativeconfig.Server{}
+	var projection *ClineProjection
 	for _, object := range objects {
 		if object.Kind != clineProjectMCPKind {
 			continue
 		}
-		projection, err := ReadClineProjection(active)
-		if err != nil {
-			return nil, err
+		if projection == nil {
+			// Resolve every selected server against one projection snapshot.
+			// Re-reading per member could mix successive edits in one mutation.
+			loaded, err := ReadClineProjection(active)
+			if err != nil {
+				return nil, err
+			}
+			projection = &loaded
 		}
 		server, ok := projection.Servers[object.LogicalName]
 		if !ok {
