@@ -33,10 +33,13 @@ def safe_read(path):
         raise ValueError("native MCP file type/owner/size refused")
     if not hasattr(os, "O_NOFOLLOW"):
         raise ValueError("no-follow file descriptor support required")
-    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    # A raced-in FIFO must not block the native-evidence reader indefinitely.
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK)
     try:
         held = os.fstat(fd)
-        if (held.st_dev, held.st_ino, held.st_size, held.st_ctime_ns) != (before.st_dev, before.st_ino, before.st_size, before.st_ctime_ns):
+        if (not stat.S_ISREG(held.st_mode)
+                or (held.st_dev, held.st_ino, held.st_size, held.st_ctime_ns) !=
+                (before.st_dev, before.st_ino, before.st_size, before.st_ctime_ns)):
             raise ValueError("native MCP identity changed before read")
         data = os.read(fd, MAX_OUTPUT + 1)
         after = os.fstat(fd)

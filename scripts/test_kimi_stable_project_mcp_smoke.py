@@ -1,8 +1,11 @@
 """No native executable required: rejection and attribution contracts only."""
 import json
+import os
+import stat
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from kimi_stable_project_mcp_smoke import (
     FOREIGN_NAME, FOREIGN_SERVER, NAME, read_servers, safe_read, verify, verify_removed,
@@ -106,6 +109,27 @@ class KimiStableProjectMcpSmokeTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "unexpected"):
                 verify_removed(path)
 
+
+    def test_read_race_to_fifo_is_nonblocking_and_refused(self):
+        # Swapping a checked regular file to a FIFO before os.open must
+        # never block waiting for a writer or count as valid MCP JSON.
+        if not all(hasattr(os, name) for name in ("mkfifo", "O_NOFOLLOW", "O_NONBLOCK")):
+            self.skipTest("POSIX no-follow, nonblocking FIFO required")
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / "mcp.json"
+            path.write_text('{"mcpServers":{}}')
+            real_open = os.open
+
+            def replace_with_fifo(name, flags, *args, **kwargs):
+                self.assertTrue(flags & os.O_NONBLOCK)
+                path.unlink()
+                os.mkfifo(path)
+                return real_open(name, flags, *args, **kwargs)
+
+            with patch("kimi_stable_project_mcp_smoke.os.open", side_effect=replace_with_fifo):
+                with self.assertRaisesRegex(ValueError, "identity changed before read"):
+                    safe_read(path)
+            self.assertTrue(stat.S_ISFIFO(path.lstat().st_mode))
 
 
 if __name__ == "__main__":
