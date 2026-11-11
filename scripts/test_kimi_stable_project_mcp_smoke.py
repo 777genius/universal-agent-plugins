@@ -15,11 +15,11 @@ from kimi_stable_project_mcp_smoke import (
 class KimiStableProjectMcpSmokeTests(unittest.TestCase):
     def test_native_server_requires_selected_project_owned_command(self):
         with tempfile.TemporaryDirectory() as root:
-            selected = Path(root) / "selected"
+            selected = Path(root).resolve() / "selected"
             config = selected / ".kimi-code" / "mcp.json"
             config.parent.mkdir(parents=True)
             inside = selected / ".uap" / "bin" / "probe"
-            outside = Path(root) / "other" / "probe"
+            outside = Path(root).resolve() / "other" / "probe"
             inside.parent.mkdir(parents=True)
             outside.parent.mkdir(parents=True)
             inside.write_text("owned, inert")
@@ -39,15 +39,15 @@ class KimiStableProjectMcpSmokeTests(unittest.TestCase):
 
     def test_duplicate_member_rejected(self):
         with tempfile.TemporaryDirectory() as root:
-            config = Path(root) / "mcp.json"
+            config = Path(root).resolve() / "mcp.json"
             config.write_text('{"mcpServers":{"same":{},"same":{}}}')
             with self.assertRaisesRegex(ValueError, "duplicate"):
                 read_servers(config)
 
     def test_alias_and_nonregular_file_rejected(self):
         with tempfile.TemporaryDirectory() as root:
-            path = Path(root) / "mcp.json"
-            real = Path(root) / "real.json"
+            path = Path(root).resolve() / "mcp.json"
+            real = Path(root).resolve() / "real.json"
             real.write_text('{"mcpServers":{}}')
             path.symlink_to(real)
             with self.assertRaisesRegex(ValueError, "alias"):
@@ -59,7 +59,7 @@ class KimiStableProjectMcpSmokeTests(unittest.TestCase):
 
     def test_unknown_server_or_transport_refused(self):
         with tempfile.TemporaryDirectory() as root:
-            selected = Path(root) / "selected"
+            selected = Path(root).resolve() / "selected"
             config = selected / ".kimi-code" / "mcp.json"
             config.parent.mkdir(parents=True)
             for contents in ({"mcpServers": {"unowned": {}}},
@@ -70,7 +70,7 @@ class KimiStableProjectMcpSmokeTests(unittest.TestCase):
 
     def test_native_foreign_mcp_preservation(self):
         with tempfile.TemporaryDirectory() as root:
-            selected = Path(root) / "selected"
+            selected = Path(root).resolve() / "selected"
             config = selected / ".kimi-code" / "mcp.json"
             launcher = selected / ".uap" / "bin" / "probe"
             config.parent.mkdir(parents=True)
@@ -93,7 +93,7 @@ class KimiStableProjectMcpSmokeTests(unittest.TestCase):
 
     def test_removal_refuses_replaced_or_owned_native_config(self):
         with tempfile.TemporaryDirectory() as root:
-            path = Path(root) / "mcp.json"
+            path = Path(root).resolve() / "mcp.json"
             verify_removed(path)  # Removed config is valid.
             path.write_text(json.dumps({"mcpServers": {"foreign": {"transport": "stdio"}}}))
             verify_removed(path)  # A foreign-only config is preserved.
@@ -101,7 +101,7 @@ class KimiStableProjectMcpSmokeTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "persisted"):
                 verify_removed(path)
             path.unlink()
-            path.symlink_to(Path(root) / "missing.json")
+            path.symlink_to(Path(root).resolve() / "missing.json")
             with self.assertRaisesRegex(ValueError, "unexpected"):
                 verify_removed(path)
             path.unlink()
@@ -116,7 +116,7 @@ class KimiStableProjectMcpSmokeTests(unittest.TestCase):
         if not all(hasattr(os, name) for name in ("mkfifo", "O_NOFOLLOW", "O_NONBLOCK")):
             self.skipTest("POSIX no-follow, nonblocking FIFO required")
         with tempfile.TemporaryDirectory() as root:
-            path = Path(root) / "mcp.json"
+            path = Path(root).resolve() / "mcp.json"
             path.write_text('{"mcpServers":{}}')
             real_open = os.open
 
