@@ -296,13 +296,14 @@ def inspect(root, secret):
     patterns = []
     for value in values:
         raw = value.encode()
-        # PowerShell and Windows snapshots may persist UTF-16, including
-        # UTF-16LE-encoded Base64 strings, not just UTF-8 plaintext.
-        patterns.extend([raw, raw.hex().encode(), base64.b64encode(raw),
-                         base64.urlsafe_b64encode(raw),
+        # Common encodings across shell/snapshot formats; no canary bytes leave
+        # the isolated scan. Hex can use either case; UTF-16BE may be Base64.
+        patterns.extend([raw, raw.hex().encode(), raw.hex().upper().encode(),
+                         base64.b64encode(raw), base64.urlsafe_b64encode(raw),
                          urllib.parse.quote(value).encode(),
                          value.encode("utf-16le"), value.encode("utf-16be"),
-                         base64.b64encode(value.encode("utf-16le"))])
+                         base64.b64encode(value.encode("utf-16le")),
+                         base64.b64encode(value.encode("utf-16be"))])
     found, symlinks = [], 0
     root_path = Path(root).resolve(strict=True)
 

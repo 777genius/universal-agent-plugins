@@ -287,8 +287,11 @@ class TestSyntheticSnapshotScanner(unittest.TestCase):
             snapshot.parent.mkdir(parents=True)
             token = "not_a_real_secret_fixture_123"
             for content in [token.encode(), token.encode().hex().encode(),
+                            token.encode().hex().upper().encode(),
+                            base64.b64encode(token.encode()),
                             token.encode("utf-16le"), token.encode("utf-16be"),
-                            base64.b64encode(token.encode("utf-16le"))]:
+                            base64.b64encode(token.encode("utf-16le")),
+                            base64.b64encode(token.encode("utf-16be"))]:
                 snapshot.write_bytes(content)
                 findings, symlinks = inspect(root, token)
                 self.assertEqual(symlinks, 0)
