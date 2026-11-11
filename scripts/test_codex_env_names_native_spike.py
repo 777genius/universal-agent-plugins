@@ -330,6 +330,32 @@ class TestSyntheticSnapshotScanner(unittest.TestCase):
             self.assertEqual(hits[0]["result"], "unscanned_external_symlink")
             self.assertNotIn(str(outside), str(hits))
 
+    def test_junction_like_directory_outside_root_is_pruned_fail_closed(self):
+        # Mock a Windows junction on every OS, even without symlink privileges.
+        with tempfile.TemporaryDirectory() as temp, tempfile.TemporaryDirectory() as foreign:
+            root = Path(temp)
+            junction = root / "simulated_junction"
+            junction.mkdir()
+            (junction / "must_not_read").write_text("synthetic_canary_test")
+            native_resolve = Path.resolve
+
+            def resolve(path, *args, **kwargs):
+                if path == junction:
+                    return Path(foreign)
+                return native_resolve(path, *args, **kwargs)
+
+            with patch.object(Path, "is_junction", new=lambda path: path == junction,
+                              create=True), patch.object(Path, "resolve", new=resolve), \
+                    patch.object(Path, "read_bytes",
+                                 side_effect=AssertionError("junction target must not be read")):
+                findings, links = inspect(root, "synthetic_canary_test")
+            self.assertEqual(links, 1)
+            self.assertEqual(len(findings), 1)
+            self.assertEqual(findings[0]["result"], "unscanned_external_symlink")
+            self.assertEqual(len(findings[0]["path_sha256"]), 64)
+            self.assertNotIn(str(junction), str(findings))
+            self.assertNotIn(str(Path(foreign)), str(findings))
+
     def test_internal_symlink_is_not_followed_or_false_positive(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

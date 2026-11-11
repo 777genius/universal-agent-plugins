@@ -337,15 +337,27 @@ def inspect(root, secret):
             "result": "unscanned_directory",
         })
 
+    # Older Windows Python lacks junction detection. Missing proof is FAIL.
+    if os.name == "nt" and not hasattr(Path, "is_junction"):
+        return ([{"path_sha256": hashlib.sha256(b".").hexdigest(),
+                  "result": "unscanned_junction_capability"}], 0)
+
+    def is_link_or_junction(path):
+        # Windows junctions are not necessarily symlinks. Prune before walk.
+        return path.is_symlink() or (
+            path.is_junction() if hasattr(path, "is_junction") else False
+        )
+
     for directory, subdirs, files in os.walk(
             root, followlinks=False, onerror=record_walk_error):
         for name in list(subdirs):
-            if (Path(directory) / name).is_symlink():
-                record_symlink(Path(directory) / name)
+            path = Path(directory) / name
+            if is_link_or_junction(path):
+                record_symlink(path)
                 subdirs.remove(name)
         for name in files:
             path = Path(directory) / name
-            if path.is_symlink():
+            if is_link_or_junction(path):
                 record_symlink(path)
                 continue
             try:
