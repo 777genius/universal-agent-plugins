@@ -69,3 +69,15 @@ test('new client rows retain guided trust and prepared activation boundaries', (
   assert.equal(clientLandingById.get('antigravity')!.status, 'Prepared by CLI');
   assert.match(antigravity.nextStep, /verify.*discovered and enabled/);
 });
+
+// Guard the single landing/README icon mapping against accidental SVG regressions.
+test('Hermes logo is a valid WebP and README uses it consistently', () => {
+  const icon = clientLandingById.get('hermes')!.icon;
+  assert.equal(icon, 'hermes.webp');
+  const bytes = readFileSync(new URL(`../public/client-icons/${icon}`, import.meta.url));
+  assert.equal(bytes.toString('ascii', 0, 4), 'RIFF');
+  assert.equal(bytes.toString('ascii', 8, 12), 'WEBP');
+  assert.equal(readme.split('landing/public/client-icons/hermes.webp').length - 1, 2);
+  assert.ok(!readme.includes('hermes.svg'));
+  assert.ok(!readme.includes('The static website initially shows'));
+});

@@ -216,7 +216,7 @@ const allClientLandingPages: ClientLandingPage[] = [
     id: 'hermes',
     slug: 'hermes',
     name: 'Hermes Agent',
-    icon: 'hermes.svg',
+    icon: 'hermes.webp',
     note: 'User Skills/MCP and Project Skills; Project MCP is unsupported',
     status: 'Supported',
     intro:
