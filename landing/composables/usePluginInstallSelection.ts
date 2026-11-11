@@ -34,6 +34,9 @@ export function usePluginInstallSelection(
   const pinnedPiReleaseSource = computed(() =>
     pinnedPiSelected.value ? eligiblePinnedPi.value?.source : undefined,
   );
+  const pinnedPiReleaseComponents = computed(() =>
+    pinnedPiSelected.value ? eligiblePinnedPi.value?.components : undefined,
+  );
   const availableClients = computed(() => {
     const policies = reachableTargetPolicies(plugin().distributions);
     return installTargets.filter((client) => {
@@ -210,6 +213,7 @@ export function usePluginInstallSelection(
     pinnedPiSource,
     pinnedPiSelected,
     pinnedPiReleaseSource,
+    pinnedPiReleaseComponents,
     projectAvailable,
     projectAutomatic,
     resolution,
