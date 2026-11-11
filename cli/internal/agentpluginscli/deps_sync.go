@@ -312,6 +312,23 @@ func (adapter *dependencyInstaller) Apply(ctx context.Context, prepared *install
 	return result, err
 }
 
+// requireLockedDirectoryFeed checks the trusted signing lineage before any
+// locked dependency may consult a local package cache or acquire source bytes.
+// A legacy lock has no feed ID and is valid only for the legacy client.
+func requireLockedDirectoryFeed(app App, locked environment.LockedPackage) error {
+	source := locked.Source.Registry
+	if source == nil {
+		return nil
+	}
+	if app.DirectoryClient == nil {
+		return errors.New("signed Directory is unavailable")
+	}
+	if source.FeedID != directoryFeedForClient(app.DirectoryClient) {
+		return errors.New("signed Directory feed differs from locked source; explicit source switch required")
+	}
+	return nil
+}
+
 // Recheck the exact signed publication for lock restoration. Superseded releases
 // may be restored, while installed-state exceptions still require live proof.
 func verifyLockedDirectory(ctx context.Context, app App, loaded loadedPackage, locked environment.LockedPackage, recorded *domain.RecordedDirectoryRelease, operation ...domain.DirectoryOperation) (loadedPackage, error) {
