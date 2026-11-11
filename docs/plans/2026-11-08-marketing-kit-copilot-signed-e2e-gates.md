@@ -33,9 +33,23 @@ fails before the boundary operation. A saved-capability refusal never substitute
 for the six-grant signed refusal, and a historical45 refusal never certifies a
 current seven-grant policy.
 
-After positive cleanup, create fresh isolated E using the production default,
+Initial ordinary four-source catalog observations in A, B and C must agree on
+the complete authenticated policy. After positive cleanup, create fresh isolated
+E on every lane using the production default,
 without any inherited origin. Verify the same released CLI and reauthenticate
 all four immutable source identities against the complete positive policy.
+This unconditional final observation must equal the initial policy exactly;
+advancement, rollback or changed grants/tuples fail qualification. Preserve the
+complete settled A/B/C profiles, foreign sentinels and Project state in failure
+guards throughout E. Do not clear their retained records or reinterpret installed
+`info` as catalog JSON: released `info` selects retained removed installations
+first, and that public projection has no catalog snapshot digest. E is explicitly
+never installed and uses ordinary trust, expiry and floor checks in its own
+isolated profile. `final_policy_observation` reports its actual policy and source
+profile. Existing A/B/C authenticated observations, locked identities and all
+lifecycle/cleanup assertions remain mandatory.
+
+Copilot uses the same E for its mandatory current-policy boundary.
 For seven grants, use ordinary `info --target vscode --scope user` and require
 one public `user/prepared` VS Code entry on each selected release. For six grants,
 warm through the authorized Codex target before testing explicit VS Code.
@@ -73,6 +87,11 @@ cannot redefine that authority. Windows reuses the existing typed
 name against the canonical trusted root plus the original lexical relative path
 before reading bytes. Normalize only drive/extended-UNC prefixes, not component
 case, Unicode or short-name aliases. There is no pathname-only read fallback.
+Project MCP cleanup reuses that same bounded byte loader with the enclosing
+disposable case as its explicit trust root, never a replaced Project directory.
+An initially absent MCP file remains absence; a file observed and then removed,
+replaced or unsafe fails closed. Duplicate/nonfinite JSON and malformed nested
+server objects remain refusals after the safe read.
 Local mocked Win32 contract tests are not actual Windows execution; the existing
 Windows native audit remains required. Redacted diagnostics never relax strict
 native cleanup or turn retained settings into lifecycle success.
@@ -242,7 +261,8 @@ The positive six User and six Project cases keep the production Directory defaul
 they never inherit a caller's `AGENTPLUGINS_DIRECTORY_ORIGIN`. The runner observes
 all four exact signed source identities through ordinary released-CLI `info`,
 records the authenticated snapshot sequence/digest, and requires the same policy
-in A/B/C, including final observations. Existing lock checks also bind tree and
+in initial A/B/C observations, then the final never-installed E observation
+described in Current acceptance above. Existing lock checks also bind tree and
 manifest digests to those immutable sources. A production policy advance cannot
 silently combine publications. The six original reports still need final audit
 against the actual production marker and the same corrected immutable executable;

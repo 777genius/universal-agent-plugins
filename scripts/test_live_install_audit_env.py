@@ -2093,7 +2093,8 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     self.assertIn("peer", report["failure"])
 
     def _exercise_marketing_kit_scope_report(self, target, *, cleanup_failure=False,
-                                              boundary_error=False, grants=7, native_error=None, native_peer_mutation=False):
+                                              boundary_error=False, grants=7, native_error=None, native_peer_mutation=False,
+                                              final_policy_error=False, final_peer_mutation=None):
         from io import StringIO
         from runpy import run_path
         from types import SimpleNamespace
@@ -2135,15 +2136,26 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             self.assertNotIn("AGENTPLUGINS_DIRECTORY_ORIGIN", env)
             self.assertFalse((Path(env["AGENTPLUGINS_HOME"]) / "uap.lock").exists())
             kind = runner["current_vscode_boundary_kind"](expected)
+            policy = observe(_cli, env, project, "vscode" if grants == 7 else "codex", expected)
             phases.append("vscode-" + kind)
             if boundary_error:
                 raise AssertionError("required current boundary failed")
             return {"stage": "VSCode current boundary", "result": "expected_refusal",
                     "contract": kind, "reason": "unsupported_saved_target" if grants == 7 else "missing_vscode_grant",
-                    "policy": expected}
+                    "policy": policy}
 
         def observe(_cli, env, _project, _target, expected=None, guards=()):
             self.assertNotIn("AGENTPLUGINS_DIRECTORY_ORIGIN", env)
+            # Actual released info selects retained removed installation records
+            # first; those records have no catalog snapshot_sequence/digest.
+            if any(key[0] == env["AGENTPLUGINS_HOME"] for key in installed):
+                raise AssertionError("signed Directory policy identity invalid")
+            phases.append("catalog:" + _project.parent.name)
+            if _project.parent.name == "E":
+                if final_peer_mutation:
+                    (_project.parent.parent / final_peer_mutation / "home/final-query-write").write_text("tampered")
+                if final_policy_error:
+                    raise AssertionError("production policy observation changed")
             response = self._marketing_kit_info_response(runner,
                 runner["REQUIRED_DISTRIBUTIONS"]["marketing-kit"], prepared_vscode=grants == 7)
             return {"source_mode": "production_default", "snapshot_sequence": 46,
@@ -2196,6 +2208,11 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 self.assertTrue(report["two_scope_lifecycle_qualified"])
                 self.assertEqual(report["positive_policy"]["source_mode"], "production_default")
                 self.assertEqual(report["positive_policy"]["snapshot_sequence"], 46)
+                self.assertEqual([phase for phase in phases if phase.startswith("catalog:")],
+                                 ["catalog:A", "catalog:B", "catalog:C", "catalog:E"])
+                self.assertEqual(report["final_policy_observation"], {
+                    "status": "passed", "source_profile": "E", "profile_usage": "never_installed",
+                    "policy": report["positive_policy"]})
                 for scope in ("user", "project"):
                     self.assertEqual(report["scope_results"][scope], {
                         "expectation": "positive_lifecycle", "status": "passed"})
@@ -2216,6 +2233,98 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 self.assertEqual(report["historical_policy_results"]["signed45"], {
                     "status": "separate_point_in_time_audit", "required_for_current_qualification": False})
 
+    def test_marketing_kit_removed_record_info_is_not_a_catalog_policy(self):
+        from runpy import run_path
+        runner = run_path(str(Path(__file__).resolve().parent / "marketing-kit-project-release-e2e.py"))
+        # Exact public projection distinction in released read_commands.go and
+        # read_directory.go: a retained removed record remains selectable and
+        # reports current_snapshot_sequence inside directory, without a digest.
+        result = {"exit_code": 0, "timeout": False, "_json": {
+            "command": "info", "result": "success", "data": {
+                "installation_id": "removed-installation", "declared_name": "marketing-kit",
+                "clients": [], "directory": {"product_id": "marketing-kit",
+                    "recorded_distribution": "777genius/marketing-kit",
+                    "recorded_release_sequence": 1, "recorded_snapshot_sequence": 46,
+                    "current_snapshot_sequence": 46}}}}
+        inspect = runner["inspect_signed_closure"]
+        with patch.dict(inspect.__globals__, {"invoke": lambda *_: result}):
+            with self.assertRaisesRegex(AssertionError, "signed Directory policy identity invalid"):
+                inspect("unused", {}, Path("unused"), "codex")
+
+    def test_marketing_kit_final_policy_failure_and_all_profile_guards_fail_closed(self):
+        for target in ("codex", "copilot"):
+            for peer in (None, "A", "B", "C"):
+                with self.subTest(target=target, peer=peer):
+                    code, report, phases = self._exercise_marketing_kit_scope_report(
+                        target, final_policy_error=True, final_peer_mutation=peer)
+                    self.assertEqual(code, 1)
+                    self.assertIn("catalog:E", phases)
+                    self.assertFalse(report["two_scope_lifecycle_qualified"])
+                    self.assertEqual(report["final_policy_observation"]["status"], "not_run")
+                    self.assertEqual(report["scope_results"]["user"]["status"], "not_run")
+                    self.assertIn("original isolated profile changed" if peer else "policy observation changed",
+                                  report["failure"])
+
+    def test_marketing_kit_final_policy_mismatch_checks_every_failure_guard(self):
+        from runpy import run_path
+        runner = run_path(str(Path(__file__).resolve().parent / "marketing-kit-project-release-e2e.py"))
+        verify = runner["verify_final_production_observation"]
+        for sequence in (44, 47):
+            with self.subTest(sequence=sequence), TemporaryDirectory() as temporary:
+                env, project, *_ = runner["run_case"]("unused", "codex", Path(temporary), "E")
+                checked = []
+                def broken_guard():
+                    checked.append("A")
+                    raise RuntimeError("A peer changed")
+                with patch.dict(verify.__globals__, {
+                        "verify_pinned_launcher": lambda *_: None,
+                        "observe_production_policy": lambda *_: {"snapshot_sequence": sequence}}):
+                    with self.assertRaisesRegex(AssertionError, "final production policy observation changed"):
+                        verify("unused", env, project, "codex", {"snapshot_sequence": 46},
+                            (lambda: checked.append("A"), lambda: checked.append("B"), lambda: checked.append("C")))
+                    self.assertEqual(checked, ["A", "B", "C"])
+                    checked.clear()
+                    with self.assertRaisesRegex(RuntimeError, "A peer changed"):
+                        verify("unused", env, project, "codex", {"snapshot_sequence": 46},
+                            (broken_guard, lambda: checked.append("B"), lambda: checked.append("C")))
+                self.assertEqual(checked, ["A", "B", "C"])
+
+    def test_marketing_kit_final_copilot_warmup_checks_peers_before_raw_refusal(self):
+        from runpy import run_path
+        runner = run_path(str(Path(__file__).resolve().parent / "marketing-kit-project-release-e2e.py"))
+        verify = runner["verify_final_production_observation"]
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            peer_env, peer_project, *_ = runner["run_case"]("unused", "copilot", root, "A")
+            env, project, *_ = runner["run_case"]("unused", "copilot", root, "E")
+            before = runner["profile_snapshot"](peer_env, peer_project)
+            injected = Path(peer_env["HOME"]) / "warmup-mutated-peer"
+            response = self._marketing_kit_info_response(runner,
+                runner["REQUIRED_DISTRIBUTIONS"]["marketing-kit"], prepared_vscode=True)
+            policy = {"source_mode": "production_default", "snapshot_sequence": 46,
+                "snapshot_digest": "sha256:" + "a" * 64,
+                "root_target_compatibility": {item["client"]: {"scopes": item["scopes"], "delivery": item["delivery"]}
+                    for item in response["_json"]["data"]["selected_release"]["target_compatibility"]},
+                "closure": runner["FIXED_SIGNED_CLOSURE"]}
+            called, checked = [], []
+            def warm(*_):
+                injected.write_text("must be detected before raw refusal")
+                return policy
+            def raw(*_):
+                called.append("raw")
+                injected.unlink()
+                return {"exit_code": 1, "reason": "unsupported_saved_target"}
+            def peer_guard():
+                runner["check_profile_unchanged"](peer_env, peer_project, before, "warmup peer")
+            with patch.dict(verify.__globals__, {"verify_pinned_launcher": lambda *_: None,
+                    "observe_production_policy": warm, "verify_vscode_user_saved_refusal": raw}):
+                with self.assertRaisesRegex(AssertionError, "original isolated profile changed"):
+                    verify("unused", env, project, "copilot", policy,
+                           (peer_guard, lambda: checked.append("other final guard")))
+            self.assertEqual(called, [])
+            self.assertTrue(injected.exists())
+            self.assertEqual(checked, ["other final guard"])
+
     def test_marketing_kit_profiles_never_inherit_arbitrary_directory_origin(self):
         with patch.dict(os.environ, {"AGENTPLUGINS_DIRECTORY_ORIGIN": "https://injected.invalid/"}):
             code, report, _ = self._exercise_marketing_kit_scope_report("copilot")
@@ -2230,7 +2339,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     "copilot", boundary_error=True, grants=grants)
                 self.assertEqual(code, 1)
                 self.assertEqual(report["scope_results"]["project"]["status"], "passed")
-                self.assertEqual(report["scope_results"]["user"]["status"], "passed")
+                self.assertEqual(report["scope_results"]["user"]["status"], "not_run")
                 self.assertFalse(report["two_scope_lifecycle_qualified"])
                 self.assertEqual(report["status"], "failed")
                 self.assertEqual(report["failure"], "required current boundary failed")
@@ -3671,7 +3780,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 except (OSError, NotImplementedError) as error:
                     self.skipTest(f"hardlinks unavailable: {error}")
                 with self.assertRaisesRegex(AssertionError, "invalid Copilot Project MCP"):
-                    check(project, {"notion"}, "remove")
+                    check(project, {"notion"}, "remove", case)
                 linked.unlink()
                 probe = case / "symlink-probe"
                 try:
@@ -3685,18 +3794,127 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
 
                 def racing_open(candidate, flags, *args, **kwargs):
                     nonlocal swapped
-                    if Path(candidate) == path and not swapped:
+                    if (Path(candidate) == path or (candidate == path.name and kwargs.get("dir_fd") is not None)) and not swapped:
                         swapped = True
                         path.rename(moved)
                         path.symlink_to(moved)
                     return real_open(candidate, flags, *args, **kwargs)
 
-                with patch.object(os, "open", side_effect=racing_open):
-                    with self.assertRaisesRegex(AssertionError, "(malformed|replaced) Copilot Project MCP"):
-                        check(project, {"notion"}, "remove")
+                if os.name == "nt":
+                    reader_globals = runner["audit"]["copilot_settings_read"].__globals__
+                    descriptor = reader_globals["copilot_settings_windows_descriptor"]
+                    def racing_descriptor(candidate, *args):
+                        nonlocal swapped
+                        swapped = True
+                        path.rename(moved)
+                        path.symlink_to(moved)
+                        return descriptor(candidate, *args)
+                    with patch.dict(reader_globals, {"copilot_settings_windows_descriptor": racing_descriptor}):
+                        with self.assertRaisesRegex(AssertionError, "(malformed|replaced) Copilot Project MCP"):
+                            check(project, {"notion"}, "remove", case)
+                else:
+                    with patch.object(os, "open", side_effect=racing_open) as patched_open:
+                        # Replacing os.open must not disable the rooted dir-fd
+                        # branch we are testing; final open is relative to it.
+                        with patch.object(os, "supports_dir_fd", os.supports_dir_fd | {patched_open}):
+                            with self.assertRaisesRegex(AssertionError, "(malformed|replaced) Copilot Project MCP"):
+                                check(project, {"notion"}, "remove", case)
                 self.assertTrue(swapped)
                 self.assertTrue(path.is_symlink())
                 self.assertEqual(moved.read_bytes(), original)
+
+    def test_marketing_kit_copilot_project_mcp_windows_race_seam_binds_actual_reader_globals(self):
+        # Portable binding proof only; actual Win32 handle calls remain CI's job.
+        import stat
+        from runpy import run_path
+        from types import SimpleNamespace
+        runner = run_path(str(Path(__file__).resolve().parent / "marketing-kit-project-release-e2e.py"))
+        reader_globals = runner["audit"]["copilot_settings_read"].__globals__
+        called = []
+        with TemporaryDirectory() as temporary:
+            case = Path(temporary).resolve()
+            project = case / "project"
+            path = project / ".github/mcp.json"
+            path.parent.mkdir(parents=True)
+            path.write_text('{"mcpServers":{}}')
+            def descriptor(candidate, initial, expected):
+                called.append(candidate)
+                self.assertEqual(candidate, path)
+                self.assertEqual(expected, path)
+                self.assertTrue(stat.S_ISREG(initial.st_mode))
+                raise OSError("mock held-handle refusal")
+            native_os = SimpleNamespace(**{**vars(os), "name": "nt", "supports_dir_fd": set()})
+            with patch.dict(reader_globals, {"os": native_os,
+                    "copilot_settings_windows_descriptor": descriptor}):
+                with self.assertRaisesRegex(AssertionError, "malformed Copilot Project MCP"):
+                    runner["copilot_project_mcp_residuals"](project, {"notion"}, "remove", case)
+            self.assertEqual(called, [path])
+
+    def test_marketing_kit_copilot_project_mcp_ancestor_swap_never_reads_foreign_bytes(self):
+        from runpy import run_path
+        runner = run_path(str(Path(__file__).resolve().parent / "marketing-kit-project-release-e2e.py"))
+        check = runner["copilot_project_mcp_residuals"]
+        for ancestor in (".github", "project"):
+            with self.subTest(ancestor=ancestor), TemporaryDirectory() as temporary:
+                base = Path(temporary).resolve()
+                case = base / "case"
+                case.mkdir()
+                project = case / "project"
+                (project / ".github").mkdir(parents=True)
+                path = project / ".github/mcp.json"
+                path.write_text('{"mcpServers":{}}')
+                foreign = base / "foreign"
+                (foreign / ".github").mkdir(parents=True)
+                foreign_path = foreign / ".github/mcp.json"
+                foreign_path.write_text('{"mcpServers":{"private-foreign":{}}}')
+                foreign_inode = (foreign_path.stat().st_dev, foreign_path.stat().st_ino)
+                redirected = project if ancestor == "project" else project / ".github"
+                destination = foreign if ancestor == "project" else foreign / ".github"
+                moved = case / "moved-owned"
+                original_guard = runner["audit"]["path_inside_case"]
+                original_fdopen = os.fdopen
+                swapped, foreign_reads = [], []
+                def racing_guard(candidate, root):
+                    allowed = original_guard(candidate, root)
+                    if candidate == path and not swapped:
+                        self.assertTrue(allowed)
+                        redirected.rename(moved)
+                        try:
+                            redirected.symlink_to(destination, target_is_directory=True)
+                        except (OSError, NotImplementedError) as error:
+                            self.skipTest(f"symlinks unavailable: {error}")
+                        swapped.append(True)
+                    return allowed
+                def checked_fdopen(descriptor, *args, **kwargs):
+                    current = os.fstat(descriptor)
+                    if (current.st_dev, current.st_ino) == foreign_inode:
+                        foreign_reads.append(True)
+                        raise AssertionError("attempted foreign read")
+                    return original_fdopen(descriptor, *args, **kwargs)
+                with patch.dict(runner["audit"], {"path_inside_case": racing_guard}), \
+                        patch.object(os, "fdopen", side_effect=checked_fdopen):
+                    with self.assertRaisesRegex(AssertionError, "malformed Copilot Project MCP"):
+                        check(project, {"notion"}, "remove", case)
+                self.assertEqual(swapped, [True])
+                self.assertEqual(foreign_reads, [])
+
+    def test_marketing_kit_copilot_project_mcp_observed_then_disappeared_is_not_absence(self):
+        from runpy import run_path
+        runner = run_path(str(Path(__file__).resolve().parent / "marketing-kit-project-release-e2e.py"))
+        check = runner["copilot_project_mcp_residuals"]
+        with TemporaryDirectory() as temporary:
+            case = Path(temporary).resolve()
+            project = case / "project"
+            project.mkdir()
+            self.assertEqual(check(project, {"notion"}, "remove", case), set())
+            path = project / ".mcp.json"
+            path.write_text('{"mcpServers":{}}')
+            def disappear(*_):
+                path.unlink()
+                return None, "absent"
+            with patch.dict(runner["audit"], {"copilot_settings_read": disappear}):
+                with self.assertRaisesRegex(AssertionError, "malformed Copilot Project MCP"):
+                    check(project, {"notion"}, "remove", case)
 
     def test_marketing_kit_copilot_personal_agents_skill_cleanup(self):
         # GitHub's Copilot CLI documents ~/.agents/skills as a personal root.

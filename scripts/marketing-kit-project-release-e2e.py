@@ -1253,7 +1253,7 @@ def copilot_native_public_state(state):
     return {"status": state["status"], "managed_count": state["managed_count"]}
 
 
-def copilot_project_mcp_residuals(project, identities, stage):
+def copilot_project_mcp_residuals(project, identities, stage, case_root):
     """Inspect Copilot's two exact Project MCP locations by server member name."""
     def reject_constant(_):
         raise ValueError("invalid JSON constant")
@@ -1273,21 +1273,14 @@ def copilot_project_mcp_residuals(project, identities, stage):
                 or identity.st_size > 1 << 20):
             raise AssertionError(f"{stage}: invalid Copilot Project MCP config")
         try:
-            flags = (os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
-                     | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_CLOEXEC", 0))
-            with os.fdopen(os.open(path, flags), "rb") as stream:
-                opened = os.fstat(stream.fileno())
-                current = path.lstat()
-                if (not stat.S_ISREG(opened.st_mode) or opened.st_nlink != 1
-                        or not stat.S_ISREG(current.st_mode) or current.st_nlink != 1
-                        or (opened.st_dev, opened.st_ino) != (identity.st_dev, identity.st_ino)
-                        or (current.st_dev, current.st_ino) != (identity.st_dev, identity.st_ino)):
-                    raise AssertionError(f"{stage}: replaced Copilot Project MCP config")
-                body = stream.read((1 << 20) + 1)
-            if len(body) > 1 << 20:
-                raise ValueError("oversized MCP config")
-            document = json.loads(body.decode("utf-8"),
-                                  object_pairs_hook=audit["_unique_json_object"],
+            body, status = audit["copilot_settings_read"](path, case_root)
+            if status is not None or not isinstance(body, str):
+                raise ValueError("unsafe or disappeared MCP config")
+            current = path.lstat()
+            if (not stat.S_ISREG(current.st_mode) or current.st_nlink != 1
+                    or (current.st_dev, current.st_ino) != (identity.st_dev, identity.st_ino)):
+                raise AssertionError(f"{stage}: replaced Copilot Project MCP config")
+            document = json.loads(body, object_pairs_hook=audit["_unique_json_object"],
                                   parse_constant=reject_constant)
             if (not isinstance(document, dict)
                     or document and not isinstance(document.get("mcpServers"), dict)):
@@ -1362,7 +1355,7 @@ def check_removed_native_components(target, home, case_root, stage, project_scop
         distribution.rsplit("/", 1)[-1] for distribution in EXPECTED
     }
     if target == "copilot" and project_scope:
-        leftovers.update(copilot_project_mcp_residuals(home, identities, stage))
+        leftovers.update(copilot_project_mcp_residuals(home, identities, stage, case_root))
     for identity in sorted(identities):
         leftovers.update(audit["native_identity_residuals"](
             roots, identity, observed, target))
@@ -1626,6 +1619,34 @@ def verify_fixed_vscode_user_policy_refusal(cli, env, project, guards):
                 guard()
 
 
+def verify_final_production_observation(cli, env, project, target, expected_policy, guards):
+    """Close policy continuity with ordinary catalog info in never-installed E."""
+    try:
+        if any(Path(env["AGENTPLUGINS_HOME"]).iterdir()):
+            raise AssertionError("final policy observation requires never-installed profile E")
+        boundary = None
+        if target == "copilot":
+            boundary = verify_current_vscode_user_boundary(
+                cli, env, project, expected_policy, guards)
+            policy = boundary["policy"]
+        else:
+            verify_pinned_launcher(cli, env, project)
+            policy = observe_production_policy(cli, env, project, target, expected_policy)
+        if policy != expected_policy:
+            raise AssertionError("final production policy observation changed")
+        return {"status": "passed", "source_profile": "E", "profile_usage": "never_installed",
+                "policy": policy}, boundary
+    finally:
+        failures = []
+        for guard in guards:
+            try:
+                guard()
+            except Exception as error:
+                failures.append(error)
+        if failures:
+            raise failures[0]
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--target", required=True, choices=["codex", "cursor", "claude", "gemini", "opencode", "copilot"])
@@ -1637,6 +1658,8 @@ def main():
     report = {"cli_version": "0.1.102", "target": options.target, "source": "real signed marketing-kit", "steps": [], "status": "failed",
               "qualification_scope": "user_and_project", "two_scope_lifecycle_qualified": False,
               "positive_policy": None, "logical_owner_evidence": None,
+              "final_policy_observation": {"status": "not_run", "source_profile": "E",
+                                           "profile_usage": "never_installed"},
               "current_vscode_user_boundary": {
                   "expectation": "authenticated_current_policy_boundary",
                   "status": "not_run" if options.target == "copilot" else "not_applicable"},
@@ -2041,17 +2064,26 @@ def main():
             check_user_project_unchanged(project_c, protected_c_project, "User final inventory")
             check_profile_unchanged(env_c, project_c, protected_c_profile,
                                     "User final inventory")
-            # Check every independent production profile against the same policy;
-            # an advancing feed cannot silently combine different publications.
-            for e, p in ((env, project_a), (env_b, project_b), (env_c, project_c)):
-                observe_production_policy(options.cli, e, p, options.target,
-                    report["positive_policy"], (
-                        lambda: check_foreign(foreign_files, root),
-                        lambda: check_user_project_unchanged(project_a, project_before_user, "final production policy"),
-                        lambda: check_profile_unchanged(env_b, project_b, protected_b, "final production policy"),
-                        lambda: check_profile_unchanged(env_c, project_c, protected_c_profile, "final production policy"),
-                    ))
-            report["scope_results"]["user"]["status"] = "passed"
+            # Released info resolves retained removed records before catalog
+            # selectors. Keep A/B/C intact and reobserve the same policy in a
+            # never-installed E, rather than reinterpret their installed schema.
+            protected_a = settled_profile_snapshot(env, project_a)
+            env_e, project_e, foreign_e, project_foreign_e, native_foreign_e = (
+                run_case(options.cli, options.target, root, "E"))
+            bind_pinned_launcher_cache(env_e, launcher_cache, root)
+            foreign_files.extend(pin_foreign([(foreign_e, "unmanaged user data\n"),
+                (project_foreign_e, "unmanaged project data\n"), *native_foreign_e], root))
+            guards = (
+                lambda: check_foreign(foreign_files, root),
+                lambda: check_profile_unchanged(env, project_a, protected_a, "final production policy"),
+                lambda: check_profile_unchanged(env_b, project_b, protected_b, "final production policy"),
+                lambda: check_profile_unchanged(env_c, project_c, protected_c_profile, "final production policy"),
+            )
+            for guard in guards:
+                guard()
+            observation, boundary = verify_final_production_observation(
+                options.cli, env_e, project_e, options.target, report["positive_policy"], guards)
+            report["final_policy_observation"] = observation
             if options.target == "copilot":
                 # Never change a production profile's origin or downgrade its cache.
                 # E is a fresh current-policy case, using the same exact CLI.
@@ -2059,26 +2091,11 @@ def main():
                     "scope": "user", "logical_owner": "copilot", "packages": sorted(EXPECTED),
                     "affected_surfaces": ["copilot", "vscode"], "separate_vscode_binding": False,
                     "native_editor_runtime": "not_qualified"}
-                protected_a = settled_profile_snapshot(env, project_a)
-                env_e, project_e, foreign_e, project_foreign_e, native_foreign_e = (
-                    run_case(options.cli, options.target, root, "E"))
-                bind_pinned_launcher_cache(env_e, launcher_cache, root)
-                foreign_files.extend(pin_foreign([(foreign_e, "unmanaged user data\n"),
-                    (project_foreign_e, "unmanaged project data\n"), *native_foreign_e], root))
-                guards = (
-                    lambda: check_foreign(foreign_files, root),
-                    lambda: check_profile_unchanged(env, project_a, protected_a, "current boundary"),
-                    lambda: check_profile_unchanged(env_b, project_b, protected_b, "current boundary"),
-                    lambda: check_profile_unchanged(env_c, project_c, protected_c_profile, "current boundary"),
-                )
-                for guard in guards:
-                    guard()
-                boundary = verify_current_vscode_user_boundary(
-                    options.cli, env_e, project_e, report["positive_policy"], guards)
                 report["steps"].append(boundary)
                 report["current_vscode_user_boundary"].update(
                     status="refused_as_expected", contract=boundary["contract"],
                     reason=boundary["reason"], policy=boundary["policy"])
+            report["scope_results"]["user"]["status"] = "passed"
         # TemporaryDirectory cleanup is part of qualification; exceptions from
         # its __exit__ must never leave a successful two-scope result behind.
         report["two_scope_lifecycle_qualified"] = True
