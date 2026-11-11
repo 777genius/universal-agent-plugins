@@ -323,7 +323,12 @@ def corrupt_locked_child_digest(lock_file, expected_identity=None):
     """Mutate one child digest on a verified file descriptor, never through a swapped path."""
     try:
         before = lock_file.lstat()
-        descriptor = os.open(lock_file, os.O_RDWR | getattr(os, "O_NOFOLLOW", 0))
+        if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1:
+            raise AssertionError("invalid negative-test lock path")
+        flags = (os.O_RDWR | getattr(os, "O_NOFOLLOW", 0)
+                 | getattr(os, "O_NONBLOCK", 0)
+                 | getattr(os, "O_CLOEXEC", 0))
+        descriptor = os.open(lock_file, flags)
     except OSError as error:
         raise AssertionError("invalid negative-test lock path") from error
     with os.fdopen(descriptor, "r+b") as stream:
@@ -368,12 +373,29 @@ def verify_corrupt_lock_refusal(cli, env, project, target, scope, guards):
         raise AssertionError("invalid cold restore scope")
     lock_parent = project if scope == "project" else Path(env["AGENTPLUGINS_HOME"])
     lock_file = lock_parent / "uap.lock"
-    original = lock_file.read_bytes()
-    # The command under test may replace the lock with an outside symlink.
-    # Retain the inode before invoking untrusted source code.
-    original_identity = lock_file.lstat()
-    if not stat.S_ISREG(original_identity.st_mode) or original_identity.st_nlink != 1:
-        raise AssertionError("invalid original signed lock path")
+    # A preceding native client may replace the lock with a foreign link or
+    # special file. Inspect the pathname before opening or reading any bytes.
+    try:
+        original_identity = lock_file.lstat()
+        if not stat.S_ISREG(original_identity.st_mode) or original_identity.st_nlink != 1:
+            raise AssertionError("invalid original signed lock path")
+        flags = (os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+                 | getattr(os, "O_NONBLOCK", 0)
+                 | getattr(os, "O_CLOEXEC", 0))
+        descriptor = os.open(lock_file, flags)
+        with os.fdopen(descriptor, "rb") as stream:
+            opened = os.fstat(stream.fileno())
+            current = lock_file.lstat()
+            if (not stat.S_ISREG(opened.st_mode) or opened.st_nlink != 1
+                    or not stat.S_ISREG(current.st_mode) or current.st_nlink != 1
+                    or (opened.st_dev, opened.st_ino)
+                    != (original_identity.st_dev, original_identity.st_ino)
+                    or (current.st_dev, current.st_ino)
+                    != (original_identity.st_dev, original_identity.st_ino)):
+                raise AssertionError("invalid original signed lock path")
+            original = stream.read()
+    except OSError as error:
+        raise AssertionError("invalid original signed lock path") from error
     original_digest, corrupted_digest = corrupt_locked_child_digest(lock_file, original_identity)
     scope_args = ["--scope", scope]
     if scope == "project":

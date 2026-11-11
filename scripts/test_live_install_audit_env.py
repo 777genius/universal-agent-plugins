@@ -940,6 +940,50 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 self.assertEqual(report["status"], "failed")
                 self.assertEqual(report["failure"], "disposable cleanup failed")
 
+    def test_marketing_kit_corrupt_lock_never_opens_preexisting_symlink(self):
+        # The fixture must refuse a planted outside symlink *before* either
+        # reading original bytes or opening the lock for corruption.
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        verify = runner["verify_corrupt_lock_refusal"]
+        corrupt = runner["corrupt_locked_child_digest"]
+        for scope in ("project", "user"):
+            with self.subTest(scope=scope), TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                home, data, project = (root / name for name in ("home", "data", "project"))
+                for path in (home, data, project):
+                    path.mkdir()
+                env = {"HOME": str(home), "AGENTPLUGINS_HOME": str(data)}
+                locked = (project if scope == "project" else data) / "uap.lock"
+                foreign = root / "foreign-lock"
+                foreign.write_bytes(b"foreign must not be read or changed")
+                try:
+                    locked.symlink_to(foreign)
+                except (OSError, NotImplementedError) as error:
+                    self.skipTest(f"host cannot create file symlinks: {error}")
+
+                original_read, original_open = Path.read_bytes, os.open
+
+                def refuse_read(path):
+                    if path == locked:
+                        raise AssertionError("read a foreign signed-lock symlink")
+                    return original_read(path)
+
+                def refuse_open(path, *args, **kwargs):
+                    if Path(path) == locked:
+                        raise AssertionError("opened a foreign signed-lock symlink")
+                    return original_open(path, *args, **kwargs)
+
+                with (patch.object(Path, "read_bytes", refuse_read),
+                      patch.object(os, "open", refuse_open)):
+                    with self.assertRaisesRegex(AssertionError, "invalid original signed lock path"):
+                        verify("agentplugins", env, project, "codex", scope, ())
+                    with self.assertRaisesRegex(AssertionError, "invalid negative-test lock path"):
+                        corrupt(locked)
+                self.assertEqual(foreign.read_bytes(), b"foreign must not be read or changed")
+
     def test_marketing_kit_corrupt_lock_restore_rejects_foreign_symlink(self):
         # A malicious native invocation may swap the fixture lock for a link to
         # an outside file. Cleanup must not follow it to write original bytes.
