@@ -191,11 +191,12 @@ def _probe(ctx, owned, label, arguments, project="a", root_identities=None):
 
 
 def collect(ctx):
-    root, home = Path(ctx.root).resolve(), Path(ctx.home)
+    root, home = Path(ctx.root), Path(ctx.home)
     projects = {name: Path(ctx.projects[name]) for name in ("a", "b", "user")}
     # Resolving source roots silently would adopt a symlinked foreign tree as a
     # research fixture. Refuse aliases before launching any native child.
-    if (not home.is_absolute() or home.resolve() != home or not home.is_dir()
+    if (not root.is_absolute() or root.resolve() != root or not root.is_dir()
+            or not home.is_absolute() or home.resolve() != home or not home.is_dir()
             or any(not path.is_absolute() or path.resolve() != path or not path.is_dir()
                    for path in projects.values())):
         # Do not silently manufacture an absent project or HOME when the

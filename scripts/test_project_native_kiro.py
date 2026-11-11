@@ -754,6 +754,26 @@ class KiroCollectorTests(unittest.TestCase):
                 if kind == "settings-file":
                     self.assertEqual(unexpected.read_text(), "foreign sentinel\\n")
 
+    def test_root_alias_refuses_before_native_probe_or_fixture_write(self):
+        # The research root is an authority boundary too: resolving it on
+        # entry could silently adopt a foreign symlink target as disposable.
+        for kind in ("root-symlink", "relative-root"):
+            ctx = self.context()
+            original = ctx.root
+            if kind == "root-symlink":
+                alias = original.parent / (original.name + "-alias")
+                alias.symlink_to(original, target_is_directory=True)
+                ctx.root = alias
+            else:
+                ctx.root = Path(original.name)
+            with self.subTest(kind=kind), self.assertRaisesRegex(
+                    ValueError, "canonical home and project directories"):
+                kiro.collect(ctx)
+            self.assertEqual(ctx.calls, [])
+            for selected in (ctx.home, *ctx.projects.values()):
+                self.assertFalse((selected / ".kiro").exists())
+            self.assertTrue(original.is_dir())
+
     def test_alias_and_nested_project_roots_refuse_before_native_probes(self):
         for kind in ("project-symlink", "project-parent-symlink",
                      "home-symlink", "nested-project-a", "nested-project-b",
