@@ -17,6 +17,34 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+type releaseActionStatusNames struct {
+	Success  string
+	Always   string
+	Failure  string
+	Canceled string
+	Skipped  string
+}
+
+func releaseActionStatuses(t *testing.T) releaseActionStatusNames {
+	t.Helper()
+	body, err := os.ReadFile("testdata/github-actions-status.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var status releaseActionStatusNames
+	if err := yaml.Unmarshal(body, &status); err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]bool{}
+	for _, name := range []string{status.Success, status.Always, status.Failure, status.Canceled, status.Skipped} {
+		if name == "" || seen[name] {
+			t.Fatal("Actions status vocabulary must contain distinct nonempty names")
+		}
+		seen[name] = true
+	}
+	return status
+}
+
 func TestStableReleaseRequiresVerifiedReproducibleBootstrapBeforeBuild(t *testing.T) {
 	_, source, _, ok := runtime.Caller(0)
 	if !ok {
@@ -443,6 +471,7 @@ func validateNativeReleaseBoundary(workflow releaseWorkflow) error {
 }
 
 func TestNativeReleaseFailureReachabilityAndMutationControls(t *testing.T) {
+	statusNames := releaseActionStatuses(t)
 	workflow := parseReleaseWorkflow(t, "agentplugins-release.yml")
 	if err := validateNativeReleaseBoundary(workflow); err != nil {
 		t.Fatal(err)
@@ -553,7 +582,7 @@ func TestNativeReleaseFailureReachabilityAndMutationControls(t *testing.T) {
 			job.If = ""
 			w.Jobs[name] = job
 		}
-		for _, status := range []string{"always", "failure", "cancelled"} {
+		for _, status := range []string{statusNames.Always, statusNames.Failure, statusNames.Canceled} {
 			mutations[name+" "+status+" override"] = func(w *releaseWorkflow) {
 				job := w.Jobs[name]
 				job.If = "${{ " + status + "() }}"
@@ -586,6 +615,7 @@ func TestNativeReleaseFailureReachabilityAndMutationControls(t *testing.T) {
 
 func assertNativeReleaseReachability(t *testing.T, workflow releaseWorkflow) {
 	t.Helper()
+	statusNames := releaseActionStatuses(t)
 	for _, name := range []string{"qualify-go", "qualify-npm", "build", "stage-draft", "platform-proof", "hermes-native-proof", "antigravity-native-proof", "verified-draft", "reuse-verified-draft", "promote-release"} {
 		job := workflow.Jobs[name]
 		promotion := name == "reuse-verified-draft" || name == "promote-release"
@@ -600,7 +630,7 @@ func assertNativeReleaseReachability(t *testing.T, workflow releaseWorkflow) {
 			t.Fatalf("%s reachable in the wrong release mode", name)
 		}
 		for _, need := range releaseNeeds(job.Needs) {
-			for _, status := range []string{"failure", "cancelled", "skipped", ""} {
+			for _, status := range []string{statusNames.Failure, statusNames.Canceled, statusNames.Skipped, ""} {
 				if status == "" {
 					delete(results, need)
 				} else {
@@ -619,14 +649,15 @@ func assertNativeReleaseReachability(t *testing.T, workflow releaseWorkflow) {
 // and condition. An explicit status function replaces implicit success().
 func evaluateNativeReleaseJob(t *testing.T, job releaseJob, results map[string]string, publish bool) bool {
 	t.Helper()
-	values := map[string]any{"success": true, "failure": false, "cancelled": false, "always": true, "inputs.publish_release": publish}
+	statusNames := releaseActionStatuses(t)
+	values := map[string]any{statusNames.Success: true, statusNames.Failure: false, statusNames.Canceled: false, statusNames.Always: true, "inputs.publish_release": publish}
 	for _, need := range releaseNeeds(job.Needs) {
 		status := results[need]
 		values["needs."+need+".result"] = status
 		if status != "success" {
 			values["success"] = false
 		}
-		if status == "failure" || status == "cancelled" {
+		if status == statusNames.Failure || status == statusNames.Canceled {
 			values[status] = true
 		}
 	}
@@ -634,7 +665,8 @@ func evaluateNativeReleaseJob(t *testing.T, job releaseJob, results map[string]s
 	if condition == "" {
 		condition = "true"
 	}
-	if !regexp.MustCompile(`\b(success|always|failure|cancelled)\s*\(`).MatchString(condition) {
+	functions := []string{statusNames.Success, statusNames.Always, statusNames.Failure, statusNames.Canceled}
+	if !regexp.MustCompile(`\b(` + strings.Join(functions, "|") + `)\s*\(`).MatchString(condition) {
 		condition = "success() && (" + condition + ")"
 	}
 	return evaluateReleaseCondition(t, condition, values)
@@ -776,7 +808,8 @@ func TestNPMReleaseBoundaryMutationNegativeControls(t *testing.T) {
 func evaluateReleaseCondition(t *testing.T, expression string, values map[string]any) bool {
 	t.Helper()
 	expression = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(expression), "${{"), "}}"))
-	for _, fn := range []string{"success", "always", "failure", "cancelled"} {
+	statusNames := releaseActionStatuses(t)
+	for _, fn := range []string{statusNames.Success, statusNames.Always, statusNames.Failure, statusNames.Canceled} {
 		if value, ok := values[fn]; ok {
 			expression = strings.ReplaceAll(expression, fn+"()", strconv.FormatBool(value.(bool)))
 		}
