@@ -110,3 +110,14 @@ Corrections to implementation contract:
 - Do not add an external Go SDK dependency just to depend on pending typed extension support. A narrow, test-covered, modern-only transport is temporary PoC code; production replacement with official Go Skills client is a follow-up decision, not an API migration in this PR.
 
 **Disposition:** protocol review exposes no blocker for the limited PoC. Implementation must be verified against concrete modern wire fixtures, not old `initialize` samples.
+
+## Review R3 — adversarial input / security boundary (2026-11-11)
+
+- **Endpoint:** an explicit HTTPS URL is necessary but insufficient. Public CLI transport rejects inline credentials, query/fragment, redirects, unsafe host/IP literals and proxy inheritance. Resolve DNS once per connection and dial only public addresses; verify TLS against the original hostname and preserve cancellation/timeout. Do not assume `skill://` URI authority is a routable network host. Test and document the fixture-only injected loopback HTTP transport; do **not** expose `--insecure`, `--allow-private` or a trust-bypass mode.
+- **Payload:** set a bounded total HTTP body size, request concurrency (sequential for PoC), SSE event size and list pagination budget. Reject ambiguous/duplicate JSON keys if the existing conformance helper permits; never echo server errors directly in CLI. Require the exact `resources/read` URI, one content item, exactly one of `text` or `blob`, and strict base64 decode for blobs.
+- **Manifest:** per-server namespace plus exact URI; reject duplicate URI entries across pages, invalid or missing `SKILL.md`, unlisted read, non-unique file entries, wrong size, a resource outside the skill's URI prefix, or traversal. The manifest is an integrity **claim by the server**, not a trusted signature; no permission is automatically derived from it.
+- **Frontmatter:** compare the *entire* YAML object to the advertised JSON object using `conformance.DecodeFrontmatter` for bounded syntax, duplicate-key handling and unknown future fields. Reject key omissions and value mismatches, including nested metadata; do not weaken parser limits. Do not render instruction bodies in JSON/human output or mark them as agent-loaded.
+- **Effects:** never write a transient source snapshot into User/Project configuration during probing. Do not create HOME/XDG directories, spawn a process, call an MCP tool, fetch companion files, prompt for OAuth, retry after bad digests, or silently import remote content into locally trusted Skill folders.
+- **Exit semantics:** public transport/parse errors are mapped to a short stable code and safe message. Preserve cancellation and deadline as separate cases; never leak an MCP endpoint containing credentials or a server-controlled error string.
+
+**Disposition:** fail-closed read-only design remains viable; actual security evidence needs negative fixture tests.
