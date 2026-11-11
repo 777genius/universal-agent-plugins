@@ -27,7 +27,7 @@ func TestSkillRenderersPreserveClientTemplatesAndPaths(t *testing.T) {
 	}
 	tests := []struct {
 		name, relPath string
-		render                      func(string, domain.SkillDocument) ([]domain.Artifact, error)
+		render        func(string, domain.SkillDocument) ([]domain.Artifact, error)
 	}{
 		{"claude", "generated/skills/claude/sample/SKILL.md", ClaudeRenderer{}.Generate},
 		{"codex", "generated/skills/codex/sample/SKILL.md", CodexRenderer{}.Generate},
