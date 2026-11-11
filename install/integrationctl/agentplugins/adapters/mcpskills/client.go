@@ -79,7 +79,7 @@ func (c *Client) List(ctx context.Context) ([]Summary, error) {
 	var summaries []Summary
 	seenURIs := make(map[string]bool)
 	seenCursors := make(map[string]bool)
-	var cursor string
+	var cursor, cacheScope string
 	for page := 0; page < maxCatalogPages; page++ {
 		args := map[string]any{}
 		if cursor != "" {
@@ -97,6 +97,10 @@ func (c *Client) List(ctx context.Context) ([]Summary, error) {
 		if json.Unmarshal(payload, &result) != nil || !result.cacheFields.valid() || result.Skills == nil {
 			return nil, ErrProtocol
 		}
+		if cacheScope != "" && cacheScope != result.CacheScope {
+			return nil, ErrProtocol
+		}
+		cacheScope = result.CacheScope
 		if len(summaries)+len(result.Skills) > maxCatalogEntries {
 			return nil, ErrProtocol
 		}
