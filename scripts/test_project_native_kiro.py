@@ -60,7 +60,7 @@ class KiroCollectorTests(unittest.TestCase):
         result = kiro.collect(ctx)
         for label, _, _, extra, _ in ctx.calls:
             expected = ({"KIRO_HOME": str(ctx.root / "private" / "kiro-help-only")}
-                        if label == "all-help" else
+                        if label in ("all-help", "mcp-help") else
                         {"KIRO_API_KEY": ctx.kiro_api_key} if label.endswith("raw-list") else None)
             self.assertEqual(extra, expected)
         self.assertNotIn("KIRO_API_KEY", ctx.env)
@@ -83,7 +83,7 @@ class KiroCollectorTests(unittest.TestCase):
                                       ["agent", "list"],
                                       ["mcp", "list", "workspace"], ["mcp", "list", "global"]])
             expected = ({"KIRO_HOME": str(ctx.root / "private" / "kiro-help-only")}
-                        if arguments == ["--help-all"] else None)
+                        if arguments in (["--help-all"], ["mcp", "--help"]) else None)
             self.assertEqual(extra_env, expected)
             self.assertEqual(timeout, 30)
         for scope in ("a", "b", "user"):
@@ -116,6 +116,40 @@ class KiroCollectorTests(unittest.TestCase):
         self.assertFalse(any(value for key, value in result["observations"].items()
                              if key.endswith("_qualified")))
         self.assertEqual((profile / "native-secret").read_text(), "not a test report")
+
+    def test_mcp_help_native_side_effect_stays_in_disposable_profile(self):
+        # Pinned 2.34 can initialize HOME on mcp --help even after
+        # --help-all was isolated; the private state is not discovery.
+        ctx = self.context()
+        profile = ctx.root / "private" / "kiro-help-only"
+
+        def native_help():
+            self.assertEqual(ctx.calls[-1][3], {"KIRO_HOME": str(profile)})
+            (profile / "mcp-native-cache").mkdir()
+            return {"exit": 0, "error": None}, b"Usage: kiro-cli mcp list\n", b""
+
+        ctx.replace["mcp-help"] = native_help
+        result = kiro.collect(ctx)
+        self.assertTrue((profile / "mcp-native-cache").is_dir())
+        self.assertFalse((ctx.home / ".kiro").exists())
+        self.assertNotIn("mcp-native-cache", str(ctx.summary))
+        self.assertFalse(any(value for key, value in result["observations"].items()
+                             if key.endswith("_qualified")))
+
+    def test_mcp_help_unowned_home_write_still_fails_closed(self):
+        ctx = self.context()
+
+        def native_help():
+            marker = ctx.home / ".kiro"
+            marker.mkdir()
+            (marker / "foreign-sentinel").write_text("keep untouched")
+            return {"exit": 0, "error": None}, b"Usage: kiro-cli mcp list\n", b""
+
+        ctx.replace["mcp-help"] = native_help
+        with self.assertRaisesRegex(ValueError, "unexpected config in: home"):
+            kiro.collect(ctx)
+        self.assertEqual(ctx.calls[-1][0], "mcp-help")
+        self.assertEqual((ctx.home / ".kiro/foreign-sentinel").read_text(), "keep untouched")
 
     def test_help_all_refuses_unowned_home_mutation_even_with_kiro_home(self):
         ctx = self.context()

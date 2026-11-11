@@ -281,19 +281,19 @@ def _probe(ctx, owned, label, arguments, project="a", root_identities=None, help
         raise ValueError("Kiro acquired companion PATH changed")
     key = getattr(ctx, "kiro_api_key", "")
     private_env = {"KIRO_API_KEY": key} if key and label.endswith("raw-list") else None
-    if label == "all-help":
-        # Kiro 2.34 can initialize native state even for --help-all. Confine
-        # only this help probe to an empty, owned, disposable vendor profile.
+    if label in ("all-help", "mcp-help"):
+        # Kiro 2.34 creates HOME state on both --help-all and mcp --help.
+        # Confine these exact help probes to an owned disposable vendor profile.
         # Never use that profile as Project/User config or activation proof.
         expected = Path(ctx.root) / "private" / "kiro-help-only"
         if (help_home != expected or root_identities is None
                 or root_identities.get(help_home) != _research_root_identity(expected)):
-            raise ValueError("Kiro all-help requires the exact isolated profile")
+            raise ValueError("Kiro selected help requires the exact isolated profile")
         private_env = {"KIRO_HOME": str(help_home)}
     try:
         record, stdout, stderr = ctx.probe(label, list(arguments), project=project, extra_env=private_env, timeout=30)
     finally:
-        if label == "all-help" and isinstance(getattr(ctx, "summary", None), dict):
+        if label in ("all-help", "mcp-help") and isinstance(getattr(ctx, "summary", None), dict):
             # No native names or file bytes are included in the report.
             ctx.summary["kiro_help_private_metadata"] = _opaque_native_marker_metadata(help_home)
         # Also enforce after a timeout or raised probe, before any next child.
@@ -366,7 +366,7 @@ def collect(ctx):
     help_text = {}
     for label, arguments, token in HELP:
         value = _probe(ctx, owned, label, arguments, root_identities=root_identities,
-                       help_home=help_profile if label == "all-help" else None)
+                       help_home=help_profile if label in ("all-help", "mcp-help") else None)
         if (token not in value or (label == "all-help" and (
                 not re.search(r"(?m)^[ \t]+--help-all[ \t]*$", value)
                 or not re.search(r"(?m)^[ \t]+(?:-h,[ \t]+)?--help[ \t]*$", value)
