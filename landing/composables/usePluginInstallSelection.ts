@@ -181,6 +181,11 @@ export function usePluginInstallSelection(
     const previousScope = scope.value;
     choicePending = true;
     scope.value = value;
+    // An explicit Pi-only Git Project source is not a signed User install;
+    // return to regular CLI detection when the user switches computers.
+    if (previousScope === 'project' && value === 'user' &&
+        targets.value.length === 1 && targets.value[0] === 'pi' &&
+        !resolveDistribution(plugin(), ['pi'], 'user').distribution) autoDetect.value = true;
     // Entering project starts with CLI-side detection, even if the user
     // manually selected Cursor in their *user* environment. An explicit
     // project choice remains persistent across detail/navigation remounts.

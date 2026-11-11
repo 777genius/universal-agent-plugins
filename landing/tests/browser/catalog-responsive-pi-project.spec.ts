@@ -115,6 +115,10 @@ for (const width of [1440, 390]) {
     await expect(detail.locator('.command-snippet--add code')).toHaveText(add);
     await expect(detail).toContainText('not a signed Pi target');
     await expect(detail.locator('.command-snippet--repair code')).toContainText('--target pi --scope project');
+    await detail.getByRole('button', { name: 'This computer', exact: true }).click();
+    await expect(detail.locator('.command-snippet--add code')).toHaveText(
+      'npx -y universal-agent-plugins add sentry');
+    await expect(detail.locator('.app-multiselect__trigger')).toContainText('All installed agents');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     expect(errors).toEqual([]);
   });
