@@ -245,3 +245,56 @@ func netIP(t *testing.T, value string) net.IP {
 	}
 	return v
 }
+
+func TestMCPRejectsMalformedManifests(t *testing.T) {
+	digest := "sha256:" + strings.Repeat("a", 64)
+	cases := []struct {
+		name      string
+		resources string
+		skillName string
+	}{
+		{"missing file size", fmt.Sprintf(`[{"uri":%q,"digest":%q}]`, sampleURI, digest), "review"},
+		{"missing document", fmt.Sprintf(`[{"uri":%q,"digest":%q,"size":1}]`, "skill://acme/review/other.md", digest), "review"},
+		{"outside root", fmt.Sprintf(`[{"uri":%q,"digest":%q,"size":1}]`, "skill://foreign/review/SKILL.md", digest), "review"},
+		{"duplicate URI", fmt.Sprintf(`[{"uri":%q,"digest":%q,"size":1},{"uri":%q,"digest":%q,"size":1}]`, sampleURI, digest, sampleURI, digest), "review"},
+		{"negative size", fmt.Sprintf(`[{"uri":%q,"digest":%q,"size":-1}]`, sampleURI, digest), "review"},
+		{"name mismatch", fmt.Sprintf(`[{"uri":%q,"digest":%q,"size":1}]`, sampleURI, digest), "different"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := Skill{URI: sampleURI, Frontmatter: map[string]any{"name": tc.skillName, "description": "Review changed files"}, Resources: json.RawMessage(tc.resources)}
+			if _, _, err := validateSkill(s); err == nil {
+				t.Fatal("invalid manifest accepted")
+			}
+		})
+	}
+}
+
+func TestMCPHeadersAndSSEFailClosed(t *testing.T) {
+	encoded := encodeHeaderValue("skill://учёт/SKILL.md")
+	if !strings.HasPrefix(encoded, "=?base64?") || !strings.HasSuffix(encoded, "?=") {
+		t.Fatalf("invalid nonascii Mcp-Name: %s", encoded)
+	}
+	valid := `{"jsonrpc":"2.0","id":1,"result":{"resultType":"complete"}}`
+	if _, err := decodeEvents([]byte("data: " + valid + "\n\ndata: " + valid + "\n\n")); err == nil {
+		t.Fatal("accepted duplicate final SSE response")
+	}
+	if _, err := decodeEvents([]byte("data: {\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{}}\n\n")); err == nil {
+		t.Fatal("accepted response with wrong ID")
+	}
+}
+
+func TestMCPServerIdentityContainsEndpointPath(t *testing.T) {
+	client := &http.Client{}
+	a, err := NewWithHTTPClient("https://mcp.example.com/team-a", client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := NewWithHTTPClient("https://mcp.example.com/team-b", client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.Origin() == b.Origin() || strings.Contains(a.Origin(), "team-a") || strings.Contains(b.Origin(), "team-b") {
+		t.Fatalf("origin identity is colliding or leaking: %s %s", a.Origin(), b.Origin())
+	}
+}
