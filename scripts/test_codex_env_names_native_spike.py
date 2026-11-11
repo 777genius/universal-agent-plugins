@@ -94,7 +94,10 @@ class TestSyntheticModelOracle(unittest.TestCase):
         self.assertIn("Start-Sleep -Seconds 7", command)
         self.assertIn("Test-Path Env:" + ENV_NAME, command)
         self.assertIn("Test-Path Env:" + FOREIGN_ENV_NAME, command)
-        self.assertIn(SHELL_ENV_PRESENT, command)
+        self.assertNotIn(SHELL_ENV_PRESENT, command)
+        self.assertNotIn(SHELL_FOREIGN_PRESENT, command)
+        self.assertNotIn(SHELL_MARKER, command)
+        self.assertIn("Write-Output", command)
         self.assertNotIn("not_a_real_secret_fixture_123", command)
 
     def test_isolated_env_contains_no_runner_auth(self):
@@ -120,6 +123,35 @@ class TestSyntheticModelOracle(unittest.TestCase):
         self.assertFalse(Model.mcp_digest_verified)
         self.assertIn("observed", Model.mcp_output_indicators)
         self.assertEqual(Model.mcp_output_type, "object")
+
+    def test_delayed_command_echo_without_error_word_is_not_execution(self):
+        # A tool may return a delayed diagnostic echoing all command arguments
+        # without any of the error words; no oracle marker may appear in argv.
+        shell = self.call({"tools": [{"type": "function", "name": "exec_command"}]})
+        command = json.loads(shell["arguments"])["cmd"]
+        self.assertNotIn(SHELL_MARKER, command)
+        self.assertNotIn(SHELL_ENV_PRESENT, command)
+        self.assertNotIn(SHELL_FOREIGN_PRESENT, command)
+        Model.shell_requested_at -= 7.0
+        self.call({"input": [{"type": "function_call_output", "call_id": SHELL_CALL,
+                             "output": "rejected command payload: " + command}],
+                   "tools": [{"type": "namespace", "name": "mcp__env_spike",
+                              "tools": [{"name": "confirm_env"}]}]})
+        self.assertTrue(Model.shell_output_seen)
+        self.assertFalse(Model.shell_execution_verified)
+        self.assertFalse(Model.shell_secret_visible)
+        self.assertFalse(Model.shell_foreign_visible)
+
+    def test_unix_runtime_marker_executes_without_command_literal(self):
+        if os.name == "nt":
+            self.skipTest("POSIX shell not available")
+        from codex_env_names_native_spike import _sh_print_marker
+        command = _sh_print_marker(SHELL_MARKER)
+        self.assertNotIn(SHELL_MARKER, command)
+        proc = subprocess.run(["sh", "-c", command], capture_output=True,
+                              text=True, timeout=5)
+        self.assertEqual(proc.returncode, 0)
+        self.assertEqual(proc.stdout, SHELL_MARKER)
 
     def test_shell_error_response_does_not_prove_execution(self):
         self.call({"tools": [{"type": "function", "name": "exec_command"}]})

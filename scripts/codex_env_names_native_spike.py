@@ -84,12 +84,28 @@ def isolated_env(root, home, secret, foreign_secret):
     return env
 
 
+def _split_runtime_marker(marker):
+    """Never embed a complete proof marker in tool arguments."""
+    half = len(marker) // 2
+    return marker[:half], marker[half:]
+
+
+def _sh_print_marker(marker):
+    left, right = _split_runtime_marker(marker)
+    return f"printf '%s%s' '{left}' '{right}'"
+
+
+def _ps_print_marker(marker):
+    left, right = _split_runtime_marker(marker)
+    return f"Write-Output ('{left}' + '{right}')"
+
+
 def windows_shell_command():
     """PowerShell checks name presence only, never reads a canary value."""
     return ("Start-Sleep -Seconds 7; "
-            f"if (Test-Path Env:{ENV_NAME}) {{ Write-Output '{SHELL_ENV_PRESENT}' }}; "
-            f"if (Test-Path Env:{FOREIGN_ENV_NAME}) {{ Write-Output '{SHELL_FOREIGN_PRESENT}' }}; "
-            f"Write-Output '{SHELL_MARKER}'")
+            f"if (Test-Path Env:{ENV_NAME}) {{ {_ps_print_marker(SHELL_ENV_PRESENT)} }}; "
+            f"if (Test-Path Env:{FOREIGN_ENV_NAME}) {{ {_ps_print_marker(SHELL_FOREIGN_PRESENT)} }}; "
+            f"{_ps_print_marker(SHELL_MARKER)}")
 
 class Model(http.server.BaseHTTPRequestHandler):
     requests = 0
@@ -231,10 +247,10 @@ class Model(http.server.BaseHTTPRequestHandler):
                 cls.error = "no advertised shell tool"
                 self.send_error(409)
                 return
-            command = ("sleep 7; if test -n \"${" + ENV_NAME + "+x}\"; then printf "
-                       + SHELL_ENV_PRESENT + "; fi; if test -n \"${"
-                       + FOREIGN_ENV_NAME + "+x}\"; then printf "
-                       + SHELL_FOREIGN_PRESENT + "; fi; printf " + SHELL_MARKER)
+            command = ("sleep 7; "
+                       f'if test -n "${{{ENV_NAME}+x}}"; then {_sh_print_marker(SHELL_ENV_PRESENT)}; fi; '
+                       f'if test -n "${{{FOREIGN_ENV_NAME}+x}}"; then {_sh_print_marker(SHELL_FOREIGN_PRESENT)}; fi; '
+                       f'{_sh_print_marker(SHELL_MARKER)}')
             if os.name == "nt":
                 command = windows_shell_command()
             # Codex exec_command can yield before a long command has finished.
