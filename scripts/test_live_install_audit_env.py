@@ -619,11 +619,11 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             for invalid in ({"exit_code": 0}, {"exit_code": -9}, {"exit_code": None},
                             {"exit_code": True}, {"timeout": True}, {"timeout": None},
                             {"stderr_tail": "network unavailable"},
-                            {"stderr_tail": diagnostic.split("\n", 1)[1]},
+                            {"stderr_tail": diagnostic.removeprefix("agentplugins: ")},
                             {"stderr_tail": 'agentplugins: no eligible directory release for "marketing-kit": '
                             '777genius/marketing-kit: release does not support complete target set; missing vscode\n'},
                             {"stderr_tail": diagnostic.replace("vscode", "copilot")},
-                            {"stderr_tail": diagnostic.replace('"marketing-kit"', '"notion"')},
+                            {"stderr_tail": diagnostic.replace("marketing-kit", "notion")},
                             {"stderr_tail": diagnostic + "\nremote download failed"},
                             {"stderr_tail": " " + diagnostic},
                             {"stderr_tail": diagnostic + " "},
