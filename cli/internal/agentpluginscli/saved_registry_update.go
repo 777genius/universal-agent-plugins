@@ -30,6 +30,9 @@ func prepareSavedRegistryUpdate(ctx context.Context, app App, dryRun bool, snaps
 	if !ok || old.Source.Registry == nil {
 		return requirements, false, errors.New("registry dependency has no locked release")
 	}
+	if app.DirectoryClient == nil || old.Source.Registry.FeedID != directoryFeedForClient(app.DirectoryClient) {
+		return requirements, false, errors.New("signed Directory feed differs from locked source; explicit source switch required")
+	}
 	request, err := savedRegistryUpdateRequest(ctx, app, old.Targets, installation)
 	if err != nil {
 		return requirements, false, err
@@ -90,6 +93,9 @@ func validateSavedRegistryUpdate(loaded loadedPackage, prior *environment.Locked
 	if loaded.directorySelection == nil || loaded.directory == nil {
 		return errors.New("registry update lacks publication identity")
 	}
+	if loaded.directory.FeedID != prior.FeedID {
+		return errors.New("signed Directory feed differs from locked source; explicit source switch required")
+	}
 	if loaded.directorySelection.ProductID != prior.ProductID || loaded.directorySelection.DistributionID != prior.DistributionID {
 		return errors.New("registry update changed product or distribution identity")
 	}
@@ -110,7 +116,7 @@ func savedRegistryCandidate(snapshot environmentSnapshot, alias string, old envi
 	next.TreeDigest = loaded.envelope.TreeDigest
 	next.ManifestDigest = loaded.envelope.ManifestDigest
 	next.ExecutableFiles = append([]string{}, loaded.envelope.ExecutableFiles...)
-	next.Source.Registry = &environment.LockedRegistrySource{Distribution: registry.Distribution, ProductID: selection.ProductID, DistributionID: selection.DistributionID, ReleaseSequence: selection.ReleaseSequence, Requested: registry.Selector, Repository: selection.Source.Repository, Path: selection.Source.Path, Commit: selection.Source.Revision}
+	next.Source.Registry = &environment.LockedRegistrySource{FeedID: loaded.directory.FeedID, Distribution: registry.Distribution, ProductID: selection.ProductID, DistributionID: selection.DistributionID, ReleaseSequence: selection.ReleaseSequence, Requested: registry.Selector, Repository: selection.Source.Repository, Path: selection.Source.Path, Commit: selection.Source.Revision}
 	locked := snapshot.Lock
 	locked.Packages = append([]environment.LockedPackage(nil), locked.Packages...)
 	for index := range locked.Packages {
