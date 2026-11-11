@@ -118,6 +118,9 @@ export function pinnedPiProjectSource(plugin: RegistryPlugin): string | undefine
   // availability from an expired, revoked, blocked or review-only release.
   const userTargets = reachableTargetPolicies(plugin.distributions, 'user');
   for (const target of userTargets) {
+    // An app-only binding authenticates a remote ChatGPT connection, not a
+    // portable native package that Pi can install.
+    if (target.app_binding) continue;
     const distribution = resolveDistribution(plugin, [target.client], 'user').distribution;
     if (!distribution || !distribution.components.length ||
         !distribution.components.every((component) =>
