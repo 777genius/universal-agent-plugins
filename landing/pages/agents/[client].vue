@@ -81,7 +81,7 @@ usePageSeo(title, () => t(`${client.presentationKey}.intro`), {
 </script>
 
 <template>
-  <main class="agent-page registry-surface">
+  <main class="agent-page registry-surface" :dir="locale === 'ar' ? 'rtl' : 'ltr'">
     <PageBackground />
     <section class="agent-page__hero section">
       <v-container>
@@ -238,6 +238,11 @@ usePageSeo(title, () => t(`${client.presentationKey}.intro`), {
 .agent-page {
   position: relative;
   min-height: 100vh;
+}
+
+.agent-page :deep(.command-snippet pre) {
+  direction: ltr;
+  text-align: left;
 }
 
 .agent-page__hero {
