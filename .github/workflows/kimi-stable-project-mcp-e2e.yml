@@ -11,6 +11,8 @@ on:
       - '.github/workflows/kimi-stable-project-mcp-e2e.yml'
       - 'cli/cmd/agentplugins/project_kimi_*'
       - 'cli/cmd/agentplugins/project_lifecycle_fixture_test.go'
+      - 'install/integrationctl/agentplugins/clients/kimi/**'
+      - 'install/integrationctl/agentplugins/adapters/clientdetect/**'
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
@@ -19,6 +21,8 @@ on:
       - '.github/workflows/kimi-stable-project-mcp-e2e.yml'
       - 'cli/cmd/agentplugins/project_kimi_*'
       - 'cli/cmd/agentplugins/project_lifecycle_fixture_test.go'
+      - 'install/integrationctl/agentplugins/clients/kimi/**'
+      - 'install/integrationctl/agentplugins/adapters/clientdetect/**'
   workflow_dispatch:
 
 permissions:
