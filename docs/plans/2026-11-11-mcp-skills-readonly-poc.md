@@ -121,3 +121,15 @@ Corrections to implementation contract:
 - **Exit semantics:** public transport/parse errors are mapped to a short stable code and safe message. Preserve cancellation and deadline as separate cases; never leak an MCP endpoint containing credentials or a server-controlled error string.
 
 **Disposition:** fail-closed read-only design remains viable; actual security evidence needs negative fixture tests.
+
+## Review R4 — UX and acceptance checklist (2026-11-11)
+
+The PoC proves a *read-only protocol adapter*, **not** a production install workflow. Acceptance criteria, in order:
+
+1. `agentplugins skills mcp list --endpoint ...` displays server-scoped metadata only; no SKILL.md body, no unrelated management-state validation; transparent `experimental`/read-only wording.
+2. `agentplugins skills mcp inspect --endpoint ... --uri ...` verifies just the requested SKILL.md (when immutable manifest is provided); displays `verified`, `unverifiable_dynamic`, or a typed refusal. Neither path claims model context loading or native agent compatibility.
+3. Table-driven tests exercise all negative cases in R2/R3; there must be a genuine end-to-end HTTP server fixture through public command wiring, with byte-count and exact-method evidence. At least one test must establish that `skills/list` invokes neither `resources/read` nor `tools/call`.
+4. Exact-HEAD Go tests and lint, no frozen VS Code modifications or generated contract edits, preserved existing tests. All review findings resolved or explicitly assessed. If CI or platform evidence is missing, keep draft; do not merge based on plan completion.
+5. Following success, rebase/merge with current `main`, mark ready and merge safely, then check postmerge main. A reviewer approval or green CI not actually returned by GitHub must not be invented.
+
+**Reviewed scope freeze:** no install/lock integration, no browser UI, no third-party SDK dependency, no MCP server authoring, no credential flow. New task/PR needed for production snapshot import. A read-only PoC is sufficient proof of basic feasibility.
