@@ -146,6 +146,7 @@ def windows_shell_command():
             f"{_ps_print_marker(SHELL_MARKER)}")
 
 class Model(http.server.BaseHTTPRequestHandler):
+    shell_only = False
     requests = 0
     shell_requested = False
     mcp_requested = False
@@ -221,6 +222,10 @@ class Model(http.server.BaseHTTPRequestHandler):
                         "failed", "error", "denied", "session id", "session_id",
                         "running", "yield_time_ms", "tool_call", "exec_command",
                         "expected", "arguments", "json", "timeout", "exited",
+                        "createprocess", "processfailed", "sandboxdenied",
+                        "failed to create unified exec process", "invalidcwd",
+                        "exec_server", "shell_snapshot", "access is denied",
+                        "failed to spawn", "file not found", "path is not valid",
                     )
                     cls.shell_response_indicators = [
                         word for word in indicators if word in lower
@@ -305,6 +310,12 @@ class Model(http.server.BaseHTTPRequestHandler):
             cls.error = "shell tool output missing"
             self.send_error(409)
             return
+        elif cls.shell_only and cls.shell_output_seen:
+            # No-secret host diagnostic only. The calling harness MUST check
+            # shell_execution_verified; returning a model message is not PASS.
+            item = {"type": "message", "id": "msg_uap_shell_only",
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "Probe complete."}]}
         elif cls.mcp_output_seen:
             item = {"type": "message", "id": "msg_uap_spike", "role": "assistant",
                     "content": [{"type": "output_text", "text": "Proof complete."}]}

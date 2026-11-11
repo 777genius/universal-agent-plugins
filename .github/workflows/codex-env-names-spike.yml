@@ -7,6 +7,7 @@ on:
     paths:
       - scripts/codex_env_names_native_spike.py
       - scripts/codex_env_names_appserver_spike.py
+      - scripts/codex_env_names_windows_shell_control.py
       - scripts/test_codex_env_names_native_spike.py
       - .github/workflows/codex-env-names-spike.yml
   workflow_dispatch:
@@ -396,13 +397,20 @@ jobs:
                                  if pattern in native_report))
                   raise SystemExit(1)
           '@ | python - "$env:CODEX_BINARY"
-      - name: Qualify genuine CLI core-inherit shell/MCP
+      # Model-driven shell control contains NO synthetic or real credentials.
+      # Native cmd/PowerShell sandbox smokes alone do not prove exec_command.
+      - name: Diagnose model-driven Windows shell without any credentials
         if: steps.windows-sandbox-preflight.outcome == 'success'
+        id: windows-model-no-secret
+        shell: pwsh
+        run: python scripts/codex_env_names_windows_shell_control.py "$env:CODEX_BINARY" "$env:RUNNER_TEMP\codex-win-no-secret-model-shell.json"
+      - name: Qualify genuine CLI core-inherit shell/MCP
+        if: steps.windows-model-no-secret.outcome == 'success'
         id: core-cli
         shell: pwsh
         run: python scripts/codex_env_names_native_spike.py "$env:CODEX_BINARY" "$env:RUNNER_TEMP\codex-win-core-cli.json" core_inherit
       - name: Qualify genuine app-server core-inherit shell/MCP
-        if: always() && steps.windows-sandbox-preflight.outcome == 'success'
+        if: always() && steps.windows-model-no-secret.outcome == 'success'
         id: core-appserver
         shell: pwsh
         run: python scripts/codex_env_names_appserver_spike.py "$env:CODEX_BINARY" "$env:RUNNER_TEMP\codex-win-core-appserver.json" core_inherit
@@ -420,6 +428,7 @@ jobs:
         with:
           name: codex-env-name-windows-x64-core-research
           path: |
+            ${{ runner.temp }}/codex-win-no-secret-model-shell.json
             ${{ runner.temp }}/codex-win-core-cli.json
             ${{ runner.temp }}/codex-win-core-appserver.json
           if-no-files-found: warn

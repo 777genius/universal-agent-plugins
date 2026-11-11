@@ -19,6 +19,7 @@ from codex_env_names_native_spike import (CHILD, Model, MCP_CALL, SHELL_CALL, SH
 
 class TestSyntheticModelOracle(unittest.TestCase):
     def setUp(self):
+        Model.shell_only = False
         Model.requests = 0
         Model.shell_requested = False
         Model.mcp_requested = False
@@ -88,6 +89,27 @@ class TestSyntheticModelOracle(unittest.TestCase):
         self.assertEqual(complete["type"], "message")
         self.assertTrue(Model.mcp_digest_verified)
         self.assertTrue(Model.mcp_output_seen)
+
+    def test_shell_only_mode_finishes_without_mcp_but_does_not_prove_shell(self):
+        Model.shell_only = True
+        shell = self.call({"tools": [{"type": "function", "name": "exec_command"}]})
+        self.assertEqual(shell["call_id"], SHELL_CALL)
+        final = self.call({"input": [{"type": "function_call_output",
+                                      "call_id": SHELL_CALL,
+                                      "output": "native tool refused"}]})
+        self.assertEqual(final["type"], "message")
+        self.assertFalse(Model.shell_execution_verified)
+        self.assertFalse(Model.mcp_requested)
+
+    def test_typed_vendor_failure_diagnostics_never_log_raw_message(self):
+        Model.shell_only = True
+        self.call({"tools": [{"type": "function", "name": "exec_command"}]})
+        self.call({"input": [{"type": "function_call_output",
+                             "call_id": SHELL_CALL,
+                             "output": "exec_command failed: CreateProcess: SYNTHETIC_PRIVATE_PATH"}]})
+        self.assertIn("createprocess", Model.shell_response_indicators)
+        self.assertFalse(Model.shell_execution_verified)
+        self.assertNotIn("SYNTHETIC_PRIVATE_PATH", str(Model.shell_response_indicators))
 
     def test_windows_shell_command_only_emits_fixed_markers(self):
         command = windows_shell_command()
