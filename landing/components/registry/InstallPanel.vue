@@ -27,6 +27,7 @@ const {
   targetDistributions,
   pinnedPiSource,
   pinnedPiSelected,
+  pinnedPiReleaseSource,
   projectAvailable,
   projectAutomatic,
   updateTargets,
@@ -122,6 +123,12 @@ const expectedSourceLabel = computed(() =>
   expectedSource.value ? t(`registryUi.distribution.${expectedSource.value.kind}`) : '',
 );
 const hasCompleteSource = computed(() => Boolean(expectedSource.value || pinnedPiSelected.value));
+const pinnedPiProvenanceURL = computed(() => {
+  const source = pinnedPiReleaseSource.value;
+  if (!source?.revision) return '';
+  const path = source.path ? `/${source.path.split('/').map(encodeURIComponent).join('/')}` : '';
+  return `https://github.com/${source.repository}/tree/${source.revision}${path}`;
+});
 const selectedTargets = computed(
   () =>
     expectedSource.value?.targets.filter((target) =>
@@ -221,6 +228,9 @@ const vendorInstall = computed(() =>
         </div>
         <p v-if="pinnedPiSelected && commands" class="install-panel__notice" role="status">
           {{ t('registryUi.install.piPinnedProjectSource') }}
+          <a :href="pinnedPiProvenanceURL" target="_blank" rel="noreferrer">
+            {{ t('registryUi.install.viewPackageSource') }}
+          </a>
         </p>
         <CommandSnippet
           v-if="commands"
