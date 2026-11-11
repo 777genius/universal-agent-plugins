@@ -7,7 +7,7 @@ import tempfile
 import unittest
 
 from grok_project_protocol_client import (document, exercise, installed_server,
-                                          read_owned, selected_installation)
+                                          read_owned, selected_installation, STATE_SCHEMA)
 from grok_project_protocol_e2e import observed_protocol
 
 
@@ -27,7 +27,7 @@ class ContractTests(unittest.TestCase):
         self.installation = {"declared_name": "fixture", "installation_id": "install",
             "clients": {"grok": self.binding}, "data_receipts": {"receipt": {
                 "scope": "project", "locator": str(self.data), "physical_backend_id": "owned", "state": "owned"}}}
-        self.state = {"schema_version": 2, "installations": [self.installation]}
+        self.state = {"schema_version": STATE_SCHEMA, "installations": [self.installation]}
         self.state_path = self.root / ".uap/state-v2.json"
         self.write_state()
         command = self.active / "probe"
@@ -59,6 +59,13 @@ class ContractTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     self.select()
                 self.binding[key] = saved
+
+    def test_legacy_future_and_noninteger_state_schema_refused(self):
+        for version in (2, 3, 4, 6, 5.0, "5", None):
+            with self.subTest(version=version):
+                self.state["schema_version"] = version
+                with self.assertRaisesRegex(ValueError, "state schema"):
+                    self.select()
 
     def test_duplicate_and_absent_installation_refused(self):
         for entries in ([], [self.installation, self.installation]):

@@ -12,6 +12,8 @@ import subprocess
 import time
 
 LIMIT = 1 << 20
+# domain/state.go: the retained state-v2.json filename does not identify its schema.
+STATE_SCHEMA = 5
 
 
 def require(value, message):
@@ -67,7 +69,8 @@ def read_owned(path, root):
 def selected_installation(project, name):
     project = Path(project)
     state = document(read_owned(project / ".uap/state-v2.json", project))
-    require(isinstance(state, dict) and state.get("schema_version") == 2, "state schema")
+    require(isinstance(state, dict) and type(state.get("schema_version")) is int
+            and state["schema_version"] == STATE_SCHEMA, "state schema")
     installs = state.get("installations")
     require(isinstance(installs, list), "installation inventory")
     matches = [item for item in installs if item.get("declared_name") == name]
