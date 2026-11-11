@@ -78,6 +78,37 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                                        "marketing-kit": change}
             self.assertFalse(disabled(changed, installed, absent))
 
+    def test_marketing_kit_copilot_settings_cleanup_needs_independent_native_proof(self):
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        check = runner["check_removed_native_components"]
+        with TemporaryDirectory() as temporary:
+            case = Path(temporary)
+            home = case / "home"
+            settings = home / ".copilot" / "settings.json"
+            settings.parent.mkdir(parents=True)
+            settings.write_text(json.dumps({"enabledPlugins": {
+                "marketing-kit@agentplugins-123456abcdef": False}}))
+            with self.assertRaisesRegex(AssertionError, "native Marketing Kit remnants"):
+                check("copilot", home, case, "User C remove")
+            check("copilot", home, case, "User C remove", copilot_disabled_proof=True)
+            with self.assertRaisesRegex(AssertionError, "native Marketing Kit remnants"):
+                check("copilot", home, case, "Project remove",
+                      project_scope=True, copilot_disabled_proof=True)
+            extra = home / ".copilot" / "marketing-kit"
+            extra.mkdir()
+            with self.assertRaisesRegex(AssertionError, "native Marketing Kit remnants"):
+                check("copilot", home, case, "User C remove", copilot_disabled_proof=True)
+            extra.rmdir()
+            settings.unlink()
+            outside = case / "foreign"
+            outside.write_text("unmanaged")
+            settings.symlink_to(outside)
+            with self.assertRaises(AssertionError):
+                check("copilot", home, case, "User C remove", copilot_disabled_proof=True)
+
     def test_marketing_kit_rejects_non_success_json_even_with_zero_exit(self):
         # A zero process exit with a refusal/partial response is not lifecycle PASS.
         from runpy import run_path
@@ -970,6 +1001,15 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     "settled_profile_snapshot": runner["profile_snapshot"],
                     "verify_corrupt_lock_refusal": lambda *_: 1,
                     "verify_vscode_user_saved_refusal": negative,
+                    # The report-shape fixture has no native executable. Unit
+                    # tests below independently exercise real parser contracts;
+                    # this mock only drives User A/C lifecycle ordering.
+                    "copilot_signed_user_versions": lambda *_: {
+                        name: "0.1.0" for name in runner["UPDATE_ALIASES"]},
+                    "copilot_native_scope_state": lambda _env, _project, versions: {
+                        "status": "installed" if versions else "absent",
+                        "managed_count": len(versions)},
+                    "copilot_disabled_closure_only": lambda *_: True,
                     "codex_user_native_remove_attestation": lambda *_: ("--external-uninstalled",),
                     # Patch the runner binding, preserving tempfile for setup helpers.
                     "tempfile": SimpleNamespace(TemporaryDirectory=CheckedCleanup),
