@@ -20,18 +20,17 @@ export function routePaths(clients, locales) {
     }),
     ...locales.map(locale => {
       assert(/^[a-z]{2}$/.test(locale));
-      return { route: `/docs/${locale}/reference/client-compatibility.html` };
+      return { route: `/docs/${locale}/reference/client-compatibility` };
     }),
   ];
   assert.equal(new Set(routes.map(value => value.route)).size, routes.length);
   return routes;
 }
 
-// VitePress toDocsPageUrl (shared.ts) removes the source extension;
-// the fetched compatibility HTML file and its canonical URL are distinct.
-export function canonicalPath(route) {
-  return /^\/docs\/[a-z]{2}\/reference\/client-compatibility\.html$/.test(route)
-    ? route.slice(0, -'.html'.length) : route;
+// VitePress cleanUrls serves compatibility pages without an extension;
+// their assembled files still end in .html.
+export function builtHtmlPath(route) {
+  return route.endsWith('/') ? route.slice(1) + 'index.html' : route.slice(1) + '.html';
 }
 
 export function checkHtml(bytes, route, id) {
@@ -39,7 +38,7 @@ export function checkHtml(bytes, route, id) {
   const html = bytes.toString('utf8');
   const tags = name => [...html.matchAll(new RegExp(`<${name}\\b[^>]*>`, 'gi'))].map(([tag]) =>
     Object.fromEntries([...tag.matchAll(/([\w-]+)\s*=\s*["']([^"']*)["']/g)].map(([, key, value]) => [key.toLowerCase(), value])));
-  assert.deepEqual(tags('link').filter(link => link.rel?.toLowerCase() === 'canonical').map(link => link.href), [origin + canonicalPath(route)], `${route}: canonical`);
+  assert.deepEqual(tags('link').filter(link => link.rel?.toLowerCase() === 'canonical').map(link => link.href), [origin + route], `${route}: canonical`);
   assert(tags('meta').filter(meta => meta.name?.toLowerCase() === 'robots')
     .every(meta => !/noindex/i.test(meta.content || '')), `${route}: noindex`);
   const text = normalize(html);
@@ -60,7 +59,7 @@ export function validateContract(contract, expected) {
   assert.equal(new Set(contract.routes.map(value => value.route)).size, contract.routes.length);
   assert.equal(contract.routes.filter(value => value.route.startsWith('/docs/')).length, 9, 'nine compatibility locales');
   for (const entry of contract.routes) {
-    assert(/^\/(?:agents\/[a-z0-9-]+\/|docs\/[a-z]{2}\/reference\/client-compatibility\.html)$/.test(entry.route));
+    assert(/^\/(?:agents\/[a-z0-9-]+\/|docs\/[a-z]{2}\/reference\/client-compatibility)$/.test(entry.route));
     assert(/^[a-f0-9]{64}$/.test(entry.sha256));
     assert(Number.isInteger(entry.bytes) && entry.bytes > 0 && entry.bytes <= maxBytes);
   }
@@ -72,7 +71,7 @@ export async function prepare(root, output) {
   const { docsLocales } = await import(pathToFileURL(path.join(root, 'website/tools/config/locales.mjs')).href);
   const contract = { schema_version: 1, ...Object.fromEntries(fields.map(key => [key, provenance[key]])), routes: [] };
   for (const entry of routePaths(clientLandingPages, docsLocales)) {
-    const relative = entry.route.endsWith('/') ? entry.route.slice(1) + 'index.html' : entry.route.slice(1);
+    const relative = builtHtmlPath(entry.route);
     const bytes = await readFile(path.join(root, '.pages-dist', relative));
     checkHtml(bytes, entry.route, entry.id);
     if (entry.route.startsWith('/docs/')) {
@@ -138,11 +137,15 @@ export async function live(root, filename, fetcher = fetch, pause = milliseconds
     }
     if (failure) throw failure;
   }
-  console.log(`Live selected-source route acceptance passed: ${contract.routes.length} exact HTML routes.`);
+  return contract.routes.length;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const [mode, root, filename] = process.argv.slice(2);
   assert(root && filename && ['prepare', 'live'].includes(mode), 'usage: checker prepare|live ROOT CONTRACT');
-  await (mode === 'prepare' ? prepare(root, filename) : live(root, filename));
+  if (mode === 'prepare') await prepare(root, filename);
+  else {
+    const count = await live(root, filename);
+    console.log(`Live selected-source route acceptance passed: ${count} exact HTML routes.`);
+  }
 }

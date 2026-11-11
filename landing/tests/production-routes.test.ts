@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { canonicalPath, checkHtml, checkLiveBytes, getBytes, routePaths, validateContract, prepare, live } from '../scripts/check-production-routes.mjs';
+import { builtHtmlPath, checkHtml, checkLiveBytes, getBytes, routePaths, validateContract, prepare, live } from '../scripts/check-production-routes.mjs';
 
 const locales = ['en', 'ru', 'uk', 'zh', 'es', 'hi', 'ar', 'pt', 'fr'];
 // Public catalogue of accepted source 55c2b820; H/A were not advertised there.
@@ -17,7 +17,7 @@ const oldClients = [
 ].map(([id, slug]) => ({ id, slug }));
 const nativeClients = [...oldClients, { id: 'hermes', slug: 'hermes' }, { id: 'antigravity', slug: 'antigravity' }];
 const identity = { source_commit: 'a'.repeat(40), source_tree: 'b'.repeat(40), workflow_commit: 'c'.repeat(40), run_id: '123', run_attempt: '2' };
-const html = (route: string, text = '') => Buffer.from(`<html><head><link rel="canonical" href="https://universal-agent-plugins.com${canonicalPath(route)}"></head><body>${text}</body></html>`);
+const html = (route: string, text = '') => Buffer.from(`<html><head><link rel="canonical" href="https://universal-agent-plugins.com${route}"></head><body>${text}</body></html>`);
 const contract = () => ({ schema_version: 1, ...identity, routes: routePaths(nativeClients, locales).map(({ route }) => {
   const bytes = html(route);
   return { route, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') };
@@ -71,10 +71,10 @@ test('contract rejects identity, cardinality, digest and path changes', () => {
 });
 
 test('HTML canonical must identify the requested route uniquely', () => {
-  const route = '/docs/ar/reference/client-compatibility.html';
+  const route = '/docs/ar/reference/client-compatibility';
   checkHtml(html(route), route);
   assert.throws(() => checkHtml(html('/'), route), /canonical/);
-  const twice = Buffer.from(html(route).toString().replace('</head>', `<link rel="canonical" href="https://universal-agent-plugins.com${canonicalPath(route)}"></head>`));
+  const twice = Buffer.from(html(route).toString().replace('</head>', `<link rel="canonical" href="https://universal-agent-plugins.com${route}"></head>`));
   assert.throws(() => checkHtml(twice, route), /canonical/);
 });
 
@@ -134,7 +134,7 @@ test('prepare and live bind selected modules, built HTML, provenance and environ
       if (entry.id === 'hermes') text = 'npx -y universal-agent-plugins add ./my-plugin --target hermes Project installation never modifies User MCP configuration';
       if (entry.id === 'antigravity') text = 'npx -y universal-agent-plugins add ./my-plugin --target antigravity Prepared by CLI';
       const bytes = html(entry.route, text);
-      const relative = entry.route.endsWith('/') ? entry.route.slice(1) + 'index.html' : entry.route.slice(1);
+      const relative = builtHtmlPath(entry.route);
       const filename = path.join(root, '.pages-dist', relative);
       await mkdir(path.dirname(filename), { recursive: true });
       await writeFile(filename, bytes);
@@ -155,10 +155,10 @@ test('prepare and live bind selected modules, built HTML, provenance and environ
       return result;
     };
     const noDelay = async () => {};
-    await live(root, contractPath, fetcher, noDelay);
+    assert.equal(await live(root, contractPath, fetcher, noDelay), 25);
     assert.equal(requested.length, 26);
     assert(requested.includes('/agents/hermes/'));
-    assert(requested.includes('/docs/ar/reference/client-compatibility.html'));
+    assert(requested.includes('/docs/ar/reference/client-compatibility'));
     process.env.GITHUB_RUN_ATTEMPT = '3';
     await assert.rejects(live(root, contractPath, fetcher, noDelay), /contract run_attempt/);
     process.env.GITHUB_RUN_ATTEMPT = identity.run_attempt;
@@ -175,10 +175,10 @@ test('prepare and live bind selected modules, built HTML, provenance and environ
   }
 });
 
-test('docs HTTP file path differs from its exact extensionless canonical', () => {
-  const route = '/docs/ar/reference/client-compatibility.html';
-  assert.equal(canonicalPath(route), '/docs/ar/reference/client-compatibility');
-  assert.equal(canonicalPath('/agents/hermes/'), '/agents/hermes/');
+test('docs canonical public route maps to the actual assembled HTML file', () => {
+  const route = '/docs/ar/reference/client-compatibility';
+  assert.equal(builtHtmlPath(route), 'docs/ar/reference/client-compatibility.html');
+  assert.equal(builtHtmlPath('/agents/hermes/'), 'agents/hermes/index.html');
   checkHtml(html(route), route);
   const wrong = Buffer.from(html(route).toString().replace('client-compatibility"', 'client-compatibility.html"'));
   assert.throws(() => checkHtml(wrong, route), /canonical/);
