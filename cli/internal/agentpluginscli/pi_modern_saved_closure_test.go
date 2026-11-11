@@ -1,11 +1,18 @@
 package agentpluginscli
 
 import (
+	"bytes"
 	"context"
+	"crypto/ed25519"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/directoryv1"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 )
@@ -59,6 +66,7 @@ func piMarketingCohortFixture(t *testing.T, scope domain.InstallScope) (freshRes
 		directory.bundle.Snapshot.Evidence[i].Client = domain.ClientPi
 		directory.bundle.Snapshot.Evidence[i].ClientVersion = pi.Version
 	}
+	directory.bundle = signPiModernTestOnlyCohort(t, directory.bundle.Snapshot)
 	fixture.app.DirectoryClient = lockedFeedTestClient{
 		fixedDirectoryClient: directory, feedID: piModernFixtureFeed,
 	}
@@ -78,6 +86,55 @@ func piMarketingCohortFixture(t *testing.T, scope domain.InstallScope) (freshRes
 		Targets: map[string][]string{"pi": {"marketing-kit"}},
 	}
 	return fixture, directory, requirements
+}
+
+func signPiModernTestOnlyCohort(t *testing.T, snapshot domain.DirectorySnapshot) directoryv1.VerifiedBundle {
+	t.Helper()
+	// All provenance is synthetic and confined to this disposable Go test.
+	// These signatures are proof of v1 verification mechanics, never publisher
+	// authority, release readiness or real materialization evidence.
+	snapshot.Sequence = 41
+	snapshot.PublicationID = "test-only-pi-modern-cohort"
+	snapshot.GeneratedAt = "2026-11-12T00:00:00Z"
+	snapshot.ExpiresAt = "2026-12-11T00:00:00Z"
+	snapshot.Revocations = []domain.DirectoryRevocation{}
+	for i := range snapshot.Products {
+		snapshot.Products[i].Categories = []string{"tools"}
+		snapshot.Products[i].MinimumCapabilities = domain.DirectoryMinimumCapabilities{
+			Skills: "required", MCP: "optional",
+		}
+	}
+	snapshotBytes, err := json.Marshal(snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seed := bytes.Repeat([]byte{71}, ed25519.SeedSize)
+	privateKey := ed25519.NewKeyFromSeed(seed)
+	digest := sha256.Sum256(snapshotBytes)
+	const keyID = "pi-test-cohort-only"
+	envelope := directoryv1.Envelope{
+		EnvelopeSchemaVersion: 1,
+		SnapshotSchemaVersion: 1,
+		Sequence: snapshot.Sequence,
+		KeyID: keyID,
+		Algorithm: "Ed25519",
+		SignatureDomain: directoryv1.SignatureDomain,
+		SnapshotDigest: "sha256:" + hex.EncodeToString(digest[:]),
+		Signature: base64.StdEncoding.EncodeToString(
+			ed25519.Sign(privateKey, directoryv1.SnapshotSignatureMessage(snapshotBytes))),
+	}
+	envelopeBytes, err := json.Marshal(envelope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	trust := directoryv1.TrustStore{Keys: []directoryv1.TrustedKey{{
+		ID: keyID, PublicKey: privateKey.Public().(ed25519.PublicKey), State: directoryv1.KeyCurrent,
+	}}}
+	verified, err := directoryv1.VerifyBundle(snapshotBytes, envelopeBytes, trust)
+	if err != nil || verified.Source != directoryv1.BundleSourceVerified {
+		t.Fatalf("test-only signed v1 cohort was not authenticated: %v", err)
+	}
+	return verified
 }
 
 // This is a source/graph/lock proof, NOT a signed-production or native Pi E2E.
