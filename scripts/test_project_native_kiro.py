@@ -940,6 +940,19 @@ class KiroCollectorTests(unittest.TestCase):
                 kiro.collect(ctx)
             self.assertEqual(len(ctx.calls), 11)
 
+    def test_fixture_clock_refuses_stalled_timestamp_without_leaving_files(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            private = Path(temporary).resolve()
+            fixture = private / "fixture"
+            fixture.write_bytes(b"fixture")
+            info = fixture.stat()
+            owned = {fixture: (b"fixture", info.st_dev, info.st_ino,
+                               info.st_ctime_ns + 10**12, ())}
+            with patch.object(kiro.time, "monotonic", side_effect=(0, 3)):
+                with self.assertRaisesRegex(ValueError, "clock did not advance"):
+                    kiro._wait_for_fixture_clock(private, owned)
+            self.assertEqual({item.name for item in private.iterdir()}, {"fixture"})
+
     def test_foreign_kiro_parent_cannot_be_adopted_or_partially_written(self):
         # Even when mcp.json itself is absent, an existing .kiro tree belongs
         # to something else. The last (User) conflict must not leave earlier

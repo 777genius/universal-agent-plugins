@@ -10,6 +10,8 @@ import os
 from pathlib import Path
 import re
 import stat
+import tempfile
+import time
 
 CLIENT = "kiro"
 VERSION = "2.34.0"
@@ -249,6 +251,22 @@ def _verify_owned_fixtures(owned):
         # bytes, size, permissions and mtime without changing the inode.
 
 
+def _wait_for_fixture_clock(private, owned):
+    """Fence coarse filesystem ctime before any child can rewrite a fixture."""
+    latest = max(max([created] + [identity[-1] for _, identity in parents])
+                 for _, _, _, created, parents in owned.values())
+    devices = {device for _, device, _, _, _ in owned.values()}
+    with tempfile.TemporaryFile(dir=private) as clock:
+        if devices != {os.fstat(clock.fileno()).st_dev}:
+            raise ValueError("Kiro fixture clock filesystem differs")
+        deadline = time.monotonic() + 2
+        while os.fstat(clock.fileno()).st_ctime_ns <= latest:
+            if time.monotonic() >= deadline:
+                raise ValueError("Kiro fixture clock did not advance")
+            time.sleep(0.001)
+            os.utime(clock.fileno(), None)
+
+
 def _probe(ctx, owned, label, arguments, project="a", root_identities=None, help_home=None):
     route = _READ_ONLY_ROUTES.get(label)
     if route is None or (project, tuple(arguments)) != route:
@@ -404,6 +422,7 @@ def collect(ctx):
             parents = tuple((parent, _directory_identity(parent))
                             for parent in (native.parent.parent, native.parent))
             owned[native] = (body, identity.st_dev, identity.st_ino, identity.st_ctime_ns, parents)
+        _wait_for_fixture_clock(root / "private", owned)
         for project in ("a", "b", "user"):
             for scope in ("workspace", "global"):
                 label = project + "-" + scope + "-raw-list"
