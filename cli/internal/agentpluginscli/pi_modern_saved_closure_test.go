@@ -280,8 +280,8 @@ func TestPiModernFixtureRefusesMissingSignedHubSpotTarget(t *testing.T) {
 			if stateErr != nil || len(state.Installations) != 0 {
 				t.Fatalf("denied Pi closure changed installed state: %+v, %v", state, stateErr)
 			}
-			if strings.Contains(err.Error(), "already installed") {
-				t.Fatalf("incorrect fallback to unrelated installed dependency: %v", err)
+			if !strings.Contains(err.Error(), "dependency conflict for directory:acme/hubspot-crm") {
+				t.Fatalf("missing HubSpot Pi grant produced the wrong refusal: %v", err)
 			}
 		})
 	}
