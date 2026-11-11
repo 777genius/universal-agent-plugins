@@ -969,7 +969,8 @@ def copilot_project_mcp_residuals(project, identities, stage):
     return leftovers
 
 
-def check_removed_native_components(target, home, case_root, stage, project_scope=False,\n                                    copilot_disabled_proof=False):
+def check_removed_native_components(target, home, case_root, stage, project_scope=False,
+                                    copilot_disabled_proof=False):
     """Refuse native MCP and Skill remnants after an empty scoped inventory."""
     # isolated_client_env() canonicalizes HOME. On macOS TemporaryDirectory
     # can return /var/... while canonical HOME is /private/var/... . Accept
