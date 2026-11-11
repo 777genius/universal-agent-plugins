@@ -5623,7 +5623,96 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                         home, env, home, "atlassian")["status"], "unqualified-prerequisites")
 
 
-    def test_copilot_signed_kit_native_oracle_refuses_reminted_siblings(self):
+    def test_marketing_kit_copilot_owner_requires_signed_binding_and_receipts(self):
+        audit = load_audit()
+        aliases = ("marketing-kit", "notion", "hubspot-crm", "playwright")
+        pins = json.loads(audit.FIXTURES.read_text())["signed_release_pins"]
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            data = root / "uap-data"
+            data.mkdir()
+            nodes, records, environment_receipts = [], [], []
+            for index, alias in enumerate(aliases):
+                pin = pins[alias]
+                version = f"1.0.{index}"
+                installation_id, binding_id = f"install-{index}", f"binding-{index}"
+                revision = {"distribution_id": pin["distribution"],
+                            "resolved_revision": pin["revision"],
+                            "release_sequence": pin["sequence"],
+                            "tree_digest": pin["tree_digest"],
+                            "manifest_digest": pin["manifest_digest"],
+                            "version": version}
+                nodes.append({"name": alias, "installation_id": installation_id,
+                              "source": pin["repository"].strip("/") + "/" + pin["path"].strip("/"),
+                              "directory": {"product_id": alias,
+                                            "recorded_distribution": pin["distribution"],
+                                            "recorded_revision": pin["revision"],
+                                            "recorded_release_sequence": pin["sequence"]},
+                              "clients": [{"client_id": "copilot",
+                                           "verification": "installation_verified",
+                                           "package_revision": revision}]})
+                physical = f"{alias}-physical"
+                target = root / "native" / alias
+                marketplace = "agentplugins-" + audit.hashlib.sha256(physical.encode()).hexdigest()[:12]
+                manifest_path = target / ".github/plugin/marketplace.json"
+                manifest_path.parent.mkdir(parents=True)
+                manifest_path.write_text(json.dumps({
+                    "name": marketplace, "plugins": [
+                        {"name": alias, "version": version, "source": "."}]
+                }), encoding="utf-8")
+                records.append({
+                    "installation_id": installation_id, "origin_mode": "directory",
+                    "directory": {"distribution_id": pin["distribution"],
+                                  "desired_release_sequence": pin["sequence"]},
+                    "package": {"version": version,
+                                "manifest_digest": pin["manifest_digest"]},
+                    "source": {"repository": pin["repository"], "package_subpath": pin["path"],
+                               "resolved_revision": pin["revision"],
+                               "tree_digest": pin["tree_digest"]},
+                    "clients": {binding_id: {
+                        "client_binding_id": binding_id, "client_id": "copilot",
+                        "scope": "user", "materialization": "materialized",
+                        "verification": "installation_verified",
+                        "affected_surfaces": ["copilot", "vscode"],
+                        "physical_artifact_id": physical, "target_locator": str(target),
+                        "package_revision": revision,
+                        "receipts": [{"phase": "committed", "client_binding_id": binding_id,
+                                      "active_path": str(target), "operation_id": f"op-{index}"}]}}})
+                environment_receipts.append({
+                    "receipt_id": f"receipt-{index}", "phase": "committed",
+                    "environment_id": "user-default", "alias": alias,
+                    "client_id": "copilot", "installation_id": installation_id,
+                    "client_binding_id": binding_id,
+                    "source_key": "directory:" + pin["distribution"],
+                    "package_digest": pin["tree_digest"]})
+            response = {"data": {"installations": nodes}}
+            state = {"installations": records, "environment_receipts": environment_receipts}
+            state_path = data / "state-v2.json"
+            def check():
+                state_path.write_text(json.dumps(state), encoding="utf-8")
+                return audit.copilot_signed_kit_owners(response, pins, data, root)
+            owners = check()
+            self.assertIsInstance(owners, dict)
+            self.assertEqual(set(owners), set(aliases))
+            self.assertEqual({v["version"] for v in owners.values()},
+                             {f"1.0.{i}" for i in range(4)})
+            old_revision = nodes[1]["clients"][0]["package_revision"]["tree_digest"]
+            nodes[1]["clients"][0]["package_revision"]["tree_digest"] = "sha256:" + "f" * 64
+            self.assertIsNone(check())
+            nodes[1]["clients"][0]["package_revision"]["tree_digest"] = old_revision
+            replay = records[0]["clients"]["binding-0"]["receipts"][0].copy()
+            records[0]["clients"]["binding-0"]["receipts"].append(replay)
+            self.assertIsNone(check())
+            records[0]["clients"]["binding-0"]["receipts"].pop()
+            environment_receipts[2]["source_key"] = "directory:foreign"
+            self.assertIsNone(check())
+            environment_receipts[2]["source_key"] = (
+                "directory:" + pins[aliases[2]]["distribution"])
+            self.assertEqual(set(check()), set(aliases))
+            records[0]["clients"]["binding-0"]["target_locator"] = str(root / "foreign")
+            self.assertIsNone(check())
+
+    def test_marketing_kit_copilot_native_oracle_refuses_reminted_siblings(self):
         audit = load_audit()
         aliases = ("marketing-kit", "notion", "hubspot-crm", "playwright")
         with TemporaryDirectory() as temporary:
@@ -5671,7 +5760,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 with self.subTest(rows=len(rows)):
                     self.assertNotEqual(probe(rows), "installed")
 
-    def test_copilot_signed_kit_requires_four_exact_preference_keys(self):
+    def test_marketing_kit_copilot_requires_four_exact_preference_keys(self):
         audit = load_audit()
         aliases = ("marketing-kit", "notion", "hubspot-crm", "playwright")
         owners = {name: {"marketplace": "agentplugins-" + str(index) * 12}
