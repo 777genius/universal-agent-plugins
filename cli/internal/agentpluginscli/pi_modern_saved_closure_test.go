@@ -209,6 +209,38 @@ func TestPiModernFixtureResolvesMarketingKitSavedClosure(t *testing.T) {
 	}
 }
 
+// The resolver-only proof above is not a saved installation. This additional
+// test reaches the composed public CLI and real installer/native file writer,
+// while retaining disposable Git, fake client detection and no model execution.
+func TestPiModernFixtureSavedUserInstallLifecycle(t *testing.T) {
+	fixture, _, _ := piMarketingCohortFixture(t, domain.ScopeUser)
+	dependencyRun(t, fixture.cliFixture, "install", "marketing-kit",
+		"--target", "pi", "--yes", "--format", "json")
+	view, err := fixture.app.Installer.Inspect(context.Background())
+	if err != nil || view.Recovery.Required ||
+		len(view.Installations) != 4 || len(view.EnvironmentReceipts) != 4 {
+		t.Fatalf("Pi signed-test-cohort saved graph did not materialize four owned packages: %+v %v", view, err)
+	}
+	for _, installation := range view.Installations {
+		if installation.Directory == nil || installation.Directory.FeedID != piModernFixtureFeed {
+			t.Fatalf("saved Pi installation borrowed the wrong signed fixture: %+v", installation.Directory)
+		}
+	}
+	first := len(view.EnvironmentReceipts)
+	dependencyRun(t, fixture.cliFixture, "install", "marketing-kit",
+		"--target", "pi", "--yes", "--format", "json")
+	repeated, err := fixture.app.Installer.Inspect(context.Background())
+	if err != nil || len(repeated.EnvironmentReceipts) != first {
+		t.Fatalf("Pi saved replay duplicated or lost the four-package graph: %+v %v", repeated, err)
+	}
+	dependencyRun(t, fixture.cliFixture, "remove", "marketing-kit",
+		"--target", "pi", "--yes", "--format", "json")
+	removed, err := fixture.app.Installer.Inspect(context.Background())
+	if err != nil || len(removed.EnvironmentReceipts) != 0 {
+		t.Fatalf("Pi saved root removal retained owned graph: %+v %v", removed, err)
+	}
+}
+
 func TestPiModernFixtureRefusesMissingSignedHubSpotTarget(t *testing.T) {
 	for _, scope := range []domain.InstallScope{domain.ScopeUser, domain.ScopeProject} {
 		t.Run(string(scope), func(t *testing.T) {
