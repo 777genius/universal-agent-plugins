@@ -4,7 +4,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from kimi_stable_project_mcp_smoke import NAME, read_servers, safe_read, verify
+from kimi_stable_project_mcp_smoke import NAME, read_servers, safe_read, verify, verify_removed
 
 
 class KimiStableProjectMcpSmokeTests(unittest.TestCase):
@@ -62,6 +62,25 @@ class KimiStableProjectMcpSmokeTests(unittest.TestCase):
                 with self.subTest(contents=contents), self.assertRaises(ValueError):
                     config.write_text(json.dumps(contents))
                     verify(config)
+
+    def test_removal_refuses_replaced_or_owned_native_config(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / "mcp.json"
+            verify_removed(path)  # Removed config is valid.
+            path.write_text(json.dumps({"mcpServers": {"foreign": {"transport": "stdio"}}}))
+            verify_removed(path)  # A foreign-only config is preserved.
+            path.write_text(json.dumps({"mcpServers": {NAME: {"transport": "stdio"}}}))
+            with self.assertRaisesRegex(ValueError, "persisted"):
+                verify_removed(path)
+            path.unlink()
+            path.symlink_to(Path(root) / "missing.json")
+            with self.assertRaisesRegex(ValueError, "unexpected"):
+                verify_removed(path)
+            path.unlink()
+            path.mkdir()
+            with self.assertRaisesRegex(ValueError, "unexpected"):
+                verify_removed(path)
+
 
 
 if __name__ == "__main__":
