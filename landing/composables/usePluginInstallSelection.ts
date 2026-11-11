@@ -8,7 +8,7 @@ import {
 } from '../data/installTargets.ts';
 import { useInstallPreferencesStore } from '../stores/installPreferences.ts';
 import { reachableTargetPolicies, resolveDistribution } from '../utils/registry.ts';
-import { pinnedPiProjectSource, projectCatalogAutomaticSelection, projectCatalogSelection } from '../utils/projectCatalogSource.ts';
+import { pinnedPiProjectSelection, projectCatalogAutomaticSelection, projectCatalogSelection } from '../utils/projectCatalogSource.ts';
 import type { DistributionResolution, InstallScope, RegistryPlugin } from '../types/registry';
 
 /** Card and detail share one selection/persistence policy; no machine detection occurs here. */
@@ -23,13 +23,16 @@ export function usePluginInstallSelection(
   const scope = ref<InstallScope>('user');
   // Eligibility must be independent of the *current* scope so a saved Pi
   // Project choice survives card -> detail navigation and enables the Project tab.
-  const eligiblePinnedPiSource = computed(() => pinnedPiProjectSource(plugin()));
+  const eligiblePinnedPi = computed(() => pinnedPiProjectSelection(plugin()));
   const pinnedPiSource = computed(() =>
-    scope.value === 'project' ? eligiblePinnedPiSource.value : undefined,
+    scope.value === 'project' ? eligiblePinnedPi.value?.selector : undefined,
   );
   const pinnedPiSelected = computed(() =>
     Boolean(pinnedPiSource.value) && !autoDetect.value &&
     targets.value.length === 1 && targets.value[0] === 'pi',
+  );
+  const pinnedPiReleaseSource = computed(() =>
+    pinnedPiSelected.value ? eligiblePinnedPi.value?.source : undefined,
   );
   const availableClients = computed(() => {
     const policies = reachableTargetPolicies(plugin().distributions);
@@ -43,7 +46,7 @@ export function usePluginInstallSelection(
           (target) => target.client === 'chatgpt' && Boolean(target.app_binding),
         ));
       }
-      return (client.id === 'pi' && Boolean(eligiblePinnedPiSource.value)) ||
+      return (client.id === 'pi' && Boolean(eligiblePinnedPi.value)) ||
         policies.some((policy) => policy.client === canonicalInstallTarget(client.id));
     });
   });
@@ -81,7 +84,7 @@ export function usePluginInstallSelection(
   // This must not broaden any signed release scope or assume local client state.
   const projectAutomatic = computed(() => projectCatalogAutomaticSelection(plugin()));
   const projectAvailable = computed(() =>
-    Boolean(projectAutomatic.value?.resolution.distribution || eligiblePinnedPiSource.value),
+    Boolean(projectAutomatic.value?.resolution.distribution || eligiblePinnedPi.value),
   );
   const resolution = computed(() => select(targets.value));
   let choicePending = false;
@@ -206,6 +209,7 @@ export function usePluginInstallSelection(
     targetDistributions,
     pinnedPiSource,
     pinnedPiSelected,
+    pinnedPiReleaseSource,
     projectAvailable,
     projectAutomatic,
     resolution,
