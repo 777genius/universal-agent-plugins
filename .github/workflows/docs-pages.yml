@@ -78,7 +78,7 @@ jobs:
 
       - uses: actions/setup-go@v6
         with:
-          go-version: "1.26.10"
+          go-version: "1.26.11"
           cache: false
 
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.0.0
@@ -208,6 +208,10 @@ jobs:
     timeout-minutes: 30
     needs: build
     steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
       - name: Confirm requested deployment commit
         env:
           EXPECTED_SHA: ${{ inputs.expected_sha }}
@@ -234,6 +238,10 @@ jobs:
           for pair in \
             "/ root.html" \
             "/agent-skills/ skills.html" \
+            "/plugins/ plugins.html" \
+            "/logo-192.webp logo-192.webp" \
+            "/showcase/agent-notifications.webp showcase.webp" \
+            "/BUILD_PROVENANCE.json provenance.json" \
             "/llms.txt llms.txt" \
             "/.well-known/ai-catalog.json ai-catalog.json" \
             "/.well-known/ard.json ard.json" \
@@ -246,6 +254,7 @@ jobs:
           done
           python3 - "$tmp" <<'PY'
           import json
+          import os
           import sys
           from html.parser import HTMLParser
           from pathlib import Path
@@ -274,6 +283,20 @@ jobs:
               assert [tag.get("href") for tag in head.links if tag.get("rel") == "canonical"] == [expected], f"{path}: canonical"
               assert any(tag.get("hreflang") == "x-default" for tag in head.links), f"{path}: hreflang"
               assert all("noindex" not in value for value in head.robots), f"{path}: noindex"
+
+          plugins = (root / "plugins.html").read_text(encoding="utf-8")
+          assert 'data-count-scope="initial-reviewed-subset-not-full-directory"' in plugins
+          assert "The static page starts with reviewed plugins." not in plugins
+          assert "How standalone Skills work" not in plugins
+          for name in ("logo-192.webp", "showcase.webp"):
+              image = (root / name).read_bytes()
+              assert image[:4] == b"RIFF" and image[8:12] == b"WEBP", f"{name}: not WebP"
+          provenance = json.loads((root / "provenance.json").read_text(encoding="utf-8"))
+          assert provenance.get("workflow_commit") == os.environ["GITHUB_SHA"], "deployed source differs from control commit"
+          assert len(provenance.get("source_commit", "")) == 40, "missing accepted source identity"
+          pinned = json.loads(Path("website/production-source.json").read_text(encoding="utf-8"))
+          assert provenance.get("source_commit") == pinned["source_commit"], "live source commit differs from production pin"
+          assert provenance.get("source_tree") == pinned["source_tree"], "live source tree differs from production pin"
 
           llms = (root / "llms.txt").read_text(encoding="utf-8")
           assert llms.startswith("# Universal Agent Plugins\n")

@@ -61,7 +61,7 @@ func TestStableReleaseRequiresVerifiedReproducibleBootstrapBeforeBuild(t *testin
 		t.Fatal("Directory bootstrap gate must run in qualify-go before draft mutation")
 	}
 	for _, required := range []string{
-		"go-version: 1.26.10",
+		"go-version: 1.26.11",
 		"node-version: \"22.21.1\"",
 		"GOWORK: \"off\"",
 		"GOTOOLCHAIN: local",

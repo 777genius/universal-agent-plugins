@@ -93,7 +93,7 @@ may lag; check the installed version. Both help checks must succeed before suppl
 They establish command availability, not installation or native runtime success.
 
 To use engine changes that are not released yet, build the CLI from a clean,
-reviewed repository checkout with the repository's Go 1.26.10 toolchain and pin
+reviewed repository checkout with the repository's Go 1.26.11 toolchain and pin
 the source revision and executable digest instead:
 
 ```sh

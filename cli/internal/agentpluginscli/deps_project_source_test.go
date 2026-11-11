@@ -2,7 +2,6 @@ package agentpluginscli
 
 import (
 	"context"
-	"errors"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -93,8 +92,8 @@ func TestDependencyProjectSourceAliasRootChildAndExactLock(t *testing.T) {
 	user := f.cli.app
 	user.Scope = domain.ScopeUser
 	requirements.Dependencies["root"].Registry.Distribution = "rollout-demo"
-	if _, err := resolveProjectSourceGraph(ctx, user, requirements); !errors.Is(err, domain.ErrDirectoryIneligible) || !strings.Contains(err.Error(), "missing vscode") {
-		t.Fatalf("User shared-backend refusal changed: %v", err)
+	if _, err := resolveProjectSourceGraph(ctx, user, requirements); err != nil {
+		t.Fatalf("Copilot User signed graph should not require a VS Code grant: %v", err)
 	}
 }
 

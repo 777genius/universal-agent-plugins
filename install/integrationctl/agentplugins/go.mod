@@ -2,7 +2,7 @@ module github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins
 
 go 1.25.0
 
-toolchain go1.26.10
+toolchain go1.26.11
 
 replace github.com/777genius/plugin-kit-ai/install/integrationctl => ../
 
