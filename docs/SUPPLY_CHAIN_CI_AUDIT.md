@@ -1,7 +1,8 @@
 # Supply-chain CI review and local policy
 
-Status: source implementation in the draft supply-chain PR. **Do not present this
-as a shipped release until the PR is merged and a compatible CLI is published.**
+Status: source implementation merged in [PR #816](https://github.com/777genius/universal-agent-plugins/pull/816).
+**Public-release qualification remains pending; do not present these commands as
+shipped until a compatible CLI release is qualified and published.**
 
 UAP already has a signed Directory, exact versioned source acquisition,
 local security assessment, `uap.toml` and `uap.lock`. This change adds a
