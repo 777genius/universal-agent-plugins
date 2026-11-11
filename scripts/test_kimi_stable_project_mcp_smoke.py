@@ -19,8 +19,8 @@ class KimiStableProjectMcpSmokeTests(unittest.TestCase):
         events = []
         for name in LIFECYCLE_CASES:
             for root in ("original", "cold"):
-                events.append({"Test": name, "Action": "output", "Output": "KIMI_GENUINE_PROBE " + json.dumps({"version": "2.5.2", "executable": "/owned/kimi", "config_root": root})})
-                events.append({"Test": name, "Action": "output", "Output": "KIMI_PREPARED_SOURCE " + json.dumps({"source_binding_id": "pin", "tree_digest": "digest", "native_profile_root": root})})
+                events.append({"Test": name, "Action": "output", "Output": "KIMI_GENUINE_PROBE " + json.dumps({"version": "2.5.2", "executable": "/owned/kimi", "config_root": root}) + "\\n"})
+                events.append({"Test": name, "Action": "output", "Output": "KIMI_PREPARED_SOURCE " + json.dumps({"source_binding_id": "pin", "tree_digest": "digest", "native_profile_root": root}) + "\\n"})
             events.append({"Test": name, "Action": "pass"})
         with tempfile.TemporaryDirectory() as root:
             report = Path(root).resolve() / "go.json"
@@ -47,6 +47,42 @@ class KimiStableProjectMcpSmokeTests(unittest.TestCase):
             wrong_source[cold_sources[-1]]["Output"] = wrong_source[cold_sources[-1]]["Output"].replace('"digest"', '"changed"')
             with self.assertRaisesRegex(ValueError, "agreement"):
                 check(wrong_source)
+
+    def test_lifecycle_json_reassembles_chunked_go_log_events(self):
+        # test2json splits long t.Logf lines into Output events before the
+        # newline. The split can occur within a marker or quoted JSON string.
+        events = []
+        for name in LIFECYCLE_CASES:
+            roots = ("original", "cold") if name == LIFECYCLE_CASES[2] else ("original",)
+            for root in roots:
+                for marker, record in (
+                    ("KIMI_GENUINE_PROBE ", {"version": "2.5.2", "executable": "/owned/kimi", "config_root": root}),
+                    ("KIMI_PREPARED_SOURCE ", {"source_binding_id": "pin", "tree_digest": "digest",
+                                              "native_profile_root": root, "source": "x" * 2400}),
+                ):
+                    output = "    project_kimi_fixture_test.go:163: " + marker + json.dumps(record) + "\\n"
+                    fragments = [output[:46]] + [output[i:i + 207] for i in range(46, len(output), 207)]
+                    events.extend({"Test": name, "Action": "output", "Output": part} for part in fragments)
+            events.append({"Test": name, "Action": "pass"})
+        with tempfile.TemporaryDirectory() as root:
+            report = Path(root).resolve() / "go.json"
+            def check(rows):
+                report.write_text("\\n".join(json.dumps(row) for row in rows))
+                return validate_lifecycle_json(report, "/owned/kimi")
+            cases = check(events)
+            self.assertEqual(set(cases), set(LIFECYCLE_CASES))
+            self.assertEqual(len(cases[LIFECYCLE_CASES[2]]["sources"]), 2)
+            # A missing final newline must not silently discard a source tail.
+            truncated = [dict(row) for row in events]
+            last_source = max(i for i, row in enumerate(truncated)
+                              if row.get("Test") == LIFECYCLE_CASES[2] and row.get("Action") == "output")
+            truncated[last_source]["Output"] = truncated[last_source]["Output"][:-1]
+            with self.assertRaisesRegex(ValueError, "incomplete"):
+                check(truncated)
+            malformed = [dict(row) for row in events]
+            malformed[0]["Output"] = "KIMI_GENUINE_PROBE {invalid}\\n"
+            with self.assertRaisesRegex(ValueError, "malformed"):
+                check(malformed)
 
     def test_native_server_requires_selected_project_owned_command(self):
         with tempfile.TemporaryDirectory() as root:
