@@ -188,12 +188,22 @@ func TestPiModernFixtureRefusesMissingSignedHubSpotTarget(t *testing.T) {
 	for _, scope := range []domain.InstallScope{domain.ScopeUser, domain.ScopeProject} {
 		t.Run(string(scope), func(t *testing.T) {
 			fixture, directory, requirements := piMarketingCohortFixture(t, scope)
-			for i := range directory.bundle.Snapshot.Distributions {
-				distribution := &directory.bundle.Snapshot.Distributions[i]
+			// Re-sign a different, internally valid test-only publication.
+			// A missing Pi grant must not be simulated by mutating a
+			// previously verified bundle after its signature was checked.
+			snapshot := directory.bundle.Snapshot
+			for i := range snapshot.Distributions {
+				distribution := &snapshot.Distributions[i]
 				if distribution.ID == "acme/hubspot-crm" {
-					distribution.ReleasePolicies[0].Targets = nil
+					distribution.ReleasePolicies[0].Targets[0].Client = domain.ClientCodex
 				}
 			}
+			for i := range snapshot.Evidence {
+				if snapshot.Evidence[i].DistributionID == "acme/hubspot-crm" {
+					snapshot.Evidence[i].Client = domain.ClientCodex
+				}
+			}
+			directory.bundle = signPiModernTestOnlyCohort(t, snapshot)
 			_, err := resolveProjectSourceGraph(context.Background(), fixture.app, requirements)
 			if err == nil {
 				t.Fatal("Marketing Kit accepted a mandatory HubSpot child without a Pi target")
