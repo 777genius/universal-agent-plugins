@@ -786,5 +786,65 @@ class KiroCollectorTests(unittest.TestCase):
         self.assertEqual(ctx.calls, [])
 
 
+    def test_foreign_user_cwd_config_refuses_before_first_native_child(self):
+        # This fourth root is selected for native listings but deliberately
+        # has no UAP-owned marker. Never adopt even an empty foreign .kiro.
+        for kind in ("directory", "dangling-symlink"):
+            ctx = self.context()
+            marker = ctx.projects["user"] / ".kiro"
+            if kind == "directory":
+                marker.mkdir()
+                (marker / "foreign.txt").write_text("preserve foreign data")
+            else:
+                marker.symlink_to("nonexistent-foreign-target", target_is_directory=True)
+            with self.subTest(kind=kind), self.assertRaisesRegex(
+                    ValueError, "unowned native config"):
+                kiro.collect(ctx)
+            self.assertEqual(ctx.calls, [])
+            if kind == "directory":
+                self.assertEqual((marker / "foreign.txt").read_text(), "preserve foreign data")
+            else:
+                self.assertTrue(marker.is_symlink())
+
+    def test_native_commands_cannot_write_to_unowned_user_cwd(self):
+        # A successful or authentication-refused read-only command must never
+        # author native state in the separate "user" selected project cwd.
+        for label, call_count in (("version", 1), ("a-agent-raw-list", 10),
+                                  ("user-global-raw-list", 16)):
+            ctx = self.context()
+            marker = ctx.projects["user"] / ".kiro"
+
+            def changed():
+                marker.mkdir()
+                (marker / "native.json").write_text("unexpected native data")
+                body = (b"kiro-cli 2.34.0\\n" if label == "version"
+                        else b"Opaque read-only listing.\\n")
+                return {"exit": 0, "error": None}, body, b""
+
+            ctx.replace[label] = changed
+            with self.subTest(label=label), self.assertRaisesRegex(
+                    ValueError, "unowned native config"):
+                kiro.collect(ctx)
+            self.assertEqual(len(ctx.calls), call_count)
+            self.assertEqual(ctx.calls[-1][0], label)
+            self.assertEqual((marker / "native.json").read_text(), "unexpected native data")
+
+    def test_native_command_cannot_replace_selected_user_cwd_with_alias(self):
+        ctx = self.context()
+
+        def changed():
+            original = ctx.projects["user"]
+            relocated = ctx.root / "relocated-user"
+            original.rename(relocated)
+            original.symlink_to(relocated, target_is_directory=True)
+            return {"exit": 0, "error": None}, b"kiro-cli 2.34.0\\n", b""
+
+        ctx.replace["version"] = changed
+        with self.assertRaisesRegex(ValueError, "selected user cwd changed"):
+            kiro.collect(ctx)
+        self.assertEqual(len(ctx.calls), 1)
+        self.assertTrue(ctx.projects["user"].is_symlink())
+
+
 if __name__ == "__main__":
     unittest.main()
