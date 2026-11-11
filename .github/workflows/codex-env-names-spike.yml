@@ -238,48 +238,46 @@ jobs:
       - name: Verify synthetic-only Python oracles
         shell: pwsh
         run: python -m unittest discover -s scripts -p 'test_codex_env_names_native_spike.py'
-      - name: Install official SHA-pinned Codex 0.167.1 Windows x64
+      - name: Install complete official SHA-pinned Codex 0.167.1 Windows package
         id: install
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $dir = Join-Path $env:RUNNER_TEMP 'codex-native'
           New-Item -ItemType Directory -Path $dir -Force | Out-Null
-          $archive = Join-Path $dir 'codex-win.zip'
-          Invoke-WebRequest -Uri 'https://github.com/openai/codex/releases/download/rust-v0.167.1/codex-x86_64-pc-windows-msvc.exe.zip' -OutFile $archive
-          $sha = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
-          if ($sha -ne '191bd0dcd77a6aa17d4f8a4ab166fc9d05d24ca4b7015789e2aa9a53dcafb658') { throw 'Upstream Codex release checksum mismatch' }
-          Expand-Archive -LiteralPath $archive -DestinationPath $dir -Force
-          $found = @(Get-ChildItem -LiteralPath $dir -Recurse -File -Filter 'codex-x86_64-pc-windows-msvc.exe')
-          if ($found.Count -ne 1) { throw 'Expected exactly one native Codex Windows binary' }
-          # A standalone codex.exe ZIP is not a complete Windows sandbox
-          # installation. The released native sandbox resolves both helpers
-          # beside the binary or in codex-resources. Use ONLY pinned official
-          # release bytes; missing/mismatched helpers must hard-fail CI.
-          $resources = Join-Path (Split-Path -Parent $found[0].FullName) 'codex-resources'
-          New-Item -ItemType Directory -Path $resources -Force | Out-Null
-          $helpers = @(
-            @{
-              Asset = 'codex-windows-sandbox-setup-x86_64-pc-windows-msvc.exe'
-              Name = 'codex-windows-sandbox-setup.exe'
-              Sha256 = '84ab20790942fcdeb6481779785dfdc746df61314a9d8ebd7389be94d0b8f7ae'
-            },
-            @{
-              Asset = 'codex-command-runner-x86_64-pc-windows-msvc.exe'
-              Name = 'codex-command-runner.exe'
-              Sha256 = '857ead038dc320e10d6aebbce5ca5b943f6c86ad3bb58a2b022c42da47f8b931'
-            }
+          # Use the exact official installer layout, not a reconstructed
+          # standalone executable missing native exec-server/other resources.
+          $archive = Join-Path $dir 'codex-package.tar.gz'
+          Invoke-WebRequest -Uri 'https://github.com/openai/codex/releases/download/rust-v0.167.1/codex-package-x86_64-pc-windows-msvc.tar.gz' -OutFile $archive
+          $sha = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($sha -ne 'a327ba32f46e39079486ffa29e160e9da9ab2b2f73744d6101509729c26c1c1b') {
+            throw 'Official Codex Windows full-package SHA256 mismatch'
+          }
+          tar -xzf $archive -C $dir
+          if ($LASTEXITCODE -ne 0) { throw 'Codex package extraction failed' }
+          $required = @(
+            'codex-package.json',
+            'bin/codex.exe',
+            'bin/codex-code-mode-host.exe',
+            'bin/codex-exec-server.exe',
+            'codex-resources/codex-windows-sandbox-setup.exe',
+            'codex-resources/codex-command-runner.exe',
+            'codex-path/rg.exe'
           )
-          foreach ($helper in $helpers) {
-            $target = Join-Path $resources $helper.Name
-            $source = "https://github.com/openai/codex/releases/download/rust-v0.167.1/$($helper.Asset)"
-            Invoke-WebRequest -Uri $source -OutFile $target
-            $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $target).Hash.ToLowerInvariant()
-            if ($actual -ne $helper.Sha256) {
-              throw "Pinned official Codex Windows sandbox helper digest mismatch"
+          foreach ($name in $required) {
+            if (-not (Test-Path -LiteralPath (Join-Path $dir $name) -PathType Leaf)) {
+              throw "Official Codex package is missing required file: $name"
             }
           }
-          "CODEX_BINARY=$($found[0].FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          $metadata = Get-Content -LiteralPath (Join-Path $dir 'codex-package.json') -Raw | ConvertFrom-Json
+          if ($metadata.version -ne '0.167.1' -or
+              $metadata.target -ne 'x86_64-pc-windows-msvc' -or
+              $metadata.entrypoint -ne 'bin/codex.exe' -or
+              $metadata.execServer -ne 'bin/codex-exec-server.exe') {
+            throw 'Official Codex package metadata/layout mismatch'
+          }
+          $binary = Join-Path $dir 'bin/codex.exe'
+          "CODEX_BINARY=$binary" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       # A no-secret, real sandbox smoke test. Passing is not native secrecy
       # evidence; failure must block all canary-bearing Windows probes.
       - name: Preflight genuine Windows read-only sandbox without credentials
