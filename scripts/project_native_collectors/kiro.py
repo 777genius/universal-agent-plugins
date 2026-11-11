@@ -91,10 +91,22 @@ def _runtime_bin(ctx):
     return directory
 
 
+def _require_clean_user_cwd(ctx):
+    # Native MCP inventory also selects the "user" cwd, which is distinct
+    # from the HOME-owned User fixture. Never adopt native output there.
+    cwd = Path(ctx.projects["user"])
+    if not cwd.is_absolute() or not cwd.is_dir() or cwd.resolve() != cwd:
+        raise ValueError("Kiro selected user cwd changed during native research")
+    marker = cwd / ".kiro"
+    if marker.exists() or marker.is_symlink():
+        raise ValueError("Kiro selected user cwd has unowned native config")
+
+
 def _probe(ctx, owned, label, arguments, project="a"):
     route = _READ_ONLY_ROUTES.get(label)
     if route is None or (project, tuple(arguments)) != route:
         raise ValueError("Kiro read-only probe requires exact argv/project")
+    _require_clean_user_cwd(ctx)
     directory = _runtime_bin(ctx)
     if ctx.env.get("PATH") != str(directory) + ":/usr/bin:/bin":
         raise ValueError("Kiro acquired companion PATH changed")
@@ -106,6 +118,7 @@ def _probe(ctx, owned, label, arguments, project="a"):
         _runtime_bin(ctx)
     if ctx.env.get("PATH") != str(directory) + ":/usr/bin:/bin":
         raise ValueError("Kiro acquired companion PATH changed")
+    _require_clean_user_cwd(ctx)
     for path, (body, device, inode, created_ctime_ns) in owned.items():
         _parents(path)
         info = path.lstat()
