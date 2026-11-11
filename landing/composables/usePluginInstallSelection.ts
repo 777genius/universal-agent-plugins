@@ -8,7 +8,7 @@ import {
 } from '../data/installTargets.ts';
 import { useInstallPreferencesStore } from '../stores/installPreferences.ts';
 import { reachableTargetPolicies, resolveDistribution } from '../utils/registry.ts';
-import { projectCatalogAutomaticSelection, projectCatalogSelection } from '../utils/projectCatalogSource.ts';
+import { pinnedPiProjectSource, projectCatalogAutomaticSelection, projectCatalogSelection } from '../utils/projectCatalogSource.ts';
 import type { DistributionResolution, InstallScope, RegistryPlugin } from '../types/registry';
 
 /** Card and detail share one selection/persistence policy; no machine detection occurs here. */
@@ -21,6 +21,13 @@ export function usePluginInstallSelection(
   const autoDetect = models.autoDetect ?? ref(true);
   const installExpanded = ref(false);
   const scope = ref<InstallScope>('user');
+  const pinnedPiSource = computed(() =>
+    scope.value === 'project' ? pinnedPiProjectSource(plugin()) : undefined,
+  );
+  const pinnedPiSelected = computed(() =>
+    Boolean(pinnedPiSource.value) && !autoDetect.value &&
+    targets.value.length === 1 && targets.value[0] === 'pi',
+  );
   const availableClients = computed(() => {
     const policies = reachableTargetPolicies(plugin().distributions);
     return installTargets.filter((client) => {
@@ -33,7 +40,8 @@ export function usePluginInstallSelection(
           (target) => target.client === 'chatgpt' && Boolean(target.app_binding),
         ));
       }
-      return policies.some((policy) => policy.client === canonicalInstallTarget(client.id));
+      return (client.id === 'pi' && Boolean(pinnedPiSource.value)) ||
+        policies.some((policy) => policy.client === canonicalInstallTarget(client.id));
     });
   });
   const select = (selected: InstallTargetID[]): DistributionResolution => {
@@ -69,7 +77,9 @@ export function usePluginInstallSelection(
   // One authorized project source is enough to offer CLI-side target discovery.
   // This must not broaden any signed release scope or assume local client state.
   const projectAutomatic = computed(() => projectCatalogAutomaticSelection(plugin()));
-  const projectAvailable = computed(() => Boolean(projectAutomatic.value?.resolution.distribution));
+  const projectAvailable = computed(() =>
+    Boolean(projectAutomatic.value?.resolution.distribution || pinnedPiSource.value),
+  );
   const resolution = computed(() => select(targets.value));
   let choicePending = false;
   function saveChoice() {
@@ -141,6 +151,7 @@ export function usePluginInstallSelection(
       (value): value is InstallTargetID =>
         installTargets.some((client) => client.id === value) &&
         (Boolean(targetDistributions.value.get(value as InstallTargetID)) ||
+          (value === 'pi' && Boolean(pinnedPiSource.value)) ||
           targets.value.includes(value as InstallTargetID)),
     );
     if (!next.length) return;
@@ -177,6 +188,8 @@ export function usePluginInstallSelection(
     installExpanded,
     availableClients,
     targetDistributions,
+    pinnedPiSource,
+    pinnedPiSelected,
     projectAvailable,
     projectAutomatic,
     resolution,
