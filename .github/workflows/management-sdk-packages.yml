@@ -52,7 +52,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.26.10'
+          go-version: '1.26.11'
           cache: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -65,7 +65,7 @@ jobs:
           export PROOF_ROOT="$RUNNER_TEMP/sdk-package-proof"
           echo "PROOF_ROOT=$PROOF_ROOT" >> "$GITHUB_ENV"
           test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT"
-          test "$(go env GOVERSION)" = go1.26.10
+          test "$(go env GOVERSION)" = go1.26.11
           test "$(node --version)" = v22.21.1
           mkdir -p "$PROOF_ROOT"
           git rev-parse HEAD > "$PROOF_ROOT/source-head.txt"
