@@ -50,6 +50,32 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(binding["client_binding_id"], "binding")
         self.assertEqual((active, data), (self.active, self.data))
 
+    def test_snapshot_detects_empty_directory_and_mode_changes(self):
+        before = snapshot(self.active)
+        empty = self.active / "empty"
+        empty.mkdir(mode=0o700)
+        self.assertNotEqual(snapshot(self.active), before)
+        with_empty = snapshot(self.active)
+        empty.chmod(0o500)
+        self.assertNotEqual(snapshot(self.active), with_empty)
+        empty.rmdir()
+        self.assertEqual(snapshot(self.active), before)
+        (self.active / "probe").chmod(0o700)
+        self.assertNotEqual(snapshot(self.active), before)
+        before_root_mode = snapshot(self.active)
+        self.active.chmod(0o500)
+        self.assertNotEqual(snapshot(self.active), before_root_mode)
+
+    def test_snapshot_refuses_aliases_and_special_nodes(self):
+        alias = self.active / "alias"
+        alias.symlink_to(self.active / "probe")
+        with self.assertRaisesRegex(ValueError, "alias"):
+            snapshot(self.active)
+        alias.unlink()
+        os.mkfifo(self.active / "fifo")
+        with self.assertRaisesRegex(ValueError, "special node"):
+            snapshot(self.active)
+
     def test_foreign_scope_path_activation_and_receipt_refused(self):
         for key, value in (("scope", "user"), ("client_id", "codex"), ("activation", "active"),
                            ("target_locator", "/outside"), ("physical_artifact_id", ".."),
@@ -196,7 +222,7 @@ class ContractTests(unittest.TestCase):
         journey.cli = restore
         journey.repair_owned(active, data, {"installation_id": "held"})
         self.assertTrue(journey.evidence["repair"]["missing_owned_package_restored"])
-        self.assertEqual(set(snapshot(journey.root / "repair-quarantine/package")), {"plugin.json"})
+        self.assertEqual(set(snapshot(journey.root / "repair-quarantine/package")), {".", "plugin.json"})
         self.assertEqual((data / "marker").read_text(), "preserved")
 
     def test_sequential_direct_protocol_and_bad_nonce(self):

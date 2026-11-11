@@ -36,11 +36,17 @@ def write(path, value):
 
 def snapshot(root):
     result = {}
-    for path in sorted(Path(root).rglob("*")):
-        require(not path.is_symlink(), "snapshot contains an alias")
-        if path.is_file():
-            require(path.stat().st_size <= 256 << 20, "snapshot file bound")
-            result[str(path.relative_to(root))] = digest(path)
+    for path in [Path(root), *sorted(Path(root).rglob("*"))]:
+        info = path.lstat()
+        require(not stat.S_ISLNK(info.st_mode), "snapshot contains an alias")
+        require(stat.S_ISDIR(info.st_mode) or stat.S_ISREG(info.st_mode),
+                "snapshot contains a special node")
+        entry = {"kind": "directory" if stat.S_ISDIR(info.st_mode) else "file",
+                 "mode": stat.S_IMODE(info.st_mode)}
+        if stat.S_ISREG(info.st_mode):
+            require(info.st_size <= 256 << 20, "snapshot file bound")
+            entry["sha256"] = digest(path)
+        result[str(path.relative_to(root))] = entry
     return result
 
 
@@ -216,6 +222,7 @@ class Journey:
         del damaged[".mcp.json"]
         require(snapshot(active) == damaged, "partial repair fault changed unrelated files")
         self.run("damaged-inspect", [self.grok, "inspect", "--json"])
+        project_before, other_before = snapshot(self.a), snapshot(self.b)
         before_events = events(self.log, self.root)
         argv = [self.installer, "repair", installation["installation_id"], "--scope", "project",
                 "--project-root", self.a, "--target", "grok", "--format", "json"]
@@ -223,6 +230,7 @@ class Journey:
         repair_refusal(refusal, self.evidence["commands"][-1]["stderr"])
         require(read_owned(state_path, self.root) == state_before and snapshot(active) == damaged
                 and snapshot(data) == data_before and snapshot(self.source) == source_before
+                and snapshot(self.a) == project_before and snapshot(self.b) == other_before
                 and events(self.log, self.root) == before_events, "refused repair had side effects")
         # Only the test moves its exact held artifact into a fresh private
         # quarantine. UAP does not delete or adopt the partially edited tree.
@@ -279,10 +287,16 @@ class Journey:
                 and updated["source"]["tree_digest"] != first["source"]["tree_digest"],
                 "update identity or source pin differs")
         self.repair_owned(active, data, updated)
-        repaired, _, _, _ = self.protocol("repaired", "1", marker)
+        repaired, repaired_binding, repaired_active, repaired_data = self.protocol("repaired", "1", marker)
+        require(repaired["installation_id"] == updated["installation_id"]
+                and repaired["source"] == updated["source"]
+                and repaired["data_receipts"] == updated["data_receipts"]
+                and repaired_binding["client_binding_id"] == binding["client_binding_id"]
+                and repaired_active == active and repaired_data == data,
+                "repair changed the held package, binding or data authority")
         self.evidence["pre_removal_data_receipts"] = repaired["data_receipts"]
         self.cli("remove", "remove", NAME)
-        require(not active.exists(), "owned package survives removal")
+        require(not os.path.lexists(active), "owned package survives removal")
         self.inspect("removed-inspect", active, False, True)
         before = events(self.log, self.root)
         self.run("removed-doctor", [self.grok, "mcp", "doctor", "--json"], expected=(0, 1))
