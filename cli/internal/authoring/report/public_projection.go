@@ -35,14 +35,9 @@ func remapPublicAssessment(a Assessment, replacements map[string]string) Assessm
 
 // remapPublicAssessments applies the same ID projection to each policy and check.
 func (r *Report) remapPublicAssessments(replacements map[string]string) {
-	r.Loadability = remapPublicAssessment(r.Loadability, replacements)
-	r.Conformance = remapPublicAssessment(r.Conformance, replacements)
-	r.HostSafety = remapPublicAssessment(r.HostSafety, replacements)
-	r.Readiness = remapPublicAssessment(r.Readiness, replacements)
-	r.Release = remapPublicAssessment(r.Release, replacements)
-	r.Runtime = remapPublicAssessment(r.Runtime, replacements)
-	r.Compatibility = remapPublicAssessment(r.Compatibility, replacements)
-	r.Toolchain = remapPublicAssessment(r.Toolchain, replacements)
+	for _, assessment := range r.policyAssessments() {
+		*assessment = remapPublicAssessment(*assessment, replacements)
+	}
 	r.Checks = append([]Check{}, r.Checks...)
 	for i := range r.Checks {
 		r.Checks[i].Assessment = remapPublicAssessment(r.Checks[i].Assessment, replacements)

@@ -18,6 +18,9 @@ const (
 // ClientID switches. They are not serialized; a new client is added by filling
 // this struct on its ClientDefinition row, not by teaching usecase another id.
 type ClientTraits struct {
+	// DirectoryOwnGrant authorizes this native client by its own signed grant.
+	// Shared-backend ownership and affected-surface accounting remain intact.
+	DirectoryOwnGrant bool `json:"-"`
 	// SavedDependenciesDeferred records owner qualification scope, not SDK or
 	// imperative adapter availability. Existing registered APIs remain usable.
 	SavedDependenciesDeferred bool

@@ -40,12 +40,15 @@ type Client struct {
 	// Origin is the configured schema-1 directory (for example,
 	// https://host/registry/schemas/1/). Artifact URLs never come from signed or
 	// unsigned metadata beyond validated relative names.
-	Origin     string
-	HTTPClient *http.Client
-	Trust      TrustStore
-	Embedded   EmbeddedBundle
-	Cache      Cache
-	Now        func() time.Time
+	// FeedID identifies the pinned signing lineage for persisted installation
+	// sequence floors. The historical schema-1 feed is the empty identity.
+	// It is never loaded from a URL, signed snapshot, or environment variable.
+	Origin, FeedID string
+	HTTPClient     *http.Client
+	Trust          TrustStore
+	Embedded       EmbeddedBundle
+	Cache          Cache
+	Now            func() time.Time
 	// AllowHTTPForTests is an explicit in-memory test switch. It is never read
 	// from or written to the cache.
 	AllowHTTPForTests bool

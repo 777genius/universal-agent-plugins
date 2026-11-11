@@ -48,6 +48,14 @@ a later client version, another scope or an untested package. UAP is independent
 community tooling; these are bounded maintainer observations, not vendor
 certification or a claim of universal production readiness.
 
+## Hermes and Antigravity: source qualification {#hermes-antigravity-source}
+
+At the 2026-11-10 checkpoint, published CLI `0.1.102` does not include Hermes or Antigravity. The following results qualify source, not a published artifact. Qualification against the immutable release binary and signed Directory eligibility remain separate pending checks. Client capability does not authorize a Directory package for that target.
+
+**Hermes 0.23.0:** User Skills and owned stdio/Streamable HTTP MCP configuration; Project Skills only. Project MCP is refused without redirecting to User configuration. Linux x64, macOS arm64 and native Windows x64 passed first/repeated add, update, repair, removal, untrusted Project discovery and A/B isolation in [42813277862](https://github.com/777genius/universal-agent-plugins/actions/runs/42813277862) at UAP `a50c8a245f1c273efb3d171f4c54ed540475336a`. Four loopback HTTP `initialize`/`tools/list` exchanges per OS prove connection and tool discovery, not `tools/call`, model use, authentication or trusted Project execution. SSE and hooks are unsupported. Portable commands are projected as Skills; explicit-only commands are withheld when explicit invocation cannot be enforced.
+
+**Antigravity:** owned native plugin bundles with Skills and stdio/Streamable HTTP MCP in User and Project scopes remain **Prepared**. Actual `agy` 1.5.3 passed strict validation and isolated CLI import/list/uninstall on Linux, macOS and Windows in [42804680737](https://github.com/777genius/universal-agent-plugins/actions/runs/42804680737). These CLI observations do not prove actual IDE discovery or enablement, MCP startup, tool execution or authentication; IDE qualification remains separate. UAP does not grant project trust.
+
 ## Pi extensions, Skills and MCP {#pi-native-extensions}
 
 Published CLI `0.1.102` accepts `--target pi` for compatible Agent Plugins 1.0

@@ -50,7 +50,7 @@ jobs:
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.10"
+          go-version: "1.26.11"
           cache: false
 
       - uses: pnpm/action-setup@a8198c4bff370c8506180b035930dea56dbd5288 # v5
@@ -88,6 +88,7 @@ jobs:
       - name: Prepare Nuxt tooling
         working-directory: landing
         run: |
+          node ./scripts/prepare-webp-assets.mjs
           pnpm exec nuxt prepare
           pnpm exec vue-tsc --noEmit
 
@@ -98,6 +99,7 @@ jobs:
           NUXT_PUBLIC_SITE_URL: https://777genius.github.io/universal-agent-plugins
         working-directory: landing
         run: |
+          pnpm run check:advisories
           pnpm run test:registry
           pnpm run lint
           pnpm run check:i18n
@@ -403,7 +405,7 @@ jobs:
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.10"
+          go-version: "1.26.11"
           cache: false
 
       # Keep docs on its own packageManager; landing uses a newer lockfile format.
@@ -467,6 +469,7 @@ jobs:
           pnpm exec nuxt prepare
           pnpm exec vue-tsc --noEmit
           pnpm run test:artifact
+          pnpm run check:advisories
           pnpm run test:registry
           pnpm run lint
           pnpm run generate

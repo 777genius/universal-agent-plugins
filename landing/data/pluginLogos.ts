@@ -1,21 +1,21 @@
 import atlassianLogo from '~/assets/images/plugin-logos/atlassian.svg';
 import cloudflareLogo from '~/assets/images/plugin-logos/cloudflare.svg';
-import context7Logo from '~/assets/images/plugin-logos/context7.png';
+import context7Logo from '~/assets/images/plugin-logos/context7.webp';
 import firebaseLogo from '~/assets/images/plugin-logos/firebase.svg';
 import githubLogo from '~/assets/images/plugin-logos/github.svg';
 import gitlabLogo from '~/assets/images/plugin-logos/gitlab.svg';
 import greptileLogo from '~/assets/images/plugin-logos/greptile.svg';
-import herokuLogo from '~/assets/images/plugin-logos/heroku.png';
+import herokuLogo from '~/assets/images/plugin-logos/heroku.webp';
 import dockerLogo from '~/assets/images/plugin-logos/docker.svg';
-import hubspotLogo from '~/assets/images/plugin-logos/hubspot.png';
+import hubspotLogo from '~/assets/images/plugin-logos/hubspot.webp';
 import linearLogo from '~/assets/images/plugin-logos/linear.svg';
 import neonLogo from '~/assets/images/plugin-logos/neon.svg';
-import notionLogo from '~/assets/images/plugin-logos/notion.png';
+import notionLogo from '~/assets/images/plugin-logos/notion.webp';
 import sentryLogo from '~/assets/images/plugin-logos/sentry.svg';
 import slackLogo from '~/assets/images/plugin-logos/slack.svg';
 import stripeLogo from '~/assets/images/plugin-logos/stripe.svg';
 import supabaseLogo from '~/assets/images/plugin-logos/supabase.svg';
-import vercelLogo from '~/assets/images/plugin-logos/vercel.png';
+import vercelLogo from '~/assets/images/plugin-logos/vercel.webp';
 import type { PluginLogoSurface } from '~/types/content';
 
 interface PluginLogoDefinition {

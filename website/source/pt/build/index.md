@@ -88,7 +88,7 @@ de cada arquivo.
 
 Os comandos abaixo compilam a CLI atual a partir do código-fonte com as
 ferramentas de criação habilitadas. Eles exigem Git e a cadeia de ferramentas
-Go declarada no repositório (atualmente Go 1.26.10). Registre o
+Go declarada no repositório (atualmente Go 1.26.11). Registre o
 commit selecionado ao compartilhar resultados.
 
 ```bash

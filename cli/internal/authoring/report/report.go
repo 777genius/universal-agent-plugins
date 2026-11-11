@@ -242,7 +242,7 @@ func (r *Report) finish() {
 	sort.Slice(r.Findings, func(i, j int) bool { return r.Findings[i].ID < r.Findings[j].ID })
 	sort.Slice(r.Components, func(i, j int) bool { return r.Components[i].ID < r.Components[j].ID })
 	r.SchemaIDs = unique(r.SchemaIDs)
-	for _, a := range []*Assessment{&r.Loadability, &r.Conformance, &r.HostSafety, &r.Readiness, &r.Release, &r.Runtime, &r.Compatibility, &r.Toolchain} {
+	for _, a := range r.policyAssessments() {
 		a.FindingIDs = unique(a.FindingIDs)
 	}
 	for i := range r.Checks {
