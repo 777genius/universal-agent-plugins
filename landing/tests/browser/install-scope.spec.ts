@@ -278,7 +278,7 @@ test('Marketing Kit offers signed-v1 Project installation without fabricating na
   expect(errors).toEqual([]);
 });
 
-test('Marketing Kit Project still rejects unsupported required components', async ({ page }) => {
+test('Marketing Kit Project rejects unsupported components without an exact Pi source', async ({ page }) => {
   const errors = await offline(page);
   const index = scopedFixture();
   const plugin = index.plugins[0]!;
@@ -287,6 +287,8 @@ test('Marketing Kit Project still rejects unsupported required components', asyn
   plugin.trust_state = 'reviewed';
   plugin.distributions = plugin.distributions.slice(0, 1);
   plugin.distributions[0]!.releases[0]!.components = ['extensions'];
+  // Pi supports native Project extensions, but no immutable source is available here.
+  plugin.distributions[0]!.releases[0]!.source.revision = null;
   await projections(page, index);
   await navigate(page, '/', 'en', '?q=marketing-kit');
   const card = page.locator('.plugin-card[data-install-source="marketing-kit"]');
@@ -370,9 +372,13 @@ for (const width of [1440, 390]) {
   });
 }
 
-test('unsupported extensions-only Project does not show a misleading scope switch, but the User command remains', async ({ page }) => {
+test('unsupported Cursor extensions and missing exact Pi source keep User command only', async ({ page }) => {
   const errors = await offline(page);
-  await projections(page, partialComponentsFixture(['extensions'], ['cursor']));
+  const index = partialComponentsFixture(['extensions'], ['cursor']);
+  // Cursor Project extensions are unsupported; without a full SHA the separate
+  // Pi exact-Git Project route must also remain unavailable.
+  index.plugins[0]!.distributions[0]!.releases[0]!.source.revision = null;
+  await projections(page, index);
   await navigate(page, '/', 'en', '?q=i18n-state-00');
   const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]');
   await card.locator('.plugin-card__install-toggle').click();
