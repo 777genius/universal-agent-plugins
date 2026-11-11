@@ -9,7 +9,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/url"
 	"strings"
 	"unicode/utf8"
@@ -240,5 +239,3 @@ func summarize(s Skill, origin, integrity string) (Summary, error) {
 	}
 	return summary, nil
 }
-
-func unavailable(kind string) error { return fmt.Errorf("%s: %w", kind, ErrInvalidEntry) }
