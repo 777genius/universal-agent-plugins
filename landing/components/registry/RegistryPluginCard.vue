@@ -14,7 +14,7 @@ import type { RegistryDiagnostic, RegistryPlugin } from '~/types/registry';
 import { githubSourceUrl, reachableTargetPolicies, vendorInstallSource } from '~/utils/registry';
 import { authenticationIndicator } from '~/utils/authentication';
 import { pluginCommands } from '~/utils/commands';
-import { projectCatalogCommands } from '~/utils/projectCatalogSource';
+import { projectCatalogCommands, pinnedPiProjectCommands } from '~/utils/projectCatalogSource';
 import { pluginBenefit } from '~/data/catalogCuration';
 const { t, locale, n } = useI18n();
 const localePath = useLocalePath();
@@ -34,6 +34,8 @@ const {
   scope,
   installExpanded,
   targetDistributions,
+  pinnedPiSource,
+  pinnedPiSelected,
   projectAvailable,
   projectAutomatic,
   updateTargets,
@@ -82,18 +84,21 @@ const canChooseInstall = computed(
 const canInstall = computed(
   () =>
     (scope.value !== 'project' || !autoDetect.value || Boolean(projectAutomatic.value?.resolution.distribution)) &&
-    (isDiscovered.value
-      ? props.plugin.installable &&
-        props.plugin.discovery?.availability !== 'unavailable' &&
-        (autoDetect.value || Boolean(selectedDistribution.value))
-      : current.value &&
-        (autoDetect.value ? props.plugin.installable : Boolean(selectedDistribution.value))),
+    ((pinnedPiSelected.value && current.value && props.plugin.installable) ||
+      (isDiscovered.value
+        ? props.plugin.installable &&
+          props.plugin.discovery?.availability !== 'unavailable' &&
+          (autoDetect.value || Boolean(selectedDistribution.value))
+        : current.value &&
+          (autoDetect.value ? props.plugin.installable : Boolean(selectedDistribution.value)))),
 );
 const command = computed(() =>
   canInstall.value
-    ? (scope.value === 'project'
-        ? projectCatalogCommands(props.plugin, autoDetect.value ? undefined : canonicalInstallTargets(targets.value))
-        : pluginCommands(props.plugin, autoDetect.value ? undefined : cliInstallTargets(targets.value))
+    ? (pinnedPiSelected.value
+        ? pinnedPiProjectCommands(props.plugin)
+        : scope.value === 'project'
+          ? projectCatalogCommands(props.plugin, autoDetect.value ? undefined : canonicalInstallTargets(targets.value))
+          : pluginCommands(props.plugin, autoDetect.value ? undefined : cliInstallTargets(targets.value))
       ).add
     : '',
 );
@@ -120,6 +125,7 @@ const targetOptions = computed(() =>
     // Keep invalid explicitly saved selections visible for recovery, but an
     // auto-detected project must never make a stale Cursor placeholder selectable.
     disabled: !targetDistributions.value.get(client.id) &&
+      !(client.id === 'pi' && pinnedPiSource.value && current.value) &&
       (autoDetect.value || !targets.value.includes(client.id)),
     description: (() => {
       if (isDiscovered.value)
@@ -141,7 +147,10 @@ const targetOptions = computed(() =>
         return target?.app_binding
           ? t('registryUi.card.verifiedConnectionFinishSetupInChatgpt')
           : t('registryUi.card.notAvailableForChatgpt');
-      if (client.id === 'pi' && !target) return t('registryUi.install.piNoCompatibleRelease');
+      if (client.id === 'pi' && !target)
+        return pinnedPiSource.value && current.value
+          ? t('registryUi.install.piPinnedProjectSource')
+          : t('registryUi.install.piNoCompatibleRelease');
       return target
         ? t(`registryUi.delivery.${target.delivery}`)
         : t('registryUi.card.notInstallableFromAnActiveRelease');
@@ -411,6 +420,9 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
               @update:auto-selected="updateAutoDetect"
               @update:model-value="updateTargets"
             />
+            <p v-if="pinnedPiSelected && canInstall" class="plugin-card__author" role="status">
+              {{ t('registryUi.install.piPinnedProjectSource') }}
+            </p>
             <CommandSnippet
               v-if="canInstall"
               :label="t('registryUi.card.add')"
