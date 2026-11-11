@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { clientSupportRows } from '../../data/clientSupport.ts';
+import { hydrated, wording } from './i18n-state.helpers';
 
 test('home lists the complete scope matrix immediately before FAQ', async ({ page }) => {
   await page.goto('./');
@@ -94,24 +95,52 @@ test('dark agent icon contrast never filters the app or breaks the fixed orbit',
   }
 });
 
-for (const client of ['hermes', 'antigravity']) {
-  for (const width of [1440, 390]) {
-    test(`${client} route copies a local package command at ${width}px`, async ({ page, context }) => {
-      await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-      await page.setViewportSize({ width, height: 900 });
-      await page.goto(`./agents/${client}/`);
-      const command = `npx -y universal-agent-plugins add ./my-plugin --target ${client}`;
-      const install = page.locator('.agent-page__install');
-      await expect(install.locator('code')).toHaveText(command);
-      await expect(install).toContainText('valid Agent Plugins 1.0 package');
-      await install.getByRole('button', { name: 'Copy command', exact: true }).click();
-      await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(command);
-      const icon = page.locator('.agent-page__icon img');
-      await expect(icon).toHaveAttribute('src', new RegExp(`/client-icons/${client}\\.svg$`));
-      await expect.poll(() => icon.evaluate((image) => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
-      if (client === 'hermes') await expect(page.locator('.agent-page__flow')).toContainText('Project installation never modifies User MCP configuration');
+const nativeClientCases = (['hermes', 'antigravity'] as const).flatMap((client) =>
+  (['en', 'ar'] as const).flatMap((locale) =>
+    (['light', 'dark'] as const).flatMap((theme) =>
+      [1440, 390].map((width) => ({ client, locale, theme, width })),
+    ),
+  ),
+);
+
+for (const { client, locale, theme, width } of nativeClientCases) {
+  test(`${client} ${locale} ${theme} route copies a local package command at ${width}px`, async ({ page, context }, testInfo) => {
+    const t = wording(locale);
+    const direction = locale === 'ar' ? 'rtl' : 'ltr';
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await page.setViewportSize({ width, height: 900 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await context.addInitScript((value) => {
+      if (window === window.top) localStorage.setItem('theme', value);
+    }, theme);
+    await page.goto(`${locale === 'en' ? './' : `./${locale}/`}agents/${client}/`);
+    await hydrated(page);
+    await expect(page.locator('html')).toHaveAttribute('lang', locale);
+    await expect(page.locator('html')).toHaveAttribute('dir', direction);
+    await expect(page.locator('.agent-page')).toHaveCSS('direction', direction);
+    await expect(page.locator('.v-application')).toHaveClass(new RegExp(`v-theme--${theme}`));
+    const command = `npx -y universal-agent-plugins add ./my-plugin --target ${client}`;
+    const install = page.locator('.agent-page__install');
+    await expect(install.locator('code')).toHaveText(command);
+    await expect(install).toContainText(t('registryUi.agentPage.localPackageHint'));
+    await install.getByRole('button', { name: t('registryUi.command.copyLabel'), exact: true }).click();
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(command);
+    const icon = page.locator('.agent-page__icon img');
+    expect((await icon.getAttribute('src'))?.endsWith(`/client-icons/${client}.svg`)).toBe(true);
+    await expect.poll(() => icon.evaluate((image) => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+    await expect(page.locator('.agent-page__steps article').nth(0).locator('p')).toHaveText(t(`registryUi.clients.${client}.delivery`));
+    await expect(page.locator('.agent-page__steps article').nth(1).locator('p')).toHaveText(t(`registryUi.clients.${client}.activation`));
+    await expect(page.locator('.agent-page__status')).toHaveText(t(`registryUi.clients.${client}.status`));
+    if (locale === 'en') {
+      if (client === 'hermes')
+        await expect(page.locator('.agent-page__flow')).toContainText('Project installation never modifies User MCP configuration');
       else await expect(page.locator('.agent-page__status')).toHaveText('Prepared by CLI');
-      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
-    });
-  }
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+
+    const name = `${client}-${locale}-${theme}-${width}.png`;
+    const path = testInfo.outputPath(name);
+    await page.screenshot({ path, fullPage: true, animations: 'disabled' });
+    await testInfo.attach(name, { path, contentType: 'image/png' });
+  });
 }
