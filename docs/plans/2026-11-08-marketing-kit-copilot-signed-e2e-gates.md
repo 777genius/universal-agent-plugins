@@ -207,6 +207,14 @@ symlinks, a FIFO, incorrect scanner bytes and assessment identity/policy mismatc
 
 ## Six positive User and Project lifecycles (owner clarification, 2026-11-10)
 
+**Historical signed45 boundary below; superseded by Current acceptance.**
+The six positive User and six positive Project lifecycles, native ownership,
+peer/foreign isolation and strict cleanup remain mandatory. The earlier fixed45
+VS Code refusal described in this section is an optional point-in-time audit,
+not an unconditional requirement for qualifying the current production policy.
+Current acceptance selects the separate refusal from authenticated current
+six-grant or seven-grant policy; the two must never be conflated.
+
 The final release boundary is **six positive User and six positive Project
 lifecycles**, as clarified in Registry PR #461 comments 6779721254 and 6781163730.
 The interim Copilot User expected refusal is superseded as an acceptance target.
@@ -215,8 +223,8 @@ clients: signed add, list, repeat add, unchanged update, intact repair, independ
 cold locked restore, corrupt-lock refusal, native removal, and retained foreign,
 Project, peer-profile, ownership and installation identity checks.
 
-Retain a separate signed-policy negative in the Copilot lane after both positive
-lifecycles finish: an **explicit VS Code User** add through its documented `--no-save` route must receive the exact
+The earlier signed45 qualification retained a separate signed-policy negative
+after both positive lifecycles: an **explicit VS Code User** add through its documented `--no-save` route received the exact
 missing-VS-Code grant refusal. It does not qualify a positive lifecycle. Require
 nonzero integer exit without timeout, exactly empty raw stdout and the exact raw
 two-line stderr diagnostic (including the normal resolving/validating prefix)
@@ -255,7 +263,12 @@ inventories, and an exactly unchanged warmed HOME/data/Project snapshot. This is
 negative policy evidence only. It does not qualify either positive Copilot
 lifecycle on the unchanged published `0.1.102` executable.
 
-## Production positives and the immutable45 VS Code boundary
+## Production positives and the historical immutable45 VS Code boundary
+
+The positive production-source integrity and native checks below remain current.
+The fixed45 D-only steps are historical, optional audit instructions. They do
+not replace the mandatory current-policy E boundary in Current acceptance,
+and they must not be required to set `two_scope_lifecycle_qualified`.
 
 The positive six User and six Project cases keep the production Directory default;
 they never inherit a caller's `AGENTPLUGINS_DIRECTORY_ORIGIN`. The runner observes
@@ -268,9 +281,10 @@ silently combine publications. The six original reports still need final audit
 against the actual production marker and the same corrected immutable executable;
 a default URL alone is not proof of current production freshness.
 
-The separate explicit VS Code refusal belongs to unchanged signed45. Production
-may independently authorize the prepared VS Code sibling; this report must never
-claim that a refusal on45 proves a refusal on a newer production policy. After
+Historically, the separate explicit VS Code refusal belonged to unchanged
+signed45. Production may independently authorize the prepared VS Code sibling;
+this report must never claim that a refusal on45 proves a refusal on a newer
+production policy. D's subsequent fixed45 procedure is only a historical audit. After
 both positive lifecycles and native cleanup, create a fresh disposable D through
 `run_case`. Set only D's fixed origin after environment isolation. Share only the
 SHA-checked released executable cache, never production state or Directory caches.
@@ -352,11 +366,15 @@ foreign sentinel throughout warmup, refusal and failure cleanup. This is a
 `saved_management_capability` result under the current positive policy, not a
 signed-grant refusal. It creates no standalone Editor installation lifecycle.
 
-Then run unchanged fixed45 D as its separately labeled signed-policy negative;
-protect warmed E as an additional peer. Both distinct probes and temporary
-profile cleanup must succeed before `two_scope_lifecycle_qualified` becomes
-true. A failed capability/context check must not be replaced by D's legitimate
-missing-VS-Code refusal or count as a positive lifecycle.
+For current qualification, require the selected authenticated current-policy E
+negative described in Current acceptance, plus strict temporary-profile cleanup
+and all protected peer/foreign state. Fixed45 D remains an optional, separately
+labeled historical signed-policy audit; it is **not** required for
+`two_scope_lifecycle_qualified`, cannot substitute for E, and must never
+mask a failed E capability/context check. If D is run, keep warmed E protected
+as an additional peer and preserve the historical D negative's strict guards.
+Neither a failed current-policy negative nor cleanup may count as a positive
+lifecycle.
 
 The genuine SHA-checked published `.102` format preflight observes actual
 production44, authenticates the four immutable sources, returns exit1 with
