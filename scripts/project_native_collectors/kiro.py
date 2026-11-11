@@ -129,6 +129,16 @@ def _require_clean_user_cwd(ctx):
     if marker.exists() or marker.is_symlink():
         raise ValueError("Kiro selected user cwd has unowned native config")
 
+def _require_clean_unowned_roots(ctx):
+    """Before fixture creation, no native probe may seed unowned project or HOME config."""
+    roots = (("home", Path(ctx.home)), ("a", Path(ctx.projects["a"])),
+             ("b", Path(ctx.projects["b"])))
+    changed = [label for label, root in roots
+               if (root / ".kiro").exists() or (root / ".kiro").is_symlink()]
+    if changed:
+        # Never print native filenames, contents, environment or credentials.
+        raise ValueError("Kiro native probe left unexpected config in: " + ", ".join(changed))
+
 
 def _probe(ctx, owned, label, arguments, project="a", root_identities=None):
     route = _READ_ONLY_ROUTES.get(label)
@@ -137,6 +147,8 @@ def _probe(ctx, owned, label, arguments, project="a", root_identities=None):
     _require_clean_user_cwd(ctx)
     if root_identities is not None:
         _verify_root_identities(root_identities)
+    if not owned:
+        _require_clean_unowned_roots(ctx)
     directory = _runtime_bin(ctx)
     if ctx.env.get("PATH") != str(directory) + ":/usr/bin:/bin":
         raise ValueError("Kiro acquired companion PATH changed")
@@ -149,6 +161,9 @@ def _probe(ctx, owned, label, arguments, project="a", root_identities=None):
         if root_identities is not None:
             _verify_root_identities(root_identities)
         _runtime_bin(ctx)
+        if not owned:
+            _require_clean_unowned_roots(ctx)
+        _require_clean_user_cwd(ctx)
     if ctx.env.get("PATH") != str(directory) + ":/usr/bin:/bin":
         raise ValueError("Kiro acquired companion PATH changed")
     _require_clean_user_cwd(ctx)
@@ -249,17 +264,8 @@ def collect(ctx):
         # A read-only authentication refusal cannot conceal native config
         # created by an earlier version/help/list probe. Preserve any files
         # for forensic review; never classify the refusal as a clean boundary.
-        selected_roots = (("home", home), *((scope, projects[scope]) for scope in ("a", "b", "user")))
-        unexpected = []
-        for scope, selected_root in selected_roots:
-            marker = selected_root / ".kiro"
-            if marker.exists() or marker.is_symlink():
-                unexpected.append(scope)
-        if unexpected:
-            # Only record synthetic disposable root labels, never private
-            # native file names, bytes, environment variables or credentials.
-            raise ValueError("Kiro authentication refusal left unexpected native config in: "
-                             + ", ".join(unexpected))
+        _require_clean_unowned_roots(ctx)
+        _require_clean_user_cwd(ctx)
         auth_boundary = {"probe": "a-agent-raw-list", "cwd_selection": "a",
                          "arguments": ["agent", "list"],
                          "kind": "authentication-required", "exit": 1,
