@@ -10,6 +10,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
+// TestClineProjectServersSelectsOneProjectionForMultipleOwnedMembers keeps owned selections and excludes foreign entries.
 func TestClineProjectServersSelectsOneProjectionForMultipleOwnedMembers(t *testing.T) {
 	root := t.TempDir()
 	projection := ClineProjection{Servers: map[string]nativeconfig.Server{
@@ -41,6 +42,7 @@ func TestClineProjectServersSelectsOneProjectionForMultipleOwnedMembers(t *testi
 	}
 }
 
+// TestClineProjectServersSkillsOnlyRequiresNoMCPProjection preserves the no-MCP-input path.
 func TestClineProjectServersSkillsOnlyRequiresNoMCPProjection(t *testing.T) {
 	servers, err := clineProjectServers(t.TempDir(), []domain.NativeObjectOwnership{
 		{Kind: clineProjectSkillKind, LogicalName: "skill"},
@@ -53,6 +55,7 @@ func TestClineProjectServersSkillsOnlyRequiresNoMCPProjection(t *testing.T) {
 	}
 }
 
+// TestClineProjectServersRefusesMissingOrIncompleteMCPProjection fails closed without changing the source.
 func TestClineProjectServersRefusesMissingOrIncompleteMCPProjection(t *testing.T) {
 	root := t.TempDir()
 	objects := []domain.NativeObjectOwnership{{Kind: clineProjectMCPKind, LogicalName: "required"}}
@@ -71,6 +74,15 @@ func TestClineProjectServersRefusesMissingOrIncompleteMCPProjection(t *testing.T
 	if _, err := clineProjectServers(root, objects); err == nil {
 		t.Fatal("projection without the selected MCP member must fail closed")
 	}
+	// A valid first member must never leak out as a partial result when a later
+	// selected member is missing from the same source projection.
+	mixed := []domain.NativeObjectOwnership{
+		{Kind: clineProjectMCPKind, LogicalName: "foreign"},
+		{Kind: clineProjectMCPKind, LogicalName: "required"},
+	}
+	if partial, err := clineProjectServers(root, mixed); err == nil || partial != nil {
+		t.Fatalf("missing second member returned partial result: %#v, %v", partial, err)
+	}
 	unchanged, err := os.ReadFile(filepath.Join(root, ClineProjectionFile))
 	if err != nil {
 		t.Fatal(err)
@@ -80,6 +92,7 @@ func TestClineProjectServersRefusesMissingOrIncompleteMCPProjection(t *testing.T
 	}
 }
 
+// TestClineProjectObjectsUsesSingleStagedMCPProjectionForSelectedMembers verifies consistent receipt selection.
 func TestClineProjectObjectsUsesSingleStagedMCPProjectionForSelectedMembers(t *testing.T) {
 	project := t.TempDir()
 	staging := filepath.Join(project, ".uap", "package")
@@ -127,6 +140,7 @@ func TestClineProjectObjectsUsesSingleStagedMCPProjectionForSelectedMembers(t *t
 	}
 }
 
+// TestClineProjectObjectsMissingSelectedMCPRefusesWithoutWritingConfig rejects incomplete staged ownership.
 func TestClineProjectObjectsMissingSelectedMCPRefusesWithoutWritingConfig(t *testing.T) {
 	project := t.TempDir()
 	staging := filepath.Join(project, ".uap", "package")

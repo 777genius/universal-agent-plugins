@@ -31,6 +31,7 @@ func clineProjectOwned(objects []domain.NativeObjectOwnership) []domain.NativeOb
 	return selected
 }
 
+// clineProjectObjects uses one staged MCP projection for all selected ownership receipts.
 func clineProjectObjects(staging string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan) ([]domain.NativeObjectOwnership, error) {
 	layout := clineProjectComponents(plan.TargetContext.ProjectRoot)
 	objects := []domain.NativeObjectOwnership{}
@@ -79,6 +80,8 @@ func clineProjectObjects(staging string, envelope domain.PackageEnvelope, plan d
 	return objects, layout.ValidateObjects(objects)
 }
 
+// clineProjectServers resolves all owned MCP members from one active source snapshot.
+// Missing selected members fail closed without returning a partial server set.
 func clineProjectServers(active string, objects []domain.NativeObjectOwnership) (map[string]nativeconfig.Server, error) {
 	servers := map[string]nativeconfig.Server{}
 	var projection *ClineProjection
