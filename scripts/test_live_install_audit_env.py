@@ -3692,7 +3692,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     return real_open(candidate, flags, *args, **kwargs)
 
                 with patch.object(os, "open", side_effect=racing_open):
-                    with self.assertRaisesRegex(AssertionError, "malformed Copilot Project MCP"):
+                    with self.assertRaisesRegex(AssertionError, "(malformed|replaced) Copilot Project MCP"):
                         check(project, {"notion"}, "remove")
                 self.assertTrue(swapped)
                 self.assertTrue(path.is_symlink())
