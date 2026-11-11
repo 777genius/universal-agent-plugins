@@ -221,7 +221,8 @@ func registryLockedPackage(requirement environment.Requirement, loaded loadedPac
 		DigestAlgorithm: domain.TreeDigestAlgorithm, TreeDigest: loaded.envelope.TreeDigest,
 		ManifestDigest: loaded.envelope.ManifestDigest, ExecutableFiles: append([]string{}, loaded.envelope.ExecutableFiles...),
 		Source: environment.LockedSource{Registry: &environment.LockedRegistrySource{
-			Distribution: requirement.Registry.Distribution, ProductID: selection.ProductID, DistributionID: selection.DistributionID,
+			FeedID: loaded.directory.FeedID, Distribution: requirement.Registry.Distribution,
+			ProductID: selection.ProductID, DistributionID: selection.DistributionID,
 			ReleaseSequence: selection.ReleaseSequence, Requested: requirement.Registry.Selector,
 			Repository: selection.Source.Repository, Path: selection.Source.Path, Commit: selection.Source.Revision,
 		}},
