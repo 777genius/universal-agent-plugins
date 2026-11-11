@@ -394,6 +394,43 @@ jobs:
                         ",".join(pattern for pattern in patterns
                                  if pattern in native_report))
                   raise SystemExit(1)
+
+              # Codex 0.167.1 defaults to login=true for exec_command. For
+              # PowerShell this OMITS -NoProfile, unlike the control above.
+              # Independently verify the vendor-default launch form with
+              # strictly no credential names or values in the environment.
+              login_args = [powershell, "-Command", fixed_probe]
+              for scope, argv in (
+                  ("direct", login_args),
+                  ("sandbox", [sys.argv[1], "sandbox",
+                               "--permission-profile", ":read-only", "--"]
+                              + login_args),
+              ):
+                  try:
+                      login = subprocess.run(
+                          argv, cwd=root, env=env, capture_output=True,
+                          text=True, timeout=60)
+                  except (OSError, subprocess.TimeoutExpired) as exc:
+                      print("windows_no_secret_powershell_login_" + scope +
+                            "_pass=false")
+                      print("windows_no_secret_powershell_login_" + scope +
+                            "_exception=" + type(exc).__name__)
+                      raise SystemExit(1)
+                  login_ok = (
+                      login.returncode == 0 and
+                      "UAP_WINDOWS_POWERSHELL_NO_SECRET_OK" in login.stdout
+                  )
+                  print("windows_no_secret_powershell_login_" + scope +
+                        "_pass=" + str(login_ok).lower())
+                  if not login_ok:
+                      observed = (login.stdout + login.stderr).lower()
+                      categories = ("sandbox", "permission", "access denied",
+                                    "profile", "failed", "unrecognized",
+                                    "not supported", "invalid")
+                      print("windows_no_secret_powershell_login_" + scope +
+                            "_indicators=" +
+                            ",".join(k for k in categories if k in observed))
+                      raise SystemExit(1)
           '@ | python - "$env:CODEX_BINARY"
       # Model-driven shell control contains NO synthetic or real credentials.
       # Native cmd/PowerShell sandbox smokes alone do not prove exec_command.
