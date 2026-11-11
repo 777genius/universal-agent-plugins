@@ -224,7 +224,7 @@ class KiroCollectorTests(unittest.TestCase):
                             kiro.collect(ctx)
                         self.assertEqual(ctx.calls, [])
                     else:
-                        with self.assertRaisesRegex(ValueError, "unexpected native config"):
+                        with self.assertRaisesRegex(ValueError, "native probe left unexpected config"):
                             kiro.collect(ctx)
                         self.assertEqual(len(ctx.calls), 10)
                         self.assertEqual(ctx.calls[-1][0], "a-agent-raw-list")
