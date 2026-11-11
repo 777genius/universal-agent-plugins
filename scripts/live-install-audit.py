@@ -761,7 +761,7 @@ def copilot_native_list_read_unchanged(profile, home, before):
     added = [name for name in after if name not in before]
     if len(added) > 2:
         return False
-    prefix = profile.name + "/logs/"
+    prefix = profile.name + "/" + "logs" + os.sep
     for name in added:
         if not name.startswith(prefix):
             return False
