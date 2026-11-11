@@ -465,7 +465,132 @@ def qoder_native_plugin_state(home, env, cwd, identity, expected_version=None):
     return {"status": "unqualified-identity-or-version"}
 
 
-def copilot_native_plugin_state(home, env, cwd, identity, expected_version=None):
+def copilot_signed_kit_owners(list_json, pins, data, case_root):
+    """Qualify all four signed User bindings before trusting native siblings."""
+    aliases = ("marketing-kit", "notion", "hubspot-crm", "playwright")
+    text, status = copilot_settings_read(data / "state-v2.json", case_root)
+    if status is not None:
+        return None
+    try:
+        state = json.loads(text, object_pairs_hook=_unique_json_object)
+        records = state["installations"]
+        receipts = state["environment_receipts"]
+        if (not isinstance(records, list) or len(records) != 4
+                or not isinstance(receipts, list) or len(receipts) != 4):
+            return None
+        owners, receipt_keys, physical_ids, binding_ids = {}, set(), set(), set()
+        for alias in aliases:
+            pin = pins[alias]
+            matches = matching_installations(list_json, alias, "copilot", "plugin", alias, pins)
+            if len(matches) != 1:
+                return None
+            public = matches[0]
+            public_clients = [v for v in public["clients"] if v.get("client_id") == "copilot"]
+            if len(public_clients) != 1:
+                return None
+            version = public_clients[0]["package_revision"]["version"]
+            if not isinstance(version, str) or not version:
+                return None
+            selected = [v for v in records if v["directory"].get("distribution_id") == pin["distribution"]]
+            if len(selected) != 1:
+                return None
+            record = selected[0]
+            directory, source, package = (record[k] for k in ("directory", "source", "package"))
+            if (record["installation_id"] != public["installation_id"]
+                    or record.get("origin_mode") != "directory"
+                    or directory.get("desired_release_sequence") != pin["sequence"]
+                    or package.get("version") != version
+                    or package.get("manifest_digest") != pin["manifest_digest"]
+                    or any(source.get(key) != pin[field] for key, field in (
+                        ("repository", "repository"), ("package_subpath", "path"),
+                        ("resolved_revision", "revision"), ("tree_digest", "tree_digest")))):
+                return None
+            bindings = record["clients"]
+            if not isinstance(bindings, dict) or len(bindings) != 1:
+                return None
+            binding_id, binding = next(iter(bindings.items()))
+            physical = binding.get("physical_artifact_id")
+            target = Path(binding.get("target_locator", ""))
+            revision = binding.get("package_revision", {})
+            if (not isinstance(binding_id, str) or not binding_id or binding_id in binding_ids
+                    or binding.get("client_binding_id") != binding_id
+                    or binding.get("client_id") != "copilot" or binding.get("scope") != "user"
+                    or binding.get("materialization") != "materialized"
+                    or binding.get("verification") != "installation_verified"
+                    or binding.get("affected_surfaces") != ["copilot", "vscode"]
+                    or not isinstance(physical, str) or not physical or physical in physical_ids
+                    or physical in (".", "..") or Path(physical).name != physical
+                    or not target.is_absolute() or not target.is_dir()
+                    or not path_inside_case(target, case_root)
+                    or any(revision.get(key) != expected for key, expected in (
+                        ("version", version), ("resolved_revision", pin["revision"]),
+                        ("tree_digest", pin["tree_digest"]),
+                        ("manifest_digest", pin["manifest_digest"]))):
+                return None
+            binding_receipts = binding.get("receipts")
+            if (not isinstance(binding_receipts, list) or not binding_receipts
+                    or any(not isinstance(v, dict) or v.get("phase") != "committed"
+                           or v.get("client_binding_id") != binding_id
+                           or v.get("active_path") != str(target)
+                           or not isinstance(v.get("operation_id"), str) or not v["operation_id"]
+                           for v in binding_receipts)
+                    or len({v["operation_id"] for v in binding_receipts}) != len(binding_receipts)):
+                return None
+            marketplace = "agentplugins-" + hashlib.sha256(physical.encode()).hexdigest()[:12]
+            manifest_text, manifest_status = copilot_settings_read(
+                target / ".github/plugin/marketplace.json", case_root)
+            if manifest_status is not None:
+                return None
+            manifest = json.loads(manifest_text, object_pairs_hook=_unique_json_object)
+            if (not isinstance(manifest, dict) or manifest.get("name") != marketplace
+                    or not isinstance(manifest.get("plugins"), list)
+                    or len(manifest["plugins"]) != 1
+                    or any(manifest["plugins"][0].get(key) != value for key, value in (
+                        ("name", alias), ("version", version), ("source", ".")))):
+                return None
+            owners[alias] = {"marketplace": marketplace, "version": version,
+                             "target_locator": str(target)}
+            receipt_keys.add((alias, "copilot", public["installation_id"],
+                              binding_id, "directory:" + pin["distribution"], pin["tree_digest"]))
+            physical_ids.add(physical)
+            binding_ids.add(binding_id)
+        observed = {tuple(item.get(key) for key in (
+            "alias", "client_id", "installation_id", "client_binding_id",
+            "source_key", "package_digest")) for item in receipts}
+        if (observed != receipt_keys or len(observed) != 4
+                or len({v.get("receipt_id") for v in receipts}) != 4
+                or any(v.get("phase") != "committed" or v.get("environment_id") != "user-default"
+                       or not isinstance(v.get("receipt_id"), str) or not v["receipt_id"]
+                       for v in receipts)):
+            return None
+        return owners
+    except (KeyError, IndexError, TypeError, ValueError, AttributeError):
+        return None
+
+
+def copilot_signed_kit_settings(home, case_root, owners, enabled):
+    """Require exactly four physical qualified preferences, not merely one."""
+    if not isinstance(owners, dict) or set(owners) != {
+            "marketing-kit", "notion", "hubspot-crm", "playwright"}:
+        return False
+    text, status = copilot_settings_read(home / ".copilot/settings.json", case_root)
+    if status is not None:
+        return False
+    try:
+        document = json.loads(text, object_pairs_hook=_unique_json_object)
+        expected = {name + "@" + owner["marketplace"]: enabled
+                    for name, owner in owners.items()}
+        return (isinstance(document, dict)
+                and set(document) in ({"enabledPlugins"},
+                                      {"enabledPlugins", "extraKnownMarketplaces"})
+                and ("extraKnownMarketplaces" not in document
+                     or document["extraKnownMarketplaces"] == {})
+                and document.get("enabledPlugins") == expected)
+    except (TypeError, ValueError, KeyError, AttributeError):
+        return False
+
+
+def copilot_native_plugin_state(home, env, cwd, identity, expected_version=None, owners=None):
     """Read documented Copilot plugin list JSON from the original isolated profile."""
     profile = home / ".copilot"
     executable = AGENT_BINARIES.get("copilot")
@@ -478,6 +603,30 @@ def copilot_native_plugin_state(home, env, cwd, identity, expected_version=None)
     entries = observed.get("_json")
     if observed.get("exit_code") != 0 or not isinstance(entries, list) or len(entries) > 1024:
         return {"status": "unqualified-list"}
+    if owners is not None:
+        if (set(owners) != {"marketing-kit", "notion", "hubspot-crm", "playwright"}
+                or len(entries) != 5):
+            return {"status": "unqualified-signed-closure"}
+        found, builtin = set(), 0
+        for entry in entries:
+            if not isinstance(entry, dict):
+                return {"status": "unqualified-schema"}
+            if entry.get("name") == "browser-use":
+                if entry != {"name": "browser-use", "marketplace": "", "version": "0.0.4",
+                             "enabled": False, "source": "builtin"}:
+                    return {"status": "unqualified-signed-closure"}
+                builtin += 1
+                continue
+            owner = owners.get(entry.get("name"))
+            if (not isinstance(owner, dict) or entry["name"] in found
+                    or entry.get("marketplace") != owner["marketplace"]
+                    or entry.get("version") != owner["version"]
+                    or entry.get("enabled") is not True or entry.get("source") != "live"
+                    or entry.get("installedFrom") != owner["target_locator"]):
+                return {"status": "unqualified-signed-closure"}
+            found.add(entry["name"])
+        return ({"status": "installed"} if builtin == 1 and found == set(owners)
+                else {"status": "unqualified-signed-closure"})
     found = 0
     for entry in entries:
         if (not isinstance(entry, dict)
@@ -1540,9 +1689,18 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             home, env, project, identity, matching[0].get("version"))
         assert_case_unchanged()
     copilot_native_before_remove = None
+    kit_owners = None
     if target == "copilot" and kind == "plugin" and installed and repeat_verified:
-        copilot_native_before_remove = copilot_native_plugin_state(
-            home, env, project, identity, matching[0].get("version"))
+        if item == "marketing-kit":
+            kit_owners = copilot_signed_kit_owners(listed_json, signed_release_pins or {},
+                                                   data, case_root)
+        if item == "marketing-kit" and (kit_owners is None
+                or not copilot_signed_kit_settings(home, case_root, kit_owners, True)):
+            copilot_native_before_remove = {"status": "unqualified-signed-closure"}
+        else:
+            copilot_native_before_remove = copilot_native_plugin_state(
+                home, env, project, identity, matching[0].get("version"),
+                owners=kit_owners)
         assert_case_unchanged()
     cleanup = None
     native_uninstall = None
@@ -1645,7 +1803,9 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         and copilot_disabled_preference_only(
             copilot_before, copilot_after_add, copilot_after_remove,
             copilot_native_before_remove, copilot_native_after_remove,
-            native_residuals))
+            native_residuals)
+        and (item != "marketing-kit" or copilot_signed_kit_settings(
+            home, case_root, kit_owners, False)))
     removal_verified = bool(
         cleanup and cleanup["exit_code"] == 0 and post_list and post_list["exit_code"] == 0
         and post_list_schema_valid and old_ids.isdisjoint(remaining_ids)
