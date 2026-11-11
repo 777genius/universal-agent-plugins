@@ -123,3 +123,57 @@ for (const width of [1440, 390]) {
     expect(errors).toEqual([]);
   });
 }
+
+test('Pi direct install uses older release provenance without borrowing newer source security review', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const errors = await offline(page);
+  const index = sentryFixture();
+  const plugin = index.plugins[0]!;
+  const distribution = plugin.distributions[0]!;
+  const older = distribution.releases[0]!;
+  const newer = structuredClone(older);
+  newer.release_sequence += 1;
+  newer.source.revision = 'f'.repeat(40);
+  newer.source.tree_sha256 = 'sha256:' + 'f'.repeat(64);
+  newer.targets = [{
+    client: 'chatgpt', authentication: 'required', delivery: 'manual_activation',
+    scopes: ['user'], app_binding: { app_key: 'sentry-chatgpt', id: 'remote', mcp_server: 'sentry' },
+  }];
+  distribution.releases = [newer, older];
+  distribution.source = newer.source;
+  distribution.targets = newer.targets;
+  distribution.release_sequence = newer.release_sequence;
+  plugin.source = newer.source;
+  plugin.security = {
+    generated_at: '2026-11-10T12:00:00Z',
+    scanner: { id: 'lintai', version: '1.0.0' },
+    policy: { id: 'test', version: 1, digest: 'sha256:' + 'a'.repeat(64) },
+    outcome: 'no_blocking_findings',
+    counts: { blocking: 0, warnings: 0, total: 0 },
+    scanned_files: 1,
+    findings: [],
+  };
+  await projections(page, index);
+  await navigate(page, '/', 'en', '?q=sentry');
+  const card = page.locator('.plugin-card[data-install-source="sentry"]');
+  await expect(card.locator('.plugin-card__security')).toHaveCount(1);
+  await card.locator('.plugin-card__install-toggle').click();
+  await card.getByRole('button', { name: 'This project', exact: true }).click();
+  await card.locator('.app-multiselect__trigger').click();
+  await page.getByRole('checkbox', { name: /^Pi(?:\\s|$)/ }).click();
+  await page.keyboard.press('Escape');
+
+  const sourceUrl = 'https://github.com/777genius/universal-agent-plugins/tree/2ddbb99dd190c1792b79904f9875e6322bccd243/plugins/sentry';
+  await expect(card.locator('.plugin-card__install .command-snippet--add code'))
+    .toContainText('@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/sentry --target pi --scope project');
+  await expect(card.locator('.plugin-card__install a', { hasText: 'View source' }))
+    .toHaveAttribute('href', sourceUrl);
+  await expect(card.locator('.plugin-card__security')).toHaveCount(0);
+  await card.locator('.plugin-card__title-link').click();
+  const panel = page.locator('.install-panel');
+  await expect(panel.getByRole('link', { name: 'View package source' }))
+    .toHaveAttribute('href', sourceUrl);
+  await expect(panel.locator('.command-snippet--add code'))
+    .toContainText('@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/sentry --target pi --scope project');
+  expect(errors).toEqual([]);
+});
