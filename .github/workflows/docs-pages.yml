@@ -93,7 +93,10 @@ jobs:
           cp -a "${RUNNER_TEMP}/uap-registry-mirror/." landing/public/
 
       # Offline docs retain the compiler declared by the accepted site source.
+      # Reset setup-go's inherited local mode while it reads the toolchain directive.
       - uses: actions/setup-go@v6
+        env:
+          GOTOOLCHAIN: auto
         with:
           go-version-file: go.mod
           cache: false

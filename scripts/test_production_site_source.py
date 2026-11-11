@@ -117,6 +117,10 @@ class ProductionSourceTests(unittest.TestCase):
             self.assertNotIn('go-version-file:', network_go)
             self.assertIn('          go-version-file: go.mod\n', docs_go)
             self.assertNotIn('go-version:', docs_go)
+            # setup-go exports local after parsing; the next action must reset
+            # that inherited value to honor the accepted toolchain directive.
+            self.assertIn('        env:\n          GOTOOLCHAIN: auto\n', docs_go)
+            self.assertNotIn('GOTOOLCHAIN: auto', network_go)
             feed = text.split('      - name: Verify and stage signed', 1)[1].split('\n      # Offline docs', 1)[0]
             self.assertIn('          GOTOOLCHAIN: local\n', feed)
             self.assertIn('test "$(go env GOVERSION)" = go1.26.11', feed)
