@@ -234,7 +234,11 @@ func (f *openCodeProjectFixture) command(t *testing.T, class, label, exe, cwd st
 	if unexpectedTraffic ||
 		projectNativeCaptureAdmission(result, class == "uap" && label == "repeat-remove-A") != nil {
 		f.failed = true
-		t.Fatal("child deadline/output limit or unexpected MCP connection; see bounded evidence")
+		t.Fatalf("child deadline/output limit or unexpected MCP connection; see bounded evidence: "+
+			"label=%s class=%s exit=%d error_kind=%s deadline=%t stdout_limit=%t stderr_limit=%t "+
+			"elapsed_ms=%d recorder_before=%v recorder_after=%v unexpected_traffic=%t",
+			label, class, result.Exit, result.ErrorKind, result.Deadline, result.StdoutLimit, result.StderrLimit,
+			result.ElapsedMS, before, after, unexpectedTraffic)
 	}
 	return result
 }
