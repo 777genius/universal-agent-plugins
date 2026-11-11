@@ -28,9 +28,16 @@ func TestSkillRenderersPreserveClientTemplatesAndPaths(t *testing.T) {
 	tests := []struct {
 		name, relPath string
 		render        func(string, domain.SkillDocument) ([]domain.Artifact, error)
+		marker        string
 	}{
-		{"claude", "generated/skills/claude/sample/SKILL.md", ClaudeRenderer{}.Generate},
-		{"codex", "generated/skills/codex/sample/SKILL.md", CodexRenderer{}.Generate},
+		{
+			name: "claude", relPath: "generated/skills/claude/sample/SKILL.md",
+			render: ClaudeRenderer{}.Generate, marker: "> Claude generate for `skills/sample/SKILL.md`.",
+		},
+		{
+			name: "codex", relPath: "generated/skills/codex/sample/SKILL.md",
+			render: CodexRenderer{}.Generate, marker: "> Codex generate for `skills/sample/SKILL.md`.",
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -44,6 +51,9 @@ func TestSkillRenderersPreserveClientTemplatesAndPaths(t *testing.T) {
 			// Fixed output assertions catch projection regressions independently of
 			// the helper's own field mapping and template-data construction.
 			rendered := string(artifacts[0].Content)
+			if !strings.Contains(rendered, tc.marker) {
+				t.Fatalf("%s used the wrong client template: missing %q", tc.name, tc.marker)
+			}
 			for _, expected := range []string{
 				"# sample",
 				"Inspect one authored skill",
