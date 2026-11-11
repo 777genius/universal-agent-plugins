@@ -102,7 +102,9 @@ class ContractTests(unittest.TestCase):
         good = [{"session": "s", "pid": 1, "nonce": "n", "method": method}
                 for method in ("initialize", "tools/list")]
         self.assertEqual(len(observed_protocol(good, "n", ("initialize", "tools/list"))), 1)
-        for bad in (good[:1], [good[0], dict(good[1], session="other")],
+        for bad in (good[:1], list(reversed(good)), [dict(row, session="") for row in good],
+                    [dict(row, pid=0) for row in good],
+                    [good[0], dict(good[1], session="other")],
                     [good[0], dict(good[1], nonce="wrong")]):
             with self.subTest(rows=bad), self.assertRaises(ValueError):
                 observed_protocol(bad, "n", ("initialize", "tools/list"))

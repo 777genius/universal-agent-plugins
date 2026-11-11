@@ -1,5 +1,6 @@
 """Real Grok doctor + direct installed MCP calls; no model or account required."""
 import argparse
+import base64
 import hashlib
 import json
 import os
@@ -53,11 +54,15 @@ def observed_protocol(rows, nonce, methods):
     sessions = {}
     for row in rows:
         require(isinstance(row, dict) and row.get("nonce") == nonce
-                and isinstance(row.get("session"), str) and type(row.get("pid")) is int,
+                and isinstance(row.get("session"), str) and bool(row["session"])
+                and type(row.get("pid")) is int and row["pid"] > 0,
                 "uncorrelated MCP probe event")
         sessions.setdefault((row["session"], row["pid"]), []).append(row.get("method"))
-    require(any(all(method in sequence for method in methods) for sequence in sessions.values()),
-            "missing same-session native MCP traffic")
+    def ordered(sequence):
+        positions = [sequence.index(method) for method in methods if method in sequence]
+        return len(positions) == len(methods) and positions == sorted(set(positions))
+    require(any(ordered(sequence) for sequence in sessions.values()),
+            "missing ordered same-session native MCP traffic")
     return [{"session": key[0], "pid": key[1], "methods": sequence}
             for key, sequence in sessions.items()]
 
@@ -89,7 +94,8 @@ class Journey:
                                           self.env, self.root, label, timeout=timeout,
                                           limit=1 << 20, memory_only=True)
         self.evidence["commands"].append(dict(record, stdout=stdout.decode("utf-8", "replace"),
-                                               stderr=stderr.decode("utf-8", "replace")))
+            stderr=stderr.decode("utf-8", "replace"), stdout_base64=base64.b64encode(stdout).decode(),
+            stderr_base64=base64.b64encode(stderr).decode()))
         self.check()
         require(record["error"] is None and record["exit"] in expected,
                 "command failed: " + label)
@@ -164,8 +170,10 @@ class Journey:
         self.check()
         direct_rows = events(self.log, self.root)[len(before):]
         correlated = observed_protocol(direct_rows, self.nonce, ("initialize", "tools/list", "tools/call"))
-        require(any(row["session"] == direct["facts"]["session"] for row in correlated),
-                "tool result/session not in server events")
+        require(len(correlated) == 1 and correlated[0]["session"] == direct["facts"]["session"]
+                and correlated[0]["pid"] == direct["facts"]["pid"]
+                and correlated[0]["methods"].count("tools/call") == 1,
+                "tool result identity differs or bad nonce caused a tool event")
         require(all(row["session"] != direct["facts"]["session"] for row in native),
                 "native and direct callers were conflated")
         self.evidence["stages"].append({"stage": stage, "binding": binding,
@@ -272,9 +280,17 @@ def main():
             verify_files(identities, budget)
             version = journey.run("grok-version", [binary, "--version"], root)
             require(version == b"grok 1.0.70 (f50904eaee6c)\n", "pinned native Grok version differs")
-            journey.execute()
-            verify_files(identities, budget)
-            evidence["all_original_events"] = events(journey.log, root)
+            try:
+                journey.execute()
+                verify_files(identities, budget)
+            finally:
+                # Capture before TemporaryDirectory cleans up, on failure too.
+                # Invalid/aliased event files must fail rather than be adopted.
+                evidence["all_original_events"] = events(journey.log, root)
+                if journey.log.exists():
+                    original = read_owned(journey.log, root)
+                    evidence["events_sha256"] = hashlib.sha256(original).hexdigest()
+                    evidence["events_base64"] = base64.b64encode(original).decode()
         require(not git("status", "--porcelain", "--untracked-files=normal"), "source changed")
         evidence["passed"] = True
         evidence["native_doctor_initialize_and_list_qualified"] = True
