@@ -15,7 +15,15 @@ class KimiStableProjectMcpSmokeTests(unittest.TestCase):
             config.parent.mkdir(parents=True)
             inside = selected / ".uap" / "bin" / "probe"
             outside = Path(root) / "other" / "probe"
-            for command, accepted in ((inside, True), (outside, False)):
+            inside.parent.mkdir(parents=True)
+            outside.parent.mkdir(parents=True)
+            inside.write_text("owned, inert")
+            outside.write_text("foreign, inert")
+            alias = selected / ".uap" / "bin" / "linked-probe"
+            alias.symlink_to(outside)
+            escaped = selected / ".uap" / ".." / ".." / "other" / "probe"
+            for command, accepted in ((inside, True), (outside, False),
+                                      (alias, False), (escaped, False)):
                 with self.subTest(accepted=accepted):
                     config.write_text(json.dumps({"mcpServers": {NAME: {"transport": "stdio", "command": str(command)}}}))
                     if accepted:
