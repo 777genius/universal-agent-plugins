@@ -845,6 +845,36 @@ class KiroCollectorTests(unittest.TestCase):
             else:
                 self.assertTrue(marker.is_symlink())
 
+    def test_native_probe_cannot_replace_or_relax_disposable_roots(self):
+        # Before fixture writes, no owned mcp.json exists. A vendor child
+        # replacing an empty workspace must be detected before UAP adopts it.
+        for label, call_count in (("version", 1), ("a-agent-raw-list", 10),
+                                  ("a-workspace-raw-list", 11)):
+            for scope in ("a", "b", "user", "home"):
+                for mutation in ("replacement", "mode"):
+                    ctx = self.context()
+                    selected = ctx.home if scope == "home" else ctx.projects[scope]
+
+                    def changed():
+                        if mutation == "replacement":
+                            selected.rename(ctx.root / ("relocated-" + scope))
+                            selected.mkdir()
+                        else:
+                            selected.chmod(stat.S_IMODE(selected.stat().st_mode) ^ stat.S_IWGRP)
+                        body = (b"kiro-cli 2.34.0\\n" if label == "version"
+                                else b"Opaque read-only listing.\\n")
+                        return {"exit": 0, "error": None}, body, b""
+
+                    ctx.replace[label] = changed
+                    with self.subTest(label=label, scope=scope, mutation=mutation):
+                        with self.assertRaisesRegex(ValueError, "disposable root identity/mode"):
+                            kiro.collect(ctx)
+                    self.assertEqual(len(ctx.calls), call_count)
+                    self.assertEqual(ctx.calls[-1][0], label)
+                    if mutation == "replacement":
+                        self.assertTrue((ctx.root / ("relocated-" + scope)).is_dir())
+
+
     def test_native_commands_cannot_write_to_unowned_user_cwd(self):
         # A successful or authentication-refused read-only command must never
         # author native state in the separate "user" selected project cwd.

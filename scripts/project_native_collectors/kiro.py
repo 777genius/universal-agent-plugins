@@ -100,6 +100,25 @@ def _directory_identity(path):
             stat.S_IMODE(info.st_mode), info.st_ctime_ns)
 
 
+def _research_root_identity(path):
+    """Only stable identity bits: authored .kiro entries legitimately change root ctime."""
+    if not path.is_absolute() or path.resolve() != path:
+        raise ValueError("Kiro disposable root alias refused")
+    info = path.lstat()
+    if not stat.S_ISDIR(info.st_mode):
+        raise ValueError("Kiro disposable root is no longer a directory")
+    return (info.st_dev, info.st_ino, info.st_uid, info.st_gid,
+            stat.S_IMODE(info.st_mode))
+
+
+def _verify_root_identities(identities):
+    # Native help/list probes must not silently replace even an *empty*
+    # Project A/B, HOME or separate User cwd before UAP authors test files.
+    for path, original in identities.items():
+        if _research_root_identity(path) != original:
+            raise ValueError("Kiro changed disposable root identity/mode")
+
+
 def _require_clean_user_cwd(ctx):
     # Native MCP inventory also selects the "user" cwd, which is distinct
     # from the HOME-owned User fixture. Never adopt native output there.
@@ -111,11 +130,13 @@ def _require_clean_user_cwd(ctx):
         raise ValueError("Kiro selected user cwd has unowned native config")
 
 
-def _probe(ctx, owned, label, arguments, project="a"):
+def _probe(ctx, owned, label, arguments, project="a", root_identities=None):
     route = _READ_ONLY_ROUTES.get(label)
     if route is None or (project, tuple(arguments)) != route:
         raise ValueError("Kiro read-only probe requires exact argv/project")
     _require_clean_user_cwd(ctx)
+    if root_identities is not None:
+        _verify_root_identities(root_identities)
     directory = _runtime_bin(ctx)
     if ctx.env.get("PATH") != str(directory) + ":/usr/bin:/bin":
         raise ValueError("Kiro acquired companion PATH changed")
@@ -124,6 +145,9 @@ def _probe(ctx, owned, label, arguments, project="a"):
     try:
         record, stdout, stderr = ctx.probe(label, list(arguments), project=project, extra_env=private_env, timeout=30)
     finally:
+        # Also enforce after a timeout or raised probe, before any next child.
+        if root_identities is not None:
+            _verify_root_identities(root_identities)
         _runtime_bin(ctx)
     if ctx.env.get("PATH") != str(directory) + ":/usr/bin:/bin":
         raise ValueError("Kiro acquired companion PATH changed")
@@ -185,6 +209,8 @@ def collect(ctx):
                    for i, first in enumerate(project_roots)
                    for second in project_roots[i + 1:])):
         raise ValueError("Kiro requires disjoint projects and original user home")
+    root_identities = {path: _research_root_identity(path)
+                       for path in (root, home, *project_roots)}
     # A preexisting native profile is foreign, even in disposable roots.
     # Do not launch vendor help/list commands that might rewrite it before
     # the later fixture-creation conflict check.
@@ -198,19 +224,20 @@ def collect(ctx):
     if ctx.env.get("PATH") != "/usr/bin:/bin":
         raise ValueError("Kiro research requires the original closed system PATH")
     ctx.env["PATH"] = str(directory) + ":/usr/bin:/bin"
-    version = _probe(ctx, owned, "version", ("--version",))
+    version = _probe(ctx, owned, "version", ("--version",), root_identities=root_identities)
     if version != "kiro-cli " + VERSION:
         raise ValueError("Kiro version differs from immutable pin")
     help_text = {}
     for label, arguments, token in HELP:
-        value = _probe(ctx, owned, label, arguments)
+        value = _probe(ctx, owned, label, arguments, root_identities=root_identities)
         if (token not in value or (label == "all-help" and (
                 not re.search(r"(?m)^[ \t]+--help-all[ \t]*$", value)
                 or not re.search(r"(?m)^[ \t]+(?:-h,[ \t]+)?--help[ \t]*$", value)
                 or "Usage:" in value or "USAGE:" in value))):
             raise ValueError("unrecognized pinned Kiro help: " + label)
         help_text[label] = value
-    agent_text = _probe(ctx, owned, "a-agent-raw-list", ("agent", "list"))
+    agent_text = _probe(ctx, owned, "a-agent-raw-list", ("agent", "list"),
+                        root_identities=root_identities)
     agent_observation = None if agent_text is None else {
         "probe": "a-agent-raw-list", "cwd_selection": "a",
         "sha256_normalized_text": hashlib.sha256(agent_text.encode()).hexdigest(),
@@ -270,7 +297,8 @@ def collect(ctx):
         for project in ("a", "b", "user"):
             for scope in ("workspace", "global"):
                 label = project + "-" + scope + "-raw-list"
-                text = _probe(ctx, owned, label, ("mcp", "list", scope), project)
+                text = _probe(ctx, owned, label, ("mcp", "list", scope), project,
+                              root_identities=root_identities)
                 if text is None:
                     auth_boundary = {"probe": label, "cwd_selection": project,
                                      "arguments": ["mcp", "list", scope],
