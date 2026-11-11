@@ -116,6 +116,18 @@ def verify(path):
     return sha(safe_read(path))
 
 
+def verify_removed(path):
+    """Require absence or a readable foreign-only native MCP config after removal."""
+    try:
+        path.lstat()
+    except FileNotFoundError:
+        return
+    if not path.is_file():
+        raise ValueError("Kimi removal left unexpected native MCP object")
+    if NAME in read_servers(path):
+        raise ValueError("Kimi owned MCP member persisted after removal")
+
+
 def smoke(installer, client, report_dir):
     if os.environ.get("GITHUB_ACTIONS") != "true" or os.environ.get("RUNNER_ENVIRONMENT") != "github-hosted":
         raise ValueError("genuine hosted disposable environment required")
@@ -177,8 +189,9 @@ def smoke(installer, client, report_dir):
         # No login, trust override, session, MCP tool execution or model API.
         _, _ = run([str(installer), "remove", NAME, *base[1:]], cwd=a, env=env)
         remaining = a / ".kimi-code" / "mcp.json"
-        if remaining.is_file() and NAME in read_servers(remaining):
-            raise ValueError("Kimi owned MCP member persisted after removal")
+        verify_removed(remaining)
+        if (home / ".kimi-code" / "mcp.json").exists():
+            raise ValueError("Kimi Project-only install modified User MCP config")
         if (b / ".kimi-code").exists():
             raise ValueError("Kimi removal changed Project B")
         evidence = {"schema_version": 1, "client": "kimi", "real_client_version": "2.5.2",
