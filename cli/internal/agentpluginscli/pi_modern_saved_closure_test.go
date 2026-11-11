@@ -221,7 +221,11 @@ func TestPiModernFixtureSavedUserInstallLifecycle(t *testing.T) {
 		len(view.Installations) != 4 || len(view.EnvironmentReceipts) != 4 {
 		t.Fatalf("Pi signed-test-cohort saved graph did not materialize four owned packages: %+v %v", view, err)
 	}
-	for _, installation := range view.Installations {
+	state, stateErr := fixture.store.Load()
+	if stateErr != nil || len(state.Installations) != 4 {
+		t.Fatalf("Pi saved state did not retain four installations: %+v %v", state, stateErr)
+	}
+	for _, installation := range state.Installations {
 		if installation.Directory == nil || installation.Directory.FeedID != piModernFixtureFeed {
 			t.Fatalf("saved Pi installation borrowed the wrong signed fixture: %+v", installation.Directory)
 		}
