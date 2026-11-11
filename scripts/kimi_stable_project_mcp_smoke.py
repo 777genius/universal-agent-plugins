@@ -54,12 +54,22 @@ def run(argv, *, cwd, env, seconds=90):
     with tempfile.TemporaryFile(mode="w+b") as stdout, tempfile.TemporaryFile(mode="w+b") as stderr:
         p = subprocess.Popen(argv, cwd=cwd, env=env, stdin=subprocess.DEVNULL,
                              stdout=stdout, stderr=stderr, start_new_session=True)
+        timed_out = False
         try:
             p.wait(timeout=seconds)
         except subprocess.TimeoutExpired:
-            os.killpg(p.pid, signal.SIGKILL)
+            timed_out = True
+        finally:
+            # A native parent can exit while background children retain file
+            # descriptors or write into the disposable profile. Reap its group
+            # on success and failure; never leave a detached fixture process.
+            try:
+                os.killpg(p.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
             p.wait(timeout=5)
-            raise ValueError("bounded native command timed out") from None
+        if timed_out:
+            raise ValueError("bounded native command timed out")
         stdout.seek(0)
         stderr.seek(0)
         out, err = stdout.read(MAX_OUTPUT + 1), stderr.read(MAX_OUTPUT + 1)
