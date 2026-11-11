@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"time"
 )
 
 const (
@@ -73,6 +74,8 @@ func (c *Client) discover(ctx context.Context) error {
 // List retrieves metadata only. A partial/empty listing does not imply the
 // server has no other Skills (clients may query exact URIs via Inspect).
 func (c *Client) List(ctx context.Context) ([]Summary, error) {
+	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
 	if err := c.discover(ctx); err != nil {
 		return nil, err
 	}
@@ -130,6 +133,8 @@ func (c *Client) List(ctx context.Context) ([]Summary, error) {
 // Inspect obtains one exact URI and verifies only its SKILL.md. Dynamic entries
 // remain visible but cannot be content-bound. No Skill content is returned.
 func (c *Client) Inspect(ctx context.Context, uri string) (Summary, error) {
+	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
 	if validateURI(uri) != nil {
 		return Summary{}, ErrInvalidEntry
 	}
