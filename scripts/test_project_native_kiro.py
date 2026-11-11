@@ -15,7 +15,8 @@ class FakeContext:
         self.root = Path(root)
         self.home = self.root / "home"
         self.projects = {scope: self.root / scope for scope in ("a", "b", "user")}
-        self.calls, self.replace, self.env = [], {}, {"PATH": "/usr/bin:/bin"}
+        self.calls, self.replace, self.env, self.summary = [], {}, {"PATH": "/usr/bin:/bin"}, {}
+        (self.root / "private").mkdir(mode=0o700)
         self.probe_envs, self.identities = [], {}
         for path in (self.home, *self.projects.values()):
             path.mkdir()
@@ -58,7 +59,10 @@ class KiroCollectorTests(unittest.TestCase):
         ctx.kiro_api_key = "ksk_inert_private_key_12345"
         result = kiro.collect(ctx)
         for label, _, _, extra, _ in ctx.calls:
-            self.assertEqual(extra, {"KIRO_API_KEY": ctx.kiro_api_key} if label.endswith("raw-list") else None)
+            expected = ({"KIRO_HOME": str(ctx.root / "private" / "kiro-help-only")}
+                        if label == "all-help" else
+                        {"KIRO_API_KEY": ctx.kiro_api_key} if label.endswith("raw-list") else None)
+            self.assertEqual(extra, expected)
         self.assertNotIn("KIRO_API_KEY", ctx.env)
         self.assertFalse(any(value for key, value in result["observations"].items() if key.endswith("_qualified")))
 
@@ -78,13 +82,96 @@ class KiroCollectorTests(unittest.TestCase):
             self.assertIn(arguments, [["--version"], *[list(args) for _, args, _ in kiro.HELP],
                                       ["agent", "list"],
                                       ["mcp", "list", "workspace"], ["mcp", "list", "global"]])
-            self.assertIsNone(extra_env)
+            expected = ({"KIRO_HOME": str(ctx.root / "private" / "kiro-help-only")}
+                        if arguments == ["--help-all"] else None)
+            self.assertEqual(extra_env, expected)
             self.assertEqual(timeout, 30)
         for scope in ("a", "b", "user"):
             root = ctx.home if scope == "user" else ctx.projects[scope]
             document = json.loads((root / ".kiro/settings/mcp.json").read_text())
             self.assertEqual(set(document["mcpServers"]), {kiro.NAMES[scope]})
             self.assertIs(document["mcpServers"][kiro.NAMES[scope]]["disabled"], True)
+
+    def test_help_all_uses_only_disposable_kiro_home_with_opaque_metadata(self):
+        ctx = self.context()
+        profile = ctx.root / "private" / "kiro-help-only"
+
+        def native_help():
+            self.assertEqual(ctx.calls[-1][3], {"KIRO_HOME": str(profile)})
+            (profile / "native-cache").mkdir()
+            (profile / "native-secret").write_text("not a test report")
+            return ({"exit": 0, "error": None},
+                    b"Commands:\n  mcp\nOptions:\n --help-all\n --help\n",
+                    kiro._ALL_HELP_STDERR)
+
+        ctx.replace["all-help"] = native_help
+        result = kiro.collect(ctx)
+        self.assertEqual(ctx.summary["kiro_help_private_metadata"], {
+            "kind": "directory",
+            "direct_entries": {"regular": 1, "directory": 1, "symlink": 0, "special": 0},
+            "truncated": False,
+        })
+        self.assertNotIn("native-cache", str(ctx.summary))
+        self.assertNotIn("native-secret", str(ctx.summary))
+        self.assertFalse(any(value for key, value in result["observations"].items()
+                             if key.endswith("_qualified")))
+        self.assertEqual((profile / "native-secret").read_text(), "not a test report")
+
+    def test_help_all_refuses_unowned_home_mutation_even_with_kiro_home(self):
+        ctx = self.context()
+
+        def native_help():
+            marker = ctx.home / ".kiro"
+            marker.mkdir()
+            (marker / "foreign-sentinel").write_text("leave untouched")
+            return ({"exit": 0, "error": None},
+                    b"Commands:\n  mcp\nOptions:\n --help-all\n --help\n",
+                    kiro._ALL_HELP_STDERR)
+
+        ctx.replace["all-help"] = native_help
+        with self.assertRaisesRegex(ValueError, "unexpected config in: home"):
+            kiro.collect(ctx)
+        self.assertEqual(ctx.calls[-1][0], "all-help")
+        self.assertEqual((ctx.home / ".kiro/foreign-sentinel").read_text(), "leave untouched")
+
+    def test_help_all_profile_conflicts_fail_before_any_native_probe(self):
+        for kind in ("existing", "symlink", "private-alias"):
+            ctx = self.context()
+            profile = ctx.root / "private" / "kiro-help-only"
+            if kind == "existing":
+                profile.mkdir()
+                (profile / "foreign-state").write_text("unchanged")
+            elif kind == "symlink":
+                outside = ctx.root / "foreign"
+                outside.mkdir()
+                profile.symlink_to(outside, target_is_directory=True)
+            else:
+                existing = ctx.root / "private"
+                renamed = ctx.root / "private-original"
+                existing.rename(renamed)
+                existing.symlink_to(renamed, target_is_directory=True)
+            with self.subTest(kind=kind), self.assertRaises((ValueError, FileExistsError)):
+                kiro.collect(ctx)
+            self.assertEqual(ctx.calls, [])
+
+    def test_help_all_replaced_private_profile_fails_closed(self):
+        ctx = self.context()
+        profile = ctx.root / "private" / "kiro-help-only"
+
+        def native_help():
+            original = profile.with_name("retained-native")
+            profile.rename(original)
+            profile.symlink_to(original, target_is_directory=True)
+            return ({"exit": 0, "error": None},
+                    b"Commands:\n  mcp\nOptions:\n --help-all\n --help\n",
+                    kiro._ALL_HELP_STDERR)
+
+        ctx.replace["all-help"] = native_help
+        with self.assertRaisesRegex(ValueError, "disposable root alias refused"):
+            kiro.collect(ctx)
+        self.assertEqual(ctx.calls[-1][0], "all-help")
+        self.assertTrue(profile.is_symlink())
+
 
     def test_agent_help_is_exact_and_precedes_configuration_and_listing(self):
         ctx = self.context()

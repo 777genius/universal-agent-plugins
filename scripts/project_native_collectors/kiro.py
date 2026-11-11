@@ -183,6 +183,21 @@ def _require_clean_unowned_roots(ctx):
                          ", ".join(label for label, _ in changed))
 
 
+def _private_help_home(ctx, identities):
+    """Reserve a fresh KIRO_HOME for --help-all, separate from every native scope."""
+    private = Path(ctx.root) / "private"
+    if (_research_root_identity(private)[-1] != 0o700
+            or private.lstat().st_uid != os.getuid()):
+        raise ValueError("Kiro private help root ownership/mode refused")
+    profile = private / "kiro-help-only"
+    if profile.exists() or profile.is_symlink():
+        raise FileExistsError("Kiro isolated help profile already exists")
+    profile.mkdir(mode=0o700)
+    identities[private] = _research_root_identity(private)
+    identities[profile] = _research_root_identity(profile)
+    return profile
+
+
 def _verify_owned_fixtures(owned):
     """Check authored fixtures even if a child raises or times out."""
     for path, (body, device, inode, created_ctime_ns, parents) in owned.items():
@@ -234,7 +249,7 @@ def _verify_owned_fixtures(owned):
         # bytes, size, permissions and mtime without changing the inode.
 
 
-def _probe(ctx, owned, label, arguments, project="a", root_identities=None):
+def _probe(ctx, owned, label, arguments, project="a", root_identities=None, help_home=None):
     route = _READ_ONLY_ROUTES.get(label)
     if route is None or (project, tuple(arguments)) != route:
         raise ValueError("Kiro read-only probe requires exact argv/project")
@@ -248,9 +263,21 @@ def _probe(ctx, owned, label, arguments, project="a", root_identities=None):
         raise ValueError("Kiro acquired companion PATH changed")
     key = getattr(ctx, "kiro_api_key", "")
     private_env = {"KIRO_API_KEY": key} if key and label.endswith("raw-list") else None
+    if label == "all-help":
+        # Kiro 2.34 can initialize native state even for --help-all. Confine
+        # only this help probe to an empty, owned, disposable vendor profile.
+        # Never use that profile as Project/User config or activation proof.
+        expected = Path(ctx.root) / "private" / "kiro-help-only"
+        if (help_home != expected or root_identities is None
+                or root_identities.get(help_home) != _research_root_identity(expected)):
+            raise ValueError("Kiro all-help requires the exact isolated profile")
+        private_env = {"KIRO_HOME": str(help_home)}
     try:
         record, stdout, stderr = ctx.probe(label, list(arguments), project=project, extra_env=private_env, timeout=30)
     finally:
+        if label == "all-help" and isinstance(getattr(ctx, "summary", None), dict):
+            # No native names or file bytes are included in the report.
+            ctx.summary["kiro_help_private_metadata"] = _opaque_native_marker_metadata(help_home)
         # Also enforce after a timeout or raised probe, before any next child.
         if root_identities is not None:
             _verify_root_identities(root_identities)
@@ -314,12 +341,14 @@ def collect(ctx):
     if ctx.env.get("PATH") != "/usr/bin:/bin":
         raise ValueError("Kiro research requires the original closed system PATH")
     ctx.env["PATH"] = str(directory) + ":/usr/bin:/bin"
+    help_profile = _private_help_home(ctx, root_identities)
     version = _probe(ctx, owned, "version", ("--version",), root_identities=root_identities)
     if version != "kiro-cli " + VERSION:
         raise ValueError("Kiro version differs from immutable pin")
     help_text = {}
     for label, arguments, token in HELP:
-        value = _probe(ctx, owned, label, arguments, root_identities=root_identities)
+        value = _probe(ctx, owned, label, arguments, root_identities=root_identities,
+                       help_home=help_profile if label == "all-help" else None)
         if (token not in value or (label == "all-help" and (
                 not re.search(r"(?m)^[ \t]+--help-all[ \t]*$", value)
                 or not re.search(r"(?m)^[ \t]+(?:-h,[ \t]+)?--help[ \t]*$", value)
