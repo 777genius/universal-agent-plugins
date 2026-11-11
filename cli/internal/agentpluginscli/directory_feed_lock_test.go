@@ -84,3 +84,34 @@ func TestLockedDirectoryRejectsCrossFeedBeforeAnyLookup(t *testing.T) {
 		})
 	}
 }
+
+func TestSavedRegistryUpdateCannotChangeSigningLineage(t *testing.T) {
+	loaded := loadedPackage{
+		directory: &domain.DirectoryOrigin{FeedID: "modern-v1"},
+		directorySelection: &domain.DirectorySelection{
+			ProductID: "crm", DistributionID: "owner/crm", ReleaseSequence: 3,
+		},
+	}
+	for _, tc := range []struct {
+		name, previousFeed string
+		wantError bool
+	}{
+		{"same modern feed", "modern-v1", false},
+		{"legacy lock", "", true},
+		{"another modern feed", "modern-v1-other", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			prior := &environment.LockedRegistrySource{
+				FeedID: tc.previousFeed, ProductID: "crm", DistributionID: "owner/crm",
+			}
+			err := validateSavedRegistryUpdate(loaded, prior)
+			if tc.wantError {
+				if err == nil || !strings.Contains(err.Error(), "feed differs from locked source") {
+					t.Fatalf("signed cross-feed update admitted: %v", err)
+				}
+			} else if err != nil {
+				t.Fatalf("same-feed update refused: %v", err)
+			}
+		})
+	}
+}
