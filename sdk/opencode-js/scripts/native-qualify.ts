@@ -5,7 +5,7 @@ import { mkdir, writeFile, readFile, appendFile } from 'node:fs/promises';
 import { join, resolve, isAbsolute } from 'node:path';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { liveEvidenceRows } from './native-jsonl.ts';
+import { parseNativeRows } from './native-jsonl.ts';
 
 type Json = Record<string, any>;
 assert(process.argv[2]&&isAbsolute(process.argv[2])&&process.argv[2].includes('TEST-'),'An explicit absolute TEST scratch directory is required');
@@ -16,7 +16,9 @@ const run = join(root, `run-${generation}-${Date.now()}`);
 await mkdir(run, { recursive: true });
 const evidence = join(run, 'evidence.jsonl');
 const record = (value: unknown) => appendFile(evidence, JSON.stringify(value) + '\n');
-const provider = createServer(async (req, res) => {
+const providerRequests: Promise<void>[] = [];
+const provider = createServer((req, res) => {
+ const request = (async () => {
   let raw = ''; for await (const chunk of req) raw += chunk;
   const body = JSON.parse(raw || '{}') as Json;
   const text = JSON.stringify(body.messages ?? body.input ?? []);
@@ -33,6 +35,9 @@ const provider = createServer(async (req, res) => {
   if (call) packet({tool_calls:[{index:0,id:`call_${scenario}`,type:'function',function:{name:tool,arguments:JSON.stringify(args)}}]});
   else packet({content:'Qualification completed.'});
   packet({}, call ? 'tool_calls' : 'stop'); res.end('data: [DONE]\n\n');
+ })();
+ providerRequests.push(request);
+ return request;
 });
 await new Promise<void>((ok) => provider.listen(0,'127.0.0.1',ok));
 const providerPort = (provider.address() as {port:number}).port;
@@ -75,7 +80,7 @@ const api = async (path: string, body?: unknown, method = body === undefined ? '
  if (!response.ok) throw new Error(`${response.status} ${path} ${text}`);
  return text ? JSON.parse(text) : undefined;
 };
-const rows=async():Promise<Json[]> => liveEvidenceRows(await readFile(evidence,'utf8'));
+const rows=async():Promise<Json[]> => parseNativeRows(await readFile(evidence,'utf8'));
 const facts=async(sid:string,kind:string)=>(await rows()).filter((r)=>r.fact?.sessionID===sid&&r.fact?.kind===kind);
 const fenceProof=async(sid:string,rid:string,close:(row:Json)=>boolean) => {
  await wait(async()=> (await rows()).some((r)=>r.phase==='preparation-exit'&&r.requestID===rid));
@@ -194,17 +199,18 @@ try {
   assert((await rows()).filter((r)=>r.phase==='plugin-loaded').length>before);
   await record({phase:'reload-pass',sessionID:reloaded.id});
  }
- const all=await rows();
- const loaded=all.filter((r)=>r.phase==='plugin-loaded');
- assert(loaded.length>=2);
- for(const instance of loaded)assert.equal(generation==='v1'?instance.directory:instance.location?.directory,project);
- for(const fenced of all.filter((r)=>['settlement-fence-pass','dispose-fence-pass'].includes(r.phase)))assert(!all.some((r)=>r.fact?.requestID===fenced.requestID));
- for(const row of all.filter((r)=>r.fact)){assert.equal(row.current,true);assert.equal(row.fact.provenance.generation,generation);}
- await writeFile(join(run,'result.json'),JSON.stringify({status:'passed',generation,run},null,2));
- console.log(JSON.stringify({run,evidence,status:'passed'}));
 } finally {
  if(child.pid){try{process.kill(-child.pid,'SIGTERM');}catch{}}
  await new Promise<void>((ok)=>{if(child.exitCode!==null||child.signalCode!==null)ok();else child.once('exit',()=>ok());});
  await new Promise<void>((ok)=>provider.close(()=>ok()));
+ await Promise.all(providerRequests);
  await record({phase:'owned-host-closed',pid:child.pid,exitCode:child.exitCode,signal:child.signalCode});
 }
+const all=parseNativeRows(await readFile(evidence,'utf8'),true);
+const loaded=all.filter((r)=>r.phase==='plugin-loaded');
+assert(loaded.length>=2);
+for(const instance of loaded)assert.equal(generation==='v1'?instance.directory:instance.location?.directory,project);
+for(const fenced of all.filter((r)=>['settlement-fence-pass','dispose-fence-pass'].includes(r.phase)))assert(!all.some((r)=>r.fact?.requestID===fenced.requestID));
+for(const row of all.filter((r)=>r.fact)){assert.equal(row.current,true);assert.equal(row.fact.provenance.generation,generation);}
+await writeFile(join(run,'result.json'),JSON.stringify({status:'passed',generation,run},null,2));
+console.log(JSON.stringify({run,evidence,status:'passed'}));

@@ -3,6 +3,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import assert from 'node:assert/strict';
+import { parseNativeRows } from './native-jsonl.ts';
 type Row = Record<string, any>;
 const [root,sourceSHA,v1,v2,packPath]=process.argv.slice(2);
 assert(root&&sourceSHA&&v1&&v2&&packPath,'root sourceSHA v1Run v2Run packJSON required');
@@ -10,7 +11,7 @@ const hash=(data:Uint8Array|string)=>createHash('sha256').update(data).digest('h
 const cells=[];
 for(const [generation,run] of [['v1',v1],['v2',v2]]) {
  const bytes=await readFile(join(run,'evidence.jsonl'));
- const rows=bytes.toString().trim().split('\n').map((line)=>JSON.parse(line)) as Row[];
+ const rows=parseNativeRows(bytes.toString(),true) as Row[];
  const result=JSON.parse(await readFile(join(run,'result.json'),'utf8'));
  assert.equal(result.status,'passed');
  const ready=rows.find((r)=>r.phase==='server-ready')!;
