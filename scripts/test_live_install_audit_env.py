@@ -56,6 +56,9 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 [{**entries[0], "enabled": False}, *entries[1:]],
                 [{**entries[0], "version": "9.9.9"}, *entries[1:]],
                 [{**entries[0], "marketplace": "foreign"}, *entries[1:]],
+                [{**entries[0], "marketplace": "agentplugins-fake"}, *entries[1:]],
+                [{**entries[0], "marketplace": "agentplugins-123456ABCDEF"},
+                 *entries[1:]],
                 [{**entries[0], "name": "reminted"}, *entries[1:]],
                 [{**entries[0], "enabled": "true"}, *entries[1:]],
                 entries[:-1]):
@@ -77,6 +80,35 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             changed["after_remove"] = {**shapes["after_remove"],
                                        "marketing-kit": change}
             self.assertFalse(disabled(changed, installed, absent))
+
+    def test_marketing_kit_copilot_signed_version_bindings_accept_one_owner(self):
+        from runpy import run_path
+
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        read = runner["copilot_signed_user_versions"]
+        rows = [{
+            "directory": {"recorded_distribution": distribution},
+            "clients": {"scope-binding": {
+                "client_id": "copilot", "scope": "user",
+                "package_revision": {"version": "0.1.0"}}}}
+            for distribution in runner["REQUIRED_DISTRIBUTIONS"].values()]
+        with patch.dict(read.__globals__, {"inventory": lambda *_: rows}):
+            self.assertEqual(read("cli", {}, Path.cwd()), {
+                name: "0.1.0" for name in runner["UPDATE_ALIASES"]})
+        for changed in (
+                rows[:-1],
+                [{**rows[0], "clients": []}, *rows[1:]],
+                [{**rows[0], "clients": {"a": {
+                    "client_id": "copilot", "scope": "user",
+                    "package_revision": {"version": ""}}}}, *rows[1:]],
+                [{**rows[0], "clients": {"a": rows[0]["clients"]["scope-binding"],
+                                        "b": rows[0]["clients"]["scope-binding"]}},
+                 *rows[1:]]):
+            with self.subTest(rows=changed), patch.dict(
+                    read.__globals__, {"inventory": lambda *_: changed}):
+                with self.assertRaises(AssertionError):
+                    read("cli", {}, Path.cwd())
 
     def test_marketing_kit_copilot_settings_cleanup_needs_independent_native_proof(self):
         from runpy import run_path

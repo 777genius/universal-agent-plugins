@@ -846,6 +846,8 @@ def copilot_signed_user_versions(cli, env, project):
         if alias is None or alias in versions:
             raise AssertionError("Copilot User signed native version identity changed")
         bindings = row.get("clients") or []
+        if isinstance(bindings, dict):
+            bindings = list(bindings.values())
         if not isinstance(bindings, list):
             raise AssertionError("Copilot User native version bindings invalid")
         selected = [entry for entry in bindings if isinstance(entry, dict)
@@ -879,6 +881,12 @@ def copilot_native_entries_state(entries, expected_versions):
         name, marketplace = entry["name"], entry.get("marketplace")
         managed = isinstance(marketplace, str) and re.fullmatch(
             r"agentplugins-[0-9a-f]{12}", marketplace) is not None
+        # A malformed or case-shifted UAP marketplace must not disappear
+        # from a supposedly empty native registration inventory.
+        if (isinstance(marketplace, str)
+                and marketplace.casefold().startswith("agentplugins-")
+                and not managed):
+            raise AssertionError("Copilot native managed marketplace malformed")
         if not managed and name not in UPDATE_ALIASES:
             continue
         if not managed or name not in UPDATE_ALIASES or name in found:
