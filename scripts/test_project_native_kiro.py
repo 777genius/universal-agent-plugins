@@ -60,7 +60,7 @@ class KiroCollectorTests(unittest.TestCase):
         result = kiro.collect(ctx)
         for label, _, _, extra, _ in ctx.calls:
             expected = ({"KIRO_HOME": str(ctx.root / "private" / "kiro-help-only")}
-                        if label in ("all-help", "mcp-help", "mcp-list-help") else
+                        if label in ("all-help", "mcp-help", "mcp-list-help", "mcp-status-help") else
                         {"KIRO_API_KEY": ctx.kiro_api_key} if label.endswith("raw-list") else None)
             self.assertEqual(extra, expected)
         self.assertNotIn("KIRO_API_KEY", ctx.env)
@@ -83,7 +83,8 @@ class KiroCollectorTests(unittest.TestCase):
                                       ["agent", "list"],
                                       ["mcp", "list", "workspace"], ["mcp", "list", "global"]])
             expected = ({"KIRO_HOME": str(ctx.root / "private" / "kiro-help-only")}
-                        if arguments in (["--help-all"], ["mcp", "--help"], ["mcp", "list", "--help"]) else None)
+                        if arguments in (["--help-all"], ["mcp", "--help"], ["mcp", "list", "--help"],
+                                         ["mcp", "status", "--help"]) else None)
             self.assertEqual(extra_env, expected)
             self.assertEqual(timeout, 30)
         for scope in ("a", "b", "user"):
@@ -118,9 +119,9 @@ class KiroCollectorTests(unittest.TestCase):
         self.assertEqual((profile / "native-secret").read_text(), "not a test report")
 
     def test_mcp_subcommand_help_side_effect_stays_in_disposable_profile(self):
-        # Both selected MCP help probes can initialize HOME in pinned 2.34.
+        # All three observed MCP help probes can initialize HOME in pinned 2.34.
         # The isolated profile cannot count as discovery or activation.
-        for label in ("mcp-help", "mcp-list-help"):
+        for label in ("mcp-help", "mcp-list-help", "mcp-status-help"):
             with self.subTest(label=label):
                 ctx = self.context()
                 profile = ctx.root / "private" / "kiro-help-only"
@@ -144,7 +145,7 @@ class KiroCollectorTests(unittest.TestCase):
                                      if key.endswith("_qualified")))
 
     def test_mcp_subcommand_help_unowned_home_write_still_fails_closed(self):
-        for label in ("mcp-help", "mcp-list-help"):
+        for label in ("mcp-help", "mcp-list-help", "mcp-status-help"):
             with self.subTest(label=label):
                 ctx = self.context()
 
