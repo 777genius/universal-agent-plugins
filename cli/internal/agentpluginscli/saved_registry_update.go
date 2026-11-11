@@ -30,7 +30,10 @@ func prepareSavedRegistryUpdate(ctx context.Context, app App, dryRun bool, snaps
 	if !ok || old.Source.Registry == nil {
 		return requirements, false, errors.New("registry dependency has no locked release")
 	}
-	if app.DirectoryClient == nil || old.Source.Registry.FeedID != directoryFeedForClient(app.DirectoryClient) {
+	if app.DirectoryClient == nil {
+		return requirements, false, errors.New("signed Directory is unavailable")
+	}
+	if old.Source.Registry.FeedID != directoryFeedForClient(app.DirectoryClient) {
 		return requirements, false, errors.New("signed Directory feed differs from locked source; explicit source switch required")
 	}
 	request, err := savedRegistryUpdateRequest(ctx, app, old.Targets, installation)
