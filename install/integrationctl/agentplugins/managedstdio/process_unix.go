@@ -3,6 +3,8 @@
 package managedstdio
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"syscall"
 )
@@ -13,10 +15,18 @@ func replaceProcess(command string, args []string, cwd string) error {
 }
 
 func replaceProcessEnvironment(command string, args []string, cwd string, environment []string) error {
+	previous, err := os.Getwd()
+	if err != nil {
+		return err
+	}
 	if err := os.Chdir(cwd); err != nil {
 		return err
 	}
-	// #nosec G702 -- StartSession verifies a consented absolute executable with exact argv[0];
-	// replacing this process without shell evaluation is the explicit session boundary.
-	return syscall.Exec(command, args, environment)
+	// #nosec G702 -- StartSession validates explicit absolute argv and consent;
+	// exec replaces the process directly without a shell or command parsing.
+	execErr := syscall.Exec(command, args, environment)
+	if restoreErr := os.Chdir(previous); restoreErr != nil {
+		return errors.Join(execErr, fmt.Errorf("restore cwd after failed native exec: %w", restoreErr))
+	}
+	return execErr
 }
