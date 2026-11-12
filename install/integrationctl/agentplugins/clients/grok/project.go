@@ -17,19 +17,8 @@ var _ clients.Projector = (*Adapter)(nil)
 func (*Adapter) Project(_ context.Context, in clients.ProjectionInput) ([]domain.NativeObjectOwnership, error) {
 	project := in.Plan.Scope == domain.ScopeProject || in.Plan.TargetContext.Scope == domain.ScopeProject || in.Plan.TargetContext.ProjectRoot != ""
 	if project {
-		if _, err := grokPlanRoot(domain.DetectedClient{ClientID: domain.ClientGrok, ConfigRoot: in.Plan.TargetContext.UserConfigRoot}, in.Plan); err != nil {
+		if err := validateProjectProjection(in); err != nil {
 			return nil, err
-		}
-		if !filepath.IsAbs(in.StagingPath) || filepath.Clean(in.StagingPath) != in.StagingPath || filepath.Dir(in.StagingPath) != in.Plan.TargetAnchor || !strings.HasPrefix(filepath.Base(in.StagingPath), ".agentplugins-staging-") {
-			return nil, fmt.Errorf("grok project staging differs from exact selected anchor")
-		}
-		if err := pathpolicy.RequireContainedChild(in.Plan.TargetAnchor, in.StagingPath); err != nil {
-			return nil, err
-		}
-		for _, component := range in.Plan.Components {
-			if component.Support != domain.SupportUnsupported && component.Kind != domain.ComponentSkill && component.Kind != domain.ComponentMCPServer {
-				return nil, fmt.Errorf("grok project component is unqualified")
-			}
 		}
 	}
 	manifest := shared.ManifestFromEnvelope(in.Envelope, shared.WithAuthorNameEmail())
@@ -58,5 +47,31 @@ func (*Adapter) Project(_ context.Context, in clients.ProjectionInput) ([]domain
 	}); err != nil {
 		return nil, err
 	}
+	if project {
+		if err := projectGrokStdio(in); err != nil {
+			return nil, err
+		}
+	}
 	return nil, nil
+}
+
+func validateProjectProjection(in clients.ProjectionInput) error {
+	if _, err := grokPlanRoot(domain.DetectedClient{ClientID: domain.ClientGrok, ConfigRoot: in.Plan.TargetContext.UserConfigRoot}, in.Plan); err != nil {
+		return err
+	}
+	if !filepath.IsAbs(in.StagingPath) || filepath.Clean(in.StagingPath) != in.StagingPath || filepath.Dir(in.StagingPath) != in.Plan.TargetAnchor || !strings.HasPrefix(filepath.Base(in.StagingPath), ".agentplugins-staging-") {
+		return fmt.Errorf("grok project staging differs from exact selected anchor")
+	}
+	if err := pathpolicy.RequireContainedChild(in.Plan.TargetAnchor, in.StagingPath); err != nil {
+		return err
+	}
+	for _, component := range in.Plan.Components {
+		if component.Support != domain.SupportUnsupported && component.Kind != domain.ComponentSkill && component.Kind != domain.ComponentMCPServer {
+			return fmt.Errorf("grok project component is unqualified")
+		}
+	}
+	if err := shared.DeliverManagedStdio(in.DeliverLauncher(), in.StagingPath, in.Envelope, in.Plan); err != nil {
+		return err
+	}
+	return nil
 }

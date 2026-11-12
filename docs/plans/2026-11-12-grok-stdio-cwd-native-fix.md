@@ -1,6 +1,7 @@
 # Preserve the portable Grok stdio working-directory contract
 
-Status: plan before implementation. Production baseline is main
+Status: implemented locally; independent review and actual final-source CI are
+required before acceptance. Production baseline is main
 `ba64b3feda24f160339fde484ed365a7080c3c75`. This is a separate Grok-only
 fix workstream. Do not edit, overwrite or discard concurrent PR #883 commits.
 No credentials, vendor model, login, trust automation, public capability
@@ -53,32 +54,96 @@ launcher/root/data/cwd/encoded-child bindings against the exact selected plan
 and envelope. Old direct or stale projections must require refresh; read-only
 checks must not silently rewrite active bytes. Reuse existing trusted helper
 delivery, content hashing, ownership, receipt, rollback and removal behavior.
-No generic helper, schema, state engine, resolver or registry change is needed.
+No new generic helper, schema, state engine, resolver or registry is introduced.
+The owner-authorized scoped declarative/read-only corrections below are needed
+to reach the existing public lifecycle paths; a new adapter hook alone was
+proven insufficient.
 
 ## Exact bounded file list and estimates
 
-| File | Intended change | Estimated delta |
-| --- | --- | ---: |
-| install/integrationctl/agentplugins/clients/grok/project.go | Call Project-only stdio binding and preserve current User path | 10–20 LOC |
-| install/integrationctl/agentplugins/clients/grok/project_stdio.go (new) | Trusted launcher projection and active-binding validation through existing interfaces | 160–220 production LOC |
-| install/integrationctl/agentplugins/clients/grok/project_stdio_test.go (new) | Projection, stale-authority, path and User noninterference contracts | 220–320 test LOC |
-| cli/cmd/agentplugins/project_grok_e2e_test.go | Exercise ordinary composed trusted delivery and exact resulting bindings | 20–40 test LOC |
-| scripts/grok_project_protocol_client.py | Strict actual helper/encoded-argv/hash admission; direct caller cwd is explicit; never modify decoded config | 50–80 LOC |
-| scripts/grok_project_protocol_e2e.py | Supply source-built helper hash/caller scope; retain original installed config before attempts | 10–30 LOC |
-| scripts/test_grok_project_protocol.py | Actual-helper admission and cwd/data/hash/opaque-argument negatives | 70–100 test LOC |
-| docs/plans/2026-11-12-grok-stdio-cwd-native-fix.md | This plan, review findings and measured final validation | Documentation |
+The original eight-path plan expanded after independent review and actual
+composed regressions proved two existing bypasses. The owner explicitly
+accepted minimal generic use of the existing declarative traits; no client-ID
+branch or alternate installation engine is added.
 
-No other production paths are in scope. If a required fixture correction
-outside this list is discovered, report it before expanding the patch.
-Current main Grok adapter blobs match the failed source. PR #878 at
-9bbf942d7532805a1ef98f71b1d2694804ec84d3 changes only two automation
+| File | Final bounded purpose |
+| --- | --- |
+| install/integrationctl/agentplugins/clients/grok/project.go | Project-only trusted delivery before any projection writes; preserve User |
+| install/integrationctl/agentplugins/clients/grok/project_stdio.go (new) | Encoded launcher projection and receipt-bound read-only validation |
+| install/integrationctl/agentplugins/clients/grok/project_stdio_test.go (new) | Three cwd anchors, opaque argv, legacy/wrong authorities/helper refusals |
+| install/integrationctl/agentplugins/domain/project_policy.go | Existing scoped Project flags for helper readiness and active projection |
+| install/integrationctl/agentplugins/domain/clients_catalog.go | Declare those flags for Grok Project only |
+| install/integrationctl/agentplugins/domain/project_grok_policy_test.go (new) | Prepared/no-effects/User and other prepared-client policy invariants |
+| install/integrationctl/agentplugins/usecase/prepared_project_verifier.go | Honor required active projection after unchanged fail-closed legacy branch |
+| install/integrationctl/agentplugins/usecase/prepared_project_verifier_test.go | Grok/Pi/other prepared and mismatched legacy classification |
+| install/integrationctl/agentplugins/usecase/observe_owned_binding.go | Reuse guarded projection-only observation separately from activation proof |
+| install/integrationctl/agentplugins/usecase/projection_refresh.go | Existing unsaved update refresh includes required active projection |
+| install/integrationctl/agentplugins/usecase/refresh_projection.go | Command-skill equality cannot bypass required native projection refresh |
+| install/integrationctl/agentplugins/installer/verify_prepared.go | Sealed-handle projection-only readback; shared state/profile/cancellation guards |
+| install/integrationctl/agentplugins/installer/verify_prepared_projection_test.go (new) | Actual common sealed guard under cancellation/state/profile races |
+| cli/internal/agentpluginscli/deps_sync.go | Inspect only declaratively required unchanged projections before no-op |
+| cli/cmd/agentplugins/project_grok_e2e_test.go | Actual composed saved/unsaved old-direct migration, pin rules and readiness |
+| scripts/grok_project_protocol_client.py | Admit exact emitted helper/config/hash/argv and explicit caller cwd |
+| scripts/grok_project_protocol_e2e.py | Raw config before attempt; actual default/plugin/data cwd update/restart stages |
+| scripts/test_grok_project_protocol.py | Strict helper/data/cwd/source-hash rejection contracts |
+| docs/plans/2026-11-12-grok-stdio-cwd-native-fix.md | This plan, findings and measured validation |
+
+Current main Grok adapter blobs matched the failed source. PR #878 at
+9bbf942d7532805a1ef98f71b1d2694804ec84d3 changed only two automation
 workflows, its six-client plan and two Python probes; no adapter overlap.
 
-Complexity 4/10, approximately 170–240 production LOC and 360–530 test/helper
-LOC. Reliability confidence 8/10 for reused launcher/path authorities; 6/10
-until actual pinned Grok executes the final installed projection. New
-production functions stay under existing size/complexity limits. No lint
-exemption, architectural budget, oracle or safety refusal is weakened.
+Complexity 6/10 after the public-path findings, approximately 360–430 added
+production LOC and 500–650 test/helper LOC. Reliability confidence 8/10 for
+reused launcher/path/state authorities; 6/10 until actual pinned Grok executes
+the final installed projection on hosted Linux. Production functions retain
+existing size/complexity limits. No lint exemption, architecture budget,
+oracle, trust or safety refusal is weakened.
+
+### Public-path findings and authorized correction
+
+Grok's prepared Project originally had neither helper-readiness nor active
+projection traits. The generic prepared-file shortcut therefore bypassed a
+new adapter hook. The scoped policy now declares both while retaining
+LifecyclePrepared, no TracksNativeEffects, and unchanged User traits. The
+legacy Qoder malformed-receipt classifier remains before the new flag check.
+
+A genuine old direct tree seeded through an explicit predecessor Projector
+seam has its original valid artifact receipt. An unsaved repeated add must
+refuse it with ErrProjectionRefreshRequired. Existing explicit update can
+refresh that tree at the same source revision through its existing transaction
+and data authorities. A command-skill equality shortcut must not bypass this
+native projection check. Repair continues to preserve the recorded projection.
+
+Saved add/sync previously returned unchanged solely from source digest and
+lifecycle facts, without invoking projection readback. The new read-only
+unchanged preflight is gated only by RequiresActiveNativeProjection. It uses
+the sealed repair handle and exact source/receipt/profile state, asserts
+projection completeness, and never claims activation. Existing saved pin
+policy remains intact: a stale projection gets ErrProjectionPinChangeRequired;
+a source pin change applies the current projection. No silent saved refresh
+or receipt mutation is authorized.
+
+### Local validation so far
+
+With official Go1.26.11, the three composed ZIP tests pass: same-revision
+unsaved repeat refusal and explicit update refresh; saved old-pin refusal
+with package/state unchanged, new-pin update, then current-pin repeat with
+package/state unchanged; missing helper planning refusal before A/B/User
+effects. Adapter stdio (including bare and bundled commands), scoped policy and
+existing/new prepared classifier tests pass. All five existing Pi facade
+tests and the nine-case sealed-handle cancellation/state/profile/invalid-handle
+regression pass without skips. Nineteen inert Python contracts pass.
+Complete make lint with LINT_BASE=HEAD (the exact ba64 local baseline) passes
+all four whole-file gates, four changed-line passes and unchanged exclusions.
+These are local contract observations, not hosted/native qualification.
+
+Full make test-core actually failed in this container, including unavailable
+/proc containment and malformed-or-duplicate Codex environment refusals.
+The latter Codex refresh callback failure was independently reproduced on
+unchanged exact ba64 baseline source. Preserve the actual failed core log;
+this is not a full-core pass or a waiver. The CLI phase is not credited when
+make stopped after the core failure. Actual hosted full core, cross-OS,
+rollback and genuine native results remain mandatory.
 
 ## Meaningful verification and evidence
 
@@ -113,8 +178,12 @@ native tools-call observation does not establish portable cwd conformance.
 
 After this product fix is reviewed, its owner must reconcile PR #883 with the
 new actual helper admission and restore the portable package/data cwd oracle.
-That follow-up belongs to PR #883's owner; this workstream does not edit its
-branch or new grok_noauth_call_e2e.py/test/workflow files. Both old direct-helper
+That follow-up belongs to PR #883's owner and the root integrator; this
+workstream does not overwrite its branch or concurrent commits. The tiny
+integration delta must capture inherited original config before admission,
+use inherited expected_runtime_cwd(active,data), pass source-built App hash
+and expected cwd to installed_server, and assert that explicit expected cwd
+in native tool facts. Both old direct-helper
 and new native-call lanes must pass on their actual final combined source.
 Only guarded final-source merge and genuine natural postmerge execution can
 complete acceptance. Source GO or a plan is not executed product acceptance.

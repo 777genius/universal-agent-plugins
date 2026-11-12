@@ -59,7 +59,7 @@ func (session *repairSession) refreshIntactProjection() (AddResult, error) {
 // as a config file the client created since, stay with RefreshProjection, as
 // they do for a package without commands.
 func (session *repairSession) commandSkillsAlreadyCurrent() (bool, error) {
-	if !session.input.refreshChangedProjectionOnly {
+	if !session.input.refreshChangedProjectionOnly || session.plan.SelectedDelivery.EffectiveTraitsForScope(session.input.Client.ClientID, session.input.Scope).RequiresActiveNativeProjection {
 		return false, nil
 	}
 	current, verified, err := session.service.commandSkillsCurrent(session.ctx, session.target.ActivePath, session.input.Envelope, session.plan)

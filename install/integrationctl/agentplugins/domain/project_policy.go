@@ -4,11 +4,13 @@ package domain
 // value enables nothing. Client stacks add it together with project layouts;
 // user traits and physical backend sharing remain unchanged.
 type ProjectPolicy struct {
-	LifecycleKind       LifecycleKind `json:"-"`
-	BackendFamily       string        `json:"-"`
-	SkillSupport        SupportLevel  `json:"-"`
-	MCPSupport          SupportLevel  `json:"-"`
-	TracksNativeEffects bool          `json:"-"`
+	LifecycleKind                  LifecycleKind `json:"-"`
+	BackendFamily                  string        `json:"-"`
+	SkillSupport                   SupportLevel  `json:"-"`
+	MCPSupport                     SupportLevel  `json:"-"`
+	TracksNativeEffects            bool          `json:"-"`
+	UsesManagedStdioLauncher       bool          `json:"-"`
+	RequiresActiveNativeProjection bool          `json:"-"`
 }
 
 func (policy ProjectPolicy) Valid() bool {
@@ -46,6 +48,14 @@ func withProjectComponentSupport(definition ClientDefinition, skills, mcp Suppor
 	return definition
 }
 
+// A prepared Project can require the trusted process adapter and readback
+// without acquiring native activation, effect tracking or User-scope traits.
+func withProjectManagedStdio(definition ClientDefinition) ClientDefinition {
+	definition.ProjectPolicy.UsesManagedStdioLauncher = true
+	definition.ProjectPolicy.RequiresActiveNativeProjection = true
+	return definition
+}
+
 // Clients with confirmed native effects reuse these capabilities and enable
 // receipt-bound effect tracking. Grok's prepared-only Project adapter must not
 // accidentally acquire that lifecycle policy from a metadata-only correction.
@@ -77,6 +87,8 @@ func (delivery SelectedDelivery) EffectiveTraitsForScope(id ClientID, scope Inst
 	traits.LifecycleKind = definition.ProjectPolicy.LifecycleKind
 	traits.SavedDependenciesDeferred = false
 	traits.BindsNativeProfileRoot = true
+	traits.UsesManagedStdioLauncher = traits.UsesManagedStdioLauncher || definition.ProjectPolicy.UsesManagedStdioLauncher
+	traits.RequiresActiveNativeProjection = traits.RequiresActiveNativeProjection || definition.ProjectPolicy.RequiresActiveNativeProjection
 	if definition.ProjectPolicy.TracksNativeEffects {
 		traits.TracksNativeEffects = true
 	}

@@ -15,6 +15,28 @@ import (
 // Callers needing an atomic environment proof hold their existing mutation lock;
 // state and captured profiles are also checked around observational callbacks.
 func (e *Engine) VerifyPreparedBinding(ctx context.Context, prepared *PreparedOperation) (bool, error) {
+	return e.observePreparedBinding(ctx, prepared, func(observation preparedBindingObservation) (bool, error) {
+		return observation.service.InspectOwnedBinding(ctx, observation.input, observation.plan, observation.installation, observation.binding)
+	})
+}
+
+// VerifyPreparedProjection admits only a current receipt-bound projection. It
+// does not qualify native activation, authentication or model availability.
+func (e *Engine) VerifyPreparedProjection(ctx context.Context, prepared *PreparedOperation) (bool, error) {
+	return e.observePreparedBinding(ctx, prepared, func(observation preparedBindingObservation) (bool, error) {
+		return observation.service.InspectOwnedProjection(ctx, observation.input, observation.plan, observation.installation, observation.binding)
+	})
+}
+
+type preparedBindingObservation struct {
+	service      usecase.Service
+	input        usecase.AddInput
+	plan         domain.DeliveryPlan
+	installation domain.Installation
+	binding      domain.ClientBinding
+}
+
+func (e *Engine) observePreparedBinding(ctx context.Context, prepared *PreparedOperation, observe func(preparedBindingObservation) (bool, error)) (bool, error) {
 	if ctx == nil || prepared == nil || prepared.engine != e {
 		return false, ErrInvalidRequest
 	}
@@ -36,8 +58,8 @@ func (e *Engine) VerifyPreparedBinding(ctx context.Context, prepared *PreparedOp
 		return false, err
 	}
 	service := e.lifecycle(helper, prepared.facts, prepared.detected)
-	input := usecase.AddInput{Envelope: prepared.envelope, Client: prepared.client, Scope: domain.ScopeUser, BackendExecutable: prepared.req.ClientExecutable, EnvironmentAuthority: prepared.req.EnvironmentAuthority}
-	coherent, observedErr := service.InspectOwnedBinding(ctx, input, cloneObservedDeliveryPlan(prepared.observationPlan), installation, binding)
+	input := usecase.AddInput{Envelope: prepared.envelope, Client: prepared.client, Scope: e.scope(), BackendExecutable: prepared.req.ClientExecutable, EnvironmentAuthority: prepared.req.EnvironmentAuthority}
+	coherent, observedErr := observe(preparedBindingObservation{service: service, input: input, plan: cloneObservedDeliveryPlan(prepared.observationPlan), installation: installation, binding: binding})
 	if err := e.checkNativeObservation(ctx, prepared); err != nil {
 		return false, errors.Join(ErrPlanChanged, observedErr, err)
 	}

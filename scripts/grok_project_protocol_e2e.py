@@ -133,7 +133,8 @@ class Journey:
             require(path.resolve() == path and path.is_file() and digest(path) == expected,
                     "protected fixture changed: " + str(path))
 
-    def author(self, revision):
+    def author(self, revision, cwd=None):
+        self.fixture_cwd = cwd
         write(self.source / "plugin.json", {
             "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
             "name": NAME, "version": "1.0." + revision, "description": "Credential-free MCP E2E"})
@@ -144,11 +145,15 @@ class Journey:
             target.chmod(0o700)
         write(self.source / "skills" / NAME / "SKILL.md",
               "---\nname: " + NAME + "\ndescription: Local protocol fixture\n---\nNo model required.\n")
+        write(self.source / "runtime/keep.txt", "owned plugin-relative cwd fixture\n")
+        server = {"type": "stdio", "command": "./bin/probe", "args": [],
+                  "env": {"UAP_TEST_ROOT": str(self.root), "UAP_TEST_EVENTS": str(self.log),
+                          "UAP_TEST_NONCE": self.nonce, "UAP_TEST_REVISION": revision}}
+        if cwd is not None:
+            server["cwd"] = cwd
         write(self.source / "mcp.json", {
             "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
-            "mcpServers": {SERVER: {"type": "stdio", "command": "./bin/probe", "args": [],
-                "env": {"UAP_TEST_ROOT": str(self.root), "UAP_TEST_EVENTS": str(self.log),
-                        "UAP_TEST_NONCE": self.nonce, "UAP_TEST_REVISION": revision}}}})
+            "mcpServers": {SERVER: server}})
 
     def cli(self, label, verb, selector):
         argv = [self.installer, verb, selector, "--scope", "project", "--project-root", self.a,
@@ -184,16 +189,33 @@ class Journey:
         write(trust, "[folders." + json.dumps(str(self.a)) + "]\ntrusted = true\n")
         self.protected.update({config: digest(config), trust: digest(trust)})
 
+    def expected_runtime_cwd(self, active, data):
+        if self.fixture_cwd == "${PLUGIN_DATA}":
+            return data
+        if self.fixture_cwd == "./runtime":
+            return active / "runtime"
+        require(self.fixture_cwd is None, "unregistered cwd fixture")
+        return active
+
+    def capture_installed_config(self, stage, installation, binding, active):
+        original = read_owned(active / ".mcp.json", self.root)
+        self.evidence.setdefault("installed_config_receipts", []).append({
+            "stage": stage, "installation_id": installation["installation_id"], "binding": binding,
+            "path": str(active / ".mcp.json"), "bytes": len(original),
+            "sha256": hashlib.sha256(original).hexdigest(), "base64": base64.b64encode(original).decode()})
+
     def protocol(self, stage, revision, marker, create=False):
         installation, binding, active, data = selected_installation(self.a, NAME)
-        server = installed_server(active, data, self.root, SERVER, self.nonce)
+        self.capture_installed_config(stage, installation, binding, active)
+        expected_cwd = self.expected_runtime_cwd(active, data)
+        server = installed_server(active, data, self.root, SERVER, self.nonce, digest(self.installer), expected_cwd)
         before = events(self.log, self.root)
         self.run(stage + "-native-doctor", [self.grok, "mcp", "doctor", "--json"], timeout=45)
         native_rows = events(self.log, self.root)[len(before):]
         native = observed_protocol(native_rows, self.nonce, ("initialize", "tools/list"))
         before = events(self.log, self.root)
         self.check()
-        direct = exercise(server, self.env, self.nonce, revision, marker, create)
+        direct = exercise(server, self.env, self.nonce, revision, marker, create, self.a, expected_cwd)
         self.check()
         direct_rows = events(self.log, self.root)[len(before):]
         correlated = observed_protocol(direct_rows, self.nonce, ("initialize", "tools/list", "tools/call"))
@@ -297,6 +319,18 @@ class Journey:
                 and repaired_binding["client_binding_id"] == binding["client_binding_id"]
                 and repaired_active == active and repaired_data == data,
                 "repair changed the held package, binding or data authority")
+        self.evidence["pre_removal_data_receipts"] = repaired["data_receipts"]
+        for stage, revision, cwd in (("plugin-cwd", "2", "./runtime"), ("data-cwd", "3", "${PLUGIN_DATA}")):
+            self.author(revision, cwd=cwd)
+            self.cli(stage + "-update", "update", self.source)
+            current, current_binding, current_active, current_data = self.protocol(stage, revision, marker)
+            require(current["installation_id"] == repaired["installation_id"]
+                    and current["data_receipts"] == repaired["data_receipts"]
+                    and current_binding["client_binding_id"] == repaired_binding["client_binding_id"]
+                    and current_active == active and current_data == data,
+                    "cwd update changed binding or retained data authority")
+            repaired = current
+        self.protocol("restarted-data-cwd", "3", marker)
         self.evidence["pre_removal_data_receipts"] = repaired["data_receipts"]
         self.cli("remove", "remove", NAME)
         require(not os.path.lexists(active), "owned package survives removal")
