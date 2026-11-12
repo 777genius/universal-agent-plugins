@@ -63,6 +63,15 @@ func verifySessionInventory(body []byte, path string, names []string) error {
 		if !expected[name] || row["path"] != path || row["disabled"] != false || transport != "stdio" {
 			return fmt.Errorf("cline did not select the exact owned project source")
 		}
+		// File-level verification rejects automatic approvals. If the native
+		// inventory exposes its effective approval state, enforce it too:
+		// startup consent must not become tool-call consent.
+		if approval, present := row["autoApprove"]; present {
+			items, ok := approval.([]any)
+			if !ok || len(items) != 0 {
+				return fmt.Errorf("cline native inventory reports automatic MCP approvals for %q", name)
+			}
+		}
 		delete(expected, name)
 	}
 	return nil
