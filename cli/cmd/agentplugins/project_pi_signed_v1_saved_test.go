@@ -280,8 +280,26 @@ func TestPiProjectSignedV1SavedFourPackageLifecycle(t *testing.T) {
 		t.Fatal("Project A installation changed unselected Project B Pi native config")
 	}
 	journey.run(t, journey.a, "remove", "marketing-kit", "--target", "pi", "--yes")
-	if got := len(journey.state(t, journey.a).EnvironmentReceipts); got != 0 {
-		t.Fatalf("Project Pi removal left signed test-only owned graph: %d", got)
+	removed := journey.state(t, journey.a)
+	if len(removed.EnvironmentReceipts) != 0 || len(removed.Installations) != 0 {
+		t.Fatalf("Project Pi removal left signed test-only owned graph: %+v", removed)
+	}
+	projectANative := piSignedProjectNativeRoot(journey, journey.a)
+	if _, err := os.Stat(filepath.Join(projectANative, "skills", "campaign-planning", "SKILL.md")); !os.IsNotExist(err) {
+		t.Fatalf("Project Pi removal left an owned native Skill (or unexpected stat error): %v", err)
+	}
+	if got := projectJourneyRead(t, filepath.Join(projectANative, "skills", "foreign", "SKILL.md")); got != "foreign Pi skill\n" {
+		t.Fatalf("Project Pi removal damaged foreign native Skill: %q", got)
+	}
+	var nativeAfter struct {
+		MCPServers map[string]json.RawMessage `json:"mcpServers"`
+		Keep       bool                       `json:"keep"`
+	}
+	if err := json.Unmarshal([]byte(projectJourneyRead(t, filepath.Join(projectANative, "mcp.json"))), &nativeAfter); err != nil {
+		t.Fatal(err)
+	}
+	if !nativeAfter.Keep || len(nativeAfter.MCPServers) != 1 || nativeAfter.MCPServers["foreign"] == nil {
+		t.Fatalf("Project Pi removal damaged foreign MCP or left owned native entries: %+v", nativeAfter)
 	}
 	if got := len(journey.state(t, "").EnvironmentReceipts); got != 4 {
 		t.Fatalf("Project Pi removal changed User receipts: %d", got)
