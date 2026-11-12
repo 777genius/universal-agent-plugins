@@ -145,6 +145,46 @@ class NativeAdmissionContracts(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "config inventory bound"):
                 snapshot(root)
 
+    @unittest.skipUnless(os.name == "posix" and hasattr(os, "O_NOFOLLOW")
+                         and hasattr(os, "O_DIRECTORY"), "native snapshot is POSIX-only")
+    def test_snapshot_detects_empty_directory_and_mode_only_foreign_changes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            before = snapshot(root)
+            directory = root / "foreign-empty"
+            directory.mkdir(mode=0o700)
+            after = snapshot(root)
+            self.assertNotEqual(before, after)
+            self.assertEqual(after["foreign-empty"],
+                             {"kind": "directory", "mode": 0o700})
+            directory.chmod(0o750)
+            self.assertNotEqual(snapshot(root), after)
+            directory.rmdir()
+            self.assertEqual(snapshot(root), before)
+
+    @unittest.skipUnless(os.name == "posix" and hasattr(os, "O_NOFOLLOW")
+                         and hasattr(os, "O_DIRECTORY"), "native snapshot is POSIX-only")
+    def test_snapshot_refuses_empty_directory_alias_swap_before_metadata_capture(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary)
+            root, foreign = parent / "owned", parent / "foreign"
+            root.mkdir()
+            foreign.mkdir()
+            directory = root / "empty"
+            directory.mkdir()
+            original = os.open
+
+            def swap(path, flags, *args, **kwargs):
+                if path == "empty" and kwargs.get("dir_fd") is not None:
+                    directory.rmdir()
+                    directory.symlink_to(foreign, target_is_directory=True)
+                return original(path, flags, *args, **kwargs)
+
+            with patch.object(os, "open", side_effect=swap):
+                with self.assertRaises(OSError):
+                    snapshot(root)
+            self.assertEqual(list(foreign.iterdir()), [])
+
     def test_excluded_clients_are_not_admitted(self):
         for target in ("vscode", "chatgptweb", "chatgpt", "codex", "kimi"):
             self.assertNotIn(target, CLIENTS)

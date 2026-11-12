@@ -61,6 +61,27 @@ def read_anchored_snapshot(root_fd, parts, expected):
             os.close(descriptor)
 
 
+def read_anchored_directory_mode(root_fd, parts, expected):
+    """Record owned directory metadata only after no-follow identity validation."""
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
+    opened = []
+    parent = root_fd
+    try:
+        for segment in parts:
+            child = os.open(segment, flags, dir_fd=parent)
+            opened.append(child)
+            parent = child
+        actual = os.fstat(parent)
+        identity = lambda meta: (meta.st_dev, meta.st_ino, meta.st_mode,
+                                 meta.st_mtime_ns, meta.st_ctime_ns)
+        require(stat.S_ISDIR(actual.st_mode) and identity(actual) == identity(expected),
+                "config directory changed before capture")
+        return stat.S_IMODE(actual.st_mode)
+    finally:
+        for descriptor in reversed(opened):
+            os.close(descriptor)
+
+
 def snapshot(root):
     """Capture only hashes/metadata, never native-generated file contents or foreign data."""
     require(root.is_dir() and root.resolve() == root and not root.is_symlink(),
@@ -86,6 +107,12 @@ def snapshot(root):
             meta = path.lstat()
             require(not stat.S_ISLNK(meta.st_mode), "native probe created an alias")
             if stat.S_ISDIR(meta.st_mode):
+                # Empty directories and mode changes are foreign-state changes,
+                # even when no regular file has been added or removed.
+                out[str(relative)] = {
+                    "kind": "directory",
+                    "mode": read_anchored_directory_mode(root_fd, relative.parts, meta),
+                }
                 continue
             require(stat.S_ISREG(meta.st_mode) and meta.st_size <= 1 << 20,
                     "config capture bound")
