@@ -45,6 +45,32 @@ jobs:
         run: |
           test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
           git diff --exit-code
+      # Docker Hub's real immutable MCP package invokes the Docker CLI.
+      # Hosted macOS does not ship it; provide the genuine client binary only,
+      # never a mock executable, disable the preflight, or start Docker daemon.
+      - name: Provide genuine Docker CLI when the Docker Hub shard needs it
+        if: ${{ matrix.shard == 0 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v docker >/dev/null 2>&1; then
+            case "${{ runner.os }}" in
+              macOS)
+                brew install docker
+                ;;
+              Windows)
+                choco install docker-cli --version=29.8.0 --yes --no-progress
+                export PATH="/c/ProgramData/chocolatey/bin:$PATH"
+                printf '%s\n' 'C:\ProgramData\chocolatey\bin' >> "$GITHUB_PATH"
+                ;;
+              *)
+                echo 'Docker Hub real MCP source requires an installed Docker CLI on this runner' >&2
+                exit 1
+                ;;
+            esac
+          fi
+          command -v docker
+          docker --version
       - name: Full pinned real-source Pi signed-test saved User and Project lifecycle
         shell: bash
         env:
