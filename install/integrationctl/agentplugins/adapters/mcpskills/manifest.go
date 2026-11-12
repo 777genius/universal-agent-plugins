@@ -140,25 +140,25 @@ func validateSkill(s Skill) ([]Resource, bool, error) {
 }
 
 func validateResourceCollection(skillURI, root string, resources []Resource) error {
-seen := make(map[string]bool, len(resources))
-var total int64
-found := false
-for _, resource := range resources {
-	if err := validateURI(resource.URI); err != nil || !strings.HasPrefix(resource.URI, root+"/") ||
-		resource.Size < 0 || resource.Size > maxSkillBytes || !validDigest(resource.Digest) || seen[resource.URI] {
-		return ErrInvalidEntry
-	}
-	seen[resource.URI] = true
-	if resource.URI == skillURI {
-		found = true
-	}
-	total += resource.Size
-	if total > maxSkillBytes {
-		return ErrInvalidEntry
-	}
+	seen := make(map[string]bool, len(resources))
+	var total int64
+	found := false
+	for _, resource := range resources {
+		if err := validateURI(resource.URI); err != nil || !strings.HasPrefix(resource.URI, root+"/") ||
+			resource.Size < 0 || resource.Size > maxSkillBytes || !validDigest(resource.Digest) || seen[resource.URI] {
+			return ErrInvalidEntry
+		}
+		seen[resource.URI] = true
+		if resource.URI == skillURI {
+			found = true
+		}
+		total += resource.Size
+		if total > maxSkillBytes {
+			return ErrInvalidEntry
+		}
 }
-if !found {
-	return ErrInvalidEntry
+	if !found {
+		return ErrInvalidEntry
 }
 	return nil
 }
