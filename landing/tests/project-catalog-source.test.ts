@@ -145,6 +145,19 @@ test('Pi exact-source route refuses unsound or unsupported signed-source project
   }
 });
 
+test('foreign extensions cannot use the alternate portable Pi Project route', () => {
+  for (const components of [
+    ['extensions'], ['skills', 'extensions'], ['mcp', 'extensions'],
+  ] as const) {
+    const plugin = reviewed();
+    const release = plugin.distributions[0]!.releases[0]!;
+    release.components = [...components];
+    assert.ok(release.source.revision, 'Retain the exact reviewed source');
+    assert.equal(pinnedPiProjectSelection(plugin), undefined);
+    assert.throws(() => pinnedPiProjectCommands(plugin), /No eligible Pi Project/);
+  }
+});
+
 test('signed Pi Project grant keeps the original signed short-name route', () => {
   const plugin = reviewed();
   plugin.distributions[0]!.releases[0]!.targets.push({
@@ -152,6 +165,19 @@ test('signed Pi Project grant keeps the original signed short-name route', () =>
   });
   assert.ok(projectCatalogSelection(plugin, ['pi']).resolution.distribution);
   assert.equal(pinnedPiProjectSource(plugin), undefined);
+  assert.equal(projectCatalogCommands(plugin, ['pi']).add,
+    'npx -y universal-agent-plugins add gitlab --target pi --scope project');
+});
+
+test('signed Pi extension Project grant retains its normal signed route', () => {
+  const plugin = reviewed();
+  const release = plugin.distributions[0]!.releases[0]!;
+  release.components = ['extensions'];
+  release.targets = [{
+    client: 'pi', authentication: 'required', delivery: 'managed', scopes: ['user', 'project'],
+  }];
+  assert.ok(projectCatalogSelection(plugin, ['pi']).resolution.distribution);
+  assert.equal(pinnedPiProjectSelection(plugin), undefined);
   assert.equal(projectCatalogCommands(plugin, ['pi']).add,
     'npx -y universal-agent-plugins add gitlab --target pi --scope project');
 });

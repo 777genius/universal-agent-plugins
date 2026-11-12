@@ -123,9 +123,12 @@ export function pinnedPiProjectSelection(
     // portable native package that Pi can install.
     if (target.app_binding) continue;
     const distribution = resolveDistribution(plugin, [target.client], 'user').distribution;
+    // Generic extension capability does not prove a foreign extension carries
+    // Pi's native manifest binding. Only portable Skills/MCP may use this
+    // alternate route; explicitly signed Pi releases keep their normal path.
     if (!distribution || !distribution.components.length ||
         !distribution.components.every((component) =>
-          ['skills', 'mcp', 'extensions'].includes(component) &&
+          ['skills', 'mcp'].includes(component) &&
           projectComponentSupported('pi', component))) continue;
 
     const signedRelease = distribution.releases.find((release) =>
