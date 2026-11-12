@@ -1,6 +1,7 @@
 """Inert decoder/authority contracts; no vendor client is mocked as a PASS."""
 import json
 import base64
+import os
 import sys
 import types
 from unittest.mock import patch
@@ -41,6 +42,70 @@ class NativeAdmissionContracts(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "alias"):
                 snapshot(root)
             self.assertEqual((root / "owned").read_text(), "sentinel")
+
+    @unittest.skipUnless(os.name == "posix" and hasattr(os, "O_NOFOLLOW")
+                         and hasattr(os, "O_DIRECTORY"), "requires POSIX no-follow dirfd")
+    def test_snapshot_refuses_leaf_alias_swap_before_open(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary)
+            root = parent / "owned"
+            root.mkdir()
+            leaf = root / "config"
+            leaf.write_text("safe")
+            foreign = parent / "foreign-secret"
+            foreign.write_text("do-not-capture")
+            original = os.open
+
+            def swap(path, flags, *args, **kwargs):
+                if path == "config" and kwargs.get("dir_fd") is not None:
+                    leaf.unlink()
+                    leaf.symlink_to(foreign)
+                return original(path, flags, *args, **kwargs)
+
+            with patch.object(os, "open", side_effect=swap):
+                with self.assertRaises(OSError):
+                    snapshot(root)
+            self.assertEqual(foreign.read_text(), "do-not-capture")
+
+    @unittest.skipUnless(os.name == "posix" and hasattr(os, "O_NOFOLLOW")
+                         and hasattr(os, "O_DIRECTORY"), "requires POSIX no-follow dirfd")
+    def test_snapshot_refuses_ancestor_alias_and_fifo_swap(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary)
+            root = parent / "owned"
+            root.mkdir()
+            child = root / "sub"
+            child.mkdir()
+            (child / "config").write_text("safe")
+            foreign = parent / "foreign"
+            foreign.mkdir()
+            (foreign / "config").write_text("do-not-capture")
+            original = os.open
+
+            def swap_ancestor(path, flags, *args, **kwargs):
+                if path == "sub" and kwargs.get("dir_fd") is not None:
+                    (child / "config").unlink()
+                    child.rmdir()
+                    child.symlink_to(foreign, target_is_directory=True)
+                return original(path, flags, *args, **kwargs)
+
+            with patch.object(os, "open", side_effect=swap_ancestor):
+                with self.assertRaises(OSError):
+                    snapshot(root)
+            child.unlink()
+            child.mkdir()
+            leaf = child / "config"
+            leaf.write_text("safe")
+
+            def swap_fifo(path, flags, *args, **kwargs):
+                if path == "config" and kwargs.get("dir_fd") is not None:
+                    leaf.unlink()
+                    os.mkfifo(leaf)
+                return original(path, flags, *args, **kwargs)
+
+            with patch.object(os, "open", side_effect=swap_fifo):
+                with self.assertRaisesRegex(ValueError, "config capture bound"):
+                    snapshot(root)
 
     def test_raw_bytes_and_modes_preserved(self):
         with tempfile.TemporaryDirectory() as temporary:

@@ -32,24 +32,67 @@ def put(path, body):
     path.chmod(0o600)
 
 
+def read_anchored_snapshot(root_fd, parts, expected):
+    """Open each component beneath the owned directory without following aliases."""
+    flags = os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
+    opened = []
+    parent = root_fd
+    try:
+        for segment in parts[:-1]:
+            child = os.open(segment, flags | os.O_DIRECTORY, dir_fd=parent)
+            opened.append(child)
+            parent = child
+        leaf = os.open(parts[-1], flags | os.O_NONBLOCK, dir_fd=parent)
+        opened.append(leaf)
+        before = os.fstat(leaf)
+        require(stat.S_ISREG(before.st_mode) and before.st_size <= 1 << 20,
+                "config capture bound")
+        identity = lambda meta: (meta.st_dev, meta.st_ino, meta.st_mode, meta.st_size,
+                                 meta.st_mtime_ns, meta.st_ctime_ns)
+        require(identity(before) == identity(expected), "config changed before capture")
+        with os.fdopen(os.dup(leaf), "rb") as stream:
+            raw = stream.read((1 << 20) + 1)
+        require(len(raw) <= 1 << 20 and identity(os.fstat(leaf)) == identity(before),
+                "config changed during capture")
+        return raw
+    finally:
+        for descriptor in reversed(opened):
+            os.close(descriptor)
+
+
 def snapshot(root):
-    """Capture ordinary test config bytes, not aliases or an unbounded cache."""
+    """Capture test-only config without foreign content or raced path aliases."""
     require(root.is_dir() and root.resolve() == root and not root.is_symlink(),
             "snapshot root is missing or aliased")
-    out = {}
-    for path in sorted(root.rglob("*")):
-        meta = path.lstat()
-        require(not path.is_symlink(), "native probe created an alias")
-        if path.is_dir():
-            continue
-        require(stat.S_ISREG(meta.st_mode) and meta.st_size <= 1 << 20, "config capture bound")
-        raw = path.read_bytes()
-        out[str(path.relative_to(root))] = {
-            "sha256": hashlib.sha256(raw).hexdigest(), "mode": stat.S_IMODE(meta.st_mode),
-            "bytes": len(raw), "base64": base64.b64encode(raw).decode(),
-        }
-        require(len(out) <= 256, "config inventory bound")
-    return out
+    require(os.name == "posix" and all(hasattr(os, flag) for flag in
+            ("O_DIRECTORY", "O_NOFOLLOW", "O_NONBLOCK"))
+            and os.open in os.supports_dir_fd, "secure snapshot unavailable")
+    root_meta = root.lstat()
+    directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
+    root_fd = os.open(root, directory_flags)
+    try:
+        observed = os.fstat(root_fd)
+        require((root_meta.st_dev, root_meta.st_ino) == (observed.st_dev, observed.st_ino),
+                "snapshot root changed")
+        out = {}
+        for path in sorted(root.rglob("*")):
+            relative = path.relative_to(root)
+            require(0 < len(relative.parts) <= 32 and len(out) < 256,
+                    "config inventory bound")
+            meta = path.lstat()
+            require(not stat.S_ISLNK(meta.st_mode), "native probe created an alias")
+            if stat.S_ISDIR(meta.st_mode):
+                continue
+            require(stat.S_ISREG(meta.st_mode) and meta.st_size <= 1 << 20,
+                    "config capture bound")
+            raw = read_anchored_snapshot(root_fd, relative.parts, meta)
+            out[str(relative)] = {
+                "sha256": hashlib.sha256(raw).hexdigest(), "mode": stat.S_IMODE(meta.st_mode),
+                "bytes": len(raw), "base64": base64.b64encode(raw).decode(),
+            }
+        return out
+    finally:
+        os.close(root_fd)
 
 
 def native_json(body):
