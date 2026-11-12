@@ -57,6 +57,7 @@ async function setup(
     | 'selected'
     | 'acquisition'
     | 'references'
+    | 'recoveryWitness'
     | 'failed'
     | 'completeExternal'
     | 'completeResolved'
@@ -124,6 +125,34 @@ async function setup(
       },
       attempt_history: [],
     };
+  }
+  if (mode === 'recoveryWitness') {
+    const primary = shard.records[0];
+    if (primary.status !== 'partial' || primary.findings.length === 0)
+      throw new Error('Expected a source-bound partial report with grouped findings');
+    const original = structuredClone(primary);
+    for (const key of ['freshness', 'target_revision', 'retry', 'attempt_history'])
+      delete original[key];
+    // Two authenticated scanner outputs have equal group counts, but one
+    // OSV-dependent advisory differs. Do not manufacture a clean scan or a
+    // synthetic combined scanner digest.
+    const distinct = structuredClone(original.findings[0]);
+    distinct.id = 'sha256:' + '9'.repeat(64);
+    distinct.message = 'Independent OSV dependency advisory: unpinned version';
+    distinct.rule = 'SC4';
+    distinct.severity = 'LOW';
+    original.findings[0] = distinct;
+    original.report_digest = 'sha256:' + '8'.repeat(64);
+    primary.findings_truncated = true;
+    primary.coverage.grouping_complete = false;
+    primary.coverage.reasons.push(
+      { code: 'recovery_conflict', message: 'Independent authenticated scans differ.' },
+      { code: 'normalization_truncated', message: 'Both original reports remain available.' },
+    );
+    primary.recovery_witnesses = [{
+      origin: { run_id: 42854039402, run_attempt: 1 },
+      record: original,
+    }];
   }
   if (mode === 'failed') {
     for (const record of shard.records) {
@@ -456,6 +485,42 @@ async function setup(
     body,
   };
 }
+for (const locale of ['en', 'ru'] as const) {
+  for (const width of [1280, 390]) {
+    test(`independent recovery findings remain visible without claiming a complete scan (${locale}, ${width}px)`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      const { assessment, errors } = await setup(page, 'recoveryWitness');
+      if (locale === 'ru') await navigate(page, '/plugins/', 'ru', '?q=i18n-state-00');
+      await expect(assessment).toHaveClass(/skillspector--incomplete/);
+      await assessment.locator(':scope > summary').click();
+      const first = assessment.locator('.skillspector__record').first();
+      await first.locator(':scope > summary').click();
+      const title = locale === 'ru' ? 'Отдельная подтверждённая проверка' : 'Independent authenticated scan';
+      const witness = first.locator('.skillspector__record-reasons').filter({ hasText: title });
+      await expect(witness).toBeVisible();
+      await expect(witness).toContainText('42854039402');
+      await expect(witness).toContainText('sha256:' + '8'.repeat(64));
+      const signal = witness.locator('.skillspector__findings > li');
+      await expect(signal).toHaveCount(1);
+      await expect(signal.first()).toContainText('SC4 · LOW');
+      await expect(signal.first()).toContainText('Independent OSV dependency advisory: unpinned version');
+      await expect(first.locator('.skillspector__record-body > .skillspector__findings > li')).toHaveCount(4);
+      await expect(assessment).not.toContainText(
+        locale === 'ru' ? 'Статическая проверка: замечаний нет' : 'No static findings',
+      );
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      const screenshotDir = process.env.UAP_LANDING_SCREENSHOT_DIR;
+      if (screenshotDir) {
+        mkdirSync(screenshotDir, { recursive: true });
+        await assessment.locator('.skillspector__dialog').screenshot({
+          path: `${screenshotDir}/recovery-witness-${locale}-${width}.png`,
+        });
+      }
+      expect(errors).toEqual([]);
+    });
+  }
+}
+
 for (const width of [1280, 390]) {
   test(`automated review and Skill scan align their icons, type, spacing and chevron (${width}px)`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
