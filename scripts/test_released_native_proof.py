@@ -195,11 +195,11 @@ class ReleasedNativeProofTests(unittest.TestCase):
     def test_windows_hermes_pinned_first_launch_repairs_only_pe_before_baseline(self):
         exe = self.root / "hermes.exe"
         def make(loader, entry=b"print('pinned')"):
-            exe.write_bytes(loader + b"#!pinned-python -I\\n")
+            exe.write_bytes(loader + b"#!pinned-python -I\n")
             with zipfile.ZipFile(exe, "a") as archive:
                 archive.writestr(zipfile.ZipInfo("__main__.py",
                     date_time=(2026, 11, 12, 12, 0, 0)), entry)
-        make(b"MZfirst-pinned-stub\\n")
+        make(b"MZfirst-pinned-stub\n")
         original = proof.sha(exe)
         calls = []
         def identity(client, env):
@@ -212,7 +212,7 @@ class ReleasedNativeProofTests(unittest.TestCase):
         def run_preflight(command, env):
             calls.append(command)
             if command[1:3] == ["skills", "list"]:
-                make(b"MZrepublished-pinned-stub\\n")
+                make(b"MZrepublished-pinned-stub\n")
             return "pinned vendor success"
         env = {"HERMES_BIN": str(exe)}
         with patch.object(proof, "vendor_identity", side_effect=identity), \
@@ -229,9 +229,9 @@ class ReleasedNativeProofTests(unittest.TestCase):
                                 **baseline, "launcher_content_sha256": "b" * 64}))
         def mutate_payload(command, env):
             if command[1:3] == ["skills", "list"]:
-                make(b"MZfirst-pinned-stub\\n", b"print('mutated')")
+                make(b"MZfirst-pinned-stub\n", b"print('mutated')")
             return "pinned vendor success"
-        make(b"MZfirst-pinned-stub\\n")
+        make(b"MZfirst-pinned-stub\n")
         with patch.object(proof, "vendor_identity", side_effect=identity), \
              patch.object(proof, "output", side_effect=mutate_payload):
             with self.assertRaisesRegex(ValueError, "launcher code or ZIP metadata"):
@@ -239,7 +239,7 @@ class ReleasedNativeProofTests(unittest.TestCase):
 
     def test_windows_hermes_first_launch_cmd_and_runtime_fail_closed(self):
         cmd = self.root / "hermes.cmd"
-        cmd.write_bytes(b"@echo off\\r\\nexit /b 0\\r\\n")
+        cmd.write_bytes(b"@echo off\r\nexit /b 0\r\n")
         env = {"HERMES_BIN": str(cmd)}
         commands = []
         def identity(client, env):
@@ -248,7 +248,7 @@ class ReleasedNativeProofTests(unittest.TestCase):
                     "launcher_kind": "cmd", "executable_sha256": proof.sha(cmd)}
         def mutate_cmd(command, env):
             commands.append(command)
-            cmd.write_bytes(cmd.read_bytes() + b"rem changed\\r\\n")
+            cmd.write_bytes(cmd.read_bytes() + b"rem changed\r\n")
             return "ok"
         with patch.object(proof, "vendor_identity", side_effect=identity), \
              patch.object(proof, "output", side_effect=mutate_cmd):
@@ -256,7 +256,7 @@ class ReleasedNativeProofTests(unittest.TestCase):
                 proof.settle_windows_hermes_launcher(env)
         self.assertTrue(all(argv[:4] == ["cmd.exe", "/d", "/c", str(cmd)]
                             for argv in commands))
-        cmd.write_bytes(b"@echo off\\r\\nexit /b 0\\r\\n")
+        cmd.write_bytes(b"@echo off\r\nexit /b 0\r\n")
         before, after = identity("hermes", env), identity("hermes", env)
         after["runtime_sha256"] = "b" * 64
         with patch.object(proof, "vendor_identity", side_effect=[before, after]), \
