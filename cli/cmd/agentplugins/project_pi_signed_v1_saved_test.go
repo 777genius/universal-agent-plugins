@@ -281,8 +281,15 @@ func TestPiProjectSignedV1SavedFourPackageLifecycle(t *testing.T) {
 	}
 	journey.run(t, journey.a, "remove", "marketing-kit", "--target", "pi", "--yes")
 	removed := journey.state(t, journey.a)
-	if len(removed.EnvironmentReceipts) != 0 || len(removed.Installations) != 0 {
-		t.Fatalf("Project Pi removal left signed test-only owned graph: %+v", removed)
+	if len(removed.EnvironmentReceipts) != 0 {
+		t.Fatalf("Project Pi removal left owned native receipts: %d", len(removed.EnvironmentReceipts))
+	}
+	// Uninstall intentionally retains package data and historical installation
+	// records. It must not retain any active client bindings.
+	for _, installed := range removed.Installations {
+		if !installed.DataRetained || len(installed.Clients) != 0 {
+			t.Fatalf("Project Pi removal left an active binding or lost retained data: %+v", installed)
+		}
 	}
 	projectANative := piSignedProjectNativeRoot(journey, journey.a)
 	if _, err := os.Stat(filepath.Join(projectANative, "skills", "campaign-planning", "SKILL.md")); !os.IsNotExist(err) {
