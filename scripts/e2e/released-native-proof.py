@@ -14,6 +14,7 @@ import re
 import signal
 import subprocess
 import sys
+import zipfile
 
 TARGETS = ("linux-amd64", "darwin-arm64", "windows-amd64")
 REPOSITORY = "777genius/universal-agent-plugins"
@@ -121,6 +122,31 @@ def pinned_vendor_version(client, version):
     return expected
 
 
+def windows_hermes_launcher_content_sha256(binary):
+    """Hash the executable loader and the sole Python entrypoint, not ZIP timestamps.
+
+    The pinned Hermes launcher is a distlib self-extracting EXE. Its upstream
+    _launchers.py explicitly treats ZIP timestamp metadata as non-identity.
+    Reject anything other than the expected single-entry executable; never
+    normalize an arbitrary PE file or a changed loader/entrypoint.
+    """
+    require(binary.suffix.lower() == ".exe", "Hermes Windows launcher must be an EXE")
+    with zipfile.ZipFile(binary) as archive:
+        entries = archive.infolist()
+        require(len(entries) == 1 and entries[0].filename == "__main__.py"
+                and not entries[0].is_dir(), "unexpected Hermes launcher ZIP structure")
+        script = archive.read(entries[0])
+        with binary.open("rb") as stream:
+            preamble = stream.read(entries[0].header_offset)
+    require(preamble.startswith(b"MZ") and b"#!"
+            in preamble, "invalid Hermes launcher executable preamble")
+    digest = hashlib.sha256()
+    for part in (preamble, script):
+        digest.update(len(part).to_bytes(8, "big"))
+        digest.update(part)
+    return digest.hexdigest()
+
+
 def vendor_identity(client, env):
     binary = Path(env["HERMES_BIN" if client == "hermes" else "AGY_BIN"]).resolve(strict=True)
     command = [str(binary), "--version"]
@@ -140,16 +166,25 @@ def vendor_identity(client, env):
                 and Path(argv[0]).is_absolute() and argv[1:3] == ["-I", "-c"],
                 "Hermes native runtime command is invalid")
         runtime = Path(argv[0]).resolve(strict=True)
-    return {"version_output": version, "executable_sha256": sha(binary),
-            "runtime_sha256": sha(runtime)}
+    identity = {"version_output": version, "executable_sha256": sha(binary),
+                "runtime_sha256": sha(runtime)}
+    if client == "hermes" and os.name == "nt" and binary.suffix.lower() == ".exe":
+        identity["launcher_content_sha256"] = windows_hermes_launcher_content_sha256(binary)
+    return identity
 
 
 def vendor_comparison(client, vendor):
     if client != "hermes":
         return vendor
     # Version advisories are observations; executable and runtime bytes stay exact.
-    return {"version": pinned_vendor_version(client, vendor["version_output"]),
-            **{key: vendor[key] for key in ("executable_sha256", "runtime_sha256")}}
+    comparison = {"version": pinned_vendor_version(client, vendor["version_output"]),
+                  "runtime_sha256": vendor["runtime_sha256"]}
+    # Keep exact-byte enforcement for every other launcher. For pinned Windows
+    # distlib EXEs, separately record raw SHA in the transcript but compare
+    # unchanged loader+entrypoint content (ZIP timestamp metadata may rotate).
+    key = "launcher_content_sha256" if "launcher_content_sha256" in vendor else "executable_sha256"
+    comparison[key] = vendor[key]
+    return comparison
 
 
 def vendor_diagnostics(transcript, before, after=None, error=None):
@@ -257,8 +292,11 @@ def aggregate(args):
                 and proof.get("transcript_sha256") == sha(path.with_name("transcript.log")),
                 "native proof did not pass with the exact binary and transcript")
         vendor = proof.get("vendor", {})
-        require(set(vendor) == {"version_output", "executable_sha256", "runtime_sha256"}
-                and all(re.fullmatch(DIGEST, vendor[key]) for key in ("executable_sha256", "runtime_sha256")),
+        required_vendor = {"version_output", "executable_sha256", "runtime_sha256"}
+        if args.client == "hermes" and target == "windows-amd64":
+            required_vendor.add("launcher_content_sha256")
+        require(set(vendor) == required_vendor
+                and all(re.fullmatch(DIGEST, vendor[key]) for key in required_vendor - {"version_output"}),
                 "native vendor receipt is incomplete")
         pinned_vendor_version(args.client, vendor["version_output"])
     require(seen == set(TARGETS), "native target set is incomplete")
