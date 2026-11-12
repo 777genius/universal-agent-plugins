@@ -172,6 +172,39 @@ class KimiNativeWebProbeTests(unittest.TestCase):
         killpg.assert_called_once_with(4567, native.signal.SIGKILL)
         child.wait.assert_called_once_with(timeout=5)
 
+    @patch.object(native.os, "killpg")
+    @patch.object(native, "start_server")
+    @patch.object(native, "list_servers")
+    @patch.object(native, "response")
+    def test_failed_untrust_network_cleanup_still_kills_native_child(
+            self, api, catalog, startup, killpg):
+        child = MagicMock(pid=5791)
+        startup.return_value = ("http://127.0.0.1:12345", "private-inert-token", child)
+        config = Path("/test/project/.kimi-code/mcp.json")
+        row = {"name": native.SERVER_NAME, "source": "global",
+               "origin": str(config), "mutable": False}
+        catalog.side_effect = [{}, {native.SERVER_NAME: row}]
+        paths = []
+
+        def reply(path, base, token, method="GET", data=None):
+            paths.append(path)
+            if path == "/api/v1/workspaces":
+                return {"id": "isolated-project"}
+            if path.endswith("/trust"):
+                return {"trusted": method == "POST"}
+            if path == "/api/v2/mcp/servers:test":
+                return {"success": True, "output": "uap_ping"}
+            if path.endswith("/untrust"):
+                raise TimeoutError("native revoke acknowledgment lost")
+            raise AssertionError("unexpected native API route")
+
+        api.side_effect = reply
+        with self.assertRaisesRegex(TimeoutError, "native revoke acknowledgment lost"):
+            native.probe(Path("/test/kimi"), {}, Path("/test/project"), config)
+        self.assertEqual(sum(path.endswith("/untrust") for path in paths), 2)
+        killpg.assert_called_once_with(5791, native.signal.SIGKILL)
+        child.wait.assert_called_once_with(timeout=5)
+
     def test_private_token_requires_owned_regular_nonworld_readable_file(self):
         with tempfile.TemporaryDirectory() as temp:
             home = Path(temp)
