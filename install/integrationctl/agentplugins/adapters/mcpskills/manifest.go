@@ -3,6 +3,7 @@
 package mcpskills
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
@@ -53,6 +54,23 @@ type Skill struct {
 	URI         string          `json:"uri"`
 	Frontmatter map[string]any  `json:"frontmatter"`
 	Resources   json.RawMessage `json:"resources"`
+}
+
+// UnmarshalJSON preserves JSON numeric precision for exact comparison with
+// the YAML frontmatter. The default map decoder rounds large integers to float64.
+func (s *Skill) UnmarshalJSON(data []byte) error {
+	var wire struct {
+		URI         string          `json:"uri"`
+		Frontmatter map[string]any  `json:"frontmatter"`
+		Resources   json.RawMessage `json:"resources"`
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+	if err := decoder.Decode(&wire); err != nil {
+		return ErrInvalidEntry
+	}
+	*s = Skill{URI: wire.URI, Frontmatter: wire.Frontmatter, Resources: wire.Resources}
+	return nil
 }
 
 func (s Skill) name() string {
