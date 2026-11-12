@@ -14,7 +14,7 @@ import type { RegistryDiagnostic, RegistryPlugin } from '~/types/registry';
 import { githubSourceUrl, reachableTargetPolicies, vendorInstallSource } from '~/utils/registry';
 import { authenticationIndicator } from '~/utils/authentication';
 import { pluginCommands } from '~/utils/commands';
-import { projectCatalogCommands } from '~/utils/projectCatalogSource';
+import { projectCatalogCommands, pinnedPiProjectCommands } from '~/utils/projectCatalogSource';
 import { pluginBenefit } from '~/data/catalogCuration';
 const { t, locale, n } = useI18n();
 const localePath = useLocalePath();
@@ -34,6 +34,10 @@ const {
   scope,
   installExpanded,
   targetDistributions,
+  pinnedPiSource,
+  pinnedPiSelected,
+  pinnedPiReleaseSource,
+  pinnedPiReleaseComponents,
   projectAvailable,
   projectAutomatic,
   updateTargets,
@@ -82,18 +86,21 @@ const canChooseInstall = computed(
 const canInstall = computed(
   () =>
     (scope.value !== 'project' || !autoDetect.value || Boolean(projectAutomatic.value?.resolution.distribution)) &&
-    (isDiscovered.value
-      ? props.plugin.installable &&
-        props.plugin.discovery?.availability !== 'unavailable' &&
-        (autoDetect.value || Boolean(selectedDistribution.value))
-      : current.value &&
-        (autoDetect.value ? props.plugin.installable : Boolean(selectedDistribution.value))),
+    ((pinnedPiSelected.value && current.value && props.plugin.installable) ||
+      (isDiscovered.value
+        ? props.plugin.installable &&
+          props.plugin.discovery?.availability !== 'unavailable' &&
+          (autoDetect.value || Boolean(selectedDistribution.value))
+        : current.value &&
+          (autoDetect.value ? props.plugin.installable : Boolean(selectedDistribution.value)))),
 );
 const command = computed(() =>
   canInstall.value
-    ? (scope.value === 'project'
-        ? projectCatalogCommands(props.plugin, autoDetect.value ? undefined : canonicalInstallTargets(targets.value))
-        : pluginCommands(props.plugin, autoDetect.value ? undefined : cliInstallTargets(targets.value))
+    ? (pinnedPiSelected.value
+        ? pinnedPiProjectCommands(props.plugin)
+        : scope.value === 'project'
+          ? projectCatalogCommands(props.plugin, autoDetect.value ? undefined : canonicalInstallTargets(targets.value))
+          : pluginCommands(props.plugin, autoDetect.value ? undefined : cliInstallTargets(targets.value))
       ).add
     : '',
 );
@@ -120,6 +127,7 @@ const targetOptions = computed(() =>
     // Keep invalid explicitly saved selections visible for recovery, but an
     // auto-detected project must never make a stale Cursor placeholder selectable.
     disabled: !targetDistributions.value.get(client.id) &&
+      !(client.id === 'pi' && pinnedPiSource.value && current.value) &&
       (autoDetect.value || !targets.value.includes(client.id)),
     description: (() => {
       if (isDiscovered.value)
@@ -141,7 +149,10 @@ const targetOptions = computed(() =>
         return target?.app_binding
           ? t('registryUi.card.verifiedConnectionFinishSetupInChatgpt')
           : t('registryUi.card.notAvailableForChatgpt');
-      if (client.id === 'pi' && !target) return t('registryUi.install.piNoCompatibleRelease');
+      if (client.id === 'pi' && !target)
+        return pinnedPiSource.value && current.value
+          ? t('registryUi.install.piPinnedProjectSource')
+          : t('registryUi.install.piNoCompatibleRelease');
       return target
         ? t(`registryUi.delivery.${target.delivery}`)
         : t('registryUi.card.notInstallableFromAnActiveRelease');
@@ -170,8 +181,19 @@ const repositoryStars = computed(() =>
     maximumFractionDigits: 1,
   }).format(props.plugin.discovery?.stars ?? 0),
 );
+const assessmentSource = computed(() => pinnedPiReleaseSource.value ?? props.plugin.source);
+const assessedRevisionMatches = computed(() => {
+  if (!pinnedPiSelected.value) return true;
+  const selected = pinnedPiReleaseSource.value;
+  const assessed = props.plugin.source;
+  return Boolean(selected &&
+    selected.repository === assessed.repository &&
+    selected.revision === assessed.revision &&
+    selected.path === assessed.path &&
+    selected.tree_sha256 === assessed.tree_sha256);
+});
 const provenanceURL = computed(() => {
-  const source = selectedDistribution.value?.source ?? props.plugin.source;
+  const source = pinnedPiReleaseSource.value ?? selectedDistribution.value?.source ?? props.plugin.source;
   if (!source?.revision) return '';
   const suffix = source.path ? `/${source.path}` : '';
   return `https://github.com/${source.repository}/tree/${source.revision}${suffix}`;
@@ -275,17 +297,17 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
     </p>
     <div class="plugin-card__assessments">
       <SecurityAssessmentBadge
-        v-if="plugin.security && !discoveryStale"
+        v-if="plugin.security && !discoveryStale && assessedRevisionMatches"
         :plugin="plugin"
         :details-to="securityDetailURL"
       />
       <SkillSpectorAssessment
-        :applicable="plugin.components.includes('skills')"
+        :applicable="(pinnedPiReleaseComponents ?? plugin.components).includes('skills')"
         :subject="{
           kind: 'plugin',
-          repository: plugin.source.repository,
-          path: plugin.source.path,
-          revision: plugin.source.revision,
+          repository: assessmentSource.repository,
+          path: assessmentSource.path,
+          revision: assessmentSource.revision,
         }"
         :name="plugin.display_name"
         scope="plugin"
@@ -411,6 +433,12 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
               @update:auto-selected="updateAutoDetect"
               @update:model-value="updateTargets"
             />
+            <p v-if="pinnedPiSelected && canInstall" class="plugin-card__author" role="status">
+              {{ t('registryUi.install.piPinnedProjectSource') }}
+              <a :href="provenanceURL" target="_blank" rel="noreferrer">
+                {{ t('registryUi.card.viewSource') }}
+              </a>
+            </p>
             <CommandSnippet
               v-if="canInstall"
               :label="t('registryUi.card.add')"

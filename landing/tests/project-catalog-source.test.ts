@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { projectCatalogAutomaticSelection, projectCatalogCommands, projectCatalogSelection } from '../utils/projectCatalogSource.ts';
+import { pinnedPiProjectCommands, pinnedPiProjectSelection, pinnedPiProjectSource, projectCatalogAutomaticSelection, projectCatalogCommands, projectCatalogSelection } from '../utils/projectCatalogSource.ts';
 import type { RegistryPlugin } from '../types/registry.ts';
 
 function reviewed(): RegistryPlugin {
@@ -101,4 +101,137 @@ test('signed user source and original target scope are unchanged by selection', 
   assert.deepEqual(plugin.distributions[0]!.releases[0]!.targets.find(x => x.client === 'codex')!.scopes, ['user']);
   const result = projectCatalogSelection(plugin, ['codex']).resolution;
   assert.equal(result.distribution?.source.revision, plugin.source.revision);
+});
+
+
+test('Pi project uses an explicit immutable Git source instead of inventing a signed target', () => {
+  const plugin = reviewed();
+  const previous = structuredClone(plugin.distributions);
+  assert.equal(projectCatalogSelection(plugin, ['pi']).resolution.distribution, undefined);
+  const source = 'github:777genius/universal-agent-plugins@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/gitlab';
+  assert.equal(pinnedPiProjectSource(plugin), source);
+  const commands = pinnedPiProjectCommands(plugin);
+  assert.equal(commands.add, `npx -y universal-agent-plugins add ${source} --target pi --scope project`);
+  assert.equal(commands.update, `npx -y universal-agent-plugins add ${source} --target pi --scope project`);
+  assert.equal(commands.repair, 'npx -y universal-agent-plugins repair gitlab --target pi --scope project');
+  assert.equal(commands.remove, 'npx -y universal-agent-plugins remove gitlab --scope project');
+  assert.deepEqual(plugin.distributions, previous, 'The signed target list must not be rewritten');
+});
+
+test('Pi exact-source route refuses unsound or unsupported signed-source projections', () => {
+  const variants = [
+    (p: RegistryPlugin) => { delete p.trust_state; },
+    (p: RegistryPlugin) => { p.trust_state = 'conformant_unreviewed'; },
+    (p: RegistryPlugin) => { p.installable = false; },
+    (p: RegistryPlugin) => { p.distributions[0]!.releases[0]!.source.revision = null; },
+    (p: RegistryPlugin) => { p.distributions[0]!.releases[0]!.source.path = '../escape'; },
+    (p: RegistryPlugin) => { p.distributions[0]!.releases[0]!.source.tree_sha256 = 'sha256:bad'; },
+    (p: RegistryPlugin) => { p.distributions[0]!.releases[0]!.source.manifest_sha256 = 'bad'; },
+    (p: RegistryPlugin) => { p.distributions[0]!.releases[0]!.components = []; },
+    (p: RegistryPlugin) => { p.distributions[0]!.releases[0]!.components = ['hooks' as never]; },
+    (p: RegistryPlugin) => { p.distributions[0]!.releases[0]!.selectable = false; },
+    (p: RegistryPlugin) => { p.distributions[0]!.releases[0]!.release_status = 'revoked'; },
+    (p: RegistryPlugin) => { p.distributions[0]!.status = 'suspended'; },
+    (p: RegistryPlugin) => { p.distributions[0]!.kind = 'upstream'; },
+    (p: RegistryPlugin) => {
+      p.distributions[0]!.releases[0]!.targets[0]!.canonical_closure = { eligible: true, closure_digest: 'sha256:' + 'a'.repeat(64) };
+    },
+  ];
+  for (const change of variants) {
+    const plugin = reviewed();
+    change(plugin);
+    assert.equal(pinnedPiProjectSource(plugin), undefined, String(change));
+    assert.throws(() => pinnedPiProjectCommands(plugin), /No eligible Pi Project/);
+  }
+});
+
+test('foreign extensions cannot use the alternate portable Pi Project route', () => {
+  for (const components of [
+    ['extensions'], ['skills', 'extensions'], ['mcp', 'extensions'],
+  ] as const) {
+    const plugin = reviewed();
+    const release = plugin.distributions[0]!.releases[0]!;
+    release.components = [...components];
+    assert.ok(release.source.revision, 'Retain the exact reviewed source');
+    assert.equal(pinnedPiProjectSelection(plugin), undefined);
+    assert.throws(() => pinnedPiProjectCommands(plugin), /No eligible Pi Project/);
+  }
+});
+
+test('signed Pi Project grant keeps the original signed short-name route', () => {
+  const plugin = reviewed();
+  plugin.distributions[0]!.releases[0]!.targets.push({
+    client: 'pi', authentication: 'required', delivery: 'managed', scopes: ['user', 'project'],
+  });
+  assert.ok(projectCatalogSelection(plugin, ['pi']).resolution.distribution);
+  assert.equal(pinnedPiProjectSource(plugin), undefined);
+  assert.equal(projectCatalogCommands(plugin, ['pi']).add,
+    'npx -y universal-agent-plugins add gitlab --target pi --scope project');
+});
+
+test('signed Pi extension Project grant retains its normal signed route', () => {
+  const plugin = reviewed();
+  const release = plugin.distributions[0]!.releases[0]!;
+  release.components = ['extensions'];
+  release.targets = [{
+    client: 'pi', authentication: 'required', delivery: 'managed', scopes: ['user', 'project'],
+  }];
+  assert.ok(projectCatalogSelection(plugin, ['pi']).resolution.distribution);
+  assert.equal(pinnedPiProjectSelection(plugin), undefined);
+  assert.equal(projectCatalogCommands(plugin, ['pi']).add,
+    'npx -y universal-agent-plugins add gitlab --target pi --scope project');
+});
+
+test('ChatGPT app-only binding does not authorize portable Pi Project source', () => {
+  const plugin = reviewed();
+  plugin.distributions[0]!.releases[0]!.targets = [{
+    client: 'chatgpt', authentication: 'required', delivery: 'manual_activation',
+    scopes: ['user'], app_binding: { app_key: 'test', id: 'test-app', mcp_server: 'remote' },
+  }];
+  assert.equal(pinnedPiProjectSource(plugin), undefined);
+  assert.throws(() => pinnedPiProjectCommands(plugin), /No eligible Pi Project/);
+});
+
+test('signed Pi blocking evidence forbids Git suggestion without a Pi target', () => {
+  const plugin = reviewed();
+  plugin.distributions[0]!.releases[0]!.blocking_clients.push('pi');
+  assert.equal(pinnedPiProjectSource(plugin), undefined);
+  assert.throws(() => pinnedPiProjectCommands(plugin), /No eligible Pi Project/);
+});
+
+test('an explicitly blocked signed Pi grant cannot be bypassed by a pinned-source suggestion', () => {
+  const plugin = reviewed();
+  const release = plugin.distributions[0]!.releases[0]!;
+  release.targets.push({ client: 'pi', authentication: 'required', delivery: 'prepared', scopes: ['user'] });
+  release.blocking_clients.push('pi');
+  assert.equal(projectCatalogSelection(plugin, ['pi']).resolution.distribution, undefined);
+  assert.equal(pinnedPiProjectSource(plugin), undefined);
+  assert.throws(() => pinnedPiProjectCommands(plugin), /No eligible Pi Project/);
+});
+
+
+test('Pi pinned source identity follows the selected older release, not newer ChatGPT-only product source', () => {
+  const plugin = reviewed();
+  const distribution = plugin.distributions[0]!;
+  const older = distribution.releases[0]!;
+  const newer = structuredClone(older);
+  newer.release_sequence += 1;
+  newer.source.revision = 'f'.repeat(40);
+  newer.targets = [{
+    client: 'chatgpt', delivery: 'manual_activation', authentication: 'required',
+    scopes: ['user'], app_binding: { app_key: 'reviewed-app', id: 'selected', mcp_server: 'remote' },
+  }];
+  distribution.releases = [newer, older];
+  distribution.source = newer.source;
+  distribution.targets = newer.targets;
+  plugin.source = newer.source;
+  const selected = pinnedPiProjectSelection(plugin);
+  assert.equal(selected?.selector,
+    'github:777genius/universal-agent-plugins@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/gitlab');
+  assert.equal(selected?.source.revision, older.source.revision);
+  assert.notEqual(selected?.source.revision, plugin.source.revision);
+  assert.deepEqual(selected?.components, ['mcp']);
+  assert.equal(pinnedPiProjectSource(plugin), selected?.selector);
+  assert.equal(pinnedPiProjectCommands(plugin).add,
+    `npx -y universal-agent-plugins add ${selected?.selector} --target pi --scope project`);
 });

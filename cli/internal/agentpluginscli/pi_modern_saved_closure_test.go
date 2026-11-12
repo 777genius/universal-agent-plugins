@@ -28,8 +28,10 @@ func piMarketingCohortFixture(t *testing.T, scope domain.InstallScope) (freshRes
 	t.Helper()
 	fixture, repo, directory := dependencyReviewFixture(t)
 	pi := fixtureClient(t, domain.ClientPi)
-	pi.Version = "1.5.0" // Test applicability only; not a real host process.
-	fixture.app.Version = "0.1.104" // Test installer identity, not a released-binary run.
+	// Test applicability only; not a real host process.
+	pi.Version = "1.5.0"
+	// Test installer identity, not a released-binary run.
+	fixture.app.Version = "0.1.104"
 	fixture.client = pi
 	fixture.app.Detector = staticDetector{clients: []domain.DetectedClient{pi}}
 	fixture.app.Scope = scope
@@ -140,11 +142,11 @@ func signPiModernTestOnlyCohort(t *testing.T, snapshot domain.DirectorySnapshot)
 	envelope := directoryv1.Envelope{
 		EnvelopeSchemaVersion: 1,
 		SnapshotSchemaVersion: 1,
-		Sequence: snapshot.Sequence,
-		KeyID: keyID,
-		Algorithm: "Ed25519",
-		SignatureDomain: directoryv1.SignatureDomain,
-		SnapshotDigest: "sha256:" + hex.EncodeToString(digest[:]),
+		Sequence:              snapshot.Sequence,
+		KeyID:                 keyID,
+		Algorithm:             "Ed25519",
+		SignatureDomain:       directoryv1.SignatureDomain,
+		SnapshotDigest:        "sha256:" + hex.EncodeToString(digest[:]),
 		Signature: base64.StdEncoding.EncodeToString(
 			ed25519.Sign(privateKey, directoryv1.SnapshotSignatureMessage(snapshotBytes))),
 	}
@@ -178,9 +180,9 @@ func TestPiModernFixtureResolvesMarketingKitSavedClosure(t *testing.T) {
 				t.Fatalf("Pi saved graph must contain Marketing Kit and 3 required children: %+v", lock)
 			}
 			wanted := map[string]string{
-				"marketing-kit": "0.1.0",
-				"notion": "0.1.0",
-				"hubspot-crm": "0.1.0",
+				"marketing-kit":     "0.1.0",
+				"notion":            "0.1.0",
+				"hubspot-crm":       "0.1.0",
 				"playwright-bridge": "0.0.80",
 			}
 			for _, pin := range lock.Packages {
@@ -240,8 +242,24 @@ func TestPiModernFixtureSavedUserInstallLifecycle(t *testing.T) {
 	dependencyRun(t, fixture.cliFixture, "remove", "marketing-kit",
 		"--target", "pi", "--yes", "--format", "json")
 	removed, err := fixture.app.Installer.Inspect(context.Background())
-	if err != nil || len(removed.EnvironmentReceipts) != 0 {
-		t.Fatalf("Pi saved root removal retained owned graph: %+v %v", removed, err)
+	if err != nil || removed.Recovery.Required || len(removed.EnvironmentReceipts) != 0 || len(removed.Installations) != 4 {
+		t.Fatalf("Pi root removal did not clear active receipts while retaining package data: %+v %v", removed, err)
+	}
+	// A normal removal intentionally retains owned package data; it must not
+	// retain any active client bindings or environmental receipts.
+	for _, retained := range removed.Installations {
+		if !retained.DataRetained || len(retained.Bindings) != 0 || len(retained.DataRoots) == 0 {
+			t.Fatalf("Pi removed installation still active or missing retained data: %+v", retained)
+		}
+	}
+	saved, stateErr := fixture.store.Load()
+	if stateErr != nil || len(saved.Installations) != 4 || len(saved.EnvironmentReceipts) != 0 {
+		t.Fatalf("Pi removal did not persist the inactive data-retained installations: %+v %v", saved, stateErr)
+	}
+	for _, retained := range saved.Installations {
+		if !retained.DataRetained || len(retained.Clients) != 0 {
+			t.Fatalf("Pi removed installation retained an active client binding: %+v", retained)
+		}
 	}
 }
 
@@ -277,15 +295,29 @@ func TestPiModernFixtureRefusesMissingSignedHubSpotTarget(t *testing.T) {
 				t.Fatal("negative test mutated original signed snapshot or did not change signed policy")
 			}
 			_, err := resolveProjectSourceGraph(context.Background(), fixture.app, requirements)
-			if err == nil {
-				t.Fatal("Marketing Kit accepted a mandatory HubSpot child without a Pi target")
+			if err == nil || !strings.Contains(err.Error(), "dependency conflict for directory:acme/hubspot-crm") {
+				t.Fatalf("missing HubSpot Pi grant resolved an unauthorized child: %v", err)
+			}
+			// The disposable CLI composition in this test supports user scope.
+			// Project-scope denial is exercised by the real scoped resolver
+			// above; a project CLI lifecycle belongs to a scoped composer test.
+			if scope == domain.ScopeUser {
+				stdout, stderr, installErr := fixture.execute(false,
+					"install", "marketing-kit", "--target", "pi", "--yes", "--format", "json")
+				if installErr == nil || !strings.Contains(installErr.Error()+" "+stderr+" "+stdout,
+					"dependency conflict for directory:acme/hubspot-crm") {
+					t.Fatalf("CLI accepted missing signed HubSpot Pi grant: err=%v stdout=%s stderr=%s",
+						installErr, stdout, stderr)
+				}
 			}
 			state, stateErr := fixture.store.Load()
 			if stateErr != nil || len(state.Installations) != 0 {
 				t.Fatalf("denied Pi closure changed installed state: %+v, %v", state, stateErr)
 			}
-			if !strings.Contains(err.Error(), "dependency conflict for directory:acme/hubspot-crm") {
-				t.Fatalf("missing HubSpot Pi grant produced the wrong refusal: %v", err)
+			view, inspectErr := fixture.app.Installer.Inspect(context.Background())
+			if inspectErr != nil || len(view.EnvironmentReceipts) != 0 || len(view.Installations) != 0 {
+				t.Fatalf("denied Pi CLI install changed receipts or installations: %+v %v",
+					view, inspectErr)
 			}
 		})
 	}

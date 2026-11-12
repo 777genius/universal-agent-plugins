@@ -8,7 +8,7 @@ import {
 } from '../data/installTargets.ts';
 import { useInstallPreferencesStore } from '../stores/installPreferences.ts';
 import { reachableTargetPolicies, resolveDistribution } from '../utils/registry.ts';
-import { projectCatalogAutomaticSelection, projectCatalogSelection } from '../utils/projectCatalogSource.ts';
+import { pinnedPiProjectSelection, projectCatalogAutomaticSelection, projectCatalogSelection } from '../utils/projectCatalogSource.ts';
 import type { DistributionResolution, InstallScope, RegistryPlugin } from '../types/registry';
 
 /** Card and detail share one selection/persistence policy; no machine detection occurs here. */
@@ -21,6 +21,22 @@ export function usePluginInstallSelection(
   const autoDetect = models.autoDetect ?? ref(true);
   const installExpanded = ref(false);
   const scope = ref<InstallScope>('user');
+  // Eligibility must be independent of the *current* scope so a saved Pi
+  // Project choice survives card -> detail navigation and enables the Project tab.
+  const eligiblePinnedPi = computed(() => pinnedPiProjectSelection(plugin()));
+  const pinnedPiSource = computed(() =>
+    scope.value === 'project' ? eligiblePinnedPi.value?.selector : undefined,
+  );
+  const pinnedPiSelected = computed(() =>
+    Boolean(pinnedPiSource.value) && !autoDetect.value &&
+    targets.value.length === 1 && targets.value[0] === 'pi',
+  );
+  const pinnedPiReleaseSource = computed(() =>
+    pinnedPiSelected.value ? eligiblePinnedPi.value?.source : undefined,
+  );
+  const pinnedPiReleaseComponents = computed(() =>
+    pinnedPiSelected.value ? eligiblePinnedPi.value?.components : undefined,
+  );
   const availableClients = computed(() => {
     const policies = reachableTargetPolicies(plugin().distributions);
     return installTargets.filter((client) => {
@@ -33,7 +49,8 @@ export function usePluginInstallSelection(
           (target) => target.client === 'chatgpt' && Boolean(target.app_binding),
         ));
       }
-      return policies.some((policy) => policy.client === canonicalInstallTarget(client.id));
+      return (client.id === 'pi' && Boolean(eligiblePinnedPi.value)) ||
+        policies.some((policy) => policy.client === canonicalInstallTarget(client.id));
     });
   });
   const select = (selected: InstallTargetID[]): DistributionResolution => {
@@ -69,7 +86,9 @@ export function usePluginInstallSelection(
   // One authorized project source is enough to offer CLI-side target discovery.
   // This must not broaden any signed release scope or assume local client state.
   const projectAutomatic = computed(() => projectCatalogAutomaticSelection(plugin()));
-  const projectAvailable = computed(() => Boolean(projectAutomatic.value?.resolution.distribution));
+  const projectAvailable = computed(() =>
+    Boolean(projectAutomatic.value?.resolution.distribution || eligiblePinnedPi.value),
+  );
   const resolution = computed(() => select(targets.value));
   let choicePending = false;
   function saveChoice() {
@@ -141,11 +160,20 @@ export function usePluginInstallSelection(
       (value): value is InstallTargetID =>
         installTargets.some((client) => client.id === value) &&
         (Boolean(targetDistributions.value.get(value as InstallTargetID)) ||
+          (value === 'pi' && Boolean(pinnedPiSource.value)) ||
           targets.value.includes(value as InstallTargetID)),
     );
     if (!next.length) return;
     choicePending = true;
-    const selected = [...new Set(next)];
+    let selected = [...new Set(next)];
+    // A pinned Git Pi Project install is its own command, not an extra target
+    // added to another package's signed Directory selection.
+    if (scope.value === 'project' && pinnedPiSource.value && selected.includes('pi') &&
+        selected.length > 1) {
+      selected = targets.value.includes('pi')
+        ? selected.filter((id) => id !== 'pi')
+        : ['pi'];
+    }
     targets.value = reconcileLocalChatGPTTargets(selected, targets.value);
     saveUnboundChoice();
   }
@@ -159,6 +187,11 @@ export function usePluginInstallSelection(
     const previousScope = scope.value;
     choicePending = true;
     scope.value = value;
+    // An explicit Pi-only Git Project source is not a signed User install;
+    // return to regular CLI detection when the user switches computers.
+    if (previousScope === 'project' && value === 'user' &&
+        targets.value.length === 1 && targets.value[0] === 'pi' &&
+        !resolveDistribution(plugin(), ['pi'], 'user').distribution) autoDetect.value = true;
     // Entering project starts with CLI-side detection, even if the user
     // manually selected Cursor in their *user* environment. An explicit
     // project choice remains persistent across detail/navigation remounts.
@@ -177,6 +210,10 @@ export function usePluginInstallSelection(
     installExpanded,
     availableClients,
     targetDistributions,
+    pinnedPiSource,
+    pinnedPiSelected,
+    pinnedPiReleaseSource,
+    pinnedPiReleaseComponents,
     projectAvailable,
     projectAutomatic,
     resolution,
