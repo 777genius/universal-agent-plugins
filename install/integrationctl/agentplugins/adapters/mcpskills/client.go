@@ -55,7 +55,7 @@ func (c *Client) discover(ctx context.Context) error {
 			Extensions map[string]json.RawMessage `json:"extensions"`
 		} `json:"capabilities"`
 	}
-	if json.Unmarshal(body, &result) != nil || !result.cacheFields.valid() ||
+	if json.Unmarshal(body, &result) != nil || !result.valid() ||
 		len(result.Capabilities.Resources) < 2 || result.Capabilities.Resources[0] != '{' {
 		return ErrProtocol
 	}
@@ -83,7 +83,7 @@ func (c *Client) List(ctx context.Context) ([]Summary, error) {
 	seenURIs := make(map[string]bool)
 	seenCursors := make(map[string]bool)
 	var cursor, cacheScope string
-	for page := 0; page < maxCatalogPages; page++ {
+	for page := range maxCatalogPages {
 		args := map[string]any{}
 		if cursor != "" {
 			args["cursor"] = cursor
@@ -97,26 +97,16 @@ func (c *Client) List(ctx context.Context) ([]Summary, error) {
 			Skills     []Skill `json:"skills"`
 			NextCursor string  `json:"nextCursor"`
 		}
-		if json.Unmarshal(payload, &result) != nil || !result.cacheFields.valid() || result.Skills == nil {
+		if json.Unmarshal(payload, &result) != nil || !result.valid() || result.Skills == nil {
 			return nil, ErrProtocol
 		}
 		if cacheScope != "" && cacheScope != result.CacheScope {
 			return nil, ErrProtocol
 		}
 		cacheScope = result.CacheScope
-		if len(summaries)+len(result.Skills) > maxCatalogEntries {
-			return nil, ErrProtocol
-		}
-		for _, skill := range result.Skills {
-			if seenURIs[skill.URI] {
-				return nil, ErrProtocol
-			}
-			seenURIs[skill.URI] = true
-			summary, err := summarize(skill, c.origin, "manifest_only")
-			if err != nil {
-				return nil, err
-			}
-			summaries = append(summaries, summary)
+		summaries, err = appendCatalogSkills(summaries, result.Skills, seenURIs, c.origin)
+		if err != nil {
+			return nil, err
 		}
 		if result.NextCursor == "" {
 			return summaries, nil
@@ -128,6 +118,25 @@ func (c *Client) List(ctx context.Context) ([]Summary, error) {
 		cursor = result.NextCursor
 	}
 	return nil, errors.Join(ErrProtocol, errors.New("MCP Skills page limit exceeded"))
+}
+
+// appendCatalogSkills validates each entry before exposing even a partial page.
+func appendCatalogSkills(summaries []Summary, skills []Skill, seenURIs map[string]bool, origin string) ([]Summary, error) {
+	if len(summaries)+len(skills) > maxCatalogEntries {
+		return nil, ErrProtocol
+	}
+	for _, skill := range skills {
+		if seenURIs[skill.URI] {
+			return nil, ErrProtocol
+		}
+		seenURIs[skill.URI] = true
+		summary, err := summarize(skill, origin, "manifest_only")
+		if err != nil {
+			return nil, err
+		}
+		summaries = append(summaries, summary)
+	}
+	return summaries, nil
 }
 
 // Inspect obtains one exact URI and verifies only its SKILL.md. Dynamic entries
@@ -149,7 +158,7 @@ func (c *Client) Inspect(ctx context.Context, uri string) (Summary, error) {
 		cacheFields
 		Skill Skill `json:"skill"`
 	}
-	if json.Unmarshal(payload, &result) != nil || !result.cacheFields.valid() || result.Skill.URI != uri {
+	if json.Unmarshal(payload, &result) != nil || !result.valid() || result.Skill.URI != uri {
 		return Summary{}, ErrProtocol
 	}
 	summary, err := summarize(result.Skill, c.origin, "verified")
@@ -175,7 +184,7 @@ func (c *Client) Inspect(ctx context.Context, uri string) (Summary, error) {
 		cacheFields
 		Contents []readContent `json:"contents"`
 	}
-	if json.Unmarshal(readPayload, &read) != nil || !read.cacheFields.valid() || len(read.Contents) != 1 {
+	if json.Unmarshal(readPayload, &read) != nil || !read.valid() || len(read.Contents) != 1 {
 		return Summary{}, ErrProtocol
 	}
 	content, err := readResourceBytes(uri, read.Contents[0])
