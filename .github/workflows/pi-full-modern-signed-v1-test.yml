@@ -132,7 +132,10 @@ jobs:
           assert snapshot['evidence'] == []
           upstream_ids = {d['id'] for d in snapshot['distributions'] if d['kind'] == 'upstream'}
           assert upstream_ids == {'github/github', 'upstash/context7'}
-          wanted_digest = 'sha256:' + hashlib.sha256(source).hexdigest()
+          # Pin reviewed fixture bytes independently from the checked-out candidate.
+          # Metadata source_commit or matching report hashes alone are insufficient.
+          wanted_digest = 'sha256:458a5c2809d6d2c443496e18ea3fee309d14f8a12f476f301873f3b9f9769399'
+          assert 'sha256:' + hashlib.sha256(source).hexdigest() == wanted_digest, 'frozen TEST-only fixture bytes changed'
           expected_saved = {
               (d['id'] + '@' + str(d['releases'][0]['sequence']) + '/' + scope, index % 3)
               for index, d in enumerate(snapshot['distributions'])
