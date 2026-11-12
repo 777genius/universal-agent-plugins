@@ -194,11 +194,10 @@ class ReleasedNativeProofTests(unittest.TestCase):
 
     def test_windows_hermes_pinned_first_launch_repairs_only_pe_before_baseline(self):
         exe = self.root / "hermes.exe"
-        def make(loader, entry=b"print('pinned')"):
+        def make(loader, entry=b"print('pinned')", stamp=(2026, 11, 12, 12, 0, 0)):
             exe.write_bytes(loader + b"#!pinned-python -I\n")
             with zipfile.ZipFile(exe, "a") as archive:
-                archive.writestr(zipfile.ZipInfo("__main__.py",
-                    date_time=(2026, 11, 12, 12, 0, 0)), entry)
+                archive.writestr(zipfile.ZipInfo("__main__.py", date_time=stamp), entry)
         make(b"MZfirst-pinned-stub\n")
         original = proof.sha(exe)
         calls = []
@@ -212,7 +211,7 @@ class ReleasedNativeProofTests(unittest.TestCase):
         def run_preflight(command, env):
             calls.append(command)
             if command[1:3] == ["skills", "list"]:
-                make(b"MZother-pinned-stub\n")
+                make(b"MZother-pinned-stub\n", stamp=(2026, 11, 12, 13, 0, 0))
             return "pinned vendor success"
         env = {"HERMES_BIN": str(exe)}
         with patch.object(proof, "vendor_identity", side_effect=identity), \
