@@ -96,7 +96,14 @@ def list_servers(base, token, project):
     servers = response("/api/v2/mcp/servers?" + query, base, token)
     if not isinstance(servers, list):
         raise ValueError("native MCP catalog is not a list")
-    return {row.get("name"): row for row in servers if isinstance(row, dict)}
+    catalog = {}
+    for row in servers:
+        if not isinstance(row, dict) or not isinstance(row.get("name"), str) or not row["name"]:
+            raise ValueError("native MCP catalog entry invalid")
+        if row["name"] in catalog:
+            raise ValueError("native MCP catalog contains duplicate runtime name")
+        catalog[row["name"]] = row
+    return catalog
 
 
 def ensure_project_server(servers, config_path):
