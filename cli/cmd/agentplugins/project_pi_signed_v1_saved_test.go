@@ -97,6 +97,7 @@ func TestPiProjectSignedV1SavedFourPackageLifecycle(t *testing.T) {
 		b: projectJourneyTemp(t), transport: transport,
 	}
 	journey.cache = filepath.Join(journey.home, "uap")
+	projectJourneyWrite(t, filepath.Join(journey.home, "pi-test-host-never-launched"), "inert Pi host fixture; never execute\n")
 	for _, root := range []string{"", journey.a, journey.b} {
 		native := piSignedProjectNativeRoot(journey, root)
 		projectJourneyWrite(t, filepath.Join(native, "mcp.json"), "{\"mcpServers\":{\"foreign\":{\"type\":\"streamable-http\",\"url\":\"https://foreign.example.test/mcp\"}},\"keep\":true}")
@@ -212,7 +213,7 @@ func TestPiProjectSignedV1SavedFourPackageLifecycle(t *testing.T) {
 		return sourceacquisition.Acquirer{
 			TempRoot: root, HTTPClient: transport.server.Client(),
 			Runner: signedV1ProjectGitRunner{
-				delegate: projectGitDiagnosticRunner{recorder: transport.diagnostic, root: root}, caFile: ca,
+				delegate: sourceacquisition.OSRunner{}, caFile: ca,
 			},
 			URLForRepo: func(value string) string {
 				if value == repository {
