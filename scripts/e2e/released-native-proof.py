@@ -160,6 +160,9 @@ def windows_hermes_launcher_fingerprint(binary):
     which pinned distlib EXE component changed, without treating it as safe.
     """
     binary = Path(binary).resolve(strict=True)
+    if binary.suffix.lower() == ".cmd":
+        return {"launcher_kind": "cmd", "executable_sha256": sha(binary),
+                "executable_bytes": binary.stat().st_size}
     normalized = windows_hermes_launcher_content_sha256(binary)
     raw = binary.read_bytes()
     with zipfile.ZipFile(binary) as archive:
@@ -173,6 +176,7 @@ def windows_hermes_launcher_fingerprint(binary):
     central_zip[12:16] = bytes(4)
     digest = lambda data: hashlib.sha256(data).hexdigest()
     return {
+        "launcher_kind": "distlib-exe",
         "executable_sha256": digest(raw),
         "launcher_content_sha256": normalized,
         "loader_sha256": digest(raw[:shebang]),
