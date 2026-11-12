@@ -161,6 +161,25 @@ class NoAuthContracts(unittest.TestCase):
         self.assertEqual(route["xdg"]["XDG_DATA_HOME"], str(self.ctx.private / "no-auth-validate-valid/data"))
         for root, expected in self.owned.items():
             self.assertEqual(noauth.tree_identity(root), expected)
+    def test_owned_regular_open_is_nofollow_and_nonblocking(self):
+        # A regular file can be exchanged for a FIFO after lstat; open must not hang.
+        target = self.fixtures / "valid.json"
+        actual_open = os.open
+        seen = []
+
+        def guard_open(path, flags, *args, **kwargs):
+            if Path(path) == target:
+                self.assertTrue(flags & os.O_NOFOLLOW)
+                self.assertTrue(flags & os.O_NONBLOCK)
+                seen.append(flags)
+            return actual_open(path, flags, *args, **kwargs)
+
+        with patch.object(noauth.os, "open", side_effect=guard_open):
+            identity, digest = noauth.file_identity(target)
+        self.assertTrue(seen)
+        self.assertIsNotNone(identity)
+        self.assertEqual(len(digest), 64)
+
     def test_symlink_hardlink_and_special_inventory_refuse(self):
         for kind in ("symlink", "hardlink", "fifo"):
             with self.subTest(kind=kind):

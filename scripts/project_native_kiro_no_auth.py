@@ -32,7 +32,7 @@ def file_identity(path):
             or before.st_uid != os.getuid() or before.st_size > 65536
             or path.resolve() != path):
         raise ValueError("owned fixture identity refused")
-    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     try:
         if research.artifacts.identity(before) != research.artifacts.identity(os.fstat(fd)):
             raise ValueError("owned fixture changed on open")
