@@ -196,7 +196,7 @@ def windows_hermes_non_loader_sha256(binary):
         zip_start = archive.infolist()[0].header_offset
     shebang = raw.rfind(b"#!", 0, zip_start)
     require(shebang > 0 and raw.startswith(b"MZ")
-            and raw[shebang:zip_start].rstrip(b"\\r\\n").endswith(b" -I"),
+            and raw[shebang:zip_start].rstrip(b"\r\n").endswith(b" -I"),
             "invalid pinned Hermes Windows EXE shebang")
     return hashlib.sha256(raw[shebang:]).hexdigest()
 
