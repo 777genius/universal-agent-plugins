@@ -168,8 +168,10 @@ def probe(client, env, project, config_path):
         state = response(trust_path + "/trust", base, token)
         if state != {"trusted": False}:
             raise ValueError("native Project was unexpectedly trusted")
-        state = response(trust_path + "/trust", base, token, "POST", {})
+        # A grant can take effect even if its response is lost. Mark it pending
+        # before issuing the request so every ambiguous outcome attempts revoke.
         trusted = True
+        state = response(trust_path + "/trust", base, token, "POST", {})
         if state != {"trusted": True}:
             raise ValueError("native workspace trust grant was not acknowledged")
         ensure_project_server(list_servers(base, token, project), config_path)
@@ -180,9 +182,11 @@ def probe(client, env, project, config_path):
         if "uap_ping" not in str(tested.get("output")):
             raise ValueError("native MCP connection did not list expected tool")
         state = response(trust_path + "/untrust", base, token, "POST", {})
-        trusted = False
         if state != {"trusted": False} or SERVER_NAME in list_servers(base, token, project):
             raise ValueError("native project trust revocation did not suppress MCP")
+        # Only clear the pending cleanup after the native state and catalog
+        # both prove revocation. A failed/ambiguous revoke is retried in finally.
+        trusted = False
         return {"native_mcp_started": True, "tools_list": True, "tools_call": False,
                 "authentication": "server-issued-loopback-bearer-only",
                 "workspace_trust": "native-API-granted-and-revoked-test-only",
@@ -192,7 +196,9 @@ def probe(client, env, project, config_path):
             try:
                 response("/api/v1/workspaces/" + urllib.parse.quote(workspace["id"], safe="") + "/untrust",
                          base, token, "POST", {})
-            except (urllib.error.URLError, ValueError):
+            except (OSError, ValueError):
+                # Includes timeouts: a cleanup network error must not bypass
+                # killing the disposable native process group.
                 pass
         try:
             os.killpg(process.pid, signal.SIGKILL)
