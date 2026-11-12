@@ -123,29 +123,34 @@ def pinned_vendor_version(client, version):
 
 
 def windows_hermes_launcher_content_sha256(binary):
-    """Hash the executable loader and the sole Python entrypoint, not ZIP timestamps.
+    """Hash the full distlib EXE, excluding only ZIP DOS timestamp fields.
 
     The pinned Hermes launcher is a distlib self-extracting EXE. Its upstream
-    _launchers.py explicitly treats ZIP timestamp metadata as non-identity.
-    Reject anything other than the expected single-entry executable; never
-    normalize an arbitrary PE file or a changed loader/entrypoint.
+    _launchers.py treats ZIP timestamps as non-identity. Preserve every other
+    byte, including the PE loader, compressed entrypoint, ZIP flags, metadata
+    and archive trailer; never normalize an arbitrary ZIP modification.
     """
     require(binary.suffix.lower() == ".exe", "Hermes Windows launcher must be an EXE")
+    raw = bytearray(binary.read_bytes())
     with zipfile.ZipFile(binary) as archive:
         entries = archive.infolist()
         require(len(entries) == 1 and entries[0].filename == "__main__.py"
                 and not entries[0].is_dir(), "unexpected Hermes launcher ZIP structure")
-        script = archive.read(entries[0])
-        with binary.open("rb") as stream:
-            preamble = stream.read(entries[0].header_offset)
-    require(preamble.startswith(b"MZ") and b"#!"
-            in preamble, "invalid Hermes launcher executable preamble")
-    digest = hashlib.sha256()
-    for part in (preamble, script):
-        digest.update(len(part).to_bytes(8, "big"))
-        digest.update(part)
-    return digest.hexdigest()
-
+        entry = entries[0]
+        require(entry.file_size <= (1 << 20) and not (entry.flag_bits & 1),
+                "unexpected Hermes launcher entrypoint size or encryption")
+        archive.read(entry)  # Verify the sole entrypoint and its CRC.
+        local, central = entry.header_offset, archive.start_dir
+    require(0 < local and local + 30 <= central and central + 46 <= len(raw)
+            and raw[local:local + 4] == b"PK\x03\x04"
+            and raw[central:central + 4] == b"PK\x01\x02",
+            "invalid Hermes launcher ZIP header offsets")
+    require(raw.startswith(b"MZ") and b"#!" in raw[:local],
+            "invalid Hermes launcher executable preamble")
+    # Only these local and central DOS time/date fields are normalized.
+    raw[local + 10:local + 14] = b"\0" * 4
+    raw[central + 12:central + 16] = b"\0" * 4
+    return hashlib.sha256(raw).hexdigest()
 
 def vendor_identity(client, env):
     binary = Path(env["HERMES_BIN" if client == "hermes" else "AGY_BIN"]).resolve(strict=True)
