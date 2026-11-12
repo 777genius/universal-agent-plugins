@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import zipfile
 from unittest.mock import patch
 
 SOURCE = Path(__file__).resolve().parents[1]
@@ -138,6 +139,57 @@ class ReleasedNativeProofTests(unittest.TestCase):
         self.assertEqual(receipt["vendor"], before)
         self.assertEqual(receipt["transcript_sha256"], proof.sha(self.receipt().with_name("transcript.log")))
 
+
+    def test_windows_distlib_zip_timestamp_only_keeps_launcher_code_identity(self):
+        def launcher(filename, timestamp, script=b"print('pinned')", prefix=b"MZpinned-loader\\n#!pinned-python -I\\n"):
+            path = self.root / filename
+            path.write_bytes(prefix)
+            with zipfile.ZipFile(path, "a", compression=zipfile.ZIP_DEFLATED) as archive:
+                archive.writestr(zipfile.ZipInfo("__main__.py", date_time=timestamp), script)
+            return path
+
+        original = launcher("before.exe", (2026, 11, 12, 12, 0, 0))
+        metadata = launcher("after.exe", (2026, 11, 12, 13, 0, 0))
+        self.assertNotEqual(proof.sha(original), proof.sha(metadata))
+        pinned = proof.windows_hermes_launcher_content_sha256(original)
+        self.assertEqual(pinned, proof.windows_hermes_launcher_content_sha256(metadata))
+        # Only DOS timestamps are normalized; a changed ZIP comment, though
+        # not in the decompressed Python script, must still fail identity.
+        commented = launcher("comment.exe", (2026, 11, 12, 13, 0, 0))
+        with zipfile.ZipFile(commented, "a") as archive:
+            archive.comment = b"unreviewed ZIP metadata"
+        self.assertNotEqual(pinned, proof.windows_hermes_launcher_content_sha256(commented))
+        before = {"version_output": "Hermes Agent v0.23.0", "runtime_sha256": "a" * 64,
+                  "executable_sha256": proof.sha(original), "launcher_kind": "distlib-exe",
+                  "launcher_content_sha256": pinned}
+        after = {**before, "executable_sha256": proof.sha(metadata)}
+        self.assertEqual(proof.vendor_comparison("hermes", before),
+                         proof.vendor_comparison("hermes", after))
+        self.assertNotEqual(proof.vendor_comparison("hermes", before),
+                            proof.vendor_comparison("hermes", {**after, "runtime_sha256": "b" * 64}))
+        with self.assertRaisesRegex(ValueError, "vendor version"):
+            proof.vendor_comparison("hermes", {**after, "version_output": "Hermes Agent v0.23.1"})
+        script_changed = launcher("script.exe", (2026, 11, 12, 13, 0, 0), b"print('changed')")
+        loader_changed = launcher("loader.exe", (2026, 11, 12, 13, 0, 0),
+                                  prefix=b"MZchanged-loader\\n#!pinned-python -I\\n")
+        for changed in (script_changed, loader_changed):
+            with self.subTest(changed=changed.name):
+                after = {**before, "executable_sha256": proof.sha(changed),
+                         "launcher_content_sha256": proof.windows_hermes_launcher_content_sha256(changed)}
+                self.assertNotEqual(proof.vendor_comparison("hermes", before),
+                                    proof.vendor_comparison("hermes", after))
+        invalid = self.root / "invalid.exe"
+        invalid.write_bytes(b"MZnot-a-distlib-zip")
+        with self.assertRaises(zipfile.BadZipFile):
+            proof.windows_hermes_launcher_content_sha256(invalid)
+        multi = self.root / "multi.exe"
+        multi.write_bytes(b"MZpinned-loader\\n#!pinned-python -I\\n")
+        with zipfile.ZipFile(multi, "a") as archive:
+            archive.writestr("__main__.py", "pass")
+            archive.writestr("other.py", "pass")
+        with self.assertRaisesRegex(ValueError, "launcher ZIP structure"):
+            proof.windows_hermes_launcher_content_sha256(multi)
+
     def test_vendor_hash_drift_is_rejected_with_or_without_advisory_drift(self):
         for client in ("hermes", "antigravity"):
             self.args.client = client
@@ -256,7 +308,11 @@ class ReleasedNativeProofTests(unittest.TestCase):
             data = proof.target_identity(common, verified, self.source, target)
             data.update(status="pass", exit_code=0, uap_version_output="agentplugins 1.2.3",
                         binary_sha256_before=data["asset"]["sha256"],
-                        binary_sha256_after=data["asset"]["sha256"], vendor=self.vendor,
+                        binary_sha256_after=data["asset"]["sha256"],
+                        vendor=({**self.vendor, "launcher_kind": "distlib-exe",
+                                 "launcher_content_sha256": "c" * 64}
+                                if self.args.client == "hermes" and target == "windows-amd64"
+                                else self.vendor),
                         transcript_sha256=proof.sha(transcript))
             path = folder / "receipt.json"
             path.write_text(json.dumps(data))
@@ -266,6 +322,54 @@ class ReleasedNativeProofTests(unittest.TestCase):
     def test_exact_three_platform_set_passes(self):
         self.make_receipts()
         proof.aggregate(self.args)
+
+    def test_hermes_windows_cmd_fallback_uses_strict_executable_bytes(self):
+        # A pinned official .cmd fallback has no embedded ZIP to normalize.
+        # Both selection and stored receipt must make its kind unambiguous.
+        self.args.client = "hermes"
+        self.vendor["version_output"] = "Hermes Agent v0.23.0"
+        command = {**self.vendor, "launcher_kind": "cmd"}
+        self.assertEqual(proof.vendor_comparison("hermes", command),
+                         proof.vendor_comparison("hermes", dict(command)))
+        self.assertNotEqual(proof.vendor_comparison("hermes", command),
+                            proof.vendor_comparison("hermes", {**command,
+                                                              "executable_sha256": "b" * 64}))
+        self.assertNotEqual(proof.vendor_comparison("hermes", command),
+                            proof.vendor_comparison("hermes", {**command,
+                                                              "launcher_kind": "distlib-exe",
+                                                              "launcher_content_sha256": "c" * 64}))
+        for invalid in ({**command, "launcher_kind": "unknown"},
+                        {**command, "launcher_content_sha256": "c" * 64}):
+            with self.assertRaises(ValueError):
+                proof.vendor_comparison("hermes", invalid)
+
+        paths = self.make_receipts()
+        windows = next(path for path in paths if path.parent.name == "windows-amd64")
+        record = json.loads(windows.read_text())
+        record["vendor"] = command
+        windows.write_text(json.dumps(record))
+        proof.aggregate(self.args)  # Windows CMD is valid only with full-byte hash.
+        record["vendor"]["launcher_kind"] = "unverified"
+        windows.write_text(json.dumps(record))
+        with self.assertRaisesRegex(ValueError, "launcher kind"):
+            proof.aggregate(self.args)
+        record["vendor"]["launcher_kind"] = "cmd"
+        record["vendor"]["launcher_content_sha256"] = "c" * 64
+        windows.write_text(json.dumps(record))
+        with self.assertRaisesRegex(ValueError, "vendor receipt is incomplete"):
+            proof.aggregate(self.args)
+
+    def test_hermes_windows_receipt_requires_content_digest(self):
+        self.args.client = "hermes"
+        self.vendor["version_output"] = "Hermes Agent v0.23.0"
+        paths = self.make_receipts()
+        proof.aggregate(self.args)
+        windows = next(path for path in paths if path.parent.name == "windows-amd64")
+        record = json.loads(windows.read_text())
+        del record["vendor"]["launcher_content_sha256"]
+        windows.write_text(json.dumps(record))
+        with self.assertRaisesRegex(ValueError, "vendor receipt is incomplete"):
+            proof.aggregate(self.args)
 
     def test_absent_and_duplicate_platform_sets_rejected(self):
         with self.assertRaisesRegex(ValueError, "three native platform receipts"):
@@ -308,7 +412,8 @@ class ReleasedNativeProofTests(unittest.TestCase):
             proof.aggregate(self.args)
 
     def test_vendor_version_and_runtime_pin_refusals(self):
-        binary = self.root / "vendor"
+        # Windows Hermes permits only official .exe or .cmd launcher forms.
+        binary = self.root / ("vendor.cmd" if os.name == "nt" else "vendor")
         binary.write_text("synthetic vendor")
         env = {"AGY_BIN": str(binary)}
         with patch.object(proof, "output", return_value="agy 1.5.3"):

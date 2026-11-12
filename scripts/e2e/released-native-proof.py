@@ -14,6 +14,7 @@ import re
 import signal
 import subprocess
 import sys
+import zipfile
 
 TARGETS = ("linux-amd64", "darwin-arm64", "windows-amd64")
 REPOSITORY = "777genius/universal-agent-plugins"
@@ -121,6 +122,36 @@ def pinned_vendor_version(client, version):
     return expected
 
 
+def windows_hermes_launcher_content_sha256(binary):
+    """Hash the full distlib EXE, excluding only ZIP DOS timestamp fields.
+
+    The pinned Hermes launcher is a distlib self-extracting EXE. Its upstream
+    _launchers.py treats ZIP timestamps as non-identity. Preserve every other
+    byte, including the PE loader, compressed entrypoint, ZIP flags, metadata
+    and archive trailer; never normalize an arbitrary ZIP modification.
+    """
+    require(binary.suffix.lower() == ".exe", "Hermes Windows launcher must be an EXE")
+    raw = bytearray(binary.read_bytes())
+    with zipfile.ZipFile(binary) as archive:
+        entries = archive.infolist()
+        require(len(entries) == 1 and entries[0].filename == "__main__.py"
+                and not entries[0].is_dir(), "unexpected Hermes launcher ZIP structure")
+        entry = entries[0]
+        require(entry.file_size <= (1 << 20) and not (entry.flag_bits & 1),
+                "unexpected Hermes launcher entrypoint size or encryption")
+        archive.read(entry)  # Verify the sole entrypoint and its CRC.
+        local, central = entry.header_offset, archive.start_dir
+    require(0 < local and local + 30 <= central and central + 46 <= len(raw)
+            and raw[local:local + 4] == b"PK\x03\x04"
+            and raw[central:central + 4] == b"PK\x01\x02",
+            "invalid Hermes launcher ZIP header offsets")
+    require(raw.startswith(b"MZ") and b"#!" in raw[:local],
+            "invalid Hermes launcher executable preamble")
+    # Only these local and central DOS time/date fields are normalized.
+    raw[local + 10:local + 14] = b"\0" * 4
+    raw[central + 12:central + 16] = b"\0" * 4
+    return hashlib.sha256(raw).hexdigest()
+
 def vendor_identity(client, env):
     binary = Path(env["HERMES_BIN" if client == "hermes" else "AGY_BIN"]).resolve(strict=True)
     command = [str(binary), "--version"]
@@ -140,16 +171,39 @@ def vendor_identity(client, env):
                 and Path(argv[0]).is_absolute() and argv[1:3] == ["-I", "-c"],
                 "Hermes native runtime command is invalid")
         runtime = Path(argv[0]).resolve(strict=True)
-    return {"version_output": version, "executable_sha256": sha(binary),
-            "runtime_sha256": sha(runtime)}
+    identity = {"version_output": version, "executable_sha256": sha(binary),
+                "runtime_sha256": sha(runtime)}
+    if client == "hermes" and os.name == "nt":
+        # The official Windows installer admits an EXE or CMD launcher. Only
+        # distlib EXEs may ignore two ZIP DOS timestamps; CMD stays byte-strict.
+        kind = {".exe": "distlib-exe", ".cmd": "cmd"}.get(binary.suffix.lower())
+        require(kind is not None, "unsupported Hermes Windows launcher kind")
+        identity["launcher_kind"] = kind
+        if kind == "distlib-exe":
+            identity["launcher_content_sha256"] = windows_hermes_launcher_content_sha256(binary)
+    return identity
 
 
 def vendor_comparison(client, vendor):
     if client != "hermes":
         return vendor
-    # Version advisories are observations; executable and runtime bytes stay exact.
-    return {"version": pinned_vendor_version(client, vendor["version_output"]),
-            **{key: vendor[key] for key in ("executable_sha256", "runtime_sha256")}}
+    # Version advisories do not define identity. Runtime bytes are always exact;
+    # only Windows distlib ZIP metadata is excluded from launcher code identity.
+    comparison = {"version": pinned_vendor_version(client, vendor["version_output"]),
+                  "runtime_sha256": vendor["runtime_sha256"]}
+    # An explicit native launcher kind prevents an EXE from silently falling
+    # back to a CMD/raw-hash receipt, or vice versa, in release aggregation.
+    kind = vendor.get("launcher_kind")
+    if kind is not None:
+        require(kind in ("distlib-exe", "cmd"), "unsupported Hermes Windows launcher kind")
+        comparison["launcher_kind"] = kind
+    if kind == "distlib-exe":
+        require("launcher_content_sha256" in vendor, "Windows distlib digest missing")
+        comparison["launcher_content_sha256"] = vendor["launcher_content_sha256"]
+    else:
+        require("launcher_content_sha256" not in vendor, "unexpected Windows distlib digest")
+        comparison["executable_sha256"] = vendor["executable_sha256"]
+    return comparison
 
 
 def vendor_diagnostics(transcript, before, after=None, error=None):
@@ -257,8 +311,15 @@ def aggregate(args):
                 and proof.get("transcript_sha256") == sha(path.with_name("transcript.log")),
                 "native proof did not pass with the exact binary and transcript")
         vendor = proof.get("vendor", {})
-        require(set(vendor) == {"version_output", "executable_sha256", "runtime_sha256"}
-                and all(re.fullmatch(DIGEST, vendor[key]) for key in ("executable_sha256", "runtime_sha256")),
+        required_vendor = {"version_output", "executable_sha256", "runtime_sha256"}
+        if args.client == "hermes" and target == "windows-amd64":
+            kind = vendor.get("launcher_kind")
+            require(kind in ("distlib-exe", "cmd"), "invalid Hermes Windows launcher kind")
+            required_vendor.add("launcher_kind")
+            if kind == "distlib-exe":
+                required_vendor.add("launcher_content_sha256")
+        require(set(vendor) == required_vendor
+                and all(re.fullmatch(DIGEST, vendor[key]) for key in required_vendor - {"version_output", "launcher_kind"}),
                 "native vendor receipt is incomplete")
         pinned_vendor_version(args.client, vendor["version_output"])
     require(seen == set(TARGETS), "native target set is incomplete")
