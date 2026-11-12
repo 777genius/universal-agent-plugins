@@ -173,8 +173,14 @@ def vendor_identity(client, env):
         runtime = Path(argv[0]).resolve(strict=True)
     identity = {"version_output": version, "executable_sha256": sha(binary),
                 "runtime_sha256": sha(runtime)}
-    if client == "hermes" and os.name == "nt" and binary.suffix.lower() == ".exe":
-        identity["launcher_content_sha256"] = windows_hermes_launcher_content_sha256(binary)
+    if client == "hermes" and os.name == "nt":
+        # The official Windows installer admits an EXE or CMD launcher. Only
+        # distlib EXEs may ignore two ZIP DOS timestamps; CMD stays byte-strict.
+        kind = {".exe": "distlib-exe", ".cmd": "cmd"}.get(binary.suffix.lower())
+        require(kind is not None, "unsupported Hermes Windows launcher kind")
+        identity["launcher_kind"] = kind
+        if kind == "distlib-exe":
+            identity["launcher_content_sha256"] = windows_hermes_launcher_content_sha256(binary)
     return identity
 
 
@@ -185,11 +191,18 @@ def vendor_comparison(client, vendor):
     # only Windows distlib ZIP metadata is excluded from launcher code identity.
     comparison = {"version": pinned_vendor_version(client, vendor["version_output"]),
                   "runtime_sha256": vendor["runtime_sha256"]}
-    # Keep exact-byte enforcement for every other launcher. For pinned Windows
-    # distlib EXEs, separately record raw SHA in the transcript but compare
-    # unchanged loader+entrypoint content (ZIP timestamp metadata may rotate).
-    key = "launcher_content_sha256" if "launcher_content_sha256" in vendor else "executable_sha256"
-    comparison[key] = vendor[key]
+    # An explicit native launcher kind prevents an EXE from silently falling
+    # back to a CMD/raw-hash receipt, or vice versa, in release aggregation.
+    kind = vendor.get("launcher_kind")
+    if kind is not None:
+        require(kind in ("distlib-exe", "cmd"), "unsupported Hermes Windows launcher kind")
+        comparison["launcher_kind"] = kind
+    if kind == "distlib-exe":
+        require("launcher_content_sha256" in vendor, "Windows distlib digest missing")
+        comparison["launcher_content_sha256"] = vendor["launcher_content_sha256"]
+    else:
+        require("launcher_content_sha256" not in vendor, "unexpected Windows distlib digest")
+        comparison["executable_sha256"] = vendor["executable_sha256"]
     return comparison
 
 
@@ -300,9 +313,13 @@ def aggregate(args):
         vendor = proof.get("vendor", {})
         required_vendor = {"version_output", "executable_sha256", "runtime_sha256"}
         if args.client == "hermes" and target == "windows-amd64":
-            required_vendor.add("launcher_content_sha256")
+            kind = vendor.get("launcher_kind")
+            require(kind in ("distlib-exe", "cmd"), "invalid Hermes Windows launcher kind")
+            required_vendor.add("launcher_kind")
+            if kind == "distlib-exe":
+                required_vendor.add("launcher_content_sha256")
         require(set(vendor) == required_vendor
-                and all(re.fullmatch(DIGEST, vendor[key]) for key in required_vendor - {"version_output"}),
+                and all(re.fullmatch(DIGEST, vendor[key]) for key in required_vendor - {"version_output", "launcher_kind"}),
                 "native vendor receipt is incomplete")
         pinned_vendor_version(args.client, vendor["version_output"])
     require(seen == set(TARGETS), "native target set is incomplete")
