@@ -173,7 +173,7 @@ class ProtocolTests(unittest.TestCase):
 
     def test_absent_native_stage_grants_trust_and_refuses_surviving_owned_catalog(self):
         with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
+            root = Path(temp).resolve()
             evidence = {"commands": [], "native_sessions": []}
             obj = journey.Journey(root, root / "installer", root / "probe", root / "kimi", root / "node", evidence)
             process = subprocess.Popen(["/usr/bin/python3", "-c", "import time;time.sleep(60)"],
@@ -215,7 +215,7 @@ class ProtocolTests(unittest.TestCase):
 
     def test_config_mutation_refused_before_replacement_and_marker_metadata_observable(self):
         with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
+            root = Path(temp).resolve()
             obj = journey.Journey(root, root / "installer", root / "probe", root / "bin/kimi", root / "node",
                                   {"commands": [], "native_sessions": []})
             obj.configure("http://127.0.0.1:1234/v1")
