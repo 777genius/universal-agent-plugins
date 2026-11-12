@@ -106,7 +106,7 @@ func TestDNSFallbackNeverRedialsHostOrPrivateIP(t *testing.T) {
 	if got := strings.Join(calls, ","); got != "8.8.8.8:443,1.1.1.1:443" {
 		t.Fatalf("unexpected dial order or hostname re-resolution: %q", got)
 	}
-	private := append(ips, net.IPAddr{IP: net.ParseIP("127.0.0.1")})
+	private := []net.IPAddr{ips[0], ips[1], {IP: net.ParseIP("127.0.0.1")}}
 	called := false
 	if _, err := dialPublicAddresses(context.Background(), "443", private,
 		func(context.Context, string, string) (net.Conn, error) {
