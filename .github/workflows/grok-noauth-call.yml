@@ -1,0 +1,87 @@
+name: Grok native MCP call without vendor auth
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/grok-noauth-call.yml'
+      - 'scripts/grok_project_protocol_*.py'
+      - 'scripts/grok_noauth_call_e2e.py'
+      - 'scripts/test_grok_noauth_call.py'
+      - 'docs/plans/2026-11-12-grok-noauth-native-call.md'
+      - 'scripts/test_grok_project_protocol.py'
+      - 'repotests/testdata/agentplugins_native_probe/**'
+      - 'install/integrationctl/agentplugins/clients/grok/**'
+      - 'cli/**'
+      - 'install/integrationctl/agentplugins/clients/shared/**'
+      - 'scripts/native_client_research.py'
+      - 'scripts/project_native_research.py'
+      - 'scripts/project_native_collectors/grok.py'
+      - 'go.work'
+      - 'go.work.sum'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/grok-noauth-call.yml'
+      - 'scripts/grok_project_protocol_*.py'
+      - 'scripts/grok_noauth_call_e2e.py'
+      - 'scripts/test_grok_noauth_call.py'
+      - 'docs/plans/2026-11-12-grok-noauth-native-call.md'
+      - 'scripts/test_grok_project_protocol.py'
+      - 'repotests/testdata/agentplugins_native_probe/**'
+      - 'install/integrationctl/agentplugins/clients/grok/**'
+      - 'cli/**'
+      - 'install/integrationctl/agentplugins/clients/shared/**'
+      - 'scripts/native_client_research.py'
+      - 'scripts/project_native_research.py'
+      - 'scripts/project_native_collectors/grok.py'
+      - 'go.work'
+      - 'go.work.sum'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: grok-noauth-call-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  native-local-provider:
+    name: Genuine native tools call through installed stdio lifecycle
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify exact source and inert contracts
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT"
+          test -z "$(git status --porcelain --untracked-files=normal)"
+          python3 -m unittest discover -s scripts -p 'test_grok_noauth_call.py' -v
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.11'
+          cache: false
+      - name: Build ordinary installer and existing credential-free probe
+        run: |
+          set -euo pipefail
+          mkdir -m 700 "$RUNNER_TEMP/grok-native-call-tools"
+          go build -trimpath -o "$RUNNER_TEMP/grok-native-call-tools/agentplugins" ./cli/cmd/agentplugins
+          go build -trimpath -o "$RUNNER_TEMP/grok-native-call-tools/probe" ./repotests/testdata/agentplugins_native_probe
+          test -z "$(git status --porcelain --untracked-files=normal)"
+      - name: Run genuine Grok through deterministic local provider
+        run: |
+          python3 scripts/grok_noauth_call_e2e.py \
+            --installer "$RUNNER_TEMP/grok-native-call-tools/agentplugins" \
+            --probe "$RUNNER_TEMP/grok-native-call-tools/probe" \
+            --output "$RUNNER_TEMP/grok-noauth-native-call-evidence"
+      - name: Preserve original bounded protocol evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: grok-noauth-native-call-${{ github.sha }}
+          path: ${{ runner.temp }}/grok-noauth-native-call-evidence/evidence.json
+          if-no-files-found: error
+          retention-days: 14
+
