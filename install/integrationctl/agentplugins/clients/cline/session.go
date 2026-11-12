@@ -109,6 +109,14 @@ func exactSessionServers(body []byte, names []string) error {
 		if disabled, present := server["disabled"]; present && disabled != false {
 			return fmt.Errorf("Cline server %q was disabled; startup does not override that choice", name)
 		}
+		// Starting the client is not consent to automatically approve MCP
+		// tool calls. Keep this separate from the CLI's --auto-approve flag.
+		if configured, present := server["autoApprove"]; present {
+			approvals, ok := configured.([]any)
+			if !ok || len(approvals) != 0 {
+				return fmt.Errorf("Cline server %q requests automatic MCP tool approval", name)
+			}
+		}
 	}
 	return nil
 }
