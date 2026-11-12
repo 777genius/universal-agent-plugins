@@ -15,6 +15,12 @@ on:
       - 'scripts/run-native-client-matrix.py'
       - 'repotests/testdata/agentplugins_native_probe/**'
   workflow_dispatch:
+    inputs:
+      kiro_auth_research:
+        description: 'Run the legacy Kiro diagnostic with its dedicated CI credential'
+        type: boolean
+        required: false
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -72,7 +78,7 @@ jobs:
         env:
           AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED: '1'
           EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
-          KIRO_API_KEY: ${{ matrix.client == 'kiro' && secrets.KIRO_API_KEY || '' }}
+          KIRO_API_KEY: ${{ github.event_name == 'workflow_dispatch' && inputs.kiro_auth_research == true && matrix.client == 'kiro' && secrets.KIRO_API_KEY || '' }}
         run: python3 scripts/project_native_research.py --client '${{ matrix.client }}' --phase '${{ matrix.phase }}' --output '${{ runner.temp }}/project-native-${{ matrix.client }}'
       - name: Admit the exact bounded evidence ZIP
         id: admission
