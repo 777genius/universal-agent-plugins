@@ -59,7 +59,10 @@ test("STRUCTURAL missing npm: staged-child and unsupported platform skips preced
   for (const extra of [{ AGENTPLUGINS_STAGED_TEST_CHILD: "1" },
     { DISCOVERY_PLATFORM: "win32" }, { DISCOVERY_PLATFORM: "darwin" }]) {
     const out = invoke(["--test", "--test-reporter=tap", "consumers/private-npm-pack.cjs", "consumers/private-npm-launcher.cjs"], extra);
-    assert.match(out, /# fail 0/); assert.match(out, /# skipped 27/);
+    assert.match(out, /^# tests 28$/m);
+    assert.match(out, /^# pass 0$/m);
+    assert.match(out, /^# fail 0$/m);
+    assert.match(out, /^# skipped 28$/m);
   }
 });
 test("STRUCTURAL enabled fixture rejects missing or invalid explicit npm before creating a workspace", () => {
