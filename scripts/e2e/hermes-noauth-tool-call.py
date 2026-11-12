@@ -112,12 +112,17 @@ def child_case():
                 # preserve the entire UAP-produced MCP mapping byte for byte.
                 header = b"model: offline-native-smoke\n"
                 require(original.startswith(header) and original.count(header) == 1
-                        and b"mcp_servers:\n" in original, "unexpected native YAML baseline")
+                        and original.endswith(b"\n") and b"mcp_servers:\n" in original
+                        and b"\ntools:" not in original, "unexpected native YAML baseline")
                 selected_model = {"provider": "custom", "base_url": provider.base_url,
                                   "default": MODEL, "context_length": 65536}
                 self.config.write_bytes(
                     b"model: " + json.dumps(selected_model, sort_keys=True).encode("utf-8")
-                    + b"\n" + original[len(header):])
+                    + b"\n" + original[len(header):]
+                    # Official Hermes config explicitly permits an eager tool
+                    # surface. It keeps this deterministic probe on direct
+                    # native MCP, without modifying installed MCP authority.
+                    + b"tools:\n  tool_search:\n    enabled: off\n")
                 held = self.config.read_bytes()
                 query = "Call the offered inert ping once. nonce=" + provider.nonce + " stage=" + stage
                 native = json.loads(Path(os.environ["HERMES_NATIVE_RUNTIME_COMMAND_FILE"]).read_text())
