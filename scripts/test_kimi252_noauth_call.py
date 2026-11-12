@@ -91,7 +91,7 @@ class ProtocolTests(unittest.TestCase):
             self.assertFalse(driver.completed)
 
     def test_wrong_result_roots_nonce_revision_marker_process_or_framing_refused(self):
-        for key in ("nonce", "revision", "marker", "cwd", "plugin_root", "plugin_data", "pid", "session"):
+        for key in ("nonce", "operation", "revision", "marker", "cwd", "plugin_root", "plugin_data", "pid", "session"):
             facts = {**expected(), "pid": 123, "session": "owned", key: False}
             driver = native.Driver(expected()); driver.respond(request())
             with self.subTest(key=key), self.assertRaises(ValueError): driver.respond(result(facts))
@@ -154,6 +154,20 @@ class ProtocolTests(unittest.TestCase):
             req = urllib.request.Request(url + "/chat/completions", data=raw, headers={"Content-Type": "application/json"})
             with self.assertRaises(urllib.error.HTTPError): opener.open(req, timeout=3)
             self.assertNotIn("request", driver.requests[0]); self.assertFalse(driver.completed)
+
+    def test_private_native_bearer_in_rejected_route_cannot_enter_evidence(self):
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        secret = "test-owned-private-bearer"
+        for suffix in ("/chat/completions/" + secret, "/chat/completions?token=" + secret):
+            with self.subTest(route=suffix.split(secret)[0]), native.provider(expected()) as (url, driver):
+                driver.secret = secret
+                req = urllib.request.Request(url + suffix, data=b"{}",
+                                             headers={"Content-Type": "application/json"})
+                with self.assertRaises(urllib.error.HTTPError): opener.open(req, timeout=3)
+                self.assertEqual(driver.requests[0]["path"], "<rejected-route>")
+                self.assertNotIn(secret, json.dumps(driver.requests))
+                self.assertNotIn(secret, driver.error or "")
+                self.assertFalse(driver.completed)
 
     def test_actual_http_malformed_schema_then_valid_retry_stays_failed(self):
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
