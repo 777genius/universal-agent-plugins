@@ -11,6 +11,7 @@ import (
 	"errors"
 	"net/url"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/conformance"
@@ -85,7 +86,8 @@ func validateURI(value string) error {
 	}
 	parsed, err := url.Parse(value)
 	if err != nil || parsed.Scheme == "" || parsed.User != nil || parsed.Fragment != "" ||
-		parsed.RawQuery != "" || parsed.Opaque != "" || parsed.ForceQuery {
+		parsed.RawQuery != "" || parsed.Opaque != "" || parsed.ForceQuery ||
+		strings.ContainsFunc(parsed.Path, unicode.IsControl) {
 		return ErrInvalidEntry
 	}
 	// Preserve URI identity byte-for-byte; reject encoded/path traversal.
