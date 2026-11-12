@@ -30,7 +30,7 @@ func (d sessionDetector) Detect(context.Context) ([]domain.DetectedClient, error
 		// The product session guard still refuses editor-only clients.
 		Surfaces: []domain.ClientSurface{{ID: "cline_cli", Detected: true}}}}, nil
 }
-func (d sessionDetector) DetectTargetsWithVersionProbe(ctx context.Context, ids []domain.ClientID) ([]domain.DetectedClient, error) {
+func (d sessionDetector) DetectTargetsWithVersionProbe(ctx context.Context, _ []domain.ClientID) ([]domain.DetectedClient, error) {
 	*d.probes++
 	found, err := d.Detect(ctx)
 	found[0].Version = d.version
@@ -80,7 +80,8 @@ func TestClineProjectSessionComposedLifecycle(t *testing.T) {
 	userBefore, bBefore := securityFixtureTree(t, user), securityFixtureTree(t, journey.b)
 	statePath := filepath.Join(journey.a, ".uap", "state-v2.json")
 	before := projectJourneyRead(t, statePath)
-	run := []string{"run", "--target", "cline"}
+	run := make([]string, 0, 5)
+	run = append(run, "run", "--target", "cline")
 	for _, flags := range [][]string{nil, {"--yes"}} {
 		if _, err := journey.execute(journey.a, append(append([]string{}, run...), flags...)...); err == nil {
 			t.Fatal("startup accepted missing action-specific consent")

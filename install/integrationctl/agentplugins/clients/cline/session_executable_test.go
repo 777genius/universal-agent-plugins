@@ -34,7 +34,7 @@ func TestClineSessionExistingCLIPathStillRequiresObservedSurface(t *testing.T) {
 	client := domain.DetectedClient{
 		ClientID: domain.ClientCline, Status: domain.DetectionDetected,
 		ExecutablePath: executable,
-		Surfaces: []domain.ClientSurface{{ID: "cline_cli", Detected: true}},
+		Surfaces:       []domain.ClientSurface{{ID: "cline_cli", Detected: true}},
 	}
 	got, err := clineSessionExecutable(clients.Env{}, client, 1)
 	if err != nil || got != executable {

@@ -41,7 +41,7 @@ func (adapter *Adapter) PlanSession(ctx context.Context, env clients.Env, req cl
 		return clients.SessionPlan{}, err
 	}
 	if !after.Exists || after.Mode != file.Mode || !bytes.Equal(after.Body, file.Body) {
-		return clients.SessionPlan{}, fmt.Errorf("Cline project MCP source changed during verification")
+		return clients.SessionPlan{}, fmt.Errorf("cline project MCP source changed during verification")
 	}
 	if err := exactSessionServers(file.Body, names); err != nil {
 		return clients.SessionPlan{}, err
@@ -62,7 +62,7 @@ func (adapter *Adapter) sessionServers(env clients.Env, req clients.SessionReque
 	selected := map[string]bool{}
 	for _, binding := range req.Bindings {
 		if binding.Scope != "project" {
-			return nil, fmt.Errorf("Cline session requires Project scope")
+			return nil, fmt.Errorf("cline session requires Project scope")
 		}
 		if err := adapter.ValidateBindingProfile(req.ProjectRoot, binding); err != nil {
 			return nil, err
@@ -99,22 +99,22 @@ func exactSessionServers(body []byte, names []string) error {
 	}
 	servers, ok := document["mcpServers"].(map[string]any)
 	if !ok || len(document) != 1 || len(servers) != len(names) {
-		return fmt.Errorf("Cline session source contains unowned or unsupported configuration")
+		return fmt.Errorf("cline session source contains unowned or unsupported configuration")
 	}
 	for _, name := range names {
 		server, ok := servers[name].(map[string]any)
 		if !ok {
-			return fmt.Errorf("Cline owned server is missing")
+			return fmt.Errorf("cline owned server is missing")
 		}
 		if disabled, present := server["disabled"]; present && disabled != false {
-			return fmt.Errorf("Cline server %q was disabled; startup does not override that choice", name)
+			return fmt.Errorf("cline server %q was disabled; startup does not override that choice", name)
 		}
 		// Starting the client is not consent to automatically approve MCP
 		// tool calls. Keep this separate from the CLI's --auto-approve flag.
 		if configured, present := server["autoApprove"]; present {
 			approvals, ok := configured.([]any)
 			if !ok || len(approvals) != 0 {
-				return fmt.Errorf("Cline server %q requests automatic MCP tool approval", name)
+				return fmt.Errorf("cline server %q requests automatic MCP tool approval", name)
 			}
 		}
 	}

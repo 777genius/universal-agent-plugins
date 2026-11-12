@@ -1,12 +1,14 @@
 package managedstdio
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestSessionRejectsInvalidProcessBeforeChangingDirectory(t *testing.T) {
@@ -51,7 +53,9 @@ func TestSessionPreservesInheritedStdioAndExplicitEnvironment(t *testing.T) {
 		t.Fatal(err)
 	}
 	cwd := t.TempDir()
-	cmd := exec.Command(executable, "-test.run=^TestSessionPreservesInheritedStdioAndExplicitEnvironment$")
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, executable, "-test.run=^TestSessionPreservesInheritedStdioAndExplicitEnvironment$")
 	cmd.Env = append(os.Environ(), "UAP_SESSION_CHILD=1", "UAP_SESSION_CWD="+cwd, "UAP_SESSION_VALUE=original")
 	output, err := cmd.CombinedOutput()
 	if err != nil {

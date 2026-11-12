@@ -17,12 +17,12 @@ func clineSessionExecutable(env clients.Env, client domain.DetectedClient, bindi
 	// An absolute executable field is not proof of the CLI surface:
 	// editor-only detection must never enter the native process runner.
 	if !hasClineCLISurface(client.Surfaces) {
-		return "", fmt.Errorf("Cline CLI surface is required; editor-only detection is insufficient")
+		return "", fmt.Errorf("cline CLI surface is required; editor-only detection is insufficient")
 	}
 	executable := client.ExecutablePath
 	if executable == "" {
 		if env.LookupExecutable == nil {
-			return "", fmt.Errorf("Cline CLI session resolver is unavailable")
+			return "", fmt.Errorf("cline CLI session resolver is unavailable")
 		}
 		var err error
 		executable, err = env.LookupExecutable("cline")
@@ -31,7 +31,7 @@ func clineSessionExecutable(env clients.Env, client domain.DetectedClient, bindi
 		}
 	}
 	if !filepath.IsAbs(executable) {
-		return "", fmt.Errorf("Cline session executable must resolve to an absolute path")
+		return "", fmt.Errorf("cline session executable must resolve to an absolute path")
 	}
 	return executable, nil
 }

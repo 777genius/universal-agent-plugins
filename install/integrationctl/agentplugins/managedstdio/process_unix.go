@@ -16,5 +16,7 @@ func replaceProcessEnvironment(command string, args []string, cwd string, enviro
 	if err := os.Chdir(cwd); err != nil {
 		return err
 	}
+	// #nosec G702 -- StartSession verifies a consented absolute executable with exact argv[0];
+	// replacing this process without shell evaluation is the explicit session boundary.
 	return syscall.Exec(command, args, environment)
 }
