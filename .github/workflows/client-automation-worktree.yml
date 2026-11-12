@@ -1,0 +1,48 @@
+# Temporary development-only transport for PR #878. Remove before merge.
+# Exports tracked source and public vendored dependencies, never credentials,
+# .git, runner HOME or environment. This is not product acceptance.
+name: Automation exact offline worktree
+on:
+  pull_request:
+    paths: ['.github/workflows/client-automation-worktree.yml']
+permissions:
+  contents: read
+jobs:
+  worktree:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.11'
+          cache: false
+      - name: Export exact public source and offline compiler inputs
+        env:
+          EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT"
+          test -z "$(git status --porcelain --untracked-files=normal)"
+          out="$RUNNER_TEMP/uap-automation-worktree"
+          mkdir -m 700 "$out"
+          git archive --format=tar HEAD > "$out/source.tar"
+          go work vendor -o "$out/vendor"
+          tar -C "$out" -czf "$out/vendor.tar.gz" vendor
+          rm -rf "$out/vendor"
+          tar -C "$(go env GOROOT)" -czf "$out/go-toolchain.tar.gz" .
+          git rev-parse HEAD > "$out/source-commit.txt"
+          git rev-parse 'HEAD^{tree}' > "$out/source-tree.txt"
+          go version > "$out/toolchain.txt"
+          (cd "$out" && sha256sum source.tar vendor.tar.gz go-toolchain.tar.gz > SHA256SUMS)
+          test -z "$(git status --porcelain --untracked-files=normal)"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: automation-offline-worktree-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/uap-automation-worktree/
+          if-no-files-found: error
+          retention-days: 1
