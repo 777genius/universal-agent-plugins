@@ -67,8 +67,8 @@ func (m *mockRemote) handler(w http.ResponseWriter, r *http.Request) {
 	body, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 1, "result": cache})
 	if m.sse {
 		w.Header().Set("Content-Type", "text/event-stream")
-		fmt.Fprint(w, ": ready\n\ndata: {\"jsonrpc\":\"2.0\",\"method\":\"notifications/progress\",\"params\":{}}\n\n")
-		fmt.Fprintf(w, "data: %s\n\n", body)
+		_, _ = fmt.Fprint(w, ": ready\n\ndata: {\"jsonrpc\":\"2.0\",\"method\":\"notifications/progress\",\"params\":{}}\n\n")
+		_, _ = fmt.Fprintf(w, "data: %s\n\n", body)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
