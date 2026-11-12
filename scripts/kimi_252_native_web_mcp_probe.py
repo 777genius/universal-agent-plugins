@@ -12,7 +12,6 @@ import stat
 import signal
 import socket
 import subprocess
-import tempfile
 import time
 import urllib.error
 import urllib.parse
@@ -40,6 +39,10 @@ def native_private_token(home):
                 entry.st_ino, entry.st_dev, entry.st_size, entry.st_ctime_ns):
             raise ValueError("native bearer file changed while opened")
         raw = os.read(fd, 129)
+        after = os.fstat(fd)
+        if (after.st_ino, after.st_dev, after.st_size, after.st_ctime_ns) != (
+                entry.st_ino, entry.st_dev, entry.st_size, entry.st_ctime_ns):
+            raise ValueError("native bearer changed during read")
     finally:
         os.close(fd)
     if len(raw) != entry.st_size:
@@ -57,8 +60,12 @@ def native_private_token(home):
 
 
 def response(req, base, token, method="GET", data=None):
-    if not base.startswith("http://127.0.0.1:"):
-        raise ValueError("native management endpoint must be loopback")
+    origin = urllib.parse.urlsplit(base)
+    if (origin.scheme != "http" or origin.hostname != "127.0.0.1"
+            or origin.port is None or origin.username is not None
+            or origin.password is not None or origin.path or origin.query
+            or origin.fragment):
+        raise ValueError("native management endpoint must be exact loopback origin")
     body = None if data is None else json.dumps(data).encode("utf-8")
     request = urllib.request.Request(base + req, data=body, method=method,
         headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"})
@@ -92,40 +99,38 @@ def start_server(client, env, project, timeout=45):
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
-    with tempfile.TemporaryFile(mode="w+b") as capture:
-        process = subprocess.Popen([str(client), "web", "--no-open", "--host", "127.0.0.1", "--port", str(port)],
-            cwd=project, env=env, stdout=capture, stderr=subprocess.STDOUT,
-            stdin=subprocess.DEVNULL, start_new_session=True)
+    # No captured stdout: the native banner includes the private bearer and
+    # should never reach CI logs/artifacts or an unbounded temporary file.
+    process = subprocess.Popen([str(client), "web", "--no-open", "--host", "127.0.0.1", "--port", str(port)],
+        cwd=project, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        stdin=subprocess.DEVNULL, start_new_session=True)
+    try:
+        deadline = time.monotonic() + timeout
+        base = f"http://127.0.0.1:{port}"
+        while time.monotonic() < deadline:
+            if process.poll() is not None:
+                raise ValueError("native web process exited before authenticated startup")
+            # The real Kimi 2.5.2 server writes a private home-wide bearer.
+            # The isolated test's own auth state is read strictly read-only.
+            token = native_private_token(Path(env["KIMI_CODE_HOME"]))
+            if token:
+                try:
+                    result = response("/api/v1/meta", base, token)
+                    if isinstance(result, dict):
+                        return base, token, process
+                except (urllib.error.URLError, TimeoutError, ValueError):
+                    pass
+            time.sleep(.3)
+        raise ValueError("native authenticated management startup timed out (token-file="
+                         + ("present" if native_private_token(Path(env["KIMI_CODE_HOME"])) else "absent")
+                         + ")")
+    except BaseException:
         try:
-            deadline = time.monotonic() + timeout
-            base = f"http://127.0.0.1:{port}"
-            while time.monotonic() < deadline:
-                if process.poll() is not None:
-                    raise ValueError("native web process exited before authenticated startup")
-                # In non-TTY CI the rich startup banner may be absent. Read the
-                # native 0600 persistent token from the disposable Kimi home;
-                # it is never logged or added to a retained artifact.
-                home = Path(env["KIMI_CODE_HOME"])
-                token = native_private_token(home)
-                if token:
-                    try:
-                        result = response("/api/v1/meta", base, token)
-                        if isinstance(result, dict):
-                            return base, token, process
-                    except (urllib.error.URLError, TimeoutError, ValueError):
-                        pass
-                time.sleep(.3)
-            # Only nonsecret diagnostics; never report or print the token.
-            raise ValueError("native authenticated management startup timed out (token-file="
-                             + ("present" if native_private_token(Path(env["KIMI_CODE_HOME"])) else "absent")
-                             + ")")
-        except BaseException:
-            try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            process.wait(timeout=5)
-            raise
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        process.wait(timeout=5)
+        raise
 
 
 def probe(client, env, project, config_path):
