@@ -412,7 +412,8 @@ class ReleasedNativeProofTests(unittest.TestCase):
             proof.aggregate(self.args)
 
     def test_vendor_version_and_runtime_pin_refusals(self):
-        binary = self.root / "vendor"
+        # Windows Hermes permits only official .exe or .cmd launcher forms.
+        binary = self.root / ("vendor.cmd" if os.name == "nt" else "vendor")
         binary.write_text("synthetic vendor")
         env = {"AGY_BIN": str(binary)}
         with patch.object(proof, "output", return_value="agy 1.5.3"):
