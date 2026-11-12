@@ -31,7 +31,6 @@ jobs:
       EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
       UAP_PI_FULL_REAL_SOURCE_E2E: '1'
       UAP_PI_FULL_SHARD: ${{ matrix.shard }}
-      UAP_PI_FULL_REPORT: ${{ runner.temp }}/pi-full-report-${{ matrix.os }}-${{ matrix.shard }}.json
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -48,6 +47,8 @@ jobs:
           git diff --exit-code
       - name: Full pinned real-source Pi signed-test saved User and Project lifecycle
         shell: bash
+        env:
+          UAP_PI_FULL_REPORT: ${{ runner.temp }}/pi-full-report-${{ matrix.os }}-${{ matrix.shard }}.json
         run: |
           go test -p=2 -count=1 -timeout=48m -v ./cli/cmd/agentplugins \
             -run '^TestPiFullModernSignedTestOnlyMarketplace$'
