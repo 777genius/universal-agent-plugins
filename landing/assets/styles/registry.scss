@@ -1168,21 +1168,30 @@ img {
   gap: 12px;
   min-width: 0;
 }
-/* Both filters share one ordinary desktop slot. Reclaim decorative icon space
-   so their accessible labels remain useful without turning into tiny inputs. */
-@media (min-width: 981px) {
-  .catalog-filter-pair .app-select__value > svg,
-  .catalog-filter-pair .app-combobox__anchor > svg:first-child {
-    display: none;
+/* Five equally usable columns on wide desktops: trust no longer consumes
+   the search-sized slot, and Source / Owner each get an independent column. */
+@media (min-width: 1521px) {
+  .catalog-controls--plugins {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
-  .catalog-filter-pair .app-select__trigger,
-  .catalog-filter-pair .app-combobox__anchor {
-    padding-inline: 6px;
-    gap: 4px;
+  .catalog-controls--plugins > .search-field {
+    grid-column: span 2;
   }
-  .catalog-filter-pair .app-select__value,
-  .catalog-filter-pair .app-combobox__input {
-    font-size: 0.75rem;
+  .catalog-controls--plugins .catalog-filter-pair {
+    display: contents;
+  }
+}
+/* Use three readable filter columns from 981px (including 1024px/Retina
+   viewports); the existing <=980px tablet rule switches to two. */
+@media (min-width: 981px) and (max-width: 1520px) {
+  .catalog-controls--plugins {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .catalog-controls--plugins > .search-field {
+    grid-column: 1 / -1;
+  }
+  .catalog-controls--plugins .catalog-filter-pair {
+    display: contents;
   }
 }
 /* Flat toolbar only; dropdown panels and installation controls keep their surfaces. */
@@ -3422,7 +3431,7 @@ img {
   }
 }
 
-@media (max-width: 380px) {
+@media (max-width: 560px) {
   .catalog-filter-pair {
     grid-template-columns: minmax(0, 1fr);
   }

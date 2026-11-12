@@ -62,7 +62,7 @@ test('shell English messages compile, interpolate and retain baseline FAQ facts'
   assert.equal(errors.mock.callCount(), 0);
 });
 
-test('supported-agent FAQ stays in sync with the 14 public clients across all locales', () => {
+test('supported-agent FAQ stays in sync with the 16 public clients across all locales', () => {
   const expected = clientLandingPages.map((client) => client.name);
   for (const locale of publishedLocales) {
     const localized = JSON.parse(read(`i18n/locales/${locale}.json`)) as {
@@ -382,11 +382,10 @@ test('download and client strip retain every original support qualification', ()
   }
   const source = read('components/sections/DownloadSection.vue');
   for (const field of ['note', 'activation']) assert.ok(source.includes(`registryUi.clients.${'${client.id}'}.${field}`));
-  assert.equal(clientLandingPages.length, 14);
+  assert.equal(clientLandingPages.length, 16);
   assert.ok(clientLandingPages.every((client) => client.id !== 'vscode'));
-  for (const pending of ['hermes', 'antigravity']) {
-    assert.ok(clientLandingPages.every((client) => client.id !== pending),
-      `${pending} needs a qualified CLI release before public installation`);
+  for (const id of ['hermes', 'antigravity']) {
+    assert.ok(clientLandingPages.some((client) => client.id === id));
   }
 });
 

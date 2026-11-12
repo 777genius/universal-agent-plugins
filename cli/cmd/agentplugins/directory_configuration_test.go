@@ -258,9 +258,16 @@ func (transport conformanceFixtureTransport) RoundTrip(request *http.Request) (*
 
 func writeConformanceFixture(t *testing.T, root string) map[string]string {
 	t.Helper()
+	return writeConformanceFixtureWithSeed(t, root, 17)
+}
+
+// Distinct, fixed test-only Ed25519 seeds exercise independent v1 signing
+// lineages. Production trust keys and bootstrap are never changed.
+func writeConformanceFixtureWithSeed(t *testing.T, root string, testSeed byte) map[string]string {
+	t.Helper()
 	seed := make([]byte, ed25519.SeedSize)
 	for i := range seed {
-		seed[i] = 17
+		seed[i] = testSeed
 	}
 	privateKey := ed25519.NewKeyFromSeed(seed)
 	publicKey := privateKey.Public().(ed25519.PublicKey)

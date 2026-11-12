@@ -13,6 +13,8 @@
     <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/grok-dark.svg"><img src="landing/public/client-icons/grok.svg" width="32" height="32" alt="Grok Build" /></picture>&nbsp;&nbsp;
     <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/kimi-dark.svg"><img src="landing/public/client-icons/kimi.svg" width="32" height="32" alt="Kimi Code" /></picture>&nbsp;&nbsp;
     <img src="landing/public/client-icons/qoder.svg" width="32" height="32" alt="Qoder" />&nbsp;&nbsp;
+    <img src="landing/public/client-icons/hermes.webp" width="32" height="32" alt="Hermes Agent" />&nbsp;&nbsp;
+    <img src="landing/public/client-icons/antigravity.svg" width="32" height="32" alt="Google Antigravity" />&nbsp;&nbsp;
     <img src="landing/public/client-icons/pi.svg" width="32" height="32" alt="Pi" />
 </p>
 
@@ -28,8 +30,6 @@ Share `uap.toml` (package list) and `uap.lock` (exact versions) to restore your
 setup on another computer or with your team.
 
 **More than a one-time installer:** UAP combines a [searchable plugin directory](https://universal-agent-plugins.com/plugins/), independent [Agent Skills](https://universal-agent-plugins.com/agent-skills/) (no `plugin.json` wrapper needed), native multi-agent installation, managed repair/removal, portable dependency locks, and [Go/TypeScript SDKs](https://universal-agent-plugins.com/docs/en/sdk/). Review [product capabilities and release boundaries](docs/PRODUCT_CAPABILITIES.md) for evidence and limitations.
-
-The static website initially shows **reviewed** packages; after page load it can append additional community records from a signed discovery feed. The initial reviewed count is **not** the full discovered-catalog count, and discovery is not proof that every entry is installable or E2E-tested. See [how catalog discovery works](docs/PRODUCT_CAPABILITIES.md#how-the-public-catalog-works-important-for-crawlers).
 
 [Documentation](https://universal-agent-plugins.com/docs/) ·
 [Browse plugins](https://universal-agent-plugins.com/plugins/) ·
@@ -292,6 +292,8 @@ workspace. Agents may still ask you to trust the project, sign in, or restart.
 | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/cline-dark.svg"><img src="landing/public/client-icons/cline.svg" width="24" height="24" alt="" align="middle"></picture> **Cline** | Skills, MCP | Skills, MCP | Guided | Select the project MCP settings path and reload Cline. |
 | <img src="landing/public/client-icons/kiro.svg" width="24" height="24" alt="" align="middle"> **Kiro** | Skills, MCP | Skills, MCP | Guided | Sign in, approve access, and restart Kiro if prompted. |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/grok-dark.svg"><img src="landing/public/client-icons/grok.svg" width="24" height="24" alt="" align="middle"></picture> **Grok Build** | Skills, MCP | Skills, MCP (prepared) | Guided | Open the selected project in Grok; enable and trust the plugin, reload, then verify Skills and MCP. |
+| <img src="landing/public/client-icons/hermes.webp" width="24" height="24" alt="" align="middle"> **Hermes Agent** | Skills, MCP | Skills only | Guided | Restart Hermes, trust the selected Git project, and verify Skills and User MCP; Project MCP is unsupported. |
+| <img src="landing/public/client-icons/antigravity.svg" width="24" height="24" alt="" align="middle"> **Google Antigravity** | Plugins, Skills, MCP | Plugins, Skills, MCP | Prepared | Open or reload Antigravity; review trust and verify the prepared plugin is discovered and enabled in the selected scope. |
 | <img src="landing/public/client-icons/openai.svg" width="24" height="24" alt="" align="middle"> **ChatGPT** | Desktop local plugins; Web connected apps | Not supported | Guided | Desktop: local install via Codex CLI; Web: connect or install in ChatGPT. |
 
 <!-- AGENT_SUPPORT_MATRIX_END -->
@@ -313,6 +315,13 @@ Each signed Directory release still needs an explicit Pi target; direct pinned
 Git sources use a separate CLI-validated installation path. For scoped trust,
 activation and native E2E limits, see the
 [project compatibility matrix](docs/PROJECT_CLIENT_SUPPORT.md).
+
+Hermes supports User Skills and stdio/Streamable HTTP MCP, plus Project Skills
+at the selected Git root. Project MCP is unsupported. Antigravity prepares owned
+User/Project native plugins with Skills and supported MCP; verify discovery,
+trust and enablement in the IDE. Preparation does not prove IDE activation.
+For both clients, ordinary portable commands project to Skills; explicit-only
+commands are withheld because these hosts cannot enforce explicit invocation.
 
 Grok Build, Kimi Code, and Qoder support stdio and Streamable HTTP MCP in user
 scope. Qoder also preserves native hooks, commands, and bundled binaries.
@@ -402,7 +411,7 @@ For Go Hooks, host detection, installation, and TypeScript management, see the
 <table>
   <tr>
     <td width="104" align="center">
-      <a href="https://github.com/777genius/agent-notifications"><img src="landing/public/showcase/agent-notifications.png" width="80" height="80" alt="Agent Notifications logo" /></a>
+      <a href="https://github.com/777genius/agent-notifications"><img src="landing/assets/images/showcase/agent-notifications.png" width="80" height="80" alt="Agent Notifications logo" /></a>
     </td>
     <td>
       <strong><a href="https://github.com/777genius/agent-notifications">Agent Notifications</a></strong><br />

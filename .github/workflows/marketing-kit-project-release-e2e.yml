@@ -5,6 +5,18 @@ on:
     paths:
       - 'landing/**'
       - 'scripts/marketing-kit-project-release-e2e.py'
+      - 'scripts/marketing-kit-published-launcher-abort.js'
+      - 'scripts/test_live_install_audit_env.py'
+      - 'scripts/live-install-audit.py'
+      - '.github/workflows/marketing-kit-project-release-e2e.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'landing/**'
+      - 'scripts/marketing-kit-project-release-e2e.py'
+      - 'scripts/marketing-kit-published-launcher-abort.js'
+      - 'scripts/test_live_install_audit_env.py'
+      - 'scripts/live-install-audit.py'
       - '.github/workflows/marketing-kit-project-release-e2e.yml'
   workflow_dispatch:
 
@@ -17,7 +29,7 @@ concurrency:
 
 jobs:
   marketing-kit-project:
-    name: npm 0.1.102 / ${{ matrix.target }} / real Project lifecycle
+    name: npm 0.1.104 / ${{ matrix.target }} / real Project lifecycle
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     strategy:
@@ -32,6 +44,8 @@ jobs:
           - { target: claude, package: '@anthropic-ai/claude-code@2.1.263' }
           - { target: gemini, package: '@google/gemini-cli@0.66.0' }
           - { target: opencode, package: 'opencode-ai@1.18.34' }
+          # Use the identical fixed Copilot CLI pin from the published-client audit.
+          - { target: copilot, package: '@github/copilot@1.0.105' }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -46,7 +60,7 @@ jobs:
           TARGET: ${{ matrix.target }}
         run: |
           set -euo pipefail
-          npm install --global universal-agent-plugins@0.1.102
+          npm install --global universal-agent-plugins@0.1.104
           if [[ "$TARGET" == cursor ]]; then
             curl --fail --show-error --silent --location --retry 2 \
               'https://downloads.cursor.com/lab/2026.10.22-27dcf5f/linux/x64/agent-cli-package.tar.gz' \
@@ -66,10 +80,98 @@ jobs:
             ln -s "$executable" "$RUNNER_TEMP/cursor-bin/cursor-agent"
             echo "$RUNNER_TEMP/cursor-bin" >> "$GITHUB_PATH"
             "$executable" --version
+            # User-scope Cursor package preparation requires the actual Editor:
+            # the SHA-pinned Cursor Agent above alone is NOT an editor.
+            # Only run the previously recorded official Linux Editor 3.22.12
+            # .deb after matching cursor/README and the independent immutable
+            # levivilet/lvce-quickpick-benchmark config/editors.lock.json pin.
+            # Keep it runner-local: do not run a vendor .deb postinstall script.
+            curl --fail --show-error --silent --location --retry 2 \
+              'https://downloads.cursor.com/production/3a92974361033b2051526321308c2740fe5912c5/linux/x64/deb/amd64/deb/cursor_3.22.12_amd64.deb' \
+              --output "$RUNNER_TEMP/cursor-editor.deb"
+            echo "8b9198f7dde79f7e27cc83dabf3c66a93ca5303b6919719100c82f29d9498a65  $RUNNER_TEMP/cursor-editor.deb" | sha256sum --check -
+            test "$(dpkg-deb --field "$RUNNER_TEMP/cursor-editor.deb" Package)" = cursor
+            [[ "$(dpkg-deb --field "$RUNNER_TEMP/cursor-editor.deb" Version)" =~ ^3\.22\.12([-+].*)?$ ]]
+            test "$(dpkg-deb --field "$RUNNER_TEMP/cursor-editor.deb" Architecture)" = amd64
+            mkdir -p "$RUNNER_TEMP/cursor-editor-root"
+            dpkg-deb --extract "$RUNNER_TEMP/cursor-editor.deb" "$RUNNER_TEMP/cursor-editor-root"
+            editor="$RUNNER_TEMP/cursor-editor-root/usr/share/cursor/cursor"
+            test -f "$editor" && test -x "$editor" && test ! -L "$editor"
+            cat > "$RUNNER_TEMP/cursor-bin/cursor" <<'EDITOR'
+          #!/bin/sh
+          exec "$RUNNER_TEMP/cursor-editor-root/usr/share/cursor/cursor" "$@"
+          EDITOR
+            chmod 0700 "$RUNNER_TEMP/cursor-bin/cursor"
+            # The adapter's editor detector checks executable presence only.
+            # Do NOT start Chromium here: extracting the verified .deb without
+            # its privileged SUID sandbox correctly makes GUI startup refuse.
+            # Version was checked above from exact SHA-pinned Debian metadata;
+            # runtime discovery, model auth and MCP tools/call are separate gates.
           else
             npm install --global "$NATIVE_PACKAGE"
           fi
-          test "$(agentplugins version)" = 'agentplugins 0.1.102'
+          # The immutable npm launcher fetches the exact 0.1.104 GitHub binary
+          # on first use. A transient release-asset HTTP 504 must not turn all
+          # six genuine lifecycle lanes into unexecuted noise. Never fall back
+          # to latest, skip version validation or accept a different version.
+          # Bound each acquisition by elapsed time, not socket inactivity.
+          # Reuse the published launcher's AbortSignal path so a timeout
+          # finishes its owned temporary/cache-lock cleanup before retrying.
+          # A successful but wrong pinned version is never retried or accepted.
+          for attempt in 1 2 3; do
+            if UAP_GLOBAL_NPM_ROOT="$(npm root -g)" node <<'NODE'
+          "use strict";
+          const path = require("node:path");
+          const { spawnSync } = require("node:child_process");
+          const packageRoot = path.join(process.env.UAP_GLOBAL_NPM_ROOT, "universal-agent-plugins");
+          const { ensureBinary } = require(path.join(packageRoot, "lib/bootstrap.js"));
+          const abort = new AbortController();
+          const deadline = setTimeout(() => abort.abort(), 75_000);
+          async function check() {
+            try {
+              const release = await ensureBinary({ packageRoot, signal: abort.signal });
+              if (abort.signal.aborted) throw new Error("pinned launcher acquisition timed out");
+              if (release.version !== "0.1.104") {
+                throw Object.assign(new Error("unexpected pinned release version"), { noRetry: true });
+              }
+              const result = spawnSync("agentplugins", ["version"], { encoding: "utf8", timeout: 15_000 });
+              if (result.error || result.signal || result.status !== 0) {
+                throw new Error("published agentplugins version probe failed");
+              }
+              if (result.stdout.replace(/\n+$/, "") !== "agentplugins 0.1.104") {
+                throw Object.assign(new Error("wrong published agentplugins version"), { noRetry: true });
+              }
+            } finally {
+              clearTimeout(deadline);
+            }
+          }
+          check().catch(error => {
+            console.error(error.message);
+            process.exitCode = error.noRetry ? 42 : 1;
+          });
+          NODE
+            then
+              break
+            else
+              status=$?
+              if (( status == 42 )); then
+                echo 'exact published version mismatch; refusing retry' >&2
+                exit 1
+              fi
+            fi
+            if (( attempt == 3 )); then
+              echo 'exact agentplugins 0.1.104 unavailable after three attempts' >&2
+              exit 1
+            fi
+            sleep "$((attempt * 5))"
+          done
+      - name: Verify published launcher abort cleanup
+        if: matrix.target == 'codex'
+        run: |
+          set -euo pipefail
+          # Real pinned npm 0.1.104 module, with only the HTTPS request stalled.
+          # A mock transport here proves cleanup, not a native-client tools/call.
+          UAP_GLOBAL_NPM_ROOT="$(npm root -g)" timeout 20s node scripts/marketing-kit-published-launcher-abort.js
       - name: Verify published ChatGPT target safety fences
         if: matrix.target == 'codex'
         run: |
@@ -100,12 +202,16 @@ jobs:
         env:
           TARGET: ${{ matrix.target }}
         run: |
+          # Preserve preflight failures even when no lifecycle report is written.
+          mkdir -p "$RUNNER_TEMP/marketing-kit-project"
+          set -o pipefail
+          python3 -m unittest scripts/test_live_install_audit_env.py -k marketing_kit_ 2>&1 | tee "$RUNNER_TEMP/marketing-kit-project/regressions.log"
           python3 scripts/marketing-kit-project-release-e2e.py             --target "$TARGET" --cli "$(command -v agentplugins)"             --report "$RUNNER_TEMP/marketing-kit-project/report.json"
       - name: Preserve factual outcomes including failures
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
-          name: marketing-kit-0.1.102-${{ matrix.target }}
+          name: marketing-kit-0.1.104-${{ matrix.target }}
           path: ${{ runner.temp }}/marketing-kit-project/
           if-no-files-found: warn
           retention-days: 14

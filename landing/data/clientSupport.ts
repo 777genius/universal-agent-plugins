@@ -135,6 +135,22 @@ const publishedClientSupportRows: ClientSupport[] = [
     nextStep: 'Open the selected project in Grok; enable and trust the plugin, reload, then verify Skills and MCP.',
   },
   {
+    id: 'hermes',
+    name: 'Hermes Agent',
+    user: 'Skills, MCP',
+    project: 'Skills only',
+    setup: 'Guided',
+    nextStep: 'Restart Hermes, trust the selected Git project, and verify Skills and User MCP; Project MCP is unsupported.',
+  },
+  {
+    id: 'antigravity',
+    name: 'Google Antigravity',
+    user: 'Plugins, Skills, MCP',
+    project: 'Plugins, Skills, MCP',
+    setup: 'Prepared',
+    nextStep: 'Open or reload Antigravity; review trust and verify the prepared plugin is discovered and enabled in the selected scope.',
+  },
+  {
     id: 'vscode',
     name: 'VS Code',
     user: 'Copilot-backed package',

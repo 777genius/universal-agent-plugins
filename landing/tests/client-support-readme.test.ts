@@ -19,8 +19,8 @@ test('README and landing support rows, setup actions and logos are in sync', () 
   const last = '<!-- AGENT_SUPPORT_MATRIX_END -->';
   assert.equal(readme.split(first).length, 2);
   assert.equal(readme.split(last).length, 2);
-  assert.equal(clientSupportRows.length, 14);
-  assert.equal(new Set(clientSupportRows.map((r) => r.id)).size, 14);
+  assert.equal(clientSupportRows.length, 16);
+  assert.equal(new Set(clientSupportRows.map((r) => r.id)).size, 16);
   assert.ok(!clientSupportRows.some((r) => r.id === 'vscode'));
   assert.ok(!clientLandingById.has('vscode'));
 
@@ -53,4 +53,31 @@ test('English support translations preserve source-matrix capabilities and next 
     }
     assert.equal(messages.setup[row.setup.toLowerCase()], row.setup, row.setup);
   }
+});
+
+// Delivery and activation are separate; preserve scope refusals in public copy.
+test('new client rows retain guided trust and prepared activation boundaries', () => {
+  const hermes = clientSupportRows.find((row) => row.id === 'hermes')!;
+  assert.equal(hermes.user, 'Skills, MCP');
+  assert.equal(hermes.project, 'Skills only');
+  assert.equal(hermes.setup, 'Guided');
+  assert.match(hermes.nextStep, /trust.*Project MCP is unsupported/);
+  const antigravity = clientSupportRows.find((row) => row.id === 'antigravity')!;
+  assert.equal(antigravity.user, 'Plugins, Skills, MCP');
+  assert.equal(antigravity.project, 'Plugins, Skills, MCP');
+  assert.equal(antigravity.setup, 'Prepared');
+  assert.equal(clientLandingById.get('antigravity')!.status, 'Prepared by CLI');
+  assert.match(antigravity.nextStep, /verify.*discovered and enabled/);
+});
+
+// Guard the single landing/README icon mapping against accidental SVG regressions.
+test('Hermes logo is a valid WebP and README uses it consistently', () => {
+  const icon = clientLandingById.get('hermes')!.icon;
+  assert.equal(icon, 'hermes.webp');
+  const bytes = readFileSync(new URL(`../public/client-icons/${icon}`, import.meta.url));
+  assert.equal(bytes.toString('ascii', 0, 4), 'RIFF');
+  assert.equal(bytes.toString('ascii', 8, 12), 'WEBP');
+  assert.equal(readme.split('landing/public/client-icons/hermes.webp').length - 1, 2);
+  assert.ok(!readme.includes('hermes.svg'));
+  assert.ok(!readme.includes('The static website initially shows'));
 });

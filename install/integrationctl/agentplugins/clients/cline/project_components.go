@@ -31,9 +31,11 @@ func clineProjectOwned(objects []domain.NativeObjectOwnership) []domain.NativeOb
 	return selected
 }
 
+// clineProjectObjects uses one staged MCP projection for all selected ownership receipts.
 func clineProjectObjects(staging string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan) ([]domain.NativeObjectOwnership, error) {
 	layout := clineProjectComponents(plan.TargetContext.ProjectRoot)
 	objects := []domain.NativeObjectOwnership{}
+	var projection *ClineProjection
 	for _, component := range plan.Components {
 		if component.Support == domain.SupportUnsupported {
 			continue
@@ -52,15 +54,20 @@ func clineProjectObjects(staging string, envelope domain.PackageEnvelope, plan d
 			}
 			object, err = layout.SkillObject(component.Name, relative, staging)
 		case domain.ComponentMCPServer:
-			var projection ClineProjection
-			projection, err = ReadClineProjection(staging)
-			if err == nil {
-				server, ok := projection.Servers[component.Name]
-				if !ok {
-					return nil, fmt.Errorf("projected Cline MCP server is missing")
+			if projection == nil {
+				// Ownership receipts for all selected MCP members must refer to
+				// the same staged source revision.
+				loaded, readErr := ReadClineProjection(staging)
+				if readErr != nil {
+					return nil, readErr
 				}
-				object, err = layout.MCPObject(component.Name, server, layout.ConfigPaths.JSON)
+				projection = &loaded
 			}
+			server, ok := projection.Servers[component.Name]
+			if !ok {
+				return nil, fmt.Errorf("projected Cline MCP server is missing")
+			}
+			object, err = layout.MCPObject(component.Name, server, layout.ConfigPaths.JSON)
 		default:
 			return nil, fmt.Errorf("unsupported Cline project component %q", component.Kind)
 		}
@@ -73,15 +80,23 @@ func clineProjectObjects(staging string, envelope domain.PackageEnvelope, plan d
 	return objects, layout.ValidateObjects(objects)
 }
 
+// clineProjectServers resolves all owned MCP members from one active source snapshot.
+// Missing selected members fail closed without returning a partial server set.
 func clineProjectServers(active string, objects []domain.NativeObjectOwnership) (map[string]nativeconfig.Server, error) {
 	servers := map[string]nativeconfig.Server{}
+	var projection *ClineProjection
 	for _, object := range objects {
 		if object.Kind != clineProjectMCPKind {
 			continue
 		}
-		projection, err := ReadClineProjection(active)
-		if err != nil {
-			return nil, err
+		if projection == nil {
+			// Resolve every selected server against one projection snapshot.
+			// Re-reading per member could mix successive edits in one mutation.
+			loaded, err := ReadClineProjection(active)
+			if err != nil {
+				return nil, err
+			}
+			projection = &loaded
 		}
 		server, ok := projection.Servers[object.LogicalName]
 		if !ok {

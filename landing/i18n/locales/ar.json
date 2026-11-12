@@ -257,7 +257,9 @@
         "kiro": "سجّل الدخول ووافق على الوصول وأعد تشغيل Kiro عند الطلب.",
         "grok": "افتح المشروع في Grok، وفعّل الإضافة وامنحها الثقة، ثم أعد التحميل وتحقّق من المهارات وMCP.",
         "vscode": "افتح المجلد وثق به ثم راجع خوادم MCP وفعّلها.",
-        "chatgpt": "سطح المكتب: ثبّت الإضافة محليًا عبر Codex CLI؛ الويب: اربط التطبيق أو ثبّته في ChatGPT."
+        "chatgpt": "سطح المكتب: ثبّت الإضافة محليًا عبر Codex CLI؛ الويب: اربط التطبيق أو ثبّته في ChatGPT.",
+        "hermes": "أعد تشغيل Hermes ووثّق مشروع Git المحدد وتحقق من Skills وMCP للمستخدم؛ MCP للمشروع غير مدعوم.",
+        "antigravity": "افتح Antigravity أو أعد تحميله؛ راجع الثقة وتحقق من اكتشاف الإضافة المجهزة وتفعيلها في النطاق المحدد."
       }
     },
     "dependencies": {
@@ -321,7 +323,7 @@
       "items": {
         "0": {
           "question": "ما وكلاء الذكاء الاصطناعي المدعومون؟",
-          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder, Pi: لكل عميل مسار خاص للتثبيت أو الإعداد. يعتمد التوافق على مكونات الحزمة ونطاق التثبيت ومتطلبات التفعيل."
+          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder, Hermes Agent, Google Antigravity, Pi: لكل عميل مسار خاص للتثبيت أو الإعداد. يعتمد التوافق على مكونات الحزمة ونطاق التثبيت ومتطلبات التفعيل."
         },
         "1": {
           "question": "هل يثبّت أمر واحد في كل وكيل؟",
@@ -826,7 +828,8 @@
           "extensions": "إضافات"
         }
       },
-      "piNoCompatibleRelease": "يدعم UAP وكيل Pi، لكن الإصدار الموقّع لهذه الإضافة لا يتضمن هدف تثبيت متوافقًا مع Pi."
+      "piNoCompatibleRelease": "يدعم UAP وكيل Pi، لكن الإصدار الموقّع لهذه الإضافة لا يتضمن هدف تثبيت متوافقًا مع Pi.",
+      "piPinnedProjectSource": "المشروع: ثبّت في Pi من مصدر Git مثبّت على SHA محدد (وليس هدف Pi موقّعًا)؛ تتحقق أداة CLI من التوافق."
     },
     "authentication": {
       "not_required": "لا يلزم حساب",

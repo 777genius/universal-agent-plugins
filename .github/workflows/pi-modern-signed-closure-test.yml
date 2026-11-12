@@ -1,0 +1,50 @@
+name: Pi modern signed-v1 saved closure (test-only)
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/pi-modern-signed-closure-test.yml'
+      - 'cli/internal/agentpluginscli/pi_modern_saved_closure_test.go'
+      - 'cli/internal/agentpluginscli/deps_*.go'
+      - 'cli/internal/agentpluginscli/saved_*.go'
+      - 'install/integrationctl/agentplugins/adapters/directoryv1/**'
+      - 'install/integrationctl/agentplugins/domain/directory*.go'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pi-signed-test-closure-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  signed-saved-closure:
+    name: Signed test cohort / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2025]
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      GOMAXPROCS: '2'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.11'
+          cache: false
+      - name: Require exact immutable PR HEAD
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git diff --exit-code
+      - name: Verify synthetic signed-v1 four-package Pi saved closure and refusal
+        shell: bash
+        run: |
+          go test -p=2 -count=1 -timeout=8m -v ./cli/internal/agentpluginscli -run '^TestPiModernFixture'

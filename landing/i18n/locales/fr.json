@@ -394,7 +394,9 @@
         "kiro": "Connectez-vous, autorisez l’accès et redémarrez Kiro si demandé.",
         "grok": "Ouvrez le projet dans Grok, activez le plugin et accordez-lui votre confiance ; rechargez puis vérifiez Skills et MCP.",
         "vscode": "Ouvrez le dossier, accordez-lui votre confiance, puis vérifiez et activez les serveurs MCP.",
-        "chatgpt": "Ordinateur : installation locale via Codex CLI ; Web : connecter ou installer l’application dans ChatGPT."
+        "chatgpt": "Ordinateur : installation locale via Codex CLI ; Web : connecter ou installer l’application dans ChatGPT.",
+        "hermes": "Redémarrez Hermes, accordez votre confiance au projet Git sélectionné et vérifiez les Skills et le MCP utilisateur ; le MCP projet est indisponible.",
+        "antigravity": "Ouvrez ou rechargez Antigravity ; vérifiez la confiance, la détection et l’activation du plugin préparé dans la portée sélectionnée."
       }
     },
     "dependencies": {
@@ -458,7 +460,7 @@
       "items": {
         "0": {
           "question": "Quels agents IA sont pris en charge ?",
-          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder, Pi : chaque client dispose de son propre parcours d’installation ou de préparation. La compatibilité dépend des composants, de la portée et des conditions d’activation."
+          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder, Hermes Agent, Google Antigravity, Pi : chaque client dispose de son propre parcours d’installation ou de préparation. La compatibilité dépend des composants, de la portée et des conditions d’activation."
         },
         "1": {
           "question": "Une seule commande installe-t-elle le plugin dans tous les agents ?",
@@ -826,7 +828,8 @@
           "extensions": "Modules complémentaires"
         }
       },
-      "piNoCompatibleRelease": "Pi est pris en charge, mais la version signée de ce plugin ne propose pas de cible compatible avec Pi."
+      "piNoCompatibleRelease": "Pi est pris en charge, mais la version signée de ce plugin ne propose pas de cible compatible avec Pi.",
+      "piPinnedProjectSource": "Projet : installez dans Pi depuis la source Git épinglée sur un SHA exact (pas une cible Pi signée) ; la CLI vérifie la compatibilité."
     },
     "authentication": {
       "not_required": "Aucun compte requis",

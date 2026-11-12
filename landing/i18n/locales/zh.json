@@ -394,7 +394,9 @@
         "kiro": "登录、批准访问，并在提示时重启 Kiro。",
         "grok": "在 Grok 中打开所选项目，启用并信任插件，重新加载后验证技能和 MCP。",
         "vscode": "打开并信任文件夹；检查并启用 MCP 服务器。",
-        "chatgpt": "桌面端：通过 Codex CLI 在本地安装；网页版：在 ChatGPT 中连接或安装应用。"
+        "chatgpt": "桌面端：通过 Codex CLI 在本地安装；网页版：在 ChatGPT 中连接或安装应用。",
+        "hermes": "重启 Hermes，信任选定的 Git 项目，并验证 Skills 和用户 MCP；不支持项目 MCP。",
+        "antigravity": "打开或重新加载 Antigravity；检查信任设置，并确认已准备的插件在所选范围内被发现并启用。"
       }
     },
     "dependencies": {
@@ -458,7 +460,7 @@
       "items": {
         "0": {
           "question": "支持哪些人工智能代理？",
-          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder, Pi：各客户端有自己的安装或准备流程。兼容性取决于包的组件、安装范围和激活要求。"
+          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder, Hermes Agent, Google Antigravity, Pi：各客户端有自己的安装或准备流程。兼容性取决于包的组件、安装范围和激活要求。"
         },
         "1": {
           "question": "一个命令就能为所有智能体安装插件吗？",
@@ -826,7 +828,8 @@
           "extensions": "扩展"
         }
       },
-      "piNoCompatibleRelease": "Pi 已获支持，但此插件的已签名发行版本不包含兼容 Pi 的安装目标。"
+      "piNoCompatibleRelease": "Pi 已获支持，但此插件的已签名发行版本不包含兼容 Pi 的安装目标。",
+      "piPinnedProjectSource": "项目：使用此插件固定到具体 SHA 的 Git 源安装到 Pi（不是已签名的 Pi 目标）；CLI 会检查兼容性。"
     },
     "authentication": {
       "not_required": "无需帐户",

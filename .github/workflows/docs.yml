@@ -45,7 +45,7 @@ jobs:
 
       - uses: actions/setup-go@v6
         with:
-          go-version: "1.26.10"
+          go-version: "1.26.11"
           cache: false
 
       - uses: actions/setup-python@v6
@@ -93,6 +93,12 @@ jobs:
           GOSUMDB: "off"
           GOENV: "off"
         run: pnpm run docs:check
+
+      - name: Prefer configured canonical Ubuntu package mirrors
+        working-directory: .
+        run: |
+          python3 -m unittest discover -s scripts -p 'test_ci_ubuntu_apt_mirrors.py'
+          sudo python3 scripts/ci_ubuntu_apt_mirrors.py
 
       - name: Install Chromium for docs smoke
         run: pnpm exec playwright install --with-deps chromium

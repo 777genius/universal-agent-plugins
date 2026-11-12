@@ -57,7 +57,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.10"
+          go-version: "1.26.11"
           cache: false
       - name: Verify scoped ownership, project lifecycle and legacy lock safety
         run: go test -p=2 -count=1 -timeout=12m ./install/integrationctl/agentplugins/domain ./install/integrationctl/agentplugins/adapters/statev2 ./install/integrationctl/agentplugins/adapters/nativeconfig ./install/integrationctl/agentplugins/adapters/legacylock ./install/integrationctl/agentplugins/clients/... ./install/integrationctl/agentplugins/providers ./install/integrationctl/agentplugins/planner ./install/integrationctl/agentplugins/installer ./install/integrationctl/agentplugins/environment ./install/integrationctl/agentplugins/usecase ./cli/internal/agentpluginscli ./cli/cmd/agentplugins -run 'Test(TargetContext|Project|PrepareRejectsCrossEnvironmentContext|StateLockSharesPhysicalLegacyFileLock|RemoveLegacyAbortsReconcileWhenLegacyStateReappears|RemoveLegacyDelegatesThenReconcilesStateV2|LegacyControllerRejectsForeignHomeBeforeLegacyEngine|LegacyControllerAcceptsOriginalUserHome|LegacyRemovalRequiresExplicitAllTargetAndReconcilesV2|MigrateStateIsExplicitPlanFirstAndPathRedacted|MigrateStateExplicitlyMigratesAuthoritativeSchemaTwoThroughFour)'
@@ -76,7 +76,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.10"
+          go-version: "1.26.11"
           cache: false
       - name: Qualify native Windows transition privacy and durable recovery
         working-directory: install/integrationctl/agentplugins
@@ -96,7 +96,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.10"
+          go-version: "1.26.11"
           cache: false
       - name: Qualify native Windows managed stdio process-tree ownership
         working-directory: install/integrationctl/agentplugins
@@ -131,7 +131,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.10"
+          go-version: "1.26.11"
           cache: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -162,7 +162,7 @@ jobs:
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.10"
+          go-version: "1.26.11"
           cache: false
 
       # Same target as the local preflight, so a green run here means the same
@@ -206,7 +206,7 @@ jobs:
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.10"
+          go-version: "1.26.11"
           cache: false
 
       # The core carries 39 platform-tagged files; only a real cross build
@@ -232,7 +232,7 @@ jobs:
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.10"
+          go-version: "1.26.11"
           cache: false
 
       # test-core does not compile the authoring commands, terminal prompts,

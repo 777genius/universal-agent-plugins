@@ -394,7 +394,9 @@
         "kiro": "Inicia sesión, autoriza el acceso y reinicia Kiro si se solicita.",
         "grok": "Abre el proyecto en Grok, habilita el plugin y concédele confianza; recarga y verifica las Skills y MCP.",
         "vscode": "Abre la carpeta, confía en ella y revisa y activa los servidores MCP.",
-        "chatgpt": "Escritorio: instalación local mediante Codex CLI; Web: conecta o instala la aplicación en ChatGPT."
+        "chatgpt": "Escritorio: instalación local mediante Codex CLI; Web: conecta o instala la aplicación en ChatGPT.",
+        "hermes": "Reinicia Hermes, confía en el proyecto Git seleccionado y verifica Skills y MCP de usuario; MCP de proyecto no está disponible.",
+        "antigravity": "Abre o recarga Antigravity; revisa la confianza y verifica que el plugin preparado se detecte y esté habilitado en el ámbito seleccionado."
       }
     },
     "dependencies": {
@@ -458,7 +460,7 @@
       "items": {
         "0": {
           "question": "¿Qué agentes de IA son compatibles?",
-          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder, Pi: cada cliente tiene una ruta propia de instalación o preparación. La compatibilidad depende de los componentes, el ámbito y los requisitos de activación."
+          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder, Hermes Agent, Google Antigravity, Pi: cada cliente tiene una ruta propia de instalación o preparación. La compatibilidad depende de los componentes, el ámbito y los requisitos de activación."
         },
         "1": {
           "question": "¿Un solo comando instala el plugin en todos los agentes?",
@@ -826,7 +828,8 @@
           "extensions": "Extensiones"
         }
       },
-      "piNoCompatibleRelease": "Pi es compatible, pero la versión firmada de este plugin no incluye un destino compatible con Pi."
+      "piNoCompatibleRelease": "Pi es compatible, pero la versión firmada de este plugin no incluye un destino compatible con Pi.",
+      "piPinnedProjectSource": "Proyecto: instala en Pi desde la fuente Git fijada a un SHA exacto (no es un destino Pi firmado); la CLI comprueba la compatibilidad."
     },
     "authentication": {
       "not_required": "No se requiere cuenta",
