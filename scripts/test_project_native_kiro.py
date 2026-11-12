@@ -60,8 +60,10 @@ class KiroCollectorTests(unittest.TestCase):
         result = kiro.collect(ctx)
         for label, _, _, extra, _ in ctx.calls:
             expected = ({"KIRO_HOME": str(ctx.root / "private" / "kiro-help-only")}
-                        if label in ("top-help", "all-help", "mcp-help", "mcp-list-help",
-                                     "mcp-status-help", "acp-help", "chat-help", "agent-help") else
+                        if label in (row[0] for row in kiro.HELP) else
+                        {"KIRO_HOME": str(ctx.root / "private" / "kiro-agent-list-only"),
+                         "KIRO_API_KEY": ctx.kiro_api_key}
+                        if label == "a-agent-raw-list" else
                         {"KIRO_API_KEY": ctx.kiro_api_key} if label.endswith("raw-list") else None)
             self.assertEqual(extra, expected)
         self.assertNotIn("KIRO_API_KEY", ctx.env)
@@ -84,7 +86,9 @@ class KiroCollectorTests(unittest.TestCase):
                                       ["agent", "list"],
                                       ["mcp", "list", "workspace"], ["mcp", "list", "global"]])
             expected = ({"KIRO_HOME": str(ctx.root / "private" / "kiro-help-only")}
-                        if arguments in [list(args) for _, args, _ in kiro.HELP] else None)
+                        if arguments in [list(args) for _, args, _ in kiro.HELP] else
+                        {"KIRO_HOME": str(ctx.root / "private" / "kiro-agent-list-only")}
+                        if arguments == ["agent", "list"] else None)
             self.assertEqual(extra_env, expected)
             self.assertEqual(timeout, 30)
         for scope in ("a", "b", "user"):
@@ -256,7 +260,7 @@ class KiroCollectorTests(unittest.TestCase):
 
         def agent_list():
             self.assertEqual(ctx.calls[-1], (
-                "a-agent-raw-list", ["agent", "list"], "a", None, 30))
+                "a-agent-raw-list", ["agent", "list"], "a", {"KIRO_HOME": str(ctx.root / "private" / "kiro-agent-list-only")}, 30))
             self.assertEqual([call[0] for call in ctx.calls[:-1]],
                              ["version", *[label for label, _, _ in kiro.HELP]])
             for root in (ctx.home, *ctx.projects.values()):
@@ -278,6 +282,60 @@ class KiroCollectorTests(unittest.TestCase):
                              if key.endswith("_qualified")))
         for root in (ctx.home, *ctx.projects.values()):
             self.assertFalse((root / ".kiro/agents").exists())
+
+
+    def test_agent_list_auth_refusal_isolated_from_user_and_project_roots(self):
+        ctx = self.context()
+        profile = ctx.root / "private" / "kiro-agent-list-only"
+
+        def refused():
+            self.assertEqual(ctx.calls[-1][3], {"KIRO_HOME": str(profile)})
+            (profile / "native-auth-cache").mkdir()
+            (profile / "private-unreported-token").write_text("not a result")
+            return {"exit": 1, "error": None}, b"", kiro._LIST_AUTH_STDERR
+
+        ctx.replace["a-agent-raw-list"] = refused
+        result = kiro.collect(ctx)
+        self.assertEqual(result["observations"]["read_only_authentication_boundary"]["kind"],
+                         "authentication-required")
+        self.assertEqual(ctx.summary["kiro_agent_private_metadata"]["kind"], "directory")
+        self.assertNotIn("private-unreported-token", str(ctx.summary))
+        self.assertFalse(any(value for key, value in result["observations"].items()
+                             if key.endswith("_qualified")))
+        for root in (ctx.home, *ctx.projects.values()):
+            self.assertFalse((root / ".kiro").exists())
+        self.assertEqual((profile / "private-unreported-token").read_text(), "not a result")
+
+    def test_agent_list_profile_preexisting_or_replaced_refused(self):
+        for kind in ("preexisting", "symlink", "replaced"):
+            ctx = self.context()
+            profile = ctx.root / "private" / "kiro-agent-list-only"
+            if kind == "preexisting":
+                profile.mkdir()
+                (profile / "foreign-sentinel").write_text("preserved")
+            elif kind == "symlink":
+                foreign = ctx.root / "foreign"
+                foreign.mkdir()
+                profile.symlink_to(foreign, target_is_directory=True)
+            else:
+                def replaced():
+                    retained = ctx.root / "retained-agent-private"
+                    profile.rename(retained)
+                    profile.symlink_to(retained, target_is_directory=True)
+                    return {"exit": 1, "error": None}, b"", kiro._LIST_AUTH_STDERR
+
+                ctx.replace["a-agent-raw-list"] = replaced
+            with self.subTest(kind=kind), self.assertRaises((FileExistsError, ValueError)):
+                kiro.collect(ctx)
+            if kind == "replaced":
+                self.assertEqual(ctx.calls[-1][0], "a-agent-raw-list")
+                self.assertTrue(profile.is_symlink())
+            else:
+                self.assertEqual(ctx.calls, [])
+            if kind == "preexisting":
+                self.assertEqual((profile / "foreign-sentinel").read_text(), "preserved")
+            if kind == "symlink":
+                self.assertTrue(profile.is_symlink())
 
     def test_agent_list_wrong_route_refuses_before_any_child(self):
         routes = [(("agent", verb), "a") for verb in (
@@ -322,7 +380,7 @@ class KiroCollectorTests(unittest.TestCase):
         result = kiro.collect(ctx)
         self.assertEqual(len(ctx.calls), 10)
         self.assertEqual(ctx.calls[-1], (
-            "a-agent-raw-list", ["agent", "list"], "a", None, 30))
+            "a-agent-raw-list", ["agent", "list"], "a", {"KIRO_HOME": str(ctx.root / "private" / "kiro-agent-list-only")}, 30))
         self.assertEqual([case["id"] for case in result["cases"]], ["kiro.help"])
         facts = result["observations"]
         self.assertIsNone(facts["raw_agent_list_observation"])
@@ -712,7 +770,7 @@ class KiroCollectorTests(unittest.TestCase):
             "agent-help", ["agent", "--help"], "a",
             {"KIRO_HOME": str(ctx.root / "private" / "kiro-help-only")}, 30))
         self.assertEqual(ctx.calls[-2], (
-            "a-agent-raw-list", ["agent", "list"], "a", None, 30))
+            "a-agent-raw-list", ["agent", "list"], "a", {"KIRO_HOME": str(ctx.root / "private" / "kiro-agent-list-only")}, 30))
         self.assertEqual(ctx.calls[-1], (
             "a-workspace-raw-list", ["mcp", "list", "workspace"], "a", None, 30))
         self.assertTrue(all(call[-1] == 30 for call in ctx.calls))

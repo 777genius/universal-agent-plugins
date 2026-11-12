@@ -191,13 +191,13 @@ def _require_clean_unowned_roots(ctx):
                          ", ".join(label for label, _ in changed))
 
 
-def _private_help_home(ctx, identities):
-    """Reserve a fresh KIRO_HOME for informational help, disjoint from native scopes."""
+def _private_probe_home(ctx, identities, name):
+    """Reserve a fresh KIRO_HOME for one read-only probe class, never a native scope."""
     private = Path(ctx.root) / "private"
     if (_research_root_identity(private)[-1] != 0o700
             or private.lstat().st_uid != os.getuid()):
         raise ValueError("Kiro private help root ownership/mode refused")
-    profile = private / "kiro-help-only"
+    profile = private / name
     if profile.exists() or profile.is_symlink():
         raise FileExistsError("Kiro isolated help profile already exists")
     profile.mkdir(mode=0o700)
@@ -273,7 +273,7 @@ def _wait_for_fixture_clock(private, owned):
             os.utime(clock.fileno(), None)
 
 
-def _probe(ctx, owned, label, arguments, project="a", root_identities=None, help_home=None):
+def _probe(ctx, owned, label, arguments, project="a", root_identities=None, help_home=None, agent_home=None):
     route = _READ_ONLY_ROUTES.get(label)
     if route is None or (project, tuple(arguments)) != route:
         raise ValueError("Kiro read-only probe requires exact argv/project")
@@ -296,12 +296,25 @@ def _probe(ctx, owned, label, arguments, project="a", root_identities=None, help
                 or root_identities.get(help_home) != _research_root_identity(expected)):
             raise ValueError("Kiro selected help requires the exact isolated profile")
         private_env = {"KIRO_HOME": str(help_home)}
+    elif label == "a-agent-raw-list":
+        # A real unauthenticated agent inventory also initializes native HOME.
+        # Observe it from a separate, empty disposable KIRO_HOME. This cannot
+        # prove User/Project discovery, activation, credentials, or login.
+        expected = Path(ctx.root) / "private" / "kiro-agent-list-only"
+        if (agent_home != expected or root_identities is None
+                or root_identities.get(agent_home) != _research_root_identity(expected)):
+            raise ValueError("Kiro agent inventory requires isolated read-only profile")
+        private_env = {"KIRO_HOME": str(agent_home)}
+        if key:
+            private_env["KIRO_API_KEY"] = key
     try:
         record, stdout, stderr = ctx.probe(label, list(arguments), project=project, extra_env=private_env, timeout=30)
     finally:
         if label in _HELP_PROFILE_LABELS and isinstance(getattr(ctx, "summary", None), dict):
             # No native names or file bytes are included in the report.
             ctx.summary["kiro_help_private_metadata"] = _opaque_native_marker_metadata(help_home)
+        if label == "a-agent-raw-list" and isinstance(getattr(ctx, "summary", None), dict):
+            ctx.summary["kiro_agent_private_metadata"] = _opaque_native_marker_metadata(agent_home)
         # Also enforce after a timeout or raised probe, before any next child.
         if root_identities is not None:
             _verify_root_identities(root_identities)
@@ -365,7 +378,8 @@ def collect(ctx):
     if ctx.env.get("PATH") != "/usr/bin:/bin":
         raise ValueError("Kiro research requires the original closed system PATH")
     ctx.env["PATH"] = str(directory) + ":/usr/bin:/bin"
-    help_profile = _private_help_home(ctx, root_identities)
+    help_profile = _private_probe_home(ctx, root_identities, "kiro-help-only")
+    agent_profile = _private_probe_home(ctx, root_identities, "kiro-agent-list-only")
     version = _probe(ctx, owned, "version", ("--version",), root_identities=root_identities)
     if version != "kiro-cli " + VERSION:
         raise ValueError("Kiro version differs from immutable pin")
@@ -380,7 +394,7 @@ def collect(ctx):
             raise ValueError("unrecognized pinned Kiro help: " + label)
         help_text[label] = value
     agent_text = _probe(ctx, owned, "a-agent-raw-list", ("agent", "list"),
-                        root_identities=root_identities)
+                        root_identities=root_identities, agent_home=agent_profile)
     agent_observation = None if agent_text is None else {
         "probe": "a-agent-raw-list", "cwd_selection": "a",
         "sha256_normalized_text": hashlib.sha256(agent_text.encode()).hexdigest(),
