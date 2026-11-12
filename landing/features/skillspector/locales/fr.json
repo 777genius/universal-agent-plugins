@@ -117,7 +117,7 @@
       "copyDiagnosticsError": "Impossible de copier. Autorisez l'accès au presse-papiers puis réessayez.",
       "recoveryWitnessTitle": "Analyse authentifiée indépendante",
       "recoveryWitnessRun": "Exécution main {run}, tentative {attempt}",
-      "recoveryWitnessExplanation": "Ce rapport original distinct contient des résultats absents de l'analyse principale. La couverture reste incomplète et ces signaux automatiques n'ont pas été confirmés par un audit indépendant.",
+      "recoveryWitnessExplanation": "Ce rapport original distinct peut contenir des résultats absents de l'analyse principale ou différents de ceux-ci. La couverture reste incomplète et ces signaux automatisés n'ont pas été confirmés par un audit indépendant.",
       "recoveryWitnessFindings": "Résultats supplémentaires d'une analyse authentifiée"
     }
   }

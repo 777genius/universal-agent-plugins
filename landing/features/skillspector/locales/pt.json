@@ -117,7 +117,7 @@
       "copyDiagnosticsError": "Não foi possível copiar. Permita acesso à área de transferência e tente novamente.",
       "recoveryWitnessTitle": "Análise autenticada independente",
       "recoveryWitnessRun": "Execução main {run}, tentativa {attempt}",
-      "recoveryWitnessExplanation": "Este relatório original separado contém achados ausentes na análise principal. A cobertura continua incompleta; esses sinais automáticos não foram confirmados por auditoria independente.",
+      "recoveryWitnessExplanation": "Este relatório original separado pode conter achados ausentes da análise principal ou diferentes dos dela. A cobertura continua incompleta; esses sinais automáticos não foram confirmados por auditoria independente.",
       "recoveryWitnessFindings": "Achados adicionais de uma análise autenticada"
     }
   }

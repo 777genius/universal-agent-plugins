@@ -117,7 +117,7 @@
       "copyDiagnosticsError": "无法复制。请允许访问剪贴板后重试。",
       "recoveryWitnessTitle": "独立验证的扫描记录",
       "recoveryWitnessRun": "main 运行 {run}，第 {attempt} 次尝试",
-      "recoveryWitnessExplanation": "这份独立的原始报告包含主扫描中没有的发现。检查仍不完整；这些自动检测结果尚未经过独立审计确认。",
+      "recoveryWitnessExplanation": "这份独立原始报告可能包含主扫描中缺失或与主扫描不同的发现。检查仍不完整；这些自动检测结果尚未经过独立审计确认。",
       "recoveryWitnessFindings": "另一份已验证扫描中的其他发现"
     }
   }
