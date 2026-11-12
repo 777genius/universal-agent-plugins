@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
-	"path/filepath"
 	"sort"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
@@ -21,9 +20,9 @@ func (adapter *Adapter) PlanSession(ctx context.Context, env clients.Env, req cl
 	if err := ctx.Err(); err != nil {
 		return clients.SessionPlan{}, err
 	}
-	if req.Client.ClientID != domain.ClientCline || req.Client.Status != domain.DetectionDetected ||
-		!filepath.IsAbs(req.Client.ExecutablePath) || len(req.Bindings) == 0 {
-		return clients.SessionPlan{}, fmt.Errorf("an installed Cline CLI and owned project bindings are required")
+	executable, err := clineSessionExecutable(env, req.Client, len(req.Bindings))
+	if err != nil {
+		return clients.SessionPlan{}, err
 	}
 	path := clineProjectComponents(req.ProjectRoot).ConfigPaths.JSON
 	file, err := env.NativeConfig.ReadExactFile(path)
@@ -52,7 +51,7 @@ func (adapter *Adapter) PlanSession(ctx context.Context, env clients.Env, req cl
 		args = append(args, "config", "mcp", "--json")
 	}
 	return clients.SessionPlan{
-		ClientID: domain.ClientCline, Executable: req.Client.ExecutablePath, Arguments: args,
+		ClientID: domain.ClientCline, Executable: executable, Arguments: args,
 		Directory: req.ProjectRoot, ConfigDigest: fmt.Sprintf("%x", sha256.Sum256(file.Body)), Servers: names,
 		Environment: map[string]string{"CLINE_MCP_SETTINGS_PATH": path, "CLINE_NO_AUTO_UPDATE": "1"},
 	}, nil
