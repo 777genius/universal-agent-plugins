@@ -727,7 +727,7 @@ export function decodeSkillSpectorShardV3(
         !Array.isArray(r.recovery_witnesses) ||
         r.recovery_witnesses.length < 1 ||
         r.recovery_witnesses.length > 2 ||
-        r.freshness !== 'current' ||
+        !['current', 'historical'].includes(r.freshness) ||
         r.status !== 'partial' ||
         !r.findings_truncated ||
         c.grouping_complete !== false ||
@@ -766,6 +766,8 @@ export function decodeSkillSpectorShardV3(
         identities.add(identity);
         // Run the same strict decoder on this unmodified scanner record,
         // attaching only the outer publication's queue-state context.
+        // If the catalog has advanced its pin, both original findings stay
+        // historical and must never count as a check of the new revision.
         decodeSkillSpectorShardV3(
           {
             schema_version: 3,
@@ -774,7 +776,7 @@ export function decodeSkillSpectorShardV3(
             repository: s.repository,
             records: [{
               ...original,
-              freshness: 'current',
+              freshness: r.freshness,
               target_revision: r.target_revision,
               retry: r.retry,
               attempt_history: r.attempt_history,
