@@ -132,6 +132,11 @@ export interface SkillSpectorRecord {
     latest_status?: 'complete' | 'partial' | 'error';
   };
   attempt_history?: Record<string, unknown>[];
+  /** Distinct source-bound, authenticated main-run evidence; not part of the primary scan. */
+  recovery_witnesses?: Array<{
+    origin: { run_id: number; run_attempt: number };
+    record: SkillSpectorRecord;
+  }>;
   /** Added only after the independently pinned cohort Ed25519 signature verifies. */
   signed_cohort_verified?: true;
   signed_cohort_expires_at?: number;
