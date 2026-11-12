@@ -10,10 +10,14 @@ adapters, vendor source, credential handling or the Project MCP refusal.
 
 Keep the genuine official Hermes 0.23 source pin
 `2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19`, its official installation/launcher
-and resolved native Windows runtime. The pinned `_parser.py` supports
-`hermes chat --provider custom --base-url http://127.0.0.1:PORT/v1 --model ID
---toolsets uap-native-test-server --max-turns 3 --run-budget 45 --oneshot -Q -q QUERY`.
-Its `runtime_provider_backends.py` deliberately supplies the SDK's
+and resolved native Windows runtime. Use the official legacy `hermes-agent` /
+`run_agent.py` CLI through the installed runtime and official `runtime_command`
+bootstrap, with `--base-url http://127.0.0.1:PORT/v1 --model ID
+--enabled-toolsets uap-native-test-server --max-turns 3 --query QUERY`. The
+test-owned profile explicitly selects `model.provider: custom`. This runs the
+real native agent loop without expanding ownership to normal chat's persistent
+gateway. It does not qualify the default chat UI. The pinned
+`runtime_provider_backends.py` deliberately supplies the SDK's
 `no-key-required` placeholder for a custom endpoint without credentials. No
 vendor login, fabricated credential, trust bypass or real inference is needed.
 
@@ -77,9 +81,11 @@ actual expected-denied boundary. No release/Directory qualification is inferred.
 
 ## Estimate and validation
 
-Approximately 150-210 native-driver LOC, 130-180 provider-fixture LOC,
-100-150 inert-test LOC, 170-230 new workflow LOC and 25-45 optional shared-fixture
-LOC, plus this plan. Complexity 4/10; source feasibility high, cross-platform
+The implementation is approximately 356 native-driver lines (including bounded
+capture and owned Windows job cleanup), 214 provider-fixture lines (including
+original request/response capture), 169 inert-test lines, 212 new workflow lines
+and 51 added optional shared-fixture lines, plus this plan. Complexity 4/10;
+source feasibility high, cross-platform
 reliability 7/10 pending actual native CI. First hosted run must settle native
 CLI streaming, custom-provider startup and toolset/approval behavior; uncertainty
 fails qualification rather than introducing a bypass.
@@ -97,6 +103,8 @@ or native turn has been executed locally for this feasibility review.
 - `hermes_cli/runtime_provider_backends.py`, lines 116-204: explicit custom
   endpoint routing, credential isolation and no-key placeholder.
 - `hermes_cli/main.py::cmd_chat` and `cli.py::main`: real native CLI dispatch.
+- `agent/legacy_cli.py` and `run_agent.py::main`: the selected official legacy
+  CLI driver, using the same native agent loop and MCP registry.
 - `tools/mcp_tool_schema.py`, lines 147-193: native generated function identity.
 - `tools/mcp_tool_registration.py`: server-name alias registration.
 - `tools/mcp_tool_discovery.py`, lines 604-630: selected-server native startup.
