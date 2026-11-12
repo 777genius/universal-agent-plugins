@@ -16,6 +16,12 @@ on:
       - 'repotests/agentplugins_windsurf_component_runtime*test.go'
       - 'repotests/testdata/agentplugins_native_probe/**'
   workflow_dispatch:
+    inputs:
+      kiro_auth_research:
+        description: 'Run the legacy Kiro diagnostic with its dedicated CI credential'
+        type: boolean
+        required: false
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -36,13 +42,22 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Verify inert envelope and selection contracts
         run: python3 -m unittest discover -s scripts -p 'test_project_native_runtime.py'
-      - name: Select only implemented exact native tests
+      - name: Select implemented native tests without vendor authentication by default
         id: selection
+        env:
+          UAP_WORKFLOW_EVENT: ${{ github.event_name }}
+          UAP_KIRO_AUTH_RESEARCH: ${{ inputs.kiro_auth_research == true && 'true' || 'false' }}
         run: |
           python3 - <<'PYTHON'
           import json, os, subprocess
           value = subprocess.check_output(['python3', 'scripts/project_native_runtime.py', '--matrix'], text=True).strip()
           matrix = json.loads(value)
+          allow_kiro_auth = (os.environ['UAP_WORKFLOW_EVENT'] == 'workflow_dispatch'
+                             and os.environ['UAP_KIRO_AUTH_RESEARCH'] == 'true')
+          if not allow_kiro_auth:
+              matrix['include'] = [row for row in matrix['include'] if row['client'] != 'kiro']
+              print('Kiro authenticated diagnostic not selected; use the separate Kiro no-auth installation gate.')
+          value = json.dumps(matrix, separators=(',', ':'))
           with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
               output.write('matrix=' + value + '\n')
               output.write('count=' + str(len(matrix['include'])) + '\n')
@@ -101,7 +116,7 @@ jobs:
           cache: false
       - name: Run the selected bounded current-source native test
         env:
-          KIRO_API_KEY: ${{ matrix.client == 'kiro' && secrets.KIRO_API_KEY || '' }}
+          KIRO_API_KEY: ${{ github.event_name == 'workflow_dispatch' && inputs.kiro_auth_research == true && matrix.client == 'kiro' && secrets.KIRO_API_KEY || '' }}
         run: python3 scripts/project_native_runtime.py --client '${{ matrix.client }}' --output '${{ runner.temp }}/project-runtime-${{ matrix.client }}'
       - name: Admit exact closed output files
         id: admission
