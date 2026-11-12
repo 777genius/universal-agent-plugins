@@ -19,6 +19,34 @@ on:
       - 'install/integrationctl/agentplugins/installer/project*.go'
       - 'install/integrationctl/agentplugins/planner/planner.go'
       - 'install/integrationctl/agentplugins/planner/project*.go'
+      - 'install/integrationctl/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'go.work'
+      - 'go.work.sum'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/pi-project-native.yml'
+      - 'scripts/pi_project_native_e2e.py'
+      - 'scripts/pi_project_components_native_e2e.py'
+      - 'scripts/pi_local_model_fixture.py'
+      - 'install/integrationctl/agentplugins/clients/pi/**'
+      - 'install/integrationctl/agentplugins/clients/shared/**'
+      - 'install/integrationctl/agentplugins/adapters/nativeconfig/**'
+      - 'install/integrationctl/agentplugins/clients/all/registry.go'
+      - 'install/integrationctl/agentplugins/domain/clients_catalog.go'
+      - 'install/integrationctl/agentplugins/domain/project_policy.go'
+      - 'install/integrationctl/agentplugins/installer/pi_project_lifecycle_test.go'
+      - 'install/integrationctl/agentplugins/installer/pi_project_components_facade_test.go'
+      - 'install/integrationctl/agentplugins/installer/project*.go'
+      - 'install/integrationctl/agentplugins/planner/planner.go'
+      - 'install/integrationctl/agentplugins/planner/project*.go'
+      - 'install/integrationctl/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'go.work'
+      - 'go.work.sum'
   workflow_dispatch:
 
 permissions:
