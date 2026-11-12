@@ -344,6 +344,11 @@ const selectedCommand = computed(() => {
   color: #0f172a;
 }
 
+.v-theme--light .download-section__method-link,
+.v-theme--light .download-section__release-info a {
+  color: #0e7490;
+}
+
 .v-theme--light .download-section__method {
   border-color: rgba(15, 23, 42, 0.12);
 }
