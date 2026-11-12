@@ -496,7 +496,9 @@ for (const locale of ['en', 'ru'] as const) {
       const first = assessment.locator('.skillspector__record').first();
       await first.locator(':scope > summary').click();
       const title = locale === 'ru' ? 'Отдельная подтверждённая проверка' : 'Independent authenticated scan';
-      const witness = first.locator('.skillspector__record-reasons').filter({ hasText: title });
+      // Only the independent witness <div>; the separate reasons <ul> may echo
+      // the same translated title in its recovery coverage description.
+      const witness = first.locator('div.skillspector__record-reasons').filter({ hasText: title });
       await expect(witness).toBeVisible();
       await expect(witness).toContainText('42854039402');
       await expect(witness).toContainText('sha256:' + '8'.repeat(64));
