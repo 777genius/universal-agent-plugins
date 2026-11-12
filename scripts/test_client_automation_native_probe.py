@@ -107,6 +107,8 @@ class NativeAdmissionContracts(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "config capture bound"):
                     snapshot(root)
 
+    @unittest.skipUnless(os.name == "posix" and hasattr(os, "O_NOFOLLOW")
+                         and hasattr(os, "O_DIRECTORY"), "native snapshot is POSIX-only")
     def test_raw_bytes_and_modes_preserved(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

@@ -66,7 +66,7 @@ def snapshot(root):
             "snapshot root is missing or aliased")
     require(os.name == "posix" and all(hasattr(os, flag) for flag in
             ("O_DIRECTORY", "O_NOFOLLOW", "O_NONBLOCK"))
-            and os.open in os.supports_dir_fd, "secure snapshot unavailable")
+            , "secure snapshot unavailable")
     root_meta = root.lstat()
     directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
     root_fd = os.open(root, directory_flags)
