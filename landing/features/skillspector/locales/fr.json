@@ -114,7 +114,11 @@
       "copiedDiagnostics": "Copié",
       "copyDiagnosticsHelp": "Copie le statut du scan et toutes les preuves diagnostiques publiées de cette fiche au format JSON. Aucune donnée n'est envoyée.",
       "copyDiagnosticsSuccess": "Diagnostic copié. Collez-le dans un assistant IA pour analyser les preuves.",
-      "copyDiagnosticsError": "Impossible de copier. Autorisez l'accès au presse-papiers puis réessayez."
+      "copyDiagnosticsError": "Impossible de copier. Autorisez l'accès au presse-papiers puis réessayez.",
+      "recoveryWitnessTitle": "Analyse authentifiée indépendante",
+      "recoveryWitnessRun": "Exécution main {run}, tentative {attempt}",
+      "recoveryWitnessExplanation": "Ce rapport original distinct contient des résultats absents de l'analyse principale. La couverture reste incomplète et ces signaux automatiques n'ont pas été confirmés par un audit indépendant.",
+      "recoveryWitnessFindings": "Résultats supplémentaires d'une analyse authentifiée"
     }
   }
 }
