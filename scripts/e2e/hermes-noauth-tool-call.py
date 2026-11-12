@@ -114,7 +114,7 @@ def child_case():
                 require(original.startswith(header) and original.count(header) == 1
                         and b"mcp_servers:\n" in original, "unexpected native YAML baseline")
                 selected_model = {"provider": "custom", "base_url": provider.base_url,
-                                  "default": MODEL, "context_length": 32768}
+                                  "default": MODEL, "context_length": 65536}
                 self.config.write_bytes(
                     b"model: " + json.dumps(selected_model, sort_keys=True).encode("utf-8")
                     + b"\n" + original[len(header):])
@@ -122,8 +122,17 @@ def child_case():
                 query = "Call the offered inert ping once. nonce=" + provider.nonce + " stage=" + stage
                 native = json.loads(Path(os.environ["HERMES_NATIVE_RUNTIME_COMMAND_FILE"]).read_text())
                 command = runtime_command(source, python=native[0], args=["--base-url", provider.base_url,
-                    "--model", MODEL, "--enabled-toolsets", "uap-native-test-server", "--max-turns", "3",
-                    "--query", query], code=f"runpy.run_path({str(source / 'run_agent.py')!r}, run_name='__main__')")
+                    "--model", MODEL, "--enabled-toolsets", "mcp-uap-native-test-server", "--max-turns", "3",
+                    "--query", query], code=(
+                        # Legacy run_agent.py omits MCP startup. Discover the
+                        # exact UAP-owned server with the pinned vendor API.
+                        "from tools.mcp_oauth import suppress_interactive_oauth\n"
+                        "from tools.mcp_tool_discovery import discover_mcp_tools\n"
+                        "with suppress_interactive_oauth():\n"
+                        "    discovered = discover_mcp_tools(allowed_mcp_names=['uap-native-test-server'])\n"
+                        "if sorted(discovered) != ['mcp__uap_native_test_server__ping']:\n"
+                        "    raise RuntimeError('native selected MCP tool discovery differs')\n"
+                        f"runpy.run_path({str(source / 'run_agent.py')!r}, run_name='__main__')"))
                 try:
                     output = bounded(command, self.root, dict(os.environ), self.evidence / (stage + "-native-driver"))
                     provider.close()
