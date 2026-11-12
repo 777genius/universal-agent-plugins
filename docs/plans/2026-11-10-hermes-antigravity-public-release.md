@@ -174,3 +174,55 @@ workflow, an uploaded plan or a locally generated site. Waiting for CI or
 publication propagation is normal execution. A genuine missing owner session
 or protected approval is recorded only after the reviewable candidate and all
 other useful authorized work are complete.
+
+## 2026-11-12 completion addendum
+
+PR #866 is merged. Production Pages run `43131614466` serves source
+`fb2025da8077a476379909b89b1f18a348e3b499`, controlled by `e5839316`.
+Hermes and Antigravity rows, logos, all nine translated cards and next steps
+are present. The remaining documentation work is the dated release-boundary
+paragraph in the nine locale compatibility references and the two native guides.
+
+1. Observe qualification run `43119733519`, attempt 1, for frozen candidate
+   `0.1.105`, source `6e4647c14645ca819bd11e1140ebc6ac453c8807`.
+   At this checkpoint the six platform npm/binary proofs and aggregate pass,
+   and Hermes macOS ARM64 native passes. Hermes Windows job `130921405924`
+   failed at `02:13:51Z`: the native lifecycle child exited `0` and the UAP
+   binary digest was unchanged, but the pre/post `vendor_identity` equality
+   check failed with `native vendor changed during harness`. Other native lanes
+   were queued at the preceding checkpoint. These are partial results and an
+   observed qualification failure, not readiness or completed publication.
+   Latest public is `0.1.104`; publication remains pending. Original job Inputs
+   confirm `auto_publish: true`, so successful qualification has publication
+   consequences through the existing gates.
+2. Diagnose the original artifacts and pinned vendor source before another
+   qualification attempt. The cause is under independent investigation. If a
+   release-harness defect is established, document and review a separate small
+   amendment that fixes only that proven defect; do not waive the identity check
+   or blindly retry. Candidate `0.1.105` and its frozen source remain historical
+   identities. If the frozen source must change, inspect the live version
+   inventory and select the next unused version, preserving the old tag/assets.
+3. After observed qualification and public release success, replace only the
+   stale current-boundary wording with the exact version, frozen source and
+   observed artifact/native evidence. Preserve historical source results and
+   links, existing heading anchors, Hermes Project MCP refusal and Antigravity
+   **Prepared** status. Actual Antigravity IDE activation is explicitly deferred
+   by the owner in #864; CLI/native lifecycle proof does not establish it.
+4. Review the approximately eleven documentation files plus this plan; retain
+   concise evidence JSON only if it adds exact, independently checkable facts.
+   Run locale availability generation, the documented Docs checks and UI smoke
+   checks with their required environment; record any unavailable verification
+   honestly. Review exact-commit CI before merge.
+5. After documentation review and merge, update the production pin to a reviewed
+   ancestor through the existing Pages contract, then read back the deployed
+   release wording in all nine compatibility routes. Release promotion and
+   production pin changes remain separate observed gates.
+
+Scope is residual release documentation and exact evidence only: no runtime,
+workflow, frozen VS Code or signed Directory authorization changes. Estimated
+complexity is **2/10**, risk of an incorrect availability/evidence claim **4/10**,
+expected reliability after exact-evidence review **9/10**, and diff size **2/10**
+(about 60–140 changed lines, excluding optional evidence JSON). Pending gates
+are Windows failure diagnosis and any reviewed correction, remaining native
+proofs, verified draft/promotion, npm/public artifact
+readback, documentation verification, review and production deployment readback.
