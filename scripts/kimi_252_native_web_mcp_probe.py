@@ -5,6 +5,7 @@ Only an isolated CI-owned project is trusted through the documented native
 workspace-trust endpoint; trust is explicitly revoked. No vendor login,
 model, --dangerous-bypass-auth, or trust environment override is used.
 """
+import http.client
 import json
 import os
 from pathlib import Path
@@ -196,16 +197,20 @@ def probe(client, env, project, config_path):
                 "workspace_trust": "native-API-granted-and-revoked-test-only",
                 "native_client": "kimi-code", "native_version": "2.5.2"}
     finally:
-        if trusted and workspace and isinstance(workspace.get("id"), str):
-            try:
-                response("/api/v1/workspaces/" + urllib.parse.quote(workspace["id"], safe="") + "/untrust",
-                         base, token, "POST", {})
-            except (OSError, ValueError):
-                # Includes timeouts: a cleanup network error must not bypass
-                # killing the disposable native process group.
-                pass
         try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        process.wait(timeout=5)
+            if trusted and workspace and isinstance(workspace.get("id"), str):
+                try:
+                    response("/api/v1/workspaces/" + urllib.parse.quote(workspace["id"], safe="") + "/untrust",
+                             base, token, "POST", {})
+                except (OSError, ValueError, http.client.HTTPException):
+                    # Any ambiguous response remains a failed qualification.
+                    # Cleanup must still terminate the isolated process group.
+                    pass
+        finally:
+            # Even unforeseen exceptions during /untrust must not strand the
+            # native Kimi process or its test-only trusted workspace.
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            process.wait(timeout=5)
