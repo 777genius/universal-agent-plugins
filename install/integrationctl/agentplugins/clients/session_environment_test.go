@@ -8,7 +8,7 @@ import (
 func TestSessionChildEnvironmentRemovesWindowsCaseAliases(t *testing.T) {
 	plan := SessionPlan{Environment: map[string]string{
 		"CLINE_MCP_SETTINGS_PATH": "/project/mcp.json",
-		"CLINE_NO_AUTO_UPDATE": "1",
+		"CLINE_NO_AUTO_UPDATE":    "1",
 	}}
 	base := []string{
 		"HOME=/original", "cline_mcp_settings_path=/foreign",
