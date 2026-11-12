@@ -19,17 +19,18 @@ type request struct {
 	Params json.RawMessage `json:"params"`
 }
 type facts struct {
-	Nonce    string   `json:"nonce"`
-	Revision string   `json:"revision"`
-	CWD      string   `json:"cwd"`
-	Argv     []string `json:"argv"`
-	Root     string   `json:"plugin_root"`
-	Data     string   `json:"plugin_data"`
-	Literal  string   `json:"literal"`
-	Once     string   `json:"once"`
-	Marker   string   `json:"marker,omitempty"`
-	PID      int      `json:"pid"`
-	Session  string   `json:"session"`
+	Nonce     string   `json:"nonce"`
+	Operation string   `json:"operation,omitempty"`
+	Revision  string   `json:"revision"`
+	CWD       string   `json:"cwd"`
+	Argv      []string `json:"argv"`
+	Root      string   `json:"plugin_root"`
+	Data      string   `json:"plugin_data"`
+	Literal   string   `json:"literal"`
+	Once      string   `json:"once"`
+	Marker    string   `json:"marker,omitempty"`
+	PID       int      `json:"pid"`
+	Session   string   `json:"session"`
 }
 
 var session = fmt.Sprintf("%d-%d", os.Getpid(), time.Now().UnixNano())
@@ -130,6 +131,9 @@ func inspect(params json.RawMessage) (any, error) {
 			if err = os.WriteFile(path, []byte(p.Arguments.Marker), 0600); err != nil {
 				return nil, err
 			}
+			f.Operation = "write"
+		} else {
+			f.Operation = "read"
 		}
 		b, err := os.ReadFile(path)
 		if err != nil {
