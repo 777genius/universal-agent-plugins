@@ -158,6 +158,10 @@ class ReleasedNativeProofTests(unittest.TestCase):
         after = {**before, "executable_sha256": proof.sha(metadata)}
         self.assertEqual(proof.vendor_comparison("hermes", before),
                          proof.vendor_comparison("hermes", after))
+        self.assertNotEqual(proof.vendor_comparison("hermes", before),
+                            proof.vendor_comparison("hermes", {**after, "runtime_sha256": "b" * 64}))
+        with self.assertRaisesRegex(ValueError, "vendor version"):
+            proof.vendor_comparison("hermes", {**after, "version_output": "Hermes Agent v0.23.1"})
         script_changed = launcher("script.exe", (2026, 11, 12, 13, 0, 0), b"print('changed')")
         loader_changed = launcher("loader.exe", (2026, 11, 12, 13, 0, 0),
                                   prefix=b"MZchanged-loader\\n#!pinned-python -I\\n")
