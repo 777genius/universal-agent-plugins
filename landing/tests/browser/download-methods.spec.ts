@@ -14,6 +14,16 @@ test('Hero alternatives open the installation-only page', async ({ page }) => {
 for (const width of [1440, 390]) {
   test('installation methods remain readable at ' + width + 'px', async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 900 });
+    await page.addInitScript(() => {
+      let copied = '';
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: {
+          writeText: async (value: string) => { copied = value; },
+          readText: async () => copied,
+        },
+      });
+    });
     await page.goto('./download/');
     const tabs = page.locator('.download-section__install-tab');
     const command = page.locator('.download-section__command code');
@@ -28,6 +38,9 @@ for (const width of [1440, 390]) {
       await tab.click();
       await expect(tab).toHaveAttribute('aria-pressed', 'true');
       await expect(command).toContainText(snippet);
+      const exactCommand = (await command.textContent())!.trim();
+      await page.locator('.download-section__command').getByRole('button').click();
+      await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(exactCommand);
       await expect(page.locator('.download-section__method-description')).not.toBeEmpty();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     }
