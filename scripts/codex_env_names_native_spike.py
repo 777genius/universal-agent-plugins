@@ -544,12 +544,10 @@ def inspect(root, secret):
                                   "result": "unscanned_oversize"})
                     continue
                 data = path.read_bytes()
-            except FileNotFoundError:
-                # Codex atomically replaces/deletes temporary snapshot files.
-                # A vanished file is not an inaccessible persisted file.
-                continue
             except OSError as exc:
-                # Locked files still fail closed: never exempt SQLite -shm.
+                # Vanished and locked files both leave incomplete evidence.
+                # Never treat a file disappearing between lstat/read as proof
+                # that its transient content was safe; never exempt SQLite -shm.
                 # Expose only fixed diagnostics, not messages or pathnames.
                 found.append({
                     "path_sha256": hashlib.sha256(

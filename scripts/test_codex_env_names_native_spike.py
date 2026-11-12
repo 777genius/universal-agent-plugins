@@ -643,14 +643,24 @@ class TestSyntheticSnapshotScanner(unittest.TestCase):
             self.assertFalse(findings[0]["sqlite_shm_candidate"])
             self.assertNotIn("do not serialize this", str(findings))
 
-    def test_atomic_unlink_during_read_is_not_false_positive(self):
+    def test_atomic_unlink_during_read_fails_closed_without_raw_data(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             file = root / "transient"
             file.write_text("nonsecret")
-            with patch.object(Path, "read_bytes", side_effect=FileNotFoundError):
+            with patch.object(Path, "read_bytes",
+                              side_effect=FileNotFoundError(
+                                  2, "untrusted error text", str(file))):
                 findings, _ = inspect(root, "synthetic_token")
-            self.assertEqual(findings, [])
+            self.assertEqual(len(findings), 1)
+            item = findings[0]
+            self.assertEqual(item["result"], "unscanned_file")
+            self.assertEqual(item["io_reason"], "vanished_during_walk")
+            self.assertEqual(item["scope"], "other")
+            self.assertFalse(item["sqlite_shm_candidate"])
+            self.assertNotIn(str(file), str(findings))
+            self.assertNotIn("untrusted error text", str(findings))
+            self.assertNotIn("synthetic_token", str(findings))
 
 
 if __name__ == "__main__":
