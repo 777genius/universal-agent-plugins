@@ -60,7 +60,6 @@ func newSkillsMCPCommand(opts *options, create mcpReaderFactory) *cobra.Command 
 	return root
 }
 
-
 func runMCPInspect(cmd *cobra.Command, opts *options, endpoint, uri string, create mcpReaderFactory) error {
 	reader, err := startMCPRead(cmd, opts, endpoint, create)
 	if err != nil {
