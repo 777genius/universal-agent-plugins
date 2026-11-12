@@ -18,6 +18,7 @@ class KimiStableProjectMcpSmokeTests(unittest.TestCase):
     def test_lifecycle_json_requires_exact_pass_probes_sources_and_cold_pair(self):
         events = []
         for name in LIFECYCLE_CASES:
+            events.append({"Test": name, "Action": "run"})
             for root in ("original", "cold"):
                 events.append({"Test": name, "Action": "output", "Output": "KIMI_GENUINE_PROBE " + json.dumps({"version": "2.5.2", "executable": "/owned/kimi", "config_root": root}) + "\n"})
                 events.append({"Test": name, "Action": "output", "Output": "KIMI_PREPARED_SOURCE " + json.dumps({"source_binding_id": "pin", "tree_digest": "digest", "native_profile_root": root}) + "\n"})
@@ -28,16 +29,26 @@ class KimiStableProjectMcpSmokeTests(unittest.TestCase):
                 report.write_text("\n".join(json.dumps(row) for row in rows))
                 return validate_lifecycle_json(report, "/owned/kimi")
             self.assertEqual(set(check(events)), set(LIFECYCLE_CASES))
+            # PASS with source logs but no test start, or a late/duplicate
+            # terminal event, must not qualify the native client.
+            for tampered in (
+                [row for row in events if not (row["Test"] == LIFECYCLE_CASES[0] and row["Action"] == "run")],
+                events + [{"Test": LIFECYCLE_CASES[0], "Action": "pass"}],
+                events + [{"Test": LIFECYCLE_CASES[0], "Action": "run"}],
+                events + [{"Test": LIFECYCLE_CASES[0], "Action": "output", "Output": "late\\n"}],
+            ):
+                with self.assertRaises(ValueError):
+                    check(tampered)
             for rows in ([], events[:-1], [{**row, "Action": "skip"} if row.get("Action") == "pass" else row for row in events], [row for row in events if "KIMI_PREPARED_SOURCE" not in row.get("Output", "")], [row for row in events if '"config_root": "cold"' not in row.get("Output", "")]):
                 with self.assertRaises(ValueError):
                     check(rows)
             wrong = [dict(row) for row in events]
-            wrong[0]["Output"] = wrong[0]["Output"].replace("2.5.2", "2.3.2")
+            wrong[1]["Output"] = wrong[1]["Output"].replace("2.5.2", "2.3.2")
             with self.assertRaisesRegex(ValueError, "version"):
                 check(wrong)
             for replacement in ('"executable": "/other/kimi"',):
                 wrong_path = [dict(row) for row in events]
-                wrong_path[0]["Output"] = wrong_path[0]["Output"].replace('"executable": "/owned/kimi"', replacement)
+                wrong_path[1]["Output"] = wrong_path[1]["Output"].replace('"executable": "/owned/kimi"', replacement)
                 with self.assertRaisesRegex(ValueError, "selection"):
                     check(wrong_path)
             cold_sources = [i for i, row in enumerate(events) if row["Test"] == LIFECYCLE_CASES[2] and "KIMI_PREPARED_SOURCE" in row.get("Output", "")]
@@ -53,6 +64,7 @@ class KimiStableProjectMcpSmokeTests(unittest.TestCase):
         # newline. The split can occur within a marker or quoted JSON string.
         events = []
         for name in LIFECYCLE_CASES:
+            events.append({"Test": name, "Action": "run"})
             roots = ("original", "cold") if name == LIFECYCLE_CASES[2] else ("original",)
             for root in roots:
                 for marker, record in (
@@ -77,10 +89,11 @@ class KimiStableProjectMcpSmokeTests(unittest.TestCase):
             last_source = max(i for i, row in enumerate(truncated)
                               if row.get("Test") == LIFECYCLE_CASES[2] and row.get("Action") == "output")
             truncated[last_source]["Output"] = truncated[last_source]["Output"][:-1]
-            with self.assertRaisesRegex(ValueError, "incomplete"):
+            # A truncated log tail before PASS is an invalid terminal event.
+            with self.assertRaisesRegex(ValueError, "terminal"):
                 check(truncated)
             malformed = [dict(row) for row in events]
-            malformed[0]["Output"] = "KIMI_GENUINE_PROBE {invalid}\n"
+            malformed[1]["Output"] = "KIMI_GENUINE_PROBE {invalid}\n"
             with self.assertRaisesRegex(ValueError, "malformed"):
                 check(malformed)
 
