@@ -189,7 +189,10 @@ test('manual download channel beats delayed detection and locale remount', async
     expect(commands.length).toBeGreaterThan(0);
     expect(commands.join('\n')).toContain('npx -y universal-agent-plugins add');
     gate.release();
-    await expect(page.locator('.download-section__platform-note')).toContainText(wording('en')('download.platforms.linux'));
+    // Detection must complete, but it must not overwrite the explicit npm choice.
+    const linuxRecommendation = page.locator('.download-section__install-tab').filter({ hasText: downloadChannelTitle('en', 'script') });
+    await expect(linuxRecommendation.locator('.download-section__install-tab-badge')).toHaveText(wording('en')('download.recommended'));
+    await expect(page.locator('.download-section__platform-note')).toHaveCount(0);
     await expect(npm).toHaveAttribute('aria-pressed', 'true');
     for (const locale of locales.filter((value) => value !== 'en')) {
       await navigate(page, '/download/', locale);
