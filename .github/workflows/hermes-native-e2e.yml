@@ -310,6 +310,15 @@ jobs:
           $fingerprintAfter = python scripts/e2e/released-native-proof.py fingerprint --binary "$env:HERMES_BIN"
           if ($LASTEXITCODE -ne 0) { throw 'Pinned Hermes launcher post-lifecycle fingerprint failed' }
           [IO.File]::WriteAllText((Join-Path $evidenceDir 'launcher-after.json'), $fingerprintAfter + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
+          # No digest normalization is permitted after the pinned vendor's
+          # native first-use preparation. Compare the entire launcher bytes,
+          # not only the entrypoint, loader, ZIP segments or timestamps.
+          $settled = Get-Content -LiteralPath (Join-Path $evidenceDir 'launcher-after-preflight.json') -Raw | ConvertFrom-Json
+          $observed = $fingerprintAfter | ConvertFrom-Json
+          if ($settled.launcher_kind -cne $observed.launcher_kind -or
+              $settled.executable_sha256 -cne $observed.executable_sha256) {
+            throw 'Hermes native Windows launcher changed after first-use preparation'
+          }
       - name: Retain release-native receipt and transcript
         if: ${{ always() && inputs.release_tag != '' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
