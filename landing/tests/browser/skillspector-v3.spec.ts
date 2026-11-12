@@ -141,6 +141,10 @@ async function setup(
     distinct.message = 'Independent OSV dependency advisory: unpinned version';
     distinct.rule = 'SC4';
     distinct.severity = 'LOW';
+    distinct.evidence = { witness_source: 'independent authenticated report' };
+    distinct.code_snippet = 'original source evidence';
+    distinct.context = { scanner: 'independent source' };
+    distinct.remediation = { note: 'review the original source' };
     original.findings[0] = distinct;
     original.report_digest = 'sha256:' + '8'.repeat(64);
     primary.findings_truncated = true;
@@ -506,6 +510,12 @@ for (const locale of ['en', 'ru'] as const) {
       await expect(signal).toHaveCount(1);
       await expect(signal.first()).toContainText('SC4 · LOW');
       await expect(signal.first()).toContainText('Independent OSV dependency advisory: unpinned version');
+      const detail = signal.first().locator('details').first();
+      await detail.locator(':scope > summary').click();
+      await expect(detail.locator('pre')).toHaveCount(4);
+      await expect(detail).toContainText('original source evidence');
+      await expect(detail).toContainText('independent authenticated report');
+      await expect(detail).toContainText('review the original source');
       await expect(first.locator('.skillspector__record-body > .skillspector__findings > li')).toHaveCount(4);
       await expect(first.locator(':scope > summary')).toContainText(
         locale === 'ru' ? 'Сканирование неполное' : 'Incomplete scan',

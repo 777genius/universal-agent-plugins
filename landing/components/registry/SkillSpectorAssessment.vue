@@ -629,7 +629,33 @@ async function copyDiagnostics() {
                     >
                       <code>{{ finding.rule }} · {{ finding.severity }}</code>
                       <p>{{ finding.message }}</p>
-                      <p>{{ t('registryUi.skillSpector.unreviewedSignal') }}</p>
+                      <p>
+                        {{
+                          t(
+                            `registryUi.skillSpector.${finding.review_status === 'confirmed' && ['HIGH', 'CRITICAL'].includes(finding.severity) ? 'confirmedMaterialIssue' : finding.review_status === 'false_positive' ? 'registryClassification' : finding.review_status === 'accepted' ? 'acceptedSignal' : 'unreviewedSignal'}`,
+                          )
+                        }}<template
+                          v-if="finding.confidence !== undefined && finding.confidence !== null"
+                        >
+                          ·
+                          {{
+                            t('registryUi.skillSpector.confidence', {
+                              confidence: n(Math.round(finding.confidence * 100)),
+                            })
+                          }}</template
+                        >
+                      </p>
+                      <p v-if="finding.exception" class="skillspector__classification">
+                        {{ t('registryUi.skillSpector.classificationExplanation') }}
+                        {{ finding.exception.reason }} <code>{{ finding.exception.id }}</code>
+                      </p>
+                      <p v-if="finding.raw_count !== undefined">
+                        {{
+                          t('registryUi.skillSpector.occurrenceCount', {
+                            count: n(finding.raw_count),
+                          })
+                        }}
+                      </p>
                       <template
                         v-for="(position, positionIndex) in finding.occurrences?.length
                           ? finding.occurrences
@@ -644,6 +670,30 @@ async function copyDiagnostics() {
                         ><code>{{ skillSpectorFindingLocation(position) }}</code> ↗</a>
                         <code v-else>{{ skillSpectorFindingLocation(position) }}</code>
                       </template>
+                      <details
+                        v-if="
+                          (finding.evidence && Object.keys(finding.evidence).length) ||
+                          finding.code_snippet ||
+                          finding.context ||
+                          finding.remediation
+                        "
+                      >
+                        <summary>{{ t('registryUi.skillSpector.evidence') }}</summary>
+                        <pre v-if="finding.code_snippet">{{
+                          typeof finding.code_snippet === 'string'
+                            ? finding.code_snippet
+                            : json(finding.code_snippet)
+                        }}</pre>
+                        <pre v-if="finding.context">{{ json(finding.context) }}</pre>
+                        <pre v-if="finding.remediation">{{ json(finding.remediation) }}</pre>
+                        <pre v-if="finding.evidence && Object.keys(finding.evidence).length">{{
+                          json(finding.evidence)
+                        }}</pre>
+                      </details>
+                      <details v-if="finding.finding_ids?.length">
+                        <summary>{{ t('registryUi.skillSpector.findingIds') }}</summary>
+                        <pre>{{ finding.finding_ids.join('\n') }}</pre>
+                      </details>
                     </li>
                   </ul>
                 </div>

@@ -747,7 +747,11 @@ export function decodeSkillSpectorShardV3(
           !Number.isSafeInteger(origin.run_attempt) ||
           Number(origin.run_attempt) < 1 ||
           Number(origin.run_attempt) > 1000 ||
-          Object.hasOwn(original, 'recovery_witnesses') ||
+          // Authenticated worker originals carry scanner evidence only.
+          // Never silently overwrite an injected publication-state field
+          // while validating a *different* object than the one displayed.
+          ['recovery_witnesses', 'freshness', 'target_revision', 'retry', 'attempt_history']
+            .some((key) => Object.hasOwn(original, key)) ||
           original.id !== r.id ||
           original.kind !== r.kind ||
           original.plugin_path !== r.plugin_path ||
