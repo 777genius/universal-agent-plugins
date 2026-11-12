@@ -15,11 +15,10 @@ import secrets
 import shutil
 import subprocess
 import sys
-import tempfile
 import threading
 import time
 
-from codex_env_names_native_spike import CHILD, ENV_NAME, FOREIGN_ENV_NAME, Model, inspect, isolated_env, aggregate_findings, structured_mcp_receipt_matches, WINDOWS_NATIVE_SANDBOX_CONFIG
+from codex_env_names_native_spike import CHILD, ENV_NAME, FOREIGN_ENV_NAME, Model, inspect, isolated_env, aggregate_findings, structured_mcp_receipt_matches, WINDOWS_NATIVE_SANDBOX_CONFIG, isolated_root
 
 def rpc_send(proc, q, serial, method, params, timeout=35):
     proc.stdin.write((json.dumps({"id": serial, "method": method,
@@ -52,7 +51,7 @@ def main():
     secret = "uap_appserver_spike_" + secrets.token_hex(24)
     foreign_secret = "uap_foreign_appserver_" + secrets.token_hex(24)
     Model.expected_digest = hashlib.sha256(secret.encode()).hexdigest()
-    root = Path(tempfile.mkdtemp(prefix="uap-codex-appserver-"))
+    root = isolated_root("uap-codex-appserver-")
     home, project = root / "home", root / "project"
     (home / ".codex").mkdir(parents=True)
     (project / ".codex").mkdir(parents=True)

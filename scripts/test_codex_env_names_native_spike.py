@@ -15,7 +15,7 @@ import http.server
 
 from codex_env_names_native_spike import (CHILD, Model, MCP_CALL, SHELL_CALL, SHELL_MARKER,
                                         SHELL_ENV_PRESENT, SHELL_FOREIGN_PRESENT,
-                                        ENV_NAME, FOREIGN_ENV_NAME, inspect, aggregate_findings, windows_shell_command, isolated_env, structured_mcp_receipt_matches, fixed_windows_spawn_error_category, WINDOWS_NATIVE_SANDBOX_CONFIG)
+                                        ENV_NAME, FOREIGN_ENV_NAME, inspect, aggregate_findings, windows_shell_command, isolated_env, isolated_root, structured_mcp_receipt_matches, fixed_windows_spawn_error_category, WINDOWS_NATIVE_SANDBOX_CONFIG)
 
 
 class TestSyntheticModelOracle(unittest.TestCase):
@@ -388,6 +388,26 @@ class TestSyntheticMcpChild(unittest.TestCase):
         self.assertEqual(tool["name"], "confirm_env")
         self.assertEqual(tool["annotations"]["readOnlyHint"], True)
         self.assertEqual(tool["annotations"]["destructiveHint"], False)
+
+
+class TestIsolatedProjectTrustRoot(unittest.TestCase):
+    def test_new_spike_root_resolves_disposable_temp_alias(self):
+        # macOS usually spells TMPDIR /var/folders/..., while realpath is
+        # /private/var/folders/...; Codex CLI trust lookup may differ.
+        with tempfile.TemporaryDirectory() as base:
+            physical = Path(base) / "physical"
+            physical.mkdir()
+            alias = Path(base) / "alias"
+            try:
+                alias.symlink_to(physical, target_is_directory=True)
+            except OSError:
+                self.skipTest("cannot create disposable directory symlink")
+            with patch("codex_env_names_native_spike.tempfile.mkdtemp",
+                       return_value=str(alias)) as make:
+                result = isolated_root("uap-test-")
+                make.assert_called_once_with(prefix="uap-test-")
+            self.assertEqual(result, physical.resolve(strict=True))
+            self.assertNotEqual(str(result), str(alias))
 
 
 class TestSyntheticSnapshotScanner(unittest.TestCase):

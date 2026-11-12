@@ -130,6 +130,17 @@ def fixed_windows_spawn_error_category(response):
     }.get(match.group(1), "other_win32_error")
 
 
+def isolated_root(prefix):
+    """Keep disposable Codex project trust keys canonical on symlinked temp dirs.
+
+    macOS's /var/folders alias can resolve to /private/var/folders. The Codex
+    CLI may canonicalize cwd before matching [projects.<path>] trust keys.
+    Canonicalize our NEW, isolated root before generating either config; no
+    real user profile is visited or modified.
+    """
+    return Path(tempfile.mkdtemp(prefix=prefix)).resolve(strict=True)
+
+
 def isolated_env(root, home, secret, foreign_secret):
     """Disposable Codex profile: no real runner secrets are inherited."""
     env = {"HOME": str(home), "CODEX_HOME": str(home / ".codex"),
@@ -571,7 +582,7 @@ def main():
     secret = "uap_spike_" + secrets.token_hex(24)
     foreign_secret = "uap_foreign_spike_" + secrets.token_hex(24)
     Model.expected_digest = hashlib.sha256(secret.encode()).hexdigest()
-    root = Path(tempfile.mkdtemp(prefix="uap-codex-spike-"))
+    root = isolated_root("uap-codex-spike-")
     home, project = root / "home", root / "project"
     (home / ".codex").mkdir(parents=True)
     (project / ".codex").mkdir(parents=True)
