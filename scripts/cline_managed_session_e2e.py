@@ -119,6 +119,10 @@ class SessionJourney:
         state = read_owned(state_path, self.root)
         self.uap("declined-start", ["run", "--inspect"], expected=(1,))
         self.uap("install-yes-is-not-start-consent", ["run", "--inspect", "--yes"], expected=(1,))
+        # Read-only diagnostics before the session planner. Keep the original
+        # refusal intact; never fake a Detected client or an owned binding.
+        self.uap("preflight-list", ["list", "--format", "json"])
+        self.uap("preflight-doctor", ["doctor", "--format", "json"], expected=(0, 1, 2))
         self.uap("preview", ["run", "--dry-run", "--format", "json"])
         require(not self.events.exists() and read_owned(state_path, self.root) == state, "declined start had an effect")
         self.install("repeat-install", "add", self.source)
