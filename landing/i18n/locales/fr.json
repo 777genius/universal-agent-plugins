@@ -828,7 +828,8 @@
           "extensions": "Modules complémentaires"
         }
       },
-      "piNoCompatibleRelease": "Pi est pris en charge, mais la version signée de ce plugin ne propose pas de cible compatible avec Pi."
+      "piNoCompatibleRelease": "Pi est pris en charge, mais la version signée de ce plugin ne propose pas de cible compatible avec Pi.",
+      "piPinnedProjectSource": "Projet : installez dans Pi depuis la source Git épinglée sur un SHA exact (pas une cible Pi signée) ; la CLI vérifie la compatibilité."
     },
     "authentication": {
       "not_required": "Aucun compte requis",

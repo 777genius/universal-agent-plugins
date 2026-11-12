@@ -845,7 +845,8 @@
           "extensions": "Extensions"
         }
       },
-      "piNoCompatibleRelease": "Pi is supported, but this plugin's signed release has no compatible Pi target."
+      "piNoCompatibleRelease": "Pi is supported, but this plugin's signed release has no compatible Pi target.",
+      "piPinnedProjectSource": "Project: install Pi from this package's exact pinned Git source (not a signed Pi target); CLI checks compatibility."
     },
     "authentication": {
       "not_required": "No account required",
