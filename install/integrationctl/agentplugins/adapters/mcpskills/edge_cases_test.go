@@ -14,7 +14,10 @@ import (
 
 func TestRPCEnvelopeAdversarialResponses(t *testing.T) {
 	t.Parallel()
-	cases := []struct { name, body string; want error }{
+	cases := []struct {
+		name, body string
+		want       error
+	}{
 		{"wrong ID", `{"jsonrpc":"2.0","id":2,"result":{}}`, ErrProtocol},
 		{"no ID", `{"jsonrpc":"2.0","result":{}}`, ErrProtocol},
 		{"wrong version", `{"jsonrpc":"1.0","id":1,"result":{}}`, ErrProtocol},
@@ -57,7 +60,10 @@ func TestSSERejectsMalformedAndAmbiguousResponses(t *testing.T) {
 func TestMCPHTTPRejectsOversizeAndUnexpectedEncodings(t *testing.T) {
 	t.Parallel()
 	good := `{"jsonrpc":"2.0","id":1,"result":{}}`
-	cases := []struct{ name, media, encoding, payload string; length int64 }{
+	cases := []struct {
+		name, media, encoding, payload string
+		length                         int64
+	}{
 		{"bad media type", "text/html", "", good, -1},
 		{"content encoding", "application/json", "gzip", good, -1},
 		{"oversize header", "application/json", "", good, maxResponseBytes + 1},
@@ -67,10 +73,14 @@ func TestMCPHTTPRejectsOversizeAndUnexpectedEncodings(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			status := http.StatusOK
-			if tc.name == "non-OK status" { status = http.StatusBadRequest }
+			if tc.name == "non-OK status" {
+				status = http.StatusBadRequest
+			}
 			header := http.Header{}
 			header.Set("Content-Type", tc.media)
-			if tc.encoding != "" { header.Set("Content-Encoding", tc.encoding) }
+			if tc.encoding != "" {
+				header.Set("Content-Encoding", tc.encoding)
+			}
 			response := &http.Response{StatusCode: status, ContentLength: tc.length, Header: header,
 				Body: io.NopCloser(strings.NewReader(tc.payload))}
 			if _, err := decodeHTTPResponse(context.Background(), response); err == nil {
@@ -85,7 +95,10 @@ func TestManifestRejectsIntegrityAndPathAmbiguity(t *testing.T) {
 	body := []byte(sampleSkill)
 	sum := sha256.Sum256(body)
 	good := Resource{URI: sampleURI, Digest: "sha256:" + hex.EncodeToString(sum[:]), Size: int64(len(body))}
-	cases := []struct { name string; file Resource }{
+	cases := []struct {
+		name string
+		file Resource
+	}{
 		{"wrong root", Resource{URI: "skill://other/review/SKILL.md", Digest: good.Digest, Size: good.Size}},
 		{"oversize", Resource{URI: sampleURI, Digest: good.Digest, Size: maxSkillBytes + 1}},
 		{"negative size", Resource{URI: sampleURI, Digest: good.Digest, Size: -1}},
