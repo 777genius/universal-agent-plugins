@@ -15,7 +15,7 @@ from unittest.mock import patch
 import http.server
 
 from codex_env_names_appserver_spike import terminal_turn_status, classify_native_stdio_line
-from codex_env_names_native_spike import (_scan_stat_identity, _windows_path_within_root, _capture_scan_root, _read_regular_bounded, stop_live_observer, synthetic_canary_patterns, contains_synthetic_canary, CHILD, Model, MCP_CALL, SHELL_CALL, SHELL_MARKER,
+from codex_env_names_native_spike import (_scan_stat_identity, _windows_path_within_root, _capture_scan_root, _read_regular_bounded, stop_live_observer, synthetic_canary_patterns, contains_synthetic_canary, verified_vendor_version, PINNED_VENDOR_VERSION, CHILD, Model, MCP_CALL, SHELL_CALL, SHELL_MARKER,
                                         SHELL_ENV_PRESENT, SHELL_FOREIGN_PRESENT,
                                         ENV_NAME, FOREIGN_ENV_NAME, inspect, aggregate_findings, windows_shell_command, isolated_env, isolated_root, structured_mcp_receipt_matches, fixed_windows_spawn_error_category, WINDOWS_NATIVE_SANDBOX_CONFIG)
 
@@ -407,6 +407,24 @@ class TestSyntheticMcpChild(unittest.TestCase):
 
 
 class TestNativeSecurityLifecycle(unittest.TestCase):
+    def test_vendor_version_artifacts_reject_raw_or_tampered_output(self):
+        good = SimpleNamespace(returncode=0, stdout=PINNED_VENDOR_VERSION + "\n",
+                               stderr="")
+        self.assertTrue(verified_vendor_version(good))
+        for value in (
+            SimpleNamespace(returncode=1, stdout=PINNED_VENDOR_VERSION,
+                            stderr=""),
+            SimpleNamespace(returncode=0, stdout=PINNED_VENDOR_VERSION,
+                            stderr="unexpected native output"),
+            SimpleNamespace(returncode=0,
+                            stdout=PINNED_VENDOR_VERSION + " UAP_FAKE_CANARY",
+                            stderr=""),
+            SimpleNamespace(returncode=0, stdout="codex-cli 0.167.2",
+                            stderr="")
+        ):
+            self.assertFalse(verified_vendor_version(value))
+
+
     def test_real_cli_captured_stdio_checks_encoded_synthetic_canary(self):
         secret = "uap_inert_stdout_fixture_56789"
         patterns = synthetic_canary_patterns(secret)

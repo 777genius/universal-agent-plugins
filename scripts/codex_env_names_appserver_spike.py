@@ -18,7 +18,7 @@ import sys
 import threading
 import time
 
-from codex_env_names_native_spike import CHILD, ENV_NAME, FOREIGN_ENV_NAME, Model, inspect, isolated_env, aggregate_findings, structured_mcp_receipt_matches, WINDOWS_NATIVE_SANDBOX_CONFIG, isolated_root, _capture_scan_root, stop_live_observer, synthetic_canary_patterns, contains_synthetic_canary
+from codex_env_names_native_spike import CHILD, ENV_NAME, FOREIGN_ENV_NAME, Model, inspect, isolated_env, aggregate_findings, structured_mcp_receipt_matches, WINDOWS_NATIVE_SANDBOX_CONFIG, isolated_root, _capture_scan_root, stop_live_observer, synthetic_canary_patterns, contains_synthetic_canary, verified_vendor_version, PINNED_VENDOR_VERSION
 
 def rpc_send(proc, q, serial, method, params, timeout=35):
     proc.stdin.write((json.dumps({"id": serial, "method": method,
@@ -176,11 +176,16 @@ def main():
     try:
         version = subprocess.run([str(codex), "--version"], env=env,
                                  capture_output=True, timeout=15, text=True)
-        report["version"] = version.stdout.strip()[:100]
+        report["version"] = (
+            PINNED_VENDOR_VERSION if verified_vendor_version(version)
+            else "unverified_vendor_version"
+        )
         stdio["canary_observed"] = (
             contains_synthetic_canary(version.stdout.encode(), stdio_patterns)
             or contains_synthetic_canary(version.stderr.encode(), stdio_patterns)
         )
+        if report["version"] != PINNED_VENDOR_VERSION:
+            raise RuntimeError("vendor_version_unverified")
         proc = subprocess.Popen([str(codex), "app-server"], cwd=project, env=env,
                                 stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                 stderr=subprocess.DEVNULL)

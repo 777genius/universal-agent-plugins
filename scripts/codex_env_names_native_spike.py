@@ -30,6 +30,7 @@ FOREIGN_ENV_NAME = "UAP_E2E_FOREIGN_PASSWORD"
 # Explicit restricted-token sandbox only for disposable native Windows CI.
 # Official Codex 0.167.1 package smoke tests use windows.sandbox="unelevated".
 WINDOWS_NATIVE_SANDBOX_CONFIG = '[windows]\nsandbox = "unelevated"\n'
+PINNED_VENDOR_VERSION = "codex-cli 0.167.1"
 SHELL_CALL = "call_uap_shell_snapshot"
 SHELL_MARKER = "UAP_SHELL_COMPLETED"
 SHELL_ENV_PRESENT = "UAP_SHELL_ENV_PRESENT"
@@ -596,6 +597,13 @@ def _read_regular_bounded(path, observed, root, root_anchor):
             return data
 
 
+def verified_vendor_version(result):
+    """Only the pinned official vendor version is allowed in proof artifacts."""
+    return (result.returncode == 0
+            and result.stdout.strip() == PINNED_VENDOR_VERSION
+            and not result.stderr.strip())
+
+
 def synthetic_canary_patterns(values):
     """Shared synthetic-only raw/encoded canary patterns for disk and stdio."""
     values = (values,) if isinstance(values, str) else values
@@ -856,7 +864,12 @@ def main():
     try:
         version = subprocess.run([str(codex), "--version"], env=env,
                                  capture_output=True, timeout=15, text=True)
-        report["version"] = version.stdout.strip()[:100]
+        report["version"] = (
+            PINNED_VENDOR_VERSION if verified_vendor_version(version)
+            else "unverified_vendor_version"
+        )
+        if report["version"] != PINNED_VENDOR_VERSION:
+            raise ValueError("vendor_version_unverified")
         # Observe LIVE named snapshots during the deliberately held shell tool.
         # Post-exit scans alone miss transient files deleted by normal cleanup.
         monitor_stop = threading.Event()
