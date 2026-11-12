@@ -239,6 +239,14 @@ const reasonPosition = (reason: { path?: unknown; start_line?: unknown; end_line
   return `${path}${start ? `:${start}${end && end !== start ? `–${end}` : ''}` : ''}`;
 };
 const groups = (record: SkillSpectorRecord) => record.findings;
+const witnessOnlyFindings = (primary: SkillSpectorRecord, original: SkillSpectorRecord) => {
+  const byId = new Map(primary.findings.map((finding) => [finding.id, finding]));
+  return original.findings.filter((finding) => {
+    const current = byId.get(finding.id);
+    // A group ID alone is not enough to elide changed evidence.
+    return !current || JSON.stringify(current) !== JSON.stringify(finding);
+  });
+};
 const recordStatus = (record: SkillSpectorRecord) =>
   record.freshness === 'historical' ||
   (props.subject?.kind === 'plugin' && record.source.revision !== props.subject.revision)
@@ -594,6 +602,50 @@ async function copyDiagnostics() {
                     </details>
                   </li>
                 </ul>
+                <div
+                  v-for="(witness, witnessIndex) in record.recovery_witnesses ?? []"
+                  :key="`${witness.origin.run_id}-${witness.origin.run_attempt}-${witnessIndex}`"
+                  class="skillspector__record-reasons"
+                >
+                  <p>
+                    <strong>{{ t('registryUi.skillSpector.recoveryWitnessTitle') }}</strong>
+                    · {{ t('registryUi.skillSpector.recoveryWitnessRun', {
+                      run: n(witness.origin.run_id),
+                      attempt: n(witness.origin.run_attempt),
+                    }) }}
+                    · <code>{{ witness.record.report_digest }}</code>
+                  </p>
+                  <p>{{ t('registryUi.skillSpector.recoveryWitnessExplanation') }}</p>
+                  <ul
+                    v-if="witnessOnlyFindings(record, witness.record).length"
+                    class="skillspector__findings"
+                    :aria-label="t('registryUi.skillSpector.recoveryWitnessFindings')"
+                  >
+                    <li
+                      v-for="(finding, index) in witnessOnlyFindings(record, witness.record)"
+                      :key="finding.id || index"
+                      :data-finding-id="finding.id"
+                    >
+                      <code>{{ finding.rule }} · {{ finding.severity }}</code>
+                      <p>{{ finding.message }}</p>
+                      <p>{{ t('registryUi.skillSpector.unreviewedSignal') }}</p>
+                      <template
+                        v-for="(position, positionIndex) in finding.occurrences?.length
+                          ? finding.occurrences
+                          : [finding]"
+                        :key="positionIndex"
+                      >
+                        <a
+                          v-if="skillSpectorFindingUrl(witness.record, occurrence(finding, position))"
+                          :href="skillSpectorFindingUrl(witness.record, occurrence(finding, position))"
+                          target="_blank"
+                          rel="noreferrer"
+                        ><code>{{ skillSpectorFindingLocation(position) }}</code> ↗</a>
+                        <code v-else>{{ skillSpectorFindingLocation(position) }}</code>
+                      </template>
+                    </li>
+                  </ul>
+                </div>
                 <ul
                   v-if="(record.coverage?.reasons ?? record.errors).length"
                   class="skillspector__record-reasons"
