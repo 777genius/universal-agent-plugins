@@ -39,7 +39,10 @@ type SourceAcquirer interface {
 }
 
 type App struct {
-	ManagementFactory func(management.Startup) (App, error)
+	// Explicit selected-client startup is distinct from install/activation.
+	SessionEnv         clients.Env
+	StartNativeSession func(context.Context, clients.SessionPlan) error
+	ManagementFactory  func(management.Startup) (App, error)
 	// ForScope composes an isolated runtime after command flags select its context.
 	ForScope           func(domain.InstallScope, string) (App, error) `json:"-"`
 	Scope              domain.InstallScope                            `json:"-"`

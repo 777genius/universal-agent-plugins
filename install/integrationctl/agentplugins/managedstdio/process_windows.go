@@ -22,11 +22,16 @@ var assignProcessToJobObject = windows.AssignProcessToJobObject
 func Supported() bool { return true }
 
 func replaceProcess(command string, args []string, cwd string) error {
+	return replaceProcessEnvironment(command, args, cwd, os.Environ())
+}
+
+func replaceProcessEnvironment(command string, args []string, cwd string, environment []string) error {
 	if command == "" || !filepathIsAbs(cwd) {
 		return errors.New("managed stdio requires an absolute command and cwd")
 	}
 	cmd := exec.Command(command, args[1:]...)
 	cmd.Dir = cwd
+	cmd.Env = environment
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.CREATE_SUSPENDED}
 
