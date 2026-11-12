@@ -2,16 +2,17 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strconv"
 	"testing"
@@ -19,7 +20,6 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/directoryv1"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/specregistry"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -33,47 +33,10 @@ const (
 	piFullShardCount           = 3
 )
 
-
-// admitPiTestOnlyUpstreamSources extends only an ephemeral TEST-signed snapshot.
-// The upstream publisher's production evidence is deliberately absent from the
-// pinned JSON fixture. The real immutable package bytes must pass independent
-// acquisition in the test before any successful saved case is reported.
-func admitPiTestOnlyUpstreamSources(snapshot *domain.DirectorySnapshot) int {
-	added := 0
-	for index := range snapshot.Distributions {
-		distribution := &snapshot.Distributions[index]
-		if distribution.Kind != domain.DistributionUpstream {
-			continue
-		}
-		release := distribution.Releases[0]
-		id := "test-only/pi-materialization/" + distribution.ProductID
-		// The reviewed_external policy here is SYNTHETIC test data, signed by
-		// the separate throwaway key below, never a genuine upstream review.
-		snapshot.Evidence = append(snapshot.Evidence, domain.DirectoryEvidence{
-			SchemaVersion: 1, ID: id, DistributionID: distribution.ID,
-			ReleaseSequence: release.Sequence, PackageTreeDigest: release.TreeDigest,
-			Level: "materialization", Outcome: "passed", Client: domain.ClientPi,
-			ClientVersion: "test-only-pi-1.18.34", InstallerVersion: "0.1.104",
-			OS: "linux", Architecture: "amd64", ObservedAt: "2026-11-11T00:00:00Z",
-			Artifact: domain.DirectoryEvidenceArtifact{
-				Repository: release.PackageSource.Repository,
-				Revision: release.PackageSource.Revision,
-				Path: release.PackageSource.Path + "/plugin.json",
-				Digest: release.ManifestDigest,
-			},
-			Trust: &domain.DirectoryEvidenceTrust{Kind: "reviewed_external"},
-		})
-		distribution.ReleasePolicies[0].CurrentEvidence =
-			append(distribution.ReleasePolicies[0].CurrentEvidence, id)
-		added++
-	}
-	return added
-}
-
 // This is NEVER publisher evidence. The snapshot deliberately contains
 // synthetically granted Pi targets and no reviewed real-host evidence.
-// The test asserts the real pinned 36 package bytes and saved installer
-// semantics, but cannot prove protected Ed25519 authority or account login.
+// The test acquires 34 pinned package sources for saved lifecycles and
+// observes two upstream denials, without granting materialization evidence.
 func piFullSignedTestDirectory(t *testing.T, cacheRoot string) (*directoryv1.Client, domain.DirectorySnapshot) {
 	t.Helper()
 	body, err := os.ReadFile(piFullSnapshotPath)
@@ -104,15 +67,8 @@ func piFullSignedTestDirectory(t *testing.T, cacheRoot string) (*directoryv1.Cli
 	if total != 36 {
 		t.Fatal("not all 36 active source policies were pinned")
 	}
-	if admitted := admitPiTestOnlyUpstreamSources(&snapshot); admitted != 2 {
-		t.Fatalf("expected exactly two upstream packages in disposable Pi cohort, got %d", admitted)
-	}
-	// Re-sign ONLY the ephemeral TEST snapshot. The checked-in source manifest
-	// remains immutable without publisher-backed Pi materialization receipts.
-	body, err = json.Marshal(snapshot)
-	if err != nil {
-		t.Fatal(err)
-	}
+	// Sign the original zero-evidence TEST fixture bytes. Neither source
+	// acquisition nor this disposable signature grants upstream materialization.
 	seed := bytes.Repeat([]byte{93}, ed25519.SeedSize)
 	privateKey := ed25519.NewKeyFromSeed(seed)
 	const keyID = "pi-full-test-signer-only"
@@ -204,9 +160,61 @@ func piFullRealSavedJourney(t *testing.T) (projectJourney, domain.DirectorySnaps
 	return journey, snapshot
 }
 
-// The User and Project commands run against original immutable public Git
-// sources and a TEST-ONLY independently signed v1 snapshot. A green result
-// is not production key trust or a genuine live Pi/model/MCP/OAuth session.
+type piFullExpectedDenial struct {
+	Case    string `json:"case"`
+	Refusal string `json:"refusal"`
+}
+
+func piFullUpstreamRefusal(distribution string) string {
+	return fmt.Sprintf("%s in %q: upstream release lacks current passed materialization evidence for pi", domain.ErrDirectoryIneligible, distribution)
+}
+
+func piFullAssertUpstreamDenied(t *testing.T, j projectJourney, root, distribution string) string {
+	t.Helper()
+	if distribution != "github/github" && distribution != "upstash/context7" {
+		t.Fatalf("unexpected upstream negative case %q", distribution)
+	}
+	before := make(map[string]map[string]string)
+	intentPaths := make([]string, 0, 6)
+	for _, scopeRoot := range []string{"", j.a, j.b} {
+		state := j.state(t, scopeRoot)
+		if len(state.Installations) != 0 || len(state.EnvironmentReceipts) != 0 {
+			t.Fatal("upstream denial fixture already owns saved state")
+		}
+		native := piSignedProjectNativeRoot(j, scopeRoot)
+		before[native] = securityFixtureTree(t, native)
+		scope := domain.ScopeUser
+		if scopeRoot != "" {
+			scope = domain.ScopeProject
+		}
+		selected, err := j.app.ForScope(scope, scopeRoot)
+		if err != nil {
+			t.Fatal(err)
+		}
+		intentPaths = append(intentPaths, filepath.Join(selected.DependenciesRoot, "uap.toml"), filepath.Join(selected.DependenciesRoot, "uap.lock"))
+	}
+	projectJourneyAbsent(t, intentPaths...)
+	_, err := j.execute(root, "install", distribution, "--target", "pi", "--yes")
+	if !errors.Is(err, domain.ErrDirectoryIneligible) || err.Error() != piFullUpstreamRefusal(distribution) {
+		t.Fatalf("expected exact upstream materialization refusal for %s, got %v", distribution, err)
+	}
+	for _, scopeRoot := range []string{"", j.a, j.b} {
+		state := j.state(t, scopeRoot)
+		if len(state.Installations) != 0 || len(state.EnvironmentReceipts) != 0 {
+			t.Fatal("denied upstream install left saved installations or environment receipts")
+		}
+		native := piSignedProjectNativeRoot(j, scopeRoot)
+		if !reflect.DeepEqual(before[native], securityFixtureTree(t, native)) {
+			t.Fatalf("denied upstream install changed native or foreign scope %q", scopeRoot)
+		}
+	}
+	projectJourneyAbsent(t, intentPaths...)
+	return err.Error()
+}
+
+// The signed zero-evidence fixture proves 68 saved User/Project lifecycles
+// and four actual upstream refusals per OS. A refusal is never a successful
+// lifecycle, publisher review, production grant or native Pi session.
 func TestPiFullModernSignedTestOnlyMarketplace(t *testing.T) {
 	if os.Getenv("UAP_PI_FULL_REAL_SOURCE_E2E") != "1" {
 		t.Skip("isolated three-OS real public-source matrix only")
@@ -217,36 +225,29 @@ func TestPiFullModernSignedTestOnlyMarketplace(t *testing.T) {
 	}
 	_, snapshot := piFullRealSavedJourney(t)
 	selected := 0
-	passedCases := make([]string, 0, 24)
+	savedCases := make([]string, 0, 24)
+	deniedCases := make([]piFullExpectedDenial, 0, 2)
+	wantDenied := 0
 	for index, distribution := range snapshot.Distributions {
 		if index%piFullShardCount != shard {
 			continue
 		}
 		selected++
 		if distribution.Kind == domain.DistributionUpstream {
-			// Synthetic test admission is allowed only after the actual pinned
-			// upstream source bytes independently pass the production digest check.
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-			acquirer := sourceacquisition.Acquirer{TempRoot: t.TempDir()}
-			release := distribution.Releases[0]
-			sealed, err := acquirer.AcquireGitHubVerified(ctx,
-				release.PackageSource.Repository, release.PackageSource.Revision,
-				release.PackageSource.Path, release.TreeDigest)
-			cancel()
-			if err != nil {
-				t.Fatalf("upstream Pi TEST-only admission has no verified real source: %s: %v", distribution.ID, err)
-			}
-			if err := packagedigest.Remove(sealed); err != nil {
-				t.Fatalf("upstream Pi verified-source cleanup failed: %v", err)
-			}
+			wantDenied += 2
 		}
 		for _, scope := range []domain.InstallScope{domain.ScopeUser, domain.ScopeProject} {
 			caseName := fmt.Sprintf("%s@%d/%s", distribution.ID, distribution.Releases[0].Sequence, scope)
+			refusal := ""
 			passed := t.Run(caseName, func(t *testing.T) {
 				j, _ := piFullRealSavedJourney(t)
 				root := ""
 				if scope == domain.ScopeProject {
 					root = j.a
+				}
+				if distribution.Kind == domain.DistributionUpstream {
+					refusal = piFullAssertUpstreamDenied(t, j, root, distribution.ID)
+					return
 				}
 				originalB := projectJourneyRead(t, filepath.Join(piSignedProjectNativeRoot(j, j.b), "mcp.json"))
 				j.run(t, root, "install", distribution.ID, "--target", "pi", "--yes")
@@ -282,15 +283,19 @@ func TestPiFullModernSignedTestOnlyMarketplace(t *testing.T) {
 				}
 			})
 			if passed {
-				passedCases = append(passedCases, caseName)
+				if distribution.Kind == domain.DistributionUpstream {
+					deniedCases = append(deniedCases, piFullExpectedDenial{Case: caseName, Refusal: refusal})
+				} else {
+					savedCases = append(savedCases, caseName)
+				}
 			}
 		}
 	}
 	if selected != 12 {
 		t.Fatalf("exact shard should cover 12 active distributions, got %d", selected)
 	}
-	if len(passedCases) != 24 {
-		t.Fatalf("missing actual successful saved Pi scopes in shard %d: %d/24", shard, len(passedCases))
+	if len(savedCases) != 24-wantDenied || len(deniedCases) != wantDenied {
+		t.Fatalf("missing observed Pi cases in shard %d: saved=%d/%d expected-denied=%d/%d", shard, len(savedCases), 24-wantDenied, len(deniedCases), wantDenied)
 	}
 	if target := os.Getenv("UAP_PI_FULL_REPORT"); target != "" {
 		body, err := os.ReadFile(piFullSnapshotPath)
@@ -298,18 +303,25 @@ func TestPiFullModernSignedTestOnlyMarketplace(t *testing.T) {
 			t.Fatal(err)
 		}
 		sum := sha256.Sum256(body)
+		testCommit := os.Getenv("EXPECTED_HEAD")
+		decoded, err := hex.DecodeString(testCommit)
+		if err != nil || len(decoded) != 20 || hex.EncodeToString(decoded) != testCommit {
+			t.Fatal("report requires the exact immutable workflow source commit")
+		}
 		report, err := json.MarshalIndent(struct {
-			Kind string `json:"kind"`
-			SourceCommit string `json:"source_commit"`
-			SnapshotSHA256 string `json:"snapshot_sha256"`
-			RunnerOS string `json:"runner_os"`
-			Shard int `json:"shard"`
-			Cases []string `json:"passed_cases"`
-			ProductionPublished bool `json:"production_published"`
+			Kind                string                 `json:"kind"`
+			TestCommit          string                 `json:"test_commit"`
+			SourceCommit        string                 `json:"source_commit"`
+			SnapshotSHA256      string                 `json:"snapshot_sha256"`
+			RunnerOS            string                 `json:"runner_os"`
+			Shard               int                    `json:"shard"`
+			SavedCases          []string               `json:"saved_cases"`
+			ExpectedDeniedCases []piFullExpectedDenial `json:"expected_denied_cases"`
+			ProductionPublished bool                   `json:"production_published"`
 		}{
-			Kind: "pi-full-signed-v1-test-only-saved", SourceCommit: piFullRegistrySourceCommit,
+			Kind: "pi-signed-v1-test-only-saved-and-denied", TestCommit: testCommit, SourceCommit: piFullRegistrySourceCommit,
 			SnapshotSHA256: "sha256:" + hex.EncodeToString(sum[:]), RunnerOS: runtime.GOOS,
-			Shard: shard, Cases: passedCases, ProductionPublished: false,
+			Shard: shard, SavedCases: savedCases, ExpectedDeniedCases: deniedCases, ProductionPublished: false,
 		}, "", "  ")
 		if err != nil {
 			t.Fatal(err)
@@ -318,5 +330,5 @@ func TestPiFullModernSignedTestOnlyMarketplace(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	t.Logf("TEST-ONLY Ed25519 full modern v1: %d exact real public sources, %d saved User/Project lifecycles, OS=%s, shard=%d; no live Pi/account/runtime/production key", selected, len(passedCases), runtime.GOOS, shard)
+	t.Logf("TEST-ONLY Ed25519 v1: %d pinned distributions, %d saved User/Project lifecycles, %d observed expected-denied scopes, OS=%s, shard=%d; no upstream evidence or live Pi/account/runtime/production key", selected, len(savedCases), len(deniedCases), runtime.GOOS, shard)
 }

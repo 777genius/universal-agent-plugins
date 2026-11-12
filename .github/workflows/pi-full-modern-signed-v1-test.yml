@@ -1,8 +1,14 @@
-name: Pi 36 real sources / 72 saved scopes - signed TEST cohort
+name: Pi signed TEST - 68 saved and 4 expected-denied scopes
 
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - '.github/workflows/pi-full-modern-signed-v1-test.yml'
+      - 'cli/cmd/agentplugins/pi_full_modern_signed_v1_test.go'
+      - 'cli/cmd/agentplugins/testdata/pi-full-modern-v1-test-only-snapshot.json'
+  push:
+    branches: [main]
     paths:
       - '.github/workflows/pi-full-modern-signed-v1-test.yml'
       - 'cli/cmd/agentplugins/pi_full_modern_signed_v1_test.go'
@@ -18,7 +24,7 @@ concurrency:
 
 jobs:
   saved-scope:
-    name: Pi real signed-TEST scope / ${{ matrix.os }} / shard ${{ matrix.shard }}
+    name: Pi signed-TEST saved and denied scopes / ${{ matrix.os }} / shard ${{ matrix.shard }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     strategy:
@@ -40,7 +46,7 @@ jobs:
         with:
           go-version: '1.26.11'
           cache: false
-      - name: Verify exact immutable current PR HEAD
+      - name: Verify exact immutable workflow HEAD
         shell: bash
         run: |
           test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
@@ -71,14 +77,14 @@ jobs:
           fi
           command -v docker
           docker --version
-      - name: Full pinned real-source Pi signed-test saved User and Project lifecycle
+      - name: Observe pinned Pi saved lifecycles and exact upstream refusals
         shell: bash
         env:
           UAP_PI_FULL_REPORT: ${{ runner.temp }}/pi-full-report-${{ matrix.os }}-${{ matrix.shard }}.json
         run: |
           go test -p=2 -count=1 -timeout=48m -v ./cli/cmd/agentplugins \
             -run '^TestPiFullModernSignedTestOnlyMarketplace$'
-      - name: Upload scoped signed-test receipt or retain job failure
+      - name: Upload separate saved and expected-denied observations or retain failure
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: ${{ always() }}
         with:
@@ -88,7 +94,7 @@ jobs:
           if-no-files-found: ignore
 
   aggregate:
-    name: Independently verify all 72 signed-TEST saved cases (not production)
+    name: Verify 68 saved and 4 expected-denied scopes per OS (TEST only)
     needs: saved-scope
     runs-on: ubuntu-24.04
     timeout-minutes: 12
@@ -98,7 +104,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
-      - name: Require all nine real-source matrix jobs successful
+      - name: Require all nine saved and expected-denied matrix jobs successful
         shell: bash
         env:
           MATRIX_RESULT: ${{ needs['saved-scope'].result }}
@@ -109,7 +115,7 @@ jobs:
           pattern: pi-full-*
           path: _reports
           merge-multiple: true
-      - name: Verify 9 original receipts, exact test-only source SHA, and 72 distinct scopes
+      - name: Verify 9 original reports and separate 204 saved from 12 denied observations
         shell: bash
         env:
           EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -117,25 +123,39 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
           python3 - <<'PY'
           import hashlib, json
+          from os import environ
           from pathlib import Path
           source = Path('cli/cmd/agentplugins/testdata/pi-full-modern-v1-test-only-snapshot.json').read_bytes()
           snapshot = json.loads(source)
           assert snapshot['source_commit'] == '32b6c48d071aceadf90a030c9d69477fe1a6a65a'
           assert len(snapshot['distributions']) == 36
+          assert snapshot['evidence'] == []
+          upstream_ids = {d['id'] for d in snapshot['distributions'] if d['kind'] == 'upstream'}
+          assert upstream_ids == {'github/github', 'upstash/context7'}
           wanted_digest = 'sha256:' + hashlib.sha256(source).hexdigest()
-          expected = {
+          expected_saved = {
               (d['id'] + '@' + str(d['releases'][0]['sequence']) + '/' + scope, index % 3)
               for index, d in enumerate(snapshot['distributions'])
+              if d['kind'] != 'upstream'
               for scope in ('user', 'project')
           }
+          expected_denied = {
+              (d['id'] + '@' + str(d['releases'][0]['sequence']) + '/' + scope, index % 3):
+              f'no eligible directory release in "{d["id"]}": upstream release lacks current passed materialization evidence for pi'
+              for index, d in enumerate(snapshot['distributions'])
+              if d['kind'] == 'upstream'
+              for scope in ('user', 'project')
+          }
+          assert len(expected_saved) == 68 and len(expected_denied) == 4
           paths = list(Path('_reports').glob('pi-full-report-*.json'))
           assert len(paths) == 9, f'expected 9 independent original receipts, got {len(paths)}'
           expected_os = {'ubuntu-24.04':'linux','macos-15':'darwin','windows-2025':'windows'}
-          seen_jobs, seen_cases = set(), set()
+          seen_jobs, seen_saved, seen_denied = set(), set(), set()
           for path in paths:
               report = json.loads(path.read_bytes())
-              assert set(report) == {'kind','source_commit','snapshot_sha256','runner_os','shard','passed_cases','production_published'}
-              assert report['kind'] == 'pi-full-signed-v1-test-only-saved'
+              assert set(report) == {'kind','test_commit','source_commit','snapshot_sha256','runner_os','shard','saved_cases','expected_denied_cases','production_published'}
+              assert report['kind'] == 'pi-signed-v1-test-only-saved-and-denied'
+              assert report['test_commit'] == environ['EXPECTED_HEAD']
               assert report['production_published'] is False
               assert report['source_commit'] == snapshot['source_commit']
               assert report['snapshot_sha256'] == wanted_digest
@@ -147,14 +167,28 @@ jobs:
               assert report['runner_os'] == expected_os[os] and type(report['shard']) is int and report['shard'] == idx
               assert (os, idx) not in seen_jobs
               seen_jobs.add((os, idx))
-              assert isinstance(report['passed_cases'], list) and len(report['passed_cases']) == 24
-              expected_cases = {case for case, shard in expected if shard == idx}
-              assert set(report['passed_cases']) == expected_cases, f'{name}: missing or extra scope cases'
-              assert len(set(report['passed_cases'])) == 24
-              for case in report['passed_cases']:
-                  assert (os, case) not in seen_cases
-                  seen_cases.add((os, case))
-          assert len(seen_jobs) == 9 and len(seen_cases) == 216
-          print('PASS: every OS ran all 72 saved source/scope lifecycles from independently checked test-only signed v1 fixture')
-          print('NOT CLAIMED: protected production Ed25519 trust, released CLI routing, real Pi/model/OAuth runtime or published 72/72')
+              wanted_saved = {case for case, shard in expected_saved if shard == idx}
+              wanted_denied = {case: reason for (case, shard), reason in expected_denied.items() if shard == idx}
+              assert isinstance(report['saved_cases'], list)
+              assert len(report['saved_cases']) == len(wanted_saved)
+              assert set(report['saved_cases']) == wanted_saved, f'{name}: missing or extra saved lifecycle'
+              denials = report['expected_denied_cases']
+              assert isinstance(denials, list) and len(denials) == len(wanted_denied)
+              observed_denied = {}
+              for denial in denials:
+                  assert isinstance(denial, dict) and set(denial) == {'case','refusal'}
+                  case, refusal = denial['case'], denial['refusal']
+                  assert isinstance(case, str) and case not in observed_denied
+                  assert case in wanted_denied and refusal == wanted_denied[case]
+                  observed_denied[case] = refusal
+              assert observed_denied == wanted_denied, f'{name}: missing or altered upstream denial'
+              for case in report['saved_cases']:
+                  assert (os, case) not in seen_saved and (os, case) not in seen_denied
+                  seen_saved.add((os, case))
+              for case in observed_denied:
+                  assert (os, case) not in seen_saved and (os, case) not in seen_denied
+                  seen_denied.add((os, case))
+          assert len(seen_jobs) == 9 and len(seen_saved) == 204 and len(seen_denied) == 12
+          print('PASS: each OS observed 68 saved lifecycles and 4 exact expected-denied upstream scopes in the signed TEST fixture')
+          print('NOT CLAIMED: 72 positive lifecycles, upstream materialization evidence, production trust, released CLI routing or native Pi/model/OAuth runtime')
           PY
