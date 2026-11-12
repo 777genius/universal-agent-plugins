@@ -169,13 +169,15 @@ func TestPiFullModernSignedTestOnlyMarketplace(t *testing.T) {
 	}
 	_, snapshot := piFullRealSavedJourney(t)
 	selected := 0
+	passedCases := make([]string, 0, 24)
 	for index, distribution := range snapshot.Distributions {
 		if index%piFullShardCount != shard {
 			continue
 		}
 		selected++
 		for _, scope := range []domain.InstallScope{domain.ScopeUser, domain.ScopeProject} {
-			t.Run(fmt.Sprintf("%s/release-%d/%s", distribution.ID, distribution.Releases[0].Sequence, scope), func(t *testing.T) {
+			caseName := fmt.Sprintf("%s@%d/%s", distribution.ID, distribution.Releases[0].Sequence, scope)
+			passed := t.Run(caseName, func(t *testing.T) {
 				j, _ := piFullRealSavedJourney(t)
 				root := ""
 				if scope == domain.ScopeProject {
@@ -211,10 +213,42 @@ func TestPiFullModernSignedTestOnlyMarketplace(t *testing.T) {
 					t.Fatal("Pi remove changed unselected Project B foreign native settings")
 				}
 			})
+			if passed {
+				passedCases = append(passedCases, caseName)
+			}
 		}
 	}
 	if selected != 12 {
 		t.Fatalf("exact shard should cover 12 active distributions, got %d", selected)
 	}
-	t.Logf("TEST-ONLY Ed25519 full modern v1: %d exact real public sources, %d saved User/Project lifecycles, OS=%s, shard=%d; no live Pi/account/runtime/production key", selected, selected*2, runtime.GOOS, shard)
+	if len(passedCases) != 24 {
+		t.Fatalf("missing actual successful saved Pi scopes in shard %d: %d/24", shard, len(passedCases))
+	}
+	if target := os.Getenv("UAP_PI_FULL_REPORT"); target != "" {
+		body, err := os.ReadFile(piFullSnapshotPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sum := sha256.Sum256(body)
+		report, err := json.MarshalIndent(struct {
+			Kind string `json:"kind"`
+			SourceCommit string `json:"source_commit"`
+			SnapshotSHA256 string `json:"snapshot_sha256"`
+			RunnerOS string `json:"runner_os"`
+			Shard int `json:"shard"`
+			Cases []string `json:"passed_cases"`
+			ProductionPublished bool `json:"production_published"`
+		}{
+			Kind: "pi-full-signed-v1-test-only-saved", SourceCommit: piFullRegistrySourceCommit,
+			SnapshotSHA256: "sha256:" + hex.EncodeToString(sum[:]), RunnerOS: runtime.GOOS,
+			Shard: shard, Cases: passedCases, ProductionPublished: false,
+		}, "", "  ")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(target, append(report, '\\n'), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Logf("TEST-ONLY Ed25519 full modern v1: %d exact real public sources, %d saved User/Project lifecycles, OS=%s, shard=%d; no live Pi/account/runtime/production key", selected, len(passedCases), runtime.GOOS, shard)
 }
