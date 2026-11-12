@@ -89,7 +89,8 @@ class KimiStableProjectMcpSmokeTests(unittest.TestCase):
             last_source = max(i for i, row in enumerate(truncated)
                               if row.get("Test") == LIFECYCLE_CASES[2] and row.get("Action") == "output")
             truncated[last_source]["Output"] = truncated[last_source]["Output"][:-1]
-            with self.assertRaisesRegex(ValueError, "incomplete"):
+            # A truncated log tail before PASS is an invalid terminal event.
+            with self.assertRaisesRegex(ValueError, "terminal"):
                 check(truncated)
             malformed = [dict(row) for row in events]
             malformed[1]["Output"] = "KIMI_GENUINE_PROBE {invalid}\n"
