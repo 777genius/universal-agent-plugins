@@ -720,6 +720,72 @@ export function decodeSkillSpectorShardV3(
       !Array.isArray(r.attempt_history)
     )
       fail();
+    if (r.recovery_witnesses !== undefined) {
+      // A conflict is an explicitly incomplete publication, not one
+      // fabricated scanner report. Every witness keeps its own report digest.
+      if (
+        !Array.isArray(r.recovery_witnesses) ||
+        r.recovery_witnesses.length < 1 ||
+        r.recovery_witnesses.length > 2 ||
+        r.freshness !== 'current' ||
+        r.status !== 'partial' ||
+        !r.findings_truncated ||
+        c.grouping_complete !== false ||
+        !c.reasons.some((reason: Record<string, unknown>) => reason.code === 'recovery_conflict') ||
+        !c.reasons.some((reason: Record<string, unknown>) => reason.code === 'normalization_truncated')
+      )
+        fail();
+      const identities = new Set<string>();
+      for (const entry of r.recovery_witnesses) {
+        const witness = shape(entry, ['origin', 'record']);
+        const origin = shape(witness.origin, ['run_id', 'run_attempt']);
+        const original = obj(witness.record);
+        const originalSource = obj(original.source);
+        if (
+          !Number.isSafeInteger(origin.run_id) ||
+          Number(origin.run_id) <= 0 ||
+          !Number.isSafeInteger(origin.run_attempt) ||
+          Number(origin.run_attempt) < 1 ||
+          Number(origin.run_attempt) > 1000 ||
+          Object.hasOwn(original, 'recovery_witnesses') ||
+          original.id !== r.id ||
+          original.kind !== r.kind ||
+          original.plugin_path !== r.plugin_path ||
+          !['partial', 'complete'].includes(original.status) ||
+          !digest.test(original.report_digest) ||
+          original.report_digest === r.report_digest ||
+          ['repository', 'revision', 'path', 'content_digest'].some(
+            (key) => originalSource[key] !== source[key],
+          ) ||
+          JSON.stringify(original.scanner) !== JSON.stringify(r.scanner) ||
+          new TextEncoder().encode(JSON.stringify(witness)).byteLength > 256 * 1024
+        )
+          fail();
+        const identity = JSON.stringify([origin.run_id, origin.run_attempt, original.report_digest]);
+        if (identities.has(identity)) fail();
+        identities.add(identity);
+        // Run the same strict decoder on this unmodified scanner record,
+        // attaching only the outer publication's queue-state context.
+        decodeSkillSpectorShardV3(
+          {
+            schema_version: 3,
+            scanner: s.scanner,
+            profile: s.profile,
+            repository: s.repository,
+            records: [{
+              ...original,
+              freshness: 'current',
+              target_revision: r.target_revision,
+              retry: r.retry,
+              attempt_history: r.attempt_history,
+            }],
+          },
+          manifest,
+          { ...descriptor, record_count: 1 },
+          now,
+        );
+      }
+    }
   }
   return s.records as SkillSpectorRecord[];
 }
