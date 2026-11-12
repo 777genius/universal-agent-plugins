@@ -1,4 +1,4 @@
-name: Kimi 2.5.2 Project MCP preparation (no trust or model)
+name: Kimi 2.5.2 Project MCP native trust and preparation (no model)
 
 on:
   # Requalify the integrated exact main SHA after the focused PR merges.
@@ -7,6 +7,8 @@ on:
     branches: [main]
     paths:
       - 'scripts/kimi_stable_project_mcp_smoke.py'
+      - 'scripts/kimi_252_native_web_mcp_probe.py'
+      - 'scripts/test_kimi_252_native_web_mcp_probe.py'
       - 'scripts/test_kimi_stable_project_mcp_smoke.py'
       - '.github/workflows/kimi-stable-project-mcp-e2e.yml'
       - 'cli/cmd/agentplugins/project_kimi_*'
@@ -17,6 +19,8 @@ on:
     types: [opened, synchronize, reopened]
     paths:
       - 'scripts/kimi_stable_project_mcp_smoke.py'
+      - 'scripts/kimi_252_native_web_mcp_probe.py'
+      - 'scripts/test_kimi_252_native_web_mcp_probe.py'
       - 'scripts/test_kimi_stable_project_mcp_smoke.py'
       - '.github/workflows/kimi-stable-project-mcp-e2e.yml'
       - 'cli/cmd/agentplugins/project_kimi_*'
@@ -34,7 +38,7 @@ concurrency:
 
 jobs:
   native-prepared:
-    name: Pinned Kimi 2.5.2 MCP and App preparation (${{ matrix.os }})
+    name: Pinned Kimi 2.5.2 MCP native trust and App preparation (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -54,8 +58,12 @@ jobs:
         with:
           node-version: '24'
           package-manager-cache: false
-      - name: Verify inert validation contracts
-        run: python3 -m unittest discover -s scripts -p 'test_kimi_stable_project_mcp_smoke.py'
+      - name: Verify MCP evidence and native HTTP trust contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s scripts -p 'test_kimi_stable_project_mcp_smoke.py'
+          python3 -m unittest discover -s scripts -p 'test_kimi_252_native_web_mcp_probe.py'
       - name: Install genuine publisher stable 2.5.2 and source-built UAP
         shell: bash
         run: |
@@ -89,8 +97,9 @@ jobs:
           (pathlib.Path(os.environ["REPORT_DIR"]) / "kimi-app-lifecycle.json").write_text(json.dumps(evidence, indent=2) + "\n")
           PYCODE
 
-      - name: Observe owned project MCP preparation without activation
+      - name: Observe native trusted MCP startup and tools/list after UAP Project delivery
         env:
+          UAP_KIMI_252_NATIVE_WEB: '1'
           REPORT_DIR: ${{ runner.temp }}/kimi-mcp-prepared-proof
           EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         shell: bash
@@ -103,11 +112,11 @@ jobs:
             --cli "$RUNNER_TEMP/agentplugins-source" \
             --client "$(command -v kimi)" \
             --report-dir "$REPORT_DIR"
-      - name: Retain original prepared-only evidence
+      - name: Retain original App and native MCP evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
-          name: kimi-stable-252-project-mcp-prepared-${{ matrix.os }}
+          name: kimi-stable-252-project-mcp-native-${{ matrix.os }}
           path: ${{ runner.temp }}/kimi-mcp-prepared-proof/
           if-no-files-found: warn
           retention-days: 14
