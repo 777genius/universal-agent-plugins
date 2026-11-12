@@ -114,7 +114,11 @@
       "copiedDiagnostics": "Copiado",
       "copyDiagnosticsHelp": "Copia el estado y todas las pruebas diagnósticas publicadas de esta ficha como JSON. No se envía ningún dato.",
       "copyDiagnosticsSuccess": "Diagnóstico copiado. Pégalo en tu asistente de IA para analizar las pruebas.",
-      "copyDiagnosticsError": "No se pudo copiar. Permite el acceso al portapapeles e inténtalo de nuevo."
+      "copyDiagnosticsError": "No se pudo copiar. Permite el acceso al portapapeles e inténtalo de nuevo.",
+      "recoveryWitnessTitle": "Análisis autenticado independiente",
+      "recoveryWitnessRun": "Ejecución main {run}, intento {attempt}",
+      "recoveryWitnessExplanation": "Este informe original independiente contiene hallazgos ausentes del análisis principal. La cobertura sigue incompleta; las señales automáticas no se han confirmado mediante una auditoría independiente.",
+      "recoveryWitnessFindings": "Hallazgos adicionales de un análisis autenticado"
     }
   }
 }
