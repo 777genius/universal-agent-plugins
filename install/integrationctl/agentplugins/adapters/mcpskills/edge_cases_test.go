@@ -41,12 +41,12 @@ func TestSSERejectsMalformedAndAmbiguousResponses(t *testing.T) {
 	t.Parallel()
 	const response = `{"jsonrpc":"2.0","id":1,"result":{"resultType":"complete"}}`
 	cases := map[string]string{
-		"empty stream": ": keepalive\n\n",
-		"wrong final ID": "data: {\"jsonrpc\":\"2.0\",\"id\":8,\"result\":{}}\n\n",
+		"empty stream":              ": keepalive\n\n",
+		"wrong final ID":            "data: {\"jsonrpc\":\"2.0\",\"id\":8,\"result\":{}}\n\n",
 		"unexpected server request": "data: {\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\"}\n\n",
-		"duplicate final": "data: " + response + "\n\ndata: " + response + "\n\n",
-		"notification after final": "data: " + response + "\n\ndata: {\"jsonrpc\":\"2.0\",\"method\":\"notifications/progress\",\"params\":{}}\n\n",
-		"duplicate key": "data: {\"jsonrpc\":\"2.0\",\"id\":1,\"id\":1,\"result\":{}}\n\n",
+		"duplicate final":           "data: " + response + "\n\ndata: " + response + "\n\n",
+		"notification after final":  "data: " + response + "\n\ndata: {\"jsonrpc\":\"2.0\",\"method\":\"notifications/progress\",\"params\":{}}\n\n",
+		"duplicate key":             "data: {\"jsonrpc\":\"2.0\",\"id\":1,\"id\":1,\"result\":{}}\n\n",
 	}
 	for name, body := range cases {
 		t.Run(name, func(t *testing.T) {
