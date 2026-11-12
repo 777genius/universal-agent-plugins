@@ -31,9 +31,9 @@ type piSignedProjectDetector struct{ home string }
 func (d piSignedProjectDetector) Detect(context.Context) ([]domain.DetectedClient, error) {
 	return []domain.DetectedClient{{
 		ClientID: domain.ClientPi, DisplayName: "Pi", Status: domain.DetectionDetected,
-		ConfigRoot: filepath.Join(d.home, ".pi", "agent"),
+		ConfigRoot:     filepath.Join(d.home, ".pi", "agent"),
 		ExecutablePath: filepath.Join(d.home, "pi-test-host-never-launched"),
-		Version: "1.5.0",
+		Version:        "1.5.0",
 	}}, nil
 }
 
@@ -69,7 +69,7 @@ func TestPiProjectSignedV1SavedFourPackageLifecycle(t *testing.T) {
 				"\"fixture/hubspot-crm\" = \"0.1.0\"\n"+
 				"\"fixture/playwright-bridge\" = \"0.1.0\"\n")
 		} else {
-			mcp := ""
+			var mcp string
 			if item.mcpName == "playwright" {
 				mcp = fmt.Sprintf("{\"$schema\":\"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json\",\"mcpServers\":{%q:{\"type\":\"stdio\",\"command\":\"go\",\"args\":[\"version\"]}}}", item.mcpName)
 			} else {
