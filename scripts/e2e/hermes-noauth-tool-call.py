@@ -107,15 +107,17 @@ def child_case():
             with ScriptedHermesProvider(os.environ["HERMES_CALL_NONCE"], stage) as provider:
                 # Configure only this test-owned profile, before holding its bytes.
                 # JSON is a strict YAML subset; preserve both MCP entries exactly.
-                configured = {"model": {"provider": "custom", "base_url": provider.base_url,
-                    "default": MODEL, "context_length": 32768}, "mcp_servers": {
-                    "foreign": {"command": "echo", "args": ["foreign"]},
-                    "uap-native-test-server": {"url": os.environ["HERMES_NATIVE_MCP_URL"]}}}
-                # Preserve the exact existing UAP-produced MCP authority, not a recreated projection.
-                import yaml
-                native_config = yaml.safe_load(original)
-                configured["mcp_servers"] = native_config["mcp_servers"]
-                self.config.write_text(json.dumps(configured) + "\n", encoding="utf-8")
+                # The official isolated runtime does not guarantee PyYAML.
+                # Change only this disposable profile's known test model line;
+                # preserve the entire UAP-produced MCP mapping byte for byte.
+                header = b"model: offline-native-smoke\n"
+                require(original.startswith(header) and original.count(header) == 1
+                        and b"mcp_servers:\n" in original, "unexpected native YAML baseline")
+                selected_model = {"provider": "custom", "base_url": provider.base_url,
+                                  "default": MODEL, "context_length": 32768}
+                self.config.write_bytes(
+                    b"model: " + json.dumps(selected_model, sort_keys=True).encode("utf-8")
+                    + b"\n" + original[len(header):])
                 held = self.config.read_bytes()
                 query = "Call the offered inert ping once. nonce=" + provider.nonce + " stage=" + stage
                 native = json.loads(Path(os.environ["HERMES_NATIVE_RUNTIME_COMMAND_FILE"]).read_text())
