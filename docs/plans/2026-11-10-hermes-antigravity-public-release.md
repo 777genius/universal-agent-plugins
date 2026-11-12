@@ -226,3 +226,52 @@ expected reliability after exact-evidence review **9/10**, and diff size **2/10*
 are Windows failure diagnosis and any reviewed correction, remaining native
 proofs, verified draft/promotion, npm/public artifact
 readback, documentation verification, review and production deployment readback.
+
+### Reviewed harness amendment: stable identity and failure diagnostics
+
+The independent critic accepts the following narrow correction, with the
+important limitation that the old failing field remains **unknown**. The
+[original failed job and its run artifacts](https://github.com/777genius/universal-agent-plugins/actions/runs/43119733519/job/130921405924)
+show a vendor-identity equality failure, a successful lifecycle child and an
+unchanged UAP binary digest; they do not classify which vendor field changed.
+The pinned Hermes
+[`_startup_fast.py`](https://github.com/NousResearch/hermes-agent/blob/2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19/hermes_cli/_startup_fast.py)
+is the vendor source to inspect for version-output/advisory behavior. Advisory
+text is a hypothesis for the old failure, not an established diagnosis.
+
+1. Limit implementation to `scripts/e2e/released-native-proof.py` and
+   `scripts/test_released_native_proof.py`, plus this plan. Before identity
+   equality can fail, write the full raw pre/post vendor dictionaries and exact
+   changed fields as JSON into the existing transcript. Add no artifact file or
+   receipt-schema change. Preserve failure diagnostics and emit no PASS receipt
+   for a failed identity check. If AFTER sampling raises a version/source-pin
+   error, append the saved BEFORE observation and error to the transcript before
+   re-raising where possible.
+2. For Hermes, compare the parsed exact version from the real primary Hermes
+   first line `Hermes Agent v...`, the pinned source SHA checked both before
+   and after, and exact
+   executable/runtime SHA256 values. A version token elsewhere in unexpected
+   output is insufficient: reject a wrong primary version even if an update
+   notice contains the expected version, and reject `0.23.00` or a development
+   suffix. Remote advisory text is retained in raw diagnostics
+   but excluded from the stable identity comparison. Keep Antigravity's full
+   vendor comparison unchanged.
+3. Never normalize binary bytes, repair a launch during the measured interval,
+   or accept an executable/runtime hash or source-pin change. A new run showing
+   hash drift must still fail. Regressions must show advisory-only differences
+   pass, while unexpected version text, version mismatch, executable/runtime
+   changes and source-pin changes fail without a PASS receipt; preserve the
+   transcript diagnosis in failure cases. Use independent BEFORE/AFTER
+   dictionaries through mock `side_effect`, and assert the second sample was
+   consumed; a single shared mocked vendor object does not prove comparison.
+4. Run source-wrapper regression tests and the existing three-OS native harness
+   CI. Review and merge normally, then qualify a new immutable candidate with
+   the complete release proof. Failed candidate `0.1.105` cannot be promoted;
+   choose the next unused version only after checking the live inventory, and
+   preserve old tags/assets. Public documentation changes wait for successful
+   new qualification and publication.
+
+Estimated scope is 40–90 implementation lines plus focused tests; complexity
+**4/10**, residual risk **3/10** with the strict hash/source/version checks
+retained. This amendment does not classify the historical vendor drift, waive
+release gates or authorize a retry of the failed frozen candidate as a fix.
