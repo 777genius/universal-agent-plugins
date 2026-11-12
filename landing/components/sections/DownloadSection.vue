@@ -40,6 +40,29 @@ const selectedCommand = computed(() => {
   // npx executes a plugin command without installing a persistent CLI.
   return channel.id === 'npm' ? channel.invocation + ' add context7' : (channel.command ?? '');
 });
+
+function onMethodTabKeydown(event: KeyboardEvent) {
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+
+  const tablist = event.currentTarget;
+  if (!(tablist instanceof HTMLElement)) return;
+  const tabs = Array.from(tablist.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+  const activeIndex = tabs.indexOf(event.target as HTMLButtonElement);
+  if (activeIndex < 0 || tabs.length === 0) return;
+
+  event.preventDefault();
+  const nextIndex =
+    event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? tabs.length - 1
+        : (activeIndex + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+  const channel = installChannels.value[nextIndex];
+  if (channel) {
+    selectInstallChannel(channel.id);
+    tabs[nextIndex]?.focus();
+  }
+}
 </script>
 
 <template>
@@ -63,14 +86,18 @@ const selectedCommand = computed(() => {
             <p id="download-methods-label" class="download-section__install-tabs-label">
               {{ t('download.installTabsLabel') }}
             </p>
-            <div class="download-section__install-tabs-row" role="group" aria-labelledby="download-methods-label">
+            <div class="download-section__install-tabs-row" role="tablist" aria-labelledby="download-methods-label" @keydown="onMethodTabKeydown">
               <button
                 v-for="channel in installChannels"
                 :key="channel.id"
                 type="button"
                 class="download-section__install-tab"
                 :class="{ 'download-section__install-tab--active': channel.id === selectedInstallId }"
-                :aria-pressed="channel.id === selectedInstallId"
+                role="tab"
+                :id="'download-method-tab-' + channel.id"
+                aria-controls="download-method-panel"
+                :aria-selected="channel.id === selectedInstallId"
+                :tabindex="channel.id === selectedInstallId ? 0 : -1"
                 @click="selectInstallChannel(channel.id)"
               >
                 <span>{{ channel.title }}</span>
@@ -93,7 +120,14 @@ const selectedCommand = computed(() => {
             </p>
           </div>
 
-          <div v-if="selectedInstallChannel" class="download-section__method">
+          <div
+            v-if="selectedInstallChannel"
+            id="download-method-panel"
+            class="download-section__method"
+            role="tabpanel"
+            :aria-labelledby="'download-method-tab-' + selectedInstallChannel.id"
+            tabindex="0"
+          >
             <div class="download-section__method-header">
               <div class="download-section__method-copy">
                 <h2 class="download-section__method-title">{{ selectedInstallChannel.title }}</h2>
