@@ -339,7 +339,10 @@ class NativeJourney(existing.Journey):
         installation, binding, active, data = selected_installation(self.a, existing.NAME)
         installed_server(active, data, self.root, existing.SERVER, self.nonce)
         expected = {"nonce": self.nonce, "revision": revision, "marker": marker,
-                    "operation": "write" if create else "read", "cwd": str(active),
+                    # Pinned Grok 1.0.70 starts plugin stdio MCP from the selected
+                    # project cwd, not the managed plugin package directory.
+                    # Keep both identities independent in the native receipt.
+                    "operation": "write" if create else "read", "cwd": str(self.a),
                     "plugin_root": str(active), "plugin_data": str(data)}
         result = self.native_session(stage + "-native-call", expected)
         self.evidence["stages"].append({"stage": stage, "binding": binding, **result})
