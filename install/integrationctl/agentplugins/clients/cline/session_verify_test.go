@@ -16,6 +16,12 @@ func TestSessionNativeInventoryRequiresExactSource(t *testing.T) {
 	if err := verifySessionInventory([]byte(good), "/project/mcp.json", []string{"owned"}); err != nil {
 		t.Fatal(err)
 	}
+	// A native client that reports an empty effective approval list is safe;
+	// inherited/nonempty tool approvals must never qualify an inspected session.
+	emptyApprovals := strings.Replace(good, `"disabled":false`, `"disabled":false,"autoApprove":[]`, 1)
+	if err := verifySessionInventory([]byte(emptyApprovals), "/project/mcp.json", []string{"owned"}); err != nil {
+		t.Fatal(err)
+	}
 	bad := []string{"[]", "null", "help", good + "{}", strings.Replace(good, "owned", "foreign", 1),
 		strings.Replace(good, "/project/mcp.json", "/user/mcp.json", 1), strings.Replace(good, "false", "true", 1),
 		strings.Replace(good, `"disabled":false`, `"disabled":false,"disabled":false`, 1),
@@ -23,6 +29,12 @@ func TestSessionNativeInventoryRequiresExactSource(t *testing.T) {
 		strings.Replace(good, `"stdio"`, `"sse"`, 1),
 		strings.Replace(good, `"stdio"`, `"http"`, 1),
 		strings.Replace(good, `"stdio"`, `"websocket"`, 1),
+		strings.Replace(good, `"disabled":false`, `"disabled":false,"autoApprove":["*"]`, 1),
+		strings.Replace(good, `"disabled":false`, `"disabled":false,"autoApprove":["read_file"]`, 1),
+		strings.Replace(good, `"disabled":false`, `"disabled":false,"autoApprove":true`, 1),
+		strings.Replace(good, `"disabled":false`, `"disabled":false,"autoApprove":null`, 1),
+		strings.Replace(good, `"disabled":false`, `"disabled":false,"autoApprove":{}`, 1),
+		strings.Replace(good, `"disabled":false`, `"disabled":false,"autoApprove":[],"autoApprove":[]`, 1),
 		"[null]", "[{},{}]"}
 	for _, body := range bad {
 		if err := verifySessionInventory([]byte(body), "/project/mcp.json", []string{"owned"}); err == nil {
