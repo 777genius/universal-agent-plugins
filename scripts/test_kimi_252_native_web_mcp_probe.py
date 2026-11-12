@@ -90,6 +90,25 @@ class KimiNativeWebProbeTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             native.list_servers("http://127.0.0.1:12345", "secret", Path("/a"))
 
+    @patch.object(native, "response")
+    def test_native_catalog_fails_closed_on_ambiguous_or_malformed_rows(self, api):
+        row = {"name": native.SERVER_NAME, "source": "global",
+               "origin": "/test/project/.kimi-code/mcp.json", "mutable": False}
+        for rows, reason in (
+            ([row, row], "duplicate"),
+            ([row, dict(row, source="plugin")], "duplicate"),
+            ([row, None], "invalid"),
+            ([row, {"source": "global"}], "invalid"),
+            ([row, {"name": ""}], "invalid"),
+            ([row, {"name": 123}], "invalid"),
+        ):
+            with self.subTest(rows=rows), self.assertRaisesRegex(ValueError, reason):
+                api.return_value = rows
+                native.list_servers("http://127.0.0.1:12345", "secret", Path("/test/project"))
+        api.return_value = [row]
+        self.assertEqual(native.list_servers("http://127.0.0.1:12345", "secret",
+                                              Path("/test/project"))[native.SERVER_NAME], row)
+
     def test_private_token_requires_owned_regular_nonworld_readable_file(self):
         with tempfile.TemporaryDirectory() as temp:
             home = Path(temp)

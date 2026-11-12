@@ -83,7 +83,7 @@ jobs:
           UAP_PI_FULL_REPORT: ${{ runner.temp }}/pi-full-report-${{ matrix.os }}-${{ matrix.shard }}.json
         run: |
           go test -p=2 -count=1 -timeout=48m -v ./cli/cmd/agentplugins \
-            -run '^TestPiFullModernSignedTestOnlyMarketplace$'
+            -run '^TestPiFullModernSignedTestOnlyMarketplace(RejectsFilteredCallbacks)?$'
       - name: Upload separate saved and expected-denied observations or retain failure
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: ${{ always() }}

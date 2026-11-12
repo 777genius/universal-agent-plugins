@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/base64"
@@ -11,10 +12,12 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"runtime"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -316,6 +319,9 @@ func TestPiFullModernSignedTestOnlyMarketplace(t *testing.T) {
 			t.Fatal(err)
 		}
 		sum := sha256.Sum256(body)
+		if hex.EncodeToString(sum[:]) != piFullExpectedSnapshotSHA256 {
+			t.Fatal("reviewed Pi snapshot bytes changed before reporting")
+		}
 		testCommit := os.Getenv("EXPECTED_HEAD")
 		decoded, err := hex.DecodeString(testCommit)
 		if err != nil || len(decoded) != 20 || hex.EncodeToString(decoded) != testCommit {
@@ -344,4 +350,45 @@ func TestPiFullModernSignedTestOnlyMarketplace(t *testing.T) {
 		}
 	}
 	t.Logf("TEST-ONLY Ed25519 v1: %d pinned distributions, %d saved User/Project lifecycles, %d observed expected-denied scopes, OS=%s, shard=%d; no upstream evidence or live Pi/account/runtime/production key", selected, len(savedCases), len(deniedCases), runtime.GOOS, shard)
+}
+
+// Exercise actual Go filtering: T.Run may return true without executing its
+// callback. Every acquisition callback is filtered in this private child;
+// its expected failure must not publish a saved/denied product report.
+func TestPiFullModernSignedTestOnlyMarketplaceRejectsFilteredCallbacks(t *testing.T) {
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	report := filepath.Join(root, "filtered-report.json")
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	command := exec.CommandContext(ctx, executable,
+		"-test.run=^TestPiFullModernSignedTestOnlyMarketplace$/^__no_distribution_matches__$",
+		"-test.count=1", "-test.timeout=20s")
+	command.WaitDelay = 5 * time.Second
+	command.Env = []string{
+		"HOME=" + root, "USERPROFILE=" + root,
+		"TMPDIR=" + root, "TMP=" + root, "TEMP=" + root,
+		"GOMAXPROCS=2", "UAP_PI_FULL_REAL_SOURCE_E2E=1", "UAP_PI_FULL_SHARD=0",
+		// Private regression input only: permit the buggy report path to run;
+		// this inert head is never a product source claim or uploaded report.
+		"EXPECTED_HEAD=" + strings.Repeat("0", 40),
+		"UAP_PI_FULL_REPORT=" + report,
+	}
+	for _, name := range []string{"SystemRoot", "WINDIR"} {
+		if value := os.Getenv(name); value != "" {
+			command.Env = append(command.Env, name+"="+value)
+		}
+	}
+	output, err := command.CombinedOutput()
+	var exit *exec.ExitError
+	const refusal = "Pi test-only case 777genius/atlassian@1/user skipped or failed before completing assertions"
+	if ctx.Err() != nil || !errors.As(err, &exit) || exit.ExitCode() != 1 || !strings.Contains(string(output), refusal) {
+		t.Fatalf("filtered callbacks did not fail at the exact report-completeness guard: %v\n%s", err, output)
+	}
+	if _, err := os.Lstat(report); !os.IsNotExist(err) {
+		t.Fatalf("filtered callbacks published a report or its absence is uncertain: %v", err)
+	}
 }
