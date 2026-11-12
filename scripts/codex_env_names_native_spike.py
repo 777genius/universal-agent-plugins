@@ -427,6 +427,29 @@ class Model(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+def _read_regular_bounded(path, observed):
+    """Read the observed inode with bounded no-follow I/O, or fail closed.
+
+    A native process may swap a path between lstat and read. Never follow a
+    swapped final symlink or trust modified bytes; findings stay redacted.
+    """
+    limit = 32 * 1024 * 1024
+    flags = (os.O_RDONLY | getattr(os, "O_BINARY", 0)
+             | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_NOFOLLOW", 0))
+    with os.fdopen(os.open(path, flags), "rb") as reader:
+        opened = os.fstat(reader.fileno())
+        identity = lambda info: (info.st_dev, info.st_ino, info.st_size,
+                                 info.st_mtime_ns, info.st_ctime_ns)
+        if (not stat.S_ISREG(opened.st_mode) or opened.st_ino == 0
+                or identity(opened) != identity(observed) or opened.st_size > limit):
+            raise OSError(errno.EIO, "unstable_native_scan")
+        data = reader.read(limit + 1)
+        after = os.fstat(reader.fileno())
+        if len(data) != opened.st_size or identity(after) != identity(opened):
+            raise OSError(errno.EIO, "unstable_native_scan")
+        return data
+
+
 def inspect(root, secret):
     values = (secret,) if isinstance(secret, str) else secret
     patterns = []
@@ -543,7 +566,7 @@ def inspect(root, secret):
                     found.append({"path_sha256": hashlib.sha256(str(path.relative_to(root)).encode()).hexdigest(),
                                   "result": "unscanned_oversize"})
                     continue
-                data = path.read_bytes()
+                data = _read_regular_bounded(path, metadata)
             except OSError as exc:
                 # Vanished and locked files both leave incomplete evidence.
                 # Never treat a file disappearing between lstat/read as proof

@@ -581,7 +581,7 @@ class TestSyntheticSnapshotScanner(unittest.TestCase):
                 os.mkfifo(fifo)
             except OSError:
                 self.skipTest("Named pipe creation unavailable on this runner")
-            with patch.object(Path, "read_bytes",
+            with patch("codex_env_names_native_spike._read_regular_bounded",
                               side_effect=AssertionError("special file must not be opened")):
                 findings, symlinks = inspect(root, "only_a_synthetic_test_value")
             self.assertEqual(symlinks, 0)
@@ -596,7 +596,7 @@ class TestSyntheticSnapshotScanner(unittest.TestCase):
             root = Path(temp)
             protected = root / "private_canary_test"
             protected.write_text("only_a_test")
-            with patch.object(Path, "read_bytes",
+            with patch("codex_env_names_native_spike._read_regular_bounded",
                               side_effect=PermissionError(13, "test_denied", str(protected))):
                 findings, symlinks = inspect(root, "synthetic_only")
             self.assertEqual(symlinks, 0)
@@ -614,7 +614,7 @@ class TestSyntheticSnapshotScanner(unittest.TestCase):
             db_dir.mkdir(parents=True)
             locked = db_dir / "state_5.sqlite-shm"
             locked.write_bytes(b"benign")
-            with patch.object(Path, "read_bytes",
+            with patch("codex_env_names_native_spike._read_regular_bounded",
                               side_effect=OSError(13, "sensitive path and message", str(locked))):
                 findings, links = inspect(root, "synthetic_token")
             self.assertEqual(links, 0)
@@ -635,7 +635,7 @@ class TestSyntheticSnapshotScanner(unittest.TestCase):
             project.mkdir()
             blocked = project / "report.txt"
             blocked.write_text("benign")
-            with patch.object(Path, "read_bytes",
+            with patch("codex_env_names_native_spike._read_regular_bounded",
                               side_effect=OSError(5, "do not serialize this")):
                 findings, _ = inspect(root, "synthetic_token")
             self.assertEqual(findings[0]["io_reason"], "other_io_error")
@@ -648,7 +648,7 @@ class TestSyntheticSnapshotScanner(unittest.TestCase):
             root = Path(temp)
             file = root / "transient"
             file.write_text("nonsecret")
-            with patch.object(Path, "read_bytes",
+            with patch("codex_env_names_native_spike._read_regular_bounded",
                               side_effect=FileNotFoundError(
                                   2, "untrusted error text", str(file))):
                 findings, _ = inspect(root, "synthetic_token")
@@ -661,6 +661,59 @@ class TestSyntheticSnapshotScanner(unittest.TestCase):
             self.assertNotIn(str(file), str(findings))
             self.assertNotIn("untrusted error text", str(findings))
             self.assertNotIn("synthetic_token", str(findings))
+
+
+    def test_path_swap_to_external_symlink_never_reads_external_file(self):
+        if os.name == "nt":
+            self.skipTest("final-component symlink swap requires POSIX O_NOFOLLOW")
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "scan"
+            root.mkdir()
+            outside = Path(temp) / "foreign_credential_fixture"
+            outside.write_text("outside_only_synthetic_canary")
+            victim = root / "mutable"
+            victim.write_text("safe")
+            original_open = os.open
+            swapped = False
+
+            def swap_before_open(path, flags, *args, **kwargs):
+                nonlocal swapped
+                if Path(path) == victim and not swapped:
+                    swapped = True
+                    victim.unlink()
+                    victim.symlink_to(outside)
+                return original_open(path, flags, *args, **kwargs)
+
+            with patch("codex_env_names_native_spike.os.open",
+                       side_effect=swap_before_open):
+                findings, _ = inspect(root, "outside_only_synthetic_canary")
+            self.assertTrue(swapped)
+            self.assertEqual(len(findings), 1)
+            self.assertEqual(findings[0]["result"], "unscanned_file")
+            self.assertNotIn("foreign_credential_fixture", str(findings))
+            self.assertNotIn("outside_only_synthetic_canary", str(findings))
+
+    def test_file_mutation_between_stat_and_open_fails_closed(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            victim = root / "mutable"
+            victim.write_text("safe")
+            original_open = os.open
+            mutated = False
+
+            def mutate_before_open(path, flags, *args, **kwargs):
+                nonlocal mutated
+                if Path(path) == victim and not mutated:
+                    mutated = True
+                    victim.write_text("new_inert_contents_different_length")
+                return original_open(path, flags, *args, **kwargs)
+
+            with patch("codex_env_names_native_spike.os.open",
+                       side_effect=mutate_before_open):
+                findings, _ = inspect(root, "no_matching_canary")
+            self.assertTrue(mutated)
+            self.assertEqual(len(findings), 1)
+            self.assertEqual(findings[0]["result"], "unscanned_file")
 
 
 if __name__ == "__main__":
