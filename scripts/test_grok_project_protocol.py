@@ -1,5 +1,7 @@
 """Inert contracts; these tests do not claim native Grok acceptance."""
+import base64
 import copy
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -8,7 +10,8 @@ import tempfile
 import unittest
 
 from grok_project_protocol_client import (document, exercise, installed_server,
-                                          read_owned, selected_installation, retained_data, STATE_SCHEMA)
+                                          read_owned, selected_installation, retained_data, STATE_SCHEMA,
+                                          HELPER_DIRECTORY)
 from grok_project_protocol_e2e import observed_protocol, repair_refusal, Journey, snapshot
 
 
@@ -33,7 +36,20 @@ class ContractTests(unittest.TestCase):
         self.write_state()
         command = self.active / "probe"
         command.write_text("fixture")
-        self.server = {"command": str(command), "args": [], "cwd": str(self.active), "env": {
+        child = self.active / "bin/probe"
+        child.parent.mkdir()
+        child.write_text("inert Go probe fixture")
+        child.chmod(0o700)
+        helper = self.active / HELPER_DIRECTORY / "agentplugins"
+        helper.parent.mkdir(parents=True)
+        helper.write_bytes(b"inert trusted-helper contract bytes")
+        helper.chmod(0o700)
+        self.helper_hash = hashlib.sha256(helper.read_bytes()).hexdigest()
+        (helper.parent / "metadata.json").write_text(json.dumps({"protocol": 1,
+            "sha256": self.helper_hash, "cliVersion": "inert-contract"}))
+        self.server = {"command": str(helper), "args": ["--internal-stdio-v1", str(self.active),
+            str(self.data), str(self.active), "plugin", "--argv-base64-v1",
+            base64.b64encode(b"./bin/probe").decode()], "env": {
             "PLUGIN_ROOT": str(self.active), "PLUGIN_DATA": str(self.data),
             "UAP_TEST_ROOT": str(self.root), "UAP_TEST_NONCE": "nonce"}}
 
@@ -143,11 +159,11 @@ class ContractTests(unittest.TestCase):
     def test_installed_config_is_exact_and_credential_free(self):
         sidecar = self.active / ".mcp.json"
         sidecar.write_text(json.dumps({"mcpServers": {"probe": self.server}}))
-        self.assertEqual(installed_server(self.active, self.data, self.root, "probe", "nonce"), self.server)
+        self.assertEqual(installed_server(self.active, self.data, self.root, "probe", "nonce", self.helper_hash, self.active), self.server)
         self.server["env"]["XAI_API_KEY"] = "not-a-real-key"
         sidecar.write_text(json.dumps({"mcpServers": {"probe": self.server}}))
         with self.assertRaisesRegex(ValueError, "environment"):
-            installed_server(self.active, self.data, self.root, "probe", "nonce")
+            installed_server(self.active, self.data, self.root, "probe", "nonce", self.helper_hash, self.active)
 
     def test_foreign_command_and_extra_server_refused(self):
         for command, extra in (("/bin/true", False), (self.server["command"], True)):
@@ -157,7 +173,36 @@ class ContractTests(unittest.TestCase):
                 servers["foreign"] = self.server
             (self.active / ".mcp.json").write_text(json.dumps({"mcpServers": servers}))
             with self.assertRaises(ValueError):
-                installed_server(self.active, self.data, self.root, "probe", "nonce")
+                installed_server(self.active, self.data, self.root, "probe", "nonce", self.helper_hash, self.active)
+
+    def test_installed_launcher_rejects_legacy_cwd_wrong_roots_transport_and_source_hash(self):
+        for fault in ("cwd", "data", "anchor", "encoding", "child", "helper-hash", "metadata"):
+            with self.subTest(fault=fault):
+                server = copy.deepcopy(self.server)
+                expected_hash = self.helper_hash
+                if fault == "cwd": server["cwd"] = str(self.active)
+                if fault == "data": server["args"][2] = str(self.root / "foreign")
+                if fault == "anchor": server["args"][4] = "data"
+                if fault == "encoding": server["args"][5] = "--"
+                if fault == "child": server["args"][6] = base64.b64encode(b"/foreign").decode()
+                if fault == "helper-hash": expected_hash = "0" * 64
+                metadata = Path(server["command"]).parent / "metadata.json"
+                before = metadata.read_bytes()
+                if fault == "metadata": metadata.write_text(json.dumps({"protocol": True, "sha256": self.helper_hash, "cliVersion": "inert"}))
+                (self.active / ".mcp.json").write_text(json.dumps({"mcpServers": {"probe": server}}))
+                try:
+                    with self.assertRaises(ValueError):
+                        installed_server(self.active, self.data, self.root, "probe", "nonce", expected_hash, self.active)
+                finally:
+                    metadata.write_bytes(before)
+
+    def test_actual_installed_launcher_data_cwd_is_admitted_without_rewriting(self):
+        self.server["args"][3:5] = [str(self.data), "data"]
+        sidecar = self.active / ".mcp.json"
+        sidecar.write_text(json.dumps({"mcpServers": {"probe": self.server}}))
+        original = sidecar.read_bytes()
+        self.assertEqual(installed_server(self.active, self.data, self.root, "probe", "nonce", self.helper_hash, self.data), self.server)
+        self.assertEqual(sidecar.read_bytes(), original)
 
     def test_native_events_must_share_session_and_nonce(self):
         good = [{"session": "s", "pid": 1, "nonce": "n", "method": method}
@@ -258,7 +303,7 @@ for line in sys.stdin:
  response["result"]=value; print(json.dumps(response),flush=True)
 ''')
         server = dict(self.server, command=sys.executable, args=[str(child)])
-        result = exercise(server, {"PATH": "/usr/bin:/bin"}, "nonce", "0", "marker", True)
+        result = exercise(server, {"PATH": "/usr/bin:/bin"}, "nonce", "0", "marker", True, self.active, self.active)
         self.assertEqual(result["caller"], "direct-installed-stdio-client")
         self.assertFalse(result["grok_model_invoked"])
         self.assertEqual(len(result["transcript"]), 9)

@@ -392,3 +392,21 @@ func TestPreparedProjectFileVerifierCannotMutateFrozenOwnershipPacket(t *testing
 		}
 	}
 }
+
+func TestPreparedClassifierHonorsScopedActiveProjection(t *testing.T) {
+	input := AddInput{Scope: domain.ScopeProject, Client: domain.DetectedClient{ClientID: domain.ClientGrok}}
+	plan := domain.DeliveryPlan{Scope: domain.ScopeProject, ClientID: domain.ClientGrok}
+	if preparedProjectFileCandidate(input, plan) {
+		t.Fatal("Grok active readback escaped through prepared-file bypass")
+	}
+	input.Client.ClientID = domain.ClientAntigravity
+	plan.ClientID = domain.ClientAntigravity
+	if !preparedProjectFileCandidate(input, plan) {
+		t.Fatal("other prepared client's file-only behavior changed")
+	}
+	fixture := newPreparedFileFixture(t)
+	fixture.input.Client.ClientID = domain.ClientGrok
+	if !preparedProjectFileCandidate(fixture.input, fixture.plan) {
+		t.Fatal("mismatched legacy Qoder receipt escaped fail-closed verifier")
+	}
+}
