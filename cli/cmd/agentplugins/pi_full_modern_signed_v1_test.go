@@ -98,8 +98,8 @@ func piFullSignedTestDirectory(t *testing.T, cacheRoot string) (*directoryv1.Cli
 		}},
 		Trust: trust, Embedded: directoryv1.EmbeddedBundle{Snapshot: body, Envelope: envelope},
 		RequireEmbeddedBootstrap: true,
-		Cache: directoryv1.Cache{Path: filepath.Join(cacheRoot, "pi-full-test-only-cache.json")},
-		Now: func() time.Time { return now },
+		Cache:                    directoryv1.Cache{Path: filepath.Join(cacheRoot, "pi-full-test-only-cache.json")},
+		Now:                      func() time.Time { return now },
 	}
 	return client, snapshot
 }
@@ -108,8 +108,8 @@ func piFullRealSavedJourney(t *testing.T) (projectJourney, domain.DirectorySnaps
 	t.Helper()
 	journey := projectJourney{
 		home: projectJourneyTemp(t),
-		a: projectJourneyTemp(t),
-		b: projectJourneyTemp(t),
+		a:    projectJourneyTemp(t),
+		b:    projectJourneyTemp(t),
 	}
 	journey.cache = filepath.Join(journey.home, "uap")
 	projectJourneyWrite(t, filepath.Join(journey.home, "pi-test-host-never-launched"), "inert Pi host fixture\n")
