@@ -69,9 +69,9 @@ def start_server(client, env, project, timeout=45):
             while time.monotonic() < deadline:
                 if process.poll() is not None:
                     raise ValueError("native web process exited before authenticated startup")
-                capture.flush()
-                capture.seek(0)
-                banner = capture.read(MAX_CAPTURE + 1)
+                # pread does not move the file offset shared by the child.
+                # A regular seek/read could race with and overwrite the banner.
+                banner = os.pread(capture.fileno(), MAX_CAPTURE + 1, 0)
                 if len(banner) > MAX_CAPTURE:
                     raise ValueError("native startup output exceeded bound")
                 match = TOKEN.search(banner)
@@ -86,7 +86,10 @@ def start_server(client, env, project, timeout=45):
                 time.sleep(.3)
             raise ValueError("native authenticated management startup timed out")
         except BaseException:
-            os.killpg(process.pid, signal.SIGKILL)
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
             process.wait(timeout=5)
             raise
 
