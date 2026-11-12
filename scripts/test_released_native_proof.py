@@ -212,7 +212,7 @@ class ReleasedNativeProofTests(unittest.TestCase):
         def run_preflight(command, env):
             calls.append(command)
             if command[1:3] == ["skills", "list"]:
-                make(b"MZrepublished-pinned-stub\n")
+                make(b"MZother-pinned-stub\n")
             return "pinned vendor success"
         env = {"HERMES_BIN": str(exe)}
         with patch.object(proof, "vendor_identity", side_effect=identity), \
