@@ -828,7 +828,8 @@
           "extensions": "扩展"
         }
       },
-      "piNoCompatibleRelease": "Pi 已获支持，但此插件的已签名发行版本不包含兼容 Pi 的安装目标。"
+      "piNoCompatibleRelease": "Pi 已获支持，但此插件的已签名发行版本不包含兼容 Pi 的安装目标。",
+      "piPinnedProjectSource": "项目：使用此插件固定到具体 SHA 的 Git 源安装到 Pi（不是已签名的 Pi 目标）；CLI 会检查兼容性。"
     },
     "authentication": {
       "not_required": "无需帐户",

@@ -9,12 +9,20 @@ on:
       - 'scripts/kimi_stable_project_mcp_smoke.py'
       - 'scripts/test_kimi_stable_project_mcp_smoke.py'
       - '.github/workflows/kimi-stable-project-mcp-e2e.yml'
+      - 'cli/cmd/agentplugins/project_kimi_*'
+      - 'cli/cmd/agentplugins/project_lifecycle_fixture_test.go'
+      - 'install/integrationctl/agentplugins/clients/kimi/**'
+      - 'install/integrationctl/agentplugins/adapters/clientdetect/**'
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
       - 'scripts/kimi_stable_project_mcp_smoke.py'
       - 'scripts/test_kimi_stable_project_mcp_smoke.py'
       - '.github/workflows/kimi-stable-project-mcp-e2e.yml'
+      - 'cli/cmd/agentplugins/project_kimi_*'
+      - 'cli/cmd/agentplugins/project_lifecycle_fixture_test.go'
+      - 'install/integrationctl/agentplugins/clients/kimi/**'
+      - 'install/integrationctl/agentplugins/adapters/clientdetect/**'
   workflow_dispatch:
 
 permissions:
@@ -26,8 +34,12 @@ concurrency:
 
 jobs:
   native-prepared:
-    name: Pinned Kimi 2.5.2 project MCP-only add/repeat/remove (Prepared)
-    runs-on: ubuntu-24.04
+    name: Pinned Kimi 2.5.2 MCP and App preparation (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -50,6 +62,33 @@ jobs:
           set -euo pipefail
           npm install --global @moonshot-ai/kimi-code@2.5.2
           go build -trimpath -ldflags='-X main.version=0.1.102' -o "$RUNNER_TEMP/agentplugins-source" ./cli/cmd/agentplugins
+      - name: Observe production App saved repair and archive cold replay with genuine version probes
+        env:
+          REPORT_DIR: ${{ runner.temp }}/kimi-mcp-prepared-proof
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          UAP_KIMI_GENUINE: '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          export UAP_KIMI_STABLE_EXECUTABLE="$(command -v kimi)"
+          mkdir -p "$REPORT_DIR"
+          go test -json ./cli/cmd/agentplugins -run '^TestProjectKimi(ComposedSavedLifecycle|PublicIntactRepairPreservesMCPSelection|ColdSavedImportPreservesPinnedAgreement)$' -count=1 -timeout=15m > "$REPORT_DIR/kimi-app-lifecycle-go.json"
+          PYTHONPATH=scripts python3 - <<'PYCODE'
+          import hashlib, json, os, pathlib, re, subprocess
+          from kimi_stable_project_mcp_smoke import validate_lifecycle_json
+          cases = validate_lifecycle_json(pathlib.Path(os.environ["REPORT_DIR"]) / "kimi-app-lifecycle-go.json", os.environ["UAP_KIMI_STABLE_EXECUTABLE"])
+          head = os.environ["EXPECTED_SHA"]
+          assert re.fullmatch("[0-9a-f]{40}", head)
+          assert subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip() == head
+          with open(os.environ["UAP_KIMI_STABLE_EXECUTABLE"], "rb") as stream:
+              launcher_sha256 = hashlib.file_digest(stream, "sha256").hexdigest()
+          with open(pathlib.Path(os.environ["RUNNER_TEMP"]) / "agentplugins-source", "rb") as stream:
+              source_cli_sha256 = hashlib.file_digest(stream, "sha256").hexdigest()
+          evidence = {"schema_version": 1, "qualification": "production-App-preparation-with-genuine-version-probe", "security_boundary": "inert-fixture", "source_commit": head, "source_tree": subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], text=True).strip(), "run_id": os.environ["GITHUB_RUN_ID"], "run_attempt": os.environ["GITHUB_RUN_ATTEMPT"], "runner_os": os.environ["RUNNER_OS"], "runner_arch": os.environ["RUNNER_ARCH"], "client_executable": os.environ["UAP_KIMI_STABLE_EXECUTABLE"], "real_client_version": "2.5.2", "selected_launcher_sha256": launcher_sha256, "launcher_checksum_scope": "selected file bytes following npm symlink; not transitive npm package", "separate_python_checkpoint_binary": {"sha256": source_cli_sha256, "injected_version_label": "0.1.102", "used_by": "separate add/repeat/remove checkpoint, not in-process App"}, "cases": cases, "native_mcp_started": False, "tools_list": False, "tools_call": False, "authentication_proven": False, "workspace_trust_granted": False, "released_binary_proven": False}
+          (pathlib.Path(os.environ["REPORT_DIR"]) / "kimi-app-lifecycle.json").write_text(json.dumps(evidence, indent=2) + "\n")
+          PYCODE
+
       - name: Observe owned project MCP preparation without activation
         env:
           REPORT_DIR: ${{ runner.temp }}/kimi-mcp-prepared-proof
@@ -68,7 +107,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
-          name: kimi-stable-252-project-mcp-prepared
+          name: kimi-stable-252-project-mcp-prepared-${{ matrix.os }}
           path: ${{ runner.temp }}/kimi-mcp-prepared-proof/
           if-no-files-found: warn
           retention-days: 14
