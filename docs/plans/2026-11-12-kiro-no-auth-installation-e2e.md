@@ -25,8 +25,9 @@ HOME are owned. Do not snapshot, inherit or inspect any credential value.
 Capture version and agent validate --help. Require its actual grammar to
 advertise --path. Then probe explicit owned valid, invalid-schema and missing
 custom-agent files. Record raw bounded stdout/stderr/exit. Unknown grammar or
-output fails pending review. Validation is only explicit custom-agent schema
-validation, never proof that UAP skills or MCP were loaded.
+output fails pending review. The measured result for all three validation
+inputs is an exact authentication refusal before schema validation. No schema
+validation or loading of UAP skills/MCP is inferred.
 
 Capture actual agent list and MCP workspace/global list in isolated owned
 profiles. Only the previously measured exact exit1/error-null/empty-stdout/
@@ -65,17 +66,54 @@ frozen VS Code files change.
 
 ## Estimate, reliability and review
 
-Expected new runner 220-320 LOC, targeted tests 150-240 LOC, workflow 70-100 LOC.
+Expected new runner 220-320 LOC, targeted tests 150-260 LOC, workflow 170-180 LOC.
 Complexity 4/10: finite argv table and reuse of existing process/acquisition
 authorities. Reliability confidence 7/10 for reused UAP lifecycles and known
-refusals, 4/10 for unmeasured native validate output. Actual pinned observations
-must settle that uncertainty; no permissive output parser buys a pass.
+refusals, initially 4/10 for unmeasured native validate output. The actual local
+capture settled the latter as a refusal before validation; final-source hosted
+acceptance remains required. No permissive output parser buys a pass.
 
 Run Python contracts/AST, YAML and embedded-shell syntax checks locally.
 Actual Go compilation/lint, all three OS lifecycle tests and genuine pinned
 native observations require final-source hosted CI. Original artifacts must
 be checked independently before acceptance. Any native refusal is a declared
 negative case, never a successful native lifecycle or model/tool observation.
+
+## Measured isolation correction before hosted acceptance
+
+A separately labelled local protocol capture verified the exact official2.34.0
+archive and companion identities. Version and agent validate --help exited0;
+the latter advertised --path. The full original HOME guard correctly rejected
+the capture because the client created XDG_DATA_HOME/kiro-cli/data.sqlite3 even
+with private KIRO_HOME. That two-command failure and original streams remain
+retained; it is not a successful native installation or hosted/App proof.
+
+Each finite probe therefore selects held private XDG config/cache/state/data
+directories as well as KIRO_HOME. Original HOME/A/B/User tree guards remain
+unchanged. The Kiro-only wrapper uses the existing Context.command and bounded
+process helper, verifies pinned runtime files before and finally, preserves
+the exact argv/cwd allowlist,20-second timeout and stream receipts, and records
+the actual child profile paths. No shared environment override rule is relaxed.
+Inert regressions require private DB initialization to preserve original HOME
+and reject private/profile/XDG replacement.
+
+The second actual local capture completed all14 finite commands with all
+original guards preserved. Root and an independent reviewer each checked its
+original ZIP SHA256 d8c4d5f989170f29b63827ab667a06355001188889a43e34851a70a1b08f79c7,
+CRC and28 stream byte/hash joins. Exact version and206-byte help succeeded;
+all three validation inputs and nine agent/MCP inventories returned the exact
+64-byte not-logged-in refusal, exit1, error null and empty stdout. The final
+parser admits only these measured full help bytes and12 exact bound denials.
+Schema validation, native discovery/loading, authentication, model and native
+MCP runtime flags remain false. Both earlier failed captures remain retained.
+Local protocol admission does not substitute for actual hosted UAP execution.
+
+The dedicated workflow additionally admits exact Go JSON parent and Git/ZIP
+subcase RUN/PASS events plus the SDK parent, with no fail/skip or zero-execution
+acceptance. It retains clean before/after source SHA/tree and original log
+digests with the lifecycle artifact. Current implementation size is about240
+runner lines,250 targeted-test lines and172 workflow lines; complexity remains
+4/10. No Go cases or production adapters change.
 
 ## Sources
 
