@@ -55,7 +55,9 @@ func piFullSignedTestDirectory(t *testing.T, cacheRoot string) (*directoryv1.Cli
 		if distribution.Status != domain.DistributionActive || len(distribution.Releases) != 1 ||
 			len(distribution.ReleasePolicies) != 1 || len(distribution.ReleasePolicies[0].Targets) != 1 ||
 			distribution.ReleasePolicies[0].Targets[0].Client != domain.ClientPi ||
-			distribution.ReleasePolicies[0].Targets[0].Scopes[0] != domain.ScopeUser {
+			len(distribution.ReleasePolicies[0].Targets[0].Scopes) != 1 ||
+			distribution.ReleasePolicies[0].Targets[0].Scopes[0] != domain.ScopeUser ||
+			distribution.ReleasePolicies[0].ReleaseSequence != distribution.Releases[0].Sequence {
 			t.Fatalf("unreviewed source or unexpected signed grant: %s", distribution.ID)
 		}
 		total++
