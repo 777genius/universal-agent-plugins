@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/base64"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/directoryv1"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/specregistry"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -30,6 +32,43 @@ const (
 	piFullSnapshotPath         = "testdata/pi-full-modern-v1-test-only-snapshot.json"
 	piFullShardCount           = 3
 )
+
+
+// admitPiTestOnlyUpstreamSources extends only an ephemeral TEST-signed snapshot.
+// The upstream publisher's production evidence is deliberately absent from the
+// pinned JSON fixture. The real immutable package bytes must pass independent
+// acquisition in the test before any successful saved case is reported.
+func admitPiTestOnlyUpstreamSources(snapshot *domain.DirectorySnapshot) int {
+	added := 0
+	for index := range snapshot.Distributions {
+		distribution := &snapshot.Distributions[index]
+		if distribution.Kind != domain.DistributionUpstream {
+			continue
+		}
+		release := distribution.Releases[0]
+		id := "test-only/pi-materialization/" + distribution.ProductID
+		// The reviewed_external policy here is SYNTHETIC test data, signed by
+		// the separate throwaway key below, never a genuine upstream review.
+		snapshot.Evidence = append(snapshot.Evidence, domain.DirectoryEvidence{
+			SchemaVersion: 1, ID: id, DistributionID: distribution.ID,
+			ReleaseSequence: release.Sequence, PackageTreeDigest: release.TreeDigest,
+			Level: "materialization", Outcome: "passed", Client: domain.ClientPi,
+			ClientVersion: "test-only-pi-1.18.34", InstallerVersion: "0.1.104",
+			OS: "linux", Architecture: "amd64", ObservedAt: "2026-11-11T00:00:00Z",
+			Artifact: domain.DirectoryEvidenceArtifact{
+				Repository: release.PackageSource.Repository,
+				Revision: release.PackageSource.Revision,
+				Path: release.PackageSource.Path + "/plugin.json",
+				Digest: release.ManifestDigest,
+			},
+			Trust: &domain.DirectoryEvidenceTrust{Kind: "reviewed_external"},
+		})
+		distribution.ReleasePolicies[0].CurrentEvidence =
+			append(distribution.ReleasePolicies[0].CurrentEvidence, id)
+		added++
+	}
+	return added
+}
 
 // This is NEVER publisher evidence. The snapshot deliberately contains
 // synthetically granted Pi targets and no reviewed real-host evidence.
@@ -64,6 +103,15 @@ func piFullSignedTestDirectory(t *testing.T, cacheRoot string) (*directoryv1.Cli
 	}
 	if total != 36 {
 		t.Fatal("not all 36 active source policies were pinned")
+	}
+	if admitted := admitPiTestOnlyUpstreamSources(&snapshot); admitted != 2 {
+		t.Fatalf("expected exactly two upstream packages in disposable Pi cohort, got %d", admitted)
+	}
+	// Re-sign ONLY the ephemeral TEST snapshot. The checked-in source manifest
+	// remains immutable without publisher-backed Pi materialization receipts.
+	body, err = json.Marshal(snapshot)
+	if err != nil {
+		t.Fatal(err)
 	}
 	seed := bytes.Repeat([]byte{93}, ed25519.SeedSize)
 	privateKey := ed25519.NewKeyFromSeed(seed)
@@ -175,6 +223,23 @@ func TestPiFullModernSignedTestOnlyMarketplace(t *testing.T) {
 			continue
 		}
 		selected++
+		if distribution.Kind == domain.DistributionUpstream {
+			// Synthetic test admission is allowed only after the actual pinned
+			// upstream source bytes independently pass the production digest check.
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			acquirer := sourceacquisition.Acquirer{TempRoot: t.TempDir()}
+			release := distribution.Releases[0]
+			sealed, err := acquirer.AcquireGitHubVerified(ctx,
+				release.PackageSource.Repository, release.PackageSource.Revision,
+				release.PackageSource.Path, release.TreeDigest)
+			cancel()
+			if err != nil {
+				t.Fatalf("upstream Pi TEST-only admission has no verified real source: %s: %v", distribution.ID, err)
+			}
+			if err := packagedigest.Remove(sealed); err != nil {
+				t.Fatalf("upstream Pi verified-source cleanup failed: %v", err)
+			}
+		}
 		for _, scope := range []domain.InstallScope{domain.ScopeUser, domain.ScopeProject} {
 			caseName := fmt.Sprintf("%s@%d/%s", distribution.ID, distribution.Releases[0].Sequence, scope)
 			passed := t.Run(caseName, func(t *testing.T) {
