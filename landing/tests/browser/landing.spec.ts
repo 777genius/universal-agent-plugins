@@ -882,7 +882,7 @@ test('download page recommends the detected OS path and preserves the npx altern
   await page.goto(new URL('download', baseURL).href);
   const tabs = page.locator('.download-section__install-tab');
   const script = tabs.filter({ hasText: 'Verified install script' });
-  await expect(script).toHaveAttribute('aria-pressed', 'true');
+  await expect(script).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByText('Best option for Linux selected')).toBeVisible();
   await expect(page.getByText(/install\.sh \| sh/)).toBeVisible();
   await expect(page.locator('.download-section__command code')).toContainText('install.sh | sh');
@@ -909,7 +909,7 @@ test('Windows visitors receive the PowerShell installer and invocation', async (
   const powershell = page
     .locator('.download-section__install-tab')
     .filter({ hasText: 'PowerShell' });
-  await expect(powershell).toHaveAttribute('aria-pressed', 'true');
+  await expect(powershell).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByText('Best option for Windows selected')).toBeVisible();
   await expect(page.getByText(/install\.ps1 \| iex/)).toBeVisible();
   await expect(page.locator('.download-section__command code')).toContainText('install.ps1 | iex');
@@ -934,7 +934,7 @@ test('mobile visitors are not told that a desktop CLI command is recommended', a
   await expect(tabs.getByText('The CLI runs on desktop.')).toBeVisible();
   await expect(
     tabs.locator('.download-section__install-tab').filter({ hasText: 'npx' }),
-  ).toHaveAttribute('aria-pressed', 'true');
+  ).toHaveAttribute('aria-selected', 'true');
 
   await context.close();
 });
