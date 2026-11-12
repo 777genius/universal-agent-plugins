@@ -11,14 +11,14 @@ import (
 )
 
 // Public saved CLI, real TLS Git and the production source/store/planner,
-// installer/native transactions. Detection/security are inert host boundaries.
-// The trusted test executable is copied as launcher bytes but never executed;
-// this test certifies no Kimi, MCP, model, trust or native discovery behavior.
+// installer/native transactions. Security remains an inert host boundary.
+// Detection is inert by default; explicit hosted genuine mode uses only the
+// production selected Kimi version probe. No MCP, model, trust or discovery proof.
 func TestProjectKimiComposedSavedLifecycle(t *testing.T) {
 	transport := newProjectJourneyTransport(t, "git")
 	journey := newProjectJourney(t, transport)
 	user := filepath.Join(journey.home, ".kimi")
-	journey.app = configureProjectKimiJourney(journey.app, user, filepath.Join(journey.home, "kimi"))
+	journey.app = configureProjectKimiJourney(t, journey.app, user, filepath.Join(journey.home, "kimi"))
 	foreign := `{"mcpServers":{"foreign":{"transport":"http","url":"https://foreign.test/mcp","enabled":false}},"policy":"keep"}`
 	for _, project := range []string{user, journey.a, journey.b} {
 		native := filepath.Join(project, ".kimi-code")

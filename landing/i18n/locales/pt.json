@@ -828,7 +828,8 @@
           "extensions": "Extensões"
         }
       },
-      "piNoCompatibleRelease": "O Pi é compatível, mas a versão assinada deste plugin não inclui um destino compatível com Pi."
+      "piNoCompatibleRelease": "O Pi é compatível, mas a versão assinada deste plugin não inclui um destino compatível com Pi.",
+      "piPinnedProjectSource": "Projeto: instale no Pi a partir do Git fixado em um SHA exato (não é um destino Pi assinado); a CLI verifica a compatibilidade."
     },
     "authentication": {
       "not_required": "Nenhuma conta necessária",

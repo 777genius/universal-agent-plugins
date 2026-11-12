@@ -155,7 +155,8 @@ for (const { client, locale, theme, width } of nativeClientCases) {
     await install.getByRole('button', { name: t('registryUi.command.copyLabel'), exact: true }).click();
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(command);
     const icon = page.locator('.agent-page__icon img');
-    expect((await icon.getAttribute('src'))?.endsWith(`/client-icons/${client}.svg`)).toBe(true);
+    const iconFilename = client === 'hermes' ? 'hermes.webp' : 'antigravity.svg';
+    expect((await icon.getAttribute('src'))?.endsWith(`/client-icons/${iconFilename}`)).toBe(true);
     await expect.poll(() => icon.evaluate((image) => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
     await expect(page.locator('.agent-page__steps article').nth(0).locator('p')).toHaveText(t(`registryUi.clients.${client}.delivery`));
     await expect(page.locator('.agent-page__steps article').nth(1).locator('p')).toHaveText(t(`registryUi.clients.${client}.activation`));
