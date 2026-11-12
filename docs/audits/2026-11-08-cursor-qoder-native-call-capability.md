@@ -25,3 +25,11 @@ Read against UAP `main` at `f32c9ee880170b8fa9a2ea3408ef69571d2feecf` and offici
 ## Current outcome
 
 No auth-free selected-client invocation path verified for these pinned CLIs, and no new hosted E2E run has been launched. Draft PR #793 correctly remains pending; this note narrows the implementation so future attempts cannot confuse inventory, synthetic MCP requests or another SDK with a genuine native client call. VS Code #530 and Kiro #686 remain separate, and their unqualified native gates must not be silently included as PASS.
+
+## 2026-11-12 independent vendor-doc contract check (source-only)
+
+Official [Cursor headless](https://cursor.com/docs/cli/headless) says `agent -p` refuses unapproved MCP calls; `--force`/`--yolo` bypass that approval boundary and cannot qualify this PR. An authorized test must use exact named-tool permission in a disposable, explicitly consented profile; `CURSOR_API_KEY` is the documented CI credential name. It is not present or used by this research.
+
+Official [Qoder CLI auth](https://docs.qoder.com/cli/authentication) uses `QODER_PERSONAL_ACCESS_TOKEN` for CI (not `QODER_API_KEY`). Official [Qoder MCP reference](https://docs.qoder.com/cli/mcp-reference) states `--strict-mcp-config` ignores the original project `.mcp.json`, and `--mcp-config` can substitute a different server. A **positive** native UAP-installed Project E2E must use neither override, must prove selected Project A source and explicit per-server trust / per-tool permission, and must retain independent server-side `tools/call` evidence. `--allowed-mcp-server-names` is a loading filter, not consent. Strict/alternate-config modes may serve only as separately labelled negative controls. Never use all-server approval, `--yolo` or `bypass_permissions` to claim default native behavior.
+
+Three proof-boundary reviews: (1) separate inventory from actual model-initiated server call; (2) reject alternate-source trust/config bypass; (3) require genuine vendor auth and only narrowly consented named tool in disposable A/B roots. All leave `cursor.mcp-tools-call` and `qoder.mcp-tools-call` **unqualified** until original exact-HEAD native results exist. No executable, credentials, native-run, CI policy or site/release status changed by this documentation correction.
