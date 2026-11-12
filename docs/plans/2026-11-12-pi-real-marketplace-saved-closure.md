@@ -19,7 +19,8 @@ The complete expected tuples are in the Go test. Do not use a branch tip or subs
 - Reuse #870's deterministic **test-only** Ed25519 Directory v1 strict signature verifier, in-memory verified client and isolated `FeedID`.
 - Use production isolated GitHub source acquisition for immutable full commit SHA and digest verification against the public source tree.
 - Resolve saved Pi user/project graphs and check all four immutable locks; exercise the composed user saved install+remove and four owned receipts with real package bytes.
-- Run the exact test on fresh Linux/macOS/Windows GitHub-hosted environments, no account credentials or model/MCP process. A specific test-only environment variable gates network usage; production has no new config or feature flag.
+- Run the exact real-public-source test on fresh Linux/macOS/Windows GitHub-hosted environments, no account credentials or model/MCP process. A specific test-only environment variable gates public network acquisition; production has no new config or feature flag.
+- Independently run `TestPiProjectSignedV1SavedFourPackageLifecycle`: a disposable local TLS Git repository, second unrelated deterministic **test-only** Ed25519 key and the production CLI scoped composer exercise public `install` → `deps sync --locked` → `remove` over Pi User and Project A, with owned four-node receipts, real native Skills/MCP filesystem materialization and Project B/foreign state preservation. No real Pi process or account activation is claimed.
 - A test-only synthetic policy/evidence record is **not trusted production materialization evidence**. Do not promote it to the real Registry or advertise 72/72. Exact signed modern production authorizations must be proved separately by editor-protected publication and released CLI native E2E.
 
 ## Review cycles
