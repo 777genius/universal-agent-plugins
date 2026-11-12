@@ -152,6 +152,40 @@ def windows_hermes_launcher_content_sha256(binary):
     raw[central + 12:central + 16] = b"\0" * 4
     return hashlib.sha256(raw).hexdigest()
 
+
+def windows_hermes_launcher_fingerprint(binary):
+    """Diagnostic only: opaque component hashes, never launcher code or paths.
+
+    A changed normalized digest is still a release failure. These fields show
+    which pinned distlib EXE component changed, without treating it as safe.
+    """
+    binary = Path(binary).resolve(strict=True)
+    normalized = windows_hermes_launcher_content_sha256(binary)
+    raw = binary.read_bytes()
+    with zipfile.ZipFile(binary) as archive:
+        entry = archive.infolist()[0]  # structure/CRC already checked above
+        payload = archive.read(entry)
+        local, central = entry.header_offset, archive.start_dir
+    shebang = raw.rfind(b"#!", 0, local)
+    require(shebang > 0, "Hermes Windows launcher shebang missing")
+    local_zip, central_zip = bytearray(raw[local:central]), bytearray(raw[central:])
+    local_zip[10:14] = b"\\0" * 4
+    central_zip[12:16] = b"\\0" * 4
+    digest = lambda data: hashlib.sha256(data).hexdigest()
+    return {
+        "executable_sha256": digest(raw),
+        "launcher_content_sha256": normalized,
+        "loader_sha256": digest(raw[:shebang]),
+        "shebang_sha256": digest(raw[shebang:local]),
+        "entrypoint_sha256": digest(payload),
+        "local_zip_sha256": digest(local_zip),
+        "central_zip_sha256": digest(central_zip),
+        "executable_bytes": len(raw),
+        "preamble_bytes": local,
+        "entrypoint_bytes": len(payload),
+    }
+
+
 def vendor_identity(client, env):
     binary = Path(env["HERMES_BIN" if client == "hermes" else "AGY_BIN"]).resolve(strict=True)
     command = [str(binary), "--version"]
@@ -327,6 +361,13 @@ def aggregate(args):
 
 
 def main():
+    if sys.argv[1:2] == ["fingerprint"]:
+        inspector = argparse.ArgumentParser(description="Read-only pinned Windows Hermes launcher diagnostics")
+        inspector.add_argument("mode", choices=("fingerprint",))
+        inspector.add_argument("--binary", required=True)
+        args = inspector.parse_args()
+        print(json.dumps(windows_hermes_launcher_fingerprint(args.binary), sort_keys=True))
+        return
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("mode", choices=("run", "aggregate"))
     parser.add_argument("--client", choices=("hermes", "antigravity"), required=True)
