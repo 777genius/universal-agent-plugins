@@ -45,20 +45,44 @@ func publicHTTPClient() *http.Client {
 			if err != nil || port != "443" {
 				return nil, errors.New("invalid public MCP destination")
 			}
-			resolved, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+			// Bound DNS and all connection attempts by one shared budget.
+			dialCtx, cancel := context.WithTimeout(ctx, 6*time.Second)
+			defer cancel()
+			resolved, err := net.DefaultResolver.LookupIPAddr(dialCtx, host)
 			if err != nil || len(resolved) == 0 {
 				return nil, errors.New("MCP public DNS unavailable")
 			}
-			for _, r := range resolved {
-				if !publicAddress(r.IP) {
-					return nil, errors.New("nonpublic MCP destination")
-				}
-			}
-			return dialer.DialContext(ctx, "tcp", net.JoinHostPort(resolved[0].IP.String(), port))
+			return dialPublicAddresses(dialCtx, port, resolved, dialer.DialContext)
 		},
 	}
 	return &http.Client{Timeout: 12 * time.Second, Transport: transport,
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+}
+
+// dialPublicAddresses validates the entire DNS answer before attempting a
+// connection. Every fallback uses the already validated literal address,
+// never the original hostname (which could resolve differently on retry).
+func dialPublicAddresses(ctx context.Context, port string, resolved []net.IPAddr, dial func(context.Context, string, string) (net.Conn, error)) (net.Conn, error) {
+	if len(resolved) == 0 {
+		return nil, errors.New("MCP public DNS unavailable")
+	}
+	for _, entry := range resolved {
+		if !publicAddress(entry.IP) {
+			return nil, errors.New("nonpublic MCP destination")
+		}
+	}
+	var lastErr error
+	for _, entry := range resolved {
+		conn, err := dial(ctx, "tcp", net.JoinHostPort(entry.IP.String(), port))
+		if err == nil {
+			return conn, nil
+		}
+		lastErr = err
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+	}
+	return nil, lastErr
 }
 
 func publicAddress(ip net.IP) bool {
