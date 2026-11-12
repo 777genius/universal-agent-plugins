@@ -508,7 +508,16 @@ class TestSyntheticSnapshotScanner(unittest.TestCase):
                     self.assertTrue(findings[0]["shell_snapshot_path"])
                 self.assertNotIn(token, str(findings))
             snapshot.write_text("nonsecret")
-            self.assertEqual(inspect(root, token)[0], [])
+            final_findings, _ = inspect(root, token)
+            if os.name == "nt":
+                # A Win32 descriptor/path identity mismatch is an incomplete
+                # scan, not evidence that the canary is absent. Preserve NO-GO.
+                self.assertTrue(not final_findings or all(
+                    item["result"] == "unscanned_file"
+                    and item["scope"] == "codex_home"
+                    for item in final_findings))
+            else:
+                self.assertEqual(final_findings, [])
 
     def test_second_independent_synthetic_value_is_scanned(self):
         with tempfile.TemporaryDirectory() as temp:
