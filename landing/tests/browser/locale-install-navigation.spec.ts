@@ -40,7 +40,7 @@ for (const target of publishedLocales.filter((locale) => locale !== 'en')) {
             tabs.findIndex((tab) => tab.getAttribute('aria-pressed') === 'true'),
           );
         expect(selectionIndex).toBeGreaterThanOrEqual(0);
-        const commands = await page.locator('.download-section__steps code').allTextContents();
+        const commands = await page.locator('.download-section__command code').allTextContents();
         expect(commands.length).toBeGreaterThan(0);
         expect(commands.join('\n')).toContain('curl');
         const initialUrl = page.url();
@@ -78,7 +78,7 @@ for (const target of publishedLocales.filter((locale) => locale !== 'en')) {
           page.locator('.download-section__install-tab').nth(selectionIndex),
         ).toHaveAttribute('aria-pressed', 'true');
         await expect
-          .poll(() => page.locator('.download-section__steps code').allTextContents())
+          .poll(() => page.locator('.download-section__command code').allTextContents())
           .toEqual(commands);
         if (width < 768) await page.getByRole('button', { name: wording(target)('shell.navigation.open'), exact: true }).click();
         await switcher.click();

@@ -2,8 +2,8 @@
   "shell": {
     "download": {
       "heading": {
-        "title": "安装你的第一个插件",
-        "note": "选择如何运行 CLI，选择一个或多个代理，然后复制命令。"
+        "title": "安装 Universal Agent Plugins",
+        "note": "选择一种方式，将命令复制到终端运行。"
       },
       "channels": {
         "brew": {

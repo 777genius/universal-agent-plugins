@@ -885,14 +885,10 @@ test('download page recommends the detected OS path and preserves the npx altern
   await expect(script).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByText('Best option for Linux selected')).toBeVisible();
   await expect(page.getByText(/install\.sh \| sh/)).toBeVisible();
-  await expect(
-    page.getByText('$HOME/.local/bin/agentplugins add context7 --target codex,cursor'),
-  ).toBeVisible();
+  await expect(page.locator('.download-section__command code')).toContainText('install.sh | sh');
 
   await tabs.filter({ hasText: 'npx' }).click();
-  await expect(
-    page.getByText('npx -y universal-agent-plugins add context7 --target codex,cursor'),
-  ).toBeVisible();
+  await expect(page.locator('.download-section__command code')).toHaveText('npx -y universal-agent-plugins add context7');
   await expect(page.getByText('npx -y universal-agent-plugins version')).toHaveCount(0);
 
   await context.close();
@@ -916,9 +912,7 @@ test('Windows visitors receive the PowerShell installer and invocation', async (
   await expect(powershell).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByText('Best option for Windows selected')).toBeVisible();
   await expect(page.getByText(/install\.ps1 \| iex/)).toBeVisible();
-  await expect(
-    page.getByText('& "$HOME\\.local\\bin\\agentplugins.exe" add context7 --target codex,cursor'),
-  ).toBeVisible();
+  await expect(page.locator('.download-section__command code')).toContainText('install.ps1 | iex');
 
   await context.close();
 });

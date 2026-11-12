@@ -185,7 +185,7 @@ test('manual download channel beats delayed detection and locale remount', async
     const npm = page.locator('.download-section__install-tab').filter({ hasText: downloadChannelTitle('en', 'npm') });
     await npm.click();
     await expect(npm).toHaveAttribute('aria-pressed', 'true');
-    const commands = await page.locator('.download-section__steps code').allTextContents();
+    const commands = await page.locator('.download-section__command code').allTextContents();
     expect(commands.length).toBeGreaterThan(0);
     expect(commands.join('\n')).toContain('npx -y universal-agent-plugins add');
     gate.release();
@@ -196,7 +196,7 @@ test('manual download channel beats delayed detection and locale remount', async
       await expect(page.getByRole('heading', { name: downloadHeading(locale), exact: true })).toBeVisible();
       const localizedNpm = page.locator('.download-section__install-tab').filter({ hasText: downloadChannelTitle(locale, 'npm') });
       await expect(localizedNpm).toHaveAttribute('aria-pressed', 'true');
-      await expect.poll(() => page.locator('.download-section__steps code').allTextContents()).toEqual(commands);
+      await expect.poll(() => page.locator('.download-section__command code').allTextContents()).toEqual(commands);
     }
     expect(errors).toEqual([]);
   } finally { gate.release(); }
