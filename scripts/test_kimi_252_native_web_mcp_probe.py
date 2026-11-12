@@ -1,14 +1,74 @@
 """Contract checks for bounded native Kimi 2.5.2 MCP management evidence."""
+from contextlib import contextmanager
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import json
+import os
 import tempfile
+import threading
 import unittest
-import urllib.request
 from unittest.mock import patch
 from pathlib import Path
 
 import kimi_252_native_web_mcp_probe as native
 
 
+@contextmanager
+def local_api(*, code=0, status=200, location=None):
+    requests = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            requests.append(self.headers.get("Authorization"))
+            self.send_response(status)
+            if location is not None:
+                self.send_header("Location", location)
+            self.end_headers()
+            self.wfile.write(json.dumps({"code": code, "data": {"observed": True}}).encode())
+
+        def log_message(self, *_):
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=lambda: server.serve_forever(poll_interval=.01), daemon=True)
+    thread.start()
+    try:
+        yield "http://127.0.0.1:" + str(server.server_port), requests
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
 class KimiNativeWebProbeTests(unittest.TestCase):
+    def test_redirect_never_forwards_bearer_to_another_origin(self):
+        for status in (301, 302, 303, 307, 308):
+            with self.subTest(status=status), local_api() as (destination, received):
+                with local_api(status=status, location=destination + "/capture") as (base, initial):
+                    with self.assertRaisesRegex(ValueError, "redirect refused"):
+                        native.response("/api/v1/meta", base, "inert-local-token")
+                    self.assertEqual(initial, ["Bearer inert-local-token"])
+                self.assertEqual(received, [])
+
+    def test_ambient_proxy_never_receives_local_bearer(self):
+        with local_api() as (proxy, intercepted), local_api() as (base, received):
+            environment = {"http_proxy": proxy, "https_proxy": proxy,
+                           "HTTP_PROXY": proxy, "HTTPS_PROXY": proxy,
+                           "no_proxy": "", "NO_PROXY": ""}
+            with patch.dict(os.environ, environment), patch.object(native.urllib.request, "_opener", None):
+                self.assertEqual(native.response("/api/v1/meta", base, "inert-local-token"),
+                                 {"observed": True})
+            self.assertEqual(received, ["Bearer inert-local-token"])
+            self.assertEqual(intercepted, [])
+
+    def test_native_api_success_code_is_an_actual_integer(self):
+        with local_api() as (base, _):
+            self.assertEqual(native.response("/api/v1/meta", base, "inert-local-token"),
+                             {"observed": True})
+        for code in (False, 0.0, "0", None, 1):
+            with self.subTest(code=code), local_api(code=code) as (base, _):
+                with self.assertRaisesRegex(ValueError, "native API request refused"):
+                    native.response("/api/v1/meta", base, "inert-local-token")
+
     def test_rejects_wrong_project_attribution(self):
         path = Path("/private/project/.kimi-code/mcp.json")
         valid = {"name": native.SERVER_NAME, "source": "global",
@@ -48,17 +108,6 @@ class KimiNativeWebProbeTests(unittest.TestCase):
             token_file.symlink_to(secret)
             with self.assertRaises(ValueError):
                 native.native_private_token(home)
-
-    def test_loopback_bearer_never_uses_proxy_or_redirect(self):
-        opener = native.local_opener()
-        self.assertTrue(any(isinstance(handler, urllib.request.ProxyHandler)
-                            and handler.proxies == {} for handler in opener.handlers))
-        self.assertTrue(any(isinstance(handler, native.RefuseRedirect)
-                            for handler in opener.handlers))
-        with self.assertRaisesRegex(ValueError, "redirect refused"):
-            native.RefuseRedirect().redirect_request(
-                None, None, 302, "redirect", {}, "https://other.example/")
-
 
     def test_never_queries_a_non_loopback_address(self):
         with self.assertRaises(ValueError):

@@ -85,7 +85,8 @@ def response(req, base, token, method="GET", data=None):
         if len(raw) > MAX_CAPTURE:
             raise ValueError("oversized native API response")
     result = json.loads(raw)
-    if not isinstance(result, dict) or result.get("code") != 0:
+    if (not isinstance(result, dict) or type(result.get("code")) is not int
+            or result["code"] != 0):
         raise ValueError("native API request refused: " + req)
     return result.get("data")
 
