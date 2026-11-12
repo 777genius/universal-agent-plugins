@@ -36,7 +36,7 @@ for (const width of [1440, 390]) {
     ]) {
       const tab = tabs.filter({ hasText: label });
       await tab.click();
-      await expect(tab).toHaveAttribute('aria-pressed', 'true');
+      await expect(tab).toHaveAttribute('aria-selected', 'true');
       await expect(command).toContainText(snippet);
       const exactCommand = (await command.textContent())!.trim();
       await page.locator('.download-section__command').getByRole('button').click();
@@ -50,3 +50,35 @@ for (const width of [1440, 390]) {
     });
   });
 }
+
+test('installation methods expose a keyboard-operable tabpanel', async ({ page }) => {
+  await page.goto('./download/');
+  const tablist = page.getByRole('tablist');
+  const tabs = tablist.getByRole('tab');
+  const panel = page.getByRole('tabpanel');
+
+  await expect(tabs).toHaveCount(4);
+  await tabs.first().click();
+  await expect(tabs.first()).toHaveAttribute('aria-selected', 'true');
+  await expect(tabs.first()).toHaveAttribute('tabindex', '0');
+  await expect(tabs.nth(1)).toHaveAttribute('tabindex', '-1');
+  await expect(tabs.first()).toHaveAttribute('aria-controls', 'download-method-panel');
+  await expect(panel).toHaveAttribute('aria-labelledby', 'download-method-tab-npm');
+
+  await tabs.first().press('ArrowRight');
+  await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true');
+  await expect(tabs.nth(1)).toBeFocused();
+  await expect(panel).toHaveAttribute('aria-labelledby', 'download-method-tab-brew');
+
+  await tabs.nth(1).press('End');
+  await expect(tabs.last()).toBeFocused();
+  await expect(tabs.last()).toHaveAttribute('aria-selected', 'true');
+
+  await tabs.last().press('Home');
+  await expect(tabs.first()).toBeFocused();
+  await expect(tabs.first()).toHaveAttribute('aria-selected', 'true');
+
+  await tabs.first().press('ArrowLeft');
+  await expect(tabs.last()).toBeFocused();
+  await expect(tabs.last()).toHaveAttribute('aria-selected', 'true');
+});
