@@ -131,7 +131,13 @@ class SessionJourney:
         require(command.is_absolute() and command.is_relative_to(active) and command.resolve() == command,
                 "installed probe command is not owned")
         require(selected["env"]["UAP_TEST_NONCE"] == self.nonce, "installed nonce differs")
-        direct = exercise(selected, self.env, self.nonce, revision, "kept-" + self.nonce, create)
+        # This fixture omits source cwd, so the normative managed default is
+        # the installed plugin root. Exercise exactly that projected directory.
+        native_cwd = Path(selected["cwd"])
+        require(native_cwd == active and native_cwd.resolve() == active and native_cwd.is_dir(),
+                "native Cline MCP cwd differs from the owned plugin root")
+        direct = exercise(selected, self.env, self.nonce, revision, "kept-" + self.nonce,
+                          create, native_cwd, native_cwd)
         self.evidence["stages"].append({"stage": stage, "binding": binding, "native_inventory": rows,
                                          "direct_installed_mcp": direct})
         return installation, binding, active
