@@ -121,6 +121,7 @@ func inspect(params json.RawMessage) (any, error) {
 		if err != nil {
 			return nil, err
 		}
+		var executedOperation string
 		if p.Arguments.Operation == "write" {
 			if len(p.Arguments.Marker) > 256 {
 				return nil, errors.New("marker too long")
@@ -131,9 +132,9 @@ func inspect(params json.RawMessage) (any, error) {
 			if err = os.WriteFile(path, []byte(p.Arguments.Marker), 0600); err != nil {
 				return nil, err
 			}
-			f.Operation = "write"
+			executedOperation = "write"
 		} else {
-			f.Operation = "read"
+			executedOperation = "read"
 		}
 		b, err := os.ReadFile(path)
 		if err != nil {
@@ -143,6 +144,11 @@ func inspect(params json.RawMessage) (any, error) {
 			return nil, errors.New("marker too long")
 		}
 		f.Marker = string(b)
+		// Existing native lanes admit a closed legacy facts schema. Only a
+		// fixture explicitly requesting this receipt receives the new field.
+		if os.Getenv("UAP_TEST_REPORT_OPERATION") == "1" {
+			f.Operation = executedOperation
+		}
 	}
 	if err := event("tools/call", &f); err != nil {
 		return nil, err

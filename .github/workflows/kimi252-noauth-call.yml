@@ -73,6 +73,8 @@ jobs:
         with:
           node-version: '24'
           package-manager-cache: false
+      - name: Verify legacy and opted-in actual Go probe receipts
+        run: go test -count=1 -v ./repotests/testdata/agentplugins_native_probe
       - name: Build ordinary source App and existing Go MCP probe
         shell: bash
         run: |

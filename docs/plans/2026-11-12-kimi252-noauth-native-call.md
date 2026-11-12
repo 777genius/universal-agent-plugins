@@ -139,3 +139,22 @@ admission fails. Each stage retains the original strict-read Project MCP config
 bytes/hash before any native attempt and requires them unchanged after cleanup;
 missing config is recorded explicitly. Earlier untrusted negative observations
 remain narrower protocol evidence, not this corrected negative acceptance.
+
+## Shared probe compatibility correction
+
+The operation receipt must not widen every existing native result schema.
+Independent integration review found closed raw-facts admission in Cline,
+Gemini, Copilot and earlier Kimi lanes. The shared Go probe therefore reports
+the executed operation only when the owned MCP fixture explicitly sets
+`UAP_TEST_REPORT_OPERATION=1`. This new Kimi journey selects that receipt;
+legacy, empty, disabled and malformed values keep the existing result fields.
+The provider still requires the actual executed operation, with no relaxed
+fact or process checks. No production behavior or other client's validator
+changes are needed.
+
+An explicit hosted Go test builds and executes the actual probe. It checks
+legacy and opted-in write/read results, unchanged read-marker identity and
+timestamps, and refusal of invalid operations and nonces without tool effects.
+The previously successful hosted Kimi artifacts remain evidence for their
+original source; the corrected final source still requires its natural hosted
+Linux/macOS native run before acceptance.

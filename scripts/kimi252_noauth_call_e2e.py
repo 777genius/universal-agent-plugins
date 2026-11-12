@@ -119,7 +119,8 @@ class Journey:
         write(self.package / "mcp.json", {"$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
               "mcpServers": {NAME: {"type": "stdio", "command": "./bin/probe", "args": [],
               "env": {"UAP_TEST_ROOT": str(self.root), "UAP_TEST_EVENTS": str(self.log),
-                      "UAP_TEST_NONCE": self.nonce, "UAP_TEST_REVISION": revision}}}})
+                      "UAP_TEST_NONCE": self.nonce, "UAP_TEST_REVISION": revision,
+                      "UAP_TEST_REPORT_OPERATION": "1"}}}})
 
     def selected(self):
         rows = [row for row in installation_state(self.a)["installations"] if row.get("declared_name") == NAME]
