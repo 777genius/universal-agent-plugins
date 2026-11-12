@@ -188,6 +188,32 @@ and new native-call lanes must pass on their actual final combined source.
 Only guarded final-source merge and genuine natural postmerge execution can
 complete acceptance. Source GO or a plan is not executed product acceptance.
 
+## Follow-up independent review before hosted acceptance
+
+Review of the exact `30389a7757c0e1b81d6a7c3939270e6ffaaed549`
+tree found two bounded corrections. Helper digest readback now reuses Grok's
+existing anchored `openProjectHandle(path, false)`: its Unix nonblocking,
+no-follow walk and Windows no-reparse walk prevent a regular-file-to-FIFO or
+ancestor-alias replacement from hanging or following another file at open.
+The existing handle race regressions remain the authority; no new opener,
+test-only production hook or weakened path check is introduced.
+
+The existing composed MCP-only retained-data test still expected direct `go`
+execution. It now admits only the installed managed launcher, exact
+package/data/default-cwd authority, explicit encoded-argv separator, original
+decoded `go version` child and retained `DATA` expansion. Its existing
+installation, removal and foreign-state checks remain intact.
+
+Independent source review and seven focused Go test groups (including thirty
+subcases) passed, covering anchored replacement refusals, cwd/opaque arguments,
+stale projections, helper readiness, scoped policy and sealed observation
+guards. Full `make lint LINT_BASE=HEAD` passed both passes for all four modules
+with the existing baseline. The local composed Git test cannot reach its changed
+assertion because this host refuses private Git process containment. Full local
+`make test-core` has likewise reported missing `/proc/.../children` prerequisites;
+neither is a full local E2E PASS. Current-source hosted Required, cross-platform
+contracts and combined #883 genuine native lifecycle remain mandatory.
+
 ## Primary sources and retained originals
 
 - https://agent-plugins.org/specification section 7.2.1 and section 11.1

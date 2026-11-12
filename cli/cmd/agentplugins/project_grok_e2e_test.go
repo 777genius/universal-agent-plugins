@@ -16,6 +16,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
@@ -331,11 +332,26 @@ func TestProjectGrokMCPOnlyStdioKeepsOwnedData(t *testing.T) {
 		t.Fatal(err)
 	}
 	var projected struct {
-		Servers map[string]map[string]any `json:"mcpServers"`
+		Servers map[string]struct {
+			Command string            `json:"command"`
+			Args    []string          `json:"args"`
+			Env     map[string]string `json:"env"`
+			CWD     *string           `json:"cwd"`
+		} `json:"mcpServers"`
 	}
-	if err := json.Unmarshal(body, &projected); err != nil || len(projected.Servers) != 1 ||
-		projected.Servers["docs"]["command"] != "go" {
+	if err := json.Unmarshal(body, &projected); err != nil || len(projected.Servers) != 1 {
 		t.Fatalf("Grok stdio native MCP projection differs: %s %v", body, err)
+	}
+	server, present := projected.Servers["docs"]
+	helper := filepath.Join(binding.TargetLocator, filepath.FromSlash(managedstdio.RelativeDirectory), managedstdio.ExecutableName)
+	authority := []string{managedstdio.Mode, binding.TargetLocator, expectedData, binding.TargetLocator, "plugin"}
+	if !present || server.Command != helper || server.CWD != nil || len(server.Args) != 8 || server.Args[5] != "--argv-base64-v1" ||
+		!reflect.DeepEqual(server.Args[:5], authority) || server.Env["DATA"] != expectedData {
+		t.Fatalf("Grok stdio launcher lost package/data/cwd authority: %+v", server)
+	}
+	child, err := managedstdio.DecodeCommandArguments(server.Args[5], server.Args[6:])
+	if err != nil || !reflect.DeepEqual(child, []string{"go", "version"}) {
+		t.Fatalf("Grok stdio launcher changed the original child command: %v %v", child, err)
 	}
 	journey.run(t, journey.a, "remove", "docs", "--target", "grok")
 	projectJourneyAbsent(t, binding.TargetLocator)

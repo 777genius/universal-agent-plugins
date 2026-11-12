@@ -204,7 +204,7 @@ func grokHelperDigest(root string) (string, error) {
 	if err != nil || !before.Mode().IsRegular() || before.Size() <= 0 || before.Size() > 128<<20 {
 		return "", fmt.Errorf("%w: grok managed helper is unavailable", domain.ErrProjectionRefreshRequired)
 	}
-	file, err := os.Open(path)
+	file, err := openProjectHandle(path, false)
 	if err != nil {
 		return "", err
 	}
