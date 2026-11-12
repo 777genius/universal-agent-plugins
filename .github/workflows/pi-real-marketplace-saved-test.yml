@@ -7,6 +7,7 @@ on:
       - '.github/workflows/pi-real-marketplace-saved-test.yml'
       - 'cli/internal/agentpluginscli/pi_real_marketplace_saved_e2e_test.go'
       - 'cli/internal/agentpluginscli/pi_modern_saved_closure_test.go'
+      - 'cli/cmd/agentplugins/project_pi_signed_v1_saved_test.go'
   workflow_dispatch:
 
 permissions:
@@ -48,3 +49,8 @@ jobs:
         run: |
           go test -p=2 -count=1 -timeout=20m -v ./cli/internal/agentpluginscli \
             -run '^TestPiRealMarketplaceSignedTestCohortSavedClosure$'
+      - name: Verify signed test-only Pi User/Project native saved lifecycle
+        shell: bash
+        run: |
+          go test -p=2 -count=1 -timeout=15m -v ./cli/cmd/agentplugins \
+            -run '^TestPiProjectSignedV1SavedFourPackageLifecycle$'
