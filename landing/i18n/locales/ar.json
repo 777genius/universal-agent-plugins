@@ -828,7 +828,8 @@
           "extensions": "إضافات"
         }
       },
-      "piNoCompatibleRelease": "يدعم UAP وكيل Pi، لكن الإصدار الموقّع لهذه الإضافة لا يتضمن هدف تثبيت متوافقًا مع Pi."
+      "piNoCompatibleRelease": "يدعم UAP وكيل Pi، لكن الإصدار الموقّع لهذه الإضافة لا يتضمن هدف تثبيت متوافقًا مع Pi.",
+      "piPinnedProjectSource": "المشروع: ثبّت في Pi من مصدر Git مثبّت على SHA محدد (وليس هدف Pi موقّعًا)؛ تتحقق أداة CLI من التوافق."
     },
     "authentication": {
       "not_required": "لا يلزم حساب",
