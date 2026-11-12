@@ -28,9 +28,23 @@ func TestClineProjectSessionResolvesObservedCLIWithoutChangingFileOnlyAuthority(
 	}
 }
 
+func TestClineSessionExistingCLIPathStillRequiresObservedSurface(t *testing.T) {
+	t.Parallel()
+	executable := filepath.Join(t.TempDir(), "cline")
+	client := domain.DetectedClient{
+		ClientID: domain.ClientCline, Status: domain.DetectionDetected,
+		ExecutablePath: executable,
+		Surfaces: []domain.ClientSurface{{ID: "cline_cli", Detected: true}},
+	}
+	got, err := clineSessionExecutable(clients.Env{}, client, 1)
+	if err != nil || got != executable {
+		t.Fatalf("observed CLI path was not retained: %q %v", got, err)
+	}
+}
+
 func TestClineProjectSessionExecutableNegatives(t *testing.T) {
 	t.Parallel()
-	for _, mode := range []string{"editor-only", "absent-cli", "foreign-client", "not-detected", "no-bindings", "nil-resolver", "lookup-error", "relative", "empty"} {
+	for _, mode := range []string{"editor-only", "editor-path", "absent-cli", "absent-cli-path", "foreign-client", "not-detected", "no-bindings", "nil-resolver", "lookup-error", "relative", "empty"} {
 		t.Run(mode, func(t *testing.T) {
 			client := domain.DetectedClient{ClientID: domain.ClientCline, Status: domain.DetectionDetected,
 				Surfaces: []domain.ClientSurface{{ID: "cline_cli", Detected: true}}}
@@ -53,6 +67,12 @@ func TestClineProjectSessionExecutableNegatives(t *testing.T) {
 				client.Surfaces = []domain.ClientSurface{{ID: "cline_vscode_extension", Detected: true}}
 			case "absent-cli":
 				client.Surfaces[0].Detected = false
+			case "editor-path":
+				client.Surfaces = []domain.ClientSurface{{ID: "cline_vscode_extension", Detected: true}}
+				client.ExecutablePath = filepath.Join(t.TempDir(), "editor")
+			case "absent-cli-path":
+				client.Surfaces[0].Detected = false
+				client.ExecutablePath = filepath.Join(t.TempDir(), "cline")
 			case "foreign-client":
 				client.ClientID = "foreign"
 			case "not-detected":
