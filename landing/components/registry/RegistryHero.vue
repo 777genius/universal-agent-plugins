@@ -345,10 +345,10 @@ function updateTargets(values: string[]) {
                     <p v-else class="install-panel__notice" role="status">
                       {{ t('shell.hero.refreshNotice') }}
                     </p>
-                    <a
+                    <NuxtLink
                       class="hero-quick-start__more-install"
-                      :href="localePath('/download/')"
-                      >{{ t('shell.hero.otherMethods') }} <span aria-hidden="true">↗</span></a
+                      :to="localePath('/download/')"
+                      >{{ t('shell.hero.otherMethods') }} <span aria-hidden="true">→</span></NuxtLink
                     >
                   </div>
                 </li>
