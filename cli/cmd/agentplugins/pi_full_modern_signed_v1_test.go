@@ -205,7 +205,10 @@ func TestPiFullModernSignedTestOnlyMarketplace(t *testing.T) {
 				if got := len(j.state(t, root).EnvironmentReceipts); got != expected {
 					t.Fatalf("replay changed signed test-only receipt count: got %d want %d", got, expected)
 				}
-				j.run(t, root, "remove", distribution.ID, "--target", "pi", "--yes")
+				// A canonical distribution ID selects the source at install time;
+				// saved removal resolves the declared root alias, not an imperative
+				// mutation of environment-owned bindings.
+				j.run(t, root, "remove", distribution.ProductID, "--target", "pi", "--yes")
 				if got := len(j.state(t, root).EnvironmentReceipts); got != 0 {
 					t.Fatalf("signed test-only %s %s removal left %d owned receipts", distribution.ID, scope, got)
 				}
