@@ -3,11 +3,11 @@ package agentpluginscli
 import (
 	"context"
 	"fmt"
+	"os"
 	"runtime"
 	"strings"
 	"testing"
 
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/directoryv1"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
@@ -149,7 +149,7 @@ func piRealMarketplaceFixture(t *testing.T, scope domain.InstallScope) freshRest
 // This proves pinned public source bytes and saved dependency behavior, but
 // intentionally cannot qualify a production signer or authenticated Pi runtime.
 func TestPiRealMarketplaceSignedTestCohortSavedClosure(t *testing.T) {
-	if !strings.EqualFold("1", t.Getenv("UAP_PI_REAL_SAVED_E2E")) {
+	if !strings.EqualFold("1", os.Getenv("UAP_PI_REAL_SAVED_E2E")) {
 		t.Skip("real pinned public-source E2E is only enabled in isolated three-OS workflow")
 	}
 	for _, scope := range []domain.InstallScope{domain.ScopeUser, domain.ScopeProject} {
