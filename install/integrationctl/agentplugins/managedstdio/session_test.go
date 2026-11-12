@@ -36,6 +36,29 @@ func TestSessionRejectsInvalidProcessBeforeChangingDirectory(t *testing.T) {
 	}
 }
 
+func TestFailedNativeExecRestoresCallingProcessDirectory(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX process replacement only")
+	}
+	before, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cwd := t.TempDir()
+	missing := filepath.Join(cwd, "missing-native-executable")
+	if err := StartSession(missing, []string{missing}, cwd, []string{"PATH=/unused"}); err == nil {
+		t.Fatal("missing executable unexpectedly replaced process")
+	}
+	after, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after != before {
+		_ = os.Chdir(before)
+		t.Fatalf("failed native exec changed process cwd: %q -> %q", before, after)
+	}
+}
+
 func TestSessionPreservesInheritedStdioAndExplicitEnvironment(t *testing.T) {
 	if os.Getenv("UAP_SESSION_CHILD") == "1" {
 		cwd := os.Getenv("UAP_SESSION_CWD")
