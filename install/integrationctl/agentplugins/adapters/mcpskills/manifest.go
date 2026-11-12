@@ -156,10 +156,10 @@ func validateResourceCollection(skillURI, root string, resources []Resource) err
 		if total > maxSkillBytes {
 			return ErrInvalidEntry
 		}
-}
+	}
 	if !found {
 		return ErrInvalidEntry
-}
+	}
 	return nil
 }
 
