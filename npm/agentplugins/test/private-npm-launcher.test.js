@@ -14,6 +14,12 @@ async function until(predicate) {
   const deadline = Date.now() + 8000;
   while (!predicate()) { if (Date.now() > deadline) throw new Error("fixture readiness deadline"); await delay(10); }
 }
+function readyPID(file) {
+  const raw = fs.readFileSync(file, "utf8"), pid = Number(raw);
+  assert.ok(Number.isSafeInteger(pid) && pid > 0 && String(pid) === raw,
+    "fixture readiness must contain one complete positive safe-integer PID");
+  return pid;
+}
 function wrapper(product, args = [], env = f.envFor(), preload) {
   const child = cp.spawn(node, [...(preload ? ["--require", preload] : []), path.join(f.packageRoot(product), "bin", product + ".js"), ...args], {
     env, cwd: f.cwd, stdio: ["ignore", "pipe", "pipe"]
@@ -53,6 +59,50 @@ for (const product of c.PRODUCTS) test(`POSIX STRUCTURAL independent ${product} 
   }
 });
 
+test("POSIX STRUCTURAL fixture publishes a complete owned PID before readiness", async () => {
+  const root = mkdir(path.join(f.root, "pid-publication"));
+  const ready = path.join(root, "ready"), opened = path.join(root, "opened");
+  for (const raw of ["", "0", "-1", "1e2", "0x10", "1.0", "01", "123\n", "9007199254740992"]) {
+    fs.writeFileSync(ready, raw);
+    assert.throws(() => readyPID(ready), /complete positive safe-integer PID/);
+  }
+  fs.unlinkSync(ready);
+  const preload = path.join(root, "hold-pid-write.js");
+  fs.writeFileSync(preload, `const fs=require('node:fs'),path=require('node:path');const write=fs.writeFileSync;
+fs.writeFileSync=function(file,bytes,...options){
+  if(typeof file!=='string'||path.dirname(file)!==${JSON.stringify(root)}||String(bytes)!==String(process.pid))return write(file,bytes,...options);
+  const fd=fs.openSync(file,options[0]?.flag||'w');
+  try{write(${JSON.stringify(opened)},'opened');process.kill(process.pid,'SIGSTOP');return write(fd,bytes,...options)}
+  finally{fs.closeSync(fd)}
+};\n`);
+  assert.equal(f.launch("agentplugins").status, 0);
+  const child = cp.spawn(node, ["--require", preload, f.binaryPath("agentplugins"), "wait", ready], {
+    env: f.envFor(), cwd: f.cwd, stdio: "ignore"
+  });
+  const done = new Promise((resolve, reject) => {
+    child.once("error", reject);
+    child.once("close", (code, signal) => resolve({ code, signal }));
+  });
+  try {
+    // Observe the actual writer stopped after open and before any PID bytes.
+    await until(() => fs.existsSync(opened) &&
+      /^State:\s+T\b/m.test(fs.readFileSync(`/proc/${child.pid}/status`, "utf8")));
+    assert.equal(fs.existsSync(ready), false, "partial PID must not publish readiness");
+    child.kill("SIGCONT");
+    await until(() => fs.existsSync(ready));
+    assert.equal(readyPID(ready), child.pid);
+    fs.writeFileSync(ready + ".release", "finish");
+    child.kill("SIGTERM");
+    await until(() => child.exitCode !== null || child.signalCode !== null);
+    assert.deepEqual(await done, { code: 0, signal: null });
+    assert.throws(() => process.kill(child.pid, 0), { code: "ESRCH" }, "actual fixture child is gone");
+  } finally {
+    child.kill("SIGCONT");
+    child.kill("SIGKILL");
+    await done;
+  }
+});
+
 for (const product of c.PRODUCTS) for (const signal of ["SIGINT", "SIGTERM"]) test(`POSIX STRUCTURAL ${product}: parent ${signal}, child ${signal}, stubborn cleanup`, async () => {
   const direct = await wrapper(product, ["signal", signal]).done;
   assert.equal(direct.signal, signal); assert.equal(direct.stdout, ""); assert.equal(direct.stderr, "");
@@ -60,7 +110,7 @@ for (const product of c.PRODUCTS) for (const signal of ["SIGINT", "SIGTERM"]) te
     const ready = path.join(f.root, `${product}-${signal}-${mode}`);
     const p = wrapper(product, [mode, ready]); let pid;
     try {
-      await until(() => fs.existsSync(ready)); pid = Number(fs.readFileSync(ready, "utf8"));
+      await until(() => fs.existsSync(ready)); pid = readyPID(ready);
       const start = Date.now(); p.child.kill(signal);
       await until(() => fs.existsSync(ready + ".signals"));
       p.child.kill(signal); await delay(40);
