@@ -2,6 +2,7 @@ package clients
 
 import (
 	"context"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -39,10 +40,26 @@ type SessionPlanner interface {
 
 // ChildEnvironment returns a copy, replacing only this plan's explicit keys.
 func (plan SessionPlan) ChildEnvironment(base []string) []string {
+	return plan.childEnvironment(base, runtime.GOOS == "windows")
+}
+
+// Windows treats environment keys as case-insensitive. Strip inherited aliases
+// of the two explicit Cline overrides before launching the selected client.
+func (plan SessionPlan) childEnvironment(base []string, caseInsensitive bool) []string {
+	normalize := func(key string) string {
+		if caseInsensitive {
+			return strings.ToUpper(key)
+		}
+		return key
+	}
+	overrides := make(map[string]struct{}, len(plan.Environment))
+	for key := range plan.Environment {
+		overrides[normalize(key)] = struct{}{}
+	}
 	result := make([]string, 0, len(base)+len(plan.Environment))
 	for _, item := range base {
 		key, _, _ := strings.Cut(item, "=")
-		if _, replace := plan.Environment[key]; !replace {
+		if _, replace := overrides[normalize(key)]; !replace {
 			result = append(result, item)
 		}
 	}
