@@ -15,7 +15,7 @@ from unittest.mock import patch
 import http.server
 
 from codex_env_names_appserver_spike import terminal_turn_status
-from codex_env_names_native_spike import (_scan_stat_identity, _windows_path_within_root, CHILD, Model, MCP_CALL, SHELL_CALL, SHELL_MARKER,
+from codex_env_names_native_spike import (_scan_stat_identity, _windows_path_within_root, _capture_scan_root, CHILD, Model, MCP_CALL, SHELL_CALL, SHELL_MARKER,
                                         SHELL_ENV_PRESENT, SHELL_FOREIGN_PRESENT,
                                         ENV_NAME, FOREIGN_ENV_NAME, inspect, aggregate_findings, windows_shell_command, isolated_env, isolated_root, structured_mcp_receipt_matches, fixed_windows_spawn_error_category, WINDOWS_NATIVE_SANDBOX_CONFIG)
 
@@ -430,6 +430,46 @@ class TestNativeSecurityLifecycle(unittest.TestCase):
             r"\\?\D:\other\scan.txt", root))
         self.assertFalse(_windows_path_within_root(
             r"\\?\UNC\server\share\file.txt", root))
+
+    def test_root_junction_swap_fails_closed_without_reading_target(self):
+        # Analogous to Windows root junction replacement; the initial anchor
+        # must remain authoritative even after filesystem path resolution moves.
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "isolated_root"
+            root.mkdir()
+            (root / "benign").write_text("safe")
+            pinned = _capture_scan_root(root)
+            external = Path(temp) / "foreign_tree"
+            external.mkdir()
+            (external / "outside").write_text("EXTERNAL_SYNTHETIC_CANARY")
+            (root / "benign").unlink()
+            root.rmdir()
+            try:
+                root.symlink_to(external, target_is_directory=True)
+            except OSError:
+                self.skipTest("symlink/junction creation unsupported")
+            findings, _ = inspect(root, "EXTERNAL_SYNTHETIC_CANARY",
+                                  root_anchor=pinned)
+            self.assertEqual(len(findings), 1)
+            self.assertEqual(findings[0]["result"], "unscanned_directory")
+            self.assertEqual(findings[0]["io_reason"], "root_identity_changed")
+            self.assertNotIn("EXTERNAL_SYNTHETIC_CANARY", str(findings))
+            self.assertNotIn(str(external), str(findings))
+
+    def test_root_directory_replacement_without_symlink_fails_closed(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "isolated_root"
+            root.mkdir()
+            pinned = _capture_scan_root(root)
+            root.rename(Path(temp) / "moved_original")
+            root.mkdir()
+            (root / "potential_outside").write_text("not_readable_by_scanner")
+            findings, _ = inspect(root, "not_readable_by_scanner",
+                                  root_anchor=pinned)
+            self.assertEqual(len(findings), 1)
+            self.assertEqual(findings[0]["result"], "unscanned_directory")
+            self.assertEqual(findings[0]["io_reason"], "root_identity_changed")
+            self.assertNotIn("not_readable_by_scanner", str(findings))
 
     def test_windows_path_identity_excludes_only_incompatible_ctime(self):
         baseline = dict(st_dev=1, st_ino=5, st_size=8, st_mtime_ns=99)

@@ -18,7 +18,7 @@ import sys
 import threading
 import time
 
-from codex_env_names_native_spike import CHILD, ENV_NAME, FOREIGN_ENV_NAME, Model, inspect, isolated_env, aggregate_findings, structured_mcp_receipt_matches, WINDOWS_NATIVE_SANDBOX_CONFIG, isolated_root
+from codex_env_names_native_spike import CHILD, ENV_NAME, FOREIGN_ENV_NAME, Model, inspect, isolated_env, aggregate_findings, structured_mcp_receipt_matches, WINDOWS_NATIVE_SANDBOX_CONFIG, isolated_root, _capture_scan_root
 
 def rpc_send(proc, q, serial, method, params, timeout=35):
     proc.stdin.write((json.dumps({"id": serial, "method": method,
@@ -79,6 +79,7 @@ def main():
     foreign_secret = "uap_foreign_appserver_" + secrets.token_hex(24)
     Model.expected_digest = hashlib.sha256(secret.encode()).hexdigest()
     root = isolated_root("uap-codex-appserver-")
+    root_anchor = _capture_scan_root(root)
     home, project = root / "home", root / "project"
     (home / ".codex").mkdir(parents=True)
     (project / ".codex").mkdir(parents=True)
@@ -142,7 +143,9 @@ def main():
     def observer():
         while not stop.is_set():
             try:
-                hits, _ = inspect(root, (secret, foreign_secret))
+                hits, _ = inspect(
+                    root, (secret, foreign_secret), root_anchor=root_anchor
+                )
                 live["samples"] += 1
                 for hit in hits:
                     live["hits"][(hit["path_sha256"], hit["result"])] = hit
@@ -285,7 +288,9 @@ def main():
         report["observer_stopped"] = observer_stopped
         if report["failure"] is None and not report["graceful_shutdown"]:
             report["failure"] = "graceful_shutdown_unverified"
-        found, symlinks = inspect(root, (secret, foreign_secret))
+        found, symlinks = inspect(
+            root, (secret, foreign_secret), root_anchor=root_anchor
+        )
         # A still-running observer may hold an unseen transient canary;
         # do not consume its mutable findings or certify a security PASS.
         all_hits, counts = aggregate_findings(

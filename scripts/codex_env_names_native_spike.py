@@ -440,6 +440,33 @@ def _scan_stat_identity(info, include_change_time=True):
 _SCAN_DIRFD_SUPPORTED = os.open in os.supports_dir_fd
 
 
+def _capture_scan_root(root):
+    """Pin immutable lexical root + filesystem identity at fixture creation."""
+    path = Path(root)
+    observed = path.lstat()
+    if (not stat.S_ISDIR(observed.st_mode) or observed.st_ino == 0
+            or path.is_symlink()
+            or (hasattr(path, "is_junction") and path.is_junction())):
+        raise OSError(errno.EPERM, "untrusted_disposable_scan_root")
+    return (str(path), observed.st_dev, observed.st_ino)
+
+
+def _scan_root_is_original(root, pinned):
+    """Reject junction, symlink, directory replacement and renamed roots."""
+    try:
+        if str(Path(root)) != pinned[0]:
+            return False
+        return _capture_scan_root(root) == pinned
+    except (OSError, ValueError):
+        return False
+
+
+def _root_changed_finding():
+    return {"path_sha256": hashlib.sha256(b".").hexdigest(),
+            "result": "unscanned_directory", "io_reason": "root_identity_changed",
+            "scope": "other"}
+
+
 def _windows_path_within_root(opened_path, root_path):
     """Accept only fully qualified local-drive paths beneath the isolated root."""
     def canonical(value):
@@ -475,11 +502,11 @@ def _windows_fd_within_root(fd, root):
     written = get_path(handle, buffer, len(buffer), 0)
     if (not 0 < written < len(buffer)
             or not _windows_path_within_root(
-                buffer.value, str(Path(root).resolve(strict=True)))):
+                buffer.value, str(root))):
         raise OSError(errno.EPERM, "file_not_proven_inside_root")
 
 
-def _read_regular_bounded(path, observed, root):
+def _read_regular_bounded(path, observed, root, root_anchor):
     """Read only from a verified descendant with stable file identity.
 
     POSIX pins each parent with O_DIRECTORY|O_NOFOLLOW and opens relative
@@ -489,11 +516,17 @@ def _read_regular_bounded(path, observed, root):
     limit = 32 * 1024 * 1024
     flags = (os.O_RDONLY | getattr(os, "O_BINARY", 0)
              | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_NOFOLLOW", 0))
+    # A previously trusted temporary root cannot be swapped to a Windows
+    # junction or an ordinary new directory and silently re-anchored.
+    if not _scan_root_is_original(root, root_anchor):
+        raise OSError(errno.EPERM, "changed_disposable_scan_root")
     with contextlib.ExitStack() as descriptors:
         if os.name == "nt":
             fd = os.open(path, flags)
             try:
-                _windows_fd_within_root(fd, root)
+                _windows_fd_within_root(fd, root_anchor[0])
+                if not _scan_root_is_original(root, root_anchor):
+                    raise OSError(errno.EPERM, "changed_disposable_scan_root")
             except BaseException:
                 os.close(fd)
                 raise
@@ -517,6 +550,9 @@ def _read_regular_bounded(path, observed, root):
                 descriptors.callback(os.close, opened_dir)
                 directory_fd = opened_dir
             fd = os.open(relative.parts[-1], flags, dir_fd=directory_fd)
+            if not _scan_root_is_original(root, root_anchor):
+                os.close(fd)
+                raise OSError(errno.EPERM, "changed_disposable_scan_root")
         with os.fdopen(fd, "rb") as reader:
             opened = os.fstat(reader.fileno())
             # Windows path stat reports creation ctime; handle stat reports
@@ -532,12 +568,20 @@ def _read_regular_bounded(path, observed, root):
             data = reader.read(limit + 1)
             after = os.fstat(reader.fileno())
             if (len(data) != opened.st_size
-                    or _scan_stat_identity(after) != _scan_stat_identity(opened)):
+                    or _scan_stat_identity(after) != _scan_stat_identity(opened)
+                    or not _scan_root_is_original(root, root_anchor)):
                 raise OSError(errno.EIO, "unstable_native_scan")
             return data
 
 
-def inspect(root, secret):
+def inspect(root, secret, root_anchor=None):
+    if root_anchor is None:
+        try:
+            root_anchor = _capture_scan_root(root)
+        except (OSError, ValueError):
+            return ([_root_changed_finding()], 0)
+    if not _scan_root_is_original(root, root_anchor):
+        return ([_root_changed_finding()], 0)
     values = (secret,) if isinstance(secret, str) else secret
     patterns = []
     for value in values:
@@ -653,7 +697,7 @@ def inspect(root, secret):
                     found.append({"path_sha256": hashlib.sha256(str(path.relative_to(root)).encode()).hexdigest(),
                                   "result": "unscanned_oversize"})
                     continue
-                data = _read_regular_bounded(path, metadata, root)
+                data = _read_regular_bounded(path, metadata, root, root_anchor)
             except OSError as exc:
                 # Vanished and locked files both leave incomplete evidence.
                 # Never treat a file disappearing between lstat/read as proof
@@ -672,6 +716,8 @@ def inspect(root, secret):
                 found.append({"path_sha256": hashlib.sha256(str(path.relative_to(root)).encode()).hexdigest(),
                               "result": "synthetic_value_persisted",
                               "shell_snapshot_path": "shell_snapshots" in path.parts})
+    if not _scan_root_is_original(root, root_anchor):
+        found.append(_root_changed_finding())
     return found, symlinks
 
 def aggregate_findings(*batches):
@@ -709,6 +755,7 @@ def main():
     foreign_secret = "uap_foreign_spike_" + secrets.token_hex(24)
     Model.expected_digest = hashlib.sha256(secret.encode()).hexdigest()
     root = isolated_root("uap-codex-spike-")
+    root_anchor = _capture_scan_root(root)
     home, project = root / "home", root / "project"
     (home / ".codex").mkdir(parents=True)
     (project / ".codex").mkdir(parents=True)
@@ -784,7 +831,9 @@ def main():
         def monitor():
             while not monitor_stop.is_set():
                 try:
-                    matches, links = inspect(root, (secret, foreign_secret))
+                    matches, links = inspect(
+                        root, (secret, foreign_secret), root_anchor=root_anchor
+                    )
                     live["samples"] += 1
                     live["symlinks"] = max(live["symlinks"], links)
                     for match in matches:
@@ -822,7 +871,9 @@ def main():
         report["requests"] = Model.requests
         report["advertised_tool_names"] = sorted(Model.advertised_tool_names)[:35]
         report["mcp_child_saw_secret"] = Model.mcp_digest_verified
-        found, symlinks = inspect(root, (secret, foreign_secret))
+        found, symlinks = inspect(
+            root, (secret, foreign_secret), root_anchor=root_anchor
+        )
         # Never aggregate a live dictionary while the observer may still be
         # scanning; an incomplete join is itself a mandatory security FAIL.
         combined, counts = aggregate_findings(
