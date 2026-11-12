@@ -182,7 +182,11 @@ def probe(client, env, project, config_path):
         if "uap_ping" not in str(tested.get("output")):
             raise ValueError("native MCP connection did not list expected tool")
         state = response(trust_path + "/untrust", base, token, "POST", {})
-        if state != {"trusted": False} or SERVER_NAME in list_servers(base, token, project):
+        # The mutation response is not an independent read of persisted trust.
+        # Require both fresh native trust state and the effective MCP catalog.
+        if (state != {"trusted": False}
+                or response(trust_path + "/trust", base, token) != {"trusted": False}
+                or SERVER_NAME in list_servers(base, token, project)):
             raise ValueError("native project trust revocation did not suppress MCP")
         # Only clear the pending cleanup after the native state and catalog
         # both prove revocation. A failed/ambiguous revoke is retried in finally.
