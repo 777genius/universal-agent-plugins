@@ -107,6 +107,7 @@ Every changed client has User and Project A delivery with independent Project B
 and original User sentinels. Product tests use the ordinary public UAP CLI.
 
 - Dry-run, missing/declined action consent: no native process or installed effect.
+- Installation explicitly confirmed (including `--yes`) while separate native enablement consent is absent or declined: installation stays valid and resumable, with no enablement action, new trust, or unrelated profile change.
 - Add/repeat/update/missing-package repair/cold locked restore/remove; same
   installation/source/binding/data authority across lifecycle and retained data.
 - Exact-owned native action and read-back; same-name User/A/B collision, stale
