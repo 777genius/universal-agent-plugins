@@ -180,9 +180,9 @@ func TestPiModernFixtureResolvesMarketingKitSavedClosure(t *testing.T) {
 				t.Fatalf("Pi saved graph must contain Marketing Kit and 3 required children: %+v", lock)
 			}
 			wanted := map[string]string{
-				"marketing-kit": "0.1.0",
-				"notion": "0.1.0",
-				"hubspot-crm": "0.1.0",
+				"marketing-kit":     "0.1.0",
+				"notion":            "0.1.0",
+				"hubspot-crm":       "0.1.0",
 				"playwright-bridge": "0.0.80",
 			}
 			for _, pin := range lock.Packages {
