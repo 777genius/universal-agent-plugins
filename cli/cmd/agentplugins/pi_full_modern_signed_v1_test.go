@@ -33,6 +33,10 @@ const (
 	piFullShardCount           = 3
 )
 
+// Independently reviewed byte identity of the frozen TEST-only fixture.
+// The source_commit field alone is not a proof of unchanged fixture bytes.
+const piFullExpectedSnapshotSHA256 = "458a5c2809d6d2c443496e18ea3fee309d14f8a12f476f301873f3b9f9769399"
+
 // This is NEVER publisher evidence. The snapshot deliberately contains
 // synthetically granted Pi targets and no reviewed real-host evidence.
 // The test acquires 34 pinned package sources for saved lifecycles and
@@ -42,6 +46,9 @@ func piFullSignedTestDirectory(t *testing.T, cacheRoot string) (*directoryv1.Cli
 	body, err := os.ReadFile(piFullSnapshotPath)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if actual := sha256.Sum256(body); hex.EncodeToString(actual[:]) != piFullExpectedSnapshotSHA256 {
+		t.Fatal("frozen TEST-only snapshot bytes changed without review")
 	}
 	var snapshot domain.DirectorySnapshot
 	if err := json.Unmarshal(body, &snapshot); err != nil {
@@ -239,6 +246,7 @@ func TestPiFullModernSignedTestOnlyMarketplace(t *testing.T) {
 		for _, scope := range []domain.InstallScope{domain.ScopeUser, domain.ScopeProject} {
 			caseName := fmt.Sprintf("%s@%d/%s", distribution.ID, distribution.Releases[0].Sequence, scope)
 			refusal := ""
+			completed := false
 			passed := t.Run(caseName, func(t *testing.T) {
 				j, _ := piFullRealSavedJourney(t)
 				root := ""
@@ -247,6 +255,7 @@ func TestPiFullModernSignedTestOnlyMarketplace(t *testing.T) {
 				}
 				if distribution.Kind == domain.DistributionUpstream {
 					refusal = piFullAssertUpstreamDenied(t, j, root, distribution.ID)
+					completed = true
 					return
 				}
 				originalB := projectJourneyRead(t, filepath.Join(piSignedProjectNativeRoot(j, j.b), "mcp.json"))
@@ -281,7 +290,11 @@ func TestPiFullModernSignedTestOnlyMarketplace(t *testing.T) {
 				if got := projectJourneyRead(t, filepath.Join(piSignedProjectNativeRoot(j, j.b), "mcp.json")); got != originalB {
 					t.Fatal("Pi remove changed unselected Project B foreign native settings")
 				}
+				completed = true
 			})
+			if !passed || !completed {
+				t.Fatalf("Pi test-only case %s skipped or failed before completing assertions", caseName)
+			}
 			if passed {
 				if distribution.Kind == domain.DistributionUpstream {
 					deniedCases = append(deniedCases, piFullExpectedDenial{Case: caseName, Refusal: refusal})
