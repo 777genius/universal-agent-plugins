@@ -59,6 +59,17 @@ def native_private_token(home):
 
 
 
+class RefuseRedirect(urllib.request.HTTPRedirectHandler):
+    """A native bearer must never leave the exact loopback server."""
+    def redirect_request(self, request, fp, code, msg, headers, newurl):
+        raise ValueError("native loopback API redirect refused")
+
+
+def local_opener():
+    # The runner may supply HTTP_PROXY; never forward the native bearer to it.
+    return urllib.request.build_opener(urllib.request.ProxyHandler({}), RefuseRedirect())
+
+
 def response(req, base, token, method="GET", data=None):
     origin = urllib.parse.urlsplit(base)
     if (origin.scheme != "http" or origin.hostname != "127.0.0.1"
@@ -69,7 +80,7 @@ def response(req, base, token, method="GET", data=None):
     body = None if data is None else json.dumps(data).encode("utf-8")
     request = urllib.request.Request(base + req, data=body, method=method,
         headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"})
-    with urllib.request.urlopen(request, timeout=7) as reply:
+    with local_opener().open(request, timeout=7) as reply:
         raw = reply.read(MAX_CAPTURE + 1)
         if len(raw) > MAX_CAPTURE:
             raise ValueError("oversized native API response")
