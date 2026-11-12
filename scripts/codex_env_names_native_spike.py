@@ -35,6 +35,17 @@ SHELL_FOREIGN_PRESENT = "UAP_SHELL_FOREIGN_PRESENT"
 MCP_CALL = "call_uap_env_mcp"
 SEARCH_CALL = "call_uap_tool_search"
 
+# Vendor-supplied tool names are untrusted. Report only this fixed vocabulary;
+# never serialize arbitrary advertised names or model/provider metadata.
+KNOWN_NATIVE_TOOL_NAMES = frozenset({
+    "exec_command", "shell_command", "tool_search",
+    "mcp__env_spike", "mcp__env_spike__confirm_env",
+    "create_goal", "get_goal", "update_goal",
+    "list_mcp_resource_templates", "list_mcp_resources",
+    "multi_agent_v1", "read_mcp_resource", "request_user_input",
+    "view_image", "write_stdin",
+})
+
 CHILD = r'''
 import hashlib, json, os, sys
 name = "UAP_E2E_SYNTHETIC_TOKEN"
@@ -308,8 +319,15 @@ class Model(http.server.BaseHTTPRequestHandler):
                 if structured_mcp_receipt_matches(output, cls.expected_digest):
                     cls.mcp_digest_verified = True
         tools = req.get("tools", [])
-        function_names = {x.get("name") for x in tools if isinstance(x, dict)}
-        cls.advertised_tool_names.update(name for name in function_names if name)
+        function_names = {
+            name for x in tools if isinstance(x, dict)
+            for name in (x.get("name"),) if isinstance(name, str)
+        }
+        # The raw names are only used for in-memory routing during this
+        # request. Reports never include names outside the reviewed allowlist.
+        cls.advertised_tool_names.update(
+            name for name in function_names if name in KNOWN_NATIVE_TOOL_NAMES
+        )
         namespace = next((x for x in tools if isinstance(x, dict)
                           and x.get("type") == "namespace"
                           and x.get("name") == "mcp__env_spike"), None)

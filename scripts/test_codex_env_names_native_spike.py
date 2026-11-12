@@ -66,6 +66,20 @@ class TestSyntheticModelOracle(unittest.TestCase):
         finally:
             client.close()
 
+    def test_vendor_tool_names_are_bounded_before_artifact_reporting(self):
+        # A provider could put a synthetic value or arbitrary data in a tool
+        # name; this must never reach redacted proof artifacts.
+        untrusted = "PRIVATE_SYNTHETIC_CANARY_NEVER_STORE"
+        shell = self.call({"tools": [
+            {"type": "function", "name": "exec_command"},
+            {"type": "function", "name": untrusted},
+            {"type": "function", "name": ["not-a-string"]},
+        ]})
+        self.assertEqual(shell["name"], "exec_command")
+        self.assertIn("exec_command", Model.advertised_tool_names)
+        self.assertNotIn(untrusted, Model.advertised_tool_names)
+        self.assertNotIn(untrusted, json.dumps(sorted(Model.advertised_tool_names)))
+
     def test_real_call_ids_and_matching_digest_must_be_observed(self):
         shell = self.call({"tools": [{"type": "function", "name": "exec_command"}]})
         self.assertEqual(shell["call_id"], SHELL_CALL)
