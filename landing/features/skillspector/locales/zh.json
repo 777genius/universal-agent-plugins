@@ -114,7 +114,11 @@
       "copiedDiagnostics": "已复制",
       "copyDiagnosticsHelp": "将此条目的检查状态和所有已发布诊断证据复制为 JSON，不会发送任何数据。",
       "copyDiagnosticsSuccess": "诊断信息已复制。可粘贴到 AI 助手中分析证据。",
-      "copyDiagnosticsError": "无法复制。请允许访问剪贴板后重试。"
+      "copyDiagnosticsError": "无法复制。请允许访问剪贴板后重试。",
+      "recoveryWitnessTitle": "独立验证的扫描记录",
+      "recoveryWitnessRun": "main 运行 {run}，第 {attempt} 次尝试",
+      "recoveryWitnessExplanation": "这份独立的原始报告包含主扫描中没有的发现。检查仍不完整；这些自动检测结果尚未经过独立审计确认。",
+      "recoveryWitnessFindings": "另一份已验证扫描中的其他发现"
     }
   }
 }
