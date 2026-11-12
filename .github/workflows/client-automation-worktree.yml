@@ -1,6 +1,6 @@
 # Temporary development-only transport for PR #878. Remove before merge.
-# Exports tracked source and public vendored dependencies, never credentials,
-# .git, runner HOME or environment. This is not product acceptance.
+# Exports tracked public source and digest-verified vendor binaries only.
+# No .git, credentials, runner HOME, caches or profile state. Not product proof.
 name: Automation exact offline worktree
 on:
   pull_request:
@@ -12,37 +12,54 @@ jobs:
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
           ref: ${{ github.event.pull_request.head.sha }}
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
-        with:
-          go-version: '1.26.11'
-          cache: false
-      - name: Export exact public source and offline compiler inputs
+      - name: Export exact source and frozen public vendor distributions
         env:
           EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT"
           test -z "$(git status --porcelain --untracked-files=normal)"
-          out="$RUNNER_TEMP/uap-automation-worktree"
+          out="$RUNNER_TEMP/uap-automation-native-inputs"
           mkdir -m 700 "$out"
           git archive --format=tar HEAD > "$out/source.tar"
-          go work vendor -o "$out/vendor"
-          tar -C "$out" -czf "$out/vendor.tar.gz" vendor
-          rm -rf "$out/vendor"
-          tar -C "$(go env GOROOT)" -czf "$out/go-toolchain.tar.gz" .
           git rev-parse HEAD > "$out/source-commit.txt"
           git rev-parse 'HEAD^{tree}' > "$out/source-tree.txt"
-          go version > "$out/toolchain.txt"
-          (cd "$out" && sha256sum source.tar vendor.tar.gz go-toolchain.tar.gz > SHA256SUMS)
+          PYTHONPATH=scripts python3 - "$out" <<'PY'
+          import hashlib, importlib, json, sys
+          from pathlib import Path
+          from project_native_research import Budget, acquire, materialize, verify_files
+          destination = Path(sys.argv[1])
+          budget = Budget(900)
+          manifest = {}
+          for name in ('cline', 'grok', 'windsurf'):
+              module = importlib.import_module('project_native_collectors.' + name)
+              receipt, contents = acquire(module.ACQUISITION, budget)
+              root = destination / name
+              root.mkdir(mode=0o700)
+              binary, identities = materialize(root, module.ACQUISITION, receipt, contents)
+              verify_files(identities, budget)
+              manifest[name] = {'acquisition': receipt, 'binary': str(binary.relative_to(destination)),
+                                'sha256': hashlib.sha256(binary.read_bytes()).hexdigest()}
+          (destination / 'native-inputs.json').write_text(json.dumps(manifest, sort_keys=True), encoding='utf-8')
+          PY
+          curl --fail --location --silent --show-error --retry 3 --max-time 120 \
+            'https://github.com/google-antigravity/antigravity-cli/releases/download/1.5.3/agy_cli_linux_x64.tar.gz' \
+            -o "$out/agy-1.5.3-linux-x64.tar.gz"
+          printf '%s  %s\n' '1b4850599cce73a17f94ffb422df3bf9531531b77dbddc40c1a435e0c2c16807' \
+            "$out/agy-1.5.3-linux-x64.tar.gz" | sha256sum --check --status
+          (cd "$out" && find . -type f -print0 | sort -z | xargs -0 sha256sum > "$RUNNER_TEMP/native-inputs-sha256")
+          mv "$RUNNER_TEMP/native-inputs-sha256" "$out/SHA256SUMS"
           test -z "$(git status --porcelain --untracked-files=normal)"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: automation-offline-worktree-${{ github.event.pull_request.head.sha }}
-          path: ${{ runner.temp }}/uap-automation-worktree/
+          name: automation-native-inputs-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/uap-automation-native-inputs/
           if-no-files-found: error
           retention-days: 1
