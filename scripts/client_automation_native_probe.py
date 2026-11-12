@@ -118,6 +118,36 @@ def exact_plugin_id(body, path):
     return ident
 
 
+def grok_readonly_project_inventory(body, project, selected_path):
+    """Prove the exact disabled project plugin was *seen*, not enabled."""
+    facts = native_json(body)
+    require(isinstance(facts, dict) and facts.get("grokVersion") == "1.0.70"
+            and facts.get("cwd") == str(project)
+            and facts.get("projectRoot") in (str(project), str(project) + os.sep)
+            and facts.get("projectTrusted") is False,
+            "Grok native selected untrusted project differs")
+    rows = facts.get("plugins")
+    require(isinstance(rows, list) and len(rows) <= 256,
+            "Grok native project plugin inventory invalid")
+    seen = set()
+    matched = []
+    for row in rows:
+        require(isinstance(row, dict) and isinstance(row.get("name"), str)
+                and bool(row["name"].strip()), "Grok native plugin identity invalid")
+        key = row["name"].casefold()
+        require(key not in seen, "Grok native plugin identity duplicated")
+        seen.add(key)
+        if row["name"] == NAME:
+            require(row.get("scope") == "project"
+                    and row.get("path") == str(selected_path)
+                    and row.get("enabled") is False,
+                    "Grok native project source or disabled state differs")
+            matched.append({"name": NAME, "scope": "project",
+                            "path": str(selected_path), "enabled": False})
+    require(len(matched) == 1, "Grok exact disabled Project plugin not discovered")
+    return matched[0]
+
+
 class Probe:
     def __init__(self, root, binary, evidence):
         self.root, self.binary, self.evidence = root, binary, evidence
@@ -171,10 +201,14 @@ class Probe:
         try:
             _, listing = self.run("list-before-a", [self.binary, "plugin", "list", "--json"])
             self.run("list-before-b", [self.binary, "plugin", "list", "--json"], self.b)
-            _, inspected = self.run("inspect-before-a", [self.binary, "inspect", "--json"])
-            facts = native_json(inspected)
-            require(isinstance(facts, dict) and facts.get("projectTrusted") is False
-                    and facts.get("cwd") == str(self.a), "Grok untrusted project differs")
+            _, inspected_a = self.run("inspect-before-a", [self.binary, "inspect", "--json"])
+            _, inspected_b = self.run("inspect-before-b", [self.binary, "inspect", "--json"], self.b)
+            self.evidence["project_inventory"] = {
+                "a": grok_readonly_project_inventory(inspected_a, self.a, roots[1]),
+                "b": grok_readonly_project_inventory(inspected_b, self.b, roots[2]),
+            }
+            # Inspect proves exact prepared native discovery, not a safe
+            # scope-qualified enable command; `plugin enable` accepts a name.
             # Never invent a native ID or fall back to a name-only mutator.
             try:
                 ident = exact_plugin_id(listing, roots[1])
