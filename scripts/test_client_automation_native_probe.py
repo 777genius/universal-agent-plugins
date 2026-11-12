@@ -1,6 +1,7 @@
 """Inert decoder/authority contracts; no vendor client is mocked as a PASS."""
 import json
 import base64
+import hashlib
 import os
 import sys
 import types
@@ -109,14 +110,30 @@ class NativeAdmissionContracts(unittest.TestCase):
 
     @unittest.skipUnless(os.name == "posix" and hasattr(os, "O_NOFOLLOW")
                          and hasattr(os, "O_DIRECTORY"), "native snapshot is POSIX-only")
-    def test_raw_bytes_and_modes_preserved(self):
+    def test_only_digest_and_modes_preserved(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             put(root / "config", {"name": NAME})
             item = snapshot(root)["config"]
             self.assertEqual(item["mode"], 0o600)
             self.assertEqual(item["bytes"], (root / "config").stat().st_size)
-            self.assertEqual(len(item["sha256"]), 64)
+            self.assertEqual(item["sha256"], hashlib.sha256((root / "config").read_bytes()).hexdigest())
+            self.assertEqual(set(item), {"sha256", "mode", "bytes"})
+
+    @unittest.skipUnless(os.name == "posix" and hasattr(os, "O_NOFOLLOW")
+                         and hasattr(os, "O_DIRECTORY"), "requires POSIX no-follow dirfd")
+    def test_snapshot_refuses_hardlinked_external_file_without_serializing_it(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary)
+            root = parent / "owned"
+            root.mkdir()
+            (root / "inert").write_bytes(b"owned")
+            foreign = parent / "foreign-secret"
+            foreign.write_bytes(b"do-not-capture")
+            os.link(foreign, root / "external-link")
+            with self.assertRaisesRegex(ValueError, "linked file"):
+                snapshot(root)
+            self.assertEqual(foreign.read_bytes(), b"do-not-capture")
 
     def test_excluded_clients_are_not_admitted(self):
         for target in ("vscode", "chatgptweb", "chatgpt", "codex", "kimi"):

@@ -45,10 +45,11 @@ def read_anchored_snapshot(root_fd, parts, expected):
         leaf = os.open(parts[-1], flags | os.O_NONBLOCK, dir_fd=parent)
         opened.append(leaf)
         before = os.fstat(leaf)
-        require(stat.S_ISREG(before.st_mode) and before.st_size <= 1 << 20,
-                "config capture bound")
+        require(stat.S_ISREG(before.st_mode) and before.st_size <= 1 << 20
+                and before.st_nlink == 1,
+                "config capture bound or linked file")
         identity = lambda meta: (meta.st_dev, meta.st_ino, meta.st_mode, meta.st_size,
-                                 meta.st_mtime_ns, meta.st_ctime_ns)
+                                 meta.st_mtime_ns, meta.st_ctime_ns, meta.st_nlink)
         require(identity(before) == identity(expected), "config changed before capture")
         with os.fdopen(os.dup(leaf), "rb") as stream:
             raw = stream.read((1 << 20) + 1)
@@ -61,7 +62,7 @@ def read_anchored_snapshot(root_fd, parts, expected):
 
 
 def snapshot(root):
-    """Capture test-only config without foreign content or raced path aliases."""
+    """Capture only hashes/metadata, never native-generated file contents or foreign data."""
     require(root.is_dir() and root.resolve() == root and not root.is_symlink(),
             "snapshot root is missing or aliased")
     require(os.name == "posix" and all(hasattr(os, flag) for flag in
@@ -88,7 +89,7 @@ def snapshot(root):
             raw = read_anchored_snapshot(root_fd, relative.parts, meta)
             out[str(relative)] = {
                 "sha256": hashlib.sha256(raw).hexdigest(), "mode": stat.S_IMODE(meta.st_mode),
-                "bytes": len(raw), "base64": base64.b64encode(raw).decode(),
+                "bytes": len(raw),
             }
         return out
     finally:
