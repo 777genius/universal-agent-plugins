@@ -169,8 +169,8 @@ def windows_hermes_launcher_fingerprint(binary):
     shebang = raw.rfind(b"#!", 0, local)
     require(shebang > 0, "Hermes Windows launcher shebang missing")
     local_zip, central_zip = bytearray(raw[local:central]), bytearray(raw[central:])
-    local_zip[10:14] = b"\\0" * 4
-    central_zip[12:16] = b"\\0" * 4
+    local_zip[10:14] = bytes(4)
+    central_zip[12:16] = bytes(4)
     digest = lambda data: hashlib.sha256(data).hexdigest()
     return {
         "executable_sha256": digest(raw),
