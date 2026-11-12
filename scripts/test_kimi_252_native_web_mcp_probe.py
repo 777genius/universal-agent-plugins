@@ -1,6 +1,7 @@
 """Contract checks for bounded native Kimi 2.5.2 MCP management evidence."""
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import http.client
 import json
 import os
 import tempfile
@@ -243,6 +244,65 @@ class KimiNativeWebProbeTests(unittest.TestCase):
             native.probe(Path("/test/kimi"), {}, Path("/test/project"), config)
         self.assertEqual(sum(path.endswith("/untrust") for path in paths), 2)
         killpg.assert_called_once_with(5791, native.signal.SIGKILL)
+        child.wait.assert_called_once_with(timeout=5)
+
+
+    @patch.object(native.os, "killpg")
+    @patch.object(native, "start_server")
+    @patch.object(native, "list_servers")
+    @patch.object(native, "response")
+    def test_http_bad_status_during_untrust_cleanup_kills_child(
+            self, api, catalog, startup, killpg):
+        """An HTTPException during cleanup must not strand Kimi's process group."""
+        child = MagicMock(pid=6821)
+        startup.return_value = ("http://127.0.0.1:12345", "inert-token", child)
+        catalog.return_value = {}
+
+        def reply(path, base, token, method="GET", data=None):
+            if path == "/api/v1/workspaces":
+                return {"id": "test-owned-project"}
+            if path.endswith("/trust") and method == "GET":
+                return {"trusted": False}
+            if path.endswith("/trust") and method == "POST":
+                raise TimeoutError("grant acknowledgment lost")
+            if path.endswith("/untrust"):
+                raise http.client.BadStatusLine("malformed native HTTP response")
+            raise AssertionError("unexpected native API route")
+
+        api.side_effect = reply
+        with self.assertRaisesRegex(TimeoutError, "grant acknowledgment lost"):
+            native.probe(Path("/test/kimi"), {}, Path("/test/project"),
+                         Path("/test/project/.kimi-code/mcp.json"))
+        killpg.assert_called_once_with(6821, native.signal.SIGKILL)
+        child.wait.assert_called_once_with(timeout=5)
+
+    @patch.object(native.os, "killpg")
+    @patch.object(native, "start_server")
+    @patch.object(native, "list_servers")
+    @patch.object(native, "response")
+    def test_unexpected_cleanup_exception_still_kills_child(
+            self, api, catalog, startup, killpg):
+        """Even a non-network cleanup exception must run termination in finally."""
+        child = MagicMock(pid=6822)
+        startup.return_value = ("http://127.0.0.1:12345", "inert-token", child)
+        catalog.return_value = {}
+
+        def reply(path, base, token, method="GET", data=None):
+            if path == "/api/v1/workspaces":
+                return {"id": "test-owned-project"}
+            if path.endswith("/trust") and method == "GET":
+                return {"trusted": False}
+            if path.endswith("/trust") and method == "POST":
+                raise TimeoutError("grant acknowledgment lost")
+            if path.endswith("/untrust"):
+                raise RuntimeError("unexpected cleanup failure")
+            raise AssertionError("unexpected native API route")
+
+        api.side_effect = reply
+        with self.assertRaisesRegex(RuntimeError, "unexpected cleanup failure"):
+            native.probe(Path("/test/kimi"), {}, Path("/test/project"),
+                         Path("/test/project/.kimi-code/mcp.json"))
+        killpg.assert_called_once_with(6822, native.signal.SIGKILL)
         child.wait.assert_called_once_with(timeout=5)
 
     def test_private_token_requires_owned_regular_nonworld_readable_file(self):
