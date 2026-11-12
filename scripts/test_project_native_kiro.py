@@ -788,24 +788,20 @@ class KiroCollectorTests(unittest.TestCase):
             "kiro.native-restart-removal", "kiro.mcp-initialize",
             "kiro.mcp-tools-list", "kiro.mcp-tools-call"])
 
-    def test_second_mcp_list_auth_refusal_counts_only_unrun_routes(self):
+    def test_later_mcp_list_auth_refusal_cannot_be_reclassified_as_clean_boundary(self):
+        # Only the first exact workspace list refusal is a measured
+        # authentication boundary. Later list refusals are not qualified.
         ctx = self.context()
         ctx.replace["a-global-raw-list"] = (
             {"exit": 1, "error": None}, b"", kiro._LIST_AUTH_STDERR)
-        result = kiro.collect(ctx)
+        with self.assertRaisesRegex(
+                ValueError, "Kiro probe did not finish cleanly: a-global-raw-list"):
+            kiro.collect(ctx)
         self.assertEqual(len(ctx.calls), 12)
+        self.assertEqual(ctx.calls[-2][0], "a-workspace-raw-list")
         self.assertEqual(ctx.calls[-1][0], "a-global-raw-list")
-        facts = result["observations"]
-        self.assertEqual([row["probe"] for row in facts["raw_source_list_observations"]],
-                         ["a-workspace-raw-list"])
-        self.assertEqual(facts["read_only_authentication_boundary"], {
-            "probe": "a-global-raw-list", "cwd_selection": "a",
-            "arguments": ["mcp", "list", "global"],
-            "kind": "authentication-required", "exit": 1,
-            "remaining_list_commands_unobserved": 4})
-        self.assertEqual([row["id"] for row in result["cases"]], ["kiro.help"])
-        self.assertFalse(any(value for key, value in facts.items()
-                             if key.endswith("_qualified")))
+        self.assertFalse(any("qualified" in key and value
+                             for key, value in ctx.summary.items()))
 
     def test_changed_or_missing_authentication_tuple_is_refused(self):
         good = ({"exit": 1, "error": None}, b"", kiro._LIST_AUTH_STDERR)

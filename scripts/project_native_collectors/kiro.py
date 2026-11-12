@@ -452,7 +452,7 @@ def collect(ctx):
                     auth_boundary = {"probe": label, "cwd_selection": project,
                                      "arguments": ["mcp", "list", scope],
                                      "kind": "authentication-required", "exit": 1,
-                                     "remaining_list_commands_unobserved": len(_MCP_LIST_ROUTES) - len(captures) - 1}
+                                     "remaining_list_commands_unobserved": 5}
                     break
                 captures.append({"probe": label, "cwd_selection": project, "scope_argument": scope,
                                  "sha256_normalized_text": hashlib.sha256(text.encode()).hexdigest(),
