@@ -143,7 +143,7 @@ func TestPiProjectSignedV1SavedFourPackageLifecycle(t *testing.T) {
 		distribution := "fixture/" + item.name
 		snapshot.Products = append(snapshot.Products, domain.DirectoryProduct{
 			SchemaVersion: 1, ID: item.name, DisplayName: item.name,
-			Description: "Signed test-only Pi project package",
+			Description:  "Signed test-only Pi project package",
 			ManifestName: item.name, Aliases: []string{item.name},
 			ReservedAliases: []string{item.name}, Categories: []string{"tools"},
 			MinimumCapabilities: domain.DirectoryMinimumCapabilities{Skills: skills, MCP: mcp},
@@ -155,11 +155,11 @@ func TestPiProjectSignedV1SavedFourPackageLifecycle(t *testing.T) {
 			Status: domain.DistributionActive,
 			Releases: []domain.DirectoryRelease{{
 				Sequence: 1, PackageVersion: "0.1.0", ManifestName: item.name,
-				AgentPluginsSchema: domain.PluginSchemaV1,
-				PackageSource: domain.DirectorySource{Repository: repository, Revision: commit, Path: item.path},
+				AgentPluginsSchema:  domain.PluginSchemaV1,
+				PackageSource:       domain.DirectorySource{Repository: repository, Revision: commit, Path: item.path},
 				TreeDigestAlgorithm: domain.TreeDigestAlgorithm,
-				TreeDigest: loaded.TreeDigest, ManifestDigest: loaded.ManifestDigest,
-				Components: components, PublishedAt: now.Add(-2*time.Hour).Format(time.RFC3339),
+				TreeDigest:          loaded.TreeDigest, ManifestDigest: loaded.ManifestDigest,
+				Components: components, PublishedAt: now.Add(-2 * time.Hour).Format(time.RFC3339),
 			}},
 			ReleasePolicies: []domain.DirectoryReleasePolicy{{
 				ReleaseSequence: 1, Status: domain.ReleaseActive,
