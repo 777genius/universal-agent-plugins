@@ -111,7 +111,7 @@ class Driver:
         else:
             facts = document(payload.encode())
             require(isinstance(facts, dict), "native facts are not an object")
-            for key in ("nonce", "revision", "marker", "cwd", "plugin_root", "plugin_data"):
+            for key in ("nonce", "operation", "revision", "marker", "cwd", "plugin_root", "plugin_data"):
                 require(facts.get(key) == self.expected[key], "native result authority differs: " + key)
             require(type(facts.get("pid")) is int and facts["pid"] > 0
                     and isinstance(facts.get("session"), str) and facts["session"],
@@ -141,7 +141,11 @@ def provider(expected=None, reject=False):
             pass
 
         def serve(self):
-            record = {"method": self.command[:16], "path": self.path[:256]}
+            # Only the exact accepted route may enter evidence. Never retain an
+            # untrusted path or query: even a refused request could contain
+            # the native server's private bearer.
+            record = {"method": self.command[:16],
+                      "path": self.path if self.path == "/v1/chat/completions" else "<rejected-route>"}
             with driver.lock:
                 driver.requests.append(record)
             try:
