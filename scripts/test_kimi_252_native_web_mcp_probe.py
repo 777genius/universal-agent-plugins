@@ -1,6 +1,7 @@
 """Contract checks for bounded native Kimi 2.5.2 MCP management evidence."""
 import tempfile
 import unittest
+import urllib.request
 from unittest.mock import patch
 from pathlib import Path
 
@@ -47,6 +48,17 @@ class KimiNativeWebProbeTests(unittest.TestCase):
             token_file.symlink_to(secret)
             with self.assertRaises(ValueError):
                 native.native_private_token(home)
+
+    def test_loopback_bearer_never_uses_proxy_or_redirect(self):
+        opener = native.local_opener()
+        self.assertTrue(any(isinstance(handler, urllib.request.ProxyHandler)
+                            and handler.proxies == {} for handler in opener.handlers))
+        self.assertTrue(any(isinstance(handler, native.RefuseRedirect)
+                            for handler in opener.handlers))
+        with self.assertRaisesRegex(ValueError, "redirect refused"):
+            native.RefuseRedirect().redirect_request(
+                None, None, 302, "redirect", {}, "https://other.example/")
+
 
     def test_never_queries_a_non_loopback_address(self):
         with self.assertRaises(ValueError):
