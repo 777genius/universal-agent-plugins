@@ -161,7 +161,7 @@ func TestPiRealMarketplaceSignedTestCohortSavedClosure(t *testing.T) {
 						Alias: "marketing-kit",
 						Registry: &environment.RegistrySource{
 							Distribution: "777genius/marketing-kit",
-							Selector: environment.Selector{Kind: environment.SelectorVersion, Value: "0.1.0"},
+							Selector:     environment.Selector{Kind: environment.SelectorVersion, Value: "0.1.0"},
 						},
 					},
 				},
