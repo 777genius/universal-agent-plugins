@@ -102,8 +102,8 @@ func piRealMarketplaceFixture(t *testing.T, scope domain.InstallScope) freshRest
 	for _, item := range piRealMarketplaceClosure {
 		release := domain.DirectoryRelease{
 			Sequence: item.sequence, PackageVersion: item.version, ManifestName: item.manifest,
-			AgentPluginsSchema: domain.PluginSchemaV1,
-			PackageSource: domain.DirectorySource{Repository: item.repository, Revision: item.revision, Path: item.path},
+			AgentPluginsSchema:  domain.PluginSchemaV1,
+			PackageSource:       domain.DirectorySource{Repository: item.repository, Revision: item.revision, Path: item.path},
 			TreeDigestAlgorithm: domain.TreeDigestAlgorithm, TreeDigest: item.tree,
 			ManifestDigest: item.manifestHash, Components: item.components,
 			PublishedAt: "2026-11-11T00:00:00Z",
@@ -118,7 +118,7 @@ func piRealMarketplaceFixture(t *testing.T, scope domain.InstallScope) freshRest
 		snapshot.Evidence = append(snapshot.Evidence, evidence)
 		snapshot.Products = append(snapshot.Products, domain.DirectoryProduct{
 			SchemaVersion: 1, ID: item.product, DisplayName: item.product,
-			Description: "Actual pinned public source in a disposable signed-v1 test",
+			Description:  "Actual pinned public source in a disposable signed-v1 test",
 			ManifestName: item.manifest, Aliases: []string{item.product},
 			ReservedAliases: []string{item.product}, Categories: []string{"tools"},
 			MinimumCapabilities: domain.DirectoryMinimumCapabilities{Skills: "optional", MCP: "required"},
