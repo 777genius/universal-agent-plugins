@@ -67,7 +67,7 @@ func TestMCPHTTPRejectsOversizeAndUnexpectedEncodings(t *testing.T) {
 		{"bad media type", "text/html", "", good, -1},
 		{"content encoding", "application/json", "gzip", good, -1},
 		{"oversize header", "application/json", "", good, maxResponseBytes + 1},
-		{"oversize body", "application/json", "", strings.Repeat("x", maxResponseBytes + 1), -1},
+		{"oversize body", "application/json", "", strings.Repeat("x", maxResponseBytes+1), -1},
 		{"non-OK status", "application/json", "", good, -1},
 	}
 	for _, tc := range cases {
