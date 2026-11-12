@@ -102,6 +102,22 @@ func decodeHTTPResponse(ctx context.Context, response *http.Response) (json.RawM
 	if encoding := response.Header.Get("Content-Encoding"); encoding != "" && encoding != "identity" {
 		return nil, ErrProtocol
 	}
+	media, _, err := mime.ParseMediaType(response.Header.Get("Content-Type"))
+	if err != nil {
+		return nil, ErrProtocol
+	}
+	if media == "text/event-stream" {
+		// An SSE response need not close the stream after the final JSON-RPC
+		// reply. Return as soon as that event is complete, within read bounds.
+		result, err := decodeEventStream(response.Body, true)
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		return result, err
+	}
+	if media != "application/json" {
+		return nil, ErrProtocol
+	}
 	payload, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
 	if err != nil {
 		if ctx.Err() != nil {
@@ -112,17 +128,7 @@ func decodeHTTPResponse(ctx context.Context, response *http.Response) (json.RawM
 	if len(payload) > maxResponseBytes {
 		return nil, ErrProtocol
 	}
-	media, _, err := mime.ParseMediaType(response.Header.Get("Content-Type"))
-	if err != nil {
-		return nil, ErrProtocol
-	}
-	if media == "application/json" {
-		return decodeResponse(payload)
-	}
-	if media == "text/event-stream" {
-		return decodeEvents(payload)
-	}
-	return nil, ErrProtocol
+	return decodeResponse(payload)
 }
 
 func encodeHeaderValue(value string) string {
@@ -165,7 +171,14 @@ func decodeResponse(payload []byte) (json.RawMessage, error) {
 }
 
 func decodeEvents(payload []byte) (json.RawMessage, error) {
-	scanner := bufio.NewScanner(bytes.NewReader(payload))
+	// Offline decoding checks the *whole* payload, including duplicate replies.
+	return decodeEventStream(bytes.NewReader(payload), false)
+}
+
+func decodeEventStream(reader io.Reader, stopAfterFinal bool) (json.RawMessage, error) {
+	// The reader limit covers all SSE lines, not only individual data fields.
+	limited := &io.LimitedReader{R: reader, N: maxResponseBytes + 1}
+	scanner := bufio.NewScanner(limited)
 	scanner.Buffer(make([]byte, 4096), maxResponseBytes)
 	var data []string
 	var final json.RawMessage
@@ -177,6 +190,12 @@ func decodeEvents(payload []byte) (json.RawMessage, error) {
 				return nil, err
 			}
 			data = nil
+			if stopAfterFinal && final != nil {
+				if limited.N == 0 {
+					return nil, ErrProtocol
+				}
+				return final, nil
+			}
 			continue
 		}
 		if strings.HasPrefix(line, ":") {
@@ -187,7 +206,7 @@ func decodeEvents(payload []byte) (json.RawMessage, error) {
 		}
 		// Ignore id, retry and event fields; they are not MCP JSON-RPC messages.
 	}
-	if scanner.Err() != nil {
+	if scanner.Err() != nil || limited.N == 0 {
 		return nil, ErrProtocol
 	}
 	if err := acceptSSEData(data, &final); err != nil {
