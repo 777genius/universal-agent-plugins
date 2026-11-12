@@ -172,6 +172,46 @@ class KimiNativeWebProbeTests(unittest.TestCase):
         killpg.assert_called_once_with(4567, native.signal.SIGKILL)
         child.wait.assert_called_once_with(timeout=5)
 
+
+    @patch.object(native.os, "killpg")
+    @patch.object(native, "start_server")
+    @patch.object(native, "list_servers")
+    @patch.object(native, "response")
+    def test_untrust_ack_without_persisted_revocation_fails_closed(
+            self, api, catalog, startup, killpg):
+        child = MagicMock(pid=6812)
+        startup.return_value = ("http://127.0.0.1:12345", "inert-token", child)
+        config = Path("/test/project/.kimi-code/mcp.json")
+        row = {"name": native.SERVER_NAME, "source": "global",
+               "origin": str(config), "mutable": False}
+        catalog.side_effect = [{}, {native.SERVER_NAME: row}]
+        trust_reads = 0
+        revokes = []
+
+        def reply(path, base, token, method="GET", data=None):
+            nonlocal trust_reads
+            if path == "/api/v1/workspaces":
+                return {"id": "isolated-project"}
+            if path.endswith("/trust"):
+                if method == "POST":
+                    return {"trusted": True}
+                trust_reads += 1
+                return {"trusted": trust_reads > 1}
+            if path == "/api/v2/mcp/servers:test":
+                return {"success": True, "output": "uap_ping"}
+            if path.endswith("/untrust"):
+                revokes.append(path)
+                return {"trusted": False}
+            raise AssertionError("unexpected native API route")
+
+        api.side_effect = reply
+        with self.assertRaisesRegex(ValueError, "trust revocation did not suppress"):
+            native.probe(Path("/test/kimi"), {}, Path("/test/project"), config)
+        self.assertEqual(trust_reads, 2)
+        self.assertEqual(len(revokes), 2)
+        killpg.assert_called_once_with(6812, native.signal.SIGKILL)
+        child.wait.assert_called_once_with(timeout=5)
+
     @patch.object(native.os, "killpg")
     @patch.object(native, "start_server")
     @patch.object(native, "list_servers")
