@@ -189,6 +189,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'UAP Windows build failed' }
           "UAP_BIN=$uapExe" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Install pinned native Windows Hermes and resolve its real runtime
+        id: hermes_install
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -275,6 +276,10 @@ jobs:
           "HERMES_NATIVE_RUNTIME_COMMAND_FILE=$runtimePath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           'PYTHONUTF8=1' | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           $hermesBinDir | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          # No source or executable bytes enter artifacts: diagnostics contain hashes only.
+          $fingerprintBefore = python scripts/e2e/released-native-proof.py fingerprint --binary "$hermesBin"
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned Hermes launcher pre-lifecycle fingerprint failed' }
+          [IO.File]::WriteAllText((Join-Path $evidenceDir 'launcher-before.json'), $fingerprintBefore + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
       - name: Real Hermes native Windows lifecycle and trust boundary
         shell: pwsh
         env:
@@ -287,6 +292,15 @@ jobs:
             python scripts/e2e/hermes-native.py run scripts/e2e/hermes-native-lifecycle.py
           }
           if ($LASTEXITCODE -ne 0) { throw 'Native lifecycle failed' }
+      - name: Capture pinned Windows Hermes launcher post-lifecycle fingerprint
+        if: ${{ always() && steps.hermes_install.outcome == 'success' }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $evidenceDir = Split-Path -Parent $env:HERMES_NATIVE_RUNTIME_COMMAND_FILE
+          $fingerprintAfter = python scripts/e2e/released-native-proof.py fingerprint --binary "$env:HERMES_BIN"
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned Hermes launcher post-lifecycle fingerprint failed' }
+          [IO.File]::WriteAllText((Join-Path $evidenceDir 'launcher-after.json'), $fingerprintAfter + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
       - name: Retain release-native receipt and transcript
         if: ${{ always() && inputs.release_tag != '' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
