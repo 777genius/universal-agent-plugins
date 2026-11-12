@@ -83,7 +83,7 @@ func (c *Client) List(ctx context.Context) ([]Summary, error) {
 	seenURIs := make(map[string]bool)
 	seenCursors := make(map[string]bool)
 	var cursor, cacheScope string
-	for page := range maxCatalogPages {
+	for range maxCatalogPages {
 		args := map[string]any{}
 		if cursor != "" {
 			args["cursor"] = cursor
