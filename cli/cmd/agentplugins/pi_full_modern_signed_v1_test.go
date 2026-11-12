@@ -246,7 +246,7 @@ func TestPiFullModernSignedTestOnlyMarketplace(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(target, append(report, '\\n'), 0600); err != nil {
+		if err := os.WriteFile(target, append(report, '\n'), 0600); err != nil {
 			t.Fatal(err)
 		}
 	}
