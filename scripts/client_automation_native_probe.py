@@ -1,7 +1,8 @@
 """Pinned native API admission research; never product or activation acceptance.
 
-The only mutation experiment enables an inert, test-authored Grok Skill inside
-fresh disposable HOME/projects. No MCP process, provider or real profile is used.
+Read-only native selection probes run inside fresh disposable HOME/projects.
+Grok enablement stays refused until identity, read-back and recovery are proven.
+No MCP process, provider or real profile is used.
 """
 import argparse
 import base64
@@ -33,6 +34,8 @@ def put(path, body):
 
 def snapshot(root):
     """Capture ordinary test config bytes, not aliases or an unbounded cache."""
+    require(root.is_dir() and root.resolve() == root and not root.is_symlink(),
+            "snapshot root is missing or aliased")
     out = {}
     for path in sorted(root.rglob("*")):
         meta = path.lstat()
@@ -49,15 +52,60 @@ def snapshot(root):
     return out
 
 
-def exact_plugin_id(body, path):
-    """Accept only an explicit scoped native ID joined to one exact path."""
+def native_json(body):
+    """Strict bounded native JSON, never help text or an exit-code substitute."""
+    require(isinstance(body, (str, bytes)) and 0 < len(body) <= 1 << 20, "native JSON bound")
     def pairs(items):
         result = {}
         for key, value in items:
             require(key not in result, "duplicate native JSON key")
             result[key] = value
         return result
-    value = json.loads(body, object_pairs_hook=pairs)
+    def invalid_constant(_value):
+        raise ValueError("nonfinite native JSON value")
+    try:
+        return json.loads(body, object_pairs_hook=pairs, parse_constant=invalid_constant)
+    except (UnicodeError, RecursionError) as error:
+        raise ValueError("invalid native JSON encoding or depth") from error
+
+
+def successful_capture(record):
+    require("error" in record and record["error"] is None, "native capture failed")
+    require(type(record.get("exit")) is int and record["exit"] == 0,
+            "native command failed: " + str(record.get("probe", "unknown")))
+
+
+def check_version(client, stdout):
+    expected = {"cline": b"3.0.73", "grok": b"grok 1.0.70 (f50904eaee6c)"}
+    require(client in expected and stdout in (expected[client], expected[client] + b"\n",
+                                              expected[client] + b"\r\n"),
+            "native version differs from pinned acquisition")
+
+
+def cline_inventory(body, path, name):
+    # Candidate schema from cline/cline@50e77bc1 apps/cli/src/commands/config.ts.
+    # The frozen executable must confirm it; there is no help/text fallback.
+    rows = native_json(body)
+    require(isinstance(rows, list) and len(rows) == 1 and isinstance(rows[0], dict),
+            "Cline exact single-server inventory required")
+    row = rows[0]
+    require(row.get("name") == name and row.get("path") == str(path)
+            and row.get("transportType") == "stdio" and row.get("disabled") is True,
+            "Cline selected source or disabled sentinel differs")
+    return row
+
+
+def require_admission(evidence):
+    require(evidence.get("research_completed") is True
+            and evidence.get("native_api_admitted") is True,
+            "native API not admitted; collected diagnostics are not acceptance")
+    require(evidence.get("qualified_product_e2e") is False,
+            "research cannot qualify product E2E")
+
+
+def exact_plugin_id(body, path):
+    """Accept only an explicit scoped native ID joined to one exact path."""
+    value = native_json(body)
     rows = value if isinstance(value, list) else value.get("plugins") if isinstance(value, dict) else None
     require(isinstance(rows, list), "unqualified native list envelope")
     matches = [row for row in rows if isinstance(row, dict) and row.get("path") == str(path)]
@@ -96,14 +144,16 @@ class Probe:
         self.evidence["commands"].append(dict(record,
             stdout_base64=base64.b64encode(stdout).decode(),
             stderr_base64=base64.b64encode(stderr).decode()))
-        require(record["error"] is None, "native capture failed: " + label)
+        successful_capture(record)
         return record["exit"], stdout
 
     def grok(self):
         for label, args in (("version", ["--version"]), ("plugin-help", ["plugin", "--help"]),
                             ("enable-help", ["plugin", "enable", "--help"]),
                             ("list-help", ["plugin", "list", "--help"])):
-            self.run(label, [self.binary, *args])
+            _, output = self.run(label, [self.binary, *args])
+            if label == "version":
+                check_version("grok", output)
         put(self.home / ".grok/config.toml",
             '[marketplace]\ndefault_skills_installs_purged = true\n[features]\nturn_summary = false\n')
         roots = [self.home / ".grok/plugins/user-probe", self.a / ".grok/plugins/project-probe",
@@ -112,49 +162,72 @@ class Probe:
             put(root / ".grok-plugin/plugin.json", {"name": NAME, "version": "1.0.0", "skills": "./skills/"})
             put(root / ("skills/probe-" + str(index) + "/SKILL.md"),
                 "---\nname: probe-" + str(index) + "\ndescription: Inert scope identity fixture\n---\nText only.\n")
-        code, listing = self.run("list-before-a", [self.binary, "plugin", "list", "--json"])
-        self.run("list-before-b", [self.binary, "plugin", "list", "--json"], self.b)
-        self.run("inspect-before-a", [self.binary, "inspect", "--json"])
-        before = {"user": snapshot(self.home / ".grok"), "a": snapshot(self.a / ".grok"),
-                  "b": snapshot(self.b / ".grok")}
+        config = self.home / ".grok/config.toml"
+        original_config = config.read_bytes()
+        watched = {"user_plugin": roots[0], "a": self.a, "b": self.b}
+        before = {name: snapshot(path) for name, path in watched.items()}
         self.evidence["before"] = before
-        # A name-only mutator is deliberately NEVER called. Absence of a stable
-        # full native ID is evidence of a missing admission prerequisite.
+        self.evidence["native_api_admitted"] = False
         try:
-            require(code == 0, "native plugin list failed")
-            ident = exact_plugin_id(listing, roots[1])
-        except (ValueError, TypeError) as error:
-            self.evidence["enable_admission"] = {"admitted": False, "reason": str(error)}
-        else:
-            exit_code, _ = self.run("enable-exact-project-id", [self.binary, "plugin", "enable", ident])
-            self.evidence["enable_admission"] = {"admitted": True, "id": ident, "exit": exit_code}
-            self.run("list-after-a", [self.binary, "plugin", "list", "--json"])
-            self.run("list-after-b", [self.binary, "plugin", "list", "--json"], self.b)
-            self.run("inspect-after-a", [self.binary, "inspect", "--json"])
-        self.evidence["after"] = {"user": snapshot(self.home / ".grok"),
-            "a": snapshot(self.a / ".grok"), "b": snapshot(self.b / ".grok")}
-        require(not (self.home / ".grok/trusted_folders.toml").exists(), "native experiment changed trust")
-        require(self.evidence["after"]["a"] == before["a"] and self.evidence["after"]["b"] == before["b"],
-                "native enable changed project package bytes")
+            _, listing = self.run("list-before-a", [self.binary, "plugin", "list", "--json"])
+            self.run("list-before-b", [self.binary, "plugin", "list", "--json"], self.b)
+            _, inspected = self.run("inspect-before-a", [self.binary, "inspect", "--json"])
+            facts = native_json(inspected)
+            require(isinstance(facts, dict) and facts.get("projectTrusted") is False
+                    and facts.get("cwd") == str(self.a), "Grok untrusted project differs")
+            # Never invent a native ID or fall back to a name-only mutator.
+            try:
+                ident = exact_plugin_id(listing, roots[1])
+            except (ValueError, TypeError) as error:
+                self.evidence["enable_admission"] = {"admitted": False, "reason": str(error)}
+            else:
+                # Identity alone does not prove selective mutation or recovery.
+                self.evidence["enable_admission"] = {"admitted": False, "id": ident,
+                    "reason": "exact enable/read-back/recovery remain unqualified"}
+        finally:
+            after = {name: snapshot(path) for name, path in watched.items()}
+            self.evidence["after"] = after
+            require(after == before, "read-only collection changed fixture state")
+            require(not config.is_symlink() and config.read_bytes() == original_config,
+                    "read-only collection changed Grok user configuration")
+            trust = self.home / ".grok/trusted_folders.toml"
+            require(not trust.exists() and not trust.is_symlink(), "native experiment changed trust")
 
     def cline(self):
+        self.evidence["native_api_admitted"] = False
         for label, args in (("version", ["--version"]), ("help", ["--help"]),
-                            ("mcp-help", ["mcp", "--help"]),
-                            ("mcp-list-help", ["mcp", "list", "--help"])):
-            self.run(label, [self.binary, "--auto-approve", "false", *args])
-        # Disabled entries prove source selection without executing an MCP server.
+                            ("config-help", ["config", "--help"])):
+            _, output = self.run(label, [self.binary, "--auto-approve", "false", *args])
+            if label == "version":
+                check_version("cline", output)
+        # The command reads configuration, with both sentinels disabled; no
+        # server connection or model/credential is used to prove selection.
         user = self.home / ".cline/data/settings/cline_mcp_settings.json"
         project = self.a / ".uap/clients/cline/mcp.json"
         for path, name in ((user, "user-sentinel"), (project, "project-sentinel")):
             put(path, {"mcpServers": {name: {"command": "/usr/bin/false", "disabled": True,
                 "autoApprove": [], "args": []}}})
-        self.run("mcp-default", [self.binary, "--auto-approve", "false", "mcp", "list"])
-        self.run("mcp-selected-a", [self.binary, "--auto-approve", "false", "mcp", "list"],
-                 overrides={"CLINE_MCP_SETTINGS_PATH": str(project)})
-        self.run("mcp-default-b", [self.binary, "--auto-approve", "false", "mcp", "list"], self.b)
-        self.evidence["selected_environment"] = {"CLINE_MCP_SETTINGS_PATH": str(project),
-                                                "CLINE_NO_AUTO_UPDATE": "1"}
-        self.evidence["configuration"] = {"user": snapshot(user.parent), "project": snapshot(project.parent)}
+        watched = {"user": user.parent, "project": project.parent, "b": self.b}
+        before = {name: snapshot(path) for name, path in watched.items()}
+        self.evidence["configuration_before"] = before
+        selected = {"CLINE_MCP_SETTINGS_PATH": str(project)}
+        observations = []
+        self.evidence["source_selection"] = observations
+        cases = (("mcp-default", self.a, {}, user, "user-sentinel"),
+                 ("mcp-selected-a", self.a, selected, project, "project-sentinel"),
+                 ("mcp-default-after-a", self.a, {}, user, "user-sentinel"),
+                 ("mcp-default-b", self.b, {}, user, "user-sentinel"))
+        for label, cwd, overrides, path, name in cases:
+            try:
+                _, body = self.run(label, [self.binary, "--auto-approve", "false",
+                                          "config", "mcp", "--json"], cwd, overrides)
+                observations.append({"probe": label, "server": cline_inventory(body, path, name)})
+            finally:
+                after = {name: snapshot(path) for name, path in watched.items()}
+                self.evidence["configuration"] = after
+                require(after == before, "Cline observation changed fixture configuration or Project B")
+        self.evidence["selected_environment"] = dict(selected, CLINE_NO_AUTO_UPDATE="1")
+        self.evidence["native_api_admitted"] = True
 
 
 def main():
@@ -172,7 +245,7 @@ def main():
     args.output.mkdir(mode=0o700, parents=True, exist_ok=False)
     evidence = {"schema_version": 1, "client": args.client, "source_commit": actual,
                 "source_tree": tree, "commands": [], "research_completed": False,
-                "qualified_product_e2e": False, "provider_authentication": False, "model_invoked": False}
+                "native_api_admitted": False, "qualified_product_e2e": False, "provider_authentication": False, "model_invoked": False}
     try:
         from project_native_research import Budget, acquire, materialize, verify_files
         if args.client == "grok":
@@ -190,12 +263,14 @@ def main():
             getattr(probe, args.client)()
             verify_files(identities, budget)
         evidence["research_completed"] = True
+        require_admission(evidence)
     except Exception as error:
         evidence["error"] = type(error).__name__ + ": " + str(error)
         raise
     finally:
         put(args.output / "native-api.json", evidence)
         print(json.dumps({"research_completed": evidence["research_completed"],
+                          "native_api_admitted": evidence["native_api_admitted"],
                           "qualified_product_e2e": False, "client": args.client}))
 
 
