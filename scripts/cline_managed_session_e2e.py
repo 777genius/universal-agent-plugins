@@ -19,6 +19,32 @@ NAME, SERVER = "uap-cline-session", "uap_session_probe"
 SOURCE = Path(__file__).resolve().parent.parent
 
 
+def cline_owned_stdio(entry):
+    """Unwrap the genuine Cline native transport without accepting a flat or foreign route."""
+    require(isinstance(entry, dict) and set(entry) <= {"transport", "disabled", "autoApprove"},
+            "Cline owned MCP entry contains unsupported fields")
+    if "disabled" in entry:
+        require(entry["disabled"] is False, "disabled Cline server must not execute")
+    if "autoApprove" in entry:
+        require(entry["autoApprove"] == [], "fixture must not grant automatic tool approval")
+    transport = entry.get("transport")
+    require(isinstance(transport, dict) and set(transport) <=
+            {"type", "command", "args", "env", "cwd"} and transport.get("type") == "stdio",
+            "Cline native transport is not the selected stdio source")
+    require(isinstance(transport.get("command"), str) and transport["command"],
+            "Cline native stdio command missing")
+    require(isinstance(transport.get("cwd"), str) and transport["cwd"],
+            "Cline native stdio cwd missing")
+    require(isinstance(transport.get("args", []), list) and
+            all(isinstance(value, str) for value in transport.get("args", [])),
+            "Cline native stdio arguments invalid")
+    env = transport.get("env")
+    require(isinstance(env, dict) and all(isinstance(key, str) and isinstance(value, str)
+                                           for key, value in env.items()),
+            "Cline native stdio environment invalid")
+    return transport
+
+
 class SessionJourney:
     def __init__(self, root, cli, native, probe, evidence):
         self.root, self.cli, self.native, self.probe, self.evidence = root, cli, native, probe, evidence
@@ -100,7 +126,7 @@ class SessionJourney:
                 and rows[0].get("path") == str(config) and rows[0].get("transportType") == "stdio"
                 and rows[0].get("disabled") is False, "native Cline source selection differs")
         require(read_owned(self.a / ".uap/state-v2.json", self.root) == state, "session changed UAP state")
-        selected = document(read_owned(config, self.root))["mcpServers"][SERVER]
+        selected = cline_owned_stdio(document(read_owned(config, self.root))["mcpServers"][SERVER])
         command = Path(selected["command"])
         require(command.is_absolute() and command.is_relative_to(active) and command.resolve() == command,
                 "installed probe command is not owned")
