@@ -10,10 +10,12 @@ from pathlib import Path
 import tempfile
 import threading
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 import http.server
 
-from codex_env_names_native_spike import (CHILD, Model, MCP_CALL, SHELL_CALL, SHELL_MARKER,
+from codex_env_names_appserver_spike import terminal_turn_status
+from codex_env_names_native_spike import (_scan_stat_identity, CHILD, Model, MCP_CALL, SHELL_CALL, SHELL_MARKER,
                                         SHELL_ENV_PRESENT, SHELL_FOREIGN_PRESENT,
                                         ENV_NAME, FOREIGN_ENV_NAME, inspect, aggregate_findings, windows_shell_command, isolated_env, isolated_root, structured_mcp_receipt_matches, fixed_windows_spawn_error_category, WINDOWS_NATIVE_SANDBOX_CONFIG)
 
@@ -402,6 +404,34 @@ class TestSyntheticMcpChild(unittest.TestCase):
         self.assertEqual(tool["name"], "confirm_env")
         self.assertEqual(tool["annotations"]["readOnlyHint"], True)
         self.assertEqual(tool["annotations"]["destructiveHint"], False)
+
+
+class TestNativeSecurityLifecycle(unittest.TestCase):
+    def test_turn_terminal_correlation_rejects_unrelated_and_failed_events(self):
+        match = {"method": "turn/completed", "params": {
+            "threadId": "thread-a", "turn": {"id": "turn-a", "status": "completed"}}}
+        self.assertTrue(terminal_turn_status(match, "thread-a", "turn-a"))
+        self.assertIsNone(terminal_turn_status(match, "thread-b", "turn-a"))
+        self.assertIsNone(terminal_turn_status(match, "thread-a", "turn-b"))
+        self.assertIsNone(terminal_turn_status({"method": "turn/started"},
+                                               "thread-a", "turn-a"))
+        self.assertFalse(terminal_turn_status({
+            "method": "turn/completed", "params": {
+                "threadId": "thread-a", "turn": {"id": "turn-a", "status": "failed"}}},
+            "thread-a", "turn-a"))
+
+    def test_windows_path_identity_excludes_only_incompatible_ctime(self):
+        baseline = dict(st_dev=1, st_ino=5, st_size=8, st_mtime_ns=99)
+        before = SimpleNamespace(**baseline, st_ctime_ns=10)
+        after = SimpleNamespace(**baseline, st_ctime_ns=20)
+        self.assertEqual(_scan_stat_identity(before, include_change_time=False),
+                         _scan_stat_identity(after, include_change_time=False))
+        self.assertNotEqual(_scan_stat_identity(before),
+                            _scan_stat_identity(after))
+        changed = SimpleNamespace(**(baseline | {"st_mtime_ns": 100}),
+                                  st_ctime_ns=20)
+        self.assertNotEqual(_scan_stat_identity(before, include_change_time=False),
+                            _scan_stat_identity(changed, include_change_time=False))
 
 
 class TestIsolatedProjectTrustRoot(unittest.TestCase):

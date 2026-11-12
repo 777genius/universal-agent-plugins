@@ -427,6 +427,12 @@ class Model(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+def _scan_stat_identity(info, include_change_time=True):
+    """Path-vs-handle identity: Windows stat ctime has incompatible semantics."""
+    shared = (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns)
+    return shared + ((info.st_ctime_ns,) if include_change_time else ())
+
+
 def _read_regular_bounded(path, observed):
     """Read the observed inode with bounded no-follow I/O, or fail closed.
 
@@ -438,14 +444,20 @@ def _read_regular_bounded(path, observed):
              | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_NOFOLLOW", 0))
     with os.fdopen(os.open(path, flags), "rb") as reader:
         opened = os.fstat(reader.fileno())
-        identity = lambda info: (info.st_dev, info.st_ino, info.st_size,
-                                 info.st_mtime_ns, info.st_ctime_ns)
+        # Python/Windows lstat.st_ctime_ns is creation time while fstat
+        # may report change time. Keep ctime for POSIX path-vs-handle,
+        # and ALWAYS check full fstat identity before/after the read.
+        path_identity = lambda info: _scan_stat_identity(
+            info, include_change_time=os.name != "nt"
+        )
         if (not stat.S_ISREG(opened.st_mode) or opened.st_ino == 0
-                or identity(opened) != identity(observed) or opened.st_size > limit):
+                or path_identity(opened) != path_identity(observed)
+                or opened.st_size > limit):
             raise OSError(errno.EIO, "unstable_native_scan")
         data = reader.read(limit + 1)
         after = os.fstat(reader.fileno())
-        if len(data) != opened.st_size or identity(after) != identity(opened):
+        if (len(data) != opened.st_size
+                or _scan_stat_identity(after) != _scan_stat_identity(opened)):
             raise OSError(errno.EIO, "unstable_native_scan")
         return data
 
@@ -716,6 +728,8 @@ def main():
         finally:
             monitor_stop.set()
             observer.join(timeout=3)
+            observer_stopped = not observer.is_alive()
+        report["live_observer_stopped"] = observer_stopped
         report["codex_exit_code"] = result.returncode
         report["live_scan_samples"] = live["samples"]
         report["live_snapshot_files_seen"] = live["snapshot_files_seen"]
@@ -734,13 +748,17 @@ def main():
         report["advertised_tool_names"] = sorted(Model.advertised_tool_names)[:35]
         report["mcp_child_saw_secret"] = Model.mcp_digest_verified
         found, symlinks = inspect(root, (secret, foreign_secret))
-        combined, counts = aggregate_findings(found, live["hits"].values())
+        # Never aggregate a live dictionary while the observer may still be
+        # scanning; an incomplete join is itself a mandatory security FAIL.
+        combined, counts = aggregate_findings(
+            found, tuple(live["hits"].values()) if observer_stopped else ()
+        )
         report["leak"] = bool(combined)  # legacy name: any unsafe finding
         report["canary_persistence_observed"] = counts.get("synthetic_value_persisted", 0) > 0
-        report["unsafe_scan_observed"] = any(
+        report["unsafe_scan_observed"] = (not observer_stopped or any(
             category.startswith("unscanned_") and total > 0
             for category, total in counts.items()
-        )
+        ))
         report["finding_counts"] = counts
         report["finding_total"] = len(combined)
         report["matches"] = combined[:10]
@@ -750,8 +768,9 @@ def main():
         elif not all([report["real_codex_shell_called"], report["real_codex_mcp_called"],
                       report["mcp_child_saw_secret"]]):
             report["failure"] = Model.error or "native_proof_incomplete"
-        elif (combined or live["errors"] or live["samples"] < 20
-              or Model.shell_secret_visible or Model.shell_foreign_visible):
+        elif (not observer_stopped or combined or live["errors"]
+              or live["samples"] < 20 or Model.shell_secret_visible
+              or Model.shell_foreign_visible):
             report["failure"] = "live_canary_persisted_or_unsafe_scan"
         else:
             report["secrecy_pass"] = True

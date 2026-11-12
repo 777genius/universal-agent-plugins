@@ -39,6 +39,33 @@ def rpc_send(proc, q, serial, method, params, timeout=35):
         return row.get("result", {})
     raise RuntimeError("codex_rpc_timeout_" + method.replace("/", "_"))
 
+def terminal_turn_status(message, thread_id, turn_id):
+    """Only a correlated terminal turn notification can certify completion."""
+    if not isinstance(message, dict) or message.get("method") != "turn/completed":
+        return None
+    params = message.get("params")
+    if not isinstance(params, dict) or params.get("threadId") != thread_id:
+        return None
+    turn = params.get("turn")
+    if not isinstance(turn, dict) or turn.get("id") != turn_id:
+        return None
+    return turn.get("status") == "completed"
+
+
+def wait_for_turn_terminal(proc, messages, thread_id, turn_id, deadline):
+    while time.monotonic() < deadline:
+        try:
+            event = messages.get(timeout=min(.25, max(.01, deadline - time.monotonic())))
+        except queue.Empty:
+            if proc.poll() is not None:
+                return False
+            continue
+        outcome = terminal_turn_status(event, thread_id, turn_id)
+        if outcome is not None:
+            return outcome
+    return False
+
+
 def main():
     codex = Path(sys.argv[1]).resolve(strict=True)
     evidence = Path(sys.argv[2]).resolve()
@@ -106,7 +133,9 @@ def main():
     report = {"policy_mode": mode, "sandbox_backend": ("bwrap" if sys.platform.startswith("linux") else "native"), "version": "", "real_codex_shell_called": False,
               "mcp_native_connected": False, "real_codex_mcp_called": False,
               "mcp_child_saw_secret": False, "leak": False,
-              "secrecy_pass": False, "failure": None}
+              "secrecy_pass": False, "failure": None,
+              "turn_completed": False, "graceful_shutdown": False,
+              "shutdown_mode": "not_run"}
     proc = None
     stop = threading.Event()
     live = {"samples": 0, "hits": {}, "errors": 0, "snapshots_seen": False}
@@ -175,12 +204,15 @@ def main():
             )
         except RuntimeError as exc:
             report["direct_mcp_call_error"] = str(exc)[:96]
-        rpc_send(proc, messages, 100, "turn/start", {
+        started = rpc_send(proc, messages, 100, "turn/start", {
             "threadId": thread_id,
             "input": [{"type": "text",
                        "text": "Run a shell tool once, then call env_spike confirm_env.",
                        "text_elements": []}]
         })
+        turn_id = started.get("turn", {}).get("id")
+        if not isinstance(turn_id, str) or not turn_id:
+            raise RuntimeError("codex_turn_id_missing")
         deadline = time.monotonic() + 65
         while not Model.mcp_output_seen and time.monotonic() < deadline:
             if Model.error:
@@ -188,6 +220,10 @@ def main():
             if proc.poll() is not None:
                 raise RuntimeError("codex_ended_while_turn_active")
             time.sleep(.05)
+        if not Model.mcp_output_seen or not wait_for_turn_terminal(
+                proc, messages, thread_id, turn_id, deadline):
+            raise RuntimeError("native_turn_terminal_unproven")
+        report["turn_completed"] = True
         report["shell_tool_output_seen"] = Model.shell_output_seen
         report["shell_secret_visible"] = Model.shell_secret_visible
         report["shell_foreign_visible"] = Model.shell_foreign_visible
@@ -217,22 +253,50 @@ def main():
         report["failure"] = str(exc) if isinstance(exc, RuntimeError) else type(exc).__name__
     finally:
         if proc is not None:
-            proc.terminate()
-            try:
-                proc.communicate(timeout=5)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-                proc.communicate(timeout=5)
+            # Official Codex stdio transport drains pending RPC/rollout on EOF.
+            # Never use SIGTERM as the happy path before the terminal turn.
+            if proc.poll() is None:
+                try:
+                    proc.stdin.close()
+                    proc.stdin = None
+                    proc.wait(timeout=38)
+                    report["graceful_shutdown"] = proc.returncode == 0
+                    report["shutdown_mode"] = (
+                        "eof_graceful" if report["graceful_shutdown"]
+                        else "nonzero_exit"
+                    )
+                except (OSError, subprocess.TimeoutExpired):
+                    report["shutdown_mode"] = "forced_terminate"
+                    if proc.poll() is None:
+                        proc.terminate()
+                        try:
+                            proc.wait(timeout=5)
+                        except subprocess.TimeoutExpired:
+                            report["shutdown_mode"] = "forced_kill"
+                            proc.kill()
+                            proc.wait(timeout=5)
+            else:
+                report["shutdown_mode"] = "already_exited"
+            if proc.stdout is not None:
+                proc.stdout.close()
         stop.set()
         watch.join(timeout=3)
+        observer_stopped = not watch.is_alive()
+        report["observer_stopped"] = observer_stopped
+        if report["failure"] is None and not report["graceful_shutdown"]:
+            report["failure"] = "graceful_shutdown_unverified"
         found, symlinks = inspect(root, (secret, foreign_secret))
-        all_hits, counts = aggregate_findings(found, live["hits"].values())
+        # A still-running observer may hold an unseen transient canary;
+        # do not consume its mutable findings or certify a security PASS.
+        all_hits, counts = aggregate_findings(
+            found, tuple(live["hits"].values()) if observer_stopped else ()
+        )
         report["leak"] = bool(all_hits)  # legacy name: any unsafe finding
         report["canary_persistence_observed"] = counts.get("synthetic_value_persisted", 0) > 0
-        report["unsafe_scan_observed"] = any(
+        report["unsafe_scan_observed"] = (not observer_stopped or any(
             category.startswith("unscanned_") and total > 0
             for category, total in counts.items()
-        )
+        ))
         report["finding_counts"] = counts
         report["finding_total"] = len(all_hits)
         report["matching_path_hashes"] = all_hits[:12]
@@ -242,7 +306,10 @@ def main():
         report["symlinks_observed_not_followed"] = symlinks
         report["model_requests"] = Model.requests
         report["model_advertised_tools"] = sorted(Model.advertised_tool_names)[:25]
-        report["secrecy_pass"] = (report["failure"] is None and not all_hits
+        report["secrecy_pass"] = (report["failure"] is None
+                                  and report["turn_completed"]
+                                  and report["graceful_shutdown"]
+                                  and observer_stopped and not all_hits
                                   and not Model.shell_secret_visible
                                   and not Model.shell_foreign_visible
                                   and live["errors"] == 0 and live["samples"] >= 20)
