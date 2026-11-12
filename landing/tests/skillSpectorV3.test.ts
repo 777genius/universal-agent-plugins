@@ -374,6 +374,17 @@ describe('SkillSpector v3 exact producer contract', () => {
     assert.deepEqual(primary.findings, referenceRecord('asc_workflow').findings);
     assert.equal(primary.recovery_witnesses[0]!.record.findings.length, 1);
 
+    // Once the catalog pin changes, both original findings remain readable,
+    // but neither counts as a verification of the new target revision.
+    const historical = structuredClone(primary);
+    historical.freshness = 'historical';
+    historical.target_revision = 'b'.repeat(40);
+    const historicalDecoded = decodeReference(historical);
+    assert.equal(historicalDecoded.freshness, 'historical');
+    assert.equal(historicalDecoded.target_revision, 'b'.repeat(40));
+    assert.deepEqual(historicalDecoded.recovery_witnesses, primary.recovery_witnesses);
+    assert.equal(historicalDecoded.status, 'partial');
+
     const cases: Array<[string, (record: typeof primary) => void]> = [
       ['forged run', record => { record.recovery_witnesses![0]!.origin.run_id = 0; }],
       ['forged source', record => { record.recovery_witnesses![0]!.record.source.revision = 'a'.repeat(40); }],
