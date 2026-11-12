@@ -15,7 +15,7 @@ from unittest.mock import patch
 import http.server
 
 from codex_env_names_appserver_spike import terminal_turn_status
-from codex_env_names_native_spike import (_scan_stat_identity, _windows_path_within_root, _capture_scan_root, CHILD, Model, MCP_CALL, SHELL_CALL, SHELL_MARKER,
+from codex_env_names_native_spike import (_scan_stat_identity, _windows_path_within_root, _capture_scan_root, _read_regular_bounded, CHILD, Model, MCP_CALL, SHELL_CALL, SHELL_MARKER,
                                         SHELL_ENV_PRESENT, SHELL_FOREIGN_PRESENT,
                                         ENV_NAME, FOREIGN_ENV_NAME, inspect, aggregate_findings, windows_shell_command, isolated_env, isolated_root, structured_mcp_receipt_matches, fixed_windows_spawn_error_category, WINDOWS_NATIVE_SANDBOX_CONFIG)
 
@@ -479,6 +479,49 @@ class TestNativeSecurityLifecycle(unittest.TestCase):
             self.assertEqual(pinned[1], str(root.resolve(strict=True)))
             self.assertEqual(len(pinned), 4)
             self.assertNotEqual(pinned[3], 0)
+
+    def test_root_swap_during_posix_open_fails_on_descriptor_inode(self):
+        if os.name == "nt":
+            self.skipTest("POSIX root descriptor identity control")
+        if os.open not in os.supports_dir_fd:
+            self.skipTest("POSIX dir_fd not supported")
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            root = base / "disposable_root"
+            root.mkdir()
+            target = root / "probe"
+            target.write_text("benign")
+            observed = target.lstat()
+            anchor = _capture_scan_root(root)
+            moved = base / "original_moved"
+            replacement = base / "replacement_moved"
+            original_open = os.open
+            swapped = False
+
+            def swap_during_root_open(path, flags, *args, **kwargs):
+                nonlocal swapped
+                if Path(path) == root and not swapped:
+                    swapped = True
+                    root.rename(moved)
+                    root.mkdir()
+                    (root / "probe").write_text("OUTSIDE_SYNTHETIC_CANARY")
+                    fd = original_open(path, flags, *args, **kwargs)
+                    (root / "probe").unlink()
+                    root.rename(replacement)
+                    moved.rename(root)
+                    # The lexical root pathname is now ORIGINAL again:
+                    # comparing only before/after names misses this swap.
+                    self.assertEqual(_capture_scan_root(root), anchor)
+                    return fd
+                return original_open(path, flags, *args, **kwargs)
+
+            with patch("codex_env_names_native_spike.os.open",
+                       side_effect=swap_during_root_open):
+                with self.assertRaises(OSError):
+                    _read_regular_bounded(target, observed, root, anchor)
+            self.assertTrue(swapped)
+            self.assertEqual(target.read_text(), "benign")
+            self.assertEqual((replacement / "probe").exists(), False)
 
     def test_windows_path_identity_excludes_only_incompatible_ctime(self):
         baseline = dict(st_dev=1, st_ino=5, st_size=8, st_mtime_ns=99)

@@ -548,6 +548,13 @@ def _read_regular_bounded(path, observed, root, root_anchor):
                          | getattr(os, "O_CLOEXEC", 0))
             directory_fd = os.open(root, dir_flags)
             descriptors.callback(os.close, directory_fd)
+            # The pathname check above can race with a directory rename.
+            # Anchor the ACTUAL opened root descriptor's inode to the
+            # immutable identity captured before launching Codex.
+            opened_root = os.fstat(directory_fd)
+            if (not stat.S_ISDIR(opened_root.st_mode)
+                    or (opened_root.st_dev, opened_root.st_ino) != root_anchor[2:4]):
+                raise OSError(errno.EPERM, "swapped_disposable_root_handle")
             for component in relative.parts[:-1]:
                 opened_dir = os.open(component, dir_flags, dir_fd=directory_fd)
                 descriptors.callback(os.close, opened_dir)
