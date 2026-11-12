@@ -5,9 +5,10 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/spf13/cobra"
+
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/mcpskills"
-	"github.com/spf13/cobra"
 )
 
 // This CLI has no installer state dependency: a successful read proves only
@@ -52,31 +53,36 @@ func newSkillsMCPCommand(opts *options, create mcpReaderFactory) *cobra.Command 
 		}}
 	inspect := &cobra.Command{Use: "inspect", Short: "Verify one exact SKILL.md without loading it into an agent", Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			reader, err := startMCPRead(cmd, opts, endpoint, create)
-			if err != nil {
-				return err
-			}
-			if uri == "" {
-				return CLIUsageError{Code: "INVALID_SELECTION", Message: "specify the exact Skill --uri"}
-			}
-			item, err := reader.Inspect(cmd.Context(), uri)
-			if err != nil {
-				return mcpPublicError(err)
-			}
-			report := struct {
-				Experimental bool              `json:"experimental"`
-				ReadOnly     bool              `json:"read_only"`
-				Skill        mcpskills.Summary `json:"skill"`
-			}{true, true, item}
-			if opts.format == "json" {
-				return writeJSONOutput(cmd.OutOrStdout(), "skills mcp inspect", report)
-			}
-			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Experimental MCP Skill %s (%s): %s; %d resources, no agent activation\n", prompt.SafeText(item.Name), prompt.SafeText(item.URI), prompt.SafeText(item.Integrity), item.Resources)
-			return err
+			return runMCPInspect(cmd, opts, endpoint, uri, create)
 		}}
 	inspect.Flags().StringVar(&uri, "uri", "", "exact URI of the remote SKILL.md")
 	root.AddCommand(list, inspect)
 	return root
+}
+
+
+func runMCPInspect(cmd *cobra.Command, opts *options, endpoint, uri string, create mcpReaderFactory) error {
+	reader, err := startMCPRead(cmd, opts, endpoint, create)
+	if err != nil {
+		return err
+	}
+	if uri == "" {
+		return CLIUsageError{Code: "INVALID_SELECTION", Message: "specify the exact Skill --uri"}
+	}
+	item, err := reader.Inspect(cmd.Context(), uri)
+	if err != nil {
+		return mcpPublicError(err)
+	}
+	report := struct {
+		Experimental bool              `json:"experimental"`
+		ReadOnly     bool              `json:"read_only"`
+		Skill        mcpskills.Summary `json:"skill"`
+	}{true, true, item}
+	if opts.format == "json" {
+		return writeJSONOutput(cmd.OutOrStdout(), "skills mcp inspect", report)
+	}
+	_, err = fmt.Fprintf(cmd.OutOrStdout(), "Experimental MCP Skill %s (%s): %s; %d resources, no agent activation\n", prompt.SafeText(item.Name), prompt.SafeText(item.URI), prompt.SafeText(item.Integrity), item.Resources)
+	return err
 }
 
 func startMCPRead(cmd *cobra.Command, opts *options, endpoint string, create mcpReaderFactory) (*mcpskills.Client, error) {
