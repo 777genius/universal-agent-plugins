@@ -15,7 +15,7 @@ import grok_noauth_call_e2e as native
 
 def expected():
     return {"nonce": "owned-nonce", "revision": "0", "marker": "owned-marker",
-            "operation": "read", "cwd": "/owned/project/plugin", "plugin_root": "/owned/project/plugin",
+            "operation": "read", "cwd": "/owned/project", "plugin_root": "/owned/project/plugin",
             "plugin_data": "/owned/project/data"}
 
 
