@@ -184,7 +184,7 @@ test('manual download channel beats delayed detection and locale remount', async
     await expect(page.locator('.download-section__platform-note')).toHaveCount(0);
     const npm = page.locator('.download-section__install-tab').filter({ hasText: downloadChannelTitle('en', 'npm') });
     await npm.click();
-    await expect(npm).toHaveAttribute('aria-pressed', 'true');
+    await expect(npm).toHaveAttribute('aria-selected', 'true');
     const commands = await page.locator('.download-section__command code').allTextContents();
     expect(commands.length).toBeGreaterThan(0);
     expect(commands.join('\n')).toContain('npx -y universal-agent-plugins add');
@@ -193,12 +193,12 @@ test('manual download channel beats delayed detection and locale remount', async
     const linuxRecommendation = page.locator('.download-section__install-tab').filter({ hasText: downloadChannelTitle('en', 'script') });
     await expect(linuxRecommendation.locator('.download-section__install-tab-badge')).toHaveText(wording('en')('download.recommended'));
     await expect(page.locator('.download-section__platform-note')).toHaveCount(0);
-    await expect(npm).toHaveAttribute('aria-pressed', 'true');
+    await expect(npm).toHaveAttribute('aria-selected', 'true');
     for (const locale of locales.filter((value) => value !== 'en')) {
       await navigate(page, '/download/', locale);
       await expect(page.getByRole('heading', { name: downloadHeading(locale), exact: true })).toBeVisible();
       const localizedNpm = page.locator('.download-section__install-tab').filter({ hasText: downloadChannelTitle(locale, 'npm') });
-      await expect(localizedNpm).toHaveAttribute('aria-pressed', 'true');
+      await expect(localizedNpm).toHaveAttribute('aria-selected', 'true');
       await expect.poll(() => page.locator('.download-section__command code').allTextContents()).toEqual(commands);
     }
     expect(errors).toEqual([]);
@@ -255,7 +255,7 @@ for (const outcome of ['success', 'error', 'security'] as const) {
           // No registry status is exposed on download; observe its public boundary
           // and return to a registry consumer to await the shared feed outcome.
           await expect(page.locator('.catalog, .plugin-card, .install-panel')).toHaveCount(0);
-          await expect(page.locator('.download-section__install-tab[aria-pressed="true"]')).toContainText('npx');
+          await expect(page.locator('.download-section__install-tab[aria-selected="true"]')).toContainText('npx');
           await navigate(page, '/plugins/', 'en', '?q=gitlab&client=cursor');
         }
         // Remounts may reuse the reverified fresh snapshot at the same sequence.
