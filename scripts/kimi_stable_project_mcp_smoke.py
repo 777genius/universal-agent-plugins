@@ -162,7 +162,7 @@ def smoke(installer, client, report_dir):
                 env={"PATH": os.environ["PATH"], "HOME": str(home), "GIT_CONFIG_NOSYSTEM": "1",
                      "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_TERMINAL_PROMPT": "0"}, seconds=15)
         (source / "plugin.json").write_text(json.dumps({"$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", "name": NAME, "version": "1.0.0"}), encoding="utf-8")
-        (source / "bin" / "probe").write_text("#!/usr/bin/env python3\n# Inert: never invoked by this qualification.\n", encoding="utf-8")
+        (source / "bin" / "probe").write_text("#!/usr/bin/env python3\n\"\"\"Isolated deterministic MCP probe; it never calls an external service.\"\"\"\nimport json\nimport sys\n\nfor line in sys.stdin:\n    request = json.loads(line)\n    method = request.get(\"method\")\n    if \"id\" not in request:\n        continue\n    if method == \"initialize\":\n        result = {\"protocolVersion\": request.get(\"params\", {}).get(\"protocolVersion\", \"2025-03-26\"),\n                  \"capabilities\": {\"tools\": {}},\n                  \"serverInfo\": {\"name\": \"uap-native-e2e\", \"version\": \"1.0.0\"}}\n    elif method == \"tools/list\":\n        result = {\"tools\": [{\"name\": \"uap_ping\", \"description\": \"An inert proof tool\",\n                             \"inputSchema\": {\"type\": \"object\", \"properties\": {}}}]}\n    elif method == \"tools/call\" and request.get(\"params\", {}).get(\"name\") == \"uap_ping\":\n        result = {\"content\": [{\"type\": \"text\", \"text\": \"uap-pong\"}]}\n    else:\n        response = {\"jsonrpc\": \"2.0\", \"id\": request[\"id\"],\n                    \"error\": {\"code\": -32601, \"message\": \"unsupported method\"}}\n        print(json.dumps(response), flush=True)\n        continue\n    print(json.dumps({\"jsonrpc\": \"2.0\", \"id\": request[\"id\"], \"result\": result}), flush=True)\n", encoding="utf-8")
         (source / "bin" / "probe").chmod(0o700)
         (source / "mcp.json").write_text(json.dumps({"$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json", "mcpServers": {NAME: {"type": "stdio", "command": "./bin/probe", "args": ["--inert"]}}}), encoding="utf-8")
         # Do not inherit an ambient vendor credential, workspace-trust override
@@ -209,7 +209,12 @@ def smoke(installer, client, report_dir):
             raise ValueError("Kimi repeat add mutated native MCP config")
         if (b / ".kimi-code").exists():
             raise ValueError("Project B Kimi profile changed")
-        # No login, trust override, session, MCP tool execution or model API.
+        # The optional hosted lane uses the *native* Kimi 2.5.2 management
+        # server and its real explicit trust API. Never bypass host auth/trust.
+        native_evidence = None
+        if os.environ.get("UAP_KIMI_252_NATIVE_WEB") == "1":
+            from kimi_252_native_web_mcp_probe import probe
+            native_evidence = probe(client, env, a, native_mcp)
         _, _ = run([str(installer), "remove", NAME, *base[1:]], cwd=a, env=env)
         remaining = a / ".kimi-code" / "mcp.json"
         verify_removed(remaining, foreign=FOREIGN_SERVER)
@@ -221,8 +226,11 @@ def smoke(installer, client, report_dir):
                     "selected_scope": "project", "stages": events,
                     "native_mcp_config_prepared": True, "project_b_untouched": True,
                     "foreign_native_mcp_preserved": True,
-                    "native_mcp_started": False, "tools_list": False, "tools_call": False,
-                    "authentication_proven": False, "workspace_trust_granted": False}
+                    "native_mcp_started": bool(native_evidence and native_evidence["native_mcp_started"]),
+                    "tools_list": bool(native_evidence and native_evidence["tools_list"]),
+                    "tools_call": False, "native_web_probe": native_evidence,
+                    "authentication_proven": False, "workspace_trust_granted": bool(native_evidence),
+                    "workspace_trust_revoked": bool(native_evidence)}
         (report_dir / "kimi-mcp-prepared.json").write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
 
 
