@@ -345,6 +345,48 @@ describe('SkillSpector v3 exact producer contract', () => {
     }
   });
 
+  it('accepts a separate authenticated original witness without treating its findings as one scanner report', () => {
+    const primary = referenceRecord();
+    const original = structuredClone(primary) as Record<string, unknown>;
+    for (const key of ['freshness', 'target_revision', 'retry', 'attempt_history']) delete original[key];
+    original.report_digest = 'sha256:' + '9'.repeat(64);
+    primary.coverage.grouping_complete = false;
+    primary.findings_truncated = true;
+    primary.coverage.reasons.push(
+      { code: 'recovery_conflict', message: 'Independent authenticated scans disagree.' },
+      { code: 'normalization_truncated', message: 'Both original reports are retained separately.' },
+    );
+    primary.recovery_witnesses = [{
+      origin: { run_id: 42854039402, run_attempt: 1 },
+      record: original as unknown as SkillSpectorRecord,
+    }];
+    assert.deepEqual(decodeReference(primary).recovery_witnesses, primary.recovery_witnesses);
+    assert.notEqual(primary.recovery_witnesses[0]!.record.report_digest, primary.report_digest);
+    assert.equal(primary.status, 'partial');
+    assert.deepEqual(primary.findings, referenceRecord().findings);
+
+    const cases: Array<[string, (record: typeof primary) => void]> = [
+      ['forged run', record => { record.recovery_witnesses![0]!.origin.run_id = 0; }],
+      ['forged source', record => { record.recovery_witnesses![0]!.record.source.revision = 'a'.repeat(40); }],
+      ['forged digest', record => { record.recovery_witnesses![0]!.record.report_digest = record.report_digest; }],
+      ['nested witness', record => { record.recovery_witnesses![0]!.record.recovery_witnesses = []; }],
+      ['removed conflict reason', record => {
+        record.coverage.reasons = record.coverage.reasons.filter(
+          (reason: { code: string }) => reason.code !== 'recovery_conflict',
+        );
+      }],
+      ['fabricated complete', record => { record.status = 'complete'; }],
+      ['oversized original', record => {
+        record.recovery_witnesses![0]!.record.findings[0]!.message = 'x'.repeat(300_000);
+      }],
+    ];
+    for (const [label, change] of cases) {
+      const altered = structuredClone(primary);
+      change(altered);
+      assert.throws(() => decodeReference(altered), /invalid/, label);
+    }
+  });
+
   it('accepts all three real normalized reference/ledger records without dropping original positions or evidence', () => {
     for (const [key, references, diagnostics] of [
       ['cloudflare', 6, 664],
