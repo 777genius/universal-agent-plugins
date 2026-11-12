@@ -191,6 +191,21 @@ class ContractTests(unittest.TestCase):
             with self.subTest(kind=kind), self.assertRaises(ValueError):
                 repair_refusal(json.dumps(bad).encode(), diagnostic)
 
+    def test_partial_repair_refusal_rejects_boolean_and_float_integers(self):
+        value = {"schema_version": 1, "command": "repair", "result": "failure", "data": {
+            "status": "preflight_failed", "succeeded": 0, "failed": 1,
+            "targets": [{"target": "grok", "output": {"result": {"mutated": False}}}]}}
+        stderr = "native identity ownership is indeterminate; refusing repair\n"
+        self.assertEqual(repair_refusal(json.dumps(value).encode(), stderr), value)
+        for field, replacements in (("schema_version", (True, 1.0)),
+                                    ("succeeded", (False, 0.0)), ("failed", (True, 1.0))):
+            for replacement in replacements:
+                bad = copy.deepcopy(value)
+                target = bad if field == "schema_version" else bad["data"]
+                target[field] = replacement
+                with self.subTest(field=field, value=replacement), self.assertRaises(ValueError):
+                    repair_refusal(json.dumps(bad).encode(), stderr)
+
     def test_missing_repair_restores_package_without_adopting_partial_changes(self):
         # Inert lifecycle contract only; hosted E2E must invoke the real UAP/Grok.
         (self.root / "journey").mkdir()

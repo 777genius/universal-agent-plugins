@@ -76,12 +76,15 @@ def observed_protocol(rows, nonce, methods):
 def repair_refusal(body, stderr):
     """Accept only the existing non-mutating ownership refusal, not any failure."""
     value = document(body)
-    require(isinstance(value, dict) and value.get("schema_version") == 1
+    require(isinstance(value, dict) and type(value.get("schema_version")) is int
+            and value["schema_version"] == 1
             and value.get("command") == "repair" and value.get("result") == "failure",
             "repair refusal envelope differs")
     data = value.get("data", {})
-    require(data.get("status") == "preflight_failed" and data.get("succeeded") == 0
-            and data.get("failed") == 1, "repair refusal outcome differs")
+    require(data.get("status") == "preflight_failed"
+            and type(data.get("succeeded")) is int and data["succeeded"] == 0
+            and type(data.get("failed")) is int and data["failed"] == 1,
+            "repair refusal outcome differs")
     targets = data.get("targets", [])
     require(len(targets) == 1 and targets[0].get("target") == "grok"
             and targets[0].get("output", {}).get("result", {}).get("mutated") is False,
