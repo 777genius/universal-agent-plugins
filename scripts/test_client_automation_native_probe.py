@@ -135,6 +135,16 @@ class NativeAdmissionContracts(unittest.TestCase):
                 snapshot(root)
             self.assertEqual(foreign.read_bytes(), b"do-not-capture")
 
+    @unittest.skipUnless(os.name == "posix" and hasattr(os, "O_NOFOLLOW")
+                         and hasattr(os, "O_DIRECTORY"), "requires POSIX no-follow dirfd")
+    def test_snapshot_bounds_directory_only_trees(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for index in range(257):
+                (root / f"dir-{index:03d}").mkdir()
+            with self.assertRaisesRegex(ValueError, "config inventory bound"):
+                snapshot(root)
+
     def test_excluded_clients_are_not_admitted(self):
         for target in ("vscode", "chatgptweb", "chatgpt", "codex", "kimi"):
             self.assertNotIn(target, CLIENTS)

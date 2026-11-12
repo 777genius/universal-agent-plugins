@@ -76,9 +76,12 @@ def snapshot(root):
         require((root_meta.st_dev, root_meta.st_ino) == (observed.st_dev, observed.st_ino),
                 "snapshot root changed")
         out = {}
-        for path in sorted(root.rglob("*")):
+        # Bound directory entries as well as regular files. Eager sorting or
+        # counting only captured files lets a native-generated directory tree
+        # exhaust memory/CPU before the snapshot limit can fire.
+        for count, path in enumerate(root.rglob("*"), start=1):
             relative = path.relative_to(root)
-            require(0 < len(relative.parts) <= 32 and len(out) < 256,
+            require(count <= 256 and 0 < len(relative.parts) <= 32,
                     "config inventory bound")
             meta = path.lstat()
             require(not stat.S_ISLNK(meta.st_mode), "native probe created an alias")
