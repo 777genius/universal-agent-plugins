@@ -56,6 +56,48 @@ class NativeAdmissionContracts(unittest.TestCase):
             self.assertNotIn(target, CLIENTS)
 
 
+class GrokProjectInspectContracts(unittest.TestCase):
+    def setUp(self):
+        self.project = Path("/private/project-a")
+        self.path = self.project / ".grok/plugins/project-probe"
+        self.plugin = {"name": NAME, "scope": "project", "path": str(self.path),
+                       "enabled": False, "provides": {"skills": 1}}
+        self.facts = {"grokVersion": "1.0.70", "cwd": str(self.project),
+                      "projectRoot": str(self.project) + "/", "projectTrusted": False,
+                      "plugins": [self.plugin]}
+
+    def inspect(self, value):
+        return probe.grok_readonly_project_inventory(json.dumps(value), self.project, self.path)
+
+    def test_native_readonly_exact_project_is_not_enablement(self):
+        self.assertEqual(self.inspect(self.facts), {"name": NAME, "scope": "project",
+                            "path": str(self.path), "enabled": False})
+
+    def test_unknown_project_or_trust_refuses(self):
+        for field, value in (("cwd", "/private/project-b"),
+                             ("projectRoot", "/private/project-b/"),
+                             ("projectTrusted", True), ("grokVersion", "1.0.71")):
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                self.inspect(dict(self.facts, **{field: value}))
+
+    def test_foreign_duplicate_or_enabled_project_refuses(self):
+        for rows in ([dict(self.plugin, path="/private/foreign")],
+                     [dict(self.plugin, scope="user")],
+                     [dict(self.plugin, enabled=True)],
+                     [self.plugin, self.plugin],
+                     [self.plugin, dict(self.plugin, name=NAME.upper())],
+                     [None], [], [{}]):
+            with self.subTest(rows=rows), self.assertRaises(ValueError):
+                self.inspect(dict(self.facts, plugins=rows))
+
+    def test_nonobject_or_duplicate_native_fields_refuse(self):
+        with self.assertRaises(ValueError):
+            probe.grok_readonly_project_inventory("null", self.project, self.path)
+        with self.assertRaisesRegex(ValueError, "duplicate"):
+            probe.grok_readonly_project_inventory('{"plugins":[],"plugins":[]}',
+                                                   self.project, self.path)
+
+
 class ProcessResultContracts(unittest.TestCase):
     def setUp(self):
         self.probe = object.__new__(probe.Probe)
@@ -278,9 +320,14 @@ class GrokRouteContracts(unittest.TestCase):
                         return 0, json.dumps([{"name": NAME, "scope": "project",
                             "path": str(inner.a / ".grok/plugins/project-probe"),
                             "id": "project/abcdef12/" + NAME}]).encode()
-                if label == "inspect-before-a":
-                    return 0, json.dumps({"projectTrusted": mode == "trusted",
-                                          "cwd": str(inner.a)}).encode()
+                if label in ("inspect-before-a", "inspect-before-b"):
+                    project = inner.a if label == "inspect-before-a" else inner.b
+                    return 0, json.dumps({"grokVersion": "1.0.70", "cwd": str(project),
+                                          "projectRoot": str(project) + "/",
+                                          "projectTrusted": mode == "trusted",
+                                          "plugins": [{"name": NAME, "scope": "project",
+                                                       "path": str(project / ".grok/plugins/project-probe"),
+                                                       "enabled": False}]}).encode()
                 return 0, b"[]"
         item = object.__new__(Inert)
         item.root, item.binary = self.root, self.root / "bin/grok"
