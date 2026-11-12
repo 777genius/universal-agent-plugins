@@ -165,7 +165,7 @@ func TestPiProjectSignedV1SavedFourPackageLifecycle(t *testing.T) {
 				ReleaseSequence: 1, Status: domain.ReleaseActive,
 				MinimumInstallerVersion: "0.1.0",
 				Targets: []domain.DirectoryTarget{{
-					Client: domain.ClientPi, Scopes: []domain.InstallScope{domain.ScopeUser, domain.ScopeProject},
+					Client: domain.ClientPi, Scopes: []domain.InstallScope{domain.ScopeUser},
 					Delivery: "managed", Authentication: domain.AuthenticationRequirementUnknown,
 				}}, CurrentEvidence: []string{},
 			}},

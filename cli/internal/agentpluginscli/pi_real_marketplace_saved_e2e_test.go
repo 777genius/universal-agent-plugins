@@ -132,7 +132,7 @@ func piRealMarketplaceFixture(t *testing.T, scope domain.InstallScope) freshRest
 				ReleaseSequence: item.sequence, Status: domain.ReleaseActive,
 				MinimumInstallerVersion: "0.1.104",
 				Targets: []domain.DirectoryTarget{{
-					Client: domain.ClientPi, Scopes: []domain.InstallScope{domain.ScopeUser, domain.ScopeProject},
+					Client: domain.ClientPi, Scopes: []domain.InstallScope{domain.ScopeUser},
 					Delivery: "managed", Authentication: item.auth,
 				}},
 				CurrentEvidence: []string{evidenceID},
