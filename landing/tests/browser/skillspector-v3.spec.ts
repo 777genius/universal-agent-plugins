@@ -505,8 +505,8 @@ for (const locale of ['en', 'ru'] as const) {
       await expect(signal.first()).toContainText('SC4 · LOW');
       await expect(signal.first()).toContainText('Independent OSV dependency advisory: unpinned version');
       await expect(first.locator('.skillspector__record-body > .skillspector__findings > li')).toHaveCount(4);
-      await expect(assessment).not.toContainText(
-        locale === 'ru' ? 'Статическая проверка: замечаний нет' : 'No static findings',
+      await expect(first.locator(':scope > summary')).toContainText(
+        locale === 'ru' ? 'Сканирование неполное' : 'Incomplete scan',
       );
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       const screenshotDir = process.env.UAP_LANDING_SCREENSHOT_DIR;
