@@ -1,0 +1,45 @@
+name: Client automation native admission
+on:
+  pull_request:
+    paths:
+      - 'scripts/client_automation_native_probe.py'
+      - 'scripts/test_client_automation_native_probe.py'
+      - '.github/workflows/client-automation-native.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: client-automation-admission-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  native-api:
+    name: Native API research (${{ matrix.client }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        client: [cline, grok]
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Test native identity decoder and no-alias fixture contracts
+        run: python3 -m unittest discover -s scripts -p 'test_client_automation_native_probe.py' -v
+      - name: Capture pinned official CLI behavior in disposable profiles
+        run: |
+          python3 scripts/client_automation_native_probe.py \
+            --client '${{ matrix.client }}' \
+            --output "$RUNNER_TEMP/native-api-${{ matrix.client }}"
+      - name: Preserve original research evidence (not product acceptance)
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: automation-native-${{ matrix.client }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/native-api-${{ matrix.client }}/native-api.json
+          if-no-files-found: error
+          retention-days: 14
