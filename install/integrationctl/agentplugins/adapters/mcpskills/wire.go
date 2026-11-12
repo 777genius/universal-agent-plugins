@@ -87,7 +87,12 @@ func (c *Client) rpcCall(ctx context.Context, method string, params map[string]a
 		}
 		return nil, ErrRemote
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
+	return decodeHTTPResponse(ctx, response)
+}
+
+// decodeHTTPResponse enforces status, encoding and body caps before accepting any result.
+func decodeHTTPResponse(ctx context.Context, response *http.Response) (json.RawMessage, error) {
 	if response.StatusCode != http.StatusOK {
 		return nil, ErrRemote
 	}
@@ -121,7 +126,7 @@ func (c *Client) rpcCall(ctx context.Context, method string, params map[string]a
 }
 
 func encodeHeaderValue(value string) string {
-	safe := len(value) > 0 && strings.TrimSpace(value) == value &&
+	safe := value != "" && strings.TrimSpace(value) == value &&
 		!strings.HasPrefix(value, "=?base64?")
 	for _, ch := range []byte(value) {
 		if ch < ' ' || ch > '~' {
@@ -164,42 +169,14 @@ func decodeEvents(payload []byte) (json.RawMessage, error) {
 	scanner.Buffer(make([]byte, 4096), maxResponseBytes)
 	var data []string
 	var final json.RawMessage
-	process := func() error {
-		if len(data) == 0 {
-			return nil
-		}
-		raw := []byte(strings.Join(data, "\n"))
-		data = nil
-		if conformance.RejectDuplicateJSONKeys(raw) != nil {
-			return ErrProtocol
-		}
-		var message struct {
-			Version string          `json:"jsonrpc"`
-			ID      json.RawMessage `json:"id"`
-			Method  string          `json:"method"`
-		}
-		if json.Unmarshal(raw, &message) != nil || message.Version != "2.0" {
-			return ErrProtocol
-		}
-		if len(message.ID) == 0 && strings.HasPrefix(message.Method, "notifications/") && final == nil {
-			return nil
-		}
-		if final != nil || string(message.ID) != "1" || message.Method != "" {
-			return ErrProtocol
-		}
-		result, err := decodeResponse(raw)
-		if err != nil {
-			return err
-		}
-		final = result
-		return nil
-	}
+
 	for scanner.Scan() {
 		line := strings.TrimSuffix(scanner.Text(), "\r")
 		if line == "" {
-			if err := process(); err != nil {
+			if err := acceptSSEData(data, &final); err != nil {
 				return nil, err
 			}
+			data = nil
 			continue
 		}
 		if strings.HasPrefix(line, ":") {
@@ -213,11 +190,42 @@ func decodeEvents(payload []byte) (json.RawMessage, error) {
 	if scanner.Err() != nil {
 		return nil, ErrProtocol
 	}
-	if err := process(); err != nil {
+	if err := acceptSSEData(data, &final); err != nil {
 		return nil, err
 	}
 	if final == nil {
 		return nil, ErrProtocol
 	}
 	return final, nil
+}
+
+// acceptSSEData allows progress notifications before the one matching response.
+func acceptSSEData(data []string, final *json.RawMessage) error {
+	if len(data) == 0 {
+		return nil
+	}
+	raw := []byte(strings.Join(data, "\n"))
+	if conformance.RejectDuplicateJSONKeys(raw) != nil {
+		return ErrProtocol
+	}
+	var message struct {
+		Version string          `json:"jsonrpc"`
+		ID      json.RawMessage `json:"id"`
+		Method  string          `json:"method"`
+	}
+	if json.Unmarshal(raw, &message) != nil || message.Version != "2.0" {
+		return ErrProtocol
+	}
+	if len(message.ID) == 0 && strings.HasPrefix(message.Method, "notifications/") && *final == nil {
+		return nil
+	}
+	if *final != nil || string(message.ID) != "1" || message.Method != "" {
+		return ErrProtocol
+	}
+	result, err := decodeResponse(raw)
+	if err != nil {
+		return err
+	}
+	*final = result
+	return nil
 }
