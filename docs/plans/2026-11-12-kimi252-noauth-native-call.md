@@ -94,3 +94,48 @@ References:
 - https://moonshotai.github.io/kimi-code/en/configuration/providers
 - https://moonshotai.github.io/kimi-code/en/reference/server-api.html
 - Existing scripts/kimi_252_native_web_mcp_probe.py and kimi_stable_project_mcp_smoke.py
+
+## Measured 2.5.2 protocol and implementation admission
+
+The verified release binary completed five local exact-adapter protocol stages:
+declined owned call (zero call/marker), one approved native call, a subsequent
+native read preserving marker bytes/stat, Project B absence and removed-source
+absence. Native manual mode, one-shot approval and final empty permission rules
+were observed. Positive and read stages join exact provider invocation replay,
+wall-time-framed native result and original same-process MCP initialize/list/call.
+This local direct-config Python fixture is protocol admission only; it does not
+qualify production App installation, the Go fixture or hosted OS execution.
+
+Pinned `POST /sessions` accepts `agent_config` in its schema but the create
+handler ignores it. `mcp_servers` is also not applied by session-config updates.
+Do not rely on either to select a model, restrict server loading or grant
+permission. Apply the measured model/manual overrides on `POST /prompts`;
+observe actual native manual-mode frames and the complete offered tool schema.
+Keep preexisting foreign/User MCP fixtures explicitly disabled using the pinned
+`enabled=false` server field, so their preserved entries never start foreign
+services. Preserve their original bytes and source ownership.
+
+The native tool is `mcp__uap-kimi-stable-mcp-proof__inspect_runtime`. Normal
+approval carries exact session/main-agent/call/interaction IDs and generic
+input-display detail with nonce/operation/marker. Validate all before answering
+`approved` or `rejected`, omit `scope`, and require final permission_rules empty.
+The inline Node24 standard WebSocket bridge only subscribes/observes; it never
+approves. Its private bearer arrives on stdin, not argv/env/artifact; origin,
+frame/byte/deadline bounds and bearer exclusion fail closed. Reuse #880's bearer
+and trust cleanup independently of model-provider protocol.
+
+Original failed create/config and closed-PATH Node observations remain retained.
+The actual live 2.5.2 OpenAPI/AsyncAPI and source-specific local captures remain
+separate intermediate admission evidence. Full hosted production CLI lifecycle,
+original artifacts, independent source/protocol review and postmerge are still
+mandatory before final native acceptance.
+
+Independent review corrected the absence oracle: Project B and removed-source
+sessions must receive the same ordinary explicit test-owned workspace trust as
+positive stages, then prove the trusted native catalog and offered tools omit
+the owned server. Untrusted suppression alone is not removal/source-absence
+proof. Trust is always revoked and freshly verified, even after this negative
+admission fails. Each stage retains the original strict-read Project MCP config
+bytes/hash before any native attempt and requires them unchanged after cleanup;
+missing config is recorded explicitly. Earlier untrusted negative observations
+remain narrower protocol evidence, not this corrected negative acceptance.
