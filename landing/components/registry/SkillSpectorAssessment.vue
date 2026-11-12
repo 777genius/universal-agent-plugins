@@ -610,8 +610,9 @@ async function copyDiagnostics() {
                   <p>
                     <strong>{{ t('registryUi.skillSpector.recoveryWitnessTitle') }}</strong>
                     · {{ t('registryUi.skillSpector.recoveryWitnessRun', {
-                      run: n(witness.origin.run_id),
-                      attempt: n(witness.origin.run_attempt),
+                      // GitHub run IDs are identifiers; locale grouping changes their exact text.
+                      run: String(witness.origin.run_id),
+                      attempt: String(witness.origin.run_attempt),
                     }) }}
                     · <code>{{ witness.record.report_digest }}</code>
                   </p>
