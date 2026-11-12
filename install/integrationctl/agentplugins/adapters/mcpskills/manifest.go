@@ -79,7 +79,7 @@ func (s Skill) resources() ([]Resource, bool, error) {
 }
 
 func validateURI(value string) error {
-	if len(value) == 0 || len(value) > maxURIBytes || !utf8.ValidString(value) ||
+	if value == "" || len(value) > maxURIBytes || !utf8.ValidString(value) ||
 		strings.ContainsAny(value, "\\\r\n\t") || strings.TrimSpace(value) != value {
 		return ErrInvalidEntry
 	}
@@ -88,21 +88,26 @@ func validateURI(value string) error {
 		parsed.RawQuery != "" || parsed.Opaque != "" || parsed.ForceQuery {
 		return ErrInvalidEntry
 	}
-	// Preserve the URI identity byte-for-byte, and refuse path ambiguity.
-	lower := strings.ToLower(parsed.EscapedPath())
-	if strings.Contains(lower, "%2f") || strings.Contains(lower, "%5c") ||
-		strings.Contains(lower, "%00") || strings.Contains(value, "#") || strings.Contains(value, "?") {
-		return ErrInvalidEntry
-	}
-	for _, component := range strings.Split(parsed.Path, "/") {
-		if component == "." || component == ".." {
-			return ErrInvalidEntry
-		}
-	}
-	if strings.Contains(parsed.Path, "//") {
+	// Preserve URI identity byte-for-byte; reject encoded/path traversal.
+	if ambiguousSkillPath(parsed, value) {
 		return ErrInvalidEntry
 	}
 	return nil
+}
+
+// ambiguousSkillPath rejects escapes and segments that create a different path identity.
+func ambiguousSkillPath(parsed *url.URL, value string) bool {
+	lower := strings.ToLower(parsed.EscapedPath())
+	if strings.Contains(lower, "%2f") || strings.Contains(lower, "%5c") ||
+		strings.Contains(lower, "%00") || strings.Contains(value, "#") || strings.Contains(value, "?") {
+		return true
+	}
+	for _, component := range strings.Split(parsed.Path, "/") {
+		if component == "." || component == ".." {
+			return true
+		}
+	}
+	return strings.Contains(parsed.Path, "//")
 }
 
 func validateSkill(s Skill) ([]Resource, bool, error) {
@@ -128,27 +133,34 @@ func validateSkill(s Skill) ([]Resource, bool, error) {
 	if len(resources) == 0 || len(resources) > maxResources {
 		return nil, false, ErrInvalidEntry
 	}
-	seen := make(map[string]bool, len(resources))
-	var total int64
-	found := false
-	for _, resource := range resources {
-		if err := validateURI(resource.URI); err != nil || !strings.HasPrefix(resource.URI, root+"/") ||
-			resource.Size < 0 || resource.Size > maxSkillBytes || !validDigest(resource.Digest) || seen[resource.URI] {
-			return nil, false, ErrInvalidEntry
-		}
-		seen[resource.URI] = true
-		if resource.URI == s.URI {
-			found = true
-		}
-		total += resource.Size
-		if total > maxSkillBytes {
-			return nil, false, ErrInvalidEntry
-		}
-	}
-	if !found {
-		return nil, false, ErrInvalidEntry
+	if err := validateResourceCollection(s.URI, root, resources); err != nil {
+		return nil, false, err
 	}
 	return resources, false, nil
+}
+
+func validateResourceCollection(skillURI, root string, resources []Resource) error {
+seen := make(map[string]bool, len(resources))
+var total int64
+found := false
+for _, resource := range resources {
+	if err := validateURI(resource.URI); err != nil || !strings.HasPrefix(resource.URI, root+"/") ||
+		resource.Size < 0 || resource.Size > maxSkillBytes || !validDigest(resource.Digest) || seen[resource.URI] {
+		return ErrInvalidEntry
+	}
+	seen[resource.URI] = true
+	if resource.URI == skillURI {
+		found = true
+	}
+	total += resource.Size
+	if total > maxSkillBytes {
+		return ErrInvalidEntry
+	}
+}
+if !found {
+	return ErrInvalidEntry
+}
+	return nil
 }
 
 func validDigest(value string) bool {
@@ -156,7 +168,7 @@ func validDigest(value string) bool {
 		return false
 	}
 	for _, ch := range value[7:] {
-		if !(ch >= '0' && ch <= '9' || ch >= 'a' && ch <= 'f') {
+		if (ch < '0' || ch > '9') && (ch < 'a' || ch > 'f') {
 			return false
 		}
 	}
