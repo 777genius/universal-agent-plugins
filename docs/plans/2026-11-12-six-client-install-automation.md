@@ -1,154 +1,144 @@
 # Six-client installation automation — one PR
 
 Date: 2026-11-12. Baseline: `071026c96fe0e937b6e8716037b1b08473e4a5db`.
-Status: design and capability qualification; implementation is not yet accepted.
+Status: three design review passes recorded below; native admission and production
+implementation are not yet accepted. A source review is not an executed E2E.
 
-## Owner decision, recorded verbatim in substance
+## Owner scope
 
-One Draft PR contains the plan, reviewed corrections, implementation, E2E and
-merge. Commit and push each coherent change immediately. Do not split this work
-into separate client PRs. Do not publish a CLI release as part of this request.
+One Draft PR contains the plan, corrections, implementation, genuine E2E,
+merge and postmerge checks. Push each coherent commit immediately. Do not
+split the clients into separate PRs or publish a release within this request.
 
-**VS Code is excluded completely:** no adapter, protocol, configuration,
-dedicated fixture/test, dependency qualification or UI behavior changes.
-**ChatGPT Web is excluded completely.** Neither target is included in new
-commands, client actions, native runs or capability/badge promotion. Do not
-silently expand this into ChatGPT Desktop/Codex, Kimi or another client.
+**VS Code: excluded completely.** No adapter, config, protocol, dedicated test,
+UI behavior, dependency qualification or native run changes.
+**ChatGPT Web: excluded completely.** No new command admits it. Do not expand
+this into ChatGPT Desktop/Codex, Kimi or other agents. Shared seams must preserve
+excluded-target behavior byte-for-byte where possible and semantically always.
 
-The six targets are Cline, Grok Build, Google Antigravity, Windsurf/Devin, Kiro
-and Hermes. Existing PR #686 owns Kiro authentication research; #877 owns Kimi
-MCP. Do not edit those branches or relabel their evidence. Merged #810/#869
-already provide Grok preparation and no-model MCP proof; reuse that work.
+Included: Cline, Grok Build, Google Antigravity, Windsurf/Devin, Kiro, Hermes.
+Reuse merged Grok #810/#869. Do not modify the branches or evidence of separate
+Kiro authentication research #686 or Kimi #877.
 
-## Outcome, not a badge change
+## Required outcome
 
-After ordinary UAP installation, automate the remaining safe, documented
-client-specific steps instead of asking users to copy environment variables,
-edit configuration or manually repeat an action UAP can perform and verify.
-Keep four distinct facts: installed files, native discovery, enabled runtime,
-and provider authentication. `Prepared` is an honest result, not a failure to
-hide. A configured entry or successful list command is not a tool-call proof.
+Automate safe, documented client steps after ordinary UAP delivery instead of
+asking users to copy environment variables, edit JSON or repeat a verifiable
+native action manually. Distinguish installed files, native discovery, enabled
+runtime and provider authentication. Prepared remains valid; a badge change is
+not implementation. A list/config response is not a successful MCP tool call.
 
-No model request, purchased subscription or provider key is necessary for the
-baseline test plan. A vendor login requirement must be recorded separately;
-never invent a session, bypass authentication or copy a real user's credentials.
+Baseline qualification uses no purchased subscription, provider key or model
+request. A native authentication requirement stays a separate external boundary;
+never fabricate an account, bypass login or copy a real user's credentials.
 
-## Stage 0 — prove the native action before product changes
+## Native admission before mutation
 
-For each target, capture a pinned official version, hash/identity and exact
-help/list/config behavior in disposable User, Project A and Project B roots.
-Review current source/docs AND an actual executable. A documented command
-name does not establish its scope, output shape or ownership safety.
+For every new operation record the exact official version/hash, help syntax,
+selected original profile, scope, target identity and actual effects. Use fresh
+private HOME and independent Git projects A/B. Current documentation alone is
+not proof that an older pinned executable implements the same interface.
 
-| Target | Existing implementation | Concrete remaining work | Admission prerequisite |
+| Client | Existing delivery | Work to qualify and implement | Boundary |
 | --- | --- | --- | --- |
-| Cline | User native Skills/MCP; Project Skills plus owned `.uap/clients/cline/mcp.json` | Remove manual per-process environment assembly for CLI; select the exact project MCP source and verify it in a fresh process. Keep IDE route separate. | Real published CLI supports the chosen settings override; whole-file override and user precedence are explicitly preserved. |
-| Grok | User lifecycle; Project plugin Skills/MCP; #869 real doctor/list and direct installed-config calls | Explicitly consented, exact-owned plugin enablement and read-only verification, without changing workspace trust. | Native enable action must resolve the exact installed project path, not a same-name User plugin; untrusted Project remains untrusted. |
-| Antigravity | Owned User/Project bundle; strict validation and isolated CLI registration evidence | Register/enable through the genuine `agy` interface when identity and scope are provable; verify native inventory. | Determine whether local install duplicates the bundle or changes profile-global state. CLI registration is not IDE activation. |
-| Windsurf/Devin | Distinct Devin User/Project native layouts plus legacy Cascade route | Verify the selected Devin inventory after automatic delivery; eliminate obsolete manual import guidance only on that observed route. | Exact executable/profile/version and native list contract. Legacy Windsurf must not inherit Devin claims or new state. |
-| Kiro | Automatic configuration/Skill mutation; runtime currently authentication-gated | Finish credential-free file/selection verification and use a genuine read-only observer only when already authorized; retain precise next action otherwise. | No broad custom-agent rewrite, auth bypass or duplicated #686 native-auth investigation. |
-| Hermes | User Skills/MCP; trusted Project Skills; Project MCP refused | Prove whether an official selected-profile/session override can safely isolate Project MCP. Implement only that supported route, retaining default User authority. | No write to User YAML for Project; no fake claim that ordinary `hermes` auto-loads a managed isolated profile. No copied tokens, history, model settings or second config engine. |
+| Cline | User native Skills/MCP; Project Skills and `.uap/clients/cline/mcp.json` | Select the installed Project MCP source for an explicitly requested CLI process and verify effective configuration; eliminate manual environment assembly. | The override selects the whole file; do not merge/copy User servers. IDE and normal unwrapped startup remain separate. |
+| Grok | User lifecycle; Project package; real no-model protocol proof in #869 | Explicitly consented exact-owned plugin enablement and native read-back. | Prove stable full identity, not name-only selection. Do not grant workspace trust or override prior disablement. |
+| Antigravity | Native User/Project bundle, validation and isolated registration | Register/enable only through a proven scope- and source-specific native interface; verify inventory. | CLI profile and IDE profile may differ. No second copy, global registration or enabled IDE claim from file presence. |
+| Windsurf/Devin | Devin User/Project native components; separate Cascade route | Native selected inventory verification and precise remaining actions after delivery. | Qualified Devin is not legacy Windsurf. Preserve coexisting profiles, local overrides and cloud/team policy. |
+| Kiro | Automatic native config/Skill mutation; auth-gated runtime | Automatic file/selection verification and genuine read-only observation when supported without new login. | Do not rewrite custom-agent resources or includeMcpJson globally; never borrow #686 authentication evidence. |
+| Hermes | User Skills/MCP and Project Skills; Project MCP refused | Qualify an official explicit profile/session route for isolated Project MCP, then integrate it with existing ownership. | No Project-to-User YAML fallback, copied login/history/model settings or claim that plain `hermes` loads a UAP profile. |
 
-For an unqualified native action, capture the exact limitation in this same PR
-and keep its status incomplete. Do not substitute a fixture executable for the
-vendor binary or merge a false capability claim.
+If a native action is not qualified, keep that row incomplete and preserve its
+previous behavior. Do not replace an absent API with a fake native executable,
+a general wrapper platform or a misleading Automatic label.
 
-## Stage 1 — narrow architecture and consent
+## Architecture and consent
 
-Read AGENTS.md, docs/ARCHITECTURE.md and CONTRIBUTING.md first. Reuse existing
-client registry, plan/refinement, lifecycle, command runner, native-config
-kernel, ownership receipts, locks, transactions and rollback. Operational
-client logic stays in `clients/<id>`; generic providers must not branch on IDs.
+Reuse the existing registry, plan/refinement, lifecycle, process supervisor,
+native-config kernel, receipts, locks, transactions and rollback. Client logic
+stays in `clients/<id>`; generic providers do not switch on client IDs.
 
-1. Prefer an existing lifecycle or verifier interface. Add a narrow optional
-   interface only if an actual remaining action cannot be represented by one.
-   Do not introduce a framework, manager service, service locator, second
-   installer/resolver/state store, feature flag or duplicate truth matrix.
-2. If Cline/Hermes require a new process, expose an explicit launch operation;
-   do not spawn an interactive client on ordinary install or modify the parent
-   shell. Reuse existing execution/cancellation and exact target selection.
-   A launcher is not advertised as native automatic discovery on plain startup.
-3. Plugin enablement is a separate execution permission. Show exact client,
-   scope, project, owned package and effect; obtain action-specific consent.
-   Ordinary install `--yes`, `--activation-complete` and `--auth-complete` must
-   not be reinterpreted as consent to run arbitrary code or grant trust.
-4. Unknown executable/version, ambiguous same-name plugins, stale receipt,
-   unowned selected path, shadowed configuration, changed plan or unsupported
-   action fail before mutation. Revalidate under the existing lock.
-5. Never auto-grant workspace trust, change enterprise policy, overwrite user
-   disablement, invoke a model prompt or launch every configured MCP server as
-   a verification shortcut. Probe only the reviewed owned target when a native
-   selective interface exists; otherwise do not claim selective verification.
-6. If a native command writes config beyond the owned leaf, determine whether
-   the existing kernel can record and roll back that exact effect. No adoption
-   of a whole foreign configuration file; no broad `force` flags.
-7. Persist only existing supported receipt/status facts. No JSON, lock, wire or
-   data migration. Installation remains resumable when a later native phase
-   cannot run. Cancellation must not leave a false successful status.
+1. Prefer existing interfaces. Add one narrow optional interface only after an
+   actual native action needs it. No framework, service locator, parallel
+   installer/resolver, state store, feature flag or duplicate capability matrix.
+2. Any selected-session operation is explicit: no interactive process on normal
+   install and no alteration of the parent shell. First verify the existing
+   runner's stdin/stdout, cancellation and child-lifetime contract. Captured
+   noninteractive ProcessRunner is not automatically an interactive TTY runner.
+   Do not hide this mismatch behind `sh -c`, a detached child or a global shim.
+3. Show exact native action, client, scope, original profile, project and owned
+   package. Obtain action-specific consent. Existing `--yes`,
+   `--activation-complete` and `--auth-complete` are not new enable/trust consent.
+4. Revalidate exact receipt, selected executable/version, full native identity,
+   source path and absence of shadowing under the current mutation lock. Stale,
+   foreign, ambiguous, unsupported or disabled-by-user targets refuse before
+   mutation. A plain name cannot select across User and Project A/B.
+5. Never auto-grant trust, change enterprise policy, overwrite disablement,
+   invoke a model prompt or use all-server startup as a verification shortcut.
+   Probe only a reviewed owned target through a selective native interface.
+6. Before any native command that writes beyond the owned leaf, require a
+   verified exact recovery path using the existing kernel. **If that recovery
+   cannot be verified, refuse before mutation and leave the action incomplete.**
+   Never adopt a whole foreign file, use broad force flags, or restore a stale
+   full-file snapshot over a concurrent user edit. Rollback is ownership-aware.
+7. No persisted JSON/lock/wire/schema migration. Use existing truthful status
+   facts. A failed native follow-up leaves delivery resumable, not falsely Active.
+   Existing cancellation/rollback rules remain; no widened security exemptions.
 
-## Stage 2 — incremental implementation in this branch
+## Implementation order within this branch
 
-A. Cline selected-process route and tests, including User/Project isolation.
-B. Grok precise consented enable/verify route, reusing #869's protocol evidence.
-C. Antigravity exact scope/identity registration and enablement, then real list.
-D. Devin-specific observation; preserve legacy Windsurf and mixed installations.
-E. Kiro safe automatic delivery/observer path without borrowing auth proof.
-F. Hermes isolated Project MCP only after Stage 0 establishes a real native
-   route; otherwise retain the hard refusal and document the external gap.
+A. Qualify native commands and selected-session mechanisms using existing
+   pinned acquisition and bounded subprocess helpers. Keep research evidence
+   explicitly separate from actual UAP-product acceptance.
+B. Cline selected-process path, with no User/IDE accidental rewrite.
+C. Grok exact enable/verify, reusing installed-config evidence from #869.
+D. Antigravity exact-scope registration/enablement and selected inventory.
+E. Devin observation and legacy coexistence, then Kiro selection/file checks.
+F. Hermes Project MCP only after a genuine isolated route is established.
 
-Each coherent commit includes its regression tests and is pushed immediately.
-Keep the head stable while genuine native CI runs; fix actual failures in a
-consolidated patch rather than restarting full matrices for cosmetic edits.
-No separate PRs, releases, registry signing changes or public promotion.
+Reuse current tests/collectors instead of writing a second installer or broad
+new test platform. Consolidate actual corrections before another native CI
+push; do not cancel queued jobs for cosmetic edits. No separate client PRs,
+release, registry-signature changes or public capability promotion.
 
-## Stage 3 — tests and independent oracles
+## Required acceptance
 
-For every changed client, test User and Project A with an independent Project B
-and foreign-user sentinel. Install through the actual public CLI, not a second
-config writer. Reuse pinned local stdio/HTTP probes and existing native helpers.
+Every changed client has User and Project A delivery with independent Project B
+and original User sentinels. Product tests use the ordinary public UAP CLI.
 
-Required scenarios:
-- dry-run and declined/absent consent: no client, config, receipt or process effect;
-- first/repeated add, update, missing-package repair, cold locked restore, remove;
-- unchanged repeat identity, source pin and data receipt; retained data on remove;
-- exact-owned enable success and native read-back; same-name foreign target,
-  global/project ambiguity, unknown version, preexisting disabled entry refusal;
-- untrusted and unauthenticated boundaries remain unmodified and accurately reported;
-- partial user edits are refused, not overwritten to repair a test;
-- timeout, child failure and cancellation preserve ownership and recoverability;
-- new-process scope selection does not alter parent env or original user settings;
-- no paid service or real secret; logs never retain auth material;
-- genuine initialize/list/call where the selected native interface allows it;
-  an independent installed-config call is explicitly distinguished from native call.
+- Dry-run, missing/declined action consent: no native process or installed effect.
+- Add/repeat/update/missing-package repair/cold locked restore/remove; same
+  installation/source/binding/data authority across lifecycle and retained data.
+- Exact-owned native action and read-back; same-name User/A/B collision, stale
+  source, unknown version, foreign path, symlink, config shadowing and deliberate
+  disablement negatives. All refuse without unowned changes.
+- Trust/login remain unchanged. Partial user edits are not overwritten to make
+  repair pass. Failure, cancellation, timeout and interrupted recovery preserve
+  ownership; no surviving detached native process.
+- Session selection changes neither parent environment nor unrelated profiles;
+  startup behavior without the explicit selection is not misrepresented.
+- Real local stdio/HTTP initialize/list/call only where admitted. Distinguish
+  direct installed-config calls, native client calls and model authentication.
 
-Capture raw bounded output, actual command/exit, nonce/session correlations,
-source SHA/tree, native versions/hashes, test counts, effect and isolation
-assertions. Verify original artifact digest/CRC and actual checkout. A skipped,
-queued, cancelled, mocked or research-only run is not native acceptance.
+Record exact source SHA/tree, genuine executable identity, bounded original
+stdout/stderr/exit, effect and isolation assertions, nonce/session correlations
+and retained receipts. Check original artifact digest/CRC. Mocked, queued,
+skipped, cancelled or research-only runs are not successful native acceptance.
 
-Reuse existing affected E2E lanes; add a path-scoped lane only for a genuinely
-new behavior. Cover Linux/macOS/Windows where an affected native host is
-available, preserving unsupported-platform labels rather than inventing success.
-For Go changes run make lint, make test-core, relevant rollback/install/polyglot
-checks and applicable full Required/security workflows. Do not widen exemptions.
+Run applicable Linux/macOS/Windows coverage where the selected host is available,
+without inventing unsupported-platform passes. Reuse affected lanes; a new
+path-scoped lane is permitted only for an actual new behavior. For Go changes,
+run make lint, test-core, affected rollback/install/polyglot checks and full
+Required/security checks. Keep unrelated clients and their contracts intact.
 
-## Stage 4 — review, integration and completion
+Before merge inspect the final file allowlist, excluded boundaries, every
+applicable exact-head check and actionable review. Use SHA-guarded merge, then
+verify actual postmerge native and shared checks. Do not call all six complete
+when a required operation is still absent or an external limit is only described.
 
-Perform at least three design reviews before implementation: (1) native API and
-scope feasibility, (2) architecture/minimality, (3) consent/ownership and negative
-E2E. Record findings and concrete corrections below; these are review passes,
-not claims of independent reviewers. Request independent PR review as available.
+## Size and uncertainty
 
-Before merge, verify every affected file against the allowlist and both excluded
-client boundaries; no unrelated catalog/schema/release changes. Resolve actual
-review findings, inspect exact-head CI and original native evidence, perform a
-SHA-guarded normal merge and verify postmerge native/shared checks. If any of
-the six required changes remains unimplemented, do not label the whole task
-complete or reinterpret a limitation as successful automatic support.
-
-## Initial sizing (estimates, not a commitment)
-
-| Work | Changed/new production lines | Test/E2E lines | Complexity / confidence |
+| Client | Production changed/new LOC | Test/E2E LOC | Complexity / confidence |
 | --- | ---: | ---: | --- |
 | Cline | 120–240 | 220–420 | 3/10 / 6/10 |
 | Grok | 100–220 | 180–350 | 4/10 / 6/10 |
@@ -157,20 +147,47 @@ complete or reinterpret a limitation as successful automatic support.
 | Kiro | 120–300 | 220–450 | 6/10 / 5/10 |
 | Hermes Project MCP | 350–900+ | 400–850+ | 8/10 / 3/10 |
 
-These estimates exclude unsupported vendor work, purchases and credential
-provisioning. Re-estimate after native feasibility review; do not compensate for
-an unavailable safe interface with an oversized wrapper or silent global writes.
+Estimates exclude vendor-side work and must be revised after native admission.
+Do not compensate for a missing safe API with a large new framework.
 
-## Evidence and review log
+## Three design reviews and concrete corrections
 
-- Baseline inspected: main 071026c; existing Grok #810/#869 are already merged.
-- Overlap checked: #686 remains the separate Kiro research/auth task; #877 is
-  Kimi-only and outside this request. VS Code frozen instructions remain intact.
-- Official current references: [Grok commands](https://docs.x.ai/build/cli/reference),
-  [Antigravity marketplace](https://antigravity.google/docs/marketplace),
-  [Cline CLI source](https://github.com/cline/cline/blob/main/docs/cli/cli-reference.mdx),
-  [Hermes MCP](https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp),
-  [Kiro commands](https://kiro.dev/docs/cli/reference/cli-commands/).
-- R1 native feasibility: pending exact-source and executable checks.
-- R2 architecture/minimality: pending.
-- R3 authority/negative-E2E: pending.
+**R1 — native API/scope feasibility (source and retained-evidence review).**
+Grok's documented full plugin identity must be checked against pinned 1.0.70;
+that binary's `inspect` does not expose a stable ID, and its build hash is not
+an upstream Git reference. Project enable cannot be implemented as name-only
+`enable`. Cline's whole-file override applies to one process, not its IDE or
+later ordinary startup. Antigravity's CLI and direct User/Project bundle paths
+must be compared before registration; native install may duplicate content.
+Hermes documents User MCP authority; an isolated profile is a distinct session
+route, not native default Project support. **Correction:** retain these as
+runtime-admission gates, not assumed feasible implementations.
+
+**R2 — architecture/minimality.** Existing lifecycle/preflight/verifier interfaces
+already cover configuration delivery and observation. The available captured
+ProcessRunner has no interactive stdin/TTY contract. **Correction:** do not add
+a generic action bus or session framework; first establish whether a narrow
+explicit selected invocation can reuse a supported supervisor. No command or
+public status is added merely to wrap a manual instruction.
+
+**R3 — consent, recovery and falsifiability.** Name-only enablement can affect a
+same-name foreign plugin. Native doctor may start every server; a probe is not
+read-only merely because its name suggests diagnostics. A whole-file rollback
+can overwrite concurrent foreign edits. **Correction:** require exact identity,
+selective consent, no trust writes, verified ownership-aware recovery before
+mutation, and collision/no-effect tests. CodeRabbit finding 4550436510 prompted
+the explicit hard refusal in architecture item 6; it is accepted, not waived.
+
+These three passes are design self-review, not independent executed proofs.
+CodeRabbit independently reviewed the plan; production and native acceptance
+remain pending. Subsequent findings are recorded here with their actual source.
+
+## Primary references
+
+- [Grok plugin commands and full identity](https://github.com/xai-org/grok-build/blob/2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8/crates/codegen/xai-grok-pager/docs/user-guide/09-plugins.md)
+- [Antigravity plugins](https://antigravity.google/docs/plugins)
+- [Cline selected configuration](https://github.com/cline/cline/blob/main/docs/mcp/mcp-overview.mdx)
+- [Hermes MCP](https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp)
+- [Kiro CLI](https://kiro.dev/docs/cli/reference/cli-commands/)
+- Existing `clients/lifecycle.go`, `ports/interfaces_runtime.go` and native E2E
+  helpers are the integration seams, not permission to bypass their boundaries.
