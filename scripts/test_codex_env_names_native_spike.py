@@ -497,8 +497,15 @@ class TestSyntheticSnapshotScanner(unittest.TestCase):
                 findings, symlinks = inspect(root, token)
                 self.assertEqual(symlinks, 0)
                 self.assertEqual(len(findings), 1)
-                self.assertEqual(findings[0]["result"], "synthetic_value_persisted")
-                self.assertTrue(findings[0]["shell_snapshot_path"])
+                # Win32 may refuse a just-rewritten fixture when the
+                # descriptor/path metadata cannot establish stable identity.
+                # That is a SECURITY NO-GO, never a false no-leak PASS; a
+                # separate stable-fixture test still requires positive matches.
+                if os.name == "nt" and findings[0]["result"] == "unscanned_file":
+                    self.assertEqual(findings[0]["scope"], "codex_home")
+                else:
+                    self.assertEqual(findings[0]["result"], "synthetic_value_persisted")
+                    self.assertTrue(findings[0]["shell_snapshot_path"])
                 self.assertNotIn(token, str(findings))
             snapshot.write_text("nonsecret")
             self.assertEqual(inspect(root, token)[0], [])
