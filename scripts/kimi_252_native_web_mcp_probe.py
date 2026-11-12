@@ -8,7 +8,7 @@ model, --dangerous-bypass-auth, or trust environment override is used.
 import json
 import os
 from pathlib import Path
-import re
+import stat
 import signal
 import socket
 import subprocess
@@ -20,7 +20,40 @@ import urllib.request
 
 SERVER_NAME = "uap-kimi-stable-mcp-proof"
 MAX_CAPTURE = 1 << 20
-TOKEN = re.compile(rb"(?:^|\n)Token:\s*([A-Za-z0-9_.~+/=-]{16,})", re.M)
+def native_private_token(home):
+    """Only read the test-owned Kimi home-issued bearer; never print its bytes."""
+    target = home / "server.token"
+    try:
+        entry = target.lstat()
+    except FileNotFoundError:
+        return None
+    if (not stat.S_ISREG(entry.st_mode) or entry.st_nlink != 1
+            or entry.st_uid != os.getuid() or entry.st_mode & 0o077
+            or entry.st_size < 16 or entry.st_size > 128):
+        raise ValueError("native bearer file permissions or identity invalid")
+    if not hasattr(os, "O_NOFOLLOW"):
+        raise ValueError("native bearer requires no-follow descriptor")
+    fd = os.open(target, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        held = os.fstat(fd)
+        if (held.st_ino, held.st_dev, held.st_size, held.st_ctime_ns) != (
+                entry.st_ino, entry.st_dev, entry.st_size, entry.st_ctime_ns):
+            raise ValueError("native bearer file changed while opened")
+        raw = os.read(fd, 129)
+    finally:
+        os.close(fd)
+    if len(raw) != entry.st_size:
+        raise ValueError("native bearer short read")
+    try:
+        token = raw.decode("ascii").strip()
+    except UnicodeDecodeError as exc:
+        raise ValueError("native bearer encoding rejected") from exc
+    if len(token) < 16 or len(token) > 128 or not all(
+        char.isalnum() or char in "-_" for char in token
+    ):
+        raise ValueError("native bearer shape rejected")
+    return token
+
 
 
 def response(req, base, token, method="GET", data=None):
@@ -69,14 +102,12 @@ def start_server(client, env, project, timeout=45):
             while time.monotonic() < deadline:
                 if process.poll() is not None:
                     raise ValueError("native web process exited before authenticated startup")
-                # pread does not move the file offset shared by the child.
-                # A regular seek/read could race with and overwrite the banner.
-                banner = os.pread(capture.fileno(), MAX_CAPTURE + 1, 0)
-                if len(banner) > MAX_CAPTURE:
-                    raise ValueError("native startup output exceeded bound")
-                match = TOKEN.search(banner)
-                if match:
-                    token = match.group(1).decode("ascii")
+                # In non-TTY CI the rich startup banner may be absent. Read the
+                # native 0600 persistent token from the disposable Kimi home;
+                # it is never logged or added to a retained artifact.
+                home = Path(env["KIMI_CODE_HOME"])
+                token = native_private_token(home)
+                if token:
                     try:
                         result = response("/api/v1/meta", base, token)
                         if isinstance(result, dict):
@@ -84,7 +115,10 @@ def start_server(client, env, project, timeout=45):
                     except (urllib.error.URLError, TimeoutError, ValueError):
                         pass
                 time.sleep(.3)
-            raise ValueError("native authenticated management startup timed out")
+            # Only nonsecret diagnostics; never report or print the token.
+            raise ValueError("native authenticated management startup timed out (token-file="
+                             + ("present" if native_private_token(Path(env["KIMI_CODE_HOME"])) else "absent")
+                             + ")")
         except BaseException:
             try:
                 os.killpg(process.pid, signal.SIGKILL)
