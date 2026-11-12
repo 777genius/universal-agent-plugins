@@ -58,6 +58,7 @@ async function setup(
     | 'acquisition'
     | 'references'
     | 'recoveryWitness'
+    | 'recoveryWitnessOrderOnly'
     | 'failed'
     | 'completeExternal'
     | 'completeResolved'
@@ -126,7 +127,7 @@ async function setup(
       attempt_history: [],
     };
   }
-  if (mode === 'recoveryWitness') {
+  if (mode === 'recoveryWitness' || mode === 'recoveryWitnessOrderOnly') {
     const primary = shard.records[0];
     if (primary.status !== 'partial' || primary.findings.length === 0)
       throw new Error('Expected a source-bound partial report with grouped findings');
@@ -136,16 +137,24 @@ async function setup(
     // Two authenticated scanner outputs have equal group counts, but one
     // OSV-dependent advisory differs. Do not manufacture a clean scan or a
     // synthetic combined scanner digest.
-    const distinct = structuredClone(original.findings[0]);
-    distinct.id = 'sha256:' + '9'.repeat(64);
-    distinct.message = 'Independent OSV dependency advisory: unpinned version';
-    distinct.rule = 'SC4';
-    distinct.severity = 'LOW';
-    distinct.evidence = { witness_source: 'independent authenticated report' };
-    distinct.code_snippet = 'original source evidence';
-    distinct.context = { scanner: 'independent source' };
-    distinct.remediation = { note: 'review the original source' };
-    original.findings[0] = distinct;
+    if (mode === 'recoveryWitnessOrderOnly') {
+      // Both original finding values are identical. Reverse object key order
+      // to prove the UI never invents an additional finding from serialization.
+      original.findings = original.findings.map((finding: Record<string, unknown>) =>
+        Object.fromEntries(Object.entries(finding).reverse()),
+      );
+    } else {
+      const distinct = structuredClone(original.findings[0]);
+      distinct.id = 'sha256:' + '9'.repeat(64);
+      distinct.message = 'Independent OSV dependency advisory: unpinned version';
+      distinct.rule = 'SC4';
+      distinct.severity = 'LOW';
+      distinct.evidence = { witness_source: 'independent authenticated report' };
+      distinct.code_snippet = 'original source evidence';
+      distinct.context = { scanner: 'independent source' };
+      distinct.remediation = { note: 'review the original source' };
+      original.findings[0] = distinct;
+    }
     original.report_digest = 'sha256:' + '8'.repeat(64);
     primary.findings_truncated = true;
     primary.coverage.grouping_complete = false;
@@ -532,6 +541,20 @@ for (const locale of ['en', 'ru'] as const) {
     });
   }
 }
+
+test('an independent original with only reordered JSON keys does not duplicate findings', async ({ page }) => {
+  const { assessment, errors } = await setup(page, 'recoveryWitnessOrderOnly');
+  await expect(assessment).toHaveClass(/skillspector--incomplete/);
+  await assessment.locator(':scope > summary').click();
+  const first = assessment.locator('.skillspector__record').first();
+  await first.locator(':scope > summary').click();
+  const witness = first.locator('div.skillspector__record-reasons');
+  await expect(witness).toBeVisible();
+  await expect(witness).toContainText('42854039402');
+  await expect(witness.locator('.skillspector__findings > li')).toHaveCount(0);
+  await expect(first.locator('.skillspector__record-body > .skillspector__findings > li')).toHaveCount(4);
+  expect(errors).toEqual([]);
+});
 
 for (const width of [1280, 390]) {
   test(`automated review and Skill scan align their icons, type, spacing and chevron (${width}px)`, async ({ page }) => {

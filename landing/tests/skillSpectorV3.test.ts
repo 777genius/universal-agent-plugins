@@ -389,15 +389,19 @@ describe('SkillSpector v3 exact producer contract', () => {
       ['forged run', record => { record.recovery_witnesses![0]!.origin.run_id = 0; }],
       ['forged source', record => { record.recovery_witnesses![0]!.record.source.revision = 'a'.repeat(40); }],
       ['forged digest', record => { record.recovery_witnesses![0]!.record.report_digest = record.report_digest; }],
-      ['nested witness', record => { record.recovery_witnesses![0]!.record.recovery_witnesses = []; }],
-      ['original freshness injection', record => { record.recovery_witnesses![0]!.record.freshness = 'current'; }],
+      ['nested witness', record => { Object.assign(record.recovery_witnesses![0]!.record, { recovery_witnesses: [] }); }],
+      ['original freshness injection', record => {
+        Object.assign(record.recovery_witnesses![0]!.record, { freshness: 'current' });
+      }],
       ['original target revision injection', record => {
-        record.recovery_witnesses![0]!.record.target_revision = record.source.revision;
+        Object.assign(record.recovery_witnesses![0]!.record, { target_revision: record.source.revision });
       }],
       ['original retry injection', record => {
-        record.recovery_witnesses![0]!.record.retry = structuredClone(record.retry);
+        Object.assign(record.recovery_witnesses![0]!.record, { retry: structuredClone(record.retry) });
       }],
-      ['original history injection', record => { record.recovery_witnesses![0]!.record.attempt_history = []; }],
+      ['original history injection', record => {
+        Object.assign(record.recovery_witnesses![0]!.record, { attempt_history: [] });
+      }],
       ['removed conflict reason', record => {
         record.coverage.reasons = record.coverage.reasons.filter(
           (reason: { code: string }) => reason.code !== 'recovery_conflict',

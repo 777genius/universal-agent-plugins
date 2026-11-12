@@ -135,7 +135,10 @@ export interface SkillSpectorRecord {
   /** Distinct source-bound, authenticated main-run evidence; not part of the primary scan. */
   recovery_witnesses?: Array<{
     origin: { run_id: number; run_attempt: number };
-    record: SkillSpectorRecord;
+    record: Omit<
+      SkillSpectorRecord,
+      'recovery_witnesses' | 'freshness' | 'target_revision' | 'retry' | 'attempt_history'
+    >;
   }>;
   /** Added only after the independently pinned cohort Ed25519 signature verifies. */
   signed_cohort_verified?: true;

@@ -239,12 +239,25 @@ const reasonPosition = (reason: { path?: unknown; start_line?: unknown; end_line
   return `${path}${start ? `:${start}${end && end !== start ? `–${end}` : ''}` : ''}`;
 };
 const groups = (record: SkillSpectorRecord) => record.findings;
+const stableFindingJSON = (value: unknown): string => {
+  const ordered = (item: unknown): unknown =>
+    Array.isArray(item)
+      ? item.map(ordered)
+      : item !== null && typeof item === 'object'
+        ? Object.fromEntries(
+            Object.entries(item)
+              .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+              .map(([key, child]) => [key, ordered(child)]),
+          )
+        : item;
+  return JSON.stringify(ordered(value));
+};
 const witnessOnlyFindings = (primary: SkillSpectorRecord, original: SkillSpectorRecord) => {
   const byId = new Map(primary.findings.map((finding) => [finding.id, finding]));
   return original.findings.filter((finding) => {
     const current = byId.get(finding.id);
-    // A group ID alone is not enough to elide changed evidence.
-    return !current || JSON.stringify(current) !== JSON.stringify(finding);
+    // Distinguish changed evidence, not an irrelevant JSON field-order difference.
+    return !current || stableFindingJSON(current) !== stableFindingJSON(finding);
   });
 };
 const recordStatus = (record: SkillSpectorRecord) =>
