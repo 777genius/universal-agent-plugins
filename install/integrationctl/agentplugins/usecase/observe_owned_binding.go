@@ -13,19 +13,37 @@ import (
 // acknowledges an attempt, or persists readiness. Known manual registration can
 // be coherent while authentication and activation remain incomplete.
 func (service Service) InspectOwnedBinding(ctx context.Context, input AddInput, plan domain.DeliveryPlan, installation domain.Installation, binding domain.ClientBinding) (bool, error) {
-	if err := ctx.Err(); err != nil {
+	guarded, complete, manual, err := service.inspectOwnedProjection(ctx, input, plan, installation, binding)
+	if err != nil || !complete {
 		return false, err
 	}
-	if err := validateNativeBinding(binding, input.Client); err != nil {
-		return false, err
+	if manual {
+		return true, nil
+	}
+	return guarded.inspectOwnedVerification(ctx, input, plan, binding)
+}
+
+// InspectOwnedProjection verifies immutable ownership and current projection
+// without asserting that the client has activated or loaded those components.
+func (service Service) InspectOwnedProjection(ctx context.Context, input AddInput, plan domain.DeliveryPlan, installation domain.Installation, binding domain.ClientBinding) (bool, error) {
+	_, complete, _, err := service.inspectOwnedProjection(ctx, input, plan, installation, binding)
+	return complete, err
+}
+
+func (service Service) inspectOwnedProjection(ctx context.Context, input AddInput, plan domain.DeliveryPlan, installation domain.Installation, binding domain.ClientBinding) (Service, bool, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return service, false, false, err
+	}
+	if err := service.validateNativeBinding(ctx, binding, input.Client); err != nil {
+		return service, false, false, err
 	}
 	if service.Stager == nil || service.Activator == nil {
-		return false, errors.New("native materialization verification is unavailable")
+		return service, false, false, errors.New("native materialization verification is unavailable")
 	}
 	activationPolicy := service.Activator
 	service = service.guardFrozenProfiles(ctx, []domain.DetectedClient{input.Client}, nil)
 	if err := service.Stager.Verify(ctx, binding.TargetLocator, managedDigest(binding)); err != nil {
-		return false, err
+		return service, false, false, err
 	}
 	input.DryRun, input.Confirmed, input.InstallIntent = true, false, plan.InstallIntent
 	// Projection only consults optional activation policy; the generic profile
@@ -35,16 +53,13 @@ func (service Service) InspectOwnedBinding(ctx context.Context, input AddInput, 
 	projection.Activator = activationPolicy
 	delivery, complete, manual, err := projection.activeNativeDelivery(ctx, input, plan, installation, binding)
 	if err != nil || !complete {
-		return false, err
+		return service, false, false, err
 	}
 	manual = manual || projection.manualRegistrationSettled(input, plan, binding, delivery)
 	if err := service.profileCheck(); err != nil {
-		return false, err
+		return service, false, false, err
 	}
-	if manual {
-		return true, nil
-	}
-	return service.inspectOwnedVerification(ctx, input, plan, binding)
+	return service, true, manual, nil
 }
 
 func (service Service) inspectOwnedVerification(ctx context.Context, input AddInput, plan domain.DeliveryPlan, binding domain.ClientBinding) (bool, error) {

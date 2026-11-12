@@ -16,7 +16,12 @@ from pi_local_model_fixture import ScriptedPiModel
 
 class PiHTTPMCPProbe:
     """Single bounded, stateless HTTP MCP fixture for both native Pi scopes."""
-    def __init__(self):
+    def __init__(self, *, nonce=None):
+        if nonce is not None and (not isinstance(nonce, str) or not re.fullmatch("[0-9a-f]{64}", nonce)):
+            raise ValueError("inert MCP nonce must be 32-byte lowercase hex")
+        self.nonce = nonce
+        self.calls = []
+        self.invalid_calls = 0
         self.lock = threading.Lock()
         self.observed = []
         outer = self
@@ -33,11 +38,17 @@ class PiHTTPMCPProbe:
                     length = int(self.headers.get("Content-Length", "0"))
                     if length <= 0 or length > 1 << 16:
                         raise ValueError("HTTP MCP body size")
-                    request = json.loads(self.rfile.read(length))
+                    raw_request = self.rfile.read(length)
+                    request = json.loads(raw_request)
+                    if outer.nonce is not None and not isinstance(request, dict):
+                        raise ValueError("nonce MCP request is not an object")
                     method = request.get("method")
                     if request.get("jsonrpc") != "2.0" or not isinstance(method, str):
                         raise ValueError("not JSON-RPC")
                 except (ValueError, TypeError, json.JSONDecodeError):
+                    if outer.nonce is not None:
+                        with outer.lock:
+                            outer.invalid_calls += 1
                     self.send_error(400)
                     return
                 with outer.lock:
@@ -49,18 +60,55 @@ class PiHTTPMCPProbe:
                     self.send_response(202)
                     self.end_headers()
                     return
+                if outer.nonce is not None and method == "tools/call" and (
+                        not isinstance(request.get("params"), dict)
+                        or request["params"].get("name") != "ping"):
+                    with outer.lock:
+                        outer.invalid_calls += 1
+                    self.send_error(400)
+                    return
+                call_record = None
                 if method == "initialize":
                     result = {"protocolVersion": "2025-11-25", "capabilities": {"tools": {}},
                               "serverInfo": {"name": "pi-http-probe", "version": "1.0.0"}}
                 elif method == "tools/list":
                     result = {"tools": [{"name": "ping", "description": "Inert HTTP proof",
                                          "inputSchema": {"type": "object", "properties": {}}}]}
+                    if outer.nonce is not None:
+                        result["tools"][0].update({
+                            "inputSchema": {"type": "object", "properties": {
+                                "nonce": {"type": "string"}, "stage": {"type": "string"}},
+                                "required": ["nonce", "stage"], "additionalProperties": False},
+                            "annotations": {"readOnlyHint": True, "destructiveHint": False}})
                 elif method == "tools/call" and request.get("params", {}).get("name") == "ping":
-                    result = {"content": [{"type": "text", "text": "pi-http-e2e"}]}
+                    text = "pi-http-e2e"
+                    if outer.nonce is not None:
+                        args = request["params"].get("arguments")
+                        if (not isinstance(args, dict) or set(args) != {"nonce", "stage"}
+                                or args["nonce"] != outer.nonce
+                                or not isinstance(args["stage"], str)
+                                or args["stage"] not in {"user-add", "user-repair"}):
+                            with outer.lock:
+                                outer.invalid_calls += 1
+                            self.send_error(400)
+                            return
+                        text = "uap-hermes:" + args["nonce"] + ":" + args["stage"]
+                        with outer.lock:
+                            call_record = {"id": request["id"], "name": "ping",
+                                           "arguments": dict(args), "result": text,
+                                           "request_hex": raw_request.hex()}
+                            outer.calls.append(call_record)
+                    result = {"content": [{"type": "text", "text": text}]}
                 else:
+                    if outer.nonce is not None and method == "tools/call":
+                        with outer.lock:
+                            outer.invalid_calls += 1
                     self.send_error(400)
                     return
                 data = json.dumps({"jsonrpc": "2.0", "id": request["id"], "result": result}).encode()
+                if call_record is not None:
+                    with outer.lock:
+                        call_record["response_hex"] = data.hex()
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(data)))
@@ -83,6 +131,11 @@ class PiHTTPMCPProbe:
     def methods(self):
         with self.lock:
             return tuple(self.observed)
+
+    def call_records(self):
+        """Optional inert Hermes proof; default Pi wire responses are unchanged."""
+        with self.lock:
+            return json.loads(json.dumps(self.calls)), self.invalid_calls
 
     def __enter__(self):
         return self

@@ -1,0 +1,212 @@
+name: Hermes native User tools call - scripted localhost provider, no vendor auth
+'on':
+  pull_request:
+    types:
+    - opened
+    - synchronize
+    - reopened
+    - ready_for_review
+    paths:
+    - .github/workflows/hermes-noauth-tool-call.yml
+    - scripts/e2e/hermes-noauth-tool-call.py
+    - scripts/hermes_local_provider_fixture.py
+    - scripts/test_hermes_local_provider_fixture.py
+    - scripts/pi_project_components_native_e2e.py
+    - scripts/e2e/hermes-native.py
+    - scripts/e2e/hermes-native-lifecycle.py
+    - install/integrationctl/agentplugins/clients/hermes/**
+    - install/integrationctl/agentplugins/adapters/nativeconfig/hermes_yaml*
+  push:
+    branches:
+    - main
+    paths:
+    - .github/workflows/hermes-noauth-tool-call.yml
+    - scripts/e2e/hermes-noauth-tool-call.py
+    - scripts/hermes_local_provider_fixture.py
+    - scripts/test_hermes_local_provider_fixture.py
+    - scripts/pi_project_components_native_e2e.py
+    - scripts/e2e/hermes-native.py
+    - scripts/e2e/hermes-native-lifecycle.py
+    - install/integrationctl/agentplugins/clients/hermes/**
+    - install/integrationctl/agentplugins/adapters/nativeconfig/hermes_yaml*
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency:
+  group: hermes-noauth-call-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+jobs:
+  native-call:
+    name: Hermes 0.23 actual legacy driver tools/call (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - os: ubuntu-24.04
+          python: python3
+        - os: macos-15
+          python: python3
+        - os: windows-2025
+          python: python
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        ref: ${{ github.event.pull_request.head.sha || github.sha }}
+        persist-credentials: false
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+      with:
+        go-version: 1.26.11
+        cache: false
+    - name: Inert provider, nonce and unchanged shared wire contracts
+      shell: bash
+      run: ${{ matrix.python }} -m unittest discover -s scripts -p 'test_hermes_local_provider_fixture.py' -v
+    - name: Build exact source UAP executable
+      shell: bash
+      run: |
+        ${{ matrix.python }} - <<'PYTHON'
+        import os, pathlib, subprocess
+        binary = pathlib.Path(os.environ['RUNNER_TEMP']) / ('agentplugins.exe' if os.name == 'nt' else 'agentplugins')
+        subprocess.run(['go', 'build', '-o', str(binary), './cli/cmd/agentplugins'], check=True)
+        with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as stream:
+            stream.write('UAP_BIN=' + str(binary) + '\n')
+        PYTHON
+    - name: Install pinned Hermes from the official committed source
+      shell: bash
+      run: |
+        set -euo pipefail
+        sha=2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19
+        source="$RUNNER_TEMP/hermes-agent"
+        profile_home="$RUNNER_TEMP/hermes-native-home"
+        mkdir -p "$profile_home"
+        # Fetch the commit graph without executing a mutable remote installer;
+        # bootstrap itself lives at this pinned official Hermes tag's commit.
+        git clone --filter=blob:none --no-checkout \
+          https://github.com/NousResearch/hermes-agent.git "$source"
+        git -C "$source" checkout --force --detach "$sha"
+        test "$(git -C "$source" rev-parse HEAD)" = "$sha"
+        export HOME="$profile_home"
+        export HERMES_HOME="$profile_home/selected-profile"
+        bash "$source/scripts/install.sh" --commit "$sha" \
+          --dir "$source" --hermes-home "$HERMES_HOME" \
+          --non-interactive --skip-browser --skip-computer-use
+        hermes="$profile_home/.local/bin/hermes"
+        test -x "$hermes"
+        "$hermes" --version
+        echo "HERMES_BIN=$hermes" >> "$GITHUB_ENV"
+        echo "HERMES_HOME=$HERMES_HOME" >> "$GITHUB_ENV"
+        echo "HOME=$profile_home" >> "$GITHUB_ENV"
+      if: ${{ runner.os != 'Windows' }}
+    - name: Install pinned native Windows Hermes and resolve its real runtime
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $hermesPin = '2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19'
+        $hermesSource = Join-Path $env:RUNNER_TEMP 'hermes-agent'
+        $fixtureHome = Join-Path $env:RUNNER_TEMP 'hermes-native-home'
+        $hermesProfile = Join-Path $fixtureHome 'selected-profile'
+        $evidenceDir = Join-Path $env:RUNNER_TEMP ('hermes-native-evidence-install-' + [guid]::NewGuid().ToString('N'))
+        $profileEnv = @{
+          HOME = $fixtureHome
+          USERPROFILE = $fixtureHome
+          APPDATA = (Join-Path $fixtureHome 'AppData/Roaming')
+          LOCALAPPDATA = (Join-Path $fixtureHome 'AppData/Local')
+          XDG_CONFIG_HOME = (Join-Path $fixtureHome 'config')
+          XDG_CACHE_HOME = (Join-Path $fixtureHome 'cache')
+          UV_CACHE_DIR = (Join-Path $fixtureHome 'cache/uv')
+          UV_PYTHON_INSTALL_DIR = (Join-Path $fixtureHome 'bootstrap-python')
+          TEMP = (Join-Path $fixtureHome 'tmp')
+          TMP = (Join-Path $fixtureHome 'tmp')
+          HERMES_HOME = $hermesProfile
+        }
+        foreach ($entry in $profileEnv.GetEnumerator()) {
+          New-Item -ItemType Directory -Force -Path $entry.Value | Out-Null
+          Set-Item -Path "Env:$($entry.Key)" -Value $entry.Value
+        }
+        New-Item -ItemType Directory -Force -Path $evidenceDir | Out-Null
+        Remove-Item Env:HERMES_RUNTIME_DIR -ErrorAction SilentlyContinue
+        Remove-Item Env:HERMES_INSTALL_CHANNEL -ErrorAction SilentlyContinue
+        $env:PYTHONUTF8 = '1'
+        git clone --filter=blob:none --no-checkout https://github.com/NousResearch/hermes-agent.git $hermesSource
+        if ($LASTEXITCODE -ne 0) { throw 'Pinned Hermes source clone failed' }
+        git -C $hermesSource config core.autocrlf false
+        if ($LASTEXITCODE -ne 0) { throw 'Hermes checkout byte policy failed' }
+        git -C $hermesSource checkout --force --detach $hermesPin
+        if ($LASTEXITCODE -ne 0) { throw 'Pinned Hermes source checkout failed' }
+        $actualPin = (git -C $hermesSource rev-parse HEAD).Trim()
+        if ($LASTEXITCODE -ne 0 -or $actualPin -ne $hermesPin) { throw 'Hermes source pin differs' }
+
+        # Run only the installer from the pinned official checkout.
+        # NonInteractive skips provider setup and gateway-service installation.
+        & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $hermesSource 'scripts/install.ps1') `
+          -Commit $hermesPin -InstallDir $hermesSource -HermesHome $hermesProfile `
+          -NonInteractive -SkipBrowser -SkipComputerUse 2>&1 |
+          Tee-Object -FilePath (Join-Path $evidenceDir 'install.log')
+        if ($LASTEXITCODE -ne 0) { throw 'Pinned native Hermes installation failed' }
+        $actualPin = (git -C $hermesSource rev-parse HEAD).Trim()
+        if ($LASTEXITCODE -ne 0 -or $actualPin -ne $hermesPin) { throw 'Hermes installer changed the selected source pin' }
+
+        # Both are official outputs; do not invent a wrapper or use an ambient CLI.
+        $hermesBinDir = Join-Path $hermesProfile 'bin'
+        $hermesBin = $null
+        foreach ($name in @('hermes.exe', 'hermes.cmd')) {
+          $candidate = Join-Path $hermesBinDir $name
+          if (Test-Path -LiteralPath $candidate -PathType Leaf) { $hermesBin = $candidate; break }
+        }
+        if (-not $hermesBin) { throw 'Official Windows Hermes launcher is missing' }
+        # Reuse the vendor's bounded exe/cmd probe and its command-file quoting.
+        $runtimeHelper = Join-Path $hermesSource 'scripts/desktop-update/runtime.ps1'
+        . ([ScriptBlock]::Create([IO.File]::ReadAllText($runtimeHelper)))
+        $version = Invoke-HermesProbe -Exe $hermesBin -Arguments @('--version')
+        if ($version.TimedOut -or $version.Code -ne 0 -or -not $version.Output.Trim()) { throw 'Native Hermes version probe failed' }
+        $version.Output | Tee-Object -FilePath (Join-Path $evidenceDir 'version.txt')
+        $probe = Invoke-HermesProbe -Exe $hermesBin -Arguments @('--print-runtime-command')
+        if ($probe.TimedOut -or $probe.Code -ne 0) { throw 'Native Hermes runtime resolution failed' }
+        $runtimePath = Join-Path $evidenceDir 'runtime-command.json'
+        [IO.File]::WriteAllText($runtimePath, $probe.Output, [Text.UTF8Encoding]::new($false))
+        $env:HERMES_NATIVE_RUNTIME_COMMAND_FILE = $runtimePath
+        @'
+        import json, os
+        from pathlib import Path
+        argv = json.loads(Path(os.environ['HERMES_NATIVE_RUNTIME_COMMAND_FILE']).read_text(encoding='utf-8'))
+        if not isinstance(argv, list) or len(argv) < 4 or not all(isinstance(x, str) and x for x in argv):
+            raise SystemExit('Native launcher did not return a list of nonempty strings')
+        if not Path(argv[0]).is_absolute() or not Path(argv[0]).is_file() or argv[1:3] != ['-I', '-c']:
+            raise SystemExit('Native launcher did not select its real isolated Python runtime')
+        print('Official Windows Hermes runtime argv resolved and validated')
+        '@ | python -
+        if ($LASTEXITCODE -ne 0) { throw 'Native runtime JSON contract failed' }
+
+        foreach ($entry in $profileEnv.GetEnumerator()) {
+          "$($entry.Key)=$($entry.Value)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        }
+        "HERMES_BIN=$hermesBin" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        "HERMES_NATIVE_RUNTIME_COMMAND_FILE=$runtimePath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        'PYTHONUTF8=1' | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        $hermesBinDir | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      if: ${{ runner.os == 'Windows' }}
+    - name: Resolve official POSIX installed runtime command
+      if: ${{ runner.os != 'Windows' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        runtime="$RUNNER_TEMP/hermes-native-runtime-command.json"
+        "$HERMES_BIN" --print-runtime-command > "$runtime"
+        printf 'HERMES_NATIVE_RUNTIME_COMMAND_FILE=%s\n' "$runtime" >> "$GITHUB_ENV"
+    - name: Real pinned Hermes legacy driver User MCP calls without vendor authentication
+      shell: bash
+      env:
+        HERMES_NATIVE_UAP_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      run: ${{ matrix.python }} scripts/e2e/hermes-noauth-tool-call.py
+    - name: Retain original nonce, provider, native process and lifecycle evidence
+      if: ${{ always() }}
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        name: hermes-noauth-native-call-${{ runner.os }}-${{ runner.arch }}-${{ github.run_id }}-${{ github.run_attempt
+          }}
+        path: ${{ runner.temp }}/hermes-native-call-evidence-*/
+        if-no-files-found: error
+        retention-days: 14

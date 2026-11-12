@@ -206,7 +206,7 @@ func markStoppedRefresh(partial *GroupResult, input GroupInput, failed int, atte
 // scope is materialized at exactly this revision. It only reads state;
 // RefreshProjection checks the exact binding again under its own lock.
 func (service Service) projectionRefreshTarget(input AddInput) (string, bool, error) {
-	if input.EnvironmentAuthority != nil || !rendersCommands(input.Envelope, input.Client.ClientID) || service.StateStore == nil {
+	if input.EnvironmentAuthority != nil || !refreshesManagedProjection(input) || service.StateStore == nil {
 		return "", false, nil
 	}
 	state, err := service.StateStore.Load()
@@ -226,6 +226,13 @@ func (service Service) projectionRefreshTarget(input AddInput) (string, bool, er
 		}
 	}
 	return "", false, nil
+}
+
+// Explicit update can refresh a declaratively required native projection even
+// when no command skills are present. Saved pins retain their separate policy.
+func refreshesManagedProjection(input AddInput) bool {
+	return rendersCommands(input.Envelope, input.Client.ClientID) ||
+		(domain.SelectedDelivery{}).EffectiveTraitsForScope(input.Client.ClientID, input.Scope).RequiresActiveNativeProjection
 }
 
 // rendersCommands reports whether command rules shape this client's tree:

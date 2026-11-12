@@ -345,6 +345,80 @@ describe('SkillSpector v3 exact producer contract', () => {
     }
   });
 
+  it('accepts a separate authenticated original witness without treating its findings as one scanner report', () => {
+    // The Cloudflare reference fixture intentionally exceeds the 256 KiB
+    // witness budget. Use a compact valid partial report and one real grouped
+    // finding so this positive case tests the contract, not its size refusal.
+    const primary = referenceRecord('asc_workflow');
+    const original = structuredClone(primary) as Record<string, unknown>;
+    for (const key of ['freshness', 'target_revision', 'retry', 'attempt_history']) delete original[key];
+    const finding = structuredClone(referenceFixture.cloudflare.findings[0]);
+    original.findings = [finding];
+    original.finding_count = finding.raw_count;
+    original.raw_finding_count = finding.raw_count;
+    original.finding_group_count = 1;
+    original.report_digest = 'sha256:' + '9'.repeat(64);
+    primary.coverage.grouping_complete = false;
+    primary.findings_truncated = true;
+    primary.coverage.reasons.push(
+      { code: 'recovery_conflict', message: 'Independent authenticated scans disagree.' },
+      { code: 'normalization_truncated', message: 'Both original reports are retained separately.' },
+    );
+    primary.recovery_witnesses = [{
+      origin: { run_id: 42854039402, run_attempt: 1 },
+      record: original as unknown as SkillSpectorRecord,
+    }];
+    assert.deepEqual(decodeReference(primary).recovery_witnesses, primary.recovery_witnesses);
+    assert.notEqual(primary.recovery_witnesses[0]!.record.report_digest, primary.report_digest);
+    assert.equal(primary.status, 'partial');
+    assert.deepEqual(primary.findings, referenceRecord('asc_workflow').findings);
+    assert.equal(primary.recovery_witnesses[0]!.record.findings.length, 1);
+
+    // Once the catalog pin changes, both original findings remain readable,
+    // but neither counts as a verification of the new target revision.
+    const historical = structuredClone(primary);
+    historical.freshness = 'historical';
+    historical.target_revision = 'b'.repeat(40);
+    const historicalDecoded = decodeReference(historical);
+    assert.equal(historicalDecoded.freshness, 'historical');
+    assert.equal(historicalDecoded.target_revision, 'b'.repeat(40));
+    assert.deepEqual(historicalDecoded.recovery_witnesses, primary.recovery_witnesses);
+    assert.equal(historicalDecoded.status, 'partial');
+
+    const cases: Array<[string, (record: typeof primary) => void]> = [
+      ['forged run', record => { record.recovery_witnesses![0]!.origin.run_id = 0; }],
+      ['forged source', record => { record.recovery_witnesses![0]!.record.source.revision = 'a'.repeat(40); }],
+      ['forged digest', record => { record.recovery_witnesses![0]!.record.report_digest = record.report_digest; }],
+      ['nested witness', record => { Object.assign(record.recovery_witnesses![0]!.record, { recovery_witnesses: [] }); }],
+      ['original freshness injection', record => {
+        Object.assign(record.recovery_witnesses![0]!.record, { freshness: 'current' });
+      }],
+      ['original target revision injection', record => {
+        Object.assign(record.recovery_witnesses![0]!.record, { target_revision: record.source.revision });
+      }],
+      ['original retry injection', record => {
+        Object.assign(record.recovery_witnesses![0]!.record, { retry: structuredClone(record.retry) });
+      }],
+      ['original history injection', record => {
+        Object.assign(record.recovery_witnesses![0]!.record, { attempt_history: [] });
+      }],
+      ['removed conflict reason', record => {
+        record.coverage.reasons = record.coverage.reasons.filter(
+          (reason: { code: string }) => reason.code !== 'recovery_conflict',
+        );
+      }],
+      ['fabricated complete', record => { record.status = 'complete'; }],
+      ['oversized original', record => {
+        record.recovery_witnesses![0]!.record.findings[0]!.message = 'x'.repeat(300_000);
+      }],
+    ];
+    for (const [label, change] of cases) {
+      const altered = structuredClone(primary);
+      change(altered);
+      assert.throws(() => decodeReference(altered), /invalid/, label);
+    }
+  });
+
   it('accepts all three real normalized reference/ledger records without dropping original positions or evidence', () => {
     for (const [key, references, diagnostics] of [
       ['cloudflare', 6, 664],

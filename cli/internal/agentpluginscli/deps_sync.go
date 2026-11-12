@@ -95,6 +95,9 @@ func preflightDependencyAdapter(ctx context.Context, adapter *dependencyInstalle
 	}()
 	for _, action := range actions {
 		if action.Action == environment.ActionUnchanged {
+			if err := adapter.verifyUnchangedProjection(ctx, action); err != nil {
+				return nil, fmt.Errorf("preflight %s/%s: %w", action.Alias, action.ClientID, err)
+			}
 			continue
 		}
 		adapter.previewUpdate = nil
@@ -126,6 +129,29 @@ func preflightDependencyAdapter(ctx context.Context, adapter *dependencyInstalle
 		claims[key] = action.Alias
 	}
 	return actions, nil
+}
+
+func (adapter *dependencyInstaller) verifyUnchangedProjection(ctx context.Context, action dependencyAction) error {
+	traits := (domain.SelectedDelivery{}).EffectiveTraitsForScope(domain.ClientID(action.ClientID), adapter.app.scope())
+	if !traits.RequiresActiveNativeProjection {
+		return nil
+	}
+	prepared, err := adapter.Prepare(ctx, managementNativeRepair(action))
+	if err != nil {
+		return err
+	}
+	defer func() { _ = prepared.Close() }()
+	complete, err := adapter.app.Installer.VerifyPreparedProjection(ctx, prepared)
+	if errors.Is(err, domain.ErrProjectionRefreshRequired) && action.Authority != nil {
+		return domain.ErrProjectionPinChangeRequired
+	}
+	if err != nil {
+		return err
+	}
+	if !complete {
+		return errors.New("recorded binding has no complete current projection")
+	}
+	return nil
 }
 
 func (adapter *dependencyInstaller) preflightProjectVersions(ctx context.Context, actions []dependencyAction) error {

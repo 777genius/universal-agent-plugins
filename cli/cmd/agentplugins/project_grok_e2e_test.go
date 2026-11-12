@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -10,8 +11,12 @@ import (
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/grok"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
@@ -85,7 +90,7 @@ func configureProjectGrokJourney(app agentpluginscli.App, user string, runner *p
 	}
 	app.Detector = projectGrokDetector{user: user, executable: runner.executable, version: version}
 	app.Lifecycle.Activator = providers.Activator{Registry: app.ClientRegistry, Runner: runner}
-	app.Lifecycle.NativeObserver = providers.NativeIdentityObserver{Registry: app.ClientRegistry, Runner: runner}
+	app.Lifecycle.NativeObserver = providers.NativeIdentityObserver{Registry: app.ClientRegistry, Runner: runner, Stager: app.Lifecycle.Stager}
 	compose := app.ForScope
 	app.ForScope = func(scope domain.InstallScope, root string) (agentpluginscli.App, error) {
 		selected, err := compose(scope, root)
@@ -327,11 +332,26 @@ func TestProjectGrokMCPOnlyStdioKeepsOwnedData(t *testing.T) {
 		t.Fatal(err)
 	}
 	var projected struct {
-		Servers map[string]map[string]any `json:"mcpServers"`
+		Servers map[string]struct {
+			Command string            `json:"command"`
+			Args    []string          `json:"args"`
+			Env     map[string]string `json:"env"`
+			CWD     *string           `json:"cwd"`
+		} `json:"mcpServers"`
 	}
-	if err := json.Unmarshal(body, &projected); err != nil || len(projected.Servers) != 1 ||
-		projected.Servers["docs"]["command"] != "go" {
+	if err := json.Unmarshal(body, &projected); err != nil || len(projected.Servers) != 1 {
 		t.Fatalf("Grok stdio native MCP projection differs: %s %v", body, err)
+	}
+	server, present := projected.Servers["docs"]
+	helper := filepath.Join(binding.TargetLocator, filepath.FromSlash(managedstdio.RelativeDirectory), managedstdio.ExecutableName)
+	authority := []string{managedstdio.Mode, binding.TargetLocator, expectedData, binding.TargetLocator, "plugin"}
+	if !present || server.Command != helper || server.CWD != nil || len(server.Args) != 8 || server.Args[5] != "--argv-base64-v1" ||
+		!reflect.DeepEqual(server.Args[:5], authority) || server.Env["DATA"] != expectedData {
+		t.Fatalf("Grok stdio launcher lost package/data/cwd authority: %+v", server)
+	}
+	child, err := managedstdio.DecodeCommandArguments(server.Args[5], server.Args[6:])
+	if err != nil || !reflect.DeepEqual(child, []string{"go", "version"}) {
+		t.Fatalf("Grok stdio launcher changed the original child command: %v %v", child, err)
 	}
 	journey.run(t, journey.a, "remove", "docs", "--target", "grok")
 	projectJourneyAbsent(t, binding.TargetLocator)
@@ -357,5 +377,171 @@ func TestProjectGrokUnqualifiedMCPVersionRefusesBeforeOwnedMutation(t *testing.T
 	if !reflect.DeepEqual(userBefore, securityFixtureTree(t, user)) ||
 		!reflect.DeepEqual(otherBefore, securityFixtureTree(t, journey.b)) || runner.calls == 0 {
 		t.Fatal("version refusal changed user/B or skipped read-only inspect")
+	}
+}
+
+// This explicit predecessor seam creates the actual old direct projection via
+// the original shared encoder before its genuine immutable receipt is saved.
+// No installed file or receipt is edited to simulate a legacy installation.
+type legacyProjectGrok struct{ *grok.Adapter }
+
+func (adapter legacyProjectGrok) Project(_ context.Context, in clients.ProjectionInput) ([]domain.NativeObjectOwnership, error) {
+	manifest := shared.ManifestFromEnvelope(in.Envelope, shared.WithAuthorNameEmail())
+	manifest["skills"] = "./skills/"
+	manifest["mcpServers"] = "./.mcp.json"
+	if err := shared.WriteJSON(filepath.Join(in.StagingPath, ".grok-plugin", "plugin.json"), manifest); err != nil {
+		return nil, err
+	}
+	return []domain.NativeObjectOwnership{}, shared.ProjectMCPServers(shared.MCPProjection{Root: in.StagingPath, Envelope: in.Envelope, Names: shared.SupportedMCPNames(in.Plan), Dialect: shared.MCPDialectGrok, PluginRoot: in.Plan.ActivePath, DataPath: in.PluginDataPath})
+}
+func projectGrokAdapterApp(t *testing.T, app agentpluginscli.App, adapter clients.Adapter) agentpluginscli.App {
+	t.Helper()
+	registry, err := clients.NewRegistry(adapter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	app.ClientRegistry = registry
+	stager, ok := app.Lifecycle.Stager.(providers.Stager)
+	if !ok {
+		t.Fatal("fixture requires composed production stager")
+	}
+	stager.Registry = registry
+	app.Lifecycle.Stager = stager
+	compose := app.ForScope
+	app.ForScope = func(scope domain.InstallScope, root string) (agentpluginscli.App, error) {
+		selected, err := compose(scope, root)
+		if err != nil {
+			return selected, err
+		}
+		return projectGrokAdapterApp(t, selected, adapter), nil
+	}
+	return app
+}
+func TestProjectGrokLegacyStdioRequiresExplicitProjectionRefresh(t *testing.T) {
+	transport := newProjectJourneyTransport(t, "zip")
+	journey := newProjectJourney(t, transport)
+	user := filepath.Join(journey.home, ".grok")
+	projectJourneyWrite(t, filepath.Join(user, "keep"), "foreign User")
+	normal := journey.app
+	runner := &projectGrokRunner{t: t, executable: filepath.Join(journey.home, "grok-not-executed"), version: "1.0.70"}
+	journey.app = configureProjectGrokJourney(projectGrokAdapterApp(t, normal, legacyProjectGrok{grok.New()}), user, runner)
+	journey.run(t, journey.a, "add", transport.endpoint, "--target", "grok", "--no-save")
+	initial, binding := projectGrokUnsavedOwned(t, journey)
+	before := securityFixtureTree(t, filepath.Join(journey.a, ".grok"))
+	foreignUser, foreignB := securityFixtureTree(t, user), securityFixtureTree(t, journey.b)
+	journey.app = configureProjectGrokJourney(normal, user, runner)
+	_, err := journey.execute(journey.a, "add", transport.endpoint, "--target", "grok", "--no-save")
+	if !errors.Is(err, domain.ErrProjectionRefreshRequired) {
+		t.Fatal("same revision legacy direct projection was accepted", err)
+	}
+	if !reflect.DeepEqual(before, securityFixtureTree(t, filepath.Join(journey.a, ".grok"))) {
+		t.Fatal("refused repeat rewrote old immutable projection")
+	}
+	journey.run(t, journey.a, "update", initial.InstallationID, "--target", "grok")
+	refreshed, current := projectGrokUnsavedOwned(t, journey)
+	if refreshed.Source.TreeDigest != initial.Source.TreeDigest || current.TargetLocator != binding.TargetLocator || current.ClientBindingID != binding.ClientBindingID || current.Activation != domain.ActivationPrepared || current.Verification != domain.VerificationPackageValid {
+		t.Fatal("projection refresh changed source authority or promoted activation", current)
+	}
+	body := projectJourneyRead(t, filepath.Join(current.TargetLocator, ".mcp.json"))
+	if !strings.Contains(body, "--argv-base64-v1") || strings.Contains(body, `"cwd"`) {
+		t.Fatal("explicit update did not install managed cwd launcher", body)
+	}
+	journey.run(t, journey.a, "add", transport.endpoint, "--target", "grok", "--no-save")
+	if !reflect.DeepEqual(foreignUser, securityFixtureTree(t, user)) || !reflect.DeepEqual(foreignB, securityFixtureTree(t, journey.b)) {
+		t.Fatal("legacy refresh changed B or User")
+	}
+}
+
+func projectGrokUnsavedOwned(t *testing.T, journey projectJourney) (domain.Installation, domain.ClientBinding) {
+	t.Helper()
+	state := journey.state(t, journey.a)
+	if len(state.Installations) != 1 || len(state.Installations[0].Clients) != 1 || len(state.EnvironmentReceipts) != 0 {
+		t.Fatal("legacy unsaved fixture authority differs", state)
+	}
+	installation := state.Installations[0]
+	for _, binding := range installation.Clients {
+		return installation, binding
+	}
+	t.Fatal("legacy binding missing")
+	return domain.Installation{}, domain.ClientBinding{}
+}
+
+func projectGrokNoHelperApp(t *testing.T, app agentpluginscli.App) agentpluginscli.App {
+	t.Helper()
+	stager, ok := app.Lifecycle.Stager.(providers.Stager)
+	if !ok {
+		t.Fatal("fixture requires composed production stager")
+	}
+	stager.LauncherSource = nil
+	app.Lifecycle.Stager = stager
+	compose := app.ForScope
+	app.ForScope = func(scope domain.InstallScope, root string) (agentpluginscli.App, error) {
+		selected, err := compose(scope, root)
+		if err != nil {
+			return selected, err
+		}
+		return projectGrokNoHelperApp(t, selected), nil
+	}
+	return app
+}
+func TestProjectGrokHelperReadinessPrecedesProjectionEffects(t *testing.T) {
+	transport := newProjectJourneyTransport(t, "zip")
+	journey := newProjectJourney(t, transport)
+	user := filepath.Join(journey.home, ".grok")
+	projectJourneyWrite(t, filepath.Join(user, "keep"), "foreign User")
+	runner := &projectGrokRunner{t: t, executable: filepath.Join(journey.home, "grok-not-executed"), version: "1.0.70"}
+	journey.app = projectGrokNoHelperApp(t, configureProjectGrokJourney(journey.app, user, runner))
+	beforeA, beforeB, beforeUser := securityFixtureTree(t, journey.a), securityFixtureTree(t, journey.b), securityFixtureTree(t, user)
+	output, err := journey.execute(journey.a, "add", transport.endpoint, "--target", "grok", "--no-save", "--dry-run")
+	if err != nil || !strings.Contains(output, "managed_stdio_helper_unavailable") {
+		t.Fatal("planning did not report unavailable trusted helper", output, err)
+	}
+	if !reflect.DeepEqual(beforeA, securityFixtureTree(t, journey.a)) || !reflect.DeepEqual(beforeB, securityFixtureTree(t, journey.b)) || !reflect.DeepEqual(beforeUser, securityFixtureTree(t, user)) {
+		t.Fatal("readiness preview changed project or foreign roots")
+	}
+}
+
+func TestProjectGrokSavedLegacyStdioRequiresPinChange(t *testing.T) {
+	transport := newProjectJourneyTransport(t, "zip")
+	journey := newProjectJourney(t, transport)
+	user := filepath.Join(journey.home, ".grok")
+	projectJourneyWrite(t, filepath.Join(user, "keep"), "foreign User")
+	normal := journey.app
+	runner := &projectGrokRunner{t: t, executable: filepath.Join(journey.home, "grok-not-executed"), version: "1.0.70"}
+	journey.app = configureProjectGrokJourney(projectGrokAdapterApp(t, normal, legacyProjectGrok{grok.New()}), user, runner)
+	journey.run(t, journey.a, "add", transport.endpoint, "--alias", "docs", "--target", "grok")
+	initial, binding := journey.owned(t, journey.a)
+	before := securityFixtureTree(t, filepath.Join(journey.a, ".grok"))
+	stateBefore := projectJourneyRead(t, filepath.Join(journey.namespace(journey.a), "state-v2.json"))
+	foreignUser, foreignB := securityFixtureTree(t, user), securityFixtureTree(t, journey.b)
+	journey.app = configureProjectGrokJourney(normal, user, runner)
+	_, err := journey.execute(journey.a, "add", transport.endpoint, "--alias", "docs", "--target", "grok")
+	if !errors.Is(err, domain.ErrProjectionPinChangeRequired) {
+		t.Fatal("saved stale pin was accepted or offered an unauthorized refresh", err)
+	}
+	if !reflect.DeepEqual(before, securityFixtureTree(t, filepath.Join(journey.a, ".grok"))) || stateBefore != projectJourneyRead(t, filepath.Join(journey.namespace(journey.a), "state-v2.json")) {
+		t.Fatal("refused saved pin changed immutable package or ownership state")
+	}
+	projectJourneyWrite(t, filepath.Join(transport.repo, "skills", "docs", "SKILL.md"), projectJourneyAdvancedSkill)
+	transport.mu.Lock()
+	transport.archive = projectJourneyArchive(t, transport.repo)
+	transport.mu.Unlock()
+	journey.run(t, journey.a, "update", "docs", "--target", "grok")
+	updated, current := journey.owned(t, journey.a)
+	if updated.Source.TreeDigest == initial.Source.TreeDigest || current.TargetLocator != binding.TargetLocator || current.ClientBindingID != binding.ClientBindingID || current.Activation != domain.ActivationPrepared || current.Verification != domain.VerificationPackageValid {
+		t.Fatal("saved pin update lost ownership or promoted activation", current)
+	}
+	body := projectJourneyRead(t, filepath.Join(current.TargetLocator, ".mcp.json"))
+	if !strings.Contains(body, "--argv-base64-v1") || strings.Contains(body, `"cwd"`) {
+		t.Fatal("new pin did not install managed cwd launcher", body)
+	}
+	stateBefore = projectJourneyRead(t, filepath.Join(journey.namespace(journey.a), "state-v2.json"))
+	packageBefore := securityFixtureTree(t, current.TargetLocator)
+	journey.run(t, journey.a, "add", transport.endpoint, "--alias", "docs", "--target", "grok")
+	if !reflect.DeepEqual(packageBefore, securityFixtureTree(t, current.TargetLocator)) || stateBefore != projectJourneyRead(t, filepath.Join(journey.namespace(journey.a), "state-v2.json")) {
+		t.Fatal("current saved pin repeat changed materialization or receipt")
+	}
+	if !reflect.DeepEqual(foreignUser, securityFixtureTree(t, user)) || !reflect.DeepEqual(foreignB, securityFixtureTree(t, journey.b)) {
+		t.Fatal("saved pin admission changed User or B")
 	}
 }
