@@ -242,12 +242,24 @@ func TestPiModernFixtureSavedUserInstallLifecycle(t *testing.T) {
 	dependencyRun(t, fixture.cliFixture, "remove", "marketing-kit",
 		"--target", "pi", "--yes", "--format", "json")
 	removed, err := fixture.app.Installer.Inspect(context.Background())
-	if err != nil || len(removed.EnvironmentReceipts) != 0 || len(removed.Installations) != 0 {
-		t.Fatalf("Pi saved root removal retained owned graph: %+v %v", removed, err)
+	if err != nil || removed.Recovery.Required || len(removed.EnvironmentReceipts) != 0 || len(removed.Installations) != 4 {
+		t.Fatalf("Pi root removal did not clear active receipts while retaining package data: %+v %v", removed, err)
+	}
+	// A normal removal intentionally retains owned package data; it must not
+	// retain any active client bindings or environmental receipts.
+	for _, retained := range removed.Installations {
+		if !retained.DataRetained || len(retained.Bindings) != 0 || len(retained.DataRoots) == 0 {
+			t.Fatalf("Pi removed installation still active or missing retained data: %+v", retained)
+		}
 	}
 	saved, stateErr := fixture.store.Load()
-	if stateErr != nil || len(saved.Installations) != 0 {
-		t.Fatalf("Pi saved root removal left persistent installations: %+v %v", saved, stateErr)
+	if stateErr != nil || len(saved.Installations) != 4 || len(saved.EnvironmentReceipts) != 0 {
+		t.Fatalf("Pi removal did not persist the inactive data-retained installations: %+v %v", saved, stateErr)
+	}
+	for _, retained := range saved.Installations {
+		if !retained.DataRetained || len(retained.Clients) != 0 {
+			t.Fatalf("Pi removed installation retained an active client binding: %+v", retained)
+		}
 	}
 }
 
@@ -286,12 +298,17 @@ func TestPiModernFixtureRefusesMissingSignedHubSpotTarget(t *testing.T) {
 			if err == nil || !strings.Contains(err.Error(), "dependency conflict for directory:acme/hubspot-crm") {
 				t.Fatalf("missing HubSpot Pi grant resolved an unauthorized child: %v", err)
 			}
-			stdout, stderr, installErr := fixture.cliFixture.execute(false,
-				"install", "marketing-kit", "--target", "pi", "--yes", "--format", "json")
-			if installErr == nil || !strings.Contains(installErr.Error()+" "+stderr+" "+stdout,
-				"dependency conflict for directory:acme/hubspot-crm") {
-				t.Fatalf("CLI accepted missing signed HubSpot Pi grant: err=%v stdout=%s stderr=%s",
-					installErr, stdout, stderr)
+			// The disposable CLI composition in this test supports user scope.
+			// Project-scope denial is exercised by the real scoped resolver
+			// above; a project CLI lifecycle belongs to a scoped composer test.
+			if scope == domain.ScopeUser {
+				stdout, stderr, installErr := fixture.execute(false,
+					"install", "marketing-kit", "--target", "pi", "--yes", "--format", "json")
+				if installErr == nil || !strings.Contains(installErr.Error()+" "+stderr+" "+stdout,
+					"dependency conflict for directory:acme/hubspot-crm") {
+					t.Fatalf("CLI accepted missing signed HubSpot Pi grant: err=%v stdout=%s stderr=%s",
+						installErr, stdout, stderr)
+				}
 			}
 			state, stateErr := fixture.store.Load()
 			if stateErr != nil || len(state.Installations) != 0 {
