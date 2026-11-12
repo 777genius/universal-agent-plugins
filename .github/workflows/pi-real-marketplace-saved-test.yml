@@ -1,6 +1,14 @@
 name: Pi real marketplace four-package saved cohort E2E (test-only)
 
 on:
+  # Qualify the integrated main commit with the same real-source and filesystem cases.
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/pi-real-marketplace-saved-test.yml'
+      - 'cli/internal/agentpluginscli/pi_real_marketplace_saved_e2e_test.go'
+      - 'cli/internal/agentpluginscli/pi_modern_saved_closure_test.go'
+      - 'cli/cmd/agentplugins/project_pi_signed_v1_saved_test.go'
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
