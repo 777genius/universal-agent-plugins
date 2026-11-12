@@ -72,7 +72,7 @@ class ReleasedNativeProofTests(unittest.TestCase):
     def receipt(self):
         return Path(self.args.proofs) / "receipt.json"
 
-    def invoke(self, execute=None, version="agentplugins 1.2.3"):
+    def invoke(self, execute=None, version="agentplugins 1.2.3", vendor_samples=None):
         real_output = proof.output
 
         def output(command, env):
@@ -95,9 +95,12 @@ class ReleasedNativeProofTests(unittest.TestCase):
 
         with patch.object(proof, "output", side_effect=output), \
              patch.object(proof, "host_target", return_value="linux-amd64"), \
-             patch.object(proof, "vendor_identity", return_value=self.vendor), \
+             patch.object(proof, "vendor_identity", side_effect=vendor_samples or
+                          [dict(self.vendor), dict(self.vendor)]) as observe_vendor, \
              patch.object(proof, "execute", side_effect=execute or success):
+            self.vendor_observer = observe_vendor
             proof.run(self.args)
+        return observe_vendor.call_count
 
     def test_pass_only_receipt_uses_exact_binary_and_fixed_harness_without_credentials(self):
         with patch.dict(os.environ, {"GH_TOKEN": "secret", "GITHUB_TOKEN": "secret",
@@ -113,11 +116,91 @@ class ReleasedNativeProofTests(unittest.TestCase):
 
     def test_hermes_uses_existing_fixed_lifecycle_and_mcp_driver(self):
         self.args.client = "hermes"
-        self.vendor["version_output"] = "Hermes Agent 0.23.0"
+        self.vendor["version_output"] = "Hermes Agent v0.23.0"
         self.invoke()
         receipt = json.loads(self.receipt().read_text())
         self.assertEqual(receipt["vendor_pin"], proof.HERMES_PIN)
         self.assertEqual(set(receipt["harness"]), set(proof.harness_files("hermes", "linux-amd64")))
+
+    def vendor_diagnosis(self):
+        transcript = self.receipt().with_name("transcript.log")
+        return json.loads(transcript.read_text().splitlines()[-1])
+
+    def test_hermes_advisory_drift_retains_raw_samples_and_exact_hashes(self):
+        self.args.client = "hermes"
+        before = {**self.vendor, "version_output": "Hermes Agent v0.23.0 (2026.9.24)\nUp to date"}
+        after = {**before, "version_output": "Hermes Agent v0.23.0 (2026.9.24)\nUpdate available"}
+        self.assertEqual(self.invoke(vendor_samples=[before, after]), 2)
+        self.assertIsNot(before, after)
+        self.assertEqual(self.vendor_diagnosis(), {"vendor_before": before, "vendor_after": after,
+                                                  "changed_fields": ["version_output"]})
+        receipt = json.loads(self.receipt().read_text())
+        self.assertEqual(receipt["vendor"], before)
+        self.assertEqual(receipt["transcript_sha256"], proof.sha(self.receipt().with_name("transcript.log")))
+
+    def test_vendor_hash_drift_is_rejected_with_or_without_advisory_drift(self):
+        for client in ("hermes", "antigravity"):
+            self.args.client = client
+            before = dict(self.vendor)
+            if client == "hermes":
+                before["version_output"] = "Hermes Agent v0.23.0\nUp to date"
+            for key in ("executable_sha256", "runtime_sha256"):
+                for advisory in (False, True):
+                    with self.subTest(client=client, key=key, advisory=advisory):
+                        after = {**before, key: "b" * 64}
+                        if advisory:
+                            after["version_output"] += "\nUpdate available"
+                        with self.assertRaisesRegex(ValueError, "native vendor changed.*" + key):
+                            self.invoke(vendor_samples=[dict(before), after])
+                        self.assertEqual(self.vendor_observer.call_count, 2)
+                        expected = sorted([key] + (["version_output"] if advisory else []))
+                        self.assertEqual(self.vendor_diagnosis(), {
+                            "vendor_before": before, "vendor_after": after, "changed_fields": expected})
+                        self.assertFalse(self.receipt().exists())
+
+    def test_antigravity_raw_advisory_drift_stays_strict(self):
+        before, after = dict(self.vendor), {**self.vendor, "version_output": "agy 1.5.3\nUpdate available"}
+        with self.assertRaisesRegex(ValueError, "native vendor changed.*version_output"):
+            self.invoke(vendor_samples=[before, after])
+        self.assertEqual(self.vendor_observer.call_count, 2)
+        self.assertEqual(self.vendor_diagnosis()["changed_fields"], ["version_output"])
+        self.assertFalse(self.receipt().exists())
+
+    def test_after_observation_error_retains_before_and_never_writes_pass(self):
+        self.args.client = "hermes"
+        before = {**self.vendor, "version_output": "Hermes Agent v0.23.0"}
+        for message in ("native vendor version differs from pinned release", "Hermes source pin mismatch"):
+            with self.subTest(message=message):
+                with self.assertRaisesRegex(ValueError, message):
+                    self.invoke(vendor_samples=[dict(before), ValueError(message)])
+                self.assertEqual(self.vendor_observer.call_count, 2)
+                self.assertEqual(self.vendor_diagnosis(), {"vendor_before": before,
+                                                          "vendor_after_error": "ValueError: " + message})
+                self.assertFalse(self.receipt().exists())
+
+    def test_hermes_primary_version_validation_also_applies_to_aggregate(self):
+        self.args.client = "hermes"
+        self.vendor["version_output"] = "Hermes Agent v0.23.0 (2026.9.24) · stable · local 2bd378ed1b8d"
+        paths = self.make_receipts()
+        proof.aggregate(self.args)
+        original = json.loads(paths[0].read_text())
+        for version in ("Hermes Agent v0.23.1\nUpdate available: 0.23.0", "notice 0.23.0",
+                        "Hermes Agent v0.23.00", "Hermes Agent v0.23.0.dev1", "Hermes Agent v0.23.0-rc1",
+                        "notice\nHermes Agent v0.23.0", "Hermes Agent v0.23.0+local", "Hermes Agent v0.23.0fake"):
+            with self.subTest(version=version):
+                with self.assertRaisesRegex(ValueError, "vendor version"):
+                    proof.pinned_vendor_version("hermes", version)
+                after = {**self.vendor, "version_output": version}
+                with self.assertRaisesRegex(ValueError, "vendor version"):
+                    self.invoke(vendor_samples=[dict(self.vendor), after])
+                self.assertEqual(self.vendor_observer.call_count, 2)
+                self.assertEqual(self.vendor_diagnosis()["vendor_after"], after)
+                self.assertFalse(self.receipt().exists())
+                self.receipt().with_name("transcript.log").unlink()
+                data = {**original, "vendor": {**self.vendor, "version_output": version}}
+                paths[0].write_text(json.dumps(data))
+                with self.assertRaisesRegex(ValueError, "vendor version"):
+                    proof.aggregate(self.args)
 
     def test_wrong_actual_version_and_runtime_error_never_write_pass(self):
         with self.assertRaisesRegex(ValueError, "actual UAP version"):
@@ -235,16 +318,16 @@ class ReleasedNativeProofTests(unittest.TestCase):
                  self.assertRaisesRegex(ValueError, "vendor version"):
                 proof.vendor_identity("antigravity", env)
         env = {"HERMES_BIN": str(binary), "RUNNER_TEMP": str(self.root)}
-        with patch.object(proof, "output", side_effect=["Hermes 0.23.0", "wrong-pin"]), \
+        with patch.object(proof, "output", side_effect=["Hermes Agent v0.23.0", "wrong-pin"]), \
              self.assertRaisesRegex(ValueError, "Hermes source pin"):
             proof.vendor_identity("hermes", env)
         runtime_file = self.root / "runtime-command.json"
         env["HERMES_NATIVE_RUNTIME_COMMAND_FILE"] = str(runtime_file)
         runtime_file.write_text(json.dumps([str(binary), "-I", "-c", "pass"]))
-        with patch.object(proof, "output", side_effect=["Hermes 0.23.0", proof.HERMES_PIN]):
+        with patch.object(proof, "output", side_effect=["Hermes Agent v0.23.0", proof.HERMES_PIN]):
             self.assertEqual(proof.vendor_identity("hermes", env)["runtime_sha256"], proof.sha(binary))
         runtime_file.write_text(json.dumps([str(binary), "unisolated-runtime"]))
-        with patch.object(proof, "output", side_effect=["Hermes 0.23.0", proof.HERMES_PIN]), \
+        with patch.object(proof, "output", side_effect=["Hermes Agent v0.23.0", proof.HERMES_PIN]), \
              self.assertRaisesRegex(ValueError, "runtime command is invalid"):
             proof.vendor_identity("hermes", env)
 
