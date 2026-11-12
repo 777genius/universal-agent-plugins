@@ -448,7 +448,10 @@ def _capture_scan_root(root):
             or path.is_symlink()
             or (hasattr(path, "is_junction") and path.is_junction())):
         raise OSError(errno.EPERM, "untrusted_disposable_scan_root")
-    return (str(path), observed.st_dev, observed.st_ino)
+    # Pin both the lexical spelling and its one-time canonical Windows path.
+    # A later junction swap may not redefine either trust boundary.
+    return (str(path), str(path.resolve(strict=True)),
+            observed.st_dev, observed.st_ino)
 
 
 def _scan_root_is_original(root, pinned):
@@ -524,7 +527,7 @@ def _read_regular_bounded(path, observed, root, root_anchor):
         if os.name == "nt":
             fd = os.open(path, flags)
             try:
-                _windows_fd_within_root(fd, root_anchor[0])
+                _windows_fd_within_root(fd, root_anchor[1])
                 if not _scan_root_is_original(root, root_anchor):
                     raise OSError(errno.EPERM, "changed_disposable_scan_root")
             except BaseException:

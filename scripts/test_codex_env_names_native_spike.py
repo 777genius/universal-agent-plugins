@@ -471,6 +471,15 @@ class TestNativeSecurityLifecycle(unittest.TestCase):
             self.assertEqual(findings[0]["io_reason"], "root_identity_changed")
             self.assertNotIn("not_readable_by_scanner", str(findings))
 
+    def test_root_anchor_pins_lexical_and_canonical_at_creation(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            pinned = _capture_scan_root(root)
+            self.assertEqual(pinned[0], str(root))
+            self.assertEqual(pinned[1], str(root.resolve(strict=True)))
+            self.assertEqual(len(pinned), 4)
+            self.assertNotEqual(pinned[3], 0)
+
     def test_windows_path_identity_excludes_only_incompatible_ctime(self):
         baseline = dict(st_dev=1, st_ino=5, st_size=8, st_mtime_ns=99)
         before = SimpleNamespace(**baseline, st_ctime_ns=10)
