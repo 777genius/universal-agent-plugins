@@ -18,7 +18,7 @@ import sys
 import threading
 import time
 
-from codex_env_names_native_spike import CHILD, ENV_NAME, FOREIGN_ENV_NAME, Model, inspect, isolated_env, aggregate_findings, structured_mcp_receipt_matches, WINDOWS_NATIVE_SANDBOX_CONFIG, isolated_root, _capture_scan_root
+from codex_env_names_native_spike import CHILD, ENV_NAME, FOREIGN_ENV_NAME, Model, inspect, isolated_env, aggregate_findings, structured_mcp_receipt_matches, WINDOWS_NATIVE_SANDBOX_CONFIG, isolated_root, _capture_scan_root, stop_live_observer
 
 def rpc_send(proc, q, serial, method, params, timeout=35):
     proc.stdin.write((json.dumps({"id": serial, "method": method,
@@ -282,9 +282,7 @@ def main():
                 report["shutdown_mode"] = "already_exited"
             if proc.stdout is not None:
                 proc.stdout.close()
-        stop.set()
-        watch.join(timeout=3)
-        observer_stopped = not watch.is_alive()
+        observer_stopped = stop_live_observer(stop, watch)
         report["observer_stopped"] = observer_stopped
         if report["failure"] is None and not report["graceful_shutdown"]:
             report["failure"] = "graceful_shutdown_unverified"

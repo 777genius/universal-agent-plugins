@@ -429,6 +429,18 @@ class Model(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+def stop_live_observer(stop_event, observer):
+    """Wait for the entire in-flight native scan, else deny secrecy PASS.
+
+    The Windows descriptor-relative scanner can take longer than 3 seconds
+    when SQLite files are locked. Waiting longer changes no scan coverage:
+    a timed-out observer still fails closed in both CLI and app-server.
+    """
+    stop_event.set()
+    observer.join(timeout=20)
+    return not observer.is_alive()
+
+
 def _scan_stat_identity(info, include_change_time=True):
     """Path-vs-handle identity: Windows stat ctime has incompatible semantics."""
     shared = (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns)
@@ -860,9 +872,7 @@ def main():
             result = subprocess.run(commands, cwd=project, env=env,
                                     capture_output=True, timeout=115)
         finally:
-            monitor_stop.set()
-            observer.join(timeout=3)
-            observer_stopped = not observer.is_alive()
+            observer_stopped = stop_live_observer(monitor_stop, observer)
         report["live_observer_stopped"] = observer_stopped
         report["codex_exit_code"] = result.returncode
         report["live_scan_samples"] = live["samples"]

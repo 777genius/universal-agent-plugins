@@ -15,7 +15,7 @@ from unittest.mock import patch
 import http.server
 
 from codex_env_names_appserver_spike import terminal_turn_status
-from codex_env_names_native_spike import (_scan_stat_identity, _windows_path_within_root, _capture_scan_root, _read_regular_bounded, CHILD, Model, MCP_CALL, SHELL_CALL, SHELL_MARKER,
+from codex_env_names_native_spike import (_scan_stat_identity, _windows_path_within_root, _capture_scan_root, _read_regular_bounded, stop_live_observer, CHILD, Model, MCP_CALL, SHELL_CALL, SHELL_MARKER,
                                         SHELL_ENV_PRESENT, SHELL_FOREIGN_PRESENT,
                                         ENV_NAME, FOREIGN_ENV_NAME, inspect, aggregate_findings, windows_shell_command, isolated_env, isolated_root, structured_mcp_receipt_matches, fixed_windows_spawn_error_category, WINDOWS_NATIVE_SANDBOX_CONFIG)
 
@@ -407,6 +407,35 @@ class TestSyntheticMcpChild(unittest.TestCase):
 
 
 class TestNativeSecurityLifecycle(unittest.TestCase):
+    def test_incomplete_observer_join_never_certifies_secrecy(self):
+        class DelayedScan:
+            def __init__(self):
+                self.waited = None
+            def join(self, timeout):
+                self.waited = timeout
+            def is_alive(self):
+                return True
+
+        observer = DelayedScan()
+        stopped = threading.Event()
+        self.assertFalse(stop_live_observer(stopped, observer))
+        self.assertTrue(stopped.is_set())
+        self.assertGreaterEqual(observer.waited, 10)
+
+    def test_completed_observer_join_is_acknowledged(self):
+        class FinishedScan:
+            def join(self, timeout):
+                self.timeout = timeout
+            def is_alive(self):
+                return False
+
+        observer = FinishedScan()
+        stopped = threading.Event()
+        self.assertTrue(stop_live_observer(stopped, observer))
+        self.assertTrue(stopped.is_set())
+        self.assertGreaterEqual(observer.timeout, 10)
+
+
     def test_turn_terminal_correlation_rejects_unrelated_and_failed_events(self):
         match = {"method": "turn/completed", "params": {
             "threadId": "thread-a", "turn": {"id": "turn-a", "status": "completed"}}}
