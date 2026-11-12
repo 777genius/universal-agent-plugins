@@ -14,10 +14,15 @@ func clineSessionExecutable(env clients.Env, client domain.DetectedClient, bindi
 	if client.ClientID != domain.ClientCline || client.Status != domain.DetectionDetected || bindings == 0 {
 		return "", fmt.Errorf("an installed Cline CLI and owned project bindings are required")
 	}
+	// An absolute executable field is not proof of the CLI surface:
+	// editor-only detection must never enter the native process runner.
+	if !hasClineCLISurface(client.Surfaces) {
+		return "", fmt.Errorf("Cline CLI surface is required; editor-only detection is insufficient")
+	}
 	executable := client.ExecutablePath
 	if executable == "" {
-		if !hasClineCLISurface(client.Surfaces) || env.LookupExecutable == nil {
-			return "", fmt.Errorf("Cline CLI session resolver is unavailable; editor-only detection is insufficient")
+		if env.LookupExecutable == nil {
+			return "", fmt.Errorf("Cline CLI session resolver is unavailable")
 		}
 		var err error
 		executable, err = env.LookupExecutable("cline")
