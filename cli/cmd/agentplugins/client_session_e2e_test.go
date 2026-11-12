@@ -25,7 +25,10 @@ type sessionDetector struct {
 
 func (d sessionDetector) Detect(context.Context) ([]domain.DetectedClient, error) {
 	return []domain.DetectedClient{{ClientID: domain.ClientCline, ConfigRoot: d.user,
-		ExecutablePath: d.executable, Status: domain.DetectionDetected}}, nil
+		ExecutablePath: d.executable, Status: domain.DetectionDetected,
+		// This injected composed-test detector explicitly exposes a CLI surface.
+		// The product session guard still refuses editor-only clients.
+		Surfaces: []domain.ClientSurface{{ID: "cline_cli", Detected: true}}}}, nil
 }
 func (d sessionDetector) DetectTargetsWithVersionProbe(ctx context.Context, ids []domain.ClientID) ([]domain.DetectedClient, error) {
 	*d.probes++
