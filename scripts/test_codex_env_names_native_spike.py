@@ -1,5 +1,6 @@
 """Unit negative controls for Codex native secrecy evidence, no network/vendor client."""
 import http.client
+import io
 import hashlib
 import base64
 import json
@@ -14,7 +15,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 import http.server
 
-from codex_env_names_appserver_spike import terminal_turn_status, classify_native_stdio_line
+from codex_env_names_appserver_spike import terminal_turn_status, classify_native_stdio_line, scan_redacted_stderr
 from codex_env_names_native_spike import (_scan_stat_identity, _windows_path_within_root, _capture_scan_root, _read_regular_bounded, stop_live_observer, synthetic_canary_patterns, contains_synthetic_canary, verified_vendor_version, PINNED_VENDOR_VERSION, CHILD, Model, MCP_CALL, SHELL_CALL, SHELL_MARKER,
                                         SHELL_ENV_PRESENT, SHELL_FOREIGN_PRESENT,
                                         ENV_NAME, FOREIGN_ENV_NAME, inspect, aggregate_findings, windows_shell_command, isolated_env, isolated_root, structured_mcp_receipt_matches, fixed_windows_spawn_error_category, WINDOWS_NATIVE_SANDBOX_CONFIG)
@@ -404,6 +405,48 @@ class TestSyntheticMcpChild(unittest.TestCase):
         self.assertEqual(tool["name"], "confirm_env")
         self.assertEqual(tool["annotations"]["readOnlyHint"], True)
         self.assertEqual(tool["annotations"]["destructiveHint"], False)
+
+
+class TestRedactedNativeStderr(unittest.TestCase):
+    def test_encoded_synthetic_canary_across_fragmented_reads(self):
+        secret = "uap_synthetic_stderr_unit_only"
+        patterns = synthetic_canary_patterns(secret)
+
+        class Fragmented:
+            def __init__(self, data):
+                self.data = data
+
+            def read(self, _size):
+                chunk, self.data = self.data[:7], self.data[7:]
+                return chunk
+
+        for encoded in (secret.encode(), secret.encode().hex().encode(),
+                        base64.b64encode(secret.encode()),
+                        secret.encode("utf-16le")):
+            with self.subTest(encoding=encoded[:6]):
+                stream = Fragmented(b"prefix" + encoded + b"suffix")
+                self.assertTrue(scan_redacted_stderr(stream, patterns))
+
+    def test_complete_clean_stream_is_not_a_canary(self):
+        patterns = synthetic_canary_patterns("uap_synthetic_stderr_unit_only")
+        self.assertFalse(scan_redacted_stderr(io.BytesIO(b"fixed safe diagnostic"),
+                                              patterns))
+
+    def test_incomplete_or_invalid_stderr_cannot_be_clean(self):
+        patterns = synthetic_canary_patterns("uap_synthetic_stderr_unit_only")
+
+        class Invalid:
+            def read(self, _size):
+                return None
+
+        class Broken:
+            def read(self, _size):
+                raise OSError("synthetic read failure")
+
+        for stream in (Invalid(), Broken()):
+            with self.subTest(stream=type(stream).__name__):
+                with self.assertRaises(OSError):
+                    scan_redacted_stderr(stream, patterns)
 
 
 class TestNativeSecurityLifecycle(unittest.TestCase):

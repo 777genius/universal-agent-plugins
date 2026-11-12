@@ -78,6 +78,22 @@ def classify_native_stdio_line(raw, patterns):
     return message, matched, isinstance(message, dict)
 
 
+def scan_redacted_stderr(stream, patterns):
+    """Drain native stderr with bounded overlap; never preserve raw bytes."""
+    overlap = max((len(pattern) for pattern in patterns), default=1) - 1
+    tail = b""
+    matched = False
+    while True:
+        chunk = stream.read(4096)
+        if chunk == b"":
+            return matched
+        if not isinstance(chunk, bytes):
+            raise OSError("incomplete_native_stderr")
+        window = tail + chunk
+        matched |= contains_synthetic_canary(window, patterns)
+        tail = window[-overlap:] if overlap else b""
+
+
 def main():
     codex = Path(sys.argv[1]).resolve(strict=True)
     evidence = Path(sys.argv[2]).resolve()
@@ -150,10 +166,13 @@ def main():
               "secrecy_pass": False, "failure": None,
               "turn_completed": False, "graceful_shutdown": False,
               "shutdown_mode": "not_run", "stdio_canary_observed": False,
-              "stdio_reader_stopped": False, "stdio_read_complete": False}
+              "stdio_reader_stopped": False, "stdio_read_complete": False,
+              "stderr_reader_stopped": False, "stderr_read_complete": False}
     proc = None
     receiver = None
+    stderr_receiver = None
     stdio = {"canary_observed": False, "incomplete": False}
+    stderr_scan = {"canary_observed": False, "eof": False, "error": False}
     stop = threading.Event()
     live = {"samples": 0, "hits": {}, "errors": 0, "snapshots_seen": False}
     def observer():
@@ -188,8 +207,18 @@ def main():
             raise RuntimeError("vendor_version_unverified")
         proc = subprocess.Popen([str(codex), "app-server"], cwd=project, env=env,
                                 stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                stderr=subprocess.DEVNULL)
+                                stderr=subprocess.PIPE)
         messages = queue.Queue(maxsize=512)
+        def capture_stderr():
+            try:
+                stderr_scan["canary_observed"] = scan_redacted_stderr(
+                    proc.stderr, stdio_patterns
+                )
+                stderr_scan["eof"] = True
+            except (OSError, ValueError, TypeError):
+                stderr_scan["error"] = True
+        stderr_receiver = threading.Thread(target=capture_stderr, daemon=True)
+        stderr_receiver.start()
         def receive():
             try:
                 for raw in proc.stdout:
@@ -320,9 +349,21 @@ def main():
                 report["stdio_reader_stopped"] = not receiver.is_alive()
             if proc.stdout is not None and report["stdio_reader_stopped"]:
                 proc.stdout.close()
-        report["stdio_canary_observed"] = stdio["canary_observed"]
+            if stderr_receiver is not None:
+                stderr_receiver.join(timeout=5)
+                report["stderr_reader_stopped"] = not stderr_receiver.is_alive()
+            if proc.stderr is not None and report["stderr_reader_stopped"]:
+                proc.stderr.close()
+        report["stderr_read_complete"] = (
+            report["stderr_reader_stopped"] and stderr_scan["eof"]
+            and not stderr_scan["error"]
+        )
+        report["stdio_canary_observed"] = (
+            stdio["canary_observed"] or stderr_scan["canary_observed"]
+        )
         report["stdio_read_complete"] = (
             report["stdio_reader_stopped"] and not stdio["incomplete"]
+            and report["stderr_read_complete"]
         )
         observer_stopped = stop_live_observer(stop, watch)
         report["observer_stopped"] = observer_stopped
