@@ -176,7 +176,8 @@ def vendor_identity(client, env):
 def vendor_comparison(client, vendor):
     if client != "hermes":
         return vendor
-    # Version advisories are observations; executable and runtime bytes stay exact.
+    # Version advisories do not define identity. Runtime bytes are always exact;
+    # only Windows distlib ZIP metadata is excluded from launcher code identity.
     comparison = {"version": pinned_vendor_version(client, vendor["version_output"]),
                   "runtime_sha256": vendor["runtime_sha256"]}
     # Keep exact-byte enforcement for every other launcher. For pinned Windows
