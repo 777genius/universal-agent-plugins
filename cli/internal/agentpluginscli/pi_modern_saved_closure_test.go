@@ -28,8 +28,10 @@ func piMarketingCohortFixture(t *testing.T, scope domain.InstallScope) (freshRes
 	t.Helper()
 	fixture, repo, directory := dependencyReviewFixture(t)
 	pi := fixtureClient(t, domain.ClientPi)
-	pi.Version = "1.5.0" // Test applicability only; not a real host process.
-	fixture.app.Version = "0.1.104" // Test installer identity, not a released-binary run.
+	// Test applicability only; not a real host process.
+	pi.Version = "1.5.0"
+	// Test installer identity, not a released-binary run.
+	fixture.app.Version = "0.1.104"
 	fixture.client = pi
 	fixture.app.Detector = staticDetector{clients: []domain.DetectedClient{pi}}
 	fixture.app.Scope = scope
