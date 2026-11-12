@@ -18,7 +18,7 @@ import sys
 import threading
 import time
 
-from codex_env_names_native_spike import CHILD, ENV_NAME, FOREIGN_ENV_NAME, Model, inspect, isolated_env, aggregate_findings, structured_mcp_receipt_matches, WINDOWS_NATIVE_SANDBOX_CONFIG, isolated_root, _capture_scan_root, stop_live_observer
+from codex_env_names_native_spike import CHILD, ENV_NAME, FOREIGN_ENV_NAME, Model, inspect, isolated_env, aggregate_findings, structured_mcp_receipt_matches, WINDOWS_NATIVE_SANDBOX_CONFIG, isolated_root, _capture_scan_root, stop_live_observer, synthetic_canary_patterns, contains_synthetic_canary
 
 def rpc_send(proc, q, serial, method, params, timeout=35):
     proc.stdin.write((json.dumps({"id": serial, "method": method,
@@ -66,6 +66,18 @@ def wait_for_turn_terminal(proc, messages, thread_id, turn_id, deadline):
     return False
 
 
+def classify_native_stdio_line(raw, patterns):
+    """Parse bounded JSON-RPC while returning only canary/coverage flags."""
+    matched = contains_synthetic_canary(raw, patterns)
+    if len(raw) > 1 << 20:
+        return None, matched, False
+    try:
+        message = json.loads(raw)
+    except (TypeError, ValueError):
+        return None, matched, False
+    return message, matched, isinstance(message, dict)
+
+
 def main():
     codex = Path(sys.argv[1]).resolve(strict=True)
     evidence = Path(sys.argv[2]).resolve()
@@ -77,6 +89,7 @@ def main():
         raise ValueError("unexpected native spike parameter")
     secret = "uap_appserver_spike_" + secrets.token_hex(24)
     foreign_secret = "uap_foreign_appserver_" + secrets.token_hex(24)
+    stdio_patterns = synthetic_canary_patterns((secret, foreign_secret))
     Model.expected_digest = hashlib.sha256(secret.encode()).hexdigest()
     root = isolated_root("uap-codex-appserver-")
     root_anchor = _capture_scan_root(root)
@@ -136,8 +149,11 @@ def main():
               "mcp_child_saw_secret": False, "leak": False,
               "secrecy_pass": False, "failure": None,
               "turn_completed": False, "graceful_shutdown": False,
-              "shutdown_mode": "not_run"}
+              "shutdown_mode": "not_run", "stdio_canary_observed": False,
+              "stdio_reader_stopped": False, "stdio_read_complete": False}
     proc = None
+    receiver = None
+    stdio = {"canary_observed": False, "incomplete": False}
     stop = threading.Event()
     live = {"samples": 0, "hits": {}, "errors": 0, "snapshots_seen": False}
     def observer():
@@ -161,19 +177,33 @@ def main():
         version = subprocess.run([str(codex), "--version"], env=env,
                                  capture_output=True, timeout=15, text=True)
         report["version"] = version.stdout.strip()[:100]
+        stdio["canary_observed"] = (
+            contains_synthetic_canary(version.stdout.encode(), stdio_patterns)
+            or contains_synthetic_canary(version.stderr.encode(), stdio_patterns)
+        )
         proc = subprocess.Popen([str(codex), "app-server"], cwd=project, env=env,
                                 stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                 stderr=subprocess.DEVNULL)
         messages = queue.Queue(maxsize=512)
         def receive():
-            for raw in proc.stdout:
-                try:
-                    if len(raw) > 1 << 20:
-                        continue
-                    messages.put(json.loads(raw), timeout=1)
-                except (ValueError, queue.Full):
-                    break
-        threading.Thread(target=receive, daemon=True).start()
+            try:
+                for raw in proc.stdout:
+                    message, matched, complete = classify_native_stdio_line(
+                        raw, stdio_patterns
+                    )
+                    stdio["canary_observed"] |= matched
+                    if not complete:
+                        stdio["incomplete"] = True
+                        break
+                    try:
+                        messages.put(message, timeout=1)
+                    except queue.Full:
+                        stdio["incomplete"] = True
+                        break
+            except (OSError, ValueError):
+                stdio["incomplete"] = True
+        receiver = threading.Thread(target=receive, daemon=True)
+        receiver.start()
         rpc_send(proc, messages, 1, "initialize", {
             "clientInfo": {"name": "uap_codex_appserver_spike", "version": "1.0.0"},
             "capabilities": {"experimentalApi": True}
@@ -280,8 +310,15 @@ def main():
                             proc.wait(timeout=5)
             else:
                 report["shutdown_mode"] = "already_exited"
-            if proc.stdout is not None:
+            if receiver is not None:
+                receiver.join(timeout=5)
+                report["stdio_reader_stopped"] = not receiver.is_alive()
+            if proc.stdout is not None and report["stdio_reader_stopped"]:
                 proc.stdout.close()
+        report["stdio_canary_observed"] = stdio["canary_observed"]
+        report["stdio_read_complete"] = (
+            report["stdio_reader_stopped"] and not stdio["incomplete"]
+        )
         observer_stopped = stop_live_observer(stop, watch)
         report["observer_stopped"] = observer_stopped
         if report["failure"] is None and not report["graceful_shutdown"]:
@@ -312,6 +349,8 @@ def main():
         report["secrecy_pass"] = (report["failure"] is None
                                   and report["turn_completed"]
                                   and report["graceful_shutdown"]
+                                  and report["stdio_read_complete"]
+                                  and not report["stdio_canary_observed"]
                                   and observer_stopped and not all_hits
                                   and not Model.shell_secret_visible
                                   and not Model.shell_foreign_visible

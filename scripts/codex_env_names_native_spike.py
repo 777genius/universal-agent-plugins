@@ -596,6 +596,28 @@ def _read_regular_bounded(path, observed, root, root_anchor):
             return data
 
 
+def synthetic_canary_patterns(values):
+    """Shared synthetic-only raw/encoded canary patterns for disk and stdio."""
+    values = (values,) if isinstance(values, str) else values
+    patterns = []
+    for value in values:
+        if not value:
+            continue
+        raw = value.encode()
+        patterns.extend((raw, raw.hex().encode(), raw.hex().upper().encode(),
+                         base64.b64encode(raw), base64.urlsafe_b64encode(raw),
+                         urllib.parse.quote(value).encode(),
+                         value.encode("utf-16le"), value.encode("utf-16be"),
+                         base64.b64encode(value.encode("utf-16le")),
+                         base64.b64encode(value.encode("utf-16be"))))
+    return tuple(patterns)
+
+
+def contains_synthetic_canary(data, patterns):
+    """Never serialize matching bytes; return only a Boolean."""
+    return any(pattern in data for pattern in patterns)
+
+
 def inspect(root, secret, root_anchor=None):
     if root_anchor is None:
         try:
@@ -604,18 +626,7 @@ def inspect(root, secret, root_anchor=None):
             return ([_root_changed_finding()], 0)
     if not _scan_root_is_original(root, root_anchor):
         return ([_root_changed_finding()], 0)
-    values = (secret,) if isinstance(secret, str) else secret
-    patterns = []
-    for value in values:
-        raw = value.encode()
-        # Common encodings across shell/snapshot formats; no canary bytes leave
-        # the isolated scan. Hex can use either case; UTF-16BE may be Base64.
-        patterns.extend([raw, raw.hex().encode(), raw.hex().upper().encode(),
-                         base64.b64encode(raw), base64.urlsafe_b64encode(raw),
-                         urllib.parse.quote(value).encode(),
-                         value.encode("utf-16le"), value.encode("utf-16be"),
-                         base64.b64encode(value.encode("utf-16le")),
-                         base64.b64encode(value.encode("utf-16be"))])
+    patterns = synthetic_canary_patterns(secret)
     found, symlinks = [], 0
     root_path = Path(root).resolve(strict=True)
 
@@ -734,7 +745,7 @@ def inspect(root, secret, root_anchor=None):
                     "sqlite_shm_candidate": path.name.lower().endswith(".sqlite-shm"),
                 })
                 continue
-            if any(p and p in data for p in patterns):
+            if contains_synthetic_canary(data, patterns):
                 found.append({"path_sha256": hashlib.sha256(str(path.relative_to(root)).encode()).hexdigest(),
                               "result": "synthetic_value_persisted",
                               "shell_snapshot_path": "shell_snapshots" in path.parts})
@@ -775,6 +786,7 @@ def main():
         raise ValueError("unexpected native spike parameter")
     secret = "uap_spike_" + secrets.token_hex(24)
     foreign_secret = "uap_foreign_spike_" + secrets.token_hex(24)
+    stdio_patterns = synthetic_canary_patterns((secret, foreign_secret))
     Model.expected_digest = hashlib.sha256(secret.encode()).hexdigest()
     root = isolated_root("uap-codex-spike-")
     root_anchor = _capture_scan_root(root)
@@ -875,6 +887,13 @@ def main():
             observer_stopped = stop_live_observer(monitor_stop, observer)
         report["live_observer_stopped"] = observer_stopped
         report["codex_exit_code"] = result.returncode
+        # Inspect real native stdout/stderr in memory, never log their bytes.
+        report["native_stdio_canary_observed"] = any(
+            contains_synthetic_canary(data, stdio_patterns) for data in (
+                version.stdout.encode(), version.stderr.encode(),
+                result.stdout, result.stderr
+            )
+        )
         report["live_scan_samples"] = live["samples"]
         report["live_snapshot_files_seen"] = live["snapshot_files_seen"]
         report["live_scan_errors"] = live["errors"]
@@ -916,7 +935,8 @@ def main():
             report["failure"] = Model.error or "native_proof_incomplete"
         elif (not observer_stopped or combined or live["errors"]
               or live["samples"] < 20 or Model.shell_secret_visible
-              or Model.shell_foreign_visible):
+              or Model.shell_foreign_visible
+              or report["native_stdio_canary_observed"]):
             report["failure"] = "live_canary_persisted_or_unsafe_scan"
         else:
             report["secrecy_pass"] = True

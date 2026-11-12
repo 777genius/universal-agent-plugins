@@ -14,8 +14,8 @@ from types import SimpleNamespace
 from unittest.mock import patch
 import http.server
 
-from codex_env_names_appserver_spike import terminal_turn_status
-from codex_env_names_native_spike import (_scan_stat_identity, _windows_path_within_root, _capture_scan_root, _read_regular_bounded, stop_live_observer, CHILD, Model, MCP_CALL, SHELL_CALL, SHELL_MARKER,
+from codex_env_names_appserver_spike import terminal_turn_status, classify_native_stdio_line
+from codex_env_names_native_spike import (_scan_stat_identity, _windows_path_within_root, _capture_scan_root, _read_regular_bounded, stop_live_observer, synthetic_canary_patterns, contains_synthetic_canary, CHILD, Model, MCP_CALL, SHELL_CALL, SHELL_MARKER,
                                         SHELL_ENV_PRESENT, SHELL_FOREIGN_PRESENT,
                                         ENV_NAME, FOREIGN_ENV_NAME, inspect, aggregate_findings, windows_shell_command, isolated_env, isolated_root, structured_mcp_receipt_matches, fixed_windows_spawn_error_category, WINDOWS_NATIVE_SANDBOX_CONFIG)
 
@@ -407,6 +407,41 @@ class TestSyntheticMcpChild(unittest.TestCase):
 
 
 class TestNativeSecurityLifecycle(unittest.TestCase):
+    def test_real_cli_captured_stdio_checks_encoded_synthetic_canary(self):
+        secret = "uap_inert_stdout_fixture_56789"
+        patterns = synthetic_canary_patterns(secret)
+        for encoded in (secret.encode(), secret.encode().hex().encode(),
+                        base64.b64encode(secret.encode()),
+                        secret.encode("utf-16le"),
+                        base64.b64encode(secret.encode("utf-16le"))):
+            self.assertTrue(contains_synthetic_canary(encoded, patterns))
+        self.assertFalse(contains_synthetic_canary(b"unrelated output", patterns))
+
+    def test_appserver_jsonrpc_canary_detection_is_boolean_only(self):
+        secret = "uap_inert_appserver_line_4321"
+        patterns = synthetic_canary_patterns(secret)
+        raw = json.dumps({"method": "turn/completed",
+                          "params": {"threadId": "thread-1", "debug": secret}}).encode()
+        parsed, seen, complete = classify_native_stdio_line(raw, patterns)
+        self.assertTrue(seen)
+        self.assertTrue(complete)
+        self.assertEqual(parsed["method"], "turn/completed")
+        clean, seen, complete = classify_native_stdio_line(
+            b'{"method":"turn/completed"}', patterns
+        )
+        self.assertTrue(complete)
+        self.assertFalse(seen)
+        self.assertEqual(clean["method"], "turn/completed")
+
+    def test_appserver_invalid_or_oversize_jsonrpc_cannot_pass_coverage(self):
+        patterns = synthetic_canary_patterns("synthetic_value_fixture")
+        for raw in (b"not json", b"x" * ((1 << 20) + 1)):
+            parsed, seen, complete = classify_native_stdio_line(raw, patterns)
+            self.assertIsNone(parsed)
+            self.assertFalse(complete)
+            self.assertFalse(seen)
+
+
     def test_incomplete_observer_join_never_certifies_secrecy(self):
         class DelayedScan:
             def __init__(self):
