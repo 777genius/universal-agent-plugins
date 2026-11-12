@@ -1181,14 +1181,17 @@ img {
     display: contents;
   }
 }
-/* On smaller desktops use two readable columns instead of five clipped ones. */
+/* Use three readable filter columns from 981px (including 1024px/Retina
+   viewports); the existing <=980px tablet rule switches to two. */
 @media (min-width: 981px) and (max-width: 1520px) {
   .catalog-controls--plugins {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
-  .catalog-controls--plugins > .search-field,
-  .catalog-controls--plugins .catalog-filter-pair {
+  .catalog-controls--plugins > .search-field {
     grid-column: 1 / -1;
+  }
+  .catalog-controls--plugins .catalog-filter-pair {
+    display: contents;
   }
 }
 /* Flat toolbar only; dropdown panels and installation controls keep their surfaces. */

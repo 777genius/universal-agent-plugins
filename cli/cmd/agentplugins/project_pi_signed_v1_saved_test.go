@@ -31,9 +31,9 @@ type piSignedProjectDetector struct{ home string }
 func (d piSignedProjectDetector) Detect(context.Context) ([]domain.DetectedClient, error) {
 	return []domain.DetectedClient{{
 		ClientID: domain.ClientPi, DisplayName: "Pi", Status: domain.DetectionDetected,
-		ConfigRoot: filepath.Join(d.home, ".pi", "agent"),
+		ConfigRoot:     filepath.Join(d.home, ".pi", "agent"),
 		ExecutablePath: filepath.Join(d.home, "pi-test-host-never-launched"),
-		Version: "1.5.0",
+		Version:        "1.5.0",
 	}}, nil
 }
 
@@ -69,7 +69,7 @@ func TestPiProjectSignedV1SavedFourPackageLifecycle(t *testing.T) {
 				"\"fixture/hubspot-crm\" = \"0.1.0\"\n"+
 				"\"fixture/playwright-bridge\" = \"0.1.0\"\n")
 		} else {
-			mcp := ""
+			var mcp string
 			if item.mcpName == "playwright" {
 				mcp = fmt.Sprintf("{\"$schema\":\"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json\",\"mcpServers\":{%q:{\"type\":\"stdio\",\"command\":\"go\",\"args\":[\"version\"]}}}", item.mcpName)
 			} else {
@@ -118,8 +118,8 @@ func TestPiProjectSignedV1SavedFourPackageLifecycle(t *testing.T) {
 	snapshot := domain.DirectorySnapshot{
 		SnapshotSchemaVersion: 1, Sequence: 1, PublicationID: "pi-test-only-1",
 		SourceCommit: commit, GeneratedAt: now.Add(-time.Hour).Format(time.RFC3339),
-		ExpiresAt: now.Add(24*time.Hour).Format(time.RFC3339),
-		Products: []domain.DirectoryProduct{}, Distributions: []domain.DirectoryDistribution{},
+		ExpiresAt: now.Add(24 * time.Hour).Format(time.RFC3339),
+		Products:  []domain.DirectoryProduct{}, Distributions: []domain.DirectoryDistribution{},
 		Evidence: []domain.DirectoryEvidence{}, Revocations: []domain.DirectoryRevocation{},
 	}
 	for _, item := range packages {
@@ -143,7 +143,7 @@ func TestPiProjectSignedV1SavedFourPackageLifecycle(t *testing.T) {
 		distribution := "fixture/" + item.name
 		snapshot.Products = append(snapshot.Products, domain.DirectoryProduct{
 			SchemaVersion: 1, ID: item.name, DisplayName: item.name,
-			Description: "Signed test-only Pi project package",
+			Description:  "Signed test-only Pi project package",
 			ManifestName: item.name, Aliases: []string{item.name},
 			ReservedAliases: []string{item.name}, Categories: []string{"tools"},
 			MinimumCapabilities: domain.DirectoryMinimumCapabilities{Skills: skills, MCP: mcp},
@@ -155,11 +155,11 @@ func TestPiProjectSignedV1SavedFourPackageLifecycle(t *testing.T) {
 			Status: domain.DistributionActive,
 			Releases: []domain.DirectoryRelease{{
 				Sequence: 1, PackageVersion: "0.1.0", ManifestName: item.name,
-				AgentPluginsSchema: domain.PluginSchemaV1,
-				PackageSource: domain.DirectorySource{Repository: repository, Revision: commit, Path: item.path},
+				AgentPluginsSchema:  domain.PluginSchemaV1,
+				PackageSource:       domain.DirectorySource{Repository: repository, Revision: commit, Path: item.path},
 				TreeDigestAlgorithm: domain.TreeDigestAlgorithm,
-				TreeDigest: loaded.TreeDigest, ManifestDigest: loaded.ManifestDigest,
-				Components: components, PublishedAt: now.Add(-2*time.Hour).Format(time.RFC3339),
+				TreeDigest:          loaded.TreeDigest, ManifestDigest: loaded.ManifestDigest,
+				Components: components, PublishedAt: now.Add(-2 * time.Hour).Format(time.RFC3339),
 			}},
 			ReleasePolicies: []domain.DirectoryReleasePolicy{{
 				ReleaseSequence: 1, Status: domain.ReleaseActive,
@@ -206,8 +206,8 @@ func TestPiProjectSignedV1SavedFourPackageLifecycle(t *testing.T) {
 		}},
 		Trust: trust, Embedded: directoryv1.EmbeddedBundle{Snapshot: snapshotBytes, Envelope: envelopeBytes},
 		RequireEmbeddedBootstrap: true,
-		Cache: directoryv1.Cache{Path: filepath.Join(journey.cache, "pi-project-test-cache.json")},
-		Now: func() time.Time { return now },
+		Cache:                    directoryv1.Cache{Path: filepath.Join(journey.cache, "pi-project-test-cache.json")},
+		Now:                      func() time.Time { return now },
 	}
 	acquire := func(root string) agentpluginscli.SourceAcquirer {
 		return sourceacquisition.Acquirer{
@@ -263,7 +263,7 @@ func TestPiProjectSignedV1SavedFourPackageLifecycle(t *testing.T) {
 		}
 		var config struct {
 			MCPServers map[string]json.RawMessage `json:"mcpServers"`
-			Keep bool `json:"keep"`
+			Keep       bool                       `json:"keep"`
 		}
 		if err := json.Unmarshal([]byte(projectJourneyRead(t, filepath.Join(native, "mcp.json"))), &config); err != nil {
 			t.Fatal(err)
@@ -280,8 +280,33 @@ func TestPiProjectSignedV1SavedFourPackageLifecycle(t *testing.T) {
 		t.Fatal("Project A installation changed unselected Project B Pi native config")
 	}
 	journey.run(t, journey.a, "remove", "marketing-kit", "--target", "pi", "--yes")
-	if got := len(journey.state(t, journey.a).EnvironmentReceipts); got != 0 {
-		t.Fatalf("Project Pi removal left signed test-only owned graph: %d", got)
+	removed := journey.state(t, journey.a)
+	if len(removed.EnvironmentReceipts) != 0 {
+		t.Fatalf("Project Pi removal left owned native receipts: %d", len(removed.EnvironmentReceipts))
+	}
+	// Uninstall intentionally retains package data and historical installation
+	// records. It must not retain any active client bindings.
+	for _, installed := range removed.Installations {
+		if !installed.DataRetained || len(installed.Clients) != 0 {
+			t.Fatalf("Project Pi removal left an active binding or lost retained data: %+v", installed)
+		}
+	}
+	projectANative := piSignedProjectNativeRoot(journey, journey.a)
+	if _, err := os.Stat(filepath.Join(projectANative, "skills", "campaign-planning", "SKILL.md")); !os.IsNotExist(err) {
+		t.Fatalf("Project Pi removal left an owned native Skill (or unexpected stat error): %v", err)
+	}
+	if got := projectJourneyRead(t, filepath.Join(projectANative, "skills", "foreign", "SKILL.md")); got != "foreign Pi skill\n" {
+		t.Fatalf("Project Pi removal damaged foreign native Skill: %q", got)
+	}
+	var nativeAfter struct {
+		MCPServers map[string]json.RawMessage `json:"mcpServers"`
+		Keep       bool                       `json:"keep"`
+	}
+	if err := json.Unmarshal([]byte(projectJourneyRead(t, filepath.Join(projectANative, "mcp.json"))), &nativeAfter); err != nil {
+		t.Fatal(err)
+	}
+	if !nativeAfter.Keep || len(nativeAfter.MCPServers) != 1 || nativeAfter.MCPServers["foreign"] == nil {
+		t.Fatalf("Project Pi removal damaged foreign MCP or left owned native entries: %+v", nativeAfter)
 	}
 	if got := len(journey.state(t, "").EnvironmentReceipts); got != 4 {
 		t.Fatalf("Project Pi removal changed User receipts: %d", got)

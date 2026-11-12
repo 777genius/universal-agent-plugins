@@ -226,6 +226,86 @@ def smoke(installer, client, report_dir):
         (report_dir / "kimi-mcp-prepared.json").write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
 
 
+
+LIFECYCLE_CASES = (
+    "TestProjectKimiComposedSavedLifecycle",
+    "TestProjectKimiPublicIntactRepairPreservesMCPSelection",
+    "TestProjectKimiColdSavedImportPreservesPinnedAgreement",
+)
+
+
+def validate_lifecycle_json(filename, selected_executable):
+    """Accept only three actual PASS cases with genuine probes and source records."""
+    with filename.open("rb") as stream:
+        body = stream.read(8 * MAX_OUTPUT + 1)
+    if len(body) > 8 * MAX_OUTPUT:
+        raise ValueError("Go lifecycle evidence exceeded bound")
+    # go test -json may split a long t.Logf line across several Output events
+    # (including in the middle of a JSON string). Reassemble complete lines per
+    # test before decoding evidence; never accept a truncated marker at EOF.
+    cases = {name: {"outcomes": [], "probes": [], "sources": [], "_pending": "",
+                    "_started": False, "_finished": False} for name in LIFECYCLE_CASES}
+    for line in body.splitlines():
+        event = json.loads(line)
+        if event.get("Test") not in cases:
+            continue
+        row = cases[event["Test"]]
+        action = event.get("Action")
+        if action == "run":
+            if row["_started"] or row["_finished"]:
+                raise ValueError("duplicate Go lifecycle test start")
+            row["_started"] = True
+        elif action in ("pass", "fail", "skip"):
+            if not row["_started"] or row["_finished"] or row["_pending"]:
+                raise ValueError("invalid Go lifecycle terminal event")
+            row["_finished"] = True
+            row["outcomes"].append(action)
+        elif action not in ("output", "pause", "cont"):
+            raise ValueError("unexpected Go lifecycle test action")
+        if action == "run":
+            continue
+        if not row["_started"] or row["_finished"] and action not in ("pass", "fail", "skip"):
+            raise ValueError("out-of-order Go lifecycle event")
+        if action != "output":
+            continue
+        output = event.get("Output", "")
+        if not isinstance(output, str):
+            raise ValueError("invalid Go lifecycle Output field")
+        pending = row["_pending"] + output
+        if len(pending) > MAX_OUTPUT:
+            raise ValueError("Go lifecycle output line exceeded bound")
+        *complete_lines, row["_pending"] = pending.split("\n")
+        for complete_line in complete_lines:
+            for marker, key in (("KIMI_GENUINE_PROBE ", "probes"), ("KIMI_PREPARED_SOURCE ", "sources")):
+                if marker in complete_line:
+                    try:
+                        record = json.loads(complete_line.split(marker, 1)[1])
+                    except json.JSONDecodeError as exc:
+                        raise ValueError("malformed genuine lifecycle evidence") from exc
+                    if not isinstance(record, dict):
+                        raise ValueError("genuine lifecycle evidence must be an object")
+                    row[key].append(record)
+    for name, row in cases.items():
+        if row.pop("_pending"):
+            raise ValueError("incomplete Go lifecycle output line: " + name)
+        if not row.pop("_started") or not row.pop("_finished"):
+            raise ValueError("missing genuine Go lifecycle run/finish: " + name)
+        if row["outcomes"] != ["pass"] or not row["probes"] or not row["sources"]:
+            raise ValueError("missing genuine lifecycle PASS/probe/source: " + name)
+        if any(probe.get("version") != "2.5.2" or not selected_executable or probe.get("executable") != selected_executable or not probe.get("config_root") for probe in row["probes"]):
+            raise ValueError("genuine lifecycle version/selection differs")
+        if any(not source.get("source_binding_id") or not source.get("tree_digest") or not source.get("native_profile_root") for source in row["sources"]):
+            raise ValueError("genuine lifecycle source attribution missing")
+    cold = cases[LIFECYCLE_CASES[2]]
+    if len({probe["config_root"] for probe in cold["probes"]}) < 2:
+        raise ValueError("cold lifecycle did not probe both private applications")
+    if len(cold["sources"]) < 2 or len({source["native_profile_root"] for source in cold["sources"]}) < 2:
+        raise ValueError("cold lifecycle did not retain both source records")
+    if len({(source["source_binding_id"], source["tree_digest"]) for source in cold["sources"]}) != 1:
+        raise ValueError("cold lifecycle source agreement differs")
+    return cases
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--cli", required=True, type=Path)
