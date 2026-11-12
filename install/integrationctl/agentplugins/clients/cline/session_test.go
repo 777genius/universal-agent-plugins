@@ -23,6 +23,11 @@ func TestSessionWholeFileRefusesForeignDisabledAndMalformedMembers(t *testing.T)
 		`{"mcpServers":{"owned":{},"foreign":{}}}`,
 		`{"mcpServers":{"owned":{"disabled":true}}}`,
 		`{"mcpServers":{"owned":{"disabled":"false"}}}`,
+		`{"mcpServers":{"owned":{"autoApprove":["read_file"]}}}`,
+		`{"mcpServers":{"owned":{"autoApprove":["*"]}}}`,
+		`{"mcpServers":{"owned":{"autoApprove":true}}}`,
+		`{"mcpServers":{"owned":{"autoApprove":null}}}`,
+		`{"mcpServers":{"owned":{"autoApprove":{}}}}`,
 		`{"mcpServers":{"owned":{}} ,"extra":{}}`,
 		`{"mcpServers":{"owned":{},"owned":{}}}`,
 		`{"mcpServers":{"owned":null}}`,
@@ -31,7 +36,12 @@ func TestSessionWholeFileRefusesForeignDisabledAndMalformedMembers(t *testing.T)
 			t.Fatal("unsafe session source accepted", body)
 		}
 	}
-	if err := exactSessionServers([]byte(`{"mcpServers":{"owned":{"disabled":false}}}`), []string{"owned"}); err != nil {
-		t.Fatal(err)
+	for _, body := range []string{
+		`{"mcpServers":{"owned":{"disabled":false}}}`,
+		`{"mcpServers":{"owned":{"disabled":false,"autoApprove":[]}}}`,
+	} {
+		if err := exactSessionServers([]byte(body), []string{"owned"}); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
