@@ -242,8 +242,12 @@ func TestPiModernFixtureSavedUserInstallLifecycle(t *testing.T) {
 	dependencyRun(t, fixture.cliFixture, "remove", "marketing-kit",
 		"--target", "pi", "--yes", "--format", "json")
 	removed, err := fixture.app.Installer.Inspect(context.Background())
-	if err != nil || len(removed.EnvironmentReceipts) != 0 {
+	if err != nil || len(removed.EnvironmentReceipts) != 0 || len(removed.Installations) != 0 {
 		t.Fatalf("Pi saved root removal retained owned graph: %+v %v", removed, err)
+	}
+	saved, stateErr := fixture.store.Load()
+	if stateErr != nil || len(saved.Installations) != 0 {
+		t.Fatalf("Pi saved root removal left persistent installations: %+v %v", saved, stateErr)
 	}
 }
 
@@ -279,15 +283,24 @@ func TestPiModernFixtureRefusesMissingSignedHubSpotTarget(t *testing.T) {
 				t.Fatal("negative test mutated original signed snapshot or did not change signed policy")
 			}
 			_, err := resolveProjectSourceGraph(context.Background(), fixture.app, requirements)
-			if err == nil {
-				t.Fatal("Marketing Kit accepted a mandatory HubSpot child without a Pi target")
+			if err == nil || !strings.Contains(err.Error(), "dependency conflict for directory:acme/hubspot-crm") {
+				t.Fatalf("missing HubSpot Pi grant resolved an unauthorized child: %v", err)
+			}
+			stdout, stderr, installErr := fixture.cliFixture.execute(false,
+				"install", "marketing-kit", "--target", "pi", "--yes", "--format", "json")
+			if installErr == nil || !strings.Contains(installErr.Error()+" "+stderr+" "+stdout,
+				"dependency conflict for directory:acme/hubspot-crm") {
+				t.Fatalf("CLI accepted missing signed HubSpot Pi grant: err=%v stdout=%s stderr=%s",
+					installErr, stdout, stderr)
 			}
 			state, stateErr := fixture.store.Load()
 			if stateErr != nil || len(state.Installations) != 0 {
 				t.Fatalf("denied Pi closure changed installed state: %+v, %v", state, stateErr)
 			}
-			if !strings.Contains(err.Error(), "dependency conflict for directory:acme/hubspot-crm") {
-				t.Fatalf("missing HubSpot Pi grant produced the wrong refusal: %v", err)
+			view, inspectErr := fixture.app.Installer.Inspect(context.Background())
+			if inspectErr != nil || len(view.EnvironmentReceipts) != 0 || len(view.Installations) != 0 {
+				t.Fatalf("denied Pi CLI install changed receipts or installations: %+v %v",
+					view, inspectErr)
 			}
 		})
 	}
