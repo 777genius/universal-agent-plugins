@@ -142,11 +142,11 @@ func signPiModernTestOnlyCohort(t *testing.T, snapshot domain.DirectorySnapshot)
 	envelope := directoryv1.Envelope{
 		EnvelopeSchemaVersion: 1,
 		SnapshotSchemaVersion: 1,
-		Sequence:	snapshot.Sequence,
-		KeyID:	keyID,
-		Algorithm:	"Ed25519",
-		SignatureDomain:	directoryv1.SignatureDomain,
-		SnapshotDigest:	"sha256:" + hex.EncodeToString(digest[:]),
+		Sequence:              snapshot.Sequence,
+		KeyID:                 keyID,
+		Algorithm:             "Ed25519",
+		SignatureDomain:       directoryv1.SignatureDomain,
+		SnapshotDigest:        "sha256:" + hex.EncodeToString(digest[:]),
 		Signature: base64.StdEncoding.EncodeToString(
 			ed25519.Sign(privateKey, directoryv1.SnapshotSignatureMessage(snapshotBytes))),
 	}
