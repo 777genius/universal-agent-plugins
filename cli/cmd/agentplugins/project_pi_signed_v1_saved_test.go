@@ -206,8 +206,8 @@ func TestPiProjectSignedV1SavedFourPackageLifecycle(t *testing.T) {
 		}},
 		Trust: trust, Embedded: directoryv1.EmbeddedBundle{Snapshot: snapshotBytes, Envelope: envelopeBytes},
 		RequireEmbeddedBootstrap: true,
-		Cache: directoryv1.Cache{Path: filepath.Join(journey.cache, "pi-project-test-cache.json")},
-		Now: func() time.Time { return now },
+		Cache:                    directoryv1.Cache{Path: filepath.Join(journey.cache, "pi-project-test-cache.json")},
+		Now:                      func() time.Time { return now },
 	}
 	acquire := func(root string) agentpluginscli.SourceAcquirer {
 		return sourceacquisition.Acquirer{
