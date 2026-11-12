@@ -243,14 +243,31 @@ def validate_lifecycle_json(filename, selected_executable):
     # go test -json may split a long t.Logf line across several Output events
     # (including in the middle of a JSON string). Reassemble complete lines per
     # test before decoding evidence; never accept a truncated marker at EOF.
-    cases = {name: {"outcomes": [], "probes": [], "sources": [], "_pending": ""} for name in LIFECYCLE_CASES}
+    cases = {name: {"outcomes": [], "probes": [], "sources": [], "_pending": "",
+                    "_started": False, "_finished": False} for name in LIFECYCLE_CASES}
     for line in body.splitlines():
         event = json.loads(line)
         if event.get("Test") not in cases:
             continue
         row = cases[event["Test"]]
-        if event.get("Action") in ("pass", "fail", "skip"):
-            row["outcomes"].append(event["Action"])
+        action = event.get("Action")
+        if action == "run":
+            if row["_started"] or row["_finished"]:
+                raise ValueError("duplicate Go lifecycle test start")
+            row["_started"] = True
+        elif action in ("pass", "fail", "skip"):
+            if not row["_started"] or row["_finished"] or row["_pending"]:
+                raise ValueError("invalid Go lifecycle terminal event")
+            row["_finished"] = True
+            row["outcomes"].append(action)
+        elif action not in ("output", "pause", "cont"):
+            raise ValueError("unexpected Go lifecycle test action")
+        if action == "run":
+            continue
+        if not row["_started"] or row["_finished"] and action not in ("pass", "fail", "skip"):
+            raise ValueError("out-of-order Go lifecycle event")
+        if action != "output":
+            continue
         output = event.get("Output", "")
         if not isinstance(output, str):
             raise ValueError("invalid Go lifecycle Output field")
@@ -271,6 +288,8 @@ def validate_lifecycle_json(filename, selected_executable):
     for name, row in cases.items():
         if row.pop("_pending"):
             raise ValueError("incomplete Go lifecycle output line: " + name)
+        if not row.pop("_started") or not row.pop("_finished"):
+            raise ValueError("missing genuine Go lifecycle run/finish: " + name)
         if row["outcomes"] != ["pass"] or not row["probes"] or not row["sources"]:
             raise ValueError("missing genuine lifecycle PASS/probe/source: " + name)
         if any(probe.get("version") != "2.5.2" or not selected_executable or probe.get("executable") != selected_executable or not probe.get("config_root") for probe in row["probes"]):
