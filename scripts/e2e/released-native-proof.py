@@ -108,15 +108,26 @@ def host_target():
     return f"{os_name}-{arch}"
 
 
+def pinned_vendor_version(client, version):
+    expected = "0.23.0" if client == "hermes" else "1.5.3"
+    if client == "hermes":
+        first_line = version.splitlines()[0] if version else ""
+        match = re.match(r"Hermes Agent v((?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*))"
+                         r"(?= \(| ·|$)", first_line)
+        valid = match is not None and match[1] == expected
+    else:
+        valid = re.search(r"(?<![\d.])v?" + re.escape(expected) + r"(?![\d.])", version)
+    require(valid, "native vendor version differs from pinned release")
+    return expected
+
+
 def vendor_identity(client, env):
     binary = Path(env["HERMES_BIN" if client == "hermes" else "AGY_BIN"]).resolve(strict=True)
     command = [str(binary), "--version"]
     if os.name == "nt" and binary.suffix.lower() == ".cmd":
         command = ["cmd.exe", "/d", "/c", *command]
     version = output(command, env)
-    expected = "0.23.0" if client == "hermes" else "1.5.3"
-    require(re.search(r"(?<![\d.])v?" + re.escape(expected) + r"(?![\d.])", version),
-            "native vendor version differs from pinned release")
+    pinned_vendor_version(client, version)
     runtime = binary
     if client == "hermes":
         source = Path(env["RUNNER_TEMP"]) / "hermes-agent"
@@ -131,6 +142,26 @@ def vendor_identity(client, env):
         runtime = Path(argv[0]).resolve(strict=True)
     return {"version_output": version, "executable_sha256": sha(binary),
             "runtime_sha256": sha(runtime)}
+
+
+def vendor_comparison(client, vendor):
+    if client != "hermes":
+        return vendor
+    # Version advisories are observations; executable and runtime bytes stay exact.
+    return {"version": pinned_vendor_version(client, vendor["version_output"]),
+            **{key: vendor[key] for key in ("executable_sha256", "runtime_sha256")}}
+
+
+def vendor_diagnostics(transcript, before, after=None, error=None):
+    data = {"vendor_before": before}
+    if error is not None:
+        data["vendor_after_error"] = f"{type(error).__name__}: {error}"
+    else:
+        data.update(vendor_after=after, changed_fields=sorted(
+            key for key in before.keys() | after.keys() if before.get(key) != after.get(key)))
+    with transcript.open("a", encoding="utf-8") as log:
+        log.write("\n" + json.dumps(data, sort_keys=True) + "\n")
+    return data.get("changed_fields", [])
 
 
 def execute(command, env, source, transcript):
@@ -180,7 +211,14 @@ def run(args):
     code = execute(command, env, args.source, transcript)
     require(code == 0, f"native harness exited {code}; inspect transcript")
     require(sha(binary) == proof["asset"]["sha256"], "release binary changed during native harness")
-    require(vendor_identity(args.client, env) == vendor, "native vendor changed during harness")
+    try:
+        vendor_after = vendor_identity(args.client, env)
+    except Exception as error:
+        vendor_diagnostics(transcript, vendor, error=error)
+        raise
+    changed = vendor_diagnostics(transcript, vendor, vendor_after)
+    require(vendor_comparison(args.client, vendor_after) == vendor_comparison(args.client, vendor),
+            "native vendor changed during harness: " + ", ".join(changed))
     common_after, verified_after = identity(args, env)
     require(proof == target_identity(common_after, verified_after, args.source, args.target),
             "release or harness identity changed during execution")
@@ -219,11 +257,10 @@ def aggregate(args):
                 and proof.get("transcript_sha256") == sha(path.with_name("transcript.log")),
                 "native proof did not pass with the exact binary and transcript")
         vendor = proof.get("vendor", {})
-        version = "0.23.0" if args.client == "hermes" else "1.5.3"
         require(set(vendor) == {"version_output", "executable_sha256", "runtime_sha256"}
-                and re.search(r"(?<![\d.])v?" + re.escape(version) + r"(?![\d.])", vendor["version_output"])
                 and all(re.fullmatch(DIGEST, vendor[key]) for key in ("executable_sha256", "runtime_sha256")),
                 "native vendor receipt is incomplete")
+        pinned_vendor_version(args.client, vendor["version_output"])
     require(seen == set(TARGETS), "native target set is incomplete")
     print(f"PASS: {args.client}: exact release bundle and all three native platforms")
 
