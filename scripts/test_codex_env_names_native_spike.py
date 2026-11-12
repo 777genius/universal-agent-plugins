@@ -421,15 +421,15 @@ class TestNativeSecurityLifecycle(unittest.TestCase):
             "thread-a", "turn-a"))
 
     def test_windows_open_handle_must_be_beneath_local_disposable_root(self):
-        root = r"C:\\runner\\temp\\uap-proof"
+        root = r"C:\runner\temp\uap-proof"
         self.assertTrue(_windows_path_within_root(
-            r"\\\\?\\C:\\runner\\temp\\uap-proof\\home\\scan.txt", root))
+            r"\\?\C:\runner\temp\uap-proof\home\scan.txt", root))
         self.assertFalse(_windows_path_within_root(
-            r"\\\\?\\C:\\runner\\temp\\uap-proof-other\\secret.txt", root))
+            r"\\?\C:\runner\temp\uap-proof-other\secret.txt", root))
         self.assertFalse(_windows_path_within_root(
-            r"\\\\?\\D:\\other\\scan.txt", root))
+            r"\\?\D:\other\scan.txt", root))
         self.assertFalse(_windows_path_within_root(
-            r"\\\\?\\UNC\\server\\share\\file.txt", root))
+            r"\\?\UNC\server\share\file.txt", root))
 
     def test_windows_path_identity_excludes_only_incompatible_ctime(self):
         baseline = dict(st_dev=1, st_ino=5, st_size=8, st_mtime_ns=99)
