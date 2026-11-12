@@ -1,12 +1,13 @@
 """Contract checks for bounded native Kimi 2.5.2 MCP management evidence."""
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import http.client
 import json
 import os
 import tempfile
 import threading
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from pathlib import Path
 
 import kimi_252_native_web_mcp_probe as native
@@ -108,6 +109,201 @@ class KimiNativeWebProbeTests(unittest.TestCase):
         api.return_value = [row]
         self.assertEqual(native.list_servers("http://127.0.0.1:12345", "secret",
                                               Path("/test/project"))[native.SERVER_NAME], row)
+
+
+    @patch.object(native.os, "killpg")
+    @patch.object(native, "start_server")
+    @patch.object(native, "list_servers")
+    @patch.object(native, "response")
+    def test_lost_grant_ack_still_attempts_revoke_and_kills_native_child(
+            self, api, catalog, startup, killpg):
+        child = MagicMock(pid=1234)
+        startup.return_value = ("http://127.0.0.1:12345", "private-inert-token", child)
+        catalog.return_value = {}
+        calls = []
+        def reply(path, base, token, method="GET", data=None):
+            calls.append((path, method))
+            if path == "/api/v1/workspaces":
+                return {"id": "isolated-project"}
+            if path.endswith("/trust") and method == "GET":
+                return {"trusted": False}
+            if path.endswith("/trust") and method == "POST":
+                # The native server may have granted trust before losing the ack.
+                raise TimeoutError("injected lost acknowledgment")
+            if path.endswith("/untrust"):
+                return {"trusted": False}
+            raise AssertionError("unexpected native API route")
+        api.side_effect = reply
+        with self.assertRaises(TimeoutError):
+            native.probe(Path("/test/kiro"), {}, Path("/test/project"),
+                         Path("/test/project/.kimi-code/mcp.json"))
+        self.assertEqual([p for p, _ in calls if p.endswith("/untrust")],
+                         ["/api/v1/workspaces/isolated-project/untrust"])
+        killpg.assert_called_once_with(1234, native.signal.SIGKILL)
+        child.wait.assert_called_once_with(timeout=5)
+
+    @patch.object(native.os, "killpg")
+    @patch.object(native, "start_server")
+    @patch.object(native, "list_servers")
+    @patch.object(native, "response")
+    def test_ambiguous_revoke_retries_and_never_reports_tools_list_success(
+            self, api, catalog, startup, killpg):
+        child = MagicMock(pid=4567)
+        startup.return_value = ("http://127.0.0.1:12345", "private-inert-token", child)
+        config = Path("/test/project/.kimi-code/mcp.json")
+        row = {"name": native.SERVER_NAME, "source": "global",
+               "origin": str(config), "mutable": False}
+        catalog.side_effect = [{}, {native.SERVER_NAME: row}, {native.SERVER_NAME: row}]
+        calls = []
+        def reply(path, base, token, method="GET", data=None):
+            calls.append((path, method))
+            if path == "/api/v1/workspaces":
+                return {"id": "isolated-project"}
+            if path.endswith("/trust"):
+                return {"trusted": method == "POST"}
+            if path == "/api/v2/mcp/servers:test":
+                return {"success": True, "output": "uap_ping"}
+            if path.endswith("/untrust"):
+                return {"trusted": False}
+            raise AssertionError("unexpected native API route")
+        api.side_effect = reply
+        with self.assertRaisesRegex(ValueError, "trust revocation did not suppress"):
+            native.probe(Path("/test/kimi"), {}, Path("/test/project"), config)
+        self.assertEqual(sum(path.endswith("/untrust") for path, _ in calls), 2)
+        killpg.assert_called_once_with(4567, native.signal.SIGKILL)
+        child.wait.assert_called_once_with(timeout=5)
+
+
+    @patch.object(native.os, "killpg")
+    @patch.object(native, "start_server")
+    @patch.object(native, "list_servers")
+    @patch.object(native, "response")
+    def test_untrust_ack_without_persisted_revocation_fails_closed(
+            self, api, catalog, startup, killpg):
+        child = MagicMock(pid=6812)
+        startup.return_value = ("http://127.0.0.1:12345", "inert-token", child)
+        config = Path("/test/project/.kimi-code/mcp.json")
+        row = {"name": native.SERVER_NAME, "source": "global",
+               "origin": str(config), "mutable": False}
+        catalog.side_effect = [{}, {native.SERVER_NAME: row}]
+        trust_reads = 0
+        revokes = []
+
+        def reply(path, base, token, method="GET", data=None):
+            nonlocal trust_reads
+            if path == "/api/v1/workspaces":
+                return {"id": "isolated-project"}
+            if path.endswith("/trust"):
+                if method == "POST":
+                    return {"trusted": True}
+                trust_reads += 1
+                return {"trusted": trust_reads > 1}
+            if path == "/api/v2/mcp/servers:test":
+                return {"success": True, "output": "uap_ping"}
+            if path.endswith("/untrust"):
+                revokes.append(path)
+                return {"trusted": False}
+            raise AssertionError("unexpected native API route")
+
+        api.side_effect = reply
+        with self.assertRaisesRegex(ValueError, "trust revocation did not suppress"):
+            native.probe(Path("/test/kimi"), {}, Path("/test/project"), config)
+        self.assertEqual(trust_reads, 2)
+        self.assertEqual(len(revokes), 2)
+        killpg.assert_called_once_with(6812, native.signal.SIGKILL)
+        child.wait.assert_called_once_with(timeout=5)
+
+    @patch.object(native.os, "killpg")
+    @patch.object(native, "start_server")
+    @patch.object(native, "list_servers")
+    @patch.object(native, "response")
+    def test_failed_untrust_network_cleanup_still_kills_native_child(
+            self, api, catalog, startup, killpg):
+        child = MagicMock(pid=5791)
+        startup.return_value = ("http://127.0.0.1:12345", "private-inert-token", child)
+        config = Path("/test/project/.kimi-code/mcp.json")
+        row = {"name": native.SERVER_NAME, "source": "global",
+               "origin": str(config), "mutable": False}
+        catalog.side_effect = [{}, {native.SERVER_NAME: row}]
+        paths = []
+
+        def reply(path, base, token, method="GET", data=None):
+            paths.append(path)
+            if path == "/api/v1/workspaces":
+                return {"id": "isolated-project"}
+            if path.endswith("/trust"):
+                return {"trusted": method == "POST"}
+            if path == "/api/v2/mcp/servers:test":
+                return {"success": True, "output": "uap_ping"}
+            if path.endswith("/untrust"):
+                raise TimeoutError("native revoke acknowledgment lost")
+            raise AssertionError("unexpected native API route")
+
+        api.side_effect = reply
+        with self.assertRaisesRegex(TimeoutError, "native revoke acknowledgment lost"):
+            native.probe(Path("/test/kimi"), {}, Path("/test/project"), config)
+        self.assertEqual(sum(path.endswith("/untrust") for path in paths), 2)
+        killpg.assert_called_once_with(5791, native.signal.SIGKILL)
+        child.wait.assert_called_once_with(timeout=5)
+
+
+    @patch.object(native.os, "killpg")
+    @patch.object(native, "start_server")
+    @patch.object(native, "list_servers")
+    @patch.object(native, "response")
+    def test_http_bad_status_during_untrust_cleanup_kills_child(
+            self, api, catalog, startup, killpg):
+        """An HTTPException during cleanup must not strand Kimi's process group."""
+        child = MagicMock(pid=6821)
+        startup.return_value = ("http://127.0.0.1:12345", "inert-token", child)
+        catalog.return_value = {}
+
+        def reply(path, base, token, method="GET", data=None):
+            if path == "/api/v1/workspaces":
+                return {"id": "test-owned-project"}
+            if path.endswith("/trust") and method == "GET":
+                return {"trusted": False}
+            if path.endswith("/trust") and method == "POST":
+                raise TimeoutError("grant acknowledgment lost")
+            if path.endswith("/untrust"):
+                raise http.client.BadStatusLine("malformed native HTTP response")
+            raise AssertionError("unexpected native API route")
+
+        api.side_effect = reply
+        with self.assertRaisesRegex(TimeoutError, "grant acknowledgment lost"):
+            native.probe(Path("/test/kimi"), {}, Path("/test/project"),
+                         Path("/test/project/.kimi-code/mcp.json"))
+        killpg.assert_called_once_with(6821, native.signal.SIGKILL)
+        child.wait.assert_called_once_with(timeout=5)
+
+    @patch.object(native.os, "killpg")
+    @patch.object(native, "start_server")
+    @patch.object(native, "list_servers")
+    @patch.object(native, "response")
+    def test_unexpected_cleanup_exception_still_kills_child(
+            self, api, catalog, startup, killpg):
+        """Even a non-network cleanup exception must run termination in finally."""
+        child = MagicMock(pid=6822)
+        startup.return_value = ("http://127.0.0.1:12345", "inert-token", child)
+        catalog.return_value = {}
+
+        def reply(path, base, token, method="GET", data=None):
+            if path == "/api/v1/workspaces":
+                return {"id": "test-owned-project"}
+            if path.endswith("/trust") and method == "GET":
+                return {"trusted": False}
+            if path.endswith("/trust") and method == "POST":
+                raise TimeoutError("grant acknowledgment lost")
+            if path.endswith("/untrust"):
+                raise RuntimeError("unexpected cleanup failure")
+            raise AssertionError("unexpected native API route")
+
+        api.side_effect = reply
+        with self.assertRaisesRegex(RuntimeError, "unexpected cleanup failure"):
+            native.probe(Path("/test/kimi"), {}, Path("/test/project"),
+                         Path("/test/project/.kimi-code/mcp.json"))
+        killpg.assert_called_once_with(6822, native.signal.SIGKILL)
+        child.wait.assert_called_once_with(timeout=5)
 
     def test_private_token_requires_owned_regular_nonworld_readable_file(self):
         with tempfile.TemporaryDirectory() as temp:
