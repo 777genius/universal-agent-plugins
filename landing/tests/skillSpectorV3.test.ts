@@ -346,9 +346,17 @@ describe('SkillSpector v3 exact producer contract', () => {
   });
 
   it('accepts a separate authenticated original witness without treating its findings as one scanner report', () => {
-    const primary = referenceRecord();
+    // The Cloudflare reference fixture intentionally exceeds the 256 KiB
+    // witness budget. Use a compact valid partial report and one real grouped
+    // finding so this positive case tests the contract, not its size refusal.
+    const primary = referenceRecord('asc_workflow');
     const original = structuredClone(primary) as Record<string, unknown>;
     for (const key of ['freshness', 'target_revision', 'retry', 'attempt_history']) delete original[key];
+    const finding = structuredClone(referenceFixture.cloudflare.findings[0]);
+    original.findings = [finding];
+    original.finding_count = finding.raw_count;
+    original.raw_finding_count = finding.raw_count;
+    original.finding_group_count = 1;
     original.report_digest = 'sha256:' + '9'.repeat(64);
     primary.coverage.grouping_complete = false;
     primary.findings_truncated = true;
@@ -363,7 +371,8 @@ describe('SkillSpector v3 exact producer contract', () => {
     assert.deepEqual(decodeReference(primary).recovery_witnesses, primary.recovery_witnesses);
     assert.notEqual(primary.recovery_witnesses[0]!.record.report_digest, primary.report_digest);
     assert.equal(primary.status, 'partial');
-    assert.deepEqual(primary.findings, referenceRecord().findings);
+    assert.deepEqual(primary.findings, referenceRecord('asc_workflow').findings);
+    assert.equal(primary.recovery_witnesses[0]!.record.findings.length, 1);
 
     const cases: Array<[string, (record: typeof primary) => void]> = [
       ['forged run', record => { record.recovery_witnesses![0]!.origin.run_id = 0; }],
