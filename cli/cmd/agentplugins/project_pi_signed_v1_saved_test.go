@@ -118,8 +118,8 @@ func TestPiProjectSignedV1SavedFourPackageLifecycle(t *testing.T) {
 	snapshot := domain.DirectorySnapshot{
 		SnapshotSchemaVersion: 1, Sequence: 1, PublicationID: "pi-test-only-1",
 		SourceCommit: commit, GeneratedAt: now.Add(-time.Hour).Format(time.RFC3339),
-		ExpiresAt: now.Add(24*time.Hour).Format(time.RFC3339),
-		Products: []domain.DirectoryProduct{}, Distributions: []domain.DirectoryDistribution{},
+		ExpiresAt: now.Add(24 * time.Hour).Format(time.RFC3339),
+		Products:  []domain.DirectoryProduct{}, Distributions: []domain.DirectoryDistribution{},
 		Evidence: []domain.DirectoryEvidence{}, Revocations: []domain.DirectoryRevocation{},
 	}
 	for _, item := range packages {
@@ -263,7 +263,7 @@ func TestPiProjectSignedV1SavedFourPackageLifecycle(t *testing.T) {
 		}
 		var config struct {
 			MCPServers map[string]json.RawMessage `json:"mcpServers"`
-			Keep bool `json:"keep"`
+			Keep       bool                       `json:"keep"`
 		}
 		if err := json.Unmarshal([]byte(projectJourneyRead(t, filepath.Join(native, "mcp.json"))), &config); err != nil {
 			t.Fatal(err)
