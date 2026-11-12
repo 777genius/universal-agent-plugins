@@ -90,6 +90,18 @@ func TestMCPHTTPRejectsOversizeAndUnexpectedEncodings(t *testing.T) {
 	}
 }
 
+func TestURIRejectsPercentEncodedControl(t *testing.T) {
+	t.Parallel()
+	for _, uri := range []string{
+		"skill://acme/review/%1f/SKILL.md",
+		"skill://acme/review/%7f/SKILL.md",
+	} {
+		if err := validateURI(uri); !errors.Is(err, ErrInvalidEntry) {
+			t.Fatalf("accepted control escape in URI %q: %v", uri, err)
+		}
+	}
+}
+
 func TestManifestRejectsIntegrityAndPathAmbiguity(t *testing.T) {
 	t.Parallel()
 	body := []byte(sampleSkill)
