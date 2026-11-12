@@ -153,6 +153,12 @@ class ReleasedNativeProofTests(unittest.TestCase):
         self.assertNotEqual(proof.sha(original), proof.sha(metadata))
         pinned = proof.windows_hermes_launcher_content_sha256(original)
         self.assertEqual(pinned, proof.windows_hermes_launcher_content_sha256(metadata))
+        # Only DOS timestamps are normalized; a changed ZIP comment, though
+        # not in the decompressed Python script, must still fail identity.
+        commented = launcher("comment.exe", (2026, 11, 12, 13, 0, 0))
+        with zipfile.ZipFile(commented, "a") as archive:
+            archive.comment = b"unreviewed ZIP metadata"
+        self.assertNotEqual(pinned, proof.windows_hermes_launcher_content_sha256(commented))
         before = {"version_output": "Hermes Agent v0.23.0", "runtime_sha256": "a" * 64,
                   "executable_sha256": proof.sha(original), "launcher_content_sha256": pinned}
         after = {**before, "executable_sha256": proof.sha(metadata)}
