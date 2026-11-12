@@ -191,13 +191,17 @@ def windows_hermes_non_loader_sha256(binary):
     Even during native self-repair, the interpreter shebang, compressed Python
     entrypoint, ZIP headers and trailing bytes must remain unmodified.
     """
-    raw = Path(binary).read_bytes()
+    raw = bytearray(Path(binary).read_bytes())
     with zipfile.ZipFile(binary) as archive:
-        zip_start = archive.infolist()[0].header_offset
+        entry = archive.infolist()[0]
+        zip_start, central = entry.header_offset, archive.start_dir
     shebang = raw.rfind(b"#!", 0, zip_start)
     require(shebang > 0 and raw.startswith(b"MZ")
             and raw[shebang:zip_start].rstrip(b"\r\n").endswith(b" -I"),
             "invalid pinned Hermes Windows EXE shebang")
+    # Mirrors the existing full-EXE policy: ignore ONLY the two ZIP DOS timestamps.
+    raw[zip_start + 10:zip_start + 14] = bytes(4)
+    raw[central + 12:central + 16] = bytes(4)
     return hashlib.sha256(raw[shebang:]).hexdigest()
 
 
