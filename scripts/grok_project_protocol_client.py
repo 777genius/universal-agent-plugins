@@ -2,6 +2,8 @@
 
 No vendor auth, model, shell, config mutation, or environment inheritance.
 """
+import base64
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -14,6 +16,7 @@ import time
 LIMIT = 1 << 20
 # domain/state.go: the retained state-v2.json filename does not identify its schema.
 STATE_SCHEMA = 5
+HELPER_DIRECTORY = "io.github.777genius.agentplugins/managed-stdio-v1"
 
 
 def require(value, message):
@@ -120,15 +123,48 @@ def selected_installation(project, name):
     return installation, binding, active, data
 
 
-def installed_server(active, data, root, name, expected_nonce):
+def helper_digest(path, root):
+    path, root = Path(path), Path(root)
+    require(path.is_relative_to(root) and root.resolve() == root and path.resolve() == path,
+            "managed helper path differs")
+    before = path.lstat()
+    require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1
+            and before.st_uid == os.getuid() and 0 < before.st_size <= 128 << 20
+            and before.st_mode & 0o111, "managed helper is not an owned executable")
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        held = os.fstat(fd)
+        require((held.st_dev, held.st_ino) == (before.st_dev, before.st_ino), "helper replaced")
+        digest, size = hashlib.sha256(), 0
+        while chunk := os.read(fd, 65536):
+            size += len(chunk)
+            require(size <= 128 << 20, "managed helper grew")
+            digest.update(chunk)
+        after = os.fstat(fd)
+        require((held.st_size, held.st_mtime_ns, held.st_ctime_ns)
+                == (after.st_size, after.st_mtime_ns, after.st_ctime_ns), "helper changed")
+    finally:
+        os.close(fd)
+    require(size == before.st_size and path.resolve() == path
+            and os.path.samestat(before, path.lstat()), "helper namespace changed")
+    return digest.hexdigest()
+
+
+def installed_server(active, data, root, name, expected_nonce, expected_helper_sha256, expected_cwd):
     config = document(read_owned(Path(active) / ".mcp.json", root))
     servers = config.get("mcpServers")
     require(isinstance(servers, dict) and set(servers) == {name}, "exact installed server required")
     server = servers[name]
     require(isinstance(server, dict) and server.get("type", "stdio") == "stdio", "stdio only")
     command = Path(server.get("command", ""))
-    require(command.is_absolute() and command.is_relative_to(active)
-            and command.resolve() == command and command.is_file(), "foreign installed command")
+    require(command == Path(active) / HELPER_DIRECTORY / "agentplugins", "foreign installed helper")
+    require(isinstance(expected_helper_sha256, str) and len(expected_helper_sha256) == 64
+            and helper_digest(command, root) == expected_helper_sha256, "managed helper source hash differs")
+    metadata = document(read_owned(command.parent / "metadata.json", root))
+    require(set(metadata) == {"protocol", "sha256", "cliVersion"}
+            and type(metadata["protocol"]) is int and metadata["protocol"] == 1
+            and metadata["sha256"] == expected_helper_sha256
+            and isinstance(metadata["cliVersion"], str) and metadata["cliVersion"], "managed helper metadata differs")
     args, env = server.get("args", []), server.get("env", {})
     require(isinstance(args, list) and len(args) <= 32 and all(isinstance(x, str) for x in args),
             "invalid installed args")
@@ -139,18 +175,31 @@ def installed_server(active, data, root, name, expected_nonce):
     require(set(env) <= allowed and env.get("PLUGIN_ROOT") == str(active)
             and env.get("PLUGIN_DATA") == str(data) and env.get("UAP_TEST_ROOT") == str(root)
             and env.get("UAP_TEST_NONCE") == expected_nonce, "unexpected fixture environment")
-    require(server.get("cwd") == str(active), "installed cwd differs")
+    require("cwd" not in server and len(args) == 7
+            and args[:3] == ["--internal-stdio-v1", str(active), str(data)]
+            and args[3] == str(expected_cwd)
+            and args[4] == ("data" if Path(expected_cwd).is_relative_to(data) else "plugin")
+            and args[5] == "--argv-base64-v1", "installed launcher cwd/root/anchor differs")
+    raw = base64.b64decode(args[6], validate=True)
+    require(base64.b64encode(raw).decode() == args[6] and raw == b"./bin/probe",
+            "installed encoded child differs")
+    child = Path(active) / "bin/probe"
+    helper_digest(child, root)  # Exact owned executable; never substitute another command.
+    selected_cwd = Path(expected_cwd)
+    anchor = Path(data) if args[4] == "data" else Path(active)
+    require(selected_cwd.is_relative_to(anchor) and selected_cwd.resolve() == selected_cwd
+            and selected_cwd.is_dir(), "installed cwd is outside selected authority")
     return server
 
 
 class Protocol:
     """Bounded, sequential JSON-RPC over the exact installed stdio command."""
-    def __init__(self, server, base_env):
+    def __init__(self, server, base_env, process_cwd):
         self.env = dict(base_env, **server["env"])
         self.transcript, self.buffer, self.stderr = [], b"", b""
         self.total, self.deadline = 0, time.monotonic() + 15
         self.process = subprocess.Popen([server["command"], *server.get("args", [])],
-                                        cwd=server["cwd"], env=self.env,
+                                        cwd=process_cwd, env=self.env,
                                         stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                         stderr=subprocess.PIPE, start_new_session=True)
         self.selector = selectors.DefaultSelector()
@@ -214,8 +263,8 @@ class Protocol:
             self.process.stderr.close()
 
 
-def exercise(server, base_env, nonce, revision, marker, write):
-    rpc = Protocol(server, base_env)
+def exercise(server, base_env, nonce, revision, marker, write, process_cwd, expected_cwd):
+    rpc = Protocol(server, base_env, process_cwd)
     try:
         init = rpc.call(1, "initialize", {"protocolVersion": "2025-06-18", "capabilities": {},
                                         "clientInfo": {"name": "uap-no-model-e2e", "version": "1"}})
@@ -233,7 +282,7 @@ def exercise(server, base_env, nonce, revision, marker, write):
         for key, expected in {"nonce": nonce, "revision": revision, "marker": marker,
                               "plugin_root": server["env"]["PLUGIN_ROOT"],
                               "plugin_data": server["env"]["PLUGIN_DATA"],
-                              "cwd": server["cwd"]}.items():
+                              "cwd": str(expected_cwd)}.items():
             require(facts.get(key) == expected, "tool result differs: " + key)
         negative = rpc.call(4, "tools/call", {"name": "inspect_runtime", "arguments": {
             "nonce": "wrong-" + nonce}}, expected_error=True)

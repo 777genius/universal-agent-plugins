@@ -1,5 +1,6 @@
 """Inert contracts for the local driver; never native Grok qualification."""
 import copy
+from contextlib import contextmanager
 import base64
 import hashlib
 import json
@@ -7,6 +8,7 @@ from pathlib import Path
 import tempfile
 import tomllib
 import unittest
+from unittest import mock
 import urllib.error
 import urllib.request
 
@@ -15,7 +17,7 @@ import grok_noauth_call_e2e as native
 
 def expected():
     return {"nonce": "owned-nonce", "revision": "0", "marker": "owned-marker",
-            "operation": "read", "cwd": "/owned/project", "plugin_root": "/owned/project/plugin",
+            "operation": "read", "cwd": "/owned/project/plugin/work", "plugin_root": "/owned/project/plugin",
             "plugin_data": "/owned/project/data"}
 
 
@@ -159,6 +161,89 @@ class DriverTests(unittest.TestCase):
             self.assertEqual(value["plugins"]["enabled"], ["owned"])
             self.assertIs(value["features"]["turn_summary"], False)
             self.assertEqual(value["model"][native.MODEL]["base_url"], "http://127.0.0.1:5678/v1")
+
+    def test_negative_project_requires_normal_explicit_trust_and_absent_plugin(self):
+        with tempfile.TemporaryDirectory() as temp:
+            journey = native.NativeJourney(Path(temp), Path("/usr/bin/false"), Path("/usr/bin/false"), {"commands": []})
+            journey.enable_fixture()
+            trust = journey.home / ".grok/trusted_folders.toml"
+            self.assertEqual(tomllib.loads(trust.read_text())["folders"], {
+                str(journey.a): {"trusted": True}, str(journey.b): {"trusted": True}})
+            journey.check()
+            selected = {"grokVersion": "1.0.70", "cwd": str(journey.b),
+                        "projectRoot": str(journey.b), "projectTrusted": False, "plugins": []}
+            with mock.patch.object(journey, "run", return_value=json.dumps(selected).encode()), \
+                 mock.patch.object(native, "provider") as provider:
+                with self.assertRaisesRegex(ValueError, "selection/trust"):
+                    journey.native_session("negative", cwd=journey.b)
+                provider.assert_not_called()
+                selected.update(projectTrusted=True, plugins=[{"name": native.existing.NAME}])
+                journey.run.return_value = json.dumps(selected).encode()
+                with self.assertRaisesRegex(ValueError, "still advertises"):
+                    journey.native_session("negative", cwd=journey.b)
+                provider.assert_not_called()
+
+    def test_late_provider_refusal_after_join_cannot_qualify_native_session(self):
+        with tempfile.TemporaryDirectory() as temp:
+            evidence = {"commands": []}
+            journey = native.NativeJourney(Path(temp), Path("/usr/bin/false"), Path("/usr/bin/false"), evidence)
+            selected = {"grokVersion": "1.0.70", "cwd": str(journey.b),
+                        "projectRoot": str(journey.b), "projectTrusted": True, "plugins": []}
+            driver = native.Driver()
+            driver.completed, driver.primary_requests = True, 2
+            @contextmanager
+            def pending_provider(_expected):
+                yield "http://127.0.0.1:1234/v1", driver
+                driver.error = "owned late worker refusal"
+            with mock.patch.object(native, "provider", pending_provider), \
+                 mock.patch.object(journey, "configure_provider"), \
+                 mock.patch.object(journey, "run", return_value=json.dumps(selected).encode()):
+                with self.assertRaisesRegex(ValueError, "late native provider failure"):
+                    journey.native_session("negative", cwd=journey.b)
+            self.assertEqual(evidence["native_provider_sessions"][0]["error"], driver.error)
+
+    def test_failed_native_stage_retains_real_http_cleanup_refusal(self):
+        with tempfile.TemporaryDirectory() as temp:
+            evidence = {"commands": []}
+            journey = native.NativeJourney(Path(temp), Path("/usr/bin/false"), Path("/usr/bin/false"), evidence)
+            selected = {"grokVersion": "1.0.70", "cwd": str(journey.b),
+                        "projectRoot": str(journey.b), "projectTrusted": True, "plugins": []}
+            real_provider = native.provider
+            opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+            @contextmanager
+            def refused_during_cleanup(expected):
+                with real_provider(expected) as (url, driver):
+                    try:
+                        yield url, driver
+                    finally:
+                        body = request(); body["tools"][0]["function"]["parameters"] = None
+                        req = urllib.request.Request(url + "/chat/completions", data=json.dumps(body).encode(),
+                            headers={"Content-Type": "application/json"})
+                        with self.assertRaises(urllib.error.HTTPError):
+                            opener.open(req, timeout=3)
+            with mock.patch.object(native, "provider", refused_during_cleanup), \
+                 mock.patch.object(journey, "configure_provider"), \
+                 mock.patch.object(journey, "run", side_effect=[json.dumps(selected).encode(),
+                                                               ValueError("owned native stage failure")]):
+                with self.assertRaisesRegex(ValueError, "owned native stage failure"):
+                    journey.native_session("negative-failed", cwd=journey.b)
+            session = evidence["native_provider_sessions"][0]
+            self.assertIn("native wrapper schema differs", session["error"])
+            self.assertTrue(any("request_base64" in row for row in session["requests"]))
+            self.assertFalse(session["completed"])
+
+    def test_actual_http_malformed_schema_then_valid_retries_stay_refused(self):
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        for invalid in (None, [], "foreign"):
+            with self.subTest(invalid=invalid), native.provider(expected()) as (url, driver):
+                bad = request(); bad["tools"][0]["function"]["parameters"] = invalid
+                for body in (bad, request(), discovered(request()), result(request())):
+                    req = urllib.request.Request(url + "/chat/completions", data=json.dumps(body).encode(),
+                                                 headers={"Content-Type": "application/json"})
+                    with self.assertRaises(urllib.error.HTTPError): opener.open(req, timeout=3)
+                self.assertIsNotNone(driver.error)
+                self.assertFalse(driver.completed)
+                self.assertFalse(driver.called)
 
     def test_config_mutation_is_refused_before_cached_config_replacement(self):
         with tempfile.TemporaryDirectory() as temp:

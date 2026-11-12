@@ -94,3 +94,33 @@ infer an operation field absent from the shared fixture. Check protected state
 before replacing provider endpoint configuration, so prior native mutations
 cannot be overwritten and adopted as a new baseline. Preserve original bounded
 MCP JSONL bytes/hash and provider request/response bytes/hash for independent joins.
+
+## Integration with the measured cwd correction
+
+The first real hosted call in run 43259198583 reached the installed Go server but
+failed: Grok 1.0.70 ignored the emitted cwd and launched it from Project A.
+The subsequent 473d11f/9e0333d observations bind that native behavior; they do not
+qualify the portable plugin-root default. Preserve those original observations.
+The dedicated product correction in #886 uses the existing managed stdio launcher
+to enforce the declared working directory without granting activation or trust.
+
+This lane must be integrated with that correction before final acceptance. It
+retains the actual installed MCP config before each attempt, validates the emitted
+launcher against the source-built App hash and exact encoded child arguments,
+then obtains the expected cwd from the inherited finite author fixture. Genuine
+native calls must cover omitted cwd, plugin-relative cwd and plugin-data cwd,
+alongside update, repair and retained-data checks. Project cwd and plugin root
+remain separate authorities; the oracle is not weakened to match a host defect.
+
+Project B receives normal explicit trust in the same disposable profile as A.
+Before each absent-source native session, genuine inspect must report the exact
+trusted selected project and no owned plugin. Untrusted suppression cannot stand
+in for source absence. No real profile or installer trust policy is changed.
+
+Provider acceptance occurs only after all HTTP workers have drained and joined.
+Malformed schemas and unexpected parsed-data shapes latch a refusal; later valid
+requests cannot recover a failed session. Exactly three primary requests are
+required for discovery/call/result, or two for trusted absence; the existing
+bounded metadata/auxiliary requests remain separate. Inert regressions cover
+malformed-schema retries, late worker failure and trusted negative selection.
+Source HEAD/tree/clean state and compiled executable hashes must remain unchanged.

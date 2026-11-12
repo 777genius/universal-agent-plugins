@@ -42,6 +42,7 @@ class Driver:
         self.records, self.error, self.requests = [], None, 0
         self.called, self.completed, self.searched = False, False, False
         self.auxiliary = 0
+        self.primary_requests = 0
         self.result = None
         self.invocation = None
         self.call_id = "uap_owned_call"
@@ -83,9 +84,11 @@ class Driver:
                 "documented deferred MCP wrappers differ")
         for name, required in (("search_tool", ["query"]), ("use_tool", ["tool_name", "tool_input"])):
             parameters = functions[name].get("parameters", {})
-            require(parameters.get("type") == "object" and parameters.get("required") == required,
+            require(isinstance(parameters, dict) and parameters.get("type") == "object"
+                    and parameters.get("required") == required,
                     "native wrapper schema differs")
         require(not self.completed, "unexpected provider request after terminal result")
+        self.primary_requests += 1
         if not self.searched:
             self.searched = True
             return self.call("search_tool", {"query": TOOL, "limit": 5}, self.search_id)
@@ -111,8 +114,10 @@ class Driver:
             require(tool.get("description") == "Inspect only disposable fixture runtime facts.",
                     "discovered native tool description differs")
             schema = tool.get("input_schema", {})
-            require(schema.get("type") == "object" and schema.get("required") == ["nonce"]
-                    and set(schema.get("properties", {})) == {"nonce", "operation", "marker"}
+            require(isinstance(schema, dict) and schema.get("type") == "object"
+                    and schema.get("required") == ["nonce"]
+                    and isinstance(schema.get("properties"), dict)
+                    and set(schema["properties"]) == {"nonce", "operation", "marker"}
                     and all(schema["properties"][key] == {"type": "string"}
                             for key in ("nonce", "operation", "marker"))
                     and schema.get("additionalProperties") is False,
@@ -189,6 +194,7 @@ def provider(expected=None):
                     "request_base64": base64.b64encode(body).decode()}
                 driver.records.append(self.record)
                 request = existing.document(body)
+                require(driver.error is None, "provider already refused a request")
                 message, finish = driver.respond(request)
                 self.record.update(finish_reason=finish, requested_function=message.get(
                     "tool_calls", [{}])[0].get("function", {}).get("name"))
@@ -226,7 +232,7 @@ def provider(expected=None):
                                    response_base64=base64.b64encode(wire).decode())
                 self.wfile.write(wire)
                 self.wfile.flush()
-            except (ValueError, OSError, TimeoutError) as error:
+            except (ValueError, OSError, TimeoutError, TypeError, AttributeError, RecursionError) as error:
                 driver.records.append({"method": self.command[:16], "path": self.path[:256],
                                        "refused": True})
                 driver.error = type(error).__name__ + ": " + str(error)
@@ -253,6 +259,18 @@ def provider(expected=None):
 
 
 class NativeJourney(existing.Journey):
+    def enable_fixture(self):
+        super().enable_fixture()
+        self.check()
+        trust = self.home / ".grok/trusted_folders.toml"
+        first = "[folders." + json.dumps(str(self.a)) + "]\ntrusted = true\n"
+        require(existing.read_owned(trust, self.root).decode() == first,
+                "unexpected test-owned trust baseline")
+        # Project B needs ordinary explicit test trust too: suppression of an
+        # untrusted source cannot establish cross-project absence.
+        existing.write(trust, first + "[folders." + json.dumps(str(self.b)) + "]\ntrusted = true\n")
+        self.protected[trust] = existing.digest(trust)
+
     def configure_provider(self, url):
         self.check()
         config = self.home / ".grok/config.toml"
@@ -281,6 +299,17 @@ class NativeJourney(existing.Journey):
                          "HTTPS_PROXY": url.rsplit("/v1", 1)[0], "NO_PROXY": "127.0.0.1,localhost"})
 
     def native_session(self, label, expected=None, cwd=None):
+        if expected is None:
+            project = cwd or self.a
+            selected = existing.document(self.run(label + "-selection", [self.grok, "inspect", "--json"], cwd=project))
+            require(selected.get("grokVersion") == "1.0.70" and selected.get("cwd") == str(project)
+                    and selected.get("projectRoot", "").rstrip("/") == str(project)
+                    and selected.get("projectTrusted") is True, "negative project selection/trust differs")
+            plugins = selected.get("plugins")
+            require(isinstance(plugins, list) and all(isinstance(p, dict)
+                    and isinstance(p.get("name"), str) for p in plugins)
+                    and not any(p.get("name", "").casefold() == existing.NAME for p in plugins),
+                    "trusted negative project still advertises owned plugin")
         marker_before = None
         if expected is not None:
             marker = Path(expected["plugin_data"]) / "native-marker.txt"
@@ -291,58 +320,75 @@ class NativeJourney(existing.Journey):
                 require(existing.read_owned(marker, self.root).decode() == expected["marker"],
                         "read marker differs before native invocation")
                 marker_before = marker.stat()
-        with provider(expected) as (url, driver):
-            self.configure_provider(url)
-            before = existing.events(self.log, self.root)
-            try:
-                self.run(label, [self.grok, "-p", "Use only the owned fixture MCP tool once, then stop.",
-                                "-m", MODEL, "--permission-mode", "dontAsk",
-                                "--allow", "MCPTool(" + TOOL + ")"], cwd=cwd, timeout=60)
-            finally:
-                self.evidence.setdefault("native_provider_sessions", []).append({
-                    "label": label, "requests": driver.records, "error": driver.error,
-                    "completed": driver.completed, "called": driver.called,
-                    "invocation": driver.invocation, "result": driver.result})
-            rows = existing.events(self.log, self.root)[len(before):]
-            require(driver.error is None and driver.completed, "native local-provider protocol unqualified")
-            if expected is None:
-                require(not rows and not driver.called, "absent owned source still executed MCP")
-            else:
-                sessions = existing.observed_protocol(rows, self.nonce,
-                                                      ("initialize", "tools/list", "tools/call"))
-                calls = [row for row in rows if row.get("method") == "tools/call"]
-                require(len(sessions) == 1 and len(calls) == 1, "native MCP session/call count differs")
-                require(driver.invocation is not None
-                        and driver.invocation["tool_input"]["operation"] == expected["operation"],
-                        "native marker operation differs")
-                require(existing.read_owned(marker, self.root).decode() == expected["marker"],
-                        "native marker effect differs")
-                if marker_before is not None:
-                    after = marker.stat()
-                    require((after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns, after.st_ctime_ns)
-                            == (marker_before.st_dev, marker_before.st_ino, marker_before.st_size,
-                                marker_before.st_mtime_ns, marker_before.st_ctime_ns),
-                            "native read mutated marker")
-                facts = calls[0].get("facts", {})
-                require(driver.result is not None and facts.get("pid") == driver.result.get("pid")
-                        and facts.get("session") == driver.result.get("session"),
-                        "native result and original server process identity differ")
-                for key in ("nonce", "revision", "marker", "cwd", "plugin_root", "plugin_data"):
-                    require(facts.get(key) == expected[key], "original MCP authority differs: " + key)
-            return {"requests": driver.records, "native_original_events": rows,
-                    "owned_call_requested": driver.called, "native_result_verified": driver.completed,
-                    "native_result": driver.result, "native_invocation": driver.invocation,
-                    "marker_effect_verified": expected is not None,
-                    "auxiliary_requests": driver.auxiliary}
+        driver, session_record = None, None
+        try:
+            with provider(expected) as (url, driver):
+                self.configure_provider(url)
+                before = existing.events(self.log, self.root)
+                try:
+                    self.run(label, [self.grok, "-p", "Use only the owned fixture MCP tool once, then stop.",
+                                    "-m", MODEL, "--permission-mode", "dontAsk",
+                                    "--allow", "MCPTool(" + TOOL + ")"], cwd=cwd, timeout=60)
+                finally:
+                    session_record = {
+                        "label": label, "requests": driver.records, "error": driver.error,
+                        "completed": driver.completed, "called": driver.called,
+                        "invocation": driver.invocation, "result": driver.result}
+                    if expected is None:
+                        session_record["trusted_negative_selection"] = selected
+                    self.evidence.setdefault("native_provider_sessions", []).append(session_record)
+                rows = existing.events(self.log, self.root)[len(before):]
+                require(driver.error is None and driver.completed, "native local-provider protocol unqualified")
+                if expected is None:
+                    require(not rows and not driver.called, "absent owned source still executed MCP")
+                else:
+                    sessions = existing.observed_protocol(rows, self.nonce,
+                                                          ("initialize", "tools/list", "tools/call"))
+                    calls = [row for row in rows if row.get("method") == "tools/call"]
+                    require(len(sessions) == 1 and len(calls) == 1, "native MCP session/call count differs")
+                    require(driver.invocation is not None
+                            and driver.invocation["tool_input"]["operation"] == expected["operation"],
+                            "native marker operation differs")
+                    require(existing.read_owned(marker, self.root).decode() == expected["marker"],
+                            "native marker effect differs")
+                    if marker_before is not None:
+                        after = marker.stat()
+                        require((after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns, after.st_ctime_ns)
+                                == (marker_before.st_dev, marker_before.st_ino, marker_before.st_size,
+                                    marker_before.st_mtime_ns, marker_before.st_ctime_ns),
+                                "native read mutated marker")
+                    facts = calls[0].get("facts", {})
+                    require(driver.result is not None and facts.get("pid") == driver.result.get("pid")
+                            and facts.get("session") == driver.result.get("session"),
+                            "native result and original server process identity differ")
+                    for key in ("nonce", "revision", "marker", "cwd", "plugin_root", "plugin_data"):
+                        require(facts.get(key) == expected[key], "original MCP authority differs: " + key)
+                result = {"requests": driver.records, "native_original_events": rows,
+                        "owned_call_requested": driver.called, "native_result_verified": driver.completed,
+                        "native_result": driver.result, "native_invocation": driver.invocation,
+                        "marker_effect_verified": expected is not None,
+                        "auxiliary_requests": driver.auxiliary}
+        finally:
+            # Keep cleanup-time failures even if the native command or receipt
+            # admission raised before reaching the post-join qualification.
+            if driver is not None and session_record is not None:
+                session_record["error"] = driver.error
+        # ThreadingHTTPServer joins all workers on exit; a late refusal must
+        # still invalidate the completed native exchange.
+        session_record["error"] = driver.error
+        require(driver.error is None and driver.completed, "late native provider failure")
+        require(driver.primary_requests == (2 if expected is None else 3),
+                "native primary request count differs")
+        return result
 
     def protocol(self, stage, revision, marker, create=False):
         installation, binding, active, data = selected_installation(self.a, existing.NAME)
-        installed_server(active, data, self.root, existing.SERVER, self.nonce)
+        self.capture_installed_config(stage, installation, binding, active)
+        expected_cwd = self.expected_runtime_cwd(active, data)
+        installed_server(active, data, self.root, existing.SERVER, self.nonce,
+                         existing.digest(self.installer), expected_cwd)
         expected = {"nonce": self.nonce, "revision": revision, "marker": marker,
-                    # Pinned Grok 1.0.70 starts plugin stdio MCP from the selected
-                    # project cwd, not the managed plugin package directory.
-                    # Keep both identities independent in the native receipt.
-                    "operation": "write" if create else "read", "cwd": str(self.a),
+                    "operation": "write" if create else "read", "cwd": str(expected_cwd),
                     "plugin_root": str(active), "plugin_data": str(data)}
         result = self.native_session(stage + "-native-call", expected)
         self.evidence["stages"].append({"stage": stage, "binding": binding, **result})
@@ -408,7 +454,11 @@ def main():
                     original = existing.read_owned(journey.log, root)
                     evidence["events_sha256"] = hashlib.sha256(original).hexdigest()
                     evidence["events_base64"] = base64.b64encode(original).decode()
-        require(not git("status", "--porcelain", "--untracked-files=normal"), "source changed")
+        require(git("rev-parse", "HEAD") == expected
+                and git("rev-parse", "HEAD^{tree}") == evidence["source_tree"]
+                and not git("status", "--porcelain", "--untracked-files=normal"), "source changed")
+        require(existing.digest(args.installer) == evidence["installer_sha256"]
+                and existing.digest(args.probe) == evidence["probe_sha256"], "compiled executable changed")
         evidence.update(passed=True, grok_native_tools_call_qualified=True)
     except Exception as error:
         evidence["error"] = type(error).__name__ + ": " + str(error)
