@@ -6,10 +6,12 @@ through name-only env_vars; inspect the entire isolated Codex/home/project tree.
 This is not a product feature, and never reads real user credentials.
 """
 import base64
+import contextlib
 import errno
 import hashlib
 import http.server
 import json
+import ntpath
 import os
 import re
 from pathlib import Path
@@ -433,33 +435,106 @@ def _scan_stat_identity(info, include_change_time=True):
     return shared + ((info.st_ctime_ns,) if include_change_time else ())
 
 
-def _read_regular_bounded(path, observed):
-    """Read the observed inode with bounded no-follow I/O, or fail closed.
+# Capture capability before unit tests mock os.open. Without dir_fd and
+# O_NOFOLLOW on POSIX, refuse to inspect (never fall back to path-only reads).
+_SCAN_DIRFD_SUPPORTED = os.open in os.supports_dir_fd
 
-    A native process may swap a path between lstat and read. Never follow a
-    swapped final symlink or trust modified bytes; findings stay redacted.
+
+def _windows_path_within_root(opened_path, root_path):
+    """Accept only fully qualified local-drive paths beneath the isolated root."""
+    def canonical(value):
+        if value.startswith("\\\\?\\") and not value.startswith("\\\\?\\UNC\\"):
+            value = value[4:]
+        return ntpath.normcase(ntpath.normpath(value))
+    opened = canonical(opened_path)
+    root = canonical(root_path)
+    # UNC and device/volume GUID forms are deliberately unsupported: fail closed.
+    if (opened.startswith("\\\\") or root.startswith("\\\\")
+            or not ntpath.isabs(opened) or not ntpath.isabs(root)):
+        return False
+    try:
+        return ntpath.commonpath((root, opened)) == root
+    except ValueError:
+        return False
+
+
+def _windows_fd_within_root(fd, root):
+    """Check the resolved *opened handle* before reading any bytes on Windows."""
+    import ctypes
+    import msvcrt
+    from ctypes import wintypes
+    get_path = ctypes.WinDLL("kernel32", use_last_error=True).GetFinalPathNameByHandleW
+    get_path.argtypes = (wintypes.HANDLE, wintypes.LPWSTR,
+                         wintypes.DWORD, wintypes.DWORD)
+    get_path.restype = wintypes.DWORD
+    handle = msvcrt.get_osfhandle(fd)
+    length = get_path(handle, None, 0, 0)
+    if not 0 < length <= 32768:
+        raise OSError(errno.EIO, "unverifiable_opened_file_path")
+    buffer = ctypes.create_unicode_buffer(length + 1)
+    written = get_path(handle, buffer, len(buffer), 0)
+    if (not 0 < written < len(buffer)
+            or not _windows_path_within_root(
+                buffer.value, str(Path(root).resolve(strict=True)))):
+        raise OSError(errno.EPERM, "file_not_proven_inside_root")
+
+
+def _read_regular_bounded(path, observed, root):
+    """Read only from a verified descendant with stable file identity.
+
+    POSIX pins each parent with O_DIRECTORY|O_NOFOLLOW and opens relative
+    to that handle; Windows verifies the kernel-resolved opened file handle
+    before reading. No unsafe fallback if verification is unsupported.
     """
     limit = 32 * 1024 * 1024
     flags = (os.O_RDONLY | getattr(os, "O_BINARY", 0)
              | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_NOFOLLOW", 0))
-    with os.fdopen(os.open(path, flags), "rb") as reader:
-        opened = os.fstat(reader.fileno())
-        # Python/Windows lstat.st_ctime_ns is creation time while fstat
-        # may report change time. Keep ctime for POSIX path-vs-handle,
-        # and ALWAYS check full fstat identity before/after the read.
-        path_identity = lambda info: _scan_stat_identity(
-            info, include_change_time=os.name != "nt"
-        )
-        if (not stat.S_ISREG(opened.st_mode) or opened.st_ino == 0
-                or path_identity(opened) != path_identity(observed)
-                or opened.st_size > limit):
-            raise OSError(errno.EIO, "unstable_native_scan")
-        data = reader.read(limit + 1)
-        after = os.fstat(reader.fileno())
-        if (len(data) != opened.st_size
-                or _scan_stat_identity(after) != _scan_stat_identity(opened)):
-            raise OSError(errno.EIO, "unstable_native_scan")
-        return data
+    with contextlib.ExitStack() as descriptors:
+        if os.name == "nt":
+            fd = os.open(path, flags)
+            try:
+                _windows_fd_within_root(fd, root)
+            except BaseException:
+                os.close(fd)
+                raise
+        else:
+            if (not _SCAN_DIRFD_SUPPORTED or not getattr(os, "O_DIRECTORY", 0)
+                    or not getattr(os, "O_NOFOLLOW", 0)):
+                raise OSError(errno.ENOSYS, "secure_directory_open_unavailable")
+            try:
+                relative = Path(path).relative_to(Path(root))
+            except ValueError:
+                raise OSError(errno.EPERM, "file_outside_scan_root") from None
+            if (not relative.parts
+                    or any(part in (".", "..") for part in relative.parts)):
+                raise OSError(errno.EPERM, "invalid_scan_relative_path")
+            dir_flags = (os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+                         | getattr(os, "O_CLOEXEC", 0))
+            directory_fd = os.open(root, dir_flags)
+            descriptors.callback(os.close, directory_fd)
+            for component in relative.parts[:-1]:
+                opened_dir = os.open(component, dir_flags, dir_fd=directory_fd)
+                descriptors.callback(os.close, opened_dir)
+                directory_fd = opened_dir
+            fd = os.open(relative.parts[-1], flags, dir_fd=directory_fd)
+        with os.fdopen(fd, "rb") as reader:
+            opened = os.fstat(reader.fileno())
+            # Windows path stat reports creation ctime; handle stat reports
+            # change ctime. Still keep full fstat-to-fstat before/after proof.
+            def path_identity(info):
+                return _scan_stat_identity(
+                    info, include_change_time=os.name != "nt"
+                )
+            if (not stat.S_ISREG(opened.st_mode) or opened.st_ino == 0
+                    or path_identity(opened) != path_identity(observed)
+                    or opened.st_size > limit):
+                raise OSError(errno.EIO, "unstable_native_scan")
+            data = reader.read(limit + 1)
+            after = os.fstat(reader.fileno())
+            if (len(data) != opened.st_size
+                    or _scan_stat_identity(after) != _scan_stat_identity(opened)):
+                raise OSError(errno.EIO, "unstable_native_scan")
+            return data
 
 
 def inspect(root, secret):
@@ -578,7 +653,7 @@ def inspect(root, secret):
                     found.append({"path_sha256": hashlib.sha256(str(path.relative_to(root)).encode()).hexdigest(),
                                   "result": "unscanned_oversize"})
                     continue
-                data = _read_regular_bounded(path, metadata)
+                data = _read_regular_bounded(path, metadata, root)
             except OSError as exc:
                 # Vanished and locked files both leave incomplete evidence.
                 # Never treat a file disappearing between lstat/read as proof
