@@ -27,6 +27,16 @@ actually advertises, then one terminal completion after it receives the real
 tool result. The expected native wire name is
 `mcp__uap_native_test_server__ping`; fail if missing or ambiguous. Do not call
 Hermes' tool handler or MCP fixture directly from the test harness.
+The disposable profile uses the official `tools.tool_search.enabled: off`
+setting to expose that function eagerly. This changes representation only;
+native scope, approval and result-safety boundaries remain enabled.
+
+The pinned dispatcher wraps MCP text results of at least 32 characters in its
+`untrusted_tool_result` envelope. Our nonce result always exceeds that threshold.
+Require the exact source tool, pinned advisory, one opening/closing pair and
+strict inner JSON before joining its nonce/stage to the observed MCP result.
+Bare JSON, extra wrappers, surrounding data or a changed advisory fail the lane;
+do not disable the native safety wrapper to simplify the scripted provider.
 
 The official MCP registration provides the raw server-name toolset alias;
 native discovery filters selected MCP servers before startup. Selecting only
@@ -81,9 +91,9 @@ actual expected-denied boundary. No release/Directory qualification is inferred.
 
 ## Estimate and validation
 
-The implementation is approximately 356 native-driver lines (including bounded
-capture and owned Windows job cleanup), 214 provider-fixture lines (including
-original request/response capture), 169 inert-test lines, 212 new workflow lines
+The implementation is approximately 372 native-driver lines (including bounded
+capture and owned Windows job cleanup), 236 provider-fixture lines (including
+original request/response capture), 202 inert-test lines, 212 new workflow lines
 and 51 added optional shared-fixture lines, plus this plan. Complexity 4/10;
 source feasibility high, cross-platform
 reliability 7/10 pending actual native CI. First hosted run must settle native
@@ -94,7 +104,15 @@ Review shared default-wire invariance before publication. Run only meaningful
 inert fixture/receipt regressions locally; actual qualification requires original
 new-head native results on all three OS, ordinary required checks and independent
 artifact admission, then new-source main PUSH proof. No client/toolchain install
-or native turn has been executed locally for this feasibility review.
+or native turn had been executed locally for the initial feasibility review.
+
+A later isolated native protocol preflight reproduced the safety-envelope
+mismatch after the eager-tool correction. With the exact-envelope parser it
+completed one real MCP call, two provider exchanges and the final native
+response, preserving the pinned source/tree and config. Original stream and
+exchange hashes and absence of the owned process group were checked. This
+finite local preflight does not qualify the UAP lifecycle or hosted OS matrix;
+those still require their original final-source CI artifacts.
 
 ## Exact official source inspected
 
@@ -110,6 +128,10 @@ or native turn has been executed locally for this feasibility review.
 - `tools/mcp_tool_discovery.py`, lines 604-630: selected-server native startup.
 - `tools/mcp_tool_handlers.py::_call_tool_racing_stdio_death`: actual SDK
   `session.call_tool` dispatch, not a harness-issued protocol call.
+- `tools/tool_search.py::ToolSearchConfig` and `should_activate`: supported
+  eager-tool configuration in the disposable profile.
+- `agent/tool_dispatch_helpers.py::_maybe_wrap_untrusted`: the native result
+  envelope and 32-character threshold, retained and parsed by the fixture.
 
 All official references use the immutable Hermes pin above. Existing UAP source
 references are `hermes-native.py`, `hermes-native-lifecycle.py`,
