@@ -280,6 +280,15 @@ jobs:
           $fingerprintBefore = python scripts/e2e/released-native-proof.py fingerprint --binary "$hermesBin"
           if ($LASTEXITCODE -ne 0) { throw 'Pinned Hermes launcher pre-lifecycle fingerprint failed' }
           [IO.File]::WriteAllText((Join-Path $evidenceDir 'launcher-before.json'), $fingerprintBefore + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
+          # Exercise the pinned vendor's read-only CLI start/repair before the
+          # lifecycle. Keep a third fingerprint to prove whether it settles.
+          $skillsProbe = Invoke-HermesProbe -Exe $hermesBin -Arguments @('skills', 'list', '--source', 'local', '--enabled-only')
+          if ($skillsProbe.TimedOut -or $skillsProbe.Code -ne 0) { throw 'Pinned Hermes native Skills preflight failed' }
+          $mcpProbe = Invoke-HermesProbe -Exe $hermesBin -Arguments @('mcp', 'list')
+          if ($mcpProbe.TimedOut -or $mcpProbe.Code -ne 0) { throw 'Pinned Hermes native MCP preflight failed' }
+          $fingerprintPreflight = python scripts/e2e/released-native-proof.py fingerprint --binary "$hermesBin"
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned Hermes launcher settled fingerprint failed' }
+          [IO.File]::WriteAllText((Join-Path $evidenceDir 'launcher-after-preflight.json'), $fingerprintPreflight + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
       - name: Real Hermes native Windows lifecycle and trust boundary
         shell: pwsh
         env:
