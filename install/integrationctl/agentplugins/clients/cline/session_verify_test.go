@@ -19,7 +19,11 @@ func TestSessionNativeInventoryRequiresExactSource(t *testing.T) {
 	bad := []string{"[]", "null", "help", good + "{}", strings.Replace(good, "owned", "foreign", 1),
 		strings.Replace(good, "/project/mcp.json", "/user/mcp.json", 1), strings.Replace(good, "false", "true", 1),
 		strings.Replace(good, `"disabled":false`, `"disabled":false,"disabled":false`, 1),
-		strings.Replace(good, `"stdio"`, `""`, 1), "[null]", "[{},{}]"}
+		strings.Replace(good, `"stdio"`, `""`, 1),
+		strings.Replace(good, `"stdio"`, `"sse"`, 1),
+		strings.Replace(good, `"stdio"`, `"http"`, 1),
+		strings.Replace(good, `"stdio"`, `"websocket"`, 1),
+		"[null]", "[{},{}]"}
 	for _, body := range bad {
 		if err := verifySessionInventory([]byte(body), "/project/mcp.json", []string{"owned"}); err == nil {
 			t.Fatal("invalid inventory accepted", body)

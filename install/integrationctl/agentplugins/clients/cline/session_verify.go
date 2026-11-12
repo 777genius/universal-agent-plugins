@@ -60,7 +60,7 @@ func verifySessionInventory(body []byte, path string, names []string) error {
 		}
 		name, _ := row["name"].(string)
 		transport, _ := row["transportType"].(string)
-		if !expected[name] || row["path"] != path || row["disabled"] != false || transport == "" {
+		if !expected[name] || row["path"] != path || row["disabled"] != false || transport != "stdio" {
 			return fmt.Errorf("cline did not select the exact owned project source")
 		}
 		delete(expected, name)
