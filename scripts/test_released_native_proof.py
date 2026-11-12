@@ -153,6 +153,18 @@ class ReleasedNativeProofTests(unittest.TestCase):
         self.assertNotEqual(proof.sha(original), proof.sha(metadata))
         pinned = proof.windows_hermes_launcher_content_sha256(original)
         self.assertEqual(pinned, proof.windows_hermes_launcher_content_sha256(metadata))
+        before_parts = proof.windows_hermes_launcher_fingerprint(original)
+        after_parts = proof.windows_hermes_launcher_fingerprint(metadata)
+        self.assertEqual(before_parts["launcher_kind"], "distlib-exe")
+        self.assertNotEqual(before_parts["executable_sha256"], after_parts["executable_sha256"])
+        for key in ("launcher_content_sha256", "loader_sha256", "shebang_sha256",
+                    "entrypoint_sha256", "local_zip_sha256", "central_zip_sha256",
+                    "executable_bytes", "preamble_bytes", "entrypoint_bytes"):
+            self.assertEqual(before_parts[key], after_parts[key], key)
+        fingerprint_cli = subprocess.check_output([
+            sys.executable, str(SOURCE / "scripts/e2e/released-native-proof.py"),
+            "fingerprint", "--binary", str(original)], text=True)
+        self.assertEqual(json.loads(fingerprint_cli), before_parts)
         # Only DOS timestamps are normalized; a changed ZIP comment, though
         # not in the decompressed Python script, must still fail identity.
         commented = launcher("comment.exe", (2026, 11, 12, 13, 0, 0))
@@ -172,6 +184,12 @@ class ReleasedNativeProofTests(unittest.TestCase):
         script_changed = launcher("script.exe", (2026, 11, 12, 13, 0, 0), b"print('changed')")
         loader_changed = launcher("loader.exe", (2026, 11, 12, 13, 0, 0),
                                   prefix=b"MZchanged-loader\\n#!pinned-python -I\\n")
+        self.assertNotEqual(
+            before_parts["entrypoint_sha256"],
+            proof.windows_hermes_launcher_fingerprint(script_changed)["entrypoint_sha256"])
+        self.assertNotEqual(
+            before_parts["loader_sha256"],
+            proof.windows_hermes_launcher_fingerprint(loader_changed)["loader_sha256"])
         for changed in (script_changed, loader_changed):
             with self.subTest(changed=changed.name):
                 after = {**before, "executable_sha256": proof.sha(changed),
@@ -189,6 +207,17 @@ class ReleasedNativeProofTests(unittest.TestCase):
             archive.writestr("other.py", "pass")
         with self.assertRaisesRegex(ValueError, "launcher ZIP structure"):
             proof.windows_hermes_launcher_content_sha256(multi)
+
+    def test_windows_cmd_diagnostics_remain_raw_byte_strict(self):
+        cmd = self.root / "hermes.cmd"
+        cmd.write_bytes(b"@echo off\\r\\nexit /b 0\\r\\n")
+        found = proof.windows_hermes_launcher_fingerprint(cmd)
+        self.assertEqual(found, {"launcher_kind": "cmd",
+                                 "executable_sha256": proof.sha(cmd),
+                                 "executable_bytes": cmd.stat().st_size})
+        cmd.write_bytes(cmd.read_bytes() + b"rem changed\\r\\n")
+        self.assertNotEqual(found["executable_sha256"],
+                            proof.windows_hermes_launcher_fingerprint(cmd)["executable_sha256"])
 
     def test_vendor_hash_drift_is_rejected_with_or_without_advisory_drift(self):
         for client in ("hermes", "antigravity"):
