@@ -1,0 +1,133 @@
+name: Pi 36 real sources / 72 saved scopes - signed TEST cohort
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - '.github/workflows/pi-full-modern-signed-v1-test.yml'
+      - 'cli/cmd/agentplugins/pi_full_modern_signed_v1_test.go'
+      - 'cli/cmd/agentplugins/testdata/pi-full-modern-v1-test-only-snapshot.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pi-72-test-only-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  saved-scope:
+    name: Pi real signed-TEST scope / ${{ matrix.os }} / shard ${{ matrix.shard }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2025]
+        shard: [0, 1, 2]
+    env:
+      GOMAXPROCS: '2'
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      UAP_PI_FULL_REAL_SOURCE_E2E: '1'
+      UAP_PI_FULL_SHARD: ${{ matrix.shard }}
+      UAP_PI_FULL_REPORT: ${{ runner.temp }}/pi-full-report-${{ matrix.os }}-${{ matrix.shard }}.json
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.11'
+          cache: false
+      - name: Verify exact immutable current PR HEAD
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git diff --exit-code
+      - name: Full pinned real-source Pi signed-test saved User and Project lifecycle
+        shell: bash
+        run: |
+          go test -p=2 -count=1 -timeout=48m -v ./cli/cmd/agentplugins \
+            -run '^TestPiFullModernSignedTestOnlyMarketplace$'
+      - name: Upload scoped signed-test receipt or retain job failure
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: ${{ always() }}
+        with:
+          name: pi-full-${{ matrix.os }}-${{ matrix.shard }}
+          path: ${{ runner.temp }}/pi-full-report-${{ matrix.os }}-${{ matrix.shard }}.json
+          retention-days: 14
+          if-no-files-found: ignore
+
+  aggregate:
+    name: Independently verify all 72 signed-TEST saved cases (not production)
+    needs: saved-scope
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    if: ${{ always() }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Require all nine real-source matrix jobs successful
+        shell: bash
+        env:
+          MATRIX_RESULT: ${{ needs.saved-scope.result }}
+        run: |
+          test "$MATRIX_RESULT" = "success"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: pi-full-*
+          path: _reports
+          merge-multiple: true
+      - name: Verify 9 original receipts, exact test-only source SHA, and 72 distinct scopes
+        shell: bash
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          python3 - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          source = Path('cli/cmd/agentplugins/testdata/pi-full-modern-v1-test-only-snapshot.json').read_bytes()
+          snapshot = json.loads(source)
+          assert snapshot['source_commit'] == '32b6c48d071aceadf90a030c9d69477fe1a6a65a'
+          assert len(snapshot['distributions']) == 36
+          wanted_digest = 'sha256:' + hashlib.sha256(source).hexdigest()
+          expected = {
+              (d['id'] + '@' + str(d['releases'][0]['sequence']) + '/' + scope, index % 3)
+              for index, d in enumerate(snapshot['distributions'])
+              for scope in ('user', 'project')
+          }
+          paths = list(Path('_reports').glob('pi-full-report-*.json'))
+          assert len(paths) == 9, f'expected 9 independent original receipts, got {len(paths)}'
+          expected_os = {'ubuntu-24.04':'linux','macos-15':'darwin','windows-2025':'windows'}
+          seen_jobs, seen_cases = set(), set()
+          for path in paths:
+              report = json.loads(path.read_bytes())
+              assert set(report) == {'kind','source_commit','snapshot_sha256','runner_os','shard','passed_cases','production_published'}
+              assert report['kind'] == 'pi-full-signed-v1-test-only-saved'
+              assert report['production_published'] is False
+              assert report['source_commit'] == snapshot['source_commit']
+              assert report['snapshot_sha256'] == wanted_digest
+              name = path.name
+              matched = [(os, idx) for os in expected_os for idx in range(3)
+                         if name == f'pi-full-report-{os}-{idx}.json']
+              assert len(matched) == 1, f'invalid OS/shard identity {name}'
+              os, idx = matched[0]
+              assert report['runner_os'] == expected_os[os] and type(report['shard']) is int and report['shard'] == idx
+              assert (os, idx) not in seen_jobs
+              seen_jobs.add((os, idx))
+              assert isinstance(report['passed_cases'], list) and len(report['passed_cases']) == 24
+              expected_cases = {case for case, shard in expected if shard == idx}
+              assert set(report['passed_cases']) == expected_cases, f'{name}: missing or extra scope cases'
+              assert len(set(report['passed_cases'])) == 24
+              for case in report['passed_cases']:
+                  assert (os, case) not in seen_cases
+                  seen_cases.add((os, case))
+          assert len(seen_jobs) == 9 and len(seen_cases) == 216
+          print('PASS: every OS ran all 72 saved source/scope lifecycles from independently checked test-only signed v1 fixture')
+          print('NOT CLAIMED: protected production Ed25519 trust, released CLI routing, real Pi/model/OAuth runtime or published 72/72')
+          PY
