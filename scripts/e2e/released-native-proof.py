@@ -184,6 +184,57 @@ def vendor_identity(client, env):
     return identity
 
 
+def windows_hermes_non_loader_sha256(binary):
+    """During pinned first startup, require the whole EXE after the PE loader to stay exact.
+
+    vendor_identity() already verifies the single-entry distlib ZIP and CRC.
+    Even during native self-repair, the interpreter shebang, compressed Python
+    entrypoint, ZIP headers and trailing bytes must remain unmodified.
+    """
+    raw = bytearray(Path(binary).read_bytes())
+    with zipfile.ZipFile(binary) as archive:
+        entry = archive.infolist()[0]
+        zip_start, central = entry.header_offset, archive.start_dir
+    shebang = raw.rfind(b"#!", 0, zip_start)
+    require(shebang > 0 and raw.startswith(b"MZ")
+            and raw[shebang:zip_start].rstrip(b"\r\n").endswith(b" -I"),
+            "invalid pinned Hermes Windows EXE shebang")
+    # Mirrors the existing full-EXE policy: ignore ONLY the two ZIP DOS timestamps.
+    raw[zip_start + 10:zip_start + 14] = bytes(4)
+    raw[central + 12:central + 16] = bytes(4)
+    return hashlib.sha256(raw[shebang:]).hexdigest()
+
+
+def settle_windows_hermes_launcher(env):
+    """Complete pinned Hermes' ordinary Windows CLI startup BEFORE E2E baseline.
+
+    --version and --print-runtime-command are early paths: they can succeed
+    before the official CLI's first-launch repair republishes its PE stub.
+    This happens once, under the pinned checkout and runtime. Native lifecycle
+    then remains full-byte strict through vendor_comparison().
+    """
+    binary = Path(env["HERMES_BIN"]).resolve(strict=True)
+    before = vendor_identity("hermes", env)  # Source, version, real Python pinned first.
+    kind = before["launcher_kind"]
+    unchanged = (windows_hermes_non_loader_sha256(binary)
+                 if kind == "distlib-exe" else sha(binary))
+    command = ([str(binary)] if kind == "distlib-exe"
+               else ["cmd.exe", "/d", "/c", str(binary)])
+    for args in (("skills", "list", "--source", "local", "--enabled-only"),
+                 ("mcp", "list")):
+        output([*command, *args], env)  # Real vendor binary, 60s per operation.
+    settled = vendor_identity("hermes", env)
+    require(kind == settled["launcher_kind"]
+            and before["runtime_sha256"] == settled["runtime_sha256"]
+            and pinned_vendor_version("hermes", before["version_output"])
+            == pinned_vendor_version("hermes", settled["version_output"]),
+            "Hermes Windows startup changed pinned runtime, version or launcher kind")
+    require(unchanged == (windows_hermes_non_loader_sha256(binary)
+                          if kind == "distlib-exe" else sha(binary)),
+            "Hermes Windows startup changed launcher code or ZIP metadata")
+    return settled
+
+
 def vendor_comparison(client, vendor):
     if client != "hermes":
         return vendor
@@ -255,7 +306,8 @@ def run(args):
     env.update(UAP_BIN=str(binary), HERMES_NATIVE_UAP_HEAD=args.commit)
     version = output([str(binary), "version"], env)
     require(version == f"agentplugins {common['version']}", "actual UAP version differs from release tag")
-    vendor = vendor_identity(args.client, env)
+    vendor = (settle_windows_hermes_launcher(env)
+              if args.client == "hermes" and os.name == "nt" else vendor_identity(args.client, env))
     files = harness_files(args.client, args.target)
     command = ([sys.executable, str(Path(args.source) / files[0]), "run",
                 str(Path(args.source) / files[1])] if args.client == "hermes" else
