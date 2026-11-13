@@ -793,28 +793,61 @@ def lock_fixture_config(root):
     return value
 
 
-def lock_config_bytes(root, before, after):
+def lock_bootstrap_metadata(before, after, created):
+    from grok_acp_bootstrap import PINNED, PREFIX, record
+    docs = {PREFIX+name:pin for name,pin in PINNED.items() if name.startswith('docs/user-guide/')}
+    directories = {PREFIX+name for name in ('docs','docs/user-guide','logs')}
+    log = PREFIX+'logs/unified.jsonl'
+    names = set(docs) | directories | {log}
+    require(len(docs) == 27 and set(after)-set(before) == names, 'lock-unknown-membership')
+    require(created is None or set(created) == names, 'lock-startup-proof')
+    owner = record(before['.'],5)
+    for name in sorted(names):
+        meta = record(after[name],5 if name in directories else 9)
+        require(meta[0] == owner[0], 'lock-startup-device')
+        if name in directories:
+            require(meta[2] == stat.S_IFDIR | 0o755 and meta[3:] == owner[3:], 'lock-startup-directory')
+        else:
+            require(meta[2] == stat.S_IFREG | 0o644 and meta[3] == 1 and meta[4:6] == owner[3:],
+                    'lock-startup-file')
+            require(meta[6] == docs[name][0] if name in docs else 0 <= meta[6] <= 128 << 10,
+                    'lock-startup-bound')
+        if created is not None:
+            previous = record(created[name],len(meta))
+            count = 6 if name == log else len(meta)
+            require(meta[:count] == previous[:count], 'lock-startup-replaced')
+    return docs
+
+
+def lock_config_bytes(root, before, after, relative='home/.grok/config.toml'):
+    from grok_acp_bootstrap import PINNED, PREFIX
+    docs = {PREFIX+name:pin for name,pin in PINNED.items() if name.startswith('docs/user-guide/')}
+    require(relative == 'home/.grok/config.toml' or relative in docs, 'lock-read-path')
+    limit = 16384 if relative == 'home/.grok/config.toml' else docs[relative][0]
+    parts = relative.split('/')
     descriptors, parents = [], []
     try:
         parent = os.open(root, os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC)
         descriptors.append(parent)
         require(tuple(directory_id(os.fstat(parent)).values()) == tuple(before['.']), 'lock-original-root')
         prefix = ''
-        for name in ('home','.grok'):
+        for name in parts[:-1]:
             prefix = name if not prefix else prefix+'/'+name
             child = os.open(name, os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC, dir_fd=parent)
             descriptors.append(child)
-            expected = tuple(before[prefix])
+            expected = tuple(after[prefix])
             require(tuple(directory_id(os.fstat(child)).values()) == expected, 'lock-original-parent')
             parents.append((parent,name,child,expected)); parent = child
-        info = os.stat('config.toml', dir_fd=parent, follow_symlinks=False)
-        require(stable(info) == tuple(after['home/.grok/config.toml']), 'lock-config-link')
-        fd = os.open('config.toml', os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK|os.O_CLOEXEC, dir_fd=parent)
+        info = os.stat(parts[-1], dir_fd=parent, follow_symlinks=False)
+        require(stable(info) == tuple(after[relative]) and stat.S_ISREG(info.st_mode)
+                and info.st_nlink == 1 and info.st_dev == before['.'][0]
+                and (info.st_uid,info.st_gid) == tuple(before['.'][3:]), 'lock-config-link')
+        fd = os.open(parts[-1], os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK|os.O_CLOEXEC, dir_fd=parent)
         descriptors.append(fd)
-        require(stable(os.fstat(fd)) == stable(info) and 0 <= info.st_size <= 16384, 'lock-config-open')
-        body = os.read(fd, 16385)
+        require(stable(os.fstat(fd)) == stable(info) and 0 <= info.st_size <= limit, 'lock-config-open')
+        body = os.read(fd, limit+1)
         require(len(body) == info.st_size and stable(os.fstat(fd)) == stable(info)
-                == stable(os.stat('config.toml', dir_fd=parent, follow_symlinks=False)), 'lock-config-read')
+                == stable(os.stat(parts[-1], dir_fd=parent, follow_symlinks=False)), 'lock-config-read')
         for p,name,child,expected in parents:
             require(tuple(directory_id(os.fstat(child)).values()) == expected
                     == tuple(directory_id(os.stat(name,dir_fd=p,follow_symlinks=False)).values()), 'lock-parent-replaced')
@@ -824,13 +857,15 @@ def lock_config_bytes(root, before, after):
         for fd in reversed(descriptors): os.close(fd)
 
 
-def lock_ledger(root, before, phase, authored, budget):
+def lock_ledger(root, before, phase, authored, budget, *, created=None):
     import tomllib
     from devin_structured_inventory_admission import metadata_inventory
     after = metadata_inventory(root,budget)
     ledger = dict(before=before,after=after,accepted=False,config_observed=False,phase=phase)
     try:
-        require(set(after) == set(before), 'lock-unknown-membership')
+        require(set(before) <= set(after) and phase in LOCK_PHASES, 'lock-original-missing')
+        require(phase == LOCK_PHASES[0] or created is not None, 'lock-startup-proof')
+        docs = lock_bootstrap_metadata(before,after,created)
         for name, original in before.items():
             current = after[name]
             if name == 'request.json':
@@ -841,6 +876,11 @@ def lock_ledger(root, before, phase, authored, budget):
             else:
                 require(current == original, 'lock-original-changed')
         require(not (root/'unexpected-witness').exists(), 'lock-witness-started')
+        hashes = {}
+        for name,pin in docs.items():
+            budget.check()
+            hashes[name] = digest(lock_config_bytes(root,before,after,name))
+            require(hashes[name] == pin[1], 'lock-startup-content')
         body = lock_config_bytes(root,before,after)
         expected = json.loads(json.dumps(authored))
         if phase == LOCK_PHASES[1]:
@@ -849,7 +889,9 @@ def lock_ledger(root, before, phase, authored, budget):
         value = tomllib.loads(body.decode('utf-8'))
         require(json.dumps(value,sort_keys=True,allow_nan=False) == json.dumps(expected,sort_keys=True,allow_nan=False),
                 'lock-unexpected-native-effect')
-        ledger.update(accepted=True,config_observed=True,config_bytes=len(body),config_sha256=digest(body))
+        require(metadata_inventory(root,budget) == after, 'lock-final-metadata')
+        ledger.update(accepted=True,config_observed=True,config_bytes=len(body),config_sha256=digest(body),
+                      bootstrap_digests=hashes)
     except (ValueError,OSError,KeyError,TypeError):
         pass  # Closed negative metadata survives; baseline is never changed.
     return ledger
@@ -908,10 +950,13 @@ def lock_readout(members, packet, deadline):
             require(type(ledger) is dict and type(ledger.get('accepted')) is bool
                     and type(ledger.get('config_observed')) is bool and ledger['accepted'] == ledger['config_observed']
                     and ledger.get('phase') == phase
-                    and set(ledger) == fields | ({'config_bytes','config_sha256'} if ledger['accepted'] else set()), 'lock-ledger')
+                    and set(ledger) == fields | ({'config_bytes','config_sha256','bootstrap_digests'} if ledger['accepted'] else set()), 'lock-ledger')
             if ledger['accepted']:
                 require(type(ledger['config_bytes']) is int and 0 < ledger['config_bytes'] <= 16384
                         and type(ledger['config_sha256']) is str and re.fullmatch('[0-9a-f]{64}',ledger['config_sha256']), 'lock-config-fact')
+                from grok_acp_bootstrap import PINNED, PREFIX
+                require(ledger['bootstrap_digests'] == {PREFIX+name:pin[1] for name,pin in PINNED.items()
+                        if name.startswith('docs/user-guide/')}, 'lock-bootstrap-facts')
             before, after = ledger['before'], ledger['after']
             require(type(before) is dict and type(after) is dict and len(before) <= 4096 and len(after) <= 4096, 'lock-ledger-bound')
             facts.append(dict(phase=phase,semantic_complete=result['semantic_complete'],lock_held=result['lock_held'],
@@ -1310,7 +1355,7 @@ def run(output, *, session_only=False, lock_qualification=False):
             profiles = {name: snapshot(path) for name, path in roots.items()}
             bootstrap = NativeBootstrap()
             bodies['acquisition.json'] = json.dumps(receipt, sort_keys=True).encode()
-            native_ids = {}
+            native_ids, lock_created = {}, None
             phases = LOCK_PHASES if lock_qualification else (('a',) if session_only else SCOPES)
             for stage in phases:
                 scope = 'a' if lock_qualification else stage
@@ -1331,7 +1376,7 @@ def run(output, *, session_only=False, lock_qualification=False):
                 receipt = helper_capture(helper, root, min(origin + 150, request['start_monotonic_ns'] / 1e9 + 35))
                 result = validate_receipt(receipt, request)
                 cleanup_proved = True
-                ledger = lock_ledger(root,baseline,stage,authored,budget) if lock_qualification else session_metadata_ledger(root, baseline, budget) if session_only else post_ledger(root, baseline, roots, profiles, budget, bootstrap)
+                ledger = lock_ledger(root,baseline,stage,authored,budget,created=lock_created) if lock_qualification else session_metadata_ledger(root, baseline, budget) if session_only else post_ledger(root, baseline, roots, profiles, budget, bootstrap)
                 if session_only:
                     ledger['selected_config_capture'] = capture_session_config(root, ledger, profiles['user_profile']['config.toml'], nonce, budget, receipt)
                 bodies[prefix + '.ledger.json'] = json.dumps(ledger, sort_keys=True).encode()
@@ -1348,6 +1393,8 @@ def run(output, *, session_only=False, lock_qualification=False):
                 if lock_qualification:
                     result.pop('rpc')
                     require(ledger['accepted'] and result['semantic_complete'], 'lock-observation-refused')
+                    if stage == LOCK_PHASES[0]:
+                        lock_created = {name:value for name,value in ledger['after'].items() if name not in baseline}
                     continue
                 if session_only:
                     summary['measurement_complete'] = True

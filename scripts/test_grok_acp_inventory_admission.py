@@ -1217,6 +1217,43 @@ class LockQualificationContracts(unittest.TestCase):
                      merged_bytes=len(body),merged_sha256=case.digest(body))
                 for label,body in zip(case.LOCK_LABELS,values)]
 
+    @contextmanager
+    def bootstrap(self, root):
+        # Inert content pins preserve the real 27-name admission set. No vendor
+        # executable is substituted or run by this metadata/body guard test.
+        pins = {}
+        for name in ('docs', 'docs/user-guide', 'logs'):
+            path = root/'home/.grok'/name; path.mkdir(); path.chmod(0o755)
+        for name in bootstrap_case.PINNED:
+            if not name.startswith('docs/user-guide/'):
+                continue
+            body = ('inert pinned ' + name).encode()
+            path = root/'home/.grok'/name; path.write_bytes(body); path.chmod(0o644)
+            pins[name] = (len(body), case.digest(body), 0o644)
+        path = root/'home/.grok/logs/unified.jsonl'; path.write_bytes(b'inert\n'); path.chmod(0o644)
+        with mock.patch.dict(bootstrap_case.PINNED, pins):
+            yield
+
+    def test_measured_startup_is_task_born_bounded_and_frozen_across_phases(self):
+        import devin_structured_inventory_admission as metadata
+        budget=type('Budget',(),{'check':lambda self:None})()
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);authored=self.fixture(root)
+            before=metadata.metadata_inventory(root,budget);saved=copy.deepcopy(before)
+            with self.bootstrap(root):
+                locked=case.lock_ledger(root,before,case.LOCK_PHASES[0],authored,budget)
+                self.assertTrue(locked['accepted'])
+                self.assertEqual(len(locked['after'].keys()-before.keys()),31)
+                created={name:value for name,value in locked['after'].items() if name not in before}
+                config=root/'home/.grok/config.toml'
+                config.write_text(config.read_text().replace('disabled_mcp_servers = []',
+                    'disabled_mcp_servers = ["'+case.LOCK_NAME+'"]').replace('enabled = true','enabled = false'))
+                with (root/'home/.grok/logs/unified.jsonl').open('ab') as stream:stream.write(b'inert second\n')
+                released=case.lock_ledger(root,before,case.LOCK_PHASES[1],authored,budget,created=created)
+                self.assertTrue(released['accepted'])
+                self.assertEqual(released['bootstrap_digests'],locked['bootstrap_digests'])
+                self.assertEqual(before,saved)
+
     def test_actual_flock_proves_supervisor_state_without_releasing_its_lock(self):
         import fcntl
         with tempfile.TemporaryDirectory() as temporary:
@@ -1280,17 +1317,76 @@ class LockQualificationContracts(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary);authored=self.fixture(root)
             before=metadata.metadata_inventory(root,budget);saved=copy.deepcopy(before)
-            self.assertTrue(case.lock_ledger(root,before,case.LOCK_PHASES[0],authored,budget)['accepted'])
-            path=root/'home/.grok/config.toml';original=path.read_text()
-            path.write_text(original.replace('disabled_mcp_servers = []','disabled_mcp_servers = ["'+case.LOCK_NAME+'"]'))
-            self.assertFalse(case.lock_ledger(root,before,case.LOCK_PHASES[1],authored,budget)['accepted'])
-            path.write_text(path.read_text().replace('enabled = true','enabled = false'))
-            self.assertTrue(case.lock_ledger(root,before,case.LOCK_PHASES[1],authored,budget)['accepted'])
-            self.assertEqual(before,saved)
-            (root/'b/foreign').write_text('PRIVATE')
-            with mock.patch.object(case,'lock_config_bytes',side_effect=AssertionError('foreign bytes read')) as read:
-                self.assertFalse(case.lock_ledger(root,before,case.LOCK_PHASES[1],authored,budget)['accepted'])
-            read.assert_not_called()
+            with self.bootstrap(root):
+                first=case.lock_ledger(root,before,case.LOCK_PHASES[0],authored,budget)
+                self.assertTrue(first['accepted'])
+                created={name:value for name,value in first['after'].items() if name not in before}
+                path=root/'home/.grok/config.toml';original=path.read_text()
+                path.write_text(original.replace('disabled_mcp_servers = []','disabled_mcp_servers = ["'+case.LOCK_NAME+'"]'))
+                self.assertFalse(case.lock_ledger(root,before,case.LOCK_PHASES[1],authored,budget,created=created)['accepted'])
+                path.write_text(path.read_text().replace('enabled = true','enabled = false'))
+                self.assertTrue(case.lock_ledger(root,before,case.LOCK_PHASES[1],authored,budget,created=created)['accepted'])
+                self.assertEqual(before,saved)
+                (root/'b/foreign').write_text('PRIVATE')
+                with mock.patch.object(case,'lock_config_bytes',side_effect=AssertionError('foreign bytes read')) as read:
+                    self.assertFalse(case.lock_ledger(root,before,case.LOCK_PHASES[1],authored,budget,created=created)['accepted'])
+                read.assert_not_called()
+
+    def test_startup_membership_authority_and_existing_member_refuse_before_bytes(self):
+        import devin_structured_inventory_admission as metadata
+        budget=type('Budget',(),{'check':lambda self:None})()
+        for fault in ('unknown','missing','mode','hardlink','symlink','oversize-log','existing-log'):
+            with self.subTest(fault=fault),tempfile.TemporaryDirectory() as temporary:
+                root=Path(temporary);authored=self.fixture(root)
+                before=metadata.metadata_inventory(root,budget)
+                with self.bootstrap(root):
+                    doc=root/'home/.grok/docs/user-guide/01-getting-started.md'
+                    if fault=='unknown':(root/'home/.grok/private').touch()
+                    elif fault=='missing':doc.unlink()
+                    elif fault=='mode':doc.chmod(0o600)
+                    elif fault=='hardlink':os.link(doc,root.parent/(root.name+'-alias'))
+                    elif fault=='symlink':doc.unlink();doc.symlink_to(root/'witness.py')
+                    elif fault=='oversize-log':(root/'home/.grok/logs/unified.jsonl').write_bytes(b'x'*((128<<10)+1))
+                    else:before['home/.grok/logs/unified.jsonl']=metadata.metadata_inventory(root,budget)['home/.grok/logs/unified.jsonl']
+                    try:
+                        with mock.patch.object(case,'lock_config_bytes',side_effect=AssertionError('unadmitted bytes read')) as read:
+                            if fault in ('hardlink','symlink'):
+                                with self.assertRaises(ValueError):
+                                    case.lock_ledger(root,before,case.LOCK_PHASES[0],authored,budget)
+                            else:
+                                self.assertFalse(case.lock_ledger(root,before,case.LOCK_PHASES[0],authored,budget)['accepted'])
+                        read.assert_not_called()
+                    finally:
+                        if fault=='hardlink':(root.parent/(root.name+'-alias')).unlink()
+
+    def test_pinned_doc_content_and_second_phase_creation_identity_are_not_renewed(self):
+        import devin_structured_inventory_admission as metadata
+        budget=type('Budget',(),{'check':lambda self:None})()
+        for fault in ('wrong-body','later-doc','rotated-log','owner','directory'):
+            with self.subTest(fault=fault),tempfile.TemporaryDirectory() as temporary:
+                root=Path(temporary);authored=self.fixture(root)
+                before=metadata.metadata_inventory(root,budget)
+                with self.bootstrap(root):
+                    first=case.lock_ledger(root,before,case.LOCK_PHASES[0],authored,budget)
+                    self.assertTrue(first['accepted'])
+                    created={name:value for name,value in first['after'].items() if name not in before}
+                    saved=copy.deepcopy(created)
+                    if fault in ('owner','directory'):
+                        after=copy.deepcopy(first['after']);name='home/.grok/docs' if fault=='directory' else 'home/.grok/docs/user-guide/01-getting-started.md'
+                        meta=list(after[name]);meta[1 if fault=='directory' else 4]+=1;after[name]=meta
+                        with self.assertRaises(ValueError):case.lock_bootstrap_metadata(before,after,created)
+                        continue
+                    path=root/('home/.grok/logs/unified.jsonl' if fault=='rotated-log' else 'home/.grok/docs/user-guide/01-getting-started.md')
+                    if fault=='wrong-body':path.write_bytes(b'X'*path.stat().st_size)
+                    else:
+                        replacement=path.with_suffix('.replacement');replacement.write_bytes(path.read_bytes());replacement.chmod(0o644);replacement.replace(path)
+                    if fault=='wrong-body':
+                        self.assertFalse(case.lock_ledger(root,before,case.LOCK_PHASES[0],authored,budget)['accepted'])
+                    else:
+                        with mock.patch.object(case,'lock_config_bytes',side_effect=AssertionError('replacement bytes read')) as read:
+                            self.assertFalse(case.lock_ledger(root,before,case.LOCK_PHASES[1],authored,budget,created=created)['accepted'])
+                        read.assert_not_called()
+                    self.assertEqual(created,saved)
 
     def test_replaced_original_root_refuses_before_content_read(self):
         import devin_structured_inventory_admission as metadata
@@ -1328,7 +1424,9 @@ class LockReadoutContracts(unittest.TestCase):
                                  system_executables=systems,result=result))
             members[phase+'.rpc.json']=json.dumps(case.rpc_state()).encode()
             members[phase+'.ledger.json']=json.dumps(dict(phase=phase,accepted=True,config_observed=True,
-                config_bytes=12,config_sha256='e'*64,before={'PRIVATE/PATH':[1]},after={'PRIVATE/PATH':[2]})).encode()
+                config_bytes=12,config_sha256='e'*64,before={'PRIVATE/PATH':[1]},after={'PRIVATE/PATH':[2]},
+                bootstrap_digests={bootstrap_case.PREFIX+name:pin[1] for name,pin in bootstrap_case.PINNED.items()
+                                   if name.startswith('docs/user-guide/')})).encode()
         summary=dict(packet,schema_version=1,mode=case.LOCK_MODE,collection_complete=False,cleanup_complete=True,
                      qualification=dict(case.FALSE),scopes=receipts,measurement_complete=len(phases)==2)
         members['admission.json']=json.dumps(summary).encode()
@@ -1346,7 +1444,7 @@ class LockReadoutContracts(unittest.TestCase):
                 self.assertNotIn(private,json.dumps(facts))
 
     def test_source_cleanup_bool_missing_stream_rpc_and_unjoined_members_refuse(self):
-        for fault in ('source','cleanup','bool','stream','rpc','extra','no-phase','phase','writer'):
+        for fault in ('source','cleanup','bool','stream','rpc','extra','no-phase','phase','writer','bootstrap'):
             packet,members=self.fixture();summary=json.loads(members['admission.json'])
             if fault=='source':summary['source_tree']='f'*40
             elif fault=='cleanup':summary['scopes'][0]['cleanup_complete']=False
@@ -1356,7 +1454,10 @@ class LockReadoutContracts(unittest.TestCase):
             elif fault=='extra':members['a-version.merged.log']=b'PRIVATE'
             elif fault=='no-phase':summary['scopes']=[]
             elif fault=='phase':summary['scopes'][0]['result']['phase']='PRIVATE'
-            else:summary['scopes'][0]['result']['commands'][-1]['exit']=0
+            elif fault=='writer':summary['scopes'][0]['result']['commands'][-1]['exit']=0
+            else:
+                ledger=json.loads(members['locked-writer.ledger.json']);ledger['bootstrap_digests']={}
+                members['locked-writer.ledger.json']=json.dumps(ledger).encode()
             members['admission.json']=json.dumps(summary).encode()
             with self.subTest(fault=fault):
                 self.assertEqual(self.read(packet,members),dict(schema_version=1,mode=case.LOCK_MODE,reason='readout-refused'))

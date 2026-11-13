@@ -138,7 +138,9 @@ unlock it. Other errors or the wrong state refuse. Collector FD teardown cannot
 release the supervisor lock. Failed family cleanup grants no lifetime or raw
 capture proof. Only after proved cleanup may the parent take the authoritative
 original-baseline metadata ledger.
-Locked phase permits no effect. Released phase invokes exactly the same writer
+Locked phase permits no change to original members except the existing bounded
+request control. The separately measured task-born startup envelope below is the
+only new membership admitted. Released phase invokes exactly the same writer
 without acquiring flock. Only two known semantic witness changes are permitted:
 disabled_mcp_servers becomes [uap-lock-witness], and its server.enabled becomes
 literal false. Config owner/device/mode/singlelink and bounded held reads remain
@@ -197,3 +199,96 @@ all qualification flags and the final workflow fence remain unchanged.
 Inert contracts cover phase/order/bounds, real pre-read hooks, atomic postimages,
 midstream/whole-metadata changes and malformed optional records. Native validation
 remains pending; no enablement, recovery or Project activation is claimed.
+
+
+## Actual da680106 lock capture and task-born startup envelope
+
+The original run43468549490/job132057540236 failed the final measurement gate.
+Artifact14064428474 is the5350-byte outer archive with SHA-256
+ca5ca085d7017d7d41986197ef855c7d156f2c07dcd4ec546863da6660d945cc;
+its sole research.zip is36817 bytes, SHA-256
+8bd7506918cfddcd427d4f3e075f5daa96b68071e0cd0ec380108c1613a5cd9d.
+Both CRCs, exact eight inner members, source/nonce joins and all four native
+stream byte counts/hashes were independently checked. The source is da680106,
+not the later8d008cdb supervisor-held lock implementation. This original cannot
+qualify the corrected lock lifetime through strict family cleanup.
+
+Version and both help probes exited0. The actual locked native writer exited1
+with the bounded timeout waiting for its config-init lock. Receipt semantic
+completion, observed lock ownership and both cleanup facts were true. The
+original authored302-byte0600 config and every other original member remained
+unchanged. Exactly31 new members appeared: docs, docs/user-guide and logs
+subdirectories; the27 already pinned public user-guide documents; and one
+693-byte0644 logs/unified.jsonl. The old exact-membership guard correctly refused
+before reading config, so no released-writer phase ran. All product qualification
+flags remained false. No output from the unknown log was used as authority.
+
+This follow-up permits only that exact task-born31-member envelope. It reuses
+the existing27 literal document length/SHA-256 pins, requires original root
+owner/group/device, directory0755, regular single-link file0644, exact document
+sizes and a128-KiB bound for the sole log. It admits all metadata and preserves
+all original entries before any new body read. Descriptor-held nofollow reads
+then check only those27 public documents against their literal hashes and the
+existing bounded config semantics. No log body is read. Parent, leaf and root
+identities are rejoined and the complete metadata inventory must remain stable.
+
+The first fully accepted capture freezes the exact created identities separately
+from Baseline0. The released phase requires that same closed membership, exact
+document/directory metadata and unchanged log inode/mode/owner/device; only the
+new task-owned log may change its bounded contents. No original member or prior
+log is adopted, no source baseline is renewed, and any extra name, alias, owner
+change, rotation, replaced parent or document mutation refuses. The config still
+must show precisely both witness-disable semantic changes after lock release.
+This fixture exception grants no recovery or write authority over a real User
+profile and does not consume the held prospective plugin preparer.
+
+Local verification on the reconciled follow-up: all71 Grok ACP Python contracts
+pass, including actual new-file creation, both phases, unchanged Baseline0,
+wrong pinned content, unknown membership, original-log refusal, aliases, file
+bounds, ownership and post-creation replacement before body reads. The previously
+published original remains a valid closed negative readout. Native qualification
+of this follow-up and released-writer behavior still require new hosted evidence;
+no native or product PASS is claimed here.
+
+
+## Actual session parser cutpoint: measured agent_build phase
+
+Original run43468549490/job132057540198 also reached its measurement assertion
+without qualification. Artifact14066155399 is10494 bytes, SHA-256
+1a9aa7a036363775826e7cb6b8126234dd3832cfa5636a16d1567250532696d4;
+the closed nine-member research.zip is52283 bytes, SHA-256
+5d2fb30e399276928e1464c0d05c75b0c4f5902190f3deb48e3949ed556fe6a3.
+Both CRCs, exact da680106/treeeba42 source and all five stream hashes/lengths
+were independently checked. Native1.0.70 initializes and sends nine setup/MCP
+notifications. The final actual frame is `_x.ai/session/setup` with the literal
+phase `agent_build` and the same nonnull session ID as persistence_init and
+spawn_session_actor. The older supplementary2bdd source has15 enum phases and
+does not contain this phase; the measured pinned binary is the authority here.
+
+The old finite parser rejected that exact ninth frame and stopped ACP with
+protocol-refused. Its provider had only one models GET and one root GET, zero
+forbidden requests, and completed settlement; both strict cleanup facts were
+true. No session/new or plugin-inventory reply was received. Metadata-only
+measurement found48 additions, zero removals and one original config change;
+session SQLite/WAL/SHM and temporary files remain unadmitted. No newly created
+private body was read. All existing qualification flags remain false.
+
+The follow-up adds only the literal measured agent_build phase to the closed
+enum. It retains notification counts, exact wire keys, bounded IDs, chronological
+replay and final returned-session identity joins. A new inert regression fails
+on the old parser and passes after the one-value change. Root also replayed the
+actual captured prefix: nine notifications are accepted, while session and
+inventory responses remain absent and only the planned session/new request is
+sent. The old detached RPC recorded only eight accepted notifications, so its
+original negative diagnostic is not rewritten or promoted by this parser fix.
+The next genuine run must establish whether session setup proceeds further;
+this change admits no session effects, prompt, trust, enable or tool action.
+
+
+Reconciliation note: external2c19d826 already supplied the measured agent_build
+phase plus its bounded selected-original-config diagnostic and stronger phase
+regressions. Those exact changes are preserved; the duplicate local phase test
+was not replayed. The reconciled runtime delta adds only the separately reviewed
+lock-startup envelope, and preserves both the selected-config capture call and
+the lock-created identity argument in their respective modes. Both independent
+original da captures above remain attributed to their actual historical source.
