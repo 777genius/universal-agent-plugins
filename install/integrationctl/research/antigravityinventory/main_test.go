@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -51,6 +52,7 @@ func TestCommandOnlyAdmitsSettledBoundedPinnedResult(t *testing.T) {
 			req := fixture(t)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
+			rootRenameDenied := false
 			result, err := execute(ctx, req, func(_ context.Context, cmd ports.Command, grace time.Duration) (ports.CommandResult, error) {
 				if grace != 5*time.Second || cmd.StdoutLimitBytes != 1<<20 || strings.Join(cmd.Argv[1:], " ") != "plugin list --json" || cmd.Dir != filepath.Join(req.Root, "project") {
 					t.Fatal("fixed command differs", cmd)
@@ -80,7 +82,14 @@ func TestCommandOnlyAdmitsSettledBoundedPinnedResult(t *testing.T) {
 					}
 				case "root":
 					if e := os.Rename(req.Root, req.Root+"-old"); e != nil {
-						t.Fatal(e)
+						// Windows keeps the directory handle opened by execute locked.
+						// A denied rename means the original root is still held; do
+						// not mistake this platform protection for an E2E failure.
+						if runtime.GOOS != "windows" {
+							t.Fatal(e)
+						}
+						rootRenameDenied = true
+						break
 					}
 					if e := os.Mkdir(req.Root, 0700); e != nil {
 						t.Fatal(e)
@@ -88,7 +97,7 @@ func TestCommandOnlyAdmitsSettledBoundedPinnedResult(t *testing.T) {
 				}
 				return value, nil
 			})
-			if kind == "pass" {
+			if kind == "pass" || (kind == "root" && rootRenameDenied) {
 				if err != nil || len(result) == 0 {
 					t.Fatal(err)
 				}
@@ -98,6 +107,14 @@ func TestCommandOnlyAdmitsSettledBoundedPinnedResult(t *testing.T) {
 				}
 			} else if err == nil || result != nil {
 				t.Fatal("unproved result admitted", kind)
+			}
+			if rootRenameDenied {
+				if _, e := os.Stat(req.Root); e != nil {
+					t.Fatal("locked root disappeared", e)
+				}
+				if _, e := os.Stat(req.Root + "-old"); !errors.Is(e, os.ErrNotExist) {
+					t.Fatal("root moved despite rejected rename", e)
+				}
 			}
 		})
 	}
