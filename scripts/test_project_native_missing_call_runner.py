@@ -37,6 +37,8 @@ class RealClientRunnerContractTest(unittest.TestCase):
         qoder = agent_command("qoder", binary, "read-only")
         self.assertEqual(cursor[:2], [binary, "-p"])
         self.assertEqual(qoder[:2], [binary, "-p"])
+        self.assertIn("--allowed-mcp-server-names", qoder)
+        self.assertIn("uap_qoder_call", qoder)
         for argv in (cursor, qoder):
             self.assertNotIn("--force", argv)
             self.assertNotIn("--yolo", argv)
