@@ -228,9 +228,13 @@ test('prepare and live bind selected modules, built HTML, provenance and environ
     process.env.GITHUB_RUN_ATTEMPT = '3';
     await assert.rejects(live(root, contractPath, fetcher, noDelay), /contract run_attempt/);
     process.env.GITHUB_RUN_ATTEMPT = identity.run_attempt;
-    published.set('/download/', published.get('/download/')!.replace('<body>', '<BODY>'));
-    await assert.rejects(live(root, contractPath, fetcher, noDelay), /SHA256|byte length/);
-    published.set('/download/', html('/download/').toString());
+    const originalDownload = published.get('/download/')!;
+    const staleDownload = originalDownload.replace('<body>', '<BODY>');
+    assert.notEqual(staleDownload, originalDownload);
+    assert.equal(Buffer.byteLength(staleDownload), Buffer.byteLength(originalDownload));
+    published.set('/download/', staleDownload);
+    await assert.rejects(live(root, contractPath, fetcher, noDelay), /SHA256/);
+    published.set('/download/', originalDownload);
     published.set('/agents/hermes/', published.get('/agents/hermes/')!.replace('Project installation', 'Project INSTALLATION'));
     await assert.rejects(live(root, contractPath, fetcher, noDelay), /SHA256|byte length/);
     published.set('/BUILD_PROVENANCE.json', JSON.stringify({ ...provenance, source_tree: 'd'.repeat(40) }));
