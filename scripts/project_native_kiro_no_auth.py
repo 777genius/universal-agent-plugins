@@ -8,12 +8,14 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import stat
 
 import project_native_research as research
 from project_native_collectors import kiro
 
 HELP = ("agent", "validate", "--help")
+STATUS_HELP = ("mcp", "status", "--help")
 VALIDATE_HELP = (b"Validate a config with the given path\n\n"
                  b"Usage: kiro-cli agent validate [OPTIONS] --path <PATH>\n\nOptions:\n"
                  b"  -p, --path <PATH>  \n  -v, --verbose...   Increase logging verbosity\n"
@@ -91,7 +93,7 @@ def prepare(ctx):
     return owned, fixtures
 
 
-def routes(fixtures):
+def routes(fixtures, ctx):
     table = {"version": ("a", ("--version",)),
              "validate-help": ("a", HELP)}
     for name in ("valid", "invalid", "missing"):
@@ -100,6 +102,10 @@ def routes(fixtures):
         table[project + "-agent-list"] = (project, ("agent", "list"))
         for scope in ("workspace", "global"):
             table[project + "-mcp-" + scope] = (project, ("mcp", "list", scope))
+    table["mcp-status-help"] = ("a", STATUS_HELP)
+    for project in ("a", "b", "user"):
+        selected = ctx.home if project == "user" else ctx.projects[project]
+        table[project + "-mcp-status"] = (project, ("mcp", "status", "--name", "uap-noauth-" + selected.name))
     return table
 
 
@@ -167,6 +173,19 @@ def exact_success(record, stdout, stderr, expected):
             and stdout == expected and stderr == b"")
 
 
+def status_help_supported(record, stdout, stderr):
+    """Syntax gate only; the first original help still needs independent review."""
+    if (not exact_success(record, stdout, stderr, stdout) or not isinstance(stdout, bytes)
+            or not 0 < len(stdout) <= 4096):
+        return False
+    try:
+        text = kiro._text(stdout)
+    except (ValueError, UnicodeError):
+        return False
+    return (len(re.findall(r"(?m)^Usage: kiro-cli mcp status(?:[ \t][^\n]*)?$", text)) == 1
+            and re.search(r"(?m)^[ \t]+(?:-[A-Za-z],[ \t]+)?--name[ =]<[A-Z_]+>(?:[ \t]|$)", text) is not None)
+
+
 def collect(ctx):
     owned, fixtures = prepare(ctx)
     roots = [Path(ctx.root), ctx.home, ctx.private, *(ctx.projects[key] for key in ("a", "b", "user"))]
@@ -174,7 +193,7 @@ def collect(ctx):
     if ctx.env.get("PATH") != "/usr/bin:/bin":
         raise ValueError("original closed PATH required")
     ctx.env["PATH"] = str(kiro._runtime_bin(ctx)) + ":/usr/bin:/bin"
-    table = routes(fixtures)
+    table = routes(fixtures, ctx)
     record, stdout, stderr = probe(ctx, table, owned, root_ids, "version", ("--version",), "a")
     if not exact_success(record, stdout, stderr, b"kiro-cli 2.34.0\n"):
         raise ValueError("exact pinned Kiro version required")
@@ -195,7 +214,7 @@ def collect(ctx):
                             "status": "expected-auth-refusal"})
     refusals = []
     for label, (project, arguments) in table.items():
-        if label.startswith("validate") or label == "version":
+        if label.startswith("validate") or label in ("version", "mcp-status-help") or label.endswith("-mcp-status"):
             continue
         record, stdout, stderr = probe(ctx, table, owned, root_ids, label, arguments, project)
         if not exact_refusal(record, stdout, stderr):
@@ -203,12 +222,26 @@ def collect(ctx):
         refusals.append({"probe": label, "status": "expected-auth-refusal",
                          "native_discovery_qualified": False})
     ctx.summary["expected_auth_refusals"] = refusals
+    status = []
+    ctx.summary["status_observations"] = status
+    ctx.summary["status_observation_qualified"] = False
+    record, stdout, stderr = probe(ctx, table, owned, root_ids, "mcp-status-help", STATUS_HELP, "a")
+    if not status_help_supported(record, stdout, stderr):
+        raise ValueError("unreviewed pinned MCP status grammar")
+    ctx.summary["status_help_syntax_observed"] = True
+    for project in ("a", "b", "user"):
+        label = project + "-mcp-status"
+        selected_project, arguments = table[label]
+        record, stdout, stderr = probe(ctx, table, owned, root_ids, label, arguments, selected_project)
+        if not exact_refusal(record, stdout, stderr):
+            raise ValueError("unreviewed no-auth status result: " + label)
+        status.append({"probe": label, "status": "expected-auth-refusal", "native_status_qualified": False})
     ctx.summary["fixture_preservation_verified"] = True
     ctx.summary["finite_capture_complete"] = True
-    ctx.summary["expected_auth_refusal_count"] = len(validations) + len(refusals)
+    ctx.summary["expected_auth_refusal_count"] = len(validations) + len(refusals) + len(status)
     ctx.summary["validation_schema_observed"] = False
     ctx.summary["native_discovery_observed"] = False
-    ctx.summary["boundary"] = "exact pinned help and 12 authentication refusals only; no schema validation or native loading observed"
+    ctx.summary["boundary"] = "exact original help/12 denials plus status syntax gate/3 status denials; no native status, schema validation or loading qualified"
 
 
 def run(output):

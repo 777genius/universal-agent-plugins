@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -85,7 +86,7 @@ func TestCommandOnlyAdmitsSettledBoundedPinnedResult(t *testing.T) {
 						// Windows keeps the directory handle opened by execute locked.
 						// A denied rename means the original root is still held; do
 						// not mistake this platform protection for an E2E failure.
-						if runtime.GOOS != "windows" {
+						if runtime.GOOS != "windows" || !errors.Is(e, syscall.Errno(32)) {
 							t.Fatal(e)
 						}
 						rootRenameDenied = true

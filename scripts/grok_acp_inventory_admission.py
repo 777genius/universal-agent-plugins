@@ -120,8 +120,9 @@ def rpc_frame(value, state, req, send):
               'params': {'sessionId': 'uap-admission-' + req['nonce'] + '-' + req['scope']}})
         return False
     require(value['id'] == 2 and state['plugins'] is None, 'listing-id')
-    closed(value['result'], 'plugins')
-    require(type(value['result']['plugins']) is list and len(value['result']['plugins']) <= 128, 'plugins-bound')
+    closed(value['result'], 'result')
+    listing = closed(value['result']['result'], 'plugins')
+    require(type(listing['plugins']) is list and len(listing['plugins']) <= 128, 'plugins-bound')
     state['plugins'] = value
     return True
 
@@ -356,7 +357,7 @@ def post_ledger(root, before, roots, profiles, budget):
 
 
 def inventory_rows(result, root, scope):
-    rows = result['rpc']['plugins']['result']['plugins']
+    rows = result['rpc']['plugins']['result']['result']['plugins']
     wanted = {str(root / 'home/.grok/plugins' / name): ('user', name) for name in ('uap-acp-collision', 'uap-acp-foreign-user')}
     if scope != 'user':
         wanted.update({str(root / scope / '.grok/plugins' / name): ('project', name) for name in ('uap-acp-collision', 'uap-acp-foreign-' + scope)})
@@ -447,8 +448,96 @@ def publish(output, bodies, held=None, expected=None):
         if owned: os.close(descriptor)
 
 
-def admit_publication(output, packet, expected_commit, expected_tree, destination):
+def publication_readout(raw, packet, deadline):
+    """Diagnostic only: never withhold an already admitted original ZIP."""
+    import io
+    import struct
+    import zipfile
+    refused = dict(schema_version=1, reason='readout-refused', scopes=[])
+    try:
+        def budget():
+            require(type(deadline) is float and time.monotonic() < deadline, 'readout-deadline')
+        budget()
+        require(type(raw) is bytes and 0 < len(raw) <= 17 << 20, 'readout-archive-bound')
+        allowed = {'admission.json', 'acquisition.json'} | {s + suffix for s in SCOPES for suffix in ('.rpc.json', '.ledger.json')} | {s + '-' + label + '.merged.log' for s in SCOPES for label in LABELS}
+        require(len(raw) >= 22, 'readout-eocd')
+        end = struct.unpack('<4s4H2LH', raw[-22:])
+        require(end[0] == b'PK\x05\x06' and end[1] == end[2] == 0
+                and end[3] == end[4] and 0 < end[4] <= 23 and end[5] <= 16 << 10
+                and end[6] + end[5] == len(raw) - 22 and end[7] == 0, 'readout-central-bound')
+        with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+            infos = archive.infolist()
+            require(len(infos) == end[4], 'readout-central-count')
+            require(0 < len(infos) <= 23 and len({i.filename for i in infos}) == len(infos)
+                    and all(i.filename in allowed and not i.is_dir() and not i.flag_bits & 1
+                            and i.compress_type in (zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED)
+                            and 0 <= i.file_size <= LIMIT for i in infos)
+                    and sum(i.file_size for i in infos) <= 16 << 20, 'readout-members')
+            members = {}
+            for info in infos:
+                budget()
+                body = archive.read(info)
+                require(len(body) == info.file_size, 'readout-member-size')
+                members[info.filename] = body
+        budget()
+        summary = document(members['admission.json'])
+        require(type(summary) is dict and set(summary) <= set('schema_version collection_complete cleanup_complete qualification scopes source_commit source_tree nonce run attempt error'.split())
+                and type(summary.get('schema_version')) is int and summary['schema_version'] == 1
+                and type(summary.get('collection_complete')) is bool and summary.get('cleanup_complete') is True
+                and summary.get('error') in (None, 'admission-refused'), 'readout-summary')
+        require(closed(summary['qualification'], ' '.join(FALSE)) == FALSE
+                and all(v is False for v in summary['qualification'].values()), 'readout-qualification')
+        for key in ('source_commit', 'source_tree', 'nonce'):
+            require(type(summary.get(key)) is str and summary[key] == packet[key], 'readout-source')
+        receipts = summary['scopes']
+        require(type(receipts) is list and len(receipts) <= len(SCOPES), 'readout-scopes')
+        require(not summary['collection_complete'] or len(receipts) == len(SCOPES), 'readout-incomplete')
+        facts = []
+        for index, receipt in enumerate(receipts):
+            budget()
+            scope = SCOPES[index]
+            require(type(receipt) is dict and receipt.get('scope') == scope
+                    and receipt.get('cleanup_complete') is True and receipt.get('sealed_cleanup_complete') is True, 'readout-cleanup')
+            result = receipt['result']
+            for obj in (receipt, result):
+                for key in ('source_commit', 'source_tree', 'nonce'):
+                    require(type(obj.get(key)) is str and obj[key] == packet[key], 'readout-scope-source')
+                require(type(obj.get('schema_version')) is int and obj['schema_version'] == 1 and obj.get('scope') == scope, 'readout-scope')
+            reason = result['reason']
+            require(type(reason) is str and reason in ('complete', 'protocol-refused', 'help-refused', 'isolation-refused', 'collector-refused')
+                    and type(result['semantic_complete']) is bool and result['semantic_complete'] == (reason == 'complete'), 'readout-reason')
+            commands = result['commands']
+            require(type(commands) is list and len(commands) <= 5, 'readout-commands')
+            failed = 0
+            for number, row in enumerate(commands):
+                budget()
+                require(type(row) is dict and row.get('label') == LABELS[number]
+                        and row.get('merged_file') == scope + '-' + LABELS[number] + '.merged.log'
+                        and type(row.get('merged_bytes')) is int and 0 <= row['merged_bytes'] <= LIMIT
+                        and type(row.get('merged_sha256')) is str and re.fullmatch('[0-9a-f]{64}', row['merged_sha256'])
+                        and (row.get('exit') is None or type(row['exit']) is int)
+                        and row.get('error') in (None, 'deadline', 'stream-bound', 'process-refused', 'protocol-refused'), 'readout-command')
+                body = members[row['merged_file']]
+                require(len(body) == row['merged_bytes'] and digest(body) == row['merged_sha256'], 'readout-stream')
+                failed += row.get('exit') != 0 or row.get('error') is not None
+            ledger = document(members[scope + '.ledger.json'])
+            require(type(ledger) is dict and type(ledger.get('accepted')) is bool
+                    and all(type(ledger.get(k)) is dict and len(ledger[k]) <= 4096 for k in ('before', 'after')), 'readout-ledger')
+            before, after = ledger['before'], ledger['after']
+            facts.append(dict(scope=scope, reason=reason, semantic_complete=result['semantic_complete'],
+                              ledger_accepted=ledger['accepted'], commands=len(commands), failed_commands=failed,
+                              added_entries=len(after.keys() - before.keys()), removed_entries=len(before.keys() - after.keys()),
+                              changed_entries=sum(before[k] != after[k] for k in before.keys() & after.keys())))
+        budget()
+        return dict(schema_version=1, reason='collection-complete' if summary['collection_complete'] else 'admission-refused',
+                    collection_complete=summary['collection_complete'], cleanup_complete=True, scopes=facts)
+    except Exception:
+        return refused
+
+
+def admit_publication(output, packet, expected_commit, expected_tree, destination, diagnostics=None, diagnostic_deadline=None):
     """Workflow parent validates held bytes; no scanning a stale output prefix."""
+    require(diagnostics is None or type(diagnostics) is list and not diagnostics, 'readout-output')
     closed(packet, 'schema_version source_commit source_tree nonce publication')
     require(type(packet['schema_version']) is int and packet['schema_version'] == 1
             and packet['source_commit'] == expected_commit and packet['source_tree'] == expected_tree
@@ -483,6 +572,8 @@ def admit_publication(output, packet, expected_commit, expected_tree, destinatio
                 and proof['upload'] == directory_id(os.fstat(upload_fd))
                 == directory_id(os.stat('upload', dir_fd=root_fd, follow_symlinks=False))
                 and set(os.listdir(root_fd)) == {'upload'} and set(os.listdir(upload_fd)) == {'research.zip'}, 'publication-final-authority')
+        if diagnostics is not None:
+            diagnostics.append(publication_readout(raw, packet, diagnostic_deadline))
         return destination / 'research.zip'
     finally:
         for descriptor in reversed(descriptors): os.close(descriptor)

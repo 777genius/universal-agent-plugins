@@ -301,3 +301,28 @@ success. Native-family CleanupComplete is still mandatory before every ledger
 or next mutation. Root approved820 code/contracts only for the concrete atime,
 strict boolean/number and retained-unknown-effect negative contracts. Metadata
 stability excludes atime only; config semantic equality preserves literal types.
+
+## fc8 Antigravity platform-test correction and refusal metadata
+
+Original Windows job131862540827 refused the inert root rename because the
+held directory handle denied sharing. External follow-up4994e4e preserves the
+denied-rename case and verifies the original root remains while the destination
+is absent. Keep that correction and additionally require the exact observed
+Windows sharing violation, rather than accepting an unrelated rename error.
+A successful replacement still requires refusal. This Go bridge case is not
+skipped on either platform and the runtime authority is unchanged.
+
+Original macOS job131862541242 passed the existing ordinary User inventory,
+then the new disposable fixture stopped at the combined file size/link/device
+gate. Its log does not identify the entry or establish which predicate failed.
+Add only bounded metadata at that existing refusal: <=128 UTF-8 bytes of the
+fixture-relative name, full relative-name SHA, fixed reason, mode/size/links,
+same-device boolean and saturation flag. No file is opened for this diagnostic;
+no contents, absolute path, link target or SID is recorded. Keep single-link,
+1MiB/member and16MiB aggregate bounds, original refusal and retained fixtures.
+
+Actual oversized-file/no-read/privacy and saturated-integer contracts are added.
+These focused follow-ups revise the earlier source-size estimate because of
+observed hosted failures; they add no native action or production capability.
+Post-outage source edits remain unexecuted; current-head hosted tests and native
+originals must pass before acceptance. No production enablement is added.

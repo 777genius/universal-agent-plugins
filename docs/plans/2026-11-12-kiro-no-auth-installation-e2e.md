@@ -123,3 +123,35 @@ runner lines,250 targeted-test lines and172 workflow lines; complexity remains
   it does not establish a2.34 no-auth route.
 - Original2.34 help/auth boundary: PR686 run43212876687, artifact13944208217.
 
+
+## Prospective selective status observation (2026-11-13)
+
+Root authorized this three-path collector/test/plan addition after source review.
+Keep the original fourteen probes and their twelve exact measured authentication
+refusals unchanged. Existing pinned `project_native_collectors/kiro.py` already
+registers `mcp status --help` with the `--name` token; that is the prior source
+basis for measuring this route, rather than applying newer CLI docs to 2.34.
+
+After those original observations, capture the actual pinned status help under
+its own private profile and original total budget. Require exit0, null error,
+empty stderr, <=4096 help bytes, the exact child-command Usage spelling and an
+advertised `--name <VALUE>` option before issuing any status request. This is a
+finite syntax gate, not a claim that the unreviewed full help has been admitted.
+Then request status for the independently authored disabled A, B and global User
+fixture names from their selected A/B/separate User cwd. The User request names
+HOME's original User fixture while preserving the separate cwd's foreign fixture.
+Every request retains the same closed environment, fresh private KIRO_HOME/XDG,
+immutable runtime companions, original HOME/User/B/fixture guards and 20s probe
+limit. The original360s total deadline is not extended.
+
+Only the existing exact exit1/error-null/empty-stdout/64-byte authentication
+refusal is accepted as the prospective negative observation. Unexpected success,
+changed stderr, timeout or unknown help stops further status requests and retains
+original evidence for review. All native discovery/status/MCP/model/auth and
+product qualifications remain false. Fifteen expected denials and eighteen
+finite probes describe the proposed complete negative capture, not historical
+native evidence. Genuine final-source help/status originals and independent
+source/stream/hash/preservation review are still required before acceptance.
+No native executable, authentication, ACP, model, policy, pin, workflow, production
+adapter or public capability changed. Local22 inert tests pass through both
+discovery and direct execution; none is a native observation.

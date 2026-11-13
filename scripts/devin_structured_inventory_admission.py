@@ -14,6 +14,7 @@ import secrets
 import shutil
 import stat
 import sys
+import time
 
 import project_native_research as shared
 from pi_project_components_native_e2e import PiHTTPMCPProbe
@@ -283,7 +284,10 @@ class KnownFileDiagnostics:
 
 BOOTSTRAP_DIRS = frozenset(("home/cache/devin", "home/cache/devin/cli", "home/config/devin/cli", "home/data/devin",
     "home/data/devin/cli", "home/data/devin/cli/logs", "home/data/devin/cli/plugins", "home/data/devin/mcp", "home/data/devin/mcp/oauth"))
+DEFINITIONS_CACHE = "home/cache/devin/cli/unleash_definitions.bf84fa7496e6f844.bin"
+DEFINITIONS_BYTES = 674340
 BOOTSTRAP_FIXED = {
+    DEFINITIONS_CACHE: (DEFINITIONS_BYTES, "8626d6fd4ce3381b2eb32b6c60b7ad752d88c73d8a4fb848e3576bff113393f1"),
     "home/cache/devin/telemetry_state.json": (16, "7445ff8769cba2e1b004c754a770a85293e7548228e4fa3d363263c96c9b6290"),
     "home/data/devin/cli/plugins/lock.json": (57, "cbce3a5464482eb4cfb7b152ad15183bcb5db5c5557c625ee0cec1edb582aa88"),
     "home/data/devin/cli/plugins/lock.json.lock": (0, hashlib.sha256(b"").hexdigest())}
@@ -317,9 +321,18 @@ def read_bootstrap_file(ctx, relative, expected, inventory):
         descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent)
         stack.callback(os.close, descriptor)
         before = os.fstat(descriptor)
+        maximum = DEFINITIONS_BYTES if relative == DEFINITIONS_CACHE else 16384
         require(stable(before) == tuple(expected) and stat.S_ISREG(before.st_mode) and before.st_nlink == 1
-                and before.st_size <= 16384 and (before.st_uid, before.st_gid) == ctx.original_output_identity[3:], "bootstrap opened file differs")
-        body = os.read(descriptor, 16385)
+                and before.st_size <= maximum and (before.st_uid, before.st_gid) == ctx.original_output_identity[3:]
+                and (relative != DEFINITIONS_CACHE or before.st_size == DEFINITIONS_BYTES), "bootstrap opened file differs")
+        chunks, remaining = [], maximum + 1
+        while remaining:
+            ctx.budget.check()
+            chunk = os.read(descriptor, remaining)
+            if not chunk: break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        body = b"".join(chunks)
         require(len(body) == before.st_size and stable(os.fstat(descriptor)) == stable(before)
                 and stable(os.stat(name, dir_fd=parent, follow_symlinks=False)) == stable(before), "bootstrap file changed")
         for ancestor, leaf, child, identity in chain:
@@ -332,6 +345,8 @@ def read_bootstrap_file(ctx, relative, expected, inventory):
 class BootstrapEffects:
     def __init__(self, ctx, baseline):
         self.ctx, self.baseline = ctx, baseline
+        require(DEFINITIONS_CACHE not in baseline, "definition cache preexists original baseline")
+        self.definitions_identity = None
         self.installation_sha, self.version_seen = None, False
         self.proofs = []
 
@@ -339,6 +354,9 @@ class BootstrapEffects:
         ctx, baseline = self.ctx, self.baseline
         require(root_identity(ctx.root) == ctx.original_output_identity, "bootstrap root replaced")
         require(all(key in current and (key == METADATA_CONFIG or current[key] == value) for key, value in baseline.items()), "protected original authority changed")
+        if self.definitions_identity is not None:
+            require(all(current.get(key) == value for key, value in self.definitions_identity.items()),
+                    "definition cache original identity changed")
         new = set(current) - set(baseline)
         logs = {key for key in new if BOOTSTRAP_LOG.fullmatch(key)}
         require(len(new) <= 24 and len(logs) <= 8, "bootstrap membership count")
@@ -351,13 +369,20 @@ class BootstrapEffects:
                 require(len(info) == 5 and info[2] == stat.S_IFDIR | 0o755 and tuple(info[3:]) == ctx.original_output_identity[3:], "bootstrap directory ownership/mode")
                 continue
             require(relative in BOOTSTRAP_FIXED or relative in (METADATA_CONFIG, INSTALLATION_ID, MAINTENANCE) or relative in logs, "unknown native bootstrap path")
-            mode = 0o600 if relative == METADATA_CONFIG else 0o644
+            mode = 0o600 if relative in (METADATA_CONFIG, DEFINITIONS_CACHE) else 0o644
             require(len(info) == 9 and info[2] == stat.S_IFREG | mode and info[3] == 1, "bootstrap ordinary file mode/link")
             body = read_bootstrap_file(ctx, relative, info, current)
-            total += len(body); require(total <= 256 << 10, "bootstrap byte count")
+            # One separately pinned native cache does not enlarge mutable-file allowance.
+            if relative != DEFINITIONS_CACHE:
+                total += len(body)
+                require(total <= 256 << 10, "bootstrap byte count")
             digest = hashlib.sha256(body).hexdigest()
             if relative in BOOTSTRAP_FIXED:
                 require((len(body), digest) == BOOTSTRAP_FIXED[relative], "bootstrap fixed bytes differ")
+                if relative == DEFINITIONS_CACHE and self.definitions_identity is None:
+                    parents = Path(relative).parents
+                    keys = [str(parent) for parent in parents if str(parent) != "."] + [relative]
+                    self.definitions_identity = {key: current[key] for key in keys}
             elif relative == INSTALLATION_ID:
                 require(re.fullmatch(rb"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", body), "unmeasured installation ID format")
                 require(self.installation_sha in (None, digest), "installation ID continuity changed")
@@ -422,7 +447,102 @@ def verify_metadata_sources(body, ctx, expected, scope):
                 and row.get("args") == entry.get("args", []) and row.get("disabled_tools") == entry.get("disabledTools", []), "explicit config changed MCP source or semantics")
 
 
-def collect(ctx, probes):
+READOUT_LABELS = frozenset(name for name, _ in HELP) | frozenset(kind + '-' + scope for kind in ('mcp', 'skills') for scope in ('a', 'b', 'user', 'a-repeat'))
+READOUT_PHASES = READOUT_LABELS | frozenset(('preparation', 'source', 'acquisition', 'materialization', 'probes', 'fixture', 'source-final-clean'))
+READOUT_ERRORS = {
+    'native metadata command refused': 'native-command-refused',
+    'native help/version diagnostic': 'native-help-diagnostic',
+    'help changed original or metadata input': 'help-effects-refused',
+    'protected original authority changed': 'original-authority-refused',
+    'original fixture bytes or identity changed': 'original-fixture-refused',
+    'unknown native bootstrap path': 'bootstrap-path-refused',
+    'bootstrap membership count': 'bootstrap-count-refused',
+    'bootstrap ordinary file mode/link': 'bootstrap-mode-link-refused',
+    'bootstrap fixed bytes differ': 'bootstrap-fixed-content-refused',
+    'unmeasured installation ID format': 'installation-format-refused',
+    'installation ID continuity changed': 'installation-continuity-refused',
+    'unmeasured maintenance lock format': 'maintenance-format-refused',
+    'metadata config unexpected settings': 'metadata-settings-refused',
+    'metadata config version': 'metadata-version-refused',
+    'metadata config version regressed': 'metadata-version-refused',
+    'multiple logs born in one command': 'log-count-refused',
+    'MCP original scope members differ': 'mcp-members-refused',
+    'explicit config changed MCP source or semantics': 'mcp-source-refused',
+    'unreviewed MCP row schema': 'mcp-schema-refused',
+    'native metadata launched stdio': 'stdio-effect-refused',
+    'native metadata contacted MCP endpoint': 'endpoint-effect-refused',
+}
+
+
+def readout_reason(error):
+    try:
+        return READOUT_ERRORS.get(str(error), 'unclassified-refusal')
+    except Exception:
+        return 'unclassified-refusal'
+
+
+def closed_readout(summary, state):
+    def budget():
+        require(type(state['deadline']) is float and time.monotonic() < state['deadline'], 'readout deadline')
+    budget()
+    require(type(state['phase']) is str and state['phase'] in READOUT_PHASES
+            and type(state['reason']) is str and state['reason'] in set(READOUT_ERRORS.values()) | {'capture-incomplete', 'capture-finished-unqualified', 'unclassified-refusal'}, 'readout state')
+    require(summary.get('collection_complete') is False and summary.get('admission_qualified') is False
+            and summary.get('cleanup_complete') is True and type(summary.get('metadata_capture_complete')) is bool
+            and summary.get('artifact_admission_failed', False) is False, 'readout admission')
+    qualification = summary['qualification']
+    require(type(qualification) is dict and set(qualification) == set(shared.QUALIFICATION_CASES)
+            and all(value is False for value in qualification.values()), 'readout qualification')
+    require(all(type(summary.get(key)) is str and re.fullmatch('[0-9a-f]{40}', summary[key])
+                for key in ('source_commit', 'source_tree')), 'readout source')
+    commands, effects = summary['commands'], summary.get('command_effects', [])
+    require(type(commands) is list and len(commands) <= 60 and type(effects) is list and len(effects) <= 13, 'readout counts')
+    failed, rows, seen = 0, [], set()
+    for command in commands:
+        budget()
+        require(type(command) is dict and 'exit' in command and 'error' in command
+                and (command.get('exit') is None or type(command['exit']) is int)
+                and (command.get('error') is None or type(command['error']) is str), 'readout command')
+        failed += command.get('exit') != 0 or command.get('error') is not None
+    def counts(changes):
+        require(type(changes) is dict and len(changes) <= 8192, 'readout effect bound')
+        added = removed = changed = 0
+        for delta in changes.values():
+            budget()
+            require(type(delta) is dict and set(delta) == {'before', 'after'}
+                    and (delta['before'] is not None or delta['after'] is not None), 'readout delta')
+            added += delta['before'] is None
+            removed += delta['after'] is None
+            changed += delta['before'] is not None and delta['after'] is not None
+        return dict(added=added, removed=removed, changed=changed)
+    for effect in effects:
+        budget()
+        require(type(effect) is dict and set(effect) == {'label', 'changes', 'outer_changes'}
+                and type(effect['label']) is str and effect['label'] in READOUT_LABELS and effect['label'] not in seen, 'readout effect')
+        seen.add(effect['label'])
+        rows.append(dict(phase=effect['label'], fixture=counts(effect['changes']), outer=counts(effect['outer_changes'])))
+    value = dict(schema_version=1, phase=state['phase'], reason=state['reason'], collection_complete=False,
+                 metadata_capture_complete=summary['metadata_capture_complete'], cleanup_complete=True,
+                 commands=len(commands), failed_commands=failed, effects=rows)
+    budget()
+    require(len(json.dumps(value).encode()) <= 16 << 10, 'readout output bound')
+    return value
+
+
+def publish_with_readout(summary, ctx, output, identity, state):
+    shared.publish(summary, ctx, output)
+    try:
+        require(root_identity(output) == identity, 'readout original root')
+        value = closed_readout(summary, state)
+    except Exception:
+        value = dict(schema_version=1, reason='readout-refused')
+    try:
+        os.write(1, ('DEVIN_CLOSED_READOUT=' + json.dumps(value, separators=(',', ':')) + '\n').encode())
+    except (OSError, ValueError):
+        pass
+
+
+def collect(ctx, probes, readout_state=None):
     nonce = secrets.token_hex(32)
     expected, startup, marker = fixture(ctx, {key: value.url for key, value in probes.items()}, nonce)
     roots = {"home": ctx.home, "temporary": ctx.root / "tmp", **ctx.projects}
@@ -443,6 +563,7 @@ def collect(ctx, probes):
                        exact_source_admission="unreviewed-native-schema", admission_qualified=False)
 
     def command(label, arguments, scope="a"):
+        if readout_state is not None: readout_state["phase"] = label
         before = snapshot(ctx)
         command_outer_before = metadata_inventory(ctx.root, ctx.budget)
         effects.verify(command_outer_before)
@@ -511,19 +632,25 @@ def run(output):
                "qualification": {name: False for name in shared.QUALIFICATION_CASES}, "commands": [],
                "host": {key: os.environ.get(key) for key in ("RUNNER_OS", "RUNNER_ARCH", "ImageOS", "ImageVersion", "GITHUB_RUN_ID", "GITHUB_RUN_ATTEMPT")}}
     ctx, held_cleanup, probes_settled = None, {}, True
+    readout_state = dict(phase="preparation", reason="capture-incomplete", deadline=None)
     try:
         with shared.Budget(360) as budget:
+            readout_state["deadline"] = budget.deadline
             ctx = AdmissionContext(output, summary, budget)
             ctx.original_output_identity = identity
             held_cleanup = {path: root_identity(path) for path in (ctx.home, ctx.private, ctx.output, output / "tmp", *ctx.projects.values())}
+            readout_state["phase"] = "source"
             ctx.source_and_projects()
+            readout_state["phase"] = "acquisition"
             receipt, contents = shared.acquire(SPEC, budget)
             admitted_archive(receipt)
             summary["acquisition"] = receipt
+            readout_state["phase"] = "materialization"
             binary, ctx.identities = shared.materialize(output / "client", SPEC, receipt, contents)
             held_cleanup[output / "client"] = root_identity(output / "client")
             ctx.argv = [str(binary)]
             summary["runtime_files"] = [{"path": str(path), "sha256": digest} for path, digest in ctx.identities.items()]
+            readout_state["phase"] = "probes"
             probes_settled = False
             probes = {}
             try:
@@ -531,7 +658,8 @@ def run(output):
                     for key in ("a", "b", "user", "local", "legacy"):
                         probes[key] = observe_connections(stack.enter_context(PiHTTPMCPProbe(nonce=secrets.token_hex(32))))
                     try:
-                        collect(ctx, probes)
+                        readout_state["phase"] = "fixture"
+                        collect(ctx, probes, readout_state)
                     finally:
                         summary.update(probe_methods={name: list(probe.methods()) for name, probe in probes.items()},
                                        accepted_connections={name: len(probe.accepted_connections) for name, probe in probes.items()})
@@ -539,11 +667,14 @@ def run(output):
                 probes_settled = len(probes) == 5 and all(not probe.thread.is_alive() for probe in probes.values())
             zero_effects(probes, output / "stdio-started")
             shared.verify_files(ctx.identities, budget)
+            readout_state["phase"] = "source-final-clean"
             record, out, err = ctx.command("source-final-clean", ["/usr/bin/git", "status", "--porcelain", "--untracked-files=normal"], shared.SOURCE, ctx.env, 10)
             require(record["exit"] == 0 and not out and not err, "source changed")
             # Full native schema/effects admission remains an independent gate.
             summary["collection_complete"] = False
+            readout_state["reason"] = "capture-finished-unqualified"
     except Exception as error:
+        readout_state["reason"] = readout_reason(error)
         summary["error"] = type(error).__name__ + ": " + str(error)[:300]
     finally:
         require(root_identity(output) == identity, "outer root replaced")
@@ -574,17 +705,17 @@ def run(output):
         if not summary.get("cleanup_complete"):
             safe = {"collection_complete": False, "admission_qualified": False,
                     "qualification": summary["qualification"], "commands": [], "cleanup_complete": False}
-            shared.publish(safe, None, output)
+            publish_with_readout(safe, None, output, identity, readout_state)
         else:
             try:
                 bodies = shared.evidence(summary, ctx.captures if ctx else {}, [])
                 require(sum(map(len, bodies.values())) <= 16 << 20, "admission evidence aggregate exceeds16MiB")
-                shared.publish(summary, ctx, output)
+                publish_with_readout(summary, ctx, output, identity, readout_state)
             except (ValueError, KeyError, TypeError, OSError):
                 summary["collection_complete"] = False
                 safe = {"collection_complete": False, "admission_qualified": False, "commands": [],
                         "qualification": summary["qualification"], "artifact_admission_failed": True}
-                shared.publish(safe, None, output)
+                publish_with_readout(safe, None, output, identity, readout_state)
     return 0 if summary["collection_complete"] else 1
 
 

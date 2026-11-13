@@ -470,6 +470,91 @@ class ProfileAdmissionContracts(unittest.TestCase):
                 with self.subTest(marker=marker), self.assertRaises(RuntimeError):
                     CASE["no_user_copies"](root, [marker])
 
+    def test_census_readout_uses_closed_staged_bytes_without_private_context(self):
+        import time
+        stage = CASE["stage_evidence"]
+        authority = stage.__globals__
+        with tempfile.TemporaryDirectory() as temporary:
+            native, evidence = Path(temporary).resolve() / "native", Path(temporary).resolve() / "evidence"
+            native.mkdir(); evidence.mkdir()
+            (native / "PRIVATE-NAME").write_bytes(b"PRIVATE-CONTENT")
+            identity = CASE["directory_identity"](native)
+            census = CASE["metadata_census"](native, identity, time.monotonic() + 5)
+            nonce = "f" * 64
+            (evidence / "bootstrap-census.json").write_text(json.dumps(census))
+            (evidence / "bootstrap-census-request.json").write_text(json.dumps({
+                "schema_version": 1, "reason": "initial-inventory-refused", "nonce": nonce,
+                "root_identity": list(identity)}))
+            (evidence / "profile-admission.json").write_text('{"admission_qualified":false}')
+            lines, reads, actual = [], [], CASE["ordinary_bytes"]
+            def read(path, *args, **kwargs):
+                self.assertFalse((evidence / "upload").exists(), "readout reread after commit")
+                reads.append(path.name)
+                return actual(path, *args, **kwargs)
+            def emit(line, *, flush):
+                self.assertTrue(flush)
+                self.assertTrue(authority["EVIDENCE_CLOSED"])
+                self.assertTrue((evidence / "upload").is_dir())
+                lines.append(line)
+            with mock.patch.dict(authority, {"ordinary_bytes": read, "print": emit, "EVIDENCE_CLOSED": False}):
+                stage(evidence)
+                self.assertTrue(authority["EVIDENCE_CLOSED"])
+            self.assertEqual(len(lines), 1)
+            self.assertEqual(len(reads), 5)
+            report = json.loads(lines[0].removeprefix("HERMES_BOOTSTRAP_CENSUS "))
+            self.assertEqual(report["kind"], "hermes-bootstrap-census-readout")
+            self.assertTrue(report["present"])
+            self.assertTrue(report["measurement_only"])
+            self.assertFalse(report["admission_qualified"])
+            self.assertEqual(report["census"], census)
+            for private in (nonce, str(native), str(evidence), "PRIVATE-NAME", "PRIVATE-CONTENT"):
+                self.assertNotIn(private, lines[0])
+
+    def test_census_readout_missing_invalid_commit_and_stdout_failures(self):
+        stage = CASE["stage_evidence"]
+        authority = stage.__globals__
+        for mode in ("missing", "invalid", "rename", "stdout-oserror", "stdout-valueerror"):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as temporary:
+                evidence = Path(temporary).resolve()
+                proof = b'{"admission_qualified":false,"error":"original native failure"}'
+                (evidence / "profile-admission.json").write_bytes(proof)
+                if mode != "missing":
+                    census = {"schema_version": 1, "measurement_only": True, "admission_qualified": False,
+                              "complete": False, "status": "refused", "reason": "request"}
+                    if mode == "invalid": census["nonce"] = "private-not-a-census-field"
+                    (evidence / "bootstrap-census.json").write_text(json.dumps(census))
+                lines = []
+                def emit(line, *, flush):
+                    self.assertTrue(authority["EVIDENCE_CLOSED"])
+                    self.assertTrue((evidence / "upload").is_dir())
+                    lines.append(line)
+                    if mode == "stdout-oserror": raise OSError("inert stdout closed")
+                    if mode == "stdout-valueerror": raise ValueError("inert stream closed")
+                with mock.patch.dict(authority, {"print": emit, "EVIDENCE_CLOSED": False}):
+                    if mode == "invalid":
+                        with self.assertRaisesRegex(RuntimeError, "closed census schema"):
+                            stage(evidence)
+                    elif mode == "rename":
+                        with mock.patch.object(Path, "rename", side_effect=OSError("inert commit refusal")):
+                            with self.assertRaisesRegex(OSError, "inert commit refusal"):
+                                stage(evidence)
+                    else:
+                        stage(evidence)
+                    if mode in ("invalid", "rename"):
+                        self.assertFalse(authority["EVIDENCE_CLOSED"])
+                        self.assertFalse((evidence / "upload").exists())
+                        self.assertFalse(list(evidence.glob(".upload-pending-*")))
+                        self.assertEqual(lines, [])
+                    else:
+                        self.assertTrue(authority["EVIDENCE_CLOSED"])
+                        self.assertEqual((evidence / "upload/profile-admission.json").read_bytes(), proof)
+                        self.assertEqual(len(lines), 1)
+                        if mode == "missing":
+                            self.assertEqual(json.loads(lines[0].removeprefix("HERMES_BOOTSTRAP_CENSUS ")), {
+                                "schema_version": 1, "kind": "hermes-bootstrap-census-readout",
+                                "measurement_only": True, "admission_qualified": False, "present": False})
+                self.assertEqual((evidence / "profile-admission.json").read_bytes(), proof)
+
     def test_closed_upload_rejects_unknown_members_and_never_stages_private_tree(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()

@@ -142,8 +142,8 @@ def same_inventory_directory(before, held):
 def check_inventory_directory(before, held, label):
     """Fail closed with bounded cross-API field *names*, never paths or values.
 
-    Windows path lstat and held directory fstat can synthesize different
-    mode and attribute flags for the same file ID. Both domains independently
+    Windows path lstat and held directory fstat use distinct OS queries and
+    can report different mode and attribute flags for the same file ID. Both domains independently
     enforce non-reparse identity and preserve full before/after snapshots.
     """
     if same_inventory_directory(before, held):
@@ -364,7 +364,7 @@ def validate_census_member(name, body):
             and type(value["complete"]) is bool, "census qualification")
     if "groups" not in value:
         require(value["complete"] is False and value["status"] == "refused" and value["reason"] == "request", "census refusal")
-        return
+        return value
     require(type(value["overflow"]) is bool and (value["status"], value["reason"]) in
             (("complete", "none"), ("partial", "time-limit"), ("partial", "member-limit"), ("partial", "depth-limit"), ("partial", "overflow"), ("refused", "authority")), "census status")
     require(value["complete"] == (value["status"] == "complete") and not (value["complete"] and value["overflow"]), "census completeness")
@@ -381,6 +381,7 @@ def validate_census_member(name, body):
     require(value["reason"] != "member-limit" or value["entries"] == CENSUS_MEMBERS, "census member limit join")
     require(sum(row["entries"] for row in value["groups"].values()) == value["entries"]
             and min(CENSUS_CAP, sum(row["logical_regular_bytes"] for row in value["groups"].values())) == value["logical_regular_bytes"], "census total join")
+    return value
 
 
 def maybe_census(evidence, home, expected, nonce, settled, deadline, evidence_expected):
@@ -663,6 +664,18 @@ def admit_evidence(directory):
             validate_census_member(path.name, ordinary_bytes(path, info))
 
 
+def census_readout(value):
+    """Project only an already validated census into a measurement statement."""
+    result = {"schema_version": 1, "kind": "hermes-bootstrap-census-readout",
+              "measurement_only": True, "admission_qualified": False, "present": value is not None}
+    if value is not None:
+        names = ("schema_version", "measurement_only", "admission_qualified", "complete", "status", "reason")
+        if "groups" in value:
+            names += ("overflow", "groups", "entries", "logical_regular_bytes")
+        result["census"] = {name: value[name] for name in names}
+    return result
+
+
 def stage_evidence(directory):
     global EVIDENCE_CLOSED
     identity = directory_identity(directory)
@@ -673,11 +686,14 @@ def stage_evidence(directory):
     pending = directory / (".upload-pending-" + secrets.token_hex(16))
     pending.mkdir(mode=0o700)
     pending_identity = directory_identity(pending)
+    census = None
     try:
         for name, expected in sorted(sources.items()):
             body = ordinary_bytes(directory / name, expected)
             if name in ("bootstrap-census-request.json", "bootstrap-census.json"):
-                validate_census_member(name, body)
+                value = validate_census_member(name, body)
+                if name == "bootstrap-census.json":
+                    census = value
             with (pending / name).open("xb") as stream:
                 stream.write(body)
         require(directory_identity(directory) == identity
@@ -692,6 +708,11 @@ def stage_evidence(directory):
         require(directory_identity(pending) == pending_identity, "private evidence staging directory changed")
         shutil.rmtree(pending)
         raise
+    # This optional log statement owns no artifact or native success decision.
+    try:
+        print("HERMES_BOOTSTRAP_CENSUS " + json.dumps(census_readout(census), sort_keys=True, separators=(",", ":")), flush=True)
+    except (OSError, ValueError):
+        pass
 
 
 def safe_failure_evidence(runner, failure_kind="unclosed-native-admission"):

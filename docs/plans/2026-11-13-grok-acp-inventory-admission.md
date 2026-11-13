@@ -1,5 +1,34 @@
 # Grok 1.0.70 isolated ACP inventory admission
 
+### Original fc8 capture and measured reply correction
+
+The original artifact `14033028378` from run `43418573214` was retrieved after
+execution access returned. Its outer SHA256 is
+`c53c0cf19f71c842d5fdae2027d26b8e552aac95ef4795e1704c4f5e3859984d`;
+inner ZIP SHA256 is
+`2327565e990a51aa2be7052680a0cd313f648aa82af32c94f8a7dc1ebbbebee4`.
+Both ZIP CRC checks passed. All five original stream lengths and SHA256 values,
+source `fc8a2ed58c5ac2be1119a080d33fd16ef1c2e5e0`, tree
+`ed0b57c733600bc32d08a7639a16a55bd3b914ab`, nonce, helper result and retained
+RPC joins were checked.
+
+The shipping native response for id 2 is exactly an outer JSON-RPC result with
+an extension envelope: `result.result.plugins`. It contains the two authored
+User roots with full scope/hash/name IDs and boolean `trusted`/`enabled` fields.
+The former single-result parser rejected that measured response. The collector
+and inventory reader now require the measured double envelope, with closed
+fields at both levels; flat, triple, extra-field and oversized alternatives
+remain refused. An actual inert pipe exchange checks both emitted requests,
+retained response bytes and hashes, and exact root/ID projection.
+
+This correction does not admit the original effects ledger: it recorded 43 new
+entries and the one authored `request.json` update. New native config, session
+database, locks and metadata remain outside the admitted bootstrap recipe.
+The original run is still negative, all qualifications remain false, and later
+scopes must not run after that refusal. The closed workflow readout reports
+only bounded stage/reason/count facts after original archive admission; it does
+not replace original stream, source, ledger or cleanup evidence.
+
 Status: root and independent plan reviews authorize ONLY this metadata admission.
 No local vendor/privileged execution, production enablement or remote publication
 is authorized by this file. Restored base after environment loss:

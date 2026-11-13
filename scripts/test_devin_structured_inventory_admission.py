@@ -355,4 +355,194 @@ class ProspectiveBootstrapContracts(unittest.TestCase):
                     with self.assertRaises(ValueError): case.verify_metadata_sources(json.dumps(bad).encode(), ctx, expected, scope)
 
 
+class ClosedDevinReadoutContracts(unittest.TestCase):
+    def fixture(self):
+        summary = dict(collection_complete=False, metadata_capture_complete=False, admission_qualified=False,
+                       cleanup_complete=True, qualification=dict.fromkeys(case.shared.QUALIFICATION_CASES, False),
+                       source_commit='a' * 40, source_tree='b' * 40,
+                       error='ValueError: PRIVATE_CONFIG_UUID', commands=[dict(exit=1, error=None)],
+                       command_effects=[dict(label='mcp-a', changes={'PRIVATE_CONFIG': {'before': None, 'after': {'private': 'PRIVATE_UUID'}}},
+                                             outer_changes={'PRIVATE_PATH': {'before': [1], 'after': [2]}})])
+        state = dict(phase='mcp-a', reason='bootstrap-path-refused', deadline=case.time.monotonic() + 5)
+        return summary, state
+
+    def test_fixed_projection_has_no_private_values_and_never_qualifies(self):
+        summary, state = self.fixture()
+        value = case.closed_readout(summary, state)
+        self.assertEqual(value, dict(schema_version=1, phase='mcp-a', reason='bootstrap-path-refused',
+                                    collection_complete=False, metadata_capture_complete=False, cleanup_complete=True,
+                                    commands=1, failed_commands=1,
+                                    effects=[dict(phase='mcp-a', fixture=dict(added=1, removed=0, changed=0),
+                                                  outer=dict(added=0, removed=0, changed=1))]))
+        for word in ('PRIVATE', 'UUID', 'source_commit', 'config', 'error'):
+            self.assertNotIn(word, json.dumps(value))
+        self.assertEqual(case.readout_reason(ValueError('unknown PRIVATE_CONFIG')), 'unclassified-refusal')
+        self.assertEqual(case.readout_reason(ValueError('unknown native bootstrap path')), 'bootstrap-path-refused')
+
+    def test_unknown_types_flags_bounds_and_deadline_refuse(self):
+        for change in ('phase', 'reason', 'metadata', 'qualification', 'admission', 'cleanup', 'artifact', 'commands', 'missing-exit', 'effects', 'deadline'):
+            with self.subTest(change=change):
+                summary, state = self.fixture()
+                if change in ('phase', 'reason'): state[change] = 'PRIVATE'
+                elif change == 'metadata': summary['metadata_capture_complete'] = 0
+                elif change == 'qualification': summary['qualification'][case.shared.QUALIFICATION_CASES[0]] = 0
+                elif change == 'admission': summary['admission_qualified'] = True
+                elif change == 'cleanup': summary['cleanup_complete'] = False
+                elif change == 'artifact': summary['artifact_admission_failed'] = True
+                elif change == 'commands': summary['commands'] *= 61
+                elif change == 'missing-exit': del summary['commands'][0]['exit']
+                elif change == 'effects': summary['command_effects'][0]['label'] = 'PRIVATE_PATH'
+                else: state['deadline'] = case.time.monotonic() - 1
+                with self.assertRaises(ValueError): case.closed_readout(summary, state)
+
+    def test_actual_publisher_commits_before_finite_output_and_preserves_negative(self):
+        import zipfile
+        summary, state = self.fixture()
+        summary['commands'] = []
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            original = case.root_identity(root)
+            emitted = []
+            def write(fd, body):
+                self.assertEqual(fd, 1)
+                with zipfile.ZipFile(root / 'upload/research.zip') as archive:
+                    self.assertIsNone(archive.testzip())
+                    committed = json.loads(archive.read('research.json'))
+                    self.assertEqual(committed, summary)
+                    self.assertFalse(committed['collection_complete'])
+                emitted.append(body)
+                return len(body)
+            with patch.object(case.os, 'write', side_effect=write):
+                case.publish_with_readout(summary, None, root, original, state)
+            self.assertEqual(len(emitted), 1)
+            self.assertNotIn(b'PRIVATE', emitted[0])
+            self.assertEqual(json.loads(emitted[0].split(b'=', 1)[1])['phase'], 'mcp-a')
+            self.assertFalse(summary['collection_complete'])
+
+    def test_readout_failure_or_stdout_error_preserves_actual_committed_archive(self):
+        import zipfile
+        for failure in ('deadline', 'stdout-os', 'stdout-value', 'internal-admission'):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as temporary:
+                summary, state = self.fixture(); summary['commands'] = []
+                if failure == 'deadline': state['deadline'] = case.time.monotonic() - 1
+                if failure == 'internal-admission': summary['commands'] = [{}]
+                root = Path(temporary).resolve(); emitted = []
+                def write(_fd, body):
+                    if failure == 'stdout-os': raise OSError('PRIVATE_STDOUT')
+                    if failure == 'stdout-value': raise ValueError('PRIVATE_STDOUT')
+                    emitted.append(body); return len(body)
+                with patch.object(case.os, 'write', side_effect=write):
+                    case.publish_with_readout(summary, None, root, case.root_identity(root), state)
+                with zipfile.ZipFile(root / 'upload/research.zip') as archive:
+                    self.assertIsNone(archive.testzip())
+                    committed = json.loads(archive.read('research.json'))
+                    self.assertFalse(committed['collection_complete'])
+                if not failure.startswith('stdout'):
+                    self.assertEqual(emitted, [b'DEVIN_CLOSED_READOUT={"schema_version":1,"reason":"readout-refused"}\n'])
+
+    def test_failed_publication_emits_nothing_and_root_replacement_never_leaks(self):
+        summary, state = self.fixture()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            with patch.object(case.shared, 'publish', side_effect=OSError('PRIVATE_PUBLISH')), patch.object(case.os, 'write') as output:
+                with self.assertRaises(OSError):
+                    case.publish_with_readout(summary, None, root, case.root_identity(root), state)
+                output.assert_not_called()
+            original = case.root_identity(root)
+            def replace(*_args):
+                root.rename(root.with_name(root.name + '-original'))
+                root.mkdir(); (root / 'foreign').write_bytes(b'retained')
+            try:
+                with patch.object(case.shared, 'publish', side_effect=replace), patch.object(case.os, 'write') as output:
+                    case.publish_with_readout(summary, None, root, original, state)
+                self.assertEqual(output.call_args.args[1], b'DEVIN_CLOSED_READOUT={"schema_version":1,"reason":"readout-refused"}\n')
+                self.assertEqual((root / 'foreign').read_bytes(), b'retained')
+            finally:
+                import shutil
+                shutil.rmtree(root.with_name(root.name + '-original'))
+
+class FixedDefinitionCacheContracts(unittest.TestCase):
+    def fixture(self, root):
+        ctx, effects, user = ProspectiveBootstrapContracts.fixture(self, root)
+        ProspectiveBootstrapContracts.create_aux(self, ctx)
+        cache = ctx.root / case.DEFINITIONS_CACHE
+        body = (b"PRIVATE_CACHE_BYTES" * (case.DEFINITIONS_BYTES // 19 + 2))[:case.DEFINITIONS_BYTES]
+        cache.write_bytes(body); cache.chmod(0o600)
+        # Authored inert bytes exercise the real reader; never a native cache fixture.
+        fixed = dict(case.BOOTSTRAP_FIXED)
+        fixed[case.DEFINITIONS_CACHE] = (len(body), hashlib.sha256(body).hexdigest())
+        return ctx, effects, user, cache, body, fixed
+
+    def test_separate_fixed_allowance_reads_full_short_chunks_and_only_records_hash(self):
+        self.assertEqual(case.BOOTSTRAP_FIXED[case.DEFINITIONS_CACHE],
+                         (674340, "8626d6fd4ce3381b2eb32b6c60b7ad752d88c73d8a4fb848e3576bff113393f1"))
+        with tempfile.TemporaryDirectory() as root:
+            ctx, effects, user, cache, body, fixed = self.fixture(root)
+            baseline = copy.deepcopy(effects.baseline)
+            real_read, requests = case.os.read, []
+            def short_read(fd, count):
+                if os.fstat(fd).st_ino == cache.stat().st_ino:
+                    self.assertLessEqual(count, case.DEFINITIONS_BYTES + 1)
+                    requests.append(count)
+                    return real_read(fd, min(count, 32768))
+                return real_read(fd, count)
+            with patch.object(case, "BOOTSTRAP_FIXED", fixed), patch.object(case.os, "read", side_effect=short_read):
+                effects.verify(case.metadata_inventory(ctx.root, ctx.budget))
+                first = copy.deepcopy(effects.definitions_identity)
+                effects.verify(case.metadata_inventory(ctx.root, ctx.budget))
+            self.assertGreater(len(requests), 2)
+            self.assertEqual(effects.definitions_identity, first)
+            self.assertEqual(effects.baseline, baseline)
+            self.assertEqual(user.read_bytes(), b'{"read_config_from":{"cloud":false}}\n')
+            self.assertEqual(effects.proofs[-1][case.DEFINITIONS_CACHE],
+                             {"bytes": 674340, "sha256": hashlib.sha256(body).hexdigest()})
+            bodies = case.shared.evidence({"commands": [], "proofs": effects.proofs}, {}, [])
+            self.assertNotIn(b"PRIVATE_CACHE_BYTES", bodies["research.json"])
+
+    def test_real_pin_size_and_mode_refuse_without_generic_larger_file_admission(self):
+        for change in ("hash", "size", "mode", "link", "other-name", "other-file"):
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as root:
+                ctx, effects, _, cache, body, fixed = self.fixture(root)
+                if change == "size": cache.write_bytes(body + b"x")
+                elif change == "mode": cache.chmod(0o644)
+                elif change == "link": os.link(cache, cache.with_name("hardlinked.bin"))
+                elif change == "other-name": cache.rename(cache.with_name("unleash_definitions.unreviewed.bin"))
+                elif change == "other-file":
+                    (ctx.root / case.MAINTENANCE).write_bytes(b"x" * 16385)
+                if change == "hash":
+                    with self.assertRaisesRegex(ValueError, "fixed bytes"):
+                        effects.verify(case.metadata_inventory(ctx.root, ctx.budget))
+                else:
+                    with patch.object(case, "BOOTSTRAP_FIXED", fixed), self.assertRaises(ValueError):
+                        effects.verify(case.metadata_inventory(ctx.root, ctx.budget))
+
+    def test_first_cache_and_parent_identities_never_refresh_or_read_replacements(self):
+        for change in ("leaf", "parent", "removed", "mtime"):
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as root:
+                ctx, effects, _, cache, body, fixed = self.fixture(root)
+                os.utime(cache, ns=(1_000_000_000, 1_000_000_000))
+                with patch.object(case, "BOOTSTRAP_FIXED", fixed):
+                    effects.verify(case.metadata_inventory(ctx.root, ctx.budget))
+                    original = copy.deepcopy(effects.definitions_identity)
+                    if change == "leaf":
+                        cache.rename(cache.with_name("original.bin")); cache.write_bytes(body); cache.chmod(0o600)
+                    elif change == "parent":
+                        cache.parent.rename(cache.parent.with_name("original-cli")); cache.parent.mkdir(mode=0o755)
+                        cache.write_bytes(body); cache.chmod(0o600)
+                        (cache.parent / "foreign").write_bytes(b"retained")
+                    elif change == "removed": cache.unlink()
+                    else: os.utime(cache, ns=(2_000_000_000, 2_000_000_000))
+                    with patch.object(case.os, "read", side_effect=AssertionError("replacement bytes must not be read")):
+                        with self.assertRaisesRegex(ValueError, "original identity"):
+                            effects.verify(case.metadata_inventory(ctx.root, ctx.budget))
+                    self.assertEqual(effects.definitions_identity, original)
+                    if change == "parent": self.assertEqual((cache.parent / "foreign").read_bytes(), b"retained")
+
+    def test_preexisting_cache_is_not_seeded_into_original_baseline(self):
+        with tempfile.TemporaryDirectory() as root:
+            ctx, _, _, _, _, _ = self.fixture(root)
+            with self.assertRaisesRegex(ValueError, "preexists original baseline"):
+                case.BootstrapEffects(ctx, case.metadata_inventory(ctx.root, ctx.budget))
+
+
 if __name__ == "__main__": unittest.main()

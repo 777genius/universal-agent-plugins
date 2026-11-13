@@ -362,3 +362,35 @@ and follow_symlinks to os.stat, which cannot be forwarded to Path.lstat. The roo
 actual patched API, and the Windows injection is scoped to the exact fixture file.
 This follow-up also adds the reviewed census bound, distinct exhaustion reasons
 and their contracts on top of that source.
+
+## Closed census stdout readout
+
+Emit one HERMES_BOOTSTRAP_CENSUS measurement statement only after the existing
+source/root/membership checks, atomic upload rename and EVIDENCE_CLOSED=true.
+Reuse the parsed object returned by the existing census validator and the same
+bounded staging read; never cache or print the request nonce or root identity.
+The separate readout protocol carries fixed measurement/unqualified flags,
+present=true plus the closed census, or present=false without invented totals.
+
+Do not parse lifecycle.stderr or infer a cause from RuntimeError/traceback text.
+No native command, filesystem reread, artifact member, budget or acceptance
+bound changes. Optional stdout OSError/ValueError cannot delete committed
+evidence or replace the original native failure. Successful staging, privacy,
+missing report, invalid schema, atomic failure and closed-stdout contracts are
+added. These post-outage changes and new contracts are UNEXECUTED at authoring;
+current-source hosted CI and original evidence remain required. This statement
+is not product/native qualification, and partial census counts remain lower bounds.
+
+
+### Directory identity across Windows stat APIs
+
+The external `aabcd9b3e763d4341884173d37cdd5b1f7d7caf8` correction is preserved.
+A directory's positive device/inode/birth identity, links, bytes and mtime join the
+path and held-handle observations. Both records must still be ordinary directories
+without reparse attributes or tags. The held handle denies directory deletion;
+complete path-domain and descriptor-domain snapshots, including all attribute bits,
+are independently rechecked before and after enumeration. Cross-API attribute
+equality is not used as object identity. The original fc8 receipt proved a field
+mismatch but did not capture the differing bits; synthetic masks in contracts are
+not an observation of the hosted values. This does not qualify custom-root native
+loading or relax temporal metadata checks within either authority domain.

@@ -61,8 +61,23 @@ class AdmissionContracts(unittest.TestCase):
         self.assertFalse(case.rpc_frame(notification, state, req, sent.append))
         self.assertFalse(case.rpc_frame({'jsonrpc': '2.0', 'id': 1, 'result': {'protocolVersion': 1, '_meta': {'agentVersion': '1.0.70'}}}, state, req, sent.append))
         self.assertEqual(sent, [{'jsonrpc': '2.0', 'id': 2, 'method': '_x.ai/plugins/list', 'params': {'sessionId': 'uap-admission-' + req['nonce'] + '-a'}}])
-        self.assertTrue(case.rpc_frame({'jsonrpc': '2.0', 'id': 2, 'result': {'plugins': []}}, state, req, sent.append))
+        self.assertTrue(case.rpc_frame({'jsonrpc': '2.0', 'id': 2, 'result': {'result': {'plugins': []}}}, state, req, sent.append))
         with self.assertRaises(ValueError): case.rpc_frame(notification, state, req, sent.append)
+
+    def test_listing_requires_measured_double_result_envelope(self):
+        req = {'nonce': 'a' * 32, 'scope': 'user'}
+        initialize = {'jsonrpc': '2.0', 'id': 1, 'result': {'protocolVersion': 1, '_meta': {'agentVersion': '1.0.70'}}}
+        for result in ({'plugins': []}, {'result': {'result': {'plugins': []}}},
+                       {'result': {'plugins': []}, 'extra': None},
+                       {'result': {'plugins': [], 'extra': None}},
+                       {'result': {'plugins': None}}, {'result': {'plugins': [{}] * 129}}):
+            with self.subTest(result=result):
+                state, sent = case.rpc_state(), []
+                case.rpc_frame(initialize, state, req, sent.append)
+                with self.assertRaises(ValueError):
+                    case.rpc_frame({'jsonrpc': '2.0', 'id': 2, 'result': result}, state, req, sent.append)
+                self.assertIsNone(state['plugins'])
+                self.assertEqual(len(sent), 1)
 
     def test_requests_unknown_notifications_ids_and_versions_refuse(self):
         for value in ({'jsonrpc': '2.0', 'id': 1, 'method': 'fs/read_text_file', 'params': {}},
@@ -73,6 +88,33 @@ class AdmissionContracts(unittest.TestCase):
                       {'jsonrpc': '2.0', 'id': 1, 'result': {'protocolVersion': 1, '_meta': {'agentVersion': '1.0.71'}}}):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 case.rpc_frame(value, case.rpc_state(), {'nonce': 'a' * 32, 'scope': 'a'}, lambda _: self.fail('unexpected request'))
+
+    def test_actual_pipe_preserves_nested_listing_for_exact_inventory(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            rows = [dict(id='user/12345678/' + name, root=str(root / 'home/.grok/plugins' / name),
+                         name=name, scope='user', trusted=True, enabled=False)
+                    for name in ('uap-acp-collision', 'uap-acp-foreign-user')]
+            frames = [{'jsonrpc': '2.0', 'id': 1, 'result': {'protocolVersion': 1, '_meta': {'agentVersion': '1.0.70'}}},
+                      {'jsonrpc': '2.0', 'id': 2, 'result': {'result': {'plugins': rows}}}]
+            child = """import json, sys
+frames = json.loads(sys.argv[1])
+for method, frame in zip(('initialize', '_x.ai/plugins/list'), frames):
+    assert json.loads(sys.stdin.readline())['method'] == method
+    print(json.dumps(frame), flush=True)
+sys.stdin.read()
+"""
+            state = case.rpc_state()
+            record = case.command([sys.executable, '-I', '-c', child, json.dumps(frames)], 'acp', root,
+                                  {'PATH': os.defpath}, time.monotonic() + 3, case.LIMIT, state, self.request(root))
+            self.assertIsNone(record['error'])
+            self.assertEqual(state['plugins'], frames[1])
+            captured = base64.b64decode(record['merged_base64'], validate=True)
+            self.assertEqual([json.loads(line) for line in captured.splitlines()], frames)
+            self.assertEqual(len(captured), record['merged_bytes'])
+            self.assertEqual(case.digest(captured), record['merged_sha256'])
+            self.assertEqual(case.inventory_rows({'rpc': state}, root, 'user'),
+                             {row['root']: row['id'] for row in rows})
 
     def test_help_requires_exact_native_pin_and_advertised_syntax(self):
         rows = help_rows()
@@ -86,11 +128,11 @@ class AdmissionContracts(unittest.TestCase):
         root = Path('/tmp/uap-fixture')
         rows = [dict(id='user/12345678/' + name, root=str(root / 'home/.grok/plugins' / name), name=name, scope='user', trusted=True, enabled=True)
                 for name in ('uap-acp-collision', 'uap-acp-foreign-user')]
-        result = {'rpc': {'plugins': {'result': {'plugins': rows}}}}
+        result = {'rpc': {'plugins': {'result': {'result': {'plugins': rows}}}}}
         case.inventory_rows(result, root, 'user')
         for mutate in ('missing', 'duplicate', 'scope', 'sibling', 'name-only'):
             value = copy.deepcopy(result)
-            current = value['rpc']['plugins']['result']['plugins']
+            current = value['rpc']['plugins']['result']['result']['plugins']
             if mutate == 'missing': current.pop()
             elif mutate == 'duplicate': current.append(current[0])
             elif mutate == 'scope': current[0]['scope'] = 'project'
@@ -332,6 +374,118 @@ case['collect'](pathlib.Path(sys.argv[2]))
                 self.assertEqual((root / 'upload/foreign').read_bytes(), b'retained')
                 self.assertEqual((root / 'upload/research.zip').read_bytes(), original)
 
+
+
+    def readout_fixture(self):
+        packet = dict(source_commit='a' * 40, source_tree='b' * 40, nonce='c' * 32)
+        body = b'inert-stream'
+        row = dict(label='version', argv=['/PRIVATE/NONPRINTABLE'], exit=1, error=None,
+                   merged_file='user-version.merged.log', merged_bytes=len(body), merged_sha256=case.digest(body))
+        result = dict(packet, schema_version=1, scope='user', semantic_complete=False,
+                      reason='help-refused', commands=[row])
+        receipt = dict(packet, schema_version=1, scope='user', cleanup_complete=True,
+                       sealed_cleanup_complete=True, result=result)
+        summary = dict(packet, schema_version=1, collection_complete=False, cleanup_complete=True,
+                       qualification=dict(case.FALSE), scopes=[receipt], error='admission-refused')
+        ledger = dict(accepted=False, before={'PRIVATE/PATH': [1]}, after={'PRIVATE/PATH': [2], 'OTHER/SECRET': [3]})
+        members = {'admission.json': json.dumps(summary).encode(), 'user.ledger.json': json.dumps(ledger).encode(),
+                   'user-version.merged.log': body}
+        return packet, members
+
+    def readout_zip(self, members):
+        import io
+        stream = io.BytesIO()
+        with zipfile.ZipFile(stream, 'w') as archive:
+            for name, body in members.items(): archive.writestr(name, body)
+        return stream.getvalue()
+
+    def test_readout_projects_only_finite_joined_facts_and_keeps_negative(self):
+        packet, members = self.readout_fixture()
+        value = case.publication_readout(self.readout_zip(members), packet, time.monotonic() + 5)
+        self.assertEqual(value, dict(schema_version=1, reason='admission-refused', collection_complete=False, cleanup_complete=True,
+                                    scopes=[dict(scope='user', reason='help-refused', semantic_complete=False, ledger_accepted=False,
+                                                 commands=1, failed_commands=1, added_entries=1, removed_entries=0, changed_entries=1)]))
+        encoded = json.dumps(value)
+        for private in ('PRIVATE', 'SECRET', 'NONPRINTABLE', 'inert-stream', 'merged_file', 'source_commit'):
+            self.assertNotIn(private, encoded)
+
+    def test_readout_malformed_unknown_types_sources_and_streams_are_fixed_refusal(self):
+        packet, original = self.readout_fixture()
+        for mutation in ('json', 'reason', 'bool', 'source', 'scope', 'cleanup', 'qualification', 'stream', 'complete', 'extra'):
+            with self.subTest(mutation=mutation):
+                members = copy.deepcopy(original)
+                summary = json.loads(members['admission.json'])
+                if mutation == 'json': members['admission.json'] = b'{"secret":"RAW","secret":1}'
+                elif mutation == 'reason': summary['scopes'][0]['result']['reason'] = 'RAW SECRET'
+                elif mutation == 'bool': summary['scopes'][0]['result']['semantic_complete'] = 0
+                elif mutation == 'source': summary['source_tree'] = 'd' * 40
+                elif mutation == 'scope': summary['scopes'][0]['scope'] = '/PRIVATE/PATH'
+                elif mutation == 'cleanup': summary['cleanup_complete'] = False
+                elif mutation == 'qualification': summary['qualification']['native_mcp_call'] = 0
+                elif mutation == 'stream': members['user-version.merged.log'] = b'changed'
+                elif mutation == 'complete': summary['collection_complete'] = True
+                else: members['RAW-SECRET'] = b'raw bytes'
+                if mutation != 'json': members['admission.json'] = json.dumps(summary).encode()
+                self.assertEqual(case.publication_readout(self.readout_zip(members), packet, time.monotonic() + 5),
+                                 dict(schema_version=1, reason='readout-refused', scopes=[]))
+
+    def test_readout_budget_member_bound_and_crc_never_leak_or_raise(self):
+        packet, members = self.readout_fixture()
+        raw = self.readout_zip(members)
+        for candidate, deadline in ((raw, time.monotonic() - 1),
+                                    (raw.replace(b'inert-stream', b'other-stream'), time.monotonic() + 5),
+                                    (self.readout_zip(dict(members, **{'user-acp.merged.log': b'x' * (case.LIMIT + 1)})), time.monotonic() + 5)):
+            self.assertEqual(case.publication_readout(candidate, packet, deadline),
+                             dict(schema_version=1, reason='readout-refused', scopes=[]))
+
+    def test_readout_appends_only_after_original_publication_authority(self):
+        packet, members = self.readout_fixture()
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary); root = parent / 'output'; root.mkdir()
+            proof = case.publish(root, members)
+            frame = dict(packet, schema_version=1, publication=proof)
+            diagnostic = []
+            bad = copy.deepcopy(frame); bad['publication']['sha256'] = '0' * 64
+            with mock.patch.object(case, 'publication_readout') as readout, self.assertRaises(ValueError):
+                case.admit_publication(root, bad, packet['source_commit'], packet['source_tree'], parent / 'bad',
+                                       diagnostics=diagnostic, diagnostic_deadline=time.monotonic() + 5)
+            self.assertEqual(diagnostic, []); readout.assert_not_called()
+            for label, offset in (('fresh', 5), ('expired', -1)):
+                diagnostic = []
+                actual = case.admit_publication(root, frame, packet['source_commit'], packet['source_tree'], parent / label,
+                                                diagnostics=diagnostic, diagnostic_deadline=time.monotonic() + offset)
+                self.assertEqual(actual.read_bytes(), (root / 'upload/research.zip').read_bytes())
+                self.assertEqual(len(diagnostic), 1)
+                self.assertEqual(diagnostic[0]['reason'], 'admission-refused' if offset > 0 else 'readout-refused')
+
+    def test_readout_never_appends_or_touches_foreign_replaced_root(self):
+        packet, members = self.readout_fixture()
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary); root = parent / 'output'; root.mkdir()
+            proof = case.publish(root, members)
+            frame = dict(packet, schema_version=1, publication=proof)
+            root.rename(parent / 'original'); root.mkdir()
+            sentinel = root / 'foreign'; sentinel.write_bytes(b'retained')
+            diagnostics = []
+            with mock.patch.object(case, 'publication_readout') as readout, self.assertRaises(FileNotFoundError):
+                case.admit_publication(root, frame, packet['source_commit'], packet['source_tree'], parent / 'admitted',
+                                       diagnostics=diagnostics, diagnostic_deadline=time.monotonic() + 5)
+            readout.assert_not_called()
+            self.assertEqual(diagnostics, [])
+            self.assertEqual(sentinel.read_bytes(), b'retained')
+            self.assertFalse((parent / 'admitted').exists())
+
+    def test_readout_rejects_unbounded_central_metadata_before_zip_allocation(self):
+        import struct
+        packet, members = self.readout_fixture()
+        raw = self.readout_zip(members)
+        for offset, format, value in ((8, '<H', 65535), (12, '<L', 65536), (16, '<L', 0), (20, '<H', 1)):
+            changed = bytearray(raw)
+            struct.pack_into(format, changed, len(changed) - 22 + offset, value)
+            with mock.patch.object(zipfile, 'ZipFile') as parser:
+                self.assertEqual(case.publication_readout(bytes(changed), packet, time.monotonic() + 5),
+                                 dict(schema_version=1, reason='readout-refused', scopes=[]))
+                parser.assert_not_called()
 
 
 if __name__ == '__main__':

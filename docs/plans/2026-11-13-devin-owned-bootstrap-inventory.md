@@ -102,3 +102,51 @@ byte-identical recovery of that unpublished prose. No runtime/test byte changed
 during recovery. Genuine final-source hosted capture and independent review of
 the original bounded output, effects, source identity and cleanup remain
 mandatory. A partial or negative observation is not product completion.
+
+## Exact prospective definition-cache observation (2026-11-13)
+
+Root authorized this finite amendment after inspecting real fc8 job131865623233
+in run43418573214. The CRC-clean original inner artifact14034180217 has25 members,
+source fc8a2ed58c5ac2be1119a080d33fd16ef1c2e5e0/tree
+ed0b57c733600bc32d08a7639a16a55bd3b914ab,24 recorded streams and proven cleanup.
+It stopped at `unknown native bootstrap path`; `mcp-a` itself exited0. The
+snapshot independently records exactly one additional cache candidate:
+
+- Path: home/cache/devin/cli/unleash_definitions.bf84fa7496e6f844.bin.
+- Length674340 bytes; SHA2568626d6fd4ce3381b2eb32b6c60b7ad752d88c73d8a4fb848e3576bff113393f1.
+- Ordinary single-link0600; original task UID/GID and filesystem.
+
+The exact4994 native workflow43420259044 was still queued when checked before
+coding; no second native sample or equality is claimed. Any changed future
+sample must refuse, not extend this exception. The filename suffix is not a
+content digest or an independently admitted native identity.
+
+Read-only official3000.12.57 acquisition again verified the exact72925933-byte
+archive SHA0946784ef886d716e82a8026f76933bf0a6e4f0a804a23722bb62047e8c07d4a
+and213734376-byte entry SHA3f3fb99f472d92f7852be3775ac2b66b5d60baf26f3441b02d54c56b160bc30d.
+No executable ran. Bundled configuration/reference docs expose no documented
+CLI offline/Unleash/telemetry-disable switch. `read_config_from.cloud=false`
+only excludes cloud MCP/personal plugin imports while preserving required
+organization policy. Proxy or sandbox-network changes would not establish a
+neutral metadata route and are not introduced.
+
+Permit only the exact path/size/hash/mode above as an additional fixed native
+observation. Keep the256KiB aggregate for every other bootstrap leaf unchanged;
+this one file has a separate exact674340-byte allowance, still inside existing
+16MiB evidence/global limits. No wildcard or generic large-file exception.
+The held nofollow reader loops over bounded regular-file reads, binds every
+parent and leaf to the same current ledger, and admits this file only after
+its complete fixed digest agrees. Never upload its body, seed/copy/rewrite it,
+change network/policy, or renew Baseline0. Record only its byte count and hash.
+
+After its first accepted native appearance, retain the exact leaf metadata
+and all original ancestor directory identities as additional constraints.
+Removal, replacement, mode/owner/device or mtime/ctime changes refuse before
+any subsequent leaf reads, even when replacement bytes have the same digest.
+No recovery or adoption of a changed cache is authorized. The existing original
+User/B/runtime/source controls and all false product qualifications remain.
+Only collector, its inert tests and this plan change. Inert tests use authored
+674340-byte content with a temporary test digest to exercise actual bounded
+reads and identity refusal, never as a native fixture or alternate production
+pin. Genuine final-source capture and independent original evidence review
+remain required; an original cleanup/diagnostic PASS is not product completion.

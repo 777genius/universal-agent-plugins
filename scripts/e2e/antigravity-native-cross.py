@@ -128,6 +128,25 @@ def assert_native_mcp(plugin, fixture_root):
         raise AssertionError("A client-managed placeholder remained in native MCP configuration")
 
 
+def require_windows_token_owner(owner, token, security):
+    """Compare to this token's exact default object owner, not TokenUser/groups."""
+    import ctypes
+    from ctypes import wintypes as w
+    needed = w.DWORD()
+    security.GetTokenInformation(token, 4, None, 0, ctypes.byref(needed))
+    if not ctypes.sizeof(ctypes.c_void_p) <= needed.value <= 65536:
+        raise AssertionError("Windows default-owner token bound")
+    allocated = needed.value
+    body = ctypes.create_string_buffer(allocated)
+    if not security.GetTokenInformation(token, 4, body, allocated, ctypes.byref(needed)):
+        raise AssertionError("Windows default-owner token unavailable")
+    if not ctypes.sizeof(ctypes.c_void_p) <= needed.value <= allocated:
+        raise AssertionError("Windows default-owner token changed size")
+    selected = ctypes.cast(body, ctypes.POINTER(ctypes.c_void_p))[0]
+    if not owner or not selected or not security.EqualSid(owner, selected):
+        raise AssertionError("Windows owner differs from task token default owner")
+
+
 def owned_handle(path, directory=False, parent=None):
     """Open the owned fixture without following aliases; Windows holds directories."""
     if os.name != "nt":
@@ -158,15 +177,7 @@ def owned_handle(path, directory=False, parent=None):
             if not security.OpenProcessToken(w.HANDLE(-1), 8, ctypes.byref(token)):
                 raise ctypes.WinError(ctypes.get_last_error())
             try:
-                needed = w.DWORD()
-                security.GetTokenInformation(token, 1, None, 0, ctypes.byref(needed))
-                if not 0 < needed.value <= 65536:
-                    raise AssertionError("Windows token identity bound")
-                body = ctypes.create_string_buffer(needed.value)
-                if not security.GetTokenInformation(token, 1, body, needed, ctypes.byref(needed)):
-                    raise ctypes.WinError(ctypes.get_last_error())
-                if not security.EqualSid(owner, ctypes.cast(body, ctypes.POINTER(ctypes.c_void_p))[0]):
-                    raise AssertionError("Windows owner differs from task token")
+                require_windows_token_owner(owner, token, security)
             finally:
                 if not kernel.CloseHandle(token): raise ctypes.WinError(ctypes.get_last_error())
         finally:
@@ -193,6 +204,24 @@ def stable_file(info):
     # Reading may legitimately advance atime; it grants no mutation authority.
     return (*object_identity(info), info.st_nlink, info.st_size, info.st_mtime_ns, info.st_ctime_ns,
             getattr(info, "st_birthtime_ns", None), getattr(info, "st_file_attributes", None), getattr(info, "st_reparse_tag", None))
+
+
+def profile_file_refusal(root, child, info, root_device):
+    """Bounded metadata for one refused owned-fixture entry; never open it."""
+    relative = child.relative_to(root).as_posix().encode("utf-8")
+    values = {"bytes": info.st_size, "links": info.st_nlink, "mode": info.st_mode}
+    if not all(type(value) is int and value >= 0 for value in values.values()):
+        raise AssertionError("Profile file bound/alias/device: metadata unavailable")
+    cap = (1 << 53) - 1
+    facts = {"type": "antigravity-profile-file-refusal",
+             "reason": "links" if info.st_nlink != 1 else "size" if info.st_size > 1 << 20 else "device",
+             "member": relative[:128].decode("utf-8", "ignore"),
+             "member_sha256": hashlib.sha256(relative).hexdigest(),
+             "member_truncated": len(relative) > 128,
+             "same_device": info.st_dev == root_device,
+             "overflow": any(value > cap for value in values.values())}
+    facts.update({key: min(value, cap) for key, value in values.items()})
+    raise AssertionError("Profile file bound/alias/device: " + json.dumps(facts, ensure_ascii=True, sort_keys=True))
 
 
 class ProfileLedger:
@@ -233,7 +262,8 @@ class ProfileLedger:
                     info = child.lstat() if os.name == "nt" else os.stat(entry.name, dir_fd=descriptor, follow_symlinks=False)
                     if stat.S_ISDIR(info.st_mode): visit(child, depth + 1, None if os.name == "nt" else descriptor); continue
                     identity = object_identity(info)
-                    if info.st_nlink != 1 or info.st_size > 1 << 20 or info.st_dev != identity_root[0]: raise AssertionError("Profile file bound/alias/device")
+                    if info.st_nlink != 1 or info.st_size > 1 << 20 or info.st_dev != identity_root[0]:
+                        profile_file_refusal(self.root, child, info, identity_root[0])
                     fd = owned_handle(child, parent=None if os.name == "nt" else descriptor)
                     try:
                         opened = os.fstat(fd)
@@ -456,6 +486,64 @@ def admission_contracts():
                 retained = list(parent.glob("uap-agy-direct-*"))
                 self.assertEqual(len(retained), 1)
                 self.assertEqual((retained[0] / "unexpected").read_text(), "unknown")
+
+        def test_refused_member_diagnostic_is_bounded_and_never_reads_content(self):
+            from types import SimpleNamespace
+            with tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary); child = root / ("s" * 150)
+                child.write_bytes(b"PRIVATE-CONTENT" + b"x" * (1 << 20))
+                original_open = owned_handle
+                def guarded(path, *args, **kwargs):
+                    if path == child: raise AssertionError("Refused member was opened")
+                    return original_open(path, *args, **kwargs)
+                with patch.dict(globals(), {"owned_handle": guarded}), self.assertRaises(AssertionError) as caught:
+                    ProfileLedger(root)
+                message = str(caught.exception)
+                facts = json.loads(message.split(": ", 1)[1])
+                self.assertEqual(set(facts), {"type", "reason", "member", "member_sha256", "member_truncated", "same_device", "overflow", "bytes", "links", "mode"})
+                self.assertEqual(facts["reason"], "size")
+                self.assertEqual(facts["member_sha256"], hashlib.sha256(child.name.encode()).hexdigest())
+                self.assertTrue(facts["member_truncated"])
+                self.assertLessEqual(len(facts["member"].encode()), 128)
+                self.assertFalse(facts["overflow"])
+                self.assertNotIn("PRIVATE-CONTENT", message)
+                self.assertNotIn(str(root), message)
+                fake = SimpleNamespace(st_size=1 << 54, st_nlink=1, st_mode=stat.S_IFREG | 0o600, st_dev=root.stat().st_dev)
+                with self.assertRaises(AssertionError) as overflow:
+                    profile_file_refusal(root, child, fake, fake.st_dev)
+                capped = json.loads(str(overflow.exception).split(": ", 1)[1])
+                self.assertEqual(capped["bytes"], (1 << 53) - 1)
+                self.assertTrue(capped["overflow"])
+
+        def test_windows_owner_uses_only_exact_token_default_owner(self):
+            import ctypes
+            from ctypes import wintypes as w
+            class TokenAPI:
+                def __init__(self, selected=202, bound=32, returned=32, fail=False):
+                    self.selected, self.bound, self.returned, self.fail = selected, bound, returned, fail
+                    self.classes, self.equal_calls = [], []
+                def GetTokenInformation(self, _token, information_class, body, size, needed):
+                    self.classes.append(information_class)
+                    ctypes.cast(needed, ctypes.POINTER(w.DWORD))[0] = self.bound if body is None else self.returned
+                    if body is None or self.fail: return 0
+                    self.asserted_size = size
+                    ctypes.cast(body, ctypes.POINTER(ctypes.c_void_p))[0] = self.selected
+                    return 1
+                def EqualSid(self, owner, selected):
+                    self.equal_calls.append((owner, selected))
+                    return owner == selected
+            # Distinct synthetic user/default-owner IDs: only exact default owner202 passes.
+            api = TokenAPI()
+            require_windows_token_owner(202, object(), api)
+            self.assertEqual(api.classes, [4, 4])
+            self.assertEqual(api.equal_calls, [(202, 202)])
+            for owner, changes in ((101, {}), (303, {}), (0, {}), (202, {'selected': 0}),
+                                   (202, {'bound': 0}), (202, {'bound': 65537}),
+                                   (202, {'returned': 33}), (202, {'returned': 0}), (202, {'fail': True})):
+                with self.subTest(owner=owner, changes=changes):
+                    api = TokenAPI(**changes)
+                    with self.assertRaises(AssertionError): require_windows_token_owner(owner, object(), api)
+                    self.assertTrue(api.classes and all(value == 4 for value in api.classes))
 
         def test_config_is_closed_and_bounded(self):
             for body in (b'{"x":1,"x":2}', b'{} {}', b'{"x":NaN}', b'{"x":1e999}', b'[' * 10 + b'0' + b']' * 10, b'x' * 16385):

@@ -108,6 +108,7 @@ jobs:
           from native_client_research import run_probe
           temporary = pathlib.Path(os.environ['RUNNER_TEMP']).resolve()
           output = temporary / 'grok-acp-inventory'
+          diagnostic_deadline = __import__('time').monotonic() + 180
           record, stdout, stderr = run_probe([sys.executable, 'scripts/grok_acp_inventory_admission.py', '--output', str(output)],
               pathlib.Path.cwd(), dict(os.environ), temporary, 'grok-acp-frontend', timeout=180, limit=1 << 20, memory_only=True)
           if record['error'] is not None or record['exit'] not in (0, 1):
@@ -118,7 +119,10 @@ jobs:
           destination = pathlib.Path(tempfile.mkdtemp(prefix='grok-acp-admitted-', dir=temporary))
           destination.rmdir()
           expected_tree = subprocess.check_output(['/usr/bin/git', 'rev-parse', 'HEAD^{tree}'], text=True).strip()
-          admitted = capture.admit_publication(output, packet, os.environ['EXPECTED_COMMIT'], expected_tree, destination)
+          diagnostics = []
+          admitted = capture.admit_publication(output, packet, os.environ['EXPECTED_COMMIT'], expected_tree, destination,
+              diagnostics=diagnostics, diagnostic_deadline=diagnostic_deadline)
+          print('GROK_READOUT=' + __import__('json').dumps(diagnostics[0], separators=(',', ':')))
           with open(os.environ['GITHUB_OUTPUT'], 'a') as stream:
               stream.write('admitted=' + str(admitted) + '\n' + 'observation_exit=' + str(record['exit']) + '\n')
           PYTHON
