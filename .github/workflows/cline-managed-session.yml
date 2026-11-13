@@ -87,7 +87,7 @@ jobs:
         os: [ubuntu-24.04, macos-15, windows-2025]
     defaults:
       run:
-        shell: bash
+        shell: pwsh
     env:
       EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
       PYTHONDONTWRITEBYTECODE: '1'
@@ -107,14 +107,20 @@ jobs:
           cache: false
       - name: Test composed lifecycle and inherited process I/O
         run: |
-          test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT"
+          if ((git rev-parse HEAD) -ne $env:EXPECTED_COMMIT) { throw 'Source identity differs' }
           go test -count=1 ./install/integrationctl/agentplugins/clients/cline ./install/integrationctl/agentplugins/managedstdio ./cli/internal/agentpluginscli ./cli/cmd/agentplugins -run 'Test(ClineProjectSession|Session)'
-          go test -count=1 ./install/integrationctl/agentplugins/research/clinesession
+          if ($LASTEXITCODE -ne 0) { throw 'Composed session contracts failed' }
+          go -C install/integrationctl/agentplugins test -count=1 ./research/clinesession
+          if ($LASTEXITCODE -ne 0) { throw 'Fixed session bridge contracts failed' }
       - name: Verify Cline native transport readback rejects flat/foreign entries
-        run: python3 -m unittest discover -s scripts -p 'test_cline_managed_session_e2e.py' -v
+        run: |
+          $python = if ($IsWindows) { 'python' } else { 'python3' }
+          & $python -m unittest discover -s scripts -p 'test_cline_managed_session_e2e.py' -v
+          if ($LASTEXITCODE -ne 0) { throw 'Session Python contracts failed' }
       - name: Build ordinary UAP and credential-free MCP fixture
         run: |
-          python3 - <<'PY'
+          $python = if ($IsWindows) { 'python' } else { 'python3' }
+          & $python -c @'
           import os, subprocess
           from pathlib import Path
           from cline_managed_session_e2e import build_bridge
@@ -124,10 +130,12 @@ jobs:
           for destination, package in ((installer, './cli/cmd/agentplugins'), (probe, './repotests/testdata/agentplugins_native_probe')):
               subprocess.run(['go', 'build', '-trimpath', '-o', str(destination), package], check=True, timeout=180)
           build_bridge(installer, probe, helper)
-          PY
+          '@
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned session tools build failed' }
       - name: Verify actual installed Cline selection and MCP lifecycle without model
         run: |
-          python3 - <<'PY'
+          $python = if ($IsWindows) { 'python' } else { 'python3' }
+          & $python -c @'
           import os, subprocess, sys
           from pathlib import Path
           root = Path(os.environ['RUNNER_TEMP'])
@@ -136,7 +144,8 @@ jobs:
           for option, name in (('installer', 'agentplugins'), ('probe', 'probe'), ('helper', 'clinesession')):
               args.extend(['--' + option, str(root / (name + suffix))])
           subprocess.run(args + ['--output', str(root / 'cline-session-evidence')], check=True, timeout=930)
-          PY
+          '@
+          if ($LASTEXITCODE -ne 0) { throw 'Native managed session did not pass' }
       - name: Retain original evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a

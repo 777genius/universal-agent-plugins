@@ -85,7 +85,7 @@ func TestFixedWireRejectsUnknownDuplicateAndUnpinnedSource(t *testing.T) {
 	}
 }
 func TestRunAdmitsOnlySettledPinnedBoundedResult(t *testing.T) {
-	for _, condition := range []string{"success", "cleanup", "not-started", "error", "pin", "output"} {
+	for _, condition := range []string{"success", "cleanup", "not-started", "error", "pin", "output", "stderr"} {
 		t.Run(condition, func(t *testing.T) {
 			r := fixedFixture(t)
 			input, _ := requestPipe(t, r)
@@ -106,6 +106,9 @@ func TestRunAdmitsOnlySettledPinnedBoundedResult(t *testing.T) {
 				if condition == "output" {
 					result.Stdout = make([]byte, (1<<20)+1)
 				}
+				if condition == "stderr" {
+					result.Stderr = make([]byte, 32769)
+				}
 				if condition == "error" {
 					return result, io.ErrUnexpectedEOF
 				}
@@ -122,6 +125,94 @@ func TestRunAdmitsOnlySettledPinnedBoundedResult(t *testing.T) {
 				t.Fatal("unexpected retry")
 			}
 		})
+	}
+}
+func TestColdEnvironmentHasSeparateRootsAndNoDuplicateKeys(t *testing.T) {
+	r := fixedFixture(t)
+	r.Action = "cold-session"
+	cmd, err := command(r)
+	if err != nil || cmd.Dir != filepath.Join(r.Root, "cold") {
+		t.Fatal("cold working directory differs", err)
+	}
+	env := map[string]string{}
+	for _, item := range cmd.Env {
+		key, value, _ := strings.Cut(item, "=")
+		key = strings.ToUpper(key)
+		if _, exists := env[key]; exists {
+			t.Fatal("duplicate native environment key", key)
+		}
+		env[key] = value
+	}
+	for key, leaf := range map[string]string{"HOME": "cold-home", "USERPROFILE": "cold-home", "AGENTPLUGINS_HOME": "cold-cache", "GOCACHE": "cold-go-cache", "GOPATH": "cold-go-path"} {
+		if env[key] != filepath.Join(r.Root, leaf) {
+			t.Fatal("cold fixture reused warm state", key)
+		}
+	}
+	merged, err := protocolEnvironment(r.Root, "cold-session", transport{Env: map[string]string{"GOWORK": "off", "GOTOOLCHAIN": "local"}})
+	if err != nil || strings.Count(strings.Join(merged, "\n"), "GOWORK=") != 1 {
+		t.Fatal("protocol environment appended aliases", err)
+	}
+}
+
+func TestProtocolAgainstRealOwnedProbePreservesMarker(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	probe := filepath.Join(root, "probe"+suffix())
+	source, err := filepath.Abs("../../../../../repotests/testdata/agentplugins_native_probe/main.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	buildContext, buildCancel := context.WithTimeout(context.Background(), time.Minute)
+	defer buildCancel()
+	build := exec.CommandContext(buildContext, "go", "build", "-o", probe, source)
+	if output, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build exact owned fixture: %v: %s", err, output)
+	}
+	data, events := filepath.Join(root, "data"), filepath.Join(root, "events.jsonl")
+	for _, revision := range []string{"0", "1"} {
+		transport := transport{CWD: root, Env: map[string]string{"PLUGIN_ROOT": root, "PLUGIN_DATA": data, "UAP_TEST_ROOT": root,
+			"UAP_TEST_EVENTS": events, "UAP_TEST_NONCE": "owned", "UAP_TEST_REVISION": revision, "UAP_TEST_REPORT_OPERATION": "1"}}
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		cmd := exec.CommandContext(ctx, probe)
+		cmd.Dir = root
+		cmd.Env, err = protocolEnvironment(root, "direct-session", transport)
+		if err != nil {
+			t.Fatal(err)
+		}
+		input, err := cmd.StdinPipe()
+		if err != nil {
+			t.Fatal(err)
+		}
+		output, err := cmd.StdoutPipe()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = cmd.Start(); err != nil {
+			t.Fatal(err)
+		}
+		client := rpcClient{input: input, output: bufio.NewReaderSize(output, 65537)}
+		operation := "read"
+		if revision == "0" {
+			operation = "write"
+		}
+		exchangeErr := exchange(&client, transport, operation)
+		_ = input.Close()
+		tail, readErr := io.ReadAll(output)
+		waitErr := cmd.Wait()
+		cancel()
+		if exchangeErr != nil || readErr != nil || waitErr != nil || len(tail) != 0 || len(client.transcript) != 4 {
+			t.Fatalf("real fixture exchange %s: %v %v %v", revision, exchangeErr, readErr, waitErr)
+		}
+	}
+	body, err := os.ReadFile(filepath.Join(data, "native-marker.txt"))
+	if err != nil || string(body) != "kept-owned" {
+		t.Fatal("marker was not preserved", err)
+	}
+	body, err = os.ReadFile(events)
+	if err != nil || bytes.Count(body, []byte{'\n'}) != 6 {
+		t.Fatal("missing original protocol events", err)
 	}
 }
 func TestParentEOFOrExtraCancelsActualCommandContext(t *testing.T) {

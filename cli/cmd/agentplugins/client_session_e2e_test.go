@@ -197,5 +197,5 @@ func (runner sessionInventoryRunner) Run(_ context.Context, command legacyports.
 		rows = append(rows, map[string]any{"name": name, "path": path, "transportType": "stdio", "disabled": false})
 	}
 	output, err := json.Marshal(rows)
-	return legacyports.CommandResult{ExitCode: 0, Stdout: output}, err
+	return legacyports.CommandResult{ExitCode: 0, Stdout: output, CleanupComplete: true}, err
 }

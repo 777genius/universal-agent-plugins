@@ -24,6 +24,8 @@ func TestProjectKiroComposedSourceLifecycle(t *testing.T) {
 			}
 			bNative := securityFixtureTree(t, f.kiroRoot(f.b))
 			bState := projectJourneyRead(t, filepath.Join(f.namespace(f.b), "state-v2.json"))
+			// Keep B's original file identities as well as bytes while A changes.
+			f.preserve(t, f.kiroRoot(f.b), filepath.Join(f.namespace(f.b), "state-v2.json"))
 			kiroProjectReconcileAndRepair(t, f)
 			kiroProjectUpdateAndTransfer(t, f)
 			kiroProjectRemove(t, f)
@@ -75,6 +77,7 @@ func kiroProjectUpdateAndTransfer(t *testing.T, f kiroProjectJourney) {
 		t.Fatal("Kiro export changed exact portable pins")
 	}
 	cold := newKiroProjectJourney(t, f.transport)
+	cold.preserve(t, cold.kiroRoot(cold.b))
 	projectJourneyAbsent(t, cold.cache, filepath.Join(cold.a, ".uap"))
 	cold.run(t, cold.a, "deps", "import", exchange, "--install", "--yes")
 	restored, _ := cold.assertKiroOwned(t, cold.a, projectJourneyAdvancedSkill, "https://managed.test/v2")

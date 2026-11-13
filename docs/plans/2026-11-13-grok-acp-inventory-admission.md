@@ -1,8 +1,53 @@
 # Grok 1.0.70 isolated ACP inventory admission
 
-## Reviewed next measurement: finite bootstrap bytes
+## Current measured bootstrap and prospective scope contract
 
-Root R1 authorizes exactly this plan, the existing admission script and its test,
+The measured 43-name native bootstrap in
+[the native bootstrap amendment](2026-11-13-grok-acp-native-bootstrap.md)
+supersedes the unpublished 35-name preseed recipe. Do not author
+`default_skills_installs_purged` or `session_search = false` in the fixture.
+Keep a single native-created bootstrap route and the original fixture baseline.
+Both original fc8 and 4994 archives agree on all 33 immutable file pins,
+913,351 bytes, and the exact 43 additions. Offline admission of those effects
+does not relabel either historical failed run or prove later native scopes.
+
+The pinned discovery resolver at public source
+`2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8` keeps Project over User when manifest
+names collide. The former four-root Project expectation contradicted that source.
+The prospective exact sets are:
+
+| Invocation | Exact expected roots |
+| --- | --- |
+| User | User collision and User unique. |
+| A | A collision, A unique and User unique. |
+| B | B collision, B unique and User unique. |
+
+Every native ID must equal scope, the first eight hexadecimal SHA256 characters
+of its canonical physical root, and manifest name. A Project collision must
+carry the exact source warning naming the suppressed User root. Extra, missing,
+duplicate, outside or sibling roots, wrong hashes and wrong winners refuse.
+The losing User row is absent, but its original bytes and physical identity
+remain protected by the original effects ledger. Tests exercise those negatives
+and a real same-byte replacement of the suppressed User skill before profile reads.
+
+Both historical archives contain only User. Fresh exact-source User/A/B evidence
+remains required; this source-derived contract grants no native qualification.
+The external bootstrap helper, pre-read authority checks, ctime-only UUID chmod
+exception, immutable metadata guards and bounded ten-file capture remain intact.
+One prospective risk remains: the public pager startup calls guide extraction
+on each invocation, and that extractor writes the same guide files. If shipping
+ACP repeats those timestamp writes, the current immutable metadata guard will
+refuse the next scope. Preserve that refusal until an original capture and
+independent review establish a narrower change. No timeout or process count grows.
+
+Primary source: [PluginId and resolve_name_conflicts](https://github.com/xai-org/grok-build/blob/2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8/crates/codegen/xai-grok-agent/src/plugins/discovery.rs),
+[PluginInfo serialization](https://github.com/xai-org/grok-build/blob/2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8/crates/codegen/xai-grok-shell/src/extensions/plugins.rs),
+[pager startup](https://github.com/xai-org/grok-build/blob/2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8/crates/codegen/xai-grok-pager-bin/src/main.rs),
+and [guide extraction](https://github.com/xai-org/grok-build/blob/2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8/crates/codegen/xai-grok-pager/src/docs.rs).
+
+## Retained measurement checkpoint: finite bootstrap bytes
+
+The b378190d checkpoint authorized this plan, the existing admission script and its test,
 with 130–170 changed runtime/test lines. The first User invocation keeps the
 existing controller, network isolation, deadline, strict cleanup receipts and
 original effect baseline. After both cleanup proofs, the parent captures ten
@@ -57,11 +102,11 @@ fields at both levels; flat, triple, extra-field and oversized alternatives
 remain refused. An actual inert pipe exchange checks both emitted requests,
 retained response bytes and hashes, and exact root/ID projection.
 
-This correction does not admit the original effects ledger: it recorded 43 new
-entries and the one authored `request.json` update. New native config, session
-database, locks and metadata remain outside the admitted bootstrap recipe.
-The original run is still negative, all qualifications remain false, and later
-scopes must not run after that refusal. The closed workflow readout reports
+The reply correction alone did not admit the original effects ledger: it recorded
+43 new entries and the one authored `request.json` update. The measured bootstrap
+amendment above now admits only that finite effect domain for a fresh run.
+The original run stays negative and all qualifications remain false. Later scopes
+must not run after any current refusal. The closed workflow readout reports
 only bounded stage/reason/count facts after original archive admission; it does
 not replace original stream, source, ledger or cleanup evidence.
 
@@ -217,21 +262,22 @@ has no managed catalog. Nonempty/duplicate/unknown notification or inbound reque
 refuses. No broad notification ignoring or unreviewed retry. Inputframe4096bytes,
 outputframe64KiB, <=64frames, UTF8/unique keys/finite numbers/depth16/items512,
 exact numeric IDs/result-or-error. Listing must contain stable full ID, canonical
-physical root, exact scope and boolean state; reject collisions/shadowing/siblings.
+physical root, exact scope and boolean state, with the precise prospective
+precedence contract above; wrong winners, extra roots and siblings refuse.
 FIRST actual schema capture remains unqualified even if collection completes.
 
 ## Effects, raw evidence and recovery
 
 Reuse metadata_inventory from scripts/devin_structured_inventory_admission.py,
-physical/content snapshot+grok_profile_bootstrap from client_automation_native_probe,
+physical/content snapshot from client_automation_native_probe,
 and descriptor-safe archive helpers in native_client_project_artifacts.py.
 Bound entire owned outer entry set4096/depth32; each ordinary file/evidence1MiB,
 aggregate16MiB. Verify already-admitted large executable hashes separately.
 Reject aliases/specials/replacement/outside paths/source or sibling changes.
-Only already measured1.0.70 docs/user-guide named Markdown and unified log bootstrap
-allowance can be reused; preserve all original bytes/physical identity. Any other
-new config/trust/provider state is unadmitted. Unknown writes are recorded then
-fail, never restored or adopted to disguise them.
+Only the measured 43-name NativeBootstrap contract is admitted; preserve all
+original bytes and physical identity. Any other new config, trust, provider or
+session state is unadmitted. Unknown writes are recorded then fail, never
+restored or adopted to disguise them.
 
 Closed artifacts: admission.json/acquisition.json, three scope RPC and ledger
 JSONs, up to15 scope-command merged logs. Summary contains isolation/system/cleanup

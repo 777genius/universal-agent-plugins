@@ -48,11 +48,15 @@ type sessionObservationRunner struct {
 	result  legacyports.CommandResult
 	err     error
 	bounded bool
+	cancel  context.CancelFunc
 }
 
 func (runner *sessionObservationRunner) Run(ctx context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
 	runner.command = command
 	_, runner.bounded = ctx.Deadline()
+	if runner.cancel != nil {
+		runner.cancel()
+	}
 	return runner.result, runner.err
 }
 
@@ -63,19 +67,26 @@ func TestSessionNativeInventoryExitAndCapability(t *testing.T) {
 	for _, failure := range []struct {
 		result legacyports.CommandResult
 		err    error
-	}{{legacyports.CommandResult{ExitCode: 1, Stdout: good}, nil}, {legacyports.CommandResult{Stdout: good}, errors.New("native failure")},
-		{legacyports.CommandResult{Stdout: []byte("Usage: cline")}, nil}, {legacyports.CommandResult{Stdout: make([]byte, (1<<20)+1)}, nil}} {
+	}{{legacyports.CommandResult{ExitCode: 1, Stdout: good, CleanupComplete: true}, nil}, {legacyports.CommandResult{Stdout: good, CleanupComplete: true}, errors.New("native failure")},
+		{legacyports.CommandResult{Stdout: []byte("Usage: cline"), CleanupComplete: true}, nil}, {legacyports.CommandResult{Stdout: make([]byte, (1<<20)+1), CleanupComplete: true}, nil},
+		{legacyports.CommandResult{Stdout: good}, nil}, {legacyports.CommandResult{Stdout: good, CleanupComplete: true, NoChildStarted: true}, nil}} {
 		runner := &sessionObservationRunner{result: failure.result, err: failure.err}
 		if err := New().VerifySession(context.Background(), clients.Env{Runner: runner}, plan); err == nil {
 			t.Fatal("native failure accepted")
 		}
 	}
-	runner := &sessionObservationRunner{result: legacyports.CommandResult{Stdout: good}}
+	runner := &sessionObservationRunner{result: legacyports.CommandResult{Stdout: good, CleanupComplete: true}}
 	if err := New().VerifySession(context.Background(), clients.Env{Runner: runner}, plan); err != nil {
 		t.Fatal(err)
 	}
 	if !runner.bounded || runner.command.StdoutLimitBytes != 1<<20 || runner.command.Dir != "/project" ||
 		!reflect.DeepEqual(runner.command.Argv, []string{"/native/cline", "--auto-approve", "false", "--cwd", "/project", "config", "mcp", "--json"}) {
 		t.Fatalf("native observation changed scope or command: %+v", runner.command)
+	}
+	canceled, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	runner.cancel = cancel
+	if err := New().VerifySession(canceled, clients.Env{Runner: runner}, plan); !errors.Is(err, context.Canceled) {
+		t.Fatalf("late cancellation admitted native inventory: %v", err)
 	}
 }

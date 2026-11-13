@@ -376,6 +376,29 @@ class ProfileAdmissionContracts(unittest.TestCase):
                     original, SimpleNamespace(**dict(base, st_mode=stat.S_IFREG | 0o755)),
                     "inventory directory changed at open")
 
+    def test_directory_temporal_diagnostic_keeps_windows_domains_separate(self):
+        import stat
+        path = Path(__file__).resolve().parent / "private-directory-name"
+        base = dict(st_dev=4, st_ino=5, st_mode=stat.S_IFDIR | 0o755, st_nlink=1,
+                    st_uid=6, st_gid=7, st_size=0, st_mtime_ns=100, st_ctime_ns=90,
+                    st_birthtime_ns=80, st_file_attributes=16, st_reparse_tag=0)
+        before = SimpleNamespace(**base)
+        held = SimpleNamespace(**dict(base, st_mode=stat.S_IFDIR | 0o700, st_ctime_ns=800, st_file_attributes=32))
+        for change in (None, "path", "handle"):
+            linked = SimpleNamespace(**dict(base, **({"st_ctime_ns": 123456789} if change == "path" else {})))
+            current = SimpleNamespace(**dict(vars(held), **({"st_file_attributes": 123456789} if change == "handle" else {})))
+            with self.subTest(change=change), mock.patch.object(CASE["artifacts"], "WINDOWS", True):
+                with mock.patch.object(Path, "lstat", return_value=linked), mock.patch.object(os, "fstat", return_value=current):
+                    with mock.patch.object(Path, "resolve", return_value=path):
+                        if change is None:
+                            CASE["verify_inventory_directory"](path, before, 17, held)
+                            continue
+                        with self.assertRaises(RuntimeError) as caught:
+                            CASE["verify_inventory_directory"](path, before, 17, held)
+            field = "path:st_ctime_ns" if change == "path" else "handle:st_file_attributes"
+            self.assertEqual(str(caught.exception), "inventory directory changed (" + field + ")")
+
+
     def test_directory_temporal_refusal_names_domain_and_fields_without_values(self):
         fields = CASE["STABLE_FIELDS"] + (("st_birthtime_ns", "st_file_attributes", "st_reparse_tag") if CASE["artifacts"].WINDOWS else ())
         base = {field: 100 for field in fields}
@@ -829,8 +852,8 @@ class BundledRuntimeContracts(unittest.TestCase):
             parent = Path(temporary).resolve(); root = parent / "payload"; root.mkdir()
             leaf = root / "runtime"; leaf.write_bytes(b"owned bytes")
             identity = CASE["directory_identity"](root)
-            def add_alias(records):
-                function(records)
+            def add_alias(records, deadline):
+                function(records, deadline)
                 os.link(leaf, parent / "late-foreign")
             with mock.patch.dict(CASE["payload_snapshot"].__globals__, {"payload_hardlink_closure": add_alias}), mock.patch.object(os, "read", side_effect=AssertionError("hash before late-link check")):
                 with self.assertRaisesRegex(RuntimeError, "metadata changed before hashing"):
@@ -848,7 +871,7 @@ class BundledRuntimeContracts(unittest.TestCase):
             records = {"first": {"type": "file", "identity": before}, "second": {"type": "file", "identity": after}}
             with mock.patch.object(os, "read", side_effect=AssertionError("body before metadata closure")):
                 with self.assertRaisesRegex(RuntimeError, "hardlink metadata differs"):
-                    CASE["payload_hardlink_closure"](records)
+                    CASE["payload_hardlink_closure"](records, __import__("time").monotonic() + 5)
 
     def test_complete_metadata_pass_keeps_original_deadline_and_byte_bound(self):
         import time
@@ -910,6 +933,33 @@ class BundledRuntimeContracts(unittest.TestCase):
             records["link"]["target"] = target
             with self.subTest(target=target), mock.patch.object(Path, "resolve", side_effect=AssertionError("link traversed")), self.assertRaises(RuntimeError):
                 CASE["payload_links"](root, records, time.monotonic() + 5)
+
+    def test_payload_alias_closure_keeps_original_deadline_and_positive_identity(self):
+        import time
+        original = {"type": "file", "identity": (4, 5, 0o100600, 1, 7, 100, 101, 8, 9)}
+        with self.assertRaisesRegex(RuntimeError, "deadline"):
+            CASE["payload_hardlink_closure"]({"one": original}, time.monotonic() - 1)
+        for index in (0, 1, 3):
+            identity = list(original["identity"]); identity[index] = 0
+            with self.subTest(index=index), self.assertRaisesRegex(RuntimeError, "identity unavailable"):
+                CASE["payload_hardlink_closure"]({"one": {**original, "identity": identity}}, time.monotonic() + 5)
+
+    def test_payload_extended_windows_links_require_local_absolute_drive(self):
+        import time
+        from pathlib import PureWindowsPath
+        records = {".": {"type": "directory"}, "file": {"type": "file"},
+                   "link": {"type": "link", "target": r"\\?\C:\payload\file"}}
+        for name in ("UNC", "UNC/server", "UNC/server/share", "GLOBALROOT", "GLOBALROOT/Device"):
+            records[name] = {"type": "directory"}
+        for name in ("UNC/server/share/file", "GLOBALROOT/Device/file"):
+            records[name] = {"type": "file"}
+        with mock.patch.dict(CASE["payload_links"].__globals__, {"Path": PureWindowsPath}), mock.patch.object(CASE["artifacts"], "WINDOWS", True):
+            CASE["payload_links"](PureWindowsPath("C:/payload"), records, time.monotonic() + 5)
+            for target in (r"\\?\UNC\server\share\file", r"\\?\GLOBALROOT\Device\file", r"\\?\C:file"):
+                records["link"]["target"] = target
+                with self.subTest(target=target), self.assertRaisesRegex(RuntimeError, "payload device namespace link"):
+                    CASE["payload_links"](PureWindowsPath("C:/payload"), records, time.monotonic() + 5)
+
 
     @unittest.skipIf(os.name == "nt", "physical POSIX symlink capture; graph validation runs on every OS")
     def test_payload_records_link_text_and_never_opens_escaping_target(self):

@@ -422,24 +422,27 @@ def capture_bootstrap_files(root, ledger, budget):
 
 
 def inventory_rows(result, root, scope):
+    require(scope in SCOPES, 'inventory-scope')
     rows = result['rpc']['plugins']['result']['result']['plugins']
-    wanted = {str(root / 'home/.grok/plugins' / name): ('user', name) for name in ('uap-acp-collision', 'uap-acp-foreign-user')}
+    user_names = ('uap-acp-collision', 'uap-acp-foreign-user') if scope == 'user' else ('uap-acp-foreign-user',)
+    wanted = {str(root / 'home/.grok/plugins' / name): ('user', name) for name in user_names}
     if scope != 'user':
         wanted.update({str(root / scope / '.grok/plugins' / name): ('project', name) for name in ('uap-acp-collision', 'uap-acp-foreign-' + scope)})
+    require(type(rows) is list and len(rows) == len(wanted), 'exact-inventory-count')
     seen, matched = set(), set()
     for row in rows:
         require(type(row) is dict and type(row.get('id')) is str and row['id'] and row['id'] not in seen, 'plugin-id')
         seen.add(row['id'])
         require(type(row.get('trusted')) is bool and type(row.get('enabled')) is bool, 'plugin-state')
-        if row.get('root') in wanted:
-            expected_scope, name = wanted[row['root']]
-            require(row.get('scope') == expected_scope and row.get('name') == name and row['root'] not in matched, 'plugin-source')
-            require(re.fullmatch(re.escape(expected_scope) + r'/[0-9a-f]{8}/' + re.escape(name), row['id']), 'full-plugin-id')
-            matched.add(row['root'])
-        elif str(root) in str(row.get('root', '')):
-            raise ValueError('sibling-plugin')
+        require(type(row.get('root')) is str and row['root'] in wanted, 'unknown-plugin-root')
+        expected_scope, name = wanted[row['root']]
+        require(row.get('scope') == expected_scope and row.get('name') == name and row['root'] not in matched, 'plugin-source')
+        require(row['id'] == expected_scope + '/' + digest(row['root'].encode())[:8] + '/' + name, 'full-plugin-id')
+        conflict = 'Name collision: shadowing "uap-acp-collision" from ' + str(root / 'home/.grok/plugins/uap-acp-collision')
+        require(row.get('conflict') == (conflict if scope != 'user' and name == 'uap-acp-collision' else None), 'plugin-precedence')
+        matched.add(row['root'])
     require(matched == set(wanted), 'exact-inventory-incomplete')
-    return {row['root']: row['id'] for row in rows if row.get('root') in wanted}
+    return {row['root']: row['id'] for row in rows}
 
 
 def directory_id(info):

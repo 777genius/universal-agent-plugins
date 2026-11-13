@@ -24,6 +24,17 @@ def help_rows():
                  merged_bytes=len(body), merged_sha256=case.digest(body)) for label, body in zip(case.LABELS, bodies)]
 
 
+def plugin_row(root, scope, name):
+    path = str(root / 'home/.grok/plugins' / name if scope == 'user' else root / scope / '.grok/plugins' / name)
+    native_scope = 'user' if scope == 'user' else 'project'
+    row = dict(id=native_scope + '/' + case.digest(path.encode())[:8] + '/' + name,
+               root=path, name=name, scope=native_scope, trusted=scope == 'user', enabled=False)
+    if scope != 'user' and name == 'uap-acp-collision':
+        row['conflict'] = 'Name collision: shadowing "uap-acp-collision" from ' + str(root / 'home/.grok/plugins/uap-acp-collision')
+    return row
+
+
+
 class AdmissionContracts(unittest.TestCase):
     def request(self, root):
         return dict(schema_version=1, source_commit='a' * 40, source_tree='b' * 40, uid=1001, gid=1001,
@@ -94,8 +105,7 @@ class AdmissionContracts(unittest.TestCase):
     def test_actual_pipe_preserves_nested_listing_for_exact_inventory(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            rows = [dict(id='user/12345678/' + name, root=str(root / 'home/.grok/plugins' / name),
-                         name=name, scope='user', trusted=True, enabled=False)
+            rows = [plugin_row(root, 'user', name)
                     for name in ('uap-acp-collision', 'uap-acp-foreign-user')]
             frames = [{'jsonrpc': '2.0', 'id': 1, 'result': {'protocolVersion': 1, '_meta': {'agentVersion': '1.0.70'}}},
                       {'jsonrpc': '2.0', 'id': 2, 'result': {'result': {'plugins': rows}}}]
@@ -128,19 +138,42 @@ sys.stdin.read()
 
     def test_full_id_requires_exact_roots_scope_and_no_sibling(self):
         root = Path('/tmp/uap-fixture')
-        rows = [dict(id='user/12345678/' + name, root=str(root / 'home/.grok/plugins' / name), name=name, scope='user', trusted=True, enabled=True)
+        rows = [plugin_row(root, 'user', name)
                 for name in ('uap-acp-collision', 'uap-acp-foreign-user')]
         result = {'rpc': {'plugins': {'result': {'result': {'plugins': rows}}}}}
         case.inventory_rows(result, root, 'user')
-        for mutate in ('missing', 'duplicate', 'scope', 'sibling', 'name-only'):
+        for mutate in ('missing', 'duplicate', 'scope', 'sibling', 'name-only', 'wrong-hash', 'outside'):
             value = copy.deepcopy(result)
             current = value['rpc']['plugins']['result']['result']['plugins']
             if mutate == 'missing': current.pop()
             elif mutate == 'duplicate': current.append(current[0])
             elif mutate == 'scope': current[0]['scope'] = 'project'
             elif mutate == 'name-only': current[0]['id'] = current[0]['name']
+            elif mutate == 'wrong-hash': current[0]['id'] = 'user/00000000/' + current[0]['name']
+            elif mutate == 'outside': current[0]['root'] = '/outside/plugin'
             else: current[0]['root'] = str(root / 'b/.grok/plugins/foreign')
             with self.assertRaises(ValueError): case.inventory_rows(value, root, 'user')
+
+    def test_project_precedence_has_exact_winner_and_preserved_unique_sources(self):
+        root = Path('/tmp/uap-fixture')
+        for scope in ('a', 'b'):
+            rows = [plugin_row(root, 'user', 'uap-acp-foreign-user'),
+                    plugin_row(root, scope, 'uap-acp-collision'),
+                    plugin_row(root, scope, 'uap-acp-foreign-' + scope)]
+            result = {'rpc': {'plugins': {'result': {'result': {'plugins': rows}}}}}
+            self.assertEqual(case.inventory_rows(result, root, scope), {row['root']: row['id'] for row in rows})
+            for mutation in ('wrong-winner', 'duplicate', 'sibling', 'lost-unique', 'both-winners', 'wrong-warning'):
+                value = copy.deepcopy(result)
+                current = value['rpc']['plugins']['result']['result']['plugins']
+                if mutation == 'wrong-winner': current[1] = plugin_row(root, 'user', 'uap-acp-collision')
+                elif mutation == 'duplicate': current[2] = copy.deepcopy(current[1])
+                elif mutation == 'sibling': current[1] = plugin_row(root, 'b' if scope == 'a' else 'a', 'uap-acp-collision')
+                elif mutation == 'lost-unique': current.pop(0)
+                elif mutation == 'both-winners': current.append(plugin_row(root, 'user', 'uap-acp-collision'))
+                else: current[1]['conflict'] = 'different source'
+                with self.subTest(scope=scope, mutation=mutation), self.assertRaises(ValueError):
+                    case.inventory_rows(value, root, scope)
+
 
     def test_bounded_reader_rejects_same_bytes_replacement_and_alias(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -637,6 +670,25 @@ def native_bootstrap_fixture():
 
 
 class NativeBootstrapContracts(unittest.TestCase):
+    def test_shadowed_user_source_replacement_refuses_before_profile_reads(self):
+        import client_automation_native_probe as snapshot_case
+        with native_bootstrap_fixture() as fixture:
+            self.assertTrue(fixture['capture']()['accepted'])
+            root = fixture['root']
+            rows = [plugin_row(root, 'user', 'uap-acp-foreign-user'),
+                    plugin_row(root, 'a', 'uap-acp-collision'), plugin_row(root, 'a', 'uap-acp-foreign-a')]
+            case.inventory_rows({'rpc': {'plugins': {'result': {'result': {'plugins': rows}}}}}, root, 'a')
+            target = fixture['native'] / 'plugins/uap-acp-collision/skills/inert/SKILL.md'
+            original = target.read_bytes()
+            with target.open('rb'):
+                target.unlink()
+                target.write_bytes(original)
+                target.chmod(0o600)
+                with mock.patch.object(snapshot_case, 'snapshot') as reader:
+                    self.assertFalse(fixture['capture']()['accepted'])
+                reader.assert_not_called()
+                self.assertEqual(target.read_bytes(), original)
+
     def test_real_first_creation_repeat_uuid_chmod_and_bounded_cache_changes(self):
         with native_bootstrap_fixture() as f:
             original = copy.deepcopy(f['before'])

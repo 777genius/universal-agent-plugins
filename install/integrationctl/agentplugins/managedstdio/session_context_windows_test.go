@@ -93,6 +93,13 @@ func TestSessionContextCancellationBeforeResume(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	resumeCalls := 0
+	originalResume := resumeSessionChild
+	resumeSessionChild = func(pid int) error {
+		resumeCalls++
+		return originalResume(pid)
+	}
+	t.Cleanup(func() { resumeSessionChild = originalResume })
 	original := assignProcessToJobObject
 	assignProcessToJobObject = func(job, process windows.Handle) error {
 		if err := original(job, process); err != nil {
@@ -111,10 +118,13 @@ func TestSessionContextCancellationBeforeResume(t *testing.T) {
 	select {
 	case err := <-done:
 		if !errors.Is(err, context.Canceled) {
-			t.Fatalf("cancelled suspended session: %v", err)
+			t.Fatalf("canceled suspended session: %v", err)
 		}
 	case <-time.After(5 * time.Second):
-		t.Fatal("cancelled suspended session was not reaped")
+		t.Fatal("canceled suspended session was not reaped")
+	}
+	if resumeCalls != 0 {
+		t.Errorf("canceled suspended session attempted resume %d times", resumeCalls)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "pre-resume.pid")); !os.IsNotExist(err) {
 		t.Fatalf("suspended child executed after cancellation: %v", err)

@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -22,18 +24,32 @@ func (detector kiroProjectDetector) Detect(context.Context) ([]domain.DetectedCl
 
 // Reuse the core journey's production CLI/state helpers and real TLS Git/ZIP
 // transports. Kiro supplies its own detected profile and native layout.
-type kiroProjectJourney struct{ projectJourney }
+type kiroProjectJourney struct {
+	projectJourney
+	protected map[string]kiroProtectedTree
+}
+
+type kiroProtectedTree struct {
+	entries    map[string]string
+	identities map[string]os.FileInfo
+}
 
 func newKiroProjectJourney(t *testing.T, transport *projectJourneyTransport) kiroProjectJourney {
 	t.Helper()
-	f := kiroProjectJourney{projectJourney{home: projectJourneyTemp(t), a: projectJourneyTemp(t), b: projectJourneyTemp(t), transport: transport}}
+	f := kiroProjectJourney{projectJourney: projectJourney{home: projectJourneyTemp(t), a: projectJourneyTemp(t), b: projectJourneyTemp(t), transport: transport}, protected: map[string]kiroProtectedTree{}}
 	f.cache = filepath.Join(f.home, "uap")
-	for _, root := range []string{"", f.a, f.b} {
+	for index, root := range []string{"", f.a, f.b} {
 		native := f.kiroRoot(root)
 		projectJourneyWrite(t, filepath.Join(native, "settings", "mcp.json"), `{"mcpServers":{"foreign":{"url":"https://foreign.test/mcp","disabled":true}},"foreignPreference":"keep"}`)
 		projectJourneyWrite(t, filepath.Join(native, "skills", "foreign", "SKILL.md"), "foreign skill\n")
 		projectJourneyWrite(t, filepath.Join(native, "hooks.json"), "foreign hooks\n")
+		label := []string{"user", "project-a", "project-b"}[index]
+		projectJourneyWrite(t, filepath.Join(native, "agents", "preserved.json"), `{"name":"preserved","includeMcpJson":false,"resources":["file://`+label+`.md"],"mcpServers":{"docs":{"url":"https://`+label+`.invalid/mcp","disabled":true}}}`)
 	}
+	user := f.kiroRoot("")
+	projectJourneyWrite(t, filepath.Join(user, "settings", "mcp.json"), `{"mcpServers":{"docs":{"url":"https://user-peer.invalid/mcp","disabled":true},"foreign":{"url":"https://foreign.test/mcp","disabled":true}},"foreignPreference":"keep"}`)
+	projectJourneyWrite(t, filepath.Join(user, "skills", "docs", "SKILL.md"), "Original same-name User skill.\n")
+	f.preserve(t, user, filepath.Join(f.kiroRoot(f.a), "agents"), filepath.Join(f.kiroRoot(f.b), "agents"))
 	registry, err := specregistry.New()
 	if err != nil {
 		t.Fatal(err)
@@ -44,6 +60,68 @@ func newKiroProjectJourney(t *testing.T, transport *projectJourneyTransport) kir
 	}
 	f.app = configureKiroProjectJourney(app, f.home, transport)
 	return f
+}
+
+// These are preserved opaque policy files, never evidence of active agent selection.
+func (f kiroProjectJourney) preserve(t *testing.T, roots ...string) {
+	t.Helper()
+	f.assertProtected(t)
+	for _, root := range roots {
+		if _, exists := f.protected[root]; exists {
+			t.Fatal("cannot rebaseline original Kiro policy or peer")
+		}
+		snapshot := kiroProtectedTree{entries: securityFixtureTree(t, root), identities: map[string]os.FileInfo{}}
+		for relative := range snapshot.entries {
+			held, err := os.Open(filepath.Join(root, relative))
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() {
+				if err := held.Close(); err != nil {
+					t.Error(err)
+				}
+			})
+			original, err := held.Stat()
+			if err != nil {
+				t.Fatal(err)
+			}
+			snapshot.identities[relative] = original
+		}
+		f.protected[root] = snapshot
+	}
+	f.assertProtected(t)
+}
+
+func (f kiroProjectJourney) assertProtected(t *testing.T) {
+	t.Helper()
+	for root, snapshot := range f.protected {
+		if !reflect.DeepEqual(snapshot.entries, securityFixtureTree(t, root)) {
+			t.Fatalf("Kiro changed original policy or peer bytes/membership: %s", root)
+		}
+		for relative, original := range snapshot.identities {
+			current, err := os.Lstat(filepath.Join(root, relative))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !os.SameFile(original, current) || original.Mode() != current.Mode() {
+				t.Fatalf("Kiro replaced original policy or peer identity: %s", root)
+			}
+		}
+	}
+}
+
+func (f kiroProjectJourney) run(t *testing.T, project string, args ...string) {
+	t.Helper()
+	f.assertProtected(t)
+	f.projectJourney.run(t, project, args...)
+	f.assertProtected(t)
+	for _, installation := range f.state(t, project).Installations {
+		for _, binding := range installation.Clients {
+			if binding.Activation != domain.ActivationPrepared || binding.Verification != domain.VerificationInstalled {
+				t.Fatal("Kiro policy/peer fixture upgraded prepared file verification")
+			}
+		}
+	}
 }
 
 // Preserve the production scoped composer, installer, ownership kernel, store,

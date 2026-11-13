@@ -17,6 +17,7 @@ import (
 
 var assignProcessToJobObject = windows.AssignProcessToJobObject
 var terminateSessionJob = windows.TerminateJobObject
+var resumeSessionChild = resumeSessionProcess
 
 // Windows cannot replace the current process with execve. A private Job
 // Object gives the managed helper equivalent process-tree ownership: the
@@ -84,7 +85,7 @@ func replaceSessionContext(ctx context.Context, command string, args []string, c
 	if ctx.Err() != nil {
 		return waitSessionContext(ctx, cmd, &job)
 	}
-	if err := resumeSessionProcess(cmd.Process.Pid); err != nil {
+	if err := resumeSessionChild(cmd.Process.Pid); err != nil {
 		_ = windows.TerminateJobObject(job, 1)
 		_ = cmd.Wait()
 		return err

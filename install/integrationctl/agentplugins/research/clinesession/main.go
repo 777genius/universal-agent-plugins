@@ -14,6 +14,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -135,10 +136,12 @@ func pin(path, root, expected string) error {
 func environment(root string, cold bool) []string {
 	home := filepath.Join(root, "home")
 	cache := filepath.Join(root, "cache")
+	goPrefix := "go-"
 	if cold {
 		home, cache = filepath.Join(root, "cold-home"), filepath.Join(root, "cold-cache")
+		goPrefix = "cold-go-"
 	}
-	result := []string{"HOME=" + home, "USERPROFILE=" + home, "PATH=" + filepath.Join(root, "vendor", "package", "bin") + string(os.PathListSeparator) + filepath.Dir(gitBinary) + string(os.PathListSeparator) + filepath.Dir(goBinary), "AGENTPLUGINS_HOME=" + cache, "CLINE_NO_AUTO_UPDATE=1", "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=" + os.DevNull, "GIT_TERMINAL_PROMPT=0", "GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=core.hooksPath", "GIT_CONFIG_VALUE_0=" + os.DevNull, "NO_COLOR=1", "TERM=dumb", "LANG=C.UTF-8", "GOWORK=off", "GOTOOLCHAIN=local", "GOCACHE=" + filepath.Join(root, "go-cache"), "GOPATH=" + filepath.Join(root, "go-path"), "APPDATA=" + filepath.Join(home, "appdata"), "LOCALAPPDATA=" + filepath.Join(home, "localappdata")}
+	result := []string{"HOME=" + home, "USERPROFILE=" + home, "PATH=" + filepath.Join(root, "vendor", "package", "bin") + string(os.PathListSeparator) + filepath.Dir(gitBinary) + string(os.PathListSeparator) + filepath.Dir(goBinary), "AGENTPLUGINS_HOME=" + cache, "CLINE_NO_AUTO_UPDATE=1", "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=" + os.DevNull, "GIT_TERMINAL_PROMPT=0", "GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=core.hooksPath", "GIT_CONFIG_VALUE_0=" + os.DevNull, "NO_COLOR=1", "TERM=dumb", "LANG=C.UTF-8", "GOWORK=off", "GOTOOLCHAIN=local", "GOCACHE=" + filepath.Join(root, goPrefix+"cache"), "GOPATH=" + filepath.Join(root, goPrefix+"path"), "APPDATA=" + filepath.Join(home, "appdata"), "LOCALAPPDATA=" + filepath.Join(home, "localappdata")}
 	for _, key := range []string{"CONFIG", "DATA", "CACHE", "STATE"} {
 		result = append(result, "XDG_"+key+"_HOME="+filepath.Join(home, "xdg-"+strings.ToLower(key)))
 	}
@@ -171,6 +174,9 @@ func fixedArgs(root string) map[string][]string {
 func command(r request) (ports.Command, error) {
 	uap, native, _ := paths(r.Root)
 	project := filepath.Join(r.Root, "a")
+	if strings.HasPrefix(r.Action, "cold-") {
+		project = filepath.Join(r.Root, "cold")
+	}
 	cmd := ports.Command{Env: environment(r.Root, strings.HasPrefix(r.Action, "cold-")), Dir: project, StdoutLimitBytes: 1 << 20}
 	switch r.Action {
 	case "native-version":
@@ -207,9 +213,6 @@ func command(r request) (ports.Command, error) {
 	}
 	if r.Action == "saved-add" {
 		project = filepath.Join(r.Root, "saved")
-	}
-	if strings.HasPrefix(r.Action, "cold-") {
-		project = filepath.Join(r.Root, "cold")
 	}
 	cmd.Dir = project
 	cmd.Argv = append([]string{uap}, args...)
@@ -350,7 +353,7 @@ func validateSelected(root, project, action string, t transport) (transport, err
 		return zero, err
 	}
 	expected := managedstdio.Arguments(active, data, active, pathcontract.Plugin, child, childArgs)
-	if strings.Join(t.Args, "\x00") != strings.Join(expected, "\x00") {
+	if !slices.Equal(t.Args, expected) {
 		return zero, errors.New("managed arguments refused")
 	}
 	return t, nil

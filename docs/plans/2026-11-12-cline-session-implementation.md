@@ -36,3 +36,20 @@ Remaining work in the same PR: Grok's safe enable route, Antigravity registratio
 Devin/Kiro qualification, Hermes Project MCP, full final-head review/checks and
 postmerge acceptance. The temporary offline-worktree exporter is removed once
 its verified source/compiler inputs are available; it is not a product workflow.
+
+## Session observer cleanup review — 2026-11-13
+
+Root review found that `VerifySession` accepted an injected runner's exit-zero
+inventory even when its explicit `CleanupComplete` fact was false, or it
+reported `NoChildStarted=true`. The process port defines false cleanup as
+unknown. Valid output alone must not authorize the next client process.
+The observer now requires completed cleanup, an actual started child and a
+still-live observation context. The composed inert inventory fixture explicitly
+attests its own completed return; it remains a fixture, not vendor execution.
+
+This is a five-line production correction with focused failure coverage for
+unknown cleanup, contradictory no-start and late cancellation. Positive native
+output parsing and the existing public composed lifecycle remain separate
+checks. No consent, transport, shared runner, status or ownership rule changes.
+The focused `TestSessionNativeInventory` cases pass locally; coherent lint/core,
+independent review and native current-source acceptance remain required.

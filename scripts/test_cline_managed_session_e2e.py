@@ -4,8 +4,9 @@ import os
 from pathlib import Path
 import tempfile
 import json
+import hashlib
 
-from cline_managed_session_e2e import cline_owned_stdio, read_owned, snapshot, validate_events
+from cline_managed_session_e2e import SessionJourney, SERVER, cline_owned_stdio, read_owned, snapshot, validate_events
 from project_native_collectors.cline import ACQUISITION, platform_acquisition
 
 
@@ -41,6 +42,44 @@ class ClineTransportReadbackTests(unittest.TestCase):
 
 
 class ClinePortableFixtureTests(unittest.TestCase):
+    def test_direct_session_preserves_authority_and_prior_events(self):
+        for change in (None, "state", "helper", "prefix", "session"):
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp).resolve()
+                journey = SessionJourney.__new__(SessionJourney)
+                journey.root, journey.a, journey.nonce = root, root / "a", "owned"
+                active = journey.a / "active"
+                (active / "bin").mkdir(parents=True)
+                helper, probe = active / "helper", active / ("bin/probe.exe" if os.name == "nt" else "bin/probe")
+                helper.write_bytes(b"helper"); probe.write_bytes(b"probe")
+                journey.probe, journey.events = probe, root / "events.jsonl"
+                journey.events.write_bytes(b"{}\n")
+                config, state = journey.a / ".uap/clients/cline/mcp.json", journey.a / ".uap/state-v2.json"
+                config.parent.mkdir(parents=True)
+                state.write_bytes(b"{}")
+                config.write_text(json.dumps({"mcpServers": {SERVER: {"transport": {
+                    "type": "stdio", "command": str(helper), "cwd": str(active), "env": {}}}}}))
+                journey.evidence = {"installer_sha256": hashlib.sha256(b"helper").hexdigest()}
+                facts = {"nonce": "owned", "revision": "0", "operation": "write", "pid": 1, "session": "one"}
+                def run(action):
+                    self.assertEqual(action, "direct-create")
+                    rows = [{"method": method, "pid": 1, "session": "one", "nonce": "owned",
+                             "facts": facts if method == "tools/call" else None}
+                            for method in ("initialize", "tools/list", "tools/call")]
+                    if change == "session": rows[0]["session"] = "foreign"
+                    prefix = b"{ }\n" if change == "prefix" else b"{}\n"
+                    journey.events.write_bytes(prefix + b"".join(json.dumps(row).encode() + b"\n" for row in rows))
+                    if change == "state": state.write_bytes(b"changed")
+                    if change == "helper":
+                        helper.rename(active / "old-helper"); helper.write_bytes(b"helper")
+                    return json.dumps({"caller": "direct-installed-stdio-client", "native_cline_tools_call": False,
+                                       "facts": facts}).encode()
+                journey.run = run
+                if change is None:
+                    self.assertEqual(journey.direct("direct-create", "0")["facts"], facts)
+                else:
+                    with self.assertRaises(ValueError): journey.direct("direct-create", "0")
+
     def test_native_platforms_are_exact_and_independent(self):
         self.assertEqual(platform_acquisition("Linux", "x86_64"), ACQUISITION)
         self.assertEqual(platform_acquisition("Windows", "AMD64")["entrypoint"], "package/bin/cline.exe")

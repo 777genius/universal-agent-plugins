@@ -533,3 +533,20 @@ byte/deadline bounds before content. All44 existing/new contracts pass. Producti
 change78 additions/19 removals and65 test additions remain inside reviewed scope;
 no vendor/native execution or workflow/qualification change occurred. Actual
 final-source hosted builder/capture and original-artifact review remain required.
+
+## Concurrent closure and Windows reconciliation
+
+Preserve a84a20e7's metadata-only first walk and complete hardlink closure before
+any payload content read. That supersedes the earlier unpublished post-hash
+closure proposal; there is one alias authority and no duplicated scanner.
+The grouping walk checks the original shared deadline and requires positive
+integer device, inode and link identities before accepting a complete group.
+No deadline or baseline is renewed.
+
+Extended Windows device paths may resolve only to an absolute local drive under
+the captured runtime. UNC, GLOBALROOT and drive-relative spellings cannot be
+reinterpreted as ordinary relative members. The graph is never OS-followed.
+A separate Windows diagnostic contract proves each API's original metadata stays
+stable even when path and held-handle domains legitimately differ from each other.
+The external fixed-field diagnostic remains unchanged; raw paths/values stay out.
+Fresh hosted builder and native captures remain required.

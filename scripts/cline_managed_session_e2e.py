@@ -61,8 +61,7 @@ def verify_files(identities, budget):
 
 
 def file_identity(path):
-    info = path.lstat()
-    return info.st_dev, info.st_ino, info.st_mode, info.st_nlink
+    return artifacts.identity(path.lstat())
 
 
 def snapshot(root):
@@ -96,13 +95,13 @@ def build_bridge(installer, probe, destination):
             "gitBinary": str(git), "gitSHA": digest(git), "goBinary": str(go), "goSHA": digest(go)}
     require(all("'" not in value and "\n" not in value for value in pins.values()), "compiler pin quoting refused")
     flags = " ".join("-X 'main." + key + "=" + value + "'" for key, value in pins.items())
-    subprocess.run([str(go), "build", "-trimpath", "-ldflags", flags, "-o", str(destination),
-                    "./install/integrationctl/agentplugins/research/clinesession"],
+    subprocess.run([str(go), "-C", "install/integrationctl/agentplugins", "build", "-trimpath", "-ldflags", flags,
+                    "-o", str(destination), "./research/clinesession"],
                    cwd=SOURCE, check=True, timeout=180)
 
 
 def invoke_bridge(helper, root, action, budget):
-    remaining = min(120, budget.check() - 10)
+    remaining = min(120, budget.check() - 15)
     require(remaining > 5, "journey cleanup reserve exhausted")
     request = {"schema_version": 1, "root": str(root), "action": action,
                "source_commit": os.environ["EXPECTED_COMMIT"],
@@ -129,7 +128,8 @@ def invoke_bridge(helper, root, action, budget):
         if child.poll() is None:
             try: child.wait(timeout=5)
             except subprocess.TimeoutExpired: child.kill(); child.wait(timeout=5)
-        for thread in threads: thread.join(timeout=5)
+        cleanup_deadline = min(budget.deadline, time.monotonic() + 5)
+        for thread in threads: thread.join(timeout=max(0, cleanup_deadline - time.monotonic()))
     require(child.returncode == 0 and not failures and not any(t.is_alive() for t in threads)
             and captures.get("err") == b"", "bridge settlement refused")
     body = captures["out"]
@@ -215,7 +215,8 @@ class SessionJourney:
         verify_files(self.identities, self.budget)
         require(all(file_identity(path) == before for path, before in self.runtime_before.items()), "runtime replaced")
         require(file_identity(self.user_config) == self.user_identity
-                and read_owned(self.user_config, self.root) == self.user_before, "original User MCP changed")
+                and read_owned(self.user_config, self.root) == self.user_before
+                and file_identity(self.user_config) == self.user_identity, "original User MCP changed")
         require(snapshot(self.b) == self.b_before, "Project B changed")
 
     def run(self, action, expected=(0,)):
@@ -285,14 +286,46 @@ class SessionJourney:
         native_cwd = Path(selected["cwd"])
         require(native_cwd == active and native_cwd.resolve() == active and native_cwd.is_dir(),
                 "native Cline MCP cwd differs from the owned plugin root")
-        direct = document(self.run("direct-create" if create else "direct-session"))
-        require(direct.get("caller") == "direct-installed-stdio-client"
-                and direct.get("native_cline_tools_call") is False
-                and direct["facts"]["revision"] == revision
-                and direct["facts"]["operation"] == ("write" if create else "read"), "direct protocol identity differs")
+        direct = self.direct("direct-create" if create else "direct-session", revision)
         self.evidence["stages"].append({"stage": stage, "binding": binding, "native_inventory": rows,
                                          "direct_installed_mcp": direct})
         return installation, binding, active
+
+    def direct(self, action, revision):
+        cold = action.startswith("cold-")
+        project, server = (self.root / "cold", "uap_public_probe") if cold else (self.a, SERVER)
+        config = project / ".uap/clients/cline/mcp.json"
+        selected = cline_owned_stdio(document(read_owned(config, self.root))["mcpServers"][server])
+        helper, active = Path(selected["command"]), Path(selected["cwd"])
+        probe = active / ("main.go" if cold else "bin/probe.exe" if os.name == "nt" else "bin/probe")
+        limits = {config: 1 << 20, project / ".uap/state-v2.json": 1 << 20,
+                  helper: 256 << 20, probe: 256 << 20}
+        def authority():
+            return {path: (file_identity(path), hashlib.sha256(read_owned(path, self.root, limit)).hexdigest())
+                    for path, limit in limits.items()}
+        members = authority()
+        expected_probe = self.evidence["runtime_sha256"]["fixture_source"] if cold else digest(self.probe)
+        require(members[helper][1] == self.evidence["installer_sha256"] and members[probe][1] == expected_probe,
+                "selected direct fixture bytes differ")
+        before = read_owned(self.events, self.root, 2 << 20) if self.events.exists() else b""
+        direct = document(self.run(action))
+        require(authority() == members, "direct fixture members changed")
+        require(direct.get("caller") == "direct-installed-stdio-client" and direct.get("native_cline_tools_call") is False
+                and direct["facts"]["revision"] == revision and direct["facts"]["nonce"] == self.nonce
+                and direct["facts"]["operation"] == ("write" if action.endswith("-create") else "read"),
+                "direct protocol identity differs")
+        after = read_owned(self.events, self.root, 2 << 20)
+        require(after.startswith(before) and after.endswith(b"\n"), "original MCP events changed")
+        rows = [document(line) for line in after[len(before):].splitlines()]
+        facts = direct["facts"]
+        require([row.get("method") for row in rows] == ["initialize", "tools/list", "tools/call"]
+                and type(facts.get("pid")) is int and facts["pid"] > 0
+                and isinstance(facts.get("session"), str) and bool(facts["session"])
+                and all((row.get("pid"), row.get("session"), row.get("nonce")) ==
+                        (facts["pid"], facts["session"], self.nonce) for row in rows)
+                and rows[0]["facts"] is None and rows[1]["facts"] is None and rows[2]["facts"] == facts,
+                "MCP event lifecycle differs")
+        return direct
 
     def execute(self):
         self.run("project-init")
@@ -361,20 +394,23 @@ class SessionJourney:
         self.install("cold-locked-install")
         installed, binding, active = self.owned(self.root / "cold", "uap-cline-public-probe")
         self.cold_binding(pin, installed, binding)
+        state = read_owned(self.root / "cold/.uap/state-v2.json", self.root)
         rows = document(self.run("cold-inspect"))
+        require(read_owned(self.root / "cold/.uap/state-v2.json", self.root) == state, "cold session changed UAP state")
         config = self.root / "cold/.uap/clients/cline/mcp.json"
         require(len(rows) == 1 and rows[0].get("name") == "uap_public_probe"
                 and rows[0].get("path") == str(config) and rows[0].get("transportType") == "stdio"
                 and rows[0].get("disabled") is False, "cold native source selection differs")
         # Compile the immutable public stdlib source inside the original deadline.
         # The installed projection remains `go run PLUGIN_ROOT/main.go`.
-        require(not (self.root / "go-cache").exists(), "cold compiler cache unexpectedly populated")
+        require(all(not (self.root / name).exists() for name in ("cold-go-cache", "cold-go-path")),
+                "cold compiler cache unexpectedly populated")
         self.run("cold-build")
-        direct = document(self.run("cold-create"))
+        direct = self.direct("cold-create", "cold")
         before = read_owned(self.root / "cold/.uap/state-v2.json", self.root)
         self.install("cold-repeat")
         require(read_owned(self.root / "cold/.uap/state-v2.json", self.root) == before, "cold repeat changed state")
-        repeated = document(self.run("cold-session"))
+        repeated = self.direct("cold-session", "cold")
         require(direct["facts"]["operation"] == "write" and repeated["facts"]["operation"] == "read"
                 and repeated["facts"]["marker"] == direct["facts"]["marker"], "cold marker did not survive repeat")
         require(all(read_owned(self.root / "cold" / name, self.root) == body for name, body in agreement.items()), "cold restore rewrote agreement")

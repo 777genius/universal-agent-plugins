@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 )
 
@@ -141,14 +142,12 @@ func (b *boundedBuffer) Write(value []byte) (int, error) {
 	return b.buffer.Write(value)
 }
 func protocolEnvironment(root, action string, t transport) ([]string, error) {
-	env := environment(root, strings.HasPrefix(action, "cold-"))
 	for key, value := range t.Env {
-		if strings.ContainsAny(key+value, "\x00\r\n") || strings.Contains(key, "=") {
+		if len(value) > 4096 || strings.ContainsAny(key+value, "\x00\r\n") || strings.Contains(key, "=") {
 			return nil, errors.New("transport environment refused")
 		}
-		env = append(env, key+"="+value)
 	}
-	return env, nil
+	return (clients.SessionPlan{Environment: t.Env}).ChildEnvironment(environment(root, strings.HasPrefix(action, "cold-"))), nil
 }
 func protocol(root, action string) error {
 	t, err := selected(root, action)

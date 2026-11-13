@@ -30,8 +30,11 @@ func (*Adapter) VerifySession(ctx context.Context, env clients.Env, plan clients
 	if err != nil {
 		return fmt.Errorf("cline selected-source observation failed: %w", err)
 	}
-	if result.ExitCode != 0 || len(result.Stdout) > 1<<20 {
-		return fmt.Errorf("cline configuration inventory failed or exceeded its bound")
+	if err := bounded.Err(); err != nil {
+		return fmt.Errorf("cline selected-source observation expired: %w", err)
+	}
+	if result.ExitCode != 0 || len(result.Stdout) > 1<<20 || !result.CleanupComplete || result.NoChildStarted {
+		return fmt.Errorf("cline configuration inventory failed, exceeded its bound or did not prove process cleanup")
 	}
 	return verifySessionInventory(result.Stdout, plan.Environment["CLINE_MCP_SETTINGS_PATH"], plan.Servers)
 }

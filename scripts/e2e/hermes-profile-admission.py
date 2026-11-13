@@ -231,9 +231,13 @@ def payload_links(root, records, deadline):
     lookup = {Path(name): record for name, record in records.items()}
     require(len(lookup) == len(records), "ambiguous payload path spelling")
     def parts(target):
-        if artifacts.WINDOWS and target.startswith("\\\\?\\"):
+        extended = artifacts.WINDOWS and target.startswith("\\\\?\\")
+        if extended:
             target = target[4:]
         path = Path(target)
+        require(not extended or (path.is_absolute() and len(path.drive) == 2
+                and path.drive[0] in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+                and path.drive[1] == ":"), "payload device namespace link")
         require(not path.drive or path.is_absolute(), "payload drive-relative link")
         if path.is_absolute():
             require(path.is_relative_to(root), "payload link escapes runtime")
@@ -269,13 +273,16 @@ def payload_links(root, records, deadline):
 
 
 
-def payload_hardlink_closure(records):
+def payload_hardlink_closure(records, deadline):
     """Close every regular inode's complete alias set before any content read."""
     groups = {}
     for name, record in records.items():
+        require(time.monotonic() < deadline, "payload scan deadline")
         if record["type"] != "file":
             continue
         identity = record["identity"]
+        require(all(type(value) is int and value > 0 for value in (identity[0], identity[1], identity[3])),
+                "payload file identity unavailable")
         key = tuple(identity[:2])
         if key not in groups:
             groups[key] = (identity, [])
@@ -283,6 +290,7 @@ def payload_hardlink_closure(records):
         require(identity == original, "payload hardlink metadata differs")
         names.append(name)
     for identity, names in groups.values():
+        require(time.monotonic() < deadline, "payload scan deadline")
         require(type(identity[3]) is int and len(names) == identity[3], "payload hardlink escapes runtime")
 
 
@@ -387,7 +395,7 @@ def payload_snapshot(root, expected, deadline):
 
     visit(root, 0)
     payload_links(root, records, deadline)
-    payload_hardlink_closure(records)
+    payload_hardlink_closure(records, deadline)
     payload_hash_files(root, records, expected, deadline)
     digest = hashlib.sha256()
     for name, record in sorted(records.items()):
