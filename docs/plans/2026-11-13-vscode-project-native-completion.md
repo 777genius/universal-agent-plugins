@@ -823,3 +823,88 @@ passed in 0.016 seconds. Root also verified the original outer/inner hashes and
 CRCs, the repeated-add merged stream byte/hash receipt, the exact 3,262-byte JSON
 suffix, and the controller's completed stages, error and cleanup facts. This is
 the final R2 source acceptance; the next native result remains a separate gate.
+
+## Exact picker identity and closed await observations after d846
+
+The original [trusted run 43521133012](https://github.com/777genius/universal-agent-plugins/actions/runs/43521133012),
+job 132215378785, on `d846659e9b4f318648a088406bd96a4f6f6a0a62`
+failed at `updated-a`, `mcp-trust/operation-deadline`. Five GUI stages completed:
+empty-a, empty-b, installed-a, installed-b and stable-a. The original repeated
+add, unchanged update, intact repair and subsequent real update all passed their
+public CLI receipts. Installed and stable observations contain genuine native
+MCP initialization, catalog and fixture tool calls; the full lifecycle remains
+unqualified. Updated-a records Start clicked, no accepted MCP Trust, no sampled
+connection state, last observed `action-picker`, and no captured UI metadata.
+The last input observation does not prove that the picker remained continuously
+visible, or that the requested action was invoked. All original qualification
+flags remain false. No timeout, rerun or native outcome is inferred from this.
+
+The native artifact 14083644643 has outer SHA-256
+`5bba8b4b7ec5d71b41c26d44951572f87b566850a859fe464fec3db2c984f78f`
+and inner SHA-256
+`05ca8470c871a32fe8aa0c35dafc3fdd4d8766ac69c2aed0b0e9f43c255f4d0b`.
+Both ZIPs pass CRC checks, the inner has 34 unique members, and all 15 controller
+child stream byte/hash joins pass with reaped trees. Root independently confirmed
+the archive hashes, CRCs and exact completed/failing stages. The frontend artifact
+14085440048 has outer SHA-256
+`f5ef81266d190cca9f6085cbd1e4a02b922715aeca3dfe8d0d4ddc75a8bb354b`
+and inner SHA-256
+`5e9056235c271db20b3bd0820fd914cf92e176bed8c50ba7c92c0c8389eea3d1`.
+Its 33 members also pass CRC checks. These originals retain their original schema
+and bytes; the new diagnostic fields are never backfilled into historical output.
+
+Independent inert replay exposed a concrete selector race: labelRow validated the
+exact label but returned a live positional nth locator. Reordering the rows before
+the eventual click selected a different action. The unchanged original driver
+is 55,266 bytes, SHA-256
+`99452a02ce68b94e5056f84485366ba71e8a14087dd9fa573bfc00619001a32e`.
+The original-driver overlay's new actual-helper test fails with `foreign` clicked
+instead of `Start Server`; its test file SHA-256 is
+`f4fe17ec7e9943827fd272618e224afba22424d9df1c928c336d4f4c32252c4f`.
+This proves the selector defect, not that it caused the original d846 failure.
+
+Root R1 accepted seven existing paths: driver and its existing Node test, Go
+failure admission and its test, Python closed readout and its test, and this plan.
+The selected row now retains an escaped exact .label-name predicate when the
+eventual action resolves. Existing 256-row/unique-label/three-second checks remain,
+and Playwright's strict click refuses a disappeared or duplicated exact target.
+There is no first/nth action fallback, retry, keyboard acceptance or new GUI stage.
+Counterexamples cover reorder, disappearance, late duplicate, changed label and
+regex metacharacters; the source change does not authorize another native action.
+
+The existing negative MCP facts now require two closed observations.
+`awaitBoundary` is the fixed enum of the most recently attempted native UI await;
+it is not proof that the await completed. `elapsedMs` is the whole integer elapsed
+time within startServer, captured on exit, from zero through 15001. The value
+15001 means at least 15001 ms elapsed and caps further overrun; it grants no extra
+time. Before native startup these facts are unobserved/0. A finally block records
+time without replacing the original result or exception. The original 15-second
+MCP and 60-second stage deadlines, pending-input barrier, exact Trust title/origin,
+independent Running/protocol proofs, process cleanup and all ten stages remain.
+Go and Python require both keys, the same enum and an exact integer in range;
+missing/extra fields, booleans, floats, negative/overbound counts and private values
+refuse. Node/Python parity checks join the three actual vocabularies.
+
+Local initial verification: 42 Node driver/observer contracts pass on Node
+24.22.1; 41 Python research/handoff/readout contracts pass. TypeScript 7.0.2 with
+the existing Playwright 1.64.1 declarations compiles the actual driver and observer
+without errors. The focused Go gate and independent R2 are pending the shared
+serial analyzer's completion. Hosted d846 Core fast is separately all-green;
+Required CI remains in progress and the original trusted result remains failed.
+
+Independent R2 accepted all seven frozen file hashes after replaying the actual
+31 driver and 11 observer tests, all 41 Python tests and Go TestTrustedFailure
+(0.025 seconds). The unchanged original driver reproduces the incorrect foreign
+click; the candidate rejects the terminal-newline edge as well as the declared
+late disappearance/duplicate cases. No source or deadline issue remained. The
+original artifact audit additionally joins all 55 unique stream receipts and six
+GUI frames, including the three successful installed/stable native protocol
+observations, to their exact controller stage/nonce and process identities.
+This source acceptance does not change the failed original native result.
+
+Final affected-package size/architecture and changed-line lint both pass with
+zero issues using the normal serial runner lock, Go 1.26.11 and golangci-lint
+2.13.2. The shrink-only baseline gate also passes (138 exclusions unchanged).
+Only this factual plan append follows independent R2; all six reviewed runtime
+and test file hashes remain unchanged. Full trusted native and exact-commit
+required CI results remain necessary before merge.

@@ -136,22 +136,34 @@ test('actual publisher admission requires only the isolated in-memory secret-sto
   }
 });
 
-function helpers(rowsByPoll, textRead) {
+function helpers(rowsByPoll, textRead, refreshBeforeClick) {
   let now = 0, polls = 0;
+  const clicked = [];
   const sandbox = { Error, performance: { now: () => now }, delay: async ms => { now += ms; },
     setTimeout, clearTimeout };
   vm.createContext(sandbox);
   const actual = section('function object(', 'function text(')
-    + section('async function labelRow(', 'async function pick(')
+    + section('async function labelRow(', 'type McpPhase')
     + section('function collectedResult(', 'async function focusWorkbench');
   vm.runInContext(stripTypeScriptTypes(actual, { mode: 'strip' })
-    + '\nglobalThis.api = {labelRow, collectedResult, publisherTerminal, finalCapture, stopped};', sandbox);
-  const page = { locator() {
-    const labels = rowsByPoll[Math.min(polls++, rowsByPoll.length - 1)];
+    + '\nglobalThis.api = {labelRow, pick, collectedResult, publisherTerminal, finalCapture, stopped};', sandbox);
+  const page = { locator(selector) {
+    if (selector === '.label-name') return { filter: ({ hasText }) => ({ pattern: hasText }) };
+    assert.equal(selector, '.quick-input-widget:visible .monaco-list-row');
+    let labels = rowsByPoll[Math.min(polls++, rowsByPoll.length - 1)];
+    const refresh = () => { labels = refreshBeforeClick ? refreshBeforeClick([...labels]) : labels; };
     return { count: async () => labels.length, nth: i => ({ label: labels[i], locator: () => ({
-      count: async () => 1, innerText: async options => textRead ? textRead(labels[i], options) : labels[i] }) }) };
+      count: async () => 1, innerText: async options => textRead ? textRead(labels[i], options) : labels[i] }),
+      click: async () => { refresh(); clicked.push(labels[i]); } }),
+      filter: ({ has }) => ({ get label() { return labels.find(value => has.pattern.test(value)); },
+        click: async () => {
+          refresh();
+          const matches = labels.filter(value => has.pattern.test(value));
+          if (matches.length !== 1) throw new Error('inert exact selector strictness');
+          clicked.push(matches[0]);
+        } }) };
   } };
-  return { ...sandbox.api, page, polls: () => polls };
+  return { ...sandbox.api, page, clicked, polls: () => polls };
 }
 test('actual picker waits for asynchronously populated exact label', async () => {
   const h = helpers([[], ['foreign'], ['owned']]);
@@ -163,6 +175,18 @@ test('actual picker retains uniqueness, cardinality and finite missing deadline'
     const h = helpers([rows]);
     await assert.rejects(h.labelRow(h.page, 'owned'), /ambiguous|bound exceeded|missing/);
     assert(h.polls() <= 61);
+  }
+});
+test('actual picker keeps exact-label authority across row replacement before the click', async () => {
+  for (const label of ['Start Server', 'owned[?^].*']) {
+    const h = helpers([[label, 'foreign']], undefined, labels => labels.reverse());
+    await h.pick(h.page, label);
+    assert.deepEqual(h.clicked, [label]);
+  }
+  for (const labels of [[], ['foreign'], ['Start Server', 'Start Server'], ['Start Server changed']]) {
+    const h = helpers([['Start Server', 'foreign']], undefined, () => labels);
+    await assert.rejects(h.pick(h.page, 'Start Server'), /inert exact selector strictness/);
+    assert.deepEqual(h.clicked, []);
   }
 });
 const identity = { mode: 'trusted-project-v1', stage: 'empty-a', nonce: 'a'.repeat(32) };
@@ -273,17 +297,20 @@ test('actual input transition refuses duplicates and one shared expired read bud
   }
 });
 test('actual MCP substeps retain a fixed phase before an operation can fail', async () => {
-  for (const failure of ['list', 'server', 'action', 'start', 'trust']) {
-    let phase, picks = 0;
-    const stop = () => { throw new Error('private injected operation'); };
-    const context = { Error, performance: { now: () => 0 }, launchDiagnostic: () => {}, within: async value => value,
+  for (const elapsed of [1234, 15002]) for (const failure of ['list', 'server', 'action', 'start', 'trust']) {
+    let phase, picks = 0, clock = 0;
+    const stop = () => { clock = elapsed; throw new Error('private injected operation'); };
+    const context = { Error, performance: { now: () => clock }, launchDiagnostic: () => {}, within: async value => value,
       listServers: async (_page, mark) => { mark('mcp-server-picker'); if (failure === 'list') stop(); },
       pick: async () => { picks++; if ((failure === 'server' && picks === 1) || (failure === 'start' && picks === 2)) stop(); },
       quickInput: async () => { if (failure === 'action') stop(); }, visibleDialogs: async () => stop() };
     vm.createContext(context);
     vm.runInContext(stripTypeScriptTypes(section('async function startServer(', 'async function input('), { mode: 'strip' }) + '\nglobalThis.run = startServer;', context);
-    await assert.rejects(context.run({ evaluate: async () => ({}) }, { label: 'owned' }, 60000, value => { phase = value; }), /private injected operation/);
+    const mcp = {};
+    await assert.rejects(context.run({ evaluate: async () => ({}) }, { label: 'owned' }, 60000, value => { phase = value; }, mcp), /private injected operation/);
     assert.equal(phase, { list: 'mcp-server-picker', server: 'mcp-server-selection', action: 'mcp-action-picker', start: 'mcp-start-action', trust: 'mcp-trust' }[failure]);
+    assert.equal(mcp.awaitBoundary, { list: 'server-catalog', server: 'server-selection', action: 'action-picker', start: 'start-selection', trust: 'dialog-count' }[failure]);
+    assert.equal(mcp.elapsedMs, Math.min(15001, elapsed));
   }
 });
 test('owned picker errors map to finite reasons while arbitrary text stays opaque', () => {
@@ -333,8 +360,20 @@ test('MCP telemetry is finite and never coerces or emits hostile state values', 
   const hostile = { toString() { throw new Error('private'); }, valueOf() { throw new Error('private'); } };
   const row = facts(new Error('trigger publication refused'), undefined, null, null, true, true, Buffer.alloc(0), 0, 0,
     { startSelected: true, trustAccepted: false, lastState: hostile, stopped: hostile, starting: 999, running: -1, other: NaN, private: 'secret' });
-  assert.deepEqual(row.mcp, { startSelected: true, trustAccepted: false, lastState: 'other', postStartInput: 'unobserved', stopped: 0, starting: 255, running: 0, other: 0, launchNotification: false, outputVisible: false, launchError: 'none' });
+  assert.deepEqual(row.mcp, { startSelected: true, trustAccepted: false, lastState: 'other', postStartInput: 'unobserved', awaitBoundary: 'unobserved', elapsedMs: 0, stopped: 0, starting: 255, running: 0, other: 0, launchNotification: false, outputVisible: false, launchError: 'none' });
   assert.equal(row.reason, 'trigger-publication-refused'); assert.equal(JSON.stringify(row).includes('secret'), false);
+});
+test('await-boundary and elapsed projection never emit private values or coerce unknown types', () => {
+  const inspect = mcp => facts(undefined, undefined, null, null, false, false, Buffer.alloc(0), 0, 0, mcp).mcp;
+  const boundaries = /const MCP_AWAIT_BOUNDARIES = '([^']+)'/u.exec(source)[1].split(' ');
+  for (const awaitBoundary of boundaries) assert.equal(inspect({ awaitBoundary }).awaitBoundary, awaitBoundary);
+  const hostile = { toString() { throw new Error('PRIVATE'); }, valueOf() { throw new Error('PRIVATE'); } };
+  for (const value of [hostile, true, null, -1, 1.5, NaN, Infinity, 'PRIVATE']) {
+    assert.equal(inspect({ awaitBoundary: value }).awaitBoundary, 'unobserved');
+    assert.equal(inspect({ elapsedMs: value }).elapsedMs, 0);
+  }
+  for (const elapsedMs of [0, 1, 15000, 15001, 15002, Number.MAX_SAFE_INTEGER])
+    assert.equal(inspect({ elapsedMs }).elapsedMs, Math.min(15001, elapsedMs));
 });
 
 test('actual launch projector exports only expected native message classes and output identity', () => {
@@ -395,11 +434,16 @@ test('actual start preserves pending inputs and requires a fresh Output before c
       count: async () => { polls++; return mode === 'multiple' ? 2 : ['foreign','late-input','old-forever'].includes(mode) || mode === 'old-then-hidden' && polls < 3 ? 1 : 0; },
       getAttribute: async () => { if (mode === 'late-input') clock = 15000; return mode === 'foreign' ? 'PRIVATE_INPUT' : "Select action for 'owned'"; }
     }), evaluate: async () => ({ outputVisible: mode === 'preexisting' || started && mode !== 'no-output', launchError: 'none' }) };
-    const operation = context.run(page, { label: 'owned', originUri: 'owned-origin' }, 60000, () => {});
-    if (['old-then-hidden','trust'].includes(mode)) { assert.equal((await operation).nativeState, 'Running'); assert.equal(palette, 1); }
+    const mcp = {};
+    const operation = context.run(page, { label: 'owned', originUri: 'owned-origin' }, 60000, () => {}, mcp);
+    if (['old-then-hidden','trust'].includes(mode)) {
+      assert.deepEqual(JSON.parse(JSON.stringify(await operation)), { label: 'owned', originUri: 'owned-origin', trustPromptAccepted: mode === 'trust', nativeState: 'Running' });
+      assert.equal(palette, 1);
+    }
     else { await assert.rejects(operation, /native UI selection|native MCP startup deadline/); assert.equal(palette, 0); }
     if (mode === 'preexisting') assert.equal(started, false);
     if (mode === 'trust') assert.equal(acceptedTrust, 1);
+    assert.equal(mcp.elapsedMs, Math.min(15001, clock));
     assert(clock <= 15000);
   }
 });
@@ -436,6 +480,7 @@ test('actual pending-input helper records only current closed observations witho
     else await assert.rejects(box.read(page, 'owned', 100, mcp), /native UI selection|native MCP startup deadline/);
     if (kind.startsWith('late-')) assert.equal(Object.hasOwn(mcp, 'postStartInput'), false);
     else assert.equal(mcp.postStartInput, kind);
+    assert.equal(mcp.awaitBoundary, ['none', 'multiple', 'late-count'].includes(kind) ? 'input-count' : 'input-placeholder');
     if (['none', 'multiple', 'late-count'].includes(kind)) assert.equal(attributes, 0);
     assert.equal(JSON.stringify(mcp).includes('PRIVATE'), false);
   }

@@ -36,6 +36,7 @@ func failureChoice(value any, choices string) bool {
 }
 
 const failureReasons = "unclassified publisher-startup-failed publisher-spawn-failed publisher-stream-overflow publisher-proof-bound publisher-proof-missing publisher-proof-mismatch publisher-stream-malformed publisher-pre-verifier-stderr publisher-endpoint-ambiguous publisher-endpoint-refused publisher-port-refused stage-deadline operation-deadline browser-context-mismatch workbench-pages-ambiguous workbench-page-missing publisher-shutdown-incomplete publisher-terminal-result-mismatch observer-deadline driver-output-bound picker-input-deadline picker-input-ambiguous picker-label-missing picker-label-ambiguous picker-row-bound ui-selection-refused ui-dialog-unexpected ui-dialog-unplanned mcp-trust-origin mcp-state-refused mcp-start-deadline trigger-publication-refused"
+const failureAwaitBoundaries = "unobserved server-catalog server-selection action-picker start-precheck start-selection dialog-count trust-dialog trust-origin trust-accept trust-hidden input-count input-placeholder launch-diagnostic catalog-reopen state-row state-description state-dismiss state-dialog"
 
 func admitTrustedFailure(body []byte, stage, nonce string) (*trustedDriverFailure, error) {
 	value, err := uniqueJSON(body)
@@ -72,9 +73,13 @@ func admitTrustedFailure(body []byte, stage, nonce string) (*trustedDriverFailur
 }
 
 func validateTrustedMCPState(value any) error {
-	mcp, err := objectKeys(value, strings.Fields("startSelected trustAccepted lastState stopped starting running other launchNotification outputVisible launchError postStartInput"), nil)
-	if err != nil || !failureChoice(mcp["lastState"], "none Stopped Starting Running other") || !failureChoice(mcp["launchError"], "none variable-resolution native-start command-not-found other diagnostic-refused") || !failureChoice(mcp["postStartInput"], "unobserved none action-picker trust-picker other multiple") {
+	mcp, err := objectKeys(value, strings.Fields("startSelected trustAccepted lastState stopped starting running other launchNotification outputVisible launchError postStartInput awaitBoundary elapsedMs"), nil)
+	if err != nil || !failureChoice(mcp["lastState"], "none Stopped Starting Running other") || !failureChoice(mcp["launchError"], "none variable-resolution native-start command-not-found other diagnostic-refused") || !failureChoice(mcp["postStartInput"], "unobserved none action-picker trust-picker other multiple") || !failureChoice(mcp["awaitBoundary"], failureAwaitBoundaries) {
 		return fmt.Errorf("closed MCP state refused")
+	}
+	elapsed, err := trustedNumber(mcp["elapsedMs"])
+	if err != nil || elapsed < 0 || elapsed > 15001 {
+		return fmt.Errorf("closed MCP elapsed time refused")
 	}
 	for _, key := range []string{"startSelected", "trustAccepted", "launchNotification", "outputVisible"} {
 		if _, ok := mcp[key].(bool); !ok {

@@ -44,6 +44,7 @@ type PublisherProof = {
 };
 
 // BEGIN CLOSED FAILURE DIAGNOSTICS: pure functions, tested without loading the driver.
+const MCP_AWAIT_BOUNDARIES = 'unobserved server-catalog server-selection action-picker start-precheck start-selection dialog-count trust-dialog trust-origin trust-accept trust-hidden input-count input-placeholder launch-diagnostic catalog-reopen state-row state-description state-dismiss state-dialog'.split(' ');
 function appendDiagnostic(current: Buffer, chunk: Buffer): Buffer {
   const room = LIMIT + 1 - current.length;
   if (room <= 0) return current.subarray(0, LIMIT + 1);
@@ -137,6 +138,8 @@ function failureFacts(error: unknown, capture: unknown, code: unknown, signal: u
   const observations = (value: unknown): number => typeof value === 'number' ? Math.min(255, count(value)) : 0;
   return { mcp: { startSelected: mcp.startSelected === true, trustAccepted: mcp.trustAccepted === true, lastState: state,
     postStartInput: typeof mcp.postStartInput === 'string' && ['unobserved', 'none', 'action-picker', 'trust-picker', 'other', 'multiple'].includes(mcp.postStartInput) ? mcp.postStartInput : 'unobserved',
+    awaitBoundary: typeof mcp.awaitBoundary === 'string' && MCP_AWAIT_BOUNDARIES.includes(mcp.awaitBoundary) ? mcp.awaitBoundary : 'unobserved',
+    elapsedMs: typeof mcp.elapsedMs === 'number' && Number.isSafeInteger(mcp.elapsedMs) && mcp.elapsedMs >= 0 ? Math.min(15001, mcp.elapsedMs) : 0,
     stopped: observations(mcp.stopped), starting: observations(mcp.starting),
     running: observations(mcp.running), other: observations(mcp.other), launchNotification: mcp.launchNotification === true, outputVisible: mcp.outputVisible === true,
     launchError: typeof mcp.launchError === 'string' && ['none', 'variable-resolution', 'native-start', 'command-not-found', 'other', 'diagnostic-refused'].includes(mcp.launchError) ? mcp.launchError : 'none' }, reason: failureReason(error), captureReason: capture === undefined ? 'none' : failureReason(capture),
@@ -356,6 +359,7 @@ async function quickInput(page: Page, placeholder?: string): Promise<Locator> {
 }
 async function labelRow(page: Page, label: string): Promise<Locator> {
   const deadline = performance.now() + 3000;
+  const exactName = page.locator('.label-name').filter({ hasText: new RegExp('^' + label.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&') + '$', 'u') });
   while (true) {
     const rows = page.locator('.quick-input-widget:visible .monaco-list-row');
     const count = await rows.count();
@@ -371,7 +375,9 @@ async function labelRow(page: Page, label: string): Promise<Locator> {
       }
     }
     if (performance.now() >= deadline) throw new Error('native picker label missing');
-    if (selected) return selected;
+    // Keep exact-name authority when Playwright resolves the eventual action.
+    // An nth locator could name a different item after a list refresh.
+    if (selected) return rows.filter({ has: exactName });
     if (performance.now() >= deadline) throw new Error('native picker label missing');
     await delay(Math.min(50, deadline - performance.now()));
   }
@@ -410,10 +416,12 @@ async function startInputReady(page: Page, label: string, deadline: number, mcp:
     return deadline - performance.now();
   };
   const input = page.locator('.quick-input-widget:visible input');
+  mcp.awaitBoundary = 'input-count';
   const count = await within(input.count(), remaining());
   remaining();
   if (count > 1) { mcp.postStartInput = 'multiple'; throw new Error('native UI selection is absent or ambiguous'); }
   if (!count) { mcp.postStartInput = 'none'; return true; }
+  mcp.awaitBoundary = 'input-placeholder';
   const placeholder = await within(input.getAttribute('placeholder', { timeout: remaining() }), remaining());
   remaining();
   mcp.postStartInput = placeholder === "Select action for '" + label + "'" ? 'action-picker' : placeholder === 'Select MCP servers to trust' ? 'trust-picker' : 'other';
@@ -421,65 +429,90 @@ async function startInputReady(page: Page, label: string, deadline: number, mcp:
   return false;
 }
 async function startServer(page: Page, server: Server, stageDeadline: number, setPhase: (phase: McpPhase) => void, mcp: ObjectValue = {}): Promise<ObjectValue> {
-  const deadline = Math.min(stageDeadline, performance.now() + 15000);
-  await listServers(page, setPhase);
-  setPhase('mcp-server-selection');
-  await pick(page, server.label);
-  setPhase('mcp-action-picker');
-  await quickInput(page, "Select action for '" + server.label + "'");
-  setPhase('mcp-start-action');
-  const before = await within(page.evaluate(launchDiagnostic, server.label), Math.max(1, deadline - performance.now()));
-  if (performance.now() >= deadline) throw new Error('native MCP startup deadline exceeded');
-  if (before.outputVisible === true || before.launchError === 'diagnostic-refused') throw new Error('native UI selection is absent or ambiguous');
-  await pick(page, 'Start Server');
-  mcp.startSelected = true;
-  let trusted = false, catalogOpen = false;
-  while (performance.now() < deadline) {
-    setPhase('mcp-trust');
-    const dialogs = await visibleDialogs(page);
-    if (await dialogs.count()) {
-      const dialog = await exactDialog(page, 'Trust and run MCP server ' + server.label + '?');
-      const link = await one(dialog.getByRole('link', { name: server.label, exact: true }));
-      if (await link.getAttribute('href') !== server.originUri) throw new Error('native MCP trust origin differs');
-      await (await one(dialog.getByRole('button', { name: 'Trust', exact: true }))).click({ timeout: 3000 });
-      await dialog.waitFor({ state: 'hidden', timeout: 3000 });
-      trusted = true; mcp.trustAccepted = true; catalogOpen = false;
-    } else if (!catalogOpen) {
-      if (!await startInputReady(page, server.label, deadline, mcp)) { await delay(Math.min(50, deadline - performance.now())); continue; }
-      let observed: ObjectValue;
-      try { observed = await within(page.evaluate(launchDiagnostic, server.label), Math.max(1, deadline - performance.now())); }
-      catch { observed = { launchError: 'diagnostic-refused' }; }
-      if (performance.now() >= deadline) throw new Error('native MCP startup deadline exceeded');
-      Object.assign(mcp, observed);
-      if (observed.launchError === 'diagnostic-refused') throw new Error('native UI selection is absent or ambiguous');
-      if (observed.outputVisible !== true) { await delay(Math.min(50, deadline - performance.now())); continue; }
-      if (!await startInputReady(page, server.label, deadline, mcp)) continue;
-      const dialogCount = await (await visibleDialogs(page)).count();
-      if (performance.now() >= deadline) throw new Error('native MCP startup deadline exceeded');
-      if (dialogCount) continue;
-      await listServers(page, setPhase); catalogOpen = true;
-    } else {
-      setPhase('mcp-state');
-      try {
-        const observed = await within(page.evaluate(launchDiagnostic, server.label), Math.max(1, deadline - performance.now()));
-        mcp.launchNotification = mcp.launchNotification === true || observed.launchNotification === true;
-        mcp.outputVisible = mcp.outputVisible === true || observed.outputVisible === true;
-        if (observed.launchError !== 'none') mcp.launchError = observed.launchError;
+  const started = performance.now(), deadline = Math.min(stageDeadline, started + 15000);
+  try {
+    mcp.awaitBoundary = 'server-catalog';
+    await listServers(page, setPhase);
+    setPhase('mcp-server-selection');
+    mcp.awaitBoundary = 'server-selection';
+    await pick(page, server.label);
+    setPhase('mcp-action-picker');
+    mcp.awaitBoundary = 'action-picker';
+    await quickInput(page, "Select action for '" + server.label + "'");
+    setPhase('mcp-start-action');
+    mcp.awaitBoundary = 'start-precheck';
+    const before = await within(page.evaluate(launchDiagnostic, server.label), Math.max(1, deadline - performance.now()));
+    if (performance.now() >= deadline) throw new Error('native MCP startup deadline exceeded');
+    if (before.outputVisible === true || before.launchError === 'diagnostic-refused') throw new Error('native UI selection is absent or ambiguous');
+    mcp.awaitBoundary = 'start-selection';
+    await pick(page, 'Start Server');
+    mcp.startSelected = true;
+    let trusted = false, catalogOpen = false;
+    while (performance.now() < deadline) {
+      setPhase('mcp-trust');
+      mcp.awaitBoundary = 'dialog-count';
+      const dialogs = await visibleDialogs(page);
+      if (await dialogs.count()) {
+        mcp.awaitBoundary = 'trust-dialog';
+        const dialog = await exactDialog(page, 'Trust and run MCP server ' + server.label + '?');
+        mcp.awaitBoundary = 'trust-origin';
+        const link = await one(dialog.getByRole('link', { name: server.label, exact: true }));
+        if (await link.getAttribute('href') !== server.originUri) throw new Error('native MCP trust origin differs');
+        mcp.awaitBoundary = 'trust-accept';
+        await (await one(dialog.getByRole('button', { name: 'Trust', exact: true }))).click({ timeout: 3000 });
+        mcp.awaitBoundary = 'trust-hidden';
+        await dialog.waitFor({ state: 'hidden', timeout: 3000 });
+        trusted = true; mcp.trustAccepted = true; catalogOpen = false;
+      } else if (!catalogOpen) {
+        if (!await startInputReady(page, server.label, deadline, mcp)) { await delay(Math.min(50, deadline - performance.now())); continue; }
+        let observed: ObjectValue;
+        mcp.awaitBoundary = 'launch-diagnostic';
+        try { observed = await within(page.evaluate(launchDiagnostic, server.label), Math.max(1, deadline - performance.now())); }
+        catch { observed = { launchError: 'diagnostic-refused' }; }
+        if (performance.now() >= deadline) throw new Error('native MCP startup deadline exceeded');
+        Object.assign(mcp, observed);
+        if (observed.launchError === 'diagnostic-refused') throw new Error('native UI selection is absent or ambiguous');
+        if (observed.outputVisible !== true) { await delay(Math.min(50, deadline - performance.now())); continue; }
+        if (!await startInputReady(page, server.label, deadline, mcp)) continue;
+        mcp.awaitBoundary = 'dialog-count';
+        const dialogCount = await (await visibleDialogs(page)).count();
+        if (performance.now() >= deadline) throw new Error('native MCP startup deadline exceeded');
+        if (dialogCount) continue;
+        mcp.awaitBoundary = 'catalog-reopen';
+        await listServers(page, setPhase); catalogOpen = true;
+      } else {
+        setPhase('mcp-state');
+        mcp.awaitBoundary = 'launch-diagnostic';
+        try {
+          const observed = await within(page.evaluate(launchDiagnostic, server.label), Math.max(1, deadline - performance.now()));
+          mcp.launchNotification = mcp.launchNotification === true || observed.launchNotification === true;
+          mcp.outputVisible = mcp.outputVisible === true || observed.outputVisible === true;
+          if (observed.launchError !== 'none') mcp.launchError = observed.launchError;
+        }
+        catch { mcp.launchError = 'diagnostic-refused'; }
+        if (performance.now() >= deadline) throw new Error('native MCP startup deadline exceeded');
+        mcp.awaitBoundary = 'state-row';
+        const row = await labelRow(page, server.label);
+        mcp.awaitBoundary = 'state-description';
+        const state = (await row.locator('.label-description').innerText()).trim();
+        if (performance.now() >= deadline) throw new Error('native MCP startup deadline exceeded');
+        mcp.lastState = ['Stopped', 'Starting', 'Running'].includes(state) ? state : 'other';
+        const key = state === 'Stopped' ? 'stopped' : state === 'Starting' ? 'starting' : state === 'Running' ? 'running' : 'other';
+        mcp[key] = Math.min(255, Number(mcp[key] ?? 0) + 1);
+        if (state === 'Running') {
+          mcp.awaitBoundary = 'state-dismiss'; await page.keyboard.press('Escape');
+          mcp.awaitBoundary = 'state-dialog'; await noDialog(page);
+          return { label: server.label, originUri: server.originUri, trustPromptAccepted: trusted, nativeState: state };
+        }
+        if (state !== 'Starting' && state !== 'Stopped') throw new Error('native MCP failed or unknown state');
+        await delay(100);
       }
-      catch { mcp.launchError = 'diagnostic-refused'; }
-      if (performance.now() >= deadline) throw new Error('native MCP startup deadline exceeded');
-      const row = await labelRow(page, server.label);
-      const state = (await row.locator('.label-description').innerText()).trim();
-      if (performance.now() >= deadline) throw new Error('native MCP startup deadline exceeded');
-      mcp.lastState = ['Stopped', 'Starting', 'Running'].includes(state) ? state : 'other';
-      const key = state === 'Stopped' ? 'stopped' : state === 'Starting' ? 'starting' : state === 'Running' ? 'running' : 'other';
-      mcp[key] = Math.min(255, Number(mcp[key] ?? 0) + 1);
-      if (state === 'Running') { await page.keyboard.press('Escape'); await noDialog(page); return { label: server.label, originUri: server.originUri, trustPromptAccepted: trusted, nativeState: state }; }
-      if (state !== 'Starting' && state !== 'Stopped') throw new Error('native MCP failed or unknown state');
-      await delay(100);
     }
+    throw new Error('native MCP startup deadline exceeded');
+  } finally {
+    // Observation only: 15001 means the original 15 s budget was exceeded.
+    mcp.elapsedMs = Math.min(15001, Math.max(0, Math.floor(performance.now() - started)));
   }
-  throw new Error('native MCP startup deadline exceeded');
 }
 
 async function input(): Promise<unknown> {

@@ -605,7 +605,8 @@ class ClosedNativeReadoutTests(unittest.TestCase):
                 'diagnostics': {'reason': 'mcp-start-deadline', 'private': 'PRIVATE_ENDPOINT',
                     'mcp': {'startSelected': True, 'trustAccepted': False, 'lastState': 'Stopped',
                             'stopped': 17, 'starting': 0, 'running': 0, 'other': 0,
-                            'launchNotification': True, 'outputVisible': False, 'launchError': 'other', 'postStartInput': 'unobserved'}}}
+                            'launchNotification': True, 'outputVisible': False, 'launchError': 'other', 'postStartInput': 'unobserved',
+                            'awaitBoundary': 'state-row', 'elapsedMs': 15000}}}
 
     def archive(self, members):
         output = io.BytesIO()
@@ -621,6 +622,32 @@ class ClosedNativeReadoutTests(unittest.TestCase):
         self.assertIsNotNone(reasons); self.assertIsNotNone(phases)
         self.assertEqual(collector.READOUT_REASONS, frozenset(reasons.group(1).split()))
         self.assertEqual(collector.READOUT_PHASES, frozenset(phases.group(1).split()))
+        boundaries = re.search(r'const failureAwaitBoundaries = "([^"]+)"', source)
+        self.assertIsNotNone(boundaries)
+        self.assertEqual(collector.READOUT_AWAIT_BOUNDARIES, frozenset(boundaries.group(1).split()))
+        driver = (ROOT / 'vscode-project-runtime-observer/driver.ts').read_text()
+        boundaries = re.search(r"const MCP_AWAIT_BOUNDARIES = '([^']+)'", driver)
+        self.assertIsNotNone(boundaries)
+        self.assertEqual(collector.READOUT_AWAIT_BOUNDARIES, frozenset(boundaries.group(1).split()))
+
+    def test_await_boundary_and_elapsed_require_closed_types(self):
+        for boundary in collector.READOUT_AWAIT_BOUNDARIES:
+            for elapsed in (0, 15000, 15001):
+                value = self.failure()
+                value['diagnostics']['mcp'].update(awaitBoundary=boundary, elapsedMs=elapsed)
+                rows = collector.closed_native_readout(self.archive([('installed-a.observation.json', value)]), time.monotonic() + 5)
+                self.assertEqual(rows[0]['mcp']['awaitBoundary'], boundary)
+                self.assertEqual(rows[0]['mcp']['elapsedMs'], elapsed)
+        for key, invalid in {'awaitBoundary': (None, True, 1, 'PRIVATE_BOUNDARY', 'input-count PRIVATE'),
+                             'elapsedMs': (None, True, '1', -1, 1.5, 1.0, 15002)}.items():
+            for changed in invalid:
+                with self.subTest(key=key, value=changed):
+                    value = self.failure(); value['diagnostics']['mcp'][key] = changed
+                    with self.assertRaises(ValueError):
+                        collector.closed_native_readout(self.archive([('installed-a.observation.json', value)]), time.monotonic() + 5)
+            value = self.failure(); del value['diagnostics']['mcp'][key]
+            with self.assertRaises(ValueError):
+                collector.closed_native_readout(self.archive([('installed-a.observation.json', value)]), time.monotonic() + 5)
 
     def test_actual_projection_exposes_only_fixed_state_facts(self):
         failure = self.failure()

@@ -18,7 +18,7 @@ import (
 
 func closedFailureFixture() map[string]any {
 	return map[string]any{"type": "driver-failure", "stage": "empty-a", "nonce": "inert-nonce", "phase": "publisher-startup", "code": "closed-stage-contract-refused", "visibleNativeUI": []any{map[string]any{"kind": "dialog", "messagePresent": false}, map[string]any{"kind": "quick-input"}, map[string]any{"kind": "quick-label"}}, "diagnostics": map[string]any{
-		"mcp": map[string]any{"startSelected": false, "trustAccepted": false, "lastState": "none", "launchNotification": false, "outputVisible": false, "launchError": "none", "postStartInput": "unobserved", "stopped": 0, "starting": 0, "running": 0, "other": 0}, "reason": "publisher-startup-failed", "captureReason": "none", "publisherExitCode": nil, "publisherSignal": "none", "proofSeen": true, "endpointSeen": false, "publisherMergedBytes": 0, "preVerifierStderrBytes": 0, "mergedBytesCapped": false, "stderrBytesCapped": false,
+		"mcp": map[string]any{"startSelected": false, "trustAccepted": false, "lastState": "none", "launchNotification": false, "outputVisible": false, "launchError": "none", "postStartInput": "unobserved", "awaitBoundary": "unobserved", "elapsedMs": 0, "stopped": 0, "starting": 0, "running": 0, "other": 0}, "reason": "publisher-startup-failed", "captureReason": "none", "publisherExitCode": nil, "publisherSignal": "none", "proofSeen": true, "endpointSeen": false, "publisherMergedBytes": 0, "preVerifierStderrBytes": 0, "mergedBytesCapped": false, "stderrBytesCapped": false,
 		"startupSignatures": map[string]any{"sandboxUnavailable": false, "namespaceDenied": false, "sharedLibraryMissing": false, "glibcVersionMissing": false, "displayUnavailable": false}}}
 }
 func failureBody(t *testing.T, value any) []byte {
@@ -245,6 +245,36 @@ func TestTrustedFailurePostStartInputAndNativeErrorEnums(t *testing.T) {
 		value["diagnostics"].(map[string]any)["mcp"].(map[string]any)["postStartInput"] = input
 		if _, err := admitTrustedFailure(failureBody(t, value), "empty-a", "inert-nonce"); err == nil {
 			t.Fatal("unknown input diagnostic admitted")
+		}
+	}
+}
+
+func TestTrustedFailureAwaitBoundaryAndElapsedRemainClosed(t *testing.T) {
+	for _, boundary := range strings.Fields(failureAwaitBoundaries) {
+		for _, elapsed := range []int{0, 15000, 15001} {
+			value := closedFailureFixture()
+			mcp := value["diagnostics"].(map[string]any)["mcp"].(map[string]any)
+			mcp["awaitBoundary"], mcp["elapsedMs"] = boundary, elapsed
+			if failure, err := admitTrustedFailure(failureBody(t, value), "empty-a", "inert-nonce"); err != nil || failure == nil {
+				t.Fatal("closed negative await observation refused", boundary, elapsed, err)
+			}
+		}
+	}
+	for key, invalid := range map[string][]any{
+		"awaitBoundary": {nil, true, 1, "PRIVATE_BOUNDARY", "input-count PRIVATE"},
+		"elapsedMs":     {nil, true, "1", -1, 1.5, json.Number("1.0"), 15002},
+	} {
+		for _, changed := range invalid {
+			value := closedFailureFixture()
+			value["diagnostics"].(map[string]any)["mcp"].(map[string]any)[key] = changed
+			if _, err := admitTrustedFailure(failureBody(t, value), "empty-a", "inert-nonce"); err == nil {
+				t.Fatal("invalid await observation admitted", key, changed)
+			}
+		}
+		value := closedFailureFixture()
+		delete(value["diagnostics"].(map[string]any)["mcp"].(map[string]any), key)
+		if _, err := admitTrustedFailure(failureBody(t, value), "empty-a", "inert-nonce"); err == nil {
+			t.Fatal("missing await observation admitted", key)
 		}
 	}
 }
