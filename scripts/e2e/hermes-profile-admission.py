@@ -20,10 +20,13 @@ LIMIT = 1 << 20
 EVIDENCE_CLOSED = False
 
 
+STABLE_FIELDS = ("st_dev", "st_ino", "st_mode", "st_nlink", "st_uid", "st_gid",
+                 "st_size", "st_mtime_ns", "st_ctime_ns")
+
+
 def stable_file(info):
     # Access time may change merely because this verifier read the file.
-    return (info.st_dev, info.st_ino, info.st_mode, info.st_nlink, info.st_uid, info.st_gid,
-            info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+    return tuple(getattr(info, field) for field in STABLE_FIELDS)
 
 
 def ordinary_bytes(path, expected=None):
@@ -38,7 +41,10 @@ def ordinary_bytes(path, expected=None):
     descriptor = os.open(path, flags)
     try:
         held = os.fstat(descriptor)
-        require(stable_file(held) == stable_file(before), "file changed at open")
+        opened, expected_stat = stable_file(held), stable_file(before)
+        require(opened == expected_stat, "file changed at open: " +
+                ",".join(field for field, actual, expected in zip(STABLE_FIELDS, opened, expected_stat)
+                         if actual != expected))
         with os.fdopen(os.dup(descriptor), "rb") as stream:
             body = stream.read(LIMIT + 1)
         require(len(body) == before.st_size <= LIMIT and stable_file(os.fstat(descriptor)) == stable_file(before)
