@@ -790,3 +790,101 @@ artifact cross-open projection excluding only path-versus-FD ctime semantics,
 retaining owner-checked handles and positive birth/reparse identity. New oversized,
 owner-refusal and changed-open metadata tripwires confirm no body is read; all25
 Python contracts pass locally. Hosted native acceptance remains pending.
+
+## Prospective public receipt and bounded snapshot follow-up
+
+This four-path source proposal completes the existing public journey; it adds
+no workflow, process framework, product behavior, state schema, native action,
+authentication, enablement or release-lane change. The legacy fourteen direct
+exchanges retain their original request/receipt shapes, order and semantics.
+
+The fixed public catalog grows from twenty to twenty-three pairs. The enabled
+world has add, observed repeat, an observed repeat of a deliberately historical
+Active binding, changed update, observed intact repair, exact absent-bundle
+repair and remove. The disabled and five refusal worlds keep their original
+pairs. The saved world has one add; the cold world has locked install, one
+ordinary public add of the exact current-commit source URL with --no-save to
+observe the restored selected User bundle, then a separate locked no-op repeat.
+The fixed Go recipes still accept no arbitrary argv, environment or source URL.
+There are ten public action names,23 public pairs,14 legacy pairs and75 total
+ZIP members including the manifest. No legacy research toggle is relabeled as
+a production public observation.
+
+Source capture schema2 remains bounded to32MiB. Before accumulating another
+public pair it reserves64KiB for a manifest capped at32KiB plus bounded ZIP
+headers; excess stops admission with capture.pending still set, so no raw
+archive is published. The legacy-only29-member/1MiB archive is unchanged.
+One original360s monotonic public-journey deadline spans all worlds and fixture
+work after its first call. Each existing234s request/240s parent allowance is
+clamped to remaining time, with5s reserved for existing settlement; the helper's
+235s maximum, EOF cancellation, native30/5s path and strict cleanup receipts
+are unchanged. Final public effects must also finish within that same deadline.
+
+New public snapshots reuse ProfileLedger, including held ancestor descriptors,
+same-domain path/handle fences, ownership/no-alias checks and streaming reads.
+They admit at most4096 entries/depth24,1MiB per mutable file and16MiB aggregate,
+including a pre-read aggregate check and a final named-file/directory metadata
+fence after all body reads. Both exact control-lock leaves have a
+256-byte cap before any content read through their held parent. Reopened fstat
+must still match the captured owner/mode/link/size metadata before reading.
+Only the known platform scanner and exact bin/agy shim get immutable size/SHA
+exceptions; those hashes come from the original pinned inputs, never a changed
+snapshot file. Their bytes are streamed without retaining content. No general
+large-file or hardlink allowance is added, and legacy tree_snapshot is unchanged.
+Closed state JSON uses the same parser with finite depth16 for nested existing
+ownership receipts; ordinary config/request parsing keeps depth8.
+
+Warm and cold proofs join the exact installation/binding/source/package revision
+to canonical physical User path, native manifest and the real single owned
+data receipt/owner-marker bytes. A harmless exclusive task marker is retained
+through repeat, update, repair and removal. Read-only repeat, historical
+refinement, intact repair and cold observation preserve full owned bundle
+metadata and receipts; actual replacement compares original contents/modes
+while retaining binding and data authority. Historical authoring changes only
+activation in the captured state, through original held state parent/file
+authority, and explicitly leaves authentication unsynthesized. The absent
+bundle is renamed to an owned retained quarantine, never recursively deleted.
+Removal must retain installation source/package, empty clients, data_retained,
+data receipts and exact owner/task-marker files. Cold observation does not turn
+the later install--locked no-op into an inventory callback claim.
+
+Read-only public callbacks require the actual adapter guidance and an unchanged
+complete private HOME snapshot. During real UAP package transactions only the
+selected bundle and temporal size/link/time fields of its two exact transaction
+parent directories may change; their original identities/birth/attributes and
+all foreign/config bytes remain checked. Original User/ProjectA/ProjectB/vendor
+sentinels and portable source stay protected. The authored symlink refusal uses
+a separate bounded lstat/readlink fingerprint for that one known negative
+fixture, retaining its ordinary target independently; it cannot enter the
+no-alias snapshot allowance or be mistaken for an ordinary file.
+
+The prospective contracts cover named and opened hardlinks/oversize/mode races
+before reads, original immutable pins, exact data/revision joins, read-only
+versus repaired inode semantics, the authored alias without target reads,
+aggregate refusal before accumulation and expiry without deadline renewal.
+This follow-up was prepared during executor unavailability: its added/changed
+contracts and native journey have not been executed. Earlier25 Python contracts
+and the original helper's focused tests/lint are separate historical evidence.
+Source review, ordinary CI contracts/lint and genuine three-OS public execution
+of this exact source remain required before acceptance.
+
+The independent review corrections keep every public control/runtime role an
+ordinary file before directory recursion, with a no-read directory-at-role
+negative for both controls and pins. The persisted binding must carry exactly
+one private managed_package_directory object, joined to the declared/physical
+identity, canonical path and independently recomputed projected bundle digest.
+The same digest must match the latest committed directory-swap receipt for that
+binding; the fresh fixture has consecutive binding-level sequences, and repeated
+historical receipts with the same AfterDigest are valid. Pending native intent
+or an unacknowledged activation attempt refuses. ActivationOutcome keeps its
+NativeObjects/NativeEffect fields private in the existing public JSON DTO.
+
+Digest measurement reuses the packagesnapshot NUL-delimited kind/path/execute/
+size headers and file bytes, sorted by slash-relative path with the root omitted.
+This narrow fixture permits ASCII names and refuses snapshot-excluded .git or
+workspace-lock members rather than silently omitting observed files. Windows
+ordinary-file execute bits follow the pinned Go1.26.11 os mode rule. A separate
+literal-header vector checks root omission, ordering and executable semantics;
+realistic ownership/receipt fixtures check the original digest, a changed latest
+receipt, equal historical digests, pending effects and the private DTO boundary.
+These added corrections have also not been executed during the current outage.

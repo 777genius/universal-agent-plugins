@@ -250,11 +250,12 @@ def profile_file_refusal(root, child, info, root_device):
 
 
 class ProfileLedger:
-    def __init__(self, root, *, lintai=False):
+    def __init__(self, root, *, lintai=False, public=None):
         self.root, self.held = root, {}
         self.scanner = lintai_member() if lintai else None
+        self.public = public  # Exact public-fixture caps or original immutable size/SHA pins.
         try:
-            self.base = self.scan()
+            self.base = self.scan(strict=public is not None)
         except BaseException:
             self.close()
             raise
@@ -274,6 +275,7 @@ class ProfileLedger:
         return linked
 
     def scan(self, *, strict=False):
+        strict = strict or self.public is not None
         result, aggregate = {}, 0
         def visit(path, depth, parent=None):
             nonlocal aggregate
@@ -286,24 +288,41 @@ class ProfileLedger:
                     if len(result) >= 4096: raise AssertionError("Profile membership bound")
                     child = path / entry.name
                     info = child.lstat() if os.name == "nt" else os.stat(entry.name, dir_fd=descriptor, follow_symlinks=False)
+                    relative = child.relative_to(self.root).as_posix()
+                    admission = self.public.get(relative) if self.public is not None else None
+                    if admission is not None and not stat.S_ISREG(info.st_mode):
+                        raise AssertionError("Public pinned/control role must be an ordinary file")
                     if stat.S_ISDIR(info.st_mode): visit(child, depth + 1, None if os.name == "nt" else descriptor); continue
                     identity = object_identity(info)
-                    relative = child.relative_to(self.root).as_posix()
                     scanner = self.scanner is not None and relative == self.scanner[0]
-                    limit = self.scanner[1] if scanner else 1 << 20
+                    pin = self.scanner[1:] if scanner else admission if admission and admission[1] is not None else None
+                    limit = pin[0] if pin else admission[0] if admission else 1 << 20
+                    if admission and admission[1] is None and (info.st_nlink != 1 or not 0 < info.st_size <= limit
+                            or (os.name != "nt" and stat.S_IMODE(info.st_mode) != 0o600)):
+                        raise AssertionError("Public control lock authority differs")
                     if info.st_nlink != 1 or info.st_size > limit or info.st_dev != identity_root[0]:
                         profile_file_refusal(self.root, child, info, identity_root[0])
-                    if scanner and info.st_size != limit: raise AssertionError("Pinned scanner length differs")
-                    if scanner and os.name != "nt" and stat.S_IMODE(info.st_mode) != 0o700:
+                    if pin and info.st_size != limit: raise AssertionError("Pinned scanner length differs")
+                    if pin and os.name != "nt" and stat.S_IMODE(info.st_mode) != 0o700:
                         raise AssertionError("Pinned scanner mode differs")
+                    if self.public is not None and not pin and aggregate + info.st_size > 16 << 20:
+                        raise AssertionError("Profile bytes bound before read")
                     fd = owned_handle(child, parent=None if os.name == "nt" else descriptor)
                     try:
                         opened = os.fstat(fd)
                         if object_identity(opened)[:2] != identity[:2]: raise AssertionError("Opened file differs")
+                        if self.public is not None:
+                            named_id, opened_id = stable_file(info), stable_file(opened)
+                            if os.name == "nt":
+                                if type(named_id[9]) is not int or named_id[9] <= 0:
+                                    raise AssertionError("Public Windows creation identity unavailable")
+                                named_id, opened_id = named_id[:8] + named_id[9:], opened_id[:8] + opened_id[9:]
+                            if named_id != opened_id or opened.st_nlink != 1 or not 0 <= opened.st_size <= limit:
+                                raise AssertionError("Public opened file authority differs")
                         if scanner and os.name != "nt" and stat.S_IMODE(opened.st_mode) != 0o700:
                             raise AssertionError("Opened pinned scanner mode differs")
                         before = stable_file(opened)
-                        digest, size, body = hashlib.sha256(), 0, None if scanner else bytearray()
+                        digest, size, body = hashlib.sha256(), 0, None if pin else bytearray()
                         while size <= limit:
                             chunk = os.read(fd, min(65536, limit + 1 - size))
                             if not chunk: break
@@ -313,8 +332,8 @@ class ProfileLedger:
                         if size != info.st_size or before != stable_file(after) or stable_file(child.lstat() if os.name == "nt" else os.stat(entry.name, dir_fd=descriptor, follow_symlinks=False)) != stable_file(info):
                             raise AssertionError("Profile file changed during read")
                     finally: os.close(fd)
-                    if scanner and digest.hexdigest() != self.scanner[2]: raise AssertionError("Pinned scanner bytes differ")
-                    if not scanner: aggregate += size
+                    if pin and digest.hexdigest() != pin[1]: raise AssertionError("Pinned scanner bytes differ")
+                    if not pin: aggregate += size
                     if aggregate > 16 << 20: raise AssertionError("Profile bytes bound")
                     result[relative] = ("file", identity, info.st_nlink, info.st_size, info.st_mtime_ns, info.st_ctime_ns, digest.hexdigest(), bytes(body) if body is not None else None)
                     if strict: result[relative] += (stable_file(info), stable_file(opened))
@@ -324,7 +343,17 @@ class ProfileLedger:
         identity_root = self.directory(self.root)
         visit(self.root, 0)
         for path in self.held: self.directory(path)
+        if self.public is not None:
+            for relative, row in result.items():
+                child = self.root / relative
+                if row[0] == "directory":
+                    if self.directory_metadata(child) != row[2]: raise AssertionError("Directory changed after public snapshot")
+                else:
+                    info = child.lstat() if os.name == "nt" else os.stat(child.name, dir_fd=self.held[child.parent][0], follow_symlinks=False)
+                    if stable_file(info) != row[8]: raise AssertionError("File changed after public snapshot")
         if self.scanner is not None and self.scanner[0] not in result: raise AssertionError("Ordinary UAP scanner is missing")
+        if self.public is not None and any(pin[1] is not None and name not in result for name, pin in self.public.items()):
+            raise AssertionError("Pinned public runtime is missing")
         return result
 
     def directory_metadata(self, path):
@@ -358,7 +387,7 @@ class ProfileLedger:
         self.held.clear()
 
 
-def closed_config(body, *, limit=16384):
+def closed_config(body, *, limit=16384, depth_bound=8):
     def unique(pairs):
         if len(pairs) > 128: raise AssertionError("Config member bound")
         value = {}
@@ -369,7 +398,7 @@ def closed_config(body, *, limit=16384):
     if len(body) > limit: raise AssertionError("Config byte bound")
     value = json.loads(body, object_pairs_hook=unique, parse_constant=lambda _: (_ for _ in ()).throw(AssertionError("Config nonfinite")))
     def depth(item, level=0):
-        if level > 8 or isinstance(item, float) and not math.isfinite(item): raise AssertionError("Config depth/number bound")
+        if level > depth_bound or isinstance(item, float) and not math.isfinite(item): raise AssertionError("Config depth/number bound")
         if isinstance(item, (dict, list)):
             for child in item.values() if isinstance(item, dict) else item: depth(child, level + 1)
     depth(value)
@@ -492,12 +521,14 @@ RECEIPT_ACTIONS = tuple((initial, action) for initial, actions in (
     for action in actions)
 
 
-PUBLIC_ACTIONS = ("uap-add", "uap-repeat", "uap-update", "uap-repair", "uap-remove",
-                  "uap-add", "uap-repeat", "uap-saved-add", "uap-cold-install", "uap-cold-repeat",
+PUBLIC_MARKER = b"task-owned persistent User data; no native MCP call\n"
+
+PUBLIC_ACTIONS = ("uap-add", "uap-repeat", "uap-repeat", "uap-update", "uap-repair", "uap-repair", "uap-remove",
+                  "uap-add", "uap-repeat", "uap-saved-add", "uap-cold-install", "uap-cold-observe", "uap-cold-repeat",
                   "uap-add", "uap-repeat", "uap-add", "uap-repeat", "uap-add", "uap-repeat",
                   "uap-add", "uap-repeat", "uap-add", "uap-missing-backend")
 
-PUBLIC_WORLDS = (("enabled",) * 5 + ("disabled",) * 2 + ("saved",) + ("cold",) * 2
+PUBLIC_WORLDS = (("enabled",) * 7 + ("disabled",) * 2 + ("saved",) + ("cold",) * 3
                  + tuple(world for world in ("missing-config", "malformed-config", "foreign-collision",
                                              "config-alias", "missing-backend") for _ in range(2)))
 
@@ -517,6 +548,7 @@ class SourceReceipts:
         self.source, self.pins = source, pins
         self.slots, self.members, self.public_slots = [], {}, []
         self.public_pin, self.public_effects_verified, self.public_roots = None, False, {}
+        self.public_deadline = None
         self.pending, self.harness_complete = False, False
 
     def verify(self, members):
@@ -565,6 +597,8 @@ class SourceReceipts:
                 or max(len(frame), len(receipt)) > 2 << 20
                 or self.public_pin not in (None, req["binary_sha256"])):
             raise AssertionError("Public receipt order/source/pin/bound differs")
+        if sum(map(len, self.members.values())) + len(frame) + len(receipt) > (32 << 20) - 65536:
+            raise AssertionError("Public receipt aggregate reserve exceeded")
         world = PUBLIC_WORLDS[index]
         root = req["root"]
         if (type(root) is not str or not Path(root).is_absolute() or
@@ -588,7 +622,7 @@ class SourceReceipts:
         try:
             if self.pending: return None  # An unproved family revokes every raw upload.
             self.verify(set())
-            public_complete = len(self.public_slots) == 20 and self.public_effects_verified
+            public_complete = len(self.public_slots) == 23 and self.public_effects_verified
             complete = self.harness_complete and len(self.slots) == 14 and all(row["effects_verified"] for row in self.slots)
             if self.public_slots: complete = complete and public_complete
             summary = dict(schema_version=1, source_commit=self.source[0], source_tree=self.source[1],
@@ -598,12 +632,13 @@ class SourceReceipts:
                            native_project_qualified=False, ide_activation=False, native_mcp_call=False,
                            vendor_authentication=False, real_model_inference=False, fixtures_retained=True)
             if self.public_slots:
-                summary.update(schema_version=2, public_expected_slots=20, public_slots=self.public_slots,
+                summary.update(schema_version=2, public_expected_slots=23, public_slots=self.public_slots,
                                installer_sha256=self.public_pin, public_capture_complete=public_complete,
                                public_effects_verified=self.public_effects_verified)
             members = dict(self.members, **{"manifest.json": (json.dumps(summary, sort_keys=True) + "\n").encode()})
+            if self.public_slots and len(members["manifest.json"]) > 32768: raise AssertionError("Public manifest reserve exceeded")
             archive_bound = 32 << 20 if self.public_slots else 1 << 20
-            if len(members) > (69 if self.public_slots else 29) or sum(map(len, members.values())) > archive_bound: raise AssertionError("Receipt archive bound")
+            if len(members) > (75 if self.public_slots else 29) or sum(map(len, members.values())) > archive_bound: raise AssertionError("Receipt archive bound")
             pending, final = self.root / "pending.zip", self.root / "receipts.zip"
             flags = os.O_RDWR | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
             descriptor = os.open(pending, flags, 0o600) if os.name == "nt" else os.open("pending.zip", flags, 0o600, dir_fd=self.fd)
@@ -1167,21 +1202,22 @@ def admission_contracts():
                 self.assertEqual((pending.read_bytes(), stable_file(pending.lstat())), (b"PRIVATE-PENDING", replaced[0]))
 
         def test_public_helper_cleanup_fence_and_closed_stream_join(self):
-            for condition in ("negative", "transport", "cleanup", "bool-exit", "stream", "late-pin", "no-lf", "extra-lf", "late-frame"):
+            for condition in ("negative", "journey", "transport", "cleanup", "bool-exit", "stream", "late-pin", "no-lf", "extra-lf", "late-frame"):
                 with self.subTest(condition=condition), tempfile.TemporaryDirectory() as temporary:
                     parent = Path(temporary).resolve()
                     binaries = parent / "binaries"; binaries.mkdir()
                     paths = [binaries / name for name in ("uap", "agy", "helper")]
                     for path in paths: path.write_bytes(path.name.encode())
-                    pins = tuple(hashlib.sha256(path.read_bytes()).hexdigest() for path in paths)
+                    pins = tuple((path.stat().st_size, hashlib.sha256(path.read_bytes()).hexdigest()) for path in paths)
                     source = ("a" * 40, "b" * 40)
-                    capture = SourceReceipts(parent, source, (pins[1], pins[2]))
+                    capture = SourceReceipts(parent, source, (pins[1][1], pins[2][1]))
                     runtime = (*paths, source, pins, capture)
                     with public_fixture(parent, binaries) as (root, _env, authority):
-                        now = [time.monotonic()]
+                        now, timeouts = [100.0 if condition == "journey" else time.monotonic()], []
                         def exchange(helper, frame, timeout):
                             self.assertEqual(helper, paths[2])
                             self.assertTrue(0 < timeout <= 240)
+                            timeouts.append(timeout)
                             self.assertTrue(capture.pending)
                             if condition == "transport": raise RuntimeError("incomplete family")
                             req = json.loads(frame)
@@ -1196,9 +1232,19 @@ def admission_contracts():
                             output = json.dumps(value).encode() + b"\n"
                             return output[:-1] if condition == "no-lf" else output + b"\n" if condition == "extra-lf" else output
                         with patch(__name__ + ".bridge_exchange", side_effect=exchange) as bridge, patch.object(time, "monotonic", side_effect=lambda: now[0]):
-                            if condition == "negative":
+                            if condition in ("negative", "journey"):
                                 self.assertEqual(public_uap(runtime, root, authority, "uap-add", refused=True), b"refused")
                                 self.assertFalse(capture.pending)
+                                if condition == "journey":
+                                    original_deadline = capture.public_deadline
+                                    now[0] += 330
+                                    self.assertEqual(public_uap(runtime, root, authority, "uap-repeat", refused=True), b"refused")
+                                    self.assertEqual(capture.public_deadline, original_deadline)
+                                    self.assertTrue(0 < timeouts[-1] <= 25)
+                                    now[0] = original_deadline + 1
+                                    with self.assertRaisesRegex(AssertionError, "journey budget expired"):
+                                        public_uap(runtime, root, authority, "uap-repeat", refused=True)
+                                    self.assertFalse(capture.pending)
                                 os.close(capture.fd)
                             else:
                                 with self.assertRaises((AssertionError, RuntimeError)):
@@ -1208,7 +1254,7 @@ def admission_contracts():
                                 with patch.dict(os.environ, {"GITHUB_OUTPUT": str(output)}):
                                     self.assertIsNone(capture.publish())
                                 self.assertFalse(output.exists())
-                            self.assertEqual(bridge.call_count, 1)
+                            self.assertEqual(bridge.call_count, 2 if condition == "journey" else 1)
 
         def test_public_user_result_is_scope_and_observation_specific(self):
             action = "The selected User plugin is enabled in CLI inventory; open or reload Antigravity to verify IDE loading"
@@ -1216,13 +1262,15 @@ def admission_contracts():
                    "activation": {"activation": "prepared", "verification": "installation_verified", "user_actions": [action]}}
             packet = {"schema_version": 1, "result": "success", "data": {"result": row}}
             self.assertEqual(public_user_result(json.dumps(packet), observed=True), row)
-            for kind in ("active", "project", "missing-observation", "attested", "wrong-target"):
+            for kind in ("active", "project", "missing-observation", "attested", "private-objects", "private-effect", "wrong-target"):
                 changed = json.loads(json.dumps(packet))
                 outcome = changed["data"]["result"]["activation"]
                 if kind == "active": outcome["activation"] = "active"
                 elif kind == "project": changed["data"]["result"]["plan"]["scope"] = "project"
                 elif kind == "missing-observation": outcome["user_actions"] = []
                 elif kind == "attested": outcome["activation_attested"] = True
+                elif kind == "private-objects": outcome["native_objects"] = []
+                elif kind == "private-effect": outcome["native_effect"] = "unchanged"
                 else:
                     changed["data"] = {"targets": [{"target": "cline", "output": changed["data"]}]}
                 with self.subTest(kind=kind), self.assertRaises(AssertionError):
@@ -1232,8 +1280,12 @@ def admission_contracts():
             with tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary).resolve()
                 path = root / "state-v2.json"
-                packet = {"installations": [{"declared_name": "owned", "clients": {
-                    "one": {"client_id": "antigravity", "scope": "user", "activation": "prepared", "verification": "installation_verified"}}}]}
+                binding = dict(client_id="antigravity", scope="user", activation="prepared", verification="installation_verified",
+                               physical_artifact_id="physical", target_locator=str(root / "physical"))
+                binding["native_objects"] = [dict(object_id="package:antigravity:physical", kind="managed_package_directory",
+                                                 logical_name="owned", path=binding["target_locator"],
+                                                 managed_digest="sha256:" + "a" * 64, protection_class="managed")]
+                packet = {"schema_version": 5, "installations": [{"declared_name": "owned", "clients": {"one": binding}}]}
                 path.write_text(json.dumps(packet))
                 public_user_binding({"AGENTPLUGINS_HOME": str(root)}, "owned")
                 actual = os.read
@@ -1321,7 +1373,7 @@ def admission_contracts():
                     capture.public_effects_verified = verified
                     with patch.dict(os.environ, {"GITHUB_OUTPUT": str(parent / "outputs")}): final = capture.publish()
                     with zipfile.ZipFile(final) as archive:
-                        self.assertEqual(len(archive.infolist()), 69); self.assertIsNone(archive.testzip())
+                        self.assertEqual(len(archive.infolist()), 75); self.assertIsNone(archive.testzip())
                         summary = json.loads(archive.read("manifest.json"))
                         self.assertEqual(summary["schema_version"], 2)
                         self.assertEqual(summary["capture_complete"], verified)
@@ -1332,6 +1384,198 @@ def admission_contracts():
                             for row in slot["files"]:
                                 raw = archive.read(row["name"])
                                 self.assertEqual((len(raw), hashlib.sha256(raw).hexdigest()), (row["bytes"], row["sha256"]))
+
+        def test_public_snapshot_refuses_named_and_opened_alias_size_before_read(self):
+            effects = ("hardlink", "oversize", "open-grow", "open-link") + (() if os.name == "nt" else ("open-mode",))
+            for effect in effects:
+                with self.subTest(effect=effect), tempfile.TemporaryDirectory() as temporary:
+                    parent = Path(temporary).resolve(); root = parent / "owned"; root.mkdir()
+                    leaf = root / "file"; leaf.write_bytes(b"owned"); leaf.chmod(0o600)
+                    if effect == "hardlink": os.link(leaf, parent / "alias")
+                    if effect == "oversize": leaf.write_bytes(b"x" * (2 << 20))
+                    actual = owned_handle
+                    def raced(path, *args, **kwargs):
+                        if path == leaf:
+                            if effect == "open-grow": leaf.write_bytes(b"x" * (2 << 20))
+                            elif effect == "open-link": os.link(leaf, parent / "alias")
+                            elif effect == "open-mode": leaf.chmod(0o700)
+                        return actual(path, *args, **kwargs)
+                    with patch.dict(globals(), {"owned_handle": raced}), patch.object(os, "read") as read:
+                        with self.assertRaises(AssertionError): public_snapshot(root)
+                        read.assert_not_called()
+
+        def test_public_control_and_pinned_roles_refuse_directories_before_read(self):
+            for pinned in (False, True):
+                with self.subTest(pinned=pinned), tempfile.TemporaryDirectory() as temporary:
+                    root = Path(temporary).resolve()
+                    role = root / ("runtime" if pinned else "uap-state/mutation.lock")
+                    role.mkdir(parents=True); (role / "unexpected").write_bytes(b"do not read")
+                    with patch.object(os, "read") as read:
+                        with self.assertRaisesRegex(AssertionError, "role must be an ordinary file"):
+                            if pinned: public_snapshot(root, {"runtime": (11, "a" * 64)})
+                            else: public_state_snapshot(root, root / "uap-state")
+                        read.assert_not_called()
+
+        def test_public_package_digest_joins_literal_snapshot_header_and_modes(self):
+            with tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve(); (root / "a").mkdir()
+                (root / "a/z").write_bytes(b"xyz"); (root / "a/z").chmod(0o600)
+                (root / "run").write_bytes(b"#!\n"); (root / "run").chmod(0o700)
+                rows = public_snapshot(root)
+                literal = (b"dir\x00a\x00false\x000\x00file\x00a/z\x00false\x003\x00xyz"
+                           b"file\x00run\x00" + (b"false" if os.name == "nt" else b"true") + b"\x003\x00#!\n")
+                expected = "sha256:" + hashlib.sha256(literal).hexdigest()
+                self.assertEqual(public_bundle_digest(dict(reversed(tuple(rows.items())))), expected)
+                self.assertEqual(public_bundle_digest({key: row for key, row in rows.items() if key != "."}), expected)
+                for name in (".git/config", ".uap-integrations.lock", ".plugin-kit-ai.lock", "unqualified-\u00e9"):
+                    with self.subTest(name=name), self.assertRaisesRegex(AssertionError, "snapshot-excluded or unqualified"):
+                        public_bundle_digest({name: rows["a/z"]})
+                if os.name != "nt":
+                    (root / "run").chmod(0o600)
+                    self.assertNotEqual(public_bundle_digest(public_snapshot(root)), expected)
+
+        def test_public_lock_is_rejoined_after_later_file_reads(self):
+            with tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve(); state = root / "uap-state"; state.mkdir()
+                lock = state / "mutation.lock"; lock.write_bytes(b'{"pid":1,"acquired_at":"2026-11-13T00:00:00Z"}'); lock.chmod(0o600)
+                foreign = state / "state-v2.json"; foreign.write_bytes(b"owned")
+                actual_read, actual_scan, changed = os.read, os.scandir, []
+                @contextlib.contextmanager
+                def ordered(path):
+                    with actual_scan(path) as entries: yield iter(sorted(entries, key=lambda entry: entry.name))
+                def raced(fd, count):
+                    body = actual_read(fd, count)
+                    if not changed and os.fstat(fd).st_ino == foreign.stat().st_ino:
+                        stamp = lock.stat(); lock.write_bytes(b'{"pid":2,"acquired_at":"2026-11-13T00:00:00Z"}')
+                        os.utime(lock, ns=(stamp.st_atime_ns, stamp.st_mtime_ns + 1000000000)); changed.append(True)
+                    return body
+                with patch.object(os, "read", side_effect=raced), patch.object(os, "scandir", side_effect=ordered):
+                    with self.assertRaisesRegex(AssertionError, "changed after public snapshot"): public_state_snapshot(root, state)
+                self.assertEqual(changed, [True])
+
+        def test_public_snapshot_large_runtime_requires_original_exact_pin(self):
+            with tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve(); leaf = root / "runtime"
+                body = b"p" * ((1 << 20) + 17); leaf.write_bytes(body); leaf.chmod(0o700)
+                pin = (len(body), hashlib.sha256(body).hexdigest())
+                rows = public_snapshot(root, {"runtime": pin})
+                self.assertEqual((rows["runtime"][3], rows["runtime"][6], rows["runtime"][7]), (*pin, None))
+                leaf.write_bytes(b"q" + body[1:])
+                with self.assertRaisesRegex(AssertionError, "Pinned scanner bytes differ"):
+                    public_snapshot(root, {"runtime": pin})
+                with patch.object(os, "read") as read:
+                    with self.assertRaises(AssertionError): public_snapshot(root)
+                    read.assert_not_called()
+                leaf.unlink()
+                for index in range(17): (root / str(index)).write_bytes(b"x" * (1 << 20))
+                actual, total = os.read, [0]
+                def bounded(fd, count):
+                    chunk = actual(fd, count); total[0] += len(chunk); return chunk
+                with patch.object(os, "read", side_effect=bounded), self.assertRaisesRegex(AssertionError, "bytes bound before read"):
+                    public_snapshot(root)
+                self.assertEqual(total[0], 16 << 20)
+
+        def test_public_binding_joins_real_data_and_distinguishes_readonly_from_repair(self):
+            with tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve(); state = root / "uap-state"; home = root / "home"
+                selected, data = home / ".gemini/config/plugins/physical", state / "plugin-data/physical"
+                for path in (selected, data, root / "bin"): path.mkdir(parents=True, exist_ok=True)
+                runtime = root / "bin" / ("agy.exe" if os.name == "nt" else "agy")
+                runtime.write_bytes(b"agy"); runtime.chmod(0o700)
+                pins = {key: (3, hashlib.sha256(b"pin").hexdigest()) for key in LINTAI_PINS}
+                with patch.dict(globals(), {"LINTAI_PINS": pins}):
+                    scanner = root / lintai_member()[0]; scanner.parent.mkdir(parents=True)
+                    scanner.write_bytes(b"pin"); scanner.chmod(0o700)
+                    receipt = dict(data_receipt_id="data", physical_backend_id="physical", scope="user", state="owned", locator=str(data))
+                    source = dict(tree_digest="tree", resolved_revision="revision", source_binding_id="source")
+                    package = dict(version="1.0.0", manifest_digest="manifest")
+                    binding = dict(client_id="antigravity", client_binding_id="binding", scope="user", activation="prepared",
+                                   verification="installation_verified", authentication="not_required", data_receipt_id="data",
+                                   target_locator=str(selected), physical_artifact_id="physical",
+                                   package_revision=dict(tree_digest="tree", resolved_revision="revision", **package))
+                    installed = dict(installation_id="installation", declared_name=NAME, source=source, package=package,
+                                     clients={"binding": binding}, data_receipts={"data": receipt})
+                    packet = dict(schema_version=5, installations=[installed])
+                    manifest = selected / "plugin.json"
+                    manifest_body = json.dumps(dict(name=NAME, version="1.0.0")).encode()
+                    manifest.write_bytes(manifest_body); manifest.chmod(0o600)
+                    projected = "sha256:" + hashlib.sha256(b"file\x00plugin.json\x00false\x00"
+                                                           + str(len(manifest_body)).encode() + b"\x00" + manifest_body).hexdigest()
+                    binding["native_objects"] = [dict(object_id="package:antigravity:physical", kind="managed_package_directory",
+                                                     logical_name=NAME, path=str(selected), managed_digest=projected, protection_class="managed")]
+                    binding["receipts"] = [dict(operation_id="first", sequence=1, mutation_type="directory_swap", phase="committed",
+                                               client_binding_id="binding", active_path=str(selected), after_digest=projected)]
+                    (data / ".agentplugins-data-owner.json").write_bytes(json.dumps(receipt).encode())
+                    path = state / "state-v2.json"; path.write_bytes(json.dumps(packet).encode())
+                    env = {"HOME": str(home), "AGENTPLUGINS_HOME": str(state)}
+                    runtime_pins = ((1, "unused"), (3, hashlib.sha256(b"agy").hexdigest()), (1, "unused"))
+                    before = public_binding_proof(env, NAME, runtime_pins)
+                    public_preserved(before, public_binding_proof(env, NAME, runtime_pins))
+                    for effect in ("extra-object", "wrong-path", "wrong-kind", "wrong-digest", "pending", "attempt", "latest-receipt"):
+                        changed = json.loads(json.dumps(packet))
+                        candidate = changed["installations"][0]["clients"]["binding"]
+                        if effect == "extra-object": candidate["native_objects"].append(dict(candidate["native_objects"][0]))
+                        elif effect == "wrong-path": candidate["native_objects"][0]["path"] = str(home / "foreign")
+                        elif effect == "wrong-kind": candidate["native_objects"][0]["kind"] = "native_registration"
+                        elif effect == "wrong-digest":
+                            candidate["native_objects"][0]["managed_digest"] = "sha256:" + "0" * 64
+                            candidate["receipts"][-1]["after_digest"] = "sha256:" + "0" * 64
+                        elif effect == "pending": candidate["pending_native_intent"] = {}
+                        elif effect == "attempt": candidate["native_activation_attempt"] = "unsettled"
+                        else:
+                            candidate["receipts"].append(dict(candidate["receipts"][0], operation_id="second", sequence=2,
+                                                              after_digest="sha256:" + "0" * 64))
+                        path.write_bytes(json.dumps(changed).encode())
+                        with self.subTest(effect=effect), self.assertRaises(AssertionError):
+                            public_binding_proof(env, NAME, runtime_pins)
+                    binding["receipts"].append(dict(binding["receipts"][0], operation_id="second", sequence=2))
+                    path.write_bytes(json.dumps(packet).encode())
+                    before = public_binding_proof(env, NAME, runtime_pins)
+                    self.assertEqual(len(before["binding"]["receipts"]), 2)
+                    public_preserved(before, public_binding_proof(env, NAME, runtime_pins))
+                    descriptor = owned_handle(root, True)
+                    try: public_seed_active(root, (descriptor, None, None), before)
+                    finally: os.close(descriptor)
+                    expected = json.loads(json.dumps(packet)); expected["installations"][0]["clients"]["binding"]["activation"] = "active"
+                    self.assertEqual(json.loads(public_owned_bytes(path)), expected)
+                    path.write_bytes(json.dumps(packet).encode())
+                    before = public_binding_proof(env, NAME, runtime_pins)
+                    moved = root / "original-manifest"; manifest.rename(moved); manifest.write_bytes(moved.read_bytes()); manifest.chmod(0o600)
+                    after = public_binding_proof(env, NAME, runtime_pins)
+                    with self.assertRaises(AssertionError): public_preserved(before, after)
+                    public_preserved(before, after, replaced=True)
+                    (data / "marker").write_bytes(b"new data")
+                    with self.assertRaises(AssertionError): public_preserved(after, public_binding_proof(env, NAME, runtime_pins), replaced=True)
+                    package["version"] = "2.0.0"; path.write_bytes(json.dumps(packet).encode())
+                    with self.assertRaisesRegex(AssertionError, "revision joins"):
+                        public_binding_proof(env, NAME, runtime_pins)
+
+        def test_public_authored_alias_is_measured_without_target_body_read(self):
+            with tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve(); target = root / "authored-original.json"
+                target.write_bytes(b"owned config"); alias = root / "config.json"; alias.symlink_to(target.name)
+                with patch.object(os, "read") as read:
+                    before = public_refusal_config_identity(alias, True)
+                    self.assertEqual(public_refusal_config_identity(alias, True), before)
+                    with self.assertRaises(AssertionError): public_refusal_config_identity(alias, False)
+                    alias.unlink(); alias.symlink_to("other")
+                    with self.assertRaises(AssertionError): public_refusal_config_identity(alias, True)
+                    read.assert_not_called()
+                self.assertEqual(target.read_bytes(), b"owned config")
+
+        def test_public_aggregate_refusal_precedes_accumulation_and_revokes_upload(self):
+            with tempfile.TemporaryDirectory() as temporary:
+                parent = Path(temporary).resolve(); capture = self.receipt_fixture(parent, 14)
+                capture.members = {"inert-aggregate": b"x" * ((32 << 20) - 65536)}
+                capture.pending = True
+                req = dict(action="uap-add", source_commit=capture.source[0], source_tree=capture.source[1],
+                           binary_sha256="e" * 64, root=str(parent / "fixture"))
+                with self.assertRaisesRegex(AssertionError, "aggregate reserve"):
+                    capture.admit_public(json.dumps(req).encode() + b"\n", b"{}\n")
+                self.assertEqual(set(capture.members), {"inert-aggregate"}); self.assertFalse(capture.public_slots)
+                self.assertTrue(capture.pending)
+                with patch.dict(os.environ, {"GITHUB_OUTPUT": str(parent / "output")}): self.assertIsNone(capture.publish())
+                self.assertFalse((parent / "output").exists())
 
         def test_config_is_closed_and_bounded(self):
             for body in (b'{"x":1,"x":2}', b'{} {}', b'{"x":NaN}', b'{"x":1e999}', b'[' * 10 + b'0' + b']' * 10, b'x' * 16385):
@@ -1369,51 +1613,198 @@ def public_owned_bytes(path, *, limit=(1 << 20) - 1):
     return body
 
 
-def public_state_snapshot(root, state):
-    """Ignore only source-authored advisory-lock PID/time refreshes."""
+def public_snapshot(root, limits=None):
+    if root.resolve() != root: raise AssertionError("Public snapshot root is aliased")
+    ledger = ProfileLedger(root, public={} if limits is None else limits)
+    try: return ledger.base
+    finally: ledger.close()
+
+
+def public_state_snapshot(root, state, runtime_pins=None):
+    """Normalize only the two bounded, held advisory-lock PID/time refreshes."""
     import datetime
     import re
-    result, observed = {}, {}
     controls = tuple(state / name for name in ("mutation.lock", "environment.lock"))
+    limits = {path.relative_to(root).as_posix(): (256, None) for path in controls}
+    if runtime_pins is not None:
+        scanner = lintai_member()
+        relative = (state / Path(scanner[0]).relative_to("uap-state")).relative_to(root).as_posix()
+        limits[relative] = scanner[1:]
+        if root != state: limits["bin/" + ("agy.exe" if os.name == "nt" else "agy")] = runtime_pins[1]
+    result = public_snapshot(root, limits)
     for path in controls:
         key = path.relative_to(root).as_posix()
-        try: before = path.lstat()
-        except FileNotFoundError:
-            observed[path] = None
-            continue
-        observed[path] = stable_file(before)
-        if not 0 < before.st_size <= 256 or before.st_nlink != 1 or (os.name != "nt" and stat.S_IMODE(before.st_mode) != 0o600):
-            raise AssertionError("Public control lock authority differs")
-        body = public_owned_bytes(path, limit=256)
-        value = closed_config(body, limit=256)
+        if key not in result: continue
+        row = result[key]
+        if row[0] != "file": raise AssertionError("Public control lock is not a file")
+        value = closed_config(row[7], limit=256)
         if (set(value) != {"pid", "acquired_at"} or type(value["pid"]) is not int
                 or not 0 < value["pid"] <= 2147483647 or type(value["acquired_at"]) is not str
                 or not re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,9})?Z", value["acquired_at"])):
             raise AssertionError("Public control lock metadata differs")
         datetime.datetime.fromisoformat(value["acquired_at"].replace("Z", "+00:00"))
-        if stable_file(before) != stable_file(path.lstat()):
-            raise AssertionError("Public control lock changed during capture")
-        result[key] = ("source-control-lock", object_identity(before), before.st_nlink,
-                       getattr(before, "st_birthtime_ns", None), getattr(before, "st_file_attributes", None))
-    result.update(tree_snapshot(root, excluded=controls))
-    for path, original in observed.items():
-        try: final = stable_file(path.lstat())
-        except FileNotFoundError: final = None
-        if final != original: raise AssertionError("Public control lock changed during snapshot")
+        result[key] = ("source-control-lock", row[8][:6] + row[8][9:], row[9][:6] + row[9][9:])
     return result
 
 
-def public_user_binding(env, declared):
-    state = json.loads(public_owned_bytes(Path(env["AGENTPLUGINS_HOME"]) / "state-v2.json"))
+def public_package_object(binding, declared):
+    objects = binding.get("native_objects")
+    if (type(objects) is not list or len(objects) != 1 or type(objects[0]) is not dict
+            or set(objects[0]) != {"object_id", "kind", "logical_name", "path", "managed_digest", "protection_class"}
+            or binding.get("native_activation_attempt", "") != "" or binding.get("pending_native_intent") is not None):
+        raise AssertionError("Public package ownership or pending native intent differs")
+    row = objects[0]
+    expected = dict(object_id="package:antigravity:" + binding["physical_artifact_id"], kind="managed_package_directory",
+                    logical_name=declared, path=binding["target_locator"], protection_class="managed")
+    digest = row["managed_digest"]
+    if (any(row[key] != value for key, value in expected.items()) or type(digest) is not str
+            or len(digest) != 71 or not digest.startswith("sha256:") or any(char not in "0123456789abcdef" for char in digest[7:])):
+        raise AssertionError("Public exact managed package object differs")
+    return row
+
+
+def public_bundle_digest(rows):
+    """Existing packagesnapshot header, for these fixed authored portable bundles."""
+    digest = hashlib.sha256()
+    for name in sorted(rows):
+        if name == ".": continue
+        row = rows[name]
+        if (not name.isascii() or ".git" in name.split("/")
+                or row[0] == "file" and Path(name).name in (".uap-integrations.lock", ".plugin-kit-ai.lock")):
+            raise AssertionError("Public bundle contains a snapshot-excluded or unqualified path")
+        kind = "dir" if row[0] == "directory" else "file"
+        # Go1.26.11 os/types_windows.go never sets ordinary-file execute bits.
+        executable = kind == "file" and os.name != "nt" and bool(row[1][2] & 0o111)
+        size = row[3] if kind == "file" else 0
+        digest.update(("\0".join((kind, name, "true" if executable else "false", str(size))) + "\0").encode())
+        if kind == "file": digest.update(row[7])
+    return "sha256:" + digest.hexdigest()
+
+
+def public_user_binding(env, declared, *, body=None):
+    state = closed_config(public_owned_bytes(Path(env["AGENTPLUGINS_HOME"]) / "state-v2.json") if body is None else body, limit=1 << 20, depth_bound=16)
+    if type(state.get("schema_version")) is not int or state["schema_version"] != 5 or len(state.get("installations", [])) != 1:
+        raise AssertionError("Public state schema or installation count differs")
     matches = [row for row in state["installations"] if row["declared_name"] == declared]
     if len(matches) != 1:
         raise AssertionError("Expected one recorded public User installation")
     installed = matches[0]
     bindings = [row for row in installed["clients"].values()
                 if row["client_id"] == "antigravity" and row["scope"] == "user"]
-    if len(bindings) != 1 or bindings[0]["activation"] != "prepared" or bindings[0].get("verification") != "installation_verified" or bindings[0].get("native_objects", []):
+    if len(installed["clients"]) != 1 or len(bindings) != 1 or bindings[0]["activation"] != "prepared" or bindings[0].get("verification") != "installation_verified":
         raise AssertionError("Recorded User binding is ambiguous or falsely Active")
+    public_package_object(bindings[0], declared)
     return state, installed, bindings[0]
+
+
+def public_subtree(image, root, selected):
+    prefix = selected.relative_to(root).as_posix()
+    rows = {("." if name == prefix else name[len(prefix) + 1:]): row for name, row in image.items()
+            if name == prefix or name.startswith(prefix + "/")}
+    if rows.get(".", (None,))[0] != "directory": raise AssertionError("Public owned directory is missing")
+    return rows
+
+
+def public_bundle_content(rows):
+    return {name: (row[0], row[1][2], row[3], row[6]) if row[0] == "file" else (row[0], row[1][2])
+            for name, row in rows.items()}
+
+
+def public_binding_proof(env, declared, pins):
+    """Join recorded receipts to bytes read only through the held public root."""
+    state_root, home = Path(env["AGENTPLUGINS_HOME"]), Path(env["HOME"])
+    root = state_root.parent
+    image = public_state_snapshot(root, state_root, pins)
+    state, installed, binding = public_user_binding(env, declared, body=image["uap-state/state-v2.json"][7])
+    physical = binding["physical_artifact_id"]
+    if (type(physical) is not str or not 0 < len(physical) <= 128 or not physical.isascii()
+            or not physical[0].isalnum() or any(not (char.isalnum() or char in "_.-") for char in physical)):
+        raise AssertionError("Public physical selector is not one closed leaf")
+    selected = Path(binding["target_locator"])
+    if str(selected) != binding["target_locator"] or selected != home / ".gemini/config/plugins" / physical:
+        raise AssertionError("Public binding escaped its canonical physical User path")
+    bundle = public_subtree(image, root, selected)
+    manifest = closed_config(bundle["plugin.json"][7])
+    digest = public_bundle_digest(bundle)
+    mutations = binding.get("receipts", [])
+    if (binding["native_objects"][0]["managed_digest"] != digest or not 1 <= len(mutations) <= 8
+            or any(type(row.get("sequence")) is not int or row["sequence"] != index + 1
+                   or row.get("mutation_type") != "directory_swap" or row.get("phase") != "committed"
+                   or row.get("client_binding_id") != binding["client_binding_id"]
+                   or row.get("active_path") != str(selected) for index, row in enumerate(mutations))
+            or mutations[-1].get("after_digest") != digest):
+        raise AssertionError("Public staged digest and latest committed package receipt differ")
+    revision, source, package = binding["package_revision"], installed["source"], installed["package"]
+    if (source["tree_digest"] != revision["tree_digest"] or package["manifest_digest"] != revision["manifest_digest"]
+            or source["resolved_revision"] != revision.get("resolved_revision", "")
+            or package["version"] != revision["version"] or manifest.get("name") != declared
+            or manifest.get("version") != package["version"]):
+        raise AssertionError("Public source/package/native revision joins differ")
+    receipts = installed["data_receipts"]
+    data = receipts[binding["data_receipt_id"]]
+    data_path = state_root / "plugin-data" / binding["physical_artifact_id"]
+    if (len(receipts) != 1 or data["data_receipt_id"] != binding["data_receipt_id"]
+            or data["physical_backend_id"] != binding["physical_artifact_id"] or data["scope"] != "user"
+            or data["state"] != "owned" or data["locator"] != str(data_path)):
+        raise AssertionError("Public retained data ownership differs")
+    payload = public_subtree(image, root, data_path)
+    if closed_config(payload[".agentplugins-data-owner.json"][7]) != data:
+        raise AssertionError("Public data owner marker differs from its receipt")
+    identity = (installed["installation_id"], binding["client_binding_id"], binding["client_id"], binding["scope"],
+                binding["target_locator"], binding["physical_artifact_id"], binding["data_receipt_id"],
+                source["source_binding_id"], binding["authentication"], binding.get("native_profile_root"),
+                image["uap-state"][1], image["uap-state"][2][1][:5])
+    return dict(identity=identity, revision=(source, package, revision), data=(receipts, payload), bundle=bundle,
+                receipts=(binding.get("receipts", []), state.get("transaction_receipts", [])),
+                selected=selected, data_path=data_path, state=state, installed=installed, binding=binding,
+                state_row=image["uap-state/state-v2.json"], state_parent=(image["uap-state"][1], image["uap-state"][2][1][:5]))
+
+
+def public_preserved(before, after, *, replaced=False):
+    for key in ("identity", "revision", "data"):
+        if before[key] != after[key]: raise AssertionError("Public binding/package/data continuity differs")
+    if replaced:
+        if public_bundle_content(before["bundle"]) != public_bundle_content(after["bundle"]):
+            raise AssertionError("Public exact-revision repair changed bundle content/modes")
+    elif before["bundle"] != after["bundle"] or before["receipts"] != after["receipts"]:
+        raise AssertionError("Read-only public operation changed owned bundle/receipts")
+
+
+def public_seed_active(root, authority, before):
+    """One declared fixture effect; preserve every recorded authentication/receipt field."""
+    path = root / "uap-state/state-v2.json"
+    parent = owned_handle(path.parent, True, None if os.name == "nt" else authority[0])
+    try:
+        if (object_identity(path.parent.lstat(), True), object_identity(os.fstat(parent), True)) != before["state_parent"]:
+            raise AssertionError("Historical fixture state parent changed")
+        value = json.loads(json.dumps(before["state"]))
+        next(iter(value["installations"][0]["clients"].values()))["activation"] = "active"
+        raw = (json.dumps(value, indent=2) + "\n").encode()
+        if len(raw) > 1 << 20: raise AssertionError("Historical fixture state bound")
+        flags = os.O_RDWR | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+        descriptor = os.open(path, flags) if os.name == "nt" else os.open(path.name, flags, dir_fd=parent)
+        with os.fdopen(descriptor, "r+b") as stream:
+            if (stable_file(path.lstat()) != before["state_row"][8]
+                    or stable_file(os.fstat(stream.fileno())) != before["state_row"][9]):
+                raise AssertionError("Historical fixture original state changed")
+            stream.write(raw); stream.truncate(); stream.flush()
+        after = stable_file(path.lstat())
+        original = before["state_row"][8]
+        if (after[:6] + after[9:] != original[:6] + original[9:] or public_owned_bytes(path) != raw
+                or (object_identity(path.parent.lstat(), True), object_identity(os.fstat(parent), True)) != before["state_parent"]):
+            raise AssertionError("Historical fixture write/authority differs")
+    finally: os.close(parent)
+    print('{"declared_fixture_effect":"binding.activation=active","authentication_synthesized":false}', flush=True)
+
+
+def public_unselected_home(home, selected):
+    rows = public_snapshot(home)
+    prefix = selected.relative_to(home).as_posix()
+    parents = {path.relative_to(home).as_posix() for path in (selected.parent, selected.parent.parent)}
+    # UAP may transact in these two exact parents. Retain both API identity
+    # domains/birth/attributes; permit only their size/link/time changes.
+    return {name: (row[0], row[1], tuple(meta[:5] + meta[9:] for meta in row[2])) if name in parents else row
+            for name, row in rows.items() if name != prefix and not name.startswith(prefix + "/")}
 
 
 def public_user_result(body, *, observed=False, enabled=True):
@@ -1433,7 +1824,7 @@ def public_user_result(body, *, observed=False, enabled=True):
             or outcome.get("activation") != "prepared" or outcome.get("verification") != "installation_verified"
             or outcome.get("activation_attested", False) is not False
             or outcome.get("authentication_attested", False) is not False
-            or outcome.get("native_objects", []) not in (None, [])):
+            or "native_objects" in outcome or "native_effect" in outcome):
         raise AssertionError("Public metadata operation promoted lifecycle or changed scope")
     if observed:
         action = ("The selected User plugin is enabled in CLI inventory; open or reload Antigravity to verify IDE loading"
@@ -1462,7 +1853,7 @@ def public_fixture(parent, executable_dir):
         print('{"fixtures_retained":true,"scope":"public-uap-user-lifecycle"}', flush=True)
 
 
-def public_runtime_hash(path):
+def public_runtime_pin(path):
     named = path.lstat()
     if (not stat.S_ISREG(named.st_mode) or getattr(named, "st_file_attributes", 0) & 0x400
             or named.st_nlink != 1 or not 0 < named.st_size <= 512 << 20):
@@ -1480,24 +1871,29 @@ def public_runtime_hash(path):
         if (size != named.st_size or stable_file(named) != stable_file(path.lstat())
                 or stable_file(held) != stable_file(os.fstat(fd))):
             raise AssertionError("Public runtime changed during capture")
-        return digest.hexdigest()
+        return size, digest.hexdigest()
     finally:
         os.close(fd)
 
 
 def public_uap(runtime, root, authority, action, *, refused=False):
     uap, agy, helper, source, pins, capture = runtime
-    deadline, wall_deadline = time.monotonic() + 240, time.time_ns() + 234_000_000_000
+    now = time.monotonic()
+    if capture.public_deadline is None: capture.public_deadline = now + 360
+    deadline = min(now + 240, capture.public_deadline - 5)
+    seconds = min(234, deadline - now - 6)
+    if seconds <= 0: raise AssertionError("Original public journey budget expired")
+    wall_deadline = time.time_ns() + int(seconds * 1_000_000_000)
     fd, named, held = authority
     def original():
         if (object_identity(root.lstat(), True) != named or object_identity(os.fstat(fd), True) != held
-                or tuple(public_runtime_hash(path) for path in (uap, agy, helper)) != pins):
+                or tuple(public_runtime_pin(path) for path in (uap, agy, helper)) != pins):
             raise AssertionError("Original public fixture/runtime authority changed")
     original()
-    if capture.source != source or capture.pins != (pins[1], pins[2]):
+    if capture.source != source or capture.pins != (pins[1][1], pins[2][1]):
         raise AssertionError("Public runtime differs from original source capture")
-    selector = "uap-cline-public-probe" if action in ("uap-saved-add", "uap-cold-install", "uap-cold-repeat") else NAME
-    req = dict(binary=str(uap), binary_sha256=pins[0], root=str(root), selector=selector, action=action,
+    selector = "uap-cline-public-probe" if action in ("uap-saved-add", "uap-cold-install", "uap-cold-repeat", "uap-cold-observe") else NAME
+    req = dict(binary=str(uap), binary_sha256=pins[0][1], root=str(root), selector=selector, action=action,
                source_commit=source[0], source_tree=source[1], deadline_unix_ns=wall_deadline)
     if capture.pending: raise AssertionError("Earlier process family is unproved")
     remaining = deadline - time.monotonic()
@@ -1537,67 +1933,95 @@ def public_user_observation(runtime, source, executable_dir, parent, protected):
     with public_fixture(parent, executable_dir) as (root, env, authority):
         local = root / "source"
         shutil.copytree(source, local)
-        def command(action, observed=False, enabled=True):
+        source_before = public_snapshot(local)
+        def command(action, observed=False, enabled=True, unchanged_home=False):
+            native_before = public_snapshot(Path(env["HOME"])) if unchanged_home else None
             result = public_user_result(public_uap(runtime, root, authority, action), observed=observed, enabled=enabled)
+            if native_before is not None and public_snapshot(Path(env["HOME"])) != native_before:
+                raise AssertionError("Public read-only operation changed original User profile")
+            if public_snapshot(local) != source_before: raise AssertionError("Public operation changed original source")
             unchanged()
             return result
         command("uap-add")
-        _, installed, binding = public_user_binding(env, NAME)
-        selected = Path(binding["target_locator"])
-        plugins = Path(env["HOME"]) / ".gemini/config/plugins"
-        if selected.parent != plugins or not selected.is_dir() or selected.is_symlink():
-            raise AssertionError("Public result did not select the ordinary User bundle")
+        first = public_binding_proof(env, NAME, runtime[4])
+        selected, plugins = first["selected"], first["selected"].parent
+        if set(first["data"][1]) != {".", ".agentplugins-data-owner.json"}:
+            raise AssertionError("Fresh public data contains an unknown effect")
+        with (first["data_path"] / "public-retained-marker.txt").open("xb") as stream: stream.write(PUBLIC_MARKER)
         foreign = plugins / "public-foreign-disabled"
         shutil.copytree(selected, foreign)
         manifest = foreign / "plugin.json"
-        value = json.loads(manifest.read_bytes()); value["name"] = foreign.name
-        manifest.write_text(json.dumps(value) + "\n", encoding="utf-8")
+        value = closed_config(public_owned_bytes(manifest)); value["name"] = foreign.name
+        manifest.write_bytes((json.dumps(value) + "\n").encode())
         mcp = foreign / "mcp_config.json"
-        value = json.loads(mcp.read_bytes())
+        value = closed_config(public_owned_bytes(mcp))
         value["mcpServers"] = {"foreign-" + name: server for name, server in value["mcpServers"].items()}
-        mcp.write_text(json.dumps(value) + "\n", encoding="utf-8")
+        mcp.write_bytes((json.dumps(value) + "\n").encode())
         (foreign / "sentinel").write_bytes(b"preserved foreign User bytes\n")
-        foreign_before = tree_snapshot(foreign)
         config = plugins.parent / "config.json"
-        config.write_text(json.dumps({"plugins": {selected.name: {"enabled": True}, foreign.name: {"enabled": False}}}) + "\n", encoding="utf-8")
+        config.write_bytes((json.dumps({"plugins": {selected.name: {"enabled": True}, foreign.name: {"enabled": False}}}) + "\n").encode())
         config.chmod(0o600)
-        original_config = config.read_bytes()
-        config_identity = stable_file(config.lstat())
+        home = Path(env["HOME"])
+        foreign_before = public_unselected_home(home, selected)
         def retained():
-            if stable_file(config.lstat()) != config_identity or config.read_bytes() != original_config or tree_snapshot(foreign) != foreign_before:
-                raise AssertionError("Public observation changed native settings or foreign bytes")
-        command("uap-repeat", observed=True)
-        retained()
+            if public_unselected_home(home, selected) != foreign_before:
+                raise AssertionError("Public observation changed native settings or foreign User bytes")
+        before = public_binding_proof(env, NAME, runtime[4])
+        if before["data"][1]["public-retained-marker.txt"][7] != PUBLIC_MARKER: raise AssertionError("Declared data marker differs")
+        command("uap-repeat", observed=True, unchanged_home=True)
+        public_preserved(before, public_binding_proof(env, NAME, runtime[4])); retained()
+        before = public_binding_proof(env, NAME, runtime[4])
+        public_seed_active(root, authority, before)
+        command("uap-repeat", observed=True, unchanged_home=True)
+        public_preserved(before, public_binding_proof(env, NAME, runtime[4])); retained()
         manifest = local / "plugin.json"
-        value = json.loads(manifest.read_bytes()); value["version"] = "2.0.0"
-        manifest.write_text(json.dumps(value) + "\n", encoding="utf-8")
+        value = closed_config(public_owned_bytes(manifest)); value["version"] = "2.0.0"
+        manifest.write_bytes((json.dumps(value) + "\n").encode())
+        source_before = public_snapshot(local)
         command("uap-update", observed=True)
-        _, installed, binding = public_user_binding(env, NAME)
-        if installed["package"].get("version") != "2.0.0" or Path(binding["target_locator"]) != selected:
-            raise AssertionError("Public update changed source version or selected binding")
+        updated = public_binding_proof(env, NAME, runtime[4])
+        if (updated["identity"] != before["identity"] or updated["data"] != before["data"]
+                or updated["revision"][1]["version"] != "2.0.0"
+                or updated["revision"][0]["tree_digest"] == before["revision"][0]["tree_digest"]
+                or updated["revision"][1]["manifest_digest"] == before["revision"][1]["manifest_digest"]):
+            raise AssertionError("Public changed update lost revision or retained binding/data identity")
         retained()
-        before = tree_snapshot(selected)
-        shutil.rmtree(selected)  # Exact task-owned bundle, not partially modified content.
+        command("uap-repair", observed=True, unchanged_home=True)
+        public_preserved(updated, public_binding_proof(env, NAME, runtime[4])); retained()
+        quarantine = root / "retained-owned-bundle"
+        if quarantine.exists() or quarantine.is_symlink() or object_identity(selected.lstat(), True) != updated["bundle"]["."][1]:
+            raise AssertionError("Absent-repair quarantine authority differs")
+        selected.rename(quarantine)  # Retain exact owned bytes; never recursively delete a possibly replaced tree.
+        quarantined = public_snapshot(quarantine)
         command("uap-repair", observed=True)
-        _, _, binding = public_user_binding(env, NAME)
-        if Path(binding["target_locator"]) != selected or tree_snapshot(selected) != before:
-            raise AssertionError("Public absent-bundle repair lost recorded projection")
-        retained()
+        restored = public_binding_proof(env, NAME, runtime[4])
+        public_preserved(updated, restored, replaced=True); retained()
+        if public_snapshot(quarantine) != quarantined: raise AssertionError("Absent repair changed retained original bundle")
         public_uap(runtime, root, authority, "uap-remove")
-        if selected.exists(): raise AssertionError("Public User removal retained owned bundle")
+        image = public_state_snapshot(root, Path(env["AGENTPLUGINS_HOME"]), runtime[4])
+        state = closed_config(image["uap-state/state-v2.json"][7], limit=1 << 20, depth_bound=16)
+        if type(state.get("schema_version")) is not int or state["schema_version"] != 5 or len(state["installations"]) != 1:
+            raise AssertionError("Removal lost retained installation")
+        removed = state["installations"][0]
+        if (selected.exists() or selected.is_symlink() or removed["installation_id"] != restored["installed"]["installation_id"]
+                or removed["clients"] or removed.get("data_retained") is not True
+                or removed["source"] != restored["revision"][0] or removed["package"] != restored["revision"][1]
+                or (removed["data_receipts"], public_subtree(image, root, restored["data_path"])) != restored["data"]
+                or public_snapshot(quarantine) != quarantined or public_snapshot(local) != source_before):
+            raise AssertionError("Public removal lost persistent data/receipt or changed retained source")
         retained(); unchanged()
     with public_fixture(parent, executable_dir) as (root, env, authority):
         shutil.copytree(source, root / "source")
         public_user_result(public_uap(runtime, root, authority, "uap-add"))
-        _, _, binding = public_user_binding(env, NAME)
+        binding = public_binding_proof(env, NAME, runtime[4])["binding"]
         selected = Path(binding["target_locator"])
         config = selected.parent.parent / "config.json"
-        config.write_text(json.dumps({"plugins": {selected.name: {"enabled": False}}}) + "\n", encoding="utf-8")
+        config.write_bytes((json.dumps({"plugins": {selected.name: {"enabled": False}}}) + "\n").encode())
         config.chmod(0o600)
-        before = public_state_snapshot(root, Path(env["AGENTPLUGINS_HOME"]))
+        before = public_state_snapshot(root, Path(env["AGENTPLUGINS_HOME"]), runtime[4])
         public_user_result(public_uap(runtime, root, authority, "uap-repeat"), observed=True, enabled=False)
-        if public_state_snapshot(root, Path(env["AGENTPLUGINS_HOME"])) != before: raise AssertionError("Disabled repeat changed original fixture bytes")
-    print('{"public_user_readonly_lifecycle":true,"model_invoked":false,"ide_activation":false}', flush=True)
+        if public_state_snapshot(root, Path(env["AGENTPLUGINS_HOME"]), runtime[4]) != before: raise AssertionError("Disabled repeat changed original fixture bytes")
+    print('{"public_user_readonly_lifecycle":true,"historical_active_refined":true,"retained_data_verified":true,"model_invoked":false,"ide_activation":false}', flush=True)
 
 
 def public_user_cold_restore(runtime, executable_dir, parent):
@@ -1607,9 +2031,10 @@ def public_user_cold_restore(runtime, executable_dir, parent):
             state_root = Path(env["AGENTPLUGINS_HOME"])
             if agreement is None:
                 public_uap(runtime, root, authority, "uap-saved-add")
+                public_binding_proof(env, "uap-cline-public-probe", runtime[4])
                 agreement = {name: public_owned_bytes(state_root / name) for name in ("uap.toml", "uap.lock")}
-                lock = json.loads(agreement["uap.lock"])
-                if lock.get("lock_version") != 1 or len(lock.get("packages", [])) != 1:
+                lock = closed_config(agreement["uap.lock"], limit=1 << 20)
+                if type(lock.get("lock_version")) is not int or lock["lock_version"] != 1 or len(lock.get("packages", [])) != 1:
                     raise AssertionError("Expected one genuine saved public source lock")
                 pin = lock["packages"][0]
                 selected = pin["source"]["git"]
@@ -1625,7 +2050,8 @@ def public_user_cold_restore(runtime, executable_dir, parent):
             if {entry.name for entry in state_root.iterdir()} != set(agreement):
                 raise AssertionError("Cold transfer included more than the two agreements")
             public_uap(runtime, root, authority, "uap-cold-install")
-            state, installed, binding = public_user_binding(env, "uap-cline-public-probe")
+            initial = public_binding_proof(env, "uap-cline-public-probe", runtime[4])
+            state, installed, binding = initial["state"], initial["installed"], initial["binding"]
             revision, source = binding["package_revision"], installed["source"]
             if (source["resolved_revision"] != pin["source"]["git"]["commit"] or source["repository"] != "777genius/universal-agent-plugins"
                     or source["package_subpath"] != "repotests/testdata/agentplugins_native_probe"
@@ -1653,12 +2079,40 @@ def public_user_cold_restore(runtime, executable_dir, parent):
                     or receipts[0]["client_binding_id"] != binding["client_binding_id"] or receipts[0]["source_key"] != pin["source_key"]
                     or receipts[0]["package_digest"] != pin["tree_digest"]):
                 raise AssertionError("Cold restore did not commit the saved agreement identity")
-            before = public_state_snapshot(root, state_root)
-            public_uap(runtime, root, authority, "uap-cold-repeat")
-            if public_state_snapshot(root, state_root) != before: raise AssertionError("Cold locked repeat changed restored bytes")
+            if set(initial["data"][1]) != {".", ".agentplugins-data-owner.json"}:
+                raise AssertionError("Fresh cold data contains an unknown effect")
+            with (initial["data_path"] / "public-retained-marker.txt").open("xb") as stream: stream.write(PUBLIC_MARKER)
+            config = selected.parent.parent / "config.json"
+            config.write_bytes((json.dumps({"plugins": {selected.name: {"enabled": True}}}) + "\n").encode())
+            config.chmod(0o600)
+            restored = public_binding_proof(env, "uap-cline-public-probe", runtime[4])
+            if restored["data"][1]["public-retained-marker.txt"][7] != PUBLIC_MARKER: raise AssertionError("Cold marker differs")
+            home_before = public_snapshot(Path(env["HOME"]))
+            public_user_result(public_uap(runtime, root, authority, "uap-cold-observe"), observed=True)
+            public_preserved(restored, public_binding_proof(env, "uap-cline-public-probe", runtime[4]))
+            if public_snapshot(Path(env["HOME"])) != home_before: raise AssertionError("Cold observation changed User profile")
+            before = public_state_snapshot(root, state_root, runtime[4])
+            public_uap(runtime, root, authority, "uap-cold-repeat")  # Genuine locked no-op; not an inventory observation.
+            if public_state_snapshot(root, state_root, runtime[4]) != before: raise AssertionError("Cold locked repeat changed restored bytes")
             if any(public_owned_bytes(state_root / name) != body for name, body in agreement.items()):
                 raise AssertionError("Cold restore rewrote its only transferred agreement")
-    print('{"public_user_cold_locked_restore":true,"agreement_only_transfer":true,"native_observation_claimed":false}', flush=True)
+    print('{"public_user_cold_locked_restore":true,"agreement_only_transfer":true,"cold_public_observation":true,"locked_noop_observation_claimed":false}', flush=True)
+
+
+def public_refusal_config_identity(path, alias):
+    if not alias: return stable_file(path.lstat())
+    info = path.lstat()
+    if (path.parent.resolve() != path.parent or not stat.S_ISLNK(info.st_mode) or info.st_nlink != 1
+            or not 0 <= info.st_size <= 256 or os.readlink(path) != "authored-original.json"):
+        raise AssertionError("Authored negative config alias differs")
+    if os.name == "nt":
+        # OPEN_REPARSE_POINT checks this authored link's token owner, without
+        # reading or following its content; this does not admit aliases to a ledger.
+        os.close(owned_handle(path))
+    elif (info.st_uid, info.st_gid) != (os.getuid(), os.getgid()):
+        raise AssertionError("Authored negative config alias owner differs")
+    return tuple(getattr(info, key, None) for key in ("st_dev", "st_ino", "st_mode", "st_uid", "st_gid", "st_nlink",
+                 "st_size", "st_mtime_ns", "st_ctime_ns", "st_birthtime_ns", "st_file_attributes", "st_reparse_tag"))
 
 
 def public_user_refusals(runtime, source, executable_dir, parent):
@@ -1666,7 +2120,7 @@ def public_user_refusals(runtime, source, executable_dir, parent):
         with public_fixture(parent, executable_dir) as (root, env, authority):
             shutil.copytree(source, root / "source")
             public_user_result(public_uap(runtime, root, authority, "uap-add"))
-            _, _, binding = public_user_binding(env, NAME)
+            binding = public_binding_proof(env, NAME, runtime[4])["binding"]
             selected = Path(binding["target_locator"])
             config = selected.parent.parent / "config.json"
             config.write_text(json.dumps({"plugins": {selected.name: {"enabled": True}}}) + "\n", encoding="utf-8")
@@ -1682,22 +2136,28 @@ def public_user_refusals(runtime, source, executable_dir, parent):
                 shim = root / "bin" / ("agy.exe" if os.name == "nt" else "agy")
                 shim.rename(shim.with_name("retained-native")); action = "uap-missing-backend"
                 if shutil.which("agy", path=env["PATH"]): raise AssertionError("Missing fixture would select ambient native CLI")
-            state_before, bundle_before = public_state_snapshot(Path(env["AGENTPLUGINS_HOME"]), Path(env["AGENTPLUGINS_HOME"])), tree_snapshot(selected.parent)
+            state_before, bundle_before = public_state_snapshot(Path(env["AGENTPLUGINS_HOME"]), Path(env["AGENTPLUGINS_HOME"]), runtime[4]), public_snapshot(selected.parent)
             members = {entry.name for entry in config.parent.iterdir()}
-            identity = stable_file(config.lstat()) if condition != "missing-config" else None
+            parent_identity = object_identity(config.parent.lstat(), True)
+            identity = public_refusal_config_identity(config, condition == "config-alias") if condition != "missing-config" else None
             alias = os.readlink(config) if condition == "config-alias" else None
-            original_bytes = original.read_bytes() if condition == "config-alias" else None
+            original_identity = stable_file(original.lstat()) if condition == "config-alias" else None
+            original_bytes = public_owned_bytes(original) if condition == "config-alias" else None
+            if condition == "config-alias" and stable_file(original.lstat()) != original_identity:
+                raise AssertionError("Authored alias target changed before command")
             output = public_uap(runtime, root, authority, action, refused=condition != "missing-backend")
             if condition == "missing-backend":
                 result = public_user_result(output)
                 if result["activation"].get("user_actions") != ["Open or reload Antigravity and verify native plugin discovery/enablement; files alone do not establish runtime activation"]:
                     raise AssertionError("Missing backend falsely claimed native observation")
-            if (public_state_snapshot(Path(env["AGENTPLUGINS_HOME"]), Path(env["AGENTPLUGINS_HOME"])) != state_before or tree_snapshot(selected.parent) != bundle_before
-                    or {entry.name for entry in config.parent.iterdir()} != members):
+            if (public_state_snapshot(Path(env["AGENTPLUGINS_HOME"]), Path(env["AGENTPLUGINS_HOME"]), runtime[4]) != state_before or public_snapshot(selected.parent) != bundle_before
+                    or {entry.name for entry in config.parent.iterdir()} != members
+                    or object_identity(config.parent.lstat(), True) != parent_identity):
                 raise AssertionError("Refused public repeat changed original membership/bytes")
-            if condition != "missing-config" and stable_file(config.lstat()) != identity:
+            if condition != "missing-config" and public_refusal_config_identity(config, condition == "config-alias") != identity:
                 raise AssertionError("Refused repeat changed original native settings")
-            if condition == "config-alias" and (os.readlink(config) != alias or public_owned_bytes(original) != original_bytes):
+            if condition == "config-alias" and (os.readlink(config) != alias or stable_file(original.lstat()) != original_identity
+                                                 or public_owned_bytes(original) != original_bytes or stable_file(original.lstat()) != original_identity):
                 raise AssertionError("Refused alias changed the task-owned target")
     print('{"public_user_refusals":4,"file_only_backend_fallback":true,"unknown_effects_adopted":false,"model_invoked":false}', flush=True)
 
@@ -1708,7 +2168,7 @@ def native_main(capture=None):
     root_parent = Path(os.environ["RUNNER_TEMP"]).resolve(strict=True)
     public_pins = None
     if capture is not None:
-        public_pins = tuple(public_runtime_hash(path) for path in
+        public_pins = tuple(public_runtime_pin(path) for path in
                             (uap, agy, Path(os.environ["AGY_ADMISSION_HELPER"]).resolve(strict=True)))
     with tempfile.TemporaryDirectory(prefix="uap-antigravity-native-", dir=root_parent) as temp:
         root = Path(temp)
@@ -1980,6 +2440,8 @@ def native_main(capture=None):
                 public_user_refusals(runtime, source, executable_dir, root_parent)
                 if any(tree_snapshot(path) != before for path, before in protected):
                     raise AssertionError("Public User lifecycle changed an original unselected scope")
+                if capture.public_deadline is None or time.monotonic() >= capture.public_deadline:
+                    raise AssertionError("Original public journey expired before final effect proof")
                 capture.public_effects_verified = True
         print("PASS: real agy strict validation of Skills + stdio/HTTP MCP, separate CLI "
               "import/list/uninstall; UAP User/Project add/remove, idempotent update, "

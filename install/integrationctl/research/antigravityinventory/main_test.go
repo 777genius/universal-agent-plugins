@@ -229,6 +229,7 @@ func TestPublicActionsHaveFixedSelectorsArgvPinsAndEnvironment(t *testing.T) {
 		"uap-update":          {"update", "uap-agy-native-smoke"}, "uap-repair": {"repair", "uap-agy-native-smoke"},
 		"uap-remove": {"remove", "uap-agy-native-smoke"}, "uap-saved-add": {"add", source},
 		"uap-cold-install": {"install", "--locked"}, "uap-cold-repeat": {"install", "--locked"},
+		"uap-cold-observe": {"add", source, "--no-save"},
 	} {
 		req.Action, req.Selector = action, publicSelector(action)
 		if err := validateRequest(req); err != nil {

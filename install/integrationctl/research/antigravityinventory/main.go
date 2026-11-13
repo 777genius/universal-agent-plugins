@@ -250,7 +250,7 @@ func main() {
 
 func publicAction(action string) bool {
 	switch action {
-	case "uap-add", "uap-repeat", "uap-update", "uap-repair", "uap-remove", "uap-saved-add", "uap-cold-install", "uap-cold-repeat", "uap-missing-backend":
+	case "uap-add", "uap-repeat", "uap-update", "uap-repair", "uap-remove", "uap-saved-add", "uap-cold-install", "uap-cold-repeat", "uap-cold-observe", "uap-missing-backend":
 		return true
 	}
 	return false
@@ -271,7 +271,7 @@ func commandBudget(action string) time.Duration {
 }
 
 func publicSelector(action string) string {
-	if action == "uap-saved-add" || action == "uap-cold-repeat" || action == "uap-cold-install" {
+	if action == "uap-saved-add" || action == "uap-cold-repeat" || action == "uap-cold-install" || action == "uap-cold-observe" {
 		return "uap-cline-public-probe"
 	}
 	return "uap-agy-native-smoke"
@@ -283,8 +283,11 @@ func publicArgv(req request) []string {
 	switch operation {
 	case "add", "repeat", "missing-backend":
 		args = append(args, "add", filepath.Join(req.Root, "source"), "--no-save")
-	case "saved-add":
+	case "saved-add", "cold-observe":
 		args = append(args, "add", "https://github.com/777genius/universal-agent-plugins/tree/"+sourceCommit+"/repotests/testdata/agentplugins_native_probe")
+		if operation == "cold-observe" {
+			args = append(args, "--no-save")
+		}
 	case "cold-install", "cold-repeat":
 		return append(args, "install", "--locked", "--scope", "user", "--yes", "--format", "json")
 	default:
