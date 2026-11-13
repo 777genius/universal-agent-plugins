@@ -94,9 +94,14 @@ def snapshot(root):
     root_fd = os.open(root, directory_flags)
     try:
         observed = os.fstat(root_fd)
-        require((root_meta.st_dev, root_meta.st_ino) == (observed.st_dev, observed.st_ino),
+        require((root_meta.st_dev, root_meta.st_ino, root_meta.st_mode)
+                == (observed.st_dev, observed.st_ino, observed.st_mode)
+                and stat.S_ISDIR(observed.st_mode),
                 "snapshot root changed")
-        out = {}
+        # Include the watched directory itself. Without this record, a native
+        # command could chmod a watched Project/User root without adding or
+        # changing any child and the no-effect comparison would still pass.
+        out = {".": {"kind": "directory", "mode": stat.S_IMODE(observed.st_mode)}}
         # Bound directory entries as well as regular files. Eager sorting or
         # counting only captured files lets a native-generated directory tree
         # exhaust memory/CPU before the snapshot limit can fire.
@@ -121,6 +126,8 @@ def snapshot(root):
                 "sha256": hashlib.sha256(raw).hexdigest(), "mode": stat.S_IMODE(meta.st_mode),
                 "bytes": len(raw),
             }
+        require(os.fstat(root_fd).st_mode == observed.st_mode,
+                "snapshot root mode changed during capture")
         return out
     finally:
         os.close(root_fd)
