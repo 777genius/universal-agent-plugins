@@ -57,7 +57,7 @@ func piUpstreamTestOnlyClient(t *testing.T, cacheRoot string) (*directoryv1.Clie
 			ObservedAt: "2026-11-11T00:00:00Z",
 			Artifact: domain.DirectoryEvidenceArtifact{
 				Repository: "test/isolated", Revision: strings.Repeat("a", 40),
-				Path: "test-only/artificial-grant-do-not-promote.json",
+				Path:   "test-only/artificial-grant-do-not-promote.json",
 				Digest: "sha256:" + hex.EncodeToString(artifactDigest[:]),
 			},
 			Trust: &domain.DirectoryEvidenceTrust{Kind: "reviewed_external"},
@@ -114,7 +114,7 @@ func piUpstreamTestOnlyClient(t *testing.T, cacheRoot string) (*directoryv1.Clie
 
 // Assert the selected Pi adapter really materialized an MCP server, not
 // merely a saved dependency/receipt. Preserve foreign MCP ownership on remove.
-func assertPiUpstreamTestOnlyNativeMCP(t *testing.T, j projectJourney, root string, installed bool) {
+func assertPiUpstreamTestOnlyNativeMCP(t *testing.T, j projectJourney, root, product string, installed bool) {
 	t.Helper()
 	native := filepath.Join(piSignedProjectNativeRoot(j, root), "mcp.json")
 	var config struct {
@@ -134,8 +134,37 @@ func assertPiUpstreamTestOnlyNativeMCP(t *testing.T, j projectJourney, root stri
 		!config.Keep {
 		t.Fatalf("foreign Pi MCP config not preserved: %v / %+v", err, foreign)
 	}
-	if installed && len(config.MCPServers) < 2 {
-		t.Fatal("positive saved upstream install has no owned Pi native MCP server")
+	if installed {
+		if len(config.MCPServers) != 2 {
+			t.Fatalf("expected exactly one owned Pi server and foreign server, got %d", len(config.MCPServers))
+		}
+		raw, ok := config.MCPServers[product]
+		if !ok {
+			t.Fatalf("expected owned Pi MCP server %q missing", product)
+		}
+		var owned struct {
+			Type    string   `json:"type"`
+			URL     string   `json:"url"`
+			Command string   `json:"command"`
+			Args    []string `json:"args"`
+		}
+		if err := json.Unmarshal(raw, &owned); err != nil {
+			t.Fatalf("owned Pi MCP definition %q is invalid: %v", product, err)
+		}
+		switch product {
+		case "github":
+			// Pi's native remote codec omits the portable streamable-http type.
+			if owned.URL != "https://api.githubcopilot.com/mcp/" || owned.Command != "" {
+				t.Fatalf("GitHub native remote MCP definition is incorrect: %+v", owned)
+			}
+		case "context7":
+			if owned.Command != "node" || len(owned.Args) != 1 ||
+				!strings.HasSuffix(filepath.ToSlash(owned.Args[0]), "/io.github.777genius.agentplugins/runtime/launcher.mjs") {
+				t.Fatalf("Context7 native stdio MCP definition is incorrect: %+v", owned)
+			}
+		default:
+			t.Fatalf("unreviewed owned Pi MCP server %q", product)
+		}
 	}
 	if !installed && len(config.MCPServers) != 1 {
 		t.Fatalf("upstream removal left owned Pi MCP servers: %d", len(config.MCPServers)-1)
@@ -201,7 +230,7 @@ func TestPiUpstreamSignedTestOnlyPositiveSaved(t *testing.T) {
 					installed.Package.ManifestDigest != pinned.ManifestDigest {
 					t.Fatal("upstream saved installation was not bound to the exact immutable signed TEST-only source and feed")
 				}
-				assertPiUpstreamTestOnlyNativeMCP(t, j, root, true)
+				assertPiUpstreamTestOnlyNativeMCP(t, j, root, subject.product, true)
 				if !reflect.DeepEqual(originalB, securityFixtureTree(t, piSignedProjectNativeRoot(j, j.b))) {
 					t.Fatal("upstream install modified independent project B")
 				}
@@ -213,7 +242,7 @@ func TestPiUpstreamSignedTestOnlyPositiveSaved(t *testing.T) {
 				if len(j.state(t, root).EnvironmentReceipts) != 0 {
 					t.Fatal("upstream removal left installed environment receipts")
 				}
-				assertPiUpstreamTestOnlyNativeMCP(t, j, root, false)
+				assertPiUpstreamTestOnlyNativeMCP(t, j, root, subject.product, false)
 				if !reflect.DeepEqual(originalB, securityFixtureTree(t, piSignedProjectNativeRoot(j, j.b))) {
 					t.Fatal("upstream removal changed independent project B")
 				}
