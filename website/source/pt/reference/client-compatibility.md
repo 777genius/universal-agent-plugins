@@ -53,11 +53,17 @@ a um pacote não testado. UAP é uma ferramenta independente da comunidade; esta
 são observações delimitadas dos mantenedores, não certificação de fornecedores
 nem uma afirmação de prontidão universal para produção.
 
-## Hermes e Antigravity: verificação do código-fonte {#hermes-antigravity-source}
+## Hermes e Antigravity: suporte na CLI publicada {#hermes-antigravity-source}
 
-No ponto de verificação de 2026-11-10, a CLI publicada `0.1.102` não inclui Hermes nem Antigravity. Os resultados abaixo qualificam o código-fonte, não um artefato publicado. A verificação do binário imutável da versão e a elegibilidade no Directory assinado continuam pendentes e separadas. A capacidade do cliente não autoriza um pacote do Directory para esse destino.
+O CLI nativo **0.1.108** foi publicado em 2026-11-13 e inclui Hermes e Antigravity. A verificação da versão e a promoção foram concluídas com sucesso; a elegibilidade dos pacotes no Directory assinado continua independente. Isso não afirma publicação npm 0.1.108, autenticação do provedor ou ativação automática.
+
+[0.1.108](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.108) · [43337036671](https://github.com/777genius/universal-agent-plugins/actions/runs/43337036671) · [43454712919](https://github.com/777genius/universal-agent-plugins/actions/runs/43454712919) · source `8c3cfa28e332c533b0cc0845739c0275730a4285`.
+
+**Evidência histórica do ciclo de vida (2026-11-10):**
 
 **Hermes 0.23.0:** Skills do usuário e configuração MCP stdio/Streamable HTTP pertencente ao UAP; em projetos, apenas Skills. Project MCP é recusado sem redirecionamento para a configuração do usuário. Linux x64, macOS arm64 e Windows x64 nativo passaram pela primeira adição e repetição, atualização, reparo, remoção, descoberta em projeto sem confiança e isolamento A/B: [42813277862](https://github.com/777genius/universal-agent-plugins/actions/runs/42813277862), UAP `a50c8a245f1c273efb3d171f4c54ed540475336a`. Quatro trocas HTTP de loopback `initialize`/`tools/list` por sistema comprovam conexão e descoberta de ferramentas; não comprovam `tools/call`, uso de modelos, autenticação ou execução em projeto confiável. SSE e hooks não são compatíveis. Comandos portáteis são projetados como Skills; comandos de invocação exclusivamente explícita são retidos quando o cliente não consegue impor essa restrição.
+
+A evidência posterior [#884](https://github.com/777genius/universal-agent-plugins/pull/884) comprova `tools/call` nativo User stdio do Hermes 0.23.0 no Linux/macOS/Windows pelo driver oficial legado `run_agent.py` e um provedor local programado. O `hermes chat` padrão, a autenticação do provedor e a execução Project confiável continuam não qualificados.
 
 **Antigravity:** os pacotes de plugins nativos pertencentes ao UAP, com Skills e MCP stdio/Streamable HTTP nos escopos de usuário e projeto, permanecem **Prepared**. O `agy` 1.5.3 real passou pela validação estrita e por CLI import/list/uninstall isolados no Linux, macOS e Windows: [42804680737](https://github.com/777genius/universal-agent-plugins/actions/runs/42804680737). Essas observações não comprovam descoberta ou habilitação no IDE real, inicialização de MCP, execução de ferramentas ou autenticação; a verificação do IDE continua separada. O UAP não concede confiança ao projeto.
 

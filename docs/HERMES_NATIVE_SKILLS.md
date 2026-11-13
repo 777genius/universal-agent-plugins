@@ -1,13 +1,8 @@
 # Hermes Agent integration
 
-**Source status (2026-11-10):** the native lifecycle passed on Linux x64,
-macOS arm64 and native Windows x64 with Hermes 0.23.0 at UAP head
-`a50c8a245f1c273efb3d171f4c54ed540475336a` in
-[run 42813277862](https://github.com/777genius/universal-agent-plugins/actions/runs/42813277862).
-This is source-qualified evidence. Published CLI `0.1.102` does not contain
-Hermes or Antigravity. Qualification of an immutable public release artifact
-and signed Directory eligibility remain separate, pending boundaries; native
-CI does not authorize additional Directory targets.
+Published [native CLI 0.1.108](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.108) (2026-11-13, source `8c3cfa28e332c533b0cc0845739c0275730a4285`) includes Hermes and Antigravity; [qualification](https://github.com/777genius/universal-agent-plugins/actions/runs/43337036671) and [promotion](https://github.com/777genius/universal-agent-plugins/actions/runs/43454712919) succeeded. Signed Directory package eligibility remains separate: client capability does not authorize a package target. Package-manager channels may lag; this is not an npm 0.1.108 publication claim.
+
+Historical source lifecycle: Hermes 0.23.0 on Linux x64/macOS arm64/Windows x64 at UAP `a50c8a245f1c273efb3d171f4c54ed540475336a`, [run 42813277862](https://github.com/777genius/universal-agent-plugins/actions/runs/42813277862). Subsequent [#884](https://github.com/777genius/universal-agent-plugins/pull/884) proves native User stdio `tools/call` on all three OS through the official legacy `run_agent.py` driver and a local scripted provider. Default `hermes chat`, vendor authentication and trusted Project Skills execution remain unqualified.
 
 The Hermes Agent target ID is `hermes`. This first implementation preserves UAP's
 immutable-pinned package source, transaction journal and exact ownership while
@@ -38,9 +33,8 @@ An ambiguous YAML document, foreign edit, symlink, unknown tag/anchor or
 unsupported transport fails closed. No user YAML is ever changed by Project
 MCP. Packages requiring hooks or unqualified components are refused.
 
-**Source acceptance gate:** the recorded three-platform run satisfies the native
-lifecycle gate for its exact UAP head only. A later candidate and the frozen
-release binary need their own applicable qualification. The native smoke proves
+**Historical source acceptance gate:** the recorded three-platform run satisfies the native
+lifecycle gate for its exact UAP head only. The public release qualification is linked above. The native smoke proves
 MCP listing, connection and tool discovery over loopback Streamable HTTP; it
 does not perform `tools/call`, a model turn or an authenticated provider session.
 Project discovery is observed without granting trust, so it does not establish
