@@ -52,7 +52,7 @@ func piUpstreamTestOnlyClient(t *testing.T, cacheRoot string) (*directoryv1.Clie
 			SchemaVersion: 1, ID: id, DistributionID: distribution.ID,
 			ReleaseSequence: release.Sequence, PackageTreeDigest: release.TreeDigest,
 			Level: "materialization", Outcome: "passed", Client: domain.ClientPi,
-			Scope: domain.ScopeUser, ClientVersion: "1.5.0", InstallerVersion: "0.1.104",
+			ClientVersion: "1.5.0", InstallerVersion: "0.1.104",
 			OS: "synthetic-fixture", Architecture: "synthetic-fixture",
 			ObservedAt: "2026-11-11T00:00:00Z",
 			Artifact: domain.DirectoryEvidenceArtifact{
