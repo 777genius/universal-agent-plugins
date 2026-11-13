@@ -156,11 +156,34 @@ class NativeAdmissionContracts(unittest.TestCase):
             after = snapshot(root)
             self.assertNotEqual(before, after)
             self.assertEqual(after["foreign-empty"],
-                             {"kind": "directory", "mode": 0o700})
+                             {"kind": "directory", "mode": 0o700,
+                              "device": directory.stat().st_dev, "inode": directory.stat().st_ino})
             directory.chmod(0o750)
             self.assertNotEqual(snapshot(root), after)
             directory.rmdir()
             self.assertEqual(snapshot(root), before)
+
+    @unittest.skipUnless(os.name == "posix" and hasattr(os, "O_NOFOLLOW")
+                         and hasattr(os, "O_DIRECTORY"), "native snapshot is POSIX-only")
+    def test_snapshot_detects_same_mode_foreign_directory_replacement(self):
+        # Empty foreign directories have no content digest. Recreating one
+        # with identical mode must not pass the no-effect comparison.
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary).resolve()
+            root = parent / "watched"
+            root.mkdir()
+            foreign = root / "foreign-empty"
+            foreign.mkdir(mode=0o700)
+            foreign.chmod(0o700)
+            before = snapshot(root)
+            moved = parent / "original-foreign"
+            foreign.rename(moved)
+            foreign.mkdir(mode=0o700)
+            foreign.chmod(0o700)
+            after = snapshot(root)
+            self.assertEqual(before["foreign-empty"]["mode"], after["foreign-empty"]["mode"])
+            self.assertNotEqual(before["foreign-empty"]["inode"], after["foreign-empty"]["inode"])
+            self.assertNotEqual(before, after)
 
     @unittest.skipUnless(os.name == "posix" and hasattr(os, "O_NOFOLLOW")
                          and hasattr(os, "O_DIRECTORY"), "native snapshot is POSIX-only")
@@ -169,7 +192,8 @@ class NativeAdmissionContracts(unittest.TestCase):
             root = Path(temporary)
             before = snapshot(root)
             original_mode = root.stat().st_mode & 0o777
-            self.assertEqual(before["."], {"kind": "directory", "mode": original_mode})
+            self.assertEqual(before["."], {"kind": "directory", "mode": original_mode,
+                                           "device": root.stat().st_dev, "inode": root.stat().st_ino})
             root.chmod(0o750 if original_mode != 0o750 else 0o700)
             try:
                 changed = snapshot(root)
