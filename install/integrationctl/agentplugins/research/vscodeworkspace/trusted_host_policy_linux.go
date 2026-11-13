@@ -95,7 +95,7 @@ func policyStat(info os.FileInfo) (policyIdentity, error) {
 	if !ok {
 		return policyIdentity{}, fmt.Errorf("policy-stat-refused")
 	}
-	return policyIdentity{st.Dev, st.Ino, st.Mode, st.Uid, st.Gid, st.Nlink, st.Size, st.Mtim.Nano(), st.Ctim.Nano()}, nil
+	return policyIdentity{st.Dev, st.Ino, st.Mode, st.Uid, st.Gid, uint64(st.Nlink), st.Size, st.Mtim.Nano(), st.Ctim.Nano()}, nil
 }
 func policyReason(reason *string, next string) {
 	if *reason == "none" {

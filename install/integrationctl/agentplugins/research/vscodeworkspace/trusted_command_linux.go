@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/process"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
 func (c *controller) trustedEnvironment() map[string]string {
@@ -25,6 +26,12 @@ func (c *controller) trustedEnvironment() map[string]string {
 		env[key] = filepath.Join(f.Home, dir)
 	}
 	return env
+}
+
+// A CLI may exit nonzero after its process tree was fully reaped. Preserve
+// the runner's independent cleanup proof, not the CLI validation result.
+func publicCommandTreeReaped(result ports.CommandResult) bool {
+	return result.CleanupComplete && !result.NoChildStarted
 }
 
 // Finite public fixture operations use the existing ordinary whole-tree
@@ -73,7 +80,7 @@ func (c *controller) trustedCommand(label, cwd string, argv []string, expectedEx
 	}
 	digest := sha256.Sum256(merged)
 	record := childRecord{Label: label, Argv: argv, Cwd: cwd, Proof: proof, Diagnostics: fmt.Sprintf("ordinary public child; exact exit %d; verifier-prefixed merged stdout/stderr", r.ExitCode),
-		MergedFile: label + ".merged.log", MergedBytes: len(merged), MergedSHA: hex.EncodeToString(digest[:]), TreeReaped: runErr == nil, Error: clipped(runErr)}
+		MergedFile: label + ".merged.log", MergedBytes: len(merged), MergedSHA: hex.EncodeToString(digest[:]), TreeReaped: publicCommandTreeReaped(r), Error: clipped(runErr)}
 	if e := c.keep(record.MergedFile, merged); e != nil {
 		runErr = errors.Join(runErr, e)
 		record.Error = clipped(runErr)

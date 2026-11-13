@@ -306,18 +306,33 @@ async function callGateway(server: vscode.McpGatewayServer, expected: Server, re
     const notification = await gatewayHTTP(address, 'POST', session, { jsonrpc: '2.0', method: 'notifications/initialized' }, deadline);
     if (notification.status !== 202 || notification.body.length !== 0 || notification.session !== session) throw new Error('gateway initialized notification differs');
     phase = 'gateway-tools-list';
-    const listed = await gatewayHTTP(address, 'POST', session, { jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} }, deadline);
-    const catalog = rpc(listed, 2);
-    observations.push({ phase, label: expected.label, result: catalog });
-    if (listed.session !== session || !Array.isArray(catalog.tools) || catalog.tools.length !== 1) throw new Error('exact gateway tool catalog differs');
+    let catalog: ObjectValue | undefined, nextId = 2;
+    // Native tool discovery can briefly return an empty inventory after
+    // server selection. Retry only emptiness, under this existing deadline.
+    while (performance.now() < deadline) {
+      const id = nextId++;
+      const listed = await gatewayHTTP(address, 'POST', session, { jsonrpc: '2.0', id, method: 'tools/list', params: {} }, deadline);
+      const observed = rpc(listed, id);
+      if (listed.session !== session || !Array.isArray(observed.tools) || observed.tools.length > 1)
+        throw new Error('exact gateway tool catalog differs');
+      if (observed.tools.length === 0) {
+        await delay(Math.min(100, Math.max(1, deadline - performance.now())));
+        continue;
+      }
+      catalog = observed;
+      observations.push({ phase, label: expected.label, result: catalog });
+      break;
+    }
+    if (!catalog || !Array.isArray(catalog.tools) || catalog.tools.length !== 1)
+      throw new Error('exact gateway tool catalog differs');
     const tool = object(catalog.tools[0]);
     if (tool.name !== 'inspect_runtime' || tool.description !== 'Inspect only disposable fixture runtime facts.'
       || !same(tool.inputSchema, { type: 'object', properties: { nonce: { type: 'string' }, operation: { type: 'string' }, marker: { type: 'string' } },
         required: ['nonce'], additionalProperties: false })) throw new Error('installed gateway tool schema differs');
     const argumentsValue = { nonce: req.nonce, operation: req.operation, marker: req.marker };
     phase = 'gateway-tools-call';
-    const called = await gatewayHTTP(address, 'POST', session, { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'inspect_runtime', arguments: argumentsValue } }, deadline);
-    const output = rpc(called, 3);
+    const called = await gatewayHTTP(address, 'POST', session, { jsonrpc: '2.0', id: nextId, method: 'tools/call', params: { name: 'inspect_runtime', arguments: argumentsValue } }, deadline);
+    const output = rpc(called, nextId);
     if (called.session !== session || output.isError === true || !Array.isArray(output.content) || output.content.length !== 1) throw new Error('gateway tool call failed');
     const content = object(output.content[0]);
     if (content.type !== 'text' || typeof content.text !== 'string' || Buffer.byteLength(content.text) > LIMIT) throw new Error('gateway result content differs');

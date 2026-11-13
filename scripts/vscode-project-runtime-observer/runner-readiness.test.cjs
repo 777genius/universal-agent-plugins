@@ -1,6 +1,7 @@
 'use strict';
 // Only actual inventory wait/control predicates run; no extension, gateway or process.
 const assert = require('node:assert/strict');
+const { createHash } = require('node:crypto');
 const { readFileSync } = require('node:fs');
 const { stripTypeScriptTypes } = require('node:module');
 const { join } = require('node:path');
@@ -142,4 +143,77 @@ test('actual trigger reader waits only for the owned two-link transition and rej
     await assert.rejects(box.wait(req, performance.now() + 1000), /parent changed/);
     assert.equal(fs.readFileSync(ready, 'utf8'), 'foreign'); fs.rmSync(directory + '.old', { recursive: true });
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+});
+
+// Test the actual gateway polling implementation; no native process/model is used.
+const gatewayStart = source.indexOf('async function callGateway(');
+const gatewayEnd = source.indexOf('async function observe(', gatewayStart);
+assert(gatewayStart > 0 && gatewayEnd > gatewayStart);
+function harness(catalogs, wrongSession = false) {
+  let clock = 0, listed = 0;
+  const events = [], session = 'owned-session';
+  const tool = { name: 'inspect_runtime', description: 'Inspect only disposable fixture runtime facts.',
+    inputSchema: { type: 'object', properties: { nonce: { type: 'string' }, operation: { type: 'string' },
+      marker: { type: 'string' } }, required: ['nonce'], additionalProperties: false } };
+  const facts = { nonce: 'n', revision: 'v1', cwd: '/project', argv: [], plugin_root: '/plugin',
+    plugin_data: '/data', literal: 'literal', once: 'once', marker: 'marker', pid: 42, session: 'probe-session' };
+  const expected = { label: 'owned', facts: { ...facts } };
+  delete expected.facts.pid;
+  delete expected.facts.session;
+  const sandbox = { Error, Buffer, URL, createHash, observations: [], phase: 'start',
+    performance: { now: () => clock }, delay: async ms => { clock += ms; },
+    object: value => { if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('object required'); return value; },
+    keys: (value, keys) => assert.deepEqual(Object.keys(value).sort(), keys.slice().sort()),
+    same: (a, b) => JSON.stringify(a) === JSON.stringify(b),
+    json: value => JSON.parse(Buffer.isBuffer(value) ? value.toString('utf8') : value),
+    rpc: (reply, id) => { assert.equal(reply.id, id); assert.equal(reply.status, 200); return reply.result; },
+    gatewayHTTP: async (_url, method, selectedSession, payload) => {
+      if (method === 'DELETE') {
+        events.push(['DELETE']);
+        return { status: 204, session: selectedSession, body: Buffer.alloc(0) };
+      }
+      events.push([payload.method, payload.id]);
+      if (payload.method === 'initialize') return { status: 200, session, id: payload.id,
+        result: { protocolVersion: '2025-06-18', serverInfo: { name: 'VS Code MCP Gateway', version: '1.0.0' } } };
+      if (payload.method === 'notifications/initialized') return { status: 202, session, body: Buffer.alloc(0) };
+      if (payload.method === 'tools/list') return { status: 200, session: wrongSession ? 'foreign' : session,
+        id: payload.id, result: { tools: catalogs[Math.min(listed++, catalogs.length - 1)] } };
+      if (payload.method === 'tools/call') return { status: 200, session, id: payload.id,
+        result: { isError: false, content: [{ type: 'text', text: JSON.stringify(facts) }] } };
+      throw new Error('unreviewed method');
+    } };
+  vm.createContext(sandbox);
+  vm.runInContext(stripTypeScriptTypes(source.slice(gatewayStart, gatewayEnd), { mode: 'strip' }) +
+    '\nglobalThis.probe = callGateway;', sandbox);
+  const server = { address: { toString: () => 'http://127.0.0.1:4567/gateway/owned' } };
+  return { run: () => sandbox.probe(server, expected, { nonce: 'n', operation: 'read', marker: 'marker' }, 1000),
+    tool, events, observations: sandbox.observations };
+}
+
+test('gateway retries only empty catalog and invokes the owned tool exactly once', async () => {
+  const selected = harness([[]]);
+  const h = harness([[], [selected.tool]]);
+  const result = await h.run();
+  assert.equal(result.label, 'owned');
+  assert.deepEqual(h.events, [['initialize', 1], ['notifications/initialized', undefined],
+    ['tools/list', 2], ['tools/list', 3], ['tools/call', 4], ['DELETE']]);
+  assert.equal(h.observations.filter(item => item.phase === 'gateway-tools-list').length, 1);
+});
+
+test('unexpected nonempty catalog and mismatched session fail closed before tools/call', async () => {
+  const valid = harness([[]]).tool;
+  for (const h of [harness([[{ name: 'foreign' }, { name: 'second' }]]),
+    harness([[valid]], true)]) {
+    await assert.rejects(h.run(), /exact gateway tool catalog differs/);
+    assert.equal(h.events.some(entry => entry[0] === 'tools/call'), false);
+    assert.equal(h.events.at(-1)[0], 'DELETE');
+  }
+});
+
+test('persistent empty catalog expires the original deadline without tool invocation', async () => {
+  const h = harness([[]]);
+  await assert.rejects(h.run(), /exact gateway tool catalog differs/);
+  assert(h.events.filter(entry => entry[0] === 'tools/list').length <= 10);
+  assert.equal(h.events.some(entry => entry[0] === 'tools/call'), false);
+  assert.equal(h.events.at(-1)[0], 'DELETE');
 });

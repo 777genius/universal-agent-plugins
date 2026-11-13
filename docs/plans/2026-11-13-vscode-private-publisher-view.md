@@ -1,6 +1,6 @@
 # Conditional private publisher view for VS Code native research
 
-Status: plan only; no implementation or native execution authorized by this file.
+Status: scoped source changes and inert tests are authorized. No local mounts, native execution, policy or foreign metadata changes; genuine hosted native admission is still required.
 Base: `751da6a36567c7fe589701f2d1d0b23eafebbb99`.
 Scope: the dedicated trusted Project research fixture; no production VS Code
 adapter, User/local/hooks behavior, generic planner, or shared process runner.

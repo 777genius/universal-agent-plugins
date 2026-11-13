@@ -42,6 +42,13 @@ func transientDisplayLock(info os.FileInfo, proof isolationProof) bool {
 	st, ok := info.Sys().(*syscall.Stat_t)
 	return ok && info.Mode().IsRegular() && info.Mode() == 0444 && info.Size() == 11 && st.Nlink == 2 && int64(st.Uid) == int64(proof.UID)
 }
+// X.Org may briefly expose the pending dentry for the same inode after
+// its link count reached one. That is not a final-ready state.
+func pendingDisplayLock(held, other os.FileInfo, proof isolationProof) bool {
+	return sameDisplayPublication(held, other) &&
+		(transientDisplayLock(other, proof) || regular(other, 64))
+}
+
 func (p *displayLockPublication) observe(lock string, proof isolationProof) (os.FileInfo, os.FileInfo, error) {
 	named, err := anchoredInfo(lock)
 	if os.IsNotExist(err) && p.file == nil {
@@ -95,6 +102,9 @@ func (p *displayLockPublication) ready(lock, temp string, proof isolationProof) 
 	}
 	other, err := anchoredInfo(temp)
 	if regular(current, 64) && regular(held, 64) {
+		if err == nil && pendingDisplayLock(held, other, proof) {
+			return false, nil // Wait until the matching pending name vanishes.
+		}
 		if !os.IsNotExist(err) {
 			return false, fmt.Errorf("display temporary lock collision")
 		}
@@ -112,7 +122,7 @@ func (p *displayLockPublication) ready(lock, temp string, proof isolationProof) 
 	if err != nil {
 		return false, err
 	}
-	if !transientDisplayLock(held, proof) || !transientDisplayLock(current, proof) || !transientDisplayLock(other, proof) || !os.SameFile(held, other) {
+	if !transientDisplayLock(held, proof) || !transientDisplayLock(current, proof) || !pendingDisplayLock(held, other, proof) {
 		return false, fmt.Errorf("display lock publication pair refused")
 	}
 	return false, nil

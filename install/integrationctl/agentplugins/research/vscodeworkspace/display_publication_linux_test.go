@@ -223,3 +223,26 @@ func TestDisplayPublicationFinalReadRetainsOriginalMetadata(t *testing.T) {
 		t.Fatal("post-ready metadata mutation admitted")
 	}
 }
+
+func TestDisplayPublicationPendingUnlinkAcceptsOnlyMatchingInodeAsNotReady(t *testing.T) {
+	lock, temp, proof, body := displayPublicationFixture(t)
+	two, err := os.Lstat(lock)
+	if err != nil || !pendingDisplayLock(two, two, proof) {
+		t.Fatal("original two-link transition not recognized", err)
+	}
+	if err := os.Remove(temp); err != nil {
+		t.Fatal(err)
+	}
+	one, err := os.Lstat(lock)
+	if err != nil || !pendingDisplayLock(one, one, proof) {
+		t.Fatal("same-inode single-link transitional snapshot rejected", err)
+	}
+	foreign := filepath.Join(filepath.Dir(lock), "foreign-lock")
+	if err := os.WriteFile(foreign, body, 0444); err != nil {
+		t.Fatal(err)
+	}
+	other, err := os.Lstat(foreign)
+	if err != nil || pendingDisplayLock(one, other, proof) {
+		t.Fatal("foreign same-size temporary lock admitted", err)
+	}
+}
