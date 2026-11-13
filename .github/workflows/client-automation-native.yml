@@ -169,3 +169,68 @@ jobs:
           path: ${{ steps.grok_capture.outputs.admitted }}
           if-no-files-found: error
           retention-days: 14
+
+  grok-acp-session:
+    needs: grok-acp-inventory
+    name: Grok 1.0.70 session-only effect measurement
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+      EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: 1.26.11
+          cache: false
+      - name: Inert ACP framing, ownership and strict helper contracts
+        run: |
+          python3 -m unittest discover -s scripts -p 'test_grok_acp_inventory_admission.py' -v
+          cd install/integrationctl
+          go test ./research/grokacpinventory -count=1
+      - name: Measure one native session without prompt, action or trust
+        id: session_capture
+        run: |
+          python3 - <<'PYTHON'
+          import os, pathlib, subprocess, sys, tempfile
+          sys.path.insert(0, str(pathlib.Path.cwd() / 'scripts'))
+          import grok_acp_inventory_admission as capture
+          from native_client_research import run_probe
+          temporary = pathlib.Path(os.environ['RUNNER_TEMP']).resolve()
+          output = temporary / 'grok-acp-session'
+          diagnostic_deadline = __import__('time').monotonic() + 180
+          record, stdout, stderr = run_probe([sys.executable, 'scripts/grok_acp_inventory_admission.py', '--output', str(output), '--session-only'],
+              pathlib.Path.cwd(), dict(os.environ), temporary, 'grok-session-frontend', timeout=180, limit=1 << 20, memory_only=True)
+          if record['error'] is not None or record['exit'] not in (0, 1):
+              raise SystemExit('Frontend did not prove bounded completion; no upload admitted')
+          packet = capture.document(stdout)
+          if stdout != __import__('json').dumps(packet, separators=(',', ':')).encode() + b'\n':
+              raise SystemExit('Frontend publication receipt is not one exact closed frame')
+          destination = pathlib.Path(tempfile.mkdtemp(prefix='grok-session-admitted-', dir=temporary))
+          destination.rmdir()
+          expected_tree = subprocess.check_output(['/usr/bin/git', 'rev-parse', 'HEAD^{tree}'], text=True).strip()
+          diagnostics = []
+          admitted = capture.admit_publication(output, packet, os.environ['EXPECTED_COMMIT'], expected_tree, destination,
+              diagnostics=diagnostics, diagnostic_deadline=diagnostic_deadline, mode=capture.SESSION_MODE)
+          print('GROK_SESSION_READOUT=' + __import__('json').dumps(diagnostics[0], separators=(',', ':')))
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as stream:
+              stream.write('admitted=' + str(admitted) + '\n' + 'observation_exit=' + str(record['exit']) + '\n')
+          PYTHON
+      - name: Keep first session measurement unqualified
+        if: ${{ steps.session_capture.conclusion == 'success' }}
+        env:
+          OBSERVATION_EXIT: ${{ steps.session_capture.outputs.observation_exit }}
+        run: python3 -c "import os; raise SystemExit(0 if os.environ['OBSERVATION_EXIT'] == '0' else 1)"
+      - name: Preserve closed original session measurement without qualification
+        if: ${{ always() && steps.session_capture.conclusion == 'success' && steps.session_capture.outputs.admitted != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: grok-acp-session-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.session_capture.outputs.admitted }}
+          if-no-files-found: error
+          retention-days: 14

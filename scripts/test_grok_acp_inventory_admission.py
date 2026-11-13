@@ -884,5 +884,216 @@ class NativeBootstrapContracts(unittest.TestCase):
                 self.assertIsNone(f['bootstrap'].created)
 
 
+
+class SessionOnlyContracts(unittest.TestCase):
+    def req(self):
+        return dict(nonce='c'*32, scope='a', input_root='/tmp/owned', mode=case.SESSION_MODE)
+
+    def state(self):
+        return dict(initialize=None, plugins=None, notifications=[], session=None)
+
+    def init(self, state, req, sent):
+        return case.session_rpc_frame({'jsonrpc':'2.0','id':1,'result':{'protocolVersion':1,
+            '_meta':{'agentVersion':'1.0.70'}}},state,req,sent.append)
+
+    def test_actual_session_sequence_uses_only_returned_id_and_no_prompt(self):
+        state, req, sent = self.state(), self.req(), []
+        self.assertFalse(self.init(state,req,sent))
+        self.assertEqual(sent[-1]['method'],'session/new')
+        self.assertEqual(sent[-1]['params'],{'cwd':'/tmp/owned/a','mcpServers':[],'_meta':{'modelId':'uap-local-driver'}})
+        reply={'jsonrpc':'2.0','id':2,'result':{'sessionId':'actual-native-id'}}
+        self.assertFalse(case.session_rpc_frame(reply,state,req,sent.append))
+        self.assertEqual(sent[-1],{'jsonrpc':'2.0','id':3,'method':'_x.ai/plugins/list','params':{'sessionId':'actual-native-id'}})
+        self.assertTrue(case.session_rpc_frame({'jsonrpc':'2.0','id':3,'result':{'result':{'plugins':[]}}},state,req,sent.append))
+        self.assertEqual(len(sent),2)
+
+    def test_session_reply_and_setup_notifications_remain_finite_and_joined(self):
+        for change in ('callback','phase','sid','id','unknown','nested'):
+            state, req, sent = self.state(), self.req(), []
+            self.init(state,req,sent)
+            notice={'jsonrpc':'2.0','method':'_x.ai/session/setup','params':{'method':'session/new','phase':'auth','sessionId':None}}
+            case.session_rpc_frame(notice,state,req,sent.append)
+            response={'jsonrpc':'2.0','id':2,'result':{'sessionId':'owned'}}
+            if change=='callback': notice['method']='session/request_permission'; notice['id']=99
+            elif change=='phase': notice['params']['phase']='PRIVATE_TOKEN'
+            elif change=='sid': response['result']['sessionId']=True
+            elif change=='id': response['id']=4
+            elif change=='unknown': response['result']['private']='COOKIE'
+            else: response['result']['_meta']={'currentWorkingDirectory':'/foreign'}
+            with self.subTest(change=change),self.assertRaises(ValueError):
+                case.session_rpc_frame(notice if change in ('callback','phase') else response,state,req,sent.append)
+        state,req,sent=self.state(),self.req(),[];self.init(state,req,sent)
+        case.session_rpc_frame({'jsonrpc':'2.0','id':2,'result':{'sessionId':'owned'}},state,req,sent.append)
+        with self.assertRaises(ValueError):
+            case.session_rpc_frame({'jsonrpc':'2.0','method':'_x.ai/session/setup','params':{'method':'session/new','phase':'response_ready','sessionId':'foreign'}},state,req,sent.append)
+
+    def test_fixed_provider_accepts_only_bounded_gets_and_never_exports_headers(self):
+        import socket
+        for request, accepted in ((b'GET /v1/models HTTP/1.1',True),(b'GET / HTTP/1.1',True),
+                                  (b'POST /v1/chat/completions HTTP/1.1',False),(b'GET /auth HTTP/1.1',False)):
+            provider=case.SessionProvider(0,time.monotonic()+3);port=provider.port
+            try:
+                with socket.create_connection(('127.0.0.1',port),timeout=2) as client:
+                    client.sendall(request+b'\r\nHost: 127.0.0.1:'+str(port).encode()+b'\r\nAuthorization: Bearer PRIVATE\r\n\r\n')
+                    while client.recv(4096):pass
+            finally:provider.close()
+            self.assertEqual(provider.facts['requests'],1)
+            self.assertEqual(provider.facts['forbidden'],int(not accepted))
+            self.assertTrue(provider.facts['settled'])
+            self.assertNotIn('PRIVATE',json.dumps(provider.facts))
+
+    def test_provider_body_chunking_and_duplicate_headers_are_refused(self):
+        import socket
+        for headers in (b'Content-Length: 1\r\n',b'Transfer-Encoding: chunked\r\n',b'Host: duplicate\r\n'):
+            provider=case.SessionProvider(0,time.monotonic()+3);port=provider.port
+            try:
+                with socket.create_connection(('127.0.0.1',port),timeout=2) as client:
+                    client.sendall(b'GET /v1/models HTTP/1.1\r\nHost: 127.0.0.1:'+str(port).encode()+b'\r\n'+headers+b'\r\n')
+                    while client.recv(4096):pass
+            finally:provider.close()
+            self.assertEqual(provider.facts['forbidden'],1)
+
+    def test_privileged_constant_has_inert_root_namespace_gates_before_ioctl(self):
+        code=self.bootstrap()
+        prefix="import fcntl,os; fcntl.ioctl=lambda *a: (_ for _ in ()).throw(AssertionError('ioctl-before-gate')); "
+        parent=os.stat('/proc/self/ns/net').st_ino
+        roots='os.getuid=os.geteuid=os.getgid=os.getegid=lambda:0; '
+        for extra in (roots, roots+'os.geteuid=lambda:1; '):
+            result=subprocess.run([sys.executable,'-I','-c',prefix+extra+code,str(parent),'/usr/bin/setpriv','never-execute'],
+                                  stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=3)
+            self.assertNotEqual(result.returncode,0)
+            self.assertEqual(result.stdout,b'')
+            self.assertIn(b'loopback-bootstrap-refused',result.stderr)
+            self.assertNotIn(b'ioctl-before-gate',result.stderr)
+
+    def test_provider_absolute_deadline_refuses_slow_drip_and_late_send(self):
+        from types import SimpleNamespace
+        for late_send in (False, True):
+            clock=[0.0]
+            provider=object.__new__(case.SessionProvider)
+            provider.deadline=20;provider.port=23456
+            provider.stop=SimpleNamespace(is_set=lambda:False)
+            provider.facts=dict(requests=0,models_get=0,root_get=0,forbidden=0,settled=False)
+            connection=mock.MagicMock();connection.__enter__.return_value=connection
+            def receive(_):
+                clock[0]+=3
+                return (b'GET / HTTP/1.1\r\nHost: 127.0.0.1:23456\r\n\r\n'
+                        if late_send else b'x')
+            connection.recv.side_effect=receive
+            if late_send:
+                connection.recv.side_effect=lambda _: (clock.__setitem__(0,6) or
+                    b'GET / HTTP/1.1\r\nHost: 127.0.0.1:23456\r\n\r\n')
+            provider.listener=mock.Mock()
+            provider.listener.accept.side_effect=[(connection,('127.0.0.1',1)),OSError()]
+            with mock.patch.object(case.time,'monotonic',side_effect=lambda:clock[0]):
+                provider.serve()
+            connection.sendall.assert_not_called()
+            self.assertLessEqual(connection.recv.call_count,2)
+            self.assertGreaterEqual(provider.facts['forbidden'],1)
+
+    def bootstrap(self):
+        path=Path(__file__).resolve().parents[1]/'install/integrationctl/research/grokacpinventory/loopback_linux.go'
+        import re
+        return re.search(r'const loopbackBootstrap = `([^`]+)`',path.read_text()).group(1)
+
+    def test_actual_constant_modifies_only_lo_up_and_closes_before_drop(self):
+        import struct
+        from types import SimpleNamespace
+        events=[]
+        channel=mock.MagicMock();channel.__enter__.return_value=channel;channel.fileno.return_value=7
+        channel.__exit__.side_effect=lambda *args:events.append('close')
+        values=[8,9]
+        def ioctl(fd, operation, payload):
+            self.assertEqual((fd,len(payload),payload[:16]),(7,40,b'lo'+b'\0'*14))
+            if operation==0x8913:return struct.pack('16sH22x',b'lo',values.pop(0))
+            self.assertEqual(operation,0x8914);self.assertEqual(struct.unpack_from('H',payload,16)[0],9);events.append('lo-up')
+        fake_os=SimpleNamespace(getuid=lambda:0,geteuid=lambda:0,getgid=lambda:0,getegid=lambda:0,
+            uname=lambda:SimpleNamespace(machine='x86_64'),stat=lambda _:SimpleNamespace(st_ino=2),
+            execve=lambda exe,argv,env:events.append((exe,argv,env)))
+        fake_socket=SimpleNamespace(AF_INET=2,SOCK_DGRAM=2,socket=lambda *args:channel,if_nameindex=lambda:[(1,'lo')])
+        fake_sys=SimpleNamespace(platform='linux',byteorder='little',argv=['-c','1','/usr/bin/setpriv','--no-new-privs'])
+        with mock.patch.dict(sys.modules,{'os':fake_os,'socket':fake_socket,'fcntl':SimpleNamespace(ioctl=ioctl),'sys':fake_sys}):
+            exec(compile(self.bootstrap(),'fixed-bootstrap','exec'),{})
+        self.assertEqual(events[:2],['lo-up','close'])
+        self.assertEqual(events[-1],('/usr/bin/setpriv',['/usr/bin/setpriv','--no-new-privs'],{'PATH':'/usr/bin:/bin','LANG':'C.UTF-8'}))
+
+    def test_session_config_precedes_only_baseline_and_measurement_never_reads_unknown_bodies(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary).resolve();(root/'home/.grok').mkdir(parents=True)
+            case.session_fixture_config(root,'c'*32)
+            body=(root/'home/.grok/config.toml').read_bytes()
+            self.assertIn(('127.0.0.1:'+str(case.session_port('c'*32))).encode(),body)
+            self.assertNotIn(b'trusted',body)
+            import devin_structured_inventory_admission as metadata
+            budget=type('Budget',(),{'check':lambda self:None})()
+            before=metadata.metadata_inventory(root,budget);(root/'unknown-session').write_bytes(b'PRIVATE')
+            with mock.patch.object(case,'ordinary',side_effect=AssertionError('unknown body read')):
+                ledger=case.session_metadata_ledger(root,before,budget)
+            self.assertFalse(ledger['accepted']);self.assertTrue(ledger['protected_originals_unchanged'])
+            self.assertNotIn('PRIVATE',json.dumps(ledger))
+
+    def test_session_archive_readout_joins_actual_wire_and_refuses_detached_claims(self):
+        import io
+        import zipfile
+        packet=dict(source_commit='a'*40,source_tree='b'*40,nonce='c'*32)
+        frames=[{'jsonrpc':'2.0','id':1,'result':{'protocolVersion':1,'_meta':{'agentVersion':'1.0.70'}}},
+                {'jsonrpc':'2.0','id':2,'result':{'sessionId':'PRIVATE_NATIVE_ID'}},
+                {'jsonrpc':'2.0','id':3,'result':{'result':{'plugins':[]}}}]
+        rpc=dict(initialize=frames[0],session=frames[1],plugins=frames[2],notifications=[])
+        members={'acquisition.json':b'{}','a.rpc.json':json.dumps(rpc).encode(),
+                 'a.ledger.json':json.dumps(dict(before={},after={},accepted=False)).encode()}
+        commands=[]
+        for index,label in enumerate(case.LABELS):
+            body=(b''.join(json.dumps(frame).encode()+b'\n' for frame in frames) if index==4 else b'help')
+            name='a-'+label+'.merged.log';members[name]=body
+            commands.append(dict(label=label,merged_file=name,merged_bytes=len(body),merged_sha256=case.digest(body),exit=0,error=None))
+        result=dict(packet,schema_version=1,scope='a',mode=case.SESSION_MODE,semantic_complete=True,reason='complete',
+                    provider=dict(requests=0,models_get=0,root_get=0,forbidden=0,settled=True),commands=commands)
+        receipt=dict(packet,schema_version=1,scope='a',cleanup_complete=True,sealed_cleanup_complete=True,result=result)
+        summary=dict(packet,schema_version=1,mode=case.SESSION_MODE,collection_complete=False,cleanup_complete=True,
+                     qualification=copy.deepcopy(case.FALSE),scopes=[receipt])
+        def read(changed):
+            changed['admission.json']=json.dumps(summary).encode()
+            output=io.BytesIO()
+            with zipfile.ZipFile(output,'w') as archive:
+                for name,body in changed.items():archive.writestr(name,body)
+            return case.publication_readout(output.getvalue(),packet,time.monotonic()+2,mode=case.SESSION_MODE)
+        good=read(dict(members))
+        self.assertTrue(good['session_reply']);self.assertTrue(good['inventory_reply'])
+        self.assertNotIn('PRIVATE_NATIVE_ID',json.dumps(good))
+        for kind in ('scope','schema','reason','empty','missing','forged','truncated','no-receipt','no-lf','late-notification'):
+            original=copy.deepcopy(result);changed=dict(members)
+            if kind=='no-receipt':summary['scopes']=[]
+            elif kind=='scope':result['scope']='b'
+            elif kind=='schema':result['schema_version']=True
+            elif kind=='reason':result['reason']='help-refused'
+            elif kind=='empty':result['commands']=[]
+            elif kind=='missing':del changed['a-acp.merged.log']
+            elif kind=='forged':
+                detached=copy.deepcopy(rpc);detached['session']['result']['sessionId']='OTHER'
+                changed['a.rpc.json']=json.dumps(detached).encode()
+            elif kind in ('no-lf','late-notification'):
+                body=changed['a-acp.merged.log'][:-1] if kind=='no-lf' else changed['a-acp.merged.log']+json.dumps(
+                    {'jsonrpc':'2.0','method':'_x.ai/session/setup','params':{'method':'session/new','phase':'response_ready','sessionId':'PRIVATE_NATIVE_ID'}}).encode()+b'\n'
+                changed['a-acp.merged.log']=body
+                result['commands'][-1]['merged_bytes']=len(body);result['commands'][-1]['merged_sha256']=case.digest(body)
+            else:
+                body=changed['a-acp.merged.log'].splitlines(keepends=True)[0]
+                changed['a-acp.merged.log']=body
+                result['commands'][-1]['merged_bytes']=len(body);result['commands'][-1]['merged_sha256']=case.digest(body)
+            with self.subTest(kind=kind):
+                self.assertEqual(read(changed),dict(schema_version=1,mode=case.SESSION_MODE,reason='readout-refused'))
+            result.clear();result.update(original)
+            summary['scopes']=[receipt]
+
+    def test_session_readout_refuses_unknown_or_private_values(self):
+        packet=dict(source_commit='a'*40,source_tree='b'*40,nonce='c'*32)
+        for value in ({}, {'mode':case.SESSION_MODE,'qualification':{'private':'COOKIE'}}):
+            members={'admission.json':json.dumps(value).encode()}
+            facts=case.session_readout(members,packet,time.monotonic()+1)
+            self.assertEqual(facts,{'schema_version':1,'mode':case.SESSION_MODE,'reason':'readout-refused'})
+            self.assertNotIn('COOKIE',json.dumps(facts))
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -12,6 +12,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -20,15 +21,15 @@ import (
 )
 
 func inertRequest() request {
-	return request{1, strings.Repeat("a", 40), strings.Repeat("b", 40), 1000, 1000, strings.Repeat("c", 32), "a", 1, strings.Repeat("d", 64)}
+	return request{1, strings.Repeat("a", 40), strings.Repeat("b", 40), 1000, 1000, strings.Repeat("c", 32), "a", 1, strings.Repeat("d", 64), ""}
 }
 func inertResult(t *testing.T, r request) []byte {
 	t.Helper()
-	proof, e := json.Marshal(isolation{r.UID, r.GID, r.UID, r.GID, []int{}, 2, 1, []string{"lo"}, true, 1})
+	proof, e := json.Marshal(isolation{r.UID, r.GID, r.UID, r.GID, []int{}, 2, 1, []string{"lo"}, true, 1, false})
 	if e != nil {
 		t.Fatal(e)
 	}
-	body, e := json.Marshal(result{1, r.Commit, r.Tree, r.Scope, r.Nonce, false, "protocol-refused", proof, []json.RawMessage{}, json.RawMessage(`{"initialize":null,"plugins":null,"notifications":[]}`)})
+	body, e := json.Marshal(result{1, r.Commit, r.Tree, r.Scope, r.Nonce, false, "protocol-refused", proof, []json.RawMessage{}, json.RawMessage(`{"initialize":null,"plugins":null,"notifications":[]}`), "", nil})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -318,5 +319,72 @@ func TestInputDirectoryReplacementIsRefusedWithoutDeletion(t *testing.T) {
 		if _, e = fixedCommand("/tmp/sealed", path, inertRequest(), systems); e == nil {
 			t.Fatal("incomplete system selection admitted")
 		}
+	}
+}
+
+
+func TestSessionModeKeepsMetadataCommandAndDropSuffix(t *testing.T) {
+	r := inertRequest()
+	systems := map[string]systemFact{}
+	for _, name := range []string{"unshare", "setpriv", "env", "python3"} {
+		systems[name] = systemFact{"/usr/bin/" + name, strings.Repeat("a", 64)}
+	}
+	old, e := fixedCommand("/tmp/sealed", "/tmp/input", r, systems)
+	if e != nil {
+		t.Fatal(e)
+	}
+	r.Mode = sessionMode
+	next, e := fixedCommand("/tmp/sealed", "/tmp/input", r, systems, 42)
+	if e != nil {
+		t.Fatal(e)
+	}
+	prefix := []string{"/usr/bin/unshare", "--net", "--", "/usr/bin/python3", "-I", "-c", loopbackBootstrap, "42"}
+	if !reflect.DeepEqual(next.Argv[:len(prefix)], prefix) || !reflect.DeepEqual(next.Argv[len(prefix):], old.Argv[3:]) {
+		t.Fatal("root bootstrap changed the verified drop chain")
+	}
+	if !reflect.DeepEqual(next.Env, old.Env) || next.Dir != old.Dir {
+		t.Fatal("environment or cwd changed")
+	}
+	if _, e := fixedCommand("/tmp/sealed", "/tmp/input", r, systems); e == nil {
+		t.Fatal("missing parent admitted")
+	}
+	r.Mode = "enable"
+	if _, e := fixedCommand("/tmp/sealed", "/tmp/input", r, systems, 42); e == nil {
+		t.Fatal("arbitrary mode admitted")
+	}
+}
+func TestSessionResultRequiresModeLoopbackAndJoinedProvider(t *testing.T) {
+	r := inertRequest()
+	var body map[string]any
+	if e := json.Unmarshal(inertResult(t, r), &body); e != nil {
+		t.Fatal(e)
+	}
+	r.Mode = sessionMode
+	body["mode"] = sessionMode
+	body["provider"] = map[string]any{"requests": 1, "models_get": 1, "root_get": 0, "forbidden": 0, "settled": true}
+	body["isolation"].(map[string]any)["loopback_up"] = true
+	body["rpc"].(map[string]any)["session"] = nil
+	raw, _ := json.Marshal(body)
+	if e := validateResult(raw, r, 1); e != nil {
+		t.Fatal(e)
+	}
+	for _, key := range []string{"settled", "requests", "private"} {
+		p := body["provider"].(map[string]any)
+		original, existed := p[key]
+		p[key] = "PRIVATE"
+		changed, _ := json.Marshal(body)
+		if e := validateResult(changed, r, 1); e == nil {
+			t.Fatal("provider schema admitted", key)
+		}
+		if existed {
+			p[key] = original
+		} else {
+			delete(p, key)
+		}
+	}
+	body["isolation"].(map[string]any)["loopback_up"] = false
+	raw, _ = json.Marshal(body)
+	if e := validateResult(raw, r, 1); e == nil {
+		t.Fatal("down loopback admitted")
 	}
 }

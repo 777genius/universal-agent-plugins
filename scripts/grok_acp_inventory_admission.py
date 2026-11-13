@@ -16,6 +16,158 @@ import subprocess
 import sys
 import time
 
+SESSION_MODE = 'session-only-v1'
+SETUP_PHASES = frozenset(('auth', 'resolve_workspace', 'folder_trust', 'plugin_registry', 'mcp_merge',
+    'local_workspace', 'persistence_init', 'spawn_session_actor', 'workspace_handshake', 'model_switch',
+    'model_not_allowed', 'git_discovery', 'finalize_response', 'tool_overrides', 'response_ready'))
+
+
+def session_port(nonce):
+    require(type(nonce) is str and re.fullmatch('[0-9a-f]{32}', nonce), 'session-nonce')
+    return 20000 + int(nonce[:4], 16) % 40000
+
+
+def loopback_up():
+    import fcntl
+    import struct
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as channel:
+        raw = fcntl.ioctl(channel.fileno(), 0x8913, struct.pack('16sH22x', b'lo', 0))
+    return len(raw) == 40 and raw[:16] == b'lo' + b'\0' * 14 and struct.unpack_from('H', raw, 16)[0] & 9 == 9
+
+
+class SessionProvider:
+    """Fixed metadata GETs only; no request values or bodies enter facts."""
+    def __init__(self, port, deadline):
+        import threading
+        self.deadline, self.stop = deadline, threading.Event()
+        self.facts = dict(requests=0, models_get=0, root_get=0, forbidden=0, settled=False)
+        self.listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.listener.bind(('127.0.0.1', port))
+        self.listener.listen(4)
+        self.listener.settimeout(.05)
+        self.port = self.listener.getsockname()[1]
+        self.thread = threading.Thread(target=self.serve, daemon=True)
+        self.thread.start()
+
+    def serve(self):
+        while not self.stop.is_set() and time.monotonic() < self.deadline:
+            try:
+                connection, address = self.listener.accept()
+            except socket.timeout:
+                continue
+            except OSError:
+                if not self.stop.is_set():
+                    self.facts['forbidden'] += 1
+                return
+            with connection:
+                self.facts['requests'] += 1
+                if self.facts['requests'] > 12:
+                    self.facts['forbidden'] += 1
+                    return
+                try:
+                    connection_deadline = min(time.monotonic() + 5, self.deadline)
+                    require(address[0] == '127.0.0.1', 'provider-address')
+                    body = bytearray()
+                    while b'\r\n\r\n' not in body:
+                        remaining = connection_deadline - time.monotonic()
+                        require(remaining > 0, 'provider-deadline')
+                        connection.settimeout(remaining)
+                        piece = connection.recv(min(1024, 8193 - len(body)))
+                        require(piece and len(body) + len(piece) <= 8192, 'provider-header-bound')
+                        body.extend(piece)
+                    header, tail = bytes(body).split(b'\r\n\r\n', 1)
+                    lines = header.split(b'\r\n')
+                    require(not tail and len(lines) <= 32, 'provider-body')
+                    method, route, version = lines[0].split(b' ')
+                    require(method == b'GET' and version == b'HTTP/1.1' and route in (b'/', b'/v1/models'), 'provider-route')
+                    fields = {}
+                    for line in lines[1:]:
+                        key, value = line.split(b':', 1)
+                        key = key.lower()
+                        require(key not in fields, 'provider-duplicate')
+                        fields[key] = value.strip()
+                    require(fields.get(b'host') == ('127.0.0.1:' + str(self.port)).encode()
+                            and b'transfer-encoding' not in fields
+                            and fields.get(b'content-length', b'0') == b'0', 'provider-body-host')
+                    if route == b'/v1/models':
+                        field = 'models_get'
+                        response = b'{"object":"list","data":[{"id":"uap-local-driver","object":"model","owned_by":"uap"}]}'
+                        status = b'200 OK'
+                    else:
+                        field = 'root_get'
+                        response, status = b'{}', b'404 Not Found'
+                    remaining = connection_deadline - time.monotonic()
+                    require(remaining > 0, 'provider-deadline')
+                    connection.settimeout(remaining)
+                    connection.sendall(b'HTTP/1.1 ' + status + b'\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: '
+                                       + str(len(response)).encode() + b'\r\n\r\n' + response)
+                    self.facts[field] += 1
+                except (ValueError, OSError):
+                    self.facts['forbidden'] += 1
+
+    def close(self):
+        self.stop.set()
+        self.listener.close()
+        self.thread.join(timeout=max(0, self.deadline - time.monotonic()))
+        require(not self.thread.is_alive(), 'provider-cleanup-unproved')
+        self.facts['settled'] = True
+
+
+def session_rpc_frame(value, state, req, send):
+    require(type(value) is dict and value.get('jsonrpc') == '2.0', 'rpc-envelope')
+    if 'method' in value:
+        closed(value, 'jsonrpc method params')
+        require(len(state['notifications']) < 32, 'notification-bound')
+        if value['method'] == '_x.ai/mcp/servers_updated':
+            require(value['params'] == {'mcpServers': []}
+                    and not any(x['method'] == value['method'] for x in state['notifications']), 'notification-refused')
+        else:
+            require(value['method'] == '_x.ai/session/setup', 'notification-refused')
+            params = closed(value['params'], 'method phase sessionId')
+            require(params['method'] == 'session/new' and type(params['phase']) is str and params['phase'] in SETUP_PHASES
+                    and sum(x['params'].get('phase') == params['phase'] for x in state['notifications']) < 2,
+                    'setup-notification')
+            require(params['sessionId'] is None or type(params['sessionId']) is str
+                    and 0 < len(params['sessionId']) <= 256 and params['sessionId'].isascii()
+                    and all(32 <= ord(x) <= 126 for x in params['sessionId']), 'session-id')
+        if state['session'] is not None and value['method'] == '_x.ai/session/setup':
+            require(value['params']['sessionId'] in (None, state['session']['result']['sessionId']), 'session-notification-identity')
+        state['notifications'].append(value)
+        return False
+    if state['initialize'] is None:
+        rpc_frame(value, state, req, lambda _frame: None)
+        send({'jsonrpc':'2.0', 'id':2, 'method':'session/new', 'params':{
+            'cwd':str(Path(req['input_root']) / 'a'), 'mcpServers':[], '_meta':{'modelId':'uap-local-driver'}}})
+        return False
+    closed(value, 'jsonrpc id result')
+    require(type(value['id']) is int and type(value['result']) is dict, 'session-response')
+    if state['session'] is None:
+        result = value['result']
+        require(value['id'] == 2 and 'sessionId' in result
+                and set(result) <= {'sessionId','models','configOptions','_meta'}, 'session-response')
+        sid = result['sessionId']
+        require(type(sid) is str and 0 < len(sid) <= 256 and sid.isascii()
+                and all(32 <= ord(x) <= 126 for x in sid), 'session-id')
+        for item in state['notifications']:
+            if item['method'] == '_x.ai/session/setup':
+                require(item['params']['sessionId'] in (None, sid), 'session-notification-identity')
+        if '_meta' in result:
+            require(type(result['_meta']) is dict, 'session-meta')
+            if 'currentWorkingDirectory' in result['_meta']:
+                require(result['_meta']['currentWorkingDirectory'] == str(Path(req['input_root']) / 'a'), 'session-cwd')
+        if 'models' in result: require(type(result['models']) is dict, 'session-models')
+        if 'configOptions' in result: require(type(result['configOptions']) is list, 'session-options')
+        state['session'] = value
+        send({'jsonrpc':'2.0','id':3,'method':'_x.ai/plugins/list','params':{'sessionId':sid}})
+        return False
+    require(value['id'] == 3 and state['plugins'] is None, 'listing-id')
+    closed(value['result'], 'result')
+    listing = closed(value['result']['result'], 'plugins')
+    require(type(listing['plugins']) is list and len(listing['plugins']) <= 128, 'plugins-bound')
+    state['plugins'] = value
+    return True
+
+
 LIMIT = 1 << 20
 SCOPES = ('user', 'a', 'b')
 LABELS = ('version', 'help', 'agent-help', 'stdio-help', 'acp')
@@ -99,6 +251,9 @@ def isolation(req):
     require(value['uid'] == value['euid'] == req['uid'] != 0 and value['gid'] == value['egid'] == req['gid'] != 0
             and not value['groups'] and value['interfaces'] == ['lo'] and value['capabilities_zero']
             and value['no_new_privileges'] == 1 and value['network_namespace'] != value['parent_network_namespace'], 'isolation')
+    if req.get('mode') == SESSION_MODE:
+        value['loopback_up'] = loopback_up()
+        require(value['loopback_up'], 'loopback-down')
     return value
 
 
@@ -193,7 +348,7 @@ def command(argv, label, cwd, env, deadline, remaining, state, req):
                             line, _, buffer = buffer.partition(b'\n')
                             frames += 1
                             require(frames <= 64 and len(line) <= 64 << 10 and not completed, 'frame-bound')
-                            completed = rpc_frame(document(bytes(line), 64 << 10), state, req, send)
+                            completed = (session_rpc_frame if req.get('mode') == SESSION_MODE else rpc_frame)(document(bytes(line), 64 << 10), state, req, send)
                             require(len(json.dumps(state).encode()) <= 128 << 10, 'rpc-bound')
                             if completed:
                                 process.stdin.close()
@@ -221,6 +376,10 @@ def collector_result(req):
     result = {key: req[key] for key in ('schema_version', 'source_commit', 'source_tree', 'scope', 'nonce')}
     result.update(semantic_complete=False, reason='isolation-refused', isolation={}, commands=[], rpc=rpc_state())
     deadline, command_in_flight = req['start_monotonic_ns'] / 1e9 + 30, False
+    session, provider, provider_in_flight = req.get('mode') == SESSION_MODE, None, False
+    if session:
+        result.update(mode=SESSION_MODE, provider={})
+        result['rpc']['session'] = None
     try:
         result['isolation'] = isolation(req)
         require(req['scope'] in SCOPES and re.fullmatch('[0-9a-f]{32}', req['nonce']), 'request-identity')
@@ -228,6 +387,12 @@ def collector_result(req):
                'TMPDIR': str(root / 'tmp'), 'TERM': 'dumb', 'NO_COLOR': '1', 'GROK_DISABLE_AUTOUPDATER': '1',
                'GIT_CONFIG_NOSYSTEM': '1', 'GIT_CONFIG_GLOBAL': '/dev/null', 'GIT_TERMINAL_PROMPT': '0'}
         env.update({'XDG_' + name.upper() + '_HOME': str(root / ('xdg-' + name)) for name in ('config', 'data', 'cache', 'state')})
+        if session:
+            require(req['scope'] == 'a', 'session-scope')
+            provider_in_flight = True
+            provider = SessionProvider(session_port(req['nonce']), deadline)
+            provider_in_flight = False
+            env['XAI_API_KEY'] = 'uap-inert-local-driver'
         result['reason'] = 'help-refused'
         for label, args in zip(LABELS[:4], (['--version'], ['--help'], ['agent', '--help'], ['agent', 'stdio', '--help'])):
             remaining = LIMIT - sum(row['merged_bytes'] for row in result['commands'])
@@ -247,13 +412,23 @@ def collector_result(req):
         require(row['error'] is None and result['rpc']['plugins'] is not None, 'acp-command')
         result.update(semantic_complete=True, reason='complete')
     except (ValueError, OSError, subprocess.SubprocessError):
-        if command_in_flight:
+        if command_in_flight or provider_in_flight:
             raise  # No JSON/result authority for any incomplete command capture.
+    finally:
+        if session:
+            if provider is not None:
+                provider.close()
+            result['provider'] = dict(provider.facts) if provider is not None else dict(requests=0, models_get=0, root_get=0, forbidden=0, settled=True)
+    if session and result['provider']['forbidden']:
+        result.update(semantic_complete=False, reason='protocol-refused')
     return result
 
 
 def collect(request):
-    req = closed(document(ordinary(request, 16384), 16384), 'schema_version source_commit source_tree uid gid nonce scope input_root parent_network_namespace start_monotonic_ns')
+    req = document(ordinary(request, 16384), 16384)
+    session = req.get('mode') == SESSION_MODE
+    require('mode' not in req or session, 'mode')
+    closed(req, 'schema_version source_commit source_tree uid gid nonce scope input_root parent_network_namespace start_monotonic_ns' + (' mode' if session else ''))
     body = json.dumps(collector_result(req), separators=(',', ':')).encode() + b'\n'
     require(len(body) <= 2 << 20, 'result-bound')
     sys.stdout.buffer.write(body)
@@ -312,7 +487,13 @@ def validate_receipt(receipt, request):
         closed(record, 'path sha256')
         require(record['path'] == '/usr/bin/' + ('python3.12' if name == 'python3' else name)
                 and type(record['sha256']) is str and re.fullmatch('[0-9a-f]{64}', record['sha256']), 'system-executable')
-    result = closed(receipt['result'], 'schema_version source_commit source_tree scope nonce semantic_complete reason isolation commands rpc')
+    session = request.get('mode') == SESSION_MODE
+    result = closed(receipt['result'], 'schema_version source_commit source_tree scope nonce semantic_complete reason isolation commands rpc' + (' mode provider' if session else ''))
+    if session:
+        require(result['mode'] == SESSION_MODE, 'session-mode')
+        provider = closed(result['provider'], 'requests models_get root_get forbidden settled')
+        require(provider['settled'] is True and all(type(provider[key]) is int and 0 <= provider[key] <= 13 for key in ('requests','models_get','root_get','forbidden'))
+                and provider['requests'] == provider['models_get'] + provider['root_get'] + provider['forbidden'], 'provider-facts')
     for key in ('schema_version', 'source_commit', 'source_tree', 'scope', 'nonce'):
         require(type(result[key]) is type(request[key]) and result[key] == request[key], 'collector-identity')
     require(type(result['semantic_complete']) is bool and result['reason'] in ('complete', 'protocol-refused', 'help-refused', 'isolation-refused', 'collector-refused'), 'semantic-state')
@@ -328,8 +509,109 @@ def validate_receipt(receipt, request):
         require(type(row['merged_bytes']) is int and len(raw) == row['merged_bytes'] and digest(raw) == row['merged_sha256'], 'stream-identity')
         total += len(raw)
     require(total <= LIMIT and len(json.dumps(result['rpc']).encode()) <= 128 << 10, 'aggregate-bound')
-    closed(result['rpc'], 'initialize plugins notifications')
+    closed(result['rpc'], 'initialize plugins notifications' + (' session' if session else ''))
     return result
+
+
+
+def session_fixture_config(root, nonce):
+    url = 'http://127.0.0.1:' + str(session_port(nonce)) + '/v1'
+    text = ('[features]\ntelemetry = false\ntitle_refresh = false\n'
+            '[models]\ndefault = "uap-local-driver"\nsession_summary = "uap-local-driver"\nprompt_suggestion = "uap-local-driver"\n'
+            '[endpoints]\nmodels_base_url = "' + url + '"\n'
+            '[model.uap-local-driver]\nmodel = "uap-local-driver"\nbase_url = "' + url + '"\n'
+            'api_backend = "chat_completions"\napi_key = "uap-inert-local-driver"\ncontext_window = 64000\n')
+    path = root / 'home/.grok/config.toml'
+    require(not path.exists(), 'session-config-collision')
+    path.write_text(text)
+    path.chmod(0o600)
+
+
+def session_metadata_ledger(root, before, budget):
+    from devin_structured_inventory_admission import metadata_inventory
+    after = metadata_inventory(root, budget)
+    protected = all(after.get(name) == identity for name, identity in before.items())
+    # First capture is never a new bootstrap/effect admission. No new body read.
+    return dict(before=before, after=after, accepted=False, protected_originals_unchanged=protected)
+
+
+def session_readout(members, packet, deadline):
+    refused = dict(schema_version=1, mode=SESSION_MODE, reason='readout-refused')
+    try:
+        require(type(deadline) is float and time.monotonic() < deadline, 'readout-deadline')
+        allowed = {'admission.json','acquisition.json','a.ledger.json','a.rpc.json'} | {'a-' + label + '.merged.log' for label in LABELS}
+        require(set(members) <= allowed and len(members) <= 9, 'session-members')
+        summary = document(members['admission.json'])
+        require(type(summary) is dict and set(summary) <= set('schema_version collection_complete cleanup_complete qualification scopes source_commit source_tree nonce run attempt error mode measurement_complete'.split())
+                and type(summary.get('schema_version')) is int and summary['schema_version'] == 1
+                and ('measurement_complete' not in summary or type(summary['measurement_complete']) is bool), 'session-summary')
+        require(summary.get('mode') == SESSION_MODE and summary.get('collection_complete') is False
+                and summary.get('cleanup_complete') is True and summary['qualification'] == FALSE
+                and all(value is False for value in summary['qualification'].values()), 'session-qualification')
+        require(all(summary[key] == packet[key] for key in ('source_commit','source_tree','nonce')), 'session-source')
+        rows = summary['scopes']
+        require(type(rows) is list and len(rows) == 1, 'session-scopes')
+        facts = dict(schema_version=1, mode=SESSION_MODE, reason='measurement-only',
+                     collection_complete=False, cleanup_complete=True, session_reply=False, inventory_reply=False,
+                     provider_requests=0, provider_forbidden=0, added_entries=0, removed_entries=0, changed_entries=0)
+        if rows:
+            receipt = rows[0]
+            require(receipt['scope'] == 'a' and receipt['cleanup_complete'] is True and receipt['sealed_cleanup_complete'] is True
+                    and all(receipt[key] == packet[key] for key in ('source_commit','source_tree','nonce')), 'session-scope')
+            result = receipt['result']
+            require(result['mode'] == SESSION_MODE and all(result[key] == packet[key] for key in ('source_commit','source_tree','nonce')), 'session-source')
+            provider = closed(result['provider'], 'requests models_get root_get forbidden settled')
+            require(provider['settled'] is True and all(type(provider[k]) is int and 0 <= provider[k] <= 13 for k in ('requests','models_get','root_get','forbidden'))
+                    and provider['requests'] == provider['models_get'] + provider['root_get'] + provider['forbidden'], 'session-provider')
+            for obj in (receipt, result):
+                require(type(obj.get('schema_version')) is int and obj['schema_version'] == 1
+                        and obj.get('scope') == 'a', 'session-scope')
+            require(type(result.get('semantic_complete')) is bool
+                    and result.get('reason') in ('complete','protocol-refused','help-refused','isolation-refused','collector-refused')
+                    and result['semantic_complete'] == (result['reason'] == 'complete'), 'session-reason')
+            commands = result['commands']
+            require(type(commands) is list and len(commands) <= 5, 'session-commands')
+            for index, row in enumerate(commands):
+                require(type(row) is dict and row.get('label') == LABELS[index]
+                        and row.get('merged_file') == 'a-' + LABELS[index] + '.merged.log'
+                        and type(row.get('merged_bytes')) is int and 0 <= row['merged_bytes'] <= LIMIT
+                        and type(row.get('merged_sha256')) is str and re.fullmatch('[0-9a-f]{64}', row['merged_sha256'])
+                        and (row.get('exit') is None or type(row['exit']) is int)
+                        and row.get('error') in (None,'deadline','stream-bound','process-refused','protocol-refused'), 'session-command')
+                body = members[row['merged_file']]
+                require(len(body) == row['merged_bytes'] and digest(body) == row['merged_sha256'], 'session-stream')
+            rpc = closed(document(members['a.rpc.json']), 'initialize plugins notifications session')
+            require(type(rpc['notifications']) is list and len(rpc['notifications']) <= 32, 'session-notifications')
+            replay = dict(initialize=None, plugins=None, notifications=[], session=None)
+            request = dict(nonce=packet['nonce'], scope='a', input_root='/tmp/uap-grok-acp-input-' + packet['nonce'], mode=SESSION_MODE)
+            if any(rpc[key] is not None for key in ('initialize','session','plugins')):
+                require(len(commands) == 5, 'session-missing-stream')
+            if len(commands) == 5:
+                wire = members['a-acp.merged.log']
+                require(not wire or wire.endswith(b'\n'), 'session-frame-termination')
+                lines = wire.splitlines()
+                completed = False
+                require(len(lines) <= 64, 'session-frame-bound')
+                for line in lines:
+                    require(not completed and len(line) <= 64 << 10, 'session-frame-bound')
+                    completed = session_rpc_frame(document(line, 64 << 10), replay, request, lambda _frame: None)
+                require(replay == rpc, 'session-wire-join')
+            else:
+                require(rpc == replay, 'session-rpc-before-command')
+            require(not result['semantic_complete'] or replay['plugins'] is not None
+                    and all(row['error'] is None for row in commands), 'session-incomplete')
+            ledger = document(members['a.ledger.json'])
+            require(type(ledger['before']) is dict and type(ledger['after']) is dict
+                    and len(ledger['before']) <= 4096 and len(ledger['after']) <= 4096 and ledger['accepted'] is False, 'session-ledger')
+            before, after = ledger['before'], ledger['after']
+            facts.update(session_reply=rpc['session'] is not None, inventory_reply=rpc['plugins'] is not None,
+                         provider_requests=provider['requests'], provider_forbidden=provider['forbidden'],
+                         added_entries=len(after.keys()-before.keys()), removed_entries=len(before.keys()-after.keys()),
+                         changed_entries=sum(before[k] != after[k] for k in before.keys() & after.keys()))
+        require(time.monotonic() < deadline, 'readout-deadline')
+        return facts
+    except Exception:
+        return refused
 
 
 def fixtures(root, nonce):
@@ -516,7 +798,7 @@ def publish(output, bodies, held=None, expected=None):
         if owned: os.close(descriptor)
 
 
-def publication_readout(raw, packet, deadline):
+def publication_readout(raw, packet, deadline, *, mode=None):
     """Diagnostic only: never withhold an already admitted original ZIP."""
     import io
     import struct
@@ -548,6 +830,9 @@ def publication_readout(raw, packet, deadline):
                 require(len(body) == info.file_size, 'readout-member-size')
                 members[info.filename] = body
         budget()
+        if mode == SESSION_MODE:
+            return session_readout(members, packet, deadline)
+        require(mode is None, 'readout-mode')
         summary = document(members['admission.json'])
         require(type(summary) is dict and set(summary) <= set('schema_version collection_complete cleanup_complete qualification scopes source_commit source_tree nonce run attempt error'.split())
                 and type(summary.get('schema_version')) is int and summary['schema_version'] == 1
@@ -606,7 +891,7 @@ def publication_readout(raw, packet, deadline):
         return refused
 
 
-def admit_publication(output, packet, expected_commit, expected_tree, destination, diagnostics=None, diagnostic_deadline=None):
+def admit_publication(output, packet, expected_commit, expected_tree, destination, diagnostics=None, diagnostic_deadline=None, mode=None):
     """Workflow parent validates held bytes; no scanning a stale output prefix."""
     require(diagnostics is None or type(diagnostics) is list and not diagnostics, 'readout-output')
     closed(packet, 'schema_version source_commit source_tree nonce publication')
@@ -644,13 +929,14 @@ def admit_publication(output, packet, expected_commit, expected_tree, destinatio
                 == directory_id(os.stat('upload', dir_fd=root_fd, follow_symlinks=False))
                 and set(os.listdir(root_fd)) == {'upload'} and set(os.listdir(upload_fd)) == {'research.zip'}, 'publication-final-authority')
         if diagnostics is not None:
-            diagnostics.append(publication_readout(raw, packet, diagnostic_deadline))
+            diagnostics.append(publication_readout(raw, packet, diagnostic_deadline) if mode is None
+                               else publication_readout(raw, packet, diagnostic_deadline, mode=mode))
         return destination / 'research.zip'
     finally:
         for descriptor in reversed(descriptors): os.close(descriptor)
 
 
-def run(output):
+def run(output, *, session_only=False):
     import project_native_research as shared
     from grok_acp_bootstrap import NativeBootstrap
     from project_native_collectors.grok import ACQUISITION
@@ -690,22 +976,31 @@ def run(output):
                             + ' -X main.collectorSHA=' + digest(ordinary(collector)), '-o', str(helper), './research/grokacpinventory'],
                            cwd=shared.SOURCE / 'install/integrationctl', check=True, timeout=60)
             roots = fixtures(root, nonce)
+            if session_only:
+                session_fixture_config(root, nonce)
+                summary['mode'] = SESSION_MODE
             (root / 'request.json').write_bytes(b'{}\n')
-            baseline = metadata_inventory(root, budget)
+            baseline = None if session_only else metadata_inventory(root, budget)
             profiles = {name: snapshot(path) for name, path in roots.items()}
             bootstrap = NativeBootstrap()
             bodies['acquisition.json'] = json.dumps(receipt, sort_keys=True).encode()
             native_ids = {}
-            for scope in SCOPES:
+            for scope in (('a',) if session_only else SCOPES):
                 require(time.monotonic() < origin + 150, 'outer-deadline')
                 request = dict(schema_version=1, source_commit=commit, source_tree=tree, uid=os.getuid(), gid=os.getgid(), nonce=nonce,
                                scope=scope, start_monotonic_ns=time.monotonic_ns(), helper_sha256=digest(ordinary(helper, 64 << 20)))
+                if session_only:
+                    request['mode'] = SESSION_MODE
                 (root / 'request.json').write_text(json.dumps(request))
+                if session_only:
+                    # The one authored control request is fixed before Baseline0.
+                    require(baseline is None, 'session-baseline-renewal')
+                    baseline = metadata_inventory(root, budget)
                 cleanup_proved = False
                 receipt = helper_capture(helper, root, min(origin + 150, request['start_monotonic_ns'] / 1e9 + 35))
                 result = validate_receipt(receipt, request)
                 cleanup_proved = True
-                ledger = post_ledger(root, baseline, roots, profiles, budget, bootstrap)
+                ledger = session_metadata_ledger(root, baseline, budget) if session_only else post_ledger(root, baseline, roots, profiles, budget, bootstrap)
                 bodies[scope + '.ledger.json'] = json.dumps(ledger, sort_keys=True).encode()
                 for row in result['commands']:
                     name = scope + '-' + row['label'] + '.merged.log'
@@ -717,13 +1012,18 @@ def run(output):
                 if scope == 'user' and ledger['accepted']:
                     ledger['bootstrap_capture'] = capture_bootstrap_files(root, ledger, budget)
                     bodies[scope + '.ledger.json'] = json.dumps(ledger, sort_keys=True).encode()
+                if session_only:
+                    summary['measurement_complete'] = True
+                    result.pop('rpc')
+                    require(ledger['protected_originals_unchanged'] and result['semantic_complete'], 'native-refused')
+                    continue  # Unknown session effects never become an admitted envelope.
                 require(ledger['accepted'] and result['semantic_complete'], 'native-refused')
                 observed_ids = inventory_rows(result, root, scope)
                 require(all(path not in native_ids or native_ids[path] == value for path, value in observed_ids.items()), 'native-id-changed')
                 native_ids.update(observed_ids)
                 result.pop('rpc')
             require(not source(['status', '--porcelain', '--untracked-files=normal']), 'source-changed')
-            summary['collection_complete'] = True
+            summary['collection_complete'] = not session_only
     except Exception:
         summary['error'] = 'admission-refused'
     finally:
@@ -748,9 +1048,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path)
     parser.add_argument('--collect', type=Path)
+    parser.add_argument('--session-only', action='store_true')
     args = parser.parse_args()
-    if args.collect is not None and args.output is None:
+    if args.collect is not None and args.output is None and not args.session_only:
         collect(args.collect)
     else:
         require(args.output is not None and args.collect is None, 'mode')
-        raise SystemExit(run(args.output))
+        raise SystemExit(run(args.output, session_only=args.session_only))
