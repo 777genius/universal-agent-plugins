@@ -6,6 +6,7 @@ import runpy
 import tempfile
 import unittest
 from unittest import mock
+from types import SimpleNamespace
 
 CASE = runpy.run_path(str(Path(__file__).parent / "e2e/hermes-profile-admission.py"), run_name="hermes_profile_contract")
 
@@ -132,13 +133,13 @@ class ProfileAdmissionContracts(unittest.TestCase):
             wanted, foreign = root / "wanted", root / "foreign"
             wanted.write_bytes(b"wanted")
             foreign.write_bytes(b"foreign")
-            descriptor = os.open(foreign, os.O_RDONLY)
-            with mock.patch.object(os, "open", return_value=descriptor):
+            descriptor = CASE["artifacts"].open_member(foreign)
+            with mock.patch.object(CASE["artifacts"], "open_member", return_value=descriptor):
                 with mock.patch.object(os, "fdopen") as read:
                     with self.assertRaisesRegex(RuntimeError, "changed at open"):
                         CASE["ordinary_bytes"](wanted)
                     read.assert_not_called()
-            with mock.patch.object(os, "open") as opened:
+            with mock.patch.object(CASE["artifacts"], "open_member") as opened:
                 with self.assertRaisesRegex(RuntimeError, "before open"):
                     CASE["ordinary_bytes"](wanted, foreign.stat())
                 opened.assert_not_called()
@@ -162,6 +163,46 @@ class ProfileAdmissionContracts(unittest.TestCase):
                     with self.assertRaisesRegex(RuntimeError, "changed at open"):
                         CASE["ordinary_bytes"](wanted)
                     read.assert_not_called()
+
+    def test_windows_path_and_fd_domains_keep_separate_complete_stability(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary).resolve() / "ordinary"
+            path.write_bytes(b"portable bytes")
+            real_lstat, real_fstat, real_open = Path.lstat, os.fstat, os.open
+            def win_info(info, held=False, **changes):
+                names = ("st_dev", "st_ino", "st_mode", "st_nlink", "st_uid", "st_gid", "st_size", "st_mtime_ns", "st_ctime_ns")
+                values = {name: getattr(info, name) for name in names}
+                values.update(st_birthtime_ns=1234567, st_file_attributes=0, st_reparse_tag=0)
+                if held:
+                    values["st_ctime_ns"] += 100000
+                values.update(changes)
+                return SimpleNamespace(**values)
+            for mutation in (None, "path-ctime", "held-ctime", "inode", "birth", "reparse"):
+                counts = {"path": 0, "held": 0}
+                def path_stat(p):
+                    counts["path"] += 1
+                    value = win_info(real_lstat(p))
+                    if mutation == "path-ctime" and counts["path"] > 1:
+                        value.st_ctime_ns += 1
+                    return value
+                def held_stat(fd):
+                    counts["held"] += 1
+                    value = win_info(real_fstat(fd), held=True)
+                    if mutation == "held-ctime" and counts["held"] > 1:
+                        value.st_ctime_ns += 1
+                    if mutation == "inode": value.st_ino += 1
+                    if mutation == "birth": value.st_birthtime_ns += 1
+                    if mutation == "reparse": value.st_reparse_tag = 1
+                    return value
+                with self.subTest(mutation=mutation), mock.patch.object(CASE["artifacts"], "WINDOWS", True):
+                    # Metadata-domain simulation only. No native Windows success is claimed.
+                    with mock.patch.object(Path, "lstat", autospec=True, side_effect=path_stat), mock.patch.object(os, "fstat", side_effect=held_stat):
+                        with mock.patch.object(CASE["artifacts"], "open_member", side_effect=lambda p: real_open(p, os.O_RDONLY)):
+                            if mutation is None:
+                                self.assertEqual(CASE["ordinary_bytes"](path), b"portable bytes")
+                            else:
+                                with self.assertRaises((RuntimeError, ValueError)):
+                                    CASE["ordinary_bytes"](path)
 
     def test_file_read_access_time_does_not_change_stable_identity(self):
         with tempfile.TemporaryDirectory() as temporary:

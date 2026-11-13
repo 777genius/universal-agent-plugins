@@ -68,9 +68,6 @@ jobs:
     - name: Inert provider, nonce and unchanged shared wire contracts
       shell: bash
       run: ${{ matrix.python }} -m unittest discover -s scripts -p 'test_hermes_local_provider_fixture.py' -v
-    - name: Inert custom-root admission and preservation contracts
-      shell: bash
-      run: ${{ matrix.python }} -m unittest discover -s scripts -p 'test_hermes_profile_admission.py' -v
     - name: Build exact source UAP executable
       shell: bash
       run: |
@@ -203,6 +200,24 @@ jobs:
         runtime="$RUNNER_TEMP/hermes-native-runtime-command.json"
         "$HERMES_BIN" --print-runtime-command > "$runtime"
         printf 'HERMES_NATIVE_RUNTIME_COMMAND_FILE=%s\n' "$runtime" >> "$GITHUB_ENV"
+    - name: Inert custom-root contracts in official dependency-prepared runtime
+      shell: bash
+      run: |
+        ${{ matrix.python }} - <<'PYTHON'
+        import json, os, pathlib, subprocess, sys
+        source = pathlib.Path(os.environ['RUNNER_TEMP']) / 'hermes-agent'
+        native = json.loads(pathlib.Path(os.environ['HERMES_NATIVE_RUNTIME_COMMAND_FILE']).read_text(encoding='utf-8-sig'))
+        if not isinstance(native, list) or len(native) < 4 or not pathlib.Path(native[0]).is_file() or native[1:3] != ['-I', '-c']:
+            raise SystemExit('Official isolated Hermes runtime command is unavailable')
+        sys.path.insert(0, str(source))
+        from hermes_cli._launchers import runtime_command
+        scripts = pathlib.Path.cwd() / 'scripts'
+        code = (f'import sys, unittest; sys.path.insert(0, {str(scripts)!r}); '
+                f'suite = unittest.defaultTestLoader.discover({str(scripts)!r}, pattern="test_hermes_profile_admission.py"); '
+                'result = unittest.TextTestRunner(verbosity=2).run(suite); raise SystemExit(not result.wasSuccessful())')
+        command = runtime_command(source, python=pathlib.Path(native[0]), code=code)
+        subprocess.run(command, check=True, timeout=120)
+        PYTHON
     - name: Real pinned Hermes legacy driver User MCP calls without vendor authentication
       shell: bash
       env:

@@ -134,3 +134,23 @@ Final local admission contracts: 14 passed, with zero skips on Linux. The seven
 existing Hermes provider/wire contracts also passed. These are inert source
 checks only. Genuine hosted execution on each platform and independent original
 artifact review remain required. No product or native qualification is inferred.
+
+## Observed Windows inert gate correction
+
+Run43365562797, Windowsjob131689022830 on28633523739cf5f84fc772a39bee6b8990d62987,
+failed before vendor installation/native capture: ambient Python lacked PyYAML,
+and four ordinary-file contracts refused lstat/fstat equality. The log records no
+stat-field telemetry, so the exact differing field is not retrospectively claimed.
+Reuse native_client_project_artifacts.open_member/same_opened/identity: Windows
+uses a noninheritable OPEN_REPARSE_POINT handle and positive birth/device/inode/
+mode/link/size/mtime/attribute cross-check; full ctime remains checked separately
+path-to-path and descriptor-to-descriptor. Ownership, alias, bound and link guards
+remain. CPython documents evolving Windows ctime semantics and birthtime availability:
+https://docs.python.org/3.12/library/os.html#os.stat_result .
+
+Move the inert custom-root contracts after official pinned installation/runtime
+resolution, invoking that same official dependency-prepared runtime via its public
+runtime_command bootstrap. Its real PyYAML is used; no ambient pip, mock parser,
+new dependency or skipped test. Metadata-domain simulation checks valid differing
+path/fd ctimes while refusing either within-domain ctime drift, inode/birth changes
+and reparse metadata. Only genuine fresh hosted results establish portability.

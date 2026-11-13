@@ -16,17 +16,17 @@ import time
 HERE = Path(__file__).resolve().parent
 BASE = runpy.run_path(str(HERE / "hermes-noauth-tool-call.py"), run_name="hermes_admission_helpers")
 require, bounded, sha = (BASE[name] for name in ("require", "bounded", "sha"))
+import native_client_project_artifacts as artifacts
+
 LIMIT = 1 << 20
 EVIDENCE_CLOSED = False
-
-
 STABLE_FIELDS = ("st_dev", "st_ino", "st_mode", "st_nlink", "st_uid", "st_gid",
                  "st_size", "st_mtime_ns", "st_ctime_ns")
 
 
 def stable_file(info):
     # Access time may change merely because this verifier read the file.
-    return tuple(getattr(info, field) for field in STABLE_FIELDS)
+    return artifacts.identity(info) + (info.st_uid, info.st_gid)
 
 
 def ordinary_bytes(path, expected=None):
@@ -36,18 +36,20 @@ def ordinary_bytes(path, expected=None):
     require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1 and 0 <= before.st_size <= LIMIT,
             "bounded ordinary single-link file required")
     require(expected is None or stable_file(before) == stable_file(expected), "file changed before open")
-    flags = (os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
-             | getattr(os, "O_BINARY", 0))
-    descriptor = os.open(path, flags)
+    # Reuse native artifact admission's Windows OPEN_REPARSE_POINT handle and
+    # positive cross-API identity. Path/fd ctime domains remain separately held.
+    descriptor = artifacts.open_member(path)
     try:
         held = os.fstat(descriptor)
-        opened, expected_stat = stable_file(held), stable_file(before)
-        require(opened == expected_stat, "file changed at open: " +
-                ",".join(field for field, actual, expected in zip(STABLE_FIELDS, opened, expected_stat)
-                         if actual != expected))
+        require(artifacts.same_opened(before, held)
+                and (held.st_uid, held.st_gid) == (before.st_uid, before.st_gid),
+                "file changed at open: " + ",".join(
+                    field for field in STABLE_FIELDS
+                    if not (artifacts.WINDOWS and field == "st_ctime_ns")
+                    and getattr(held, field) != getattr(before, field)))
         with os.fdopen(os.dup(descriptor), "rb") as stream:
             body = stream.read(LIMIT + 1)
-        require(len(body) == before.st_size <= LIMIT and stable_file(os.fstat(descriptor)) == stable_file(before)
+        require(len(body) == before.st_size <= LIMIT and stable_file(os.fstat(descriptor)) == stable_file(held)
                 and stable_file(path.lstat()) == stable_file(before), "file changed during bounded capture")
         return body
     finally:
@@ -58,6 +60,8 @@ def directory_identity(path):
     require(path.is_absolute() and path.resolve() == path and not path.is_symlink(), "directory alias")
     info = path.lstat()
     require(stat.S_ISDIR(info.st_mode), "ordinary directory required")
+    if artifacts.WINDOWS:
+        artifacts.windows_identity(info)
     return (info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_gid)
 
 
