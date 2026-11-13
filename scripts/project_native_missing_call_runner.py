@@ -158,7 +158,7 @@ def native_inventory(client, binary, folder, env, private, label, absent):
         raise ValueError("unexpected project MCP source in " + label)
 
 
-def installed_config(client, project, name):
+def installed_config(client, project, name, nonce, events, installer, probe):
     target = project / CONFIG[client]
     content = json.loads(target.read_bytes())
     members = content.get("mcpServers")
@@ -169,6 +169,26 @@ def installed_config(client, project, name):
     selected = members[name]
     if not isinstance(selected, dict) or selected.get("type", "stdio") not in ("stdio", None):
         raise ValueError("selected project stdio MCP identity differs")
+    env = selected.get("env")
+    if (not isinstance(env, dict) or env.get("UAP_TEST_NONCE") != nonce
+            or env.get("UAP_TEST_EVENTS") != str(events)):
+        raise ValueError("different MCP source or nonce selected")
+    command, arguments = selected.get("command"), selected.get("args")
+    if not isinstance(command, str) or not isinstance(arguments, list) or arguments[:1] != ["--internal-stdio-v1"]:
+        raise ValueError("UAP-managed stdio transport not selected")
+    executable = Path(command)
+    if not executable.is_absolute() or not executable.is_file() or executable.is_symlink():
+        raise ValueError("managed wrapper executable differs")
+    managed = project / ".uap" / "managed" / "clients" / client
+    if managed not in executable.parents or executable.name != "agentplugins":
+        raise ValueError("wrapper not inside the owned Project installation")
+    if digest(executable.read_bytes()) != digest(installer.read_bytes()):
+        raise ValueError("managed wrapper differs from source-built UAP")
+    active = executable.parents[2]
+    actual_probe = active / "bin" / "probe"
+    if (not actual_probe.is_file() or actual_probe.is_symlink()
+            or digest(actual_probe.read_bytes()) != digest(probe.read_bytes())):
+        raise ValueError("owned MCP probe differs from source-built fixture")
     return target
 
 
@@ -204,8 +224,9 @@ def run(client, output, expected):
     key = os.environ.get(AUTH[client], "")
     if not 16 <= len(key) <= 4096 or any(char in key for char in "\x00\r\n"):
         raise ValueError("authorized disposable " + client + " CI credential absent/invalid")
-    if output.exists() or output.is_symlink():
-        raise ValueError("fresh evidence destination required")
+    if (not output.is_absolute() or output.resolve() != output or ROOT in output.parents
+            or output.exists() or output.is_symlink()):
+        raise ValueError("fresh canonical evidence destination outside checkout required")
     scratch = Path(os.environ.get("RUNNER_TEMP", "/tmp")).resolve(strict=True)
     with tempfile.TemporaryDirectory(prefix="uap-mcp-call-", dir=scratch) as temporary:
         work = Path(temporary)
@@ -262,10 +283,11 @@ def run(client, output, expected):
         if result.get("command") != "add" or result.get("result") != "success":
             raise ValueError("UAP add returned no success receipt")
         identifier = installation_id(result, client)
-        installed_config(client, project_a, server)
+        installed_config(client, project_a, server, nonce, events, installer, probe)
         if b_config.read_bytes() != before_b:
             raise ValueError("Project B changed after Project A install")
         permission_fixture(client, project_a, server)
+        start = utc()
         if client == "cursor":
             invoke("cursor-enable-one", [binary, "mcp", "enable", server], project_a, env, private, 40)
 
@@ -277,7 +299,6 @@ def run(client, output, expected):
             + server + ' exactly once with arguments {"nonce":"' + nonce
             + '"}. Do not use shell, browser, or file tools. Return the literal '
               'field from that MCP result as your complete response.')
-        start = utc()
         answer, _ = invoke("native-call-a", command, project_a, session_env, private, 180)
         end = utc()
         if server_only.encode() not in answer:
@@ -294,6 +315,10 @@ def run(client, output, expected):
         invoke("native-b-negative", agent_command(client, binary, no_call),
                project_b, session_env, private, 120)
         native_inventory(client, binary, project_b, env, private, "still-empty-b", server)
+        require_unchanged_after_negative(before_negative, events.read_bytes())
+        invoke("native-outside-negative", agent_command(client, binary, no_call),
+               outside, session_env, private, 120)
+        native_inventory(client, binary, outside, env, private, "still-empty-outside", server)
         require_unchanged_after_negative(before_negative, events.read_bytes())
 
         invoke("uap-remove-a", [
@@ -327,6 +352,7 @@ def run(client, output, expected):
             "client_model_returned_private_server_literal": True,
             "selected_project_a_uap_installed": True,
             "project_b_native_negative_executed": True,
+            "outside_native_negative_executed": True,
             "post_remove_native_negative_executed": True,
             "foreign_project_and_user_bytes_preserved": True,
             "secret_value_recorded": False,
@@ -345,7 +371,8 @@ def main():
     except Exception as error:
         # Fail closed with a stable stage-free diagnostic. Never print a
         # vendor traceback, raw model output or credentials.
-        print("selected-client native MCP qualification failed: " + type(error).__name__, file=sys.stderr)
+        reason = str(error) if str(error).startswith("genuine native command failed at stage: ") else type(error).__name__
+        print("selected-client native MCP qualification failed: " + reason, file=sys.stderr)
         raise SystemExit(1) from None
 
 
