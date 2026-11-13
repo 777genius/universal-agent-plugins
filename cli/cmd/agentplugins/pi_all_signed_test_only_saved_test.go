@@ -131,8 +131,15 @@ func TestPiAllSignedTestOnlySavedMarketplace(t *testing.T) {
 				}
 				j.run(t, root, "remove", distribution.ProductID, "--target", "pi", "--yes")
 				removed := j.state(t, root)
-				if len(removed.Installations) != 0 || len(removed.EnvironmentReceipts) != 0 {
-					t.Fatalf("%s: saved removal left owned state", name)
+				if len(removed.EnvironmentReceipts) != 0 {
+					t.Fatalf("%s: saved removal left active environment receipts", name)
+				}
+				// Uninstall intentionally keeps historical records and retained data.
+				// It must release every active native client binding.
+				for _, installed := range removed.Installations {
+					if len(installed.Clients) != 0 {
+						t.Fatalf("%s: saved removal retained an active client binding", name)
+					}
 				}
 				if distribution.Kind == domain.DistributionUpstream {
 					assertPiUpstreamTestOnlyNativeMCP(t, j, root, distribution.ProductID, false)
