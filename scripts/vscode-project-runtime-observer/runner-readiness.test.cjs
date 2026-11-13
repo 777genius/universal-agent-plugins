@@ -104,6 +104,25 @@ test('actual trigger reader waits only for the owned two-link transition and rej
       return fs.lstatSync(pathname);
     };
     await box.wait(req, performance.now() + 1000); assert.equal(raced, true); box.lstatSync = fs.lstatSync;
+    for (const replace of [false, true]) {
+      fs.linkSync(ready, ready + '.pending'); let observed = false;
+      box.lstatSync = pathname => {
+        if (!observed && pathname.endsWith('/ready.pending')) {
+          observed = true; const held = fs.openSync(ready + '.pending', fs.constants.O_RDONLY);
+          try {
+            fs.unlinkSync(ready + '.pending'); const info = fs.fstatSync(held);
+            assert.equal(info.nlink, 1);
+            if (replace) { fs.renameSync(ready, ready + '.old'); fs.writeFileSync(ready, body); }
+            return info;
+          } finally { fs.closeSync(held); }
+        }
+        return fs.lstatSync(pathname);
+      };
+      if (replace) await assert.rejects(box.wait(req, performance.now() + 1000), /pair differs/);
+      else await box.wait(req, performance.now() + 1000);
+      assert.equal(observed, true); box.lstatSync = fs.lstatSync;
+      if (replace) fs.unlinkSync(ready + '.old');
+    }
     fs.linkSync(ready, ready + '.pending');
     box.lstatSync = pathname => {
       if (pathname.endsWith('/ready.pending')) { fs.unlinkSync(ready + '.pending'); fs.unlinkSync(ready); }

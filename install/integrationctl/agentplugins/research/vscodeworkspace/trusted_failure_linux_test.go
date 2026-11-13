@@ -18,7 +18,7 @@ import (
 
 func closedFailureFixture() map[string]any {
 	return map[string]any{"type": "driver-failure", "stage": "empty-a", "nonce": "inert-nonce", "phase": "publisher-startup", "code": "closed-stage-contract-refused", "visibleNativeUI": []any{map[string]any{"kind": "dialog", "messagePresent": false}, map[string]any{"kind": "quick-input"}, map[string]any{"kind": "quick-label"}}, "diagnostics": map[string]any{
-		"mcp": map[string]any{"startSelected": false, "trustAccepted": false, "lastState": "none", "stopped": 0, "starting": 0, "running": 0, "other": 0}, "reason": "publisher-startup-failed", "captureReason": "none", "publisherExitCode": nil, "publisherSignal": "none", "proofSeen": true, "endpointSeen": false, "publisherMergedBytes": 0, "preVerifierStderrBytes": 0, "mergedBytesCapped": false, "stderrBytesCapped": false,
+		"mcp": map[string]any{"startSelected": false, "trustAccepted": false, "lastState": "none", "launchNotification": false, "outputVisible": false, "launchError": "none", "stopped": 0, "starting": 0, "running": 0, "other": 0}, "reason": "publisher-startup-failed", "captureReason": "none", "publisherExitCode": nil, "publisherSignal": "none", "proofSeen": true, "endpointSeen": false, "publisherMergedBytes": 0, "preVerifierStderrBytes": 0, "mergedBytesCapped": false, "stderrBytesCapped": false,
 		"startupSignatures": map[string]any{"sandboxUnavailable": false, "namespaceDenied": false, "sharedLibraryMissing": false, "glibcVersionMissing": false, "displayUnavailable": false}}}
 }
 func failureBody(t *testing.T, value any) []byte {
@@ -210,6 +210,18 @@ func TestTrustedFailureMCPSubstepsRemainClosedAndNegative(t *testing.T) {
 		value["phase"] = phase + " private"
 		if _, err := admitTrustedFailure(failureBody(t, value), "empty-a", "inert-nonce"); err == nil {
 			t.Fatal("arbitrary substep admitted")
+		}
+	}
+}
+
+func TestTrustedFailureLaunchDiagnosticPrivacy(t *testing.T) {
+	for _, key := range []string{"launchNotification", "outputVisible", "launchError", "private"} {
+		value := closedFailureFixture()
+		facts := value["diagnostics"].(map[string]any)
+		mcp := facts["mcp"].(map[string]any)
+		mcp[key] = "private-cookie-path"
+		if err := validateTrustedMCPState(mcp); err == nil {
+			t.Fatal("private diagnostic admitted", key)
 		}
 	}
 }

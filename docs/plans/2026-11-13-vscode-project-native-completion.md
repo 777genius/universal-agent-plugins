@@ -396,3 +396,72 @@ budget before and after observation; no deadline is renewed. Readiness failure
 is retained outside the existing planned-shutdown callback, so cleanup may be
 proved without running or qualifying the failed sequence. No global unlink,
 manual TreeReaped, shared process change or local native/mount execution is added.
+
+## Proposed bounded MCP launch diagnostic after actual 29ad capture
+
+Plan only; no implementation is represented. Exact 29ad run43430878714/job131903752635
+(source29ad3fdae517e03d4f9736a67e9161c490af2131/tree2e7754470b0752ac50605f3764279a9be54feac2)
+completed empty-a/empty-b, all eight owned trees and root cleanup, and released
+all private-view mounts. Installed-a failed mcp-state/mcp-start-deadline with91
+sampled Stopped and zero sampled Starting/Running/other. These samples do not
+prove the underlying cause or absence of shorter transitions. Both original
+ZIPs passed CRC/hash/source/prepared-input and48 stream joins. Original image
+was Ubuntu24/20261111.370.1. All native qualification flags remain false.
+
+Only existing driver.ts, driver-diagnostics.test.cjs, trusted_failure_linux.go
+and its existing test, scripts/research-vscode-project.py and its existing readout
+test may change, plus this plan (root authorized the two transport-schema paths).
+Estimate at most115 changed
+code/test lines (roughly45 driver/helper,40 Node negatives,10 validator and25 Go
+negatives); report a concrete overrun before expanding. No new runtime file,
+command, timeout, permission, source selection or acceptance rule.
+
+Pinned source authority is Microsoft/vscode e646868227c3e3a9e3f24277c8c7220be42c0be7:
+
+- mcp/common/mcpRegistry.ts resolveConnection emits the exact localized English
+  `Error starting {label}: {error}` notification for caught launch preparation
+  errors and returns undefined. mcpServer.ts start maps undefined to Stopped;
+  other branches can also produce Stopped, so this is not assumed causation.
+- browser/parts/notifications/notificationsViewer.ts creates
+  .notification-list-item-message and renders the notification message there.
+- mcpServer.ts names its output logger `MCP: {definition.label}`;
+  mcp/browser/mcpCommands.ts opens it only after awaited start returns.
+- output/browser/outputView.ts creates the TextResourceEditorInput with name
+  `MCP: {label} - Output`, installs it in .output-view, and sets document role.
+  textResourceEditorInput.getName returns that explicit name;
+  resourceEditorInput short title and editorInput.getAriaLabel preserve it;
+  computeEditorAriaLabel receives no group and adds no group/preview suffix.
+
+During the existing state loop, read only visible notification message nodes
+and the exact visible output document labelled `MCP: {expected label} - Output`
+inside .output-view. Never open/reopen Output or Notifications or switch channels.
+A pure evaluator takes the already selected expected label and returns only
+closed facts: launchNotification boolean, outputVisible boolean, and launchError
+in none/variable-resolution/other. Match the exact full expected-label prefix,
+never an unanchored label substring or another server. Bound visible messages
+at16 and each locally inspected message at4096 code units using bounded text-node
+iteration; overflow, duplicate expected notifications or failed observation
+returns a fixed diagnostic-refused category, never raw data. No labels, error
+suffixes, paths, environment values or DOM objects cross the evaluator boundary.
+All locator/evaluation reads consume remaining original start deadline; errors
+must not replace an existing stage error or renew time.
+
+Pinned registry uses String(e); VariableError extends ErrorNoTelemetry, whose
+name is CodeExpectedError. Only classify variable-resolution when that exact
+CodeExpectedError prefix and the expected notification suffix match
+source-verified resolver fixed failure text (missing environment/config name,
+missing configuration setting, or cannot-resolve-workspace-folder); every other
+suffix remains other. This is a message-class observation, never exception
+provenance or a claimed root cause. Do not invent ENOENT/keyring/sandbox categories
+without pinned-source literals. Unknown private text must remain other and absent
+from serialized facts. An absent visible notification does not prove none occurred.
+
+Meaningful inert contracts call the actual pure projector with expected/foreign
+labels, matching fixed variable failures, arbitrary private paths/tokens/UI text,
+missing output, duplicate/oversized/count-overflow messages and throwing readers;
+assert exact fixed output and absence of every private sentinel. Existing Go
+strict envelope validation must reject unknown keys/enums, wrong boolean types,
+free text and oversized facts; acceptance and all failure qualifications remain
+unchanged. Run Node, pinned strict TS and focused Go before independent review;
+root publishes only the coherent reviewed candidate. Actual next hosted capture
+is required; this plan neither repairs nor diagnoses the29ad underlying cause.

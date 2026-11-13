@@ -15,7 +15,7 @@ const pure = source.slice(begin, finish);
 assert(!/require\(|spawn\(|process\.|chromium\.|writeFile/u.test(pure));
 const sandbox = { Buffer, Error, LIMIT: 1 << 20 };
 vm.createContext(sandbox);
-vm.runInContext(stripTypeScriptTypes(pure, { mode: 'strip' }) + '\nglobalThis.facts = failureFacts; globalThis.append = appendDiagnostic;', sandbox);
+vm.runInContext(stripTypeScriptTypes(pure, { mode: 'strip' }) + '\nglobalThis.facts = failureFacts; globalThis.append = appendDiagnostic; globalThis.launch = launchDiagnostic;', sandbox);
 const facts = (...args) => JSON.parse(JSON.stringify(sandbox.facts(...args)));
 const normal = (error, capture, body = '') => facts(error, capture, null, null, false, false, Buffer.from(body), Buffer.byteLength(body), 0);
 
@@ -312,6 +312,47 @@ test('MCP telemetry is finite and never coerces or emits hostile state values', 
   const hostile = { toString() { throw new Error('private'); }, valueOf() { throw new Error('private'); } };
   const row = facts(new Error('trigger publication refused'), undefined, null, null, true, true, Buffer.alloc(0), 0, 0,
     { startSelected: true, trustAccepted: false, lastState: hostile, stopped: hostile, starting: 999, running: -1, other: NaN, private: 'secret' });
-  assert.deepEqual(row.mcp, { startSelected: true, trustAccepted: false, lastState: 'other', stopped: 0, starting: 255, running: 0, other: 0 });
+  assert.deepEqual(row.mcp, { startSelected: true, trustAccepted: false, lastState: 'other', stopped: 0, starting: 255, running: 0, other: 0, launchNotification: false, outputVisible: false, launchError: 'none' });
   assert.equal(row.reason, 'trigger-publication-refused'); assert.equal(JSON.stringify(row).includes('secret'), false);
+});
+
+test('actual launch projector exports only expected native message classes and output identity', () => {
+  const label = 'owned-server', secret = '/private/path COOKIE=token';
+  const node = text => ({ text, getClientRects: () => [1], getAttribute: () => text });
+  const root = (messages, outputs = []) => ({ querySelectorAll: selector => selector.startsWith('.notification') ? messages.map(node) : outputs.map(node),
+    createTreeWalker: row => { let done = false; return { nextNode: () => done ? null : (done = true, { nodeValue: row.text }) }; } });
+  const inspect = r => JSON.parse(JSON.stringify(sandbox.launch(label, r)));
+  assert.deepEqual(inspect(root(['Error starting owned-server: CodeExpectedError: Variable ${env:}: can not be resolved because no environment variable name is given.'], ['MCP: owned-server - Output'])),
+    { launchNotification: true, outputVisible: true, launchError: 'variable-resolution' });
+  for (const messages of [['Error starting foreign: '+secret], ['Error starting owned-server: '+secret], [], Array(17).fill(secret), [secret.repeat(4096)], ['Error starting owned-server: x','Error starting owned-server: y']]) {
+    const value = inspect(root(messages, ['MCP: foreign - Output']));
+    assert.equal(value.outputVisible, false); assert(!JSON.stringify(value).includes(secret));
+    assert.deepEqual(Object.keys(value).sort(), ['launchError','launchNotification','outputVisible']);
+  }
+  assert.equal(inspect(root(['Error starting owned-server: '+secret])).launchError, 'other');
+  assert.equal(inspect(root(['Error starting foreign: '+secret])).launchNotification, false);
+  assert.equal(inspect({ querySelectorAll() { throw new Error(secret); } }).launchError, 'diagnostic-refused');
+  assert.equal(inspect(root([], ['MCP: owned-server - Output','MCP: owned-server - Output'])).launchError, 'diagnostic-refused');
+});
+
+test('actual start rejects a late Running row after diagnostic exhausts original budget', async () => {
+  for (const throws of [false, true]) {
+    let clock = 0, rows = 0;
+    const context = { Error, performance: { now: () => clock }, listServers: async () => {}, pick: async () => {}, quickInput: async () => {},
+      visibleDialogs: async () => ({ count: async () => 0 }), delay: async () => {}, launchDiagnostic: () => {}, within: async work => work,
+      labelRow: async () => { rows++; return { locator: () => ({ innerText: async () => 'Running' }) }; } };
+    vm.createContext(context); vm.runInContext(stripTypeScriptTypes(section('async function startServer(', 'async function input('), { mode: 'strip' }) + '\nglobalThis.run = startServer;', context);
+    const page = { evaluate: async () => { clock = 15000; if (throws) throw new Error('private'); return {}; } };
+    await assert.rejects(context.run(page, { label: 'owned' }, 60000, () => {}), /native MCP startup deadline exceeded/);
+    assert.equal(rows, 0);
+  }
+});
+
+test('actual start rejects Running when final state read exhausts original budget', async () => {
+  let clock = 0;
+  const context = { Error, performance: { now: () => clock }, listServers: async () => {}, pick: async () => {}, quickInput: async () => {},
+    visibleDialogs: async () => ({ count: async () => 0 }), delay: async () => {}, launchDiagnostic: () => {}, within: async work => work,
+    labelRow: async () => ({ locator: () => ({ innerText: async () => { clock = 15000; return 'Running'; } }) }) };
+  vm.createContext(context); vm.runInContext(stripTypeScriptTypes(section('async function startServer(', 'async function input('), { mode: 'strip' }) + '\nglobalThis.run = startServer;', context);
+  await assert.rejects(context.run({ evaluate: async () => ({}) }, { label: 'owned' }, 60000, () => {}), /native MCP startup deadline exceeded/);
 });

@@ -604,7 +604,8 @@ class ClosedNativeReadoutTests(unittest.TestCase):
                 'visibleNativeUI': [{'private': 'PRIVATE_UI'}],
                 'diagnostics': {'reason': 'mcp-start-deadline', 'private': 'PRIVATE_ENDPOINT',
                     'mcp': {'startSelected': True, 'trustAccepted': False, 'lastState': 'Stopped',
-                            'stopped': 17, 'starting': 0, 'running': 0, 'other': 0}}}
+                            'stopped': 17, 'starting': 0, 'running': 0, 'other': 0,
+                            'launchNotification': True, 'outputVisible': False, 'launchError': 'other'}}}
 
     def archive(self, members):
         output = io.BytesIO()
@@ -632,7 +633,7 @@ class ClosedNativeReadoutTests(unittest.TestCase):
 
     def test_unknown_context_fields_and_numeric_boolean_facts_refuse(self):
         for kind in ('stage', 'phase', 'reason', 'unknown-type', 'extra-outer', 'extra-mcp',
-                     'state', 'boolean', 'numeric-boolean', 'count', 'missing-count'):
+                     'state', 'boolean', 'numeric-boolean', 'count', 'launch-boolean', 'output-boolean', 'launch-enum', 'missing-count'):
             with self.subTest(kind=kind):
                 value = self.failure(); mcp = value['diagnostics']['mcp']
                 if kind in ('stage', 'phase'): value[kind] = 'PRIVATE_TEXT'
@@ -644,6 +645,9 @@ class ClosedNativeReadoutTests(unittest.TestCase):
                 elif kind == 'boolean': mcp['trustAccepted'] = 'true'
                 elif kind == 'numeric-boolean': mcp['stopped'] = True
                 elif kind == 'count': mcp['stopped'] = 256
+                elif kind == 'launch-boolean': mcp['launchNotification'] = 1
+                elif kind == 'output-boolean': mcp['outputVisible'] = 'PRIVATE'
+                elif kind == 'launch-enum': mcp['launchError'] = 'PRIVATE'
                 else: del mcp['stopped']
                 with self.assertRaises(ValueError):
                     collector.closed_native_readout(self.archive([('installed-a.observation.json', value)]), time.monotonic() + 5)

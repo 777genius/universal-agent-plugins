@@ -227,12 +227,17 @@ async function waitReady(req: Request, deadline: number): Promise<void> {
           || (pair && (info.dev !== pair.dev || info.ino !== pair.ino))) throw new Error('UI trigger identity differs');
         pair = { dev: info.dev, ino: info.ino };
         if (info.nlink === 2) {
+          let removed = false;
           try {
             const other = lstatSync(pending);
-            if (!other.isFile() || other.dev !== info.dev || other.ino !== info.ino || other.nlink !== 2) throw new Error('UI trigger pair differs');
+            if (!other.isFile() || other.dev !== info.dev || other.ino !== info.ino || ![1, 2].includes(other.nlink)) throw new Error('UI trigger pair differs');
+            removed = other.nlink === 1;
           } catch (error) {
-            if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; const current = lstatSync(target);
-            if (current.dev !== info.dev || current.ino !== info.ino || current.nlink !== 1) throw new Error('UI trigger pair differs');
+            if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; removed = true;
+          }
+          if (removed) {
+            const current = lstatSync(target);
+            if (!current.isFile() || current.dev !== info.dev || current.ino !== info.ino || current.nlink !== 1) throw new Error('UI trigger pair differs');
           }
         } else {
           try { lstatSync(pending); throw new Error('UI trigger pending collision'); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }

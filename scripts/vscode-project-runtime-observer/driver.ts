@@ -49,6 +49,39 @@ function appendDiagnostic(current: Buffer, chunk: Buffer): Buffer {
   if (room <= 0) return current.subarray(0, LIMIT + 1);
   return Buffer.concat([current, chunk.subarray(0, room)]);
 }
+type LaunchNode = { getClientRects(): { length: number }; getAttribute(name: string): string | null; nodeValue?: string | null };
+type LaunchDocument = { querySelectorAll(selector: string): LaunchNode[]; createTreeWalker(node: LaunchNode, filter: number): { nextNode(): LaunchNode | null } };
+function launchDiagnostic(label: string, root: LaunchDocument = (globalThis as unknown as { document: LaunchDocument }).document): ObjectValue {
+  const refused = { launchNotification: false, outputVisible: false, launchError: 'diagnostic-refused' };
+  try {
+    const messages = root.querySelectorAll('.notification-list-item-message');
+    const outputs = root.querySelectorAll('.output-view [role="document"]');
+    if (messages.length > 16 || outputs.length > 16) return refused;
+    let matched = 0, launchError = 'none', outputVisible = false;
+    for (const node of messages) {
+      if (!node.getClientRects().length) continue;
+      const walker = root.createTreeWalker(node, 4); let text = '', part, visits = 0;
+      while ((part = walker.nextNode())) {
+        const value = part.nodeValue ?? ''; if (++visits > 4096 || text.length + value.length > 4096) return refused;
+        text += value;
+      }
+      const prefix = 'Error starting ' + label + ': ';
+      if (!text.startsWith(prefix)) continue;
+      if (++matched > 1) return refused;
+      const suffix = text.slice(prefix.length);
+      launchError = suffix.startsWith('CodeExpectedError: Variable ') && [
+        ' can not be resolved because no environment variable name is given.',
+        ' can not be resolved because no settings name is given.',
+        ' can not be resolved because setting ', ': can not find workspace folder of '
+      ].some(literal => suffix.includes(literal)) ? 'variable-resolution' : 'other';
+    }
+    let shown = 0;
+    for (const node of outputs) if (node.getClientRects().length && node.getAttribute('aria-label') === 'MCP: ' + label + ' - Output') shown++;
+    if (shown > 1) return refused;
+    outputVisible = shown === 1;
+    return { launchNotification: matched === 1, outputVisible, launchError };
+  } catch { return refused; }
+}
 function failureReason(error: unknown): string {
   if (!(error instanceof Error)) return 'unclassified';
   switch (error.message) {
@@ -96,7 +129,8 @@ function failureFacts(error: unknown, capture: unknown, code: unknown, signal: u
   const observations = (value: unknown): number => typeof value === 'number' ? Math.min(255, count(value)) : 0;
   return { mcp: { startSelected: mcp.startSelected === true, trustAccepted: mcp.trustAccepted === true, lastState: state,
     stopped: observations(mcp.stopped), starting: observations(mcp.starting),
-    running: observations(mcp.running), other: observations(mcp.other) }, reason: failureReason(error), captureReason: capture === undefined ? 'none' : failureReason(capture),
+    running: observations(mcp.running), other: observations(mcp.other), launchNotification: mcp.launchNotification === true, outputVisible: mcp.outputVisible === true,
+    launchError: typeof mcp.launchError === 'string' && ['none', 'variable-resolution', 'other', 'diagnostic-refused'].includes(mcp.launchError) ? mcp.launchError : 'none' }, reason: failureReason(error), captureReason: capture === undefined ? 'none' : failureReason(capture),
     publisherExitCode: typeof code === 'number' && Number.isInteger(code) && code >= 0 && code <= 255 ? code : null,
     publisherSignal: signal === null || signal === undefined ? 'none' : typeof signal === 'string' && signals.includes(signal) ? signal : 'other',
     proofSeen: proofSeen === true, endpointSeen: endpointSeen === true,
@@ -384,8 +418,17 @@ async function startServer(page: Page, server: Server, stageDeadline: number, se
       await listServers(page, setPhase); catalogOpen = true;
     } else {
       setPhase('mcp-state');
+      try {
+        const observed = await within(page.evaluate(launchDiagnostic, server.label), Math.max(1, deadline - performance.now()));
+        mcp.launchNotification = mcp.launchNotification === true || observed.launchNotification === true;
+        mcp.outputVisible = mcp.outputVisible === true || observed.outputVisible === true;
+        if (observed.launchError !== 'none') mcp.launchError = observed.launchError;
+      }
+      catch { mcp.launchError = 'diagnostic-refused'; }
+      if (performance.now() >= deadline) throw new Error('native MCP startup deadline exceeded');
       const row = await labelRow(page, server.label);
       const state = (await row.locator('.label-description').innerText()).trim();
+      if (performance.now() >= deadline) throw new Error('native MCP startup deadline exceeded');
       mcp.lastState = ['Stopped', 'Starting', 'Running'].includes(state) ? state : 'other';
       const key = state === 'Stopped' ? 'stopped' : state === 'Starting' ? 'starting' : state === 'Running' ? 'running' : 'other';
       mcp[key] = Math.min(255, Number(mcp[key] ?? 0) + 1);

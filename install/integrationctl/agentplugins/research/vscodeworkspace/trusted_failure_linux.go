@@ -72,11 +72,11 @@ func admitTrustedFailure(body []byte, stage, nonce string) (*trustedDriverFailur
 }
 
 func validateTrustedMCPState(value any) error {
-	mcp, err := objectKeys(value, strings.Fields("startSelected trustAccepted lastState stopped starting running other"), nil)
-	if err != nil || !failureChoice(mcp["lastState"], "none Stopped Starting Running other") {
+	mcp, err := objectKeys(value, strings.Fields("startSelected trustAccepted lastState stopped starting running other launchNotification outputVisible launchError"), nil)
+	if err != nil || !failureChoice(mcp["lastState"], "none Stopped Starting Running other") || !failureChoice(mcp["launchError"], "none variable-resolution other diagnostic-refused") {
 		return fmt.Errorf("closed MCP state refused")
 	}
-	for _, key := range []string{"startSelected", "trustAccepted"} {
+	for _, key := range []string{"startSelected", "trustAccepted", "launchNotification", "outputVisible"} {
 		if _, ok := mcp[key].(bool); !ok {
 			return fmt.Errorf("closed MCP boolean refused")
 		}
