@@ -6,7 +6,9 @@ on:
     paths:
       - 'scripts/project_native_missing_call_runner.py'
       - 'scripts/project_native_missing_call_proof.py'
+      - 'scripts/project_native_missing_call_runner.py'
       - 'scripts/test_project_native_missing_call_proof.py'
+      - 'scripts/test_project_native_missing_call_runner.py'
       - '.github/workflows/cursor-qoder-mcp-native-auth.yml'
 
 permissions:
@@ -41,7 +43,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
       - name: Verify fail-closed provenance and receipt contracts before vendor model access
-        run: python3 -m unittest discover -s scripts -p 'test_project_native_missing_call_proof.py' -v
+        run: python3 -m unittest discover -s scripts -p 'test_project_native_missing_call_*.py' -v
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: '1.26.11'
