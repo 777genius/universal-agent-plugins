@@ -216,7 +216,7 @@ class OwnedBuildCleanupTests(unittest.TestCase):
                 return result
             try:
                 with mock.patch.object(os, "unlink", side_effect=moved):
-                    with self.assertRaisesRegex(RuntimeError, "ancestor link changed"):
+                    with self.assertRaisesRegex(RuntimeError, "owned build (?:ancestor link changed|unlink held parent changed)"):
                         cleanup.detach(owned, time.monotonic() + 5)
                 self.assertEqual(member.read_bytes(), b"payload")
             finally:

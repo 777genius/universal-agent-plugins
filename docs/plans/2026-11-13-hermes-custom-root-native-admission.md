@@ -856,3 +856,16 @@ refusals before reads/deletes, and a per-domain member bound that cannot borrow
 sibling capacity. Existing replacement, outside-alias, Windows disposition and
 cancellation negatives remain required. Native Windows attribute diagnostics from
 babb are preserved; this change does not reinterpret or relax their equality.
+
+## Actual 8a macOS cleanup-contract refusal order
+
+Run43480021547/job132076721092 stopped in the eleven inert cleanup contracts,
+before the official build or custom-root observer. In the actual moved-parent
+negative, the held-parent guard raised the exact fixed message
+`owned build unlink held parent changed` before the named-ancestor guard could
+raise `owned build ancestor link changed`. The test accepted only the latter.
+Accept exactly these two production refusal messages for this one negative;
+keep the actual parent move, failure requirement and payload-preservation check.
+No production guard, ownership rule or native effect allowance changes.
+This one-line test correction is source-reviewed through the official API after
+executor loss; it has not been executed locally and needs genuine CI validation.
