@@ -130,11 +130,14 @@ func (c *controller) trustedObserve(stage, scope, trust, operation string, insta
 	defer cancel()
 	started := time.Now()
 	var observed map[string]any
+	var stageErr error
 	_, runErr := c.strictInput(ctx, stage, []string{filepath.Join(c.request.Base, "tools", "node"), filepath.Join(c.request.Base, "tools", "driver", "driver.js")}, prepared.project, c.trustedEnvironment(), prepared.frame, func(exchange context.Context, proof isolationProof) error {
 		var err error
 		observed, err = c.waitTrustedObservation(exchange, prepared.driverResult, stage, scope, trust, prepared.request, proof, started, prepared.before)
+		err, stageErr = trustedFailureForShutdown(err)
 		return err
 	})
+	runErr = errors.Join(stageErr, runErr)
 	if runErr != nil {
 		runErr = c.trustedPartialObservation(stage, prepared.result, runErr)
 	}
@@ -222,6 +225,15 @@ func (c *controller) waitTrustedObservation(exchange context.Context, driverResu
 			return nil, err
 		}
 		if ready {
+			if failure, err := admitTrustedFailure(body, stage, c.trustedState.Nonce); failure != nil || err != nil {
+				if err != nil {
+					return nil, err
+				}
+				if err := c.keep(stage+".observation.json", body); err != nil {
+					return nil, err
+				}
+				return nil, failure
+			}
 			if err := c.keep(stage+".observation.json", body); err != nil {
 				return nil, err
 			}

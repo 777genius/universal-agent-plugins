@@ -82,6 +82,8 @@ test('publisher terminal facts and byte counts have fixed safe bounds', () => {
 test('native startup signatures are fixed booleans and do not expose matched text', () => {
   for (const [text, field] of [
     ['No usable sandbox!', 'sandboxUnavailable'],
+    ['The SUID sandbox helper binary is missing: /private/publisher/chrome-sandbox', 'sandboxUnavailable'],
+    ['The SUID sandbox helper binary was found, but is not configured correctly. /private/publisher', 'sandboxUnavailable'],
     ['Failed to move to new namespace', 'namespaceDenied'],
     ['error while loading shared libraries: private.so', 'sharedLibraryMissing'],
     ["version GLIBC_2.39 not found in /private/library", 'glibcVersionMissing'],
@@ -94,11 +96,17 @@ test('native startup signatures are fixed booleans and do not expose matched tex
   }
 });
 
-test('failure reporting has no free-form native UI text or exception serialization', () => {
+test('terminal failure publication follows publisher cleanup and waits for supervised shutdown', () => {
+  const reporting = source.slice(source.indexOf('  } catch (error) {\n    const metadata ='));
+  assert(reporting.includes('const facts = failureFacts('));
   const ui = source.slice(source.indexOf('async function failureUI'), source.indexOf('async function main'));
   assert(!/textContent|getAttribute|\.slice\(/u.test(ui));
-  const reporting = source.slice(source.indexOf('  } catch (error) {\n    const metadata ='));
-  assert(reporting.includes('diagnostics: failureFacts('));
+  assert(reporting.includes('visibleNativeUI: metadata'));
+  assert(reporting.indexOf('failureUI(page)') < reporting.indexOf('browser.close()'));
   assert(!/String\(error\)|error\.message|diagnostic\.toString|endpoint\s*[,}]/u.test(reporting));
+  const settled = reporting.indexOf('if (!await stopped(child, 5000)) throw');
+  const publication = reporting.indexOf('renameSync(pending, req.driverResultFile)');
+  assert(settled >= 0 && publication > settled);
+  assert(reporting.indexOf('await parentShutdown()') > publication);
   assert(reporting.includes('diagnostic.fill(0)'));
 });

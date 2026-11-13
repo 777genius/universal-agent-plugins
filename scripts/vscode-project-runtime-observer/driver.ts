@@ -84,7 +84,9 @@ function failureFacts(error: unknown, capture: unknown, code: unknown, signal: u
     publisherMergedBytes: count(mergedBytes), preVerifierStderrBytes: count(stderrBytes),
     mergedBytesCapped: mergedBytes > LIMIT + 1, stderrBytesCapped: stderrBytes > LIMIT + 1,
     startupSignatures: {
-      sandboxUnavailable: body.includes('No usable sandbox!') || body.includes('Running as root without --no-sandbox is not supported'),
+      sandboxUnavailable: body.includes('No usable sandbox!') || body.includes('Running as root without --no-sandbox is not supported') ||
+        body.includes('The SUID sandbox helper binary is missing:') ||
+        body.includes('The SUID sandbox helper binary was found, but is not configured correctly.'),
       namespaceDenied: body.includes('Failed to move to new namespace') || body.includes('Failed to unshare'),
       sharedLibraryMissing: body.includes('error while loading shared libraries:'),
       glibcVersionMissing: body.includes('GLIBC_') && body.includes('not found'),
@@ -549,16 +551,30 @@ async function main(): Promise<void> {
     await parentShutdown();
   } catch (error) {
     const metadata = await within(failureUI(page), Math.max(1, Math.min(500, deadline - performance.now()))).catch(() => []);
-    process.stdout.write(JSON.stringify({ type: 'driver-failure', stage: req.stage, nonce: req.nonce, phase,
-      code: 'closed-stage-contract-refused', visibleNativeUI: metadata,
-      diagnostics: failureFacts(error, captureError, child?.exitCode, child?.signalCode, proof !== undefined, endpoint !== '', diagnostic, mergedBytes, stderrBytes) }) + '\n');
-    throw new Error('reported closed driver failure');
+    const facts = failureFacts(error, captureError, child?.exitCode, child?.signalCode, proof !== undefined, endpoint !== '', diagnostic, mergedBytes, stderrBytes);
+    // Settle the owned publisher before handing off a terminal failure. The
+    // driver remains alive so the supervisor can prove its planned tree stop.
+    clearTimeout(timer);
+    if (browser) { await within(browser.close(), 1000).catch(() => undefined); browser = undefined; }
+    if (child && child.exitCode === null && child.signalCode === null) {
+      child.kill('SIGTERM');
+      if (!await stopped(child, 5000)) throw new Error('publisher graceful shutdown incomplete');
+    }
+    const output = JSON.stringify({ type: 'driver-failure', stage: req.stage, nonce: req.nonce, phase,
+      code: 'closed-stage-contract-refused', visibleNativeUI: metadata, diagnostics: facts }) + '\n';
+    if (Buffer.byteLength(output) > LIMIT) throw new Error('driver output bound exceeded');
+    outputPath(req.driverResultFile);
+    const pending = outputPath(req.driverResultFile + '.pending');
+    writeFileSync(pending, output, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+    outputPath(req.driverResultFile);
+    renameSync(pending, req.driverResultFile);
+    process.stdout.write(output);
+    diagnostic.fill(0); endpoint = '';
+    await parentShutdown();
   } finally {
     clearTimeout(timer);
     if (browser) await within(browser.close(), 1000).catch(() => undefined);
     if (child && child.exitCode === null && child.signalCode === null) { child.kill('SIGTERM'); await stopped(child, 5000); }
-    // Native diagnostics include a private DevTools endpoint. They are retained
-    // only in bounded memory and never copied to stdout or a public artifact.
     diagnostic.fill(0); endpoint = '';
   }
 }

@@ -161,3 +161,57 @@ existing overflow refusal, including repeated post-overflow chunks. Keep total
 byte accounting, the same overflow reason/termination and all existing process
 semantics. An inert flood contract executes the exact inline append helper with
 256 chunks and one oversized chunk, verifying the retained cap and closed report.
+
+## Reviewed failure handoff and cleanup separation candidate
+
+The original ba8 first-empty-a artifact contains valid isolation proof, a closed
+publisher-startup driver-failure and fixed stderr. Failure was stdout-only while
+the controller polled the private atomic driver.json success result. EOF did not
+complete that polling callback; its timeout then obscured the terminal failure.
+Returning a sequence error from the Xvfb callback also prevented planned display
+shutdown. This establishes a handoff/cleanup classification defect, independent
+of the still-unconfirmed publisher startup cause.
+
+Reuse driver.json for an exact closed failure envelope, after owned publisher
+shutdown, then retain the driver leader for the existing parent planned shutdown.
+Admit exact stage/nonce/phase/code and bounded diagnostic enums, counts and booleans
+before retaining failure evidence. Keep failure separate from success validation.
+Retain the semantic stage error outside the process callback; only an admitted
+failure may request planned teardown. Retain sequence errors outside the display
+callback likewise. Supervisor errors remain errors; no TreeReaped value is set by
+this amendment. All stages and qualification remain failed on terminal failure,
+even when process/display cleanup is independently proved. Keep the existing
+artifact filename closure, sandbox, identity, deadlines and process adapter.
+
+Review scope: driver/controller handoff and inert contracts only, approximately
+2–3 hours implementation/verification plus two independent source review passes;
+hosted queue time has no estimate. New final-source genuine capture is required
+before any native acceptance. No local vendor execution or early CI replacement.
+
+The subsequent exact0d250a run43366717285/job131692719982 failed at the same
+first stage. Root and an independent reviewer checked both original ZIP digests,
+outer/inner CRCs and39 stream length/hash joins. Frontend artifact14012961916 has
+SHA2562054033a38f0295e20bdb0f83cd169bfa5cb8e1d419ac1ed1cc6f27dd0194ce2;
+native artifact14013401008 has
+SHA256876ce3ec1f489bdca697508c36876bde31dbc93ed6ec297bc64a558c4596ff60.
+The closed record reports publisher-startup-failed, SIGTRAP, valid isolation proof,
+no DevTools endpoint,586 merged bytes and all five startup signatures false.
+No native stage or qualification passed; driver/display cleanup stayed unproved.
+These facts still do not identify the underlying host or publisher cause.
+
+The existing sandboxUnavailable literal classifier additionally recognizes the
+two pinned Chromium SUID-helper fatal messages (missing/misconfigured). Both were
+absent from the initial classifier; the historical host-plan evidence already
+records the latter class on Ubuntu24. These are fixed boolean text observations,
+not an inferred AppArmor diagnosis or permission to enable that helper. The
+original bytes/path remain private, and the schema, limits and guards do not
+change. Source:
+https://github.com/chromium/chromium/blob/f916f1b7136907af19d96b95b891533d091d932a/sandbox/linux/suid/client/setuid_sandbox_host.cc .
+
+The reviewed handoff source passes focused Go/Node contracts, pinned TypeScript7
+and full lint. Its full local test-core remains failed: comparison with the
+relocation baseline finds the exact same10 failing packages and92 top-level test
+names, no newly failing test. Explicit socket/proc and Codex environment refusals
+are retained; opaque immutable-tree, permission-cleanup and progress-timeout
+causes are not invented or waived. Genuine0d hosted test-core passed separately;
+the next published source still requires its own hosted gates.

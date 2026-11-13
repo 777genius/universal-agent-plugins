@@ -415,12 +415,7 @@ func (c *controller) execute() (resultErr error) {
 	var record childRecord
 	var err error
 	if c.request.Input.Mode == trustedProjectMode {
-		record, err = outer(func(ctx context.Context, proof isolationProof) error {
-			if err := c.displayReady(ctx, proof); err != nil {
-				return err
-			}
-			return c.trustedSequence(ctx)
-		})
+		record, err = runTrustedDisplay(outer, c.displayReady, c.trustedSequence)
 	} else {
 		record, err = runDisplayTable(c.work, outer, c.displayReady, c.observe)
 	}
