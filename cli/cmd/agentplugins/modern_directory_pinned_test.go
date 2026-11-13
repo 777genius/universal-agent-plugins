@@ -23,11 +23,11 @@ func modernPinnedTestTrust(t *testing.T) pinnedModernDirectoryTrust {
 		t.Fatal(err)
 	}
 	return pinnedModernDirectoryTrust{
-		FeedID: "pi-modern-v1-test-only",
-		Origin: "https://modern-test.invalid/registry/modern/schemas/1/",
-		KeyID: signed.Trust.Keys[0].ID,
+		FeedID:          "pi-modern-v1-test-only",
+		Origin:          "https://modern-test.invalid/registry/modern/schemas/1/",
+		KeyID:           signed.Trust.Keys[0].ID,
 		PublicKeyBase64: base64.StdEncoding.EncodeToString(signed.Trust.Keys[0].PublicKey),
-		Bootstrap: signed.Embedded,
+		Bootstrap:       signed.Embedded,
 	}
 }
 
@@ -84,7 +84,7 @@ func TestPinnedModernDirectoryTrustFailsClosedBeforeFilesystemMutation(t *testin
 	other := modernPinnedTestTrust(t)
 	other.Bootstrap = writeDifferentModernBootstrap(t)
 	cases := []struct {
-		name string
+		name   string
 		mutate func(*pinnedModernDirectoryTrust)
 	}{
 		{"missing_feed", func(c *pinnedModernDirectoryTrust) { c.FeedID = "" }},

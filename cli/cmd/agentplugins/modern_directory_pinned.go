@@ -36,43 +36,9 @@ func newPinnedModernDirectoryClient(dataRoot string, approved pinnedModernDirect
 		strings.ContainsAny(approved.FeedID, "/\\ \t\r\n") {
 		return nil, fmt.Errorf("modern Directory requires a distinct canonical feed identity")
 	}
-	if approved.Origin == "" || approved.Origin != strings.TrimSpace(approved.Origin) {
-		return nil, fmt.Errorf("modern Directory requires a pinned origin")
-	}
-	origin, err := productionFeedOrigin(approved.Origin, approved.Origin, "modern Directory origin")
+	origin, err := validatePinnedModernDirectoryOrigin(approved.Origin)
 	if err != nil {
 		return nil, err
-	}
-	parsed, err := url.Parse(origin)
-	if err != nil || !strings.HasSuffix(parsed.Path, "/schemas/1/") {
-		return nil, fmt.Errorf("modern Directory requires a separate schema-1 HTTPS origin")
-	}
-	legacyOrigin, err := url.Parse(defaultDirectoryOrigin)
-	if err != nil {
-		return nil, fmt.Errorf("historical Directory origin is invalid: %w", err)
-	}
-	// The default HTTPS port or a trailing DNS dot must not disguise the
-	// historical feed as an independent modern origin.
-	legacyHost := strings.TrimSuffix(legacyOrigin.Hostname(), ".")
-	modernHost := strings.TrimSuffix(parsed.Hostname(), ".")
-	// Compare numeric TCP ports: :00443 and :443 reach the same HTTPS
-	// endpoint and must not create a second trust authority.
-	legacyPort, modernPort := 443, 443
-	if port := legacyOrigin.Port(); port != "" {
-		legacyPort, err = strconv.Atoi(port)
-		if err != nil || legacyPort < 1 || legacyPort > 65535 {
-			return nil, fmt.Errorf("historical Directory HTTPS port is invalid")
-		}
-	}
-	if port := parsed.Port(); port != "" {
-		modernPort, err = strconv.Atoi(port)
-		if err != nil || modernPort < 1 || modernPort > 65535 {
-			return nil, fmt.Errorf("modern Directory HTTPS port is invalid")
-		}
-	}
-	if strings.EqualFold(modernHost, legacyHost) && modernPort == legacyPort &&
-		parsed.EscapedPath() == legacyOrigin.EscapedPath() {
-		return nil, fmt.Errorf("modern Directory cannot reuse the historical HTTPS feed")
 	}
 	if approved.KeyID == "" || approved.KeyID != strings.TrimSpace(approved.KeyID) ||
 		approved.KeyID == defaultDirectoryKeyID {
@@ -97,12 +63,56 @@ func newPinnedModernDirectoryClient(dataRoot string, approved pinnedModernDirect
 		return nil, fmt.Errorf("modern Directory bootstrap must use schema 1")
 	}
 	return &directoryv1.Client{
-		Origin: origin,
-		FeedID: approved.FeedID,
-		HTTPClient: hardenedHTTPClient("Modern Directory"),
-		Trust: trust,
-		Embedded: approved.Bootstrap,
+		Origin:                   origin,
+		FeedID:                   approved.FeedID,
+		HTTPClient:               hardenedHTTPClient("Modern Directory"),
+		Trust:                    trust,
+		Embedded:                 approved.Bootstrap,
 		RequireEmbeddedBootstrap: true,
-		Cache: directoryv1.Cache{Path: filepath.Join(dataRoot, "directory-modern-v1-cache.json")},
+		Cache:                    directoryv1.Cache{Path: filepath.Join(dataRoot, "directory-modern-v1-cache.json")},
 	}, nil
+}
+
+// validatePinnedModernDirectoryOrigin refuses alternate spellings of the
+// historical HTTPS endpoint before constructing a separately trusted client.
+func validatePinnedModernDirectoryOrigin(pinned string) (string, error) {
+	if pinned == "" || pinned != strings.TrimSpace(pinned) {
+		return "", fmt.Errorf("modern Directory requires a pinned origin")
+	}
+	origin, err := productionFeedOrigin(pinned, pinned, "modern Directory origin")
+	if err != nil {
+		return "", err
+	}
+	parsed, err := url.Parse(origin)
+	if err != nil || !strings.HasSuffix(parsed.Path, "/schemas/1/") {
+		return "", fmt.Errorf("modern Directory requires a separate schema-1 HTTPS origin")
+	}
+	legacyOrigin, err := url.Parse(defaultDirectoryOrigin)
+	if err != nil {
+		return "", fmt.Errorf("historical Directory origin is invalid: %w", err)
+	}
+	// The default HTTPS port or a trailing DNS dot must not disguise the
+	// historical feed as an independent modern origin.
+	legacyHost := strings.TrimSuffix(legacyOrigin.Hostname(), ".")
+	modernHost := strings.TrimSuffix(parsed.Hostname(), ".")
+	// Compare numeric TCP ports: :00443 and :443 reach the same HTTPS
+	// endpoint and must not create a second trust authority.
+	legacyPort, modernPort := 443, 443
+	if port := legacyOrigin.Port(); port != "" {
+		legacyPort, err = strconv.Atoi(port)
+		if err != nil || legacyPort < 1 || legacyPort > 65535 {
+			return "", fmt.Errorf("historical Directory HTTPS port is invalid")
+		}
+	}
+	if port := parsed.Port(); port != "" {
+		modernPort, err = strconv.Atoi(port)
+		if err != nil || modernPort < 1 || modernPort > 65535 {
+			return "", fmt.Errorf("modern Directory HTTPS port is invalid")
+		}
+	}
+	if strings.EqualFold(modernHost, legacyHost) && modernPort == legacyPort &&
+		parsed.EscapedPath() == legacyOrigin.EscapedPath() {
+		return "", fmt.Errorf("modern Directory cannot reuse the historical HTTPS feed")
+	}
+	return origin, nil
 }
