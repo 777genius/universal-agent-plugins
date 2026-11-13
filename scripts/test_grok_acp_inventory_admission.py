@@ -89,7 +89,7 @@ class FrontendPublicationContracts(unittest.TestCase):
                 case.frontend_packet(raw, exit_code)
             self.assertEqual(stream.getvalue(), '')
 
-    def test_actual_workflow_blocks_refusal_before_staging_or_upload_output(self):
+    def test_actual_workflow_blocks_refusal_before_native_staging_or_admitted_output(self):
         import native_client_research as native
         workflow = (Path(__file__).parents[1] / '.github/workflows/client-automation-native.yml').read_text()
         blocks = re.findall(r"(?ms)^          python3 - <<'PYTHON'\n(.*?)^          PYTHON$", workflow)
@@ -98,22 +98,34 @@ class FrontendPublicationContracts(unittest.TestCase):
         body = self.preflight_refusal()
         with tempfile.TemporaryDirectory() as temporary:
             github_output = Path(temporary) / 'github-output'
-            github_output.write_bytes(b'original output\n')
+            retained = Path(temporary) / 'frontend-failure.zip'
+            facts = dict(bytes=123, sha256='c' * 64)
             for block in blocks:
                 for error, exit_code in ((None, 1), ('PRIVATE bounded capture refusal', 1), (None, 2), (None, 0)):
+                    github_output.write_bytes(b'original output\n')
                     expected = ValueError if error is None and exit_code in (0, 1) else SystemExit
                     with (self.subTest(error=error, exit=exit_code),
-                          mock.patch.dict(os.environ, RUNNER_TEMP=temporary, GITHUB_OUTPUT=str(github_output)),
+                          mock.patch.dict(os.environ, RUNNER_TEMP=temporary, GITHUB_OUTPUT=str(github_output), EXPECTED_COMMIT='a' * 40),
+                          mock.patch.object(subprocess, 'check_output', return_value='b' * 40),
                           mock.patch.object(native, 'run_probe', return_value=({'error': error, 'exit': exit_code}, body, b'PRIVATE stderr')) as probe,
+                          mock.patch.object(case, 'retain_frontend_failure', return_value=(retained, facts)) as retain,
                           mock.patch.object(case, 'admit_publication', side_effect=AssertionError('negative upload')) as admit,
                           mock.patch.object(tempfile, 'mkdtemp', side_effect=AssertionError('negative staging')),
                           redirect_stdout(io.StringIO()) as stream, self.assertRaises(expected)):
                         exec(compile('\n'.join(line[10:] for line in block.splitlines()), '<workflow>', 'exec'), {})
                     self.assertEqual(probe.call_args.kwargs, dict(timeout=180, limit=1 << 20, memory_only=True))
                     admit.assert_not_called()
-                    self.assertEqual(github_output.read_bytes(), b'original output\n')
+                    complete = error is None and exit_code in (0, 1)
+                    if complete:
+                        self.assertEqual(retain.call_args.args[1:6], ({'error': error, 'exit': exit_code}, body, b'PRIVATE stderr', 'a' * 40, 'b' * 40))
+                    else:
+                        retain.assert_not_called()
+                    self.assertEqual(github_output.read_bytes(), b'original output\n' +
+                        (('frontend_failure=' + str(retained) + '\n').encode() if complete else b''))
                     self.assertNotIn('PRIVATE', stream.getvalue())
-                    self.assertEqual(stream.getvalue(), 'GROK_FRONTEND_REFUSAL=' + body.decode() if error is None and exit_code == 1 else '')
+                    self.assertEqual(stream.getvalue(),
+                        ('GROK_FRONTEND_CAPTURE=' + json.dumps(facts, separators=(',', ':')) + '\n' if complete else '') +
+                        ('GROK_FRONTEND_REFUSAL=' + body.decode() if error is None and exit_code == 1 else ''))
 
 
 
@@ -1828,6 +1840,72 @@ class LockReadoutContracts(unittest.TestCase):
             self.assertEqual(untouched,[])
             self.assertEqual(case.digest(admitted.read_bytes()),proof['sha256'])
             self.assertEqual(diagnostics,[dict(schema_version=1,mode=case.LOCK_MODE,reason='readout-refused')])
+
+class FrontendFailureContracts(unittest.TestCase):
+    def record(self, stdout=b'', stderr=b''):
+        record = dict(probe='grok-acp-frontend', argv=['inert'], cwd='/inert', error=None, exit=1, elapsed_seconds=0.01)
+        for name, body in (('stdout',stdout),('stderr',stderr)):
+            record.update({name+'_file':'inert.'+name, name+'_bytes':len(body), name+'_sha256':case.digest(body)})
+        return record
+
+    def retain(self, root, record, stdout=b'', stderr=b'', deadline=None):
+        return case.retain_frontend_failure(root, record, stdout, stderr, 'a'*40, 'b'*40,
+                                            time.monotonic()+5 if deadline is None else deadline)
+
+    def test_original_child_streams_survive_empty_malformed_and_successful_parse(self):
+        from native_client_research import run_probe
+        for stdout in (b'', b'not json\n', b'{}\n'):
+            with self.subTest(stdout=stdout), tempfile.TemporaryDirectory() as temporary:
+                root=Path(temporary).resolve(); stderr=b'bounded inert frontend diagnostic\n'
+                code='import sys;sys.stdout.buffer.write('+repr(stdout)+');sys.stderr.buffer.write('+repr(stderr)+');sys.exit('+('0' if stdout==b'{}\n' else '1')+')'
+                record, out, err=run_probe([sys.executable,'-c',code],root,{},root,'grok-acp-frontend',timeout=3,memory_only=True)
+                before=copy.deepcopy(record)
+                path, facts=self.retain(root,record,out,err)
+                self.assertEqual(record,before);self.assertFalse((root/record['stdout_file']).exists())
+                if stdout==b'{}\n':self.assertEqual(case.document(out),{})
+                else:
+                    with self.assertRaises(ValueError):case.document(out)
+                with zipfile.ZipFile(path) as archive:
+                    self.assertIsNone(archive.testzip())
+                    self.assertEqual(set(archive.namelist()),{'frontend.json','frontend.stdout.bin','frontend.stderr.bin'})
+                    self.assertEqual(archive.read('frontend.stdout.bin'),stdout)
+                    self.assertEqual(archive.read('frontend.stderr.bin'),stderr)
+                    capture=json.loads(archive.read('frontend.json'))
+                self.assertEqual(capture['record'],before)
+                self.assertFalse(capture['collection_complete']);self.assertFalse(capture['native_cleanup_proven'])
+                self.assertTrue(all(value is False for value in capture['qualification'].values()))
+                self.assertEqual(facts,dict(bytes=path.stat().st_size,sha256=case.digest(path.read_bytes())))
+
+    def test_incomplete_or_unjoined_capture_refuses_before_creating_output(self):
+        for change in ('cleanup','exit','bool-exit','digest','size','bool-size','oversize','extra','expired'):
+            with self.subTest(change=change),tempfile.TemporaryDirectory() as temporary:
+                root=Path(temporary).resolve();out=b'x'*(case.LIMIT+1) if change=='oversize' else b''
+                record=self.record(out)
+                if change=='cleanup':record['error']='probe deadline exceeded'
+                elif change=='exit':record['exit']=2
+                elif change=='bool-exit':record['exit']=True
+                elif change=='digest':record['stdout_sha256']='f'*64
+                elif change=='size':record['stdout_bytes']=1
+                elif change=='bool-size':record['stdout_bytes']=False
+                elif change=='extra':record['unreviewed']='PRIVATE'
+                with self.assertRaises(ValueError):self.retain(root,record,out,deadline=0.0 if change=='expired' else None)
+                self.assertEqual(list(root.iterdir()),[])
+
+    def test_late_deadline_and_replaced_output_never_return_publication(self):
+        import native_client_project_artifacts as artifacts
+        for changed in ('deadline','replacement'):
+            with self.subTest(changed=changed),tempfile.TemporaryDirectory() as temporary:
+                root=Path(temporary).resolve();clock=[10.0];actual=artifacts.write_zip
+                def write(path,bodies):
+                    actual(path,bodies)
+                    if changed=='deadline':clock[0]=20.0
+                    else:
+                        original=next(root.iterdir());original.rename(root/'retained')
+                        original.mkdir();(original/'foreign').write_bytes(b'preserved')
+                with mock.patch.object(artifacts,'write_zip',side_effect=write),mock.patch.object(case.time,'monotonic',side_effect=lambda:clock[0]):
+                    with self.assertRaises(ValueError):self.retain(root,self.record(),deadline=15.0)
+                if changed=='replacement':self.assertEqual(next(root.glob('*/foreign')).read_bytes(),b'preserved')
+
 
 if __name__ == '__main__':
     unittest.main()

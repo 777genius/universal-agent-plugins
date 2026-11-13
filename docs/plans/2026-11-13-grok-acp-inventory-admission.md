@@ -562,3 +562,44 @@ three actual workflow Python blocks and prove that a refusal leaves an existing
 `GITHUB_OUTPUT` byte-for-byte unchanged, never calls publication admission or
 staging, and never exposes the supplied private stderr. These are local contract
 results; a future ordinary workflow must still provide the genuine observation.
+
+
+## Retain original frontend transport on failure (2026-11-13)
+
+The closed diagnostic in `999be5b1206df4d96a30c2aacc94913461560647`
+reports finite refusal stages after the existing cleanup path. Its `run`,
+`frontend`, `frontend_error`, `frontend_state` and `frontend_packet` remain
+unchanged. The previous unpublished candidate's duplicate stderr diagnostic is
+not carried forward; its local `stage` variable collided with the native lock
+phase. The existing separate `progress['stage']` keeps those roles distinct.
+
+This follow-up preserves the original bounded in-memory record/stdout/stderr in
+all three existing workflow capture steps, after their unchanged completion gate
+and before `frontend_packet`. It records only the outer transport; no unadmitted
+native archive or native-writable capture file is read. The original `0dd77f85`
+metadata job `132191359702` still has no retained frontend record or bytes, so
+its inner cause remains unknown. The later supervisor count correction is a
+source finding, not a retroactive cause established from those missing bytes.
+
+The separate ZIP uses the existing ZIP writer and held archive reader under a
+fresh 0700 directory created relative to its held parent. Source/tree/run/mode,
+exact stream lengths/hashes, parent/file identity and the original 180-second
+deadline stay joined. Each stream remains bounded at 1 MiB; the original record
+has a 16 KiB serialization ceiling. The diagnostic output is separate from
+`admitted` and uploads only on capture-step failure. The original late source
+tree read, positive receipt parser, admission and native upload conditions stay
+unchanged. `collection_complete`, every product qualification and
+`native_cleanup_proven` are false regardless of the diagnostic frame's contents.
+
+Contracts retain actual inert child bytes for empty, malformed and valid JSON,
+join original record/stream/archive hashes, and refuse incomplete capture,
+changed sizes/digests, original-budget expiry and replaced output authority.
+The three actual workflow blocks retain only their separate diagnostic output
+on refusal; none calls native publication admission or staging, and no raw
+stderr is printed. Existing closed-diagnostic and successful-publication
+contracts remain in place. These are inert contracts; a fresh hosted native run
+is still required. No production enable/recovery path changes.
+
+On the reconciled source, all 130 Grok Python contracts pass (2.368 seconds).
+All 55 pre-existing runtime function bodies are byte-identical to `999be5b1`;
+the three workflow Python blocks and workflow YAML parse, and diff-check passes.

@@ -1420,6 +1420,55 @@ def observation_exit(summary, *, lock_qualification=False):
     return 0 if summary['collection_complete'] or lock_complete else 1
 
 
+def retain_frontend_failure(parent, record, stdout, stderr, commit, tree, deadline, *, mode=None):
+    """Retain bounded outer transport bytes; this never admits a native family."""
+    import tempfile
+    from native_client_project_artifacts import write_zip
+    require(type(deadline) is float and time.monotonic() < deadline, 'frontend-deadline')
+    labels = {None:'grok-acp-frontend', SESSION_MODE:'grok-session-frontend', LOCK_MODE:'grok-lock-frontend'}
+    require((mode is None or type(mode) is str and mode in labels)
+            and all(type(value) is str and re.fullmatch('[0-9a-f]{40}', value)
+                                  for value in (commit, tree)), 'frontend-source')
+    closed(record, 'probe argv cwd error exit elapsed_seconds stdout_file stderr_file stdout_bytes stderr_bytes stdout_sha256 stderr_sha256')
+    require(record['probe'] == labels[mode] and record['error'] is None
+            and type(record['exit']) is int and record['exit'] in (0, 1), 'frontend-incomplete')
+    for name, body in (('stdout', stdout), ('stderr', stderr)):
+        require(type(body) is bytes and len(body) <= LIMIT and type(record[name+'_bytes']) is int
+                and record[name+'_bytes'] == len(body) and record[name+'_sha256'] == digest(body), 'frontend-stream')
+    encoded = json.dumps(record, sort_keys=True, allow_nan=False).encode()
+    require(len(encoded) <= 16384, 'frontend-record-bound')
+    capture = dict(schema_version=1, kind='grok_frontend_failure_capture', source_commit=commit, source_tree=tree,
+                   run=os.environ.get('GITHUB_RUN_ID'), attempt=os.environ.get('GITHUB_RUN_ATTEMPT'), mode=mode,
+                   collection_complete=False, native_cleanup_proven=False, qualification=dict(FALSE), record=record)
+    bodies = {'frontend.json':json.dumps(capture, sort_keys=True, allow_nan=False).encode(),
+              'frontend.stdout.bin':stdout, 'frontend.stderr.bin':stderr}
+    parent = Path(parent)
+    require(parent.resolve() == parent, 'frontend-parent')
+    held = os.open(parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    directory, archive = None, None
+    try:
+        original = directory_id(os.fstat(held))
+        require(original == directory_id(parent.lstat()), 'frontend-parent')
+        name = Path(tempfile.mkdtemp(prefix=labels[mode]+'-failure-', dir='/proc/self/fd/'+str(held))).name
+        output = parent / name
+        directory = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=held)
+        identity = directory_id(os.fstat(directory))
+        require(original == directory_id(parent.lstat()) and identity == directory_id(output.lstat())
+                and identity['mode'] == stat.S_IFDIR | 0o700,
+                'frontend-output')
+        require(time.monotonic() < deadline, 'frontend-deadline')
+        write_zip(Path('/proc/self/fd/' + str(directory)) / 'research.zip', bodies)
+        archive, before, raw = capture_archive(directory)
+        require(original == directory_id(parent.lstat()) == directory_id(os.fstat(held))
+                and identity == directory_id(output.lstat()) == directory_id(os.fstat(directory)), 'frontend-replaced')
+        archive_unchanged(directory, archive, before)
+        require(time.monotonic() < deadline, 'frontend-deadline')
+        return output / 'research.zip', dict(bytes=len(raw), sha256=digest(raw))
+    finally:
+        for descriptor in (archive, directory, held):
+            if descriptor is not None: os.close(descriptor)
+
+
 def run(output, *, session_only=False, lock_qualification=False, _frontend=None):
     progress = frontend_state() if _frontend is None else _frontend
     import project_native_research as shared

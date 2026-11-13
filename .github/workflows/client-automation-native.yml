@@ -191,10 +191,16 @@ jobs:
           temporary = pathlib.Path(os.environ['RUNNER_TEMP']).resolve()
           output = temporary / 'grok-acp-inventory'
           diagnostic_deadline = __import__('time').monotonic() + 180
+          capture_tree = subprocess.check_output(['/usr/bin/git', 'rev-parse', 'HEAD^{tree}'], text=True, timeout=5).strip()
           record, stdout, stderr = run_probe([sys.executable, 'scripts/grok_acp_inventory_admission.py', '--output', str(output)],
               pathlib.Path.cwd(), dict(os.environ), temporary, 'grok-acp-frontend', timeout=180, limit=1 << 20, memory_only=True)
           if record['error'] is not None or record['exit'] not in (0, 1):
               raise SystemExit('Frontend did not prove bounded completion; no upload admitted')
+          failure_path, failure_facts = capture.retain_frontend_failure(temporary, record, stdout, stderr,
+              os.environ['EXPECTED_COMMIT'], capture_tree, diagnostic_deadline, mode=None)
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as stream:
+              stream.write('frontend_failure=' + str(failure_path) + '\n')
+          print('GROK_FRONTEND_CAPTURE=' + __import__('json').dumps(failure_facts, separators=(',', ':')))
           packet = capture.frontend_packet(stdout, record['exit'])
           destination = pathlib.Path(tempfile.mkdtemp(prefix='grok-acp-admitted-', dir=temporary))
           destination.rmdir()
@@ -217,6 +223,14 @@ jobs:
         with:
           name: grok-acp-inventory-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ steps.grok_capture.outputs.admitted }}
+          if-no-files-found: error
+          retention-days: 14
+      - name: Preserve bounded frontend failure without native admission
+        if: ${{ always() && steps.grok_capture.conclusion == 'failure' && steps.grok_capture.outputs.frontend_failure != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: grok-acp-frontend-failure-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.grok_capture.outputs.frontend_failure }}
           if-no-files-found: error
           retention-days: 14
 
@@ -254,10 +268,16 @@ jobs:
           temporary = pathlib.Path(os.environ['RUNNER_TEMP']).resolve()
           output = temporary / 'grok-acp-session'
           diagnostic_deadline = __import__('time').monotonic() + 180
+          capture_tree = subprocess.check_output(['/usr/bin/git', 'rev-parse', 'HEAD^{tree}'], text=True, timeout=5).strip()
           record, stdout, stderr = run_probe([sys.executable, 'scripts/grok_acp_inventory_admission.py', '--output', str(output), '--session-only'],
               pathlib.Path.cwd(), dict(os.environ), temporary, 'grok-session-frontend', timeout=180, limit=1 << 20, memory_only=True)
           if record['error'] is not None or record['exit'] not in (0, 1):
               raise SystemExit('Frontend did not prove bounded completion; no upload admitted')
+          failure_path, failure_facts = capture.retain_frontend_failure(temporary, record, stdout, stderr,
+              os.environ['EXPECTED_COMMIT'], capture_tree, diagnostic_deadline, mode=capture.SESSION_MODE)
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as stream:
+              stream.write('frontend_failure=' + str(failure_path) + '\n')
+          print('GROK_FRONTEND_CAPTURE=' + __import__('json').dumps(failure_facts, separators=(',', ':')))
           packet = capture.frontend_packet(stdout, record['exit'])
           destination = pathlib.Path(tempfile.mkdtemp(prefix='grok-session-admitted-', dir=temporary))
           destination.rmdir()
@@ -280,6 +300,14 @@ jobs:
         with:
           name: grok-acp-session-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ steps.session_capture.outputs.admitted }}
+          if-no-files-found: error
+          retention-days: 14
+      - name: Preserve bounded frontend failure without native admission
+        if: ${{ always() && steps.session_capture.conclusion == 'failure' && steps.session_capture.outputs.frontend_failure != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: grok-session-frontend-failure-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.session_capture.outputs.frontend_failure }}
           if-no-files-found: error
           retention-days: 14
 
@@ -317,10 +345,16 @@ jobs:
           temporary = pathlib.Path(os.environ['RUNNER_TEMP']).resolve()
           output = temporary / 'grok-config-lock'
           diagnostic_deadline = __import__('time').monotonic() + 180
+          capture_tree = subprocess.check_output(['/usr/bin/git', 'rev-parse', 'HEAD^{tree}'], text=True, timeout=5).strip()
           record, stdout, stderr = run_probe([sys.executable, 'scripts/grok_acp_inventory_admission.py', '--output', str(output), '--lock-qualification'],
               pathlib.Path.cwd(), dict(os.environ), temporary, 'grok-lock-frontend', timeout=180, limit=1 << 20, memory_only=True)
           if record['error'] is not None or record['exit'] not in (0, 1):
               raise SystemExit('Frontend did not prove bounded completion; no upload admitted')
+          failure_path, failure_facts = capture.retain_frontend_failure(temporary, record, stdout, stderr,
+              os.environ['EXPECTED_COMMIT'], capture_tree, diagnostic_deadline, mode=capture.LOCK_MODE)
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as stream:
+              stream.write('frontend_failure=' + str(failure_path) + '\n')
+          print('GROK_FRONTEND_CAPTURE=' + __import__('json').dumps(failure_facts, separators=(',', ':')))
           packet = capture.frontend_packet(stdout, record['exit'])
           destination = pathlib.Path(tempfile.mkdtemp(prefix='grok-lock-admitted-', dir=temporary))
           destination.rmdir()
@@ -343,5 +377,13 @@ jobs:
         with:
           name: grok-config-lock-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ steps.lock_capture.outputs.admitted }}
+          if-no-files-found: error
+          retention-days: 14
+      - name: Preserve bounded frontend failure without native admission
+        if: ${{ always() && steps.lock_capture.conclusion == 'failure' && steps.lock_capture.outputs.frontend_failure != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: grok-lock-frontend-failure-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.lock_capture.outputs.frontend_failure }}
           if-no-files-found: error
           retention-days: 14
