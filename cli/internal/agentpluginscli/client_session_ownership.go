@@ -36,6 +36,9 @@ func sessionBindings(ctx context.Context, app App, client domain.DetectedClient)
 			if key != binding.ClientBindingID || binding.Scope != "project" || binding.PendingNativeIntent != nil {
 				return nil, fmt.Errorf("client binding is stale, unscoped or pending")
 			}
+			if binding.NativeActivationAttempt != "" {
+				return nil, fmt.Errorf("client binding has an unresolved native activation attempt")
+			}
 			if err := verifySessionBinding(ctx, app, installation, binding, client); err != nil {
 				return nil, err
 			}
