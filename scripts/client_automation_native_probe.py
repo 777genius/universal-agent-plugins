@@ -8,6 +8,7 @@ import argparse
 import base64
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -171,8 +172,13 @@ def native_json(body):
         return result
     def invalid_constant(_value):
         raise ValueError("nonfinite native JSON value")
+    def finite_float(token):
+        value = float(token)
+        require(math.isfinite(value), "nonfinite native JSON number")
+        return value
     try:
-        return json.loads(body, object_pairs_hook=pairs, parse_constant=invalid_constant)
+        return json.loads(body, object_pairs_hook=pairs, parse_constant=invalid_constant,
+                          parse_float=finite_float)
     except (UnicodeError, RecursionError) as error:
         raise ValueError("invalid native JSON encoding or depth") from error
 

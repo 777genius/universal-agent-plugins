@@ -323,9 +323,15 @@ class InventoryContracts(unittest.TestCase):
             probe.cline_inventory("Usage: cline mcp [options] [command]", self.path, "project-sentinel")
 
     def test_duplicate_nonfinite_and_oversized_json_refused(self):
-        for value in ('{"x":1,"x":2}', '[NaN]', '[Infinity]', ' ' * ((1 << 20) + 1), ''):
+        for value in ('{"x":1,"x":2}', '[NaN]', '[Infinity]', '{"x":1e9999}',
+                      '{"x":-1e9999}', '[{"nested":1e9999}]',
+                      ' ' * ((1 << 20) + 1), ''):
             with self.subTest(value=value[:30]), self.assertRaises(ValueError):
                 probe.native_json(value)
+
+    def test_finite_exponent_native_json_is_preserved(self):
+        self.assertEqual(probe.native_json('{"number":1e2,"negative":-1.5}'),
+                         {"number": 100.0, "negative": -1.5})
 
     def test_exact_pinned_versions_only(self):
         probe.check_version("cline", b"3.0.73\n")
