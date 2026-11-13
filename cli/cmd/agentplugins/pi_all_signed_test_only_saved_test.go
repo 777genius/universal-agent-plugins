@@ -1,0 +1,163 @@
+package main
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"os"
+	"reflect"
+	"runtime"
+	"strconv"
+	"testing"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+)
+
+// This is one disposable, independently keyed TEST-only signed v1 snapshot.
+// Its two upstream grants use deliberately SYNTHETIC materialization evidence.
+// Positive saved installs here can never authorize real publisher signatures.
+func TestPiAllSignedTestOnlySavedMarketplace(t *testing.T) {
+	if os.Getenv("UAP_PI_ALL_SAVED_TEST_ONLY_E2E") != "1" {
+		t.Skip("separate nine-shard, 3-OS real-source synthetic signed fixture")
+	}
+	shard, err := strconv.Atoi(os.Getenv("UAP_PI_ALL_SAVED_SHARD"))
+	if err != nil || shard < 0 || shard >= piFullShardCount {
+		t.Fatal("exact test-only shard 0..2 is required")
+	}
+	_, snapshot := piFullRealSavedJourneyWithClient(t, piUpstreamTestOnlyClient)
+	if len(snapshot.Distributions) != 36 || len(snapshot.Evidence) != 2 {
+		t.Fatal("full immutable 36-source snapshot with exactly two synthetic upstream grants required")
+	}
+	completed := make([]string, 0, 24)
+	selected := 0
+	for index, distribution := range snapshot.Distributions {
+		if index%piFullShardCount != shard {
+			continue
+		}
+		selected++
+		if len(distribution.Releases) != 1 || len(distribution.ReleasePolicies) != 1 {
+			t.Fatalf("unexpected source release cardinality: %s", distribution.ID)
+		}
+		for _, scope := range []domain.InstallScope{domain.ScopeUser, domain.ScopeProject} {
+			name := fmt.Sprintf("%s@%d/%s", distribution.ID, distribution.Releases[0].Sequence, scope)
+			executed := false
+			passed := t.Run(name, func(t *testing.T) {
+				j, _ := piFullRealSavedJourneyWithClient(t, piUpstreamTestOnlyClient)
+				root := ""
+				other := j.a
+				if scope == domain.ScopeProject {
+					root, other = j.a, ""
+				}
+				nativeB := piSignedProjectNativeRoot(j, j.b)
+				nativeOther := piSignedProjectNativeRoot(j, other)
+				beforeB := securityFixtureTree(t, nativeB)
+				beforeOther := securityFixtureTree(t, nativeOther)
+				j.run(t, root, "install", distribution.ID, "--target", "pi", "--yes")
+				state := j.state(t, root)
+				expected := 1
+				if distribution.ProductID == "marketing-kit" {
+					expected = 4
+				}
+				if len(state.Installations) != expected || len(state.EnvironmentReceipts) != expected {
+					t.Fatalf("%s: expected %d persisted signed saved packages, got %d installations / %d receipts", name, expected, len(state.Installations), len(state.EnvironmentReceipts))
+				}
+				foundRoot := false
+				for _, installed := range state.Installations {
+					if installed.Directory == nil || installed.Directory.FeedID != piUpstreamTestFeedID {
+						t.Fatalf("%s: saved child lost independent TEST-only feed identity", name)
+					}
+					if installed.Directory.DistributionID == distribution.ID {
+						pinned := distribution.Releases[0]
+						if foundRoot || installed.Source.Repository != pinned.PackageSource.Repository ||
+							installed.Source.PackageSubpath != pinned.PackageSource.Path ||
+							installed.Source.ResolvedRevision != pinned.PackageSource.Revision ||
+							installed.Source.TreeDigest != pinned.TreeDigest ||
+							installed.Package.ManifestDigest != pinned.ManifestDigest {
+							t.Fatalf("%s: root did not bind to the exact immutable upstream/registry source", name)
+						}
+						foundRoot = true
+					}
+				}
+				if !foundRoot {
+					t.Fatalf("%s: installed source root missing", name)
+				}
+				if distribution.Kind == domain.DistributionUpstream {
+					if distribution.ID != "github/github" && distribution.ID != "upstash/context7" {
+						t.Fatalf("%s: synthetic evidence was unexpectedly granted to another upstream", name)
+					}
+					assertPiUpstreamTestOnlyNativeMCP(t, j, root, distribution.ProductID, true)
+				}
+				if !reflect.DeepEqual(beforeB, securityFixtureTree(t, nativeB)) ||
+					!reflect.DeepEqual(beforeOther, securityFixtureTree(t, nativeOther)) {
+					t.Fatalf("%s: install changed another Pi user/project scope", name)
+				}
+				j.run(t, root, "deps", "sync", "--locked", "--yes")
+				if len(j.state(t, root).EnvironmentReceipts) != expected {
+					t.Fatalf("%s: locked replay lost immutable saved dependencies", name)
+				}
+				j.run(t, root, "remove", distribution.ProductID, "--target", "pi", "--yes")
+				removed := j.state(t, root)
+				if len(removed.EnvironmentReceipts) != 0 {
+					t.Fatalf("%s: saved removal left owned state", name)
+				}
+				if distribution.Kind == domain.DistributionUpstream {
+					assertPiUpstreamTestOnlyNativeMCP(t, j, root, distribution.ProductID, false)
+				}
+				if !reflect.DeepEqual(beforeB, securityFixtureTree(t, nativeB)) ||
+					!reflect.DeepEqual(beforeOther, securityFixtureTree(t, nativeOther)) {
+					t.Fatalf("%s: removal changed another Pi user/project scope", name)
+				}
+				executed = true
+			})
+			if !passed || !executed {
+				t.Fatalf("%s: skipped or incomplete signed TEST-only lifecycle", name)
+			}
+			completed = append(completed, name)
+		}
+	}
+	if selected != 12 || len(completed) != 24 {
+		t.Fatalf("shard %d did not execute 12 immutable sources x 2 saved scopes", shard)
+	}
+	if report := os.Getenv("UAP_PI_ALL_SAVED_REPORT"); report != "" {
+		head := os.Getenv("EXPECTED_HEAD")
+		decoded, err := hex.DecodeString(head)
+		if err != nil || len(decoded) != 20 || hex.EncodeToString(decoded) != head {
+			t.Fatal("report requires exact test commit SHA")
+		}
+		body, err := os.ReadFile(piFullSnapshotPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		digest := sha256.Sum256(body)
+		if hex.EncodeToString(digest[:]) != piFullExpectedSnapshotSHA256 {
+			t.Fatal("immutable original test-only snapshot digest mismatch")
+		}
+		payload, err := json.MarshalIndent(struct {
+			Kind                  string   `json:"kind"`
+			TestCommit            string   `json:"test_commit"`
+			SourceCommit          string   `json:"source_commit"`
+			SnapshotSHA256        string   `json:"snapshot_sha256"`
+			RunnerOS              string   `json:"runner_os"`
+			Shard                 int      `json:"shard"`
+			SavedCases            []string `json:"saved_cases"`
+			ProductionPublished   bool     `json:"production_published"`
+			ProductionEligibility bool     `json:"production_eligibility"`
+			SyntheticEvidence     bool     `json:"synthetic_evidence"`
+			NativePiRuntimeOAuth  bool     `json:"native_pi_runtime_or_oauth"`
+		}{
+			Kind: "pi-all-72-synthetic-test-only-saved", TestCommit: head,
+			SourceCommit: piFullRegistrySourceCommit,
+			SnapshotSHA256: "sha256:" + hex.EncodeToString(digest[:]),
+			RunnerOS: runtime.GOOS, Shard: shard, SavedCases: completed,
+			ProductionPublished: false, ProductionEligibility: false,
+			SyntheticEvidence: true, NativePiRuntimeOAuth: false,
+		}, "", "  ")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(report, append(payload, '\n'), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
