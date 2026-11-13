@@ -80,16 +80,24 @@ func testSessionContextCancellation(t *testing.T, terminationFailure bool) {
 func TestSessionContextCancellationBeforeResume(t *testing.T) {
 	dir := t.TempDir()
 	executable, err := os.Executable()
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	body, err := os.ReadFile(executable)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	fixture := filepath.Join(dir, "fixture.exe")
-	if err := os.WriteFile(fixture, body, 0700); err != nil { t.Fatal(err) }
+	if err := os.WriteFile(fixture, body, 0700); err != nil {
+		t.Fatal(err)
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	original := assignProcessToJobObject
 	assignProcessToJobObject = func(job, process windows.Handle) error {
-		if err := original(job, process); err != nil { return err }
+		if err := original(job, process); err != nil {
+			return err
+		}
 		cancel() // Exact boundary: job owns a still-suspended child.
 		return nil
 	}
@@ -102,7 +110,9 @@ func TestSessionContextCancellationBeforeResume(t *testing.T) {
 	}()
 	select {
 	case err := <-done:
-		if !errors.Is(err, context.Canceled) { t.Fatalf("cancelled suspended session: %v", err) }
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("cancelled suspended session: %v", err)
+		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("cancelled suspended session was not reaped")
 	}
