@@ -137,18 +137,27 @@ func TestClineProjectSessionComposedLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	projectJourneyWrite(t, statePath, string(withAttempt))
-	if output, err := executeSession(journey, args...); err == nil || !strings.Contains(err.Error(), "unresolved native activation attempt") {
-		t.Fatalf("session accepted unresolved native effect: %v\\n%s", err, output)
+	attemptBefore, err := os.Stat(statePath)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if len(starts) != 1 || probes != 1 {
-		t.Fatal("refused native attempt triggered a client start or inventory probe")
+	original := projectJourneyRead(t, settings)
+	for _, command := range [][]string{append(append([]string{}, run...), "--dry-run"), args} {
+		if output, runErr := executeSession(journey, command...); runErr == nil || !strings.Contains(runErr.Error(), "unresolved native activation attempt") {
+			t.Fatalf("session accepted unresolved native effect: %v\n%s", runErr, output)
+		}
+		attemptAfter, statErr := os.Stat(statePath)
+		if statErr != nil {
+			t.Fatal(statErr)
+		}
+		if len(starts) != 1 || probes != 1 || string(withAttempt) != projectJourneyRead(t, statePath) ||
+			!os.SameFile(attemptBefore, attemptAfter) || attemptBefore.Mode() != attemptAfter.Mode() ||
+			!attemptBefore.ModTime().Equal(attemptAfter.ModTime()) || original != projectJourneyRead(t, settings) {
+			t.Fatal("refused native attempt started a client, probed inventory or changed owned state")
+		}
 	}
 	projectJourneyWrite(t, statePath, savedState)
-	if savedState != projectJourneyRead(t, statePath) {
-		t.Fatal("refusal changed the retained installation state")
-	}
 
-	original := projectJourneyRead(t, settings)
 	var config map[string]any
 	if err := json.Unmarshal([]byte(original), &config); err != nil {
 		t.Fatal(err)
