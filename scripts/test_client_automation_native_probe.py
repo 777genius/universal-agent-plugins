@@ -521,7 +521,7 @@ class GrokRouteContracts(unittest.TestCase):
                         (docs / "07-mcp-servers.md").write_text("bundled native guide")
                         logs = inner.home / ".grok/logs"
                         logs.mkdir(parents=True)
-                        (logs / "unified.jsonl").write_text("{}\\n")
+                        (logs / "unified.jsonl").write_text("{}\n")
                     if mode == "full-id":
                         return 0, json.dumps([{"name": NAME, "scope": "project",
                             "path": str(inner.a / ".grok/plugins/project-probe"),

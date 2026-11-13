@@ -149,7 +149,7 @@ def grok_profile_bootstrap(before, after):
     added = sorted(set(observed) - set(original))
     def expected_native_file(path, value):
         return (path.startswith("docs/user-guide/")
-                and re.fullmatch(r"docs/user-guide/[0-9]{2}-[a-z0-9-]+\\.md", path)
+                and re.fullmatch(r"docs/user-guide/[0-9]{2}-[a-z0-9-]+\.md", path)
                 and "sha256" in value or path == "logs/unified.jsonl" and "sha256" in value)
     directories = {"docs", "docs/user-guide", "logs"}
     require(before["a"] == after["a"] and before["b"] == after["b"]
