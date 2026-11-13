@@ -221,15 +221,6 @@ func command(r request) (ports.Command, error) {
 	cmd.Argv = append(cmd.Argv, "--scope", "project", "--project-root", project)
 	return cmd, nil
 }
-func verifyPins(root string) error {
-	uap, native, probe := paths(root)
-	for _, item := range [][3]string{{uap, root, installerSHA}, {native, root, nativeSHA}, {probe, root, probeSHA}, {gitBinary, filepath.Dir(gitBinary), gitSHA}, {goBinary, filepath.Dir(goBinary), goSHA}} {
-		if err := pin(item[0], item[1], item[2]); err != nil {
-			return err
-		}
-	}
-	return nil
-}
 func settled(result ports.CommandResult, executionErr, contextErr error) error {
 	if executionErr != nil || contextErr != nil || !result.CleanupComplete || result.NoChildStarted || len(result.Stdout) >= 1<<20 || len(result.Stderr) >= 32768 {
 		return errors.Join(errors.New("command settlement refused"), executionErr, contextErr)
@@ -273,79 +264,6 @@ func emitResult(ctx context.Context, output io.Writer, req request, result ports
 		"runtime_sha256": map[string]string{"native": nativeSHA, "installer": installerSHA, "probe": probeSHA, "git": gitSHA, "go": goSHA, "fixture_source": fixtureSHA}})
 }
 
-type runtimeLease struct {
-	file *os.File
-	info os.FileInfo
-}
-
-func release(leases []runtimeLease) (err error) {
-	for index := range leases {
-		if leases[index].file != nil {
-			err = errors.Join(err, leases[index].file.Close())
-			leases[index].file = nil
-		}
-	}
-	return err
-}
-func openRuntime(path string) (*os.File, error) {
-	root, err := os.OpenRoot(filepath.Dir(path))
-	if err != nil {
-		return nil, err
-	}
-	file, openErr := atomicfile.OpenRootReadFile(root, filepath.Base(path))
-	err = errors.Join(openErr, root.Close())
-	if err != nil && file != nil {
-		err = errors.Join(err, file.Close())
-		file = nil
-	}
-	return file, err
-}
-func holdRuntime(root string) (leases []runtimeLease, resultErr error) {
-	defer func() {
-		if resultErr != nil {
-			resultErr = errors.Join(resultErr, release(leases))
-		}
-	}()
-	uap, native, probe := paths(root)
-	for _, path := range []string{uap, native, probe, gitBinary, goBinary} {
-		file, err := openRuntime(path)
-		if err != nil {
-			return leases, err
-		}
-		info, err := file.Stat()
-		leases = append(leases, runtimeLease{file, info})
-		if err != nil {
-			return leases, err
-		}
-	}
-	return leases, nil
-}
-func verifyLeases(leases []runtimeLease) error {
-	for _, lease := range leases {
-		info, err := lease.file.Stat()
-		linked, linkErr := os.Lstat(lease.file.Name())
-		if err != nil || linkErr != nil || !unchanged(lease.info, info) || !unchanged(lease.info, linked) {
-			return errors.New("held runtime identity changed")
-		}
-	}
-	return nil
-}
-func joinRoot(root *os.Root, original os.FileInfo, path string) (resultErr error) {
-	parent, err := os.OpenRoot(filepath.Dir(path))
-	if err != nil {
-		return err
-	}
-	defer func() { resultErr = errors.Join(resultErr, parent.Close()) }()
-	linked, err := parent.Lstat(filepath.Base(path))
-	if err != nil {
-		return err
-	}
-	held, err := root.Stat(".")
-	if err != nil || !os.SameFile(original, held) || !os.SameFile(original, linked) || original.Mode() != held.Mode() || original.Mode() != linked.Mode() {
-		return errors.New("original root changed")
-	}
-	return nil
-}
 func execute(ctx context.Context, req request, cmd ports.Command, invoke runner) (result ports.CommandResult, resultErr error) {
 	canonical, err := filepath.EvalSymlinks(req.Root)
 	if err != nil || canonical != req.Root {
@@ -365,20 +283,14 @@ func execute(ctx context.Context, req request, cmd ports.Command, invoke runner)
 	if err != nil || !before.IsDir() || before.Mode()&os.ModeSymlink != 0 {
 		return result, errors.New("root refused")
 	}
-	if err = errors.Join(verifyLeases(leases), verifyPins(req.Root)); err != nil {
-		return result, err
-	}
-	if err = joinRoot(rootHandle, before, req.Root); err != nil {
+	if err = verifyRuntime(ctx, rootHandle, before, req.Root, leases); err != nil {
 		return result, err
 	}
 	result, err = invoke(ctx, cmd, 5*time.Second)
 	if err = settled(result, err, ctx.Err()); err != nil {
 		return result, err
 	}
-	if err = joinRoot(rootHandle, before, req.Root); err != nil {
-		return result, err
-	}
-	if err = errors.Join(verifyLeases(leases), verifyPins(req.Root)); err != nil {
+	if err = verifyRuntime(ctx, rootHandle, before, req.Root, leases); err != nil {
 		return result, err
 	}
 	if err = release(leases); err != nil {

@@ -473,6 +473,15 @@ func TestOriginalRootJoinAndFinalCancellation(t *testing.T) {
 	if err = joinRoot(root, original, r.Root); err != nil {
 		t.Fatal(err)
 	}
+	leases, err := holdRuntime(r.Root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if e := release(leases); e != nil {
+			t.Error(e)
+		}
+	}()
 	moved := r.Root + "-moved"
 	err = os.Rename(r.Root, moved)
 	if runtime.GOOS == "windows" && errors.Is(err, syscall.Errno(32)) {
@@ -491,9 +500,10 @@ func TestOriginalRootJoinAndFinalCancellation(t *testing.T) {
 		if err = os.Mkdir(r.Root, 0700); err != nil {
 			t.Fatal(err)
 		}
-		if err = joinRoot(root, original, r.Root); err == nil {
+		if err = verifyRuntime(context.Background(), root, original, r.Root, leases); err == nil {
 			t.Fatal("replaced root admitted before launch")
 		}
+		requireRuntimeOffsets(t, leases, 0)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -534,7 +544,137 @@ func TestHeldRuntimeRefusesSameByteReplacement(t *testing.T) {
 	if err = pin(uap, r.Root, installerSHA); err != nil {
 		t.Fatal("same bytes must still match digest", err)
 	}
-	if err = verifyLeases(leases); err == nil {
+	if err = hashLease(leases[0]); err == nil {
 		t.Fatal("same-byte replacement admitted under old held identity")
 	}
+	requireRuntimeOffsets(t, leases, 0)
+}
+
+func requireRuntimeOffsets(t *testing.T, leases []runtimeLease, want int64) {
+	t.Helper()
+	for _, lease := range leases {
+		offset, err := lease.file.Seek(0, io.SeekCurrent)
+		if err != nil || offset != want {
+			t.Fatalf("held descriptor offset = %d, want %d: %v", offset, want, err)
+		}
+	}
+}
+
+func TestRuntimeHashesHeldDescriptorsAfterCompleteMetadataGate(t *testing.T) {
+	for _, condition := range []string{"rewind", "last-lease", "oversize", "hash", "canceled"} {
+		t.Run(condition, func(t *testing.T) {
+			r := fixedFixture(t)
+			if condition == "oversize" {
+				if err := os.Truncate(goBinary, (256<<20)+1); err != nil {
+					t.Fatal(err)
+				}
+			}
+			root, err := os.OpenRoot(r.Root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() {
+				if e := root.Close(); e != nil {
+					t.Error(e)
+				}
+			})
+			original, err := root.Stat(".")
+			if err != nil {
+				t.Fatal(err)
+			}
+			leases, err := holdRuntime(r.Root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() {
+				if e := release(leases); e != nil {
+					t.Error(e)
+				}
+			})
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			switch condition {
+			case "rewind":
+				for _, lease := range leases {
+					if _, err = lease.file.Seek(2, io.SeekStart); err != nil {
+						t.Fatal(err)
+					}
+				}
+			case "last-lease":
+				leases[len(leases)-1].info = leases[0].info
+			case "hash":
+				leases[0].expectedSHA = strings.Repeat("0", 64)
+			case "canceled":
+				cancel()
+			}
+			err = verifyRuntime(ctx, root, original, r.Root, leases)
+			if condition == "rewind" {
+				if err != nil {
+					t.Fatal(err)
+				}
+				requireRuntimeOffsets(t, leases, int64(len("inert")))
+				if err = verifyRuntime(ctx, root, original, r.Root, leases); err != nil {
+					t.Fatal("repeat did not rewind retained files", err)
+				}
+				requireRuntimeOffsets(t, leases, int64(len("inert")))
+				return
+			}
+			if err == nil {
+				t.Fatal("unproved runtime admitted")
+			}
+			if condition == "hash" {
+				if !strings.Contains(err.Error(), "runtime hash differs") {
+					t.Fatal("digest gate was not reached", err)
+				}
+				requireRuntimeOffsets(t, leases[:1], int64(len("inert")))
+				requireRuntimeOffsets(t, leases[1:], 0)
+				return
+			}
+			if condition == "canceled" && !errors.Is(err, context.Canceled) {
+				t.Fatal("original cancellation not retained", err)
+			}
+			requireRuntimeOffsets(t, leases, 0)
+		})
+	}
+}
+
+func TestRuntimeRetainsOriginalContainmentRoots(t *testing.T) {
+	r := fixedFixture(t)
+	_, native, _ := paths(r.Root)
+	outside := t.TempDir()
+	foreign := filepath.Join(outside, filepath.Base(native))
+	if err := os.WriteFile(foreign, []byte("inert"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	file, err := openRuntime(foreign, r.Root)
+	if file != nil {
+		t.Fatal("lexically outside runtime opened", errors.Join(err, file.Close()))
+	}
+	if err == nil {
+		t.Fatal("lexically outside runtime admitted")
+	}
+	t.Run("outside-parent", func(t *testing.T) {
+		parent := filepath.Dir(native)
+		if err = os.Rename(parent, parent+"-original"); err != nil {
+			t.Fatal(err)
+		}
+		if err = os.Symlink(outside, parent); err != nil {
+			if runtime.GOOS == "windows" && errors.Is(err, syscall.Errno(1314)) {
+				t.Skipf("real directory symlink unavailable: Windows privilege not held: %v", err)
+			}
+			t.Fatal(err)
+		}
+		leases, err := holdRuntime(r.Root)
+		t.Cleanup(func() {
+			if e := release(leases); e != nil {
+				t.Error(e)
+			}
+		})
+		if err == nil {
+			t.Fatal("outside ancestor with matching pinned bytes admitted")
+		}
+		if len(leases) != 1 || leases[0].file != nil {
+			t.Fatal("partially opened runtime leases were not released")
+		}
+	})
 }

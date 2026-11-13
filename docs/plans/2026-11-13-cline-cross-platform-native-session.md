@@ -166,3 +166,33 @@ The proof is portable incarnation, mode, size and mtime continuity plus compiled
 The shared research utility retains its lazy POSIX resource import. Its process entrypoint now refuses absent resource support before creating capture files or starting a child; bounded reads and the complete Cline frontend remain importable without resource. The isolated-import regression, held-root/runtime replacement and late-cancellation contracts accompany the change.
 
 Before execution became unavailable, the corresponding 40692b0f union passed focused Cline Go tests, 59 shared Python contracts and 13 Antigravity contracts; full Core completed with the retained 25 host-restricted failures in seven packages. This source is reconciled with subsequent branch changes through 64cf9251 and requires fresh hosted lint, Core and native cross-platform checks. No pending or historical result is substituted for current-source acceptance.
+
+## Runtime pins read only retained descriptors
+
+The b526 follow-up retained original files but still evaluated both operands of
+errors.Join(verifyLeases, verifyPins): a refused identity could be followed by
+a new path-based byte read. The first root join also followed those reads.
+This correction keeps the exact five compiled pins in their original leases.
+Before any seek/read, the original root and all five metadata records must join;
+each held file is then rewound and hashed through the same descriptor with the
+existing 256 MiB cap, exact size/SHA and metadata checks around the read.
+A final root/all-leases/context join precedes invocation or successful return.
+Selected MCP pin/heldRead behavior, cleanup and execution by name are unchanged.
+
+The cohesive runtime.go contains the existing lease/root functions and this
+bounded verification. Direct offset contracts prove held-FD reads and repeat
+rewind; a mismatched last real FileInfo and an oversized last file leave every
+offset zero. Same-byte path/root replacement, wrong hash and cancellation remain
+refusals. No test-only hook, ownership claim or FD-based execution is introduced.
+Local execution is unavailable; these contracts, formatting/lint and native
+cross-platform checks remain unexecuted until exact-source hosted CI runs.
+
+Containment also retains each former pin's exact root: the request root for
+UAP/native/probe and the respective binary directory for Git/Go. Opening leases
+uses the original root-relative atomic reader, not a newly trusted parent.
+The real outside-parent symlink with matching bytes must fail in holdRuntime
+and release its partial leases. Lexical outside paths are tested on every OS;
+Windows first attempts the real symlink; only actual
+[ERROR_PRIVILEGE_NOT_HELD 1314](https://learn.microsoft.com/en-us/windows/win32/debug/system-error-codes--1300-1699-)
+skips that separate subtest. Other failures remain errors, and the portable lexical
+check runs independently. No blanket platform skip or contained-link rejection is added.
