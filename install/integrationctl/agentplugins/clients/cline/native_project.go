@@ -150,10 +150,15 @@ func ReadClineProjection(root string) (ClineProjection, error) {
 }
 
 func ClineNeutralServer(server domain.MCPServer) (nativeconfig.Server, error) {
-	result := nativeconfig.Server{
-		Type:    server.Type,
-		Command: clineDecodedString(server, "command"),
-		URL:     clineDecodedString(server, "url"),
+	result := nativeconfig.Server{Type: server.Type}
+	var err error
+	result.Command, err = clineDecodedString(server, "command")
+	if err != nil {
+		return result, err
+	}
+	result.URL, err = clineDecodedString(server, "url")
+	if err != nil {
+		return result, err
 	}
 	if err := applyClineNeutralCWD(&result, server); err != nil {
 		return result, err
@@ -162,7 +167,6 @@ func ClineNeutralServer(server domain.MCPServer) (nativeconfig.Server, error) {
 	if err := applyClineNeutralArgs(&result, server); err != nil {
 		return result, err
 	}
-	var err error
 	result.Env, err = clineStringMap(server, "env")
 	if err != nil {
 		return result, err
@@ -171,9 +175,16 @@ func ClineNeutralServer(server domain.MCPServer) (nativeconfig.Server, error) {
 	return result, err
 }
 
-func clineDecodedString(server domain.MCPServer, key string) string {
-	value, _ := server.Decoded[key].(string)
-	return value
+func clineDecodedString(server domain.MCPServer, key string) (string, error) {
+	value, present := server.Decoded[key]
+	if !present {
+		return "", nil
+	}
+	text, ok := value.(string)
+	if !ok {
+		return "", fmt.Errorf("Cline MCP server %s must be a string", key)
+	}
+	return text, nil
 }
 
 func applyClineNeutralCWD(result *nativeconfig.Server, server domain.MCPServer) error {

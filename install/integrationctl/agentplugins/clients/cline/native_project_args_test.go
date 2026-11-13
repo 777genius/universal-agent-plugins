@@ -100,3 +100,56 @@ func TestClineNeutralMapsPreserveAbsentAndValidValues(t *testing.T) {
 		})
 	}
 }
+
+func TestClineNeutralStringFieldsRejectMalformedValues(t *testing.T) {
+	t.Parallel()
+	for _, field := range []string{"command", "url"} {
+		for _, tc := range []struct {
+			name  string
+			value any
+		}{
+			{"explicit-null", nil},
+			{"number", 7},
+			{"boolean", true},
+			{"array", []any{"node"}},
+			{"object", map[string]any{"value": "node"}},
+		} {
+			t.Run(field+"/"+tc.name, func(t *testing.T) {
+				kind := "stdio"
+				if field == "url" {
+					kind = "streamable-http"
+				}
+				_, err := ClineNeutralServer(domain.MCPServer{
+					Type: kind, Decoded: map[string]any{field: tc.value},
+				})
+				if err == nil {
+					t.Fatalf("malformed authored %s value %T was silently discarded", field, tc.value)
+				}
+			})
+		}
+	}
+}
+
+func TestClineNeutralStringFieldsPreserveAbsentAndValidValues(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name    string
+		kind    string
+		decoded map[string]any
+		command string
+		url     string
+	}{
+		{"absent-stdio", "stdio", map[string]any{}, "", ""},
+		{"stdio-command", "stdio", map[string]any{"command": "node"}, "node", ""},
+		{"absent-remote", "streamable-http", map[string]any{}, "", ""},
+		{"remote-url", "streamable-http", map[string]any{"url": "https://example.invalid/mcp"}, "", "https://example.invalid/mcp"},
+		{"empty-fields", "stdio", map[string]any{"command": "", "url": ""}, "", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := ClineNeutralServer(domain.MCPServer{Type: tc.kind, Decoded: tc.decoded})
+			if err != nil || got.Command != tc.command || got.URL != tc.url {
+				t.Fatalf("authored string fields changed: command=%q url=%q err=%v", got.Command, got.URL, err)
+			}
+		})
+	}
+}
