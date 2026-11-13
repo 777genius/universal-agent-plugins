@@ -225,7 +225,7 @@ func (c *controller) trustedDriverFrame(stage, scope, trust, requestPath, ready,
 	publisher := filepath.Join(canonicalPublisherRoot, "code")
 	observer := filepath.Join(c.request.Base, "tools", "observer")
 	args := []string{"--new-window", "--disable-crash-reporter", "--locale", "en", "--user-data-dir", f.Profile, "--extensions-dir", f.Extensions,
-		"--extensionDevelopmentPath", observer, "--enable-proposed-api", "uap-research.project-runtime-observer", "--remote-debugging-port=0", project}
+		"--extensionDevelopmentPath", observer, "--enable-proposed-api", "uap-research.project-runtime-observer", "--remote-debugging-port=0", "--use-inmemory-secretstorage", project}
 	env := c.trustedEnvironment()
 	env["UAP_VSCODE_WORKSPACE_FOLDER"] = project
 	env["UAP_VSCODE_TRUSTED_REQUEST"] = requestPath

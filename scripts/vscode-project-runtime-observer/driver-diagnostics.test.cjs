@@ -115,6 +115,27 @@ test('terminal failure publication follows publisher cleanup and waits for super
 
 // Actual asynchronous picker and terminal handoff helpers.
 function section(start, end) { return source.slice(source.indexOf(start), source.indexOf(end, source.indexOf(start))); }
+test('actual publisher admission requires only the isolated in-memory secret-storage vector', () => {
+  const context = { Error, canonical: value => value, contained: (base, value) => value.startsWith(base + '/') };
+  vm.createContext(context);
+  vm.runInContext(stripTypeScriptTypes(section('function publisherArguments(', 'function request('), { mode: 'strip' })
+    + '\nglobalThis.admit = publisherArguments;', context);
+  const args = ['--new-window', '--disable-crash-reporter', '--locale', 'en', '--user-data-dir', '/profile',
+    '--extensions-dir', '/extensions', '--extensionDevelopmentPath', '/observer',
+    '--enable-proposed-api', 'uap-research.project-runtime-observer', '--remote-debugging-port=0', '--use-inmemory-secretstorage', '/project'];
+  assert.deepEqual(Array.from(context.admit(args, '/project')), args);
+  for (const flag of ['--password-store=basic', '--disable-keytar', '--disable-workspace-trust', '--no-sandbox', '']) {
+    const changed = [...args]; changed[13] = flag;
+    assert.throws(() => context.admit(changed, '/project'), /frozen vector/);
+  }
+  assert.throws(() => context.admit(args.filter((_, index) => index !== 13), '/project'), /fixed publisher argv/);
+  assert.throws(() => context.admit([...args, '--use-inmemory-secretstorage'], '/project'), /fixed publisher argv/);
+  for (const index of [5, 7, 9]) {
+    const changed = [...args]; changed[index] = '/project/private';
+    assert.throws(() => context.admit(changed, '/project'), /separate from the project/);
+  }
+});
+
 function helpers(rowsByPoll, textRead) {
   let now = 0, polls = 0;
   const sandbox = { Error, performance: { now: () => now }, delay: async ms => { now += ms; },

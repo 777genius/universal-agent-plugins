@@ -247,6 +247,19 @@ function contained(root: string, path: string): boolean {
   const rel = relative(root, path);
   return rel !== '' && rel !== '..' && !rel.startsWith('../') && !isAbsolute(rel);
 }
+function publisherArguments(args: unknown, project: string): string[] {
+  if (!Array.isArray(args) || args.some(arg => typeof arg !== 'string') || args.length !== 15) throw new Error('fixed publisher argv required');
+  const a = args as string[];
+  const profile = canonical(a[5], true), extensions = canonical(a[7], true), observer = canonical(a[9], true);
+  const expected = ['--new-window', '--disable-crash-reporter', '--locale', 'en', '--user-data-dir', profile,
+    '--extensions-dir', extensions, '--extensionDevelopmentPath', observer,
+    '--enable-proposed-api', 'uap-research.project-runtime-observer', '--remote-debugging-port=0', '--use-inmemory-secretstorage', project];
+  if (JSON.stringify(a) !== JSON.stringify(expected)) throw new Error('publisher argv differs from frozen vector');
+  if ([profile, extensions, observer].some(path => path === project || contained(project, path) || contained(path, project)))
+    throw new Error('native profile/tools must be separate from the project');
+  return a;
+}
+
 function request(value: unknown): Request {
   const v = object(value);
   keys(v, ['mode', 'stage', 'project', 'publisher', 'publisherArgs', 'publisherEnv',
@@ -260,16 +273,7 @@ function request(value: unknown): Request {
     || v.timeoutMs !== 60000 || !['prompt', 'persisted'].includes(String(v.trustExpected))) throw new Error('stage identity or limits differ');
   const project = canonical(v.project, true), publisher = canonical(v.publisher, false);
   if (publisher !== '/usr/share/code/code' || basename(publisher) !== 'code') throw new Error('exact publisher entrypoint required');
-  const args = v.publisherArgs;
-  if (!Array.isArray(args) || args.some(arg => typeof arg !== 'string') || args.length !== 14) throw new Error('fixed publisher argv required');
-  const a = args as string[];
-  const profile = canonical(a[5], true), extensions = canonical(a[7], true), observer = canonical(a[9], true);
-  const expected = ['--new-window', '--disable-crash-reporter', '--locale', 'en', '--user-data-dir', profile,
-    '--extensions-dir', extensions, '--extensionDevelopmentPath', observer,
-    '--enable-proposed-api', 'uap-research.project-runtime-observer', '--remote-debugging-port=0', project];
-  if (JSON.stringify(a) !== JSON.stringify(expected)) throw new Error('publisher argv differs from frozen vector');
-  if ([profile, extensions, observer].some(path => path === project || contained(project, path) || contained(path, project)))
-    throw new Error('native profile/tools must be separate from the project');
+  const a = publisherArguments(v.publisherArgs, project);
   const env = object(v.publisherEnv), allowed = new Set(['HOME', 'USERPROFILE', 'PATH', 'LANG', 'TMPDIR', 'DISPLAY', 'XAUTHORITY',
     'NO_COLOR', 'TERM', 'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_CACHE_HOME', 'XDG_STATE_HOME',
     'UAP_VSCODE_WORKSPACE_FOLDER', 'UAP_VSCODE_TRUSTED_REQUEST', 'UAP_VSCODE_TRUSTED_READY', 'UAP_VSCODE_TRUSTED_RESULT']);

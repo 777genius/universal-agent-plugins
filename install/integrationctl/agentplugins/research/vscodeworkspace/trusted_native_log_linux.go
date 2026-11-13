@@ -11,8 +11,6 @@ import (
 	"regexp"
 	"syscall"
 	"time"
-
-	"golang.org/x/sys/unix"
 )
 
 // Pinned e646: environmentService.logsHome/windowLogsPath, logger toResource,
@@ -147,6 +145,7 @@ type nativeLogBaseline struct {
 	root         *os.Root
 	profile      string
 	original     os.FileInfo
+	mount        uint64
 	sessions     map[string]bool
 	logsOriginal os.FileInfo
 }
@@ -181,6 +180,11 @@ func beginNativeLog(profile string, owner int) (*nativeLogBaseline, error) {
 		return nil, fmt.Errorf("native log original root changed")
 	}
 	b := &nativeLogBaseline{root: root, profile: profile, original: info, sessions: map[string]bool{}}
+	b.mount, err = nativeLogRootMount(root)
+	if err != nil {
+		_ = root.Close()
+		return nil, err
+	}
 	logs, err := holdNativeLogDirectory(root, "logs", info.Sys().(*syscall.Stat_t).Uid, info.Sys().(*syscall.Stat_t).Gid, info.Sys().(*syscall.Stat_t).Dev)
 	if os.IsNotExist(err) {
 		return b, nil
@@ -331,26 +335,19 @@ func (b *nativeLogBaseline) collectChecked(settled bool, deadline time.Time, lab
 }
 func (b *nativeLogBaseline) readNativeLogChecked(deadline time.Time, label string, current os.FileInfo, logs, run, view nativeLogDirectory) (nativeLogFacts, nativeLogCheck) {
 	unavailable := unavailableNativeLog()
-	reason := nativeLogCheck("leaf-stat-type-link-size")
 	st := b.original.Sys().(*syscall.Stat_t)
 	name := "mcpServer.mcp.config.ws0." + label + ".log"
-	info, err := view.root.Lstat(name)
-	if err != nil || !regular(info, 64<<10) {
+	leaf, reason := holdNativeLogLeaf(view.root, name, st.Uid, st.Gid)
+	if reason != "none" {
 		return unavailable, reason
 	}
-	reason = "leaf-owner-device"
-	leaf, ok := info.Sys().(*syscall.Stat_t)
-	if !ok || leaf.Uid != st.Uid || leaf.Gid != st.Gid || leaf.Dev != st.Dev {
-		return unavailable, reason
-	}
-	reason = "leaf-open"
-	f, err := view.root.OpenFile(name, os.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0)
-	if err != nil {
-		return unavailable, reason
-	}
-	defer func() { _ = f.Close() }()
+	defer leaf.close()
 	verify := func() bool {
-		reason = nativeLogFileJoins(b.profile, current, info, view, name, f)
+		if !b.sameNativeLogMounts(leaf.parent, leaf.file) {
+			reason = "leaf-mount"
+			return false
+		}
+		reason = nativeLogFileJoins(b.profile, current, leaf.original, view, name, leaf.file)
 		if reason != "none" {
 			return false
 		}
@@ -370,7 +367,7 @@ func (b *nativeLogBaseline) readNativeLogChecked(deadline time.Time, label strin
 		return true
 	}
 	reason = "body"
-	body, err := readNativeLogBody(f, info.Size(), verify)
+	body, err := readNativeLogBody(leaf.file, leaf.original.Size(), verify)
 	if err != nil {
 		if reason == "body" || reason == "none" {
 			reason = "body-" + nativeLogCode(err)
@@ -428,7 +425,7 @@ func readNativeLogBody(reader io.Reader, expected int64, verify func() bool) ([]
 	return body, nil
 }
 
-var nativeLogRefusalCode = regexp.MustCompile(`^(initial|profile|profile-owner|logs-original|leaf-stat-type-link-size|leaf-owner-device|leaf-open|verify-stat|deadline|parser-or-deadline|body-(pre-read|read|size|post-read|io)|(session|window)-name-(member-bound|name|ambiguous|missing|io)|(profile|leaf-named|leaf-held)-(stat|stat-type|identity|mode|size|mtime|links|ctime|uid|gid|identity-type|none)|(logs|session|window)-(io|stat-type|type|uid|gid|device|held-stat|(named|held)-(stat|stat-type|identity|mode|size|mtime|links|ctime|uid|gid|identity-type|none)))$`)
+var nativeLogRefusalCode = regexp.MustCompile(`^(initial|profile|profile-owner|logs-original|leaf-stat-type-link-size|leaf-owner-device|leaf-mount|leaf-open|verify-stat|deadline|parser-or-deadline|body-(pre-read|read|size|post-read|io)|(session|window)-name-(member-bound|name|ambiguous|missing|io)|(profile|leaf-named|leaf-held)-(stat|stat-type|identity|mode|size|mtime|links|ctime|uid|gid|identity-type|none)|(logs|session|window)-(io|stat-type|type|uid|gid|device|held-stat|(named|held)-(stat|stat-type|identity|mode|size|mtime|links|ctime|uid|gid|identity-type|none)))$`)
 
 func nativeLogRefusalFrame(code nativeLogCheck) []byte {
 	if len(code) > 96 || !nativeLogRefusalCode.MatchString(string(code)) {

@@ -13,6 +13,26 @@ import (
 	"testing"
 )
 
+func TestTrustedDriverFrameKeepsSecretsInMemory(t *testing.T) {
+	c := controller{request: sealedRequest{Base: "/owned"}, trustedState: &trustedLifecycle{
+		Home: "/owned/home", Root: "/owned/root", Profile: "/owned/profile", Extensions: "/owned/extensions",
+		Projects: map[string]string{"a": "/owned/project-a"},
+	}}
+	body, err := c.trustedDriverFrame("installed-a", "a", "persisted", "/owned/request", "/owned/ready", "/owned/result", "/owned/driver", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var frame struct {
+		Args []string `json:"publisherArgs"`
+	}
+	if err := json.Unmarshal(body, &frame); err != nil {
+		t.Fatal(err)
+	}
+	if len(frame.Args) != 15 || frame.Args[13] != "--use-inmemory-secretstorage" || frame.Args[14] != "/owned/project-a" {
+		t.Fatal("isolated publisher secret-storage contract differs")
+	}
+}
+
 func trustedContractFixture(t *testing.T) (string, trustedToolManifest) {
 	t.Helper()
 	root := t.TempDir()

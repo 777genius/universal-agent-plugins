@@ -54,7 +54,14 @@ func TestNativeLogSettledAuthority(t *testing.T) {
 		t.Fatal("unsettled/late read admitted")
 	}
 	if facts, reason := baseline.collectChecked(true, deadline, "owned"); facts.Status != "observed" || !facts.TransportStart {
-		t.Fatalf("settled projection refused at own predicate %s", reason)
+		info, statErr := os.Lstat(leaf)
+		if statErr != nil {
+			t.Fatalf("settled projection refused at own predicate %s; leaf stat unavailable", reason)
+		}
+		parent := baseline.original.Sys().(*syscall.Stat_t)
+		file := info.Sys().(*syscall.Stat_t)
+		t.Fatalf("settled projection refused at own predicate %s; uid_equal=%t gid_equal=%t device_equal=%t", reason,
+			parent.Uid == file.Uid, parent.Gid == file.Gid, parent.Dev == file.Dev)
 	}
 	if err := os.Link(leaf, filepath.Join(profile, "alias")); err != nil {
 		t.Fatal(err)
@@ -74,6 +81,58 @@ func TestNativeLogSettledAuthority(t *testing.T) {
 	}
 	if facts, _ := baseline.collectChecked(true, deadline, "owned"); facts.Status != "unavailable" {
 		t.Fatal("aliased window admitted")
+	}
+}
+
+func TestNativeLogHeldMountAuthority(t *testing.T) {
+	profile := t.TempDir()
+	baseline, err := beginNativeLog(profile, os.Getuid())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer baseline.close()
+	parent, err := baseline.root.Open(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = parent.Close() }()
+	if err := os.WriteFile(filepath.Join(profile, "owned"), []byte("safe"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	leaf, err := baseline.root.Open("owned")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = leaf.Close() }()
+	if !baseline.sameNativeLogMounts(parent, leaf) {
+		t.Fatal("same held mount refused")
+	}
+	foreign, err := os.Open("/proc/self/stat")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = foreign.Close() }()
+	if _, err := readNativeLogBody(nativeLogReadTripwire{t}, 0, func() bool {
+		return baseline.sameNativeLogMounts(parent, foreign)
+	}); err == nil {
+		t.Fatal("different held mount reached bytes")
+	}
+	if baseline.sameNativeLogMounts(foreign, leaf) {
+		t.Fatal("different held parent mount admitted")
+	}
+	reads := 0
+	if _, err := readNativeLogBody(strings.NewReader("safe"), 4, func() bool {
+		reads++
+		if reads == 2 {
+			baseline.mount++
+		}
+		return baseline.sameNativeLogMounts(parent, leaf)
+	}); err == nil || reads != 2 {
+		t.Fatal("post-read mount drift admitted")
+	}
+	baseline.mount = 0
+	if baseline.sameNativeLogMounts(parent, leaf) {
+		t.Fatal("missing original mount admitted")
 	}
 }
 func TestNativeLogNoPriorSessionAdoption(t *testing.T) {
@@ -151,8 +210,9 @@ func TestNativeLogPrivatePredicateNames(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, field := range []string{"links", "ctime", "uid", "gid"} {
+	for _, field := range []string{"links", "ctime", "uid", "gid", "device", "inode"} {
 		value := *original.Sys().(*syscall.Stat_t)
+		expected := nativeLogCheck(field)
 		switch field {
 		case "links":
 			value.Nlink++
@@ -162,8 +222,14 @@ func TestNativeLogPrivatePredicateNames(t *testing.T) {
 			value.Uid++
 		case "gid":
 			value.Gid++
+		case "device":
+			value.Dev++
+			expected = "identity"
+		case "inode":
+			value.Ino++
+			expected = "identity"
 		}
-		if code := nativeLogDifference(original, nativeLogStatView{original, value}); code != nativeLogCheck(field) {
+		if code := nativeLogDifference(original, nativeLogStatView{original, value}); code != expected {
 			t.Fatalf("wrong fixed predicate %s", code)
 		}
 	}

@@ -647,3 +647,82 @@ contracts passed locally. Full lint identified one obsolete test-only collect
 wrapper after the real consumer switched to collectChecked. Removing that
 wrapper and testing the actual checked seam preserves all runtime decisions,
 JSON and stderr behavior; it introduces no additional native action.
+
+### Held mount authority after the f9f Coverage refusal
+
+Actual run43500011675/job132143002761 on merge12001cb (f9f0f4b plus9a67633)
+failed only TestNativeLogSettledAuthority at the closed leaf-owner-device
+predicate. That original log records no UID/GID/device values and does not
+establish which comparison differed. The local exact fixture passes.
+
+The [Linux overlayfs contract](https://www.kernel.org/doc/html/latest/filesystems/overlayfs.html)
+allows a directory and its ordinary child to report different st_dev values.
+Comparing those two objects' device numbers is therefore an invalid general
+mount-boundary test. Preserve each object's own dev/ino, UID/GID, mode, links,
+size and timestamps; replace only the cross-type device comparison with direct
+STATX_MNT_ID joins of the held parent and leaf, before and after the bounded
+read, against the original held profile mount. Also recheck the named profile
+mount. Unknown mount identity refuses capture. This strengthens bind-mount
+boundary checks without changing any publisher sandbox, action or deadline.
+
+Scope: native-log reader and its existing contracts, one cohesive held-leaf
+helper, and this plan. Estimate 70–110 net runtime lines and 60–80 test lines;
+complexity3/10, reliability8/10, confidence8/10 before genuine hosted results.
+Root plan review accepted preserving the held-file joins; source review is
+required before publication. No native lifecycle success is inferred.
+
+The actual reader tests require same-mount acceptance, refuse a held /proc file
+before its first read, refuse a foreign held parent, and reject an inert mount-ID
+change after reading. Existing hardlink, symlink, directory replacement, late
+read and unknown-message cases remain. Per-file device/inode changes are still
+refused. A failed positive fixture now reports only fixed UID/GID/device equality
+booleans to avoid another ambiguous three-way diagnostic.
+
+Root R2 independently inspected the corrected mount reader and reran all seven
+native-log tests successfully. Full make lint passed all eight module passes
+with the unchanged 138-rule baseline. Full make test-core on that mount
+candidate exited2: the same92 top-level failures in10 packages as the saved
+readiness baseline, with no added/removed failure names. The controller's two
+failures are denied AF_UNIX fixtures; the native-log suite passes. Other logs
+include missing process-containment interfaces and duplicate Codex environment
+refusals. This failed local gate remains failed, not an accepted CI substitute.
+
+### Explicit in-memory secrets for the disposable trusted publisher
+
+The original b586 publisher-version receipt identifies1.143.1 and exact
+e646868227c3e3a9e3f24277c8c7220be42c0be7. That version's
+[argv parser](https://github.com/microsoft/vscode/blob/e646868227c3e3a9e3f24277c8c7220be42c0be7/src/vs/platform/environment/node/argv.ts)
+accepts the boolean use-inmemory-secretstorage option; its environment service
+passes that exact flag to NativeSecretStorageService. The pinned
+[MCP input store](https://github.com/microsoft/vscode/blob/e646868227c3e3a9e3f24277c8c7220be42c0be7/src/vs/workbench/contrib/mcp/common/mcpRegistryInputStorage.ts)
+obtains an encryption key even before checking whether the secret inputs are
+empty. Without explicit memory mode, a headless publisher can require OS keyring
+initialization or an unavailable-encryption dialog during launch resolution.
+This source dependency is established; its responsibility for prior installed-a
+failures is not yet established.
+
+Root plan review accepted adding only --use-inmemory-secretstorage to the
+disposable trusted publisher vector and the driver's exact admission vector.
+The official flag stores temporary secrets in memory and skips OS encryption
+availability checks and unavailable-keyring dialogs. No password-store=basic,
+legacy disable-keytar, workspace-trust or Chromium-sandbox override is added.
+Normal User profiles, product behavior and untrusted metadata research retain
+their existing configuration. Restart evidence qualifies plugin/workspace
+lifecycle only; it does not qualify persisted authentication or OS keyring use.
+
+The actual argument validator now has positive and negative tests for this
+closed vector, including missing/duplicate memory flags, other storage modes,
+sandbox/trust flags and project/profile overlap. The Go frame test verifies its
+matching wire vector. The pinned Node24.21.0 binary digest matches the retained
+original toolchain receipt, all40 driver/readiness tests pass, and the exact
+TypeScript7.0.2 compiler digest plus pinned declarations pass strict compilation.
+All eight focused Go tests pass. Final independent source review and genuine
+hosted native execution remain required before any completion claim.
+
+Root R2 accepted the combined eight-file candidate after independent source
+review, eight focused Go tests and diff-check. Root separately read the pinned
+BaseSecretStorageService implementation and verified that explicit memory mode
+skips encryption-availability lookup and uses InMemoryStorageService. The final
+controller package passes its complete lint gate. The earlier full-core failure
+is retained; the one-line publisher-vector addition is checked by the new Go
+wire test, exact TypeScript validator, strict compiler and40 pinned-Node tests.
