@@ -126,8 +126,13 @@ def snapshot(root):
                 "sha256": hashlib.sha256(raw).hexdigest(), "mode": stat.S_IMODE(meta.st_mode),
                 "bytes": len(raw),
             }
-        require(os.fstat(root_fd).st_mode == observed.st_mode,
-                "snapshot root mode changed during capture")
+        # The anchored fd may still point to the old directory if its path
+        # was renamed and replaced while the snapshot was being enumerated.
+        # Mode-only verification would silently accept a different root inode.
+        identity = lambda meta: (meta.st_dev, meta.st_ino, meta.st_mode)
+        require(identity(os.fstat(root_fd)) == identity(observed)
+                and identity(root.lstat()) == identity(observed),
+                "snapshot root changed during capture")
         return out
     finally:
         os.close(root_fd)

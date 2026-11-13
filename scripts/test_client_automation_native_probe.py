@@ -356,6 +356,34 @@ class InventoryContracts(unittest.TestCase):
             with self.subTest(body=body), self.assertRaises(ValueError):
                 exact_plugin_id(body, path)
 
+    @unittest.skipUnless(os.name == "posix" and hasattr(os, "O_NOFOLLOW")
+                         and hasattr(os, "O_DIRECTORY"), "requires POSIX no-follow dirfd")
+    def test_snapshot_refuses_root_replacement_during_capture(self):
+        # A native probe can rename the watched directory and replace it
+        # with another same-mode directory after its anchored fd was opened.
+        # Never accept the stale fd's digest as evidence of the new root.
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary).resolve()
+            root = base / "watched"
+            root.mkdir()
+            (root / "config").write_text("original")
+            moved = base / "moved"
+            original_mode = root.stat().st_mode & 0o7777
+            capture = probe.read_anchored_snapshot
+
+            def replace_after_read(root_fd, parts, expected):
+                data = capture(root_fd, parts, expected)
+                root.rename(moved)
+                root.mkdir(mode=original_mode)
+                root.chmod(original_mode)
+                return data
+
+            with patch.object(probe, "read_anchored_snapshot", side_effect=replace_after_read):
+                with self.assertRaisesRegex(ValueError, "snapshot root changed"):
+                    snapshot(root)
+            self.assertEqual((moved / "config").read_text(), "original")
+            self.assertFalse((root / "config").exists())
+
     def test_snapshot_missing_root_or_root_alias_refused(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
