@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"path/filepath"
 	"sort"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
@@ -115,7 +116,7 @@ func exactSessionServers(body []byte, names []string) error {
 		}
 		command, commandOK := transport["command"].(string)
 		cwd, cwdOK := transport["cwd"].(string)
-		if !commandOK || command == "" || !cwdOK || cwd == "" {
+		if !commandOK || !filepath.IsAbs(command) || !cwdOK || !filepath.IsAbs(cwd) {
 			return fmt.Errorf("cline server %q has an incomplete managed stdio launcher", name)
 		}
 		if disabled, present := server["disabled"]; present && disabled != false {

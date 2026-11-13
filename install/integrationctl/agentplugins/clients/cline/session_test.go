@@ -2,6 +2,9 @@ package cline
 
 import (
 	"context"
+	"encoding/json"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
@@ -18,6 +21,20 @@ func TestSessionRequiresInstalledClientBeforeFileAccess(t *testing.T) {
 }
 
 func TestSessionWholeFileRefusesForeignDisabledAndMalformedMembers(t *testing.T) {
+	// Use platform-native absolute paths, including Windows drive/share paths.
+	// Relative launchers must never be resolved through the host PATH or cwd.
+	executable, err := json.Marshal(filepath.Join(t.TempDir(), "managed", "probe"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	directory, err := json.Marshal(filepath.Join(t.TempDir(), "project"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	nativePaths := func(body string) string {
+		body = strings.ReplaceAll(body, `"/managed/probe"`, string(executable))
+		return strings.ReplaceAll(body, `"/project"`, string(directory))
+	}
 	for _, body := range []string{
 		`{"mcpServers":{}}`,
 		`{"mcpServers":{"owned":{},"foreign":{}}}`,
@@ -37,8 +54,10 @@ func TestSessionWholeFileRefusesForeignDisabledAndMalformedMembers(t *testing.T)
 		`{"mcpServers":{"owned":{"transport":{"type":"stdio","command":"/managed/probe"}}}}`,
 		`{"mcpServers":{"owned":{"transport":{"type":"stdio","command":"","cwd":"/project"}}}}`,
 		`{"mcpServers":{"owned":{"transport":{"type":"stdio","command":"/managed/probe","cwd":""}}}}`,
+		`{"mcpServers":{"owned":{"transport":{"type":"stdio","command":"managed/probe","cwd":"/project"}}}}`,
+		`{"mcpServers":{"owned":{"transport":{"type":"stdio","command":"/managed/probe","cwd":"relative/project"}}}}`,
 	} {
-		if err := exactSessionServers([]byte(body), []string{"owned"}); err == nil {
+		if err := exactSessionServers([]byte(nativePaths(body)), []string{"owned"}); err == nil {
 			t.Fatal("unsafe session source accepted", body)
 		}
 	}
@@ -46,7 +65,7 @@ func TestSessionWholeFileRefusesForeignDisabledAndMalformedMembers(t *testing.T)
 		`{"mcpServers":{"owned":{"transport":{"type":"stdio","command":"/managed/probe","cwd":"/project"},"disabled":false}}}`,
 		`{"mcpServers":{"owned":{"transport":{"type":"stdio","command":"/managed/probe","cwd":"/project"},"disabled":false,"autoApprove":[]}}}`,
 	} {
-		if err := exactSessionServers([]byte(body), []string{"owned"}); err != nil {
+		if err := exactSessionServers([]byte(nativePaths(body)), []string{"owned"}); err != nil {
 			t.Fatal(err)
 		}
 	}
