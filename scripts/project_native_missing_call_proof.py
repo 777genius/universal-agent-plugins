@@ -6,15 +6,15 @@ the real pinned native process, UAP installation, project selection, and
 legitimate model authorization before claiming selected-client E2E.
 """
 import argparse
-from datetime import datetime, timezone
+from datetime import datetime
 import json
 from pathlib import Path
 import re
 
 MAX_BYTES = 1 << 20
 MAX_ROWS = 128
-SESSION = re.compile(r"[1-9][0-9]*-[1-9][0-9]*\\Z")
-NONCE = re.compile(r"[0-9a-f]{32,64}\\Z")
+SESSION = re.compile(r"[1-9][0-9]*-[1-9][0-9]*\Z")
+NONCE = re.compile(r"[0-9a-f]{32,64}\Z")
 METHODS = frozenset({"initialize", "tools/list", "tools/call"})
 
 
@@ -40,7 +40,7 @@ def _timestamp(value):
 
 
 def read_events(body):
-    if not isinstance(body, bytes) or len(body) > MAX_BYTES or (body and not body.endswith(b"\\n")):
+    if not isinstance(body, bytes) or len(body) > MAX_BYTES or (body and not body.endswith(b"\n")):
         raise ValueError("unbounded/incomplete event log")
     lines = body.splitlines()
     if len(lines) > MAX_ROWS:
