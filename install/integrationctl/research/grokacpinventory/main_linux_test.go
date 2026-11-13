@@ -322,7 +322,6 @@ func TestInputDirectoryReplacementIsRefusedWithoutDeletion(t *testing.T) {
 	}
 }
 
-
 func TestSessionModeKeepsMetadataCommandAndDropSuffix(t *testing.T) {
 	r := inertRequest()
 	systems := map[string]systemFact{}

@@ -59,7 +59,7 @@ type collectorRequest struct {
 	Root     string `json:"input_root"`
 	ParentNS uint64 `json:"parent_network_namespace"`
 	Start    int64  `json:"start_monotonic_ns"`
-	Mode      string `json:"mode,omitempty"`
+	Mode     string `json:"mode,omitempty"`
 }
 type isolation struct {
 	UID        int      `json:"uid"`
@@ -72,7 +72,7 @@ type isolation struct {
 	Interfaces []string `json:"interfaces"`
 	Caps       bool     `json:"capabilities_zero"`
 	NNP        int      `json:"no_new_privileges"`
-	Loopback   bool `json:"loopback_up,omitempty"`
+	Loopback   bool     `json:"loopback_up,omitempty"`
 }
 type result struct {
 	Schema    int               `json:"schema_version"`
@@ -85,8 +85,8 @@ type result struct {
 	Isolation json.RawMessage   `json:"isolation"`
 	Commands  []json.RawMessage `json:"commands"`
 	RPC       json.RawMessage   `json:"rpc"`
-	Mode      string          `json:"mode,omitempty"`
-	Provider  json.RawMessage `json:"provider,omitempty"`
+	Mode      string            `json:"mode,omitempty"`
+	Provider  json.RawMessage   `json:"provider,omitempty"`
 }
 type systemFact struct {
 	Path string `json:"path"`
