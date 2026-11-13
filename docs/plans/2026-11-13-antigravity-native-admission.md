@@ -16,6 +16,8 @@ were private disposable directories.
   No vendor import is needed. Its source field can be absent.
 - Inventory names are physical directory basenames, not manifest names. A
   renamed native directory is listed and enabled by its new basename.
+  Enable/disable stores the physical basename in config.json, independently
+  from the manifest name.
 - Direct Project `.agents/plugins` packages are absent from this CLI inventory;
   enable/disable of the Project identity fails without effects.
 - `plugin install PROJECT_PATH` copies the package into the global User plugin
@@ -52,3 +54,15 @@ inventory response does not establish IDE loading or a successful MCP call.
 References: https://antigravity.google/docs/plugins/ and
 https://antigravity.google/docs/customization-discovery/ . Current documentation
 is supplementary; pinned executable observations determine admitted behavior.
+
+## Local execution
+
+On 2026-11-13, the ordinary UAP CLI built from the baseline plus this E2E-only
+change completed the entire cross-platform harness on Linux against genuine
+agy 1.5.3: Project add/update/partial-drift refusal/absent-bundle repair,
+strict Skills/stdio/HTTP validation, separate vendor import/disable/enable/
+uninstall with exact inventory readback and foreign disablement preservation,
+direct UAP User exact-path/component discovery (`enabled=true` observed), and
+both scopes' removal/source preservation. Python syntax and diff whitespace
+checks passed. macOS/Windows and final-commit hosted execution remain pending;
+no IDE loading, MCP call or authenticated model turn was observed.
