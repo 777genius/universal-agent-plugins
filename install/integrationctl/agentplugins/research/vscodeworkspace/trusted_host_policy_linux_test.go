@@ -88,13 +88,19 @@ func TestHostPolicyOrdinaryCaptureAndNofollowRace(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = file.Close()
-	for _, kind := range []string{"foreign", "symlink", "fifo", "same-size-change"} {
+	for _, kind := range []string{"foreign", "symlink", "fifo", "same-size-mtime-change"} {
 		t.Run(kind, func(t *testing.T) {
 			if err := os.Remove(wanted); err != nil {
 				t.Fatal(err)
 			}
 			if err := os.WriteFile(wanted, []byte("same-size"), 0600); err != nil {
 				t.Fatal(err)
+			}
+			oldMtime, newMtime := time.Unix(1700000000, 0), time.Unix(1700000060, 0)
+			if kind == "same-size-mtime-change" {
+				if err := os.Chtimes(wanted, oldMtime, oldMtime); err != nil {
+					t.Fatal(err)
+				}
 			}
 			open := func(path string, flags int, mode uint32) (int, error) {
 				if flags&unix.O_NONBLOCK == 0 || flags&unix.O_NOFOLLOW == 0 || flags&unix.O_CLOEXEC == 0 {
@@ -117,9 +123,21 @@ func TestHostPolicyOrdinaryCaptureAndNofollowRace(t *testing.T) {
 					if err := unix.Mkfifo(path, 0600); err != nil {
 						t.Fatal(err)
 					}
-				case "same-size-change":
+				case "same-size-mtime-change":
+					before, err := os.Stat(path)
+					if err != nil || !before.ModTime().Equal(oldMtime) {
+						t.Fatal("old mtime premise missing", err)
+					}
 					if err := os.WriteFile(path, []byte("new-bytes"), 0600); err != nil {
 						t.Fatal(err)
+					}
+					// Do not assume rapid writes advance this filesystem's timestamps.
+					if err := os.Chtimes(path, newMtime, newMtime); err != nil {
+						t.Fatal(err)
+					}
+					after, err := os.Stat(path)
+					if err != nil || !os.SameFile(before, after) || before.Size() != after.Size() || !after.ModTime().Equal(newMtime) {
+						t.Fatal("same-inode/size and distinct mtime premise missing", err)
 					}
 				}
 				return unix.Open(path, flags, mode)
