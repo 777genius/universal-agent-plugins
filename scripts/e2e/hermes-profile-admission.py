@@ -98,32 +98,40 @@ def inventory_member(relative, info):
 
 
 def inventory(root, sentinels=()):
-    """Capture each ordinary file once through its independently checked handle."""
+    """Capture an ordinary tree, refusing after the bounded number of visits.
+
+    os.walk materializes the whole child-name list *before* the membership
+    limit is checked. A lazy scandir walk keeps that limit effective even for
+    a directory with an unexpectedly large number of entries.
+    """
     root = Path(root)
     identity = directory_identity(root)
     result, total = {}, 0
-    def walk_error(error):
-        raise error
-    for current, dirs, names in os.walk(root, followlinks=False, onerror=walk_error):
-        for path in [Path(current), *(Path(current) / name for name in dirs + names)]:
-            relative = path.relative_to(root).as_posix()
-            if relative in result:
-                continue
-            info = path.lstat()
-            require(len(result) < 2048 and len(path.relative_to(root).parts) <= 24, "inventory membership bound")
-            inventory_member(relative, info)
-            record = {"type": "directory" if stat.S_ISDIR(info.st_mode) else "file", "mode": stat.S_IMODE(info.st_mode),
-                      "device": info.st_dev, "inode": info.st_ino}
-            if record["type"] == "file":
-                body = ordinary_bytes(path, info)
-                total += len(body)
-                require(total <= 16 << 20, "inventory byte bound")
-                require(not any(marker.encode() in body for marker in sentinels), "original User settings/data copied into custom root")
-                record.update(bytes=len(body), sha256=hashlib.sha256(body).hexdigest())
-            result[relative] = record
+
+    def visit(path, depth):
+        nonlocal total
+        require(len(result) < 2048 and depth <= 24, "inventory membership bound")
+        relative = path.relative_to(root).as_posix()
+        info = path.lstat()
+        inventory_member(relative, info)
+        record = {"type": "directory" if stat.S_ISDIR(info.st_mode) else "file",
+                  "mode": stat.S_IMODE(info.st_mode), "device": info.st_dev, "inode": info.st_ino}
+        if record["type"] == "file":
+            body = ordinary_bytes(path, info)
+            total += len(body)
+            require(total <= 16 << 20, "inventory byte bound")
+            require(not any(marker.encode() in body for marker in sentinels),
+                    "original User settings/data copied into custom root")
+            record.update(bytes=len(body), sha256=hashlib.sha256(body).hexdigest())
+        result[relative] = record
+        if record["type"] == "directory":
+            with os.scandir(path) as entries:
+                for entry in entries:
+                    visit(Path(entry.path), depth + 1)
+
+    visit(root, 0)
     require(directory_identity(root) == identity, "inventory root replaced")
     return result
-
 
 def changes(before, after):
     return {name: {"before": before.get(name), "after": after.get(name)}

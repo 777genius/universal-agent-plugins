@@ -73,6 +73,39 @@ class ProfileAdmissionContracts(unittest.TestCase):
                 else:
                     self.assertTrue(CASE["changes"](before, CASE["inventory"](root)))
 
+    def test_inventory_does_not_eagerly_enumerate_past_membership_bound(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            for index in range(2048):
+                (root / f"member-{index:04d}").mkdir()
+            original_scandir, observed = os.scandir, [0]
+
+            class CountedScan:
+                def __init__(self, stream):
+                    self.stream = stream
+
+                def __enter__(self):
+                    self.stream.__enter__()
+                    return self
+
+                def __exit__(self, *args):
+                    return self.stream.__exit__(*args)
+
+                def __iter__(self):
+                    return self
+
+                def __next__(self):
+                    item = next(self.stream)
+                    observed[0] += 1
+                    if observed[0] > 2048:
+                        raise RuntimeError("scanned beyond membership bound")
+                    return item
+
+            with mock.patch.object(os, "scandir", side_effect=lambda path: CountedScan(original_scandir(path))):
+                with self.assertRaisesRegex(RuntimeError, "inventory membership bound"):
+                    CASE["inventory"](root)
+            self.assertEqual(observed[0], 2048)
+
     def test_protected_original_user_cannot_be_rebaselined(self):
         before = {"auth.json": {"sha256": "old"}, "history": {"sha256": "history"}}
         CASE["protected_unchanged"](before, dict(before), before)
