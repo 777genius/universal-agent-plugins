@@ -8,15 +8,142 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import time
+import threading
+import stat
+import platform
 
-from native_client_research import run_probe
-from project_native_research import Budget, acquire, materialize, verify_files
-from project_native_collectors.cline import ACQUISITION
-from grok_project_protocol_client import document, exercise, read_owned, require
-from grok_project_protocol_e2e import digest, write, snapshot
+import native_client_project_artifacts as artifacts
+
+from project_native_research import Budget, acquire, materialize
+from project_native_collectors.cline import platform_acquisition
+from grok_project_protocol_client import document, require
+from grok_project_protocol_e2e import digest, write
 
 NAME, SERVER = "uap-cline-session", "uap_session_probe"
 SOURCE = Path(__file__).resolve().parent.parent
+
+
+def read_owned(path, root, limit=1 << 20):
+    path, root = Path(path), Path(root)
+    require(path.is_absolute() and path.is_relative_to(root) and path != root and path.resolve() == path
+            and root.resolve() == root, "aliased or foreign fixture path")
+    before = path.lstat()
+    require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1 and before.st_size <= limit,
+            "ordinary bounded fixture file required")
+    if os.name != "nt":
+        require(before.st_uid == os.getuid(), "foreign fixture owner")
+    descriptor = artifacts.open_member(path)
+    try:
+        held = os.fstat(descriptor)
+        if artifacts.WINDOWS:
+            left, right = artifacts.windows_identity(before), artifacts.windows_identity(held)
+            require(stat.S_ISREG(held.st_mode) and left[:2] == right[:2] and left[3:] == right[3:],
+                    "Windows file authority differs")
+        else:
+            require(artifacts.same_opened(before, held), "fixture changed at open")
+        chunks, count = [], 0
+        while chunk := os.read(descriptor, min(65536, limit + 1 - count)):
+            chunks.append(chunk); count += len(chunk)
+            require(count <= limit, "fixture grew")
+        require(artifacts.identity(os.fstat(descriptor)) == artifacts.identity(held), "held fixture changed")
+    finally:
+        os.close(descriptor)
+    require(artifacts.identity(path.lstat()) == artifacts.identity(before)
+            and count == before.st_size and path.resolve() == path, "fixture namespace changed")
+    return b"".join(chunks)
+
+
+def verify_files(identities, budget):
+    for path, expected in identities.items():
+        budget.check()
+        require(hashlib.sha256(read_owned(path, path.parent, 256 << 20)).hexdigest() == expected, "runtime hash differs")
+
+
+def file_identity(path):
+    info = path.lstat()
+    return info.st_dev, info.st_ino, info.st_mode, info.st_nlink
+
+
+def snapshot(root):
+    require(root.resolve() == root and root.is_dir(), "foreign control root changed")
+    with os.scandir(root) as entries:
+        names = []
+        for entry in entries:
+            names.append(entry.name)
+            require(len(names) <= 1, "foreign control acquired a new entry")
+    require(names == ["foreign"], "foreign control membership changed")
+    return file_identity(root), file_identity(root / "foreign"), read_owned(root / "foreign", root)
+
+
+def source_identity():
+    git = Path(shutil.which("git")).resolve()
+    commit = subprocess.check_output([str(git), "rev-parse", "HEAD"], cwd=SOURCE, timeout=10).decode().strip()
+    tree = subprocess.check_output([str(git), "rev-parse", "HEAD^{tree}"], cwd=SOURCE, timeout=10).decode().strip()
+    dirty = subprocess.check_output([str(git), "status", "--porcelain", "--untracked-files=all"], cwd=SOURCE, timeout=10)
+    require(commit == os.environ.get("EXPECTED_COMMIT") and not dirty, "source is dirty or differs from requested commit")
+    return commit, tree
+
+
+def build_bridge(installer, probe, destination):
+    """Compile the fixed test driver with exact source and runtime pins."""
+    git, go = [Path(shutil.which(name)).resolve() for name in ("git", "go")]
+    commit, tree = source_identity()
+    pins = {"sourceCommit": commit, "sourceTree": tree,
+            "nativeSHA": platform_acquisition(platform.system(), platform.machine())["binary_sha256"],
+            "installerSHA": digest(installer), "probeSHA": digest(probe),
+            "fixtureSHA": digest(SOURCE / "repotests/testdata/agentplugins_native_probe/main.go"),
+            "gitBinary": str(git), "gitSHA": digest(git), "goBinary": str(go), "goSHA": digest(go)}
+    require(all("'" not in value and "\n" not in value for value in pins.values()), "compiler pin quoting refused")
+    flags = " ".join("-X 'main." + key + "=" + value + "'" for key, value in pins.items())
+    subprocess.run([str(go), "build", "-trimpath", "-ldflags", flags, "-o", str(destination),
+                    "./install/integrationctl/agentplugins/research/clinesession"],
+                   cwd=SOURCE, check=True, timeout=180)
+
+
+def invoke_bridge(helper, root, action, budget):
+    remaining = min(120, budget.check() - 10)
+    require(remaining > 5, "journey cleanup reserve exhausted")
+    request = {"schema_version": 1, "root": str(root), "action": action,
+               "source_commit": os.environ["EXPECTED_COMMIT"],
+               "source_tree": os.environ["CLINE_SOURCE_TREE"],
+               "deadline_unix_ns": time.time_ns() + int(remaining * 1_000_000_000)}
+    child = subprocess.Popen([str(helper)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE)
+    captures, failures = {}, []
+    def drain(label, stream, bound):
+        try:
+            captures[label] = stream.read(bound + 1)
+            if len(captures[label]) > bound:
+                failures.append("stream-bound"); child.stdin.close()
+        except (OSError, ValueError):
+            failures.append("stream-refused")
+    threads = [threading.Thread(target=drain, args=(label, stream, bound), daemon=True)
+               for label, stream, bound in (("out", child.stdout, 2 << 20), ("err", child.stderr, 32768))]
+    for thread in threads: thread.start()
+    try:
+        child.stdin.write(json.dumps(request).encode() + b"\n"); child.stdin.flush()
+        child.wait(timeout=remaining + 5)
+    finally:
+        child.stdin.close()
+        if child.poll() is None:
+            try: child.wait(timeout=5)
+            except subprocess.TimeoutExpired: child.kill(); child.wait(timeout=5)
+        for thread in threads: thread.join(timeout=5)
+    require(child.returncode == 0 and not failures and not any(t.is_alive() for t in threads)
+            and captures.get("err") == b"", "bridge settlement refused")
+    body = captures["out"]
+    require(body.endswith(b"\n") and body.count(b"\n") == 1, "bridge result frame refused")
+    require(len(body) <= 2 << 20, "bridge result size")
+    result = document(body)
+    require(set(result) == {"schema_version", "source_commit", "source_tree", "action", "cleanup_complete", "exit", "stdout", "stderr", "runtime_sha256"}
+            and type(result["schema_version"]) is int and result["schema_version"] == 1
+            and result["source_commit"] == request["source_commit"] and result["source_tree"] == request["source_tree"]
+            and result["action"] == action and result["cleanup_complete"] is True
+            and type(result["exit"]) is int, "bridge result identity refused")
+    out, err = [base64.b64decode(result[key] or "", validate=True) for key in ("stdout", "stderr")]
+    require(len(out) <= 1 << 20 and len(err) <= 32768, "decoded stream bound")
+    return result, out, err
 
 
 def cline_owned_stdio(entry):
@@ -45,81 +172,103 @@ def cline_owned_stdio(entry):
     return transport
 
 
+def validate_events(result, raw):
+    direct = [stage["direct_installed_mcp"] for stage in result["stages"]]
+    direct += [result["cold_locked_restore"][key] for key in ("direct_installed_mcp", "repeat_mcp")]
+    expected = {(item["facts"]["pid"], item["facts"]["session"]): item["facts"] for item in direct}
+    require(len(direct) == len(expected) == 5, "five independent fixture sessions required")
+    rows = [document(line) for line in raw.splitlines()]
+    require(len(rows) == 15, "unexpected or missing probe events")
+    grouped = {key: [] for key in expected}
+    for row in rows:
+        key = row.get("pid"), row.get("session")
+        require(type(key[0]) is int and key[0] > 0 and key in expected
+                and row.get("nonce") == expected[key]["nonce"], "unowned event session")
+        grouped[key].append(row)
+    for key, entries in grouped.items():
+        require([entry["method"] for entry in entries] == ["initialize", "tools/list", "tools/call"]
+                and entries[0]["facts"] is None and entries[1]["facts"] is None
+                and entries[2]["facts"] == expected[key], "probe event stream differs from protocol")
+
+
 class SessionJourney:
-    def __init__(self, root, cli, native, probe, evidence):
+    def __init__(self, root, cli, native, probe, helper, evidence, budget, identities):
+        self.helper, self.budget, self.settled = helper, budget, True
+        self.identities = identities
+        self.runtime_before = {path: file_identity(path) for path in identities}
         self.root, self.cli, self.native, self.probe, self.evidence = root, cli, native, probe, evidence
         self.home, self.a, self.b, self.source = [root / x for x in ("home", "a", "b", "source")]
         for path in (self.home, self.a, self.b, self.source):
             path.mkdir(mode=0o700)
         self.nonce = os.urandom(16).hex()
+        write(root / "nonce.txt", self.nonce)
         self.events = root / "mcp-events.jsonl"
         self.user_config = self.home / ".cline/data/settings/cline_mcp_settings.json"
         write(self.user_config, {"mcpServers": {"original-user": {
-            "command": "/usr/bin/false", "disabled": True, "autoApprove": []}}})
+            "command": str(root / "never-run" ), "disabled": True, "autoApprove": []}}})
         write(self.b / "foreign", "untouched")
-        self.env = {"HOME": str(self.home), "PATH": str(native.parent) + ":/usr/bin:/bin",
-                    "AGENTPLUGINS_HOME": str(root / "cache"), "CLINE_NO_AUTO_UPDATE": "1",
-                    "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null",
-                    "NO_COLOR": "1", "TERM": "dumb", "LANG": "C.UTF-8"}
         self.user_before = read_owned(self.user_config, root)
+        self.user_identity = file_identity(self.user_config)
         self.b_before = snapshot(self.b)
 
     def check(self):
-        require(read_owned(self.user_config, self.root) == self.user_before, "original User MCP changed")
+        verify_files(self.identities, self.budget)
+        require(all(file_identity(path) == before for path, before in self.runtime_before.items()), "runtime replaced")
+        require(file_identity(self.user_config) == self.user_identity
+                and read_owned(self.user_config, self.root) == self.user_before, "original User MCP changed")
         require(snapshot(self.b) == self.b_before, "Project B changed")
 
-    def run(self, label, argv, expected=(0,), cwd=None):
+    def run(self, action, expected=(0,)):
         self.check()
-        record, out, err = run_probe([str(x) for x in argv], cwd or self.a, self.env,
-                                    self.root, label, timeout=120, limit=1 << 20, memory_only=True)
+        self.settled = False
+        record, out, err = invoke_bridge(self.helper, self.root, action, self.budget)
+        self.settled = True
+        hashes = record["runtime_sha256"]
+        require(set(hashes) == {"native", "installer", "probe", "git", "go", "fixture_source"}
+                and all(isinstance(value, str) and len(value) == 64 for value in hashes.values())
+                and self.evidence.setdefault("runtime_sha256", hashes) == hashes, "runtime receipt differs")
         self.evidence["commands"].append(dict(record, stdout_base64=base64.b64encode(out).decode(),
                                                stderr_base64=base64.b64encode(err).decode()))
         self.check()
-        require(record["error"] is None and type(record["exit"]) is int
-                and record["exit"] in expected, "command failed: " + label)
+        require(type(record["exit"]) is int
+                and record["exit"] in expected, "command failed: " + action)
         return out
 
-    def uap(self, label, args, expected=(0,)):
-        return self.run(label, [self.cli, *args, "--target", "cline", "--scope", "project",
-                               "--project-root", self.a], expected)
-
-    def install(self, label, verb, selector):
-        args = [verb, selector, "--yes", "--format", "json"]
-        if verb == "add":
-            args.append("--no-save")
-        require(document(self.uap(label, args)).get("result") == "success", "UAP action was not successful")
+    def install(self, action):
+        require(document(self.run(action)).get("result") == "success", "UAP action was not successful")
 
     def author(self, revision):
         write(self.source / "plugin.json", {"$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
                                            "name": NAME, "version": "1.0." + revision})
-        binary = self.source / "bin/probe"
+        binary = self.source / ("bin/probe.exe" if os.name == "nt" else "bin/probe")
         binary.parent.mkdir(exist_ok=True)
         if not binary.exists():
             shutil.copyfile(self.probe, binary)
             binary.chmod(0o700)
         write(self.source / "skills/check/SKILL.md", "---\nname: check\ndescription: Local MCP session test\n---\nNo model.\n")
         write(self.source / "mcp.json", {"$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
-            "mcpServers": {SERVER: {"type": "stdio", "command": "./bin/probe", "args": [], "env": {
+            "mcpServers": {SERVER: {"type": "stdio", "command": "./bin/probe.exe" if os.name == "nt" else "./bin/probe", "args": [], "env": {
                 "UAP_TEST_ROOT": str(self.root), "UAP_TEST_EVENTS": str(self.events),
                 "UAP_TEST_NONCE": self.nonce, "UAP_TEST_REVISION": revision}}}})
 
-    def owned(self):
-        state = document(read_owned(self.a / ".uap/state-v2.json", self.root))
+    def owned(self, project=None, name=NAME):
+        project = project or self.a
+        state = document(read_owned(project / ".uap/state-v2.json", self.root))
         require(state.get("schema_version") == 5 and len(state.get("installations", [])) == 1, "state differs")
         installation = state["installations"][0]
-        require(installation["declared_name"] == NAME and len(installation["clients"]) == 1, "owned selection differs")
+        require(installation["declared_name"] == name and len(installation["clients"]) == 1, "owned selection differs")
         binding = next(iter(installation["clients"].values()))
         require(binding["client_id"] == "cline" and binding["scope"] == "project"
                 and binding["activation"] == "prepared", "startup changed authority or promoted activation")
         active = Path(binding["target_locator"])
-        expected = self.a / ".uap/managed/clients/cline" / binding["physical_artifact_id"]
+        expected = project / ".uap/managed/clients/cline" / binding["physical_artifact_id"]
         require(active == expected and active.resolve() == active, "foreign managed package")
         return installation, binding, active
 
     def session(self, stage, revision, create=False):
         installation, binding, active = self.owned()
         state = read_owned(self.a / ".uap/state-v2.json", self.root)
-        body = self.uap(stage + "-native-source", ["run", "--inspect", "--confirm-client-start"])
+        body = self.run("session-inspect")
         rows = document(body)
         config = self.a / ".uap/clients/cline/mcp.json"
         require(isinstance(rows, list) and len(rows) == 1 and rows[0].get("name") == SERVER
@@ -136,41 +285,45 @@ class SessionJourney:
         native_cwd = Path(selected["cwd"])
         require(native_cwd == active and native_cwd.resolve() == active and native_cwd.is_dir(),
                 "native Cline MCP cwd differs from the owned plugin root")
-        direct = exercise(selected, self.env, self.nonce, revision, "kept-" + self.nonce,
-                          create, native_cwd, native_cwd)
+        direct = document(self.run("direct-create" if create else "direct-session"))
+        require(direct.get("caller") == "direct-installed-stdio-client"
+                and direct.get("native_cline_tools_call") is False
+                and direct["facts"]["revision"] == revision
+                and direct["facts"]["operation"] == ("write" if create else "read"), "direct protocol identity differs")
         self.evidence["stages"].append({"stage": stage, "binding": binding, "native_inventory": rows,
                                          "direct_installed_mcp": direct})
         return installation, binding, active
 
     def execute(self):
-        self.run("project-init", ["/usr/bin/git", "-c", "core.hooksPath=/dev/null", "init", "--quiet"])
-        require(self.run("native-version", [self.native, "--version"]).strip() == b"3.0.73", "pinned version differs")
+        self.run("project-init")
+        require(self.run("native-version").strip() == b"3.0.73", "pinned version differs")
         self.author("0")
-        self.install("install", "add", self.source)
+        self.install("install")
         state_path = self.a / ".uap/state-v2.json"
         state = read_owned(state_path, self.root)
-        self.uap("declined-start", ["run", "--inspect"], expected=(1,))
-        self.uap("install-yes-is-not-start-consent", ["run", "--inspect", "--yes"], expected=(1,))
+        self.run("declined-start", expected=(1,))
+        self.run("install-yes-is-not-start-consent", expected=(1,))
         # Read-only diagnostics before the session planner. Keep the original
         # refusal intact; never fake a Detected client or an owned binding.
-        self.uap("preflight-list", ["list", "--format", "json"])
-        self.uap("preflight-doctor", ["doctor", "--format", "json"], expected=(0, 1, 2))
-        self.uap("preview", ["run", "--dry-run", "--format", "json"])
+        self.run("preflight-list")
+        self.run("preflight-doctor", expected=(0, 1, 2))
+        self.run("preview")
         require(not self.events.exists() and read_owned(state_path, self.root) == state, "declined start had an effect")
-        self.install("repeat-install", "add", self.source)
+        self.install("repeat-install")
         require(read_owned(state_path, self.root) == state, "repeat install changed state")
         first, binding, active = self.session("installed", "0", create=True)
         self.author("1")
-        self.install("update", "update", self.source)
+        self.install("update")
         updated, current, _ = self.session("updated", "1")
         require(current["client_binding_id"] == binding["client_binding_id"]
                 and updated["source"]["tree_digest"] != first["source"]["tree_digest"], "update identity differs")
-        shutil.rmtree(active)
-        self.uap("missing-package-refusal", ["run", "--inspect", "--confirm-client-start"], expected=(1,))
-        self.install("repair", "repair", updated["installation_id"])
+        quarantine = self.root / "missing-owned-package"
+        active.rename(quarantine)
+        self.run("missing-package-refusal", expected=(1,))
+        self.install("repair")
         repaired, current, _ = self.session("repaired", "1")
-        self.install("remove", "remove", NAME)
-        self.uap("removed-package-refusal", ["run", "--inspect", "--confirm-client-start"], expected=(1,))
+        self.install("remove")
+        self.run("removed-package-refusal", expected=(1,))
         require(not active.exists(), "owned package survives removal")
         state = document(read_owned(state_path, self.root))
         retained = state["installations"][0]
@@ -178,42 +331,129 @@ class SessionJourney:
                 and retained["data_receipts"] == repaired["data_receipts"], "retained data authority differs")
         data = Path(repaired["data_receipts"][current["data_receipt_id"]]["locator"])
         require(read_owned(data / "native-marker.txt", self.root).decode() == "kept-" + self.nonce, "user data lost")
-        original = document(self.run("ordinary-native-user-source", [self.native, "--auto-approve", "false", "config", "mcp", "--json"], cwd=self.b))
+        original = document(self.run("ordinary-native-user-source"))
         require(len(original) == 1 and original[0]["name"] == "original-user"
                 and original[0]["path"] == str(self.user_config), "ordinary startup did not retain User source")
+        self.cold_restore()
         self.check()
+
+    def cold_restore(self):
+        for name in ("saved", "cold", "cold-home"):
+            (self.root / name).mkdir(mode=0o700)
+        self.run("saved-init")
+        self.install("saved-add")
+        agreement = {name: read_owned(self.root / "saved" / name, self.root) for name in ("uap.toml", "uap.lock")}
+        locked = document(agreement["uap.lock"])
+        require(locked.get("lock_version") == 1 and len(locked["packages"]) == 1, "exact cold lock required")
+        pin = locked["packages"][0]
+        git = pin["source"]["git"]
+        require(git["commit"] == os.environ["EXPECTED_COMMIT"]
+                and git["repository"] == "777genius/universal-agent-plugins"
+                and git["path"] == "repotests/testdata/agentplugins_native_probe"
+                and pin["targets"] == ["cline"], "cold source agreement differs")
+        require(not list((self.root / "cold").iterdir()) and not list((self.root / "cold-home").iterdir())
+                and not (self.root / "cold-cache").exists(), "cold environment is not empty")
+        for name, body in agreement.items():
+            with (self.root / "cold" / name).open("xb") as target:
+                target.write(body)
+        require(set(path.name for path in (self.root / "cold").iterdir()) == set(agreement), "copied more than agreement")
+        self.run("cold-init")
+        self.install("cold-locked-install")
+        installed, binding, active = self.owned(self.root / "cold", "uap-cline-public-probe")
+        self.cold_binding(pin, installed, binding)
+        rows = document(self.run("cold-inspect"))
+        config = self.root / "cold/.uap/clients/cline/mcp.json"
+        require(len(rows) == 1 and rows[0].get("name") == "uap_public_probe"
+                and rows[0].get("path") == str(config) and rows[0].get("transportType") == "stdio"
+                and rows[0].get("disabled") is False, "cold native source selection differs")
+        # Compile the immutable public stdlib source inside the original deadline.
+        # The installed projection remains `go run PLUGIN_ROOT/main.go`.
+        require(not (self.root / "go-cache").exists(), "cold compiler cache unexpectedly populated")
+        self.run("cold-build")
+        direct = document(self.run("cold-create"))
+        before = read_owned(self.root / "cold/.uap/state-v2.json", self.root)
+        self.install("cold-repeat")
+        require(read_owned(self.root / "cold/.uap/state-v2.json", self.root) == before, "cold repeat changed state")
+        repeated = document(self.run("cold-session"))
+        require(direct["facts"]["operation"] == "write" and repeated["facts"]["operation"] == "read"
+                and repeated["facts"]["marker"] == direct["facts"]["marker"], "cold marker did not survive repeat")
+        require(all(read_owned(self.root / "cold" / name, self.root) == body for name, body in agreement.items()), "cold restore rewrote agreement")
+        self.evidence["cold_locked_restore"] = {"separate_public_fixture": True, "agreement_only_transfer": True,
+            "agreement_sha256": {name: hashlib.sha256(body).hexdigest() for name, body in agreement.items()},
+            "source_pin": pin, "binding": binding, "native_inventory": rows,
+            "direct_installed_mcp": direct, "repeat_mcp": repeated}
+
+    def cold_binding(self, pin, installation, binding):
+        source, package, revision = installation["source"], installation["package"], binding["package_revision"]
+        require(source["resolved_revision"] == pin["source"]["git"]["commit"]
+                and source["repository"] == pin["source"]["git"]["repository"]
+                and source["package_subpath"] == pin["source"]["git"]["path"]
+                and source["tree_digest"] == pin["tree_digest"] == revision["tree_digest"]
+                and package["manifest_digest"] == pin["manifest_digest"] == revision["manifest_digest"]
+                and revision["resolved_revision"] == source["resolved_revision"], "cold package identity differs")
+        receipts = document(read_owned(self.root / "cold/.uap/state-v2.json", self.root))["environment_receipts"]
+        matches = [r for r in receipts if r["alias"] == pin["alias"] and r["client_id"] == "cline"]
+        require(len(matches) == 1 and matches[0]["phase"] == "committed"
+                and matches[0]["installation_id"] == installation["installation_id"]
+                and matches[0]["client_binding_id"] == binding["client_binding_id"]
+                and matches[0]["source_key"] == pin["source_key"]
+                and matches[0]["package_digest"] == pin["tree_digest"], "cold environment receipt differs")
+        receipt = installation["data_receipts"][binding["data_receipt_id"]]
+        require(receipt["scope"] == "project" and receipt["state"] == "owned"
+                and receipt["physical_backend_id"] == binding["physical_artifact_id"]
+                and receipt["locator"] == str(self.root / "cold/.uap/plugin-data" / binding["physical_artifact_id"]),
+                "cold data receipt differs")
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    for name in ("installer", "probe", "output"):
+    for name in ("installer", "probe", "helper", "output"):
         parser.add_argument("--" + name, required=True, type=Path)
     args = parser.parse_args()
     require(os.environ.get("GITHUB_ACTIONS") == "true" and os.environ.get("RUNNER_ENVIRONMENT") == "github-hosted",
             "disposable hosted runner required")
-    sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=SOURCE, timeout=10).decode().strip()
-    require(sha == os.environ.get("EXPECTED_COMMIT"), "wrong source revision")
+    sha, tree = source_identity()
+    os.environ["CLINE_SOURCE_TREE"] = tree
     args.output.mkdir(mode=0o700, parents=True, exist_ok=False)
-    result = {"source_commit": sha, "passed": False, "commands": [], "stages": [],
+    result = {"source_commit": sha, "source_tree": tree, "platform": platform.system(), "architecture": platform.machine(),
+              "passed": False, "commands": [], "stages": [],
               "model_invoked": False, "vendor_authentication_used": False,
-              "native_cline_tools_call": False, "installer_sha256": digest(args.installer)}
+              "native_cline_tools_call": False, "installer_sha256": digest(args.installer),
+              "probe_sha256": digest(args.probe), "helper_sha256": digest(args.helper)}
     try:
         budget = Budget(900)
-        receipt, contents = acquire(ACQUISITION, budget)
+        spec = platform_acquisition(platform.system(), platform.machine())
+        receipt, contents = acquire(spec, budget)
         result["acquisition"] = receipt
-        with tempfile.TemporaryDirectory(prefix="uap-cline-session-", dir=os.environ["RUNNER_TEMP"]) as tmp:
-            root = Path(tmp).resolve()
-            native, identities = materialize(root / "vendor", ACQUISITION, receipt, contents)
+        root = Path(tempfile.mkdtemp(prefix="uap-cline-session-", dir=os.environ["RUNNER_TEMP"])).resolve()
+        try:
+            native, identities = materialize(root / "vendor", spec, receipt, contents)
             verify_files(identities, budget)
-            journey = SessionJourney(root, args.installer, native, args.probe, result)
+            (root / "bin").mkdir(mode=0o700)
+            for leaf, source in (("agentplugins", args.installer), ("probe", args.probe)):
+                destination = root / "bin" / (leaf + (".exe" if os.name == "nt" else ""))
+                shutil.copyfile(source, destination)
+                destination.chmod(0o700)
+                identities[destination] = digest(source)
+            identities[args.helper.resolve()] = digest(args.helper)
+            (root / "tmp").mkdir(mode=0o700)
+            suffix = ".exe" if os.name == "nt" else ""
+            journey = SessionJourney(root, root / "bin" / ("agentplugins" + suffix), native,
+                                     root / "bin" / ("probe" + suffix), args.helper, result, budget, identities)
             try:
                 journey.execute()
                 verify_files(identities, budget)
+                require(journey.settled, "journey did not settle")
+                validate_events(result, read_owned(journey.events, root))
+                require(source_identity() == (sha, tree), "source changed during native journey")
             finally:
-                if journey.events.exists():
+                if journey.settled and journey.events.exists():
                     raw = read_owned(journey.events, root)
                     result["events_base64"] = base64.b64encode(raw).decode()
                     result["events_sha256"] = hashlib.sha256(raw).hexdigest()
+        finally:
+            print(json.dumps({"fixtures_retained": True, "scope": "disposable-cline-session"}))
+        budget.check()
         result["passed"] = True
     except Exception as error:
         result["error"] = type(error).__name__ + ": " + str(error)

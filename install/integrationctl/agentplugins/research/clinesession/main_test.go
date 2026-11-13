@@ -1,0 +1,283 @@
+package main
+
+import (
+	"bufio"
+	"bytes"
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/pathcontract"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
+)
+
+func fixedFixture(t *testing.T) request {
+	t.Helper()
+	root, err := os.MkdirTemp("", "uap-cline-session-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, err = filepath.EvalSymlinks(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.RemoveAll(root); err != nil {
+			t.Error(err)
+		}
+	})
+	previous := []string{sourceCommit, sourceTree, nativeSHA, installerSHA, probeSHA, gitBinary, gitSHA, goBinary, goSHA}
+	t.Cleanup(func() {
+		sourceCommit, sourceTree, nativeSHA, installerSHA, probeSHA, gitBinary, gitSHA, goBinary, goSHA = previous[0], previous[1], previous[2], previous[3], previous[4], previous[5], previous[6], previous[7], previous[8]
+	})
+	sourceCommit = strings.Repeat("a", 40)
+	sourceTree = strings.Repeat("b", 40)
+	sum := sha256.Sum256([]byte("inert"))
+	nativeSHA = hex.EncodeToString(sum[:])
+	installerSHA = nativeSHA
+	probeSHA = nativeSHA
+	gitSHA = nativeSHA
+	goSHA = nativeSHA
+	gitBinary = filepath.Join(root, "bin", "git"+suffix())
+	goBinary = filepath.Join(root, "bin", "go"+suffix())
+	uap, native, probe := paths(root)
+	for _, path := range []string{uap, native, probe, gitBinary, goBinary} {
+		if err = os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err = os.WriteFile(path, []byte("inert"), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return request{Schema: 1, Root: root, Action: "native-version", Commit: sourceCommit, Tree: sourceTree, Deadline: time.Now().Add(time.Minute).UnixNano()}
+}
+func requestPipe(t *testing.T, r request) (*io.PipeReader, *io.PipeWriter) {
+	t.Helper()
+	reader, writer := io.Pipe()
+	body, err := json.Marshal(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	go func() { _, _ = writer.Write(append(body, '\n')) }()
+	t.Cleanup(func() { _ = reader.Close(); _ = writer.Close() })
+	return reader, writer
+}
+func TestFixedWireRejectsUnknownDuplicateAndUnpinnedSource(t *testing.T) {
+	r := fixedFixture(t)
+	body, _ := json.Marshal(r)
+	for _, raw := range []string{strings.Replace(string(body), `"action":`, `"extra":0,"action":`, 1), strings.Replace(string(body), `"action":`, `"action":"native-version","action":`, 1), strings.Replace(string(body), r.Commit, strings.Repeat("c", 40), 1), string(body) + "{}"} {
+		if _, err := decode([]byte(raw)); err == nil {
+			t.Fatal("admitted malformed request")
+		}
+	}
+	r.Action = "arbitrary-command"
+	if _, err := command(r); err == nil {
+		t.Fatal("unknown action admitted")
+	}
+}
+func TestRunAdmitsOnlySettledPinnedBoundedResult(t *testing.T) {
+	for _, condition := range []string{"success", "cleanup", "not-started", "error", "pin", "output"} {
+		t.Run(condition, func(t *testing.T) {
+			r := fixedFixture(t)
+			input, _ := requestPipe(t, r)
+			var output bytes.Buffer
+			calls := 0
+			err := run(input, &output, func(_ context.Context, cmd ports.Command, _ time.Duration) (ports.CommandResult, error) {
+				calls++
+				if cmd.StdoutLimitBytes != 1<<20 || cmd.Dir != filepath.Join(r.Root, "a") {
+					t.Fatal("command bounds differ")
+				}
+				if condition == "pin" {
+					uap, _, _ := paths(r.Root)
+					if e := os.WriteFile(uap, []byte("changed"), 0700); e != nil {
+						t.Fatal(e)
+					}
+				}
+				result := ports.CommandResult{CleanupComplete: condition != "cleanup", NoChildStarted: condition == "not-started", Stdout: []byte("3.0.73")}
+				if condition == "output" {
+					result.Stdout = make([]byte, (1<<20)+1)
+				}
+				if condition == "error" {
+					return result, io.ErrUnexpectedEOF
+				}
+				return result, nil
+			})
+			if condition == "success" {
+				if err != nil || output.Len() == 0 {
+					t.Fatalf("valid result: %v", err)
+				}
+			} else if err == nil || output.Len() != 0 {
+				t.Fatal("unproved result published")
+			}
+			if calls != 1 {
+				t.Fatal("unexpected retry")
+			}
+		})
+	}
+}
+func TestParentEOFOrExtraCancelsActualCommandContext(t *testing.T) {
+	for _, extra := range []bool{false, true} {
+		t.Run(map[bool]string{false: "eof", true: "extra"}[extra], func(t *testing.T) {
+			r := fixedFixture(t)
+			input, writer := requestPipe(t, r)
+			entered := make(chan struct{})
+			done := make(chan error, 1)
+			var output bytes.Buffer
+			go func() {
+				done <- run(input, &output, func(ctx context.Context, _ ports.Command, _ time.Duration) (ports.CommandResult, error) {
+					close(entered)
+					<-ctx.Done()
+					return ports.CommandResult{CleanupComplete: true}, ctx.Err()
+				})
+			}()
+			<-entered
+			if extra {
+				if _, err := writer.Write([]byte("x")); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				_ = writer.Close()
+			}
+			select {
+			case err := <-done:
+				if err == nil || output.Len() != 0 {
+					t.Fatal("parent loss published success")
+				}
+			case <-time.After(time.Second):
+				t.Fatal("parent control did not cancel")
+			}
+		})
+	}
+}
+
+type inputBuffer struct{ bytes.Buffer }
+
+func (*inputBuffer) Close() error { return nil }
+func TestProtocolWaitsForValidatedInitialize(t *testing.T) {
+	for _, initial := range []string{`{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"wrong"}}`, `{"jsonrpc":"2.0","id":2,"result":{}}`, `{"jsonrpc":"2.0","id":1,"id":1,"result":{}}`} {
+		var input inputBuffer
+		client := rpcClient{input: &input, output: bufio.NewReaderSize(strings.NewReader(initial+"\n"), 65537)}
+		if err := exchange(&client, transport{}, "read"); err == nil {
+			t.Fatal("bad initialize admitted")
+		}
+		if strings.Count(input.String(), "\n") != 1 || !strings.Contains(input.String(), `"method":"initialize"`) {
+			t.Fatal("sent a request before validating initialize")
+		}
+	}
+}
+
+func TestProtocolStderrBoundThroughActualExecCopy(t *testing.T) {
+	if os.Getenv("UAP_TEST_OVERSIZED_STDERR") == "1" {
+		if _, err := os.Stderr.Write(bytes.Repeat([]byte("x"), 65536)); err != nil {
+			os.Exit(2)
+		}
+		os.Exit(0)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestProtocolStderrBoundThroughActualExecCopy$")
+	cmd.Env = append(os.Environ(), "UAP_TEST_OVERSIZED_STDERR=1")
+	var capture boundedBuffer
+	cmd.Stderr = &capture
+	if err := cmd.Run(); err == nil || capture.Len() > 32768 {
+		t.Fatalf("oversized subprocess stderr admitted: error=%v bytes=%d", err, capture.Len())
+	}
+}
+
+func TestSelectedHelperEscapeAndUnknownEnvironmentRefuse(t *testing.T) {
+	r := fixedFixture(t)
+	project := filepath.Join(r.Root, "a")
+	active := filepath.Join(project, ".uap", "managed", "clients", "cline", "fixture")
+	data := filepath.Join(project, ".uap", "plugin-data", "fixture")
+	helper := filepath.Join(active, managedstdio.RelativeDirectory, managedstdio.ExecutableName)
+	for _, path := range []string{helper, filepath.Join(active, "bin", "probe"+suffix())} {
+		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("inert"), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var pristine transport
+	for _, change := range []string{"none", "escape", "environment"} {
+		selected := transport{Type: "stdio", Command: helper, CWD: active,
+			Args: managedstdio.Arguments(active, data, active, pathcontract.Plugin, "./bin/probe"+suffix(), nil),
+			Env:  map[string]string{"PLUGIN_ROOT": active, "PLUGIN_DATA": data, "UAP_TEST_ROOT": r.Root, "UAP_TEST_NONCE": "nonce", "UAP_TEST_REVISION": "0", "UAP_TEST_EVENTS": filepath.Join(r.Root, "mcp-events.jsonl")}}
+		if change == "escape" {
+			selected.Command, _, _ = paths(r.Root)
+		}
+		if change == "environment" {
+			selected.Env["TOKEN"] = "unexpected"
+		}
+		if change == "none" {
+			pristine = selected
+		}
+		_, err := validateSelected(r.Root, project, "direct-session", selected)
+		if (err == nil) != (change == "none") {
+			t.Fatalf("%s: %v", change, err)
+		}
+	}
+	path := filepath.Join(project, ".uap", "clients", "cline", "mcp.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{"disabled", "autoApprove"} {
+		row := map[string]any{"transport": pristine, "disabled": false, "autoApprove": []any{}}
+		row[field] = nil
+		body, err := json.Marshal(map[string]any{"mcpServers": map[string]any{serverName: row}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = os.WriteFile(path, body, 0600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = selected(r.Root, "direct-session"); err == nil {
+			t.Fatalf("explicit null %s admitted", field)
+		}
+	}
+}
+
+func TestProtocolReadDoesNotRewriteRetainedMarker(t *testing.T) {
+	target := transport{CWD: "/owned", Env: map[string]string{"UAP_TEST_NONCE": "nonce", "UAP_TEST_REVISION": "1", "PLUGIN_ROOT": "/owned", "PLUGIN_DATA": "/data"}}
+	facts := map[string]any{"nonce": "nonce", "revision": "1", "plugin_root": "/owned", "plugin_data": "/data", "cwd": "/owned", "marker": "kept-nonce", "operation": "read"}
+	encoded, _ := json.Marshal(facts)
+	responses := []map[string]any{
+		{"jsonrpc": "2.0", "id": 1, "result": map[string]any{"protocolVersion": "2025-06-18", "serverInfo": map[string]any{"name": "agentplugins-native-probe", "version": "1.0.0"}}},
+		{"jsonrpc": "2.0", "id": 2, "result": map[string]any{"tools": []any{map[string]any{"name": "inspect_runtime"}}}},
+		{"jsonrpc": "2.0", "id": 3, "result": map[string]any{"isError": false, "content": []any{map[string]any{"type": "text", "text": string(encoded)}}}},
+		{"jsonrpc": "2.0", "id": 4, "error": map[string]any{"code": -32602}},
+	}
+	var output bytes.Buffer
+	for _, response := range responses {
+		if err := json.NewEncoder(&output).Encode(response); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var input inputBuffer
+	client := rpcClient{input: &input, output: bufio.NewReaderSize(&output, 65537)}
+	if err := exchange(&client, target, "read"); err != nil {
+		t.Fatal(err)
+	}
+	var call struct {
+		Params struct {
+			Arguments struct {
+				Operation string `json:"operation"`
+			} `json:"arguments"`
+		} `json:"params"`
+	}
+	if err := json.Unmarshal(bytes.Split(input.Bytes(), []byte("\n"))[3], &call); err != nil {
+		t.Fatal(err)
+	}
+	if call.Params.Arguments.Operation != "read" {
+		t.Fatal("retained marker was overwritten")
+	}
+}

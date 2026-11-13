@@ -5,6 +5,7 @@ on:
       - 'install/integrationctl/agentplugins/clients/cline/**'
       - 'install/integrationctl/agentplugins/clients/session.go'
       - 'install/integrationctl/agentplugins/managedstdio/**'
+      - 'install/integrationctl/agentplugins/research/clinesession/**'
       - 'cli/internal/agentpluginscli/**'
       - 'cli/cmd/agentplugins/**'
       - 'scripts/grok_project_protocol_client.py'
@@ -24,6 +25,7 @@ on:
       - 'install/integrationctl/agentplugins/clients/cline/**'
       - 'install/integrationctl/agentplugins/clients/session.go'
       - 'install/integrationctl/agentplugins/managedstdio/**'
+      - 'install/integrationctl/agentplugins/research/clinesession/**'
       - 'cli/internal/agentpluginscli/**'
       - 'cli/cmd/agentplugins/**'
       - 'scripts/grok_project_protocol_client.py'
@@ -42,7 +44,7 @@ permissions:
   contents: read
 concurrency:
   group: cline-managed-session-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: false
 jobs:
   portable-session-contracts:
     # The Linux native journey exercises a genuine Cline binary. This job
@@ -76,13 +78,26 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT"
           go test -p=2 -count=1 -timeout=7m ./install/integrationctl/agentplugins/managedstdio ./install/integrationctl/agentplugins/clients/cline ./cli/internal/agentpluginscli -run '^Test(Session|ClineProjectSession)'
   native-session:
-    runs-on: ubuntu-24.04
+    name: Native managed session (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2025]
+    defaults:
+      run:
+        shell: bash
     env:
       EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
       PYTHONDONTWRITEBYTECODE: '1'
+      PYTHONPATH: scripts
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        env:
+          GIT_CONFIG_COUNT: '1'
+          GIT_CONFIG_KEY_0: core.autocrlf
+          GIT_CONFIG_VALUE_0: 'false'
         with:
           persist-credentials: false
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -92,23 +107,41 @@ jobs:
           cache: false
       - name: Test composed lifecycle and inherited process I/O
         run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT"
           go test -count=1 ./install/integrationctl/agentplugins/clients/cline ./install/integrationctl/agentplugins/managedstdio ./cli/internal/agentpluginscli ./cli/cmd/agentplugins -run 'Test(ClineProjectSession|Session)'
+          go test -count=1 ./install/integrationctl/agentplugins/research/clinesession
       - name: Verify Cline native transport readback rejects flat/foreign entries
         run: python3 -m unittest discover -s scripts -p 'test_cline_managed_session_e2e.py' -v
       - name: Build ordinary UAP and credential-free MCP fixture
         run: |
-          go build -trimpath -o "$RUNNER_TEMP/agentplugins" ./cli/cmd/agentplugins
-          go build -trimpath -o "$RUNNER_TEMP/probe" ./repotests/testdata/agentplugins_native_probe
+          python3 - <<'PY'
+          import os, subprocess
+          from pathlib import Path
+          from cline_managed_session_e2e import build_bridge
+          root = Path(os.environ['RUNNER_TEMP'])
+          suffix = '.exe' if os.name == 'nt' else ''
+          installer, probe, helper = [root / (name + suffix) for name in ('agentplugins', 'probe', 'clinesession')]
+          for destination, package in ((installer, './cli/cmd/agentplugins'), (probe, './repotests/testdata/agentplugins_native_probe')):
+              subprocess.run(['go', 'build', '-trimpath', '-o', str(destination), package], check=True, timeout=180)
+          build_bridge(installer, probe, helper)
+          PY
       - name: Verify actual installed Cline selection and MCP lifecycle without model
         run: |
-          python3 scripts/cline_managed_session_e2e.py \
-            --installer "$RUNNER_TEMP/agentplugins" --probe "$RUNNER_TEMP/probe" \
-            --output "$RUNNER_TEMP/cline-session-evidence"
+          python3 - <<'PY'
+          import os, subprocess, sys
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP'])
+          suffix = '.exe' if os.name == 'nt' else ''
+          args = [sys.executable, 'scripts/cline_managed_session_e2e.py']
+          for option, name in (('installer', 'agentplugins'), ('probe', 'probe'), ('helper', 'clinesession')):
+              args.extend(['--' + option, str(root / (name + suffix))])
+          subprocess.run(args + ['--output', str(root / 'cline-session-evidence')], check=True, timeout=930)
+          PY
       - name: Retain original evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: cline-managed-session-${{ github.run_id }}-${{ github.run_attempt }}
+          name: cline-managed-session-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/cline-session-evidence/evidence.json
           if-no-files-found: error
           retention-days: 14
