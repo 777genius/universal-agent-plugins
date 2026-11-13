@@ -173,7 +173,7 @@ func TestProtocolAgainstRealOwnedProbePreservesMarker(t *testing.T) {
 		t.Fatalf("build exact owned fixture: %v: %s", err, output)
 	}
 	data, events := filepath.Join(root, "data"), filepath.Join(root, "events.jsonl")
-	var reported []map[string]any
+	reported := make([]map[string]any, 0, 2)
 	for _, revision := range []string{"0", "1"} {
 		transport := transport{CWD: root, Env: map[string]string{"PLUGIN_ROOT": root, "PLUGIN_DATA": data, "UAP_TEST_ROOT": root,
 			"UAP_TEST_EVENTS": events, "UAP_TEST_NONCE": "owned", "UAP_TEST_REVISION": revision, "UAP_TEST_REPORT_OPERATION": "1"}}
