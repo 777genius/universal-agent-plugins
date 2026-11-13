@@ -128,9 +128,7 @@ jobs:
           cache: false
       - name: Test Global lifecycle contracts
         run: python3 -m unittest discover -s scripts -p 'test_devin_*admission.py' -v
-      - name: Build ordinary production CLI from exact current source
-        run: go build -o "$RUNNER_TEMP/devin-uap" ./cli/cmd/agentplugins
-      - name: Observe public Global add repair remove and exact native source inventories
+      - name: Build with bounded original receipts and observe public Global lifecycle
         run: |
           python3 scripts/devin_global_lifecycle_admission.py \
             --installer "$RUNNER_TEMP/devin-uap" --output "$RUNNER_TEMP/devin-global-lifecycle"

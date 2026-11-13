@@ -437,3 +437,89 @@ full doctor frame equality remain afterward. An actual same-directory leaf swap
 regression failed on the prior code for both repair and doctor by triggering the
 foreign-byte read tripwire; the corrected15-test suite passes locally. This is
 inert consumer evidence, not a native Global lifecycle pass.
+
+## Reviewed Global consumer correction
+
+The exact Global-only version gate is published in
+`2c299c6ada80805399d411c3a2b9b1d7b06910bf`.
+Project remains restricted to 3000.11.205. The following consumer correction is
+separate from production observation and from genuine lifecycle admission.
+
+The existing Global entrypoint first runs exactly two bounded build commands:
+Go 1.26.11 version (10 seconds) and the ordinary production CLI build (240
+seconds), both within the original 900-second case deadline. A separate closed
+build receipt joins the already verified clean source commit/tree, exact argv
+and cwd, integer zero exits, original base64 stream bodies and their hashes and
+lengths, and the resulting fresh executable's identity bounds and SHA256.
+Each build stream is at most 1 MiB; the produced single-link executable is at
+most 128 MiB, mode 0755 and owned by the current UID/GID. The original hosted
+build environment is used with GOTOOLCHAIN=local. No preservation claim is made
+about the hosted Go build cache or build HOME. The task-authored native HOME/XDG
+profile remains separate. The unrecorded workflow build is removed.
+
+Before public mutation, Global explicitly completes the original ordinary gate:
+the same 13 native argv/cwd records, effects.step=13 and the acknowledged first
+User migration must pass, under the unchanged ordinary-global source marker.
+Private/ordinary defaults retain 360 seconds, 20 commands and 13 effects.
+Only Global uses the fixed 900 seconds, 37 main captured commands and 30 effects
+(13 ordinary, five public lifecycle, 12 additional native observations).
+The two build records remain separate; there are no caller-controlled completion
+or deadline overrides. Final completion joins source, exact metadata schema,
+ordinary completion, typed command statuses, ordered effects and zero endpoint
+connections, while every runtime/product qualification flag stays false.
+
+A public add response supplies one prospective installation UUID for closing the
+finite output filename set before reading state. It does not acknowledge
+ownership. The persisted state must independently join the exact authored source
+tree framing, raw manifest, package inventory, binding revision, data receipt and
+marker. Four native ownership objects are required: the managed package, two
+Devin MCP entries and one Skill. Their digests are checked against the actual
+finite package, canonical Devin member encodings and Skill tree bytes.
+The packagesnapshot digest has its own framing; its large launcher is streamed
+through the existing anchored reader into a caller-local SHA256 state alongside
+the ordinary file hash. Default reader behavior is unchanged. A failed read or
+final metadata fence discards that proof.
+
+The same installation/source/package/data authority and binding revision remain
+frozen across repair. No-purge remove keeps that installation with clients={}
+and data_retained=true, preserving the original receipt, data directory and
+marker. It does not require installations=[] or claim data purge.
+Unknown UAP members and nonauxiliary metadata changes refuse before frame body
+reads. Receipt-derived public changes are fully verified before the native
+auxiliary ledger partitions them from the unchanged original baseline.
+The authored package lives beneath the original held private cleanup root.
+
+Ordinary public doctor returns read_only=true and a truthful Prepared result.
+Its exact current findings are activation_pending (degraded),
+authentication_not_checked (unknown) and native_projection_changed (degraded).
+The last code follows the ordinary detector's absent version probe and the
+Global exact-version verifier; the separate receipt and byte checks establish
+the selected file state. This is not a healthy/native-activation assertion.
+The complete doctor frame must remain unchanged. Owned Skill rows are checked
+with the same exact scope-qualified naming and closed metadata fields as the
+ordinary source validator.
+
+New contracts cover real-file retained-state consumption and altered authority,
+independent literal package framing, default reader behavior and failed-read
+discard, actual consumer Skill/schema refusals, truthful doctor responses,
+ordinary gate forwarding, typed completion, fixed build streams and the
+Global-only readout catalog. Genuine current-source Global execution and
+independent original artifact review remain required before admission.
+
+The post-public fence closes the native Skill to exactly its directory and
+SKILL.md before any state or payload byte is read, with the ordinary CopyDir
+0755/0644 modes, original device/owner and exact authored file length. Remove
+requires the entire subtree absent. Only the explicitly verified quarantine
+permits an absent Skill in the frame preceding repair; repaired state still
+requires the complete Skill. The complete ordinary 16 MiB byte sum is admitted
+from metadata before the first capture read.
+
+Owned projected MCP objects must exactly match StandardWindsurfServer for the
+fixed authored source, including the schema, transport and managed arguments.
+Coherently rehashed disabled/approval/header additions cannot create ownership.
+Pending native intent must be absent/null, and neither activation nor
+authentication may be attested. The grouped public add/repair receipt sequence
+is exactly one then two committed directory_swap entries, preserving the first
+entry unchanged; doctor preserves the complete frame. Inert regressions cover
+these failures, including the original accepted extra Skill file and a tripwire
+that proves refusal now precedes every post-public content read.

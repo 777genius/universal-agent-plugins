@@ -297,11 +297,13 @@ MAINTENANCE = "home/data/devin/cli/logs/.log-maintenance.lock"
 BOOTSTRAP_LOG = re.compile(r"home/data/devin/cli/logs/devin_[0-9]{8}-[0-9]{6}_[1-9][0-9]{0,9}\.log\Z")
 
 
-def read_bootstrap_file(ctx, relative, expected, inventory, *, maximum=None, digest_only=False):
+def read_bootstrap_file(ctx, relative, expected, inventory, *, maximum=None, digest_only=False, package_digest=None):
     """Only the prospective fixed bootstrap recipe calls this anchored reader."""
     def stable(info):
         return (info.st_dev, info.st_ino, info.st_mode, info.st_nlink, info.st_uid, info.st_gid,
                 info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+    require(package_digest is None or (type(package_digest) is type(hashlib.sha256())
+            and package_digest.name == "sha256" and package_digest.digest_size == 32), "package SHA256 state required")
     require(root_identity(ctx.root) == ctx.original_output_identity, "bootstrap original root changed")
     with ExitStack() as stack:
         parent = os.open(ctx.root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
@@ -333,6 +335,7 @@ def read_bootstrap_file(ctx, relative, expected, inventory, *, maximum=None, dig
             if not chunk: break
             if not digest_only: chunks.append(chunk)
             digest.update(chunk); count += len(chunk)
+            if package_digest is not None: package_digest.update(chunk)
             remaining -= len(chunk)
         body = b"".join(chunks)
         require(count == before.st_size and stable(os.fstat(descriptor)) == stable(before)
@@ -566,7 +569,13 @@ def closed_readout(summary, state):
     def budget():
         require(type(state['deadline']) is float and time.monotonic() < state['deadline'], 'readout deadline')
     budget()
-    require(type(state['phase']) is str and state['phase'] in READOUT_PHASES
+    labels, phases, maximum_commands, maximum_effects = READOUT_LABELS, READOUT_PHASES, 60, 13
+    if summary.get("metadata_recipe") == "ordinary-global":
+        from devin_global_lifecycle_admission import NATIVE, PUBLIC
+        labels = labels | frozenset(NATIVE + PUBLIC)
+        phases = phases | labels | {"build-go-version", "build-uap", "global-skill-quarantine"}
+        maximum_commands, maximum_effects = 37, 30
+    require(type(state['phase']) is str and state['phase'] in phases
             and type(state['reason']) is str and state['reason'] in set(READOUT_ERRORS.values()) | {'capture-incomplete', 'capture-finished-unqualified', 'metadata-complete', 'unclassified-refusal'}, 'readout state')
     require(type(summary.get('collection_complete')) is bool and summary.get('admission_qualified') is False
             and summary.get('cleanup_complete') is True and type(summary.get('metadata_capture_complete')) is bool
@@ -584,7 +593,8 @@ def closed_readout(summary, state):
     require(all(type(summary.get(key)) is str and re.fullmatch('[0-9a-f]{40}', summary[key])
                 for key in ('source_commit', 'source_tree')), 'readout source')
     commands, effects = summary['commands'], summary.get('command_effects', [])
-    require(type(commands) is list and len(commands) <= 60 and type(effects) is list and len(effects) <= 13, 'readout counts')
+    require(type(commands) is list and len(commands) <= maximum_commands
+            and type(effects) is list and len(effects) <= maximum_effects, 'readout counts')
     failed, rows, seen = 0, [], set()
     for command in commands:
         budget()
@@ -606,7 +616,7 @@ def closed_readout(summary, state):
     for effect in effects:
         budget()
         require(type(effect) is dict and set(effect) == {'label', 'changes', 'outer_changes'}
-                and type(effect['label']) is str and effect['label'] in READOUT_LABELS and effect['label'] not in seen, 'readout effect')
+                and type(effect['label']) is str and effect['label'] in labels and effect['label'] not in seen, 'readout effect')
         seen.add(effect['label'])
         rows.append(dict(phase=effect['label'], fixture=counts(effect['changes']), outer=counts(effect['outer_changes'])))
     value = dict(schema_version=1, phase=state['phase'], reason=state['reason'], collection_complete=summary['collection_complete'],
@@ -721,14 +731,19 @@ def observe_connections(probe):
     return probe
 
 
-def run(output, *, collector=collect, recipe="private", completion=require_complete_metadata, seconds=360):
+def run(output, *, collector=collect, recipe="private"):
     require(recipe in ("private", "ordinary", "ordinary-global") and ((collector is collect) == (recipe == "private")), "unknown Devin research recipe")
+    completion, seconds = require_complete_metadata, 360
+    if recipe == "ordinary-global":
+        from devin_global_lifecycle_admission import completion
+        seconds = 900
     shared.native.require_hosted("linux-amd64")
     require(output.is_absolute() and output.resolve() == output and not output.exists()
             and shared.SOURCE not in output.parents, "fresh output outside source required")
     output.mkdir(mode=0o700, parents=True)
     identity = root_identity(output)
-    prefix = "devin-structured-inventory-" if recipe == "private" else "devin-ordinary-inventory-"
+    prefix = {"private": "devin-structured-inventory-", "ordinary": "devin-ordinary-inventory-",
+              "ordinary-global": "devin-global-lifecycle-"}[recipe]
     summary = {"client": "windsurf", "phase": "observe", "candidate": prefix + VERSION, "metadata_recipe": recipe,
                "collection_complete": False, "metadata_capture_complete": False, "admission_qualified": False,
                "qualification": {name: False for name in shared.QUALIFICATION_CASES}, "commands": [],

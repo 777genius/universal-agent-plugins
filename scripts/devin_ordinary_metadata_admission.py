@@ -88,13 +88,13 @@ class OrdinaryEffects(base.BootstrapEffects):
         self.step += 1
 
 
-def require_ordinary_commands(ctx):
+def require_ordinary_commands(ctx, *, recipe="ordinary"):
     expected = [(label, arguments, "a") for label, arguments in base.HELP]
     expected += [(kind + "-" + label, [kind, "list", "--json"], scope)
                  for label, scope in (("a", "a"), ("b", "b"), ("user", "user"), ("a-repeat", "a"))
                  for kind in ("mcp", "skills")]
     records = [row for row in ctx.summary["commands"] if row.get("probe") in base.METADATA_PROBES]
-    base.require(ctx.summary.get("metadata_recipe") == "ordinary" and
+    base.require(recipe in ("ordinary", "ordinary-global") and ctx.summary.get("metadata_recipe") == recipe and
                  ctx.summary.get("metadata_route") == OrdinaryEffects.metadata_route and len(records) == len(expected),
                  "ordinary metadata recipe or sequence differs")
     for record, (label, arguments, scope) in zip(records, expected):

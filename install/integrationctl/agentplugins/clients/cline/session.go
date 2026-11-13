@@ -27,17 +27,25 @@ func (adapter *Adapter) PlanSession(ctx context.Context, env clients.Env, req cl
 	}
 	// A selected Project MCP file may hold foreign credentials. Refuse
 	// unauthorized bindings before even reading native configuration.
-	names, err := adapter.sessionServers(env, req)
+	names, err := adapter.sessionServers(req)
 	if err != nil {
 		return clients.SessionPlan{}, err
 	}
-	path := clineProjectComponents(req.ProjectRoot).ConfigPaths.JSON
+	layout := clineProjectComponents(req.ProjectRoot)
+	path := layout.ConfigPaths.JSON
 	file, err := env.NativeConfig.ReadExactFile(path)
 	if err != nil {
 		return clients.SessionPlan{}, err
 	}
 	if !file.Exists || len(file.Body) > 1<<20 {
 		return clients.SessionPlan{}, fmt.Errorf("owned Cline project MCP configuration is missing or oversized")
+	}
+	// Receipt reads must stay between snapshots; preflight above authorizes
+	// every binding without treating those structural checks as byte ownership.
+	for _, binding := range req.Bindings {
+		if err := layout.Verify(clineProjectOwned(binding.NativeObjects), false, env.NativeConfig); err != nil {
+			return clients.SessionPlan{}, err
+		}
 	}
 	after, err := env.NativeConfig.ReadExactFile(path)
 	if err != nil {
@@ -60,8 +68,7 @@ func (adapter *Adapter) PlanSession(ctx context.Context, env clients.Env, req cl
 	}, nil
 }
 
-func (adapter *Adapter) sessionServers(env clients.Env, req clients.SessionRequest) ([]string, error) {
-	layout := clineProjectComponents(req.ProjectRoot)
+func (adapter *Adapter) sessionServers(req clients.SessionRequest) ([]string, error) {
 	selected := map[string]bool{}
 	for _, binding := range req.Bindings {
 		if binding.Scope != "project" {
@@ -71,9 +78,6 @@ func (adapter *Adapter) sessionServers(env clients.Env, req clients.SessionReque
 			return nil, err
 		}
 		objects := clineProjectOwned(binding.NativeObjects)
-		if err := layout.Verify(objects, false, env.NativeConfig); err != nil {
-			return nil, err
-		}
 		for _, object := range objects {
 			if object.Kind != clineProjectMCPKind {
 				continue

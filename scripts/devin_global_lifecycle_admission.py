@@ -4,12 +4,14 @@ Native JSON observation is separate from production's file-only verifier.
 This research consumer never attests authentication, model or MCP execution.
 """
 import argparse
+import base64
 import copy
 import hashlib
 import json
 import os
 from pathlib import Path
 import re
+import shutil
 import stat
 
 import devin_ordinary_metadata_admission as ordinary
@@ -28,6 +30,162 @@ NATIVE = tuple(kind + "-" + phase + "-" + scope for phase in ("installed", "repa
 
 def sha(body):
     return hashlib.sha256(body).hexdigest()
+
+
+
+def auxiliary(name):
+    return (name in base.BOOTSTRAP_DIRS or name in base.BOOTSTRAP_FIXED
+            or name in (base.INSTALLATION_ID, base.MAINTENANCE) or base.BOOTSTRAP_LOG.fullmatch(name))
+
+
+def source_digest(bodies):
+    """The existing packagedigest v1 framing, applied only to four authored files."""
+    digest = hashlib.sha256()
+    def framed(value):
+        value = value.encode()
+        digest.update(len(value).to_bytes(8, "big")); digest.update(value)
+    framed("agentplugins.package-tree\0sha256\0v1")
+    directories = {parent.as_posix() for name in bodies for parent in Path(name).parents if str(parent) != "."}
+    for name in sorted(set(bodies) | directories):
+        directory = name in directories
+        for value in ("entry", name, "directory" if directory else "file", "040000" if directory else "100644", ""):
+            framed(value)
+        body = b"" if directory else bodies[name]
+        digest.update(len(body).to_bytes(8, "big")); digest.update(body)
+    return "sha256:" + digest.hexdigest()
+
+
+def entry_digest(name, entry):
+    canonical = json.dumps(entry, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    for literal, escaped in (("<", "\\u003c"), (">", "\\u003e"), ("&", "\\u0026"),
+                             ("\u2028", "\\u2028"), ("\u2029", "\\u2029")):
+        canonical = canonical.replace(literal, escaped)
+    return "sha256:" + sha(("agentplugins-native-mcp-v1\0devin-mcpServers\0" + name + "\0" + canonical).encode())
+
+
+def owned_skill_row(ctx, profile, scope):
+    return dict(name=str(ctx.projects[scope]) + ":" + SKILL, description="Owned Global source.",
+                triggers=["user", "model"], provider="Devin", base_dir=str(profile / "skills" / SKILL),
+                display_name=SKILL, warnings=[], errors=[])
+
+
+def doctor_result(data, identifier):
+    base.require(type(data) is dict and data.get("read_only") is True
+                 and type(data.get("installation_count")) is int and data["installation_count"] == 1
+                 and type(data.get("open_operation_count")) is int and data["open_operation_count"] == 0,
+                 "Global doctor readonly/counts")
+    item = data.get("installation")
+    base.require(type(item) is dict, "Global doctor installation shape")
+    clients, findings = item.get("clients"), data.get("findings")
+    base.require(item.get("installation_id") == identifier and item.get("name") == NAME
+                 and type(clients) is list and len(clients) == 1 and type(clients[0]) is dict
+                 and all(clients[0].get(key) == value for key, value in {
+                     "client_id": "windsurf", "scope": "user", "activation": "prepared",
+                     "materialization": "materialized", "authentication": "not_checked",
+                     "policy": "allowed", "verification": "installation_verified"}.items()),
+                 "Global doctor selected lifecycle")
+    # Ordinary Detect never executes a version probe. Its VerifyOnly therefore
+    # refuses the exact version gate; this diagnostic is not native corruption.
+    wanted = {("degraded", "activation_pending"), ("unknown", "authentication_not_checked"),
+              ("degraded", "native_projection_changed")}
+    base.require(type(findings) is list and len(findings) == len(wanted)
+                 and all(type(row) is dict and row.get("installation_id") == identifier
+                         and row.get("installation_name") == NAME and row.get("client_id") == "windsurf"
+                         for row in findings)
+                 and {(row.get("status"), row.get("code")) for row in findings} == wanted,
+                 "Global doctor truthful findings")
+
+
+def build_installer(ctx, installer):
+    """Two bounded hosted build commands; no claim about the runner's build HOME."""
+    parent = installer.parent
+    base.require(installer.is_absolute() and parent.resolve(strict=True) == parent
+                 and not installer.exists() and not installer.is_symlink(), "fresh installer output required")
+    parent_identity = base.root_identity(parent)
+    go = Path(shutil.which("go") or "").resolve(strict=True)
+    go_info = go.lstat()
+    go_owner = (go_info.st_uid, go_info.st_gid)  # setup-go may expose a root-owned toolchain.
+    go_pin = installer_pin(go, ctx.budget, owner=go_owner)
+    receipt = {"schema_version": 1, "source_commit": ctx.summary["source_commit"],
+               "source_tree": ctx.summary["source_tree"], "environment": "original-hosted-build; GOTOOLCHAIN=local",
+               "go": {"path": str(go), "bytes": go_pin[0], "sha256": go_pin[1], "uid": go_owner[0], "gid": go_owner[1], "mode": 0o755},
+               "installer": None, "commands": [], "streams": {}}
+    ctx.summary["global_build_receipt"] = receipt
+    environment = dict(os.environ, GOTOOLCHAIN="local")
+    for label, arguments, timeout in (("build-go-version", ["version"], 10),
+                                     ("build-uap", ["build", "-o", str(installer), "./cli/cmd/agentplugins"], 240)):
+        state = getattr(ctx, "global_readout_state", None)
+        if state is not None: state["phase"] = label
+        base.require(base.root_identity(parent) == parent_identity
+                     and installer_pin(go, ctx.budget, owner=go_owner) == go_pin, "build authority changed")
+        if label == "build-uap":
+            base.require(not installer.exists() and not installer.is_symlink(), "fresh installer output required")
+        ctx.process_cleanup_proved = False
+        record, stdout, stderr = base.shared.run_probe([str(go), *arguments], base.shared.SOURCE, environment,
+            ctx.private, label, timeout=min(timeout, ctx.budget.check()), limit=1 << 20, memory_only=True)
+        ctx.process_cleanup_proved = True
+        receipt["commands"].append(record)
+        for kind, body in (("stdout", stdout), ("stderr", stderr)):
+            receipt["streams"][label + "." + kind + ".log"] = base64.b64encode(body).decode("ascii")
+        base.require(type(record.get("exit")) is int and record["exit"] == 0 and record.get("error") is None,
+                     "Global bounded build command failed")
+        if label == "build-go-version":
+            base.require(stdout == b"go version go1.26.11 linux/amd64\n" and not stderr, "Global exact Go version")
+    base.require(base.root_identity(parent) == parent_identity and installer_pin(go, ctx.budget, owner=go_owner) == go_pin,
+                 "build authority changed")
+    pin = installer_pin(installer, ctx.budget)
+    receipt["installer"] = {"path": str(installer), "bytes": pin[0], "sha256": pin[1],
+                            "uid": os.getuid(), "gid": os.getgid(), "mode": 0o755}
+    ctx.identities[installer], ctx.identities[go] = pin[1], go_pin[1]
+    validate_build_receipt(receipt, ctx.summary)
+    return pin
+
+
+def validate_build_receipt(value, summary):
+    base.require(type(value) is dict and set(value) == {"schema_version", "source_commit", "source_tree", "environment",
+                 "go", "installer", "commands", "streams"} and type(value["schema_version"]) is int
+                 and value["schema_version"] == 1 and value["environment"] == "original-hosted-build; GOTOOLCHAIN=local"
+                 and all(type(value[key]) is str and re.fullmatch("[0-9a-f]{40}", value[key])
+                         and value[key] == summary.get(key) for key in ("source_commit", "source_tree")),
+                 "Global build source witness")
+    for role in ("go", "installer"):
+        row = value[role]
+        base.require(type(row) is dict and set(row) == {"path", "bytes", "sha256", "uid", "gid", "mode"}
+                     and type(row["path"]) is str and Path(row["path"]).is_absolute()
+                     and type(row["bytes"]) is int and 0 < row["bytes"] <= 128 << 20
+                     and all(type(row[key]) is int and 0 <= row[key] < 1 << 32 for key in ("uid", "gid"))
+                     and type(row["mode"]) is int and row["mode"] == 0o755
+                     and type(row["sha256"]) is str and re.fullmatch("[0-9a-f]{64}", row["sha256"]),
+                     "Global build executable witness")
+    base.require((value["installer"]["uid"], value["installer"]["gid"]) == (os.getuid(), os.getgid()),
+                 "Global build installer owner")
+    labels = ("build-go-version", "build-uap")
+    records, streams = value["commands"], value["streams"]
+    base.require(type(records) is list and len(records) == 2 and type(streams) is dict
+                 and set(streams) == {label + "." + kind + ".log" for label in labels for kind in ("stdout", "stderr")},
+                 "Global build finite captures")
+    fields = {"probe", "argv", "cwd", "error", "exit", "elapsed_seconds", "stdout_file", "stderr_file",
+              "stdout_bytes", "stderr_bytes", "stdout_sha256", "stderr_sha256"}
+    for row, label in zip(records, labels):
+        arguments = ["version"] if label == labels[0] else ["build", "-o", value["installer"]["path"], "./cli/cmd/agentplugins"]
+        base.require(type(row) is dict and set(row) == fields and row.get("probe") == label
+                     and type(row.get("exit")) is int and row["exit"] == 0 and row.get("error") is None
+                     and row.get("argv") == [value["go"]["path"], *arguments] and row.get("cwd") == str(base.shared.SOURCE)
+                     and type(row["elapsed_seconds"]) in (int, float) and base.math.isfinite(row["elapsed_seconds"])
+                     and 0 <= row["elapsed_seconds"] <= (20 if label == labels[0] else 250),
+                     "Global build command witness")
+        for kind in ("stdout", "stderr"):
+            name = label + "." + kind + ".log"
+            encoded = streams[name]
+            base.require(type(encoded) is str and len(encoded) <= 4 * (((1 << 20) + 2) // 3),
+                         "Global build stream bound")
+            body = base64.b64decode(encoded, validate=True)
+            base.require(len(body) <= 1 << 20 and row.get(kind + "_file") == name
+                         and type(row.get(kind + "_bytes")) is int and row[kind + "_bytes"] == len(body)
+                         and row.get(kind + "_sha256") == sha(body), "Global build original stream differs")
+            if label == labels[0]:
+                base.require(body == (b"go version go1.26.11 linux/amd64\n" if kind == "stdout" else b""),
+                             "Global exact Go version")
 
 
 def security_role(value):
@@ -51,10 +209,12 @@ def security_role(value):
     return "security/assessments/" + key + ".json"
 
 
-def installer_pin(path, budget):
+def installer_pin(path, budget, *, owner=None):
     base.require(path.is_absolute() and path.resolve(strict=True) == path, "prebuilt installer alias")
     before = path.lstat()
-    base.require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1 and before.st_uid == os.getuid()
+    owner = (os.getuid(), os.getgid()) if owner is None else owner
+    base.require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1
+                 and (before.st_uid, before.st_gid) == owner and stat.S_IMODE(before.st_mode) == 0o755
                  and 0 < before.st_size <= 128 << 20, "prebuilt installer authority")
     fd = base.shared.artifacts.open_member(path)
     try:
@@ -76,15 +236,18 @@ def installer_pin(path, budget):
         os.close(fd)
 
 
-def regular(ctx, relative, inventory, *, large=None):
+def regular(ctx, relative, inventory, *, large=None, package_digest=None):
     info = inventory[relative]
     maximum = large[0] if large else 1 << 20
     base.require(len(info) == 9 and stat.S_ISREG(info[2]) and info[3] == 1
                  and info[0] == ctx.original_output_identity[0]
                  and tuple(info[4:6]) == ctx.original_output_identity[3:]
                  and 0 <= info[6] <= maximum, "Global ordinary file authority")
+    if large:
+        # materialize(), the managed launcher and pinned scanner all use0700.
+        base.require(info[6] == large[0] and info[2] == stat.S_IFREG | 0o700, "Global exact large role metadata")
     value = base.read_bootstrap_file(ctx, relative, info, inventory,
-                                     maximum=maximum, digest_only=large is not None)
+                                     maximum=maximum, digest_only=large is not None, package_digest=package_digest)
     if large:
         base.require(info[6] == large[0] and value == large[1] and info[2] & 0o111,
                      "Global exact large role differs")
@@ -92,25 +255,46 @@ def regular(ctx, relative, inventory, *, large=None):
 
 
 def capture(ctx, installer_pin, helper=None, *, authorities=None, inventory=None):
-    """Hash every fixture file; only two exact large executable roles differ."""
+    """Admit the complete ordinary byte budget before reading any fixture file."""
     if inventory is None:
         inventory = base.metadata_inventory(ctx.root, ctx.budget)
     base.require(all(inventory.get(name) == identity for name, identity in (authorities or {}).items()),
                  "Global original directory authority changed")
-    result, total = {}, 0
+    roles = {name: ((213734376, base.BINARY) if ctx.root / name == Path(ctx.argv[0]) else
+                    installer_pin if helper is not None and name == helper else
+                    SCANNER if name == "home/uap-state/security/lintai/0.1.3/linux-amd64/lintai" else None)
+             for name, info in inventory.items() if len(info) == 9}
+    sizes = [inventory[name][6] for name, role in roles.items() if role is None]
+    base.require(all(type(size) is int and 0 <= size <= 1 << 20 for size in sizes)
+                 and sum(sizes) <= 16 << 20, "Global ordinary aggregate")
+    result = {}
     for name, info in inventory.items():
         row = {"identity": info}
         if len(info) == 9:
-            role = ((213734376, base.BINARY) if ctx.root / name == Path(ctx.argv[0]) else
-                    installer_pin if helper is not None and name == helper else
-                    SCANNER if name == "home/uap-state/security/lintai/0.1.3/linux-amd64/lintai" else None)
+            role = roles[name]
             value = regular(ctx, name, inventory, large=role)
             row["sha256"] = value if role else sha(value)
-            if not role:
-                total += info[6]
-                base.require(total <= 16 << 20, "Global ordinary aggregate")
         result[name] = row
+    base.require(base.metadata_inventory(ctx.root, ctx.budget) == inventory, "Global capture metadata changed")
     return inventory, result
+
+
+def capture_package(ctx, active, inventory, helper_pin):
+    """Current packagesnapshot framing; the exact helper is streamed once."""
+    prefix = active.relative_to(ctx.root).as_posix() + "/"
+    selected = {name[len(prefix):]: info for name, info in inventory.items() if name.startswith(prefix)}
+    digest, bodies = hashlib.sha256(), {}
+    for name, info in sorted(selected.items()):
+        directory = len(info) == 5
+        executable = not directory and bool(info[2] & 0o111)
+        header = "{}\0{}\0{}\0{}\0".format("dir" if directory else "file", name,
+                                          "true" if executable else "false", 0 if directory else info[6])
+        digest.update(header.encode())
+        if not directory:
+            bodies[name] = regular(ctx, prefix + name, inventory,
+                large=helper_pin if name == NS + "/agentplugins" else None, package_digest=digest)
+    base.require(base.metadata_inventory(ctx.root, ctx.budget) == inventory, "Global package metadata changed")
+    return bodies, "sha256:" + digest.hexdigest()
 
 
 class Journey:
@@ -126,8 +310,11 @@ class Journey:
         ctx.identities[installer] = self.cli_pin[1]
         self.binding, self.identifier, self.helper = None, None, None
         self.data_receipt, self.package_members = None, set()
+        self.installation_basis, self.binding_basis, self.data_authority = None, None, None
         self.security, self.assessment_path = None, None
         self.source_bodies = dict(ctx.global_source_bodies)
+        self.source_sha = source_digest(self.source_bodies)
+        self.verified_inventory = base.metadata_inventory(ctx.root, ctx.budget)
         self.state_history, self.native_labels, self.public_labels = [], [], []
         self.log_births = {}
         self.effects.max_logs, self.effects.max_members = 20, 36
@@ -136,83 +323,191 @@ class Journey:
                 if base.BOOTSTRAP_LOG.fullmatch(name):
                     self.log_births.setdefault(name, {"command": "ordinary-gate", "sha256": value["sha256"]})
 
+    def phase(self, label):
+        state = getattr(self.ctx, "global_readout_state", None)
+        if state is not None: state["phase"] = label
+
+    def identity_paths(self, identifier):
+        base.require(type(identifier) is str and re.fullmatch(
+            r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}", identifier),
+            "Global installation identity")
+        physical = NAME + "-" + sha(identifier.encode())[:12]
+        active = self.home / "managed/clients/windsurf" / physical
+        data = self.home / "plugin-data" / physical
+        return physical, active, data
+
+    def home_metadata(self, inventory, *, identifier=None, removed=False):
+        """Close every output name before reading even the known state leaf."""
+        identifier = identifier or self.identifier
+        prefix = self.home.relative_to(self.ctx.root).as_posix() + "/"
+        files = {name[len(prefix):] for name, info in inventory.items() if name.startswith(prefix) and len(info) == 9}
+        if identifier is None:
+            base.require(not any(name.startswith(prefix) for name in inventory), "Global unknown UAP state member")
+            return
+        _physical, active, data = self.identity_paths(identifier)
+        marker = (data / ".agentplugins-data-owner.json").relative_to(self.home).as_posix()
+        allowed = {"state-v2.json", "mutation.lock", marker, "security/lintai/0.1.3/linux-amd64/lintai"}
+        if self.assessment_path is not None: allowed.add(self.assessment_path)
+        if not removed:
+            allowed.update((active / name).relative_to(self.home).as_posix()
+                           for name in set(self.source_bodies) | {NS + "/agentplugins", NS + "/metadata.json"})
+        base.require(files <= allowed and {"state-v2.json", "mutation.lock", marker} <= files,
+                     "Global unknown UAP state member")
+        dirs = {"operations-v2", "plugin-data/.agentplugins-data-operations",
+                "managed", "managed/clients", "managed/clients/windsurf"}
+        for name in allowed:
+            dirs.update(parent.as_posix() for parent in Path(name).parents if str(parent) != ".")
+        base.require(all(name[len(prefix):] in dirs for name, info in inventory.items()
+                         if name.startswith(prefix) and len(info) == 5), "Global unknown UAP directory")
+        for name in files:
+            info = inventory[prefix + name]
+            mode = 0o700 if name.endswith("/agentplugins") or name.endswith("/lintai") else (
+                0o644 if name in {(active / leaf).relative_to(self.home).as_posix() for leaf in self.source_bodies} else 0o600)
+            maximum = 128 << 20 if name.endswith("/agentplugins") else SCANNER[0] if name.endswith("/lintai") else 1 << 20
+            base.require(info[2] == stat.S_IFREG | mode and info[3] == 1
+                         and info[0] == self.ctx.original_output_identity[0]
+                         and tuple(info[4:6]) == self.ctx.original_output_identity[3:] and 0 <= info[6] <= maximum,
+                         "Global UAP member metadata")
+        if self.data_authority is not None:
+            base.require(all(inventory.get(name) == info for name, info in self.data_authority.items()),
+                         "Global retained data authority changed")
+
+    def guard_frame(self, inventory):
+        base.require(all(inventory.get(name) == identity for name, identity in self.authorities.items()),
+                     "Global original directory authority changed")
+        self.home_metadata(inventory, removed=getattr(self, "removed", False))
+        self.native_skill_metadata(inventory, absent=self.identifier is None or getattr(self, "removed", False)
+                                   or getattr(self, "skill_quarantined", False))
+        for name in self.verified_inventory.keys() | inventory.keys():
+            if self.verified_inventory.get(name) != inventory.get(name):
+                base.require(auxiliary(name), "Global unacknowledged fixture member")
+        # Every original public delta is already joined to state, source and
+        # receipts, and its complete metadata must still match that observation.
+        projected = dict(self.effects.baseline)
+        projected.update({name: info for name, info in inventory.items()
+                          if auxiliary(name) or name == self.effects.config_path})
+        self.effects.verify(projected)
+
     def frame(self, inventory=None):
+        if inventory is None: inventory = base.metadata_inventory(self.ctx.root, self.ctx.budget)
+        self.guard_frame(inventory)
         return capture(self.ctx, self.cli_pin, self.helper, authorities=self.authorities, inventory=inventory)
 
     def read(self, path, inventory):
         return regular(self.ctx, path.relative_to(self.ctx.root).as_posix(), inventory)
 
-    def state(self, inventory, *, removed=False):
+    def native_skill_metadata(self, inventory, *, absent=False):
+        root = (self.profile / "skills" / SKILL).relative_to(self.ctx.root).as_posix()
+        selected = {name for name in inventory if name == root or name.startswith(root + "/")}
+        base.require(selected == (set() if absent else {root, root + "/SKILL.md"}),
+                     "Global native Skill closed membership")
+        if absent: return
+        directory, leaf = inventory[root], inventory[root + "/SKILL.md"]
+        original = self.ctx.original_output_identity
+        base.require(len(directory) == 5 and directory[2] == stat.S_IFDIR | 0o755
+                     and directory[0] == original[0] and tuple(directory[3:]) == original[3:]
+                     and len(leaf) == 9 and leaf[2] == stat.S_IFREG | 0o644 and leaf[3] == 1
+                     and leaf[0] == original[0] and tuple(leaf[4:6]) == original[3:]
+                     and leaf[6] == len(self.source_bodies["skills/" + SKILL + "/SKILL.md"]),
+                     "Global native Skill metadata")
+
+    def state(self, inventory, *, removed=False, identifier=None):
+        self.home_metadata(inventory, identifier=identifier, removed=removed)
+        self.native_skill_metadata(inventory, absent=removed)
         value = base.strict_json(self.read(self.home / "state-v2.json", inventory))
-        base.require(type(value) is dict and value.get("schema_version") == 5
-                     and type(value.get("installations")) is list, "Global state schema")
+        base.require(type(value) is dict and type(value.get("schema_version")) is int and value["schema_version"] == 5
+                     and type(value.get("installations")) is list and len(value["installations"]) == 1
+                     and not value.get("environment_receipts"), "Global state schema")
+        item = value["installations"][0]
+        current = item.get("installation_id")
+        physical, active, data = self.identity_paths(current)
+        base.require(current == (identifier or self.identifier) and item.get("declared_name") == NAME
+                     and type(item.get("clients")) is dict, "Global installation identity")
+        basis = {key: part for key, part in item.items()
+                 if key not in ("clients", "data_retained", "operation_group_id", "updated_at")}
+        if self.installation_basis is not None:
+            base.require(basis == self.installation_basis, "Global source/package/data authority changed")
         if removed:
-            base.require(not value["installations"], "Global removal left installation")
+            base.require(self.installation_basis is not None and item["clients"] == {} and item.get("data_retained") is True,
+                         "Global removal did not retain owned data")
             self.closed_home(inventory, removed=True)
             return value
-        base.require(len(value["installations"]) == 1, "Global single installation")
-        item = value["installations"][0]
-        identifier = item.get("installation_id")
-        base.require(type(identifier) is str and re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}", identifier)
-                     and item.get("declared_name") == NAME and len(item.get("clients", {})) == 1,
-                     "Global installation identity")
+        base.require(len(item["clients"]) == 1 and item.get("data_retained", False) is False, "Global single binding")
         binding = next(iter(item["clients"].values()))
-        physical = NAME + "-" + sha(identifier.encode())[:12]
-        active = self.home / "managed/clients/windsurf" / physical
-        binding_id = "client_" + sha("\0".join((identifier, "windsurf", "user", str(active))).encode())[:24]
-        data_id = "data_" + sha("\0".join((identifier, physical, "user")).encode())[:24]
-        base.require(binding.get("client_id") == "windsurf" and binding.get("scope") == "user"
+        binding_id = "client_" + sha("\0".join((current, "windsurf", "user", str(active))).encode())[:24]
+        data_id = "data_" + sha("\0".join((current, physical, "user")).encode())[:24]
+        base.require(type(binding) is dict and binding.get("client_id") == "windsurf" and binding.get("scope") == "user"
                      and set(item["clients"]) == {binding_id} and binding.get("client_binding_id") == binding_id
-                     and binding.get("data_receipt_id") == data_id
-                     and binding.get("target_locator") == str(active)
-                     and binding.get("physical_artifact_id") == physical
-                     and binding.get("native_profile_root") == str(self.profile)
-                     and binding.get("activation") == "prepared"
-                     and binding.get("materialization") == "materialized" and binding.get("policy") == "allowed"
-                     and binding.get("activation_attested", False) is False
-                     and binding.get("native_activation_attempt", "") == ""
+                     and binding.get("data_receipt_id") == data_id and binding.get("target_locator") == str(active)
+                     and binding.get("physical_artifact_id") == physical and binding.get("native_profile_root") == str(self.profile)
+                     and binding.get("activation") == "prepared" and binding.get("materialization") == "materialized"
+                     and binding.get("policy") == "allowed" and binding.get("activation_attested", False) is False
+                     and binding.get("authentication_attested", False) is False
+                     and binding.get("native_activation_attempt", "") == "" and binding.get("pending_native_intent") is None
                      and binding.get("verification") == "installation_verified"
                      and binding.get("authentication") == "not_checked", "Global binding authority")
-        base.require(self.identifier in (None, identifier), "Global installation replaced")
         source = item.get("source", {})
-        base.require(source.get("canonical_source") == str(self.source)
-                     and source.get("requested_source") == str(self.source), "Global source identity")
+        manifest = "sha256:" + sha(self.source_bodies["plugin.json"])
+        base.require(source == {"source_binding_id": "src_" + sha((str(self.source) + "\0\0").encode())[:24],
+                                "requested_source": str(self.source), "canonical_source": str(self.source),
+                                "resolved_revision": "", "tree_digest": self.source_sha},
+                     "Global source identity")
+        package = item.get("package", {})
+        base.require(package == {"loader_kind": "agent_plugins", "format_id": "agent-plugins/1.0.0",
+                                  "schema_uri": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+                                  "declared_name": NAME, "version": "1.0.0", "manifest_digest": manifest,
+                                  "inventory": {"mcp_present": True, "mcp_enabled": True,
+                                                "mcp_servers": sorted(SERVERS), "skills": [SKILL]}},
+                     "Global package identity")
+        base.require(binding.get("package_revision") == {"version": "1.0.0", "tree_digest": self.source_sha,
+                                                         "manifest_digest": manifest},
+                     "Global binding package revision")
         base.require(self.security is not None and self.security["subject"] == {
-            "tree_digest": source.get("tree_digest"), "manifest_digest": item.get("package", {}).get("manifest_digest")},
-            "Global scan does not bind installed source")
-        objects = binding.get("native_objects")
-        wanted = {"devin_global_skill_directory:" + SKILL,
-                  *("devin_global_mcp_server:" + name for name in SERVERS)}
-        base.require(type(objects) is list and len(objects) == 3
-                     and {obj.get("object_id") for obj in objects} == wanted,
-                     "Global exact native receipts")
-        for obj in objects:
-            name, kind = obj["logical_name"], obj["kind"]
-            base.require((kind == "devin_global_skill_directory" and name == SKILL
-                          and obj.get("source_relative") == "skills/" + SKILL)
-                         or (kind == "devin_global_mcp_server" and name in SERVERS
-                             and obj.get("source_relative", "") == ""), "Global receipt kind/source")
-            path = self.profile / ("skills/" + SKILL if kind == "devin_global_skill_directory" else "mcp_config.json")
-            base.require(obj.get("path") == str(path) and obj.get("protection_class") == "managed"
-                         and obj.get("user_modified", False) is False and obj.get("before_digest", "") == ""
-                         and type(obj.get("managed_digest")) is str and obj["managed_digest"].startswith("sha256:"),
-                         "Global native receipt path/digest")
-        self.identifier, self.binding = identifier, binding
-        receipts = binding.get("receipts")
-        base.require(type(receipts) is list and receipts and all(receipt.get("phase") == "committed"
-                     and receipt.get("client_binding_id") == binding.get("client_binding_id") for receipt in receipts),
-                     "Global committed public receipts")
-        receipt = item.get("data_receipts", {}).get(binding.get("data_receipt_id"))
-        data = self.home / "plugin-data" / physical
-        base.require(type(receipt) is dict and receipt.get("scope") == "user" and receipt.get("state") == "owned"
+            "tree_digest": self.source_sha, "manifest_digest": manifest}, "Global scan does not bind installed source")
+        receipt = item.get("data_receipts", {}).get(data_id)
+        base.require(type(item.get("data_receipts")) is dict and set(item["data_receipts"]) == {data_id}
+                     and type(receipt) is dict and receipt.get("scope") == "user" and receipt.get("state") == "owned"
                      and receipt.get("physical_backend_id") == physical and receipt.get("locator") == str(data)
                      and receipt.get("data_receipt_id") == data_id and receipt.get("ownership_digest")
                      == "sha256:" + sha(("agentplugins-plugin-data-v1\0" + data_id + "\0" + str(data)).encode()),
                      "Global data ownership")
         base.require(self.data_receipt is None or receipt == self.data_receipt, "Global data ownership changed")
-        self.data_receipt = receipt
+        self.data_receipt = copy.deepcopy(receipt)
         self.helper = (active / NS / "agentplugins").relative_to(self.ctx.root).as_posix()
-        self.verify_payload(active, inventory)
+        package_digest = self.verify_payload(active, inventory)
+        receipts = binding.get("receipts")
+        prior = self.binding["receipts"] if self.binding is not None else []
+        base.require(type(receipts) is list and 1 <= len(receipts) <= 2
+                     and all(type(row) is dict and row.get("phase") == "committed" and row.get("mutation_type") == "directory_swap"
+                             and row.get("client_binding_id") == binding_id and row.get("active_path") == str(active)
+                             and type(row.get("sequence")) is int and row["sequence"] == index + 1
+                             and type(row.get("after_digest")) is str
+                             and re.fullmatch(r"sha256:[0-9a-f]{64}", row["after_digest"]) for index, row in enumerate(receipts))
+                     and receipts[:len(prior)] == prior and len(receipts) <= len(prior) + 1,
+                     "Global committed public receipts")
+        digest = receipts[-1]["after_digest"]
+        base.require(digest == package_digest, "Global committed package digest differs")
+        entries = base.strict_json(self.read(self.profile / "mcp_config.json", inventory))["mcpServers"]
+        wanted = [{"object_id": "package:windsurf:" + physical, "kind": "managed_package_directory",
+                   "logical_name": NAME, "path": str(active), "managed_digest": digest, "protection_class": "managed"}]
+        skill = self.source_bodies["skills/" + SKILL + "/SKILL.md"]
+        wanted.append({"object_id": "devin_global_skill_directory:" + SKILL, "kind": "devin_global_skill_directory",
+                       "logical_name": SKILL, "path": str(self.profile / "skills" / SKILL), "source_relative": "skills/" + SKILL,
+                       "managed_digest": "sha256:" + sha(b"f\0SKILL.md\0-\0" + skill + b"\0"), "protection_class": "managed"})
+        wanted.extend({"object_id": "devin_global_mcp_server:" + name, "kind": "devin_global_mcp_server",
+                       "logical_name": name, "path": str(self.profile / "mcp_config.json"),
+                       "managed_digest": entry_digest(name, entries[name]), "protection_class": "managed"} for name in SERVERS)
+        objects = binding.get("native_objects")
+        base.require(type(objects) is list and len(objects) == 4 and all(type(row) is dict for row in objects)
+                     and sorted(objects, key=lambda row: row.get("object_id", "")) == sorted(wanted, key=lambda row: row["object_id"]),
+                     "Global exact native receipt digest joins")
+        stable_binding = {key: part for key, part in binding.items() if key not in ("updated_at", "receipts")}
+        base.require(self.binding_basis is None or stable_binding == self.binding_basis, "Global binding authority changed")
+        self.identifier, self.binding = current, binding
+        self.installation_basis, self.binding_basis = copy.deepcopy(basis), copy.deepcopy(stable_binding)
+        keys = [data.relative_to(self.ctx.root).as_posix(),
+                (data / ".agentplugins-data-owner.json").relative_to(self.ctx.root).as_posix()]
+        self.data_authority = {key: inventory[key] for key in keys}
         self.closed_home(inventory)
         return value
 
@@ -226,26 +521,27 @@ class Journey:
         base.require(files == set(source_files) | {NS + "/agentplugins", NS + "/metadata.json"},
                      "Global package closed membership")
         self.package_members = {str((active / name).relative_to(self.home)) for name in files}
+        bodies, package_digest = capture_package(self.ctx, active, inventory, self.cli_pin)
         for name, body in source_files.items():
             if name != "mcp.json":
-                base.require(self.read(active / name, inventory) == body, "Global installed source bytes differ")
-        metadata = base.strict_json(self.read(active / NS / "metadata.json", inventory))
+                base.require(bodies[name] == body, "Global installed source bytes differ")
+        metadata = base.strict_json(bodies[NS + "/metadata.json"])
         base.require(metadata == {"protocol": 1, "sha256": self.cli_pin[1], "cliVersion": "0.1.0-development"},
                      "Global managed helper metadata")
-        regular(self.ctx, self.helper, inventory, large=self.cli_pin)
-        document = base.strict_json(self.read(active / "mcp.json", inventory))
-        base.require(set(document) <= {"$schema", "mcpServers"}
-                     and document.get("$schema", "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json")
+        document = base.strict_json(bodies["mcp.json"])
+        base.require(type(document) is dict and set(document) == {"$schema", "mcpServers"}
+                     and document["$schema"]
                      == "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json", "Global projected document settings")
         projected = document["mcpServers"]
-        base.require(set(projected) == set(SERVERS), "Global MCP projection membership")
+        base.require(type(projected) is dict and set(projected) == set(SERVERS), "Global MCP projection membership")
         stdio, http = projected[SERVERS[0]], projected[SERVERS[1]]
         data = self.data_receipt["locator"]
-        base.require(stdio.get("command") == str(active / NS / "agentplugins")
-                     and stdio.get("args") == ["--internal-stdio-v1", str(active), data, str(active), "plugin", "--",
-                                                "python3", str(active / "inert.py")]
-                     and stdio.get("env") == {"PLUGIN_ROOT": str(active), "PLUGIN_DATA": data}
-                     and http.get("url") == self.probes["user"].url, "Global projected transport")
+        base.require(stdio == {"type": "stdio", "command": str(active / NS / "agentplugins"),
+                               "args": ["--internal-stdio-v1", str(active), data, str(active), "plugin", "--",
+                                        "python3", str(active / "inert.py")],
+                               "env": {"PLUGIN_ROOT": str(active), "PLUGIN_DATA": data}}
+                     and http == {"type": "streamable-http", "url": self.probes["user"].url},
+                     "Global projected transport")
         native = base.strict_json(self.read(self.profile / "mcp_config.json", inventory))
         base.require(set(native) == {"mcpServers"}, "Global native unexpected root settings")
         entries = native.get("mcpServers", {})
@@ -259,19 +555,12 @@ class Journey:
         skill = self.profile / "skills" / SKILL / "SKILL.md"
         base.require(self.read(skill, inventory) == source_files["skills/" + SKILL + "/SKILL.md"],
                      "Global projected Skill differs")
+        return package_digest
 
     def closed_home(self, inventory, *, removed=False):
-        prefix = self.home.relative_to(self.ctx.root).as_posix() + "/"
-        files = {name[len(prefix):] for name, info in inventory.items() if name.startswith(prefix) and len(info) == 9}
-        data_marker = "plugin-data/" + Path(self.data_receipt["locator"]).name + "/.agentplugins-data-owner.json"
-        allowed = {"state-v2.json", "mutation.lock", data_marker,
-                   "security/lintai/0.1.3/linux-amd64/lintai"} | (set() if removed else self.package_members)
-        if self.assessment_path is not None:
-            allowed.add(self.assessment_path)
-        base.require(files <= allowed and {"state-v2.json", "mutation.lock", data_marker} <= files,
-                     "Global unknown UAP state member")
-        marker = base.strict_json(self.read(self.home / data_marker, inventory))
-        base.require(marker == self.data_receipt, "Global data marker differs")
+        self.home_metadata(inventory, removed=removed)
+        marker = Path(self.data_receipt["locator"]) / ".agentplugins-data-owner.json"
+        base.require(base.strict_json(self.read(marker, inventory)) == self.data_receipt, "Global data marker differs")
         lock = base.strict_json(self.read(self.home / "mutation.lock", inventory))
         base.require(set(lock) == {"pid", "acquired_at"} and type(lock["pid"]) is int and lock["pid"] > 0
                      and type(lock["acquired_at"]) is str and len(lock["acquired_at"]) <= 40,
@@ -280,14 +569,17 @@ class Journey:
             cached = base.strict_json(self.read(self.home / self.assessment_path, inventory))
             expected = dict(self.security); expected.pop("evidence_source", None)
             base.require(cached == expected, "Global source-bound scan cache differs")
-        dirs = {"operations-v2", "plugin-data/.agentplugins-data-operations",
-                "managed", "managed/clients", "managed/clients/windsurf"}
-        for name in allowed:
-            dirs.update(str(parent) for parent in Path(name).parents if str(parent) != ".")
-        base.require(all(name[len(prefix):] in dirs for name, info in inventory.items()
-                         if name.startswith(prefix) and len(info) == 5), "Global unknown UAP directory")
+
+    def record_effect(self, label, before, after, old, now):
+        self.ctx.summary.setdefault("command_effects", []).append({
+            "label": label,
+            "changes": {name: {"before": old.get(name), "after": now.get(name)}
+                        for name in old.keys() | now.keys() if old.get(name) != now.get(name)},
+            "outer_changes": {name: {"before": before.get(name), "after": after.get(name)}
+                              for name in before.keys() | after.keys() if before.get(name) != after.get(name)}})
 
     def public(self, label, argv, *, removed=False):
+        self.phase(label)
         before, old = self.frame()
         base.require(installer_pin(self.installer, self.ctx.budget) == self.cli_pin, "prebuilt installer changed before public command")
         env = {**self.ctx.env, "AGENTPLUGINS_HOME": str(self.home),
@@ -296,28 +588,48 @@ class Journey:
         record, out, _ = self.ctx.command(label, [str(self.installer), *argv, *confirmation, "--target", "windsurf",
                                                   "--scope", "user", "--format", "json"],
                                            self.ctx.projects["user"], env, 90)
-        base.require(record["exit"] == 0, "public Global lifecycle refused")
+        base.require(type(record.get("exit")) is int and record["exit"] == 0 and record.get("error") is None,
+                     "public Global lifecycle refused")
         base.require(installer_pin(self.installer, self.ctx.budget) == self.cli_pin, "prebuilt installer changed during public command")
         response = base.strict_json(out)
         base.require(set(response) == {"schema_version", "command", "result", "data"}
                      and type(response["schema_version"]) is int and response["schema_version"] == 1
                      and response["command"] == argv[0] and response["result"] == "success",
                      "public Global envelope refused")
+        candidate = self.identifier
         if label == "uap-add":
-            security = response["data"].get("security")
+            data = response["data"]
+            security = data.get("security")
             self.assessment_path = security_role(security)
+            base.require(security["subject"] == {"tree_digest": self.source_sha,
+                         "manifest_digest": "sha256:" + sha(self.source_bodies["plugin.json"])},
+                         "Global public scan source differs")
             self.security = security
+            targets = data.get("targets")
+            base.require(type(targets) is list and len(targets) == 1 and targets[0].get("target") == "windsurf"
+                         and not targets[0].get("error"), "Global public selected target")
+            candidate = targets[0].get("output", {}).get("result", {}).get("installation_id")
+            self.identity_paths(candidate)  # Finite prospective names; not yet acknowledged ownership.
         after = base.metadata_inventory(self.ctx.root, self.ctx.budget)
         base.require(all(after.get(name) == identity for name, identity in self.authorities.items()),
                      "Global original directory authority changed")
         self.verify_public_metadata(before, after, doctor=label.startswith("uap-doctor"))
-        state = self.state(after, removed=removed)
-        self.state_history.append(state)
-        self.public_labels.append(label)
+        state = self.state(after, removed=removed, identifier=candidate)
+        if not removed:
+            sequence = 2 if label == "uap-repair" or "uap-repair" in self.public_labels else 1
+            base.require(len(self.binding["receipts"]) == sequence, "Global public receipt sequence")
         if label.startswith("uap-doctor"):
-            base.require(self.frame()[1] == old, "Global doctor wrote fixture")
+            doctor_result(response["data"], self.identifier)
         else:
             self.verify_public_delta(before, after, removed)
+        self.removed, self.skill_quarantined = removed, False
+        self.verified_inventory = after  # Only after the complete source/state/receipt/byte joins.
+        _, now = self.frame(after)
+        if label.startswith("uap-doctor"):
+            base.require(now == old, "Global doctor wrote fixture")
+        self.record_effect(label, before, after, old, now)
+        self.state_history.append(state)
+        self.public_labels.append(label)
         base.zero_effects(self.probes, self.ctx.root / "stdio-started")
 
     def verify_public_metadata(self, before, after, *, doctor=False):
@@ -340,17 +652,17 @@ class Journey:
         for scope in ("a", "b"):
             for kind in ("mcp", "skills"):
                 label = kind + "-" + phase + "-" + scope
+                self.phase(label)
                 before, old = self.frame()
                 record, out, _ = self.ctx.probe(label, [kind, "list", "--json"], project=scope)
-                base.require(record["exit"] == 0, "Global native inventory refused")
+                base.require(type(record.get("exit")) is int and record["exit"] == 0 and record.get("error") is None,
+                             "Global native inventory refused")
                 after = base.metadata_inventory(self.ctx.root, self.ctx.budget)
                 self.verify_native_metadata(before, after)
                 after, now = self.frame(after)
-                self.ctx.summary.setdefault("global_native_effects", []).append({"label": label,
-                    "changes": {name: {"before": old.get(name), "after": now.get(name)}
-                                for name in old.keys() | now.keys() if old.get(name) != now.get(name)}})
                 self.verify_native_delta(before, after, old, now, label)
                 rows = base.strict_json(out)
+                base.require(type(rows) is list and all(type(row) is dict for row in rows), "Global native row container")
                 if kind == "mcp":
                     owned = [row for row in rows if row.get("name") in SERVERS]
                     base.require(len(owned) == (0 if phase == "removed" else 2), "Global native MCP membership")
@@ -365,53 +677,53 @@ class Journey:
                     selected = [row for row in rows if row.get("base_dir") == str(self.profile / "skills" / SKILL)]
                     base.require(len(selected) == (0 if phase == "removed" else 1), "Global native Skill membership")
                     for row in selected:
-                        base.require(row.get("provider") == "Devin" and row.get("display_name") == SKILL,
-                                     "Global native Skill identity")
+                        base.require(row == owned_skill_row(self.ctx, self.profile, scope), "Global native Skill identity")
                     foreign = [row for row in rows if row not in selected]
                     base.verify_skill_metadata_sources(json.dumps(foreign).encode(), self.ctx, self.expected, scope, self.nonce)
+                self.record_effect(label, before, after, old, now)
+                self.verified_inventory = after
                 self.native_labels.append(label)
                 base.zero_effects(self.probes, self.ctx.root / "stdio-started")
 
     def verify_native_metadata(self, before, after):
-        # Refuse nonauxiliary identity changes before hashing any post-native body.
-        auxiliary = lambda name: (name in base.BOOTSTRAP_DIRS or name in base.BOOTSTRAP_FIXED
-                                  or name in (base.INSTALLATION_ID, base.MAINTENANCE)
-                                  or base.BOOTSTRAP_LOG.fullmatch(name))
+        # Compare every original/receipt-derived path before any post-native read.
         for name in before.keys() | after.keys():
             if before.get(name) != after.get(name):
                 base.require(auxiliary(name), "native Global changed nonauxiliary authority")
                 if name in before and base.BOOTSTRAP_LOG.fullmatch(name):
                     base.require(False, "existing task-born log changed")
-        projected = dict(self.effects.baseline)
-        projected.update({name: value for name, value in after.items()
-                          if auxiliary(name) or name == self.effects.config_path})
-        self.effects.verify(projected)
 
     def verify_native_delta(self, before, after, old, now, label):
-        # Only already admitted startup roles may change during native listings.
-        auxiliary = lambda name: (name in base.BOOTSTRAP_DIRS or name in base.BOOTSTRAP_FIXED
-                                  or name in (base.INSTALLATION_ID, base.MAINTENANCE)
-                                  or base.BOOTSTRAP_LOG.fullmatch(name))
         for name in old.keys() | now.keys():
             if old.get(name) == now.get(name): continue
             base.require(auxiliary(name), "native Global changed nonauxiliary authority")
             if base.BOOTSTRAP_LOG.fullmatch(name) and name in before:
-                base.require(old.get(name) == now.get(name), "existing task-born log changed")
-        projected = dict(self.effects.baseline)
-        projected.update({name: value for name, value in after.items()
-                          if auxiliary(name) or name == self.effects.config_path})
-        self.effects.verify(projected)
+                base.require(False, "existing task-born log changed")
         born = {name for name in after.keys() - before.keys() if base.BOOTSTRAP_LOG.fullmatch(name)}
         base.require(len(born) <= 1, "Global native multiple new logs")
         for name in born:
             base.require(name not in self.log_births, "task-born log name reused")
             self.log_births[name] = {"command": label, "sha256": now[name]["sha256"]}
 
+    def quarantine(self):
+        self.phase("global-skill-quarantine")
+        before = base.metadata_inventory(self.ctx.root, self.ctx.budget)
+        self.guard_frame(before)
+        quarantine_skill(self.ctx, self.profile, self.source_bodies["skills/" + SKILL + "/SKILL.md"])
+        after = base.metadata_inventory(self.ctx.root, self.ctx.budget)
+        old = (self.profile / "skills" / SKILL).relative_to(self.ctx.root).as_posix()
+        new = (self.ctx.private / "deliberately-quarantined-skill").relative_to(self.ctx.root).as_posix()
+        expected = {name: info for name, info in before.items() if name not in (old, old + "/SKILL.md")}
+        expected.update({new + suffix: before[old + suffix] for suffix in ("", "/SKILL.md")})
+        base.require(after == expected, "Global quarantine changed unrelated authority")
+        self.skill_quarantined = True
+        self.verified_inventory = after
+
     def execute(self):
         self.public("uap-add", ["add", str(self.source), "--no-save"])
         self.native("installed")
         self.public("uap-doctor-installed", ["doctor", self.identifier])
-        quarantine_skill(self.ctx, self.profile, self.source_bodies["skills/" + SKILL + "/SKILL.md"])
+        self.quarantine()
         self.public("uap-repair", ["repair", self.identifier])
         self.native("repaired")
         self.public("uap-doctor-repaired", ["doctor", self.identifier])
@@ -451,7 +763,7 @@ def quarantine_skill(ctx, profile, expected):
 
 
 def author_source(ctx, probes):
-    source = ctx.root / "component-source"
+    source = ctx.private / "component-source"  # Covered by the original held private-root cleanup.
     skill = source / "skills" / SKILL / "SKILL.md"
     skill.parent.mkdir(parents=True)
     (source / "plugin.json").write_text(json.dumps({"$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
@@ -477,14 +789,49 @@ def completion(summary):
     expected = ("source-commit", "source-tree", "source-clean", "git-init-a", "git-init-b", "git-init-c") + base.METADATA_PROBES
     tail = ("uap-add", *NATIVE[:4], "uap-doctor-installed", "uap-repair", *NATIVE[4:8],
             "uap-doctor-repaired", "uap-remove", *NATIVE[8:], "source-final-clean")
-    base.require([row["probe"] for row in summary["commands"]] == list(expected + tail)
-                 and all(row.get("exit") == 0 and row.get("error") is None for row in summary["commands"])
+    commands, effects = summary.get("commands"), summary.get("command_effects")
+    base.require(type(commands) is list and len(commands) == 37
+                 and all(type(row) is dict and row.get("probe") == label and type(row.get("exit")) is int
+                         and row["exit"] == 0 and "error" in row and row["error"] is None
+                         for row, label in zip(commands, expected + tail)), "Global command completion refused")
+    labels = base.METADATA_PROBES + tail[:-1]
+    base.require(type(effects) is list and len(effects) == 30
+                 and all(type(row) is dict and set(row) == {"label", "changes", "outer_changes"}
+                         and row["label"] == label and type(row["changes"]) is dict and type(row["outer_changes"]) is dict
+                         for row, label in zip(effects, labels)), "Global effect completion refused")
+    base.require(summary.get("metadata_recipe") == "ordinary-global"
+                 and summary.get("metadata_route") == ordinary.OrdinaryEffects.metadata_route
+                 and summary.get("ordinary_metadata_capture_complete") is True
                  and summary.get("global_lifecycle_capture_complete") is True
                  and summary.get("metadata_capture_complete") is True and summary.get("admission_qualified") is False
+                 and summary.get("native_json_schema") == summary.get("exact_source_admission") == base.METADATA_SCHEMA
+                 and "error" not in summary and type(summary.get("qualification")) is dict
                  and set(summary["qualification"]) == set(base.shared.QUALIFICATION_CASES)
                  and all(value is False for value in summary["qualification"].values())
                  and summary.get("native_global_steps") == list(NATIVE)
                  and summary.get("public_global_steps") == list(PUBLIC), "Global completion refused")
+    for field, empty in (("probe_methods", []), ("accepted_connections", 0)):
+        values = summary.get(field)
+        base.require(type(values) is dict and set(values) == {"a", "b", "user", "local", "legacy"}
+                     and all(type(value) is type(empty) and value == empty for value in values.values()),
+                     "Global endpoint effects")
+    for row in effects:
+        for field in ("changes", "outer_changes"):
+            changes = row[field]
+            base.require(len(changes) <= 4096 and all(type(delta) is dict and set(delta) == {"before", "after"}
+                         and (delta["before"] is not None or delta["after"] is not None) for delta in changes.values()),
+                         "Global effect delta shape")
+    validate_build_receipt(summary.get("global_build_receipt"), summary)
+
+
+def complete_ordinary_gate(ctx, effects):
+    effects.verify(base.metadata_inventory(ctx.root, ctx.budget))
+    ordinary.require_ordinary_commands(ctx, recipe="ordinary-global")
+    base.require(type(effects.step) is int and effects.step == len(base.METADATA_PROBES)
+                 and effects.after is not None and ctx.summary.get("metadata_capture_complete") is True
+                 and len(ctx.summary.get("command_effects", [])) == len(base.METADATA_PROBES),
+                 "ordinary metadata gate incomplete")
+    ctx.summary["ordinary_metadata_capture_complete"] = True
 
 
 def main():
@@ -493,14 +840,16 @@ def main():
     parser.add_argument("--installer", type=Path, required=True)
     args = parser.parse_args()
     def collect(ctx, probes, readout_state):
+        ctx.global_readout_state = readout_state
+        installer = args.installer
+        build_installer(ctx, installer)
         source = author_source(ctx, probes)
-        installer = args.installer.resolve(strict=True)
-        base.require(installer.is_file() and installer == args.installer, "prebuilt installer path")
         def continue_global(ctx, probes, expected, nonce, effects):
+            complete_ordinary_gate(ctx, effects)
             Journey(ctx, probes, expected, nonce, effects, installer, source).execute()
         base.collect(ctx, probes, readout_state, effects_type=ordinary.OrdinaryEffects,
                      continuation=continue_global)
-    return base.run(args.output, collector=collect, recipe="ordinary-global", completion=completion, seconds=900)
+    return base.run(args.output, collector=collect, recipe="ordinary-global")
 
 
 if __name__ == "__main__":
