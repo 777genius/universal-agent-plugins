@@ -90,12 +90,16 @@ var policySysctls = []policyInput{
 	{"max_user_namespaces", "/proc/sys/user/max_user_namespaces", false},
 }
 
+// syscall.Stat_t.Nlink is uint64 on amd64 but uint32 on Linux ARM64.
+// A type-parametric conversion keeps the identity portable without a lint exception.
+func policyLinkCount[T ~uint32 | ~uint64](n T) uint64 { return uint64(n) }
+
 func policyStat(info os.FileInfo) (policyIdentity, error) {
 	st, ok := info.Sys().(*syscall.Stat_t)
 	if !ok {
 		return policyIdentity{}, fmt.Errorf("policy-stat-refused")
 	}
-	return policyIdentity{st.Dev, st.Ino, st.Mode, st.Uid, st.Gid, uint64(st.Nlink), st.Size, st.Mtim.Nano(), st.Ctim.Nano()}, nil
+	return policyIdentity{st.Dev, st.Ino, st.Mode, st.Uid, st.Gid, policyLinkCount(st.Nlink), st.Size, st.Mtim.Nano(), st.Ctim.Nano()}, nil
 }
 func policyReason(reason *string, next string) {
 	if *reason == "none" {

@@ -42,6 +42,7 @@ func transientDisplayLock(info os.FileInfo, proof isolationProof) bool {
 	st, ok := info.Sys().(*syscall.Stat_t)
 	return ok && info.Mode().IsRegular() && info.Mode() == 0444 && info.Size() == 11 && st.Nlink == 2 && int64(st.Uid) == int64(proof.UID)
 }
+
 // X.Org may briefly expose the pending dentry for the same inode after
 // its link count reached one. That is not a final-ready state.
 func pendingDisplayLock(held, other os.FileInfo, proof isolationProof) bool {

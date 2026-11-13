@@ -10,9 +10,9 @@ import (
 
 func TestPublicCommandTreeReapedIndependentOfCLIExit(t *testing.T) {
 	for _, tc := range []struct {
-		name string
+		name   string
 		result ports.CommandResult
-		want bool
+		want   bool
 	}{
 		{"nonzero-reaped", ports.CommandResult{ExitCode: 1, CleanupComplete: true}, true},
 		{"zero-reaped", ports.CommandResult{ExitCode: 0, CleanupComplete: true}, true},
