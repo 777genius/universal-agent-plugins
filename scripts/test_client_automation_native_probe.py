@@ -118,7 +118,9 @@ class NativeAdmissionContracts(unittest.TestCase):
             self.assertEqual(item["mode"], 0o600)
             self.assertEqual(item["bytes"], (root / "config").stat().st_size)
             self.assertEqual(item["sha256"], hashlib.sha256((root / "config").read_bytes()).hexdigest())
-            self.assertEqual(set(item), {"sha256", "mode", "bytes"})
+            self.assertEqual(set(item), {"sha256", "mode", "bytes", "device", "inode"})
+            self.assertEqual(item["device"], (root / "config").stat().st_dev)
+            self.assertEqual(item["inode"], (root / "config").stat().st_ino)
 
     @unittest.skipUnless(os.name == "posix" and hasattr(os, "O_NOFOLLOW")
                          and hasattr(os, "O_DIRECTORY"), "requires POSIX no-follow dirfd")
@@ -183,6 +185,29 @@ class NativeAdmissionContracts(unittest.TestCase):
             after = snapshot(root)
             self.assertEqual(before["foreign-empty"]["mode"], after["foreign-empty"]["mode"])
             self.assertNotEqual(before["foreign-empty"]["inode"], after["foreign-empty"]["inode"])
+            self.assertNotEqual(before, after)
+
+    @unittest.skipUnless(os.name == "posix" and hasattr(os, "O_NOFOLLOW")
+                         and hasattr(os, "O_DIRECTORY"), "native snapshot is POSIX-only")
+    def test_snapshot_detects_same_bytes_mode_foreign_file_replacement(self):
+        # A native command can replace a foreign file with the same bytes/mode.
+        # Hash-only snapshots must not hide that ownership-changing write.
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary).resolve()
+            root = parent / "watched"
+            root.mkdir()
+            foreign = root / "foreign.json"
+            previous = parent / "original-foreign.json"
+            foreign.write_bytes(b'{"foreign":true}')
+            foreign.chmod(0o600)
+            before = snapshot(root)
+            foreign.rename(previous)
+            foreign.write_bytes(previous.read_bytes())
+            foreign.chmod(0o600)
+            after = snapshot(root)
+            self.assertEqual(before["foreign.json"]["sha256"], after["foreign.json"]["sha256"])
+            self.assertEqual(before["foreign.json"]["mode"], after["foreign.json"]["mode"])
+            self.assertNotEqual(before["foreign.json"]["inode"], after["foreign.json"]["inode"])
             self.assertNotEqual(before, after)
 
     @unittest.skipUnless(os.name == "posix" and hasattr(os, "O_NOFOLLOW")

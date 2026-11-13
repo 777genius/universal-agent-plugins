@@ -127,7 +127,7 @@ def snapshot(root):
             raw = read_anchored_snapshot(root_fd, relative.parts, meta)
             out[str(relative)] = {
                 "sha256": hashlib.sha256(raw).hexdigest(), "mode": stat.S_IMODE(meta.st_mode),
-                "bytes": len(raw),
+                "bytes": len(raw), "device": meta.st_dev, "inode": meta.st_ino,
             }
         # The anchored fd may still point to the old directory if its path
         # was renamed and replaced while the snapshot was being enumerated.
