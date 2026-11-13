@@ -550,3 +550,10 @@ A separate Windows diagnostic contract proves each API's original metadata stays
 stable even when path and held-handle domains legitimately differ from each other.
 The external fixed-field diagnostic remains unchanged; raw paths/values stay out.
 Fresh hosted builder and native captures remain required.
+
+## Bounded metadata for an external payload hardlink refusal
+
+The b79 Linux [job 131933748437](https://github.com/777genius/universal-agent-plugins/actions/runs/43439520227/job/131933748437) finished the official builder, then refused before native start or regular payload bytes. Its exact offending alias is unknown; the external build-cache explanation remains a hypothesis.
+The same closure refusal now retains one metadata-only record through existing cleanup and atomic publication: canonical payload-relative member (ASCII-escaped spelling ≤128 bytes, otherwise null), SHA256 with explicit UTF-8 surrogatepass encoding, observed device/file ID, links, captured alias count and UID/GID.
+The record is ≤1 KiB; non-uint64 integers become null with a saturation flag. Windows zero UID/GID are observations, not ownership proof. Invalid diagnostic input cannot replace the original refusal; no outside traversal, new file reads, materialization, native action or qualification change is added.
+Focused contracts cover actual outside hardlink no-read, retained internal-pair success, long/non-ASCII/surrogate names, saturation and existing publisher retention. Local execution is unavailable: this candidate has static review only; exact-source hosted contracts and native evidence remain required.

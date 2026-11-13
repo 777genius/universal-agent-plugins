@@ -841,9 +841,50 @@ class BundledRuntimeContracts(unittest.TestCase):
             os.link(foreign, root / "borrowed")
             identity = CASE["directory_identity"](root)
             with mock.patch.object(os, "read", side_effect=AssertionError("foreign body read")):
-                with self.assertRaisesRegex(RuntimeError, "hardlink escapes runtime"):
+                with self.assertRaisesRegex(CASE["PayloadHardlinkRefusal"], "hardlink escapes runtime") as refused:
                     CASE["payload_snapshot"](root, identity, time.monotonic() + 5)
             self.assertEqual(foreign.read_bytes(), b"FOREIGN-PRIVATE-BYTES")
+            diagnostic, info = refused.exception.diagnostic, foreign.stat()
+            self.assertEqual(set(diagnostic), {"schema_version", "measurement_only", "member", "member_sha256",
+                             "hash_encoding", "device", "inode", "links", "captured_aliases", "uid", "gid", "integer_saturated"})
+            self.assertEqual((diagnostic["member"], diagnostic["links"], diagnostic["captured_aliases"]), ("borrowed", 2, 1))
+            observed = [info.st_dev, info.st_ino, info.st_uid, info.st_gid]
+            bounded = [value if type(value) is int and 0 <= value <= (1 << 64) - 1 else None for value in observed]
+            self.assertEqual([diagnostic[key] for key in ("device", "inode", "uid", "gid")], bounded)
+            self.assertEqual(diagnostic["integer_saturated"], any(value is None for value in bounded))
+            evidence = parent / "evidence"; evidence.mkdir()
+            proof = dict(status="failed", admission_qualified=False, production_project_mcp=False,
+                         tools_call=False, payload_hardlink_refusal=diagnostic)
+            CASE["write_json"](evidence / "profile-admission.json", proof)
+            with mock.patch.dict(CASE["stage_evidence"].__globals__, {"EVIDENCE_CLOSED": False}):
+                CASE["stage_evidence"](evidence)
+            published = (evidence / "upload/profile-admission.json").read_text()
+            self.assertEqual(json.loads(published), proof)
+            self.assertNotIn(str(parent), published); self.assertNotIn("FOREIGN-PRIVATE-BYTES", published)
+
+    def test_payload_alias_diagnostic_bounds_names_integers_and_encoding(self):
+        import hashlib
+        import time
+        original = (4, 5, 0o100600, 2, 7, 100, 101, 8, 9)
+        for member in ("x" * 160, "venv/é.py", "venv/" + chr(0xDCFF) + ".py"):
+            with self.subTest(member=member), mock.patch.object(os, "read", side_effect=AssertionError("diagnostic read")):
+                with self.assertRaisesRegex(CASE["PayloadHardlinkRefusal"], "hardlink escapes runtime") as refused:
+                    CASE["payload_hardlink_closure"]({member: {"type": "file", "identity": original}}, time.monotonic() + 5)
+                diagnostic = refused.exception.diagnostic
+                self.assertEqual(diagnostic["member"], member if len(json.dumps(member, ensure_ascii=True).encode("ascii")) <= 128 else None)
+                self.assertEqual(diagnostic["member_sha256"], hashlib.sha256(member.encode("utf-8", "surrogatepass")).hexdigest())
+                self.assertEqual(diagnostic["hash_encoding"], "utf-8-surrogatepass")
+                self.assertTrue(diagnostic["measurement_only"]); self.assertFalse(diagnostic["integer_saturated"])
+                self.assertLessEqual(len(json.dumps(diagnostic, ensure_ascii=True).encode("ascii")), 1024)
+        oversized = ((1 << 65), (1 << 65), *original[2:-2], -1, (1 << 65))
+        diagnostic = CASE["PayloadHardlinkRefusal"](oversized, ["owned"]).diagnostic
+        for key in ("device", "inode", "uid", "gid"):
+            self.assertIsNone(diagnostic[key])
+        self.assertTrue(diagnostic["integer_saturated"])
+        for member in ("/outside", "../outside", "C:/outside", "bad\\\\name"):
+            error = CASE["PayloadHardlinkRefusal"](original, [member])
+            self.assertIsNone(error.diagnostic)
+            self.assertEqual(str(error), "payload hardlink escapes runtime")
 
     def test_late_outside_alias_is_rejoined_before_first_hash_read(self):
         import time

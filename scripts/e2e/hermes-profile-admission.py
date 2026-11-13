@@ -273,6 +273,31 @@ def payload_links(root, records, deadline):
 
 
 
+class PayloadHardlinkRefusal(RuntimeError):
+    """Retain one bounded metadata observation without authorizing a file read."""
+    def __init__(self, identity, names):
+        super().__init__("payload hardlink escapes runtime")
+        self.diagnostic = None
+        try:
+            member = min(names)
+            require(type(member) is str and member and ":" not in member and "\\" not in member
+                    and all(part not in ("", ".", "..") for part in member.split("/")), "diagnostic member")
+            encoded = json.dumps(member, ensure_ascii=True).encode("ascii")
+            values = dict(device=identity[0], inode=identity[1], links=identity[3],
+                          captured_aliases=len(names), uid=identity[-2], gid=identity[-1])
+            bounded = {key: value if type(value) is int and 0 <= value <= (1 << 64) - 1 else None
+                       for key, value in values.items()}
+            diagnostic = dict(schema_version=1, measurement_only=True,
+                              member=member if len(encoded) <= 128 else None,
+                              member_sha256=hashlib.sha256(member.encode("utf-8", "surrogatepass")).hexdigest(),
+                              hash_encoding="utf-8-surrogatepass", **bounded,
+                              integer_saturated=any(value is None for value in bounded.values()))
+            require(len(json.dumps(diagnostic, ensure_ascii=True).encode("ascii")) <= 1024, "diagnostic bound")
+            self.diagnostic = diagnostic
+        except (IndexError, TypeError, ValueError, UnicodeError, RuntimeError):
+            pass  # Diagnostics never replace the original alias refusal.
+
+
 def payload_hardlink_closure(records, deadline):
     """Close every regular inode's complete alias set before any content read."""
     groups = {}
@@ -291,7 +316,8 @@ def payload_hardlink_closure(records, deadline):
         names.append(name)
     for identity, names in groups.values():
         require(time.monotonic() < deadline, "payload scan deadline")
-        require(type(identity[3]) is int and len(names) == identity[3], "payload hardlink escapes runtime")
+        if not (type(identity[3]) is int and len(names) == identity[3]):
+            raise PayloadHardlinkRefusal(identity, names)
 
 
 def payload_hash_files(root, records, expected, deadline):
@@ -1043,6 +1069,8 @@ def run():
         require(not deltas["unadmitted_shared_effects"], "shared metadata effects require independent admission")
     except BaseException as error:
         failure = error
+        if type(error) is PayloadHardlinkRefusal and native_started is None and error.diagnostic is not None:
+            proof["payload_hardlink_refusal"] = error.diagnostic
         proof.update(status="failed", error=type(error).__name__ + ": " + str(error)[:300])
     finally:
         process_settled = child is None
