@@ -888,3 +888,39 @@ literal-header vector checks root omission, ordering and executable semantics;
 realistic ownership/receipt fixtures check the original digest, a changed latest
 receipt, equal historical digests, pending effects and the private DTO boundary.
 These added corrections have also not been executed during the current outage.
+
+### Missing selected executable: public detection refusal (2026-11-13)
+
+R1/R2 scope is the existing cross-platform admission script, its inline
+contracts and this plan. Production detection and lifecycle policy do not
+change. Antigravity's `DetectSurfaces.SelectionSurfaceIDs` selects only
+`antigravity_cli`; an existing `.gemini/config` directory or owned `config.json`
+does not select an absent `agy` executable. The adapter's file-only behavior
+for an already supplied client is not a public CLI discovery fallback.
+
+The real public UAP binary built from clean
+`f8025bfabdfbe40ea2a0f6e5b2a09f6273d97308` reproduced this boundary in an isolated
+task-owned profile, after an initial successful add and preservation of the
+original pinned agy outside PATH. With the authored owned native config still
+present, repeated ordinary `add --target antigravity --scope user --no-save
+--yes --format json` returned exit1, empty stdout and exactly:
+
+```text
+agentplugins: target "antigravity" was not detected; no target was changed
+```
+
+The existing missing-backend world now expects that refusal. Its original
+fixed helper action, pinned retained executable, source/runtime identity,
+closed streams, cleanup receipt, deadlines and all state/bundle/config/foreign
+before-after comparisons remain required. Only exit1 with empty stdout and
+that complete stderr line qualifies this specific refusal; another nonzero
+exit or diagnostic is not interchangeable. The final summary reports all five
+refusal worlds and `missing_backend_refused`, removing the false file-only
+fallback assertion.
+
+The new inert contract exercises the existing validated receipt path with the
+exact result and rejects success, a different exit, stdout bytes, absent or
+different stderr and appended diagnostics. Before the correction, five of
+these negatives were incorrectly accepted. Local production RCA and inert
+contracts do not qualify the genuine agy lifecycle; the complete current
+public journey still requires original three-OS CI receipts.

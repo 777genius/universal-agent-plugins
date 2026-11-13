@@ -1256,6 +1256,48 @@ def admission_contracts():
                                 self.assertFalse(output.exists())
                             self.assertEqual(bridge.call_count, 2 if condition == "journey" else 1)
 
+        def test_public_missing_backend_requires_exact_detection_refusal(self):
+            diagnostic = b'agentplugins: target "antigravity" was not detected; no target was changed\n'
+            for condition in ("exact", "success", "other-exit", "stdout", "empty-stderr", "other-stderr", "extra-stderr"):
+                with self.subTest(condition=condition), tempfile.TemporaryDirectory() as temporary:
+                    parent = Path(temporary).resolve(); binaries = parent / "binaries"; binaries.mkdir()
+                    paths = [binaries / name for name in ("uap", "agy", "helper")]
+                    for path in paths: path.write_bytes(path.name.encode())
+                    pins = tuple((path.stat().st_size, hashlib.sha256(path.read_bytes()).hexdigest()) for path in paths)
+                    source = ("a" * 40, "b" * 40)
+                    capture = SourceReceipts(parent, source, (pins[1][1], pins[2][1]))
+                    runtime = (*paths, source, pins, capture)
+                    try:
+                        with public_fixture(parent, binaries) as (root, _env, authority):
+                            for index, action in enumerate(PUBLIC_ACTIONS[:-1]):
+                                selected = root if PUBLIC_WORLDS[index] == PUBLIC_WORLDS[-1] else parent / PUBLIC_WORLDS[index]
+                                req = dict(source_commit=source[0], source_tree=source[1], binary_sha256=pins[0][1], action=action, root=str(selected))
+                                capture.pending = True; capture.admit_public(json.dumps(req).encode(), b'{}\n')
+                            def exchange(helper, frame, timeout):
+                                self.assertEqual(helper, paths[2]); self.assertTrue(0 < timeout <= 240)
+                                req = json.loads(frame)
+                                self.assertEqual(req["action"], "uap-missing-backend")
+                                value = {key: req[key] for key in ("source_commit", "source_tree", "root", "selector", "action", "binary_sha256")}
+                                value.update(cleanup_complete=True, exit=0 if condition == "success" else 2 if condition == "other-exit" else 1)
+                                stdout = b"unexpected" if condition == "stdout" else b""
+                                stderr = b"" if condition == "empty-stderr" else b"other refusal\n" if condition == "other-stderr" else diagnostic
+                                if condition == "extra-stderr": stderr += b"extra\n"
+                                for name, body in (("stdout", stdout), ("stderr", stderr)):
+                                    value.update({name + "_base64": base64.b64encode(body).decode(), name + "_bytes": len(body),
+                                                  name + "_sha256": hashlib.sha256(body).hexdigest()})
+                                return json.dumps(value).encode() + b"\n"
+                            with patch(__name__ + ".bridge_exchange", side_effect=exchange):
+                                if condition == "exact":
+                                    self.assertEqual(public_uap(runtime, root, authority, "uap-missing-backend", refused=True), b"")
+                                else:
+                                    with self.assertRaises(AssertionError):
+                                        public_uap(runtime, root, authority, "uap-missing-backend", refused=True)
+                            self.assertFalse(capture.pending)
+                            self.assertEqual(len(capture.public_slots), len(PUBLIC_ACTIONS))
+                            self.assertFalse(capture.public_effects_verified)
+                    finally:
+                        os.close(capture.fd)
+
         def test_public_user_result_is_scope_and_observation_specific(self):
             action = "The selected User plugin is enabled in CLI inventory; open or reload Antigravity to verify IDE loading"
             row = {"plan": {"client_id": "antigravity", "scope": "user"},
@@ -1920,6 +1962,9 @@ def public_uap(runtime, root, authority, action, *, refused=False):
     original()
     if time.monotonic() >= deadline: raise AssertionError("Original public command deadline expired before admission")
     capture.admit_public(frame, output)  # Only the strict positive outer-family receipt clears this fence.
+    if action == "uap-missing-backend" and (value["exit"] != 1 or bodies["stdout"] != b"" or
+            bodies["stderr"] != b'agentplugins: target "antigravity" was not detected; no target was changed\n'):
+        raise AssertionError("Missing backend did not produce the exact public detection refusal")
     if (value["exit"] != 0) is not refused:
         raise AssertionError("Public command success/refusal differs from fixture")
     print(json.dumps({"scope": "public-uap-acceptance", "action": action, "exit": value["exit"], "cleanup_complete": True}), flush=True)
@@ -2145,11 +2190,7 @@ def public_user_refusals(runtime, source, executable_dir, parent):
             original_bytes = public_owned_bytes(original) if condition == "config-alias" else None
             if condition == "config-alias" and stable_file(original.lstat()) != original_identity:
                 raise AssertionError("Authored alias target changed before command")
-            output = public_uap(runtime, root, authority, action, refused=condition != "missing-backend")
-            if condition == "missing-backend":
-                result = public_user_result(output)
-                if result["activation"].get("user_actions") != ["Open or reload Antigravity and verify native plugin discovery/enablement; files alone do not establish runtime activation"]:
-                    raise AssertionError("Missing backend falsely claimed native observation")
+            public_uap(runtime, root, authority, action, refused=True)
             if (public_state_snapshot(Path(env["AGENTPLUGINS_HOME"]), Path(env["AGENTPLUGINS_HOME"]), runtime[4]) != state_before or public_snapshot(selected.parent) != bundle_before
                     or {entry.name for entry in config.parent.iterdir()} != members
                     or object_identity(config.parent.lstat(), True) != parent_identity):
@@ -2159,7 +2200,7 @@ def public_user_refusals(runtime, source, executable_dir, parent):
             if condition == "config-alias" and (os.readlink(config) != alias or stable_file(original.lstat()) != original_identity
                                                  or public_owned_bytes(original) != original_bytes or stable_file(original.lstat()) != original_identity):
                 raise AssertionError("Refused alias changed the task-owned target")
-    print('{"public_user_refusals":4,"file_only_backend_fallback":true,"unknown_effects_adopted":false,"model_invoked":false}', flush=True)
+    print('{"public_user_refusals":5,"missing_backend_refused":true,"unknown_effects_adopted":false,"model_invoked":false}', flush=True)
 
 
 def native_main(capture=None):
