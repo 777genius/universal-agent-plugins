@@ -112,6 +112,36 @@ func piUpstreamTestOnlyClient(t *testing.T, cacheRoot string) (*directoryv1.Clie
 	return client, snapshot
 }
 
+// Assert the selected Pi adapter really materialized an MCP server, not
+// merely a saved dependency/receipt. Preserve foreign MCP ownership on remove.
+func assertPiUpstreamTestOnlyNativeMCP(t *testing.T, j projectJourney, root string, installed bool) {
+	t.Helper()
+	native := filepath.Join(piSignedProjectNativeRoot(j, root), "mcp.json")
+	var config struct {
+		Keep       bool                       `json:"keep"`
+		MCPServers map[string]json.RawMessage `json:"mcpServers"`
+	}
+	if err := json.Unmarshal([]byte(projectJourneyRead(t, native)), &config); err != nil {
+		t.Fatalf("Pi MCP native config is unreadable: %v", err)
+	}
+	var foreign struct {
+		Type string `json:"type"`
+		URL  string `json:"url"`
+	}
+	if err := json.Unmarshal(config.MCPServers["foreign"], &foreign); err != nil ||
+		foreign.Type != "streamable-http" ||
+		foreign.URL != "https://foreign.example.test/mcp" ||
+		!config.Keep {
+		t.Fatalf("foreign Pi MCP config not preserved: %v / %+v", err, foreign)
+	}
+	if installed && len(config.MCPServers) < 2 {
+		t.Fatal("positive saved upstream install has no owned Pi native MCP server")
+	}
+	if !installed && len(config.MCPServers) != 1 {
+		t.Fatalf("upstream removal left owned Pi MCP servers: %d", len(config.MCPServers)-1)
+	}
+}
+
 // The real public Git sources are installed with the production saved
 // resolver/composer. No Pi process, MCP tool, OAuth, production signing,
 // publisher approval, or released modern-routing behavior is exercised.
@@ -171,6 +201,7 @@ func TestPiUpstreamSignedTestOnlyPositiveSaved(t *testing.T) {
 					installed.Package.ManifestDigest != pinned.ManifestDigest {
 					t.Fatal("upstream saved installation was not bound to the exact immutable signed TEST-only source and feed")
 				}
+				assertPiUpstreamTestOnlyNativeMCP(t, j, root, true)
 				if !reflect.DeepEqual(originalB, securityFixtureTree(t, piSignedProjectNativeRoot(j, j.b))) {
 					t.Fatal("upstream install modified independent project B")
 				}
@@ -182,6 +213,7 @@ func TestPiUpstreamSignedTestOnlyPositiveSaved(t *testing.T) {
 				if len(j.state(t, root).EnvironmentReceipts) != 0 {
 					t.Fatal("upstream removal left installed environment receipts")
 				}
+				assertPiUpstreamTestOnlyNativeMCP(t, j, root, false)
 				if !reflect.DeepEqual(originalB, securityFixtureTree(t, piSignedProjectNativeRoot(j, j.b))) {
 					t.Fatal("upstream removal changed independent project B")
 				}
