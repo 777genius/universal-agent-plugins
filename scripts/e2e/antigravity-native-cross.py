@@ -588,6 +588,9 @@ class SourceReceipts:
                 else: os.link("pending.zip", "receipts.zip", src_dir_fd=self.fd, dst_dir_fd=self.fd, follow_symlinks=False)
                 if object_identity(final.lstat()) != object_identity(named) or os.fstat(stream.fileno()).st_nlink != 2:
                     raise AssertionError("Receipt archive publication changed")
+                staged = pending.lstat() if os.name == "nt" else os.stat("pending.zip", dir_fd=self.fd, follow_symlinks=False)
+                if object_identity(staged) != object_identity(named) or staged.st_nlink != 2:
+                    raise AssertionError("Receipt archive staging changed before unlink")
                 if os.name == "nt": pending.unlink()
                 else: os.unlink("pending.zip", dir_fd=self.fd)
                 self.verify({"receipts.zip"})
@@ -1096,6 +1099,25 @@ def admission_contracts():
                             with self.assertRaises(AssertionError): capture.publish()
                     self.assertFalse(output.exists())
                     self.assertEqual(foreign.read_bytes(), b"PRIVATE-FOREIGN")
+
+        def test_source_receipt_pending_replacement_after_link_preserves_foreign_file(self):
+            with tempfile.TemporaryDirectory() as temporary:
+                parent = Path(temporary).resolve(); output = parent / "outputs"
+                capture = self.receipt_fixture(parent, 1)
+                pending = capture.root / "pending.zip"
+                original_link, replaced = os.link, []
+                def replace_pending(*args, **kwargs):
+                    result = original_link(*args, **kwargs)
+                    pending.rename(capture.root / "original.zip")
+                    pending.write_bytes(b"PRIVATE-PENDING")
+                    replaced.append(stable_file(pending.lstat()))
+                    return result
+                with patch("os.link", side_effect=replace_pending), patch.dict(os.environ, {"GITHUB_OUTPUT": str(output)}):
+                    with self.assertRaises(AssertionError): capture.publish()
+                self.assertEqual(len(replaced), 1)
+                self.assertFalse(output.exists())
+                self.assertTrue(pending.exists(), "foreign pending was deleted before refusal")
+                self.assertEqual((pending.read_bytes(), stable_file(pending.lstat())), (b"PRIVATE-PENDING", replaced[0]))
 
         def test_config_is_closed_and_bounded(self):
             for body in (b'{"x":1,"x":2}', b'{} {}', b'{"x":NaN}', b'{"x":1e999}', b'[' * 10 + b'0' + b']' * 10, b'x' * 16385):

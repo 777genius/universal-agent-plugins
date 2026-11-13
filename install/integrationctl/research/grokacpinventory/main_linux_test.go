@@ -401,3 +401,16 @@ func TestSessionResultRequiresModeLoopbackAndJoinedProvider(t *testing.T) {
 		t.Fatal("down loopback admitted")
 	}
 }
+
+func TestSessionProviderRejectsCounterOverflow(t *testing.T) {
+	r := inertRequest()
+	r.Mode = sessionMode
+	maximum := int(^uint(0) >> 1)
+	body, e := json.Marshal(map[string]any{"requests": 0, "models_get": maximum, "root_get": maximum, "forbidden": 2, "settled": true})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e := validateSessionResult(result{Mode: sessionMode, Provider: body}, r); e == nil {
+		t.Fatal("overflowed provider counters admitted")
+	}
+}

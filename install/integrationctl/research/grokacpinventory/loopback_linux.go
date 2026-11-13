@@ -76,7 +76,7 @@ func validateSessionResult(got result, r request) error {
 	if e := closed(got.Provider, &p, "requests models_get root_get forbidden settled"); e != nil {
 		return e
 	}
-	if !p.Settled || p.Requests < 0 || p.Requests > 13 || p.Models < 0 || p.Root < 0 || p.Forbidden < 0 || p.Requests != p.Models+p.Root+p.Forbidden || got.Complete && p.Forbidden != 0 {
+	if !p.Settled || p.Requests < 0 || p.Requests > 13 || p.Models < 0 || p.Models > 13 || p.Root < 0 || p.Root > 13 || p.Forbidden < 0 || p.Forbidden > 13 || p.Requests != p.Models+p.Root+p.Forbidden || got.Complete && p.Forbidden != 0 {
 		return errors.New("provider-proof-refused")
 	}
 	return nil
