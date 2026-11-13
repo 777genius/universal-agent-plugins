@@ -12,6 +12,7 @@ import time
 import json
 import os
 from pathlib import Path
+import platform
 import shutil
 import subprocess
 import sys
@@ -20,6 +21,25 @@ import tempfile
 
 NAME = "uap-agy-native-smoke"
 REMOTE_URL = "https://example.invalid/uap-native-smoke"
+
+# Exact members of the official 0.1.3 archives pinned by securityscan/release.go.
+# Only this immutable UAP runtime leaf has a separate bound from profile data.
+LINTAI_PINS = {
+    "linux/amd64": (9989584, "b6723451f155eb49e84acb34d1f06de929bddfcff6238cd4e38cdc6519396fba"),
+    "darwin/arm64": (7949216, "37342414aa7feadc09b8473d1bfafe95fd79ab99f284d37518c930fcb7986c57"),
+    "darwin/amd64": (8417744, "6899e59bab426565fa2433b798a0b6e8accb114386b5d0def30a8a071be8de13"),
+    "windows/amd64": (7620608, "9d486e5b66875384c12a147b8a19007beebe2691bc6d23a7867bf019b70be453"),
+}
+
+
+def lintai_member():
+    system = {"linux": "linux", "darwin": "darwin", "win32": "windows"}.get(sys.platform)
+    arch = {"x86_64": "amd64", "amd64": "amd64", "arm64": "arm64", "aarch64": "arm64"}.get(platform.machine().lower())
+    target = f"{system}/{arch}"
+    if target not in LINTAI_PINS: raise AssertionError("Unqualified scanner platform")
+    size, digest = LINTAI_PINS[target]
+    filename = "lintai.exe" if system == "windows" else "lintai"
+    return f"uap-state/security/lintai/0.1.3/{system}-{arch}/{filename}", size, digest
 
 
 def run(binary, *args, env, cwd):
@@ -225,8 +245,9 @@ def profile_file_refusal(root, child, info, root_device):
 
 
 class ProfileLedger:
-    def __init__(self, root):
+    def __init__(self, root, *, lintai=False):
         self.root, self.held = root, {}
+        self.scanner = lintai_member() if lintai else None
         try:
             self.base = self.scan()
         except BaseException:
@@ -262,25 +283,36 @@ class ProfileLedger:
                     info = child.lstat() if os.name == "nt" else os.stat(entry.name, dir_fd=descriptor, follow_symlinks=False)
                     if stat.S_ISDIR(info.st_mode): visit(child, depth + 1, None if os.name == "nt" else descriptor); continue
                     identity = object_identity(info)
-                    if info.st_nlink != 1 or info.st_size > 1 << 20 or info.st_dev != identity_root[0]:
+                    relative = child.relative_to(self.root).as_posix()
+                    scanner = self.scanner is not None and relative == self.scanner[0]
+                    limit = self.scanner[1] if scanner else 1 << 20
+                    if info.st_nlink != 1 or info.st_size > limit or info.st_dev != identity_root[0]:
                         profile_file_refusal(self.root, child, info, identity_root[0])
+                    if scanner and info.st_size != limit: raise AssertionError("Pinned scanner length differs")
                     fd = owned_handle(child, parent=None if os.name == "nt" else descriptor)
                     try:
                         opened = os.fstat(fd)
                         if object_identity(opened)[:2] != identity[:2]: raise AssertionError("Opened file differs")
                         before = stable_file(opened)
-                        body = os.read(fd, (1 << 20) + 1)
+                        digest, size, body = hashlib.sha256(), 0, None if scanner else bytearray()
+                        while size <= limit:
+                            chunk = os.read(fd, min(65536, limit + 1 - size))
+                            if not chunk: break
+                            size += len(chunk); digest.update(chunk)
+                            if body is not None: body.extend(chunk)
                         after = os.fstat(fd)
-                        if len(body) != info.st_size or before != stable_file(after) or stable_file(child.lstat() if os.name == "nt" else os.stat(entry.name, dir_fd=descriptor, follow_symlinks=False)) != stable_file(info):
+                        if size != info.st_size or before != stable_file(after) or stable_file(child.lstat() if os.name == "nt" else os.stat(entry.name, dir_fd=descriptor, follow_symlinks=False)) != stable_file(info):
                             raise AssertionError("Profile file changed during read")
                     finally: os.close(fd)
-                    aggregate += len(body)
+                    if scanner and digest.hexdigest() != self.scanner[2]: raise AssertionError("Pinned scanner bytes differ")
+                    if not scanner: aggregate += size
                     if aggregate > 16 << 20: raise AssertionError("Profile bytes bound")
-                    result[child.relative_to(self.root).as_posix()] = ("file", identity, info.st_nlink, info.st_size, info.st_mtime_ns, info.st_ctime_ns, hashlib.sha256(body).hexdigest(), body)
+                    result[relative] = ("file", identity, info.st_nlink, info.st_size, info.st_mtime_ns, info.st_ctime_ns, digest.hexdigest(), bytes(body) if body is not None else None)
             self.directory(path)
         identity_root = self.directory(self.root)
         visit(self.root, 0)
         for path in self.held: self.directory(path)
+        if self.scanner is not None and self.scanner[0] not in result: raise AssertionError("Ordinary UAP scanner is missing")
         return result
 
     def verify(self, expected, config):
@@ -356,6 +388,7 @@ def direct_user_enable(agy, uap, source, executable_dir, root_parent):
         root = Path(tempfile.mkdtemp(prefix="uap-agy-direct-", dir=root_parent))
         print('{"fixtures_retained":true,"scope":"disposable-cli-user-only"}', flush=True)
         env = profile(root, executable_dir)
+        env["AGENTPLUGINS_HOME"] = str(root / "uap-state")
         for path in (root / "tmp", root / "project"): path.mkdir()
         run(uap, "add", source, "--target", "antigravity", "--scope", "user", "--no-save", "--yes", "--format", "json", env=env, cwd=root / "project")
         plugins = Path(env["HOME"]) / ".gemini" / "config" / "plugins"
@@ -369,7 +402,7 @@ def direct_user_enable(agy, uap, source, executable_dir, root_parent):
         config = plugins.parent / "config.json"
         baseline = {"plugins": {selected.name: {"enabled": initial}, "same-manifest-foreign": {"enabled": False}, "foreign-disabled": {"enabled": False}}}
         config.write_text(json.dumps(baseline) + "\n"); config.chmod(0o600)
-        held = ProfileLedger(root)
+        held = ProfileLedger(root, lintai=True)
         config_key = config.relative_to(root).as_posix()
         expected = json.loads(json.dumps(baseline))
         def action(kind):
@@ -462,6 +495,39 @@ def admission_contracts():
                 changed.st_atime_ns += 1
                 self.assertEqual(stable_file(before), stable_file(changed))
 
+        def test_only_exact_immutable_scanner_has_a_separate_byte_bound(self):
+            body = b's' * ((1 << 20) + 17)
+            pins = {key: (len(body), hashlib.sha256(body).hexdigest()) for key in LINTAI_PINS}
+            for effect in ("none", "bytes", "unknown-copy", "missing", "race", "config-aggregate"):
+                with self.subTest(effect=effect), tempfile.TemporaryDirectory() as temporary, patch.dict(globals(), {"LINTAI_PINS": pins}):
+                    root = Path(temporary); (root / "config.json").write_text('{}')
+                    scanner = root / lintai_member()[0]
+                    scanner.parent.mkdir(parents=True); scanner.write_bytes(body)
+                    held = ProfileLedger(root, lintai=True)
+                    try:
+                        held.verify({}, "config.json")
+                        if effect == "none": continue
+                        if effect == "bytes": scanner.write_bytes(b't' + body[1:])
+                        elif effect == "unknown-copy": (root / "other-scanner").write_bytes(body)
+                        elif effect == "missing": scanner.unlink()
+                        elif effect == "config-aggregate":
+                            for index in range(17): (root / str(index)).write_bytes(b'x' * (1 << 20))
+                        if effect == "race":
+                            original = os.read
+                            def raced(fd, count):
+                                chunk = original(fd, count)
+                                if os.fstat(fd).st_ino == scanner.stat().st_ino:
+                                    with scanner.open('r+b') as stream: stream.write(b't')
+                                return chunk
+                            with patch('os.read', side_effect=raced), self.assertRaises(AssertionError): held.verify({}, "config.json")
+                        else:
+                            with self.assertRaises(AssertionError): held.verify({}, "config.json")
+                    finally: held.close()
+                    if effect == "bytes":
+                        with self.assertRaises(AssertionError): ProfileLedger(root, lintai=True)
+                    if effect == "missing":
+                        with self.assertRaises(AssertionError): ProfileLedger(root, lintai=True)
+
         def test_unknown_first_effect_prevents_every_later_mutation(self):
             with tempfile.TemporaryDirectory() as temporary:
                 parent = Path(temporary); binary = parent / "inert"; binary.write_text("never executed")
@@ -470,6 +536,8 @@ def admission_contracts():
                     plugin = Path(env["HOME"]) / ".gemini/config/plugins/owned-physical"
                     plugin.mkdir(parents=True)
                     (plugin / "plugin.json").write_text('{"name":"inert","version":"1.0.0"}')
+                    scanner = Path(env["AGENTPLUGINS_HOME"]).parent / lintai_member()[0]
+                    scanner.parent.mkdir(parents=True); scanner.write_bytes(b'scanner')
                     return '[]'
                 def command(_helper, _agy, root, selector, action, _source, _pins):
                     calls.append(action)
@@ -480,7 +548,8 @@ def admission_contracts():
                                         "enabled": False, "version": "1.0.0", "skills": ["native-smoke"],
                                         "mcpServers": ["native-http", "native-stdio"]}
                                        for name in (selector, "same-manifest-foreign", "foreign-disabled")]).encode()
-                with patch.dict(os.environ, {"AGY_ADMISSION_HELPER": str(binary), "AGY_ADMISSION_COMMIT": "a" * 40, "AGY_ADMISSION_TREE": "b" * 40}), patch.dict(globals(), {"run": deliver, "supervised_action": command}), self.assertRaises(AssertionError):
+                pins = {key: (7, hashlib.sha256(b'scanner').hexdigest()) for key in LINTAI_PINS}
+                with patch.dict(os.environ, {"AGY_ADMISSION_HELPER": str(binary), "AGY_ADMISSION_COMMIT": "a" * 40, "AGY_ADMISSION_TREE": "b" * 40}), patch.dict(globals(), {"run": deliver, "supervised_action": command, "LINTAI_PINS": pins}), self.assertRaises(AssertionError):
                     direct_user_enable(binary, binary, parent, parent, parent)
                 self.assertEqual(calls, ["list", "enable"])
                 retained = list(parent.glob("uap-agy-direct-*"))

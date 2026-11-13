@@ -2,6 +2,63 @@
 
 Baseline: main `c94c8c752ea23a6dcb89dec9a952bd7520ee841c`.
 
+## Immutable UAP scanner admission correction
+
+On 2026-11-13 the genuine digest-verified Linux agy 1.5.3 and UAP built from
+`ee561399d01484dcdd04fce3a504b81839882b7b` completed the earlier native lifecycle.
+The new direct User fixture refused before its first native action: the ordinary
+UAP add had installed its pinned LintAI scanner at
+`config/agentplugins/security/lintai/0.1.3/linux-amd64/lintai`, an ordinary owned
+single-link file of 9,989,584 bytes. This is executable runtime, not mutable client
+configuration. The refusal's `member_sha256` identifies the relative pathname,
+not the executable content; the independently verified binary SHA-256 is below.
+
+Amend only this plan and `scripts/e2e/antigravity-native-cross.py`: explicitly
+select the task-owned `AGENTPLUGINS_HOME=<fixture>/uap-state` for ordinary UAP
+delivery, preserving the original native HOME/profile. The ledger's keyword-only
+scanner mode chooses exactly one fixed current-platform/version leaf internally.
+That leaf must already exist from ordinary add; there is no new downloader,
+runtime provisioning, arbitrary path allowance or native write authority.
+
+The four official release archives were downloaded and their SHA-256 values
+verified against `securityscan/release.go` before deriving these member pins:
+
+| Platform | Archive SHA-256 | Binary bytes | Binary SHA-256 |
+| --- | --- | ---: | --- |
+| Linux amd64 | `2b3d176db752433b904a4b42375543ff398f4841d22e48f7d4f23ded925b72da` | 9989584 | `b6723451f155eb49e84acb34d1f06de929bddfcff6238cd4e38cdc6519396fba` |
+| macOS arm64 | `be8b263e2323074080d928ea7c2129458299a6d03f7a9f178dfc1aa8e6bc17ff` | 7949216 | `37342414aa7feadc09b8473d1bfafe95fd79ab99f284d37518c930fcb7986c57` |
+| macOS amd64 | `abc170612a847bf1a896ef85a4ee93977baa8275f303dac3ed27bf34050b7513` | 8417744 | `6899e59bab426565fa2433b798a0b6e8accb114386b5d0def30a8a071be8de13` |
+| Windows amd64 | `2f61f6a83a160afa3feed9ea1722b82d0d938ebff865a4e20d39b5f55270c911` | 7620608 | `9d486e5b66875384c12a147b8a19007beebe2691bc6d23a7867bf019b70be453` |
+
+Stream this one leaf only up to its exact published member length, retaining its
+SHA-256 and original metadata without a large body copy. Reuse every held parent,
+ordinary-file, owner, volume, single-link, pre/open/post identity and immutable
+before/after comparison. A missing or changed scanner, wrong path/version/hash,
+alias, unknown large file or changed foreign configuration still refuses before
+the next command. All other files retain the 1 MiB bound and 16 MiB aggregate;
+the selected config retains its existing 16 KiB/schema/boolean-only rule.
+
+Independent plan R2 approved the two-path change and revised estimate of 55–75
+runtime and 40–60 contract lines. Inert coverage must demonstrate the exact
+large pinned member, wrong/missing/changed bytes, same-hash foreign copy,
+mid-read mutation and unchanged ordinary configuration aggregate bound.
+Source review and fresh three-platform native execution remain required; neither
+archive inspection nor a local candidate execution is final exact-head acceptance.
+
+The actual local candidate passed the corrected scanner admission, then refused
+the first supervised receipt; it is not a native sequence PASS. All eight inert
+contracts and independent code/archive R2 passed. The local ordinary process
+environment also fails existing containment prerequisites in the unchanged core
+suite; hosted execution remains decisive. Do not infer a completed native action
+or recovery from the opaque receipt refusal.
+
+Scheduling amendment: include `.github/workflows/antigravity-native-e2e.yml` only
+to set `cancel-in-progress: false`, as for the related Cline and Hermes lanes.
+The ee561399 macOS capture acquired a runner at 13:09 UTC while the corrected
+patch was ready; retain that original observation when publishing new commits.
+Queued replacement runs still require their own exact-head acceptance. This
+does not rerun, cancel, extend deadlines or change release/native commands.
+
 ## Actual pinned admission
 
 The digest-verified Linux agy 1.5.3 was executed locally without account login,
