@@ -157,16 +157,21 @@ def no_user_copies(root, sentinels):
     return inventory(root, sentinels)
 
 
-def config_boundary(root, server, url, removed=False, authored_sha=None):
-    import yaml
-    body = ordinary_bytes(root / "config.yaml")
-    value = yaml.safe_load(body)
+def config_document_boundary(body, value, server, url, removed=False, authored_sha=None):
+    """Check the exact mapping and bytes independently of the native YAML parser."""
     require(isinstance(value, dict) and set(value) <= {"mcp_servers"}, "unadmitted custom config fields")
     expected = {} if removed else {server: {"url": url}}
     require(value.get("mcp_servers", {}) == expected, "selected native MCP mapping differs")
+    digest = hashlib.sha256(body).hexdigest()
     if authored_sha is not None:
-        require(hashlib.sha256(body).hexdigest() == authored_sha, "authored custom config bytes changed")
-    return hashlib.sha256(body).hexdigest()
+        require(digest == authored_sha, "authored custom config bytes changed")
+    return digest
+
+
+def config_boundary(root, server, url, removed=False, authored_sha=None):
+    import hermes_yaml as yaml
+    body = ordinary_bytes(root / "config.yaml")
+    return config_document_boundary(body, yaml.safe_load(body), server, url, removed, authored_sha)
 
 
 def protocol_join(before, after, selected, expected):
@@ -195,7 +200,7 @@ def observe_profiles(probes):
     outer, nonce = user.parent, os.environ["HERMES_CALL_NONCE"]
     native = json.loads(ordinary_bytes(Path(os.environ["HERMES_NATIVE_RUNTIME_COMMAND_FILE"])).decode("utf-8-sig"))
     from hermes_constants import get_default_hermes_root
-    import yaml
+    import hermes_yaml as yaml
     original = get_default_hermes_root(home="").resolve()
     require(original.is_relative_to(user) and original != user and os.environ["USERPROFILE"] == str(user), "actual native User root differs")
     original.mkdir(parents=True, exist_ok=True)

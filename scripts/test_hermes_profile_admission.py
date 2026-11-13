@@ -230,25 +230,26 @@ class ProfileAdmissionContracts(unittest.TestCase):
                     CASE["verify_root_identities"]({"a": root}, held)
 
     def test_exact_config_boundary_rejects_extra_server_wrong_url_and_other_settings(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary).resolve()
-            config = root / "config.yaml"
-            url = "http://127.0.0.1:12345/mcp"
-            valid = {"mcp_servers": {"owned": {"url": url}}}
-            config.write_text(json.dumps(valid))
-            digest = CASE["config_boundary"](root, "owned", url)
-            CASE["config_boundary"](root, "owned", url, authored_sha=digest)
-            for value in ({"mcp_servers": {"owned": {"url": url + "-changed"}}},
-                          {"mcp_servers": {"owned": {"url": url}, "foreign": {"url": url}}},
-                          {**valid, "model": "copied"}, {**valid, "auth": {}}, None):
-                config.write_text(json.dumps(value))
-                with self.assertRaises(RuntimeError):
-                    CASE["config_boundary"](root, "owned", url)
-            for value in ({}, {"mcp_servers": {}}):
-                config.write_text(json.dumps(value))
-                CASE["config_boundary"](root, "owned", url, removed=True)
-                with self.assertRaises(RuntimeError):
-                    CASE["config_boundary"](root, "owned", url, authored_sha=digest)
+        # These are mapping/byte contracts. The hosted child alone imports the
+        # pinned Hermes YAML parser; no substitute parser is admitted here.
+        boundary = CASE["config_document_boundary"]
+        url = "http://127.0.0.1:12345/mcp"
+        valid = {"mcp_servers": {"owned": {"url": url}}}
+        body = json.dumps(valid).encode()
+        digest = boundary(body, valid, "owned", url)
+        boundary(body, valid, "owned", url, authored_sha=digest)
+        with self.assertRaisesRegex(RuntimeError, "config bytes changed"):
+            boundary(body + b"\n", valid, "owned", url, authored_sha=digest)
+        for value in ({"mcp_servers": {"owned": {"url": url + "-changed"}}},
+                      {"mcp_servers": {"owned": {"url": url}, "foreign": {"url": url}}},
+                      {**valid, "model": "copied"}, {**valid, "auth": {}}, None):
+            with self.assertRaises(RuntimeError):
+                boundary(json.dumps(value).encode(), value, "owned", url)
+        for value in ({}, {"mcp_servers": {}}):
+            body = json.dumps(value).encode()
+            boundary(body, value, "owned", url, removed=True)
+            with self.assertRaises(RuntimeError):
+                boundary(body, value, "owned", url, authored_sha=digest)
 
     def test_safe_failure_envelope_keeps_every_qualification_false(self):
         with tempfile.TemporaryDirectory() as temporary:

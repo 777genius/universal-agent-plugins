@@ -150,7 +150,29 @@ https://docs.python.org/3.12/library/os.html#os.stat_result .
 
 Move the inert custom-root contracts after official pinned installation/runtime
 resolution, invoking that same official dependency-prepared runtime via its public
-runtime_command bootstrap. Its real PyYAML is used; no ambient pip, mock parser,
-new dependency or skipped test. Metadata-domain simulation checks valid differing
+runtime_command bootstrap. No ambient pip, new dependency or skipped test is used.
+The assumed PyYAML dependency was disproved by the next native runner as recorded
+below. Metadata-domain simulation checks valid differing
 path/fd ctimes while refusing either within-domain ctime drift, inode/birth changes
 and reparse metadata. Only genuine fresh hosted results establish portability.
+
+## Observed official parser correction
+
+Run43368264088, macOSjob131697732241 on3016e7e7e5b2869d01b764131ea5eb221b097df2,
+completed official installation and runtime resolution, then passed14 inert
+contracts and failed the configuration contract with ModuleNotFoundError: yaml.
+No native User or custom-root stage ran. The pinned runtime_command already
+activates its committed dependencies through hermes_bootstrap; another activation
+or a pip install is not the correction. Pinned hermes_cli/config.py instead uses
+the official hermes_yaml adapter over ruamel.yaml. Both admission parser imports
+now use that same adapter for safe_load/safe_dump, retaining its YAML1.1 and
+duplicate-key policy:
+https://github.com/NousResearch/hermes-agent/blob/2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19/hermes_yaml.py .
+
+The small config_document_boundary function checks the parsed mapping and exact
+captured-byte digest independently. Inert tests exercise wrong URL, extra server,
+model/auth fields and equivalent mappings with changed bytes without importing or
+substituting a vendor parser. The hosted child alone reads bounded held files and
+parses/emits their contents using the pinned official module; native Hermes then
+reads those same files. File authority, root isolation, process containment and
+every qualification flag remain unchanged. Fresh hosted originals remain required.
