@@ -28,10 +28,10 @@ func TestSessionRejectsForeignBindingBeforeNativeConfigRead(t *testing.T) {
 		Client: domain.DetectedClient{
 			ClientID: domain.ClientCline, Status: domain.DetectionDetected,
 			ExecutablePath: filepath.Join(root, "cline"),
-			Surfaces: []domain.ClientSurface{{ID: "cline_cli", Detected: true}},
+			Surfaces:       []domain.ClientSurface{{ID: "cline_cli", Detected: true}},
 		},
 		ProjectRoot: root,
-		Bindings: []domain.ClientBinding{{Scope: "user"}},
+		Bindings:    []domain.ClientBinding{{Scope: "user"}},
 	}
 	if _, err := New().PlanSession(context.Background(), clients.Env{}, req); err == nil || !strings.Contains(err.Error(), "Project scope") {
 		t.Fatalf("foreign binding was not refused before file access: %v", err)
