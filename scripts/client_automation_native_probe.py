@@ -275,7 +275,7 @@ class Probe:
                 "---\nname: probe-" + str(index) + "\ndescription: Inert scope identity fixture\n---\nText only.\n")
         config = self.home / ".grok/config.toml"
         original_config = config.read_bytes()
-        watched = {"user_plugin": roots[0], "a": self.a, "b": self.b}
+        watched = {"user_profile": self.home / ".grok", "a": self.a, "b": self.b}
         before = {name: snapshot(path) for name, path in watched.items()}
         self.evidence["before"] = before
         self.evidence["native_api_admitted"] = False
@@ -322,7 +322,7 @@ class Probe:
         for path, name in ((user, "user-sentinel"), (project, "project-sentinel")):
             put(path, {"mcpServers": {name: {"command": "/usr/bin/false", "disabled": True,
                 "autoApprove": [], "args": []}}})
-        watched = {"user": user.parent, "project": project.parent, "b": self.b}
+        watched = {"user_profile": self.home / ".cline", "project": self.a, "b": self.b}
         before = {name: snapshot(path) for name, path in watched.items()}
         self.evidence["configuration_before"] = before
         selected = {"CLINE_MCP_SETTINGS_PATH": str(project)}

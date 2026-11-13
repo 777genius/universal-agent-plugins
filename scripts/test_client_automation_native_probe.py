@@ -386,6 +386,10 @@ class ClineRouteContracts(unittest.TestCase):
                     selected = user
                 if mode == "write":
                     user.write_text('{"mcpServers":{}}')
+                if mode == "write-profile-sibling":
+                    (inner.home / ".cline/foreign-state.json").write_text("foreign")
+                if mode == "write-project-sibling":
+                    (inner.a / "foreign-project-state").write_text("foreign")
                 if mode == "write-then-fail":
                     (inner.b / "unexpected").write_text("changed")
                     raise ValueError("native command failed")
@@ -437,6 +441,20 @@ class ClineRouteContracts(unittest.TestCase):
         self.assertFalse(item.evidence["native_api_admitted"])
         self.assertNotEqual(item.evidence["configuration"], item.evidence["configuration_before"])
 
+    def test_native_cannot_write_foreign_profile_sibling(self):
+        item = self.fixture("write-profile-sibling")
+        with self.assertRaisesRegex(ValueError, "changed fixture"):
+            item.cline()
+        self.assertIn("foreign-state.json", item.evidence["configuration"]["user_profile"])
+        self.assertFalse(item.evidence["native_api_admitted"])
+
+    def test_native_cannot_write_foreign_project_sibling(self):
+        item = self.fixture("write-project-sibling")
+        with self.assertRaisesRegex(ValueError, "changed fixture"):
+            item.cline()
+        self.assertIn("foreign-project-state", item.evidence["configuration"]["project"])
+        self.assertFalse(item.evidence["native_api_admitted"])
+
     def test_failed_native_command_still_checks_project_b(self):
         item = self.fixture("write-then-fail")
         with self.assertRaisesRegex(ValueError, "changed fixture"):
@@ -467,6 +485,8 @@ class GrokRouteContracts(unittest.TestCase):
                             raise ValueError("native command failed")
                     if mode == "write-config":
                         (inner.home / ".grok/config.toml").write_text("changed=true")
+                    if mode == "write-profile-sibling":
+                        (inner.home / ".grok/foreign-state.json").write_text("foreign")
                     if mode == "full-id":
                         return 0, json.dumps([{"name": NAME, "scope": "project",
                             "path": str(inner.a / ".grok/plugins/project-probe"),
@@ -519,8 +539,15 @@ class GrokRouteContracts(unittest.TestCase):
 
     def test_first_discovery_cannot_modify_user_config(self):
         item = self.fixture("write-config")
-        with self.assertRaisesRegex(ValueError, "changed Grok user configuration"):
+        with self.assertRaisesRegex(ValueError, "changed fixture"):
             item.grok()
+
+    def test_first_discovery_cannot_modify_foreign_profile_sibling(self):
+        item = self.fixture("write-profile-sibling")
+        with self.assertRaisesRegex(ValueError, "changed fixture"):
+            item.grok()
+        self.assertIn("foreign-state.json", item.evidence["after"]["user_profile"])
+        self.assertFalse(item.evidence["native_api_admitted"])
 
     def test_unexpected_trusted_project_refused(self):
         item = self.fixture("trusted")
