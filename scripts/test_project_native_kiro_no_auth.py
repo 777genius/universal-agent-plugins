@@ -183,6 +183,29 @@ class NoAuthContracts(unittest.TestCase):
         self.assertIsNotNone(identity)
         self.assertEqual(len(digest), 64)
 
+    def test_inventory_stops_at_global_bound_before_reading_excess_member(self):
+        root = self.root / "bounded-inventory"
+        root.mkdir(mode=0o700)
+        for index in range(127):
+            (root / str(index)).write_bytes(b"owned fixture\n")
+        self.assertEqual(len(noauth.tree_identity(root)), 128)
+        original = list(root.iterdir())
+        yielded = []
+        def entries():
+            for path in original:
+                yielded.append(path.name)
+                yield type("Entry", (), {"name": path.name})()
+            yielded.append("unread-overflow")
+            yield type("Entry", (), {"name": "unread-overflow"})()
+            self.fail("enumerated beyond the fixed inventory limit")
+        with patch.object(noauth.os, "scandir") as scanner, patch.object(
+                noauth, "file_identity", wraps=noauth.file_identity) as read:
+            scanner.return_value.__enter__.return_value = entries()
+            with self.assertRaisesRegex(ValueError, "owned fixture inventory limit"):
+                noauth.tree_identity(root)
+            self.assertEqual(read.call_count, 127)
+        self.assertEqual(len(yielded), 128)
+
     def test_symlink_hardlink_and_special_inventory_refuse(self):
         for kind in ("symlink", "hardlink", "fifo"):
             with self.subTest(kind=kind):

@@ -148,6 +148,7 @@ jobs:
           "AGY_ADMISSION_COMMIT=$commit" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "AGY_ADMISSION_TREE=$tree" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Real native plugin strict validation, discovery and scoped removal
+        id: native_lifecycle
         shell: bash
         run: |
           set -euo pipefail
@@ -157,6 +158,14 @@ jobs:
             bash scripts/e2e/antigravity-native.sh
             python3 scripts/e2e/antigravity-native-cross.py
           fi
+      - name: Retain source-native supervised exchanges
+        if: ${{ always() && inputs.release_tag == '' && steps.native_lifecycle.outputs.receipt_archive != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: antigravity-source-native-linux-amd64-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.native_lifecycle.outputs.receipt_archive }}
+          if-no-files-found: error
+          retention-days: 14
       - name: Retain release-native receipt and transcript
         if: ${{ always() && inputs.release_tag != '' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
@@ -265,6 +274,7 @@ jobs:
           "AGY_ADMISSION_COMMIT=$commit" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "AGY_ADMISSION_TREE=$tree" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Cross-platform native macOS lifecycle
+        id: native_lifecycle
         shell: bash
         run: |
           set -euo pipefail
@@ -273,6 +283,14 @@ jobs:
           else
             python3 scripts/e2e/antigravity-native-cross.py
           fi
+      - name: Retain source-native supervised exchanges
+        if: ${{ always() && inputs.release_tag == '' && steps.native_lifecycle.outputs.receipt_archive != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: antigravity-source-native-darwin-arm64-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.native_lifecycle.outputs.receipt_archive }}
+          if-no-files-found: error
+          retention-days: 14
       - name: Retain release-native receipt and transcript
         if: ${{ always() && inputs.release_tag != '' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
@@ -379,6 +397,7 @@ jobs:
           "AGY_ADMISSION_COMMIT=$commit" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "AGY_ADMISSION_TREE=$tree" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Cross-platform native Windows lifecycle
+        id: native_lifecycle
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -388,6 +407,14 @@ jobs:
             python scripts/e2e/antigravity-native-cross.py
           }
           if ($LASTEXITCODE -ne 0) { throw 'Native lifecycle failed' }
+      - name: Retain source-native supervised exchanges
+        if: ${{ always() && inputs.release_tag == '' && steps.native_lifecycle.outputs.receipt_archive != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: antigravity-source-native-windows-amd64-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.native_lifecycle.outputs.receipt_archive }}
+          if-no-files-found: error
+          retention-days: 14
       - name: Retain release-native receipt and transcript
         if: ${{ always() && inputs.release_tag != '' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0

@@ -18,6 +18,8 @@ import subprocess
 import sys
 import tempfile
 import threading
+import io
+import zipfile
 
 
 NAME = "uap-agy-native-smoke"
@@ -456,13 +458,17 @@ def bridge_exchange(helper, frame, *, timeout=35):
     return bytes(captures[0])
 
 
-def supervised_action(helper, agy, root, selector, action, source_identity, original_pins):
+def supervised_action(helper, agy, root, selector, action, source_identity, original_pins, capture=None, initial=None):
     if tuple(hashlib.sha256(path.read_bytes()).hexdigest() for path in (agy, helper)) != original_pins:
         raise AssertionError("Original executable pin changed")
     pin = original_pins[0]
     req = dict(binary=str(agy), binary_sha256=pin, root=str(root), selector=selector, action=action,
                source_commit=source_identity[0], source_tree=source_identity[1], deadline_unix_ns=time.time_ns() + 29_000_000_000)
-    output = bridge_exchange(helper, json.dumps(req).encode() + b"\n")
+    frame = json.dumps(req).encode() + b"\n"
+    if capture is not None:
+        if capture.pins != original_pins: raise AssertionError("Original capture executable pins differ")
+        capture.begin(req, initial)
+    output = bridge_exchange(helper, frame)
     if not output.endswith(b"\n") or output.count(b"\n") != 1:
         raise AssertionError("Supervised command receipt refused; owned profile retained")
     if tuple(hashlib.sha256(path.read_bytes()).hexdigest() for path in (agy, helper)) != original_pins:
@@ -474,10 +480,133 @@ def supervised_action(helper, agy, root, selector, action, source_identity, orig
     body = base64.b64decode(value["stdout_base64"], validate=True)
     if type(value["stdout_bytes"]) is not int or len(body) != value["stdout_bytes"] or hashlib.sha256(body).hexdigest() != value["stdout_sha256"]:
         raise AssertionError("Command receipt stream differs")
+    if capture is not None: capture.admit(frame, output)
     return body
 
 
-def direct_user_enable(agy, uap, source, executable_dir, root_parent):
+RECEIPT_ACTIONS = tuple((initial, action) for initial, actions in (
+    (False, ("version", "list", "enable", "list", "disable", "list")),
+    (True, ("version", "list", "enable", "list", "disable", "list", "enable", "list")))
+    for action in actions)
+
+
+class SourceReceipts:
+    """Retain only validated task-fixture exchanges; never scan native profiles."""
+    def __init__(self, parent, source, pins):
+        self.root = Path(tempfile.mkdtemp(prefix="uap-agy-receipts-", dir=parent)).resolve(strict=True)
+        if any(ord(char) < 32 for char in str(self.root)): raise AssertionError("Receipt root spelling refused")
+        self.fd = owned_handle(self.root, True)
+        self.identity = object_identity(os.fstat(self.fd), True)
+        self.path_identity = object_identity(self.root.lstat(), True)
+        if self.identity[:2] != self.path_identity[:2] or (os.name != "nt" and stat.S_IMODE(self.identity[2]) != 0o700):
+            os.close(self.fd); raise AssertionError("Receipt root authority refused")
+        if len(source) != 2 or any(type(value) is not str or len(value) != 40 or any(char not in '0123456789abcdef' for char in value) for value in source):
+            os.close(self.fd); raise AssertionError("Receipt source identity refused")
+        self.source, self.pins = source, pins
+        self.slots, self.members = [], {}
+        self.pending, self.harness_complete = False, False
+
+    def verify(self, members):
+        if object_identity(self.root.lstat(), True) != self.path_identity or object_identity(os.fstat(self.fd), True) != self.identity:
+            raise AssertionError("Original receipt root changed")
+        seen = set()
+        with os.scandir(self.root if os.name == "nt" else self.fd) as entries:
+            for entry in entries:
+                if entry.name not in members or entry.name in seen or len(seen) >= len(members):
+                    raise AssertionError("Unknown receipt-root member")
+                seen.add(entry.name)
+        if seen != members: raise AssertionError("Missing receipt-root member")
+
+    def begin(self, req, initial):
+        index = len(self.slots)
+        if self.pending or index >= 14 or (initial, req["action"]) != RECEIPT_ACTIONS[index]:
+            raise AssertionError("Receipt sequence differs")
+        if (req["source_commit"], req["source_tree"]) != self.source or req["binary_sha256"] != self.pins[0]:
+            raise AssertionError("Receipt source or pin differs")
+        profile_root = Path(req["root"])
+        if self.root == profile_root or self.root.is_relative_to(profile_root) or profile_root.is_relative_to(self.root):
+            raise AssertionError("Receipt root intersects native profile")
+        self.pending = True
+
+    def admit(self, frame, receipt):
+        # Called only after the existing supervisor receipt/source/stream validator.
+        if not self.pending or max(len(frame), len(receipt)) > 16384: raise AssertionError("Receipt byte bound")
+        index = len(self.slots); files = []
+        for suffix, body in (("request", frame), ("receipt", receipt)):
+            name = f"{index:02d}.{suffix}.json"
+            self.members[name] = body
+            files.append(dict(name=name, bytes=len(body), sha256=hashlib.sha256(body).hexdigest()))
+        initial, action = RECEIPT_ACTIONS[index]
+        self.slots.append(dict(initial_enabled=initial, action=action, files=files, effects_verified=False,
+                               config_before_sha256=None, config_after_sha256=None))
+        self.pending = False
+
+    def effects(self, before, after):
+        self.slots[-1].update(effects_verified=True, config_before_sha256=before, config_after_sha256=after)
+
+    def publish(self):
+        try:
+            if self.pending: return None  # An unproved family revokes every raw upload.
+            self.verify(set())
+            complete = self.harness_complete and len(self.slots) == 14 and all(row["effects_verified"] for row in self.slots)
+            summary = dict(schema_version=1, source_commit=self.source[0], source_tree=self.source[1],
+                           native_sha256=self.pins[0], helper_sha256=self.pins[1], expected_slots=14,
+                           evidence_root_identity=dict(path=self.path_identity, held=self.identity),
+                           capture_complete=complete, harness_complete=self.harness_complete, slots=self.slots,
+                           native_project_qualified=False, ide_activation=False, native_mcp_call=False,
+                           vendor_authentication=False, real_model_inference=False, fixtures_retained=True)
+            members = dict(self.members, **{"manifest.json": (json.dumps(summary, sort_keys=True) + "\n").encode()})
+            if len(members) > 29 or sum(map(len, members.values())) > 1 << 20: raise AssertionError("Receipt archive bound")
+            pending, final = self.root / "pending.zip", self.root / "receipts.zip"
+            flags = os.O_RDWR | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+            descriptor = os.open(pending, flags, 0o600) if os.name == "nt" else os.open("pending.zip", flags, 0o600, dir_fd=self.fd)
+            with os.fdopen(descriptor, "w+b") as stream:
+                if os.name != "nt": os.fchmod(stream.fileno(), 0o600)
+                with zipfile.ZipFile(stream, "w", compression=zipfile.ZIP_STORED) as archive:
+                    for name, body in members.items(): archive.writestr(name, body)
+                stream.flush(); os.fsync(stream.fileno())
+                info, named = os.fstat(stream.fileno()), pending.lstat()
+                if object_identity(info)[:2] != object_identity(named)[:2] or info.st_nlink != 1 or named.st_nlink != 1:
+                    raise AssertionError("Original receipt archive changed")
+                stream.seek(0); raw = stream.read((1 << 20) + 1)
+                if len(raw) != info.st_size or len(raw) > 1 << 20: raise AssertionError("Receipt archive byte bound")
+                with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+                    if len(archive.infolist()) != len(members) or set(archive.namelist()) != set(members) or archive.testzip() is not None:
+                        raise AssertionError("Receipt archive closure or CRC differs")
+                    if any(archive.read(name) != body for name, body in members.items()): raise AssertionError("Receipt archive bytes differ")
+            # Reopen through the existing owner-checked handle with Windows delete sharing.
+            # The writer's original inode and bytes remain the publication authority.
+            self.verify({"pending.zip"})
+            with os.fdopen(owned_handle(pending, parent=None if os.name == "nt" else self.fd), "rb") as stream:
+                held = os.fstat(stream.fileno())
+                if object_identity(held) != object_identity(info) or held.st_nlink != 1:
+                    raise AssertionError("Receipt archive replaced after writer close")
+                archive_sha = hashlib.sha256(raw).hexdigest()
+                if hashlib.sha256(stream.read((1 << 20) + 1)).hexdigest() != archive_sha:
+                    raise AssertionError("Receipt archive bytes changed after writer close")
+                if os.name == "nt": os.link(pending, final)
+                else: os.link("pending.zip", "receipts.zip", src_dir_fd=self.fd, dst_dir_fd=self.fd, follow_symlinks=False)
+                if object_identity(final.lstat()) != object_identity(named) or os.fstat(stream.fileno()).st_nlink != 2:
+                    raise AssertionError("Receipt archive publication changed")
+                if os.name == "nt": pending.unlink()
+                else: os.unlink("pending.zip", dir_fd=self.fd)
+                self.verify({"receipts.zip"})
+                sealed, held = final.lstat(), os.fstat(stream.fileno())
+                if object_identity(sealed) != object_identity(named) or object_identity(held) != object_identity(info) or sealed.st_nlink != 1 or held.st_nlink != 1:
+                    raise AssertionError("Sealed receipt archive changed")
+                stream.seek(0)
+                if hashlib.sha256(stream.read((1 << 20) + 1)).hexdigest() != archive_sha or stable_file(final.lstat()) != stable_file(sealed) or stable_file(os.fstat(stream.fileno())) != stable_file(held):
+                    raise AssertionError("Sealed receipt archive changed after hashing")
+        finally:
+            os.close(self.fd)
+        output = os.environ.get("GITHUB_OUTPUT")
+        if output:
+            with open(output, "a", encoding="utf-8") as destination:
+                destination.write(f"receipt_archive={final}\nreceipt_sha256={archive_sha}\n")
+        return final
+
+
+def direct_user_enable(agy, uap, source, executable_dir, root_parent, capture=None):
     helper = Path(os.environ["AGY_ADMISSION_HELPER"]).resolve(strict=True)
     source_identity = (os.environ["AGY_ADMISSION_COMMIT"], os.environ["AGY_ADMISSION_TREE"])
     original_pins = tuple(hashlib.sha256(path.read_bytes()).hexdigest() for path in (agy, helper))
@@ -503,11 +632,13 @@ def direct_user_enable(agy, uap, source, executable_dir, root_parent):
         config_key = config.relative_to(root).as_posix()
         expected = json.loads(json.dumps(baseline))
         def action(kind):
-            held.verify(expected, config_key)
-            command = lambda: supervised_action(helper, agy, root, selected.name, kind, source_identity, original_pins)
+            before_digest = held.verify(expected, config_key)
+            command = lambda: (supervised_action(helper, agy, root, selected.name, kind, source_identity, original_pins) if capture is None else
+                               supervised_action(helper, agy, root, selected.name, kind, source_identity, original_pins, capture, initial))
             body = held.observe(command) if kind in ("list", "version") else command()
             if kind in ("enable", "disable"): expected["plugins"][selected.name]["enabled"] = kind == "enable"
             digest = held.verify(expected, config_key)
+            if capture is not None: capture.effects(before_digest, digest)
             print(json.dumps({"scope": "disposable-cli-user-only", "action": kind, "initial_enabled": initial, "config_sha256": digest, "native_project_qualified": False}), flush=True)
             return body
         def inventory():
@@ -903,6 +1034,69 @@ def admission_contracts():
                     with self.assertRaisesRegex(AssertionError, "cleanup unproved"): ledger.observe(unsettled)
                 finally: ledger.close()
 
+        def receipt_fixture(self, parent, count):
+            capture = SourceReceipts(parent, ("a" * 40, "b" * 40), ("c" * 64, "d" * 64))
+            for initial, action in RECEIPT_ACTIONS[:count]:
+                capture.begin(dict(action=action, root=str(parent / "uap-agy-direct-fixture"),
+                                   source_commit="a" * 40, source_tree="b" * 40, binary_sha256="c" * 64), initial)
+                capture.admit(b'{"task":true}\n', b'{"settled":true}\n')
+                capture.effects("0" * 64, "1" * 64)
+            return capture
+
+        def test_source_receipt_archive_has_exact_members_crc_hashes_and_partial_truth(self):
+            for count, last_verified in ((1, True), (14, True), (14, False)):
+                with self.subTest(count=count, last_verified=last_verified), tempfile.TemporaryDirectory() as temporary:
+                    parent = Path(temporary).resolve(); output = parent / "outputs"
+                    capture = self.receipt_fixture(parent, count); capture.harness_complete = True
+                    capture.slots[-1]["effects_verified"] = last_verified
+                    with patch.dict(os.environ, {"GITHUB_OUTPUT": str(output)}): archive = capture.publish()
+                    with zipfile.ZipFile(archive) as stored:
+                        self.assertIsNone(stored.testzip()); self.assertEqual(len(stored.infolist()), 2 * count + 1)
+                        manifest = json.loads(stored.read("manifest.json"))
+                        self.assertIs(manifest["capture_complete"], count == 14 and last_verified)
+                        self.assertEqual(manifest["expected_slots"], 14)
+                        self.assertFalse(manifest["ide_activation"]); self.assertFalse(manifest["native_mcp_call"])
+                        for slot in manifest["slots"]:
+                            for member in slot["files"]:
+                                body = stored.read(member["name"])
+                                self.assertEqual((len(body), hashlib.sha256(body).hexdigest()), (member["bytes"], member["sha256"]))
+                    self.assertIn("receipt_archive=" + str(archive), output.read_text())
+                    self.assertIn(hashlib.sha256(archive.read_bytes()).hexdigest(), output.read_text())
+
+        def test_source_receipt_first_unknown_entry_stops_enumeration(self):
+            with tempfile.TemporaryDirectory() as temporary:
+                parent = Path(temporary).resolve(); output = parent / "outputs"
+                capture = self.receipt_fixture(parent, 1)
+                def flood():
+                    yield type("Entry", (), {"name": "unknown"})()
+                    self.fail("enumerated beyond first unknown evidence member")
+                with patch("os.scandir") as entries, patch.dict(os.environ, {"GITHUB_OUTPUT": str(output)}):
+                    entries.return_value.__enter__.return_value = flood()
+                    with self.assertRaisesRegex(AssertionError, "Unknown receipt-root member"): capture.publish()
+                self.assertFalse(output.exists())
+
+        def test_source_receipt_unknown_family_and_foreign_archive_never_expose_output(self):
+            for condition in ("unproved", "alias", "root"):
+                with self.subTest(condition=condition), tempfile.TemporaryDirectory() as temporary:
+                    parent = Path(temporary).resolve(); output = parent / "outputs"
+                    capture = self.receipt_fixture(parent, 1)
+                    foreign = parent / "foreign"; foreign.write_bytes(b"PRIVATE-FOREIGN")
+                    if condition == "unproved": capture.pending = True
+                    elif condition == "alias": os.link(foreign, capture.root / "receipts.zip")
+                    else:
+                        try: capture.root.rename(parent / "original")
+                        except OSError as error:
+                            if os.name != "nt" or getattr(error, "winerror", None) != 32: raise
+                            (capture.root / "foreign").write_bytes(b"foreign sentinel")
+                        else:
+                            capture.root.mkdir(); (capture.root / "foreign").write_bytes(b"foreign sentinel")
+                    with patch.dict(os.environ, {"GITHUB_OUTPUT": str(output)}):
+                        if condition == "unproved": self.assertIsNone(capture.publish())
+                        else:
+                            with self.assertRaises(AssertionError): capture.publish()
+                    self.assertFalse(output.exists())
+                    self.assertEqual(foreign.read_bytes(), b"PRIVATE-FOREIGN")
+
         def test_config_is_closed_and_bounded(self):
             for body in (b'{"x":1,"x":2}', b'{} {}', b'{"x":NaN}', b'{"x":1e999}', b'[' * 10 + b'0' + b']' * 10, b'x' * 16385):
                 with self.assertRaises((AssertionError, ValueError)): closed_config(body)
@@ -910,7 +1104,7 @@ def admission_contracts():
     if not result.wasSuccessful(): raise SystemExit(1)
 
 
-def main():
+def native_main(capture=None):
     agy = Path(os.environ["AGY_BIN"]).resolve(strict=True)
     uap = Path(os.environ["UAP_BIN"]).resolve(strict=True)
     root_parent = Path(os.environ["RUNNER_TEMP"]).resolve(strict=True)
@@ -1168,11 +1362,33 @@ def main():
         if tree_snapshot(source) != source_snapshot:
             raise AssertionError("Native lifecycle changed the verified portable source")
         if os.environ.get("AGY_ADMISSION_HELPER"):
-            direct_user_enable(agy, uap, source, executable_dir, root_parent)
+            direct_user_enable(agy, uap, source, executable_dir, root_parent, capture)
         print("PASS: real agy strict validation of Skills + stdio/HTTP MCP, separate CLI "
               "import/list/uninstall; UAP User/Project add/remove, idempotent update, "
               "partial-drift refusal and exact absent-bundle repair. Foreign User state "
               "preserved. IDE activation and live MCP execution were not observed.", flush=True)
+
+
+def main():
+    capture = None
+    if os.environ.get("AGY_ADMISSION_HELPER") and not os.environ.get("RELEASE_TAG"):
+        source = (os.environ["AGY_ADMISSION_COMMIT"], os.environ["AGY_ADMISSION_TREE"])
+        pins = tuple(hashlib.sha256(Path(os.environ[key]).read_bytes()).hexdigest()
+                     for key in ("AGY_BIN", "AGY_ADMISSION_HELPER"))
+        capture = SourceReceipts(Path(os.environ["RUNNER_TEMP"]).resolve(strict=True), source, pins)
+    failure = None
+    try:
+        native_main(capture)
+        if capture is not None: capture.harness_complete = True
+    except BaseException as error:
+        failure = error
+        raise
+    finally:
+        if capture is not None:
+            try: capture.publish()
+            except BaseException:
+                if failure is None: raise
+                print('Antigravity receipt publication refused; original failure retained', file=sys.stderr)
 
 
 if __name__ == "__main__":

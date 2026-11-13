@@ -58,8 +58,9 @@ def tree_identity(root):
         key = str(path.relative_to(root))
         if stat.S_ISDIR(info.st_mode):
             result[key] = ("directory", kiro._research_root_identity(path))
-            for child in sorted(path.iterdir()):
-                visit(child)
+            with os.scandir(path) as entries:
+                for entry in entries:
+                    visit(path / entry.name)
         else:
             result[key] = ("file", file_identity(path))
     visit(root)

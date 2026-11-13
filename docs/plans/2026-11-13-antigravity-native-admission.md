@@ -470,3 +470,34 @@ same-byte replacement, new members, content changes and unproved settlement.
 These checks do not qualify production inventory, IDE activation or arbitrary
 profiles. Genuine new three-platform native execution is required to establish
 whether the finite 1.5.3 fixture contract actually holds.
+
+## Source-native supervised receipt retention
+
+Source jobs retain the existing fourteen ordered direct-fixture exchanges:
+false version/list/enable/list/disable/list, then true version/list/enable/list/
+disable/list/enable/list. There are no additional native actions or modified
+release-proof paths. Exact request and receipt bytes enter bounded memory only
+after the existing source, pins, stream and positive family-cleanup validator
+accepts them. Filesystem effects are acknowledged separately by the original
+ledger; an unknown later effect retains settled bytes with capture_complete=false.
+Any unproved command family suppresses the entire raw archive and upload output.
+
+The publisher uses a fresh owner-checked private sibling outside the profiles,
+retains its original handle and separate path/handle identities, admits only
+fixed request/receipt names plus one closed manifest, and bounds the ZIP to
+29 members/1 MiB. It verifies exact bytes, member closure, CRC and SHA256 before
+exclusive hardlink publication, verifies the original archive again afterwards,
+and closes all held descriptors before exposing an explicit workflow output.
+Unexpected entries, aliases, replaced roots or byte changes refuse; fixture and
+evidence directories are retained rather than path-deleted. No unknown profile
+or stderr content is read for publication. Existing native cleanup, deadlines,
+scanner pins and exact no-write/toggle rules remain unchanged.
+
+The manifest binds source commit/tree and native/helper hashes, every retained
+slot's byte counts/hashes, separate effects flags and config digests. Partial
+captures are explicit and all IDE, Project, native MCP, authentication and model
+qualification remains false. Existing source jobs upload only the explicit
+sealed ZIP output, including admitted negative captures; release upload and
+aggregate logic remain unchanged. New publisher contracts are UNEXECUTED while
+the local environment is unavailable; independent source review and genuine
+three-platform originals, outer/inner CRC and stream joins remain required.
