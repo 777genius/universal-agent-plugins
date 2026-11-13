@@ -200,20 +200,26 @@ func applyClineNeutralRemoteType(result *nativeconfig.Server, server domain.MCPS
 }
 
 func applyClineNeutralArgs(result *nativeconfig.Server, server domain.MCPServer) error {
-	if values, ok := server.Decoded["args"].([]any); ok {
-		for _, value := range values {
-			text, ok := value.(string)
+	value, present := server.Decoded["args"]
+	if !present {
+		return nil
+	}
+	switch values := value.(type) {
+	case []any:
+		for _, item := range values {
+			text, ok := item.(string)
 			if !ok {
 				return fmt.Errorf("args must be strings")
 			}
 			result.Args = append(result.Args, text)
 		}
 		return nil
-	}
-	if values, ok := server.Decoded["args"].([]string); ok {
+	case []string:
 		result.Args = append([]string(nil), values...)
+		return nil
+	default:
+		return fmt.Errorf("args must be an array of strings")
 	}
-	return nil
 }
 
 func clineStringMap(server domain.MCPServer, key string) (map[string]string, error) {
