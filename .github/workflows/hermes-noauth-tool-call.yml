@@ -248,7 +248,6 @@ jobs:
         retention-days: 14
   bundled-custom-root:
     name: Hermes 0.23 bundled custom-root admission (${{ matrix.os }})
-    needs: native-call
     strategy:
       fail-fast: false
       matrix:

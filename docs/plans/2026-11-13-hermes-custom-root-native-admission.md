@@ -1,5 +1,37 @@
 # Hermes explicit custom-runtime-root MCP: native admission only
 
+## Windows temporal directory refusal: bounded field diagnostics
+
+Original [run 43429238373, job 131898258264](https://github.com/777genius/universal-agent-plugins/actions/runs/43429238373/job/131898258264), source
+ee561399d01484dcdd04fce3a504b81839882b7b used actual vendor-managed CPython 3.14.9
+from the source installation on Windows Server 2025. Its inert contract stopped earlier
+with `inventory directory changed`. The log does not identify the differing
+field or the path/handle domain; it is not evidence for dropping any field.
+
+Root R1 approves this diagnostic in the existing admission script and its tests,
+with at most 50 changed runtime/test lines. Preserve canonical-path admission
+and both complete `stable_file` before/after comparisons. On refusal, report
+only fixed `path:st_*` and `handle:st_*` field names from the original metadata
+objects; a canonical-path failure reports only `canonical`. Read each current
+stat once and do not reread the filesystem to prepare diagnostics. Include the
+existing Windows birth-time, attributes and reparse-tag fields where applicable.
+
+The inert contract covers every applicable field in both domains, unchanged
+records, canonical refusal and single snapshot reads. It does not override the
+host platform or claim Windows execution. The original membership-bound test,
+limits, guards, source/profile ownership and qualifications remain unchanged.
+A genuine Windows run is still required to identify the actual differing field
+before considering any corrective change to directory semantics.
+
+All 39 current inert contracts pass locally on Linux, including the unchanged
+membership-bound contract. This is no evidence of a Windows native pass.
+
+Root's scheduling amendment also removes only `needs: native-call` from the
+existing workflow's `bundled-custom-root` job. Each job owns a separate hosted
+runner, clone, runtime and evidence roots; the bundled job consumes no source-job
+outputs or artifacts. This allows independent bundle observations while a source
+lane fails. Source failures still fail the workflow; no guard or step is skipped.
+
 ## R1 approved correction: separate official bundled runtime
 
 Root approved this plan on 2026-11-13 after reviewing the original `aabcd9b3`

@@ -376,6 +376,33 @@ class ProfileAdmissionContracts(unittest.TestCase):
                     original, SimpleNamespace(**dict(base, st_mode=stat.S_IFREG | 0o755)),
                     "inventory directory changed at open")
 
+    def test_directory_temporal_refusal_names_domain_and_fields_without_values(self):
+        fields = CASE["STABLE_FIELDS"] + (("st_birthtime_ns", "st_file_attributes", "st_reparse_tag") if CASE["artifacts"].WINDOWS else ())
+        base = {field: 100 for field in fields}
+        original = SimpleNamespace(**base)
+        path = mock.Mock(name="private-directory-path")
+        path.resolve.return_value, path.lstat.return_value = path, original
+        with mock.patch.object(os, "fstat", return_value=original) as opened:
+            CASE["verify_inventory_directory"](path, original, 17, original)
+            for domain in ("path", "handle"):
+                for field in fields:
+                    changed = SimpleNamespace(**dict(base, **{field: 123456789}))
+                    path.lstat.return_value = changed if domain == "path" else original
+                    opened.return_value = changed if domain == "handle" else original
+                    path.lstat.reset_mock(); opened.reset_mock()
+                    with self.subTest(domain=domain, field=field), self.assertRaises(RuntimeError) as caught:
+                        CASE["verify_inventory_directory"](path, original, 17, original)
+                    self.assertEqual(str(caught.exception), "inventory directory changed (" + domain + ":" + field + ")")
+                    path.lstat.assert_called_once_with()
+                    opened.assert_called_once_with(17)
+            path.lstat.return_value, opened.return_value = original, original
+            path.resolve.return_value = "private-canonical-path"
+            opened.reset_mock()
+            with self.assertRaises(RuntimeError) as caught:
+                CASE["verify_inventory_directory"](path, original, 17, original)
+            self.assertEqual(str(caught.exception), "inventory directory changed (canonical)")
+            opened.assert_not_called()
+
     def test_inventory_does_not_eagerly_enumerate_past_membership_bound(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()

@@ -160,8 +160,17 @@ def check_inventory_directory(before, held, label):
 
 def verify_inventory_directory(path, before, descriptor, held, parent=None):
     linked = path.lstat() if parent is None else os.stat(path.name, dir_fd=parent, follow_symlinks=False)
-    require((parent is not None or path.resolve() == path) and stable_file(linked) == stable_file(before)
-            and stable_file(os.fstat(descriptor)) == stable_file(held), "inventory directory changed")
+    require(parent is not None or path.resolve() == path, "inventory directory changed (canonical)")
+    opened = os.fstat(descriptor)
+    if stable_file(linked) == stable_file(before) and stable_file(opened) == stable_file(held):
+        return
+    fields = STABLE_FIELDS + (("st_birthtime_ns", "st_file_attributes", "st_reparse_tag") if artifacts.WINDOWS else ())
+    details = []
+    for domain, previous, current in (("path", before, linked), ("handle", held, opened)):
+        names = [name for name in fields if getattr(previous, name, None) != getattr(current, name, None)]
+        if names:
+            details.append(domain + ":" + ",".join(names))
+    raise RuntimeError("inventory directory changed (" + ";".join(details) + ")")
 
 
 def inventory(root, sentinels=()):
