@@ -12,6 +12,44 @@ CASE = runpy.run_path(str(Path(__file__).parent / "e2e/hermes-profile-admission.
 
 
 class ProfileAdmissionContracts(unittest.TestCase):
+    def test_inventory_refusal_identifies_metadata_without_reading_member(self):
+        for mutation in ("oversize", "hardlink", "symlink"):
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                member = root / "runtime-member"
+                member.write_bytes(b"private contents must never appear in a refusal")
+                if mutation == "oversize":
+                    with member.open("r+b") as stream:
+                        stream.truncate(CASE["LIMIT"] + 1)
+                elif mutation == "hardlink":
+                    os.link(member, root / "alias")
+                else:
+                    member.unlink()
+                    member.symlink_to(root / "absent")
+                with mock.patch.dict(CASE["inventory"].__globals__, {"ordinary_bytes": mock.Mock()}) as patched:
+                    with self.assertRaisesRegex(RuntimeError, "inventory member refused:") as caught:
+                        CASE["inventory"](root)
+                    patched["ordinary_bytes"].assert_not_called()
+                message = str(caught.exception)
+                details = json.loads(message.split(": ", 1)[1])
+                self.assertIn(details["member"], ("runtime-member", "alias"))
+                self.assertEqual(set(details), {"member", "member_sha256", "mode", "links", "bytes"})
+                self.assertLess(len(message), 800)
+                self.assertNotIn(str(root), message)
+                self.assertNotIn("private contents", message)
+
+    def test_inventory_refusal_bounds_and_escapes_relative_member(self):
+        info = SimpleNamespace(st_mode=0o100600, st_nlink=2, st_size=17)
+        for relative in ("line\nname", "x" * 513):
+            with self.assertRaises(RuntimeError) as caught:
+                CASE["inventory_member"](relative, info)
+            message = str(caught.exception)
+            self.assertNotIn("\n", message)
+            self.assertLess(len(message), 800)
+            value = json.loads(message.split(": ", 1)[1])
+            self.assertEqual(value["member"], None if len(relative) > 512 else relative)
+            self.assertEqual(len(value["member_sha256"]), 64)
+
     def test_inventory_detects_bytes_modes_directories_and_aliases(self):
         for change in ("bytes", "mode", "directory", "symlink", "hardlink"):
             with self.subTest(change=change), tempfile.TemporaryDirectory() as temporary:

@@ -4,6 +4,9 @@ on:
     paths:
       - 'scripts/client_automation_native_probe.py'
       - 'scripts/test_client_automation_native_probe.py'
+      - 'scripts/grok_acp_inventory_admission.py'
+      - 'scripts/test_grok_acp_inventory_admission.py'
+      - 'install/integrationctl/research/grokacpinventory/**'
       - 'scripts/devin_structured_inventory_admission.py'
       - 'scripts/test_devin_structured_inventory_admission.py'
       - '.github/workflows/client-automation-native.yml'
@@ -70,5 +73,65 @@ jobs:
         with:
           name: devin-structured-inventory-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/devin-structured-inventory/upload/research.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  grok-acp-inventory:
+    name: Grok 1.0.70 isolated ACP metadata research
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+      EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: 1.26.11
+          cache: false
+      - name: Inert ACP framing, ownership and strict helper contracts
+        run: |
+          python3 -m unittest discover -s scripts -p 'test_grok_acp_inventory_admission.py' -v
+          cd install/integrationctl
+          go test ./research/grokacpinventory -count=1
+      - name: Capture only pinned isolated metadata with native syntax admission
+        id: grok_capture
+        run: |
+          python3 - <<'PYTHON'
+          import os, pathlib, subprocess, sys, tempfile
+          sys.path.insert(0, str(pathlib.Path.cwd() / 'scripts'))
+          import grok_acp_inventory_admission as capture
+          from native_client_research import run_probe
+          temporary = pathlib.Path(os.environ['RUNNER_TEMP']).resolve()
+          output = temporary / 'grok-acp-inventory'
+          record, stdout, stderr = run_probe([sys.executable, 'scripts/grok_acp_inventory_admission.py', '--output', str(output)],
+              pathlib.Path.cwd(), dict(os.environ), temporary, 'grok-acp-frontend', timeout=180, limit=1 << 20, memory_only=True)
+          if record['error'] is not None or record['exit'] not in (0, 1):
+              raise SystemExit('Frontend did not prove bounded completion; no upload admitted')
+          packet = capture.document(stdout)
+          if stdout != __import__('json').dumps(packet, separators=(',', ':')).encode() + b'\n':
+              raise SystemExit('Frontend publication receipt is not one exact closed frame')
+          destination = pathlib.Path(tempfile.mkdtemp(prefix='grok-acp-admitted-', dir=temporary))
+          destination.rmdir()
+          expected_tree = subprocess.check_output(['/usr/bin/git', 'rev-parse', 'HEAD^{tree}'], text=True).strip()
+          admitted = capture.admit_publication(output, packet, os.environ['EXPECTED_COMMIT'], expected_tree, destination)
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as stream:
+              stream.write('admitted=' + str(admitted) + '\n' + 'observation_exit=' + str(record['exit']) + '\n')
+          PYTHON
+      - name: Require complete native metadata observation
+        if: ${{ steps.grok_capture.conclusion == 'success' }}
+        env:
+          OBSERVATION_EXIT: ${{ steps.grok_capture.outputs.observation_exit }}
+        run: python3 -c "import os; raise SystemExit(0 if os.environ['OBSERVATION_EXIT'] == '0' else 1)"
+      - name: Preserve closed original metadata evidence without qualification
+        if: ${{ always() && steps.grok_capture.conclusion == 'success' && steps.grok_capture.outputs.admitted != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: grok-acp-inventory-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.grok_capture.outputs.admitted }}
           if-no-files-found: error
           retention-days: 14

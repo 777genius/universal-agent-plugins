@@ -1,5 +1,39 @@
 # Hermes explicit custom-runtime-root MCP: native admission only
 
+## Current bounded-inventory refusal and diagnostic correction
+
+Original Windows artifact14020477175 from run43386222522 on
+`76f2a8a35bcffeb330409353f80bf57e94a77759` passes its ZIP CRC and all nine
+stream byte/hash joins. The earlier cross-API mode mismatch is gone. Native
+custom-root capture now refuses the initial whole-tree inventory because a file
+does not meet the existing ordinary/single-link/1MiB bound, matching the prior
+macOS refusal. Neither original includes the offending member, link count or
+size. The dependency preparation messages alone do not identify that member.
+Source/runtime hashes stay unchanged; capture and qualification remain false.
+
+The official pinned `hermes_bootstrap.py` invokes
+`hermes_cli.venv_sync.prepare_launch`; `pm.environments.dependency_home_root`
+scopes dependency state per data root. These sources explain why fresh-root
+bootstrap effects must be measured, not silently excluded or rebaselined:
+https://github.com/NousResearch/hermes-agent/blob/2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19/hermes_cli/venv_sync.py
+https://github.com/NousResearch/hermes-agent/blob/2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19/pm/environments.py
+
+The narrow diagnostic correction keeps every inventory bound and refuses before
+reading an inadmissible member. It records only fixture-relative member spelling
+(JSON-escaped and limited to512 characters), the member-name SHA256, mode, link count and
+size in the bounded existing failure stream. Longer names retain only their
+hash. No file contents, absolute paths or native profile trees are published.
+The existing original custom-root identity receipt is written before the
+whole-tree baseline; a later inventory failure can therefore complete ordinary
+identity-checked cleanup of those exact created roots. This does not grant
+cleanup authority for a replaced root or prove a baseline/capture succeeded.
+
+Only admission source, focused inert contracts and this plan change. No vendor,
+environment, workflow, dependency, production capability or qualification change.
+Original final-source hosted evidence is still required before choosing any
+bootstrap treatment. Oversize/hardlink/symlink contracts assert refusal before
+content read, bounded metadata only, and existing root replacement refusals stay.
+
 Baseline: PR878 `075c8e7fad31a8d6f5b024c4b683df7ce5cb0d1e`.
 Keep official Hermes0.23.0 commit
 `2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19`; no pin/production change.

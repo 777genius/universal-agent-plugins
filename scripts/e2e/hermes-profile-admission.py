@@ -85,6 +85,18 @@ def verify_root_identities(roots, held):
         require(directory_identity(root) == tuple(held[name]), "original custom root directory changed")
 
 
+def inventory_member(relative, info):
+    """Keep the original bounds; report only bounded fixture-relative metadata."""
+    if stat.S_ISDIR(info.st_mode) or (stat.S_ISREG(info.st_mode) and info.st_nlink == 1
+                                     and 0 <= info.st_size <= LIMIT):
+        return
+    encoded = json.dumps(relative, ensure_ascii=True)
+    details = {"member": relative if len(encoded) <= 512 else None,
+               "member_sha256": hashlib.sha256(relative.encode("utf-8")).hexdigest(),
+               "mode": info.st_mode, "links": info.st_nlink, "bytes": info.st_size}
+    raise RuntimeError("inventory member refused: " + json.dumps(details, ensure_ascii=True, sort_keys=True))
+
+
 def inventory(root, sentinels=()):
     """Capture each ordinary file once through its independently checked handle."""
     root = Path(root)
@@ -99,7 +111,7 @@ def inventory(root, sentinels=()):
                 continue
             info = path.lstat()
             require(len(result) < 2048 and len(path.relative_to(root).parts) <= 24, "inventory membership bound")
-            require(stat.S_ISREG(info.st_mode) or stat.S_ISDIR(info.st_mode), "inventory special member refused")
+            inventory_member(relative, info)
             record = {"type": "directory" if stat.S_ISDIR(info.st_mode) else "file", "mode": stat.S_IMODE(info.st_mode),
                       "device": info.st_dev, "inode": info.st_ino}
             if record["type"] == "file":
@@ -254,13 +266,15 @@ def observe_profiles(probes):
         spec[scope]["directory_identity"] = held_roots[scope]
         config_boundary(root, spec[scope]["server"], spec[scope]["url"], authored_sha=spec[scope]["config_sha256"])
     spec["user"] = {"root": str(original), "project": str(user)}
+    # This receipt records our original created roots, independently of whether
+    # the subsequent whole-tree inventory admits native bootstrap effects.
+    write_json(evidence / "profile-endpoints.json", {"selected": spec, "original_native_root": str(original),
+               "os_home": str(user), "sentinel_sha256": [hashlib.sha256(x.encode()).hexdigest() for x in sentinels]})
     baseline = inventory(outer)
     protected = [str((original / name).relative_to(outer)).replace('\\', '/') for name in authored]
     controls = [str((outer / ("project-" + scope) / "foreign.txt").relative_to(outer)).replace('\\', '/') for scope in ("a", "b")]
     protected += controls
     write_json(evidence / "original-user-baseline.json", baseline)
-    write_json(evidence / "profile-endpoints.json", {"selected": spec, "original_native_root": str(original),
-               "os_home": str(user), "sentinel_sha256": [hashlib.sha256(x.encode()).hexdigest() for x in sentinels]})
     current = baseline
 
     def command(label, scope, args=None, guard=False, expected_failure=False):
