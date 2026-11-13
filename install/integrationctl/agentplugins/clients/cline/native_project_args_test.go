@@ -23,7 +23,7 @@ func TestClineNeutralArgsRejectsMalformedValues(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := ClineNeutralServer(domain.MCPServer{
-				Type: "stdio",
+				Type:    "stdio",
 				Decoded: map[string]any{"command": "node", "args": tc.args},
 			})
 			if err == nil {
@@ -36,9 +36,9 @@ func TestClineNeutralArgsRejectsMalformedValues(t *testing.T) {
 func TestClineNeutralArgsKeepsAbsentAndValidLists(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
-		name string
+		name    string
 		decoded map[string]any
-		want []string
+		want    []string
 	}{
 		{"absent", map[string]any{"command": "node"}, nil},
 		{"empty", map[string]any{"command": "node", "args": []any{}}, nil},
