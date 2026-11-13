@@ -163,7 +163,7 @@ function harness(catalogs, wrongSession = false) {
   const sandbox = { Error, Buffer, URL, createHash, observations: [], phase: 'start',
     performance: { now: () => clock }, delay: async ms => { clock += ms; },
     object: value => { if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('object required'); return value; },
-    keys: (value, keys) => assert.deepEqual(Object.keys(value).sort(), keys.slice().sort()),
+    keys: (value, keys) => assert.equal(JSON.stringify(Object.keys(value).sort()), JSON.stringify(keys.slice().sort())),
     same: (a, b) => JSON.stringify(a) === JSON.stringify(b),
     json: value => JSON.parse(Buffer.isBuffer(value) ? value.toString('utf8') : value),
     rpc: (reply, id) => { assert.equal(reply.id, id); assert.equal(reply.status, 200); return reply.result; },
