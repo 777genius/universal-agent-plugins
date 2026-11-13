@@ -981,9 +981,14 @@ class BundledRuntimeContracts(unittest.TestCase):
             root = parent / "runtime"; root.mkdir()
             path = root / "file"; path.write_bytes(b"one")
             expected, actual_read = CASE["directory_identity"](root), os.read
+            original_mtime = path.stat().st_mtime_ns
             def changed(fd, length):
                 body = actual_read(fd, length)
-                if body: path.write_bytes(b"two")
+                if body:
+                    path.write_bytes(b"two")
+                    # Windows may expose the same mtime for two immediate writes.
+                    # Retain the same-size mutation but make its metadata effect exact.
+                    os.utime(path, ns=(path.stat().st_atime_ns, original_mtime + 2_000_000_000))
                 return body
             with mock.patch.object(os, "read", side_effect=changed), self.assertRaisesRegex(RuntimeError, "changed during capture"):
                 CASE["payload_snapshot"](root, expected, time.monotonic() + 5)
