@@ -223,10 +223,12 @@ func applyClineNeutralArgs(result *nativeconfig.Server, server domain.MCPServer)
 }
 
 func clineStringMap(server domain.MCPServer, key string) (map[string]string, error) {
-	result := map[string]string{}
-	switch values := server.Decoded[key].(type) {
-	case nil:
+	value, present := server.Decoded[key]
+	if !present {
 		return nil, nil
+	}
+	result := map[string]string{}
+	switch values := value.(type) {
 	case map[string]any:
 		for name, value := range values {
 			text, ok := value.(string)
