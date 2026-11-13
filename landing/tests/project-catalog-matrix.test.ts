@@ -37,9 +37,9 @@ test('portable mixed Project package admits each target with one supported compo
   assert.equal(projectCatalogCommands(plugin).add,
     'npx -y universal-agent-plugins add gitlab --scope project');
   assert.ok(projectCatalogSelection(plugin, ['codex', 'grok']).resolution.distribution,
-    'a mixed package must not be refused merely because Grok cannot deliver its MCP part');
+    'a mixed Project package must preserve native Grok Skills and MCP delivery');
   assert.equal(projectComponentSupported('grok', 'skills'), true);
-  assert.equal(projectComponentSupported('grok', 'mcp'), false);
+  assert.equal(projectComponentSupported('grok', 'mcp'), true);
   for (const client of ['qoder', 'windsurf'] as const) {
     assert.equal(projectComponentSupported(client, 'mcp'), true,
       client + ': Project MCP must match the published CLI, not the old site table');
@@ -50,7 +50,7 @@ test('Project capability selection refuses unsupported-only packages, not mixed 
   const onlyMCP = packageWith(['mcp']);
   const onlySkills = packageWith(['skills']);
   const onlyExtensions = packageWith(['extensions']);
-  assert.equal(projectCatalogSelection(onlyMCP, ['grok']).resolution.distribution, undefined);
+  assert.ok(projectCatalogSelection(onlyMCP, ['grok']).resolution.distribution);
   assert.ok(projectCatalogSelection(onlyMCP, ['codex']).resolution.distribution);
   assert.ok(projectCatalogSelection(onlyMCP, ['qoder']).resolution.distribution);
   assert.ok(projectCatalogSelection(onlySkills, ['grok']).resolution.distribution);

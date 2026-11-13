@@ -92,13 +92,15 @@ func TestAgentpluginsReleaseContractsStayFailClosed(t *testing.T) {
 	mustContain(t, reuseJob, "if: ${{ inputs.publish_release == true }}")
 	mustContain(t, reuseJob, "needs: validate")
 	mustContain(t, reuseJob, "scripts/reuse-agentplugins-verified-draft.py")
+	mustContain(t, reuseJob, "--require-hermes-antigravity")
 	mustContain(t, releasePromoteJob, "scripts/reuse-agentplugins-verified-draft.py")
+	mustContain(t, releasePromoteJob, "--require-hermes-antigravity")
 	mustAppearBefore(t, releasePromoteJob, "scripts/reuse-agentplugins-verified-draft.py", "gh api -X PATCH")
 	mustContain(t, releaseWorkflow, "publish_release:\n        description: Explicitly promote after all verification succeeds\n        required: false\n        type: boolean\n        default: false")
 	draftReceiptJob := yamlJob(t, releaseWorkflow, "verified-draft")
 	mustContain(t, draftReceiptJob, "if: ${{ inputs.publish_release != true }}")
 	for _, want := range []string{
-		"needs: [validate, stage-draft, platform-proof]",
+		"needs: [validate, stage-draft, platform-proof, hermes-native-proof, antigravity-native-proof]",
 		"contents: write", "attestations: read",
 		"persist-credentials: false",
 		"        env:\n          GH_TOKEN: ${{ github.token }}",
@@ -339,7 +341,7 @@ func TestAgentpluginsReleaseContractsStayFailClosed(t *testing.T) {
 		"`verified-draft.json`. With `publish_release=false`, promotion is skipped",
 		"When the owner request authorizes publication",
 		"dispatch the existing producer with `publish_release=true`",
-		"all six native platform proofs, its verified",
+		"all six native platform proofs, both successful\n   Hermes/Antigravity aggregate jobs (including every aggregate step), its verified",
 		"Every dispatch still requires the exact frozen tag/workflow-source gate",
 		"This runbook does not establish that any new draft has already qualified",
 		"merged PR is not required when the exact commit has every required check",

@@ -29,8 +29,8 @@ var (
 func (*Adapter) ID() domain.ClientID { return domain.ClientCline }
 
 // DetectSurfaces observes the standalone CLI and extensions in both host editors.
-// Editor globalStorage is only a detection surface: Cline's shared native
-// configuration and skill roots live under its product-owned home.
+// Editor globalStorage is only a detection surface. The default native profile
+// is the CLI product home; an IDE extension may select another MCP settings file.
 func (*Adapter) DetectSurfaces(host clients.Host) clients.Detection {
 	vscodeConfig := filepath.Join(host.VSCodeConfigRoot(), "globalStorage", storageName)
 	cursorConfig := filepath.Join(host.EditorChannelConfigRoot("Cursor"), "globalStorage", storageName)

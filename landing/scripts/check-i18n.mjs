@@ -97,8 +97,13 @@ const unchangedLabels = new Set([
 // Independently reviewed technical captions/templates, scoped by locale AND key.
 const reviewedCaptions = {
   ar: { 'registryUi.components.mcp': 'mcp' },
-  es: { 'registryUi.components.mcp': 'mcp' },
+  // Identical French/Spanish/Portuguese cognates have been reviewed as real translations.
+  es: {
+    'registryUi.components.mcp': 'mcp',
+    'shell.clientSupport.setup.manual': 'Manual',
+  },
   fr: {
+    'shell.clientSupport.columns.agent': 'Agent',
     'nav.plugins': 'Plugins',
     'nav.faq': 'FAQ',
     'registryUi.components.mcp': 'mcp',
@@ -129,6 +134,7 @@ const reviewedCaptions = {
   },
   hi: { 'registryUi.components.mcp': 'mcp' },
   pt: {
+    'shell.clientSupport.setup.manual': 'Manual',
     'nav.plugins': 'Plugins',
     'registryUi.command.terminal': 'Terminal',
     'shell.header.plugins': 'Plugins',

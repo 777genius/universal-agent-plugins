@@ -239,6 +239,27 @@ const reasonPosition = (reason: { path?: unknown; start_line?: unknown; end_line
   return `${path}${start ? `:${start}${end && end !== start ? `–${end}` : ''}` : ''}`;
 };
 const groups = (record: SkillSpectorRecord) => record.findings;
+const stableFindingJSON = (value: unknown): string => {
+  const ordered = (item: unknown): unknown =>
+    Array.isArray(item)
+      ? item.map(ordered)
+      : item !== null && typeof item === 'object'
+        ? Object.fromEntries(
+            Object.entries(item)
+              .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+              .map(([key, child]) => [key, ordered(child)]),
+          )
+        : item;
+  return JSON.stringify(ordered(value));
+};
+const witnessOnlyFindings = (primary: SkillSpectorRecord, original: SkillSpectorRecord) => {
+  const byId = new Map(primary.findings.map((finding) => [finding.id, finding]));
+  return original.findings.filter((finding) => {
+    const current = byId.get(finding.id);
+    // Distinguish changed evidence, not an irrelevant JSON field-order difference.
+    return !current || stableFindingJSON(current) !== stableFindingJSON(finding);
+  });
+};
 const recordStatus = (record: SkillSpectorRecord) =>
   record.freshness === 'historical' ||
   (props.subject?.kind === 'plugin' && record.source.revision !== props.subject.revision)
@@ -594,6 +615,101 @@ async function copyDiagnostics() {
                     </details>
                   </li>
                 </ul>
+                <div
+                  v-for="(witness, witnessIndex) in record.recovery_witnesses ?? []"
+                  :key="`${witness.origin.run_id}-${witness.origin.run_attempt}-${witnessIndex}`"
+                  class="skillspector__record-reasons"
+                >
+                  <p>
+                    <strong>{{ t('registryUi.skillSpector.recoveryWitnessTitle') }}</strong>
+                    · {{ t('registryUi.skillSpector.recoveryWitnessRun', {
+                      // GitHub run IDs are identifiers; locale grouping changes their exact text.
+                      run: String(witness.origin.run_id),
+                      attempt: String(witness.origin.run_attempt),
+                    }) }}
+                    · <code>{{ witness.record.report_digest }}</code>
+                  </p>
+                  <p>{{ t('registryUi.skillSpector.recoveryWitnessExplanation') }}</p>
+                  <ul
+                    v-if="witnessOnlyFindings(record, witness.record).length"
+                    class="skillspector__findings"
+                    :aria-label="t('registryUi.skillSpector.recoveryWitnessFindings')"
+                  >
+                    <li
+                      v-for="(finding, index) in witnessOnlyFindings(record, witness.record)"
+                      :key="finding.id || index"
+                      :data-finding-id="finding.id"
+                    >
+                      <code>{{ finding.rule }} · {{ finding.severity }}</code>
+                      <p>{{ finding.message }}</p>
+                      <p>
+                        {{
+                          t(
+                            `registryUi.skillSpector.${finding.review_status === 'confirmed' && ['HIGH', 'CRITICAL'].includes(finding.severity) ? 'confirmedMaterialIssue' : finding.review_status === 'false_positive' ? 'registryClassification' : finding.review_status === 'accepted' ? 'acceptedSignal' : 'unreviewedSignal'}`,
+                          )
+                        }}<template
+                          v-if="finding.confidence !== undefined && finding.confidence !== null"
+                        >
+                          ·
+                          {{
+                            t('registryUi.skillSpector.confidence', {
+                              confidence: n(Math.round(finding.confidence * 100)),
+                            })
+                          }}</template
+                        >
+                      </p>
+                      <p v-if="finding.exception" class="skillspector__classification">
+                        {{ t('registryUi.skillSpector.classificationExplanation') }}
+                        {{ finding.exception.reason }} <code>{{ finding.exception.id }}</code>
+                      </p>
+                      <p v-if="finding.raw_count !== undefined">
+                        {{
+                          t('registryUi.skillSpector.occurrenceCount', {
+                            count: n(finding.raw_count),
+                          })
+                        }}
+                      </p>
+                      <template
+                        v-for="(position, positionIndex) in finding.occurrences?.length
+                          ? finding.occurrences
+                          : [finding]"
+                        :key="positionIndex"
+                      >
+                        <a
+                          v-if="skillSpectorFindingUrl(witness.record, occurrence(finding, position))"
+                          :href="skillSpectorFindingUrl(witness.record, occurrence(finding, position))"
+                          target="_blank"
+                          rel="noreferrer"
+                        ><code>{{ skillSpectorFindingLocation(position) }}</code> ↗</a>
+                        <code v-else>{{ skillSpectorFindingLocation(position) }}</code>
+                      </template>
+                      <details
+                        v-if="
+                          (finding.evidence && Object.keys(finding.evidence).length) ||
+                          finding.code_snippet ||
+                          finding.context ||
+                          finding.remediation
+                        "
+                      >
+                        <summary>{{ t('registryUi.skillSpector.evidence') }}</summary>
+                        <pre v-if="finding.code_snippet">{{
+                          typeof finding.code_snippet === 'string'
+                            ? finding.code_snippet
+                            : json(finding.code_snippet)
+                        }}</pre>
+                        <pre v-if="finding.context">{{ json(finding.context) }}</pre>
+                        <pre v-if="finding.remediation">{{ json(finding.remediation) }}</pre>
+                        <pre v-if="finding.evidence && Object.keys(finding.evidence).length">{{
+                          json(finding.evidence)
+                        }}</pre>
+                      </details>
+                      <details v-if="finding.finding_ids?.length">
+                        <summary>{{ t('registryUi.skillSpector.findingIds') }}</summary>
+                        <pre>{{ finding.finding_ids.join('\n') }}</pre>
+                      </details>
+                    </li>
+                  </ul>
+                </div>
                 <ul
                   v-if="(record.coverage?.reasons ?? record.errors).length"
                   class="skillspector__record-reasons"
@@ -799,6 +915,13 @@ async function copyDiagnostics() {
   color: var(--subtle);
   font-size: 0.75rem;
   line-height: 1.5;
+}
+.skillspector--noSkills {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  min-height: 32px;
 }
 .skillspector > summary {
   display: flex;

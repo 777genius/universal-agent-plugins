@@ -208,6 +208,60 @@
     "buildGuideLink": "افتح دليل الإنشاء"
   },
   "shell": {
+    "clientSupport": {
+      "eyebrow": "التوافق",
+      "title": "الوكلاء المدعومون ونطاقات التثبيت",
+      "description": "يثبّت نطاق المستخدم المكونات في ملف تعريف الوكيل، بينما يثبّتها نطاق المشروع في مساحة عمل محددة. يهيّئ UAP الملفات المدعومة. وقد يطلب الوكيل الوثوق بالمشروع أو تسجيل الدخول أو إعادة التشغيل.",
+      "tableLabel": "جدول دعم تثبيت الوكلاء",
+      "tableCaption": "دعم نطاقَي المستخدم والمشروع وطريقة الإعداد والخطوات اللازمة بعد التثبيت.",
+      "columns": {
+        "agent": "الوكيل",
+        "user": "نطاق المستخدم",
+        "project": "نطاق المشروع",
+        "setup": "الإعداد",
+        "nextStep": "بعد التثبيت"
+      },
+      "scrollHint": "مرّر الجدول أفقيًا لرؤية جميع الأعمدة.",
+      "note": "تلقائي: يثبّت UAP المكونات المدعومة. بإرشادات: اتبع تعليمات الوكيل. مُجهّز: فعّل الملفات المُعدّة. يدوي: أكمل الإعداد في التطبيق. لا ينجز التثبيت تسجيل الدخول ولا يمنح الثقة تلقائيًا. تعتمد الإتاحة على الإضافة وإصدار الوكيل. الإصدار المرجعي: CLI الأصلي 0.1.108. النشر على npm مستقل وقد يتأخر. دعم الوكيل لا يضمن إصدارًا موقّعًا متوافقًا من الكتالوج لكل ملحق ونطاق.",
+      "details": "عرض تفاصيل التوافق",
+      "capabilities": {
+        "pluginsSkillsMcp": "إضافات، مهارات، MCP",
+        "skillsMcp": "مهارات، MCP",
+        "pluginsSkillsMcpHooks": "إضافات، مهارات، MCP، خطافات",
+        "extensionsSkillsMcp": "امتدادات، مهارات، MCP",
+        "copilotPackage": "حزمة عبر Copilot",
+        "desktopLocalPluginsWebConnectedApps": "إضافات محلية لسطح المكتب؛ تطبيقات متصلة على الويب",
+        "personalAppSetup": "إعداد تطبيق شخصي",
+        "skillsOnly": "مهارات فقط",
+        "skillsMcpPrepared": "مهارات، MCP (مُجهّزة)",
+        "notSupported": "غير مدعوم"
+      },
+      "setup": {
+        "automatic": "تلقائي",
+        "guided": "بإرشادات",
+        "prepared": "مُجهّز",
+        "manual": "يدوي"
+      },
+      "nextSteps": {
+        "claude": "ثق بمساحة العمل وأعد تحميل Claude Code إذا طُلب منك ذلك.",
+        "codex": "افتح جلسة جديدة ووافق على وصول MCP للمشروع إذا طُلب ذلك.",
+        "opencode": "ابدأ جلسة جديدة وراجع إعدادات المشروع السارية.",
+        "cursor": "أعد تحميل Cursor وفعّل الإضافات أو خوادم MCP عند الطلب.",
+        "copilot": "أعد تشغيل Copilot CLI إذا طُلب منك ذلك.",
+        "gemini": "أعد تحميل Gemini CLI ووافق على الوصول إلى الأدوات عند الطلب.",
+        "qoder": "أعد تشغيل Qoder وراجع أذونات MCP.",
+        "pi": "ثق بالمشروع وأعد تحميل موارد Pi.",
+        "windsurf": "افتح Devin أو أعد تشغيله في المشروع المحدد، ثم راجع الوصول.",
+        "kimi": "نفّذ /reload أو /new وراجع أذونات MCP.",
+        "cline": "حدّد مسار إعدادات MCP للمشروع وأعد تحميل Cline.",
+        "kiro": "سجّل الدخول ووافق على الوصول وأعد تشغيل Kiro عند الطلب.",
+        "grok": "افتح المشروع في Grok، وفعّل الإضافة وامنحها الثقة، ثم أعد التحميل وتحقّق من المهارات وMCP.",
+        "vscode": "افتح المجلد وثق به ثم راجع خوادم MCP وفعّلها.",
+        "chatgpt": "سطح المكتب: ثبّت الإضافة محليًا عبر Codex CLI؛ الويب: اربط التطبيق أو ثبّته في ChatGPT.",
+        "hermes": "أعد تشغيل Hermes ووثّق مشروع Git المحدد وتحقق من Skills وMCP للمستخدم؛ MCP للمشروع غير مدعوم.",
+        "antigravity": "افتح Antigravity أو أعد تحميله؛ راجع الثقة وتحقق من اكتشاف الإضافة المجهزة وتفعيلها في النطاق المحدد."
+      }
+    },
     "dependencies": {
       "eyebrow": "تبعيات مترابطة",
       "title": "إضافتان. تبعية مشتركة واحدة.",
@@ -269,7 +323,7 @@
       "items": {
         "0": {
           "question": "ما وكلاء الذكاء الاصطناعي المدعومون؟",
-          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, VS Code, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder: لكل عميل مسار خاص للتثبيت أو الإعداد. يعتمد التوافق على مكونات الحزمة ونطاق التثبيت ومتطلبات التفعيل."
+          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder, Hermes Agent, Google Antigravity, Pi: لكل عميل مسار خاص للتثبيت أو الإعداد. يعتمد التوافق على مكونات الحزمة ونطاق التثبيت ومتطلبات التفعيل."
         },
         "1": {
           "question": "هل يثبّت أمر واحد في كل وكيل؟",
@@ -584,6 +638,10 @@
       "disclaimer": "تقلل الفحوصات الآلية المخاطر؛ لكنها لا تثبت أن الإضافة آمنة. راجع المصدر والأذونات قبل تثبيت برنامج لا تثق به."
     },
     "catalog": {
+      "sortLabel": "ترتيب الإضافات",
+      "sortRecommended": "موصى بها",
+      "sortName": "الاسم أ–ي",
+      "curationNote": "اقتراحات لمهام الوكلاء الشائعة، وليست تصنيفًا للأمان.",
       "staleCommunityResults": "تُعرض {count} إدخالات مجتمعية من آخر كتالوج موقّع، أُنشئ في {generated} وانتهت صلاحيته في {expired}. أوامر التثبيت متوقفة حتى يتوفر كتالوج حديث. الإدخالات التي تمت مراجعتها ما زالت متاحة.",
       "staleCommunityListing": "إدخال تاريخي موقّع؛ انتهت صلاحية الكتالوج في {expired}.",
       "staleCommunityCommands": "أوامر تثبيت إضافات المجتمع متوقفة لانتهاء صلاحية الكتالوج الموقّع. لا يزال بإمكانك تصفح الإدخالات والمصدر.",
@@ -657,8 +715,8 @@
       "unavailableAtItsIndexedSource": "غير متاح في مصدره المفهرس",
       "checkedAgainBeforeInstallation": "يُفحص مجددًا قبل التثبيت",
       "reviewedListing": "مُراجَع",
-      "notAvailableForChatgpt": "لا يتوفر اتصال ChatGPT موثّق في هذا الإصدار",
-      "verifiedConnectionFinishSetupInChatgpt": "اتصال تم التحقق منه؛ أكمل الإعداد في ChatGPT",
+      "notAvailableForChatgpt": "لا توجد لهذه الإضافة رابطة تطبيق ChatGPT Web موثّقة. تُربط تطبيقات الويب داخل ChatGPT.",
+      "verifiedConnectionFinishSetupInChatgpt": "رابطة تطبيق ChatGPT Web موثّقة؛ أكمل الاتصال من داخل ChatGPT.",
       "allInstalledAgents": "اختيار الوكلاء في الطرفية",
       "commandsDisabledInPreview": "الأوامر معطلة في المعاينة.",
       "allInstalledAgentsRecommended": "اختيار الوكلاء في الطرفية",
@@ -696,12 +754,12 @@
       "notReadyToInstall": "غير جاهز للتثبيت",
       "detectedWhenYouRunTheCommand": "يتيح الأمر اختيار الوكلاء قبل التثبيت.",
       "thisPackageIsNoLongerAvailableFromItsSource": "لم تعد هذه الحزمة متاحة من مصدرها.",
-      "notAvailableForChatgpt": "لا يتوفر اتصال ChatGPT موثّق في هذا الإصدار",
+      "notAvailableForChatgpt": "لا توجد لهذه الإضافة رابطة تطبيق ChatGPT Web موثّقة. تُربط تطبيقات الويب داخل ChatGPT.",
       "unavailableSignedDirectorySnapshotExpired": "غير متاح: انتهت صلاحية لقطة Directory الموقعة",
       "noActiveReleaseSupportsThisClient": "لا يوجد إصدار نشط يدعم هذا العميل",
       "unavailableReviewDataIsNotInstallationAuthority": "غير متاح: بيانات المراجعة ليست مرجعًا معتمدًا للتثبيت",
       "thisPackageDoesNotSupportAnyOfTheAgentsAvailableInTheInstallerYet": "لا تدعم هذه الحزمة أيًا من الوكلاء المتاحين في المثبّت حتى الآن.",
-      "verifiedConnectionFinishSetupInChatgpt": "اتصال تم التحقق منه؛ أكمل الإعداد في ChatGPT",
+      "verifiedConnectionFinishSetupInChatgpt": "رابطة تطبيق ChatGPT Web موثّقة؛ أكمل الاتصال من داخل ChatGPT.",
       "allInstalledAgents": "اختيار الوكلاء في الطرفية",
       "weFoundThisProjectButItDoesnTIncludeAnyToolsTheInstallerCanAddYet": "عثرنا على هذا المشروع، لكنه لا يتضمن بعد أي أدوات يستطيع المثبّت إضافتها.",
       "chooseTargetAgents": "اختيار الوكلاء المستهدفين",
@@ -725,7 +783,7 @@
       "unresolvedDataIsForReviewOnlyProductionCommandsRequireAPublishedSignedDirectorySnapshot": "البيانات غير المحسومة مخصصة للمراجعة فقط؛ تتطلب أوامر الإنتاج لقطة Directory موقعة ومنشورة.",
       "commandsUnavailable": "الأوامر غير متاحة.",
       "automaticDetection": "اختيار الوكلاء في الطرفية",
-      "theCliChecksThisPluginAgainstInstalledAgentsSkipsIncompatibleOnesAndLetsYouConfirmTheTargetsChatgptIsIncludedOnlyWhenThisPluginProvidesAVerifiedConnection": "تكتشف CLI الوكلاء المتوافقين لتأكيدهم. يتطلب ChatGPT اتصالًا موثقًا.",
+      "theCliChecksThisPluginAgainstInstalledAgentsSkipsIncompatibleOnesAndLetsYouConfirmTheTargetsChatgptIsIncludedOnlyWhenThisPluginProvidesAVerifiedConnection": "تفحص أداة CLI الوكلاء المحليين وتتيح تأكيد الأهداف المتوافقة. ويختلف ChatGPT Web: يمكن إعداد التطبيقات المؤهلة، لكن اكتمال الربط يتم داخل ChatGPT.",
       "oneStepRemainsInChatgpt": "تبقت خطوة واحدة في ChatGPT.",
       "noSingleSourceServesThisTargetSet": "لا يوجد مصدر واحد يخدم مجموعة الأهداف هذه.",
       "theCliWillFailBeforeMutationAndSuggestCompatibleTargetSourceCombinationsItNeverMixesDistributionsAcrossClients": "سيفشل CLI قبل إجراء أي تعديل وسيقترح تركيبات متوافقة من الأهداف والمصادر؛ ولا يخلط أبدًا توزيعات مختلفة بين العملاء.",
@@ -769,7 +827,9 @@
           "mcp": "أدوات MCP",
           "extensions": "إضافات"
         }
-      }
+      },
+      "noCompatibleSignedRelease": "يدعم UAP الوكيل {agent}، لكن هذا الملحق لا يملك إصدارًا موقّعًا متوافقًا مع نطاق التثبيت المحدد.",
+      "piPinnedProjectSource": "المشروع: ثبّت في Pi من مصدر Git مثبّت على SHA محدد (وليس هدف Pi موقّعًا)؛ تتحقق أداة CLI من التوافق."
     },
     "authentication": {
       "not_required": "لا يلزم حساب",
@@ -816,11 +876,11 @@
         "activation": "اتبع أي تلميح تفعيل يطبعه CLI، ثم ابدأ جلسة Codex جديدة."
       },
       "chatgpt": {
-        "note": "روابط تطبيقات تم التحقق منها وإرشادات إعداد Context7",
-        "status": "الإعداد داخل التطبيق",
-        "intro": "حضّر Agent Plugins 1.0 المتوافقة لـ ChatGPT مع إبقاء تفعيل التطبيق وموافقة الحساب داخل ChatGPT.",
-        "delivery": "يتحقق CLI من روابط تطبيقات الناشر، ويمكنه تجهيز حزمة marketplace شخصية لـ Context7 باستخدام نقطة نهاية MCP العامة التي لا تتطلب مصادقة.",
-        "activation": "أنشئ التطبيق أو وصّله في Developer Mode، وثبّت الإضافة الشخصية المجهزة، ثم اخترها في محادثة جديدة."
+        "note": "سطح المكتب: تلقائي عبر Codex CLI؛ الويب: إعداد داخل ChatGPT",
+        "status": "مدعوم",
+        "intro": "يدعم ChatGPT الإضافات على سطح المكتب والويب. تستخدم الإضافات المحلية على سطح المكتب متجر Codex CLI، بينما يحتاج الويب إلى تطبيق سحابي متوافق أو اتصال بالمتجر.",
+        "delivery": "يثبّت UAP إضافات سطح المكتب المحلية المتوافقة عبر Codex CLI ويُعد اتصالات الويب الموثّقة. لا تستطيع الأداة المحلية تثبيت إضافة سحابية في حساب ChatGPT دون موافقة المستخدم.",
+        "activation": "سطح المكتب: افتح محادثة محلية جديدة واختبر الإضافة. الويب: صِل التطبيق أو ثبّته داخل ChatGPT وامنح الأذونات المطلوبة."
       },
       "cursor": {
         "note": "حزمة Agent Plugin أصلية",
@@ -906,12 +966,26 @@
         "delivery": "يكتب CLI ملف بيان .qoder-plugin أصليًا ويسجّل الحزمة المُدارة عبر Qoder CLI عند توفره.",
         "activation": "أعد تحميل إضافات Qoder أو أعد تشغيل Qoder بعد التثبيت. ما زالت اتصالات MCP وقت التشغيل ومصادقة المزوّد بحاجة إلى تأكيد داخل Qoder."
       },
-      "pi": {
-        "note": "إضافات Pi الأصلية المُدارة فقط",
+      "hermes": {
+        "note": "Skills وMCP للمستخدم وSkills للمشروع؛ MCP للمشروع غير مدعوم",
         "status": "مدعوم",
-        "intro": "ثبّت حزم Agent Plugins 1.0 التي تعلن عن إضافة Pi أصلية. المهارات القابلة للنقل وإسقاط MCP خارج النطاق الحالي لهذا المحوّل.",
-        "delivery": "يثبّت CLI إضافة Pi المعلنة في دليل وكيل Pi ويتتبّع الحزمة المُدارة لتحديثها وإصلاحها وإزالتها.",
-        "activation": "بعد التثبيت، أعد تحميل الموارد أو أعد تشغيل Pi لتحميل الإضافة المُدارة."
+        "intro": "ثبّت Skills الأصلية لـ Hermes Agent للمستخدم أو لمشروع Git محدد، إضافة إلى خوادم MCP بنطاق المستخدم، مع الحفاظ على الإعدادات الأخرى.",
+        "delivery": "يدير UAP مجلدات Skills التي يملكها وإدخالات MCP المحددة في ملف config.yaml الخاص بالمستخدم. لا يغيّر التثبيت على مستوى المشروع إعدادات MCP للمستخدم.",
+        "activation": "أعد تشغيل Hermes لتحميل التكامل مجددًا. راجع الثقة في المستودع قبل استخدام Skills المشروع؛ ما زال اكتشاف المكونات والمصادقة يتطلبان تحققًا منفصلًا."
+      },
+      "antigravity": {
+        "note": "إضافات أصلية للمستخدم والمشروع؛ يجب التحقق من التفعيل",
+        "status": "جاهز عبر CLI",
+        "intro": "جهّز إضافات Google Antigravity الأصلية التي تتضمن Skills وخوادم MCP المدعومة ضمن نطاق المستخدم أو المشروع المختار.",
+        "delivery": "يجهّز UAP مجلد إضافة مُدارًا في إعدادات المستخدم أو المشروع المحدد مع الحفاظ على الإضافات الأخرى، دون تفعيل hooks تلقائيًا.",
+        "activation": "افتح Antigravity أو أعد تحميله وتحقق من اكتشاف الإضافة وتفعيلها. الملفات المجهزة وحدها لا تثبت تشغيل نموذج أو إجراء مصادقة أو تنفيذ MCP فعلي."
+      },
+      "pi": {
+        "note": "امتدادات Pi الأصلية والمهارات وMCP",
+        "status": "مدعوم",
+        "intro": "ثبّت امتدادات Pi والمهارات وMCP المتوافقة (stdio وStreamable HTTP) للمستخدم أو المشروع. تتطلب حزم الدليل إصدارًا موقّعًا متوافقًا؛ وتتحقق CLI من المصادر المباشرة بصورة منفصلة.",
+        "delivery": "تثبّت CLI المكونات المؤهلة في ملف Pi أو المشروع المحدد وتدير التحديث والإصلاح والإزالة.",
+        "activation": "أعد تحميل موارد Pi أو تشغيله. راجع الثقة بالمشروع وأذونات MCP عند الطلب."
       }
     },
     "directoryPage": {
@@ -990,7 +1064,9 @@
       "availableFor": "الإضافات المتاحة لـ {name}",
       "count": "تدعم {count} حزمة مراجَعة هذا العميل. | تدعم {count} حزم مراجَعة هذا العميل.",
       "tryPlugin": "جرّب Context7 أو استبدل {source} بالاسم المختصر المراجع لإضافة أخرى متوافقة أو بمصدر حزمة كاملة.",
-      "localPackageHint": "استبدل ./my-plugin بمسار حزمة Agent Plugins 1.0 صالحة."
+      "localPackageHint": "استبدل ./my-plugin بمسار حزمة Agent Plugins 1.0 صالحة.",
+      "piSignedCount": "حزم Pi في الدليل الموقّع: {count}",
+      "piDirectSourceNote": "تظهر هنا فقط الحزم التي تسمح إصداراتها الموقّعة باستخدام Pi. ويمكن أيضًا تثبيت Skills وخوادم MCP والامتدادات المتوافقة من حزمة محلية أو إصدار Git محدد؛ تتحقق CLI من هذه المصادر على نحو مستقل."
     },
     "components": {
       "extensions": "الامتدادات",
@@ -1018,13 +1094,14 @@
       "required": "المصادقة مطلوبة",
       "not_required": "لا تتطلب مصادقة",
       "unknown": "متطلبات المصادقة غير معروفة",
-      "varies": "تختلف حسب الوكيل",
+      "varies": "يعتمد على الوكيل أو الإصدار",
       "automatic": "يتم اكتشاف الوكلاء المثبتين عند تشغيل الأمر. اختر الوكلاء في قسم التثبيت لعرض متطلباتهم.",
       "unresolved": "لم يتم تحديد خيار تثبيت لهؤلاء الوكلاء. اختر وكيلاً مدعوماً للتحقق من متطلباته.",
       "release": "{id} · الإصدار {sequence}",
       "requiredDetail": "قد تتطلب الحزمة حساباً أو رمزاً أو تسجيل دخول؛ هذا لا يحدد OAuth ولا يؤكد أنك سجلت الدخول.",
       "not_requiredDetail": "لم يتم الإعلان عن مصادقة لهؤلاء الوكلاء. قد تنطبق حدود الخدمة ومتطلبات إعداد أخرى.",
-      "unknownDetail": "تحقق من متطلبات الحزمة قبل الاتصال."
+      "unknownDetail": "تحقق من متطلبات الحزمة قبل الاتصال.",
+      "variesDetail": "قد يختلف تسجيل الدخول للوكيل نفسه بين الإصدارات المتوافقة. اختر هدفًا وراجع خطة التثبيت المحددة."
     }
   },
   "pluginAuthoring": {

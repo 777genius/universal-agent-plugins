@@ -178,12 +178,10 @@ argumento de origem seleciona o escopo de projeto quando existe um arquivo regul
 [regras de restauração](./manage) para o comportamento estrito do lock.
 
 O destino precisa oferecer suporte aos componentes de projeto solicitados.
-A instalação em projetos do ChatGPT é explicitamente incompatível. O VS Code
-prepara `.github/skills` e os membros `servers` sob sua responsabilidade em
-`.vscode/mcp.json` para uma única pasta local. O resultado continua Prepared:
-revise a confiança no espaço de trabalho e no servidor e inspecione as
-configurações do cliente. Essa observação de metadados não comprova inicialização
-MCP, chamadas de ferramentas ou uso do modelo.
+A instalação em projetos do ChatGPT é explicitamente incompatível. Se o
+resultado for **Prepared**, revise a confiança necessária no espaço de trabalho
+e nos servidores, além das configurações do cliente. Os arquivos instalados
+por si só não comprovam inicialização MCP, chamadas de ferramentas ou uso do modelo.
 
 Leia o [guia de instalação em projetos](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_INSTALLATION.md)
 e os [limites de projeto por cliente](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)

@@ -12,7 +12,7 @@ func TestParseClientIDAliasesAndLenientPassThrough(t *testing.T) {
 		"claude": ClientClaude, "gemini": ClientGemini, "opencode": ClientOpenCode,
 		"cline": ClientCline, "windsurf": ClientWindsurf,
 		"grok": ClientGrok, "kimi": ClientKimi,
-		"qoder": ClientQoder,
+		"qoder": ClientQoder, "antigravity": ClientAntigravity,
 	}
 	for input, want := range canonical {
 		got, ok := ParseClientID(input)
@@ -63,7 +63,7 @@ func TestPublicTargetFlagNamesKeepCanonicalWebIdentity(t *testing.T) {
 func TestClientRegistryHasStableOrderAndSharedCopilotBackend(t *testing.T) {
 	want := []ClientID{
 		ClientCodex, ClientChatGPT, ClientCursor, ClientCopilot, ClientVSCode, ClientKiro,
-		ClientClaude, ClientGemini, ClientOpenCode, ClientCline, ClientWindsurf, ClientGrok, ClientKimi, ClientQoder, ClientPi,
+		ClientClaude, ClientGemini, ClientOpenCode, ClientCline, ClientWindsurf, ClientGrok, ClientKimi, ClientQoder, ClientHermes, ClientAntigravity, ClientPi,
 	}
 	if got := SupportedClientIDs(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("supported clients = %v, want %v", got, want)

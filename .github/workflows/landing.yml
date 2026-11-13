@@ -42,7 +42,6 @@ jobs:
     timeout-minutes: 20
     outputs:
       scope: ${{ steps.browser-scope.outputs.mode }}
-      matrix: ${{ steps.shard-matrix.outputs.value }}
       site-artifact-id: ${{ steps.upload-site.outputs.artifact-id }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -51,7 +50,7 @@ jobs:
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.10"
+          go-version: "1.26.11"
           cache: false
 
       - uses: pnpm/action-setup@a8198c4bff370c8506180b035930dea56dbd5288 # v5
@@ -82,6 +81,12 @@ jobs:
         working-directory: landing
         run: pnpm install --frozen-lockfile
 
+      - name: Prefer configured canonical Ubuntu package mirrors
+        working-directory: .
+        run: |
+          python3 -m unittest discover -s scripts -p 'test_ci_ubuntu_apt_mirrors.py'
+          sudo python3 scripts/ci_ubuntu_apt_mirrors.py
+
       - name: Install Chromium for static social preview
         working-directory: landing
         run: pnpm exec playwright install --with-deps --only-shell chromium
@@ -89,6 +94,7 @@ jobs:
       - name: Prepare Nuxt tooling
         working-directory: landing
         run: |
+          node ./scripts/prepare-webp-assets.mjs
           pnpm exec nuxt prepare
           pnpm exec vue-tsc --noEmit
 
@@ -99,6 +105,7 @@ jobs:
           NUXT_PUBLIC_SITE_URL: https://777genius.github.io/universal-agent-plugins
         working-directory: landing
         run: |
+          pnpm run check:advisories
           pnpm run test:registry
           pnpm run lint
           pnpm run check:i18n
@@ -149,16 +156,8 @@ jobs:
           echo "Playwright coverage: $mode"
 
 
-      # Full for any landing/UI change, manual and scheduled runs; docs-only PRs get one smoke shard.
-      - name: Choose shard matrix
-        id: shard-matrix
-        run: |
-          if [[ "${{ steps.browser-scope.outputs.mode }}" == "smoke" ]]; then
-            echo 'value={"include":[{"index":1,"total":1}]}' >> "$GITHUB_OUTPUT"
-          else
-            echo 'value={"include":[{"index":1,"total":2},{"index":2,"total":2}]}' >> "$GITHUB_OUTPUT"
-          fi
-
+      # Browser work always uses two fixed shards. For docs-only PRs,
+      # each shard takes half of the existing smaller smoke suite.
       # One signed, typechecked, generated site for both shards in this exact workflow run.
       - name: Upload verified site and registry inputs for browser shards
         id: upload-site
@@ -182,7 +181,12 @@ jobs:
       contents: read
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(needs.prepare-browser.outputs.matrix) }}
+      matrix:
+        include:
+          - index: 1
+            total: 2
+          - index: 2
+            total: 2
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -214,6 +218,12 @@ jobs:
         run: |
           test -s .e2e-pages/universal-agent-plugins/index.html
           test -s public/registry/schemas/1/latest.json
+
+      - name: Prefer configured canonical Ubuntu package mirrors
+        working-directory: .
+        run: |
+          python3 -m unittest discover -s scripts -p 'test_ci_ubuntu_apt_mirrors.py'
+          sudo python3 scripts/ci_ubuntu_apt_mirrors.py
 
       - name: Install Chromium browser
         working-directory: landing
@@ -322,7 +332,7 @@ jobs:
 
       - name: Verify shard report cardinality
         env:
-          EXPECTED_SHARDS: ${{ needs.prepare-browser.outputs.scope == 'smoke' && '1' || '2' }}
+          EXPECTED_SHARDS: '2'
         run: |
           test "$(find landing/merged-blob-reports -maxdepth 1 -type f -name '*.zip' | wc -l)" -eq "$EXPECTED_SHARDS"
 
@@ -407,7 +417,7 @@ jobs:
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.10"
+          go-version: "1.26.11"
           cache: false
 
       # Keep docs on its own packageManager; landing uses a newer lockfile format.
@@ -459,6 +469,12 @@ jobs:
           mkdir -p "${RUNNER_TEMP}/docs-tools-root/bin"
           GOBIN="${RUNNER_TEMP}/docs-tools-root/bin" go install github.com/princjef/gomarkdoc/cmd/gomarkdoc@v1.1.0
 
+      - name: Prefer configured canonical Ubuntu package mirrors
+        working-directory: .
+        run: |
+          python3 -m unittest discover -s scripts -p 'test_ci_ubuntu_apt_mirrors.py'
+          sudo python3 scripts/ci_ubuntu_apt_mirrors.py
+
       - name: Install browser
         working-directory: landing
         run: pnpm exec playwright install --with-deps --only-shell chromium
@@ -471,6 +487,7 @@ jobs:
           pnpm exec nuxt prepare
           pnpm exec vue-tsc --noEmit
           pnpm run test:artifact
+          pnpm run check:advisories
           pnpm run test:registry
           pnpm run lint
           pnpm run generate

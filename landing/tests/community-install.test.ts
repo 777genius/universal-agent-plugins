@@ -7,6 +7,7 @@ import { ref } from 'vue';
 import { createI18n, type LocaleMessageDictionary, type VueMessageType } from 'vue-i18n';
 import { pluginCommands } from '../utils/commands.ts';
 import { isReviewedMarketingKit } from '../data/marketingKitDemo.ts';
+import { installTargets, canonicalInstallTarget, canonicalInstallTargets, cliInstallTargets } from '../data/installTargets.ts';
 
 // Exercise the actual setup expressions, with Nuxt/Vue state supplied by this
 // isolated harness. No signed production data or installer is mutated.
@@ -16,7 +17,7 @@ const component = readFileSync(
 );
 const setup = component
   .match(/<script setup lang="ts">([\s\S]*?)<\/script>/)![1]!
-  .replace(/^import .*;\n/gm, '');
+  .replace(/^import[\s\S]*?from '[^']+';\n/gm, '');
 const script = stripTypeScriptTypes(setup) + '\n({ commands, unavailableDiscoveryReason });';
 
 const targetlessFixture = {
@@ -40,6 +41,8 @@ function panelState({ installable = true, autoDetect = true, current = true, sta
     useInstallPreferencesStore: () => ({ package: { identity: '' }, readPackage: () => ({ targetIds: [], autoDetect: true, expanded: false }), selectPackage: () => {} }),
     usePluginInstallSelection: () => ({
       scope: ref('user'), targetDistributions: ref(new Map()), projectAvailable: ref(false),
+      pinnedPiSource: ref(undefined), pinnedPiSelected: ref(false),
+      pinnedPiReleaseSource: ref(undefined),
       resolution: ref({ unavailable_reason: 'No compatible source.' }),
       updateTargets() {}, updateAutoDetect() {}, updateScope() {},
     }),
@@ -58,6 +61,10 @@ function panelState({ installable = true, autoDetect = true, current = true, sta
     }),
     useDiscoveryIsStale: () => ({ value: stale }),
     clients: [{ id: 'codex', name: 'Codex', icon: 'codex.svg' }],
+    installTargets,
+    canonicalInstallTarget,
+    canonicalInstallTargets,
+    cliInstallTargets,
     resolveDistribution: () => ({ unavailable_reason: 'No compatible source.' }),
     expectedDistribution: () => undefined,
     deliveryLabel: () => '',

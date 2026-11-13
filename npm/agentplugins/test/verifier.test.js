@@ -262,3 +262,110 @@ for (const scenario of [
     }
   });
 }
+
+test("canonical verifier retries transient gateway responses without replacing the pin", async () => {
+  const file = destination();
+  let requests = 0;
+  try {
+    await v.downloadFile(URL, file, PIN, { request: transport((res, req) => {
+      requests++;
+      if (requests < 3) {
+        res.statusCode = requests === 1 ? 502 : 504;
+        req.emit("response", res);
+        res.end();
+        return;
+      }
+      req.emit("response", res);
+      res.end(BODY);
+    }) });
+    assert.equal(requests, 3);
+    assert.deepEqual(fs.readFileSync(file), BODY);
+  } finally {
+    if (fs.existsSync(file)) fs.unlinkSync(file);
+  }
+});
+
+test("canonical verifier exhausts transient errors without creating partial cache files", async () => {
+  const file = destination();
+  let requests = 0;
+  await assert.rejects(v.downloadFile(URL, file, PIN, { request: transport((res, req) => {
+    requests++;
+    res.statusCode = 503;
+    req.emit("response", res);
+    res.end();
+  }) }), /HTTP 503/);
+  assert.equal(requests, 3);
+  assert.equal(fs.existsSync(file), false);
+});
+
+test("pre-response timeout does not retry without an HTTP gateway status", async () => {
+  const file = destination();
+  let attempts = 0;
+  await assert.rejects(v.downloadFile(URL, file, PIN, { request: (url, options) => {
+    attempts++;
+    return transport(() => {}, true)(url, options);
+  } }), /binary download timed out/);
+  assert.equal(attempts, 1, "only HTTP 502/503/504 may be retried");
+  assert.equal(fs.existsSync(file), false);
+});
+
+test("timeout after response cannot retry an opened or partial download", async () => {
+  const file = destination();
+  let attempts = 0;
+  const request = (url, options) => {
+    attempts++;
+    let timeout;
+    const req = transport((res, emitted) => {
+      emitted.emit("response", res);
+      res.write(BODY.subarray(0, 2));
+      process.nextTick(() => timeout());
+    })(url, options);
+    req.setTimeout = (ms, fn) => {
+      assert.equal(ms, 30_000);
+      timeout = fn;
+    };
+    return req;
+  };
+  try {
+    await assert.rejects(v.downloadFile(URL, file, PIN, { request }), /timed out/);
+    assert.equal(attempts, 1, "partial acquisition must never start a retry");
+  } finally {
+    if (fs.existsSync(file)) fs.unlinkSync(file);
+  }
+});
+
+test("pre-response timeout cancellation never retries", async () => {
+  const file = destination(), controller = new AbortController();
+  let attempts = 0;
+  const request = (url, options) => {
+    attempts++;
+    const req = transport(() => {}, true)(url, options);
+    const originalDestroy = req.destroy;
+    let destroyed = false;
+    req.destroy = error => {
+      if (destroyed) return;
+      destroyed = true;
+      originalDestroy(error);
+      controller.abort();
+    };
+    return req;
+  };
+  await assert.rejects(v.downloadFile(URL, file, PIN, {
+    request, signal: controller.signal
+  }), /timed out|cancelled/);
+  assert.equal(attempts, 1);
+  assert.equal(fs.existsSync(file), false);
+});
+
+test("request-side error mimicking a gateway status never retries", async () => {
+  const file = destination();
+  let requests = 0;
+  await assert.rejects(v.downloadFile(URL, file, PIN, {
+    request: transport((_response, request) => {
+      requests++;
+      request.emit("error", new Error("binary download failed with HTTP 503"));
+    })
+  }), /HTTP 503/);
+  assert.equal(requests, 1);
+  assert.equal(fs.existsSync(file), false);
+});

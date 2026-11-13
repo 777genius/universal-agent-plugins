@@ -11,7 +11,7 @@ on:
         required: false
         default: false
       expected_sha:
-        description: Exact lowercase 40-character source commit; required with github_hosted
+        description: Exact workflow/control commit; required with github_hosted
         type: string
         required: false
         default: ""
@@ -28,6 +28,8 @@ concurrency:
 
 jobs:
   build:
+    outputs:
+      route-contract-id: ${{ steps.route-contract.outputs.artifact-id }}
     runs-on: ${{ (github.event_name == 'push' || inputs.github_hosted) && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 20
     steps:
@@ -55,6 +57,51 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          persist-credentials: false
+
+      - name: Select immutable accepted production site source
+        run: python3 scripts/production_site_source.py select "$GITHUB_WORKSPACE" "$RUNNER_TEMP/production-site-control"
+
+      # Network-facing feed verification uses the patched control compiler.
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.26.11"
+          cache: false
+
+      # Keep the renamed CLI Pages site self-contained: every deployment carries
+      # a verified, byte-exact compatibility copy of the registry feeds. This
+      # prevents the normal Pages workflow from overwriting a previous mirror
+      # deployment with a site that only contains the landing page and docs.
+      - name: Verify and stage signed registry feeds
+        env:
+          GOTOOLCHAIN: local
+          REGISTRY_REPOSITORY: 777genius/universal-agent-plugins-registry
+          PAGES_ORIGIN: https://777genius.github.io/universal-agent-plugins-registry/
+          PRODUCT_PAGES_ORIGIN: https://universal-agent-plugins.com/
+        run: |
+          go version
+          test "$(go env GOVERSION)" = go1.26.11
+          previous="${RUNNER_TEMP}/uap-previous-mirror.json"
+          if ! curl --fail --silent --show-error --location --max-time 30 \
+            "${PRODUCT_PAGES_ORIGIN%/}/MIRROR_METADATA.json" > "$previous"; then
+            rm -f "$previous"
+          fi
+          go run ./cmd/agentplugins-registry-mirror \
+            --registry-repository "$REGISTRY_REPOSITORY" \
+            --pages-origin "$PAGES_ORIGIN" \
+            --previous-marker "$previous" \
+            --output "${RUNNER_TEMP}/uap-registry-mirror"
+          mkdir -p landing/public
+          cp -a "${RUNNER_TEMP}/uap-registry-mirror/." landing/public/
+
+      # Offline docs retain the compiler declared by the accepted site source.
+      # Reset setup-go's inherited local mode while it reads the toolchain directive.
+      - uses: actions/setup-go@v6
+        env:
+          GOTOOLCHAIN: auto
+        with:
+          go-version-file: go.mod
+          cache: false
 
       # Keep docs on its own packageManager; landing uses a newer lockfile format.
       - uses: pnpm/action-setup@v5
@@ -71,11 +118,6 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: "22.21.1"
-
-      - uses: actions/setup-go@v6
-        with:
-          go-version: "1.26.10"
-          cache: false
 
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.0.0
         with:
@@ -113,29 +155,6 @@ jobs:
         run: |
           cd "$DOCS_AUTHORING_CHECKOUT"
           GOWORK="$DOCS_AUTHORING_CHECKOUT/go.work" go build -p 2 -o "$RUNNER_TEMP/docs-authoring-preflight" ./cli/plugin-kit-ai/tools/authoring-docs
-
-      # Keep the renamed CLI Pages site self-contained: every deployment carries
-      # a verified, byte-exact compatibility copy of the registry feeds. This
-      # prevents the normal Pages workflow from overwriting a previous mirror
-      # deployment with a site that only contains the landing page and docs.
-      - name: Verify and stage signed registry feeds
-        env:
-          REGISTRY_REPOSITORY: 777genius/universal-agent-plugins-registry
-          PAGES_ORIGIN: https://777genius.github.io/universal-agent-plugins-registry/
-          PRODUCT_PAGES_ORIGIN: https://universal-agent-plugins.com/
-        run: |
-          previous="${RUNNER_TEMP}/uap-previous-mirror.json"
-          if ! curl --fail --silent --show-error --location --max-time 30 \
-            "${PRODUCT_PAGES_ORIGIN%/}/MIRROR_METADATA.json" > "$previous"; then
-            rm -f "$previous"
-          fi
-          go run ./cmd/agentplugins-registry-mirror \
-            --registry-repository "$REGISTRY_REPOSITORY" \
-            --pages-origin "$PAGES_ORIGIN" \
-            --previous-marker "$previous" \
-            --output "${RUNNER_TEMP}/uap-registry-mirror"
-          mkdir -p landing/public
-          cp -a "${RUNNER_TEMP}/uap-registry-mirror/." landing/public/
 
       - name: Install Chromium for static social preview
         working-directory: landing
@@ -182,11 +201,33 @@ jobs:
         working-directory: landing
         run: pnpm run build:pages
 
+      - name: Require published npm CLI to cover advertised capabilities
+        run: node --experimental-strip-types "$RUNNER_TEMP/production-site-control/check-published-capabilities.mjs" "$GITHUB_WORKSPACE"
+
+      - name: Seal actual production source and signed-feed provenance
+        run: python3 "$RUNNER_TEMP/production-site-control/production_site_source.py" seal "$GITHUB_WORKSPACE" "$RUNNER_TEMP/production-site-control"
+
+      - name: Prepare exact selected-source live route contract
+        run: |
+          git show "$GITHUB_SHA:landing/scripts/check-production-routes.mjs" > "$RUNNER_TEMP/production-site-control/check-production-routes.mjs"
+          node --experimental-strip-types "$RUNNER_TEMP/production-site-control/check-production-routes.mjs" prepare "$GITHUB_WORKSPACE" "$RUNNER_TEMP/production-site-routes.json"
+
+      - name: Preserve same-run live route expectations
+        id: route-contract
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: production-site-routes-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/production-site-routes.json
+          if-no-files-found: error
+          retention-days: 1
+
       - uses: actions/configure-pages@v6
 
+      # Only vetted .well-known AI discovery files and .nojekyll may be hidden (artifact gate).
       - uses: actions/upload-pages-artifact@v5
         with:
           path: .pages-dist
+          include-hidden-files: true
 
   deploy:
     environment:
@@ -196,6 +237,10 @@ jobs:
     timeout-minutes: 30
     needs: build
     steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
       - name: Confirm requested deployment commit
         env:
           EXPECTED_SHA: ${{ inputs.expected_sha }}
@@ -208,7 +253,102 @@ jobs:
 
       # Pages can remain in backend file-sync after a successful 115 MB artifact build.
       # Leave a bounded completion window longer than deploy-pages' 10 minute default.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22.21.1"
+          package-manager-cache: false
+
+      - name: Download exact same-run live route expectations
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.build.outputs.route-contract-id }}
+          path: ${{ runner.temp }}/production-site-routes
+
       - id: deployment
         uses: actions/deploy-pages@v5
         with:
           timeout: 1200000
+
+      - name: Verify advertised agent and compatibility routes after deploy
+        run: node landing/scripts/check-production-routes.mjs live "$GITHUB_WORKSPACE" "$RUNNER_TEMP/production-site-routes/production-site-routes.json"
+
+      - name: Verify live SEO routes after deploy
+        run: |
+          set -euo pipefail
+          site=https://universal-agent-plugins.com
+          tmp=$(mktemp -d)
+          trap 'rm -rf "$tmp"' EXIT
+          for pair in \
+            "/ root.html" \
+            "/agent-skills/ skills.html" \
+            "/plugins/ plugins.html" \
+            "/logo-192.webp logo-192.webp" \
+            "/showcase/agent-notifications.webp showcase.webp" \
+            "/BUILD_PROVENANCE.json provenance.json" \
+            "/llms.txt llms.txt" \
+            "/.well-known/ai-catalog.json ai-catalog.json" \
+            "/.well-known/ard.json ard.json" \
+            "/sitemap.xml sitemap.xml"; do
+            read -r route name <<< "$pair"
+            curl --fail --silent --show-error --location \
+              --retry 6 --retry-delay 5 --retry-all-errors --max-time 30 \
+              "$site$route" --output "$tmp/$name"
+            test -s "$tmp/$name"
+          done
+          python3 - "$tmp" <<'PY'
+          import json
+          import os
+          import sys
+          from html.parser import HTMLParser
+          from pathlib import Path
+          from xml.etree import ElementTree
+
+          root = Path(sys.argv[1])
+          site = "https://universal-agent-plugins.com"
+
+          class Links(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.links = []
+                  self.robots = []
+              def handle_starttag(self, tag, attrs):
+                  values = dict(attrs)
+                  if tag == "link":
+                      self.links.append(values)
+                  elif tag == "meta" and values.get("name") == "robots":
+                      self.robots.append(values.get("content", ""))
+
+          for name, path in [("root.html", "/"), ("skills.html", "/agent-skills/")]:
+              html = (root / name).read_text(encoding="utf-8")
+              head = Links()
+              head.feed(html)
+              expected = site + path
+              assert [tag.get("href") for tag in head.links if tag.get("rel") == "canonical"] == [expected], f"{path}: canonical"
+              assert any(tag.get("hreflang") == "x-default" for tag in head.links), f"{path}: hreflang"
+              assert all("noindex" not in value for value in head.robots), f"{path}: noindex"
+
+          plugins = (root / "plugins.html").read_text(encoding="utf-8")
+          assert 'data-count-scope="initial-reviewed-subset-not-full-directory"' in plugins
+          assert "The static page starts with reviewed plugins." not in plugins
+          assert "How standalone Skills work" not in plugins
+          for name in ("logo-192.webp", "showcase.webp"):
+              image = (root / name).read_bytes()
+              assert image[:4] == b"RIFF" and image[8:12] == b"WEBP", f"{name}: not WebP"
+          provenance = json.loads((root / "provenance.json").read_text(encoding="utf-8"))
+          assert provenance.get("workflow_commit") == os.environ["GITHUB_SHA"], "deployed source differs from control commit"
+          assert len(provenance.get("source_commit", "")) == 40, "missing accepted source identity"
+          pinned = json.loads(Path("website/production-source.json").read_text(encoding="utf-8"))
+          assert provenance.get("source_commit") == pinned["source_commit"], "live source commit differs from production pin"
+          assert provenance.get("source_tree") == pinned["source_tree"], "live source tree differs from production pin"
+
+          llms = (root / "llms.txt").read_text(encoding="utf-8")
+          assert llms.startswith("# Universal Agent Plugins\n")
+          assert "independent SKILL.md Skills" in llms
+          catalog = json.loads((root / "ai-catalog.json").read_text(encoding="utf-8"))
+          assert catalog == json.loads((root / "ard.json").read_text(encoding="utf-8"))
+          assert catalog.get("specVersion") == "1.0" and len(catalog.get("entries", [])) >= 2
+          locs = {loc.text for loc in ElementTree.parse(root / "sitemap.xml").getroot().findall(".//{*}loc")}
+          assert site + "/" in locs and site + "/agent-skills/" in locs
+          assert len(locs) >= 100, f"Unexpectedly small sitemap: {len(locs)}"
+          print(f"Live Pages SEO acceptance passed: canonical/hreflang, catalogs, llms.txt, sitemap ({len(locs)} URLs).")
+          PY

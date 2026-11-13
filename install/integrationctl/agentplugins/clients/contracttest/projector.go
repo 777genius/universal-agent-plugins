@@ -155,7 +155,7 @@ func projectorInput(adapter clients.Adapter, root, staging string) clients.Proje
 	if consumer, ok := adapter.(clients.OpenCodeHostProfileConsumer); ok && consumer.UsesOpenCodeHostProfile() {
 		host = OpenCodeV1Host{}
 	}
-	return clients.ProjectionInput{
+	input := clients.ProjectionInput{
 		StagingPath: staging,
 		Envelope:    projectorEnvelope(),
 		Plan: domain.DeliveryPlan{
@@ -173,6 +173,19 @@ func projectorInput(adapter clients.Adapter, root, staging string) clients.Proje
 		},
 		PluginDataPath: data,
 	}
+	// A client that has no MCP transport must still satisfy the generic
+	// projector contract using the Skills that its declaration actually admits.
+	// This is capability-driven, not a client-specific test bypass.
+	if definition, ok := domain.ClientDefinitionFor(adapter.ID()); ok && definition.Capabilities.MCPTransports["streamable-http"] == domain.SupportUnsupported {
+		selected := input.Plan.Components[:0]
+		for _, component := range input.Plan.Components {
+			if component.Kind != domain.ComponentMCPServer {
+				selected = append(selected, component)
+			}
+		}
+		input.Plan.Components = selected
+	}
+	return input
 }
 
 func projectorEnvelope() domain.PackageEnvelope {

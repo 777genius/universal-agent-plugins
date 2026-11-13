@@ -11,6 +11,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/skillspicker"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/mcpskills"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
 )
 
@@ -30,7 +31,7 @@ func newSkillsCommand(app App, opts *options) *cobra.Command {
 	add.Flags().BoolVar(&selection.yes, "yes", false, "accept the reviewed terminal plan without prompting")
 	add.Flags().BoolVar(&selection.ui, "ui", false, "open the bundled browser picker (interactive terminal only)")
 	add.Flags().BoolVar(&selection.noUI, "no-ui", false, "select and review Skills in the terminal")
-	root.AddCommand(add, newSkillsListCommand(app, opts))
+	root.AddCommand(add, newSkillsListCommand(app, opts), newSkillsMCPCommand(opts, mcpskills.New))
 	return root
 }
 func (selection *skillsAddOptions) validate(opts *options, interactive bool) error {

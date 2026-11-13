@@ -44,7 +44,12 @@ a matrix value preserved for check-name compatibility is not provider evidence.
 This opt-in does not change repository variables or route another pull request.
 Fork behavior is unchanged. ARM and architecture-specific overrides, native
 research physical-host requirements, public qualification runner identities,
-frozen VS Code workflows and signing jobs keep their existing routing.
+frozen VS Code workflows and signing jobs keep their existing routing. The
+`Coverage` job also keeps `CI_LINUX_RUNNER` for same-host reproducibility of
+strict Linux root-owned system-executable tests: on GitHub-hosted Ubuntu these
+inert namespace tests can fail their OS-owned binary admission even though the
+same code passed on the qualified Namespace runner. Coverage is **not skipped**
+and its checks/thresholds remain unchanged; a fork still uses GitHub-hosted.
 
 Apply the label **before** the push that starts the desired checks. Adding a
 label does not reroute an existing queued job, and these workflows deliberately
@@ -156,7 +161,7 @@ dispatch, coordinate a handoff of only that queued run. Do not cancel active or
 unrelated publication work, change repository-wide runner variables, or replace
 the workflow's freshly built artifact with a local artifact.
 
-Rollback: set `CI_LINUX_RUNNER` to the prior provider (`ubuntu-latest` for
-review-router-ai, `ubicloud-standard-4` for universal-agent-plugins), or unset it
-to restore each workflow's original GitHub-hosted label. Restore any architecture
+To return Linux execution to GitHub-hosted runners, unset `CI_LINUX_RUNNER`
+to restore each workflow's original GitHub-hosted label. Do not restore retired
+Ubicloud labels. Restore any architecture
 specific overrides separately. No source or test logic changes are needed.

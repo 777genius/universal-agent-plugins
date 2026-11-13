@@ -16,7 +16,7 @@ localeDisposition: "current-translation"
 [CLI](https://github.com/777genius/universal-agent-plugins/releases/latest),
 нативный выпуск, добавляет локальный API управления
 с процессом под управлением приложения, обнаружение клиентов и профилей
-без изменений и поддержку нативных расширений Pi в пользовательской области.
+без изменений и поддержку расширений Pi, Skills и MCP stdio/Streamable HTTP в пользовательской и совместимой проектной областях.
 Подробнее: [локальное управление](../use/manage#local-management-api).
 Пакетные каналы могут обновляться позднее; проверьте `agentplugins version`.
 
@@ -41,8 +41,7 @@ localeDisposition: "current-translation"
 
 Проектный результат часто остаётся **Prepared**, пока нужны доверие, перезапуск,
 явная конфигурация или новый сеанс. Проектная установка ChatGPT не поддерживается.
-VS Code подготавливает файлы одной локальной папки; наблюдение метаданных
-не доказывает запуск MCP или модели. См.
+См.
 [поддержку проектов по клиентам](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)
 и [указатель проектных проверок](https://github.com/777genius/universal-agent-plugins/blob/main/docs/evidence/PROJECT_INSTALLATION.md).
 
@@ -52,20 +51,27 @@ VS Code подготавливает файлы одной локальной п
 не являются сертификацией поставщиков или обещанием полной готовности для
 любого производственного сценария.
 
-## Нативные расширения Pi {#pi-native-extensions}
+## Hermes и Antigravity: поддержка в выпущенном CLI {#hermes-antigravity-source}
 
-Актуальный CLI принимает `--target pi` для пакетов, объявляющих
-[нативное расширение Pi](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_CONTRACT.md).
-Поддерживаются нативные расширения в пользовательской и совместимой проектной областях; проектные Skills и MCP имеют отдельные правила установки, доверия и проверки активации (см. [проектную совместимость](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)). После установки
-перезагрузите ресурсы или перезапустите Pi.
+Нативный CLI **0.1.108** опубликован 2026-11-13 и включает Hermes и Antigravity. Проверка выпуска и продвижение завершились успешно; допуск пакетов подписанного Directory проверяется отдельно. Это не означает публикацию npm 0.1.108, аутентификацию у провайдера или автоматическую активацию.
 
-[Зафиксированные результаты нативных тестов](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_EVIDENCE.md)
-относятся к Pi 1.4.0 в Linux. Они охватывают нативное обнаружение и выполнение
-выбранного расширения, обновление, восстановление отсутствующего пакета,
-удаление и сохранение чужих расширений. Они не подтверждают выполнение
-в macOS или Windows, уведомления рабочего стола, звук или фокус терминала.
-Успешная установка сама по себе не доказывает, что запущенный сеанс Pi загрузил
-расширение.
+[0.1.108](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.108) · [43337036671](https://github.com/777genius/universal-agent-plugins/actions/runs/43337036671) · [43454712919](https://github.com/777genius/universal-agent-plugins/actions/runs/43454712919) · source `8c3cfa28e332c533b0cc0845739c0275730a4285`.
+
+**Исторические данные жизненного цикла (2026-11-10):**
+
+**Hermes 0.23.0:** Skills пользователя и принадлежащие UAP настройки MCP stdio/Streamable HTTP; в проекте — только Skills. Project MCP отклоняется без перенаправления в настройки пользователя. Linux x64, macOS arm64 и нативная Windows x64 прошли первое и повторное добавление, обновление, восстановление, удаление, обнаружение Skills в недоверенном проекте и изоляцию A/B: [42813277862](https://github.com/777genius/universal-agent-plugins/actions/runs/42813277862), UAP `a50c8a245f1c273efb3d171f4c54ed540475336a`. Четыре локальных HTTP-обмена `initialize`/`tools/list` на каждой ОС подтверждают соединение и обнаружение инструментов, но не `tools/call`, работу модели, аутентификацию или доверенное выполнение в проекте. SSE и хуки не поддерживаются. Переносимые команды проецируются в Skills; команды только для явного вызова исключаются, если клиент не может обеспечить это ограничение.
+
+Более поздняя проверка [#884](https://github.com/777genius/universal-agent-plugins/pull/884) подтверждает нативный User stdio `tools/call` Hermes 0.23.0 на Linux/macOS/Windows через официальный устаревший драйвер `run_agent.py` и локального сценарного провайдера. Обычный `hermes chat`, аутентификация провайдера и выполнение в доверенном Project не проверены.
+
+**Antigravity:** принадлежащие UAP нативные пакеты плагинов со Skills и MCP stdio/Streamable HTTP в областях пользователя и проекта имеют статус **Prepared**. Настоящий `agy` 1.5.3 прошёл строгую валидацию и изолированные CLI import/list/uninstall на Linux, macOS и Windows: [42804680737](https://github.com/777genius/universal-agent-plugins/actions/runs/42804680737). Это не доказывает обнаружение и включение в IDE, запуск MCP, выполнение инструментов или аутентификацию; проверка IDE остаётся отдельной. UAP не предоставляет доверие проекту.
+
+## Расширения Pi, Skills и MCP {#pi-native-extensions}
+
+Начиная с CLI `0.1.102`, опубликованный CLI поддерживает `--target pi` для совместимых пакетов Agent Plugins 1.0: [нативных расширений Pi](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_CONTRACT.md), Skills, MCP stdio и Streamable HTTP. Поддерживаются область пользователя и совместимая область проекта; MCP SSE и универсальные App-компоненты не поддерживаются. В проекте расширения размещаются в `.pi/extensions`, Skills — в `.pi/skills`, а принадлежащие UAP MCP-настройки — в `.pi/mcp.json`. После установки Pi может потребоваться доверие проекту, перезагрузка ресурсов или новый сеанс.
+
+**Поддержка Pi в CLI не означает, что любой выпуск подписанного каталога уже разрешает Pi.** На 9 ноября 2026 года ни одна из 37 активных политик Directory не содержит цель `pi`. Поэтому короткая команда `add context7 --target pi` корректно отказывает. Точный источник `github:owner/repo@FULL_SHA//path` — отдельный явно выбранный путь, который также проходит валидацию CLI; он не заменяет подпись и полномочия каталога.
+
+[Проектные E2E](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md) и [реальный Pi `tools/call` (#656)](https://github.com/777genius/universal-agent-plugins/pull/656) подтверждают отдельные сценарии загрузки Skills/MCP и выполнения с локальной сценарной моделью на Linux, macOS и Windows. Ранние [наблюдения расширений](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_EVIDENCE.md) относились только к Linux — это историческая граница, а не сегодняшнее ограничение адаптера. Установка файлов не доказывает OAuth, доступ к облачной модели или активацию клиента.
 
 ## Исторический черновик установщика 0.1.55
 

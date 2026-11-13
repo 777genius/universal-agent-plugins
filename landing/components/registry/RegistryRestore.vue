@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import monitorImage from '~/assets/images/restore-monitor.png';
+import monitorImage from '~/assets/images/restore-monitor.webp';
 import { marketingKitName, marketingKitVersion } from '~/data/marketingKitDemo';
 import { restoreDemoCommands, type RestoreDemoMode } from '~/data/restoreDemo';
 

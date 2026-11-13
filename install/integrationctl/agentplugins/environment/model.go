@@ -124,6 +124,9 @@ type LockedGitSource struct {
 }
 
 type LockedRegistrySource struct {
+	// FeedID binds the pin to the trusted signed publication lineage.
+	// Empty retains historical Directory v1 lock semantics.
+	FeedID          string   `json:"feed_id,omitempty"`
 	Distribution    string   `json:"distribution"`
 	ProductID       string   `json:"product_id"`
 	DistributionID  string   `json:"distribution_id"`

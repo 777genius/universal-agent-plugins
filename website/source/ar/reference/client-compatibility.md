@@ -27,9 +27,23 @@ translationRequired: false
 | تشغيل MCP | تهيّأت عملية أو وصلة مسجلة وأجرت الاستدعاءات المختبرة. |
 | المصادقة واستخدام النموذج | لا يثبتان إلا إذا اختبرتهما الأدلة صراحةً. |
 
-غالبًا ما يبقى تسليم المشروع **Prepared** ما دام هناك عمل متعلق بالثقة أو إعادة التحميل أو الإعداد الصريح أو الجلسة. تثبيت مشاريع ChatGPT غير مدعوم صراحةً. يجهّز نطاق المشروع في VS Code ملفات لمجلد محلي واحد؛ ولا تُعد ملاحظة بياناته الوصفية المثبتة دليلًا على بدء MCP أو تنفيذ النموذج. راجع [دعم المشاريع حسب العميل](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md) و[فهرس أدلة المشاريع](https://github.com/777genius/universal-agent-plugins/blob/main/docs/evidence/PROJECT_INSTALLATION.md).
+غالبًا ما يبقى تسليم المشروع **Prepared** ما دام هناك عمل متعلق بالثقة أو إعادة التحميل أو الإعداد الصريح أو الجلسة. تثبيت مشاريع ChatGPT غير مدعوم صراحةً. راجع [دعم المشاريع حسب العميل](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md) و[فهرس أدلة المشاريع](https://github.com/777genius/universal-agent-plugins/blob/main/docs/evidence/PROJECT_INSTALLATION.md).
 
 تحافظ السجلات أدناه على الإصدارات التاريخية الدقيقة وإصدارات العملاء وهويات المنصات والقيود المرصودة. ولا تنطبق تلقائيًا على الإصدار الحالي أو إصدار عميل لاحق أو نطاق آخر أو حزمة غير مختبرة. UAP أدوات مجتمعية مستقلة؛ وهذه ملاحظات محدودة أجراها القائمون على الصيانة، وليست اعتمادًا من المزوّد أو ادعاء بجاهزية شاملة للإنتاج.
+
+## Hermes وAntigravity: الدعم في إصدار CLI المنشور {#hermes-antigravity-source}
+
+نُشر CLI الأصلي **0.1.108** في 2026-11-13 ويتضمن Hermes وAntigravity. نجح التحقق من الإصدار وترقيته؛ وتبقى أهلية كل حزمة في Directory الموقّع مستقلة. لا يعني ذلك نشر npm 0.1.108 أو مصادقة المزوّد أو التفعيل التلقائي.
+
+[0.1.108](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.108) · [43337036671](https://github.com/777genius/universal-agent-plugins/actions/runs/43337036671) · [43454712919](https://github.com/777genius/universal-agent-plugins/actions/runs/43454712919) · source `8c3cfa28e332c533b0cc0845739c0275730a4285`.
+
+**أدلة دورة الحياة التاريخية (2026-11-10):**
+
+**Hermes 0.23.0:** مهارات Skills للمستخدم وإعدادات MCP عبر stdio/Streamable HTTP التي يملكها UAP؛ وفي المشروع، Skills فقط. يُرفض Project MCP دون تحويله إلى إعدادات المستخدم. اجتازت Linux x64 وmacOS arm64 وWindows x64 الأصلية الإضافة الأولى والمكررة والتحديث والإصلاح والإزالة والاكتشاف في مشروع غير موثوق والعزل بين A وB: [42813277862](https://github.com/777genius/universal-agent-plugins/actions/runs/42813277862)، عند مصدر UAP `a50c8a245f1c273efb3d171f4c54ed540475336a`. تثبت أربع تبادلات HTTP عبر الحلقة المحلية لكل نظام `initialize`/`tools/list` الاتصال واكتشاف الأدوات؛ ولا تثبت `tools/call` أو استخدام نموذج أو المصادقة أو التنفيذ في مشروع موثوق. لا يُدعم SSE أو hooks. تُحوّل الأوامر المحمولة إلى Skills؛ وتُحجب الأوامر التي تتطلب استدعاءً صريحًا فقط عندما لا يستطيع العميل فرض ذلك.
+
+يثبت الدليل اللاحق [#884](https://github.com/777genius/universal-agent-plugins/pull/884) استدعاء `tools/call` الأصلي عبر User stdio في Hermes 0.23.0 على Linux/macOS/Windows باستخدام المشغّل الرسمي القديم `run_agent.py` ومزوّد محلي مبرمج. يبقى `hermes chat` الافتراضي ومصادقة المزوّد والتنفيذ في Project موثوق غير مؤهلة.
+
+**Antigravity:** تبقى حزم الإضافات الأصلية التي يملكها UAP، مع Skills وMCP عبر stdio/Streamable HTTP في نطاقَي المستخدم والمشروع، بحالة **Prepared**. اجتاز `agy` 1.5.3 الحقيقي التحقق الصارم وعمليات CLI import/list/uninstall المعزولة على Linux وmacOS وWindows: [42804680737](https://github.com/777genius/universal-agent-plugins/actions/runs/42804680737). لا تثبت هذه الملاحظات الاكتشاف أو التمكين داخل IDE الفعلي، أو بدء MCP أو تنفيذ الأدوات أو المصادقة؛ ويظل التحقق من IDE منفصلًا. لا يمنح UAP الثقة للمشروع.
 
 ## امتدادات Pi الأصلية {#pi-native-extensions}
 

@@ -90,6 +90,7 @@ type controller struct {
 	work                 context.Context
 	cancelWork           context.CancelFunc
 	runner               strictRunner
+	checkExec            func(string) error
 	files                map[string][]byte
 	bytes                int
 	output               *os.File

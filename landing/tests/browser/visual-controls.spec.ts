@@ -10,7 +10,7 @@ test('flat filters retain keyboard selection, category search, and reset', async
   await expect(page.locator('.hero-quick-start__label').filter({ hasText: 'Copy and run' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Other installation methods' })).toHaveAttribute(
     'href',
-    'https://github.com/777genius/universal-agent-plugins#install-the-cli',
+    /\/download\/$/,
   );
   await expect(page.getByText('No target flag means auto-detect')).toHaveCount(0);
   const controls = page.getByRole('search', { name: 'Filter plugins' });
@@ -47,6 +47,100 @@ test('flat filters retain keyboard selection, category search, and reset', async
   await expect(page.locator('.plugin-card').first()).toBeVisible();
   await page.getByRole('button', { name: 'Clear plugin search' }).click();
   await expect(page.getByRole('searchbox', { name: 'Search plugins' })).toHaveValue('');
+});
+
+test('plugin filter widths keep Source and Owner readable on desktop and mobile', async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await page.goto('./plugins/');
+  await hydrated(page);
+  const controls = page.getByRole('search', { name: 'Filter plugins' });
+  const source = controls.getByRole('combobox', { name: 'Filter by source' });
+  const owner = controls.getByRole('combobox', { name: 'Filter by owner' });
+  const trust = controls.getByRole('combobox', { name: 'Filter by trust level' });
+
+  for (const width of [1600, 1521, 1440, 1100, 800, 390, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    if (width <= 720) {
+      const toggle = controls.getByRole('button', { name: /More filters|Hide filters/ });
+      if ((await toggle.getAttribute('aria-expanded')) === 'false') await toggle.click();
+    }
+    await expect(source).toBeVisible();
+    await expect(owner).toBeVisible();
+    await expect(trust).toBeVisible();
+    await expect(source).toContainText('All sources');
+    await expect(owner).toHaveValue('All owners');
+
+    const sourceTextFits = await source.locator('.app-select__value').evaluate(
+      (el) => el.scrollWidth <= el.clientWidth + 1,
+    );
+    const ownerTextFits = await owner.evaluate((el) => {
+      const input = el as HTMLInputElement;
+      const context = document.createElement('canvas').getContext('2d')!;
+      context.font = getComputedStyle(input).font;
+      return context.measureText(input.value).width <= input.clientWidth - 2;
+    });
+    expect(sourceTextFits, `Source label clipped at ${width}px`).toBe(true);
+    expect(ownerTextFits, `Owner label clipped at ${width}px`).toBe(true);
+
+    const sourceBounds = (await source.boundingBox())!;
+    const ownerBounds = (await owner.boundingBox())!;
+    const trustBounds = (await trust.boundingBox())!;
+    expect(sourceBounds.x).toBeGreaterThanOrEqual(0);
+    expect(ownerBounds.x + ownerBounds.width).toBeLessThanOrEqual(width);
+    if (width > 1520) {
+      expect(Math.abs(sourceBounds.width - trustBounds.width)).toBeLessThan(3);
+      expect(Math.abs(ownerBounds.y - trustBounds.y)).toBeLessThan(3);
+    } else if (width <= 560) {
+      expect(ownerBounds.y).toBeGreaterThan(sourceBounds.y + 25);
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    if (width === 1600 || width === 390) {
+      await testInfo.attach(`catalog-filters-${width}`, {
+        body: await controls.screenshot({ animations: 'disabled' }),
+        contentType: 'image/png',
+      });
+    }
+  }
+});
+
+test('the Plugins tab does not show a crawler notice or an unrelated Skills guide', async ({
+  page,
+}) => {
+  await page.goto('./plugins/');
+  await hydrated(page);
+  await expect(page.locator('.unified-catalog__heading')).toHaveAttribute(
+    'data-count-scope',
+    'initial-reviewed-subset-not-full-directory',
+  );
+  await expect(page.locator('.unified-catalog__discovery-note')).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'How standalone Skills work' })).toHaveCount(0);
+  await page.goto('./plugins/?tab=skills');
+  await hydrated(page);
+  await expect(page.getByRole('link', { name: 'How standalone Skills work' })).toBeVisible();
+});
+
+test('translated desktop filter labels do not collide with dropdown arrows', async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.setViewportSize({ width: 1521, height: 900 });
+  for (const locale of ['ru', 'es', 'pt', 'fr']) {
+    await page.goto(`./${locale}/plugins/`);
+    await hydrated(page);
+    const controls = page.locator('.catalog-controls--plugins');
+    const collisions = await controls.locator('.app-select__trigger').evaluateAll((triggers) =>
+      triggers.flatMap((trigger) => {
+        const value = trigger.querySelector('.app-select__value > span:last-child');
+        const arrow = trigger.querySelector('.app-select__chevron');
+        if (!value || !arrow || !trigger.getBoundingClientRect().width) return [];
+        return value.getBoundingClientRect().right > arrow.getBoundingClientRect().left - 1
+          ? [trigger.getAttribute('aria-label') ?? value.textContent ?? 'unknown']
+          : [];
+      }),
+    );
+    expect(collisions, `Clipped desktop filters in ${locale}`).toEqual([]);
+  }
 });
 
 test('numbered benefits remain readable in both themes and responsive layouts', async ({

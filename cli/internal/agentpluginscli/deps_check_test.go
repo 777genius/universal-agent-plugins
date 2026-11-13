@@ -320,3 +320,45 @@ func TestDependencyCheckCancellationAndOperationalClassification(t *testing.T) {
 		t.Fatal("cancellation lost its distinct outcome")
 	}
 }
+
+// The policy verdict must be emitted through the existing offline, versioned
+// dependency integrity contract; missing or denied policy never returns success.
+func TestDependencyCheckOfflinePolicyGateCLI(t *testing.T) {
+	f := newDependencyCheckFixture(t)
+	pin := seedDependencyCheckPackage(t, f, "demo", "")
+	writeDependencyCheckAgreement(t, f, []environment.LockedPackage{pin}, "demo")
+	path := filepath.Join(f.root, "policy.yml")
+	write := func(body string) {
+		t.Helper()
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("schema_version: 1\nsources:\n  allow_hosts: [github.com]\n")
+	before := observeDependencyCheckFiles(t, f.root)
+	report, _ := executeDependencyCheck(t, f, dependencyCheckValid, "--policy", path)
+	found := false
+	for _, check := range report.Checks {
+		if check.Stage == "policy" && check.Outcome == dependencyCheckValid {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("offline policy approval did not produce a policy check")
+	}
+	assertDependencyCheckFilesUnchanged(t, f.root, before)
+
+	write("schema_version: 1\nsources:\n  deny_hosts: [github.com]\n")
+	before = observeDependencyCheckFiles(t, f.root)
+	report, _ = executeDependencyCheck(t, f, dependencyCheckInvalid, "--policy", path)
+	requireDependencyCheckCode(t, report, "policy_denied")
+	assertDependencyCheckFilesUnchanged(t, f.root, before)
+
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	before = observeDependencyCheckFiles(t, f.root)
+	report, _ = executeDependencyCheck(t, f, dependencyCheckUnavailable, "--policy", path)
+	requireDependencyCheckCode(t, report, "policy_unavailable")
+	assertDependencyCheckFilesUnchanged(t, f.root, before)
+}

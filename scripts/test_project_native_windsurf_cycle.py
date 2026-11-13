@@ -33,6 +33,39 @@ class WindsurfCycleContracts(unittest.TestCase):
         self.assertEqual(len(self.commands),len(cycle.STAGES))
         self.assertTrue(all(len(raw)<=1<<20 for raw in self.bodies().values()))
 
+    def test_add_public_scope_and_native_action_are_exact(self):
+        # The A/B fixture uses private identifiers; the public DTO must say "project".
+        baseline=copy.deepcopy(self.commands)
+        stage=next(row for row in self.commands if row["stage"]=="add-a")
+        original=cycle.load(cycle.stream(stage["value"]["stdout"]))
+        public=original["data"]
+        output=public["targets"][0]["output"]
+        self.assertEqual(public["environment"]["scope"],"project")
+        self.assertEqual(output["scope"],"project")
+        self.assertEqual(output["readiness"],"needs_action")
+        for location,key,value in (
+            ("environment","scope","a"),
+            ("environment","scope_selection_reason","implicit"),
+            ("environment","saved",True),
+            ("output","scope","a"),
+            ("output","readiness","active"),
+            ("output","next_action","different guidance"),
+            ("action","actor","installer"),
+        ):
+            with self.subTest(location=location,key=key):
+                self.commands=copy.deepcopy(baseline)
+                row=next(row for row in self.commands if row["stage"]=="add-a")
+                document=cycle.load(cycle.stream(row["value"]["stdout"]))
+                envelope=document["data"]
+                result=envelope["targets"][0]["output"]
+                target={"environment":envelope["environment"],"output":result,
+                        "action":result["next_actions"][0]}[location]
+                target[key]=value
+                row["value"]["stdout"]=wire(cycle.compact(document))
+                with self.assertRaises(ValueError):
+                    self.admit()
+        self.commands=baseline
+
     def test_typed_a2_proof_schema_source_policy_phase_hash_refusals(self):
         index=next(i for i,row in enumerate(self.proofs) if row["stage"]=="update-a")
         original=copy.deepcopy(self.proofs)

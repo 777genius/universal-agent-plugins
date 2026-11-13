@@ -116,8 +116,12 @@ func validateIsolationProof(proof isolationProof, uid, gid int, parent uint64, e
 	return nil
 }
 func (c *controller) isolationCommand(argv []string, cwd string, env map[string]string) (ports.Command, error) {
+	check := c.checkExec
+	if check == nil {
+		check = trustedSystem
+	}
 	for _, path := range []string{"/usr/bin/unshare", "/usr/bin/setpriv", "/usr/bin/env", "/usr/bin/python3"} {
-		if err := trustedSystem(path); err != nil {
+		if err := check(path); err != nil {
 			return ports.Command{}, err
 		}
 	}

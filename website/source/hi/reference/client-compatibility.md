@@ -27,9 +27,23 @@ CLI 0.1.94 से, स्रोत आर्ग्युमेंट के ब�
 | MCP रनटाइम | दर्ज प्रक्रिया या कनेक्शन प्रारंभ हुआ और जाँची गई कॉल पूरी कीं। |
 | प्रमाणीकरण और मॉडल उपयोग | केवल तभी सिद्ध, जब प्रमाण ने स्पष्ट रूप से इन्हें जाँचा हो। |
 
-ट्रस्ट, रीलोड, स्पष्ट कॉन्फ़िगरेशन या सत्र का काम बाकी होने पर प्रोजेक्ट डिलीवरी अक्सर **Prepared** रहती है। ChatGPT प्रोजेक्ट इंस्टॉलेशन स्पष्ट रूप से असमर्थित है। VS Code प्रोजेक्ट स्कोप एक लोकल फ़ोल्डर के लिए फ़ाइलें तैयार करता है; उसका पिन किया मेटाडेटा अवलोकन MCP शुरू होने या मॉडल निष्पादन का प्रमाण नहीं है। [क्लाइंट के अनुसार प्रोजेक्ट समर्थन](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md) और [प्रोजेक्ट प्रमाण सूचकांक](https://github.com/777genius/universal-agent-plugins/blob/main/docs/evidence/PROJECT_INSTALLATION.md) देखें।
+ट्रस्ट, रीलोड, स्पष्ट कॉन्फ़िगरेशन या सत्र का काम बाकी होने पर प्रोजेक्ट डिलीवरी अक्सर **Prepared** रहती है। ChatGPT प्रोजेक्ट इंस्टॉलेशन स्पष्ट रूप से असमर्थित है। [क्लाइंट के अनुसार प्रोजेक्ट समर्थन](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md) और [प्रोजेक्ट प्रमाण सूचकांक](https://github.com/777genius/universal-agent-plugins/blob/main/docs/evidence/PROJECT_INSTALLATION.md) देखें।
 
 नीचे के रिकॉर्ड सटीक ऐतिहासिक रिलीज़, क्लाइंट संस्करण, प्लेटफ़ॉर्म पहचान और देखी गई सीमाएँ सुरक्षित रखते हैं। वे अपने-आप वर्तमान रिलीज़, बाद के क्लाइंट संस्करण, दूसरे स्कोप या न जाँचे पैकेज पर लागू नहीं होते। UAP स्वतंत्र सामुदायिक टूल है। ये रखरखावकर्ताओं के सीमित अवलोकन हैं, विक्रेता प्रमाणन या हर जगह उत्पादन-तैयारी का दावा नहीं।
+
+## Hermes और Antigravity: जारी CLI में समर्थन {#hermes-antigravity-source}
+
+नेटिव CLI **0.1.108** 2026-11-13 को प्रकाशित हुआ और इसमें Hermes तथा Antigravity शामिल हैं। रिलीज़ सत्यापन और प्रमोशन सफल रहे; हस्ताक्षरित Directory में पैकेज की पात्रता अलग से जाँची जाती है। यह npm 0.1.108 के प्रकाशन, प्रदाता प्रमाणीकरण या स्वचालित सक्रियण का दावा नहीं है।
+
+[0.1.108](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.108) · [43337036671](https://github.com/777genius/universal-agent-plugins/actions/runs/43337036671) · [43454712919](https://github.com/777genius/universal-agent-plugins/actions/runs/43454712919) · source `8c3cfa28e332c533b0cc0845739c0275730a4285`.
+
+**ऐतिहासिक जीवनचक्र प्रमाण (2026-11-10):**
+
+**Hermes 0.23.0:** उपयोगकर्ता Skills और UAP के स्वामित्व वाले stdio/Streamable HTTP MCP कॉन्फ़िगरेशन; प्रोजेक्ट में केवल Skills। Project MCP अस्वीकार होता है और उपयोगकर्ता कॉन्फ़िगरेशन में नहीं भेजा जाता। Linux x64, macOS arm64 और नेटिव Windows x64 पर पहली तथा दोबारा जोड़ने की क्रिया, अपडेट, रिपेयर, हटाना, बिना ट्रस्ट वाले प्रोजेक्ट में पहचान और A/B अलगाव पास हुए: [42813277862](https://github.com/777genius/universal-agent-plugins/actions/runs/42813277862), UAP `a50c8a245f1c273efb3d171f4c54ed540475336a`। हर OS पर चार लूपबैक HTTP `initialize`/`tools/list` आदान-प्रदान कनेक्शन और टूल पहचान सिद्ध करते हैं; `tools/call`, मॉडल उपयोग, प्रमाणीकरण या विश्वसनीय प्रोजेक्ट निष्पादन नहीं। SSE और hooks समर्थित नहीं हैं। पोर्टेबल कमांड Skills के रूप में तैयार होते हैं; केवल स्पष्ट आह्वान वाले कमांड रोक दिए जाते हैं यदि क्लाइंट यह नियम लागू नहीं कर सकता।
+
+बाद का नेटिव प्रमाण [#884](https://github.com/777genius/universal-agent-plugins/pull/884) आधिकारिक पुराने `run_agent.py` ड्राइवर और स्थानीय स्क्रिप्टेड प्रदाता के माध्यम से Linux/macOS/Windows पर Hermes 0.23.0 User stdio `tools/call` सिद्ध करता है। डिफ़ॉल्ट `hermes chat`, प्रदाता प्रमाणीकरण और विश्वसनीय Project निष्पादन अभी प्रमाणित नहीं हैं।
+
+**Antigravity:** उपयोगकर्ता और प्रोजेक्ट स्कोप में UAP के स्वामित्व वाले नेटिव प्लगइन बंडल, Skills और stdio/Streamable HTTP MCP के साथ, **Prepared** रहते हैं। वास्तविक `agy` 1.5.3 ने Linux, macOS और Windows पर सख्त वैलिडेशन और अलग CLI import/list/uninstall पास किए: [42804680737](https://github.com/777genius/universal-agent-plugins/actions/runs/42804680737)। ये अवलोकन वास्तविक IDE में पहचान या सक्षम होने, MCP शुरू होने, टूल निष्पादन या प्रमाणीकरण को सिद्ध नहीं करते; IDE की जाँच अलग बाकी है। UAP प्रोजेक्ट को ट्रस्ट नहीं देता।
 
 ## Pi के नेटिव एक्सटेंशन {#pi-native-extensions}
 

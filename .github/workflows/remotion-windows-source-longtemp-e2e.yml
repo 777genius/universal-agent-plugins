@@ -1,0 +1,96 @@
+name: Remotion Windows source long TEMP E2E
+
+on:
+  pull_request:
+    paths:
+      - 'install/integrationctl/agentplugins/adapters/sourceacquisition/**'
+      - 'scripts/remotion_windows_long_temp_e2e.py'
+      - '.github/workflows/remotion-windows-source-longtemp-e2e.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  remotion-long-temp:
+    runs-on: windows-2025
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+        # Git for Windows defaults to CRLF, which would change embedded pinned
+        # JSON schema bytes before Go's embed.FS reads them.
+        env:
+          GIT_CONFIG_COUNT: '1'
+          GIT_CONFIG_KEY_0: core.autocrlf
+          GIT_CONFIG_VALUE_0: 'false'
+      - name: Require byte-exact Git schemas and immutable fixtures
+        shell: pwsh
+        run: |
+          git -c core.autocrlf=false checkout-index --force --all
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          @'
+          import hashlib
+          import pathlib
+          import subprocess
+          pins = {
+              "tests/live-install/fixtures.json": "cd7ba20b2144343645eed1498e4e810f47d4113811ddbfea72790294c2345a5d",
+              "install/integrationctl/agentplugins/adapters/specregistry/schemas/1.0.0/plugin.schema.json": "0a4aad95ce337878ad38802ebf0daa3fde76abe3f65400c86bcbb1ec0b3ab883",
+              "install/integrationctl/agentplugins/adapters/specregistry/schemas/1.0.0/mcp.schema.json": "6539175bfcdf43085855183e86da40ea94b166547a72b47ae9a0a390516d3acb",
+          }
+          for path, expected in pins.items():
+              blob = subprocess.check_output(["git", "show", "HEAD:" + path])
+              disk = pathlib.Path(path).read_bytes()
+              if blob != disk or hashlib.sha256(blob).hexdigest() != expected:
+                  raise SystemExit("pinned checkout bytes differ for " + path)
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.11'
+          cache: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Build exact source CLI for Windows
+        shell: pwsh
+        env:
+          UAP_SOURCE_CLI: ${{ runner.temp }}\agentplugins-source.exe
+        run: |
+          Push-Location cli
+          try {
+            go build -o $env:UAP_SOURCE_CLI ./cmd/agentplugins
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally {
+            Pop-Location
+          }
+      - name: Install genuine pinned Codex CLI
+        shell: pwsh
+        run: |
+          npm.cmd install --global '@openai/codex@0.153.4'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          codex --version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Real immutable Remotion Skill lifecycle in two Windows TEMP profiles
+        shell: pwsh
+        env:
+          UAP_SOURCE_CLI: ${{ runner.temp }}\agentplugins-source.exe
+          PYTHONDONTWRITEBYTECODE: '1'
+          GIT_TERMINAL_PROMPT: '0'
+        run: |
+          python scripts/remotion_windows_long_temp_e2e.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Preserve real exact-source evidence on failure
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4.6.2
+        with:
+          name: remotion-windows-source-longtemp
+          path: ${{ runner.temp }}\remotion-windows-source-longtemp.json
+          if-no-files-found: warn
+          retention-days: 7

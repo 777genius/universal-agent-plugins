@@ -21,3 +21,12 @@ overrides:
   fast-uri@>=3.0.0 <3.1.8: 3.1.8
   js-yaml@>=4.0.0 <4.3.2: 4.3.2
   nanoid@>=3.0.0 <3.3.18: 3.3.18
+  # GHSA-3g3m-2fjr-6pw4 / GHSA-g3hv-75wg-m249: transitive parents
+  # still require old vulnerable major ranges. Explicit fixed-major pins
+  # need exact-lock lint, typecheck, generate and full browser E2E before merge.
+  # Drop them only after upstream parents publish compatible safe ranges.
+  # eslint-plugin-import-x 4.17.1 imports minimatch.makeRe, removed in v11.
+  # Upstream 4.18.1 replaces it with the supported Minimatch API and declares v11.
+  'eslint-plugin-import-x@4.17.1': 4.18.1
+  'glob@>=10.0.0 <14.0.3': 14.0.4
+  'minimatch@>=7.0.0 <11.0.1': 11.0.5

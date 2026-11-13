@@ -4,7 +4,7 @@ import { clientLandingPages } from '../../data/clients';
 
 for (const scenario of [
   { name: 'registry', path: './agents/codex/', selector: '.agent-page__install .command-snippet', copy: 'Copy command', copied: 'Command copied' },
-  { name: 'download', path: './download/', selector: '.download-section__steps .command-snippet', copy: 'Copy', copied: 'Copied' },
+  { name: 'download', path: './download/', selector: '.download-section__command .command-snippet', copy: 'Copy', copied: 'Copied' },
 ]) {
   test(`${scenario.name} copy refuses false success and cleans up after browser denial`, async ({ page }) => {
     await page.addInitScript(() => {
@@ -60,33 +60,19 @@ for (const scenario of [
   });
 }
 
-test('download has one title, a readable version, and current client support', async ({ page }) => {
+test('download shows only installation methods, command and release', async ({ page }) => {
   await page.route('https://api.github.com/repos/**/releases/latest', (route) =>
     route.fulfill({
       json: { tag_name: 'agentplugins-v1.2.3', published_at: '2026-09-01T00:00:00Z', assets: [] },
     }),
   );
   await page.goto('./download/');
-  await expect(
-    page.getByRole('heading', { name: 'Install your first plugin', exact: true }),
-  ).toHaveCount(1);
-  await expect(page.locator('h1')).toHaveText('Install your first plugin');
+  await expect(page.locator('h1')).toHaveText('Install Universal Agent Plugins');
   await expect(page.locator('.download-section__release-info a')).toHaveText('v1.2.3');
-  await expect(page.getByRole('main')).not.toContainText(
-    /vagentplugins|runtime lane|packaging-only/i,
-  );
-  const support = page.locator('.download-section__support-list');
-  await expect(support.locator('.download-section__support-item')).toHaveCount(
-    clientLandingPages.length,
-  );
-  for (const client of clientLandingPages) {
-    await expect(support.getByRole('link', { name: client.name, exact: true })).toHaveAttribute(
-      'href',
-      new RegExp(`/agents/${client.slug}/$`),
-    );
-  }
-  await expect(support).toContainText('Setup in app');
-  await expect(support).toContainText('Prepared by CLI');
+  await expect(page.locator('.download-section__install-tab')).toHaveCount(4);
+  await expect(page.locator('.download-section__command .command-snippet')).toHaveCount(1);
+  await expect(page.locator('.download-section__support-list, .download-section__steps')).toHaveCount(0);
+  await expect(page.getByRole('main')).not.toContainText(/vagentplugins|runtime lane|packaging-only/i);
 });
 
 for (const client of clientLandingPages) {
@@ -107,7 +93,9 @@ for (const client of clientLandingPages) {
     });
     await page.goto(`./agents/${client.slug}/`);
     await hydrated(page);
-    const source = client.id === 'grok' || client.id === 'kimi' || client.id === 'pi' ? './my-plugin' : 'context7';
+    const source = ['grok', 'kimi', 'pi', 'hermes', 'antigravity'].includes(client.id)
+      ? './my-plugin'
+      : 'context7';
     const command = `npx -y universal-agent-plugins add ${source} --target ${client.id}`;
     const install = page.locator('.agent-page__install');
     await expect(install.locator('code').first()).toHaveText(command);

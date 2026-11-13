@@ -7,11 +7,12 @@ import (
 )
 
 // Cold-cache portable import uses the production transport/store/scope path;
-// native Kimi and the inert trusted launcher are never executed.
+// native Kimi is unexecuted by default; hosted genuine mode probes its version
+// in both private applications. The inert MCP launcher is never executed.
 func TestProjectKimiColdSavedImportPreservesPinnedAgreement(t *testing.T) {
 	transport := newProjectJourneyTransport(t, "archive")
 	original := newProjectJourney(t, transport)
-	original.app = configureProjectKimiJourney(original.app, filepath.Join(original.home, ".kimi-code"), filepath.Join(original.home, "kimi"))
+	original.app = configureProjectKimiJourney(t, original.app, filepath.Join(original.home, ".kimi-code"), filepath.Join(original.home, "kimi"))
 	if err := os.Mkdir(filepath.Join(original.a, ".git"), 0700); err != nil {
 		t.Fatal(err)
 	}
@@ -21,7 +22,7 @@ func TestProjectKimiColdSavedImportPreservesPinnedAgreement(t *testing.T) {
 	exchange := projectJourneyTemp(t)
 	original.run(t, original.a, "deps", "export", exchange, "--yes")
 	cold := newProjectJourney(t, transport)
-	cold.app = configureProjectKimiJourney(cold.app, filepath.Join(cold.home, ".kimi-code"), filepath.Join(cold.home, "kimi"))
+	cold.app = configureProjectKimiJourney(t, cold.app, filepath.Join(cold.home, ".kimi-code"), filepath.Join(cold.home, "kimi"))
 	if err := os.Mkdir(filepath.Join(cold.a, ".git"), 0700); err != nil {
 		t.Fatal(err)
 	}

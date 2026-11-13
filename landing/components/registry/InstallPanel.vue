@@ -1,14 +1,21 @@
 <script setup lang="ts">
 import { usePluginInstallSelection } from '~/composables/usePluginInstallSelection';
-import type { RegistryDiagnostic, ClientID, RegistryPlugin } from '~/types/registry';
+import {
+  installTargets,
+  canonicalInstallTarget,
+  canonicalInstallTargets,
+  cliInstallTargets,
+  type InstallTargetID,
+} from '~/data/installTargets';
+import type { RegistryDiagnostic, RegistryPlugin } from '~/types/registry';
 import { pluginCommands } from '~/utils/commands';
-import { projectCatalogCommands } from '~/utils/projectCatalogSource';
+import { projectCatalogCommands, pinnedPiProjectCommands } from '~/utils/projectCatalogSource';
 import { isFullyRetired } from '~/utils/filter';
 import { vendorInstallSource } from '~/utils/registry';
 const { t } = useI18n();
 
 const props = defineProps<{ plugin: RegistryPlugin }>();
-const targets = defineModel<ClientID[]>('targets', { required: true });
+const targets = defineModel<InstallTargetID[]>('targets', { required: true });
 const autoDetect = defineModel<boolean>('autoDetect', { required: true });
 const { asset, sourceUrl } = useSite();
 const { current, expired, published } = useDirectoryStatus();
@@ -18,6 +25,9 @@ const selection = usePluginInstallSelection(() => props.plugin, { targets, autoD
 const {
   scope,
   targetDistributions,
+  pinnedPiSource,
+  pinnedPiSelected,
+  pinnedPiReleaseSource,
   projectAvailable,
   projectAutomatic,
   updateTargets,
@@ -30,13 +40,14 @@ const autoOption = computed(() => ({
   description: t('registryUi.install.detectedWhenYouRunTheCommand'),
 }));
 const targetOptions = computed(() =>
-  clients.map((client) => ({
+  installTargets.map((client) => ({
     value: client.id,
     label: client.name,
     icon: asset(`client-icons/${client.icon}`),
     // Keep invalid explicitly saved selections visible for recovery, but an
     // auto-detected project must never make a stale Cursor placeholder selectable.
     disabled: !targetDistributions.value.get(client.id) &&
+      !(client.id === 'pi' && pinnedPiSource.value && current.value) &&
       (autoDetect.value || !targets.value.includes(client.id)),
     description: (() => {
       if (isDiscovered.value)
@@ -47,25 +58,34 @@ const targetOptions = computed(() =>
         return t('registryUi.install.unavailableReviewDataIsNotInstallationAuthority');
       if (expired.value) return t('registryUi.install.unavailableSignedDirectorySnapshotExpired');
       const source = targetDistributions.value.get(client.id);
-      const target = source?.targets.find((item) => item.client === client.id);
+      const target = source?.targets.find(
+        (item) => item.client === canonicalInstallTarget(client.id),
+      );
       if (client.id === 'chatgpt')
+        return target
+          ? t('registryUi.desktopGuide.description')
+          : t('registryUi.install.noActiveReleaseSupportsThisClient');
+      if (client.id === 'chatgptweb')
         return target?.app_binding
           ? t('registryUi.install.verifiedConnectionFinishSetupInChatgpt')
           : t('registryUi.install.notAvailableForChatgpt');
+      if (client.id === 'pi' && !target)
+        return pinnedPiSource.value && current.value
+          ? t('registryUi.install.piPinnedProjectSource')
+          : t('registryUi.install.noCompatibleSignedRelease', { agent: client.name });
       if (target) return t(`registryUi.delivery.${target.delivery}`);
-      return t('registryUi.install.noActiveReleaseSupportsThisClient');
+      return t('registryUi.install.noCompatibleSignedRelease', { agent: client.name });
     })(),
   })),
 );
-const desktopCodexCommand = computed(() =>
+const showDesktopGuide = computed(() =>
   scope.value === 'user' &&
-  !isDiscovered.value &&
+  !autoDetect.value &&
+  targets.value.includes('chatgpt') &&
   canUseSource.value &&
   props.plugin.installable &&
   !isFullyRetired(props.plugin) &&
-  Boolean(targetDistributions.value.get('codex'))
-    ? pluginCommands(props.plugin, ['codex']).add
-    : '',
+  Boolean(targetDistributions.value.get('chatgpt')),
 );
 const commands = computed(() =>
   (scope.value !== 'project' || !autoDetect.value || Boolean(projectAutomatic.value?.resolution.distribution)) &&
@@ -73,9 +93,11 @@ const commands = computed(() =>
   props.plugin.discovery?.availability !== 'unavailable' &&
   canUseSource.value &&
   (autoDetect.value || (targets.value.length > 0 && hasCompleteSource.value))
-    ? (scope.value === 'project'
-        ? projectCatalogCommands(props.plugin, autoDetect.value ? undefined : targets.value)
-        : pluginCommands(props.plugin, autoDetect.value ? undefined : targets.value)
+    ? (pinnedPiSelected.value
+        ? pinnedPiProjectCommands(props.plugin)
+        : scope.value === 'project'
+          ? projectCatalogCommands(props.plugin, autoDetect.value ? undefined : canonicalInstallTargets(targets.value))
+          : pluginCommands(props.plugin, autoDetect.value ? undefined : cliInstallTargets(targets.value))
       )
     : undefined,
 );
@@ -100,10 +122,17 @@ const expectedSource = computed(() =>
 const expectedSourceLabel = computed(() =>
   expectedSource.value ? t(`registryUi.distribution.${expectedSource.value.kind}`) : '',
 );
-const hasCompleteSource = computed(() => Boolean(expectedSource.value));
+const hasCompleteSource = computed(() => Boolean(expectedSource.value || pinnedPiSelected.value));
+const pinnedPiProvenanceURL = computed(() => {
+  const source = pinnedPiReleaseSource.value;
+  if (!source?.revision) return '';
+  const path = source.path ? `/${source.path.split('/').map(encodeURIComponent).join('/')}` : '';
+  return `https://github.com/${source.repository}/tree/${source.revision}${path}`;
+});
 const selectedTargets = computed(
   () =>
-    expectedSource.value?.targets.filter((target) => targets.value.includes(target.client)) ?? [],
+    expectedSource.value?.targets.filter((target) =>
+      canonicalInstallTargets(targets.value).includes(target.client)) ?? [],
 );
 const chatgptSelected = computed(
   () =>
@@ -197,6 +226,12 @@ const vendorInstall = computed(() =>
             @update:model-value="updateTargets"
           />
         </div>
+        <p v-if="pinnedPiSelected && commands" class="install-panel__notice" role="status">
+          {{ t('registryUi.install.piPinnedProjectSource') }}
+          <a :href="pinnedPiProvenanceURL" target="_blank" rel="noreferrer">
+            {{ t('registryUi.install.viewPackageSource') }}
+          </a>
+        </p>
         <CommandSnippet
           v-if="commands"
           :label="t('registryUi.install.add')"
@@ -204,7 +239,7 @@ const vendorInstall = computed(() =>
           :command="commands.add"
         />
       </div>
-      <ChatGPTDesktopGuide v-if="desktopCodexCommand" :command="desktopCodexCommand" />
+      <ChatGPTDesktopGuide v-if="showDesktopGuide" />
       <InstallOutcome
         v-if="commands && !autoDetect && expectedSource"
         :distribution="expectedSource"

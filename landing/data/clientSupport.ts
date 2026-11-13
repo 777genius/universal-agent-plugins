@@ -1,4 +1,5 @@
 import type { ClientTarget } from '../types/registry';
+import { clients } from './clients.ts';
 
 export type AgentSetup = 'Automatic' | 'Guided' | 'Prepared' | 'Manual';
 export interface ClientSupport {
@@ -10,11 +11,25 @@ export interface ClientSupport {
   nextStep: string;
 }
 
+/** Translation mapping for the display layer. Keep English README source rows unchanged. */
+export const clientSupportCapabilityKeys = {
+  'Plugins, Skills, MCP': 'pluginsSkillsMcp',
+  'Skills, MCP': 'skillsMcp',
+  'Plugins, Skills, MCP, hooks': 'pluginsSkillsMcpHooks',
+  'Extensions, Skills, MCP': 'extensionsSkillsMcp',
+  'Copilot-backed package': 'copilotPackage',
+  'Desktop local plugins; Web connected apps': 'desktopLocalPluginsWebConnectedApps',
+  'Personal app setup': 'personalAppSetup',
+  'Skills only': 'skillsOnly',
+  'Skills, MCP (prepared)': 'skillsMcpPrepared',
+  'Not supported': 'notSupported',
+} as const;
+
 // SYNC: Update landing/data/clientSupport.ts AND README.md "Supported clients".
 // The landing renders this in landing/components/registry/RegistryClientSupport.vue
 // before FAQ in landing/pages/index.vue. Icon mapping: landing/data/clients.ts,
 // assets: landing/public/client-icons/. Enforcement: landing/tests/client-support-readme.test.ts.
-export const clientSupportRows: ClientSupport[] = [
+const publishedClientSupportRows: ClientSupport[] = [
   {
     id: 'claude',
     name: 'Claude Code',
@@ -25,7 +40,7 @@ export const clientSupportRows: ClientSupport[] = [
   },
   {
     id: 'codex',
-    name: 'Codex',
+    name: 'Codex CLI',
     user: 'Skills, MCP',
     project: 'Skills, MCP',
     setup: 'Automatic',
@@ -115,9 +130,25 @@ export const clientSupportRows: ClientSupport[] = [
     id: 'grok',
     name: 'Grok Build',
     user: 'Skills, MCP',
+    project: 'Skills, MCP (prepared)',
+    setup: 'Guided',
+    nextStep: 'Open the selected project in Grok; enable and trust the plugin, reload, then verify Skills and MCP.',
+  },
+  {
+    id: 'hermes',
+    name: 'Hermes Agent',
+    user: 'Skills, MCP',
     project: 'Skills only',
     setup: 'Guided',
-    nextStep: 'Reload Grok; review project Skills and any CLI setup hint.',
+    nextStep: 'Restart Hermes, trust the selected Git project, and verify Skills and User MCP; Project MCP is unsupported.',
+  },
+  {
+    id: 'antigravity',
+    name: 'Google Antigravity',
+    user: 'Plugins, Skills, MCP',
+    project: 'Plugins, Skills, MCP',
+    setup: 'Prepared',
+    nextStep: 'Open or reload Antigravity; review trust and verify the prepared plugin is discovered and enabled in the selected scope.',
   },
   {
     id: 'vscode',
@@ -130,9 +161,13 @@ export const clientSupportRows: ClientSupport[] = [
   {
     id: 'chatgpt',
     name: 'ChatGPT',
-    user: 'Personal app setup',
+    user: 'Desktop local plugins; Web connected apps',
     project: 'Not supported',
-    setup: 'Manual',
-    nextStep: 'Enable Developer Mode, connect the app, and select it in a new chat.',
+    setup: 'Guided',
+    nextStep: 'Desktop: local install via Codex CLI; Web: connect or install in ChatGPT.',
   },
 ];
+
+export const clientSupportRows: ClientSupport[] = publishedClientSupportRows.filter((row) =>
+  clients.some((client) => client.id === row.id),
+);

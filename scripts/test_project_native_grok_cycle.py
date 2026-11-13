@@ -155,6 +155,9 @@ def container():
                 if stage == "repeat-add-a":
                     del output["operation_id"]
                     output["result"]["no_change"] = True
+                    action = "Review Grok project trust and discovery"
+                    output.update(scope="project", readiness="needs_action", next_action=action,
+                                  next_actions=[{"code": "verify_native", "actor": "native_client", "message": action}])
                     data = output
                 if verb == "remove":
                     receipt = next(iter(ins["data_receipts"].values()))
@@ -190,20 +193,111 @@ def container():
                   "members": [{"Name": "grok", "Kind": "file", "Bytes": 195700192, "sha256": "22d281c5964c5444147328096ba2a221f3f0874c6858e27c825656a80f6e58e9"}]}, "runtime_files": [{"path": "/held/grok", "sha256": "22d281c5964c5444147328096ba2a221f3f0874c6858e27c825656a80f6e58e9"}]},
               "scanner": {"archive_sha256": "2b3d176db752433b904a4b42375543ff398f4841d22e48f7d4f23ded925b72da", "binary_sha256": "b6723451f155eb49e84acb34d1f06de929bddfcff6238cd4e38cdc6519396fba", "platform": "linux-amd64", "route": "prepopulated supported scanner cache; ordinary CLI security assessment", "source_tag": "v0.1.3", "version": "0.1.3"}}
     rows = public, inspections, [{"stage": stage, "value": proof[stage]} for stage in cycle.PROOF]
-    bodies = {name: b"".join(raw(row) + b"\n" for row in captured) for name, captured in zip(cycle.MEMBERS, rows)}
+    bodies = {name: b"".join(raw(row) + b"\n" for row in captured) for name, captured in zip(cycle.MEMBERS[:3], rows)}
+    mcp_project = ROOT + "/grok-project-mcp-only"
+    mcp_name = "uap-grok-mcp-only"
+    mcp_active = mcp_project + "/.grok/plugins/uap-grok-mcp-only-abcdef123456"
+    mcp_plugin = {"name": mcp_name, "scope": "project", "path": mcp_active,
+                  "enabled": False, "provides": {"mcpServers": 1}}
+    # Synthetic contract fixture, not a claim of native installed-state evidence.
+    mcp_state = {"schema_version": 5, "installations": [{
+        "declared_name": mcp_name, "clients": {"owned": {
+            "client_id": "grok", "scope": "project", "target_locator": mcp_active,
+            "native_profile_root": mcp_project + "/.grok",
+            "activation": "prepared", "verification": "package_validated"}}}]}
+    mcp_rows = []
+    for stage in cycle.MCP_INSPECT:
+        observed = {"grokVersion": "1.0.70", "cwd": mcp_project,
+                    "projectRoot": mcp_project + "/", "projectTrusted": False,
+                    "mcpServers": [], "plugins": [mcp_plugin] if stage == "installed" else []}
+        value = {"cwd": mcp_project, "stdout": stream(raw(observed))}
+        if stage == "installed":
+            value["owned_state"] = stream(raw(mcp_state))
+        mcp_rows.append({"stage": stage, "value": value})
+    bodies[cycle.MEMBERS[3]] = b"".join(raw(row) + b"\n" for row in mcp_rows)
     bodies["runtime-attempt.json"] = raw(result)
     return bodies
 
 
 class GrokCycleContracts(unittest.TestCase):
-    def test_complete_four_member_parser_input_closes_only_two_flags(self):
+    def test_complete_five_member_parser_input_closes_only_two_flags(self):
         bodies = container()
         result = runtime.cli_attempt_members(bodies, SOURCE, "grok")
         self.assertTrue(result["runtime_attempt_complete"])
         self.assertEqual(sum(result["qualification"].values()), 2)
-        self.assertEqual(len(bodies), 4)
+        self.assertEqual(len(bodies), 5)
         self.assertFalse(result["real_model_qualified"])
         self.assertFalse(result["vendor_authentication_qualified"])
+
+    def test_mcp_only_original_native_inspect_requires_untrusted_discovery_and_removal(self):
+        for fault in ("missing", "trusted", "active", "wrong-version", "missing-owned",
+                      "folded-alias", "quoted-count", "retained", "root-field-alias",
+                      "plugin-field-alias", "foreign-field-alias", "provides-field-alias", "empty-foreign-name",
+                      "owned-missing", "owned-other-path", "owned-activated", "owned-user",
+                      "owned-duplicate", "owned-wrong-name"):
+            bodies = container()
+            name = cycle.MEMBERS[3]
+            rows = [cycle.load(line) for line in bodies[name].splitlines()]
+            native = cycle.load(cycle.stream(rows[0 if fault != "retained" else 1]["value"]["stdout"]))
+            if fault == "missing":
+                rows.pop()
+            elif fault == "trusted":
+                native["projectTrusted"] = True
+            elif fault == "active":
+                native["mcpServers"] = [{"name": "unexpected"}]
+            elif fault == "wrong-version":
+                native["grokVersion"] = "1.0.67"
+            elif fault == "missing-owned":
+                native["plugins"] = []
+            elif fault == "folded-alias":
+                native["plugins"][0]["name"] = "UAP-grok-mcp-only"
+            elif fault == "quoted-count":
+                native["plugins"][0]["provides"]["mcpServers"] = "1"
+            elif fault == "root-field-alias":
+                native["ProjectTrusted"] = True
+            elif fault == "plugin-field-alias":
+                native["plugins"][0]["Name"] = "foreign"
+            elif fault == "foreign-field-alias":
+                native["plugins"].append({"name": "foreign", "Scope": "project"})
+            elif fault == "provides-field-alias":
+                native["plugins"][0]["provides"]["McpServers"] = 2
+            elif fault == "empty-foreign-name":
+                native["plugins"].append({"name": " "})
+            elif fault == "retained":
+                native["plugins"] = [cycle.load(cycle.stream(rows[0]["value"]["stdout"]))["plugins"][0]]
+            elif fault == "owned-missing":
+                rows[0]["value"].pop("owned_state")
+            elif fault.startswith("owned-"):
+                state = cycle.load(cycle.stream(rows[0]["value"]["owned_state"]))
+                installation = state["installations"][0]
+                binding = installation["clients"]["owned"]
+                if fault == "owned-other-path":
+                    binding["target_locator"] = native["plugins"][0]["path"][:-12] + "eeeeeeeeeeee"
+                elif fault == "owned-activated":
+                    binding["activation"] = "activated"
+                elif fault == "owned-user":
+                    binding["scope"] = "user"
+                elif fault == "owned-duplicate":
+                    installation["clients"]["foreign"] = dict(binding)
+                elif fault == "owned-wrong-name":
+                    installation["declared_name"] = "foreign"
+                rows[0]["value"]["owned_state"] = stream(raw(state))
+            if fault != "missing":
+                rows[0 if fault != "retained" else 1]["value"]["stdout"] = stream(raw(native))
+            bodies[name] = b"".join(raw(row) + b"\n" for row in rows)
+            with self.subTest(fault=fault), self.assertRaises(ValueError):
+                runtime.cli_attempt_members(bodies, SOURCE, "grok")
+
+    def test_mcp_inspect_allows_unrelated_future_metadata(self):
+        bodies = container()
+        name = cycle.MEMBERS[3]
+        rows = [cycle.load(line) for line in bodies[name].splitlines()]
+        native = cycle.load(cycle.stream(rows[0]["value"]["stdout"]))
+        native["futureVendorField"] = {"state": "observed"}
+        native["plugins"][0]["futureVendorField"] = True
+        rows[0]["value"]["stdout"] = stream(raw(native))
+        bodies[name] = b"".join(raw(row) + b"\n" for row in rows)
+        self.assertTrue(runtime.cli_attempt_members(bodies, SOURCE, "grok")["runtime_attempt_complete"])
 
     def test_empty_outside_requires_exact_provisional_allow_without_durable_grant(self):
         paths, proof = inputs()
@@ -344,6 +438,16 @@ class GrokCycleContracts(unittest.TestCase):
                     cycle.public_result(raw(bad), stage, verb, proof[stage])
         singleton = cycle.stream(rows["repeat-add-a"]["stdout"])
         with self.assertRaises(ValueError): cycle.public_result(singleton, "add-a", "add", proof["add-a"])
+        # Repeated preparation must not claim native activation or silently
+        # drop the user's explicit verification step.
+        original = cycle.load(singleton)
+        for key, value in (("scope", "user"), ("readiness", "ready"),
+                           ("next_action", "unlinked"), ("next_actions", []),
+                           ("next_actions", [{"code": "verify_native", "actor": "user", "message": original["data"]["next_action"]}])):
+            changed = copy.deepcopy(original)
+            changed["data"][key] = value
+            with self.subTest(key=key, value=value), self.assertRaises(ValueError):
+                cycle.public_result(raw(changed), "repeat-add-a", "add", proof["repeat-add-a"])
 
     def test_failed_prefix_retains_unknown_native_output_without_qualification(self):
         bodies = container()

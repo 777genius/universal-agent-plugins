@@ -2,8 +2,8 @@
   "shell": {
     "download": {
       "heading": {
-        "title": "Instala tu primer complemento",
-        "note": "Elija cómo ejecutar la CLI, seleccione uno o más agentes y copie el comando."
+        "title": "Instalar Universal Agent Plugins",
+        "note": "Elige un método y copia el comando en tu terminal."
       },
       "channels": {
         "brew": {

@@ -1162,6 +1162,38 @@ img {
 .catalog-advanced-filters {
   display: contents;
 }
+.catalog-filter-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  min-width: 0;
+}
+/* Five equally usable columns on wide desktops: trust no longer consumes
+   the search-sized slot, and Source / Owner each get an independent column. */
+@media (min-width: 1521px) {
+  .catalog-controls--plugins {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+  .catalog-controls--plugins > .search-field {
+    grid-column: span 2;
+  }
+  .catalog-controls--plugins .catalog-filter-pair {
+    display: contents;
+  }
+}
+/* Use three readable filter columns from 981px (including 1024px/Retina
+   viewports); the existing <=980px tablet rule switches to two. */
+@media (min-width: 981px) and (max-width: 1520px) {
+  .catalog-controls--plugins {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .catalog-controls--plugins > .search-field {
+    grid-column: 1 / -1;
+  }
+  .catalog-controls--plugins .catalog-filter-pair {
+    display: contents;
+  }
+}
 /* Flat toolbar only; dropdown panels and installation controls keep their surfaces. */
 .catalog-controls .search-field input,
 .catalog-controls .app-select__trigger,
@@ -3115,8 +3147,9 @@ img {
   .catalog-controls {
     grid-template-columns: 1fr 1fr;
   }
-  .search-field {
-    grid-column: span 2;
+  .search-field,
+  .catalog-controls--plugins .catalog-filter-pair {
+    grid-column: 1 / -1;
   }
   .validation-section {
     grid-template-columns: 1fr;
@@ -3395,5 +3428,11 @@ img {
   }
   .workflow-path--animate::before {
     transform: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .catalog-filter-pair {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

@@ -114,7 +114,11 @@
       "copiedDiagnostics": "Copied",
       "copyDiagnosticsHelp": "Copies the scan status and all published diagnostic evidence for this listing as JSON. Nothing is sent.",
       "copyDiagnosticsSuccess": "Diagnostics copied. Paste them into an AI assistant to review the evidence.",
-      "copyDiagnosticsError": "Couldn't copy. Allow clipboard access and try again."
+      "copyDiagnosticsError": "Couldn't copy. Allow clipboard access and try again.",
+      "recoveryWitnessTitle": "Independent authenticated scan",
+      "recoveryWitnessRun": "Main run {run}, attempt {attempt}",
+      "recoveryWitnessExplanation": "This separate original report may contain findings absent from or changed relative to the primary scan. Coverage remains incomplete; these automated signals have not been independently confirmed.",
+      "recoveryWitnessFindings": "Additional findings from a separate authenticated scan"
     }
   }
 }

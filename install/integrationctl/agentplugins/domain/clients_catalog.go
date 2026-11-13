@@ -14,21 +14,23 @@ type PlanStatus string
 type ComponentKind string
 
 const (
-	ClientCodex    ClientID = "codex"
-	ClientChatGPT  ClientID = "chatgpt"
-	ClientCursor   ClientID = "cursor"
-	ClientCopilot  ClientID = "copilot"
-	ClientVSCode   ClientID = "vscode"
-	ClientKiro     ClientID = "kiro"
-	ClientClaude   ClientID = "claude"
-	ClientGemini   ClientID = "gemini"
-	ClientOpenCode ClientID = "opencode"
-	ClientCline    ClientID = "cline"
-	ClientWindsurf ClientID = "windsurf"
-	ClientGrok     ClientID = "grok"
-	ClientKimi     ClientID = "kimi"
-	ClientQoder    ClientID = "qoder"
-	ClientPi       ClientID = "pi"
+	ClientCodex       ClientID = "codex"
+	ClientChatGPT     ClientID = "chatgpt"
+	ClientCursor      ClientID = "cursor"
+	ClientCopilot     ClientID = "copilot"
+	ClientVSCode      ClientID = "vscode"
+	ClientKiro        ClientID = "kiro"
+	ClientClaude      ClientID = "claude"
+	ClientGemini      ClientID = "gemini"
+	ClientOpenCode    ClientID = "opencode"
+	ClientCline       ClientID = "cline"
+	ClientWindsurf    ClientID = "windsurf"
+	ClientGrok        ClientID = "grok"
+	ClientKimi        ClientID = "kimi"
+	ClientQoder       ClientID = "qoder"
+	ClientPi          ClientID = "pi"
+	ClientAntigravity ClientID = "antigravity"
+	ClientHermes      ClientID = "hermes"
 
 	DetectionNotDetected DetectionStatus = "not_detected"
 	DetectionDetected    DetectionStatus = "detected"
@@ -117,6 +119,7 @@ var clientDefinitions = []ClientDefinition{
 		LifecycleKind:  LifecycleCLIRegistry,
 	}), LifecycleNativeConfig),
 	withProjectScope(withoutCommands(clientDefinition(ClientCopilot, "GitHub Copilot CLI", "github-copilot", "managed", "native", true, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportNative, ClientTraits{
+		DirectoryOwnGrant:          true,
 		InstallIntents:             []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:              LifecycleCLIRegistry,
 		RecordsUserProfileOnCreate: true,
@@ -153,15 +156,15 @@ var clientDefinitions = []ClientDefinition{
 		LifecycleKind:  LifecycleNativeConfig,
 	}), ActivationAutomatic), LifecycleNativeConfig),
 	withProjectScope(clientDefinition(ClientWindsurf, "Windsurf / Devin", "windsurf", "prepared", "prepared", false, PackagePrepared, SupportPrepared, SupportPrepared, SupportPrepared, SupportUnsupported, SupportPrepared, ClientTraits{
-		InstallIntents:           []InstallIntent{InstallIntentAutomatic},
-		LifecycleKind:            LifecycleNativeConfig,
-		UsesManagedStdioLauncher: true,
+		InstallIntents:                    []InstallIntent{InstallIntentAutomatic},
+		LifecycleKind:                     LifecycleNativeConfig,
+		UsesManagedStdioLauncher:          true,
 		RecordsSelectedNativeRootOnCreate: true,
 	}), LifecycleNativeConfig),
-	withProjectComponentSupport(withProjectScope(clientDefinition(ClientGrok, "Grok Build", "grok", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
+	withProjectComponentSupport(withProjectManagedStdio(withProjectScope(clientDefinition(ClientGrok, "Grok Build", "grok", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
 		InstallIntents: []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:  LifecycleCLIRegistry,
-	}), LifecyclePrepared), SupportNative, SupportUnsupported),
+	}), LifecyclePrepared)), SupportNative, SupportNative),
 	withProjectScope(clientDefinition(ClientKimi, "Kimi Code", "kimi", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
 		InstallIntents: []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:  LifecycleNativeConfig,
@@ -174,6 +177,17 @@ var clientDefinitions = []ClientDefinition{
 		HonorsOpenAIMCPAuthHints:            true,
 		LegacyPreparedProjectPackageReceipt: true,
 	}), LifecycleNativeConfig), SupportNative, SupportNative),
+	withProjectComponents(withProjectScope(clientDefinition(ClientHermes, "Hermes Agent", "hermes", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
+		InstallIntents:           []InstallIntent{InstallIntentAutomatic},
+		LifecycleKind:            LifecycleNativeConfig,
+		BindsNativeProfileRoot:   true,
+		TracksNativeEffects:      true,
+		SupportsPreparedRecovery: true,
+	}), LifecycleNativeConfig), SupportNative, SupportUnsupported),
+	withProjectScope(clientDefinition(ClientAntigravity, "Google Antigravity", "antigravity", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
+		InstallIntents: []InstallIntent{InstallIntentAutomatic},
+		LifecycleKind:  LifecyclePrepared,
+	}), LifecyclePrepared),
 	withProjectComponents(withProjectScope(withActivation(withoutCommands(clientDefinition(ClientPi, "Pi", "pi", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportNative, ClientTraits{
 		InstallIntents: []InstallIntent{InstallIntentAutomatic}, LifecycleKind: LifecyclePrepared,
 		BindsNativeProfileRoot: true, RequiresPluginData: true, VerifiesNativeDirectory: true, ProtectsModifiedPackage: true,

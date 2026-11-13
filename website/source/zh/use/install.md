@@ -137,8 +137,8 @@ agentplugins skills add owner/repository --ui --scope project \
 显式指定的范围始终优先。严格的锁文件校验规则见[维护与恢复](./manage)。
 
 目标必须支持所请求的项目组件。ChatGPT 明确不支持原生项目安装。
-VS Code 为单个本地文件夹准备 `.github/skills` 和 `.vscode/mcp.json` 中属于 UAP 的 `servers` 成员；
-结果保持 `Prepared`，需要在客户端检查工作区和服务器信任。元数据观察不证明 MCP 启动、工具调用或模型执行。
+如果结果为 **Prepared**，请检查所需的工作区和服务器信任，以及客户端配置。
+仅有已安装的文件不能证明 MCP 启动、工具调用或模型执行。
 
 查看[项目安装指南](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_INSTALLATION.md)和
 [各客户端项目边界](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)，然后继续[维护与恢复](./manage)。

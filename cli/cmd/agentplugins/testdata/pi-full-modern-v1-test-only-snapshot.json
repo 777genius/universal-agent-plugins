@@ -1,0 +1,2674 @@
+{
+  "snapshot_schema_version": 1,
+  "sequence": 41,
+  "publication_id": "test-only-pi-full-cohort-20261112",
+  "source_commit": "32b6c48d071aceadf90a030c9d69477fe1a6a65a",
+  "generated_at": "2026-11-12T00:00:00Z",
+  "expires_at": "2026-12-10T00:00:00Z",
+  "products": [
+    {
+      "schema_version": 1,
+      "id": "atlassian",
+      "display_name": "Atlassian",
+      "description": "Community package for the official Atlassian Rovo MCP plugin for Jira, Confluence, and Compass workflows through Atlassian's hosted remote MCP service.",
+      "manifest_name": "atlassian",
+      "aliases": [
+        "atlassian"
+      ],
+      "reserved_aliases": [
+        "atlassian"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "atlassian",
+        "collaboration",
+        "compass",
+        "confluence",
+        "jira",
+        "mcp",
+        "planning",
+        "plugins"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/atlassian",
+      "distributions": [
+        "777genius/atlassian"
+      ],
+      "icon": {
+        "path": "assets/plugin-icons/atlassian.svg",
+        "digest": "sha256:5b2b712e8a9bb65fc7207f8273f586c325507f3f7c79b2a04e31da1dedd5f3b4"
+      }
+    },
+    {
+      "schema_version": 1,
+      "id": "chrome-devtools",
+      "display_name": "Chrome Devtools",
+      "description": "Community package for Chrome DevTools MCP. Inspect pages, automate flows, analyze performance, and debug browser state.",
+      "manifest_name": "chrome-devtools",
+      "aliases": [
+        "chrome-devtools"
+      ],
+      "reserved_aliases": [
+        "chrome-devtools"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "browser",
+        "chrome",
+        "debugging",
+        "mcp",
+        "performance"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/chrome-devtools-bridge",
+      "distributions": [
+        "777genius/chrome-devtools-bridge"
+      ],
+      "icon": {
+        "path": "assets/plugin-icons/googlechrome.svg",
+        "digest": "sha256:6f466b9a8da5314737ca5213367cfbf4a8ff75c1dbf58c30db9396cff3b16dd0"
+      }
+    },
+    {
+      "schema_version": 1,
+      "id": "cloudflare",
+      "display_name": "Cloudflare",
+      "description": "Community package for Cloudflare's 13 platform skills and API MCP server. Build, test, and deploy applications with guidance from cloudflare/skills.",
+      "manifest_name": "cloudflare",
+      "aliases": [
+        "cloudflare"
+      ],
+      "reserved_aliases": [
+        "cloudflare"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "api",
+        "cloud",
+        "cloudflare",
+        "devops",
+        "mcp",
+        "plugins",
+        "workers"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/cloudflare-bridge",
+      "distributions": [
+        "777genius/cloudflare",
+        "777genius/cloudflare-bridge"
+      ],
+      "icon": {
+        "path": "assets/plugin-icons/cloudflare.svg",
+        "digest": "sha256:32876bda81542203316d67b9623818ac60986897cac79f70e03e8f31f7b7f160"
+      }
+    },
+    {
+      "schema_version": 1,
+      "id": "cloudflare-bindings",
+      "display_name": "Cloudflare Bindings",
+      "description": "Community package for the official Cloudflare Workers Bindings MCP integration for storage, AI, and compute primitives.",
+      "manifest_name": "cloudflare-bindings",
+      "aliases": [
+        "cloudflare-bindings"
+      ],
+      "reserved_aliases": [
+        "cloudflare-bindings"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "bindings",
+        "cloudflare",
+        "mcp",
+        "plugins",
+        "workers"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/cloudflare-bindings-bridge",
+      "distributions": [
+        "777genius/cloudflare-bindings",
+        "777genius/cloudflare-bindings-bridge"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "cloudflare-docs",
+      "display_name": "Cloudflare Docs",
+      "description": "Community package for Cloudflare Docs MCP. Search current Cloudflare documentation through Cloudflare's hosted documentation server.",
+      "manifest_name": "cloudflare-docs",
+      "aliases": [
+        "cloudflare-docs"
+      ],
+      "reserved_aliases": [
+        "cloudflare-docs"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "cloud",
+        "cloudflare",
+        "docs",
+        "mcp",
+        "plugins",
+        "research"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/cloudflare-docs-bridge",
+      "distributions": [
+        "777genius/cloudflare-docs",
+        "777genius/cloudflare-docs-bridge"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "cloudflare-observability",
+      "display_name": "Cloudflare Observability",
+      "description": "Community package for the official Cloudflare hosted MCP plugin for logs, analytics, and production debugging through Cloudflare's remote observability server.",
+      "manifest_name": "cloudflare-observability",
+      "aliases": [
+        "cloudflare-observability"
+      ],
+      "reserved_aliases": [
+        "cloudflare-observability"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "analytics",
+        "cloud",
+        "cloudflare",
+        "debugging",
+        "devops",
+        "mcp",
+        "observability",
+        "plugins"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/cloudflare-observability-bridge",
+      "distributions": [
+        "777genius/cloudflare-observability",
+        "777genius/cloudflare-observability-bridge"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "cloudflare-radar",
+      "display_name": "Cloudflare Radar",
+      "description": "Community package for the official Cloudflare Radar MCP plugin for internet telemetry, traffic trends, and network intelligence through Cloudflare's hosted Radar server.",
+      "manifest_name": "cloudflare-radar",
+      "aliases": [
+        "cloudflare-radar"
+      ],
+      "reserved_aliases": [
+        "cloudflare-radar"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "analytics",
+        "cloudflare",
+        "mcp",
+        "network",
+        "plugins",
+        "radar"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/cloudflare-radar",
+      "distributions": [
+        "777genius/cloudflare-radar"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "context7",
+      "display_name": "Context7",
+      "description": "Portable Agent Plugins package for Context7. Pull up-to-date, version-specific documentation and code examples directly from source repositories into agent context.",
+      "manifest_name": "context7",
+      "aliases": [
+        "context7"
+      ],
+      "reserved_aliases": [
+        "context7"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "context7",
+        "documentation",
+        "mcp",
+        "plugins"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "upstash/context7",
+      "distributions": [
+        "777genius/context7",
+        "upstash/context7"
+      ],
+      "icon": {
+        "path": "assets/plugin-icons/context7.png",
+        "digest": "sha256:3ba6504a9d361cb43e71afa0a7666bc6f36853f0a0847812b4b2d6479afe21f6"
+      }
+    },
+    {
+      "schema_version": 1,
+      "id": "docker-hub",
+      "display_name": "Docker Hub",
+      "description": "Community package for the official Docker Hub MCP plugin for repository, image, and Docker Hub workflows through Docker's containerized stdio server.",
+      "manifest_name": "docker-hub",
+      "aliases": [
+        "docker-hub"
+      ],
+      "reserved_aliases": [
+        "docker-hub"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "containers",
+        "docker",
+        "mcp",
+        "plugins",
+        "registry"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/docker-hub",
+      "distributions": [
+        "777genius/docker-hub"
+      ],
+      "icon": {
+        "path": "assets/plugin-icons/docker.svg",
+        "digest": "sha256:ba1fb157870b2ec02e054aed42154ac7418e25af91ec321fd328d17cad4023cd"
+      }
+    },
+    {
+      "schema_version": 1,
+      "id": "figma",
+      "display_name": "Figma",
+      "description": "Community package for the official Figma MCP plugin for design context, code-to-design workflows, and authenticated access to Figma Design, Make, and FigJam through Figma's remote MCP service.",
+      "manifest_name": "figma",
+      "aliases": [
+        "figma"
+      ],
+      "reserved_aliases": [
+        "figma"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "design",
+        "figma",
+        "mcp",
+        "plugins",
+        "ui"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/figma",
+      "distributions": [
+        "777genius/figma"
+      ],
+      "icon": {
+        "path": "assets/plugin-icons/figma.svg",
+        "digest": "sha256:b9171110637bb953781a04044d9957478ae84f6a7ac597a25c0bfdfb3292a45e"
+      }
+    },
+    {
+      "schema_version": 1,
+      "id": "firebase",
+      "display_name": "Firebase",
+      "description": "Google Firebase MCP integration. Manage Firestore databases, authentication, cloud functions, hosting, and storage. Build and manage your Firebase backend directly from your development workflow.",
+      "manifest_name": "firebase",
+      "aliases": [
+        "firebase"
+      ],
+      "reserved_aliases": [
+        "firebase"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "firebase",
+        "firestore",
+        "mcp",
+        "plugins"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/firebase",
+      "distributions": [
+        "777genius/firebase"
+      ],
+      "icon": {
+        "path": "assets/plugin-icons/firebase.svg",
+        "digest": "sha256:abbf47a2efb5468324769adb713211d1611f16550440bb3ca9d224462e2f44c3"
+      }
+    },
+    {
+      "schema_version": 1,
+      "id": "firecrawl",
+      "display_name": "Firecrawl",
+      "description": "Community package for Firecrawl MCP. Search, scrape, and parse public web content through Firecrawl's hosted server.",
+      "manifest_name": "firecrawl",
+      "aliases": [
+        "firecrawl"
+      ],
+      "reserved_aliases": [
+        "firecrawl"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "mcp",
+        "research",
+        "scraping",
+        "search"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/firecrawl-bridge",
+      "distributions": [
+        "777genius/firecrawl-bridge"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "github",
+      "display_name": "GitHub",
+      "description": "Community package for GitHub MCP Server. Work with repositories, issues, pull requests, reviews, and code search through GitHub's hosted MCP endpoint.",
+      "manifest_name": "github",
+      "aliases": [
+        "github"
+      ],
+      "reserved_aliases": [
+        "github"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "auth",
+        "github",
+        "mcp",
+        "plugins"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "github/github",
+      "distributions": [
+        "777genius/github",
+        "777genius/github-bridge",
+        "github/github"
+      ],
+      "icon": {
+        "path": "assets/plugin-icons/github.svg",
+        "digest": "sha256:7355ca8b501686639280d23ab673dbfe55edaca09daa7eb0d45c6526ec570e6a"
+      }
+    },
+    {
+      "schema_version": 1,
+      "id": "gitlab",
+      "display_name": "GitLab",
+      "description": "Portable Agent Plugins package for GitLab MCP. Inspect projects, issues, merge requests, and related DevOps workflows through GitLab's HTTP server.",
+      "manifest_name": "gitlab",
+      "aliases": [
+        "gitlab"
+      ],
+      "reserved_aliases": [
+        "gitlab"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "gitlab",
+        "mcp",
+        "oauth",
+        "plugins"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/gitlab",
+      "distributions": [
+        "777genius/gitlab"
+      ],
+      "icon": {
+        "path": "assets/plugin-icons/gitlab.svg",
+        "digest": "sha256:3bbfcd2707b9cd5bc6d68d561da605c520a707ceaecf3912aede560bb0990e27"
+      }
+    },
+    {
+      "schema_version": 1,
+      "id": "greptile",
+      "display_name": "Greptile",
+      "description": "Community package for the official Greptile MCP integration for repository search and code intelligence tooling.",
+      "manifest_name": "greptile",
+      "aliases": [
+        "greptile"
+      ],
+      "reserved_aliases": [
+        "greptile"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "code-search",
+        "greptile",
+        "mcp",
+        "plugins",
+        "repository"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/greptile",
+      "distributions": [
+        "777genius/greptile"
+      ],
+      "icon": {
+        "path": "assets/plugin-icons/greptile.png",
+        "digest": "sha256:1222f4a9a6f6979452947f4c59cf1a34f059fc933270b898e3cf049bbd882898"
+      }
+    },
+    {
+      "schema_version": 1,
+      "id": "heroku",
+      "display_name": "Heroku",
+      "description": "Community package for the official Heroku hosted MCP plugin for apps, add-ons, logs, Postgres, and operational workflows through Heroku's remote MCP service.",
+      "manifest_name": "heroku",
+      "aliases": [
+        "heroku"
+      ],
+      "reserved_aliases": [
+        "heroku"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "apps",
+        "backend",
+        "cloud",
+        "devops",
+        "heroku",
+        "mcp",
+        "plugins"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/heroku",
+      "distributions": [
+        "777genius/heroku"
+      ],
+      "icon": {
+        "path": "assets/plugin-icons/heroku.png",
+        "digest": "sha256:368a7d40a8f57c2bdd0ffef591f1ca613d8323bedaeb9aac54a4b7dd1c98b229"
+      }
+    },
+    {
+      "schema_version": 1,
+      "id": "hubspot-crm",
+      "display_name": "Hubspot CRM",
+      "description": "Community package for the official HubSpot remote MCP integration for beta, read-only CRM object access through HubSpot's hosted MCP server.",
+      "manifest_name": "hubspot-crm",
+      "aliases": [
+        "hubspot-crm"
+      ],
+      "reserved_aliases": [
+        "hubspot-crm"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "crm",
+        "hubspot",
+        "marketing",
+        "mcp",
+        "plugins",
+        "sales"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/hubspot-crm",
+      "distributions": [
+        "777genius/hubspot-crm"
+      ],
+      "icon": {
+        "path": "assets/plugin-icons/hubspot.svg",
+        "digest": "sha256:5e3d32c06f065e541829e34c2d2429b1fee686a49020b1974b3fec228916f55e"
+      }
+    },
+    {
+      "schema_version": 1,
+      "id": "hubspot-developer",
+      "display_name": "Hubspot Developer",
+      "description": "Local HubSpot Developer MCP integration for project scaffolding, CMS, builds, logs, and app workflows via the HubSpot CLI.",
+      "manifest_name": "hubspot-developer",
+      "aliases": [
+        "hubspot-developer"
+      ],
+      "reserved_aliases": [
+        "hubspot-developer"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "cms",
+        "developer-tools",
+        "hubspot",
+        "mcp",
+        "plugins"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/hubspot-developer",
+      "distributions": [
+        "777genius/hubspot-developer"
+      ],
+      "icon": {
+        "path": "assets/plugin-icons/hubspot.svg",
+        "digest": "sha256:5e3d32c06f065e541829e34c2d2429b1fee686a49020b1974b3fec228916f55e"
+      }
+    },
+    {
+      "schema_version": 1,
+      "id": "linear",
+      "display_name": "Linear",
+      "description": "Community package for the official Linear MCP integration for workspace management, issues, and project workflows.",
+      "manifest_name": "linear",
+      "aliases": [
+        "linear"
+      ],
+      "reserved_aliases": [
+        "linear"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "issues",
+        "linear",
+        "mcp",
+        "plugins",
+        "project-management"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/linear",
+      "distributions": [
+        "777genius/linear"
+      ],
+      "icon": {
+        "path": "assets/plugin-icons/linear.svg",
+        "digest": "sha256:3700486fede168b1fbaf0987eda06621d0e54dd30968578b857fd7360cb2029e"
+      }
+    },
+    {
+      "schema_version": 1,
+      "id": "marketing-kit",
+      "display_name": "Marketing Kit",
+      "description": "Plan campaigns using Notion content, HubSpot CRM context and Playwright landing-page checks. UAP installs the three integrations as dependencies; account sign-in remains separate.",
+      "manifest_name": "marketing-kit",
+      "aliases": [
+        "marketing-kit"
+      ],
+      "reserved_aliases": [
+        "marketing-kit"
+      ],
+      "categories": [
+        "campaigns",
+        "content",
+        "crm",
+        "marketing"
+      ],
+      "minimum_capabilities": {
+        "skills": "required",
+        "mcp": "optional"
+      },
+      "default_distribution": "777genius/marketing-kit",
+      "distributions": [
+        "777genius/marketing-kit"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "neon",
+      "display_name": "Neon",
+      "description": "Community package for the official Neon hosted MCP plugin for database, branch, and project workflows through Neon's remote MCP server.",
+      "manifest_name": "neon",
+      "aliases": [
+        "neon"
+      ],
+      "reserved_aliases": [
+        "neon"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "database",
+        "mcp",
+        "neon",
+        "plugins",
+        "postgres"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/neon",
+      "distributions": [
+        "777genius/neon"
+      ],
+      "icon": {
+        "path": "assets/plugin-icons/neon.svg",
+        "digest": "sha256:1efb65dc651fea608e77c090df6a6113fdb186a3ca3643d2800db34bea9a72b2"
+      }
+    },
+    {
+      "schema_version": 1,
+      "id": "notion",
+      "display_name": "Notion",
+      "description": "Community package for the official Notion hosted MCP plugin for user-authorized workspace access. Search pages, read docs, edit content, and work with Notion knowledge directly from AI agents.",
+      "manifest_name": "notion",
+      "aliases": [
+        "notion"
+      ],
+      "reserved_aliases": [
+        "notion"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "collaboration",
+        "knowledge",
+        "mcp",
+        "notion",
+        "planning",
+        "plugins"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/notion",
+      "distributions": [
+        "777genius/notion"
+      ],
+      "icon": {
+        "path": "assets/plugin-icons/notion.svg",
+        "digest": "sha256:81f54dd0d8bc6dd8d01c56acd8cb67a60bc66f0b1fa48754e9d28f9f6c3d83f9"
+      }
+    },
+    {
+      "schema_version": 1,
+      "id": "playwright",
+      "display_name": "Playwright",
+      "description": "Community package for Playwright MCP. Automate browsers and inspect web pages through Playwright.",
+      "manifest_name": "playwright",
+      "aliases": [
+        "playwright"
+      ],
+      "reserved_aliases": [
+        "playwright"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "automation",
+        "browser",
+        "mcp",
+        "testing"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/playwright-bridge",
+      "distributions": [
+        "777genius/playwright-bridge"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "sentry",
+      "display_name": "Sentry",
+      "description": "Community package for the official Sentry hosted MCP plugin for human-in-the-loop debugging, issue triage, and incident workflows through Sentry's remote MCP service.",
+      "manifest_name": "sentry",
+      "aliases": [
+        "sentry"
+      ],
+      "reserved_aliases": [
+        "sentry"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "debugging",
+        "incidents",
+        "mcp",
+        "plugins",
+        "sentry"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/sentry",
+      "distributions": [
+        "777genius/sentry"
+      ],
+      "icon": {
+        "path": "assets/plugin-icons/sentry.svg",
+        "digest": "sha256:24ac56868a3b5dd440c4de2a3cf8f6864591ba81067eedd8d6be0b0690b136eb"
+      }
+    },
+    {
+      "schema_version": 1,
+      "id": "statsig",
+      "display_name": "Statsig",
+      "description": "Community package for the official Statsig MCP plugin for experiments, feature flags, configs, metrics, and console workflows through Statsig's hosted MCP service.",
+      "manifest_name": "statsig",
+      "aliases": [
+        "statsig"
+      ],
+      "reserved_aliases": [
+        "statsig"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "experimentation",
+        "feature-flags",
+        "mcp",
+        "plugins",
+        "statsig"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/statsig",
+      "distributions": [
+        "777genius/statsig"
+      ],
+      "icon": {
+        "path": "assets/plugin-icons/statsig.png",
+        "digest": "sha256:d5d78848f86767a6bb2d54326621f864b20a42e12de3dfba7d40dd2981129d0e"
+      }
+    },
+    {
+      "schema_version": 1,
+      "id": "stripe",
+      "display_name": "Stripe",
+      "description": "Community package for the official Stripe hosted MCP plugin for payments, billing, customer, and documentation workflows through Stripe's remote MCP service.",
+      "manifest_name": "stripe",
+      "aliases": [
+        "stripe"
+      ],
+      "reserved_aliases": [
+        "stripe"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "billing",
+        "commerce",
+        "mcp",
+        "payments",
+        "plugins",
+        "stripe"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/stripe",
+      "distributions": [
+        "777genius/stripe"
+      ],
+      "icon": {
+        "path": "assets/plugin-icons/stripe.svg",
+        "digest": "sha256:7576775bf9915b696bbb9162268f5c56147d2b4221a76ac6a9ca92835239b7e9"
+      }
+    },
+    {
+      "schema_version": 1,
+      "id": "supabase",
+      "display_name": "Supabase",
+      "description": "Community package for the official Supabase MCP integration for development and database operations from agent workflows.",
+      "manifest_name": "supabase",
+      "aliases": [
+        "supabase"
+      ],
+      "reserved_aliases": [
+        "supabase"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "backend",
+        "mcp",
+        "plugins",
+        "postgres",
+        "supabase"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/supabase",
+      "distributions": [
+        "777genius/supabase"
+      ],
+      "icon": {
+        "path": "assets/plugin-icons/supabase.svg",
+        "digest": "sha256:75f9566421d97d4f1d8d7f34526189fd6e727ca83987432fc2477c2fc8388086"
+      }
+    },
+    {
+      "schema_version": 1,
+      "id": "tinyfish",
+      "display_name": "TinyFish",
+      "description": "Community package for TinyFish MCP. Search the live web, fetch clean page content, and run browser automations through TinyFish's hosted server.",
+      "manifest_name": "tinyfish",
+      "aliases": [
+        "tinyfish"
+      ],
+      "reserved_aliases": [
+        "tinyfish"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "browser-automation",
+        "fetch",
+        "mcp",
+        "search",
+        "tinyfish"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/tinyfish-bridge",
+      "distributions": [
+        "777genius/tinyfish-bridge"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "vercel",
+      "display_name": "Vercel",
+      "description": "Community package for the official Vercel hosted MCP plugin for project, deployment, log, and documentation workflows through Vercel's remote MCP service.",
+      "manifest_name": "vercel",
+      "aliases": [
+        "vercel"
+      ],
+      "reserved_aliases": [
+        "vercel"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "deployments",
+        "mcp",
+        "plugins",
+        "vercel"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/vercel",
+      "distributions": [
+        "777genius/vercel"
+      ],
+      "icon": {
+        "path": "assets/plugin-icons/vercel.svg",
+        "digest": "sha256:6217577e71250f65a47fa6d738dfd32aef81446c0708c146415ec2b04622a768"
+      }
+    }
+  ],
+  "distributions": [
+    {
+      "schema_version": 1,
+      "id": "777genius/atlassian",
+      "product_id": "atlassian",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "atlassian",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/atlassian"
+          },
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:61e9343e636c6197067504b59b1a77c5466bad2ca97b59aacd5455d4c5301d7a",
+          "manifest_digest": "sha256:e83ade754f1251554622e4b48d596ebf72510bd7292b19a7793df4de8e546d04",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-11-11T00:00:00Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.104",
+          "targets": [
+            {
+              "client": "pi",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed",
+              "authentication": "required"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/chrome-devtools-bridge",
+      "product_id": "chrome-devtools",
+      "kind": "community_bridge",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 3,
+          "package_version": "1.8.0-uap.2",
+          "manifest_name": "chrome-devtools",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins-registry",
+            "revision": "32b6c48d071aceadf90a030c9d69477fe1a6a65a",
+            "path": "plugins/chrome-devtools"
+          },
+          "build_provenance": {
+            "upstream_repository": "ChromeDevTools/chrome-devtools-mcp",
+            "upstream_revision": "05d9e55581b48e12412c0b531d87c739143782b6"
+          },
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:b1ff05c14b80f38f2c71961f60540f6e55072cd09c2c828cdeb2df445b5a1bcc",
+          "manifest_digest": "sha256:d14e6529884e7f57d1a2ac6280baef1f3bd052aa3080f9c62ea8458c89b70a90",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-11-11T00:00:00Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 3,
+          "status": "active",
+          "minimum_installer_version": "0.1.104",
+          "targets": [
+            {
+              "client": "pi",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed",
+              "authentication": "not_required"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/cloudflare",
+      "product_id": "cloudflare",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "cloudflare",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/cloudflare"
+          },
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:3c882fefc11319f5f51753786b53fe0da3978f45d6797dccdcc9f283f61424a5",
+          "manifest_digest": "sha256:9bec7cfed2ecb217145c2a02658296670a328416566433518b4da0246e91d382",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-11-11T00:00:00Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.104",
+          "targets": [
+            {
+              "client": "pi",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed",
+              "authentication": "required"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/cloudflare-bindings",
+      "product_id": "cloudflare-bindings",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "cloudflare-bindings",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/cloudflare-bindings"
+          },
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:f5355538e1558c47e51f2249a753fc179352a27e17de213ee6763c4eeac763b5",
+          "manifest_digest": "sha256:6b945cf035f784216e71425cf7b6ca477b27a2069d2580e9713a65f5ec2ca0bf",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-11-11T00:00:00Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.104",
+          "targets": [
+            {
+              "client": "pi",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed",
+              "authentication": "required"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/cloudflare-bindings-bridge",
+      "product_id": "cloudflare-bindings",
+      "kind": "community_bridge",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.5.5-uap.1",
+          "manifest_name": "cloudflare-bindings",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins-registry",
+            "revision": "32b6c48d071aceadf90a030c9d69477fe1a6a65a",
+            "path": "plugins/cloudflare-bindings"
+          },
+          "build_provenance": {
+            "upstream_repository": "cloudflare/mcp-server-cloudflare",
+            "upstream_revision": "db9084730dd45ebb6ac4dd5d3181d189cc96e98d"
+          },
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:19408ffd451d109a345e3aa6e46de029efc730971576933e2649c1859f5f5936",
+          "manifest_digest": "sha256:b666db9fbf269ca6f333209f47be3ca99aaf8ca7d16c5d8907703c4a2bf8ba64",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-11-11T00:00:00Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.104",
+          "targets": [
+            {
+              "client": "pi",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed",
+              "authentication": "required"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/cloudflare-bridge",
+      "product_id": "cloudflare",
+      "kind": "community_bridge",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "1.0.0-uap.1",
+          "manifest_name": "cloudflare",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins-registry",
+            "revision": "32b6c48d071aceadf90a030c9d69477fe1a6a65a",
+            "path": "plugins/cloudflare"
+          },
+          "build_provenance": {
+            "upstream_repository": "cloudflare/skills",
+            "upstream_revision": "9177f9a0bafc1ab61a0dae8dca57a8eb4d9f636d"
+          },
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:29e6dee60be2acf06370ed182de228f101eb5d643809b87019d84e1b27f3408b",
+          "manifest_digest": "sha256:ed0c1776a5ff085de37447f8f0c28ed04148dce47c7dffabb550b08989e97465",
+          "components": [
+            "mcp",
+            "skills"
+          ],
+          "published_at": "2026-11-11T00:00:00Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.104",
+          "targets": [
+            {
+              "client": "pi",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed",
+              "authentication": "required"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/cloudflare-docs",
+      "product_id": "cloudflare-docs",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "cloudflare-docs",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/cloudflare-docs"
+          },
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:afdb5ca9b565971bbb34dec9fe6e107fcff4af98e0cd51cbc718eb43938a282d",
+          "manifest_digest": "sha256:6b575562e527194ccd31238fde8c5f764409ecc98e211e92dfb81455eef88bdd",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-11-11T00:00:00Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.104",
+          "targets": [
+            {
+              "client": "pi",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed",
+              "authentication": "not_required"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/cloudflare-docs-bridge",
+      "product_id": "cloudflare-docs",
+      "kind": "community_bridge",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 2,
+          "package_version": "0.4.13-uap.1",
+          "manifest_name": "cloudflare-docs",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins-registry",
+            "revision": "32b6c48d071aceadf90a030c9d69477fe1a6a65a",
+            "path": "plugins/cloudflare-docs"
+          },
+          "build_provenance": {
+            "upstream_repository": "cloudflare/mcp-server-cloudflare",
+            "upstream_revision": "0c51a6fbcf9a2fae80120287e8238fb947cdc2df"
+          },
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:3c56c4490ca928a8d46e40e8dbb8693698d01490621c7c21297577a09b49b747",
+          "manifest_digest": "sha256:25128465979e1837271abe8ccfc91a15a7322dbaaf7962a10aefab5c06ad12d5",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-11-11T00:00:00Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 2,
+          "status": "active",
+          "minimum_installer_version": "0.1.104",
+          "targets": [
+            {
+              "client": "pi",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed",
+              "authentication": "not_required"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/cloudflare-observability",
+      "product_id": "cloudflare-observability",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "cloudflare-observability",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/cloudflare-observability"
+          },
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:59d64ca296d700a78c134a5947eacff8f91fa64b07f910f90476c3e4fe03c1e7",
+          "manifest_digest": "sha256:41573bb020202619d72fe2cbbf35c56cb5ed4b885b17867ffd2e4a74ebcb5064",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-11-11T00:00:00Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.104",
+          "targets": [
+            {
+              "client": "pi",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed",
+              "authentication": "required"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/cloudflare-observability-bridge",
+      "product_id": "cloudflare-observability",
+      "kind": "community_bridge",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.5.5-uap.1",
+          "manifest_name": "cloudflare-observability",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins-registry",
+            "revision": "32b6c48d071aceadf90a030c9d69477fe1a6a65a",
+            "path": "plugins/cloudflare-observability"
+          },
+          "build_provenance": {
+            "upstream_repository": "cloudflare/mcp-server-cloudflare",
+            "upstream_revision": "db9084730dd45ebb6ac4dd5d3181d189cc96e98d"
+          },
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:e3455b86762215fbff2363094fbde3224033eeeb7b3994d4e3d3824afd37c5db",
+          "manifest_digest": "sha256:ceb9033ca2ae731cea03bee513ed394b2053e58bbf8e8c8f1f3f184af1c6d719",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-11-11T00:00:00Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.104",
+          "targets": [
+            {
+              "client": "pi",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed",
+              "authentication": "required"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/cloudflare-radar",
+      "product_id": "cloudflare-radar",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "cloudflare-radar",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/cloudflare-radar"
+          },
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:e3209d1a2d7084930cbb19e744e715dcbfe5bc27a72fb9ca3a22f59d8d240d79",
+          "manifest_digest": "sha256:cf94d10bad7d902f4ed171d2363854fb93409ac79a1c5e02d152be6448d66fc2",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-11-11T00:00:00Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.104",
+          "targets": [
+            {
+              "client": "pi",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed",
+              "authentication": "required"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/context7",
+      "product_id": "context7",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 6,
+          "package_version": "0.2.4",
+          "manifest_name": "context7",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins-registry",
+            "revision": "32b6c48d071aceadf90a030c9d69477fe1a6a65a",
+            "path": "plugins/context7"
+          },
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:f24e91e8635bf0ab455e5e0fa7504292621e6e9c8815cf3c84b009272b1724f8",
+          "manifest_digest": "sha256:f69113fb2f1efbae8b66541476eb8db43f9b73dbf18fa474d3a6d827f336b373",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-11-11T00:00:00Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 6,
+          "status": "active",
+          "minimum_installer_version": "0.1.104",
+          "targets": [
+            {
+              "client": "pi",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed",
+              "authentication": "not_required"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/docker-hub",
+      "product_id": "docker-hub",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "docker-hub",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/docker-hub"
+          },
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:5388e4d24222d40c57337f2d4a65559c70e34ecfd803cfe7fd41268ef722e3ba",
+          "manifest_digest": "sha256:413347fe45d0dbcbd5b4d5cf88eb7e0ec5c0cd080486ea4cb8c3f61f0bd7a95d",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-11-11T00:00:00Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.104",
+          "targets": [
+            {
+              "client": "pi",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed",
+              "authentication": "not_required"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/figma",
+      "product_id": "figma",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "figma",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/figma"
+          },
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:3c8672413b34e3570c16bc3a31d8ca77da25d5e7ef302608c9c11da3d8c8a1a8",
+          "manifest_digest": "sha256:67fbfd8062a7f3d965ee63cc68f392a6afb1e8861e3bcc5fe1f70e7e9fadabba",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-11-11T00:00:00Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.104",
+          "targets": [
+            {
+              "client": "pi",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed",
+              "authentication": "required"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/firebase",
+      "product_id": "firebase",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 8,
+          "package_version": "0.2.6",
+          "manifest_name": "firebase",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins-registry",
+            "revision": "32b6c48d071aceadf90a030c9d69477fe1a6a65a",
+            "path": "plugins/firebase"
+          },
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:023f63215112b322f30ed694b6611258ba04d059654a1b0155a8867226dfe4c3",
+          "manifest_digest": "sha256:a6438b9ba1ab794020b8dd463a80d03bbd6e797bc8b7d3d1551ce97190a3cedc",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-11-11T00:00:00Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 8,
+          "status": "active",
+          "minimum_installer_version": "0.1.104",
+          "targets": [
+            {
+              "client": "pi",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed",
+              "authentication": "required"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/firecrawl-bridge",
+      "product_id": "firecrawl",
+      "kind": "community_bridge",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "3.24.1",
+          "manifest_name": "firecrawl",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins-registry",
+            "revision": "32b6c48d071aceadf90a030c9d69477fe1a6a65a",
+            "path": "plugins/firecrawl"
+          },
+          "build_provenance": {
+            "upstream_repository": "firecrawl/firecrawl-mcp-server",
+            "upstream_revision": "518e9299817aca118f0b3f5dded4c5fe7889d24e"
+          },
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:a99ca95c810a29494ab55e6a1b827d88b89f27a3572f10e7918098914d1570ad",
+          "manifest_digest": "sha256:5dd4a55467b3149a3cd253b465796b1f021d66eab9244b8faed627b0209f4bf6",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-11-11T00:00:00Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.104",
+          "targets": [
+            {
+              "client": "pi",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed",
+              "authentication": "not_required"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/github",
+      "product_id": "github",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "github",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/github"
+          },
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:2478a68a98982f115b5288c8c8931365635ce827581516ca54e11266e95d28a3",
+          "manifest_digest": "sha256:091e37c5f33c0a92f77070cfcb1b03759b2637927281c04d989e6c8fef888cae",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-11-11T00:00:00Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.104",
+          "targets": [
+            {
+              "client": "pi",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed",
+              "authentication": "required"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/github-bridge",
+      "product_id": "github",
+      "kind": "community_bridge",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 2,
+          "package_version": "1.10.1-uap.1",
+          "manifest_name": "github",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins-registry",
+            "revision": "32b6c48d071aceadf90a030c9d69477fe1a6a65a",
+            "path": "plugins/github"
+          },
+          "build_provenance": {
+            "upstream_repository": "github/github-mcp-server",
+            "upstream_revision": "fcdd664099f957c4a7dc183d9381cef191e8c8a9"
+          },
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:2ce143ac1068f56e8674b1160c6c82515d0387529d5dbf13f03b2e080a3953d0",
+          "manifest_digest": "sha256:ea444f4814659dde61a78073d55377abd04d34fe9c09af7c9bbb41c93097523e",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-11-11T00:00:00Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 2,
+          "status": "active",
+          "minimum_installer_version": "0.1.104",
+          "targets": [
+            {
+              "client": "pi",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed",
+              "authentication": "required"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/gitlab",
+      "product_id": "gitlab",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "gitlab",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/gitlab"
+          },
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:ed37827bf8a1c65a36d6f2983ad9e8f7712f25669bd869970b221dbea3b862c2",
+          "manifest_digest": "sha256:1a181fab20d9520f5f006f4237e88d67cf58d29b9994dbc45ee4c80d2474e080",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-11-11T00:00:00Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.104",
+          "targets": [
+            {
+              "client": "pi",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed",
+              "authentication": "required"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/greptile",
+      "product_id": "greptile",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "greptile",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/greptile"
+          },
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:91f27a0beb56a229d213f88dc343d4b7a53a54d189b568f0e98aa119884a620e",
+          "manifest_digest": "sha256:05b29500564aede5274a6d21c0cf5bb4727e995045b04de170913b7ef2ae07bb",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-11-11T00:00:00Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.104",
+          "targets": [
+            {
+              "client": "pi",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed",
+              "authentication": "required"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/heroku",
+      "product_id": "heroku",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "heroku",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/heroku"
+          },
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:b8bf38abe09ad00b1368772a680f60586903113bd13535d643151487c67abb8e",
+          "manifest_digest": "sha256:5b7c088e290ed04b0eafe0275dc806e7c2153dd7cbe6b74d1c5f1d2961e9355a",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-11-11T00:00:00Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.104",
+          "targets": [
+            {
+              "client": "pi",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed",
+              "authentication": "required"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/hubspot-crm",
+      "product_id": "hubspot-crm",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "hubspot-crm",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/hubspot-crm"
+          },
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:09a0b151c384235c3d7b3929398695d24cd7b07c75993a0a73f1a218198ededd",
+          "manifest_digest": "sha256:20334e86a1b599d2759e04bfaef37dc2ddb7f6b0f3994b5d66d4eca12fbec941",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-11-11T00:00:00Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.104",
+          "targets": [
+            {
+              "client": "pi",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed",
+              "authentication": "required"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/hubspot-developer",
+      "product_id": "hubspot-developer",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 8,
+          "package_version": "0.2.6",
+          "manifest_name": "hubspot-developer",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins-registry",
+            "revision": "32b6c48d071aceadf90a030c9d69477fe1a6a65a",
+            "path": "plugins/hubspot-developer"
+          },
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:3759057d12eaa2e792cb843200c89218ce6ba05dbb1f49690443e0e211426ded",
+          "manifest_digest": "sha256:41c312e88223667349b2b36544f8cc0aab861ed4fc1cc24a58eae7d1fb83f646",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-11-11T00:00:00Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 8,
+          "status": "active",
+          "minimum_installer_version": "0.1.104",
+          "targets": [
+            {
+              "client": "pi",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed",
+              "authentication": "required"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/linear",
+      "product_id": "linear",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "linear",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/linear"
+          },
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:6d74545875e84110fc490981e72527e05e891ed0a67033a716184fb507001978",
+          "manifest_digest": "sha256:0b8ed223c21d206d802130ace7219b5c78af1903675640cc77f5195e4f86ef70",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-11-11T00:00:00Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.104",
+          "targets": [
+            {
+              "client": "pi",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed",
+              "authentication": "required"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/marketing-kit",
+      "product_id": "marketing-kit",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "marketing-kit",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins-registry",
+            "revision": "32b6c48d071aceadf90a030c9d69477fe1a6a65a",
+            "path": "plugins/marketing-kit"
+          },
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:8918c0f0222bd735fd0eef3cacf90b5a9351fb213483d1558a65b9911624e68a",
+          "manifest_digest": "sha256:40b18a6b33c6392134aff7beafb9a91eaeecf46ce765e0e888cdc743dd284ea2",
+          "components": [
+            "skills"
+          ],
+          "published_at": "2026-11-11T00:00:00Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.104",
+          "targets": [
+            {
+              "client": "pi",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed",
+              "authentication": "required"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/neon",
+      "product_id": "neon",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "neon",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/neon"
+          },
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:eda9ec7ba831b2c6bd689ed57d0862bfe31903fcfbf82410bf8f2c6a3fa2e81a",
+          "manifest_digest": "sha256:6787894c7d3e033db05deee5e36358caf387493a98a78716d6db4b343e9c0698",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-11-11T00:00:00Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.104",
+          "targets": [
+            {
+              "client": "pi",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed",
+              "authentication": "required"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/notion",
+      "product_id": "notion",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "notion",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/notion"
+          },
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:860fa6dd1830d0da2b8fed38195fa6ad6307082ac12d708118e5eb1c5d10f9b7",
+          "manifest_digest": "sha256:bbab30a4f062218d7a5fce2f6c818680d3c7adfaebdbaa3e523e15942a2f57e5",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-11-11T00:00:00Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.104",
+          "targets": [
+            {
+              "client": "pi",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed",
+              "authentication": "required"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/playwright-bridge",
+      "product_id": "playwright",
+      "kind": "community_bridge",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 2,
+          "package_version": "0.0.80",
+          "manifest_name": "playwright",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins-registry",
+            "revision": "32b6c48d071aceadf90a030c9d69477fe1a6a65a",
+            "path": "plugins/playwright"
+          },
+          "build_provenance": {
+            "upstream_repository": "microsoft/playwright-mcp",
+            "upstream_revision": "8a13ef8e9f7385a0f89477922127f31cbfde9761"
+          },
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:ff3c74bb5760fea47003130f3984d48234892330325a7cad35a7bc973acc9cf6",
+          "manifest_digest": "sha256:8419b5c9e67894c2312048c4fe30e3ea920d00101d02641230183dd7ab4d3b31",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-11-11T00:00:00Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 2,
+          "status": "active",
+          "minimum_installer_version": "0.1.104",
+          "targets": [
+            {
+              "client": "pi",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed",
+              "authentication": "not_required"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/sentry",
+      "product_id": "sentry",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "sentry",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/sentry"
+          },
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:cf7816d17894eb8f42db2587eef1ce2a31a145188879545414f840eaa477c5da",
+          "manifest_digest": "sha256:7606b1f8af700ea76590f0ae586ff8586f4dc370f536ceedbeab8d934494e42e",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-11-11T00:00:00Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.104",
+          "targets": [
+            {
+              "client": "pi",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed",
+              "authentication": "required"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/statsig",
+      "product_id": "statsig",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "statsig",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/statsig"
+          },
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:4a350c242ed9a4a29f64fa64d9f3a74025c5ee0e9d6a4e4b23eee35d1f9878ed",
+          "manifest_digest": "sha256:5100526dca8f8e53e42d1d53f8acc1879ea8a2d8b0982df3f00be5e95bf3e465",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-11-11T00:00:00Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.104",
+          "targets": [
+            {
+              "client": "pi",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed",
+              "authentication": "required"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/stripe",
+      "product_id": "stripe",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "stripe",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/stripe"
+          },
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:37867106f65c2acb5f5c64bebe4e5ce61f7e73dbb05f7d94d2f398dc913833fe",
+          "manifest_digest": "sha256:e70885fda5a4ce50c302891229e204bbf22904ec3f227670e5916d69f9b8b80d",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-11-11T00:00:00Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.104",
+          "targets": [
+            {
+              "client": "pi",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed",
+              "authentication": "required"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/supabase",
+      "product_id": "supabase",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "supabase",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/supabase"
+          },
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:4605084fd9f2f773c8eafa3741b31f639f5f5a8771320d8a7a91f5a5e1db1034",
+          "manifest_digest": "sha256:bb0672e8cd411b1c8e0872a5f7f0abc95f9c68f008802d42a2cd16a689deeb11",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-11-11T00:00:00Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.104",
+          "targets": [
+            {
+              "client": "pi",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed",
+              "authentication": "required"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/tinyfish-bridge",
+      "product_id": "tinyfish",
+      "kind": "community_bridge",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "1.2.4",
+          "manifest_name": "tinyfish",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins-registry",
+            "revision": "32b6c48d071aceadf90a030c9d69477fe1a6a65a",
+            "path": "plugins/tinyfish"
+          },
+          "build_provenance": {
+            "upstream_repository": "tinyfish-io/tinyfish-cookbook",
+            "upstream_revision": "8615317f6db58ae776dd53817ac30668c1db5ef8"
+          },
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:78fb42e51c7c11cf2cefc8891bc7dbb40b8777e84d7299549176bfcac23025a1",
+          "manifest_digest": "sha256:6f3dc73deeb2c23ea38e55d3981bd1e24a681308902001b8e3dd7dd36fea826f",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-11-11T00:00:00Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.104",
+          "targets": [
+            {
+              "client": "pi",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed",
+              "authentication": "required"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/vercel",
+      "product_id": "vercel",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "vercel",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/vercel"
+          },
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:d5089e23eccc6fe58e82be33512e25d0ee523d61f21fa42ff1e0f5bc4bad6c9c",
+          "manifest_digest": "sha256:23f7cd28573c4ab10943178db05a47f2af3639518a334449c23d89b19562ef74",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-11-11T00:00:00Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.104",
+          "targets": [
+            {
+              "client": "pi",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed",
+              "authentication": "required"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "github/github",
+      "product_id": "github",
+      "kind": "upstream",
+      "status": "active",
+      "packager": "github",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "",
+          "manifest_name": "github",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "github/github-mcp-server",
+            "revision": "59847fb6204b276dcdbe10eaf14ebe3a73176948",
+            "path": "agent-plugin"
+          },
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:277d1d6ac82febff8dcb43808f158308f04f57eb03f9621163bd0d1941d8e7a0",
+          "manifest_digest": "sha256:4500bfe9a78f736c0300fde137595bc47d16582b12727aef062eb0f2b86735f1",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-11-11T00:00:00Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.104",
+          "targets": [
+            {
+              "client": "pi",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed",
+              "authentication": "required"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "upstash/context7",
+      "product_id": "context7",
+      "kind": "upstream",
+      "status": "active",
+      "packager": "upstash",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "1.0.0",
+          "manifest_name": "context7",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "upstash/context7",
+            "revision": "769c6cd22c3d95462d1f55d789e9532cabefa5a9",
+            "path": "plugins/agent-plugins/context7"
+          },
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:08eed3b67f2e71a11b68baa594380c2f69ec1bc97584d701deaf7942ac34c0d8",
+          "manifest_digest": "sha256:d01781acd899aefa9445a290cf43a481230321934d62f9c8a2aab06a89718236",
+          "components": [
+            "mcp",
+            "skills"
+          ],
+          "published_at": "2026-11-11T00:00:00Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.104",
+          "targets": [
+            {
+              "client": "pi",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed",
+              "authentication": "required"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    }
+  ],
+  "evidence": [],
+  "revocations": []
+}

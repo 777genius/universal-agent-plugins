@@ -30,9 +30,12 @@ func acquireSavedAdd(ctx context.Context, app App, opts *options, source string,
 		}
 	}
 	if loaded.directorySelection != nil {
+		if loaded.directory == nil {
+			return environment.Requirement{}, environment.LockedPackage{}, errors.New("signed Directory selection lacks authenticated feed identity")
+		}
 		selection := loaded.directorySelection
 		requirement = environment.Requirement{Registry: &environment.RegistrySource{Distribution: selection.DistributionID, Selector: environment.Selector{Kind: environment.SelectorRelease, Value: fmt.Sprint(selection.ReleaseSequence)}}}
-		pin.Source.Registry = &environment.LockedRegistrySource{Distribution: selection.DistributionID, DistributionID: selection.DistributionID, ProductID: selection.ProductID, ReleaseSequence: selection.ReleaseSequence, Requested: requirement.Registry.Selector, Repository: selection.Source.Repository, Path: selection.Source.Path, Commit: selection.Source.Revision}
+		pin.Source.Registry = &environment.LockedRegistrySource{FeedID: loaded.directory.FeedID, Distribution: selection.DistributionID, DistributionID: selection.DistributionID, ProductID: selection.ProductID, ReleaseSequence: selection.ReleaseSequence, Requested: requirement.Registry.Selector, Repository: selection.Source.Repository, Path: selection.Source.Path, Commit: selection.Source.Revision}
 	} else {
 		pin.Source.Git = &environment.LockedGitSource{Repository: requirement.Git.Repository, Path: requirement.Git.Path, Commit: requirement.Git.Selector.Value, Requested: requirement.Git.Selector}
 	}

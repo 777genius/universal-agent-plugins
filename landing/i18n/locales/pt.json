@@ -208,6 +208,60 @@
     "buildGuideLink": "Abrir o guia de criação"
   },
   "shell": {
+    "clientSupport": {
+      "eyebrow": "Compatibilidade",
+      "title": "Agentes compatíveis e escopos de instalação",
+      "description": "O escopo de usuário instala componentes no perfil do agente; o escopo de projeto os instala em um único espaço de trabalho. O UAP configura os arquivos compatíveis. O agente ainda pode solicitar confiança, login ou reinício.",
+      "tableLabel": "Tabela de suporte à instalação por agente",
+      "tableCaption": "Suporte a usuário e projeto, modo de configuração e ações após a instalação.",
+      "columns": {
+        "agent": "Agente",
+        "user": "Escopo de usuário",
+        "project": "Escopo de projeto",
+        "setup": "Configuração",
+        "nextStep": "Após a instalação"
+      },
+      "scrollHint": "Role a tabela para os lados para ver todas as colunas.",
+      "note": "Automático: o UAP instala os componentes compatíveis. Guiado: siga as instruções do agente. Preparado: ative os arquivos preparados. Manual: conclua a configuração no aplicativo. A instalação não faz login nem concede confiança automaticamente. A disponibilidade depende do plugin e da versão do agente. Referência: CLI nativo 0.1.108. A publicação no npm é independente e pode atrasar. O suporte a um agente não garante uma versão assinada do catálogo compatível com cada plugin e escopo.",
+      "details": "Ver detalhes de compatibilidade",
+      "capabilities": {
+        "pluginsSkillsMcp": "Plugins, habilidades, MCP",
+        "skillsMcp": "Habilidades, MCP",
+        "pluginsSkillsMcpHooks": "Plugins, habilidades, MCP, ganchos",
+        "extensionsSkillsMcp": "Extensões, habilidades, MCP",
+        "copilotPackage": "Pacote via Copilot",
+        "desktopLocalPluginsWebConnectedApps": "Plugins locais no desktop; aplicativos conectados na Web",
+        "personalAppSetup": "Configuração de aplicativo pessoal",
+        "skillsOnly": "Somente habilidades",
+        "skillsMcpPrepared": "Habilidades, MCP (preparado)",
+        "notSupported": "Não suportado"
+      },
+      "setup": {
+        "automatic": "Automático",
+        "guided": "Guiado",
+        "prepared": "Preparado",
+        "manual": "Manual"
+      },
+      "nextSteps": {
+        "claude": "Confie no espaço de trabalho e recarregue o Claude Code se solicitado.",
+        "codex": "Abra uma nova sessão; autorize o acesso MCP do projeto se solicitado.",
+        "opencode": "Inicie uma nova sessão e confira as configurações efetivas do projeto.",
+        "cursor": "Recarregue o Cursor; habilite plugins ou servidores MCP se necessário.",
+        "copilot": "Reinicie o Copilot CLI se solicitado.",
+        "gemini": "Recarregue o Gemini CLI e autorize o acesso às ferramentas se solicitado.",
+        "qoder": "Reinicie o Qoder e revise as permissões MCP.",
+        "pi": "Confie no projeto e recarregue os recursos do Pi.",
+        "windsurf": "Abra ou reinicie o Devin no projeto selecionado e revise o acesso.",
+        "kimi": "Execute /reload ou /new e revise as permissões MCP.",
+        "cline": "Selecione o caminho das configurações MCP do projeto e recarregue o Cline.",
+        "kiro": "Faça login, autorize o acesso e reinicie o Kiro se solicitado.",
+        "grok": "Abra o projeto no Grok, ative o plugin e conceda confiança; recarregue e verifique Skills e MCP.",
+        "vscode": "Abra a pasta, confie nela e revise e habilite os servidores MCP.",
+        "chatgpt": "Desktop: instalação local via Codex CLI; Web: conecte ou instale o aplicativo no ChatGPT.",
+        "hermes": "Reinicie o Hermes, confie no projeto Git selecionado e verifique Skills e MCP do usuário; MCP de projeto não é compatível.",
+        "antigravity": "Abra ou recarregue o Antigravity; revise a confiança e verifique se o plugin preparado foi descoberto e ativado no escopo selecionado."
+      }
+    },
     "dependencies": {
       "eyebrow": "Dependências conectadas",
       "title": "Dois plugins. Uma dependência compartilhada.",
@@ -269,7 +323,7 @@
       "items": {
         "0": {
           "question": "Quais agentes de IA são compatíveis?",
-          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, VS Code, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder: cada cliente tem seu próprio caminho de instalação ou preparação. A compatibilidade depende dos componentes, do escopo e dos requisitos de ativação."
+          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder, Hermes Agent, Google Antigravity, Pi: cada cliente tem seu próprio caminho de instalação ou preparação. A compatibilidade depende dos componentes, do escopo e dos requisitos de ativação."
         },
         "1": {
           "question": "Um comando instala em todos os agentes?",
@@ -584,6 +638,10 @@
       "disclaimer": "Verificações automatizadas reduzem riscos; elas não provam que um plugin é seguro. Revise o código-fonte e as permissões antes de instalar software em que você não confia."
     },
     "catalog": {
+      "sortLabel": "Ordenar plugins",
+      "sortRecommended": "Recomendados",
+      "sortName": "Nome A–Z",
+      "curationNote": "Recomendações para tarefas comuns de agentes, não uma classificação de segurança.",
       "staleCommunityResults": "Exibindo {count} entradas da comunidade do último catálogo assinado, gerado em {generated}, expirado em {expired}. Os comandos de instalação estão pausados até a atualização do catálogo. As entradas revisadas continuam disponíveis.",
       "staleCommunityListing": "Entrada histórica assinada; o catálogo expirou em {expired}.",
       "staleCommunityCommands": "Os comandos de instalação da comunidade estão pausados porque o catálogo assinado expirou. Você ainda pode consultar as entradas e o código-fonte.",
@@ -657,8 +715,8 @@
       "unavailableAtItsIndexedSource": "Indisponível na fonte indexada",
       "checkedAgainBeforeInstallation": "Verificado novamente antes da instalação",
       "reviewedListing": "Revisado",
-      "notAvailableForChatgpt": "Esta versão não tem conexão verificada com o ChatGPT",
-      "verifiedConnectionFinishSetupInChatgpt": "Conexão verificada; conclua a configuração no ChatGPT",
+      "notAvailableForChatgpt": "Este plugin não tem vínculo verificado com o ChatGPT Web. Os apps Web são conectados dentro do ChatGPT.",
+      "verifiedConnectionFinishSetupInChatgpt": "Vinculação do app ChatGPT Web verificada; conclua a conexão dentro do ChatGPT.",
       "allInstalledAgents": "Escolher agentes no terminal",
       "commandsDisabledInPreview": "Comandos desativados na pré-visualização.",
       "allInstalledAgentsRecommended": "Escolher agentes no terminal",
@@ -696,12 +754,12 @@
       "notReadyToInstall": "Ainda não está pronto para instalação",
       "detectedWhenYouRunTheCommand": "O comando permite escolher agentes antes da instalação.",
       "thisPackageIsNoLongerAvailableFromItsSource": "Este pacote não está mais disponível na origem.",
-      "notAvailableForChatgpt": "Esta versão não tem conexão verificada com o ChatGPT",
+      "notAvailableForChatgpt": "Este plugin não tem vínculo verificado com o ChatGPT Web. Os apps Web são conectados dentro do ChatGPT.",
       "unavailableSignedDirectorySnapshotExpired": "Indisponível: o snapshot assinado do Directory expirou",
       "noActiveReleaseSupportsThisClient": "Nenhuma versão ativa é compatível com este cliente",
       "unavailableReviewDataIsNotInstallationAuthority": "Indisponível: dados de revisão não autorizam instalação",
       "thisPackageDoesNotSupportAnyOfTheAgentsAvailableInTheInstallerYet": "Este pacote ainda não é compatível com nenhum dos agentes disponíveis no instalador.",
-      "verifiedConnectionFinishSetupInChatgpt": "Conexão verificada; conclua a configuração no ChatGPT",
+      "verifiedConnectionFinishSetupInChatgpt": "Vinculação do app ChatGPT Web verificada; conclua a conexão dentro do ChatGPT.",
       "allInstalledAgents": "Escolher agentes no terminal",
       "weFoundThisProjectButItDoesnTIncludeAnyToolsTheInstallerCanAddYet": "Encontramos este projeto, mas ele ainda não inclui ferramentas que o instalador possa adicionar.",
       "chooseTargetAgents": "Escolha os agentes de destino",
@@ -725,7 +783,7 @@
       "unresolvedDataIsForReviewOnlyProductionCommandsRequireAPublishedSignedDirectorySnapshot": "Dados não resolvidos são apenas para revisão; comandos de produção exigem um snapshot assinado do Directory publicado.",
       "commandsUnavailable": "Comandos indisponíveis.",
       "automaticDetection": "Escolher agentes no terminal",
-      "theCliChecksThisPluginAgainstInstalledAgentsSkipsIncompatibleOnesAndLetsYouConfirmTheTargetsChatgptIsIncludedOnlyWhenThisPluginProvidesAVerifiedConnection": "A CLI detecta agentes compatíveis para confirmação. O ChatGPT exige uma conexão verificada.",
+      "theCliChecksThisPluginAgainstInstalledAgentsSkipsIncompatibleOnesAndLetsYouConfirmTheTargetsChatgptIsIncludedOnlyWhenThisPluginProvidesAVerifiedConnection": "A CLI verifica os agentes locais e permite confirmar destinos compatíveis. O ChatGPT Web é separado: apps elegíveis podem ser preparados, mas a conexão é concluída no ChatGPT.",
       "oneStepRemainsInChatgpt": "Resta uma etapa no ChatGPT.",
       "noSingleSourceServesThisTargetSet": "Nenhuma fonte única atende a este conjunto de destinos.",
       "theCliWillFailBeforeMutationAndSuggestCompatibleTargetSourceCombinationsItNeverMixesDistributionsAcrossClients": "A CLI falhará antes de qualquer alteração e sugerirá combinações compatíveis de destino/fonte; ela nunca mistura distribuições entre clientes.",
@@ -769,7 +827,9 @@
           "mcp": "Ferramentas MCP",
           "extensions": "Extensões"
         }
-      }
+      },
+      "noCompatibleSignedRelease": "O UAP oferece suporte a {agent}, mas este plugin não tem uma versão assinada compatível com o escopo selecionado.",
+      "piPinnedProjectSource": "Projeto: instale no Pi a partir do Git fixado em um SHA exato (não é um destino Pi assinado); a CLI verifica a compatibilidade."
     },
     "authentication": {
       "not_required": "Nenhuma conta necessária",
@@ -816,11 +876,11 @@
         "activation": "Siga qualquer dica de ativação exibida pela CLI e inicie uma nova sessão do Codex."
       },
       "chatgpt": {
-        "note": "Vínculos de apps verificados e configuração guiada do Context7",
-        "status": "Configuração no app",
-        "intro": "Prepare Agent Plugins 1.0 compatíveis para o ChatGPT, mantendo a ativação do app e o consentimento da conta dentro do ChatGPT.",
-        "delivery": "A CLI valida os vínculos de apps dos publicadores e pode preparar um pacote de marketplace pessoal para o Context7 usando seu endpoint MCP público, que não exige autenticação.",
-        "activation": "Crie ou conecte o app no Modo de Desenvolvedor (Developer Mode), instale o plugin pessoal preparado e selecione-o em uma nova conversa."
+        "note": "Desktop: automático pelo Codex CLI; Web: configuração no ChatGPT",
+        "status": "Compatível",
+        "intro": "O ChatGPT oferece suporte a plugins no Desktop e na Web. Os plugins locais de Desktop usam o catálogo do Codex CLI; na Web, é necessário um app na nuvem compatível ou uma conexão ao catálogo.",
+        "delivery": "O UAP instala plugins locais compatíveis no Desktop pelo Codex CLI e prepara conexões Web verificadas. A ferramenta local não instala silenciosamente um plugin na sua conta do ChatGPT.",
+        "activation": "Desktop: abra uma nova conversa local e verifique o plugin. Web: conecte ou instale o app no ChatGPT e conceda as permissões necessárias."
       },
       "cursor": {
         "note": "Pacote nativo de Agent Plugin",
@@ -906,12 +966,26 @@
         "delivery": "A CLI grava um manifesto nativo .qoder-plugin e registra o pacote gerenciado pela Qoder CLI, quando disponível.",
         "activation": "Recarregue os plugins do Qoder ou reinicie o Qoder após a instalação. As conexões MCP em execução e a autenticação do provedor ainda precisam ser confirmadas no Qoder."
       },
-      "pi": {
-        "note": "Apenas extensões nativas do Pi gerenciadas",
+      "hermes": {
+        "note": "Skills e MCP de usuário; Skills de projeto sem MCP de projeto",
         "status": "Compatível",
-        "intro": "Instale pacotes Agent Plugins 1.0 que declarem uma extensão nativa do Pi. Habilidades portáveis e projeção MCP estão fora do escopo atual deste adaptador.",
-        "delivery": "O CLI instala a extensão do Pi declarada no diretório do agente Pi e acompanha o pacote gerenciado para atualização, reparo e remoção.",
-        "activation": "Após a instalação, recarregue os recursos ou reinicie o Pi para carregar a extensão gerenciada."
+        "intro": "Instale Skills nativas do Hermes Agent para seu usuário ou um projeto Git selecionado, além de servidores MCP de usuário, sem alterar configurações de terceiros.",
+        "delivery": "O UAP gerencia as pastas Skills que pertencem a ele e entradas MCP específicas no config.yaml do usuário. A instalação em projeto nunca altera a configuração MCP do usuário.",
+        "activation": "Reinicie o Hermes para recarregar a integração. Verifique a confiança no repositório antes de usar Skills de projeto; descoberta e autenticação ainda exigem confirmação separada."
+      },
+      "antigravity": {
+        "note": "Plugins nativos de usuário e projeto; ativação precisa de verificação",
+        "status": "Preparado pela CLI",
+        "intro": "Prepare plugins nativos do Google Antigravity com Skills e servidores MCP compatíveis no escopo escolhido de usuário ou projeto.",
+        "delivery": "O UAP prepara uma pasta de plugin gerenciada na configuração selecionada de usuário ou projeto, preserva os outros plugins e não ativa hooks implicitamente.",
+        "activation": "Abra ou recarregue o Antigravity e confirme que o plugin foi detectado e habilitado. Arquivos preparados não comprovam sessão de modelo, autenticação nem execução real de MCP."
+      },
+      "pi": {
+        "note": "Extensões nativas do Pi, Skills e MCP",
+        "status": "Compatível",
+        "intro": "Instale extensões, Skills e MCP (stdio/Streamable HTTP) compatíveis com Pi no usuário ou projeto. Pacotes do catálogo exigem uma versão assinada compatível; a CLI valida as fontes diretas separadamente.",
+        "delivery": "A CLI instala componentes elegíveis no perfil ou projeto Pi escolhido e gerencia atualização, reparo e remoção.",
+        "activation": "Recarregue os recursos ou reinicie o Pi. Revise a confiança no projeto e as permissões MCP, se necessário."
       }
     },
     "directoryPage": {
@@ -990,7 +1064,9 @@
       "availableFor": "Plugins disponíveis para {name}",
       "count": "{count} pacote revisado oferece suporte a este cliente. | {count} pacotes revisados oferecem suporte a este cliente.",
       "tryPlugin": "Experimente Context7 ou substitua {source} pelo nome curto revisado de outro plugin compatível ou pela fonte de um pacote completo.",
-      "localPackageHint": "Substitua ./my-plugin pelo caminho de um pacote Agent Plugins 1.0 válido."
+      "localPackageHint": "Substitua ./my-plugin pelo caminho de um pacote Agent Plugins 1.0 válido.",
+      "piSignedCount": "Pacotes assinados do catálogo para Pi: {count}",
+      "piDirectSourceNote": "Aqui aparecem apenas pacotes cujo lançamento assinado inclui Pi. Skills, servidores MCP e extensões compatíveis também podem ser instalados de um pacote local ou commit Git fixado; a CLI valida essas fontes separadamente."
     },
     "components": {
       "extensions": "extensões",
@@ -1018,13 +1094,14 @@
       "required": "Autenticação necessária",
       "not_required": "Não requer autenticação",
       "unknown": "Requisitos de autenticação desconhecidos",
-      "varies": "Depende do agente",
+      "varies": "Depende do agente ou da versão",
       "automatic": "Os agentes instalados são detectados ao executar o comando. Selecione agentes em Instalar para ver seus requisitos.",
       "unresolved": "Nenhuma opção de instalação foi resolvida para estes agentes. Selecione um agente compatível para verificar os requisitos.",
       "release": "{id} · versão {sequence}",
       "requiredDetail": "O pacote pode exigir conta, token ou login; isso não especifica OAuth nem confirma que você está conectado.",
       "not_requiredDetail": "Nenhuma autenticação foi declarada para estes agentes. Limites do serviço e outros requisitos podem se aplicar.",
-      "unknownDetail": "Verifique os requisitos do pacote antes de conectar."
+      "unknownDetail": "Verifique os requisitos do pacote antes de conectar.",
+      "variesDetail": "O mesmo agente pode exigir autenticação diferente conforme a versão compatível. Escolha um destino e confira o plano de instalação."
     }
   },
   "pluginAuthoring": {

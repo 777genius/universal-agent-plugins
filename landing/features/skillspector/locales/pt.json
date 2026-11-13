@@ -114,7 +114,11 @@
       "copiedDiagnostics": "Copiado",
       "copyDiagnosticsHelp": "Copia o estado da verificação e todas as evidências de diagnóstico publicadas desta entrada como JSON. Nenhum dado é enviado.",
       "copyDiagnosticsSuccess": "Diagnóstico copiado. Cole-o no assistente de IA para analisar as evidências.",
-      "copyDiagnosticsError": "Não foi possível copiar. Permita acesso à área de transferência e tente novamente."
+      "copyDiagnosticsError": "Não foi possível copiar. Permita acesso à área de transferência e tente novamente.",
+      "recoveryWitnessTitle": "Análise autenticada independente",
+      "recoveryWitnessRun": "Execução main {run}, tentativa {attempt}",
+      "recoveryWitnessExplanation": "Este relatório original separado pode conter achados ausentes da análise principal ou diferentes dos dela. A cobertura continua incompleta; esses sinais automáticos não foram confirmados por auditoria independente.",
+      "recoveryWitnessFindings": "Achados adicionais de uma análise autenticada"
     }
   }
 }

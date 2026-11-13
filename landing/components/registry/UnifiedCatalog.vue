@@ -29,6 +29,7 @@ const catalogIntro = computed(() =>
       : (props.intro ?? t('registryUi.catalog.searchByCapabilityComponentOrSource')),
 );
 const { repositoryUrl } = useSite();
+const localePath = useLocalePath();
 const route = useRoute();
 const skillsActive = computed(() => isSkillsCatalog(route.query));
 const headingLabel = computed(
@@ -44,7 +45,13 @@ const modeLink = (skills: boolean) => ({
 
 <template>
   <div class="unified-catalog">
-    <div class="unified-catalog__heading" :class="directoryPage ? 'page-intro' : 'section-heading'">
+    <div
+      class="unified-catalog__heading"
+      :class="directoryPage ? 'page-intro' : 'section-heading'"
+      :data-initial-catalog="!skillsActive ? 'reviewed-directory-snapshot' : undefined"
+      :data-catalog-augmentation="!skillsActive ? 'signed-client-side-discovery' : undefined"
+      :data-count-scope="!skillsActive ? 'initial-reviewed-subset-not-full-directory' : undefined"
+    >
       <div class="catalog-heading-row">
         <component
           :is="directoryPage ? 'h1' : 'h2'"
@@ -84,6 +91,12 @@ const modeLink = (skills: boolean) => ({
         </a>
       </div>
       <p>{{ catalogIntro }}</p>
+      <!-- The reviewed seed is augmented by a verified signed community feed.
+           Count-scope metadata remains available to crawlers without a user-facing
+           implementation notice. -->
+      <p v-if="skillsActive" class="unified-catalog__skills-guide">
+        <NuxtLink :to="localePath('/agent-skills/')">{{ t('registryUi.skills.overview.learnMore') }}</NuxtLink>
+      </p>
     </div>
     <SkillsCatalog v-if="skillsActive" hide-heading />
     <PluginCatalog v-else :plugins="plugins" hide-heading />
@@ -101,3 +114,9 @@ const modeLink = (skills: boolean) => ({
 <i18n locale="fr" lang="json" src="../../features/skills-catalog/locales/fr.json" />
 
 <style lang="scss" src="../../features/skills-catalog/catalog.scss"></style>
+
+<style scoped>
+.unified-catalog__skills-guide { margin-top: .5rem; color: var(--muted); font-size: .92rem; line-height: 1.5; }
+.unified-catalog__skills-guide a { color: var(--cyan); text-underline-offset: .2em; }
+.unified-catalog__skills-guide a:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
+</style>

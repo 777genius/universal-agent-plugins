@@ -53,18 +53,18 @@ jobs:
     if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     uses: ./.github/workflows/agentplugins-published-version.yml
     with:
-      version: ${{ inputs.version }}
+      version: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.title, '[full-published-e2e]') && '0.1.102' || inputs.version }}
 
   macos-native-install:
     needs: resolve-release
     name: macOS ARM64 npm stable / ${{ matrix.target }} / ${{ matrix.kind }}
     runs-on: macos-15
-    timeout-minutes: ${{ github.event_name == 'pull_request' && 45 || 80 }}
+    timeout-minutes: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.title, '[full-published-e2e]') && 120 || github.event_name == 'pull_request' && 45 || 80 }}
     strategy:
       fail-fast: false
       max-parallel: 3
       matrix:
-        target: ${{ fromJSON(github.event_name == 'pull_request' && github.event.pull_request.draft && '["codex","claude","opencode","gemini","copilot"]' || '["codex","claude","opencode","gemini","copilot","cline","kimi","qoder","pi"]') }}
+        target: ${{ fromJSON(github.event_name == 'pull_request' && github.event.pull_request.draft && !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.title, '[full-published-e2e]')) && '["codex","claude","opencode","gemini","copilot"]' || '["codex","claude","opencode","gemini","copilot","cline","kimi","qoder","pi"]') }}
         kind: [plugin, skill]
         exclude:
           - target: pi
@@ -98,7 +98,7 @@ jobs:
       # prerequisite for all plugin targets, never by a synthetic stub.
       # No Docker daemon or authenticated MCP execution is claimed here.
       - name: Install real Docker CLI for published Docker Hub source
-        if: ${{ github.event_name != 'pull_request' && matrix.kind == 'plugin' }}
+        if: ${{ matrix.kind == 'plugin' && (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.title, '[full-published-e2e]'))) }}
         shell: bash
         run: |
           set -euo pipefail
@@ -182,7 +182,9 @@ jobs:
           AUDIT_VENDOR_OUTCOME: ${{ steps.bootstrap.outcome }}
           AUDIT_TARGET: ${{ matrix.target }}
           AUDIT_KIND: ${{ matrix.kind }}
-          AUDIT_LIMIT: ${{ github.event_name == 'pull_request' && '2' || github.event_name == 'push' && '30' || github.event_name == 'schedule' && '20' || inputs.cases || '20' }}
+          # Trusted, explicitly titled E2E PRs run all 30 frozen source cases.
+          # Ordinary PRs/forks retain the original cheap two-source smoke.
+          AUDIT_LIMIT: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.title, '[full-published-e2e]') && '30' || github.event_name == 'pull_request' && '2' || github.event_name == 'push' && '30' || github.event_name == 'schedule' && '20' || inputs.cases || '20' }}
         run: |
           set -euo pipefail
           [[ "$AUDIT_PR_HEAD_SHA" =~ ^[a-f0-9]{40}$ ]] || exit 2

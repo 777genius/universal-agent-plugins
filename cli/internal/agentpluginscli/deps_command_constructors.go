@@ -67,6 +67,7 @@ func newDependencySyncCommand(app App, opts *options, locked, yes *bool) *cobra.
 		return runDependencySync(cmd, app, opts, *locked, *yes)
 	}}
 	command.Flags().BoolVar(&opts.externalUninstalled, "external-uninstalled", false, "attest removed targets were uninstalled manually or never imported")
+	command.Flags().StringVar(&opts.dependencyPolicyFile, "policy", "", "optional local YAML dependency source and pin policy (fail closed)")
 	command.Flags().BoolVar(locked, "locked", false, "require an exact existing lock and never resolve refs")
 	command.Flags().BoolVar(yes, "yes", false, "confirm the complete preflighted sync without an interactive prompt")
 	return command

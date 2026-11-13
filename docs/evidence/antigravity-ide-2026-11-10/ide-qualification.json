@@ -1,0 +1,47 @@
+{
+  "status": "BLOCKED_OFFICIAL_OAUTH_NETWORK",
+  "observed_utc": "2026-11-10T22:10:55.803654+00:00",
+  "ide": {
+    "version": "2.6.0",
+    "commit": "9e3a5da5d6731effd57d47d88bbe5df14ac6ccdd",
+    "base_code": "1.107.0",
+    "archive_bytes": 195292315,
+    "archive_sha256": "b060a7c7679103b2b619752f8ee7a3088dd241a7d207d4311974b56ea6f94356"
+  },
+  "backend": {
+    "version": "1.5.5",
+    "archive_bytes": 74057768,
+    "binary_sha256": "89f16bdb87f62e6d07484c52e6bafe76a81b0fd13d740110c77dc3c3c8d8d8b6",
+    "manifest": {
+      "version": "1.5.5",
+      "url": "https://storage.googleapis.com/antigravity-public/antigravity-cli/1.5.5-6740358537805824/linux-x64/cli_linux_x64.tar.gz",
+      "sha512": "746a2bd73f83b65d9b44f2fc55d0f0f511ff7f89702846213eeabd76d06bc9c98576b424c2babc7b947f15e518447b946ba02dca260b778363c55c07a7f7a277"
+    },
+    "provisioning": "Official archive verified and prefetched into the ordinary backend cache in a disposable profile; no vendor modifications, authentication bypass or TLS disabling.",
+    "archive_sha512_verified": true
+  },
+  "native_ui_observations": [
+    "Initial Agent view: Could not load this view; official updater manifest fetch failed ECONNREFUSED/ENETUNREACH.",
+    "After official backend provisioning and native Try again: Antigravity branded view with Continue with Google and Having trouble signing in?",
+    "Command palette search Customizations: No matching commands.",
+    "Initial checkpoint ended at Continue with Google.",
+    "Follow-up: idle IDE renderer had terminated (killed, code 9); used ordinary New Window recovery and Get Started.",
+    "Clicked native Continue with Google. UI showed spinner, Copy sign-in link, and Trouble signing in? Enter the authorization code.",
+    "Official flow automatically opened Chromium at accounts.google.com OAuth authorization endpoint. Browser displayed This site can\u2019t be reached, accounts.google.com refused to connect, ERR_CONNECTION_REFUSED. No account choice, credential form or consent page was observed."
+  ],
+  "proof_limits": [
+    "Native Continue with Google was clicked in the official login flow; no credentials entered or copied, legal terms accepted, or consent approved.",
+    "No Customizations plugin/skill/scope discovery, enablement, A/B isolation, update/restart or remove oracle observed.",
+    "No UAP source or release binary used in actual IDE lifecycle.",
+    "No model turn or tools/call claimed."
+  ],
+  "owner_action": "Restore ordinary network reachability to official accounts.google.com OAuth in this environment, then resume the vendor login flow. Owner credentials/account choice may be required subsequently, but no login form or existing-session result was reached.",
+  "platform": "linux-x64",
+  "auth_state": "signedOut",
+  "source_links": {
+    "download": "https://antigravity.google/download",
+    "discovery": "https://antigravity.google/docs/customization-discovery",
+    "plugins": "https://antigravity.google/docs/build-plugins"
+  },
+  "followup_utc": "2026-11-10T22:34:21.338672+00:00"
+}

@@ -18,6 +18,53 @@ from urllib.parse import urlsplit, urlunsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests/live-install/fixtures.json"
+
+# One immutable authority for the signed Marketing Kit and its dependencies.
+MARKETING_KIT_DISTRIBUTIONS = {
+    "marketing-kit": "777genius/marketing-kit",
+    "notion": "777genius/notion",
+    "hubspot-crm": "777genius/hubspot-crm",
+    "playwright": "777genius/playwright-bridge",
+}
+MARKETING_KIT_SIGNED_CLOSURE = {
+    "777genius/marketing-kit": {
+        "release_sequence": 1,
+        "package_version": "0.1.0",
+        "repository": "777genius/universal-agent-plugins-registry",
+        "package_path": "plugins/marketing-kit",
+        "resolved_revision": "c5bcedd4ecf12585a8a50401852e57a44891ebec",
+        "tree_digest": "sha256:8918c0f0222bd735fd0eef3cacf90b5a9351fb213483d1558a65b9911624e68a",
+        "manifest_digest": "sha256:40b18a6b33c6392134aff7beafb9a91eaeecf46ce765e0e888cdc743dd284ea2"
+    },
+    "777genius/notion": {
+        "release_sequence": 1,
+        "package_version": "0.1.0",
+        "repository": "777genius/universal-agent-plugins",
+        "package_path": "plugins/notion",
+        "resolved_revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+        "tree_digest": "sha256:860fa6dd1830d0da2b8fed38195fa6ad6307082ac12d708118e5eb1c5d10f9b7",
+        "manifest_digest": "sha256:bbab30a4f062218d7a5fce2f6c818680d3c7adfaebdbaa3e523e15942a2f57e5"
+    },
+    "777genius/hubspot-crm": {
+        "release_sequence": 1,
+        "package_version": "0.1.0",
+        "repository": "777genius/universal-agent-plugins",
+        "package_path": "plugins/hubspot-crm",
+        "resolved_revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+        "tree_digest": "sha256:09a0b151c384235c3d7b3929398695d24cd7b07c75993a0a73f1a218198ededd",
+        "manifest_digest": "sha256:20334e86a1b599d2759e04bfaef37dc2ddb7f6b0f3994b5d66d4eca12fbec941"
+    },
+    "777genius/playwright-bridge": {
+        "release_sequence": 2,
+        "package_version": "0.0.80",
+        "repository": "777genius/universal-agent-plugins-registry",
+        "package_path": "plugins/playwright",
+        "resolved_revision": "d9c8d778200d51ae941d86bb69af23534cd1c8f7",
+        "tree_digest": "sha256:ff3c74bb5760fea47003130f3984d48234892330325a7cad35a7bc973acc9cf6",
+        "manifest_digest": "sha256:8419b5c9e67894c2312048c4fe30e3ea920d00101d02641230183dd7ab4d3b31"
+    }
+}
+
 NATIVE_ROOTS = {
     "codex": [".codex", ".agents"], "chatgpt": [],
     "cursor": [".cursor"], "copilot": [".copilot", ".config/copilot"],
@@ -111,9 +158,9 @@ def validate_fixtures(doc):
         raise ValueError("Insufficiently diverse publishers")
 
 
-def call(argv, env, cwd, timeout=105, capture_files=False):
+def call(argv, env, cwd, timeout=105, capture_files=False, capture_full=False):
     try:
-        if capture_files:
+        if capture_files or capture_full:
             # A Windows native client may spawn a child which inherits stdout
             # or stderr. Pipes stay open after the UAP process exits, causing
             # subprocess.run(capture_output=True) to time out after a real add.
@@ -134,7 +181,8 @@ def call(argv, env, cwd, timeout=105, capture_files=False):
                 return {"exit_code": None, "stdout_tail": "",
                         "stderr_tail": "bounded native output capture exceeded",
                         "timeout": False, "_json": None}
-            stdout, stderr = output.decode("utf-8", errors="replace"), errors.decode("utf-8", errors="replace")
+            decoding = "strict" if capture_full else "replace"
+            stdout, stderr = output.decode("utf-8", errors=decoding), errors.decode("utf-8", errors=decoding)
         else:
             p = subprocess.run(argv, cwd=cwd, env=env, capture_output=True,
                                text=True, errors="replace", stdin=subprocess.DEVNULL,
@@ -144,7 +192,7 @@ def call(argv, env, cwd, timeout=105, capture_files=False):
             parsed_json = json.loads(stdout)
         except ValueError:
             parsed_json = None
-        if (capture_files and p.returncode == 0
+        if (capture_files and not capture_full and p.returncode == 0
                 and (not isinstance(parsed_json, dict)
                      or parsed_json.get("result") != "success")):
             # An inherited child may append to the file after UAP exits.
@@ -152,9 +200,13 @@ def call(argv, env, cwd, timeout=105, capture_files=False):
             return {"exit_code": None, "stdout_tail": stdout[-1800:],
                     "stderr_tail": "native add success JSON unavailable",
                     "timeout": False, "_json": None}
+        complete = {"stdout_full": stdout, "stderr_full": stderr} if capture_full else {}
         return {"exit_code": p.returncode, "stdout_tail": stdout[-1800:],
                 "stderr_tail": stderr[-1800:], "timeout": False,
-                "_json": parsed_json}
+                "_json": parsed_json, **complete}
+    except UnicodeError:
+        return {"exit_code": None, "stdout_tail": "", "stderr_tail": "native output capture was not UTF-8",
+                "timeout": False, "_json": None}
     except subprocess.TimeoutExpired as e:
         return {"exit_code": None, "stdout_tail": "", "stderr_tail": str(e)[-1800:], "timeout": True}
     except OSError as e:
@@ -228,6 +280,82 @@ def snapshot(root):
                 found[f"{target_root.name}/{relative}"] = digest
     return found
 
+
+def scoped_snapshot(roots, *, snapshotter=None):
+    """Record protected file and directory identities without following links."""
+    roots = tuple(Path(root) for root in roots)
+    state = (snapshot if snapshotter is None else snapshotter)(roots)
+    # The shared audit records failed file reads and walk errors as
+    # 'unreadable'. Identical failures before/after must not prove isolation.
+    if any(digest == "unreadable" for digest in state.values()):
+        raise AssertionError("protected scope snapshot unreadable: native entry")
+
+    def record_metadata(index, path, relative):
+        """Preserve directory and file inode identity, not only permissions."""
+        try:
+            entry = path.lstat()
+        except OSError as error:
+            raise AssertionError("protected scope snapshot unreadable: metadata") from error
+        identity = (entry.st_mode, entry.st_dev, entry.st_ino)
+        # Equal bytes and inode do not prove a peer left file timestamps alone.
+        if stat.S_ISREG(entry.st_mode):
+            identity += (entry.st_mtime_ns,)
+        state[f"metadata:{index}:{relative}"] = identity
+
+    def refuse_walk_error(error):
+        raise AssertionError(f"protected scope snapshot unreadable: {error}") from error
+
+    for index, root in enumerate(roots):
+        if root.is_symlink():
+            state[f"root-link:{index}"] = os.readlink(root)
+            record_metadata(index, root, ".")
+            continue
+        # An empty protected profile must not disappear or turn into a file
+        # unnoticed: audit.snapshot records children, not root existence.
+        if not root.is_dir():
+            state[f"root-kind:{index}"] = "file" if root.exists() else "absent"
+            continue
+        state[f"root-kind:{index}"] = "directory"
+        record_metadata(index, root, ".")
+        for directory, dirs, files in os.walk(root, followlinks=False, onerror=refuse_walk_error):
+            for name in dirs:
+                path = Path(directory) / name
+                relative = path.relative_to(root).as_posix()
+                if path.is_symlink():
+                    state[f"link:{index}:{relative}"] = os.readlink(path)
+                    record_metadata(index, path, relative)
+                else:
+                    state[f"directory:{index}:{relative}"] = "present"
+                    record_metadata(index, path, relative)
+            for name in files:
+                path = Path(directory) / name
+                if path.is_symlink():
+                    relative = path.relative_to(root).as_posix()
+                    state[f"link:{index}:{relative}"] = os.readlink(path)
+                    record_metadata(index, path, relative)
+                else:
+                    record_metadata(index, path, path.relative_to(root).as_posix())
+    return state
+
+def check_copilot_snapshot_unchanged(home, case_root, before, after, stage, log_limit):
+    """Only this real read may create bounded new vendor process logs."""
+    prefix = home.name + "/" + str(Path(".copilot") / "logs") + os.sep
+    created = [key for key in after if key not in before and key.startswith(prefix)]
+    if len(created) > log_limit:
+        raise AssertionError(stage + ": excessive new Copilot process logs")
+    for key in created:
+        relative = key[len(home.name) + 1:]
+        path = home / relative
+        info = path.lstat()
+        if (not re.fullmatch(r"process-[0-9]+-[0-9]+\.log", path.name)
+                or path.parent != home / ".copilot/logs"
+                or not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size > 1 << 20
+                or not path_inside_case(path, case_root)):
+            raise AssertionError(stage + ": unsafe new Copilot process log")
+        after.pop(key)
+        after.pop("metadata:0:" + Path(relative).as_posix(), None)
+    if after != before:
+        raise AssertionError(stage + ": native query modified protected state")
 
 def exact_native_identity(text, identity):
     """Recognize an identity token in native data, never a URL substring."""
@@ -460,8 +588,292 @@ def qoder_native_plugin_state(home, env, cwd, identity, expected_version=None):
     return {"status": "unqualified-identity-or-version"}
 
 
-def copilot_native_plugin_state(home, env, cwd, identity, expected_version=None):
-    """Read documented Copilot plugin list JSON from the original isolated profile."""
+def copilot_json_document(text):
+    def unique(pairs):
+        if len({key for key, _ in pairs}) != len(pairs):
+            raise ValueError("ambiguous Copilot JSON object")
+        return dict(pairs)
+    def reject_constant(_):
+        raise ValueError("invalid Copilot JSON constant")
+    return json.loads(text, object_pairs_hook=unique, parse_constant=reject_constant)
+
+COPILOT_BUILTIN_JSON = [{"name": "browser-use", "marketplace": "", "version": "0.0.4",
+                         "enabled": False, "source": "builtin"}]
+COPILOT_BUILTIN_TEXT = "Built-in plugins:\n  • browser-use (v0.0.4) [disabled]\n"
+COPILOT_EMPTY_TEXT = "No plugins installed.\n\nUse 'copilot plugin install <source>' to install a plugin.\n"
+
+
+def copilot_native_entries_state(entries, owners):
+    """Check the complete observed .105 live JSON identity and source schema."""
+    if not isinstance(entries, list) or len(entries) != len(owners) + 1:
+        raise AssertionError("Copilot native plugin listing malformed or incomplete")
+    found, builtin = set(), []
+    for entry in entries:
+        if (not isinstance(entry, dict) or not isinstance(entry.get("name"), str)
+                or type(entry.get("enabled")) is not bool or not isinstance(entry.get("source"), str)
+                or (entry.get("version") is not None and not isinstance(entry["version"], str))):
+            raise AssertionError("Copilot native plugin entry malformed")
+        name = entry["name"]
+        if name == "browser-use":
+            builtin.append(entry)
+            continue
+        if (name not in owners or name in found or entry.get("marketplace") != owners[name]["marketplace"]
+                or entry["enabled"] is not True
+                or entry.get("version") != owners[name]["version"]
+                or entry["source"] != "live" or entry.get("installedFrom") != owners[name]["target_locator"]):
+            raise AssertionError("Copilot native managed identity is foreign or duplicated")
+        found.add(name)
+    if builtin != COPILOT_BUILTIN_JSON or found != set(owners):
+        raise AssertionError("Copilot native closure or observed builtin baseline changed")
+    return {"status": "installed" if owners else "absent", "managed_count": len(found)}
+
+
+def copilot_native_text_state(text, owners):
+    """Consume complete .105 live listing, including each exact physical path."""
+    document = text.replace("\r\n", "\n")
+    if not owners:
+        if document != COPILOT_EMPTY_TEXT + COPILOT_BUILTIN_TEXT:
+            raise AssertionError("Copilot native empty text differs from observed baseline")
+        return
+    if not document.startswith(COPILOT_BUILTIN_TEXT):
+        raise AssertionError("Copilot native builtin prefix changed")
+    document = document[len(COPILOT_BUILTIN_TEXT):].removesuffix("\n")
+    lines = document.split("\n")
+    if (not lines or lines[0] != "Live Plugins (loaded from a local marketplace directory, never copied):"
+            or len(lines) != 1 + 2 * len(owners)):
+        raise AssertionError("Copilot native full live listing incomplete")
+    found = set()
+    for index in range(1, len(lines), 2):
+        entry = re.fullmatch(r"  • ([A-Za-z0-9][A-Za-z0-9._-]*)@(agentplugins-[0-9a-f]{12}) \(v([^() ]+)\) \(enabled\)", lines[index])
+        if (entry is None or entry[1] not in owners or entry[1] in found
+                or entry[2] != owners[entry[1]]["marketplace"] or entry[3] != owners[entry[1]]["version"]
+                or lines[index + 1] != "      from " + owners[entry[1]]["target_locator"]):
+            raise AssertionError("Copilot native physical identity/version/source differs")
+        found.add(entry[1])
+    if found != set(owners):
+        raise AssertionError("Copilot native physical closure incomplete")
+
+def marketing_kit_signed_pins(fixture_pins):
+    """Extend the reviewed 30-source catalogue only with its signed kit child."""
+    if not isinstance(fixture_pins, dict):
+        return None
+    pins = {}
+    for alias, distribution in MARKETING_KIT_DISTRIBUTIONS.items():
+        anchor = MARKETING_KIT_SIGNED_CLOSURE[distribution]
+        pin = {"distribution": distribution, "repository": anchor["repository"],
+               "path": anchor["package_path"], "revision": anchor["resolved_revision"],
+               "sequence": anchor["release_sequence"], "tree_digest": anchor["tree_digest"],
+               "manifest_digest": anchor["manifest_digest"]}
+        # HubSpot is a kit dependency, not a 31st top-level catalogue case.
+        # Never silently replace a changed or missing reviewed catalogue pin.
+        if alias != "hubspot-crm" or alias in fixture_pins:
+            supplied = fixture_pins.get(alias)
+            if (not isinstance(supplied, dict) or type(supplied.get("sequence")) is not int
+                    or supplied != pin):
+                return None
+        pins[alias] = pin
+    return pins
+
+
+def copilot_signed_kit_owners(list_json, pins, data, case_root):
+    """Qualify all four signed User bindings before trusting native siblings."""
+    aliases = tuple(MARKETING_KIT_DISTRIBUTIONS)
+    pins = marketing_kit_signed_pins(pins)
+    if pins is None:
+        return None
+    text, status = copilot_settings_read(data / "state-v2.json", case_root)
+    if status is not None:
+        return None
+    try:
+        state = json.loads(text, object_pairs_hook=_unique_json_object)
+        records = state["installations"]
+        receipts = state["environment_receipts"]
+        public_records = list_json["data"]["installations"]
+        if (not isinstance(public_records, list) or len(public_records) != 4
+                or not isinstance(records, list) or len(records) != 4
+                or not isinstance(receipts, list) or len(receipts) != 4):
+            return None
+        owners, receipt_keys, physical_ids, binding_ids = {}, set(), set(), set()
+        for alias in aliases:
+            pin = pins[alias]
+            matches = matching_installations(list_json, alias, "copilot", "plugin", alias, pins)
+            if len(matches) != 1:
+                return None
+            public = matches[0]
+            public_clients = public["clients"]
+            if (not isinstance(public_clients, list) or len(public_clients) != 1
+                    or public_clients[0].get("client_id") != "copilot"):
+                return None
+            version = MARKETING_KIT_SIGNED_CLOSURE[pin["distribution"]]["package_version"]
+            public_revision = public_clients[0]["package_revision"]
+            if (public_revision.get("version") != version
+                    or type(public_revision.get("release_sequence")) is not int):
+                return None
+            selected = [v for v in records if v["directory"].get("distribution_id") == pin["distribution"]]
+            if len(selected) != 1:
+                return None
+            record = selected[0]
+            directory, source, package = (record[k] for k in ("directory", "source", "package"))
+            if (record["installation_id"] != public["installation_id"]
+                    or record.get("origin_mode") != "directory"
+                    or type(directory.get("desired_release_sequence")) is not int
+                    or directory.get("desired_release_sequence") != pin["sequence"]
+                    or package.get("version") != version
+                    or package.get("manifest_digest") != pin["manifest_digest"]
+                    or any(source.get(key) != pin[field] for key, field in (
+                        ("repository", "repository"), ("package_subpath", "path"),
+                        ("resolved_revision", "revision"), ("tree_digest", "tree_digest")))):
+                return None
+            bindings = record["clients"]
+            if not isinstance(bindings, dict) or len(bindings) != 1:
+                return None
+            binding_id, binding = next(iter(bindings.items()))
+            physical = binding.get("physical_artifact_id")
+            target = Path(binding.get("target_locator", ""))
+            revision = binding.get("package_revision", {})
+            if (not isinstance(binding_id, str) or not binding_id or binding_id in binding_ids
+                    or binding.get("client_binding_id") != binding_id
+                    or binding.get("client_id") != "copilot" or binding.get("scope") != "user"
+                    or binding.get("materialization") != "materialized"
+                    or binding.get("verification") != "installation_verified"
+                    or binding.get("affected_surfaces") != ["copilot", "vscode"]
+                    or not isinstance(physical, str) or not physical.strip()
+                    or physical != physical.strip() or physical in physical_ids
+                    or physical in (".", "..") or Path(physical).name != physical
+                    or not target.is_absolute() or not target.is_dir()
+                    or not path_inside_case(target, case_root)
+                    or not isinstance(revision, dict)
+                    or type(revision.get("release_sequence")) is not int
+                    or any(revision.get(key) != expected for key, expected in (
+                        ("distribution_id", pin["distribution"]), ("release_sequence", pin["sequence"]),
+                        ("version", version), ("resolved_revision", pin["revision"]),
+                        ("tree_digest", pin["tree_digest"]),
+                        ("manifest_digest", pin["manifest_digest"])))):
+                return None
+            binding_receipts = binding.get("receipts")
+            if (not isinstance(binding_receipts, list) or not binding_receipts
+                    or any(not isinstance(v, dict) or v.get("phase") != "committed"
+                           or v.get("client_binding_id") != binding_id
+                           or v.get("active_path") != str(target)
+                           or not isinstance(v.get("operation_id"), str) or not v["operation_id"]
+                           for v in binding_receipts)
+                    or len({v["operation_id"] for v in binding_receipts}) != len(binding_receipts)):
+                return None
+            marketplace = "agentplugins-" + hashlib.sha256(physical.encode()).hexdigest()[:12]
+            manifest_text, manifest_status = copilot_settings_read(
+                target / ".github/plugin/marketplace.json", case_root)
+            if manifest_status is not None:
+                return None
+            manifest = json.loads(manifest_text, object_pairs_hook=_unique_json_object)
+            if (not isinstance(manifest, dict) or manifest.get("name") != marketplace
+                    or not isinstance(manifest.get("plugins"), list)
+                    or len(manifest["plugins"]) != 1
+                    or any(manifest["plugins"][0].get(key) != value for key, value in (
+                        ("name", alias), ("version", version), ("source", ".")))):
+                return None
+            owners[alias] = {"marketplace": marketplace, "version": version,
+                             "target_locator": str(target)}
+            receipt_keys.add((alias, "copilot", public["installation_id"],
+                              binding_id, "directory:" + pin["distribution"], pin["tree_digest"]))
+            physical_ids.add(physical)
+            binding_ids.add(binding_id)
+        observed = {tuple(item.get(key) for key in (
+            "alias", "client_id", "installation_id", "client_binding_id",
+            "source_key", "package_digest")) for item in receipts}
+        if (observed != receipt_keys or len(observed) != 4
+                or len({v.get("receipt_id") for v in receipts}) != 4
+                or any(v.get("phase") != "committed" or v.get("environment_id") != "user-default"
+                       or not isinstance(v.get("receipt_id"), str) or not v["receipt_id"]
+                       for v in receipts)):
+            return None
+        return owners
+    except (KeyError, IndexError, TypeError, ValueError, AttributeError):
+        return None
+
+
+def copilot_signed_kit_settings(home, case_root, owners, enabled):
+    """Require exactly four physical preferences and only owned marketplaces."""
+    if type(enabled) is not bool or not isinstance(owners, dict) or set(owners) != {
+            "marketing-kit", "notion", "hubspot-crm", "playwright"}:
+        return False
+    text, status = copilot_settings_read(home / ".copilot/settings.json", case_root)
+    if status is not None:
+        return False
+    try:
+        document = copilot_json_document(text)
+        expected = {name + "@" + owner["marketplace"] for name, owner in owners.items()}
+        preferences = document.get("enabledPlugins") if isinstance(document, dict) else None
+        if (not isinstance(document, dict)
+                or set(document) not in ({"enabledPlugins"},
+                                        {"enabledPlugins", "extraKnownMarketplaces"})
+                or not isinstance(preferences, dict) or set(preferences) != expected
+                or any(value is not enabled for value in preferences.values())):
+            return False
+        marketplaces = document.get("extraKnownMarketplaces", {})
+        if not isinstance(marketplaces, dict):
+            return False
+        if not enabled:
+            return marketplaces == {}
+        # Copilot .105 retains owned directory registrations while installed.
+        # Complete native JSON and TEXT independently require all four plugins.
+        expected_sources = {
+            owner["marketplace"]: {"source": {"source": "directory",
+                                               "path": owner["target_locator"]}}
+            for owner in owners.values()}
+        return all(name in expected_sources and value == expected_sources[name]
+                   for name, value in marketplaces.items())
+    except (TypeError, ValueError, KeyError, AttributeError):
+        return False
+
+
+def copilot_native_roots_guard(home, env, project):
+    """Capture owned root identities before native queries or protected reads."""
+    case = project.parent
+
+    def stamp(path):
+        value = path.lstat()
+        if not stat.S_ISDIR(value.st_mode):
+            raise AssertionError("Copilot native protected root is not a directory")
+        return value.st_mode, value.st_dev, value.st_ino
+
+    try:
+        if case.is_symlink():
+            raise AssertionError("Copilot native case is a symlink")
+        canonical = case.resolve(strict=True)
+        case_identity = stamp(case)
+        roots = (home, Path(env["AGENTPLUGINS_HOME"]), project, home / ".copilot")
+
+        def inside(path):
+            # A trusted macOS temporary ancestor may use /var or /private/var.
+            # Neither spelling may redefine the captured case authority.
+            return path_inside_case(path, case) or path_inside_case(path, canonical)
+
+        expected = []
+        for path in roots:
+            if not inside(path):
+                raise AssertionError("Copilot native protected root escaped case")
+            expected.append((path, stamp(path)))
+    except (OSError, RuntimeError, ValueError) as error:
+        raise AssertionError("Copilot native protected root unavailable") from error
+
+    def guard():
+        try:
+            if (case.is_symlink() or case.resolve(strict=True) != canonical
+                    or stamp(case) != case_identity or stamp(canonical) != case_identity):
+                raise AssertionError("Copilot native case redirected")
+            for path, identity in expected:
+                if not inside(path) or stamp(path) != identity:
+                    raise AssertionError("Copilot native protected root redirected")
+        except (OSError, RuntimeError, ValueError) as error:
+            raise AssertionError("Copilot native protected root unavailable") from error
+
+    guard()
+    return guard
+
+
+def copilot_native_plugin_state(home, env, cwd, identity, expected_version=None,
+                                owners=None, owned_call=None):
+    """Read the original profile; signed kits require complete JSON and TEXT."""
     profile = home / ".copilot"
     executable = AGENT_BINARIES.get("copilot")
     if (not executable or not Path(executable).is_absolute()
@@ -469,6 +881,48 @@ def copilot_native_plugin_state(home, env, cwd, identity, expected_version=None)
             or not path_inside_case(profile, home)):
         return {"status": "unqualified-prerequisites"}
     native_env = dict(env, COPILOT_HOME=str(profile))
+    if owners is not None:
+        if (not isinstance(owners, dict)
+                or (owners and set(owners) != set(MARKETING_KIT_DISTRIBUTIONS))):
+            return {"status": "unqualified-signed-closure"}
+        project = Path(cwd)
+        case_root = project.parent
+        roots = (home, Path(env["AGENTPLUGINS_HOME"]), project)
+        assert_owned_roots = copilot_native_roots_guard(home, env, project)
+
+        def observe_owned():
+            assert_owned_roots()
+            return scoped_snapshot(roots)
+
+        before = observe_owned()
+        try:
+            responses = []
+            invoke_owned = call if owned_call is None else owned_call
+            for suffix in (["--json"], []):
+                assert_owned_roots()
+                if (not profile.is_dir() or profile.is_symlink()
+                        or not path_inside_case(profile, home)):
+                    return {"status": "unqualified-prerequisites"}
+                try:
+                    result = invoke_owned([executable, "plugin", "list", *suffix],
+                                          native_env, cwd, 30, capture_full=True)
+                finally:
+                    assert_owned_roots()
+                if (type(result.get("exit_code")) is not int or result["exit_code"] != 0
+                        or result.get("timeout") is not False or result.get("stderr_full") != ""
+                        or not isinstance(result.get("stdout_full"), str)
+                        or len(result["stdout_full"].encode("utf-8")) > 1 << 20):
+                    return {"status": "unqualified-list"}
+                responses.append(result["stdout_full"])
+            try:
+                state = copilot_native_entries_state(copilot_json_document(responses[0]), owners)
+                copilot_native_text_state(responses[1], owners)
+                return state
+            except (AssertionError, ValueError, TypeError, KeyError, AttributeError):
+                return {"status": "unqualified-signed-closure"}
+        finally:
+            check_copilot_snapshot_unchanged(
+                home, case_root, before, observe_owned(), "Copilot native read-only query", 2)
     observed = call([executable, "plugin", "list", "--json"], native_env, cwd, 30)
     entries = observed.get("_json")
     if observed.get("exit_code") != 0 or not isinstance(entries, list) or len(entries) > 1024:
@@ -1123,6 +1577,112 @@ def preserved_regular_text(path, expected, case_root):
 
 
 
+def copilot_settings_windows_name(value):
+    """Normalize only Win32 drive/UNC prefixes, never resolve a candidate path."""
+    import ntpath
+    value = str(value).replace("/", "\\")
+    if value.startswith("\\\\?\\UNC\\"):
+        value = "\\\\" + value[8:]
+    elif value.startswith("\\\\?\\"):
+        value = value[4:]
+    value = ntpath.normpath(value)
+    # Preserve component case, Unicode and short-name aliases exactly. Only a
+    # drive letter is normalized; do not invent filesystem equivalence keys.
+    return value[0].upper() + value[1:] if len(value) >= 2 and value[1] == ":" else value
+
+
+def copilot_settings_windows_descriptor(path, initial, expected):
+    """Reuse the owned Win32 handle seam and verify its final name before bytes."""
+    import ctypes
+    from ctypes import wintypes
+    import msvcrt
+    from runpy import run_path
+    helpers = run_path(str(ROOT / "scripts/native_client_project_artifacts.py"))
+    descriptor = helpers["open_member"](path)
+    try:
+        if not helpers["same_opened"](initial, os.fstat(descriptor)):
+            raise ValueError("Windows settings identity changed")
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        query = kernel.GetFinalPathNameByHandleW
+        query.argtypes = [wintypes.HANDLE, wintypes.LPWSTR, wintypes.DWORD, wintypes.DWORD]
+        query.restype = wintypes.DWORD
+        buffer = ctypes.create_unicode_buffer(4101)
+        size = query(msvcrt.get_osfhandle(descriptor), buffer, len(buffer), 0)
+        if (size == 0 or size >= len(buffer)
+                or copilot_settings_windows_name(buffer.value) != copilot_settings_windows_name(expected)):
+            raise ValueError("Windows settings handle left canonical case path")
+        return descriptor
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
+def copilot_settings_read(path, case_root):
+    """Read bounded owned bytes through descriptors, never a replaced symlink."""
+    descriptors = []
+    try:
+        # Resolve only the trusted root, before inspecting candidate metadata.
+        # Windows compares the actual held-handle name with this lexical path.
+        relative = path.relative_to(case_root)
+        canonical_root = case_root.resolve(strict=True)
+        root_stat = canonical_root.lstat()
+        if not stat.S_ISDIR(root_stat.st_mode):
+            return None, "unsafe-path"
+        expected = canonical_root / relative
+        initial = path.lstat()
+        if not stat.S_ISREG(initial.st_mode) or initial.st_size > 1024 * 1024:
+            return None, "not-regular-or-too-large"
+        if initial.st_nlink != 1 or not path_inside_case(path, case_root):
+            return None, "unsafe-path"
+        flags = (os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+                 | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_CLOEXEC", 0))
+        # POSIX walks verified directory descriptors. A renamed ancestor cannot
+        # redirect the final open, and no candidate component is resolved.
+        if (os.open in os.supports_dir_fd and hasattr(os, "O_DIRECTORY")
+                and hasattr(os, "O_NOFOLLOW")):
+            parent = os.open(canonical_root, flags | os.O_DIRECTORY)
+            descriptors.append(parent)
+            opened_root = os.fstat(parent)
+            if (not stat.S_ISDIR(root_stat.st_mode) or not stat.S_ISDIR(opened_root.st_mode)
+                    or (root_stat.st_dev, root_stat.st_ino) != (opened_root.st_dev, opened_root.st_ino)):
+                return None, "unsafe-path"
+            for name in relative.parts[:-1]:
+                parent = os.open(name, flags | os.O_DIRECTORY, dir_fd=parent)
+                descriptors.append(parent)
+            descriptor = os.open(path.name, flags, dir_fd=parent)
+        elif os.name == "nt":
+            descriptor = copilot_settings_windows_descriptor(path, initial, expected)
+        else:
+            return None, "unsafe-path"  # No pathname-only read fallback.
+        descriptors.append(descriptor)
+        opened = os.fstat(descriptor)
+        current = path.lstat()
+        current_root = canonical_root.lstat()
+        identity = (initial.st_dev, initial.st_ino)
+        if (not stat.S_ISREG(opened.st_mode) or not stat.S_ISREG(current.st_mode)
+                or not stat.S_ISDIR(current_root.st_mode)
+                or (root_stat.st_dev, root_stat.st_ino) != (current_root.st_dev, current_root.st_ino)
+                or opened.st_nlink != 1 or current.st_nlink != 1
+                or identity != (opened.st_dev, opened.st_ino)
+                or identity != (current.st_dev, current.st_ino)
+                or not path_inside_case(path, case_root)):
+            return None, "unsafe-path"
+        if opened.st_size > 1024 * 1024:
+            return None, "not-regular-or-too-large"
+        with os.fdopen(os.dup(descriptor), "rb") as stream:
+            body = stream.read(1024 * 1024 + 1)
+        if len(body) > 1024 * 1024:
+            return None, "not-regular-or-too-large"
+        return body.decode("utf-8"), None
+    except FileNotFoundError:
+        return None, "absent"
+    except (OSError, RuntimeError, UnicodeError, ValueError):
+        return None, "unsafe-path"
+    finally:
+        for descriptor in reversed(descriptors):
+            os.close(descriptor)
+
+
 def copilot_settings_sanitized_shape(home, case_root, identity):
     """Observe *only* token shape, never export raw client settings or secrets."""
     path = home / ".copilot/settings.json"
@@ -1131,9 +1691,10 @@ def copilot_settings_sanitized_shape(home, case_root, identity):
     if not path.exists():
         return {"status": "absent"}
     try:
-        if not path.is_file() or path.stat().st_size > 1024 * 1024:
-            return {"status": "not-regular-or-too-large"}
-        doc = json.loads(path.read_text(encoding="utf-8"))
+        text, status = copilot_settings_read(path, case_root)
+        if status is not None:
+            return {"status": status}
+        doc = json.loads(text)
     except (OSError, UnicodeError, ValueError):
         return {"status": "unreadable-or-invalid-json"}
     if not isinstance(doc, (dict, list)):
@@ -1428,9 +1989,18 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             home, env, project, identity, matching[0].get("version"))
         assert_case_unchanged()
     copilot_native_before_remove = None
+    kit_owners = None
     if target == "copilot" and kind == "plugin" and installed and repeat_verified:
-        copilot_native_before_remove = copilot_native_plugin_state(
-            home, env, project, identity, matching[0].get("version"))
+        if item == "marketing-kit":
+            kit_owners = copilot_signed_kit_owners(listed_json, signed_release_pins or {},
+                                                   data, case_root)
+        if item == "marketing-kit" and (kit_owners is None
+                or not copilot_signed_kit_settings(home, case_root, kit_owners, True)):
+            copilot_native_before_remove = {"status": "unqualified-signed-closure"}
+        else:
+            copilot_native_before_remove = copilot_native_plugin_state(
+                home, env, project, identity, matching[0].get("version"),
+                owners=kit_owners, owned_call=audited_call)
         assert_case_unchanged()
     cleanup = None
     native_uninstall = None
@@ -1477,18 +2047,21 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     copilot_native_after_remove = None
     if target == "copilot" and kind == "plugin" and cleanup and cleanup["exit_code"] == 0:
         copilot_native_after_remove = copilot_native_plugin_state(
-            home, env, project, identity)
+            home, env, project, identity, owners={} if item == "marketing-kit" else None,
+            owned_call=audited_call)
         assert_case_unchanged()
     copilot_after_remove = (copilot_settings_sanitized_shape(home, case_root, identity)
                             if copilot_before is not None and cleanup else None)
     remaining_ids = set()
     post_list_schema_valid = False
+    post_list_empty = False
     if isinstance(post_list_json, dict):
         try:
             entries = post_list_json["data"]["installations"]
             if isinstance(entries, list) and all(isinstance(v, dict) for v in entries):
-                post_list_schema_valid = True
                 remaining_ids = {entry.get("installation_id") for entry in entries}
+                post_list_schema_valid = True
+                post_list_empty = not entries
         except (KeyError, TypeError):
             pass
     old_ids = {entry["installation_id"] for entry in matching}
@@ -1533,13 +2106,21 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         and copilot_disabled_preference_only(
             copilot_before, copilot_after_add, copilot_after_remove,
             copilot_native_before_remove, copilot_native_after_remove,
-            native_residuals))
+            native_residuals)
+        and (item != "marketing-kit" or copilot_signed_kit_settings(
+            home, case_root, kit_owners, False)))
     removal_verified = bool(
         cleanup and cleanup["exit_code"] == 0 and post_list and post_list["exit_code"] == 0
         and post_list_schema_valid and old_ids.isdisjoint(remaining_ids)
+        # This fresh case owns the whole signed kit closure. An original or
+        # reminted child record must not survive even when native state is empty.
+        and (kind != "plugin" or item != "marketing-kit" or post_list_empty)
         and (target != "qoder" or kind != "plugin"
              or (qoder_native_after_remove is not None
                  and qoder_native_after_remove["status"] == "absent"))
+        and (target != "copilot" or kind != "plugin" or item != "marketing-kit"
+             or (copilot_native_after_remove is not None
+                 and copilot_native_after_remove["status"] == "absent"))
         and not post_remove_identity_registered
         and (not native_residuals or copilot_disabled_setting_retained)
         and (kind != "skill" or (post_removal_skill is None
@@ -1689,7 +2270,7 @@ def expected_negative_coverage(row, cli_version=None):
         if (row.get("status") == "prepared-lifecycle-passed"
                 and row.get("prepared_components_only") is True):
             return True
-        # Only these immutable sources in the verified 0.1.95 / 0.1.101
+        # Only these immutable sources in the verified 0.1.95 / 0.1.101 / 0.1.102
         # catalog have a clean lifecycle but no attributable native component.
         # An unknown or newly unqualified source must still fail this audit.
         non_native_direct_sources = {
@@ -1699,7 +2280,7 @@ def expected_negative_coverage(row, cli_version=None):
             "github:uizze/uizze@fc401e9e654cbafe427b0c98142fc8bccd0c4e7e",
         }
         if (row.get("status") == "package-installed-native-unqualified"
-                and cli_version in ("agentplugins 0.1.95", "agentplugins 0.1.101")
+                and cli_version in ("agentplugins 0.1.95", "agentplugins 0.1.101", "agentplugins 0.1.102")
                 and row.get("prepared_components_only") is False
                 and native_files == []
                 and row.get("source") in non_native_direct_sources):

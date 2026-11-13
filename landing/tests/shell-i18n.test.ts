@@ -62,6 +62,20 @@ test('shell English messages compile, interpolate and retain baseline FAQ facts'
   assert.equal(errors.mock.callCount(), 0);
 });
 
+test('supported-agent FAQ stays in sync with the 16 public clients across all locales', () => {
+  const expected = clientLandingPages.map((client) => client.name);
+  for (const locale of publishedLocales) {
+    const localized = JSON.parse(read(`i18n/locales/${locale}.json`)) as {
+      shell: { faq: { items: Array<{ answer: string }> } };
+    };
+    const listed = localized.shell.faq.items[0]!.answer
+      .split(/[:：]/, 1)[0]!
+      .split(',')
+      .map((name) => name.trim());
+    assert.deepEqual(listed, expected, `FAQ agents for ${locale}`);
+  }
+});
+
 test('narrow overlay preserves every active English field and technical byte', () => {
   const actual = assembleDownloadContent(overlay);
   assert.deepEqual(actual.download, legacy.download);
@@ -359,20 +373,26 @@ test('hero localizes structured fallback diagnostics and retains unknown origina
   assert.doesNotMatch(source, /fallback_reason\.(?:match|replace|split|includes)/);
 });
 
-// The original migration-copy browser assertions also exercise these rows after generation.
-test('download and client strip retain every original support qualification', () => {
-  for (const file of ['components/registry/ClientStrip.vue', 'components/sections/DownloadSection.vue']) {
+// Agent support remains on dedicated pages; download shows installation methods only.
+test('client strip retains agent support while download stays focused', () => {
+  for (const file of ['components/registry/ClientStrip.vue']) {
     const source = read(file);
     assert.match(source, /registryUi\.clients\.\$\{client.id\}\.status/);
     assert.doesNotMatch(source, /shell\.clients/);
   }
-  const source = read('components/sections/DownloadSection.vue');
-  for (const field of ['note', 'activation']) assert.ok(source.includes(`registryUi.clients.${'${client.id}'}.${field}`));
-  assert.equal(clientLandingPages.length, 15);
+  const download = read('components/sections/DownloadSection.vue');
+  assert.doesNotMatch(download, /clientLandingPages|registryUi\.clients|clientPath/);
+  assert.match(download, /download-section__install-tabs-row/);
+  assert.match(download, /download-section__command/);
+  assert.equal(clientLandingPages.length, 16);
+  assert.ok(clientLandingPages.every((client) => client.id !== 'vscode'));
+  for (const id of ['hermes', 'antigravity']) {
+    assert.ok(clientLandingPages.some((client) => client.id === id));
+  }
 });
 
 test('shell agent links keep language prefixes and canonical trailing slashes', () => {
-  for (const file of ['components/registry/ClientStrip.vue', 'components/sections/DownloadSection.vue']) {
+  for (const file of ['components/registry/ClientStrip.vue']) {
     const expression = read(file).match(/const clientPath = ([\s\S]*?);/)![1];
     const locale = ref('en');
     const clientPath = new Function('locale', 'localizedPath', 'isKnownLocale',

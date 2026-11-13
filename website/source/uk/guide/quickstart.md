@@ -47,7 +47,7 @@ Node.js не потрібен, хоча окремі плагіни можуть
 [CLI](https://github.com/777genius/universal-agent-plugins/releases/latest)
 зберігає явну область проєкту та автоматичний вибір для `install`, запроваджений
 у 0.1.94. Також доступні [локальний API керування](../use/manage#local-management-api)
-та [нативні розширення Pi](../reference/client-compatibility#pi-native-extensions).
+та [розширення Pi, Skills і MCP](../reference/client-compatibility#pi-native-extensions).
 Щоб переглянути план додавання пакета до проєкту:
 
 Для сумісного перевіреного пакета використовуйте коротку назву з підписаного Directory з явною областю Project, якщо вибраний клієнт підтримує всі обов'язкові компоненти (наприклад, `agentplugins add context7 --target codex --scope project --dry-run`). Для відтворюваного встановлення можна натомість указати Git-джерело з повним SHA коміту. Замініть `OWNER/REPOSITORY`, `FULL_COMMIT_SHA` і `PACKAGE_PATH`; для пакета в корені репозиторію приберіть `//PACKAGE_PATH`.

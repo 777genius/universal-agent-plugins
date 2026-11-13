@@ -39,7 +39,7 @@ func preparedProjectFileCandidate(input AddInput, plan domain.DeliveryPlan) bool
 		}
 	}
 	traits := (domain.SelectedDelivery{}).EffectiveTraitsForScope(input.Client.ClientID, domain.ScopeProject)
-	return traits.LifecycleKind == domain.LifecyclePrepared && !traits.TracksNativeEffects
+	return traits.LifecycleKind == domain.LifecyclePrepared && !traits.TracksNativeEffects && !traits.RequiresActiveNativeProjection
 }
 
 // Applicability is separate from authority and capability. A malformed project
