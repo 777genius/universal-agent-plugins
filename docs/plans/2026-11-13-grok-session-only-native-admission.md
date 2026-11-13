@@ -103,3 +103,51 @@ Source-only review corrected test wire escapes to actual LF/CRLF and made
 readout require final LF and refuse every frame after terminal inventory, matching
 the live collector. Missing-LF and late-notification archive negatives are authored
 but remain UNEXECUTED together with all candidate execution checks.
+
+## Separate native config-lock qualification checkpoint
+
+Source-only candidate, all new tests/AST/format/compile checks UNEXECUTED.
+No append writer, nativeconfig modification, plugin action or product activation.
+The held pure Grok preparer is not consumed by this lock-only checkpoint.
+
+An explicit lock-qualification-v1 research mode uses fixed scopeA and exactly two
+phases, locked-writer then released-writer, on one authored fixture. Metadata and
+session request schemas/argv remain unchanged. Same original150s frontend budget,
+30s exchange and35s strict cleanup per family; no outer deadline renewal.
+Each family validates actual pinned version, mcp --help advertising disable,
+and exact mcp disable --help Usage BEFORE attempting fixed argv:
+grok mcp disable uap-lock-witness. Different help fails without a writer.
+Supplementary2bdd source is not authority for binary1.0.70 lock compatibility.
+
+All profiles are fresh task-owned inputs. Config has both plugin arrays, empty
+disabled_mcp_servers, and one explicitly enabled inert witness. Its command is
+only a task-owned tripwire script; any execution creates an unexpected member
+and refuses. No configured MCP is launched intentionally; no session/model,
+vendor credentials, trust grant, plugin enable or original User data is used.
+
+After help, unprivileged collector opens the existing empty0600 regular
+single-link native .config-init.lock through fixed nofollow parents. It holds
+exclusive flock through native writer refusal AND the whole strict shutdown.
+The root supervisor reaps the entire family, releasing the collector FD;
+only then may parent take the authoritative original-baseline metadata ledger.
+Locked phase permits no effect. Released phase invokes exactly the same writer
+without acquiring flock. Only two known semantic witness changes are permitted:
+disabled_mcp_servers becomes [uap-lock-witness], and its server.enabled becomes
+literal false. Config owner/device/mode/singlelink and bounded held reads remain
+mandatory. Every other original member remains exact; unknown membership or
+foreign mutation refuses before config-body reading. No baseline is renewed.
+
+The vendor disable may pretty-serialize its task-owned config: this qualification
+does not claim foreign-byte preservation for vendor writes. Our future append
+writer remains separately gated. First complete capture is measurement-only,
+all original qualifications false and final workflow assertion stays negative.
+Closed held-publication/ZIP/source/stream authority is reused, with finite phase
+artifact names; no new diagnostic archive executor or public CLI option exists.
+
+The lock diagnostic reuses the existing ZIP/EOCD/CRC boundary after mandatory
+publication admission. It reconstructs only in-memory stream/RPC receipt fields,
+reuses validate_receipt and lock_help, and emits finite phase booleans/counts.
+Missing phases stay missing; source/stream/schema/cleanup failures or the SAME
+original180s caller deadline yield fixed readout-refused without revoking the
+original ZIP. No raw errors, argv, IDs, paths or names are projected. All new
+positive/negative archive and real-publication contracts remain UNEXECUTED.

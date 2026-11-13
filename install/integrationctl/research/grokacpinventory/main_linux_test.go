@@ -21,7 +21,7 @@ import (
 )
 
 func inertRequest() request {
-	return request{1, strings.Repeat("a", 40), strings.Repeat("b", 40), 1000, 1000, strings.Repeat("c", 32), "a", 1, strings.Repeat("d", 64), ""}
+	return request{1, strings.Repeat("a", 40), strings.Repeat("b", 40), 1000, 1000, strings.Repeat("c", 32), "a", 1, strings.Repeat("d", 64), "", ""}
 }
 func inertResult(t *testing.T, r request) []byte {
 	t.Helper()
@@ -29,7 +29,7 @@ func inertResult(t *testing.T, r request) []byte {
 	if e != nil {
 		t.Fatal(e)
 	}
-	body, e := json.Marshal(result{1, r.Commit, r.Tree, r.Scope, r.Nonce, false, "protocol-refused", proof, []json.RawMessage{}, json.RawMessage(`{"initialize":null,"plugins":null,"notifications":[]}`), "", nil})
+	body, e := json.Marshal(result{1, r.Commit, r.Tree, r.Scope, r.Nonce, false, "protocol-refused", proof, []json.RawMessage{}, json.RawMessage(`{"initialize":null,"plugins":null,"notifications":[]}`), "", nil, "", nil})
 	if e != nil {
 		t.Fatal(e)
 	}

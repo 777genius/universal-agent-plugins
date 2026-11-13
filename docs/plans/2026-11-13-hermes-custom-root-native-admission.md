@@ -607,3 +607,27 @@ its digest/numeric metadata; it is not a raw profile or stderr path.
 Reader223 lines, tests147; workflow34-line job. Added forged declared expansion,
 trailing compressed data, runtime-second-failure and refused-exit contracts.
 All new contracts remain unexecuted.
+
+## Deterministic midstream mutation contract after Windows 850
+
+Original source `850a4bea44f1321ded9be8e1e1cec7a878a35583`,
+[run 43461070487, job 132013249130](https://github.com/777genius/universal-agent-plugins/actions/runs/43461070487/job/132013249130),
+installed the official Hermes source runtime with CPython 3.14.9 on Windows.
+It then failed one of 50 inert contracts before the native User tools/call stage:
+`test_payload_replacement_and_midstream_mutation_are_refused` did not observe
+its expected capture refusal. This is not a successful current-source native run.
+
+The test overwrote `one` with same-length `two` immediately after a real read,
+but did not establish that the filesystem exposed a changed timestamp. Make
+that injected mutation explicit: retain the real same-size write, set its mtime
+two seconds beyond the pre-write value, and assert that the filesystem reports
+the changed mtime before returning the read. Keep the original refusal assertion
+and root-replacement negative. This makes the fixture precondition deterministic
+without sleeping, skipping Windows or changing any production capture guard.
+The log alone does not identify which timestamp observation remained unchanged.
+
+The concurrent `136900cdfcc6ace6c4e025221931ef08507eb4d5` correction
+already advances mtime; preserve it and add the explicit observed-delta assertion.
+Only this existing test and plan change. All runtime hashes, metadata fields,
+link-closure checks, native commands and qualification rules remain unchanged.
+The corrected contract and fresh cross-platform/native CI are unexecuted.

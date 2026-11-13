@@ -47,6 +47,7 @@ type request struct {
 	Start     int64  `json:"start_monotonic_ns"`
 	HelperSHA string `json:"helper_sha256"`
 	Mode      string `json:"mode,omitempty"`
+	Phase     string `json:"phase,omitempty"`
 }
 type collectorRequest struct {
 	Schema   int    `json:"schema_version"`
@@ -60,6 +61,7 @@ type collectorRequest struct {
 	ParentNS uint64 `json:"parent_network_namespace"`
 	Start    int64  `json:"start_monotonic_ns"`
 	Mode     string `json:"mode,omitempty"`
+	Phase    string `json:"phase,omitempty"`
 }
 type isolation struct {
 	UID        int      `json:"uid"`
@@ -87,6 +89,8 @@ type result struct {
 	RPC       json.RawMessage   `json:"rpc"`
 	Mode      string            `json:"mode,omitempty"`
 	Provider  json.RawMessage   `json:"provider,omitempty"`
+	Phase     string            `json:"phase,omitempty"`
+	LockHeld  *bool             `json:"lock_held,omitempty"`
 }
 type systemFact struct {
 	Path string `json:"path"`
@@ -119,7 +123,7 @@ func validateRequest(r request, root string, uid, gid int) error {
 	if r.Schema != 1 || r.Commit != sourceCommit || r.Tree != sourceTree || !hex40.MatchString(sourceCommit) || !hex40.MatchString(sourceTree) || !hex64.MatchString(collectorSHA) || !hex64.MatchString(r.HelperSHA) || !noncePattern.MatchString(r.Nonce) || r.UID != uid || r.GID != gid || uid <= 0 || gid <= 0 || uid > 1<<30 || gid > 1<<30 {
 		return errors.New("request-identity-refused")
 	}
-	if e := validateSessionRequest(r); e != nil {
+	if e := validateResearchMode(r); e != nil {
 		return e
 	}
 	if r.Scope != "user" && r.Scope != "a" && r.Scope != "b" {
@@ -144,7 +148,12 @@ func readRequest(root string, uid, gid int) (request, heldFile, error) {
 		e = closed(body, &r, "schema_version source_commit source_tree uid gid nonce scope start_monotonic_ns helper_sha256")
 		if e != nil {
 			e = closed(body, &r, "schema_version source_commit source_tree uid gid nonce scope start_monotonic_ns helper_sha256 mode")
-			if e == nil && r.Mode != sessionMode {
+			if e != nil {
+				e = closed(body, &r, "schema_version source_commit source_tree uid gid nonce scope start_monotonic_ns helper_sha256 mode phase")
+				if e == nil && r.Mode != lockMode {
+					e = errors.New("request-mode-refused")
+				}
+			} else if r.Mode != sessionMode {
 				e = errors.New("request-mode-refused")
 			}
 		}
@@ -179,11 +188,14 @@ func validateResult(body []byte, r request, parent uint64) error {
 	if len(body) > resultLimit {
 		return errors.New("result-bound-refused")
 	}
-	if e := closed(body, &got, sessionFields(r.Mode, "schema_version source_commit source_tree scope nonce semantic_complete reason isolation commands rpc", "mode provider")); e != nil {
+	if e := closed(body, &got, lockResultFields(r.Mode, sessionFields(r.Mode, "schema_version source_commit source_tree scope nonce semantic_complete reason isolation commands rpc", "mode provider"))); e != nil {
 		return e
 	}
 	if got.Schema != 1 || got.Commit != r.Commit || got.Tree != r.Tree || got.Scope != r.Scope || got.Nonce != r.Nonce || len(got.Commands) > 5 {
 		return errors.New("result-identity-refused")
+	}
+	if e := validateLockResult(got, r); e != nil {
+		return e
 	}
 	if e := validateSessionResult(got, r); e != nil {
 		return e
@@ -382,7 +394,7 @@ func (s *scopeState) prepare(ctx context.Context, root string, r request) error 
 		return e
 	}
 	s.parent = parent.Ino
-	req := collectorRequest{1, r.Commit, r.Tree, r.UID, r.GID, r.Nonce, r.Scope, root, parent.Ino, r.Start, r.Mode}
+	req := collectorRequest{1, r.Commit, r.Tree, r.UID, r.GID, r.Nonce, r.Scope, root, parent.Ino, r.Start, r.Mode, r.Phase}
 	body, e := json.Marshal(req)
 	if e != nil {
 		return e
@@ -474,8 +486,8 @@ func runScope(ctx, parent context.Context, root string, r request, requestFile h
 	return nil
 }
 func fixedCommand(sealed, root string, r request, systems map[string]systemFact, parentNS ...uint64) (ports.Command, error) {
-	if r.Mode != "" && r.Mode != sessionMode {
-		return ports.Command{}, errors.New("request-mode-refused")
+	if e := validateResearchMode(r); e != nil {
+		return ports.Command{}, e
 	}
 	if len(systems) != 4 {
 		return ports.Command{}, errors.New("system-selection-refused")

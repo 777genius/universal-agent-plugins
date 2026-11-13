@@ -989,6 +989,7 @@ class BundledRuntimeContracts(unittest.TestCase):
                     # Windows may expose the same mtime for two immediate writes.
                     # Retain the same-size mutation but make its metadata effect exact.
                     os.utime(path, ns=(path.stat().st_atime_ns, original_mtime + 2_000_000_000))
+                    self.assertNotEqual(path.stat().st_mtime_ns, original_mtime)
                 return body
             with mock.patch.object(os, "read", side_effect=changed), self.assertRaisesRegex(RuntimeError, "changed during capture"):
                 CASE["payload_snapshot"](root, expected, time.monotonic() + 5)

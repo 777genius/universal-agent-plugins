@@ -1095,5 +1095,174 @@ class SessionOnlyContracts(unittest.TestCase):
             self.assertNotIn('COOKIE',json.dumps(facts))
 
 
+
+class LockQualificationContracts(unittest.TestCase):
+    def fixture(self, root):
+        (root/'home/.grok').mkdir(parents=True)
+        for name in ('a','b'): (root/name).mkdir()
+        (root/'request.json').write_text('{}')
+        return case.lock_fixture_config(root)
+
+    def rows(self):
+        values=(b'grok 1.0.70 (abc1234)\n',b'Usage: grok mcp <COMMAND>\nCommands:\n  disable  Disable a server\n',
+                b'Usage: grok mcp disable <NAME>\n')
+        return [dict(label=label,argv=[],exit=0,error=None,merged_base64=base64.b64encode(body).decode(),
+                     merged_bytes=len(body),merged_sha256=case.digest(body))
+                for label,body in zip(case.LOCK_LABELS,values)]
+
+    def test_actual_flock_retained_until_explicit_fixture_teardown_and_aliases_refuse(self):
+        import fcntl
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);self.fixture(root);prior=len(case.LOCK_FDS)
+            try:
+                case.lock_file(root,True)
+                with (root/'home/.grok/.config-init.lock').open('r+b') as second:
+                    with self.assertRaises(BlockingIOError):fcntl.flock(second.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB)
+                    for fd in reversed(case.LOCK_FDS[prior:]):os.close(fd)
+                    del case.LOCK_FDS[prior:]
+                    fcntl.flock(second.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB)
+            finally:
+                for fd in reversed(case.LOCK_FDS[prior:]):os.close(fd)
+                del case.LOCK_FDS[prior:]
+            lock=root/'home/.grok/.config-init.lock'
+            os.link(lock,root/'alias')
+            with self.assertRaises(ValueError):case.lock_file(root,True)
+
+    def test_actual_help_gate_rejects_missing_advertisement_and_wrong_usage(self):
+        case.lock_help(self.rows())
+        for index,body in ((1,b'Usage: grok mcp <COMMAND>\n  list List\n'),
+                           (2,b'Usage: grok mcp enable <NAME>\n'),(2,b'Usage: grok mcp disable\n')):
+            rows=self.rows();rows[index]['merged_base64']=base64.b64encode(body).decode()
+            with self.assertRaises(ValueError):case.lock_help(rows)
+
+    def test_collector_writes_only_after_help_and_preserves_fatal_capture_fence(self):
+        req=dict(schema_version=1,source_commit='a'*40,source_tree='b'*40,nonce='c'*32,scope='a',
+                 input_root='/tmp/owned',phase=case.LOCK_PHASES[0],start_monotonic_ns=time.monotonic_ns())
+        for failure in ('none','help','capture'):
+            labels=[];rows=self.rows()
+            def command(argv,label,*args):
+                labels.append(label)
+                if label=='writer':
+                    if failure=='capture':raise ValueError('incomplete drain')
+                    return dict(label=label,argv=argv,exit=1,error=None,merged_base64='',merged_bytes=0,merged_sha256=case.digest(b''))
+                row=dict(rows[len(labels)-1])
+                if failure=='help' and label=='disable-help':row['exit']=1
+                return row
+            with mock.patch.object(case,'isolation',return_value={}),mock.patch.object(case,'lock_file') as lock, mock.patch.object(case,'command',side_effect=command):
+                if failure=='capture':
+                    with self.assertRaises(ValueError):case.lock_collector_result(req)
+                else:
+                    result=case.lock_collector_result(req)
+                    self.assertEqual(result['semantic_complete'],failure=='none')
+                if failure=='help':
+                    lock.assert_not_called();self.assertNotIn('writer',labels)
+                else:lock.assert_called_once_with(Path('/tmp/owned'),True)
+
+    def test_authoritative_ledger_requires_both_witness_changes_and_immutable_baseline(self):
+        import devin_structured_inventory_admission as metadata
+        budget=type('Budget',(),{'check':lambda self:None})()
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);authored=self.fixture(root)
+            before=metadata.metadata_inventory(root,budget);saved=copy.deepcopy(before)
+            self.assertTrue(case.lock_ledger(root,before,case.LOCK_PHASES[0],authored,budget)['accepted'])
+            path=root/'home/.grok/config.toml';original=path.read_text()
+            path.write_text(original.replace('disabled_mcp_servers = []','disabled_mcp_servers = ["'+case.LOCK_NAME+'"]'))
+            self.assertFalse(case.lock_ledger(root,before,case.LOCK_PHASES[1],authored,budget)['accepted'])
+            path.write_text(path.read_text().replace('enabled = true','enabled = false'))
+            self.assertTrue(case.lock_ledger(root,before,case.LOCK_PHASES[1],authored,budget)['accepted'])
+            self.assertEqual(before,saved)
+            (root/'b/foreign').write_text('PRIVATE')
+            with mock.patch.object(case,'lock_config_bytes',side_effect=AssertionError('foreign bytes read')) as read:
+                self.assertFalse(case.lock_ledger(root,before,case.LOCK_PHASES[1],authored,budget)['accepted'])
+            read.assert_not_called()
+
+    def test_replaced_original_root_refuses_before_content_read(self):
+        import devin_structured_inventory_admission as metadata
+        budget=type('Budget',(),{'check':lambda self:None})()
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary)/'owned';root.mkdir();self.fixture(root)
+            before=metadata.metadata_inventory(root,budget)
+            root.rename(root.with_name('retained'))
+            root.mkdir();self.fixture(root)
+            after=metadata.metadata_inventory(root,budget)
+            with mock.patch.object(case.os,'read',side_effect=AssertionError('replacement bytes read')) as read,self.assertRaises(ValueError):
+                case.lock_config_bytes(root,before,after)
+            read.assert_not_called()
+
+
+class LockReadoutContracts(unittest.TestCase):
+    def fixture(self, phases=case.LOCK_PHASES):
+        packet=dict(source_commit='a'*40,source_tree='b'*40,nonce='c'*32)
+        members,receipts={'acquisition.json':b'{}'},[]
+        tails=(['--version'],['mcp','--help'],['mcp','disable','--help'],['mcp','disable',case.LOCK_NAME])
+        for index,phase in enumerate(phases):
+            rows=LockQualificationContracts.rows(self)
+            rows.append(dict(label='writer',argv=[],exit=1 if index==0 else 0,error=None,
+                             merged_base64=base64.b64encode(b'PRIVATE_NATIVE').decode(),
+                             merged_bytes=14,merged_sha256=case.digest(b'PRIVATE_NATIVE')))
+            for number,row in enumerate(rows):
+                body=base64.b64decode(row.pop('merged_base64'));row['merged_bytes']=len(body)
+                row['argv']=['/tmp/uap-grok-acp-sealed-'+str(index+123)+'/grok',*tails[number]]
+                name=phase+'-'+case.LOCK_LABELS[number]+'.merged.log';row['merged_file']=name;members[name]=body
+            result=dict(packet,schema_version=1,scope='a',mode=case.LOCK_MODE,phase=phase,lock_held=index==0,
+                        semantic_complete=True,reason='complete',isolation={},commands=rows)
+            systems={name:dict(path='/usr/bin/'+('python3.12' if name=='python3' else name),sha256='d'*64)
+                     for name in ('unshare','setpriv','env','python3')}
+            receipts.append(dict(packet,schema_version=1,scope='a',cleanup_complete=True,sealed_cleanup_complete=True,
+                                 system_executables=systems,result=result))
+            members[phase+'.rpc.json']=json.dumps(case.rpc_state()).encode()
+            members[phase+'.ledger.json']=json.dumps(dict(phase=phase,accepted=True,config_observed=True,
+                config_bytes=12,config_sha256='e'*64,before={'PRIVATE/PATH':[1]},after={'PRIVATE/PATH':[2]})).encode()
+        summary=dict(packet,schema_version=1,mode=case.LOCK_MODE,collection_complete=False,cleanup_complete=True,
+                     qualification=dict(case.FALSE),scopes=receipts,measurement_complete=len(phases)==2)
+        members['admission.json']=json.dumps(summary).encode()
+        return packet,members
+
+    def read(self, packet, members):
+        return case.publication_readout(AdmissionContracts.readout_zip(self,members),packet,time.monotonic()+5,mode=case.LOCK_MODE)
+
+    def test_actual_archive_reports_only_existing_phases_and_closed_facts(self):
+        for phases in (case.LOCK_PHASES[:1],case.LOCK_PHASES):
+            packet,members=self.fixture(phases);facts=self.read(packet,members)
+            self.assertEqual([row['phase'] for row in facts['phases']],list(phases))
+            self.assertTrue(all(row['semantic_complete'] and row['ledger_accepted'] for row in facts['phases']))
+            for private in ('PRIVATE','argv','sha256','merged_file',case.LOCK_NAME):
+                self.assertNotIn(private,json.dumps(facts))
+
+    def test_source_cleanup_bool_missing_stream_rpc_and_unjoined_members_refuse(self):
+        for fault in ('source','cleanup','bool','stream','rpc','extra','no-phase','phase','writer'):
+            packet,members=self.fixture();summary=json.loads(members['admission.json'])
+            if fault=='source':summary['source_tree']='f'*40
+            elif fault=='cleanup':summary['scopes'][0]['cleanup_complete']=False
+            elif fault=='bool':summary['scopes'][0]['result']['lock_held']=1
+            elif fault=='stream':del members['locked-writer-version.merged.log']
+            elif fault=='rpc':members['locked-writer.rpc.json']=b'{"initialize":{},"plugins":null,"notifications":[]}'
+            elif fault=='extra':members['a-version.merged.log']=b'PRIVATE'
+            elif fault=='no-phase':summary['scopes']=[]
+            elif fault=='phase':summary['scopes'][0]['result']['phase']='PRIVATE'
+            else:summary['scopes'][0]['result']['commands'][-1]['exit']=0
+            members['admission.json']=json.dumps(summary).encode()
+            with self.subTest(fault=fault):
+                self.assertEqual(self.read(packet,members),dict(schema_version=1,mode=case.LOCK_MODE,reason='readout-refused'))
+
+    def test_real_publication_keeps_original_on_late_diagnostic_refusal(self):
+        packet,members=self.fixture()
+        with tempfile.TemporaryDirectory() as temporary:
+            output=Path(temporary)/'output';output.mkdir()
+            proof=case.publish(output,members,mode=case.LOCK_MODE)
+            packet.update(schema_version=1,publication=proof)
+            diagnostics=[]
+            with mock.patch.object(case.time,'monotonic',return_value=101.0):
+                admitted=case.admit_publication(output,packet,packet['source_commit'],packet['source_tree'],
+                    Path(temporary)/'admitted',diagnostics,100.0,mode=case.LOCK_MODE)
+            broken=copy.deepcopy(packet);broken['publication']['output']['inode']+=1
+            untouched=[]
+            with mock.patch.object(case,'publication_readout',side_effect=AssertionError('diagnostic before authority')),self.assertRaises(ValueError):
+                case.admit_publication(output,broken,packet['source_commit'],packet['source_tree'],
+                    Path(temporary)/'must-not-stage',untouched,100.0,mode=case.LOCK_MODE)
+            self.assertEqual(untouched,[])
+            self.assertEqual(case.digest(admitted.read_bytes()),proof['sha256'])
+            self.assertEqual(diagnostics,[dict(schema_version=1,mode=case.LOCK_MODE,reason='readout-refused')])
+
 if __name__ == '__main__':
     unittest.main()
