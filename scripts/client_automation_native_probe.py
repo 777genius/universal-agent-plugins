@@ -107,11 +107,32 @@ def snapshot(root):
         # Bound directory entries as well as regular files. Eager sorting or
         # counting only captured files lets a native-generated directory tree
         # exhaust memory/CPU before the snapshot limit can fire.
-        for count, path in enumerate(root.rglob("*"), start=1):
-            relative = path.relative_to(root)
-            require(count <= 256 and 0 < len(relative.parts) <= 32,
+        # Iterate from held directory descriptors, not Path.rglob. Some
+        # pathlib versions eagerly collect each directory's entries before
+        # yielding even one path, defeating the 256-entry resource bound.
+        # Descriptor-relative enumeration also avoids traversing a renamed
+        # or substituted ancestor by its ambient pathname.
+        def entries(parent_fd, prefix=()):
+            with os.scandir(parent_fd) as listing:
+                for entry in listing:
+                    parts = prefix + (entry.name,)
+                    meta = entry.stat(follow_symlinks=False)
+                    yield parts, meta
+                    if stat.S_ISDIR(meta.st_mode):
+                        child = os.open(entry.name, directory_flags, dir_fd=parent_fd)
+                        try:
+                            actual = os.fstat(child)
+                            require((meta.st_dev, meta.st_ino, meta.st_mode)
+                                    == (actual.st_dev, actual.st_ino, actual.st_mode),
+                                    "config directory replaced during traversal")
+                            yield from entries(child, parts)
+                        finally:
+                            os.close(child)
+
+        for count, (parts, meta) in enumerate(entries(root_fd), start=1):
+            relative = Path(*parts)
+            require(count <= 256 and 0 < len(parts) <= 32,
                     "config inventory bound")
-            meta = path.lstat()
             require(not stat.S_ISLNK(meta.st_mode), "native probe created an alias")
             if stat.S_ISDIR(meta.st_mode):
                 # Empty directories and mode changes are foreign-state changes,

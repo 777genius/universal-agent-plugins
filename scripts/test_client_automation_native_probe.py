@@ -148,6 +148,47 @@ class NativeAdmissionContracts(unittest.TestCase):
                 snapshot(root)
 
     @unittest.skipUnless(os.name == "posix" and hasattr(os, "O_NOFOLLOW")
+                         and hasattr(os, "O_DIRECTORY"), "requires anchored scandir")
+    def test_snapshot_stops_enumeration_at_entry_bound(self):
+        # Do not merely reject after pathlib has materialized thousands of
+        # directory entries. Every enumerated member must count immediately.
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for index in range(300):
+                (root / f"entry-{index:03d}").mkdir()
+            original = os.scandir
+            observed = []
+
+            def tracked_scan(directory_fd):
+                self.assertIsInstance(directory_fd, int)
+                underlying = original(directory_fd)
+
+                class Tracked:
+                    def __enter__(self):
+                        underlying.__enter__()
+                        return self
+
+                    def __exit__(self, *args):
+                        return underlying.__exit__(*args)
+
+                    def __iter__(self):
+                        return self
+
+                    def __next__(self):
+                        entry = next(underlying)
+                        observed.append(entry.name)
+                        self_case.assertLessEqual(len(observed), 257)
+                        return entry
+
+                return Tracked()
+
+            self_case = self
+            with patch.object(os, "scandir", side_effect=tracked_scan):
+                with self.assertRaisesRegex(ValueError, "config inventory bound"):
+                    snapshot(root)
+            self.assertEqual(len(observed), 257)
+
+    @unittest.skipUnless(os.name == "posix" and hasattr(os, "O_NOFOLLOW")
                          and hasattr(os, "O_DIRECTORY"), "native snapshot is POSIX-only")
     def test_snapshot_detects_empty_directory_and_mode_only_foreign_changes(self):
         with tempfile.TemporaryDirectory() as temporary:
