@@ -108,3 +108,29 @@ The reviewed union keeps the closed wire schema, runtime/source pins, exact oper
 Additional contracts execute the real owned Go probe through separate write/read sessions, verify cold environment independence, and refuse state mutation, identical-byte helper replacement, replaced event prefixes and foreign session events. The union remains inside the original eleven paths; genuine three-platform native results and all original false qualification flags remain unchanged pending the published-head run.
 
 Union validation: nine top-level Go tests and seven Python tests pass, full-rule scoped helper lint reports zero issues, and the child module builds with GOWORK=off. Windows amd64 and Darwin arm64 test binaries compile; these compile checks do not claim native execution. The workflow YAML parses with explicit PowerShell/native Python selection and retains cancel-in-progress=false.
+
+## Deterministic Windows pre-resume cancellation regression
+
+The external 6ec9ad68/3718c139 correction checks cancellation after successful
+Job assignment and before resume. Preserve those six production lines. A missing
+PID file could also result from resume followed by fast termination, so the test
+must observe the existing resumeSessionChild seam, which delegates to the real
+resumeSessionProcess/ResumeThread path. Reuse 16bb6b0d without a second seam. Cancellation at the assigned-but-suspended boundary requires zero
+calls; a paired real-resume control requires one call before cancellation.
+
+The existing disposable executable remains the only child. Before real assignment,
+retain non-inheritable duplicate process and Job handles through a synchronized
+channel. Register teardown before launch: cancel, terminate the retained Job,
+wait on the retained process with a direct fallback if necessary, join the sole
+StartSessionContext goroutine, close handles, then restore hooks. Report every
+teardown error; require the process already settled before rescue can mask a bug.
+No PID reopening or PID-file absence supplies execution/cleanup proof.
+
+A duplicate refers to the same object and retains its lifetime, so this regression
+exercises successful explicit termination; the separate kill-on-last-close failure
+contract stays unchanged. See Microsoft's [DuplicateHandle](https://learn.microsoft.com/en-us/windows/win32/api/handleapi/nf-handleapi-duplicatehandle)
+and [Job Objects](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects)
+contracts. Root R1 initially scoped two Go files plus this plan; after the external
+16bb6b0d seam, this follow-up changes only the existing test and plan. Linux
+cross-compilation/lint can validate source, but actual Windows execution is still
+required; no containment, consent boundary or platform support claim is broadened.

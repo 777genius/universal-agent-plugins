@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -91,44 +92,123 @@ func TestSessionContextCancellationBeforeResume(t *testing.T) {
 	if err := os.WriteFile(fixture, body, 0700); err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	resumeCalls := 0
-	originalResume := resumeSessionChild
-	resumeSessionChild = func(pid int) error {
-		resumeCalls++
-		return originalResume(pid)
+	for _, beforeResume := range []bool{true, false} {
+		if !t.Run(fmt.Sprint(beforeResume), func(t *testing.T) {
+			testSessionResumeBoundary(t, fixture, dir, beforeResume)
+		}) {
+			return // Never launch another fixture after an unsettled teardown.
+		}
 	}
-	t.Cleanup(func() { resumeSessionChild = originalResume })
-	original := assignProcessToJobObject
+}
+
+func testSessionResumeBoundary(t *testing.T, fixture, dir string, beforeResume bool) {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	owned, done := make(chan [2]windows.Handle, 1), make(chan struct{})
+	var result error
+	var resumes atomic.Int32
+	original, originalResume := assignProcessToJobObject, resumeSessionChild
 	assignProcessToJobObject = func(job, process windows.Handle) error {
+		var handles [2]windows.Handle
+		self := windows.CurrentProcess()
+		for index, handle := range []windows.Handle{job, process} {
+			if err := windows.DuplicateHandle(self, handle, self, &handles[index], 0, false, windows.DUPLICATE_SAME_ACCESS); err != nil {
+				if handles[0] != 0 {
+					err = errors.Join(err, windows.CloseHandle(handles[0]))
+				}
+				return err
+			}
+		}
+		owned <- handles // Independent handles exist before assignment can fail or block.
 		if err := original(job, process); err != nil {
 			return err
 		}
-		cancel() // Exact boundary: job owns a still-suspended child.
+		if beforeResume {
+			cancel() // Exact boundary: job owns a still-suspended child.
+		}
 		return nil
 	}
-	t.Cleanup(func() { assignProcessToJobObject = original })
-	done := make(chan error, 1)
+	resumeSessionChild = func(pid int) error {
+		resumes.Add(1)
+		err := originalResume(pid)
+		cancel() // Positive control reaches the real resume before cancellation.
+		return err
+	}
+	t.Cleanup(func() {
+		cancel()
+		if cleanupSessionResumeFixture(t, owned, done) {
+			assignProcessToJobObject, resumeSessionChild = original, originalResume
+		}
+	})
 	go func() {
-		done <- StartSessionContext(ctx, fixture,
+		result = StartSessionContext(ctx, fixture,
 			[]string{fixture, "-test.run=^TestWindowsJobFixture$", "pre-resume", dir}, dir,
 			append(os.Environ(), "UAP_WINDOWS_JOB_FIXTURE=1"))
+		close(done)
 	}()
 	select {
-	case err := <-done:
-		if !errors.Is(err, context.Canceled) {
-			t.Fatalf("canceled suspended session: %v", err)
+	case <-done:
+		if !errors.Is(result, context.Canceled) {
+			t.Fatalf("canceled suspended session: %v", result)
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("canceled suspended session was not reaped")
 	}
-	if resumeCalls != 0 {
-		t.Errorf("canceled suspended session attempted resume %d times", resumeCalls)
+	want := int32(1)
+	if beforeResume {
+		want = 0
 	}
-	if _, err := os.Stat(filepath.Join(dir, "pre-resume.pid")); !os.IsNotExist(err) {
-		t.Fatalf("suspended child executed after cancellation: %v", err)
+	if got := resumes.Load(); got != want {
+		t.Fatalf("native resume calls = %d, want %d", got, want)
 	}
+}
+
+func cleanupSessionResumeFixture(t *testing.T, owned <-chan [2]windows.Handle, done <-chan struct{}) bool {
+	t.Helper()
+	var handles [2]windows.Handle
+	select {
+	case handles = <-owned:
+	case <-done:
+		select {
+		case handles = <-owned:
+		default:
+		}
+	case <-time.After(5 * time.Second):
+		t.Error("session setup did not publish ownership or finish")
+		return false
+	}
+	if handles[0] != 0 {
+		if status, err := windows.WaitForSingleObject(handles[1], 0); err != nil || status != windows.WAIT_OBJECT_0 {
+			t.Errorf("session returned or timed out before owned process settlement: status=%d err=%v", status, err)
+		}
+		if err := windows.TerminateJobObject(handles[0], 92); err != nil {
+			t.Errorf("fixture job termination: %v", err)
+		}
+		if status, err := windows.WaitForSingleObject(handles[1], 5000); err != nil || status != windows.WAIT_OBJECT_0 {
+			t.Errorf("fixture process wait: status=%d err=%v", status, err)
+			if err := windows.TerminateProcess(handles[1], 92); err != nil {
+				t.Errorf("fixture process fallback termination: %v", err)
+			}
+			if status, err := windows.WaitForSingleObject(handles[1], 5000); err != nil || status != windows.WAIT_OBJECT_0 {
+				t.Errorf("fixture process fallback wait: status=%d err=%v", status, err)
+			}
+		}
+	}
+	joined := false
+	select {
+	case <-done:
+		joined = true
+	case <-time.After(5 * time.Second):
+		t.Error("fixture session goroutine did not finish after cleanup")
+	}
+	for _, handle := range handles {
+		if handle != 0 {
+			if err := windows.CloseHandle(handle); err != nil {
+				t.Errorf("fixture retained handle close: %v", err)
+			}
+		}
+	}
+	return joined
 }
 
 // The managed Cline session can select a project on a network share. The
