@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/url"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/directoryv1"
@@ -54,12 +55,20 @@ func newPinnedModernDirectoryClient(dataRoot string, approved pinnedModernDirect
 	// historical feed as an independent modern origin.
 	legacyHost := strings.TrimSuffix(legacyOrigin.Hostname(), ".")
 	modernHost := strings.TrimSuffix(parsed.Hostname(), ".")
-	legacyPort, modernPort := legacyOrigin.Port(), parsed.Port()
-	if legacyPort == "" {
-		legacyPort = "443"
+	// Compare numeric TCP ports: :00443 and :443 reach the same HTTPS
+	// endpoint and must not create a second trust authority.
+	legacyPort, modernPort := 443, 443
+	if port := legacyOrigin.Port(); port != "" {
+		legacyPort, err = strconv.Atoi(port)
+		if err != nil || legacyPort < 1 || legacyPort > 65535 {
+			return nil, fmt.Errorf("historical Directory HTTPS port is invalid")
+		}
 	}
-	if modernPort == "" {
-		modernPort = "443"
+	if port := parsed.Port(); port != "" {
+		modernPort, err = strconv.Atoi(port)
+		if err != nil || modernPort < 1 || modernPort > 65535 {
+			return nil, fmt.Errorf("modern Directory HTTPS port is invalid")
+		}
 	}
 	if strings.EqualFold(modernHost, legacyHost) && modernPort == legacyPort &&
 		parsed.EscapedPath() == legacyOrigin.EscapedPath() {
