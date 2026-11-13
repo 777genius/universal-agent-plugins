@@ -275,7 +275,7 @@ func TestPiUpstreamSignedTestOnlyPositiveSaved(t *testing.T) {
 			}
 		}
 		payload, err := json.MarshalIndent(map[string]any{
-			"kind": "pi-upstream-real-source-saved-test-only",
+			"kind":      "pi-upstream-real-source-saved-test-only",
 			"test_head": head, "runner_os": os.Getenv("RUNNER_OS"),
 			"saved_cases": completed, "production_published": false,
 			"production_eligibility": false, "synthetic_evidence": true,
