@@ -43,9 +43,27 @@ func newPinnedModernDirectoryClient(dataRoot string, approved pinnedModernDirect
 		return nil, err
 	}
 	parsed, err := url.Parse(origin)
-	if err != nil || !strings.HasSuffix(parsed.Path, "/schemas/1/") ||
-		strings.EqualFold(origin, defaultDirectoryOrigin) {
+	if err != nil || !strings.HasSuffix(parsed.Path, "/schemas/1/") {
 		return nil, fmt.Errorf("modern Directory requires a separate schema-1 HTTPS origin")
+	}
+	legacyOrigin, err := url.Parse(defaultDirectoryOrigin)
+	if err != nil {
+		return nil, fmt.Errorf("historical Directory origin is invalid: %w", err)
+	}
+	// The default HTTPS port or a trailing DNS dot must not disguise the
+	// historical feed as an independent modern origin.
+	legacyHost := strings.TrimSuffix(legacyOrigin.Hostname(), ".")
+	modernHost := strings.TrimSuffix(parsed.Hostname(), ".")
+	legacyPort, modernPort := legacyOrigin.Port(), parsed.Port()
+	if legacyPort == "" {
+		legacyPort = "443"
+	}
+	if modernPort == "" {
+		modernPort = "443"
+	}
+	if strings.EqualFold(modernHost, legacyHost) && modernPort == legacyPort &&
+		parsed.EscapedPath() == legacyOrigin.EscapedPath() {
+		return nil, fmt.Errorf("modern Directory cannot reuse the historical HTTPS feed")
 	}
 	if approved.KeyID == "" || approved.KeyID != strings.TrimSpace(approved.KeyID) ||
 		approved.KeyID == defaultDirectoryKeyID {
