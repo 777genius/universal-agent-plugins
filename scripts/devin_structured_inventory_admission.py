@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Finite Devin metadata capture; no product or MCP runtime qualification."""
 import argparse
+import base64
 from contextlib import ExitStack
 import hashlib
 import json
@@ -159,12 +160,132 @@ def zero_effects(probes, startup):
         require(not probe.methods() and not calls and invalid == 0 and not probe.accepted_connections, "native metadata contacted MCP endpoint")
 
 
+class KnownFileDiagnostics:
+    """Held original parents; two independently stable, bounded file versions."""
+    PATHS = {"user-config": "home/config/devin/config.json",
+             "git-a-exclude": "project-a/.git/info/exclude"}
+
+    def __init__(self, root, original_identity, baseline):
+        self.root, self.stack, self.parents, self.before = root, ExitStack(), {}, {}
+        self.original_bodies = {}
+        try:
+            require(root_identity(root) == original_identity, "diagnostic independent root differs")
+            self.root_fd = self.open_directory(root)
+            self.root_info = self.identity(os.fstat(self.root_fd))
+            require(self.root_info == original_identity, "diagnostic opened root differs")
+            for label, relative in self.PATHS.items():
+                fd, chain = self.root_fd, []
+                for component in Path(relative).parts[:-1]:
+                    child = self.open_directory(component, fd)
+                    info = os.fstat(child)
+                    require(info.st_dev == self.root_info[0] and info.st_uid == self.root_info[3],
+                            "diagnostic parent ownership/device differs")
+                    chain.append((fd, component, child, self.identity(info)))
+                    fd = child
+                self.parents[label] = (fd, Path(relative).name, chain)
+            self.verify()
+            for label in self.PATHS:
+                self.before[label] = self.read(label)
+                baseline_key = "home/config/devin/config.json" if label == "user-config" else "a/.git/info/exclude"
+                expected = baseline[baseline_key]
+                require(expected["kind"] == "file" and self.before[label]["sha256"] == expected["sha256"]
+                        and self.before[label]["bytes"] == expected["size"], "diagnostic original fixture differs")
+                if label == "user-config":
+                    require(self.original_bodies[label] == b'{"read_config_from":{"cloud":false}}\n',
+                            "diagnostic authored User config differs")
+                self.before[label]["base64"] = base64.b64encode(self.original_bodies[label]).decode()
+        except BaseException:
+            self.close()
+            raise
+
+    @staticmethod
+    def identity(info):
+        return (info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_gid)
+
+    def open_directory(self, name, parent=None):
+        fd = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent)
+        self.stack.callback(os.close, fd)
+        return fd
+
+    def verify(self):
+        require(self.identity(self.root.lstat()) == self.root_info
+                and self.identity(os.fstat(self.root_fd)) == self.root_info, "diagnostic original root changed")
+        for _fd, _name, chain in self.parents.values():
+            for parent, name, child, expected in chain:
+                require(self.identity(os.fstat(child)) == expected
+                        and self.identity(os.stat(name, dir_fd=parent, follow_symlinks=False)) == expected,
+                        "diagnostic original parent changed")
+
+    def read(self, label):
+        self.verify()
+        parent, name, _chain = self.parents[label]
+        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent)
+        self.stack.callback(os.close, fd)
+        first = os.fstat(fd)
+        def stable(info):
+            return (*self.identity(info), info.st_nlink, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+        require(stat.S_ISREG(first.st_mode) and first.st_nlink == 1 and first.st_size <= 4096
+                and first.st_dev == self.root_info[0] and first.st_uid == self.root_info[3],
+                "diagnostic bounded ordinary single-link file required")
+        body = os.read(fd, 4097)
+        require(len(body) == first.st_size and stable(os.fstat(fd)) == stable(first)
+                and stable(os.stat(name, dir_fd=parent, follow_symlinks=False)) == stable(first),
+                "diagnostic file changed during read")
+        self.verify()
+        self.original_bodies.setdefault(label, body)
+        return {"identity": list(stable(first)), "bytes": len(body),
+                "sha256": hashlib.sha256(body).hexdigest(), "projection": self.project(label, body)}
+
+    def project(self, label, body):
+        def opaque(item):
+            encoded = json.dumps(item, sort_keys=True, separators=(",", ":")).encode()
+            return {"type": type(item).__name__, "bytes": len(encoded),
+                    "sha256": hashlib.sha256(encoded).hexdigest()}
+        def fields(value, depth=0):
+            require(depth <= 4 and isinstance(value, dict) and len(value) <= 64,
+                    "diagnostic config projection bound")
+            rows = []
+            for key, item in sorted(value.items()):
+                row = {"key": key} if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,63}", key) else {"key": opaque(key)}
+                if isinstance(item, dict):
+                    row["value"] = fields(item, depth + 1)
+                elif item is None or type(item) is bool:
+                    row["value"] = item
+                else:
+                    row["value"] = opaque(item)
+                rows.append(row)
+            return rows
+        if label == "user-config":
+            return {"kind": "closed-config-projection", "fields": fields(strict_json(body))}
+        before = self.original_bodies[label].splitlines(keepends=True)
+        lines = []
+        for line in body.splitlines(keepends=True):
+            text = line.decode("ascii", "replace").rstrip("\r\n")
+            safe_pattern = (len(text) <= 128 and re.fullmatch(r"\.devin(?:/[A-Za-z0-9_.*?/-]*)?/?", text)
+                            and ".." not in text and "//" not in text)
+            row = {"bytes": len(line), "sha256": hashlib.sha256(line).hexdigest()}
+            if line in before or safe_pattern:
+                row["base64"] = base64.b64encode(line).decode()
+            lines.append(row)
+        return {"kind": "bounded-exclude-lines", "lines": lines}
+
+    def finish(self):
+        after = {label: self.read(label) for label in self.PATHS}
+        self.verify()
+        return {"schema_version": 1, "complete": True,
+                "files": {label: {"before": self.before[label], "after": after[label]} for label in self.PATHS}}
+
+    def close(self):
+        self.stack.close()
+
+
 def collect(ctx, probes):
     nonce = secrets.token_hex(32)
     expected, startup, marker = fixture(ctx, {key: value.url for key, value in probes.items()}, nonce)
     roots = {"home": ctx.home, "temporary": ctx.root / "tmp", **ctx.projects}
     identities = {name: root_identity(path) for name, path in roots.items()}
     baseline = snapshot(ctx)
+    ctx.known_file_diagnostics = KnownFileDiagnostics(ctx.root, ctx.original_output_identity, baseline)
     outer_before = metadata_inventory(ctx.root, ctx.budget)
     ctx.identities[marker] = hashlib.sha256(marker.read_bytes()).hexdigest()
     ctx.summary["stdio_effect_guard"] = {"path": str(marker), "sha256": ctx.identities[marker], "python": sys.executable}
@@ -237,6 +358,7 @@ def run(output):
     try:
         with shared.Budget(360) as budget:
             ctx = AdmissionContext(output, summary, budget)
+            ctx.original_output_identity = identity
             held_cleanup = {path: root_identity(path) for path in (ctx.home, ctx.private, ctx.output, output / "tmp", *ctx.projects.values())}
             ctx.source_and_projects()
             receipt, contents = shared.acquire(SPEC, budget)
@@ -270,6 +392,14 @@ def run(output):
         require(root_identity(output) == identity, "outer root replaced")
         try:
             require((ctx is None or ctx.process_cleanup_proved) and probes_settled, "owned process/probe cleanup unproved")
+            diagnostics = getattr(ctx, "known_file_diagnostics", None)
+            if diagnostics is not None:
+                try:
+                    summary["known_file_diagnostics"] = diagnostics.finish()
+                except (ValueError, OSError, UnicodeError):
+                    summary["known_file_diagnostics"] = {"schema_version": 1, "complete": False}
+                finally:
+                    diagnostics.close()
             for path, held in held_cleanup.items():
                 require(root_identity(path) == held, "cleanup directory identity changed")
                 shutil.rmtree(path)
@@ -277,6 +407,11 @@ def run(output):
         except Exception as error:
             summary.update(collection_complete=False, cleanup_complete=False,
                            cleanup_error=type(error).__name__)
+        diagnostics = getattr(ctx, "known_file_diagnostics", None)
+        if diagnostics is not None:
+            diagnostics.close()
+        if not summary.get("cleanup_complete"):
+            summary.pop("known_file_diagnostics", None)
         # Existing publisher admits only held bounded streams and closed JSON ZIP.
         # Unproved cleanup retains a fixed failure report, never raw captures.
         if not summary.get("cleanup_complete"):

@@ -12,6 +12,110 @@ CASE = runpy.run_path(str(Path(__file__).parent / "e2e/hermes-profile-admission.
 
 
 class ProfileAdmissionContracts(unittest.TestCase):
+    def test_census_is_content_free_disjoint_and_does_not_follow_links(self):
+        import time
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            for name in ("user/selected-profile/cache", "user/selected-profile/tools", "user/selected-profile/installs", "project-a", "project-b"):
+                (root / name).mkdir(parents=True, exist_ok=True)
+                (root / name / "item").write_bytes(b"private")
+            os.link(root / "project-a/item", root / "project-a/second")
+            if os.name != "nt": (root / "project-b/link").symlink_to(root / "project-a", target_is_directory=True)
+            expected = CASE["directory_identity"](root)
+            with mock.patch.object(os, "readlink", side_effect=AssertionError("link target read")), mock.patch.object(os, "fdopen", side_effect=AssertionError("content read")), mock.patch.dict(CASE["metadata_census"].__globals__, {"ordinary_bytes": mock.Mock(side_effect=AssertionError("content read"))}):
+                value = CASE["metadata_census"](root, expected, time.monotonic() + 5)
+            self.assertTrue(value["complete"])
+            CASE["validate_census_member"]("bootstrap-census.json", json.dumps(value).encode())
+            self.assertEqual(value["logical_regular_bytes"], 42)
+            self.assertEqual(value["groups"]["projectA"]["logical_regular_bytes"], 14)
+            self.assertEqual(value["groups"]["projectA"]["max_links"], 2)
+            self.assertEqual(value["groups"]["projectA"]["regular_hardlinked_entries"], 2)
+            self.assertEqual(value["entries"], sum(row["entries"] for row in value["groups"].values()))
+            self.assertTrue(all(row["entries"] == sum(row["kinds"].values()) for row in value["groups"].values()))
+            self.assertNotIn("private", json.dumps(value))
+
+    def test_census_root_replacement_budget_and_saturation_are_incomplete(self):
+        import stat
+        import time
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary).resolve()
+            root = parent / "root"; root.mkdir()
+            original = CASE["directory_identity"](root)
+            (root / "file").write_bytes(b"unused")
+            partial = CASE["metadata_census"](root, original, time.monotonic() - 1)
+            self.assertEqual((partial["status"], partial["reason"], partial["entries"]), ("partial", "budget", 0))
+            with mock.patch.object(CASE["time"], "monotonic", side_effect=[0, 10]):
+                partial = CASE["metadata_census"](root, original, 5)
+            self.assertEqual((partial["status"], partial["entries"]), ("partial", 1))
+            actual = os.stat
+            def huge(path, *args, **kwargs):
+                if path == "file" and kwargs.get("dir_fd") is not None:
+                    return SimpleNamespace(st_mode=stat.S_IFREG | 0o600, st_nlink=1 << 54, st_size=1 << 54)
+                return actual(path, *args, **kwargs)
+            with mock.patch.object(os, "stat", side_effect=huge):
+                value = CASE["metadata_census"](root, original, time.monotonic() + 5)
+            self.assertTrue(value["overflow"]); self.assertFalse(value["complete"])
+            self.assertEqual(value["logical_regular_bytes"], (1 << 53) - 1)
+            root.rename(parent / "original"); root.mkdir()
+            with mock.patch.object(os, "scandir", side_effect=AssertionError("foreign root enumerated")):
+                refused = CASE["metadata_census"](root, original, time.monotonic() + 5)
+            self.assertEqual(refused["status"], "refused")
+
+    def test_census_request_requires_settlement_and_closed_identity_before_walk(self):
+        import time
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary).resolve()
+            root, evidence = parent / "root", parent / "evidence"
+            root.mkdir(); evidence.mkdir()
+            expected = CASE["directory_identity"](root)
+            with mock.patch.dict(CASE["maybe_census"].__globals__, {"metadata_census": mock.Mock(side_effect=AssertionError("fallback walk"))}):
+                CASE["maybe_census"](evidence, root, expected, "c" * 64, True, time.monotonic() + 5, CASE["directory_identity"](evidence))
+                self.assertEqual(list(evidence.iterdir()), [])
+                CASE["publish_census_request"](evidence, root, "c" * 64, CASE["directory_identity"](evidence))
+                CASE["maybe_census"](evidence, root, expected, "c" * 64, False, time.monotonic() + 5, CASE["directory_identity"](evidence))
+                value = json.loads((evidence / "bootstrap-census.json").read_text())
+                self.assertFalse(value["complete"])
+            self.assertTrue({"bootstrap-census.json", "bootstrap-census-request.json"} <= CASE["MEMBERS"])
+            self.assertLess((evidence / "bootstrap-census.json").stat().st_size, 16 << 10)
+            (evidence / "bootstrap-census.json").unlink()
+            with mock.patch.dict(CASE["publish_census_request"].__globals__, {"write_census_member": mock.Mock(side_effect=OSError("cannot publish"))}):
+                CASE["publish_census_request"](evidence, root, "c" * 64, CASE["directory_identity"](evidence))
+            (evidence / "bootstrap-census-request.json").write_text('{"schema_version":1,"schema_version":1}')
+            with mock.patch.dict(CASE["maybe_census"].__globals__, {"metadata_census": mock.Mock(side_effect=AssertionError("invalid request walked"))}):
+                CASE["maybe_census"](evidence, root, expected, "c" * 64, True, time.monotonic() + 5, CASE["directory_identity"](evidence))
+            self.assertEqual(json.loads((evidence / "bootstrap-census.json").read_text())["reason"], "request")
+            with self.assertRaises(RuntimeError): CASE["stage_evidence"](evidence)
+            self.assertFalse((evidence / "upload").exists())
+            (evidence / "bootstrap-census-request.json").unlink()
+            CASE["publish_census_request"](evidence, root, "c" * 64, CASE["directory_identity"](evidence))
+            CASE["stage_evidence"](evidence)
+            self.assertEqual({path.name for path in (evidence / "upload").iterdir()}, {"bootstrap-census.json", "bootstrap-census-request.json"})
+
+    def test_census_evidence_replacement_never_writes_foreign_parent(self):
+        import time
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary).resolve()
+            root, evidence = parent / "root", parent / "evidence"
+            root.mkdir(); evidence.mkdir()
+            expected = CASE["directory_identity"](evidence)
+            evidence.rename(parent / "original-evidence"); evidence.mkdir()
+            sentinel = evidence / "foreign"
+            sentinel.write_bytes(b"retained")
+            with self.assertRaisesRegex(RuntimeError, "original census evidence changed"):
+                CASE["maybe_census"](evidence, root, CASE["directory_identity"](root), "c" * 64, True, time.monotonic() + 5, expected)
+            self.assertEqual({path.name for path in evidence.iterdir()}, {"foreign"})
+            self.assertEqual(sentinel.read_bytes(), b"retained")
+
+    def test_census_publication_refuses_oversize_unknown_and_boolean_documents(self):
+        for name in ("bootstrap-census-request.json", "bootstrap-census.json"):
+            for body in (b" " * ((16 << 10) + 1), b'{"private":"must not publish"}', b'{"schema_version":true}'):
+                with self.subTest(name=name, body=body[:30]), tempfile.TemporaryDirectory() as temporary:
+                    evidence = Path(temporary).resolve()
+                    (evidence / name).write_bytes(body)
+                    with self.assertRaises((RuntimeError, ValueError)):
+                        CASE["stage_evidence"](evidence)
+                    self.assertFalse((evidence / "upload").exists())
+
     def test_inventory_refusal_identifies_metadata_without_reading_member(self):
         for mutation in ("oversize", "hardlink", "symlink"):
             with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as temporary:
@@ -72,6 +176,128 @@ class ProfileAdmissionContracts(unittest.TestCase):
                         CASE["inventory"](root)
                 else:
                     self.assertTrue(CASE["changes"](before, CASE["inventory"](root)))
+
+    def test_inventory_refuses_directory_swap_before_or_during_enumeration(self):
+        for boundary in ("before-open", "during-scan"):
+            with self.subTest(boundary=boundary), tempfile.TemporaryDirectory() as temporary:
+                parent = Path(temporary).resolve()
+                root, foreign = parent / "root", parent / "foreign"
+                root.mkdir(); foreign.mkdir()
+                child = root / "child"
+                child.mkdir()
+                (foreign / "foreign-directory").mkdir()
+                sentinel = foreign / "sentinel"
+                sentinel.write_bytes(b"foreign contents")
+                member = CASE["inventory_member"]
+                scan = os.scandir
+                def replace():
+                    child.rename(root / "original-child")
+                    child.symlink_to(foreign, target_is_directory=True)
+                def checked(relative, info):
+                    member(relative, info)
+                    if boundary == "before-open" and relative == "child": replace()
+                def scanning(operand):
+                    selected = (Path(operand) == child if not isinstance(operand, int)
+                                else os.fstat(operand).st_ino == child.lstat().st_ino)
+                    entries = scan(operand)
+                    if boundary == "during-scan" and selected:
+                        try: replace()
+                        except BaseException:
+                            entries.close()
+                            raise
+                    return entries
+                with mock.patch.dict(CASE["inventory"].__globals__, {"inventory_member": checked}), mock.patch.object(os, "scandir", side_effect=scanning):
+                    with self.assertRaises((RuntimeError, OSError)):
+                        CASE["inventory"](root)
+                self.assertEqual(sentinel.read_bytes(), b"foreign contents")
+
+    @unittest.skipIf(os.name == "nt", "Windows held directory denies rename instead")
+    def test_posix_ordinary_parent_replacement_never_reads_foreign_same_name(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary).resolve()
+            root, foreign = parent / "root", parent / "foreign"
+            root.mkdir(); foreign.mkdir()
+            child = root / "child"
+            child.mkdir()
+            (child / "same-name").write_bytes(b"owned")
+            secret = foreign / "same-name"
+            secret.write_bytes(b"foreign private contents")
+            secret_id = (secret.stat().st_dev, secret.stat().st_ino)
+            scan, fdopen = os.scandir, os.fdopen
+            replaced, read_foreign = [], []
+            def scanning(operand):
+                entries = scan(operand)
+                if isinstance(operand, int) and os.fstat(operand).st_ino == child.lstat().st_ino:
+                    child.rename(root / "original-child")
+                    foreign.rename(child)
+                    replaced.append(True)
+                return entries
+            def guarded_open(descriptor, *args, **kwargs):
+                info = os.fstat(descriptor)
+                if (info.st_dev, info.st_ino) == secret_id:
+                    read_foreign.append(True)
+                    os.close(descriptor)
+                    raise AssertionError("foreign bytes would be read")
+                return fdopen(descriptor, *args, **kwargs)
+            with mock.patch.object(os, "scandir", side_effect=scanning), mock.patch.object(os, "fdopen", side_effect=guarded_open):
+                with self.assertRaisesRegex(RuntimeError, "inventory directory changed"):
+                    CASE["inventory"](root)
+            self.assertEqual(replaced, [True])
+            self.assertEqual(read_foreign, [])
+            self.assertEqual((child / "same-name").read_bytes(), b"foreign private contents")
+
+    def test_initial_root_replacement_never_reads_foreign_inode(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary).resolve()
+            root, foreign = parent / "root", parent / "foreign"
+            root.mkdir(); foreign.mkdir()
+            secret = foreign / "same-name"
+            secret.write_bytes(b"foreign private contents")
+            secret_id = (secret.stat().st_dev, secret.stat().st_ino)
+            original, fdopen = CASE["directory_identity"], os.fdopen
+            def swap(path):
+                identity = original(path)
+                root.rename(parent / "original-root")
+                foreign.rename(root)
+                return identity
+            def guarded_open(descriptor, *args, **kwargs):
+                info = os.fstat(descriptor)
+                if (info.st_dev, info.st_ino) == secret_id:
+                    os.close(descriptor)
+                    raise AssertionError("foreign root bytes would be read")
+                return fdopen(descriptor, *args, **kwargs)
+            with mock.patch.dict(CASE["inventory"].__globals__, {"directory_identity": swap}), mock.patch.object(os, "fdopen", side_effect=guarded_open):
+                with self.assertRaisesRegex(RuntimeError, "inventory original root changed before open"):
+                    CASE["inventory"](root)
+            self.assertEqual((root / "same-name").read_bytes(), b"foreign private contents")
+
+    def test_windows_directory_handle_uses_no_reparse_and_no_delete_sharing(self):
+        import ctypes
+        import sys
+        create, close = mock.Mock(return_value=123), mock.Mock(return_value=1)
+        transfer = mock.Mock(return_value=17)
+        kernel = SimpleNamespace(CreateFileW=create, CloseHandle=close)
+        with mock.patch.object(CASE["artifacts"], "WINDOWS", True), mock.patch.object(ctypes, "WinDLL", return_value=kernel, create=True), mock.patch.dict(sys.modules, {"msvcrt": SimpleNamespace(open_osfhandle=transfer)}), mock.patch.object(os, "O_BINARY", 0x8000, create=True):
+            self.assertEqual(CASE["open_inventory_directory"](Path("inert-directory")), 17)
+            self.assertEqual(create.call_args.args, ("inert-directory", 0x80000000, 3, None, 3, 0x02200000, None))
+            self.assertIs(create.restype, ctypes.c_void_p)
+            transfer.assert_called_once_with(123, os.O_RDONLY | 0x8000)
+            close.assert_not_called()
+            transfer.side_effect = OSError("transfer failed")
+            with self.assertRaises(OSError): CASE["open_inventory_directory"](Path("inert-directory"))
+            close.assert_called_once_with(123)
+
+    def test_windows_held_directory_requires_positive_non_reparse_identity(self):
+        import stat
+        base = dict(st_dev=4, st_ino=5, st_mode=stat.S_IFDIR | 0o755, st_nlink=1,
+                    st_size=0, st_mtime_ns=100, st_birthtime_ns=90,
+                    st_file_attributes=16, st_reparse_tag=0)
+        with mock.patch.object(CASE["artifacts"], "WINDOWS", True):
+            original = SimpleNamespace(**base)
+            self.assertTrue(CASE["same_inventory_directory"](original, SimpleNamespace(**dict(base, st_mode=stat.S_IFDIR | 0o700))))
+            self.assertFalse(CASE["same_inventory_directory"](original, SimpleNamespace(**dict(base, st_ino=6))))
+            for change in ({"st_file_attributes": 16 | 0x400}, {"st_reparse_tag": 1}, {"st_birthtime_ns": None}):
+                with self.assertRaises(ValueError): CASE["same_inventory_directory"](original, SimpleNamespace(**dict(base, **change)))
 
     def test_inventory_does_not_eagerly_enumerate_past_membership_bound(self):
         with tempfile.TemporaryDirectory() as temporary:

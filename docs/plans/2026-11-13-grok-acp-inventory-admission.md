@@ -248,3 +248,21 @@ HEAD^{tree}, and the ZIP descriptor/full pre-open metadata stays held across
 read/hash/rename/admitted-copy with final root/upload/ZIP path+FD rechecks. Same-byte
 archive and upload-directory replacement negatives preserve the foreign sentinel
 and refuse permission. No generic abstraction or new target/operation was added.
+
+
+## First hosted entrypoint correction
+
+Exact38472 native job131779695630 passed the inert contracts but produced no
+admitted stdout handoff; its log reports the parent's empty-document refusal,
+not the child's underlying stderr. Independent source review identified a
+deterministic missing required target argument in require_hosted. The explicit
+linux-amd64 argument now matches the genuine dedicated lane. An inert test calls
+the real entrypoint with a required-argument guard and proves no output directory
+or acquisition occurs before that authority check. It does not spoof host facts.
+
+Nested publication identity dictionaries now require exact keys and literal
+integers; booleans cannot pass integer equality. Archive digest spelling is closed.
+The previous continuously held file/directory authority and cleanup fences remain.
+Root approves the additional22 targeted guard/test lines beyond the2100 estimate;
+18 Python and nine helper Go contracts pass. Fresh hosted metadata, then a separate
+exact-selector enable/recovery admission, remain required before production work.

@@ -173,3 +173,21 @@ stdio effect script. Existing verify_files remains authority for large executabl
 contents. Before/after outer deltas are retained without admitting new paths. The
 legacy disabled MCP endpoint now uses a fifth existing observed Pi probe rather
 than unobserved port9. All probe threads must settle before raw publication.
+
+## Two-file negative diagnostic follow-up (38472f3)
+
+Actual original capture14023805542 returned structured A metadata, then correctly
+refused edits to existing User config and Git A exclude. Preserve that baseline
+and refusal. Hold original outer/root-relative parent descriptors from baseline;
+read only these two ordinary single-link files, <=4096bytes each, with separate
+stable before/after identities (native atomic replacement is observable). Read the
+after versions only after existing command/probe settlement gates. Parent/root
+replacement, alias, size, malformed JSON or read race yields no partial two-file
+diagnostic; original failure remains. Unknown cleanup withholds the diagnostic.
+
+Embed one closed field in existing research.json, with no shared publisher change.
+Before bytes are owned fixture bytes; after config exposes <=64 ASCII schema keys
+per object/depth4 and boolean/null values; other values/keys expose type/size/hash.
+Git after lines expose only exact baseline lines or bounded .devin relative
+patterns; other lines expose bytes/hash. No raw unrelated config/cache content,
+new vendor command, retry, restore, baseline renewal or qualification change.

@@ -24,6 +24,27 @@ class AdmissionContracts(unittest.TestCase):
         return dict(schema_version=1, source_commit='a' * 40, source_tree='b' * 40, uid=1001, gid=1001,
                     nonce='c' * 32, scope='user', input_root=str(root), parent_network_namespace=1, start_monotonic_ns=time.monotonic_ns())
 
+    def test_entrypoint_calls_required_target_host_guard_before_any_output(self):
+        import project_native_research as shared
+
+        class GuardStop(Exception):
+            pass
+
+        calls = []
+        def guard(target):  # Required argument matches the actual shared authority.
+            calls.append(target)
+            raise GuardStop('actual-host-guard-boundary')
+
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / 'not-created'
+            with (mock.patch.object(shared.native, 'require_hosted', guard),
+                  mock.patch.object(shared, 'acquire', side_effect=AssertionError('acquisition preceded host guard')),
+                  mock.patch.object(Path, 'mkdir', side_effect=AssertionError('output preceded host guard')),
+                  self.assertRaisesRegex(GuardStop, 'actual-host-guard-boundary')):
+                case.run(output)
+            self.assertEqual(calls, ['linux-amd64'])
+            self.assertFalse(output.exists())
+
     def test_json_bounds_unique_finite_and_closed_fields(self):
         for body in (b'{"x":1,"x":2}', b'{"x":1e999}', b'{"x":NaN}', b'{}{}', b'[' * 18 + b'0' + b']' * 18):
             with self.subTest(body=body[:30]), self.assertRaises(ValueError): case.document(body)
@@ -231,6 +252,27 @@ class AdmissionContracts(unittest.TestCase):
                 elif change == 'hash': value['publication']['sha256'] = '0' * 64
                 else: value['private'] = 'unknown'
                 with self.assertRaises(ValueError): case.admit_publication(root, value, 'a' * 40, 'b' * 40, parent / ('refused-' + change))
+    def test_publication_nested_identity_requires_closed_integer_fields(self):
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            root = parent / 'output'
+            root.mkdir()
+            proof = case.publish(root, {'admission.json': b'{}'})
+            packet = dict(schema_version=1, source_commit='a' * 40, source_tree='b' * 40, nonce='c' * 32, publication=proof)
+            for name in ('output', 'upload', 'archive'):
+                for mutation in ('boolean', 'extra'):
+                    value = copy.deepcopy(packet)
+                    if mutation == 'boolean': value['publication'][name]['links' if name == 'archive' else 'device'] = True
+                    else: value['publication'][name]['unknown'] = 1
+                    destination = parent / (name + mutation)
+                    with self.assertRaises(ValueError): case.admit_publication(root, value, 'a' * 40, 'b' * 40, destination)
+                    self.assertFalse(destination.exists())
+            for digest in (True, '0' * 63, 'G' * 64):
+                value = copy.deepcopy(packet)
+                value['publication']['sha256'] = digest
+                with self.assertRaises(ValueError): case.admit_publication(root, value, 'a' * 40, 'b' * 40, parent / 'bad-digest')
+            self.assertEqual(set(x.name for x in root.iterdir()), {'upload'})
+
     def test_same_byte_archive_or_upload_replacement_after_read_refuses_without_foreign_delete(self):
         for mutation in ('archive', 'upload'):
             with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory:

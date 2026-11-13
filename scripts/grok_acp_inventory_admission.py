@@ -451,6 +451,11 @@ def admit_publication(output, packet, expected_commit, expected_tree, destinatio
             and re.fullmatch('[0-9a-f]{40}', expected_tree)
             and re.fullmatch('[0-9a-f]{32}', packet['nonce']), 'publication-source')
     proof = closed(packet['publication'], 'output upload archive bytes sha256')
+    for name in ('output', 'upload', 'archive'):
+        fields = 'device inode mode uid gid' + (' links size mtime_ns ctime_ns' if name == 'archive' else '')
+        identity = closed(proof[name], fields)
+        require(all(type(number) is int for number in identity.values()), 'publication-identity-types')
+    require(type(proof['sha256']) is str and re.fullmatch('[0-9a-f]{64}', proof['sha256']), 'publication-digest')
     descriptors = []
     try:
         require(output.parent.resolve() == output.parent, 'output-parent')
@@ -484,7 +489,7 @@ def run(output):
     from project_native_collectors.grok import ACQUISITION
     from devin_structured_inventory_admission import metadata_inventory
     from client_automation_native_probe import snapshot
-    shared.native.require_hosted()
+    shared.native.require_hosted('linux-amd64')
     output = output.absolute()
     require(output.resolve() == output and not output.exists() and os.getuid() != 0, 'output-authority')
     output.mkdir(mode=0o700, parents=True)

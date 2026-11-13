@@ -112,4 +112,113 @@ class DevinAdmissionContracts(unittest.TestCase):
             self.assertIn("legacy-foreign", (home / ".codeium/windsurf/skills/legacy-foreign/SKILL.md").read_text())
 
 
+
+
+class KnownFileDiagnosticContracts(unittest.TestCase):
+    def fixture(self, root):
+        for relative in case.KnownFileDiagnostics.PATHS.values():
+            path = root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b'{"read_config_from":{"cloud":false}}\n' if relative.endswith('config.json') else b'# owned Git template\n')
+        return root / case.KnownFileDiagnostics.PATHS['user-config'], root / case.KnownFileDiagnostics.PATHS['git-a-exclude']
+
+    def hold(self, root):
+        baseline = {}
+        for label, relative in case.KnownFileDiagnostics.PATHS.items():
+            body = (root / relative).read_bytes()
+            key = "home/config/devin/config.json" if label == "user-config" else "a/.git/info/exclude"
+            baseline[key] = {"kind": "file", "size": len(body), "sha256": hashlib.sha256(body).hexdigest()}
+        return case.KnownFileDiagnostics(root, case.root_identity(root), baseline)
+
+    def test_original_root_and_fixture_join_precede_admission(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / 'owned'
+            config, _ = self.fixture(root)
+            original = case.root_identity(root)
+            root.rename(root.with_name('old'))
+            root.mkdir()
+            (root / 'foreign').write_text('preserve')
+            with patch.object(case.os, 'read', side_effect=AssertionError('foreign read')), self.assertRaises(ValueError):
+                case.KnownFileDiagnostics(root, original, {})
+            self.assertEqual((root / 'foreign').read_text(), 'preserve')
+            config, _ = self.fixture(root)
+            config.write_bytes(b'{"unexpected":true}')
+            with self.assertRaises(ValueError): self.hold(root)
+            config, exclude = self.fixture(root)
+            baseline = {
+                key: {'kind': 'file', 'size': path.stat().st_size, 'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}
+                for key, path in [('home/config/devin/config.json', config), ('a/.git/info/exclude', exclude)]}
+            exclude.write_bytes(b'foreign replacement')
+            with self.assertRaises(ValueError):
+                case.KnownFileDiagnostics(root, case.root_identity(root), baseline)
+
+    def test_replaced_file_is_observed_without_renewing_original_or_leaking_values(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            config, exclude = self.fixture(root)
+            held = self.hold(root)
+            try:
+                original = copy.deepcopy(held.before)
+                replacement = config.with_suffix('.replacement')
+                replacement.write_bytes(b'{"read_config_from":{"cloud":false},"setup":true,"token":"PRIVATE","count":123,"bad-key":"PRIVATE"}')
+                replacement.replace(config)
+                exclude.write_bytes(exclude.read_bytes() + b'.devin/cache/\n/private/SECRET\n')
+                result = held.finish()
+                self.assertEqual(result['files']['user-config']['before'], original['user-config'])
+                self.assertNotEqual(result['files']['user-config']['after']['identity'], original['user-config']['identity'])
+                text = json.dumps(result)
+                self.assertNotIn('PRIVATE', text)
+                self.assertNotIn('SECRET', text)
+                self.assertNotIn('bad-key', text)
+                self.assertIn('"setup", "value": true', text)
+                self.assertNotIn('"value": 123', text)
+                self.assertIn(b'PRIVATE', config.read_bytes())
+            finally:
+                held.close()
+
+    def test_missing_large_alias_hardlink_malformed_and_parent_replacement_refuse(self):
+        for change in ('missing', 'large', 'alias', 'hardlink', 'malformed', 'parent', 'root'):
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary) / 'owned'
+                config, exclude = self.fixture(root)
+                held = self.hold(root)
+                try:
+                    if change == 'missing': config.unlink()
+                    elif change == 'large': config.write_bytes(b'x' * 4097)
+                    elif change == 'alias':
+                        config.unlink()
+                        config.symlink_to(exclude)
+                    elif change == 'hardlink':
+                        import os
+                        os.link(config, config.with_suffix('.alias'))
+                    elif change == 'malformed': config.write_bytes(b'{"setup":true,"setup":false}')
+                    else:
+                        target = config.parent if change == 'parent' else root
+                        target.rename(target.with_name(target.name + '-old'))
+                        target.mkdir()
+                        (target / 'foreign').write_text('preserve')
+                    with self.assertRaises((ValueError, OSError)):
+                        held.finish()
+                    if change in ('parent', 'root'):
+                        self.assertEqual((target / 'foreign').read_text(), 'preserve')
+                finally:
+                    held.close()
+
+    def test_mid_read_identity_race_refuses(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            config, _exclude = self.fixture(root)
+            held = self.hold(root)
+            original_read = case.os.read
+            def racing_read(fd, limit):
+                result = original_read(fd, limit)
+                config.write_bytes(b'{"changed":true}')
+                return result
+            try:
+                with patch.object(case.os, 'read', side_effect=racing_read), self.assertRaises(ValueError):
+                    held.finish()
+            finally:
+                held.close()
+
+
 if __name__ == "__main__": unittest.main()

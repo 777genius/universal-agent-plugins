@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Observe pinned Hermes explicit custom-runtime-root MCP; UAP remains refused."""
 import hashlib
+from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
@@ -44,16 +45,19 @@ def same_opened_capture(before, held):
     return from_path[:2] == from_handle[:2] and from_path[3:] == from_handle[3:]
 
 
-def ordinary_bytes(path, expected=None):
+def ordinary_bytes(path, expected=None, *, parent=None):
     path = Path(path)
-    require(path.is_absolute() and path.resolve() == path, "ordinary file alias")
-    before = path.lstat()
+    require(parent is not None or (path.is_absolute() and path.resolve() == path), "ordinary file alias")
+    def linked():
+        return path.lstat() if parent is None else os.stat(path.name, dir_fd=parent, follow_symlinks=False)
+    before = linked()
     require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1 and 0 <= before.st_size <= LIMIT,
             "bounded ordinary single-link file required")
     require(expected is None or stable_file(before) == stable_file(expected), "file changed before open")
     # Reuse native artifact admission's Windows OPEN_REPARSE_POINT handle and
     # positive cross-API identity. Path/fd ctime domains remain separately held.
-    descriptor = artifacts.open_member(path)
+    descriptor = (artifacts.open_member(path) if parent is None else
+                  os.open(path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent))
     try:
         held = os.fstat(descriptor)
         require(same_opened_capture(before, held)
@@ -65,7 +69,7 @@ def ordinary_bytes(path, expected=None):
         with os.fdopen(os.dup(descriptor), "rb") as stream:
             body = stream.read(LIMIT + 1)
         require(len(body) == before.st_size <= LIMIT and stable_file(os.fstat(descriptor)) == stable_file(held)
-                and stable_file(path.lstat()) == stable_file(before), "file changed during bounded capture")
+                and stable_file(linked()) == stable_file(before), "file changed during bounded capture")
         return body
     finally:
         os.close(descriptor)
@@ -97,6 +101,47 @@ def inventory_member(relative, info):
     raise RuntimeError("inventory member refused: " + json.dumps(details, ensure_ascii=True, sort_keys=True))
 
 
+def open_inventory_directory(path, parent=None):
+    if not artifacts.WINDOWS:
+        return os.open(path if parent is None else path.name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_NONBLOCK, **({} if parent is None else {"dir_fd": parent}))
+    import ctypes
+    from ctypes import wintypes
+    import msvcrt
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    create, close = kernel.CreateFileW, kernel.CloseHandle
+    create.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p,
+                       wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE]
+    create.restype = wintypes.HANDLE
+    close.argtypes, close.restype = [wintypes.HANDLE], wintypes.BOOL
+    # Directory + no reparse traversal; omit FILE_SHARE_DELETE so the held
+    # directory cannot be renamed while Windows' path-only scandir enumerates.
+    handle = create(str(path), 0x80000000, 3, None, 3, 0x02200000, None)
+    if handle is None or handle == ctypes.c_void_p(-1).value:
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        descriptor = msvcrt.open_osfhandle(handle, os.O_RDONLY | os.O_BINARY)
+        require(descriptor >= 0, "Windows directory descriptor transfer failed")
+    except BaseException:
+        if not close(handle):
+            raise ctypes.WinError(ctypes.get_last_error())
+        raise
+    return descriptor
+
+
+def same_inventory_directory(before, held):
+    require(stat.S_ISDIR(before.st_mode) and stat.S_ISDIR(held.st_mode), "held inventory directory required")
+    if artifacts.WINDOWS:
+        left, right = artifacts.windows_identity(before), artifacts.windows_identity(held)
+        return left[:2] == right[:2] and left[3:] == right[3:]
+    return artifacts.same_opened(before, held)
+
+
+def verify_inventory_directory(path, before, descriptor, held, parent=None):
+    linked = path.lstat() if parent is None else os.stat(path.name, dir_fd=parent, follow_symlinks=False)
+    require((parent is not None or path.resolve() == path) and stable_file(linked) == stable_file(before)
+            and stable_file(os.fstat(descriptor)) == stable_file(held), "inventory directory changed")
+
+
 def inventory(root, sentinels=()):
     """Capture an ordinary tree, refusing after the bounded number of visits.
 
@@ -108,16 +153,19 @@ def inventory(root, sentinels=()):
     identity = directory_identity(root)
     result, total = {}, 0
 
-    def visit(path, depth):
+    def visit(path, depth, parent=None):
         nonlocal total
         require(len(result) < 2048 and depth <= 24, "inventory membership bound")
         relative = path.relative_to(root).as_posix()
-        info = path.lstat()
+        info = path.lstat() if parent is None else os.stat(path.name, dir_fd=parent, follow_symlinks=False)
+        if depth == 0:
+            require((info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_gid) == identity,
+                    "inventory original root changed before open")
         inventory_member(relative, info)
         record = {"type": "directory" if stat.S_ISDIR(info.st_mode) else "file",
                   "mode": stat.S_IMODE(info.st_mode), "device": info.st_dev, "inode": info.st_ino}
         if record["type"] == "file":
-            body = ordinary_bytes(path, info)
+            body = ordinary_bytes(path, info, **({} if parent is None else {"parent": parent}))
             total += len(body)
             require(total <= 16 << 20, "inventory byte bound")
             require(not any(marker.encode() in body for marker in sentinels),
@@ -125,13 +173,209 @@ def inventory(root, sentinels=()):
             record.update(bytes=len(body), sha256=hashlib.sha256(body).hexdigest())
         result[relative] = record
         if record["type"] == "directory":
-            with os.scandir(path) as entries:
-                for entry in entries:
-                    visit(Path(entry.path), depth + 1)
+            descriptor = open_inventory_directory(path, parent)
+            try:
+                held = os.fstat(descriptor)
+                require(same_inventory_directory(info, held), "inventory directory changed at open")
+                verify_inventory_directory(path, info, descriptor, held, parent)
+                with os.scandir(path if artifacts.WINDOWS else descriptor) as entries:
+                    for entry in entries:
+                        visit(path / entry.name, depth + 1, None if artifacts.WINDOWS else descriptor)
+                verify_inventory_directory(path, info, descriptor, held, parent)
+            finally:
+                os.close(descriptor)
 
     visit(root, 0)
     require(directory_identity(root) == identity, "inventory root replaced")
     return result
+
+CENSUS_CAP = (1 << 53) - 1
+CENSUS_GROUPS = ("cache", "tools", "installs", "bootstrap-other", "projectA", "projectB", "User-other", "outer-other")
+CENSUS_KINDS = ("directory", "regular", "symlink", "reparse", "other")
+
+
+def census_bucket(parts):
+    if parts[:2] == ("user", "selected-profile"):
+        return parts[2] if len(parts) > 2 and parts[2] in ("cache", "tools", "installs") else "bootstrap-other"
+    return {"project-a": "projectA", "project-b": "projectB", "user": "User-other"}.get(parts[0] if parts else "", "outer-other")
+
+
+def metadata_census(root, expected, deadline):
+    """Measurement only: no file contents, link targets or pathname records."""
+    groups = {name: dict(entries=0, kinds=dict.fromkeys(CENSUS_KINDS, 0), logical_regular_bytes=0,
+                         max_regular_bytes=0, max_links=0, regular_hardlinked_entries=0) for name in CENSUS_GROUPS}
+    result = dict(schema_version=1, measurement_only=True, admission_qualified=False, complete=False,
+                  status="refused", reason="authority", overflow=False, groups=groups)
+    recorded = 0
+    class Partial(Exception):
+        pass
+    def saturate(value):
+        if value > CENSUS_CAP:
+            result["overflow"] = True
+        return min(value, CENSUS_CAP)
+    def budget(depth):
+        if time.monotonic() >= deadline or recorded >= 32768 or depth > 32:
+            raise Partial()
+    def visit(path, parts, parent=None):
+        nonlocal recorded
+        budget(len(parts))
+        info = path.lstat() if parent is None else os.stat(path.name, dir_fd=parent, follow_symlinks=False)
+        if not parts:
+            require((info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_gid) == tuple(expected), "census original root changed")
+        reparse = artifacts.WINDOWS and bool(getattr(info, "st_file_attributes", 0) & 0x400)
+        kind = ("reparse" if reparse else "symlink" if stat.S_ISLNK(info.st_mode) else
+                "directory" if stat.S_ISDIR(info.st_mode) else "regular" if stat.S_ISREG(info.st_mode) else "other")
+        group = groups[census_bucket(parts)]
+        require(info.st_nlink >= 0 and info.st_size >= 0, "census invalid metadata")
+        group["entries"] += 1; group["kinds"][kind] += 1; recorded += 1
+        group["max_links"] = saturate(max(group["max_links"], info.st_nlink))
+        if kind == "regular":
+            group["regular_hardlinked_entries"] += int(info.st_nlink > 1)
+            group["logical_regular_bytes"] = saturate(group["logical_regular_bytes"] + info.st_size)
+            group["max_regular_bytes"] = saturate(max(group["max_regular_bytes"], info.st_size))
+        if kind == "directory":
+            descriptor = open_inventory_directory(path, parent)
+            try:
+                held = os.fstat(descriptor)
+                require(same_inventory_directory(info, held), "census directory changed at open")
+                verify_inventory_directory(path, info, descriptor, held, parent)
+                with os.scandir(path if artifacts.WINDOWS else descriptor) as entries:
+                    for entry in entries:
+                        visit(path / entry.name, parts + (entry.name,), None if artifacts.WINDOWS else descriptor)
+                verify_inventory_directory(path, info, descriptor, held, parent)
+            finally:
+                os.close(descriptor)
+    try:
+        require(directory_identity(root) == tuple(expected), "census original root differs")
+        visit(root, ())
+        if time.monotonic() >= deadline:
+            raise Partial()
+        require(directory_identity(root) == tuple(expected), "census original root changed")
+        result.update(status="complete" if not result["overflow"] else "partial", reason="none" if not result["overflow"] else "overflow")
+        result["complete"] = not result["overflow"]
+    except Partial:
+        result.update(status="partial", reason="budget")
+    except (OSError, RuntimeError, ValueError):
+        result.update(status="refused", reason="authority")
+    result["entries"] = sum(group["entries"] for group in groups.values())
+    result["logical_regular_bytes"] = saturate(sum(group["logical_regular_bytes"] for group in groups.values()))
+    if result["overflow"]:
+        result.update(complete=False, reason="overflow" if result["reason"] == "none" else result["reason"], status="partial" if result["status"] == "complete" else result["status"])
+    require(result["entries"] == recorded and all(sum(group["kinds"].values()) == group["entries"] for group in groups.values()), "census counter join")
+    return result
+
+
+@contextmanager
+def held_census_evidence(evidence, expected):
+    require(directory_identity(evidence) == tuple(expected), "original census evidence changed")
+    before = evidence.lstat()
+    descriptor = open_inventory_directory(evidence)
+    try:
+        held = os.fstat(descriptor)
+        require(same_inventory_directory(before, held), "census evidence changed at open")
+        key = lambda info: (info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_gid)
+        def verify():
+            require(directory_identity(evidence) == tuple(expected) and key(os.fstat(descriptor)) == key(held), "original census evidence changed")
+        verify()
+        yield descriptor, verify
+        verify()
+    finally:
+        os.close(descriptor)
+
+
+def publish_census_request(evidence, outer, nonce, expected):
+    try:
+        request = dict(schema_version=1, reason="initial-inventory-refused", nonce=nonce, root_identity=directory_identity(outer))
+        with held_census_evidence(evidence, expected) as (descriptor, verify):
+            verify()
+            write_census_member(evidence / "bootstrap-census-request.json", request, None if artifacts.WINDOWS else descriptor)
+    except (OSError, RuntimeError, ValueError):
+        pass  # The original inventory exception remains authoritative.
+
+
+def write_census_member(path, value, parent=None):
+    body = json.dumps(value, sort_keys=True).encode() + b"\n"
+    require(len(body) <= 16 << 10, "census evidence bound")
+    descriptor = (os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600) if parent is None else
+                  os.open(path.name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=parent))
+    with os.fdopen(descriptor, "wb") as stream:
+        stream.write(body)
+
+
+def census_document(body):
+    require(len(body) <= 16 << 10, "census evidence bound")
+    def unique(pairs):
+        value = {}
+        for key, item in pairs:
+            require(key not in value, "duplicate census request key")
+            value[key] = item
+        return value
+    return json.loads(body, object_pairs_hook=unique)
+
+
+def validate_census_member(name, body):
+    value = census_document(body)
+    def closed(row, keys):
+        require(type(row) is dict and set(row) == set(keys.split()), "closed census schema")
+    def integer(number, maximum=CENSUS_CAP):
+        require(type(number) is int and 0 <= number <= maximum, "census integer")
+    if name == "bootstrap-census-request.json":
+        closed(value, "schema_version reason nonce root_identity")
+        require(type(value["schema_version"]) is int and value["schema_version"] == 1
+                and value["reason"] == "initial-inventory-refused"
+                and type(value["nonce"]) is str and len(value["nonce"]) == 64
+                and all(char in "0123456789abcdef" for char in value["nonce"])
+                and type(value["root_identity"]) is list and len(value["root_identity"]) == 5, "census request schema")
+        for number in value["root_identity"]: integer(number, (1 << 64) - 1)
+        return
+    minimal = "schema_version measurement_only admission_qualified complete status reason"
+    detailed = " overflow groups entries logical_regular_bytes"
+    require(type(value) is dict, "census object")
+    closed(value, minimal + (detailed if "groups" in value else ""))
+    require(type(value["schema_version"]) is int and value["schema_version"] == 1
+            and value["measurement_only"] is True and value["admission_qualified"] is False
+            and type(value["complete"]) is bool, "census qualification")
+    if "groups" not in value:
+        require(value["complete"] is False and value["status"] == "refused" and value["reason"] == "request", "census refusal")
+        return
+    require(type(value["overflow"]) is bool and (value["status"], value["reason"]) in
+            (("complete", "none"), ("partial", "budget"), ("partial", "overflow"), ("refused", "authority")), "census status")
+    require(value["complete"] == (value["status"] == "complete") and not (value["complete"] and value["overflow"]), "census completeness")
+    closed(value["groups"], " ".join(CENSUS_GROUPS))
+    for row in value["groups"].values():
+        closed(row, "entries kinds logical_regular_bytes max_regular_bytes max_links regular_hardlinked_entries")
+        closed(row["kinds"], " ".join(CENSUS_KINDS))
+        for number in row["kinds"].values(): integer(number, 32768)
+        for key, number in row.items():
+            if key != "kinds": integer(number)
+        require(sum(row["kinds"].values()) == row["entries"] <= 32768
+                and row["regular_hardlinked_entries"] <= row["kinds"]["regular"], "census group join")
+    integer(value["entries"], 32768); integer(value["logical_regular_bytes"])
+    require(sum(row["entries"] for row in value["groups"].values()) == value["entries"]
+            and min(CENSUS_CAP, sum(row["logical_regular_bytes"] for row in value["groups"].values())) == value["logical_regular_bytes"], "census total join")
+
+
+def maybe_census(evidence, home, expected, nonce, settled, deadline, evidence_expected):
+    with held_census_evidence(evidence, evidence_expected) as (descriptor, verify):
+        parent = None if artifacts.WINDOWS else descriptor
+        request = evidence / "bootstrap-census-request.json"
+        try:
+            info = request.lstat() if parent is None else os.stat(request.name, dir_fd=parent, follow_symlinks=False)
+        except FileNotFoundError:
+            return
+        result = dict(schema_version=1, measurement_only=True, admission_qualified=False, complete=False, status="refused", reason="request")
+        try:
+            require(settled is True and info.st_size <= 16 << 10, "census settlement/request bound")
+            body = ordinary_bytes(request, info, **({} if parent is None else {"parent": parent}))
+            validate_census_member(request.name, body)
+            value = census_document(body)
+            require(value["nonce"] == nonce and tuple(value["root_identity"]) == tuple(expected), "census request identity")
+            result = metadata_census(home, expected, min(deadline, time.monotonic() + 5))
+        except (OSError, RuntimeError, ValueError):
+            pass
+        verify()
+        write_census_member(evidence / "bootstrap-census.json", result, parent)
+
 
 def changes(before, after):
     return {name: {"before": before.get(name), "after": after.get(name)}
@@ -278,7 +522,11 @@ def observe_profiles(probes):
     # the subsequent whole-tree inventory admits native bootstrap effects.
     write_json(evidence / "profile-endpoints.json", {"selected": spec, "original_native_root": str(original),
                "os_home": str(user), "sentinel_sha256": [hashlib.sha256(x.encode()).hexdigest() for x in sentinels]})
-    baseline = inventory(outer)
+    try:
+        baseline = inventory(outer)
+    except (OSError, RuntimeError, ValueError):
+        publish_census_request(evidence, outer, nonce, json.loads(os.environ["HERMES_CENSUS_EVIDENCE_ID"]))
+        raise
     protected = [str((original / name).relative_to(outer)).replace('\\', '/') for name in authored]
     controls = [str((outer / ("project-" + scope) / "foreign.txt").relative_to(outer)).replace('\\', '/') for scope in ("a", "b")]
     protected += controls
@@ -371,7 +619,7 @@ COMMANDS = ({prefix + x for prefix in ("git-", "guard-", "list-", "test-", "remo
             | {"test-a-restart", "list-user"})
 MEMBERS = ({name + suffix for name in COMMANDS for suffix in (".stdout", ".stderr", ".status.json")}
            | {"original-user-baseline.json", "original-user-final.json", "source-guards.json", "profile-endpoints.json",
-              "profile-command-deltas.json", "profile-admission.json", "lifecycle.stdout", "lifecycle.stderr", "owned-start-gate"})
+              "profile-command-deltas.json", "bootstrap-census-request.json", "bootstrap-census.json", "profile-admission.json", "lifecycle.stdout", "lifecycle.stderr", "owned-start-gate"})
 
 
 def admit_evidence(directory):
@@ -382,6 +630,9 @@ def admit_evidence(directory):
                 and info.st_size <= LIMIT, "closed admission evidence member refused")
         total += info.st_size
         require(total <= 16 << 20, "admission evidence aggregate bound")
+        if path.name in ("bootstrap-census-request.json", "bootstrap-census.json"):
+            require(info.st_size <= 16 << 10, "census evidence bound")
+            validate_census_member(path.name, ordinary_bytes(path, info))
 
 
 def stage_evidence(directory):
@@ -397,6 +648,8 @@ def stage_evidence(directory):
     try:
         for name, expected in sorted(sources.items()):
             body = ordinary_bytes(directory / name, expected)
+            if name in ("bootstrap-census-request.json", "bootstrap-census.json"):
+                validate_census_member(name, body)
             with (pending / name).open("xb") as stream:
                 stream.write(body)
         require(directory_identity(directory) == identity
@@ -440,8 +693,10 @@ def run():
     require(official["commit"] == BASE["PIN"] and not official["dirty"], "unmodified pinned Hermes required")
     evidence = Path(tempfile.mkdtemp(prefix="hermes-profile-admission-evidence-", dir=runner))
     home = Path(tempfile.mkdtemp(prefix="hermes-profile-admission-home-", dir=runner))
+    home_authority = directory_identity(home)
     identity = (home.stat().st_dev, home.stat().st_ino, home.stat().st_mode)
     evidence_identity = (evidence.stat().st_dev, evidence.stat().st_ino, evidence.stat().st_mode)
+    evidence_authority = directory_identity(evidence)
     user = home / "user"
     user.mkdir(mode=0o700)
     nonce, child, job, failure = secrets.token_hex(32), None, None, None
@@ -452,8 +707,10 @@ def run():
     native = json.loads(ordinary_bytes(runtime_file).decode("utf-8-sig"))
     held = {"runtime": sha(Path(native[0])), "runtime_command": sha(runtime_file), "launcher": sha(Path(os.environ["HERMES_BIN"]))}
     helpers = runpy.run_path(str(HERE / "hermes-native.py"), run_name="hermes_profile_process_helpers")
+    lifecycle_deadline = time.monotonic() + 720
     try:
         env = BASE["closed_environment"](user, evidence, nonce, "http://127.0.0.1:9/unused")
+        env["HERMES_CENSUS_EVIDENCE_ID"] = json.dumps(evidence_authority)
         env.pop("HERMES_NATIVE_MCP_URL", None)  # This case has no User/legacy-call endpoint.
         gate = evidence / "owned-start-gate"
         env["HERMES_CALL_START_GATE"] = str(gate)
@@ -467,9 +724,8 @@ def run():
             if os.name == "nt":
                 job = BASE["WindowsJob"](child)
             gate.write_text("owned\n")
-            deadline = time.monotonic() + 720
             while child.poll() is None:
-                require(time.monotonic() < deadline, "admission deadline")
+                require(time.monotonic() < lifecycle_deadline, "admission deadline")
                 require(all((evidence / name).stat().st_size <= LIMIT for name in ("lifecycle.stdout", "lifecycle.stderr")), "admission output bound")
                 time.sleep(.1)
         require(child.returncode == 0, "native profile observation failed")
@@ -513,6 +769,8 @@ def run():
                 require(all(not root.exists() and not root.is_symlink() for root in root_paths.values()), "cleanup lacks original custom-root receipt")
             require(home.resolve() == home and not home.is_symlink()
                     and (home.stat().st_dev, home.stat().st_ino, home.stat().st_mode) == identity, "owned outer root changed")
+            maybe_census(evidence, home, home_authority, nonce, process_settled, lifecycle_deadline, evidence_authority)
+            require(directory_identity(home) == home_authority, "owned outer root changed after census")
             shutil.rmtree(home)
             proof["cleanup"] = "completed"
         except BaseException as error:
@@ -534,7 +792,12 @@ def run():
         proof.update(runtime_before=held, runtime_after=final, lifecycle_exit=child.returncode if child else None,
                      run_id=os.environ["GITHUB_RUN_ID"], run_attempt=os.environ["GITHUB_RUN_ATTEMPT"], runner_os=os.environ["RUNNER_OS"])
         write_json(evidence / "profile-admission.json", proof)
-        stage_evidence(evidence)
+        try:
+            stage_evidence(evidence)
+        except BaseException:
+            if failure is not None:
+                raise RuntimeError("original Hermes refusal retained; evidence publication refused") from failure
+            raise
     if failure:
         raise RuntimeError("Hermes profile admission failed; inspect " + str(evidence)) from failure
     print("Captured unqualified explicit Hermes profile metadata/MCP evidence: " + str(evidence))
@@ -550,11 +813,11 @@ if __name__ == "__main__":
     elif not sys.argv[1:]:
         try:
             run()
-        except BaseException:
+        except BaseException as error:
             # Any early failure before run() closes its envelope gets only an
             # inert public report; never upload a partially admitted directory.
             if not EVIDENCE_CLOSED:
-                safe_failure_evidence(Path(os.environ["RUNNER_TEMP"]).resolve())
+                safe_failure_evidence(Path(os.environ["RUNNER_TEMP"]).resolve(), type(error.__cause__ or error).__name__)
             raise
     else:
         raise SystemExit("no arguments, or private --child")

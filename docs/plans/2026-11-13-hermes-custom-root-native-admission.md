@@ -210,3 +210,92 @@ substituting a vendor parser. The hosted child alone reads bounded held files an
 parses/emits their contents using the pinned official module; native Hermes then
 reads those same files. File authority, root isolation, process containment and
 every qualification flag remain unchanged. Fresh hosted originals remain required.
+
+
+## Measured first-bootstrap state and bounded census proposal
+
+Exact source `38472f31efb038250cce55c9eb2185fb203fa9c2` now retains actual
+first-baseline refusal metadata on all three platforms. Original archives have
+clean CRCs, eleven closed members and fourteen verified stream/hash joins each;
+source/runtime identities remain stable and owned cleanup completes. Native
+custom-root admission and every Project qualification remain false.
+
+| Platform | Original artifact / SHA256 | First refused native member |
+| --- | --- | --- |
+| Windows | 14021734988 / `48165e36f7d2c143c4e1c8300d1b5050a152d4cea8e4bd2cc63894d114c4f16a` | uv cache requests/adapters.py, ordinary, 28064 bytes, two links |
+| macOS | 14022647010 / `1bd2d1c2f5a56033dbb4e56bcdb63bcb152fa7aea09537005f590cfed2f72647` | tools/ripgrep-15.2.0-darwin-arm64/rg, ordinary executable, 4014576 bytes, one link |
+| Linux | 14022099319 / `c068b6fb95f4c5314b0e0523f08f543755ef532c1db428d410c4308d633d0cda` | uv editable-package cache symlink, 39-byte link metadata, one link |
+
+These names are fixture-relative metadata, not hashes or readings of member
+contents. The symlink target was not followed or published. The first offending
+member is not a measurement of the complete runtime layout or aggregate size.
+The official pinned borrowed-home launcher deliberately creates an independent
+dependency generation for each data root. Reusing User state, disabling ordinary
+bootstrap, omitting runtime trees or renewing the original baseline would not
+establish the required native route.
+
+Separate correction under independent review: preserve the external commit's
+lazy bounded enumeration, but bind all POSIX recursive stat/open/read operations
+to retained parent descriptors. Windows retains positively joined directory
+handles with no reparse traversal and no delete sharing. Plain directory
+replacement, not only symlink substitution, must fail without reading foreign
+bytes. This correction does not accept runtime links or increase existing bounds.
+
+Proposed next evidence step, pending independent design approval: on the original
+initial-inventory refusal only, collect a finite metadata-only census under the
+already-owned disposable outer root. Retain original failure and every false
+qualification. Never open file contents or follow link/reparse targets. Report
+only closed kind counts, logical byte totals, maximum file size/link count and
+completion/refusal facts in fixed bootstrap cache/tools/installs/other groups,
+plus fixed User/A/B/outer control groups. No raw pathname list, target spelling,
+profile contents, new cleanup authority or additional native command is allowed.
+
+The census has an independent five-second budget inside the original lifecycle
+clock, at most32768 visits and depth32, with a <=16KiB single closed evidence
+member. Bounded partial or changed-root observations explicitly remain incomplete.
+It uses held no-follow directory authority, descriptor-relative Unix metadata,
+and held Windows directory identities; every traversal rechecks its authority.
+It must not mask the original refusal if census collection or publication fails.
+Actual final-source hosted originals and a separate reviewed inventory design
+remain mandatory before accepting any measured runtime class or new resource cap.
+
+
+The two independent plan reviews are accepted; root authorizes this diagnostic
+only, with the following final fences. The child writes a fresh closed request
+only when the original initial inventory raises. A missing or failed request
+never causes a fallback scan. The parent handles that request only after actual
+whole owned process/job/probe settlement, before existing owned-root cleanup.
+Unknown settlement or original root identity skips/refuses the census and cannot
+grant deletion authority. A request-publication or census failure preserves the
+original inventory refusal and false qualification flags.
+
+Groups are disjoint fixed relative-prefix buckets. Every recorded entry belongs
+to exactly one group and kind; kind counts join to group entry counts and group
+counts join to the total. Regular logical bytes count each pathname, including
+hardlinked names, not unique physical storage. All counters/totals/maxima saturate
+at a fixed exactly representable integer cap with an explicit overflow flag;
+partial, overflow and changed-authority results cannot be complete. Symlink and
+Windows reparse leaves are counted from no-follow metadata only; no resolve,
+readlink or content open is performed on them.
+
+The five seconds are explicitly a soft budget checked between metadata operations
+inside the existing lifecycle deadline and supervisor, not a new OS-hard deadline
+or process framework. The small closed request and the census are the only two
+additional allowed evidence members, each <=16KiB. The census carries an explicit
+measurement-only designation and never authorizes native/product admission.
+Implementation may add up to340 changed code/test lines beyond the separately
+reviewed199-line directory authority correction, solely for this finite request,
+post-settlement census and meaningful negative contracts. No acceptance-bound,
+production adapter, dependency, native-command or workflow change is authorized.
+
+The final source review found and fixed a publication gap: setter bounds alone did
+not stop a malformed or oversized request from reaching the old evidence copier.
+Both new members now receive exact16KiB/typed-schema admission before publication
+and again against the actual staged bytes. Invalid request bytes withhold the raw
+upload; they are not overwritten or deleted. The fixed fallback retains the
+original failure class. Original evidence directory identity is independently
+held before request reads and writes. Per-group regular_hardlinked_entries now
+measures the relevant regular-file extent separately from directory link counts.
+The measured correction totals525 changed code/test lines, including199 directory
+authority lines and326 census lines. Root and independent source review accepted
+it;28 inert contracts pass. No native acceptance is inferred before new originals.
