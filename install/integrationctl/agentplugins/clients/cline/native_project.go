@@ -182,7 +182,7 @@ func clineDecodedString(server domain.MCPServer, key string) (string, error) {
 	}
 	text, ok := value.(string)
 	if !ok {
-		return "", fmt.Errorf("Cline MCP server %s must be a string", key)
+		return "", fmt.Errorf("cline MCP server %s must be a string", key)
 	}
 	return text, nil
 }
