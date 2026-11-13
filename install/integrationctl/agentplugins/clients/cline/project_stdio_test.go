@@ -229,7 +229,7 @@ func TestProjectClineManagedStdioRejectsMalformedAuthoredFieldsBeforeDefaults(t 
 	root, data := t.TempDir(), t.TempDir()
 	plan := domain.DeliveryPlan{Scope: domain.ScopeUser, ActivePath: root}
 	for _, tc := range []struct {
-		name string
+		name  string
 		field string
 		value any
 	}{
