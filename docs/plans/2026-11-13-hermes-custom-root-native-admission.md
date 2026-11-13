@@ -831,3 +831,28 @@ SHA256 of the already-computed relative member, and four uint32 attributes from
 the existing path/handle before/after snapshots. No new stat, file read or unlink
 is added; malformed context omits the diagnostic and preserves the refusal.
 No bit meaning, affected role or native qualification is inferred before capture.
+
+## Whole owned-build domain budget (actual 8a Linux)
+
+Run43480021547/job132076721458 completed the unmodified official payload build,
+then refused the metadata-only initial union census with `owned build byte bound`.
+The observer never ran and no alias was unlinked. The prior code budgeted entries
+for three roots but mistakenly budgeted their logical regular bytes as one root.
+No exact offending path or full union byte count was retained; do not infer one.
+
+Keep the payload's existing262144-entry/depth64/8GiB limits unchanged. Each of the
+three exact fresh owned domains (payload/work/cache) receives that same finite
+entry/byte ceiling; the disjoint metadata union is bounded by786432 entries and
+24GiB. Count logical bytes for every regular name, including internal/external
+aliases, rather than deduplicating inodes to hide census work. The original120s
+cleanup deadline is shared across all roots and phases. Complete alias accounting,
+held identities, unknown-alias refusal and final full payload closure are unchanged.
+
+A fixed closed census line reports only fixed roles, entry/regular-byte counters,
+limits and complete/refused status. Refusal occurs before alias planning/unlink;
+no raw path, body, exception or profile value is emitted. Tests prove a complete
+three-domain union exceeding a single-domain budget, independent domain/union
+refusals before reads/deletes, and a per-domain member bound that cannot borrow
+sibling capacity. Existing replacement, outside-alias, Windows disposition and
+cancellation negatives remain required. Native Windows attribute diagnostics from
+babb are preserved; this change does not reinterpret or relax their equality.

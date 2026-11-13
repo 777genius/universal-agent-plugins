@@ -6,6 +6,7 @@ official builder returns; any observed drift stops cleanup, retaining the rest.
 """
 from contextlib import ExitStack, contextmanager
 import os
+import json
 from pathlib import Path
 import runpy
 import stat
@@ -16,7 +17,8 @@ import time
 API = runpy.run_path(str(Path(__file__).parent / "e2e/hermes-profile-admission.py"),
                      run_name="hermes_owned_cleanup_helpers")
 require, stable = API["require"], API["stable_file"]
-LIMIT, DEPTH, BYTES = 3 * API["PAYLOAD_MEMBERS"], API["PAYLOAD_DEPTH"], API["PAYLOAD_BYTES"]
+DOMAIN_MEMBERS, DEPTH, BYTES = API["PAYLOAD_MEMBERS"], API["PAYLOAD_DEPTH"], API["PAYLOAD_BYTES"]
+LIMIT, UNION_BYTES = 3 * DOMAIN_MEMBERS, 3 * BYTES
 
 
 def check_time(deadline):
@@ -25,6 +27,7 @@ def check_time(deadline):
 
 class OwnedRoots:
     def __init__(self, roots):
+        require(set(roots) == {"payload", "work", "cache"}, "owned build domains differ")
         self.roots, self.held, self.identities = roots, {}, {}
         self.stack = ExitStack()
         try:
@@ -59,11 +62,14 @@ def census(owned, deadline):
     """Visit the complete disjoint domain union, without reading regular bytes."""
     owned.verify()
     records, total = {}, 0
+    counts = {label: {"entries": 0, "regular_bytes": 0} for label in owned.roots}
 
     def visit(label, path, parent, depth):
         nonlocal total
         check_time(deadline)
-        require(len(records) < LIMIT and depth <= DEPTH, "owned build census bound")
+        counts[label]["entries"] += 1
+        census_bound(counts, label, total, len(records) < LIMIT and depth <= DEPTH
+                     and counts[label]["entries"] <= DOMAIN_MEMBERS, "owned build census bound")
         info = path.lstat() if parent is None else os.stat(path.name, dir_fd=parent, follow_symlinks=False)
         if depth == 0:
             require((info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_gid)
@@ -76,7 +82,10 @@ def census(owned, deadline):
             return  # Neither resolve nor traverse links, including junctions.
         if stat.S_ISREG(info.st_mode):
             total += info.st_size
-            require(info.st_nlink > 0 and 0 <= total <= BYTES, "owned build byte bound")
+            counts[label]["regular_bytes"] += info.st_size
+            census_bound(counts, label, total, info.st_nlink > 0 and info.st_size >= 0
+                         and counts[label]["regular_bytes"] <= BYTES
+                         and total <= UNION_BYTES, "owned build byte bound")
             return
         require(stat.S_ISDIR(info.st_mode), "owned build nonordinary member")
         fd = API["open_inventory_directory"](path, parent)
@@ -94,7 +103,21 @@ def census(owned, deadline):
     for label, root in owned.roots.items():
         visit(label, root, None, 0)
     owned.verify()
+    print_census(counts, "complete", None, total)
     return records
+
+
+def print_census(counts, status, role, total):
+    print("HERMES_BUILD_CENSUS=" + json.dumps({"schema_version": 1, "status": status,
+          "role": role, "domains": counts, "regular_bytes": total,
+          "domain_byte_limit": BYTES, "union_byte_limit": UNION_BYTES,
+          "domain_member_limit": DOMAIN_MEMBERS}, sort_keys=True), flush=True)
+
+
+def census_bound(counts, label, total, admitted, reason):
+    if not admitted:
+        print_census(counts, "refused", label, total)
+    require(admitted, reason)
 
 
 def alias_plan(records):

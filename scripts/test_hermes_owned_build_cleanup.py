@@ -1,5 +1,8 @@
 """Actual owned local inode tests; no vendor execution."""
 import os
+import io
+import json
+from contextlib import redirect_stdout
 from pathlib import Path
 import tempfile
 import time
@@ -17,6 +20,59 @@ class OwnedBuildCleanupTests(unittest.TestCase):
         for root in roots.values():
             root.mkdir(mode=0o700)
         return roots
+
+    def test_each_owned_domain_has_its_own_finite_byte_budget(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            roots = self.fixture(temporary)
+            for root in roots.values():
+                (root / "member").write_bytes(b"123456")
+            owned = cleanup.OwnedRoots(roots)
+            try:
+                output = io.StringIO()
+                with mock.patch.object(cleanup, "BYTES", 8), mock.patch.object(cleanup, "UNION_BYTES", 24), redirect_stdout(output):
+                    with mock.patch.object(os, "read", side_effect=AssertionError("regular body read")):
+                        records = cleanup.census(owned, time.monotonic() + 5)
+                fact = json.loads(output.getvalue().removeprefix("HERMES_BUILD_CENSUS="))
+                self.assertEqual(len(records), 6)
+                self.assertEqual(fact["regular_bytes"], 18)
+                self.assertEqual(fact["status"], "complete")
+                self.assertEqual({r["regular_bytes"] for r in fact["domains"].values()}, {6})
+                self.assertEqual(cleanup.API["PAYLOAD_BYTES"], 8 << 30)
+            finally:
+                owned.close()
+
+    def test_domain_or_union_overflow_refuses_before_any_unlink(self):
+        for domain_overflow in (False, True):
+            with self.subTest(domain_overflow=domain_overflow), tempfile.TemporaryDirectory() as temporary:
+                roots = self.fixture(temporary)
+                for label, root in roots.items():
+                    (root / "member").write_bytes(b"123456789" if label == "cache" and domain_overflow else b"123456")
+                owned = cleanup.OwnedRoots(roots)
+                try:
+                    output = io.StringIO()
+                    with mock.patch.object(cleanup, "BYTES", 8), mock.patch.object(cleanup, "UNION_BYTES", 24 if domain_overflow else 12), redirect_stdout(output):
+                        with mock.patch.object(os, "unlink", side_effect=AssertionError("unlink before full union")), mock.patch.object(os, "read", side_effect=AssertionError("regular body read")):
+                            with self.assertRaisesRegex(RuntimeError, "owned build byte bound"):
+                                cleanup.detach(owned, time.monotonic() + 5)
+                    fact = json.loads(output.getvalue().removeprefix("HERMES_BUILD_CENSUS="))
+                    self.assertEqual((fact["status"], fact["role"]), ("refused", "cache"))
+                    self.assertEqual(set(fact["domains"]), {"payload", "work", "cache"})
+                    self.assertNotIn(str(roots["cache"]), output.getvalue())
+                    self.assertTrue(all((root / "member").exists() for root in roots.values()))
+                finally:
+                    owned.close()
+
+    def test_domain_membership_bound_cannot_borrow_sibling_budget(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            roots = self.fixture(temporary)
+            (roots["payload"] / "member").write_bytes(b"owned")
+            owned = cleanup.OwnedRoots(roots)
+            try:
+                with mock.patch.object(cleanup, "DOMAIN_MEMBERS", 1), redirect_stdout(io.StringIO()):
+                    with self.assertRaisesRegex(RuntimeError, "owned build census bound"):
+                        cleanup.census(owned, time.monotonic() + 5)
+            finally:
+                owned.close()
 
     def test_complete_alias_union_detaches_only_external_names(self):
         with tempfile.TemporaryDirectory() as temporary:
