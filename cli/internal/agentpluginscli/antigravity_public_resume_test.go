@@ -20,6 +20,7 @@ type antigravityPublicRunner struct {
 	t                        *testing.T
 	home, config, executable string
 	active                   string
+	mcpServers               []string
 	calls                    int
 }
 
@@ -36,7 +37,7 @@ func (r *antigravityPublicRunner) Run(_ context.Context, command legacyports.Com
 		r.t.Fatalf("unregistered inert command: %+v", command)
 	}
 	body, err := json.Marshal([]any{map[string]any{"name": filepath.Base(r.active), "path": r.active,
-		"version": "1.0.0", "enabled": true, "skills": []string{"guide"}, "mcpServers": []string{}}})
+		"version": readCLIObject(r.t, filepath.Join(r.active, "plugin.json"))["version"], "enabled": true, "skills": []string{"guide"}, "mcpServers": r.mcpServers}})
 	return legacyports.CommandResult{Stdout: body, CleanupComplete: true}, err
 }
 
@@ -48,6 +49,11 @@ type antigravityPublicFixture struct {
 }
 
 func newAntigravityPublicFixture(t *testing.T) antigravityPublicFixture {
+	t.Helper()
+	return newAntigravityPublicFixtureWithMCP(t, false)
+}
+
+func newAntigravityPublicFixtureWithMCP(t *testing.T, includeMCP bool) antigravityPublicFixture {
 	t.Helper()
 	client := fixtureClient(t, domain.ClientAntigravity)
 	home := filepath.Dir(client.ConfigRoot)
@@ -61,10 +67,14 @@ func newAntigravityPublicFixture(t *testing.T) antigravityPublicFixture {
 		t.Fatal(err)
 	}
 	f := newCLIFixture(t, []domain.DetectedClient{client})
-	runner := &antigravityPublicRunner{t: t, home: home, config: client.ConfigRoot, executable: client.ExecutablePath}
+	runner := &antigravityPublicRunner{t: t, home: home, config: client.ConfigRoot, executable: client.ExecutablePath, mcpServers: []string{}}
 	f.app.Lifecycle.Activator = providerstest.NewActivator(providers.Activator{Runner: runner})
 	f.app.Lifecycle.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{Runner: runner, Stager: f.app.Lifecycle.Stager})
 	source := writeCLIPlugin(t)
+	if includeMCP {
+		writeCLIMCP(t, source)
+		runner.mcpServers = []string{"demo"}
+	}
 	if err := os.MkdirAll(filepath.Join(source, "skills", "guide"), 0700); err != nil {
 		t.Fatal(err)
 	}
@@ -114,6 +124,9 @@ func antigravityPublicBytes(t *testing.T, f antigravityPublicFixture) map[string
 	t.Helper()
 	files := []string{filepath.Join(f.client.ConfigRoot, "config.json"), filepath.Join(f.client.ConfigRoot, "foreign.json"),
 		filepath.Join(f.runner.active, "plugin.json"), filepath.Join(f.runner.active, "skills", "guide", "SKILL.md")}
+	if len(f.runner.mcpServers) != 0 {
+		files = append(files, filepath.Join(f.runner.active, "mcp_config.json"))
+	}
 	result := map[string]string{}
 	for _, file := range files {
 		body, err := os.ReadFile(file)
@@ -197,11 +210,37 @@ func TestAntigravityPublicPreviewDoesNotExecuteOrPersist(t *testing.T) {
 }
 
 func TestAntigravityPublicIntactRepairUsesExistingGroupActivation(t *testing.T) {
-	f := newAntigravityPublicFixture(t)
+	// Public dispatch and the real Stager run here; native inventory remains inert.
+	f := newAntigravityPublicFixtureWithMCP(t, true)
+	manifest := readCLIObject(t, filepath.Join(f.source, "plugin.json"))
+	manifest["version"] = "2.0.0"
+	body, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(f.source, "plugin.json"), body, 0600); err != nil {
+		t.Fatal(err)
+	}
+	stdout, stderr, err := f.execute(false, "update", "demo", "--target", "antigravity", "--format", "json")
+	if err != nil || f.runner.calls == 0 {
+		t.Fatalf("public changed MCP update: calls=%d err=%v\n%s\n%s", f.runner.calls, err, stdout, stderr)
+	}
+	assertBatchJSON(t, stdout, "update", 1, 0)
+	if readCLIObject(t, filepath.Join(f.runner.active, "plugin.json"))["version"] != "2.0.0" {
+		t.Fatal("public update did not replace the delivered revision")
+	}
+	servers := readCLIObject(t, filepath.Join(f.runner.active, "mcp_config.json"))["mcpServers"].(map[string]any)
+	if len(servers) != 1 || servers["demo"] == nil {
+		t.Fatal("public producer did not deliver the selected native MCP", servers)
+	}
+	if _, err := os.Lstat(filepath.Join(f.runner.active, "mcp.json")); !os.IsNotExist(err) {
+		t.Fatal("native producer retained portable mcp.json", err)
+	}
 	f.historical(t)
 	files := antigravityPublicBytes(t, f)
-	stdout, stderr, err := f.execute(false, "repair", "demo", "--target", "antigravity", "--yes", "--format", "json")
-	if err != nil || f.runner.calls != 2 {
+	calls := f.runner.calls
+	stdout, stderr, err = f.execute(false, "repair", "demo", "--target", "antigravity", "--yes", "--format", "json")
+	if err != nil || f.runner.calls != calls+2 {
 		t.Fatalf("public grouped repair: calls=%d err=%v\n%s\n%s", f.runner.calls, err, stdout, stderr)
 	}
 	var output struct {

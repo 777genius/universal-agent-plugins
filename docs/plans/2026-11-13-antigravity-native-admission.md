@@ -924,3 +924,75 @@ different stderr and appended diagnostics. Before the correction, five of
 these negatives were incorrectly accepted. Local production RCA and inert
 contracts do not qualify the genuine agy lifecycle; the complete current
 public journey still requires original three-OS CI receipts.
+
+### Windows path-stat execute bits at the public file boundary (2026-11-13)
+
+Original source 6569cac0454b83ceb5e32d91f3a9e00efd91a19a,
+[run 43506679761, job 132170838747](https://github.com/777genius/universal-agent-plugins/actions/runs/43506679761/job/132170838747),
+failed the first real-file public binding contract before native agy execution.
+The failure was the cross-domain opened-file comparison; this fixture includes
+bin/agy.exe. The old diagnostic does not record the mismatched field values.
+
+The official CPython 3.12.10
+[path-stat implementation](https://github.com/python/cpython/blob/v3.12.10/Modules/posixmodule.c)
+adds 0111 for the case-insensitive exe, bat, cmd and com extensions. Its
+[handle-stat implementation](https://github.com/python/cpython/blob/v3.12.10/Python/fileutils.c)
+performs attribute conversion without that filename adjustment. Exact mode
+comparison therefore rejects this documented API-domain difference.
+
+Use one comparator for the two existing public opened-file checks. On Windows
+only, differing modes require zero execute bits in the held mode and exactly
+all three filename-derived bits in the named mode, with one of those four
+extensions. Equal modes retain their prior behavior. Read-only versus writable
+bits, file type, owner, device, inode, link count, size, mtime, positive creation
+identity, attributes and reparse metadata still compare exactly. The preexisting
+cross-domain ctime distinction remains; both complete temporal snapshots and
+all before/after checks remain unchanged. No directory rule changes.
+
+The new inert contract covers exact extension/read-only positives, partial and
+reversed mode differences, unrelated suffixes, metadata drift and unavailable
+creation identity. The original hosted failure is the real red evidence.
+These new contracts are UNEXECUTED locally during the environment outage;
+normal CI must run them before the unchanged genuine Windows journey.
+
+### Intact repair reads the projected native MCP document (2026-11-13)
+
+Original source `6569cac0454b83ceb5e32d91f3a9e00efd91a19a`,
+[run 43506679761, macOS job 132170838371](https://github.com/777genius/universal-agent-plugins/actions/runs/43506679761/job/132170838371),
+completed the fourteen direct native actions, public add, two repeats and
+the changed update to version 2.0.0. The following ordinary public repair
+failed with exit1 and `preparation_failed`. Its two MCP components were
+`unsupported/not_in_recorded_delivery`; `mutated=false`. The complete stderr
+ended with `agentplugins: antigravity refuses unqualified required components`.
+
+The original artifact `14078543124` is 10045 bytes, SHA256
+`53ad8f213cf58271ca32d0f7a320e7fef1839d78b3c4c4e8255d1f0c1ec38b75`.
+Both ZIP CRC checks and the exact 39-member inner inventory passed, with
+nineteen source/request/receipt joins and twenty-four stream hash/length
+joins. All nineteen cleanup receipts completed. The harness and public
+capture/effects completion flags remained false; this is genuine failed
+repair evidence, not acceptance of the whole lifecycle.
+
+The projector emits nested `mcp_config.json` and removes portable `mcp.json`
+from the staged native bundle. Without an adapter `SelectionReader`, the
+existing Stager read the default portable filename, proved an empty selection
+and correctly constrained repair to that mistaken selection. The adapter now
+declares exactly `SelectionLayout{File: "mcp_config.json", Nested: true}`.
+Both User and Project use that same native document. No generic fallback,
+digest-verification exception, ownership rule or activation policy changes.
+
+Existing provider tests add both-scope native/portable divergence, known
+missing and empty native documents, malformed syntax/member/null/array
+refusals and changed-artifact rejection. The existing public Cobra regression
+now starts with MCP, changes version through ordinary update, verifies actual
+native output and absence of portable output, then repairs the intact bundle.
+It uses the real Stager and explicitly inert native inventory callbacks;
+preserved profile/native bytes and the existing Prepared/authentication
+boundary remain asserted. It does not constitute a native client E2E pass.
+
+These new Go regressions are authored but UNEXECUTED locally during the
+environment outage. The original hosted repair is the real red evidence;
+normal Core/provider/CLI tests and fresh genuine three-OS admission are still
+required for the correction. The separately reviewed support-table edit
+retains main's historical evidence and Kimi text without promoting runtime
+or authentication capability.

@@ -231,6 +231,25 @@ def stable_file(info):
             getattr(info, "st_birthtime_ns", None), getattr(info, "st_file_attributes", None), getattr(info, "st_reparse_tag", None))
 
 
+def public_opened_equal(path, named, opened):
+    """Compare API domains; retain complete same-domain snapshots separately."""
+    named_id, opened_id = stable_file(named), stable_file(opened)
+    if os.name != "nt":
+        return named_id == opened_id
+    if any(type(value) is not int or value <= 0 for value in (named_id[9], opened_id[9])):
+        return False
+    if named_id[2] != opened_id[2]:
+        extension = path.name.rpartition(".")
+        # CPython adds these filename-derived bits only to path stat, not fstat.
+        if (opened_id[2] & 0o111 or not extension[1]
+                or extension[2].lower() not in ("exe", "bat", "cmd", "com")
+                or named_id[2] != opened_id[2] | 0o111):
+            return False
+        named_id = named_id[:2] + (opened_id[2],) + named_id[3:]
+    # CPython 3.12 path ctime aliases birthtime; handle ctime is change time.
+    return named_id[:8] + named_id[9:] == opened_id[:8] + opened_id[9:]
+
+
 def profile_file_refusal(root, child, info, root_device):
     """Bounded metadata for one refused owned-fixture entry; never open it."""
     relative = child.relative_to(root).as_posix().encode("utf-8")
@@ -312,12 +331,7 @@ class ProfileLedger:
                         opened = os.fstat(fd)
                         if object_identity(opened)[:2] != identity[:2]: raise AssertionError("Opened file differs")
                         if self.public is not None:
-                            named_id, opened_id = stable_file(info), stable_file(opened)
-                            if os.name == "nt":
-                                if type(named_id[9]) is not int or named_id[9] <= 0:
-                                    raise AssertionError("Public Windows creation identity unavailable")
-                                named_id, opened_id = named_id[:8] + named_id[9:], opened_id[:8] + opened_id[9:]
-                            if named_id != opened_id or opened.st_nlink != 1 or not 0 <= opened.st_size <= limit:
+                            if not public_opened_equal(child, info, opened) or opened.st_nlink != 1 or not 0 <= opened.st_size <= limit:
                                 raise AssertionError("Public opened file authority differs")
                         if scanner and os.name != "nt" and stat.S_IMODE(opened.st_mode) != 0o700:
                             raise AssertionError("Opened pinned scanner mode differs")
@@ -1517,6 +1531,46 @@ def admission_contracts():
                     public_snapshot(root)
                 self.assertEqual(total[0], 16 << 20)
 
+        def test_public_windows_open_comparison_admits_only_filename_execute_synthesis(self):
+            from types import SimpleNamespace
+            base = dict(st_dev=1, st_ino=2, st_mode=stat.S_IFREG | 0o666, st_uid=0, st_gid=0,
+                        st_nlink=1, st_size=3, st_mtime_ns=4, st_ctime_ns=5, st_birthtime_ns=6,
+                        st_file_attributes=32, st_reparse_tag=0)
+            executable = Path("agy.exe")
+            allowed = tuple(Path(name) for name in ("agy.exe", "AGY.EXE", "a.bat", "a.cmd", "a.com", ".exe"))
+            ordinary = tuple(Path(name) for name in ("config.json", "exe", "a.exe.txt"))
+            opened = SimpleNamespace(**base)
+            named = SimpleNamespace(**dict(base, st_mode=base["st_mode"] | 0o111, st_ctime_ns=9))
+            # Inert API-domain records, not Windows execution or native evidence.
+            with patch.object(os, "name", "nt"):
+                for path in allowed:
+                    with self.subTest(name=path.name):
+                        self.assertTrue(public_opened_equal(path, named, opened))
+                for path in ordinary:
+                    with self.subTest(name=path.name):
+                        self.assertFalse(public_opened_equal(path, named, opened))
+                        self.assertTrue(public_opened_equal(path, SimpleNamespace(**dict(base, st_ctime_ns=9)), opened))
+                for mode in (base["st_mode"] | 0o100, stat.S_IFREG | 0o555, base["st_mode"] | 0o4111):
+                    with self.subTest(named_mode=mode):
+                        self.assertFalse(public_opened_equal(executable, SimpleNamespace(**dict(base, st_mode=mode)), opened))
+                partial = SimpleNamespace(**dict(base, st_mode=base["st_mode"] | 0o100))
+                self.assertFalse(public_opened_equal(executable, named, partial))
+                self.assertFalse(public_opened_equal(executable, opened, named))
+                readonly = dict(base, st_mode=stat.S_IFREG | 0o444, st_file_attributes=33)
+                self.assertTrue(public_opened_equal(executable,
+                    SimpleNamespace(**dict(readonly, st_mode=stat.S_IFREG | 0o555)), SimpleNamespace(**readonly)))
+                for field in ("st_dev", "st_ino", "st_uid", "st_gid", "st_nlink", "st_size",
+                              "st_mtime_ns", "st_birthtime_ns", "st_file_attributes"):
+                    with self.subTest(field=field):
+                        self.assertFalse(public_opened_equal(executable, named,
+                            SimpleNamespace(**dict(base, **{field: base[field] + 1}))))
+                for birth in (None, 0, True):
+                    with self.subTest(birth=birth):
+                        self.assertFalse(public_opened_equal(executable, named,
+                            SimpleNamespace(**dict(base, st_birthtime_ns=birth))))
+                        self.assertFalse(public_opened_equal(executable,
+                            SimpleNamespace(**dict(base, st_birthtime_ns=birth)), opened))
+
         def test_public_binding_joins_real_data_and_distinguishes_readonly_from_repair(self):
             with tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary).resolve(); state = root / "uap-state"; home = root / "home"
@@ -1637,14 +1691,7 @@ def public_owned_bytes(path, *, limit=(1 << 20) - 1):
     fd = owned_handle(path)
     try:
         held = os.fstat(fd)
-        named_id, held_id = stable_file(named), stable_file(held)
-        # Existing artifact same_opened rule: Windows path/fd ctime differ in
-        # CPython; both full same-domain tuples remain mandatory after reading.
-        opened_equal = named_id == held_id
-        if os.name == "nt":
-            opened_equal = (type(named_id[9]) is int and named_id[9] > 0
-                            and named_id[:8] + named_id[9:] == held_id[:8] + held_id[9:])
-        if not opened_equal:
+        if not public_opened_equal(path, named, held):
             raise AssertionError("Public state changed at open")
         body = os.read(fd, named.st_size + 1)
         if (len(body) != named.st_size or stable_file(named) != stable_file(path.lstat())
