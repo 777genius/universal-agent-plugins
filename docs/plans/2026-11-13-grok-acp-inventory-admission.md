@@ -266,3 +266,38 @@ The previous continuously held file/directory authority and cleanup fences remai
 Root approves the additional22 targeted guard/test lines beyond the2100 estimate;
 18 Python and nine helper Go contracts pass. Fresh hosted metadata, then a separate
 exact-selector enable/recovery admission, remain required before production work.
+
+## Collector EOF correction after d7
+
+Original d7 job131802658754 passed 18 Python and helper Go contracts, then the
+workflow parent refused an empty frontend publication frame. The original log
+does not expose the underlying controller/collector failure. Do not claim that
+this proves the exact native cause.
+
+Source review and a local CPython descriptor observation identify a deterministic
+collector defect: standard stdout/stderr raw streams have closefd=False, so
+closing their Python wrappers does not close descriptors1/2. The collector then
+waits alive for its strict parent, while that parent requires actual pipe EOF
+before planned shutdown. Close these owned descriptors explicitly after flushing
+and closing both wrappers. Preserve the parent control channel, original deadline,
+strict tree cleanup and all receipt/publication/refusal requirements.
+
+Bounded scope: existing collector, existing inert test file and this plan only;
+approximately 40 code/test lines. A real inert child invokes the actual collector
+with only its metadata-producing function replaced by a fixed authored result.
+Keep its parent-control pipe open, require both actual output pipes reach EOF
+and exact finite bytes while the child remains alive, then kill/reap only that
+owned inert process. No vendor command, fake hosted admission, live privilege,
+new native action or cleanup-success claim. First run this contract on unchanged
+collector source to reproduce the missing EOF, then apply the fix and run the
+full inert suite. Independent source review precedes publication; fresh hosted
+originals must establish whether the correction resolves the observed failure.
+
+Critique1: wrapper closure is not OS descriptor closure; the test must inspect
+actual EOF rather than mock close calls. Critique2: EOF alone does not establish
+child-tree cleanup; preserve the strict controller's planned shutdown and
+publication fence, and assert the inert child is still alive at observed EOF.
+
+The actual new subprocess contract FAILS on the unchanged collector at its
+three-second EOF deadline, then PASSES after the four-line correction. All19
+inert contracts pass (no vendor execution); the code/test delta is38 lines.

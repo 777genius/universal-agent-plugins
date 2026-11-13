@@ -4,6 +4,9 @@ import copy
 import json
 import os
 from pathlib import Path
+import selectors
+import subprocess
+import sys
 import tempfile
 import time
 import unittest
@@ -143,6 +146,37 @@ class AdmissionContracts(unittest.TestCase):
                     with self.assertRaises(OSError): case.collect(request)
                 output.buffer.write.assert_not_called()
                 self.assertEqual(len(calls), failed_index + 1)
+
+    def test_actual_collector_closes_output_descriptors_before_parent_shutdown(self):
+        child = """import pathlib, runpy, sys
+case = runpy.run_path(sys.argv[1], run_name='inert_collector_eof')
+case['collect'].__globals__['collector_result'] = lambda _: {'fixture': True}
+case['collect'](pathlib.Path(sys.argv[2]))
+"""
+        with tempfile.TemporaryDirectory() as directory:
+            request = Path(directory) / 'request.json'
+            request.write_text(json.dumps(self.request(Path(directory))))
+            process = subprocess.Popen([sys.executable, '-I', '-c', child, str(Path(case.__file__).resolve()), str(request)],
+                                       stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            streams = {'stdout': bytearray(), 'stderr': bytearray()}
+            try:
+                deadline = time.monotonic() + 3
+                with selectors.DefaultSelector() as selector:
+                    for name, pipe in (('stdout', process.stdout), ('stderr', process.stderr)):
+                        selector.register(pipe, selectors.EVENT_READ, name)
+                    while selector.get_map() and time.monotonic() < deadline:
+                        for key, _ in selector.select(min(.05, max(0, deadline - time.monotonic()))):
+                            body = os.read(key.fd, 1025)
+                            streams[key.data].extend(body)
+                            self.assertLessEqual(len(streams[key.data]), 1024)
+                            if not body: selector.unregister(key.fileobj)
+                    self.assertFalse(selector.get_map(), 'collector kept an output descriptor open')
+                self.assertEqual(streams, {'stdout': b'{"fixture":true}\n', 'stderr': b''})
+                self.assertIsNone(process.poll(), 'collector exited before its strict parent shutdown')
+            finally:
+                process.kill()
+                process.wait(timeout=3)
+                for pipe in (process.stdin, process.stdout, process.stderr): pipe.close()
 
     def test_actual_drain_failure_bypasses_semantic_negative_handler(self):
         read_fd, write_fd = os.pipe()

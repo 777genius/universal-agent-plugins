@@ -177,6 +177,8 @@ jobs:
         $runtimeHelper = Join-Path $hermesSource 'scripts/desktop-update/runtime.ps1'
         . ([ScriptBlock]::Create([IO.File]::ReadAllText($runtimeHelper)))
         $version = Invoke-HermesProbe -Exe $hermesBin -Arguments @('--version')
+        $versionFacts = [ordered]@{ timed_out = [bool]$version.TimedOut; exit_code = [int]$version.Code; output_present = [bool]$version.Output.Trim() }
+        Write-Host ('HERMES_VERSION_PROBE_FACTS ' + ($versionFacts | ConvertTo-Json -Compress))
         if ($version.TimedOut -or $version.Code -ne 0 -or -not $version.Output.Trim()) { throw 'Native Hermes version probe failed' }
         $version.Output | Tee-Object -FilePath (Join-Path $evidenceDir 'version.txt')
         $probe = Invoke-HermesProbe -Exe $hermesBin -Arguments @('--print-runtime-command')

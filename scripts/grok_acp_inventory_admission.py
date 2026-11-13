@@ -252,6 +252,10 @@ def collect(request):
     sys.stdout.buffer.flush()
     sys.stdout.close()
     sys.stderr.close()
+    # CPython's standard streams have closefd=False; the strict parent needs
+    # real pipe EOF while this collector remains alive for planned shutdown.
+    os.close(1)
+    os.close(2)
     sys.stdin.buffer.read(1)
     while True:
         time.sleep(1)  # Strict parent owns termination after closed pipe EOF.

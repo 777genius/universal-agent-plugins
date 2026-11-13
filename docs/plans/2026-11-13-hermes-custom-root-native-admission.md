@@ -299,3 +299,27 @@ measures the relevant regular-file extent separately from directory link counts.
 The measured correction totals525 changed code/test lines, including199 directory
 authority lines and326 census lines. Root and independent source review accepted
 it;28 inert contracts pass. No native acceptance is inferred before new originals.
+
+## Initial Windows launcher diagnostic after d7
+
+Exact d7 job131802763698 failed at the initial official --version probe before
+runtime resolution and both E2Es; neither artifact existed. Its former guard
+combined timeout, nonzero exit and empty output without retaining those facts.
+The pinned official scripts/desktop-update/runtime.ps1 returns Code, Output and
+TimedOut and applies its existing60s bound. Log only those same guard facts as
+a fixed JSON record: literal timeout boolean, integer exit and output-present
+boolean. Preserve the original refusal, timeout, launcher and helper invocation;
+no raw output, path, retry, alternate runtime or cleanup claim is added. Main's
+8c3cfa28e later release-launcher settling preflight does not fix this earlier
+guard. Actual next hosted facts remain required before identifying its cause.
+
+## Portable census contract after d7 macOS
+
+Original macOS job131802764178 stopped in the inert census contract before
+either native capture: its projectA max_links was4 rather than the hardcoded2.
+The census deliberately measures all entry kinds, including the directory;
+directory link counts are platform-dependent. Compute the expected maximum
+from the three authored fixture entries' actual nofollow metadata, while
+retaining the independent exact two-regular-hardlinks and logical-byte checks.
+No runtime bound, census semantics or admission changes; macOS native evidence
+remains pending after this test-only correction.

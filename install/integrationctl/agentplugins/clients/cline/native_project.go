@@ -17,18 +17,10 @@ import (
 func ProjectClineNative(root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, dataPath string) error {
 	servers := make(map[string]nativeconfig.Server)
 	for _, name := range shared.SupportedMCPNames(plan) {
-		portable := envelope.MCP.Servers[name]
-		if portable.Type == "stdio" {
-			portable.Decoded = shared.CloneObject(portable.Decoded)
-			if err := shared.ApplyStdioDataContract(portable.Decoded, plan.ActivePath, dataPath, root); err != nil {
-				return fmt.Errorf("project Cline MCP server %s: %w", name, err)
-			}
-		}
-		server, err := ClineNeutralServer(portable)
+		server, err := projectClineServer(root, envelope.MCP.Servers[name], plan, dataPath)
 		if err != nil {
 			return fmt.Errorf("project Cline MCP server %s: %w", name, err)
 		}
-		server.StdioValuesResolved = portable.Type == "stdio"
 		// This first pass validates the codec without touching client state. The
 		// exact configured path is bound later when ownership objects are built.
 		settingsPath := filepath.Join(root, ".cline-settings-validation.json")
