@@ -9,6 +9,8 @@ name: Hermes native User tools call - scripted localhost provider, no vendor aut
     paths:
     - .github/workflows/hermes-noauth-tool-call.yml
     - scripts/e2e/hermes-noauth-tool-call.py
+    - scripts/e2e/hermes-profile-admission.py
+    - scripts/test_hermes_profile_admission.py
     - scripts/hermes_local_provider_fixture.py
     - scripts/test_hermes_local_provider_fixture.py
     - scripts/pi_project_components_native_e2e.py
@@ -22,6 +24,8 @@ name: Hermes native User tools call - scripted localhost provider, no vendor aut
     paths:
     - .github/workflows/hermes-noauth-tool-call.yml
     - scripts/e2e/hermes-noauth-tool-call.py
+    - scripts/e2e/hermes-profile-admission.py
+    - scripts/test_hermes_profile_admission.py
     - scripts/hermes_local_provider_fixture.py
     - scripts/test_hermes_local_provider_fixture.py
     - scripts/pi_project_components_native_e2e.py
@@ -64,6 +68,9 @@ jobs:
     - name: Inert provider, nonce and unchanged shared wire contracts
       shell: bash
       run: ${{ matrix.python }} -m unittest discover -s scripts -p 'test_hermes_local_provider_fixture.py' -v
+    - name: Inert custom-root admission and preservation contracts
+      shell: bash
+      run: ${{ matrix.python }} -m unittest discover -s scripts -p 'test_hermes_profile_admission.py' -v
     - name: Build exact source UAP executable
       shell: bash
       run: |
@@ -201,6 +208,11 @@ jobs:
       env:
         HERMES_NATIVE_UAP_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
       run: ${{ matrix.python }} scripts/e2e/hermes-noauth-tool-call.py
+    - name: Observe explicit custom-root MCP selection and preservation
+      shell: bash
+      env:
+        HERMES_NATIVE_UAP_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      run: ${{ matrix.python }} scripts/e2e/hermes-profile-admission.py
     - name: Retain original nonce, provider, native process and lifecycle evidence
       if: ${{ always() }}
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -208,5 +220,13 @@ jobs:
         name: hermes-noauth-native-call-${{ runner.os }}-${{ runner.arch }}-${{ github.run_id }}-${{ github.run_attempt
           }}
         path: ${{ runner.temp }}/hermes-native-call-evidence-*/
+        if-no-files-found: error
+        retention-days: 14
+    - name: Retain original custom-root admission evidence
+      if: ${{ always() }}
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        name: hermes-profile-admission-${{ runner.os }}-${{ runner.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
+        path: ${{ runner.temp }}/hermes-profile-admission-evidence-*/upload/
         if-no-files-found: error
         retention-days: 14
