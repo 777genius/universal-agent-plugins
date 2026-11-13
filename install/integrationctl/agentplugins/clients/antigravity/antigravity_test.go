@@ -17,7 +17,10 @@ func TestAdapterIdentityAndScopes(t *testing.T) {
 	if adapter.ID() != domain.ClientAntigravity {
 		t.Fatal("Antigravity target id mismatch")
 	}
-	root := t.TempDir()
+	root, canonicalErr := filepath.EvalSymlinks(t.TempDir())
+	if canonicalErr != nil {
+		t.Fatal(canonicalErr)
+	}
 	config := filepath.Join(root, ".gemini", "config")
 	detected := adapter.DetectSurfaces(clients.NewHost(clients.HostProbes{
 		HomeDir: root, Environment: map[string]string{},
@@ -29,7 +32,7 @@ func TestAdapterIdentityAndScopes(t *testing.T) {
 			return filepath.Join(root, "agy"), nil
 		},
 	}))
-	if detected.Err != nil || detected.ConfigRoot != config {
+	if detected.Err != nil || detected.ConfigRoot != config || detected.NativeConfigRoot != config {
 		t.Fatalf("Antigravity profile discovery: %+v", detected)
 	}
 	userAnchor, userRoot, err := adapter.TargetRoot(domain.DetectedClient{ConfigRoot: config}, domain.PackageNative, "")
@@ -235,5 +238,55 @@ func TestAntigravityMCPRejectsMixedTransportFields(t *testing.T) {
 				t.Fatal("refused transport leaked native server configuration")
 			}
 		})
+	}
+}
+
+func TestOriginalNativeProfileIsHostDerived(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	selected := filepath.Join(t.TempDir(), "other-profile")
+	adapter := New()
+	observed := adapter.DetectSurfaces(clients.NewHost(clients.HostProbes{
+		HomeDir: root, Environment: map[string]string{"HOME": selected, "USERPROFILE": selected},
+		Lstat: os.Lstat, EvalSymlinks: filepath.EvalSymlinks,
+		LookPath: func(string) (string, error) { return "", os.ErrNotExist },
+	}))
+	original := filepath.Join(root, ".gemini", "config")
+	if observed.Err != nil || observed.NativeConfigRoot != original || observed.ConfigRoot != original {
+		t.Fatal("host provenance lost", observed)
+	}
+	resolved, err := adapter.ResolveProfileRoot(selected)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resolved == observed.NativeConfigRoot {
+		t.Fatal("explicit profile became original native authority")
+	}
+	if observed.ExecutablePath != "" {
+		t.Fatal("provenance must not grant executable authority")
+	}
+}
+
+type aliasedProfileHost struct {
+	clients.Host
+	canonical string
+}
+
+func (host aliasedProfileHost) CanonicalDirectory(string) (string, error) {
+	return host.canonical, nil
+}
+
+func TestAliasedDefaultSpellingDoesNotQualifyNativeHome(t *testing.T) {
+	home := t.TempDir()
+	canonical := filepath.Join(t.TempDir(), ".gemini", "config")
+	host := clients.NewHost(clients.HostProbes{
+		HomeDir: home, Environment: map[string]string{},
+		LookPath: func(string) (string, error) { return "", os.ErrNotExist },
+	})
+	observed := New().DetectSurfaces(aliasedProfileHost{Host: host, canonical: canonical})
+	if observed.Err != nil || observed.ConfigRoot != canonical || observed.NativeConfigRoot != "" {
+		t.Fatal("canonicalized alias silently granted a different HOME", observed)
 	}
 }

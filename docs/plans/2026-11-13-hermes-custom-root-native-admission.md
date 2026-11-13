@@ -631,3 +631,19 @@ already advances mtime; preserve it and add the explicit observed-delta assertio
 Only this existing test and plan change. All runtime hashes, metadata fields,
 link-closure checks, native commands and qualification rules remain unchanged.
 The corrected contract and fresh cross-platform/native CI are unexecuted.
+
+## Pinned builder environment finding (2026-11-13)
+
+Remove the ineffective workflow-only `UV_LINK_MODE=copy` preparation override;
+restore the unchanged official `native_build.py` invocation. At pinned Hermes
+`2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19`, the initial environment preserves
+that key (`scripts/bundles/desktop_toolchain.py:27–65`), but application venv
+construction passes it through `scripts/bundles/native.py:243–249` and
+`pm/operations.py:53–60` into `pm/environment.py:242–256`, whose
+`_base_environment` removes UV settings not accepted by
+`pm/index_config.py:24–44`. That exact allowlist excludes `UV_LINK_MODE`.
+This is source proof of an ineffective override, not a native repair or proof
+of the member responsible for any closure refusal. Keep complete official
+payload, original closure guards, false qualifications and existing deadlines.
+No vendor source change, environment-filter bypass, cache cleanup or custom
+repackaging is authorized by this correction. Workflow execution remains pending.

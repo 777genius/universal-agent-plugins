@@ -47,9 +47,13 @@ func (*Adapter) DetectSurfaces(host clients.Host) clients.Detection {
 	if err != nil {
 		return clients.Detection{Err: err}
 	}
+	nativeRoot := ""
+	if root == filepath.Join(host.HomeDir(), ".gemini", "config") {
+		nativeRoot = root // Deriving HOME is qualified only for the original unaliased spelling.
+	}
 	executable := host.LookPath("agy")
 	return clients.Detection{
-		ConfigRoot: root, ExecutablePath: executable,
+		ConfigRoot: root, NativeConfigRoot: nativeRoot, ExecutablePath: executable,
 		Surfaces: []domain.ClientSurface{
 			host.ResolvedBinarySurface("antigravity_cli", executable),
 			host.DirectorySurface("antigravity_config", root),

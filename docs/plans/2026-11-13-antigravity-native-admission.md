@@ -501,3 +501,35 @@ sealed ZIP output, including admitted negative captures; release upload and
 aggregate logic remain unchanged. New publisher contracts are UNEXECUTED while
 the local environment is unavailable; independent source review and genuine
 three-platform originals, outer/inner CRC and stream joins remain required.
+
+## Original canonical detector generation admitted
+
+Original [run 43460106819, job 132004864154](https://github.com/777genius/universal-agent-plugins/actions/runs/43460106819/job/132004864154)
+checked out reviewed source `5f9a43a4ebea0ba5358ff2ffd2d975f3c9e595f5`,
+tree `3173fc7db908bb7e32785dfc686182288f3f4da4`. Go 1.26.11 executed
+`UPDATE_GOLDEN=1` with the existing `TestDetectGoldenAcrossPlatforms`;
+the original job reports PASS in 0.012s. This Ubuntu-hosted test models three
+platforms; it does not represent three native OS executions.
+
+Root and independent review parsed the three actual generated records,
+recomputed their complete UTF-8 byte counts and SHA-256, and matched the full
+committed blobs. Only Antigravity's NativeConfigRoot changes in these fixtures:
+
+| Fixture | Bytes | SHA-256 |
+| --- | ---: | --- |
+| detect_darwin.json | 12417 | c73e3dc2c3259731d0de5ba08b34f131501cb631cff5bc9dbada486768be62a2 |
+| detect_linux.json | 12146 | 6abc0fe7a07bae5c57d4e775d1e77936bc2aa4022c5493512bd99322dbc39b6d |
+| detect_windows.json | 12123 | 9ed51e592536bf04e47be967b56756ab5ae41c8ddfa2a4c38472d019bb809602 |
+
+Integrate the exact reviewed adapter/test pair and genuine generated fixtures,
+and remove the now-completed temporary fixed-candidate generator from future
+workflows. Existing running jobs are preserved. Default native provenance is
+qualified only when the resolved path exactly equals the original host HOME
+spelling; an aliased or explicitly selected delivery root grants no native HOME
+or executable authority. No native process, verifier trait or activation is
+added by this change.
+
+The historical original generator result is not final-source acceptance.
+The new provenance tests and complete affected CI remain required. Retained
+native inventory row schema, original archive CRC/stream joins, exact product
+environment and ordinary CLI lifecycle acceptance remain separate gates.
