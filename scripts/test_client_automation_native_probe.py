@@ -164,6 +164,23 @@ class NativeAdmissionContracts(unittest.TestCase):
 
     @unittest.skipUnless(os.name == "posix" and hasattr(os, "O_NOFOLLOW")
                          and hasattr(os, "O_DIRECTORY"), "native snapshot is POSIX-only")
+    def test_snapshot_detects_watched_root_mode_only_change(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            before = snapshot(root)
+            original_mode = root.stat().st_mode & 0o777
+            self.assertEqual(before["."], {"kind": "directory", "mode": original_mode})
+            root.chmod(0o750 if original_mode != 0o750 else 0o700)
+            try:
+                changed = snapshot(root)
+                self.assertNotEqual(changed, before)
+                self.assertEqual(set(changed), {"."})
+            finally:
+                root.chmod(original_mode)
+            self.assertEqual(snapshot(root), before)
+
+    @unittest.skipUnless(os.name == "posix" and hasattr(os, "O_NOFOLLOW")
+                         and hasattr(os, "O_DIRECTORY"), "native snapshot is POSIX-only")
     def test_snapshot_refuses_empty_directory_alias_swap_before_metadata_capture(self):
         with tempfile.TemporaryDirectory() as temporary:
             parent = Path(temporary)
