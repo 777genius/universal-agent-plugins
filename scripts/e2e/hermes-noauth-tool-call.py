@@ -163,11 +163,16 @@ def child_case():
         suite.remove_user()
 
 
-def closed_environment(root, evidence, nonce, mcp_url):
+def closed_environment(root, evidence, nonce, mcp_url, *, installation=None):
     env = {key: os.environ[key] for key in ("PATH", "SystemRoot", "WINDIR", "COMSPEC", "PATHEXT") if key in os.environ}
     # Only explicit official installation outputs and task-owned locations survive.
-    for key in ("HERMES_BIN", "UAP_BIN", "RUNNER_TEMP", "HERMES_NATIVE_RUNTIME_COMMAND_FILE"):
-        env[key] = os.environ[key]
+    if installation is None:
+        for key in ("HERMES_BIN", "UAP_BIN", "RUNNER_TEMP", "HERMES_NATIVE_RUNTIME_COMMAND_FILE"):
+            env[key] = os.environ[key]
+    else:
+        require(set(installation) == {"HERMES_BIN", "RUNNER_TEMP", "HERMES_PROFILE_RUNTIME_ROOT", "HERMES_PROFILE_PYTHON"},
+                "explicit bundled runtime outputs required")
+        env.update(installation)
     env.update({"HOME": str(root), "USERPROFILE": str(root), "HERMES_HOME": str(root / "selected-profile"),
                 "HERMES_NATIVE_EVIDENCE": str(evidence), "HERMES_CALL_NONCE": nonce,
                 "HERMES_NATIVE_MCP_URL": mcp_url, "PYTHONUTF8": "1", "PYTHONDONTWRITEBYTECODE": "1",

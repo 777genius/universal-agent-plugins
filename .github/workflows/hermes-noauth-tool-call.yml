@@ -50,7 +50,7 @@ permissions:
   contents: read
 concurrency:
   group: hermes-noauth-call-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: false
 env:
   PYTHONDONTWRITEBYTECODE: '1'
 jobs:
@@ -237,11 +237,6 @@ jobs:
       env:
         HERMES_NATIVE_UAP_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
       run: ${{ matrix.python }} scripts/e2e/hermes-noauth-tool-call.py
-    - name: Observe explicit custom-root MCP selection and preservation
-      shell: bash
-      env:
-        HERMES_NATIVE_UAP_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
-      run: ${{ matrix.python }} scripts/e2e/hermes-profile-admission.py
     - name: Retain original nonce, provider, native process and lifecycle evidence
       if: ${{ always() }}
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -251,6 +246,58 @@ jobs:
         path: ${{ runner.temp }}/hermes-native-call-evidence-*/
         if-no-files-found: error
         retention-days: 14
+  bundled-custom-root:
+    name: Hermes 0.23 bundled custom-root admission (${{ matrix.os }})
+    needs: native-call
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - os: ubuntu-24.04
+          python: python3
+        - os: macos-15
+          python: python3
+        - os: windows-2025
+          python: python
+    runs-on: ${{ matrix.os }}
+    # Official pm-bundle allows 180 minutes for cold native wheels. This is a
+    # separate build job; the source-installed User job retains its 45 minutes.
+    timeout-minutes: 180
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        ref: ${{ github.event.pull_request.head.sha || github.sha }}
+        persist-credentials: false
+    - name: Build the unmodified official standalone Hermes payload
+      shell: bash
+      run: |
+        ${{ matrix.python }} - <<'PYTHON'
+        import json, os, pathlib, subprocess, sys, time
+        runner = pathlib.Path(os.environ['RUNNER_TEMP']).resolve()
+        source, payload = runner / 'hermes-agent', runner / 'hermes-profile-payload'
+        pin = '2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19'
+        subprocess.run(['git', 'clone', '--filter=blob:none', '--no-checkout', 'https://github.com/NousResearch/hermes-agent.git', str(source)], check=True, timeout=180)
+        subprocess.run(['git', '-C', str(source), 'config', 'core.autocrlf', 'false'], check=True, timeout=30)
+        subprocess.run(['git', '-C', str(source), 'checkout', '--force', '--detach', pin], check=True, timeout=180)
+        assert subprocess.check_output(['git', '-C', str(source), 'rev-parse', 'HEAD'], text=True, timeout=30).strip() == pin
+        # Full vendor preparation and verification: no patched builder, omitted
+        # extras, mutable source ref, or bootstrap-suppression environment.
+        started = time.monotonic()
+        subprocess.run([sys.executable, '-S', '-B', str(source / 'scripts/bundles/native_build.py'),
+                        '--source', str(source), '--work', str(runner / 'hermes-profile-work'),
+                        '--cache', str(runner / 'hermes-profile-cache'), '--out', str(payload),
+                        '--commit', pin], check=True, timeout=9000)
+        (runner / 'hermes-profile-build.json').write_text(json.dumps({
+            'commit': pin, 'exit_code': 0, 'timeout_seconds': 9000,
+            'elapsed_seconds': round(time.monotonic() - started, 3)}) + '\n', encoding='utf-8')
+        PYTHON
+    - name: Observe bundled custom-root MCP selection and preservation
+      shell: bash
+      env:
+        HERMES_NATIVE_UAP_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      # The native family keeps its 720-second deadline; each immutable runtime
+      # scan has a separate 120-second deadline and an 8 GiB admission ceiling.
+      run: ${{ matrix.python }} scripts/e2e/hermes-profile-admission.py
     - name: Retain original custom-root admission evidence
       if: ${{ always() }}
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a

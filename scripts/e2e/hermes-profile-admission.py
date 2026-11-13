@@ -211,6 +211,160 @@ def inventory(root, sentinels=()):
     require(directory_identity(root) == identity, "inventory root replaced")
     return result
 
+
+# Official standalone payload authority is separate from the small mutable
+# profile ledger. These finite ceilings include every shipped byte and link.
+PAYLOAD_MEMBERS, PAYLOAD_DEPTH, PAYLOAD_BYTES = 262144, 64, 8 << 30
+
+
+def payload_links(root, records, deadline):
+    """Resolve only the captured link graph; never traverse a filesystem link."""
+    lookup = {Path(name): record for name, record in records.items()}
+    require(len(lookup) == len(records), "ambiguous payload path spelling")
+    def parts(target):
+        if artifacts.WINDOWS and target.startswith("\\\\?\\"):
+            target = target[4:]
+        path = Path(target)
+        require(not path.drive or path.is_absolute(), "payload drive-relative link")
+        if path.is_absolute():
+            require(path.is_relative_to(root), "payload link escapes runtime")
+            return True, list(path.relative_to(root).parts)
+        return False, list(path.parts)
+
+    for name, record in records.items():
+        if record["type"] != "link":
+            continue
+        absolute, tail = parts(record["target"])
+        pending = ([] if absolute else list(Path(name).parent.parts)) + tail
+        resolved, count = [], 0
+        while pending:
+            require(time.monotonic() < deadline, "payload scan deadline")
+            component, *pending = pending
+            if component in ("", "."):
+                continue
+            if component == "..":
+                require(bool(resolved), "payload link escapes runtime")
+                resolved.pop()
+                continue
+            resolved.append(component)
+            selected = lookup.get(Path(*resolved))
+            require(selected is not None, "payload link target missing")
+            if selected["type"] == "link":
+                count += 1
+                require(count <= PAYLOAD_DEPTH, "payload link cycle/depth")
+                absolute, tail = parts(selected["target"])
+                resolved = [] if absolute else resolved[:-1]
+                pending = tail + pending
+            elif pending:
+                require(selected["type"] == "directory", "payload link traverses non-directory")
+
+
+def payload_snapshot(root, expected, deadline):
+    """Stream all payload bytes with held no-follow directory/file authority."""
+    require(directory_identity(root) == tuple(expected), "payload original root changed")
+    records, links, total = {}, 0, 0
+
+    def visit(path, depth, parent=None):
+        nonlocal links, total
+        require(time.monotonic() < deadline, "payload scan deadline")
+        require(len(records) < PAYLOAD_MEMBERS and depth <= PAYLOAD_DEPTH, "payload membership/depth bound")
+        linked = lambda: path.lstat() if parent is None else os.stat(path.name, dir_fd=parent, follow_symlinks=False)
+        info = linked()
+        if depth == 0:
+            require((info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_gid) == tuple(expected), "payload original root changed")
+        name = path.relative_to(root).as_posix()
+        record = {"identity": stable_file(info)}
+        reparse = getattr(info, "st_file_attributes", 0) & 0x400
+        if stat.S_ISLNK(info.st_mode) or reparse:
+            require(not reparse or getattr(info, "st_reparse_tag", 0) in (0xA0000003, 0xA000000C), "unknown payload reparse point")
+            target = os.readlink(path) if parent is None else os.readlink(path.name, dir_fd=parent)
+            require(len(target) <= 4096 and stable_file(linked()) == stable_file(info), "payload link changed/bound")
+            record.update(type="link", target=target)
+            links += 1
+        elif stat.S_ISREG(info.st_mode):
+            require(0 <= info.st_size <= PAYLOAD_BYTES - total and info.st_nlink > 0, "payload byte bound")
+            descriptor = (artifacts.open_member(path) if parent is None else
+                          os.open(path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent))
+            try:
+                held = os.fstat(descriptor)
+                require(same_opened_capture(info, held) and (info.st_uid, info.st_gid) == (held.st_uid, held.st_gid), "payload file changed at open")
+                digest, size = hashlib.sha256(), 0
+                while size <= info.st_size:
+                    require(time.monotonic() < deadline, "payload scan deadline")
+                    chunk = os.read(descriptor, min(LIMIT, info.st_size + 1 - size))
+                    if not chunk:
+                        break
+                    size += len(chunk)
+                    digest.update(chunk)
+                require(size == info.st_size and stable_file(os.fstat(descriptor)) == stable_file(held)
+                        and stable_file(linked()) == stable_file(info), "payload file changed during capture")
+                total += size
+                record.update(type="file", sha256=digest.hexdigest())
+            finally:
+                os.close(descriptor)
+        else:
+            require(stat.S_ISDIR(info.st_mode), "nonordinary payload member")
+            record["type"] = "directory"
+        records[name] = record
+        if record["type"] == "directory":
+            descriptor = open_inventory_directory(path, parent)
+            try:
+                held = os.fstat(descriptor)
+                check_inventory_directory(info, held, "payload directory changed at open")
+                verify_inventory_directory(path, info, descriptor, held, parent)
+                with os.scandir(path if artifacts.WINDOWS else descriptor) as entries:
+                    for entry in entries:
+                        visit(path / entry.name, depth + 1, None if artifacts.WINDOWS else descriptor)
+                verify_inventory_directory(path, info, descriptor, held, parent)
+            finally:
+                os.close(descriptor)
+
+    visit(root, 0)
+    payload_links(root, records, deadline)
+    digest = hashlib.sha256()
+    for name, record in sorted(records.items()):
+        require(time.monotonic() < deadline, "payload scan deadline")
+        digest.update(json.dumps([name, record], sort_keys=True, ensure_ascii=True).encode() + b"\n")
+    require(directory_identity(root) == tuple(expected), "payload original root changed")
+    return {"sha256": digest.hexdigest(), "entries": len(records), "logical_regular_bytes": total, "links": links}
+
+
+def payload_contract(payload, source, target):
+    """Join official builder inputs and completed contained runtime selection."""
+    manifest_bytes = ordinary_bytes(payload / "manifest.json")
+    prepared_path = payload.with_name(payload.name + ".prepared.json")
+    prepared_identity = prepared_path.lstat()
+    prepared_bytes = ordinary_bytes(prepared_path, prepared_identity)
+    manifest, prepared = json.loads(manifest_bytes), json.loads(prepared_bytes)
+    require(manifest["schema"] == prepared["schema"] == 1 and manifest["ref"] == prepared["revision"] == BASE["PIN"]
+            and prepared["out"] == str(payload) and prepared["source"] == str(source)
+            and prepared["lock"] == hashlib.sha256(ordinary_bytes(source / "pm/lock.json")).hexdigest(), "payload source/preparation differs")
+    inputs, runtime = prepared["inputs"], manifest["runtime"]
+    require(manifest["target"] == inputs["target"] == target and inputs["ref"] == BASE["PIN"]
+            and manifest["repo"] == inputs["repo"] == runtime["repoDir"] == "hermes-agent"
+            and manifest["venv"] == "venv" and manifest["store"] == runtime["toolsDir"] == "tools"
+            and inputs["placement"] == "contained" and not (payload / "hermes-agent/.git").exists(), "payload layout/target differs")
+    selected = {"code": runtime["repoDir"], "python": runtime["storePython"],
+                "site_packages": runtime["sitePackages"], "environment": "venv", "tools": "tools"}
+    for key, relative in selected.items():
+        require(isinstance(relative, str) and relative and Path(relative).as_posix() == relative
+                and not Path(relative).is_absolute() and ".." not in Path(relative).parts, "payload selection is not relative")
+        path = payload / relative
+        require(inputs[key] == str(path) and path.resolve().is_relative_to(payload)
+                and (path.is_file() if key == "python" else path.is_dir()), "payload selected input escapes/differs")
+    require(selected["python"].startswith("tools/") and selected["site_packages"].startswith("venv/"), "payload interpreter/dependencies misplaced")
+    launcher = "bin/hermes" + (".exe" if target.startswith("win32-") else "")
+    require(runtime["commands"]["hermes"] == launcher and "hermes" in manifest["launchers"], "payload native launcher differs")
+    launcher_path = payload / launcher
+    require(launcher_path.resolve() == launcher_path and stat.S_ISREG(launcher_path.lstat().st_mode), "payload launcher alias")
+    return {"runtime_distribution": "bundled", "source_install_custom_root_qualified": False,
+            "ref": manifest["ref"], "target": target, "selected": selected, "native_command": [str(launcher_path)],
+            "launcher_sha256": hashlib.sha256(ordinary_bytes(launcher_path)).hexdigest(),
+            "manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
+            "prepared_sha256": hashlib.sha256(prepared_bytes).hexdigest(), "prepared_identity": stable_file(prepared_identity),
+            "lock_sha256": prepared["lock"]}
+
+
 CENSUS_MEMBERS = 131072
 CENSUS_CAP = (1 << 53) - 1
 CENSUS_GROUPS = ("cache", "tools", "installs", "bootstrap-other", "projectA", "projectB", "User-other", "outer-other")
@@ -506,7 +660,7 @@ def observe_profiles(probes):
     evidence = Path(os.environ["HERMES_NATIVE_EVIDENCE"])
     user = Path(os.environ["HOME"])
     outer, nonce = user.parent, os.environ["HERMES_CALL_NONCE"]
-    native = json.loads(ordinary_bytes(Path(os.environ["HERMES_NATIVE_RUNTIME_COMMAND_FILE"])).decode("utf-8-sig"))
+    native = [os.environ["HERMES_BIN"]]
     from hermes_constants import get_default_hermes_root
     import hermes_yaml as yaml
     original = get_default_hermes_root(home="").resolve()
@@ -575,7 +729,7 @@ def observe_profiles(probes):
         require(env["HOME"] == str(user) and env["USERPROFILE"] == str(user), "OS User home changed")
         if guard:
             from hermes_cli._launchers import runtime_command
-            argv = runtime_command(Path(os.environ["RUNNER_TEMP"]) / "hermes-agent", python=native[0], code=GUARD_CODE)
+            argv = runtime_command(Path(os.environ["HERMES_PROFILE_RUNTIME_ROOT"]), python=os.environ["HERMES_PROFILE_PYTHON"], code=GUARD_CODE)
         else:
             argv = [*native, *args]
         methods_before = {name: list(probe.methods()) for name, probe in probes.items()}
@@ -624,6 +778,7 @@ def observe_profiles(probes):
         return output
 
     try:
+        require(b"hermes" in command("version-a", "a", ["--version"]).lower(), "bundled native version absent")
         for scope in ("a", "b"):
             command("guard-" + scope, scope, guard=True)
             output = command("list-" + scope, scope, ["mcp", "list"])
@@ -645,7 +800,7 @@ def observe_profiles(probes):
 
 
 COMMANDS = ({prefix + x for prefix in ("git-", "guard-", "list-", "test-", "remove-mcp-", "removed-list-", "removed-test-") for x in ("a", "b")}
-            | {"test-a-restart", "list-user"})
+            | {"test-a-restart", "list-user", "version-a"})
 MEMBERS = ({name + suffix for name in COMMANDS for suffix in (".stdout", ".stderr", ".status.json")}
            | {"original-user-baseline.json", "original-user-final.json", "source-guards.json", "profile-endpoints.json",
               "profile-command-deltas.json", "bootstrap-census-request.json", "bootstrap-census.json", "profile-admission.json", "lifecycle.stdout", "lifecycle.stderr", "owned-start-gate"})
@@ -719,7 +874,8 @@ def safe_failure_evidence(runner, failure_kind="unclosed-native-admission"):
     directory = Path(tempfile.mkdtemp(prefix="hermes-profile-admission-evidence-", dir=runner))
     write_json(directory / "profile-admission.json", {"status": "failed", "error": "native admission aborted before evidence closure", "original_failure_kind": failure_kind,
                "admission_qualified": False, "production_project_mcp": False, "vendor_authentication": False,
-               "real_model_inference": False, "tools_call": False})
+               "real_model_inference": False, "tools_call": False,
+               "runtime_distribution": "bundled", "source_install_custom_root_qualified": False})
     stage_evidence(directory)
     return directory
 
@@ -751,22 +907,45 @@ def run():
     nonce, child, job, failure = secrets.token_hex(32), None, None, None
     proof = {"source": before, "hermes_source": official, "nonce": nonce, "capture_complete": False,
              "admission_qualified": False, "production_project_mcp": False,
-             "vendor_authentication": False, "real_model_inference": False, "tools_call": False}
-    runtime_file = Path(os.environ["HERMES_NATIVE_RUNTIME_COMMAND_FILE"])
-    native = json.loads(ordinary_bytes(runtime_file).decode("utf-8-sig"))
-    held = {"runtime": sha(Path(native[0])), "runtime_command": sha(runtime_file), "launcher": sha(Path(os.environ["HERMES_BIN"]))}
+             "vendor_authentication": False, "real_model_inference": False, "tools_call": False,
+             "runtime_distribution": "bundled", "source_install_custom_root_qualified": False}
+    payload = runner / "hermes-profile-payload"
+    target = {"Linux": "linux", "Windows": "win32", "macOS": "darwin"}[os.environ["RUNNER_OS"]] + "-" + os.environ["RUNNER_ARCH"].lower()
+    payload_descriptor, runtime_before, native_started = None, None, None
     helpers = runpy.run_path(str(HERE / "hermes-native.py"), run_name="hermes_profile_process_helpers")
     lifecycle_deadline = time.monotonic() + 720
     try:
-        env = BASE["closed_environment"](user, evidence, nonce, "http://127.0.0.1:9/unused")
+        build = json.loads(ordinary_bytes(runner / "hermes-profile-build.json"))
+        require(set(build) == {"commit", "exit_code", "timeout_seconds", "elapsed_seconds"}
+                and build["commit"] == BASE["PIN"] and build["exit_code"] == 0 and build["timeout_seconds"] == 9000
+                and type(build["elapsed_seconds"]) in (int, float) and 0 < build["elapsed_seconds"] <= 9000, "official payload build receipt differs")
+        proof.update(bootstrap=build, native_family_timeout_seconds=720, payload_scan_timeout_seconds=120)
+        payload_identity, payload_before = directory_identity(payload), payload.lstat()
+        require(not any(payload.is_relative_to(root) or root.is_relative_to(payload) for root in (home, evidence, checkout, runner / "hermes-agent")), "runtime/configuration roots overlap")
+        payload_descriptor = open_inventory_directory(payload)
+        payload_held = os.fstat(payload_descriptor)
+        check_inventory_directory(payload_before, payload_held, "payload root changed at open")
+        verify_inventory_directory(payload, payload_before, payload_descriptor, payload_held)
+        runtime_before = {"inventory": payload_snapshot(payload, payload_identity, time.monotonic() + 120),
+                          "provenance": payload_contract(payload, runner / "hermes-agent", target)}
+        proof["runtime_before"] = runtime_before
+        selected = runtime_before["provenance"]["selected"]
+        runtime_root, python = payload / selected["code"], payload / selected["python"]
+        env = BASE["closed_environment"](user, evidence, nonce, "http://127.0.0.1:9/unused", installation={
+            "HERMES_BIN": runtime_before["provenance"]["native_command"][0], "RUNNER_TEMP": str(runner),
+            "HERMES_PROFILE_RUNTIME_ROOT": str(runtime_root), "HERMES_PROFILE_PYTHON": str(python)})
         env["HERMES_CENSUS_EVIDENCE_ID"] = json.dumps(evidence_authority)
         env.pop("HERMES_NATIVE_MCP_URL", None)  # This case has no User/legacy-call endpoint.
         gate = evidence / "owned-start-gate"
         env["HERMES_CALL_START_GATE"] = str(gate)
-        sys.path.insert(0, str(runner / "hermes-agent"))
+        sys.path.insert(0, str(runtime_root))
         from hermes_cli._launchers import runtime_command
-        argv = runtime_command(runner / "hermes-agent", python=native[0], args=["--child"],
+        require(Path(runtime_command.__code__.co_filename).resolve() == runtime_root / "hermes_cli/_launchers.py", "observer runtime API is not payload-owned")
+        argv = runtime_command(runtime_root, python=python, args=["--child"],
                                code=f"runpy.run_path({str(Path(__file__).resolve())!r}, run_name='__main__')")
+        verify_inventory_directory(payload, payload_before, payload_descriptor, payload_held)
+        native_started = time.monotonic()
+        lifecycle_deadline = native_started + 720
         flags = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt" else {"start_new_session": True}
         with (evidence / "lifecycle.stdout").open("wb") as out, (evidence / "lifecycle.stderr").open("wb") as err:
             child = subprocess.Popen(argv, env=env, stdin=subprocess.DEVNULL, stdout=out, stderr=err, **flags)
@@ -825,6 +1004,20 @@ def run():
         except BaseException as error:
             failure = failure or error
             proof.update(status="failed", cleanup="failed", cleanup_error=type(error).__name__)
+        proof["native_family_elapsed_seconds"] = round(time.monotonic() - native_started, 3) if native_started is not None else None
+        try:
+            if runtime_before is not None and process_settled:
+                verify_inventory_directory(payload, payload_before, payload_descriptor, payload_held)
+                runtime_after = {"inventory": payload_snapshot(payload, payload_identity, time.monotonic() + 120),
+                                 "provenance": payload_contract(payload, runner / "hermes-agent", target)}
+                proof["runtime_after"] = runtime_after
+                require(runtime_after == runtime_before, "immutable bundled runtime changed")
+        except BaseException as error:
+            failure = failure or error
+            proof.update(status="failed", runtime_error=type(error).__name__ + ": " + str(error)[:300])
+        finally:
+            if payload_descriptor is not None:
+                os.close(payload_descriptor)
         if not process_settled:
             safe_failure_evidence(runner, type(failure).__name__ if failure else "process-cleanup-unproved")
             raise RuntimeError("native process cleanup unproved; raw evidence withheld") from failure
@@ -834,11 +1027,10 @@ def run():
         admit_evidence(evidence)
         proof.update(source_after=BASE["source_identity"](checkout), hermes_source_after=BASE["source_identity"](runner / "hermes-agent"),
                      streams={p.name: {"bytes": p.stat().st_size, "sha256": hashlib.sha256(ordinary_bytes(p)).hexdigest()} for p in evidence.iterdir() if p.is_file()})
-        final = {"runtime": sha(Path(native[0])), "runtime_command": sha(runtime_file), "launcher": sha(Path(os.environ["HERMES_BIN"]))}
-        if proof["source_after"] != before or proof["hermes_source_after"] != official or final != held:
+        if proof["source_after"] != before or proof["hermes_source_after"] != official:
             failure = failure or RuntimeError("source/runtime identity changed")
             proof.update(status="failed", source_error="source/runtime identity changed")
-        proof.update(runtime_before=held, runtime_after=final, lifecycle_exit=child.returncode if child else None,
+        proof.update(lifecycle_exit=child.returncode if child else None,
                      run_id=os.environ["GITHUB_RUN_ID"], run_attempt=os.environ["GITHUB_RUN_ATTEMPT"], runner_os=os.environ["RUNNER_OS"])
         write_json(evidence / "profile-admission.json", proof)
         try:

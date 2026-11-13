@@ -725,8 +725,138 @@ class ProfileAdmissionContracts(unittest.TestCase):
             root = CASE["safe_failure_evidence"](Path(temporary).resolve())
             proof = json.loads((root / "upload/profile-admission.json").read_text())
             self.assertEqual(proof["status"], "failed")
-            for key in ("admission_qualified", "production_project_mcp", "vendor_authentication", "real_model_inference", "tools_call"):
+            for key in ("admission_qualified", "production_project_mcp", "vendor_authentication", "real_model_inference", "tools_call", "source_install_custom_root_qualified"):
                 self.assertIs(proof[key], False)
+
+
+class BundledRuntimeContracts(unittest.TestCase):
+    def fixture(self, parent):
+        import hashlib
+        root, source = parent / "payload", parent / "source"
+        for name in ("hermes-agent", "tools/python/bin", "venv/lib/site-packages", "bin"):
+            (root / name).mkdir(parents=True)
+        (source / "pm").mkdir(parents=True)
+        (source / "pm/lock.json").write_bytes(b"inert pinned lock")
+        target = "win32-x64" if os.name == "nt" else "linux-x64"
+        launcher = "bin/hermes" + (".exe" if os.name == "nt" else "")
+        (root / launcher).write_bytes(b"inert launcher; never executed")
+        (root / "tools/python/bin/python").write_bytes(b"inert interpreter; never executed")
+        selected = {"code": "hermes-agent", "python": "tools/python/bin/python", "site_packages": "venv/lib/site-packages", "environment": "venv", "tools": "tools"}
+        manifest = {"schema": 1, "target": target, "ref": CASE["BASE"]["PIN"], "repo": "hermes-agent", "venv": "venv", "store": "tools", "launchers": ["hermes"],
+                    "runtime": {"repoDir": "hermes-agent", "toolsDir": "tools", "storePython": selected["python"], "sitePackages": selected["site_packages"], "commands": {"hermes": launcher}}}
+        prepared = {"schema": 1, "out": str(root), "source": str(source), "revision": manifest["ref"], "lock": hashlib.sha256(b"inert pinned lock").hexdigest(),
+                    "inputs": {**{name: str(root / value) for name, value in selected.items()}, "placement": "contained", "repo": "hermes-agent", "target": target, "ref": manifest["ref"]}}
+        (root / "manifest.json").write_text(json.dumps(manifest))
+        root.with_name("payload.prepared.json").write_text(json.dumps(prepared))
+        return root, source, target, manifest, prepared
+
+    def test_manifest_and_prepared_inputs_bind_actual_native_paths(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root, source, target, manifest, prepared = self.fixture(Path(temporary).resolve())
+            proof = CASE["payload_contract"](root, source, target)
+            self.assertEqual(proof["native_command"], [str(root / manifest["runtime"]["commands"]["hermes"])])
+            self.assertIs(proof["source_install_custom_root_qualified"], False)
+            for document, key, wrong in ((manifest, "ref", "0" * 40), (manifest, "target", "other"),
+                    (prepared, "source", str(root)), (prepared, "lock", "0" * 64),
+                    (prepared["inputs"], "python", str(source / "python")),
+                    (manifest["runtime"], "storePython", "../source/python"),
+                    (manifest["runtime"], "sitePackages", str(source)),
+                    (manifest["runtime"]["commands"], "hermes", "bin/other")):
+                original = document[key]
+                document[key] = wrong
+                (root / "manifest.json").write_text(json.dumps(manifest))
+                root.with_name("payload.prepared.json").write_text(json.dumps(prepared))
+                with self.subTest(key=key), self.assertRaises(RuntimeError):
+                    CASE["payload_contract"](root, source, target)
+                document[key] = original
+
+    def test_payload_streams_large_bytes_but_configuration_remains_bounded(self):
+        import time
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            binary = root / "runtime"
+            binary.write_bytes(b"x" * ((1 << 20) + 1))
+            expected = CASE["directory_identity"](root)
+            capture = lambda: CASE["payload_snapshot"](root, expected, time.monotonic() + 5)
+            original = capture()
+            self.assertEqual(original["logical_regular_bytes"], (1 << 20) + 1)
+            self.assertEqual(original, capture())
+            with self.assertRaisesRegex(RuntimeError, "inventory member refused"):
+                CASE["inventory"](root)
+            binary.write_bytes(b"y" * ((1 << 20) + 1))
+            self.assertNotEqual(original["sha256"], capture()["sha256"])
+            for key, value, message in (("PAYLOAD_BYTES", 2, "byte bound"), ("PAYLOAD_MEMBERS", 1, "membership/depth"), ("PAYLOAD_DEPTH", 0, "membership/depth")):
+                with mock.patch.dict(CASE["payload_snapshot"].__globals__, {key: value}), self.assertRaisesRegex(RuntimeError, message):
+                    capture()
+            with self.assertRaisesRegex(RuntimeError, "deadline"):
+                CASE["payload_snapshot"](root, expected, time.monotonic() - 1)
+
+    def test_payload_replacement_and_midstream_mutation_are_refused(self):
+        import time
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary).resolve()
+            root = parent / "runtime"; root.mkdir()
+            path = root / "file"; path.write_bytes(b"one")
+            expected, actual_read = CASE["directory_identity"](root), os.read
+            def changed(fd, length):
+                body = actual_read(fd, length)
+                if body: path.write_bytes(b"two")
+                return body
+            with mock.patch.object(os, "read", side_effect=changed), self.assertRaisesRegex(RuntimeError, "changed during capture"):
+                CASE["payload_snapshot"](root, expected, time.monotonic() + 5)
+            root.rename(parent / "old"); root.mkdir()
+            with mock.patch.object(os, "scandir", side_effect=AssertionError("foreign tree visited")), self.assertRaisesRegex(RuntimeError, "original root changed"):
+                CASE["payload_snapshot"](root, expected, time.monotonic() + 5)
+
+    def test_payload_links_resolve_captured_graph_without_target_traversal(self):
+        import time
+        root = Path(tempfile.gettempdir()).resolve() / "inert-payload"
+        records = {".": {"type": "directory"}, "dir": {"type": "directory"}, "file": {"type": "file"},
+                   "dir/up": {"type": "link", "target": ".."}, "link": {"type": "link", "target": "dir/up/file"}}
+        CASE["payload_links"](root, records, time.monotonic() + 5)
+        for target in ("dir/up/../outside", str(root.parent / "outside"), "missing", "link"):
+            records["link"]["target"] = target
+            with self.subTest(target=target), mock.patch.object(Path, "resolve", side_effect=AssertionError("link traversed")), self.assertRaises(RuntimeError):
+                CASE["payload_links"](root, records, time.monotonic() + 5)
+
+    @unittest.skipIf(os.name == "nt", "physical POSIX symlink capture; graph validation runs on every OS")
+    def test_payload_records_link_text_and_never_opens_escaping_target(self):
+        import time
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary).resolve()
+            root = parent / "runtime"; root.mkdir()
+            for name in ("one", "two"): (root / name).write_bytes(b"same")
+            link = root / "link"; link.symlink_to("one")
+            expected = CASE["directory_identity"](root)
+            capture = lambda: CASE["payload_snapshot"](root, expected, time.monotonic() + 5)
+            before = capture()
+            self.assertEqual((before["links"], before["logical_regular_bytes"]), (1, 8))
+            link.unlink(); link.symlink_to("two")
+            self.assertNotEqual(before["sha256"], capture()["sha256"])
+            (parent / "foreign").write_bytes(b"must not be read")
+            link.unlink(); link.symlink_to("../foreign")
+            actual_open = os.open
+            def guarded(path, *args, **kwargs):
+                self.assertNotEqual(Path(path).name, "foreign")
+                return actual_open(path, *args, **kwargs)
+            with mock.patch.object(os, "open", side_effect=guarded), self.assertRaisesRegex(RuntimeError, "escapes runtime"):
+                capture()
+
+    def test_source_default_environment_is_preserved_and_bundle_outputs_are_closed(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            source = {key: str(root / key) for key in ("HERMES_BIN", "UAP_BIN", "RUNNER_TEMP", "HERMES_NATIVE_RUNTIME_COMMAND_FILE")}
+            with mock.patch.dict(os.environ, {**source, "PATH": "fixture", "SECRET": "never-forward", "HERMES_PROFILE_PYTHON": "ambient"}, clear=True):
+                default = CASE["BASE"]["closed_environment"](root, root, "nonce", "url")
+                self.assertEqual({key: default[key] for key in source}, source)
+                self.assertNotIn("SECRET", default); self.assertNotIn("HERMES_PROFILE_PYTHON", default)
+                installation = {key: str(root / key) for key in ("HERMES_BIN", "RUNNER_TEMP", "HERMES_PROFILE_RUNTIME_ROOT", "HERMES_PROFILE_PYTHON")}
+                bundled = CASE["BASE"]["closed_environment"](root, root, "nonce", "url", installation=installation)
+                self.assertEqual({key: value for key, value in default.items() if key not in source}, {key: value for key, value in bundled.items() if key not in installation})
+                self.assertEqual({key: bundled[key] for key in installation}, installation)
+                for invalid in ({**installation, "SECRET": "never-forward"}, {"HERMES_BIN": "missing-other-outputs"}):
+                    with self.assertRaisesRegex(RuntimeError, "bundled runtime outputs"):
+                        CASE["BASE"]["closed_environment"](root, root, "nonce", "url", installation=invalid)
 
 
 if __name__ == "__main__":

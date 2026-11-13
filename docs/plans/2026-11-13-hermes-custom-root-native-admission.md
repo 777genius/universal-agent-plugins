@@ -1,5 +1,84 @@
 # Hermes explicit custom-runtime-root MCP: native admission only
 
+## R1 approved correction: separate official bundled runtime
+
+Root approved this plan on 2026-11-13 after reviewing the original `aabcd9b3`
+archives. Linux measured 37806 entries and 1711333608 logical bytes; macOS
+measured 34823 entries and 1024567265 bytes. Both source-installed runtimes
+populate the fresh selected home before the configuration inventory starts.
+Their symlinks and large executable files are runtime payload, not admissible
+configuration. Windows still refused a directory identity observation. None of
+these failures qualifies native custom-root behavior, and no inventory cap is
+relaxed to accept them.
+
+Keep the already-proved source-installed User tools/call lane unchanged. After
+that lane, build a separate official standalone payload with
+`scripts/bundles/native_build.py --source <pinned checkout> --work <owned work>
+--cache <owned cache> --out <owned payload> --commit
+2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19`. Do not patch vendor files, set lazy
+install suppression flags, or substitute an ambient interpreter. The builder's
+official prepared-input validation must succeed; a build failure stays a failure.
+Use the resulting `bin/hermes[.exe]` directly for native version and MCP commands.
+Source inspection corrected the first proposal: bundled launchers do not expose
+the source-install-only `--print-runtime-command` option. Their actual entry is
+`scripts/build/launchers.py` (POSIX) or `launcher_wrapper.py` (Windows), bound to
+the manifest's contained Python, source and dependency paths. Observer/guard code
+uses that same payload's public `runtime_command` API with its explicit Python.
+The native `--version` observation runs inside the selected-root command ledger.
+
+The git-less payload lives outside all disposable User/A/B/configuration roots.
+Bind its manifest ref, target and contained runtime paths to the exact checkout,
+prepared revision/source/lock, and original manifest/prepared-file byte digests.
+Retain the original vendor Git identity separately. Hash every ordinary payload
+file with streaming reads, include link text without traversing it, and reject
+links that escape the payload. Admit no external link target. A separate finite
+runtime budget permits at most 262144 entries, depth 64 and 8 GiB aggregate
+regular bytes; scans have a 120-second deadline. This exceeds the measured
+1.7 GiB source runtime without making the configuration ledger unbounded.
+Keep a held payload root identity through the native family. Compare full bytes
+and metadata snapshots before execution and after all child processes settle;
+do not reread gigabytes before each small config command. This is immutable
+test-owned runtime provenance, not a sandbox for adversarial executables.
+
+The configuration inventory retains its 2048-entry/depth24, 1 MiB/member and
+16 MiB aggregate limits, all User sentinels, sibling/root identity checks and
+unknown-effect refusals. Retain only small provenance/digest receipts, never raw
+payload files. Evidence states `runtime_distribution=bundled` and
+`source_install_custom_root_qualified=false`; bundle observations do not qualify
+source-installed custom roots, UAP Project support, vendor auth or model inference.
+
+Owned edit allowlist: this plan, `scripts/e2e/hermes-profile-admission.py`, its
+existing inert tests, and `.github/workflows/hermes-noauth-tool-call.yml`. Root
+also approved the narrow `installation=None` keyword in the existing
+`hermes-noauth-tool-call.py` environment helper: the default source-install
+allowlist stays identical; explicit bundled calls accept only four real runtime
+output paths. Contracts must reject arbitrary environment forwarding.
+
+The standalone build has its own dependent matrix job with a 180-minute limit,
+matching the pinned vendor `pm-bundle.yml` allowance for native wheels. Its
+builder subprocess has a 150-minute deadline. The source-installed User job
+retains 45 minutes. Record build duration/exit separately from the unchanged
+720-second native family and 120-second payload scans. Eight GiB is an admission
+ceiling, not a measured bundle size. Official build timeout/failure remains an
+unqualified failure; no reduced-extras builder or automatic retry is authorized.
+
+Estimate: 180–240 runtime lines, 130 focused test lines and 60 workflow
+lines; complexity 6/10, reliability target 8/10, confidence 7/10 before hosted
+execution. Tests cover manifest/ref/launcher-path mismatches, large immutable runtime
+files, changed bytes/link/root, escaping links and finite budgets while retaining
+ordinary configuration refusals. Independent review and final-source original
+artifacts on Linux, macOS and Windows are required before any acceptance.
+
+Local verification of this correction: all 38 inert custom-root contracts and
+all seven existing provider/wire contracts passed on Linux. Python compilation,
+workflow YAML parsing and diff whitespace checks passed. The tests execute no
+Hermes vendor process and grant no native/platform qualification. The official
+bundle build and final-source cross-platform original evidence remain unexecuted.
+Independent R2 source review accepted this five-file correction with no blocking
+findings; it verified the pinned official producer, runtime selection, full
+payload snapshots, process settlement and unchanged configuration guards. This
+review authorizes integration only, not native acceptance or production support.
+
 ## Current bounded-inventory refusal and diagnostic correction
 
 Original Windows artifact14020477175 from run43386222522 on
