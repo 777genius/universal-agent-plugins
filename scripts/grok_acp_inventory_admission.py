@@ -357,7 +357,7 @@ def post_ledger(root, before, roots, profiles, budget, bootstrap):
         bootstrap.metadata(before, after)  # All membership/authority before any new byte read.
         budget.check()
         current = {name: snapshot(path) for name, path in roots.items()}
-        uuid_body = ordinary(root / 'home/.grok/agent_id', 36)
+        uuid_body = ordinary(root / 'home/.grok/agent_id', 36, expected=after['home/.grok/agent_id'])
         require(metadata_inventory(root, budget) == after, 'profile changed while hashing')
         added = bootstrap.admit(before, after, profiles, current, uuid_body)
         accepted = True

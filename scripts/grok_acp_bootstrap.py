@@ -44,6 +44,7 @@ DIRECTORIES = {"docs": 0o755, "docs/user-guide": 0o755, "logs": 0o755,
                "installed-plugins": 0o755, "sessions": 0o700}
 MUTABLE = {"logs/unified.jsonl": 128 << 10, "sessions/session_search.sqlite": 256 << 10,
            "sessions/session_search.sqlite-wal": 128 << 10, "sessions/session_search.sqlite-shm": 32768}
+COMPANIONS = frozenset(("sessions/session_search.sqlite-wal", "sessions/session_search.sqlite-shm"))
 NAMES = frozenset(PINNED) | frozenset(DIRECTORIES) | frozenset(MUTABLE) | {"agent_id"}
 PREFIX = "home/.grok/"
 PROFILE_ROOTS = {"user_profile": "home/.grok", "a": "a", "b": "b"}
@@ -90,8 +91,11 @@ class NativeBootstrap:
             else:
                 require(after[path] == previous, "original member changed")
         added = set(after) - set(before)
-        require(added == {PREFIX + name for name in NAMES}, "unknown or missing native bootstrap")
-        for name in NAMES:
+        names = frozenset(path.removeprefix(PREFIX) for path in added)
+        require(names in (NAMES, NAMES - COMPANIONS) and added == {PREFIX + name for name in names},
+                "unknown or missing native bootstrap")
+        require(self.created is None or names == set(self.created), "bootstrap creation membership changed")
+        for name in names:
             meta = record(after[PREFIX + name], 5 if name in DIRECTORIES else 9)
             require(meta[0] == root[0], "bootstrap device differs")
             if name in DIRECTORIES:
@@ -119,15 +123,16 @@ class NativeBootstrap:
                 require(0 <= meta[6] <= 1 << 20, "profile file bound")
                 total += meta[6]
         require(total <= 16 << 20, "profile aggregate bound")
+        return names
 
     def admit(self, before, after, original_profiles, current_profiles, uuid_body):
-        self.metadata(before, after)
+        names = self.metadata(before, after)
         require(type(current_profiles) is dict and set(current_profiles) == set(PROFILE_ROOTS),
                 "profile snapshot sources")
         for scope in ("a", "b"):
             require(current_profiles[scope] == original_profiles[scope], "original project changed")
         original, current = original_profiles["user_profile"], current_profiles["user_profile"]
-        require(set(current) == set(original) | set(NAMES)
+        require(set(current) == set(original) | names
                 and all(current.get(path) == value for path, value in original.items()), "original User changed")
         for scope, prefix in PROFILE_ROOTS.items():
             for path, value in current_profiles[scope].items():
@@ -145,6 +150,6 @@ class NativeBootstrap:
         require(current["agent_id"]["sha256"] == uuid_hash
                 and (self.uuid_hash is None or uuid_hash == self.uuid_hash), "bootstrap UUID changed")
         if self.created is None:
-            self.created = {name: tuple(after[PREFIX + name]) for name in NAMES}
+            self.created = {name: tuple(after[PREFIX + name]) for name in names}
             self.uuid_hash = uuid_hash
-        return sorted(NAMES)
+        return sorted(names)

@@ -75,7 +75,7 @@ exception is ctime from the source-backed repeated chmod0600; mode itself never
 changes and unknown owner or content changes refuse. The admission receipt
 itself retains only the UUID hash, under the existing capture exception below.
 
-For the four named task-native mutable files retain original first-created
+For each present named task-native mutable file retain original first-created
 device/inode/mode0644/owner/single-link authority; permit only their bounded
 size/content/mtime/ctime evolution. No file deletion/recreation or new journal
 name is admitted. Prospective caps: unified log128KiB, SQLite256KiB, WAL128KiB,
@@ -102,7 +102,7 @@ External b378190dda047455fc747a186cedd88938781f8e added the separately reviewed
 ten-name,256KiB original bootstrap capture and its historical readout contracts.
 Preserve its closed fields, actual byte/hash/identity joins and original limits;
 do not replace that work with an older file. The admission helper remains
-hash/metadata-only. Live capture now runs only after the complete43-name ledger
+hash/metadata-only. Live capture runs only after the selected complete 41- or 43-name ledger
 is accepted, and the capture reader independently refuses a missing complete
 User snapshot before opening any file. This preserves the pre-read refusal for
 unknown names, owners, modes and aliases. It also retains the existing finite
@@ -133,3 +133,35 @@ accepted effects and real descendant/sealed cleanup. A Project omission due to
 native trust gating remains a refusal, never an excuse to grant trust. A native
 session or enable action needs its own later reviewed admission/recovery path.
 Historical failed artifacts and all runtime qualifications remain unchanged.
+
+## Completed capture membership amendment
+
+Original [run 43427759557](https://github.com/777genius/universal-agent-plugins/actions/runs/43427759557)
+job 131897399155, artifact 14043088584 contains a completed User ACP exchange
+and both cleanup proofs, followed by the unchanged negative effects verdict.
+Its outer ZIP SHA256 is
+`350cd4d6680510fe8adcdee32f7affe40a999701018d1a031bb835e20528190b`;
+the sole `research.zip` member has SHA256
+`3c02eb7728f25fdb3e7a4cef953dcd894f0bfa36de72d4c265f154b70fe34274`.
+Both CRC checks pass. The `user.ledger.json` records exactly 41 new members:
+the earlier 43-member set without the SQLite WAL and SHM companions. All 33
+immutable length/mode/hash pins match. The main SQLite file is 36864 bytes;
+no journal or unknown member exists. The raw UUID was not retained, so this
+replay establishes metadata and pins, not full content admission.
+
+Accept exactly these two initial sets. A lone WAL or SHM, a journal or another
+member refuses before profile reads. Full content and UUID validation records
+the selected set in the existing creation receipt; metadata inspection alone
+does not record it. Later scopes must retain that exact set and the existing
+file identities. Neither 41 to 43 nor 43 to 41 transitions grant new authority.
+Keep all existing pins, bounds, ownership checks and the original baseline.
+The literal ten-path capture keeps its existing schema: absent companions are
+`null`; present members still require byte/hash/identity and final metadata joins.
+The UUID read now supplies its already checked ledger identity to `ordinary`,
+which refuses a replacement before opening it; the shared snapshot is unchanged.
+
+Scope is these four existing files, approximately 15–25 runtime and 65–90 test
+lines plus this addendum. Inert contracts cover both initial sets and captures,
+partial companions, journal, both later membership transitions, replacement
+and UUID refusal before open. A fresh native run remains required; this change
+adds no trust, enablement, provider/model call or product qualification.

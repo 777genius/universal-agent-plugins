@@ -16,6 +16,8 @@ import zipfile
 import grok_acp_inventory_admission as case
 import grok_acp_bootstrap as bootstrap_case
 
+SQLITE_COMPANIONS = ('sessions/session_search.sqlite-wal', 'sessions/session_search.sqlite-shm')
+
 
 def help_rows():
     bodies = (b'grok 1.0.70 (f50904eaee6c)\n', b'Commands:\n  agent Agent\n',
@@ -636,7 +638,7 @@ case['collect'](pathlib.Path(sys.argv[2]))
 
 
 @contextmanager
-def native_bootstrap_fixture():
+def native_bootstrap_fixture(*, companions=True):
     """Real owned files and authored pins; no vendor or recorded-current adoption."""
     import project_native_research as shared
     from devin_structured_inventory_admission import metadata_inventory
@@ -659,6 +661,8 @@ def native_bootstrap_fixture():
         uuid = b'01234567-89ab-4cde-8fab-0123456789ab'
         (native / 'agent_id').write_bytes(uuid); (native / 'agent_id').chmod(0o600)
         for name in bootstrap_case.MUTABLE:
+            if not companions and name in SQLITE_COMPANIONS:
+                continue
             path = native / name
             path.write_bytes(b'x' * (32768 if name.endswith('-shm') else 4096))
             path.chmod(0o644)
@@ -670,6 +674,74 @@ def native_bootstrap_fixture():
 
 
 class NativeBootstrapContracts(unittest.TestCase):
+    def test_exact_initial_memberships_capture_absent_companions_without_renewal(self):
+        for companions in (False, True):
+            with self.subTest(companions=companions), native_bootstrap_fixture(companions=companions) as f:
+                ledger = f['capture']()
+                self.assertTrue(ledger['accepted'])
+                names = set(bootstrap_case.NAMES) - (set() if companions else set(SQLITE_COMPANIONS))
+                self.assertEqual(set(ledger['native_bootstrap']), names)
+                held = copy.deepcopy(f['bootstrap'].created)
+                self.assertEqual(set(held), names)
+                capture = case.capture_bootstrap_files(f['root'], ledger, f['budget'])
+                self.assertEqual(set(capture['files']), set(case.BOOTSTRAP_FILES))
+                for name in SQLITE_COMPANIONS:
+                    self.assertEqual(capture['files']['home/.grok/' + name] is None, not companions)
+                case.validate_bootstrap_capture(ledger, capture)
+                self.assertTrue(f['capture']()['accepted'])
+                self.assertEqual(f['bootstrap'].created, held)
+
+    def test_partial_companions_journal_and_created_membership_changes_refuse_before_reads(self):
+        import client_automation_native_probe as snapshot_case
+        kinds = ('first-wal', 'first-shm', 'first-journal', 'created-add', 'created-remove', 'created-inode')
+        for kind in kinds:
+            with self.subTest(kind=kind), native_bootstrap_fixture(companions=kind == 'created-remove') as f:
+                if kind.startswith('created-'):
+                    self.assertTrue(f['capture']()['accepted'])
+                held, uuid_hash = copy.deepcopy(f['bootstrap'].created), f['bootstrap'].uuid_hash
+                if kind == 'created-remove':
+                    for name in SQLITE_COMPANIONS: (f['native'] / name).unlink()
+                elif kind == 'created-inode':
+                    path = f['native'] / 'sessions/session_search.sqlite'
+                    replacement = path.with_name('.replacement')
+                    replacement.write_bytes(path.read_bytes()); replacement.chmod(0o644)
+                    replacement.replace(path)
+                else:
+                    names = SQLITE_COMPANIONS if kind == 'created-add' else (
+                        'sessions/session_search.sqlite-' + kind.removeprefix('first-'),)
+                    for name in names:
+                        path = f['native'] / name
+                        path.write_bytes(b'x' * (32768 if name.endswith('-shm') else 4096))
+                        path.chmod(0o644)
+                with mock.patch.object(snapshot_case, 'snapshot') as reader:
+                    ledger = f['capture']()
+                reader.assert_not_called()
+                self.assertFalse(ledger['accepted'])
+                self.assertEqual(ledger['profiles_after'], {})
+                self.assertEqual(f['bootstrap'].created, held)
+                self.assertEqual(f['bootstrap'].uuid_hash, uuid_hash)
+
+    def test_uuid_gap_replacement_refuses_before_open(self):
+        with native_bootstrap_fixture() as f:
+            target, ordinary, opened_counts = f['native'] / 'agent_id', case.ordinary, []
+            def replace_before_read(path, limit, **kwargs):
+                self.assertEqual(path, target)
+                replacement = target.with_name('.replacement')
+                replacement.write_bytes(b'11234567-89ab-4cde-8fab-0123456789ab')
+                replacement.chmod(0o600); replacement.replace(target)
+                with mock.patch.object(case.os, 'open', wraps=case.os.open) as opened:
+                    try:
+                        return ordinary(path, limit, **kwargs)
+                    finally:
+                        opened_counts.append(opened.call_count)
+            with mock.patch.object(case, 'ordinary', replace_before_read):
+                ledger = f['capture']()
+            self.assertEqual(opened_counts, [0])
+            self.assertFalse(ledger['accepted'])
+            self.assertEqual(ledger['profiles_after'], {})
+            self.assertIsNone(f['bootstrap'].created)
+            self.assertIsNone(f['bootstrap'].uuid_hash)
+
     def test_shadowed_user_source_replacement_refuses_before_profile_reads(self):
         import client_automation_native_probe as snapshot_case
         with native_bootstrap_fixture() as fixture:
