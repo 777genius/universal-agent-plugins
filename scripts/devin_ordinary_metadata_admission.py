@@ -10,6 +10,7 @@ ORIGINAL = b'{"read_config_from":{"cloud":false}}\n'
 
 
 class OrdinaryEffects(base.BootstrapEffects):
+    metadata_first = True
     config_path, config_mode = "home/config/devin/config.json", 0o644
     metadata_route = "ordinary-original-user-config; authored local-policy profile only"
 
@@ -43,6 +44,16 @@ class OrdinaryEffects(base.BootstrapEffects):
     def verify(self, current):
         self.prepare(self.ctx)
         self.ctx.known_file_diagnostics.verify()
+        root = self.ctx.original_output_identity
+        base.require(base.root_identity(self.ctx.root) == root
+                     and all(key in current and (key == self.config_path or current[key] == value)
+                             for key, value in self.baseline.items()), "ordinary original metadata changed")
+        info = current[self.config_path]
+        base.require(len(info) == 9 and info[0] == root[0] and info[2] == base.stat.S_IFREG | self.config_mode
+                     and info[3] == 1 and tuple(info[4:6]) == root[3:] and 0 <= info[6] <= 256,
+                     "ordinary config pre-read authority refused")
+        if not self.migrating:
+            base.require(list(info) == (self.after or self.before)["identity"], "ordinary config pre-read identity changed")
         super().verify(current)
         self.ctx.known_file_diagnostics.verify()
 

@@ -156,3 +156,13 @@ flags remain unchanged. Independent static review accepted this regression.
 Local execution is unavailable: red/green, lint and cross-platform execution
 have not been performed for this follow-up. The test is designed to detect
 the historical mismatch; fresh exact-source CI remains required.
+
+## Held runtime and portable import follow-up
+
+Preserve the concurrent cold-environment, agreement-target, original-event and empty-array corrections through 64cf9251. The fixed bridge now holds the original root and all five runtime file descriptors across command settlement, joins held and named identities before invocation and afterwards, rechecks pinned bytes, and refuses success after final release if the original context expired. Exact stdout/stderr capture caps refuse conservatively. Same-byte replacement cannot replace original identity.
+
+The proof is portable incarnation, mode, size and mtime continuity plus compiled SHA256 pins. It does not independently establish POSIX UID/GID/nlink or Windows SID/ACL continuity; the existing Python admission checks retain those narrower platform and single-link conditions. No generic ownership framework or production capability is added.
+
+The shared research utility retains its lazy POSIX resource import. Its process entrypoint now refuses absent resource support before creating capture files or starting a child; bounded reads and the complete Cline frontend remain importable without resource. The isolated-import regression, held-root/runtime replacement and late-cancellation contracts accompany the change.
+
+Before execution became unavailable, the corresponding 40692b0f union passed focused Cline Go tests, 59 shared Python contracts and 13 Antigravity contracts; full Core completed with the retained 25 host-restricted failures in seven packages. This source is reconciled with subsequent branch changes through 64cf9251 and requires fresh hosted lint, Core and native cross-platform checks. No pending or historical result is substituted for current-source acceptance.

@@ -83,7 +83,7 @@ func validateRequest(req request) error {
 		!safeName.MatchString(req.Selector) || req.Selector == "." || req.Selector == ".." ||
 		!filepath.IsAbs(req.Binary) || filepath.Clean(req.Binary) != req.Binary || !filepath.IsAbs(req.Root) || filepath.Clean(req.Root) != req.Root ||
 		!strings.HasPrefix(filepath.Base(req.Root), "uap-agy-direct-") || len(req.BinarySHA) != 64 || req.BinarySHA != nativeSHA ||
-		(req.Action != "list" && req.Action != "enable" && req.Action != "disable") {
+		(req.Action != "list" && req.Action != "enable" && req.Action != "disable" && req.Action != "version") {
 		return errors.New("closed request identity refused")
 	}
 	if _, err := hex.DecodeString(req.BinarySHA); err != nil {
@@ -144,6 +144,17 @@ func closeCapture(file *os.File, body []byte, resultErr error) ([]byte, error) {
 	return body, resultErr
 }
 
+func fixedArgv(req request) []string {
+	argv := []string{req.Binary, "plugin", req.Action, req.Selector}
+	if req.Action == "list" {
+		argv = []string{req.Binary, "plugin", "list", "--json"}
+	}
+	if req.Action == "version" {
+		argv = []string{req.Binary, "--version"}
+	}
+	return argv
+}
+
 func execute(ctx context.Context, req request, run runner) (body []byte, resultErr error) {
 	binary, binaryInfo, digest, err := fingerprint(req.Binary, false)
 	if err != nil {
@@ -158,10 +169,7 @@ func execute(ctx context.Context, req request, run runner) (body []byte, resultE
 	if digest != req.BinarySHA {
 		return nil, errors.New("binary pin differs")
 	}
-	argv := []string{req.Binary, "plugin", req.Action, req.Selector}
-	if req.Action == "list" {
-		argv = []string{req.Binary, "plugin", "list", "--json"}
-	}
+	argv := fixedArgv(req)
 	home := filepath.Join(req.Root, "home")
 	env := []string{"HOME=" + home, "USERPROFILE=" + home, "APPDATA=" + filepath.Join(home, "AppData", "Roaming"), "LOCALAPPDATA=" + filepath.Join(home, "AppData", "Local"),
 		"XDG_CONFIG_HOME=" + filepath.Join(req.Root, "config"), "XDG_CACHE_HOME=" + filepath.Join(req.Root, "cache"), "TMP=" + filepath.Join(req.Root, "tmp"), "TEMP=" + filepath.Join(req.Root, "tmp"), "TMPDIR=" + filepath.Join(req.Root, "tmp")}

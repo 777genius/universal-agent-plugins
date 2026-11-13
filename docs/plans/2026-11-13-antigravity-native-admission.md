@@ -439,3 +439,34 @@ the real pipe and then raised OSError outside the drainer's exception guard.
 The thread ended without setting failure. Close errors now mark transport
 failure too; the full receipt test injects this error independently for stdout
 and stderr and requires refusal. Native commands and cleanup authority are unchanged.
+
+## Held scanner mode before hashing
+
+The original path metadata already requires the pinned POSIX scanner to be mode 0700. The scanner now checks the held descriptor's mode before its first byte read as well. The inert same-inode race test changes 0700 to 0600, 0755 or 0777 between path observation and opening, and requires refusal with zero scanner reads. Windows keeps its separate permission domain.
+
+The exact guard and race test passed the independent 13-contract Python run on the 40692b0f union before execution became unavailable. This reconciliation preserves the later concurrent pipe-close checks and portable byte-output fixture through 64cf9251. Current-source native Linux, Windows and macOS verification is still required.
+
+## Selected-profile list and version nonmutation measurement
+
+This follow-up measures the pinned disposable fixture contract before any product
+ReadOnlyVerifier integration. Add only literal `version` to the existing closed
+bridge action enum; its argv is exactly the pinned executable plus `--version`.
+The same selected environment, original deadline, finite captures, binary pins
+and positive process-family settlement remain mandatory. Exact 1.5.3 readback is
+required before inventory or toggles.
+
+Every direct-fixture version/list now brackets the settled command with complete
+bounded profile snapshots. Compare original directory identities and full stable
+metadata, file identities/links/modes/sizes/mtime/ctime/platform metadata plus
+bytes/digests, and exact membership. Atime alone is excluded. Windows pathname
+and handle metadata remain in separate comparison domains. Preserve the original
+immutable ledger; only enable/disable retain the previous exact selected-boolean
+replacement allowance. A list/version rewrite, even identical bytes via a new
+inode, stops the sequence without inverse action, baseline renewal or restoration.
+The config-absent/bootstrap case is not measured by these preauthored fixtures.
+
+Local inert contracts cover no-effect version, metadata-only file/parent changes,
+same-byte replacement, new members, content changes and unproved settlement.
+These checks do not qualify production inventory, IDE activation or arbitrary
+profiles. Genuine new three-platform native execution is required to establish
+whether the finite 1.5.3 fixture contract actually holds.

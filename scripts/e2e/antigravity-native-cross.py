@@ -269,13 +269,13 @@ class ProfileLedger:
             raise AssertionError("Original directory replaced")
         return linked
 
-    def scan(self):
+    def scan(self, *, strict=False):
         result, aggregate = {}, 0
         def visit(path, depth, parent=None):
             nonlocal aggregate
             if depth > 24 or len(result) >= 4096: raise AssertionError("Profile membership bound")
             identity = self.directory(path, parent)
-            result[path.relative_to(self.root).as_posix()] = ("directory", identity)
+            result[path.relative_to(self.root).as_posix()] = ("directory", identity, self.directory_metadata(path)) if strict else ("directory", identity)
             descriptor = self.held[path][0]
             with os.scandir(path if os.name == "nt" else descriptor) as entries:
                 for entry in entries:
@@ -296,6 +296,8 @@ class ProfileLedger:
                     try:
                         opened = os.fstat(fd)
                         if object_identity(opened)[:2] != identity[:2]: raise AssertionError("Opened file differs")
+                        if scanner and os.name != "nt" and stat.S_IMODE(opened.st_mode) != 0o700:
+                            raise AssertionError("Opened pinned scanner mode differs")
                         before = stable_file(opened)
                         digest, size, body = hashlib.sha256(), 0, None if scanner else bytearray()
                         while size <= limit:
@@ -311,12 +313,30 @@ class ProfileLedger:
                     if not scanner: aggregate += size
                     if aggregate > 16 << 20: raise AssertionError("Profile bytes bound")
                     result[relative] = ("file", identity, info.st_nlink, info.st_size, info.st_mtime_ns, info.st_ctime_ns, digest.hexdigest(), bytes(body) if body is not None else None)
+                    if strict: result[relative] += (stable_file(info), stable_file(opened))
             self.directory(path)
+            if strict and result[path.relative_to(self.root).as_posix()][2] != self.directory_metadata(path):
+                raise AssertionError("Directory metadata changed during snapshot")
         identity_root = self.directory(self.root)
         visit(self.root, 0)
         for path in self.held: self.directory(path)
         if self.scanner is not None and self.scanner[0] not in result: raise AssertionError("Ordinary UAP scanner is missing")
         return result
+
+    def directory_metadata(self, path):
+        def metadata(info):
+            return (*object_identity(info, True), info.st_nlink, info.st_size,
+                    info.st_mtime_ns, info.st_ctime_ns, getattr(info, "st_birthtime_ns", None),
+                    getattr(info, "st_file_attributes", None), getattr(info, "st_reparse_tag", None))
+        # Compare each API domain with itself; Windows path/handle attributes may differ.
+        return metadata(path.lstat()), metadata(os.fstat(self.held[path][0]))
+
+    def observe(self, command):
+        before = self.scan(strict=True)
+        body = command()  # The existing bridge returns only after proved family settlement.
+        if self.scan(strict=True) != before:
+            raise AssertionError("Read-only native command changed original profile")
+        return body
 
     def verify(self, expected, config):
         current = self.scan()
@@ -484,8 +504,9 @@ def direct_user_enable(agy, uap, source, executable_dir, root_parent):
         expected = json.loads(json.dumps(baseline))
         def action(kind):
             held.verify(expected, config_key)
-            body = supervised_action(helper, agy, root, selected.name, kind, source_identity, original_pins)
-            if kind != "list": expected["plugins"][selected.name]["enabled"] = kind == "enable"
+            command = lambda: supervised_action(helper, agy, root, selected.name, kind, source_identity, original_pins)
+            body = held.observe(command) if kind in ("list", "version") else command()
+            if kind in ("enable", "disable"): expected["plugins"][selected.name]["enabled"] = kind == "enable"
             digest = held.verify(expected, config_key)
             print(json.dumps({"scope": "disposable-cli-user-only", "action": kind, "initial_enabled": initial, "config_sha256": digest, "native_project_qualified": False}), flush=True)
             return body
@@ -498,6 +519,7 @@ def direct_user_enable(agy, uap, source, executable_dir, root_parent):
                 if len(matches) != 1 or matches[0].get("path") != str(path) or matches[0].get("name") != path.name or matches[0].get("enabled") is not state or matches[0].get("version") != manifest["version"] or matches[0].get("skills") != ["native-smoke"] or sorted(matches[0].get("mcpServers", [])) != ["native-http", "native-stdio"]:
                     raise AssertionError("Selected or foreign physical identity differs")
         try:
+            if action("version").strip() != b"1.5.3": raise AssertionError("Selected-profile pinned version differs")
             inventory()
             action("enable"); inventory()
             action("disable"); inventory()
@@ -711,6 +733,32 @@ def admission_contracts():
                     with patch('os.read', side_effect=guarded), self.assertRaisesRegex(AssertionError, "Pinned scanner mode differs"):
                         ProfileLedger(root, lintai=True)
 
+        @unittest.skipIf(os.name == "nt", "Windows chmod has a different documented permission domain")
+        def test_scanner_same_inode_mode_race_refuses_before_read(self):
+            body = b's' * ((1 << 20) + 17)
+            pins = {key: (len(body), hashlib.sha256(body).hexdigest()) for key in LINTAI_PINS}
+            for mode in (0o600, 0o755, 0o777):
+                with self.subTest(mode=mode), tempfile.TemporaryDirectory() as temporary, patch.dict(globals(), {"LINTAI_PINS": pins}):
+                    root = Path(temporary).resolve(); scanner = root / lintai_member()[0]
+                    scanner.parent.mkdir(parents=True); scanner.write_bytes(body); scanner.chmod(0o700)
+                    original_handle, original_read = owned_handle, os.read
+                    identity = (scanner.stat().st_dev, scanner.stat().st_ino)
+                    changed, reads = [], []
+                    def raced(path, *args, **kwargs):
+                        if path == scanner:
+                            scanner.chmod(mode); changed.append(True)
+                            self.assertEqual((scanner.stat().st_dev, scanner.stat().st_ino), identity)
+                        return original_handle(path, *args, **kwargs)
+                    def guarded(fd, count):
+                        info = os.fstat(fd)
+                        if (info.st_dev, info.st_ino) == identity:
+                            reads.append(True)
+                            raise AssertionError("scanner bytes read before held mode admission")
+                        return original_read(fd, count)
+                    with patch.dict(globals(), {"owned_handle": raced}), patch('os.read', side_effect=guarded), self.assertRaisesRegex(AssertionError, "Opened pinned scanner mode differs"):
+                        ProfileLedger(root, lintai=True)
+                    self.assertEqual(changed, [True]); self.assertEqual(reads, [])
+
         def test_unknown_first_effect_prevents_every_later_mutation(self):
             with tempfile.TemporaryDirectory() as temporary:
                 parent = Path(temporary); binary = parent / "inert"; binary.write_text("never executed")
@@ -724,6 +772,7 @@ def admission_contracts():
                     return '[]'
                 def command(_helper, _agy, root, selector, action, _source, _pins):
                     calls.append(action)
+                    if action == "version": return b"1.5.3\n"
                     if action != "list":
                         (root / "unexpected").write_text("unknown")
                         return b''
@@ -734,7 +783,7 @@ def admission_contracts():
                 pins = {key: (7, hashlib.sha256(b'scanner').hexdigest()) for key in LINTAI_PINS}
                 with patch.dict(os.environ, {"AGY_ADMISSION_HELPER": str(binary), "AGY_ADMISSION_COMMIT": "a" * 40, "AGY_ADMISSION_TREE": "b" * 40}), patch.dict(globals(), {"run": deliver, "supervised_action": command, "LINTAI_PINS": pins}), self.assertRaises(AssertionError):
                     direct_user_enable(binary, binary, parent, parent, parent)
-                self.assertEqual(calls, ["list", "enable"])
+                self.assertEqual(calls, ["version", "list", "enable"])
                 retained = list(parent.glob("uap-agy-direct-*"))
                 self.assertEqual(len(retained), 1)
                 self.assertEqual((retained[0] / "unexpected").read_text(), "unknown")
@@ -796,6 +845,63 @@ def admission_contracts():
                     api = TokenAPI(**changes)
                     with self.assertRaises(AssertionError): require_windows_token_owner(owner, object(), api)
                     self.assertTrue(api.classes and all(value == 4 for value in api.classes))
+
+        def test_observation_requires_complete_unchanged_profile(self):
+            for effect in ("none", "file-mtime", "directory-mtime", "replace", "new-member", "content"):
+                with self.subTest(effect=effect), tempfile.TemporaryDirectory() as temporary:
+                    root = Path(temporary).resolve(); folder = root / "home"; folder.mkdir()
+                    target = folder / "config.json"; target.write_bytes(b'{"plugins":{}}')
+                    ledger = ProfileLedger(root)
+                    calls = []
+                    def command():
+                        calls.append("version")
+                        if effect == "file-mtime":
+                            info = target.stat(); os.utime(target, ns=(info.st_atime_ns, info.st_mtime_ns + 1000000000))
+                        elif effect == "directory-mtime":
+                            info = folder.stat(); os.utime(folder, ns=(info.st_atime_ns, info.st_mtime_ns + 1000000000))
+                        elif effect == "replace":
+                            pending = folder / "pending"; pending.write_bytes(target.read_bytes()); pending.replace(target)
+                        elif effect == "new-member": (folder / "new").write_bytes(b"unexpected")
+                        elif effect == "content": target.write_bytes(b'{"plugins":{ },"new":true}')
+                        return b"1.5.3\n"
+                    try:
+                        original = ledger.base.copy()
+                        if effect == "none":
+                            self.assertEqual(ledger.observe(command), b"1.5.3\n")
+                        else:
+                            with self.assertRaisesRegex(AssertionError, "Read-only native command"):
+                                ledger.observe(command)
+                                calls.append("later-mutation")
+                        self.assertEqual(calls, ["version"])
+                        self.assertEqual(ledger.base, original)
+                    finally: ledger.close()
+
+        def test_observation_excludes_only_read_atime_and_propagates_unsettled(self):
+            with tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve(); target = root / "file"; target.write_bytes(b"same")
+                ledger = ProfileLedger(root)
+                original_stat, original_fstat = os.stat, os.fstat
+                offset = [0]
+                class AccessTimeView:
+                    def __init__(self, info): self.info = info
+                    def __getattr__(self, name):
+                        if name == "st_atime": return self.info.st_atime + offset[0]
+                        if name == "st_atime_ns": return self.info.st_atime_ns + offset[0] * 1000000000
+                        return getattr(self.info, name)
+                def path_stat(*args, **kwargs): return AccessTimeView(original_stat(*args, **kwargs))
+                def held_stat(*args, **kwargs): return AccessTimeView(original_fstat(*args, **kwargs))
+                try:
+                    with patch("os.stat", side_effect=path_stat), patch("os.fstat", side_effect=held_stat):
+                        before = ledger.scan(strict=True)
+                        offset[0] = 1
+                        self.assertEqual(ledger.scan(strict=True), before)
+                        def command():
+                            offset[0] = 2
+                            return b"1.5.3\n"
+                        self.assertEqual(ledger.observe(command), b"1.5.3\n")
+                    def unsettled(): raise AssertionError("cleanup unproved")
+                    with self.assertRaisesRegex(AssertionError, "cleanup unproved"): ledger.observe(unsettled)
+                finally: ledger.close()
 
         def test_config_is_closed_and_bounded(self):
             for body in (b'{"x":1,"x":2}', b'{} {}', b'{"x":NaN}', b'{"x":1e999}', b'[' * 10 + b'0' + b']' * 10, b'x' * 16385):

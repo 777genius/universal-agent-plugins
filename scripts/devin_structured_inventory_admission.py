@@ -343,6 +343,7 @@ def read_bootstrap_file(ctx, relative, expected, inventory):
 
 
 class BootstrapEffects:
+    metadata_first = False
     config_path, config_mode = METADATA_CONFIG, 0o600
     metadata_route = "explicit-owned-config; not ordinary default startup"
 
@@ -644,26 +645,34 @@ def collect(ctx, probes, readout_state=None, *, effects_type=BootstrapEffects):
 
     def command(label, arguments, scope="a"):
         if readout_state is not None: readout_state["phase"] = label
+        command_outer_before = metadata_inventory(ctx.root, ctx.budget) if effects.metadata_first else None
+        if effects.metadata_first: effects.verify(command_outer_before)
         before = snapshot(ctx)
-        command_outer_before = metadata_inventory(ctx.root, ctx.budget)
-        effects.verify(command_outer_before)
+        if not effects.metadata_first:
+            command_outer_before = metadata_inventory(ctx.root, ctx.budget)
+            effects.verify(command_outer_before)
         effects.verify_snapshot(baseline, before)
         try:
             record, out, err = ctx.probe(label, [*prefix, *arguments], project=scope)
             require(record["exit"] == 0, "native metadata command refused")
             return out, err
         finally:
-            after = snapshot(ctx)
-            delta = {key: {"before": before.get(key), "after": after.get(key)}
-                     for key in before.keys() | after.keys() if before.get(key) != after.get(key)}
+            after = None if effects.metadata_first else snapshot(ctx)
             outer_after = metadata_inventory(ctx.root, ctx.budget)
             outer_delta = {key: {"before": outer_before.get(key), "after": outer_after.get(key)}
                            for key in outer_before.keys() | outer_after.keys() if outer_before.get(key) != outer_after.get(key)}
-            ctx.summary["command_effects"].append({"label": label, "changes": delta, "outer_changes": outer_delta})
+            effect = {"label": label, "changes": {}, "outer_changes": outer_delta}
+            if effects.metadata_first:
+                ctx.summary["command_effects"].append(effect)
+                effects.verify_command(command_outer_before, outer_after)
+                after = snapshot(ctx)
+            effect["changes"] = {key: {"before": before.get(key), "after": after.get(key)}
+                                 for key in before.keys() | after.keys() if before.get(key) != after.get(key)}
+            if not effects.metadata_first: ctx.summary["command_effects"].append(effect)
             require({name: root_identity(path) for name, path in roots.items()} == identities, "fixture root replaced")
             if label in {name for name, _arguments in HELP}:
                 require(outer_after == outer_before and after == baseline, "help changed original or metadata input")
-            effects.verify_command(command_outer_before, outer_after)
+            if not effects.metadata_first: effects.verify_command(command_outer_before, outer_after)
             effects.verify_snapshot(baseline, after)
             zero_effects(probes, startup)
 

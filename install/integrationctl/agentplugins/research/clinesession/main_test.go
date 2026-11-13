@@ -7,13 +7,16 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"slices"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -87,7 +90,7 @@ func TestFixedWireRejectsUnknownDuplicateAndUnpinnedSource(t *testing.T) {
 	}
 }
 func TestRunAdmitsOnlySettledPinnedBoundedResult(t *testing.T) {
-	for _, condition := range []string{"success", "cleanup", "not-started", "error", "pin", "output", "stderr"} {
+	for _, condition := range []string{"success", "cleanup", "not-started", "error", "pin", "output", "stderr", "stdout-cap", "stderr-cap"} {
 		t.Run(condition, func(t *testing.T) {
 			r := fixedFixture(t)
 			input, _ := requestPipe(t, r)
@@ -105,6 +108,12 @@ func TestRunAdmitsOnlySettledPinnedBoundedResult(t *testing.T) {
 					}
 				}
 				result := ports.CommandResult{CleanupComplete: condition != "cleanup", NoChildStarted: condition == "not-started", Stdout: []byte("3.0.73")}
+				if condition == "stdout-cap" {
+					result.Stdout = make([]byte, 1<<20)
+				}
+				if condition == "stderr-cap" {
+					result.Stderr = make([]byte, 32768)
+				}
 				if condition == "output" {
 					result.Stdout = make([]byte, (1<<20)+1)
 				}
@@ -443,5 +452,89 @@ func TestProtocolReadDoesNotRewriteRetainedMarker(t *testing.T) {
 	}
 	if call.Params.Arguments.Operation != "read" {
 		t.Fatal("retained marker was overwritten")
+	}
+}
+
+func TestOriginalRootJoinAndFinalCancellation(t *testing.T) {
+	r := fixedFixture(t)
+	root, err := os.OpenRoot(r.Root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if e := root.Close(); e != nil {
+			t.Error(e)
+		}
+	}()
+	original, err := root.Stat(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = joinRoot(root, original, r.Root); err != nil {
+		t.Fatal(err)
+	}
+	moved := r.Root + "-moved"
+	err = os.Rename(r.Root, moved)
+	if runtime.GOOS == "windows" && errors.Is(err, syscall.Errno(32)) {
+		if e := joinRoot(root, original, r.Root); e != nil {
+			t.Fatal(e)
+		}
+	} else {
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			if e := os.RemoveAll(moved); e != nil {
+				t.Error(e)
+			}
+		})
+		if err = os.Mkdir(r.Root, 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err = joinRoot(root, original, r.Root); err == nil {
+			t.Fatal("replaced root admitted before launch")
+		}
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	var output bytes.Buffer
+	if err = emitResult(ctx, &output, r, ports.CommandResult{CleanupComplete: true}); !errors.Is(err, context.Canceled) || output.Len() != 0 {
+		t.Fatal("late cancellation published result")
+	}
+}
+
+func TestHeldRuntimeRefusesSameByteReplacement(t *testing.T) {
+	r := fixedFixture(t)
+	leases, err := holdRuntime(r.Root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if e := release(leases); e != nil {
+			t.Error(e)
+		}
+	}()
+	uap, _, _ := paths(r.Root)
+	if err = verifyLeases(leases); err != nil {
+		t.Fatal(err)
+	}
+	err = os.Rename(uap, uap+"-old")
+	if runtime.GOOS == "windows" && errors.Is(err, syscall.Errno(32)) {
+		if e := verifyLeases(leases); e != nil {
+			t.Fatal(e)
+		}
+		return
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(uap, []byte("inert"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err = pin(uap, r.Root, installerSHA); err != nil {
+		t.Fatal("same bytes must still match digest", err)
+	}
+	if err = verifyLeases(leases); err == nil {
+		t.Fatal("same-byte replacement admitted under old held identity")
 	}
 }

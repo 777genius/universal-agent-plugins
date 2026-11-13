@@ -1,5 +1,9 @@
 """Cline's native MCP file uses transport envelopes, not flat command entries."""
 import unittest
+import importlib.util
+import sys
+import subprocess
+from unittest import mock
 import os
 from pathlib import Path
 import tempfile
@@ -135,6 +139,25 @@ class ClinePortableFixtureTests(unittest.TestCase):
         for invalid in ([], rows[:-1], rows + rows[:1], [dict(rows[0], session="foreign"), *rows[1:]]):
             with self.assertRaises(ValueError):
                 validate_events(result, encode(invalid))
+
+
+class UnavailablePOSIXResearchContracts(unittest.TestCase):
+    def test_import_without_resource_refuses_before_popen(self):
+        spec = importlib.util.spec_from_file_location("cline_inert_no_resource", Path(__file__).with_name("native_client_research.py"))
+        module = importlib.util.module_from_spec(spec)
+        with mock.patch.dict(sys.modules, {"resource": None}):
+            spec.loader.exec_module(module)
+            with mock.patch.object(module.subprocess, "Popen") as start:
+                with self.assertRaises(ValueError):
+                    module.run_probe(["must-not-start"], Path("."), {}, Path("."), "inert", memory_only=True)
+                with self.assertRaises(ImportError):
+                    module.child_limits()
+                start.assert_not_called()
+        code = "import sys; sys.modules['resource']=None; sys.path.insert(0, " + repr(str(Path(__file__).resolve().parent)) + "); import cline_managed_session_e2e"
+        completed = subprocess.run([sys.executable, "-I", "-c", code], stdin=subprocess.DEVNULL,
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10, check=False)
+        self.assertEqual((completed.returncode, completed.stdout, completed.stderr), (0, b"", b""))
+        self.assertEqual(module.bounded_read(__import__("io").BytesIO(b"safe"), 4), b"safe")
 
 
 if __name__ == "__main__":

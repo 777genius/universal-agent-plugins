@@ -88,6 +88,10 @@ def run_probe(argv, cwd, env, output, label, timeout=30, limit=OUTPUT_LIMIT, *, 
     """
     if os.name != "posix":
         raise ValueError("research process capture requires POSIX")
+    try:
+        __import__("resource")
+    except ImportError as error:
+        raise ValueError("research process capture requires POSIX resource limits") from error
     stdout_path, stderr_path = output / (label + ".stdout.log"), output / (label + ".stderr.log")
     record = {"probe": label, "argv": argv, "cwd": str(cwd), "error": None}
     started, process = time.monotonic(), None

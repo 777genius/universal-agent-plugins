@@ -243,3 +243,25 @@ validators also replayed successfully against all eight original native
 streams, including the command/effect completion joins and bounded readout.
 That replay leaves the historical artifact unchanged and does not count as
 a new native run of this candidate.
+
+
+## Ordinary route pre-read authority reconciliation
+
+Preserve the externally added separate ordinary collector/job and its original
+0644 User input, exact first-mcp-a migration window, command order and historical
+private --config route. This follow-up adds only an ordinary metadata-first
+opt-in on the existing effects_type seam. Both pre/post-command effects checks
+run before content snapshots; bounded outer delta is retained before a refused
+post-command snapshot. No new collector, default-route flag or workflow is added.
+
+OrdinaryEffects validates original root/parents and config device/type/exact0644,
+single link, UID/GID and at-most256-byte size BEFORE its inherited byte reader.
+Outside the sole first-mcp-a migration, the full original or first-migrated
+nine-field identity must match before bytes are read. The literal migration,
+first fingerprint/hash, original baseline and all false qualifications remain.
+
+New inert negatives cover late same-byte inode replacement, same-inode mtime
+rewrite, oversize, foreign owner and mode refusal before os.read; an actual
+ordinary collect fixture modifies mode after its first inventory and proves
+no post-mutation snapshot while retaining the bounded metadata delta. These
+API-authored tests are UNEXECUTED until an actual local/hosted gate runs.

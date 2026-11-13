@@ -165,3 +165,24 @@ func TestParentEOFOrPrefetchedExtraCancelsWithoutReceipt(t *testing.T) {
 		}
 	}
 }
+
+func TestVersionUsesOnlyPinnedFixedAction(t *testing.T) {
+	req := fixture(t)
+	req.Action = "version"
+	body, err := json.Marshal(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = decode(body); err != nil {
+		t.Fatal(err)
+	}
+	result, err := execute(context.Background(), req, func(_ context.Context, cmd ports.Command, grace time.Duration) (ports.CommandResult, error) {
+		if len(cmd.Argv) != 2 || cmd.Argv[0] != req.Binary || cmd.Argv[1] != "--version" || grace != 5*time.Second {
+			t.Fatal("version authority differs", cmd)
+		}
+		return ports.CommandResult{CleanupComplete: true, Stdout: []byte("1.5.3\n")}, nil
+	})
+	if err != nil || len(result) == 0 {
+		t.Fatal("version refused", err)
+	}
+}

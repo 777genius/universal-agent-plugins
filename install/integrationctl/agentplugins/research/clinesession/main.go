@@ -231,7 +231,7 @@ func verifyPins(root string) error {
 	return nil
 }
 func settled(result ports.CommandResult, executionErr, contextErr error) error {
-	if executionErr != nil || contextErr != nil || !result.CleanupComplete || result.NoChildStarted || len(result.Stdout) > 1<<20 || len(result.Stderr) > 32768 {
+	if executionErr != nil || contextErr != nil || !result.CleanupComplete || result.NoChildStarted || len(result.Stdout) >= 1<<20 || len(result.Stderr) >= 32768 {
 		return errors.Join(errors.New("command settlement refused"), executionErr, contextErr)
 	}
 	return nil
@@ -259,31 +259,134 @@ func run(input io.Reader, output io.Writer, invoke runner) error {
 	ctx, cancel := context.WithTimeout(ctx, remaining)
 	defer cancel()
 	go func() { var extra [1]byte; _, _ = reader.Read(extra[:]); cancel() }()
-	before, err := os.Lstat(req.Root)
-	canonical, canonicalErr := filepath.EvalSymlinks(req.Root)
-	if err != nil || canonicalErr != nil || canonical != req.Root || !before.IsDir() || before.Mode()&os.ModeSymlink != 0 {
-		return errors.New("root refused")
-	}
-	if err = verifyPins(req.Root); err != nil {
+	result, err := execute(ctx, req, cmd, invoke)
+	if err != nil {
 		return err
 	}
-	result, err := invoke(ctx, cmd, 5*time.Second)
-	if err = settled(result, err, ctx.Err()); err != nil {
-		return err
-	}
-	after, err := os.Lstat(req.Root)
-	if err != nil || !os.SameFile(before, after) || before.Mode() != after.Mode() {
-		return errors.New("root changed")
-	}
-	if err = verifyPins(req.Root); err != nil {
-		return err
-	}
-	if err = ctx.Err(); err != nil {
+	return emitResult(ctx, output, req, result)
+}
+func emitResult(ctx context.Context, output io.Writer, req request, result ports.CommandResult) error {
+	if err := ctx.Err(); err != nil {
 		return err
 	}
 	return json.NewEncoder(output).Encode(map[string]any{"schema_version": 1, "source_commit": sourceCommit, "source_tree": sourceTree, "action": req.Action, "cleanup_complete": true, "exit": result.ExitCode, "stdout": result.Stdout, "stderr": result.Stderr,
 		"runtime_sha256": map[string]string{"native": nativeSHA, "installer": installerSHA, "probe": probeSHA, "git": gitSHA, "go": goSHA, "fixture_source": fixtureSHA}})
 }
+
+type runtimeLease struct {
+	file *os.File
+	info os.FileInfo
+}
+
+func release(leases []runtimeLease) (err error) {
+	for index := range leases {
+		if leases[index].file != nil {
+			err = errors.Join(err, leases[index].file.Close())
+			leases[index].file = nil
+		}
+	}
+	return err
+}
+func openRuntime(path string) (*os.File, error) {
+	root, err := os.OpenRoot(filepath.Dir(path))
+	if err != nil {
+		return nil, err
+	}
+	file, openErr := atomicfile.OpenRootReadFile(root, filepath.Base(path))
+	err = errors.Join(openErr, root.Close())
+	if err != nil && file != nil {
+		err = errors.Join(err, file.Close())
+		file = nil
+	}
+	return file, err
+}
+func holdRuntime(root string) (leases []runtimeLease, resultErr error) {
+	defer func() {
+		if resultErr != nil {
+			resultErr = errors.Join(resultErr, release(leases))
+		}
+	}()
+	uap, native, probe := paths(root)
+	for _, path := range []string{uap, native, probe, gitBinary, goBinary} {
+		file, err := openRuntime(path)
+		if err != nil {
+			return leases, err
+		}
+		info, err := file.Stat()
+		leases = append(leases, runtimeLease{file, info})
+		if err != nil {
+			return leases, err
+		}
+	}
+	return leases, nil
+}
+func verifyLeases(leases []runtimeLease) error {
+	for _, lease := range leases {
+		info, err := lease.file.Stat()
+		linked, linkErr := os.Lstat(lease.file.Name())
+		if err != nil || linkErr != nil || !unchanged(lease.info, info) || !unchanged(lease.info, linked) {
+			return errors.New("held runtime identity changed")
+		}
+	}
+	return nil
+}
+func joinRoot(root *os.Root, original os.FileInfo, path string) (resultErr error) {
+	parent, err := os.OpenRoot(filepath.Dir(path))
+	if err != nil {
+		return err
+	}
+	defer func() { resultErr = errors.Join(resultErr, parent.Close()) }()
+	linked, err := parent.Lstat(filepath.Base(path))
+	if err != nil {
+		return err
+	}
+	held, err := root.Stat(".")
+	if err != nil || !os.SameFile(original, held) || !os.SameFile(original, linked) || original.Mode() != held.Mode() || original.Mode() != linked.Mode() {
+		return errors.New("original root changed")
+	}
+	return nil
+}
+func execute(ctx context.Context, req request, cmd ports.Command, invoke runner) (result ports.CommandResult, resultErr error) {
+	canonical, err := filepath.EvalSymlinks(req.Root)
+	if err != nil || canonical != req.Root {
+		return result, errors.New("root alias refused")
+	}
+	rootHandle, err := os.OpenRoot(req.Root)
+	if err != nil {
+		return result, err
+	}
+	defer func() { resultErr = errors.Join(resultErr, rootHandle.Close()) }()
+	leases, err := holdRuntime(req.Root)
+	if err != nil {
+		return result, err
+	}
+	defer func() { resultErr = errors.Join(resultErr, release(leases)) }()
+	before, err := rootHandle.Stat(".")
+	if err != nil || !before.IsDir() || before.Mode()&os.ModeSymlink != 0 {
+		return result, errors.New("root refused")
+	}
+	if err = errors.Join(verifyLeases(leases), verifyPins(req.Root)); err != nil {
+		return result, err
+	}
+	if err = joinRoot(rootHandle, before, req.Root); err != nil {
+		return result, err
+	}
+	result, err = invoke(ctx, cmd, 5*time.Second)
+	if err = settled(result, err, ctx.Err()); err != nil {
+		return result, err
+	}
+	if err = joinRoot(rootHandle, before, req.Root); err != nil {
+		return result, err
+	}
+	if err = errors.Join(verifyLeases(leases), verifyPins(req.Root)); err != nil {
+		return result, err
+	}
+	if err = release(leases); err != nil {
+		return result, err
+	}
+	return result, nil
+}
+
 func selected(root, action string) (transport, error) {
 	project := filepath.Join(root, "a")
 	selectedName := serverName

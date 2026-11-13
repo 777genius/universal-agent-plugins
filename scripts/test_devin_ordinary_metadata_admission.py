@@ -140,3 +140,64 @@ class OrdinaryMetadataContracts(unittest.TestCase):
                     else: self.assertEqual((root / case.OrdinaryEffects.config_path).read_bytes(), case.ORIGINAL)
                 finally:
                     ctx.known_file_diagnostics.close()
+
+
+class OrdinaryPreReadContracts(unittest.TestCase):
+    fixture = OrdinaryMetadataContracts.fixture
+    advance_help = OrdinaryMetadataContracts.advance_help
+
+    def test_original_and_first_migrated_authority_refuse_before_any_read(self):
+        for change in ('leaf', 'mtime', 'oversize', 'owner', 'mode'):
+            with self.subTest(change=change), self.fixture() as (ctx, effects, user):
+                before = self.advance_help(ctx, effects)
+                if change in ('leaf', 'mtime'):
+                    user.write_bytes(MIGRATED)
+                    effects.verify_command(before, base.metadata_inventory(ctx.root, ctx.budget))
+                    if change == 'leaf':
+                        replacement = user.with_suffix('.replacement')
+                        replacement.write_bytes(MIGRATED); replacement.chmod(0o644); replacement.replace(user)
+                    else:
+                        info = user.stat()
+                        os.utime(user, ns=(info.st_atime_ns, info.st_mtime_ns - 60_000_000_000))
+                elif change == 'oversize':
+                    user.write_bytes(b' ' * 257); effects.migrating = True
+                elif change == 'mode':
+                    user.chmod(0o600)
+                current = base.metadata_inventory(ctx.root, ctx.budget)
+                if change == 'owner':
+                    row = list(current[effects.config_path]); row[4] += 1
+                    current[effects.config_path] = tuple(row)
+                with patch.object(base.os, 'read', side_effect=AssertionError('unadmitted config bytes read')):
+                    with self.assertRaises(ValueError): effects.verify(current)
+
+    def test_real_ordinary_collect_retains_outer_delta_before_refused_content_snapshot(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            ctx = base.shared.Context(root, {}, SimpleNamespace(check=lambda: 10))
+            ctx.original_output_identity = base.root_identity(root)
+            for scope in ('a', 'b'):
+                exclude = ctx.projects[scope] / '.git/info/exclude'
+                exclude.parent.mkdir(parents=True); exclude.write_bytes(b'# original\n')
+            mutated, snapshots = [], []
+            def probe(label, arguments, project):
+                if label == 'mcp-a':
+                    (root / case.OrdinaryEffects.config_path).chmod(0o600); mutated.append(True)
+                return {'exit': 0}, b'devin 3000.12.57 (96542e930752)\n' if label == 'version' else b'--json', b''
+            ctx.probe = probe
+            probes = {name: SimpleNamespace(url='http://127.0.0.1:1234/mcp', accepted_connections=[],
+                      methods=lambda: [], call_records=lambda: ([], 0)) for name in ('a', 'b', 'user', 'local', 'legacy')}
+            original_snapshot = base.snapshot
+            def snapshot(context):
+                if mutated: raise AssertionError('unadmitted content snapshot')
+                snapshots.append(True); return original_snapshot(context)
+            try:
+                with patch.object(base, 'snapshot', side_effect=snapshot):
+                    with self.assertRaisesRegex(ValueError, 'pre-read authority'): case.collect(ctx, probes)
+                self.assertTrue(snapshots)
+                effect = ctx.summary['command_effects'][-1]
+                self.assertEqual(effect['label'], 'mcp-a')
+                self.assertEqual(effect['changes'], {})
+                self.assertIn(case.OrdinaryEffects.config_path, effect['outer_changes'])
+                self.assertFalse(ctx.summary['admission_qualified'])
+            finally:
+                ctx.known_file_diagnostics.close()
