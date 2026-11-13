@@ -506,3 +506,27 @@ with zero post-Start palette commands; preexisting Output refuses before Start;
 late placeholder read refuses; the sole exact authorized Trust flow remains.
 Existing late-diagnostic and late-Running deadline negatives remain. Source
 changes are admission-only; genuine next hosted evidence remains necessary.
+
+## Exact Output document container correction after 177
+
+Actual177 run43444309904/job131949635879 failed installed-a at
+mcp-trust/mcp-start-deadline with Start selected, zero state samples and no
+observed expected Output. This does not establish whether Start completed.
+
+Pinned Microsoft/vscode e646868227c3e3a9e3f24277c8c7220be42c0be7
+output/browser/outputView.ts149–154 creates the editor in container and adds
+output-view to that container. OutputEditor.createEditor330–334 puts
+role=document on the same parent. AbstractTextEditor.setInput in
+browser/parts/editor/textEditor.ts250–252 sets that editorContainer's aria-label.
+OutputEditor.computeAriaLabel296–299 uses the exact named Output input.
+The old descendant selector excluded this authoritative container. Descendant
+editor accessibility labels can be generic when accessibility support is disabled
+(controller/editContext/screenReaderUtils.ts119–136).
+
+Change only the selector to .output-view[role="document"]; preserve exact expected
+label, visibility, duplicate refusal, existing Start barrier and original deadlines.
+The actual helper regression models the labelled root and generic descendant,
+plus absent/hidden/foreign/duplicate cases. Driver, existing Node test and this
+plan are the only paths. No new command, consent, raw content, acceptance or
+qualification is introduced. Tests are unexecuted until an execution gate is
+available; source correction does not prove the cause of actual177.

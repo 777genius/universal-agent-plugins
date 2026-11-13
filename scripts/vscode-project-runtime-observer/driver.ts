@@ -55,7 +55,7 @@ function launchDiagnostic(label: string, root: LaunchDocument = (globalThis as u
   const refused = { launchNotification: false, outputVisible: false, launchError: 'diagnostic-refused' };
   try {
     const messages = root.querySelectorAll('.notification-list-item-message');
-    const outputs = root.querySelectorAll('.output-view [role="document"]');
+    const outputs = root.querySelectorAll('.output-view[role="document"]');
     if (messages.length > 16 || outputs.length > 16) return refused;
     let matched = 0, launchError = 'none', outputVisible = false;
     for (const node of messages) {

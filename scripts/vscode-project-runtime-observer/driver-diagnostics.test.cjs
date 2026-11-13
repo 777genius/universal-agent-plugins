@@ -382,3 +382,19 @@ test('actual start preserves pending inputs and requires a fresh Output before c
     assert(clock <= 15000);
   }
 });
+
+test('launch Output uses the exact labelled document container, never its generic editor descendant', () => {
+  const node = (label, visible = true) => ({ getClientRects: () => visible ? [1] : [], getAttribute: () => label });
+  const inspect = containers => JSON.parse(JSON.stringify(sandbox.launch('owned', {
+    querySelectorAll(selector) {
+      if (selector === '.notification-list-item-message') return [];
+      if (selector === '.output-view[role="document"]') return containers;
+      if (selector === '.output-view [role="document"]') return [node('The editor is not accessible at this time.')];
+      throw new Error('unexpected selector');
+    }
+  })));
+  assert.equal(inspect([node('MCP: owned - Output')]).outputVisible, true);
+  for (const rows of [[], [node('MCP: foreign - Output')], [node('MCP: owned - Output', false)]])
+    assert.equal(inspect(rows).outputVisible, false);
+  assert.equal(inspect([node('MCP: owned - Output'), node('MCP: owned - Output')]).launchError, 'diagnostic-refused');
+});
