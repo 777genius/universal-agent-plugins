@@ -31,14 +31,20 @@ func TestSessionWholeFileRefusesForeignDisabledAndMalformedMembers(t *testing.T)
 		`{"mcpServers":{"owned":{}} ,"extra":{}}`,
 		`{"mcpServers":{"owned":{},"owned":{}}}`,
 		`{"mcpServers":{"owned":null}}`,
+		`{"mcpServers":{"owned":{"transport":{"type":"sse","url":"http://localhost"}}}}`,
+		`{"mcpServers":{"owned":{"transport":{"type":"http","url":"http://localhost"}}}}`,
+		`{"mcpServers":{"owned":{"transport":{"type":"stdio","cwd":"/project"}}}}`,
+		`{"mcpServers":{"owned":{"transport":{"type":"stdio","command":"/managed/probe"}}}}`,
+		`{"mcpServers":{"owned":{"transport":{"type":"stdio","command":"","cwd":"/project"}}}}`,
+		`{"mcpServers":{"owned":{"transport":{"type":"stdio","command":"/managed/probe","cwd":""}}}}`,
 	} {
 		if err := exactSessionServers([]byte(body), []string{"owned"}); err == nil {
 			t.Fatal("unsafe session source accepted", body)
 		}
 	}
 	for _, body := range []string{
-		`{"mcpServers":{"owned":{"disabled":false}}}`,
-		`{"mcpServers":{"owned":{"disabled":false,"autoApprove":[]}}}`,
+		`{"mcpServers":{"owned":{"transport":{"type":"stdio","command":"/managed/probe","cwd":"/project"},"disabled":false}}}`,
+		`{"mcpServers":{"owned":{"transport":{"type":"stdio","command":"/managed/probe","cwd":"/project"},"disabled":false,"autoApprove":[]}}}`,
 	} {
 		if err := exactSessionServers([]byte(body), []string{"owned"}); err != nil {
 			t.Fatal(err)
