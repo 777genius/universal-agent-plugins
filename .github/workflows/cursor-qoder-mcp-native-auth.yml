@@ -1,0 +1,66 @@
+name: Cursor Qoder native Project MCP tools/call
+
+on:
+  pull_request:
+    types: [labeled, synchronize, reopened]
+    paths:
+      - 'scripts/project_native_missing_call_runner.py'
+      - 'scripts/project_native_missing_call_proof.py'
+      - 'scripts/test_project_native_missing_call_proof.py'
+      - '.github/workflows/cursor-qoder-mcp-native-auth.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cursor-qoder-call-native-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  genuine-native:
+    # Never expose real vendor credentials to arbitrary forks or other PRs.
+    # The opt-in label is applied only after a human has reviewed the exact
+    # branch code. This job is not selected by ordinary docs/contract CI.
+    if: >-
+      ${{ github.event.pull_request.number == 793 &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        client: [cursor, qoder]
+    env:
+      GITHUB_ACTIONS: 'true'
+      AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED: '1'
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Verify fail-closed provenance and receipt contracts before vendor model access
+        run: python3 -m unittest discover -s scripts -p 'test_project_native_missing_call_proof.py' -v
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.11'
+          cache: false
+      - name: Real source-built UAP and pinned native selected-client Project call
+        env:
+          CURSOR_API_KEY: ${{ matrix.client == 'cursor' && secrets.CURSOR_API_KEY || '' }}
+          QODER_PERSONAL_ACCESS_TOKEN: ${{ matrix.client == 'qoder' && secrets.QODER_PERSONAL_ACCESS_TOKEN || '' }}
+          RUNNER_TEMP: ${{ runner.temp }}
+        run: |
+          python3 scripts/project_native_missing_call_runner.py \
+            --client '${{ matrix.client }}' \
+            --expected-head '${{ github.event.pull_request.head.sha }}' \
+            --output '${{ runner.temp }}/mcp-call-${{ matrix.client }}-proof'
+      - name: Publish only server-side original proof and redacted provenance
+        if: ${{ success() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: mcp-native-${{ matrix.client }}-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/mcp-call-${{ matrix.client }}-proof/
+          if-no-files-found: error
+          retention-days: 14
