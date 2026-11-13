@@ -214,7 +214,8 @@ def permission_fixture(client, project, server):
 def agent_command(client, binary, prompt):
     if client == "cursor":
         return [binary, "-p", prompt, "--output-format", "json"]
-    return [binary, "-p", "--output-format", "json", "--max-turns", "4",
+    return [binary, "-p", "--allowed-mcp-server-names", NAMES["qoder"],
+            "--output-format", "json", "--max-turns", "4",
             "--no-session-persistence", prompt]
 
 
@@ -240,6 +241,12 @@ def run(client, output, expected):
         for project in ("a", "b", "outside"):
             invoke("git-" + project, ["/usr/bin/git", "init", "--quiet", "--initial-branch=main"],
                    work / project, env, private)
+        if client == "qoder":
+            # Explicit test-owned directory consent is distinct from per-server
+            # approval and applies only to Project A in the disposable HOME.
+            emit(work / "home" / ".qoder" / "settings.json", {
+                "permissions": {"trustDirectories": [str(work / "a")]}
+            })
         binary, vendor_files, acquisition = acquire_vendor(client, work, env, private)
         server = NAMES[client]
         nonce = secrets.token_hex(16)
