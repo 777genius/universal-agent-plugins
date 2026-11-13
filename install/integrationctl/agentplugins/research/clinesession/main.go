@@ -214,9 +214,11 @@ func command(r request) (ports.Command, error) {
 	if r.Action == "saved-add" {
 		project = filepath.Join(r.Root, "saved")
 	}
-	cmd.Dir = project
-	cmd.Argv = append([]string{uap}, args...)
-	cmd.Argv = append(cmd.Argv, "--target", "cline", "--scope", "project", "--project-root", project)
+	cmd.Dir, cmd.Argv = project, append([]string{uap}, args...)
+	if args[0] != "install" {
+		cmd.Argv = append(cmd.Argv, "--target", "cline")
+	}
+	cmd.Argv = append(cmd.Argv, "--scope", "project", "--project-root", project)
 	return cmd, nil
 }
 func verifyPins(root string) error {

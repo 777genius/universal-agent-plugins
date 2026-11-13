@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -213,6 +214,38 @@ func TestProtocolAgainstRealOwnedProbePreservesMarker(t *testing.T) {
 	body, err = os.ReadFile(events)
 	if err != nil || bytes.Count(body, []byte{'\n'}) != 6 {
 		t.Fatal("missing original protocol events", err)
+	}
+}
+func TestColdInstallUsesOnlyAgreementTargets(t *testing.T) {
+	r := fixedFixture(t)
+	uap, _, _ := paths(r.Root)
+	project := filepath.Join(r.Root, "cold")
+	for _, action := range []string{"cold-locked-install", "cold-repeat", "cold-inspect"} {
+		t.Run(action, func(t *testing.T) {
+			r.Action = action
+			input, _ := requestPipe(t, r)
+			want := []string{uap, "install", "--locked", "--yes", "--format", "json", "--scope", "project", "--project-root", project}
+			if action == "cold-inspect" {
+				want = []string{uap, "run", "--inspect", "--confirm-client-start", "--target", "cline", "--scope", "project", "--project-root", project}
+			}
+			var output bytes.Buffer
+			calls := 0
+			err := run(input, &output, func(_ context.Context, cmd ports.Command, _ time.Duration) (ports.CommandResult, error) {
+				calls++
+				if !slices.Equal(cmd.Argv, want) || cmd.Dir != project {
+					t.Errorf("cold invocation: argv=%q cwd=%q; want argv=%q cwd=%q", cmd.Argv, cmd.Dir, want, project)
+				}
+				for _, value := range []string{"HOME=" + filepath.Join(r.Root, "cold-home"), "AGENTPLUGINS_HOME=" + filepath.Join(r.Root, "cold-cache")} {
+					if !slices.Contains(cmd.Env, value) {
+						t.Errorf("cold environment missing %q", value)
+					}
+				}
+				return ports.CommandResult{CleanupComplete: true}, nil
+			})
+			if err != nil || calls != 1 || output.Len() == 0 {
+				t.Fatalf("cold invocation did not settle once: calls=%d err=%v", calls, err)
+			}
+		})
 	}
 }
 func TestParentEOFOrExtraCancelsActualCommandContext(t *testing.T) {

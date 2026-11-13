@@ -1,5 +1,43 @@
 # Cline native managed-session coverage on three platforms
 
+## Observed Windows import and macOS cold-install corrections
+
+The original b378190d Windows [job 131910356071](https://github.com/777genius/universal-agent-plugins/actions/runs/43432575104/job/131910356071)
+passed its Go packages but failed while importing the Python contracts:
+`cline_managed_session_e2e` imports portable acquisition helpers, which imported
+the POSIX-only `resource` module at module scope. No vendor/native action ran.
+Root R1 approves moving that import into the existing `child_limits` function
+and an explicit POSIX-only refusal at `run_probe` entry, before opening capture
+files or starting a process. Core limits, selectors, process-group cleanup and
+existing POSIX execution stay unchanged. There is no Windows process fallback;
+the Cline journey continues to use its existing Go bridge.
+
+The original b378190d macOS job 131910354493 reached native installation, update
+and repair, then refused cold installation because the bridge appended
+`--target cline` to `install --locked`. The ordinary install command takes its
+targets from `uap.toml`; explicit Project scope/root remain valid. Root R1 also
+approves omitting only `--target` for the fixed install verb, preserving the cold
+working directory, private HOME/state and all agreement/receipt checks.
+
+This correction is limited to five existing files: this plan,
+`scripts/native_client_research.py`, `scripts/test_native_client_research.py`,
+and the `clinesession/main.go` and `clinesession/main_test.go` research files.
+Estimate: 6–10 Python runtime lines, 20–35 Python contract lines, 5 Go runtime
+lines and 25–40 Go contract lines. Tests must reproduce the missing-resource
+import without claiming Windows execution, refuse unsupported probe execution
+before effects, and verify exact cold-install/repeat invocation through the
+bridge with a targeted native-inspection control. No product parser change,
+host-flag spoofing, new downloader or qualification promotion is included.
+Independent source review and fresh exact-head native results remain required.
+
+Correction validation: the new missing-resource/refusal contracts and both cold
+invocation cases failed against the original 3718c139 source. After correction,
+45 relevant Python contracts and all eight Go helper tests pass; the complete
+Cline acquisition import also passes with `resource` unavailable. Scoped Go lint
+reports zero issues, Windows amd64/macOS arm64 test cross-compiles pass, and
+root's independent R2 accepted the change. These local contracts and compiles do
+not qualify the pending genuine final-source native runs.
+
 Base: ff0be246091497b031eb0b5150803d755cbd5338. This extends the existing no-account managed-session journey, not production client behavior. Read together with the six-client installation automation plan, ARCHITECTURE.md and CONTRIBUTING.md. The current Linux journey uses POSIX-only command, file and protocol helpers; merely adding matrix hosts would not qualify Windows or macOS.
 
 ## Allowlist and size

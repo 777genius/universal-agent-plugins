@@ -5,7 +5,6 @@ No acquisition, native admission guard or command selection occurs here.
 import hashlib
 import io
 import os
-import resource
 import selectors
 import signal
 import subprocess
@@ -27,6 +26,7 @@ def bounded_read(stream, limit):
 
 
 def child_limits():
+    import resource
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
 
 
@@ -86,6 +86,8 @@ def run_probe(argv, cwd, env, output, label, timeout=30, limit=OUTPUT_LIMIT, *, 
     opened or reread, and the returned bytes come from the bounded held buffers.
     The historical on-disk behavior remains available to preserved collectors.
     """
+    if os.name != "posix":
+        raise ValueError("research process capture requires POSIX")
     stdout_path, stderr_path = output / (label + ".stdout.log"), output / (label + ".stderr.log")
     record = {"probe": label, "argv": argv, "cwd": str(cwd), "error": None}
     started, process = time.monotonic(), None
