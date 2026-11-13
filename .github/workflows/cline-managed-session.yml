@@ -44,6 +44,37 @@ concurrency:
   group: cline-managed-session-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
+  portable-session-contracts:
+    # The Linux native journey exercises a genuine Cline binary. This job
+    # separately exercises the session/process boundary on real macOS/Windows
+    # hosts; it does not claim vendor activation on those platforms.
+    name: Portable session contracts (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, windows-2025]
+    env:
+      EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        env:
+          GIT_CONFIG_COUNT: '1'
+          GIT_CONFIG_KEY_0: core.autocrlf
+          GIT_CONFIG_VALUE_0: 'false'
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.11'
+          cache: false
+      - name: Verify exact source and native session boundaries
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT"
+          go test -p=2 -count=1 -timeout=7m ./install/integrationctl/agentplugins/managedstdio ./install/integrationctl/agentplugins/clients/cline ./cli/internal/agentpluginscli -run '^Test(Session|ClineProjectSession)'
   native-session:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
