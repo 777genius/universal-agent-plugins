@@ -308,10 +308,7 @@ func checkManagedIntegrity(ctx context.Context, app App, client domain.DetectedC
 }
 
 func checkNativeProjectionIntegrity(ctx context.Context, app App, client domain.DetectedClient, target domain.DeliveryTarget, installation domain.Installation, binding domain.ClientBinding, expectedDigest string) []doctorFinding {
-	if !nativeConfigLifecycle(domain.ClientID(binding.ClientID), domain.InstallScope(binding.Scope)) {
-		return nil
-	}
-	if !hasOwnedNativeProjection(binding.NativeObjects) {
+	if !nativeConfigLifecycle(domain.ClientID(binding.ClientID), domain.InstallScope(binding.Scope)) || !hasOwnedNativeProjection(binding.NativeObjects) {
 		return nil
 	}
 	if app.Lifecycle.Activator == nil || strings.TrimSpace(client.ConfigRoot) == "" {
@@ -337,14 +334,11 @@ func checkNativeProjectionIntegrity(ctx context.Context, app App, client domain.
 		PreviousNativeObjects: append([]domain.NativeObjectOwnership(nil), binding.NativeObjects...),
 		VerifyOnly:            true,
 	})
-	if err != nil {
-		var verification *ports.VerificationError
-		if errors.As(err, &verification) && verification.Kind == ports.VerificationIndeterminate {
-			return []doctorFinding{scopedFinding("unknown", "native_projection_not_checked", installation, binding.ClientID, "the exact owned native client projection could not be checked", "restore client configuration visibility and rerun doctor before relying on this installation")}
-		}
+	var verification *ports.VerificationError
+	if err != nil && !(errors.As(err, &verification) && verification.Kind == ports.VerificationIndeterminate) {
 		return []doctorFinding{scopedFinding("degraded", "native_projection_changed", installation, binding.ClientID, "an owned native client configuration entry or skill is missing or differs from its recorded projection", repairAction(installation, binding))}
 	}
-	if outcome.Activation != domain.ActivationActive || outcome.Verification != domain.VerificationInstalled {
+	if err != nil || outcome.Activation != domain.ActivationActive || outcome.Verification != domain.VerificationInstalled {
 		return []doctorFinding{scopedFinding("unknown", "native_projection_not_checked", installation, binding.ClientID, "the exact owned native client projection could not be checked", "restore client configuration visibility and rerun doctor before relying on this installation")}
 	}
 	return nil

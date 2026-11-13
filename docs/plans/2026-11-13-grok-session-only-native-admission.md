@@ -149,8 +149,12 @@ foreign mutation refuses before config-body reading. No baseline is renewed.
 
 The vendor disable may pretty-serialize its task-owned config: this qualification
 does not claim foreign-byte preservation for vendor writes. Our future append
-writer remains separately gated. First complete capture is measurement-only,
-all original qualifications false and final workflow assertion stays negative.
+writer remains separately gated. A complete lock capture remains measurement-only
+with collection_complete and all product qualification flags false. Its process
+exit succeeds only for the explicit lock mode after both semantic/ledger phases,
+the final source-clean check, positive cleanup, and no captured error. Session
+measurement keeps its existing negative exit; its measurement marker never grants
+lock success. This changes no native command, write authority or product admission.
 Closed held-publication/ZIP/source/stream authority is reused, with finite phase
 artifact names; no new diagnostic archive executor or public CLI option exists.
 
@@ -312,14 +316,25 @@ session ID matches all four preceding nonnull setup IDs. The 143-byte frame's
 SHA-256 is `a1b6e208ca78d06c715de73be1fb9b1a3dbfecd94806938e28ebb51b73f94709`.
 The correction admits only this closed notification after initialize and before
 terminal inventory, once per session. Its tool count must be strict integer
-zero; elapsed time must be a strict integer within 0..30000 milliseconds, the
-existing finite session budget. The bounded printable ASCII ID must join prior
+zero; elapsed time must also be strict integer zero, as in the original native
+frame. A process deadline does not establish other notification values. The
+bounded printable ASCII ID must join prior
 and subsequent setup IDs and the actual `session/new` result. Unknown methods,
 keys, callbacks, duplicate notices, booleans, negative values and foreign IDs
 still refuse. Existing frame, notification, phase and process bounds remain.
 
-Three new inert parser contracts reproduce the old `notification-refused` and
-pass with this correction; all 77 existing-file contracts pass. The actual
+Supplementary public source at `xai-org/grok-build` commit
+`2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8`, blob
+`f4d6e17fcdcd0cb7694fc2d7818f516a17c9f76f`, emits literal zero/zero in
+`finish_init_without_handshakes`. Its general handshake path has variable
+elapsed time and is not admitted by this empty-MCP measurement. A separate
+negative contract checks the actual response identity in both orders without
+earlier setup IDs masking that join. Historical detached readout stays refused.
+
+The initial correction at `9d201619` added three inert parser contracts that
+reproduce the old `notification-refused`; all 77 existing-file contracts passed.
+The stricter zero/zero composition with the lock exit correction passes all 124
+Grok contracts. The actual
 12-frame original prefix now parses with 11 notifications, no session/inventory
 reply and only the planned `session/new` request. Its historical detached RPC
 contains only 10 notifications, so original readout still refuses at

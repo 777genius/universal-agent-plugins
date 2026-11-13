@@ -128,7 +128,7 @@ def session_rpc_frame(value, state, req, send):
             require(state['initialize'] is not None and state['plugins'] is None
                     and not any(x['method'] == value['method'] for x in state['notifications']), 'notification-refused')
             require(type(params['mcpToolCount']) is int and params['mcpToolCount'] == 0
-                    and type(params['elapsedMs']) is int and 0 <= params['elapsedMs'] <= 30000,
+                    and type(params['elapsedMs']) is int and params['elapsedMs'] == 0,
                     'mcp-initialized-bound')
             sid = params['sessionId']
             require(type(sid) is str and 0 < len(sid) <= 256 and sid.isascii()
@@ -1363,6 +1363,14 @@ def admit_publication(output, packet, expected_commit, expected_tree, destinatio
         for descriptor in reversed(descriptors): os.close(descriptor)
 
 
+def observation_exit(summary, *, lock_qualification=False):
+    lock_complete = (lock_qualification is True and summary.get('mode') == LOCK_MODE
+                     and summary.get('measurement_complete') is True
+                     and summary.get('cleanup_complete') is True
+                     and summary.get('error') is None)
+    return 0 if summary['collection_complete'] or lock_complete else 1
+
+
 def run(output, *, session_only=False, lock_qualification=False):
     import project_native_research as shared
     from grok_acp_bootstrap import NativeBootstrap
@@ -1488,7 +1496,7 @@ def run(output, *, session_only=False, lock_qualification=False):
         if summary['cleanup_complete'] and all(key in summary for key in ('source_commit', 'source_tree', 'nonce')):
             print(json.dumps(dict(schema_version=1, source_commit=summary['source_commit'], source_tree=summary['source_tree'],
                                   nonce=summary['nonce'], publication=publication), separators=(',', ':')))
-    return 0 if summary['collection_complete'] else 1
+    return observation_exit(summary, lock_qualification=lock_qualification)
 
 
 if __name__ == '__main__':

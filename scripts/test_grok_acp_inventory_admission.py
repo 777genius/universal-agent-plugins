@@ -1067,7 +1067,7 @@ class SessionOnlyContracts(unittest.TestCase):
 
     def test_mcp_initialized_payload_is_closed_typed_and_bounded(self):
         changes=[('mcpToolCount',True),('mcpToolCount',1),('mcpToolCount',-1),('mcpToolCount',0.0),
-                 ('elapsedMs',False),('elapsedMs',-1),('elapsedMs',30001),('elapsedMs',0.0),
+                 ('elapsedMs',False),('elapsedMs',-1),('elapsedMs',1),('elapsedMs',30000),('elapsedMs',30001),('elapsedMs',0.0),
                  ('sessionId',None),('sessionId',''),('sessionId',True),('sessionId','foreign'),
                  ('sessionId','x'*257),('sessionId','bad\n'),('sessionId','nonascii-\u00e9'),('extra',0)]
         for key,value in changes:
@@ -1079,8 +1079,19 @@ class SessionOnlyContracts(unittest.TestCase):
             state,req,sent,notice=self.mcp_initialized_fixture();del notice['params'][key]
             with self.subTest(missing=key),self.assertRaises(ValueError):
                 case.session_rpc_frame(notice,state,req,sent.append)
-        state,req,sent,notice=self.mcp_initialized_fixture();notice['params']['elapsedMs']=30000
-        self.assertFalse(case.session_rpc_frame(notice,state,req,sent.append))
+
+    def test_mcp_initialized_joins_actual_response_without_setup_ids(self):
+        for notice_first in (False, True):
+            state,req,sent=self.state(),self.req(),[];self.init(state,req,sent)
+            notice={'jsonrpc':'2.0','method':'_x.ai/mcp_initialized',
+                    'params':{'sessionId':'native-owned','mcpToolCount':0,'elapsedMs':0}}
+            response={'jsonrpc':'2.0','id':2,'result':{'sessionId':'foreign'}}
+            first,second=(notice,response) if notice_first else (response,notice)
+            case.session_rpc_frame(first,state,req,sent.append)
+            before,outbound=copy.deepcopy(state),copy.deepcopy(sent)
+            with self.subTest(notice_first=notice_first),self.assertRaisesRegex(ValueError,'session-notification-identity'):
+                case.session_rpc_frame(second,state,req,sent.append)
+            self.assertEqual(state,before);self.assertEqual(sent,outbound)
 
     def test_mcp_initialized_order_duplicate_unknown_and_total_bounds_refuse(self):
         for change in ('before-initialize','duplicate','after-inventory','wrong-returned-id','unknown-method','callback','total-bound'):
@@ -1580,6 +1591,99 @@ class LockReadoutContracts(unittest.TestCase):
             self.assertTrue(all(row['semantic_complete'] and row['ledger_accepted'] for row in facts['phases']))
             for private in ('PRIVATE','argv','sha256','merged_file',case.LOCK_NAME):
                 self.assertNotIn(private,json.dumps(facts))
+
+    def test_lock_exit_preserves_measurement_qualification_and_typed_refusals(self):
+        packet, members = self.fixture()
+        summary = case.document(members['admission.json'])
+        before = copy.deepcopy(summary)
+        self.assertEqual(self.read(packet, members)['reason'], 'measurement-only')
+        self.assertEqual(case.observation_exit(summary, lock_qualification=True), 0)
+        self.assertEqual(summary, before)
+        self.assertIs(summary['collection_complete'], False)
+        self.assertTrue(all(value is False for value in summary['qualification'].values()))
+        for key, value in (('measurement_complete', False), ('measurement_complete', 1),
+                           ('cleanup_complete', False), ('cleanup_complete', 1),
+                           ('error', 'admission-refused'), ('error', False), ('error', ''),
+                           ('mode', case.SESSION_MODE), ('mode', None)):
+            changed = dict(summary, **{key: value})
+            with self.subTest(key=key, value=value):
+                self.assertEqual(case.observation_exit(changed, lock_qualification=True), 1)
+        for selected in (False, 1):
+            self.assertEqual(case.observation_exit(summary, lock_qualification=selected), 1)
+        _, partial = self.fixture(case.LOCK_PHASES[:1])
+        self.assertEqual(case.observation_exit(case.document(partial['admission.json']), lock_qualification=True), 1)
+        self.assertEqual(case.observation_exit(dict(collection_complete=True)), 0)
+        self.assertEqual(case.observation_exit(dict(collection_complete=False)), 1)
+
+    def test_real_run_never_completes_after_second_phase_source_or_cleanup_refusal(self):
+        import io
+        import project_native_research as shared
+        from project_native_collectors.grok import ACQUISITION
+        commit, tree, native = 'a' * 40, 'b' * 40, b'inert transport fixture; never executed'
+        for refusal in ('none', 'second-phase', 'source-final', 'cleanup'):
+            with self.subTest(refusal=refusal), tempfile.TemporaryDirectory() as temporary:
+                packet, members = self.fixture()
+                receipts = case.document(members['admission.json'])['scopes']
+                calls, owned = [], []
+                def process(argv, **_options):
+                    if argv[0] == 'go':
+                        helper = Path(argv[argv.index('-o') + 1])
+                        owned.append((helper.parent, case.stable(helper.parent.lstat())[:2]))
+                        helper.write_bytes(b'inert helper; never executed')
+                        return SimpleNamespace(stdout=b'', stderr=b'')
+                    self.assertEqual(argv[0], '/usr/bin/git')
+                    if argv[1:] == ['rev-parse', 'HEAD']:
+                        output = commit.encode()
+                    elif argv[1:] == ['rev-parse', 'HEAD^{tree}']:
+                        output = tree.encode()
+                    elif argv[1:2] == ['status']:
+                        calls.append('source')
+                        output = b'M changed' if refusal == 'source-final' and calls.count('source') == 2 else b''
+                    else:
+                        self.assertIn('init', argv)
+                        output = b''
+                    return SimpleNamespace(stdout=output, stderr=b'')
+                def capture(_helper, root, _deadline):
+                    request = case.document((root / 'request.json').read_bytes())
+                    index = case.LOCK_PHASES.index(request['phase'])
+                    calls.append(request['phase'])
+                    receipt = copy.deepcopy(receipts[index])
+                    for value in (receipt, receipt['result']):
+                        for key in ('source_commit', 'source_tree', 'nonce'):
+                            value[key] = request[key]
+                    result = receipt['result']
+                    for row in result['commands']:
+                        row['merged_base64'] = base64.b64encode(members[row.pop('merged_file')]).decode()
+                    result['rpc'] = case.rpc_state()
+                    if index == 1 and refusal == 'second-phase':
+                        result.update(semantic_complete=False, reason='protocol-refused')
+                    if index == 1 and refusal == 'cleanup':
+                        receipt['cleanup_complete'] = False
+                    return receipt
+                try:
+                    with (mock.patch.object(shared.native, 'require_hosted'),
+                          mock.patch.object(shared, 'acquire', return_value=({}, {'grok': native})),
+                          mock.patch.dict(ACQUISITION, binary_sha256=case.digest(native)),
+                          mock.patch.dict(os.environ, EXPECTED_COMMIT=commit),
+                          mock.patch.object(case.os, 'getuid', return_value=1001),
+                          mock.patch.object(case.subprocess, 'run', side_effect=process),
+                          mock.patch.object(case, 'helper_capture', side_effect=capture),
+                          mock.patch.object(case, 'lock_ledger', return_value=dict(accepted=True, before={}, after={})),
+                          mock.patch.object(sys, 'stdout', io.StringIO())):
+                        status = case.run(Path(temporary) / 'output', lock_qualification=True)
+                    with zipfile.ZipFile(Path(temporary) / 'output/upload/research.zip') as archive:
+                        summary = case.document(archive.read('admission.json'))
+                    self.assertEqual(status, 0 if refusal == 'none' else 1)
+                    self.assertEqual(summary.get('measurement_complete') is True, refusal == 'none')
+                    self.assertIs(summary['collection_complete'], False)
+                    self.assertTrue(all(value is False for value in summary['qualification'].values()))
+                    self.assertEqual([value for value in calls if value in case.LOCK_PHASES], list(case.LOCK_PHASES))
+                    self.assertEqual(calls.count('source'), 2 if refusal in ('none', 'source-final') else 1)
+                finally:
+                    for root, identity in owned:
+                        if root.exists():
+                            self.assertEqual(case.stable(root.lstat())[:2], identity)
+                            case.shutil.rmtree(root)
 
     def test_source_cleanup_bool_missing_stream_rpc_and_unjoined_members_refuse(self):
         for fault in ('source','cleanup','bool','stream','rpc','extra','no-phase','phase','writer','bootstrap'):
