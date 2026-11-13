@@ -146,8 +146,13 @@ the sole `research.zip` member has SHA256
 Both CRC checks pass. The `user.ledger.json` records exactly 41 new members:
 the earlier 43-member set without the SQLite WAL and SHM companions. All 33
 immutable length/mode/hash pins match. The main SQLite file is 36864 bytes;
-no journal or unknown member exists. The raw UUID was not retained, so this
-replay establishes metadata and pins, not full content admission.
+no journal or unknown member exists. No separate raw `agent_id` file was
+retained, but the original ACP initialize result includes `_meta.agentId`.
+Its canonical UUID encoding is exactly 36 ASCII bytes, and its SHA256 matches
+`user.ledger.json`'s `profiles_after.user_profile.agent_id` content hash.
+The retained `user.rpc.json` value also matches the original initialize frame.
+These original joins permit a complete offline bootstrap content replay.
+The historical negative verdict is unchanged; this provides no Project A/B proof.
 
 Accept exactly these two initial sets. A lone WAL or SHM, a journal or another
 member refuses before profile reads. Full content and UUID validation records

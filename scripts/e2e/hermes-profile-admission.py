@@ -279,6 +279,9 @@ class PayloadHardlinkRefusal(RuntimeError):
         super().__init__("payload hardlink escapes runtime")
         self.diagnostic = None
         try:
+            require(type(identity) is tuple and len(identity) in (9, 12)
+                    and type(names) is list and 0 < len(names) <= PAYLOAD_MEMBERS
+                    and all(type(name) is str for name in names), "diagnostic shape")
             member = min(names)
             require(type(member) is str and member and ":" not in member and "\\" not in member
                     and all(part not in ("", ".", "..") for part in member.split("/")), "diagnostic member")

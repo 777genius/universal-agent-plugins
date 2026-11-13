@@ -886,6 +886,33 @@ class BundledRuntimeContracts(unittest.TestCase):
             self.assertIsNone(error.diagnostic)
             self.assertEqual(str(error), "payload hardlink escapes runtime")
 
+    def test_payload_alias_diagnostic_rejects_malformed_containers(self):
+        original = (4, 5, 0o100600, 2, 7, 100, 101, 8, 9)
+        cases = (({}, ["owned"]), (original[:4], ["owned"]), (list(original), ["owned"]),
+                 (original, "owned"), (original, []), (original, ["owned", None]),
+                 (original, ["owned"] * (CASE["PAYLOAD_MEMBERS"] + 1)))
+        with mock.patch.object(os, "read", side_effect=AssertionError("diagnostic read")):
+            for identity, names in cases:
+                with self.subTest(identity=type(identity).__name__, names=type(names).__name__):
+                    error = CASE["PayloadHardlinkRefusal"](identity, names)
+                    self.assertIsNone(error.diagnostic)
+                    self.assertEqual(str(error), "payload hardlink escapes runtime")
+
+    def test_payload_alias_diagnostic_saturates_link_count_before_json(self):
+        import time
+        original = (4, 5, 0o100600, 1 << 20000, 7, 100, 101, 8, 9)
+        with mock.patch.object(os, "read", side_effect=AssertionError("diagnostic read")):
+            with self.assertRaisesRegex(CASE["PayloadHardlinkRefusal"], "hardlink escapes runtime") as refused:
+                CASE["payload_hardlink_closure"]({"owned": {"type": "file", "identity": original}}, time.monotonic() + 5)
+            errors = [refused.exception] + [
+                CASE["PayloadHardlinkRefusal"]((*original[:3], links, *original[4:]), ["owned"])
+                for links in (True, "2")]
+        for error in errors:
+            self.assertIsNone(error.diagnostic["links"])
+            self.assertTrue(error.diagnostic["integer_saturated"])
+            self.assertLessEqual(len(json.dumps(error.diagnostic, ensure_ascii=True).encode("ascii")), 1024)
+            self.assertLessEqual(len(type(error).__name__ + ": " + str(error)), 300)
+
     def test_late_outside_alias_is_rejoined_before_first_hash_read(self):
         import time
         function = CASE["payload_hardlink_closure"]
