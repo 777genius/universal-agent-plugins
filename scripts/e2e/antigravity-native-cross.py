@@ -1227,7 +1227,8 @@ def admission_contracts():
                     capture = SourceReceipts(parent, source, (pins[1][1], pins[2][1]))
                     runtime = (*paths, source, pins, capture)
                     with public_fixture(parent, binaries) as (root, _env, authority):
-                        now, timeouts = [100.0 if condition == "journey" else time.monotonic()], []
+                        # Keep synthetic deadline subtraction exact on every host.
+                        now, timeouts = [100.0], []
                         def exchange(helper, frame, timeout):
                             self.assertEqual(helper, paths[2])
                             self.assertTrue(0 < timeout <= 240)
@@ -1300,7 +1301,7 @@ def admission_contracts():
                                     value.update({name + "_base64": base64.b64encode(body).decode(), name + "_bytes": len(body),
                                                   name + "_sha256": hashlib.sha256(body).hexdigest()})
                                 return json.dumps(value).encode() + b"\n"
-                            with patch(__name__ + ".bridge_exchange", side_effect=exchange):
+                            with patch(__name__ + ".bridge_exchange", side_effect=exchange), patch.object(time, "monotonic", return_value=100.0):
                                 if condition == "exact":
                                     self.assertEqual(public_uap(runtime, root, authority, "uap-missing-backend", refused=True), b"")
                                 else:

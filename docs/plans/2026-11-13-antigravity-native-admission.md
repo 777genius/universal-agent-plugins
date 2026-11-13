@@ -1020,3 +1020,29 @@ contracts, the affected Antigravity/provider selection tests and public Cobra
 tests, plus all eight `make lint` passes with the unchanged 138-rule baseline.
 The stronger diagnostic candidate also passed all 35 contracts on Linux.
 No new Windows/native result or full Core success is inferred from these checks.
+
+### Deterministic clocks in inert public-refusal contracts (2026-11-13)
+
+At source `4c096eea961c1758bdc8779d43999355c7cd5ef0`,
+[run 43523128070, Windows job 132222204181](https://github.com/777genius/universal-agent-plugins/actions/runs/43523128070/job/132222204181)
+failed before native execution: the nonempty-stdout and extra-stderr cases
+hit the callback's `0 < timeout <= 240` assertion before their required
+missing-backend semantic assertion. The original log contains no numeric timeout.
+
+The unchanged contract at `b923b4e6b4b80b063c298a2416b20c9118ee547b`
+reproduced that failure with an inert fixed monotonic clock of `1000.003`.
+Actual `public_uap` passed `(1000.003 + 240) - 1000.003`, or
+`240.0000000000001`, to the callback, so all seven cases failed prematurely.
+This proves a real floating-point oracle defect, not the sole cause of the
+historical Windows failure whose numeric observation is unavailable.
+
+Both existing inert public-bridge contracts now use exactly representable
+`100.0` clocks. Their strict timeout bounds, semantic refusal message,
+original-journey expiry, pending-family and stream/cleanup assertions remain.
+Production code outside `admission_contracts` is byte-for-byte and AST-identical,
+including `public_uap`, `bridge_exchange` and every native deadline.
+
+All 35 contracts passed locally in 5.681 seconds. The two affected contracts
+also passed under an externally supplied fractional clock in 0.030 seconds.
+No native client or hosted flag was substituted for these inert checks; a fresh
+corrected-source Windows/native run remains required.
