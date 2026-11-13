@@ -565,3 +565,58 @@ Reconciled on external e1ba (following 681) without replaying the superseded rev
 Preserve its incremental RPC IDs, runner tests and cleanup/no-child evidence.
 Mixed held/current pending-link snapshots remain pending via the existing helper;
 the original post-HTTP deadline is checked before accepting a tool catalog.
+
+### Settled selected-server native log projection (c3 follow-up)
+
+Actual c3f7d43 run 43472639905 failed at installed-a / mcp-trust /
+mcp-start-deadline. Both original ZIP CRCs, API digests, exact source/tree,
+prepared-input binding and 46 stream byte/hash joins passed. All eight child
+trees reaped, frontend/root cleanup completed and the private publisher view
+released with zero remaining mounts. The new observed postStartInput was none;
+no native state was sampled, Output was not visible and selected-label launch
+notifications were absent. These facts establish neither a native Stopped state
+nor a failed Start callback, transport or trust decision.
+
+The next measurement retains the existing Output barrier and every original
+budget/action. It reads only the selected task server's log after the existing
+strict child result proves whole-family settlement. Before launch it holds the
+original owned profile root and records at most 16 existing log-session names;
+after settlement it requires one fresh session and one window directory. It
+holds and rechecks every directory and the ordinary single-link task-owned
+same-device file before and after a bounded 64 KiB read, under the original
+work deadline. Unknown, old, ambiguous, aliased, drifting, unsettled or late
+inputs yield unavailable; no native qualification or stage error changes.
+
+Pinned Microsoft e646868 source authority:
+- `environment/common/environmentService.ts` 73–79: owned user-data/logs session.
+- `environment/electron-browser/environmentService.ts` 103: window log directory.
+- `desktop.main.ts` 202 and `log/common/log.ts` 781–782: logger resource mapping.
+- `installedMcpServersDiscovery.ts` 95–97 and workbench MCP management 322–341:
+  exact `.vscode/mcp.json` single-folder definition `mcp.config.ws0.<name>`.
+- `mcpServer.ts` 565–566: selected definition logger; `spdlogLog.ts` 29:
+  exact timestamp/severity frame; `mcpServerConnection.ts` 58,92: transport-start
+  and connection-state messages. `mainThreadMcp.ts` 670 supplies the fixed
+  LocalProcess extension-host info line.
+
+Only finite start/state facts leave the reader. Exact selected-label info lines
+and fixed state messages are recognized; Error suffix bytes are discarded and
+only a terminal Error frame is admitted. Unknown lines refuse the entire
+projection, preventing multiline stderr/error suffixes from spoofing state
+frames. This may conservatively withhold otherwise useful diagnostics. No raw
+log, selected label, path, nonce, command, environment or private suffix is
+exported. No registry entry log exists, so absence cannot distinguish a missing
+Start callback from pending connection resolution.
+
+The existing controller observations row carries separate `native_log` facts;
+immutable driver envelopes and UI lastState/counters remain unchanged. Existing
+frontend ZIP/CRC/readout authority validates the finite projection before CI
+prints it. Actual runtime/test size is recorded in the follow-up freeze; the
+larger held-ancestor and privacy regression scope requires root review before
+publication. Native proof remains pending genuine CI on the final source.
+
+Root review tightened attribution: the controller row retains the original
+stage nonce, and the readout requires exact handoff commit/tree plus controller
+mode/kind and equality with the immutable driver-failure nonce. These values
+are checked internally and never exported as log facts. Historical negative
+archives without native_log remain readable. Counter sum is at most 255 and a
+nonempty last state requires a corresponding observed count.

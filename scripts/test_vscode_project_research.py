@@ -701,5 +701,31 @@ class ClosedNativeReadoutTests(unittest.TestCase):
                 self.assertNotIn('PRIVATE', json.dumps(rows))
 
 
+    def test_native_log_is_separate_closed_settled_controller_projection(self):
+        facts = dict(status='observed', transport_start=True, last_state='Starting', stopped=0, starting=1, running=0, error=0)
+        controller = {'source_commit': 'a' * 40, 'source_tree': 'b' * 40, 'mode': 'trusted-project-v1',
+                      'evidence_kind': 'vscode-pinned-trusted-project-gateway-lifecycle',
+                      'observations': [{'stage': 'installed-a', 'nonce': 'PRIVATE_NONCE', 'native_log': facts, 'error': 'PRIVATE'}]}
+        body = self.archive([('installed-a.observation.json', self.failure()), ('vscode-workspace-controller.json', controller)])
+        rows = collector.closed_native_readout(body, time.monotonic() + 5, 'a' * 40, 'b' * 40)
+        self.assertEqual(rows[0]['native_log'], facts)
+        self.assertEqual(rows[0]['mcp']['lastState'], 'Stopped')
+        self.assertNotIn('PRIVATE', json.dumps(rows))
+        for key, value in [('status', 'PRIVATE'), ('last_state', 'PRIVATE'), ('transport_start', 1), ('starting', 256), ('path', 'PRIVATE')]:
+            with self.subTest(key=key):
+                changed = dict(facts); changed[key] = value
+                controller['observations'][0]['native_log'] = changed
+                with self.assertRaises(ValueError):
+                    collector.closed_native_readout(self.archive([('installed-a.observation.json', self.failure()), ('vscode-workspace-controller.json', controller)]), time.monotonic() + 5, 'a' * 40, 'b' * 40)
+
+        for field in ('source_commit', 'source_tree', 'mode', 'evidence_kind', 'nonce'):
+            changed = copy.deepcopy(controller)
+            changed['observations'][0]['native_log'] = dict(facts)
+            if field == 'nonce': changed['observations'][0][field] = 'FOREIGN_NONCE'
+            else: changed[field] = 'FOREIGN_SOURCE'
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                collector.closed_native_readout(self.archive([('installed-a.observation.json', self.failure()), ('vscode-workspace-controller.json', changed)]), time.monotonic() + 5, 'a' * 40, 'b' * 40)
+
+
 if __name__ == "__main__":
     unittest.main()

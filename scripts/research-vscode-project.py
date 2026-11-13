@@ -583,7 +583,49 @@ READOUT_PHASES = frozenset(('publisher-startup native-devtools-admission workben
 READOUT_REASONS = frozenset(('unclassified publisher-startup-failed publisher-spawn-failed publisher-stream-overflow publisher-proof-bound publisher-proof-missing publisher-proof-mismatch publisher-stream-malformed publisher-pre-verifier-stderr publisher-endpoint-ambiguous publisher-endpoint-refused publisher-port-refused stage-deadline operation-deadline browser-context-mismatch workbench-pages-ambiguous workbench-page-missing publisher-shutdown-incomplete publisher-terminal-result-mismatch observer-deadline driver-output-bound picker-input-deadline picker-input-ambiguous picker-label-missing picker-label-ambiguous picker-row-bound ui-selection-refused ui-dialog-unexpected ui-dialog-unplanned mcp-trust-origin mcp-state-refused mcp-start-deadline trigger-publication-refused').split())
 
 
-def closed_native_readout(body, deadline):
+def native_log_readout(archive, names, deadline, commit, tree):
+    if 'vscode-workspace-controller.json' not in names:
+        return {}
+    member = archive.getinfo('vscode-workspace-controller.json')
+    if member.is_dir() or member.flag_bits & 1 or not 0 < member.file_size <= 1 << 20:
+        raise ValueError('native log controller bound')
+    with archive.open(member) as stream:
+        raw = stream.read((1 << 20) + 1)
+    if len(raw) != member.file_size or time.monotonic() >= deadline:
+        raise ValueError('native log controller incomplete')
+    value = json.loads(raw.decode('utf-8', 'strict'), object_pairs_hook=publisher.bounds.unique_object,
+                       parse_constant=publisher.bounds.invalid_constant)
+    if type(value) is not dict:
+        raise ValueError('native log controller type')
+    rows, result, seen = value.get('observations'), {}, set()
+    if type(rows) is not list or len(rows) > len(GUI):
+        raise ValueError('native log observation count')
+    if commit is not None and (value.get('source_commit') != commit or value.get('source_tree') != tree
+            or value.get('mode') != 'trusted-project-v1'
+            or value.get('evidence_kind') != 'vscode-pinned-trusted-project-gateway-lifecycle'):
+        raise ValueError('native log controller source')
+    for row in rows:
+        if type(row) is not dict or row.get('stage') not in GUI or row['stage'] in seen:
+            raise ValueError('native log stage join')
+        seen.add(row['stage'])
+        facts = row.get('native_log')
+        if facts is None:
+            continue
+        if commit is None or type(row.get('nonce')) is not str or not 0 < len(row['nonce']) <= 128:
+            raise ValueError('native log attribution missing')
+        closed_artifact(facts, 'status transport_start last_state stopped starting running error'.split())
+        if (facts['status'] not in ('unavailable', 'observed') or type(facts['transport_start']) is not bool
+                or facts['last_state'] not in ('none', 'Stopped', 'Starting', 'Running', 'Error')
+                or any(type(facts[key]) is not int or not 0 <= facts[key] <= 255 for key in ('stopped', 'starting', 'running', 'error'))
+                or sum(facts[key] for key in ('stopped', 'starting', 'running', 'error')) > 255
+                or (facts['last_state'] != 'none' and facts[facts['last_state'].lower()] == 0)
+                or (facts['status'] == 'unavailable' and facts != dict(status='unavailable', transport_start=False, last_state='none', stopped=0, starting=0, running=0, error=0))):
+            raise ValueError('native log finite facts')
+        result[row['stage']] = (dict(facts), row['nonce'])
+    return result
+
+
+def closed_native_readout(body, deadline, commit=None, tree=None):
     """Projection of already receipt-bound native bytes, not a new native proof."""
     if not isinstance(body, bytes) or not 0 < len(body) <= 32 << 20:
         raise ValueError('readout ZIP bound refused')
@@ -599,6 +641,7 @@ def closed_native_readout(body, deadline):
         names = [item.filename for item in members]
         if len(names) > len(native_names()) or len(set(names)) != len(names) or not set(names) <= native_names():
             raise ValueError('readout closed members refused')
+        native_logs = native_log_readout(archive, names, deadline, commit, tree)
         for stage in GUI:
             if time.monotonic() >= deadline:
                 raise ValueError('readout original staging deadline')
@@ -634,7 +677,13 @@ def closed_native_readout(body, deadline):
                     or type(mcp['lastState']) is not str or mcp['lastState'] not in ('none', 'Stopped', 'Starting', 'Running', 'other')
                     or any(type(mcp[key]) is not int or not 0 <= mcp[key] <= 255 for key in ('stopped', 'starting', 'running', 'other'))):
                 raise ValueError('readout MCP facts refused')
-            rows.append(dict(stage=stage, phase=value['phase'], reason=facts['reason'], mcp=dict(mcp)))
+            row = dict(stage=stage, phase=value['phase'], reason=facts['reason'], mcp=dict(mcp))
+            if stage in native_logs:
+                native_log, nonce = native_logs[stage]
+                if nonce != value.get('nonce'):
+                    raise ValueError('native log failure nonce differs')
+                row['native_log'] = native_log
+            rows.append(row)
     if time.monotonic() >= deadline or len(json.dumps(rows).encode('ascii')) > 16384:
         raise ValueError('readout result bound refused')
     return rows
@@ -681,7 +730,7 @@ def stage_handoff(value, output, parent, commit, tree, *, readout=None):
         if readout is not None:
             if native_body is not None:
                 try:
-                    projection = {'status': 'observed', 'failures': closed_native_readout(native_body, deadline)}
+                    projection = {'status': 'observed', 'failures': closed_native_readout(native_body, deadline, commit, tree)}
                 except Exception:
                     # Diagnostic refusal cannot discard already admitted archives or expose raw text.
                     projection = {'status': 'refused', 'failures': []}

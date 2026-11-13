@@ -140,12 +140,14 @@ func (c *controller) trustedObserve(stage, scope, trust, operation string, insta
 		return err
 	}
 	f := c.trustedState
+	logBaseline, _ := beginNativeLog(f.Profile, c.request.Input.UID)
+	defer logBaseline.close()
 	ctx, cancel := context.WithTimeout(c.work, 65*time.Second)
 	defer cancel()
 	started := time.Now()
 	var observed map[string]any
 	var stageErr error
-	_, runErr := c.strictInput(ctx, stage, []string{filepath.Join(c.request.Base, "tools", "node"), filepath.Join(c.request.Base, "tools", "driver", "driver.js")}, prepared.project, c.trustedEnvironment(), prepared.frame, func(exchange context.Context, proof isolationProof) error {
+	child, runErr := c.strictInput(ctx, stage, []string{filepath.Join(c.request.Base, "tools", "node"), filepath.Join(c.request.Base, "tools", "driver", "driver.js")}, prepared.project, c.trustedEnvironment(), prepared.frame, func(exchange context.Context, proof isolationProof) error {
 		var err error
 		observed, err = c.waitTrustedObservation(exchange, prepared.driverResult, stage, scope, trust, prepared.request, proof, started, prepared.before)
 		err, stageErr = trustedFailureForShutdown(err)
@@ -161,7 +163,11 @@ func (c *controller) trustedObserve(stage, scope, trust, operation string, insta
 	if runErr == nil {
 		f.Stages = append(f.Stages, stage)
 	}
-	c.observations = append(c.observations, map[string]any{"stage": stage, "project": scope, "complete": runErr == nil, "observation": observed, "error": clipped(runErr)})
+	nativeLog := unavailableNativeLog()
+	if installed && runErr != nil {
+		nativeLog = logBaseline.collect(child.TreeReaped && c.work.Err() == nil, deadline, f.Packages[scope].Name)
+	}
+	c.observations = append(c.observations, map[string]any{"native_log": nativeLog, "nonce": f.Nonce, "stage": stage, "project": scope, "complete": runErr == nil, "observation": observed, "error": clipped(runErr)})
 	return runErr
 }
 
