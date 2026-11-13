@@ -48,7 +48,7 @@ func TestActivateGoldenAcrossClients(t *testing.T) {
 				request := goldenActivationRequest(t, definition.ID, root)
 				request.VerifyOnly = verifyOnly
 				outcome, err := testActivator(Activator{Runner: runner}).Activate(context.Background(), request)
-				if domain.ClientTraitsFor(definition.ID).VerifiesNativeDirectory {
+				if definition.ID == domain.ClientPi {
 					outcome = piGoldenActivationOutcome(outcome)
 				}
 				records[string(definition.ID)] = activationRecord{
@@ -80,7 +80,7 @@ func TestActivateGoldenWhenClientsRespond(t *testing.T) {
 				request.VerifyOnly = verifyOnly
 				runner := goldenRespondingRunner(definition.ID, request)
 				outcome, err := testActivator(Activator{Runner: runner}).Activate(context.Background(), request)
-				if domain.ClientTraitsFor(definition.ID).VerifiesNativeDirectory {
+				if definition.ID == domain.ClientPi {
 					outcome = piGoldenActivationOutcome(outcome)
 				}
 				records[string(definition.ID)] = activationRecord{
@@ -193,7 +193,7 @@ func goldenNativeObjects(t *testing.T, id domain.ClientID, root string) []domain
 // this client, so the activator sees the same invariants it sees in production.
 func goldenActivationRequest(t *testing.T, id domain.ClientID, root string) domain.ActivationRequest {
 	t.Helper()
-	if domain.ClientTraitsFor(id).VerifiesNativeDirectory {
+	if id == domain.ClientPi {
 		return piGoldenActivationRequest(t, root)
 	}
 	configRoot := filepath.Join(root, string(id), "config")
@@ -244,7 +244,7 @@ func goldenDeactivationRequest(t *testing.T, id domain.ClientID, root string) do
 		BackendExecutable:   request.BackendExecutable,
 		ManagedArtifactPath: request.Delivery.ActivePath,
 	}
-	if domain.ClientTraitsFor(id).VerifiesNativeDirectory {
+	if id == domain.ClientPi {
 		requestRemoval.NativeRegistryRoot = request.Plan.NativeRegistryRoot
 	}
 	return requestRemoval
