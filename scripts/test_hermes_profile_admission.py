@@ -12,6 +12,46 @@ CASE = runpy.run_path(str(Path(__file__).parent / "e2e/hermes-profile-admission.
 
 
 class ProfileAdmissionContracts(unittest.TestCase):
+    def test_observer_runtime_preserves_official_bootstrap_and_arguments(self):
+        official = ["/payload/python", "-I", "-c", "opaque official bootstrap", "--child"]
+        make = mock.Mock(return_value=official)
+        command = CASE["observer_runtime_command"](make, Path("/payload/source"),
+                    Path("/payload/python"), code="observer", args=["--child"])
+        make.assert_called_once_with(Path("/payload/source"), python=Path("/payload/python"),
+                                     code="observer", args=["--child"])
+        self.assertEqual(command, [official[0], "-I", "-B", *official[2:]])
+        self.assertEqual(official, ["/payload/python", "-I", "-c", "opaque official bootstrap", "--child"])
+        invalid = (tuple(official), official[1:], ["/foreign/python", *official[1:]],
+                   [official[0], "-S", *official[2:]], [*official, "extra"],
+                   [*official[:3], None, "--child"], [*official[:4], "changed"])
+        for argv in invalid:
+            with self.subTest(argv=argv), self.assertRaisesRegex(RuntimeError, "command shape changed"):
+                CASE["observer_runtime_command"](mock.Mock(return_value=argv), Path("/payload/source"),
+                    "/payload/python", code="observer", args=["--child"])
+
+    def test_observer_bytecode_flag_prevents_real_isolated_python_cache_writes(self):
+        import subprocess
+        import sys
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            for protected in (False, True):
+                directory = root / str(protected)
+                directory.mkdir()
+                module = directory / "uap_inert_observer_module.py"
+                module.write_text("value = 17\n", encoding="utf-8")
+                code = (f"import sys; sys.path.insert(0, {str(directory)!r}); "
+                        "import uap_inert_observer_module as probe; "
+                        "print(sys.dont_write_bytecode, probe.value)")
+                def make(_root, *, python, code, args):
+                    return [str(python), "-I", "-c", code, *args]
+                command = (CASE["observer_runtime_command"](make, directory, sys.executable, code=code)
+                           if protected else make(directory, python=sys.executable, code=code, args=()))
+                completed = subprocess.run(command, env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+                                           capture_output=True, check=True, timeout=10)
+                self.assertEqual(completed.stdout.strip(), f"{protected} 17".encode())
+                self.assertEqual(module.read_bytes(), b"value = 17\n")
+                self.assertEqual(any(directory.rglob("*.pyc")), not protected)
+
     def test_census_is_content_free_disjoint_and_does_not_follow_links(self):
         import time
         with tempfile.TemporaryDirectory() as temporary:

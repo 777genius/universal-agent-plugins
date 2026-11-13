@@ -647,3 +647,85 @@ of the member responsible for any closure refusal. Keep complete official
 payload, original closure guards, false qualifications and existing deadlines.
 No vendor source change, environment-filter bypass, cache cleanup or custom
 repackaging is authorized by this correction. Workflow execution remains pending.
+
+## Owned official-build alias teardown (2026-11-13)
+
+Actual original850 archives show Linux `venv/share/man/man1/qr.1` with two
+links/one payload alias and Windows `pm-runtime/Lib/site-packages/packaging/dependency_groups.py`
+with three links/two payload aliases; historical0a1 repeats the Windows member.
+No payload body hash is inferred from the diagnostic member-path hash.
+
+Allocate fresh0700 work/cache/payload roots exclusively before the unchanged
+pinned official builder, retain their original directory handles and identities,
+and author only the builder's documented `.native-preparation` owner marker.
+After the builder returns, one original120-second cleanup budget covers the
+complete metadata-only union census, targeted unlink and final full payload
+snapshot. At most3x262144 entries/depth64/8GiB logical regular bytes across the
+union are admitted; the prior macOS payload alone had123925 entries. Bounds are
+finite refusals, not evidence that every future cache fits. Profile caps stay
+unchanged. Unknown external runtime aliases refuse before the first unlink.
+
+Only external regular aliases whose complete inode group is accounted inside
+those original fresh held roots are unlinked. Internal payload aliases and bytes
+remain intact; all other work/cache entries are retained. Every operation joins
+original roots, no-follow held ancestors and immediate leaf identity; exact own
+nlink decrements/ctime transitions and immediate-parent metadata changes are
+tracked only for successful individual unlinks. Any observed drift stops and
+retains remaining state, without a stale rollback or whole-tree deletion.
+POSIX unlinkat is descriptor-relative, not atomic inode-CAS against arbitrary
+same-UID attackers: authority is exclusively this fresh private settled-build
+fixture lifetime, never an existing user/foreign cache. Windows uses DELETE
+access plus OPEN_REPARSE_POINT and FileDispositionInfo on the held leaf handle,
+with rename-denying held ancestors; unknown/API failures refuse.
+
+No vendor patch, custom repackage, cache relocation, raw binary upload or native
+qualification is introduced. Genuine final-source Windows/macOS/Linux capture
+remains mandatory. Local inert tests exercise actual Linux aliases, replacement,
+unknown/late outside aliases, shared deadline and membership/byte bounds; Windows
+handle behavior requires the ordinary hosted Windows lane.
+
+
+## Original archive closure and observer-only bytecode correction
+
+All five originals were downloaded through the official Actions artifact API
+and independently verified locally: exact API size/digest, whole ZIP CRC,
+closed member paths, source/source-after and vendor-pin joins, and every
+recorded output stream size/digest. The fixed historical CI reader expected
+flat members, while the real uploads retain their exact owned
+`hermes-profile-admission-evidence-<token>/upload/` prefix. Its two diagnostic
+jobs refused before reading the native evidence; those jobs are not native
+failures or passes. Remove the completed temporary jobs/reader/tests now that
+the originals have been properly audited. Genuine User/custom-root jobs remain.
+
+| Original | Artifact ID | Bytes | SHA-256 |
+| --- | ---: | ---: | --- |
+| 850 Linux | 14058673342 | 1039 | `832a926c4cc7589695e15ac6b9ba6b0d957029ab9b08c2fa35eb94d0c759a8a3` |
+| 850 Windows | 14058990969 | 1077 | `84d8ae6694ba1131427c6143b65cf4b932b8412d164fd4cbfd164d5d59b0257d` |
+| 0a1 Windows | 14052063757 | 1077 | `1be40362fd5f15c4e71519e2d73eb0dcbc102a92add9453a44496a9e59c01c55` |
+| 850 macOS | 14059226751 | 9946 | `03c61239c8dc39362f23d424a6b631b91c5f285d216d10270bb06f07595c27c6` |
+| b79 macOS | 14046328482 | 9945 | `ed0d57c5bea2e29991d7ff59d752d62209ce7842088bad2291d880a22f3af877` |
+
+Both macOS originals pass the literal native `--version` command, then refuse
+an original custom-root identity change and report changed runtime inventory.
+Both add 13 entries and 405670 logical bytes. Their aggregate-only inventories
+do not identify those members or the changed root identity field. The 920
+private-root correction remains prospective; no old failure cause is inferred.
+
+The exact pinned `hermes_cli/_launchers.py:39–72` runtime API emits
+`[python, -I, -c, bootstrap, *args]`. Isolated Python ignores the existing
+`PYTHONDONTWRITEBYTECODE=1` environment setting. Preserve that complete
+vendor-generated bootstrap and argument tail, validate its exact prefix,
+and insert `-B` only for the UAP observer and UAP resolution probes. The literal
+native launcher argv and official payload are unchanged. Native POSIX launchers
+use `-P` in `scripts/build/launchers.py`; no source-installed or native command
+is silently rewritten by this observer helper.
+
+A real isolated-Python regression demonstrates that the original `-I` control
+creates bytecode for a new inert module despite the environment setting, while
+the observer command leaves its module bytes intact and creates no cache.
+Additional shape negatives refuse changed interpreter/flags/tail/container.
+All 52 existing/new profile contracts pass locally, independently repeated.
+This proves an observer defect and its correction, not that the historical
+13 runtime members were bytecode. Complete runtime inventory guards and all
+native admission/qualification gates remain unchanged. New genuine captures
+must establish the resulting native behavior.

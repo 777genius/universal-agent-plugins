@@ -700,6 +700,21 @@ def validate_roots(user_home, native_home, roots):
             and not roots[1].is_relative_to(roots[0]), "A/B runtime roots overlap")
 
 
+def observer_runtime_command(runtime_command, root, python, *, code, args=()):
+    """Keep UAP observer imports from writing into the measured payload.
+
+    The pinned runtime API uses -I, which ignores PYTHONDONTWRITEBYTECODE.
+    Preserve its complete bootstrap and arguments; -B applies only to our
+    observer and resolution probes. Native Hermes commands use their launcher.
+    """
+    argv = runtime_command(root, python=python, code=code, args=args)
+    require(type(argv) is list and len(argv) == 4 + len(args)
+            and all(type(value) is str for value in argv)
+            and argv[:3] == [str(python), "-I", "-c"]
+            and argv[4:] == list(args), "observer runtime command shape changed")
+    return [argv[0], "-I", "-B", *argv[2:]]
+
+
 GUARD_CODE = r"""
 import json, os
 from pathlib import Path
@@ -840,7 +855,8 @@ def observe_profiles(probes):
         require(env["HOME"] == str(user) and env["USERPROFILE"] == str(user), "OS User home changed")
         if guard:
             from hermes_cli._launchers import runtime_command
-            argv = runtime_command(Path(os.environ["HERMES_PROFILE_RUNTIME_ROOT"]), python=os.environ["HERMES_PROFILE_PYTHON"], code=GUARD_CODE)
+            argv = observer_runtime_command(runtime_command, Path(os.environ["HERMES_PROFILE_RUNTIME_ROOT"]),
+                                            os.environ["HERMES_PROFILE_PYTHON"], code=GUARD_CODE)
         else:
             argv = [*native, *args]
         methods_before = {name: list(probe.methods()) for name, probe in probes.items()}
@@ -1052,8 +1068,8 @@ def run():
         sys.path.insert(0, str(runtime_root))
         from hermes_cli._launchers import runtime_command
         require(Path(runtime_command.__code__.co_filename).resolve() == runtime_root / "hermes_cli/_launchers.py", "observer runtime API is not payload-owned")
-        argv = runtime_command(runtime_root, python=python, args=["--child"],
-                               code=f"runpy.run_path({str(Path(__file__).resolve())!r}, run_name='__main__')")
+        argv = observer_runtime_command(runtime_command, runtime_root, python, args=["--child"],
+                                        code=f"runpy.run_path({str(Path(__file__).resolve())!r}, run_name='__main__')")
         verify_inventory_directory(payload, payload_before, payload_descriptor, payload_held)
         native_started = time.monotonic()
         lifecycle_deadline = native_started + 720

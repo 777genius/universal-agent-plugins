@@ -533,3 +533,115 @@ The historical original generator result is not final-source acceptance.
 The new provenance tests and complete affected CI remain required. Retained
 native inventory row schema, original archive CRC/stream joins, exact product
 environment and ordinary CLI lifecycle acceptance remain separate gates.
+
+## Conditional production User observation source candidate
+
+This seven-path candidate is not publication-ready capability evidence. The
+existing pure14 source passed original Linux, Windows and macOS jobs on b526;
+retained full native row schemas remain pending. Provenance must first be
+canonically generated/tested on the reviewed two-file alias-qualified detector;
+no hand-edited golden or decorative DetectedClient.Version is an authority.
+The runtime draft is 380 physical lines, with one new file below
+500 effective lines; the size reflects fixed config/backend leases, strict
+schema/component checks and initial/resume distinctions, not a generic runner.
+
+Use only Env.Runner.Run and its real CleanupComplete/NoChildStarted result.
+The native commands are --version (exact1.5.3) then plugin list --json under one
+original ten-second context. The child receives only the selected original
+HOME/USERPROFILE; genuine product Windows execution must confirm necessary
+platform infrastructure bindings rather than importing provider credentials.
+The final accepted row schema must be joined to retained originals before
+publication: the draft six-field closed reader is conservative and intentionally
+refuses unknown fields. No unsupported output is an authoritative absence.
+
+Eligibility is User-only, original unaliased Host-default profile, exact selected
+backend/plan locator and an existing bounded qualified plugin-boolean config with the selected override.
+Absent selected overrides remain unmeasured and cannot silently become a new
+native bootstrap predicate.
+Absent, malformed or unsupported/bootstrap config starts no child. Initial file
+delivery can remain Prepared; VerifyOnly or PackageUnchanged unavailability is
+an error so historical Active is never treated as fresh native observation.
+Project retains its existing file activation and unavailable native-classifier
+behavior; the inherited routing trait never grants Project CLI verification.
+Recognized disabled/absent observations retain Prepared with a remaining action;
+there is no enable, disable, import, global copy, session, auth or model action.
+
+Exactly the selected config and backend retain rooted original handles across
+both native commands. Rejoin namespace, named/held portable identities, mode,
+size, mtime and streaming SHA256 before/after; close errors and final context
+expiry refuse observation. This is not new UID/nlink/SID/ACL ownership or atomic
+exclusion of concurrent namespace writers. The existing core owns any persisted
+ProfileAuthority checks; legacy bindings are never captured or upgraded here.
+Configuration effects are not restored or adopted; an attempted failed native
+observation reports uncertainty. No new NativeObjects or persisted schema.
+
+Inert contracts cover the real provider/resume path, historical Active, repeat,
+update, exact absent-bundle repair, authentication and package-receipt continuity,
+Project isolation, unknown/dirty/unsettled/cancelled results and same-byte inode
+replacement. A real cold locked-restore acceptance case belongs to the existing
+CLI agreement/transport layer and is NOT simulated by a Service reload or an
+ordinary reinstall. Its concrete later CLI/native test remains an acceptance
+gap. All newly authored source/contracts are UNEXECUTED while the executor is
+unavailable; formatting, compilation, lint, full caller tests, canonical goldens
+and genuine exact-environment native product proof are mandatory before merge.
+
+Source-review correction: reject casefold-selected name/path aliases and duplicate
+casefold inventory identifiers before presence/absence classification. Error
+sentences follow lowercase Go conventions. Backend/config digest reads now check
+the same original context between fixed32KiB chunks, including immediately after
+each read; no deadline is renewed. A first-chunk cancellation contract requires
+one read and zero subsequent native commands. Alias-only and alias-plus-exact
+rows both refuse. These added contracts are UNEXECUTED; all prior publication
+gates remain unchanged. The API-only draft runtime was404 source lines before restored lint factoring.
+
+Follow-up source review preserves the original limit-plus-one read bound by
+clamping each digest chunk to the remaining admitted bytes plus one. The config
+recording-reader contract refuses oversize after requesting exactly16385bytes;
+it remains UNEXECUTED. No publication qualification changes.
+
+## Restored execution and conditional public User acceptance
+
+The original811 run43460106819 archives14057172623/14057495173/14057860650
+were downloaded after executor restoration. All three outer SHA256/size records
+match original uploads; both ZIP CRCs pass and each inner archive has exactly29
+members. Each has28 manifest request/receipt byte+SHA joins and14 stdout joins,
+source811bec555b0515bcbeb6143228a4afc583d2b090/treee1299d6652523905349c4995234e8101b4e6216b.
+All21 actual list arrays have exactly enabled,mcpServers,name,path,skills,version;
+all typed states, physical selectors, component sets and versions match. Pure
+version/list config digests match and all effects are acknowledged. IDE, Project,
+native MCP, auth and model qualifications remain false.
+
+Actual restored local checks now include gofmt, full Antigravity/domain suites,
+focused real provider history/repeat/update/repair contracts, and21 inert Python
+contracts. These are process-inert local tests, not native product acceptance.
+One initially wrong test interface was corrected to the actual transaction port;
+three lint findings were corrected without exemptions. The module's unchanged
+legacy lint findings require the standard changed-line/architecture gate.
+
+A separate draft acceptance amendment, EXCLUDED from this RO-only freeze,
+adds genuine PUBLIC UAP User repeat,
+changed2.0 update, completely absent owned-bundle repair and exact remove. A
+separate disabled fixture must retain its initial false state. Five independently
+authored negative fixtures require repeat refusal for missing config, malformed
+config, foreign same-manifest collision, actual config symlink and absent native
+backend; no baseline is restored after a refusal. An unavailable symlink
+prerequisite fails the test rather than skipping or spoofing an OS. Original
+ProjectA/B, source and three independent User/vendor profiles remain protected.
+
+A separate cold PUBLIC fixture uses the immutable current source commit's
+existing repotests/testdata/agentplugins_native_probe. It transfers ONLY saved
+uap.toml/uap.lock into an independent empty native/User state/cache world, runs
+install--locked, joins actual source/tree/manifest and committed environment
+receipt identity, then authors one known enabled override and exercises real
+read-only repeat. This is the existing saved-install route, not a reinstallation
+masquerading as restore. Public JSON intentionally hides paths and declared
+versions, so tests use the existing bounded state binding for those identities.
+
+Only source runs with the existing receipt collector execute the extension;
+released-lane argv and evidence remain unchanged. Exact new RO action text plus
+Prepared/Installed outcome establishes that the real compiled adapter reached
+native observation. In particular, genuine Windows execution must prove its
+closed HOME/USERPROFILE child environment works; no ambient provider variables
+are added. These added public/native journeys have NOT run locally and remain
+mandatory hosted acceptance. The original14 retained direct exchanges retain
+exactly their original scope and are not relabeled as product-command streams.

@@ -2,11 +2,18 @@ package usecase
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providerstest"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
+	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
 type resumeObservationActivator struct {
@@ -91,5 +98,130 @@ func TestResumeUncheckedAuthenticationNoChangeRequiresVerifiedObservation(t *tes
 				t.Fatalf("unchanged observation wrote state: %v", err)
 			}
 		})
+	}
+}
+
+type antigravityObservationRunner struct {
+	active  string
+	version string
+	failed  bool
+	calls   int
+}
+
+func (runner *antigravityObservationRunner) Run(_ context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
+	runner.calls++
+	body := []byte("1.5.3\n")
+	if len(command.Argv) == 4 {
+		var err error
+		body, err = json.Marshal([]any{map[string]any{"name": filepath.Base(runner.active), "path": runner.active,
+			"version": runner.version, "enabled": true, "skills": []string{}, "mcpServers": []string{}}})
+		if err != nil {
+			return legacyports.CommandResult{}, err
+		}
+	}
+	return legacyports.CommandResult{CleanupComplete: !runner.failed, Stdout: body}, nil
+}
+
+type antigravityObservationFixture struct {
+	service   Service
+	store     transaction.StateStore
+	input     AddInput
+	runner    *antigravityObservationRunner
+	installed AddResult
+}
+
+func antigravityReadFixture(t *testing.T) antigravityObservationFixture {
+	t.Helper()
+	service, store, client := serviceFixture(t)
+	home, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	client.ClientID = domain.ClientAntigravity
+	client.ConfigRoot = filepath.Join(home, ".gemini", "config")
+	client.NativeConfigRoot = client.ConfigRoot
+	client.ExecutablePath = filepath.Join(home, "agy")
+	if err = os.WriteFile(client.ExecutablePath, []byte("inert; no native process"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	input := addInput(t, client, "https://example.com/antigravity-observation")
+	input.Confirmed, input.BackendExecutable = true, client.ExecutablePath
+	runner := &antigravityObservationRunner{version: "1.0.0"}
+	service.Activator = providerstest.NewActivator(providers.Activator{Runner: runner})
+	installed, err := service.Add(context.Background(), input)
+	if err != nil || installed.Activation.Activation != domain.ActivationPrepared || runner.calls != 0 {
+		t.Fatal("initial file delivery required native bootstrap", installed, err, runner.calls)
+	}
+	config, err := json.Marshal(map[string]any{"plugins": map[string]any{filepath.Base(installed.Plan.ActivePath): map[string]any{"enabled": true}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(client.ConfigRoot, "config.json"), config, 0600); err != nil {
+		t.Fatal(err)
+	}
+	runner.active = installed.Plan.ActivePath
+	return antigravityObservationFixture{service: service, store: store, input: input, runner: runner, installed: installed}
+}
+
+func TestAntigravityRealProviderResumeReobservesHistoricalActiveAndPreservesReceipts(t *testing.T) {
+	for _, failure := range []bool{false, true} {
+		t.Run(map[bool]string{false: "observed", true: "unavailable"}[failure], func(t *testing.T) {
+			fixture := antigravityReadFixture(t)
+			before, err := fixture.store.Load()
+			if err != nil {
+				t.Fatal(err)
+			}
+			binding := onlyBinding(before.Installations[0])
+			binding.Activation = domain.ActivationActive
+			binding.Authentication = domain.AuthenticationPending
+			before.Installations[0].Clients[binding.ClientBindingID] = binding
+			if err = fixture.store.Save(before); err != nil {
+				t.Fatal(err)
+			}
+			fixture.runner.failed = failure
+			result, err := fixture.service.Add(context.Background(), fixture.input)
+			if (err != nil) != failure || result.Activation.Activation == domain.ActivationActive || result.Activation.AuthenticationAttested {
+				t.Fatal("historical Active became false native evidence", result, err)
+			}
+			after, loadErr := fixture.store.Load()
+			if loadErr != nil {
+				t.Fatal(loadErr)
+			}
+			updated := onlyBinding(after.Installations[0])
+			if !reflect.DeepEqual(binding.Receipts, updated.Receipts) || !reflect.DeepEqual(binding.PackageRevision, updated.PackageRevision) ||
+				!reflect.DeepEqual(before.TransactionReceipts, after.TransactionReceipts) || updated.Authentication != domain.AuthenticationPending {
+				t.Fatal("read-only resume rewrote package/authentication ownership", after)
+			}
+			want := 2
+			if failure {
+				want = 1
+			}
+			if fixture.runner.calls != want {
+				t.Fatal("wrong metadata command count", fixture.runner.calls)
+			}
+		})
+	}
+}
+
+func TestAntigravityRealProviderUpdateAndAbsentBundleRepairRetainPrepared(t *testing.T) {
+	fixture := antigravityReadFixture(t)
+	repeated, err := fixture.service.Add(context.Background(), fixture.input)
+	if err != nil || repeated.Activation.Activation != domain.ActivationPrepared {
+		t.Fatal(repeated, err)
+	}
+	fixture.input.OperationID = "antigravity-update"
+	setEnvelopeVersion(t, &fixture.input.Envelope, "2.0.0", "sha256:source-two", "sha256:manifest-two")
+	fixture.runner.version = "2.0.0"
+	updated, err := fixture.service.Update(context.Background(), fixture.input)
+	if err != nil || updated.Activation.Activation != domain.ActivationPrepared {
+		t.Fatal(updated, err)
+	}
+	if err = os.RemoveAll(updated.Plan.ActivePath); err != nil {
+		t.Fatal(err)
+	}
+	fixture.input.OperationID = "antigravity-repair"
+	repaired, err := fixture.service.Repair(context.Background(), fixture.input)
+	if err != nil || repaired.Activation.Activation != domain.ActivationPrepared || repaired.Activation.ActivationAttested {
+		t.Fatal("repair promoted runtime activation", repaired, err)
 	}
 }

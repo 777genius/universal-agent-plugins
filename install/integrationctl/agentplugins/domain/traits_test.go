@@ -161,3 +161,15 @@ func TestPiNativeEffectTrackingIsProjectScoped(t *testing.T) {
 		t.Fatalf("Pi project lost its selected components: %+v", projectCaps)
 	}
 }
+
+func TestAntigravityReadOnlyRoutingKeepsPreparedScopesWithoutNativeEffects(t *testing.T) {
+	for _, scope := range []InstallScope{ScopeUser, ScopeProject} {
+		traits := (SelectedDelivery{}).EffectiveTraitsForScope(ClientAntigravity, scope)
+		if traits.LifecycleKind != LifecyclePrepared || traits.TracksNativeEffects || !traits.VerifiesNativeDirectory {
+			t.Fatalf("Antigravity scope %s changed lifecycle effects: %+v", scope, traits)
+		}
+		if !ShouldReadOnlyVerifyForScope(ClientAntigravity, scope, "", InstallIntentAutomatic) {
+			t.Fatal("missing backend bypassed authoritative resume error routing", scope)
+		}
+	}
+}

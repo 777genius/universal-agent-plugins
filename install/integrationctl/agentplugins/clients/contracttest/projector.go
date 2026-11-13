@@ -44,7 +44,11 @@ func projectorViolations(t *testing.T, adapter clients.Adapter) []string {
 		return []string{fmt.Sprintf("write outside marker: %v", err)}
 	}
 	input := projectorInput(adapter, root, staging)
-	if domain.ClientTraitsFor(adapter.ID()).VerifiesNativeDirectory {
+	definition, _ := domain.ClientDefinitionFor(adapter.ID())
+	// Directory observation is also supported by Skill/MCP-only adapters.
+	// Select this extension fixture only when the adapter admits native extensions.
+	nativeExtension := domain.ClientTraitsFor(adapter.ID()).VerifiesNativeDirectory && definition.Capabilities.ExtensionSupport == domain.SupportNative
+	if nativeExtension {
 		input = directoryProjectorInput(t, input, root)
 	}
 	before := listPaths(root)
@@ -60,7 +64,7 @@ func projectorViolations(t *testing.T, adapter clients.Adapter) []string {
 		return append(violations, fmt.Sprintf("seed reset staging tree: %v", err))
 	}
 	input.StagingPath = reset
-	if domain.ClientTraitsFor(adapter.ID()).VerifiesNativeDirectory {
+	if nativeExtension {
 		seedNativeEntrypoint(t, reset)
 	}
 	second, err := projector.Project(context.Background(), input)

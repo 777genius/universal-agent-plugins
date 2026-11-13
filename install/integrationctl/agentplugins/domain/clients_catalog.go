@@ -186,7 +186,7 @@ var clientDefinitions = []ClientDefinition{
 	}), LifecycleNativeConfig), SupportNative, SupportUnsupported),
 	withProjectScope(clientDefinition(ClientAntigravity, "Google Antigravity", "antigravity", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
 		InstallIntents: []InstallIntent{InstallIntentAutomatic},
-		LifecycleKind:  LifecyclePrepared,
+		LifecycleKind:  LifecyclePrepared, VerifiesNativeDirectory: true,
 	}), LifecyclePrepared),
 	withProjectComponents(withProjectScope(withActivation(withoutCommands(clientDefinition(ClientPi, "Pi", "pi", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportNative, ClientTraits{
 		InstallIntents: []InstallIntent{InstallIntentAutomatic}, LifecycleKind: LifecyclePrepared,
