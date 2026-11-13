@@ -757,3 +757,69 @@ make lint gate passed all eight modules and the unchanged 138-rule baseline.
 The already-started full core gate finished with the same 92 failing test names
 and ten failing packages as the earlier environment-bound run; both failure
 sets are equal. That local gate remains failed, with hosted results required.
+
+### Actual trusted progress and repeated-add DTO correction
+
+The original trusted run [43508520412](https://github.com/777genius/universal-agent-plugins/actions/runs/43508520412)
+used source `667b5636a3c572c078bf79dc1db00c48f7ca7c66`, tree
+`36f829b5e8926e0289333df64561e403bc8e3051`. Native artifact `14079188405`
+has 21,615 outer ZIP bytes and SHA-256
+`f109120d4b36806095330a0aa28f8dc2c835b37452758c4ee77d60e0b439d7de`;
+its 117,893-byte `native.zip` has SHA-256
+`39ee4dc772e552a41e3c1183b1a4d5749e518e1b4b1361a2699627112797b4cd`.
+The outer/inner digests and CRCs, exact source identities, 27 native members and
+16 original stream byte/hash joins were independently checked. Ten recorded
+children were reaped without overflow, both cleanup layers completed, and the
+publisher's private mounts were released with none remaining.
+
+The four completed GUI stages are `empty-a`, `empty-b`, `installed-a`, and
+`installed-b`. The two installed observations contain genuine VS Code MCP Gateway
+initialization, tools listing and `inspect_runtime` calls, with joined fixture
+nonces, separate A/B PIDs, expected revisions and retained markers. This advances
+the earlier installed-a failure. It does not qualify the unfinished full lifecycle:
+all five final qualification flags remain false. The later failure is exactly
+`single public target outcome missing` after `repeat-add-a`; it is not a GUI
+failure or a process cleanup refusal.
+
+The real no-change add route in `add_application.go` renders `addResultData`
+directly through `renderAddResultWithSecurity`, giving `data.result`. Initial add
+uses the batch `data.targets[0].output.result` representation. The native oracle
+previously required the latter for every operation and rejected the actual
+successful, unchanged repeated add. The correction binds the JSON command to the
+existing fixed argv, admits the single result only for the exact `repeat-add-a`
+stage and `add` command, requires explicit false dry-run/confirmation/mutation,
+true no-change, and exact VS Code/project plan identity. Mixed representations,
+foreign targets, unexpected stages and absent or numeric booleans are refused.
+The existing batch path, independent filesystem/state comparisons, GUI stages,
+native protocol requirements and final completion gate retain their roles.
+
+The test fixture is the unchanged 3,262-byte public JSON frame from that original
+`repeat-add-a.merged.log`, after its separately verified isolation/progress prefix.
+Its SHA-256 is `0e452aed9e122d0f079389218a97990fea9cc110bba5311296938df5cc666e03`.
+It contains only this disposable, unauthenticated fixture's public output. The
+positive regression uses those exact bytes; counterexamples mutate the original
+command, representation, intent, booleans and target/scope fields. Root R1 accepted
+this bounded oracle correction and four-file scope.
+
+Root R2 identified a missing join between the flat DTO's lifecycle claims and
+the existing independently verified Prepared receipt. The flat plan now also
+requires `ready`, `prepared_package`, `prepared`, `not_checked`, `allowed` and
+`package_validated`; its activation result requires `prepared`, `not_checked`,
+`allowed` and `installation_verified`. Counterexamples reject promoted
+activation/authentication, blocked policy, missing status and unverified results.
+The batch decoder is a separate small helper, preserving its earlier role
+without adding a lint exemption. The final focused contracts and an external
+overlay replay of all three original add-A/add-B/repeat-add-A JSON frames pass
+in 0.024 seconds. The prepared-input artifact was also independently checked:
+33 members, 32 original stream byte/hash joins, clean exact source/tree,
+Go 1.26.11 and native publisher 1.143.1/e646868227c3e3a9e3f24277c8c7220be42c0be7.
+The next ordinary trusted native run remains required; no rerun, cancellation
+or native completion is claimed here.
+
+Root independently reproduced three promoted lifecycle claims against the first
+candidate (the counterexample test failed in 0.012 seconds), then accepted the
+corrected runtime after the original focused cases and the same three negatives
+passed in 0.016 seconds. Root also verified the original outer/inner hashes and
+CRCs, the repeated-add merged stream byte/hash receipt, the exact 3,262-byte JSON
+suffix, and the controller's completed stages, error and cleanup facts. This is
+the final R2 source acceptance; the next native result remains a separate gate.

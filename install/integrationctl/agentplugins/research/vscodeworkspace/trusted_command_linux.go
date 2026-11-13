@@ -92,22 +92,36 @@ func (c *controller) trustedCommand(label, cwd string, argv []string, expectedEx
 	return output, runErr
 }
 
-func trustedPublicOutcome(body []byte, mutated bool) error {
+func trustedPublicOutcome(body []byte, command, stage string, mutated bool) error {
 	value, err := uniqueJSON(body)
 	object, ok := value.(map[string]any)
-	if err != nil || !ok || object["schema_version"] != json.Number("1") || object["result"] != "success" {
+	if err != nil || !ok || object["schema_version"] != json.Number("1") || object["command"] != command || object["result"] != "success" {
 		return fmt.Errorf("public CLI success envelope differs")
 	}
 	data, ok := object["data"].(map[string]any)
 	if !ok {
 		return fmt.Errorf("public CLI data missing")
 	}
+	if _, flat := data["result"]; flat {
+		_, batch := data["targets"]
+		if batch || command != "add" || stage != "repeat-add-a" || mutated {
+			return fmt.Errorf("single no-change add outside repeated-add stage")
+		}
+		return trustedRepeatAddOutcome(data)
+	}
+	if stage == "repeat-add-a" {
+		return fmt.Errorf("repeated add omitted single no-change outcome")
+	}
+	return trustedBatchPublicOutcome(data, mutated)
+}
+
+func trustedBatchPublicOutcome(data map[string]any, mutated bool) error {
 	results, ok := data["targets"].([]any)
 	if !ok || len(results) != 1 {
 		return fmt.Errorf("single public target outcome missing")
 	}
 	result, ok := results[0].(map[string]any)
-	if !ok {
+	if !ok || result["target"] != "vscode" {
 		return fmt.Errorf("public target outcome malformed")
 	}
 	output, ok := result["output"].(map[string]any)
@@ -117,6 +131,42 @@ func trustedPublicOutcome(body []byte, mutated bool) error {
 	outcome, ok := output["result"].(map[string]any)
 	if !ok || outcome["mutated"] != mutated {
 		return fmt.Errorf("public target mutation result differs")
+	}
+	return nil
+}
+
+// The real add no-change path renders addResultData directly, before the
+// multi-target apply route. Only the fixed repeated-add stage expects it.
+func trustedRepeatAddOutcome(data map[string]any) error {
+	if data["dry_run"] != false || data["scope"] != "project" {
+		return fmt.Errorf("repeated add scope or execution intent differs")
+	}
+	outcome, ok := data["result"].(map[string]any)
+	if !ok || outcome["mutated"] != false || outcome["no_change"] != true || outcome["requires_confirmation"] != false {
+		return fmt.Errorf("repeated add no-change result differs")
+	}
+	plan, ok := outcome["plan"].(map[string]any)
+	if !ok || plan["client_id"] != "vscode" || plan["scope"] != "project" {
+		return fmt.Errorf("repeated add selected target differs")
+	}
+	for key, want := range map[string]string{
+		"status": "ready", "package_mode": "prepared_package", "activation": "prepared",
+		"authentication": "not_checked", "policy": "allowed", "verification": "package_validated",
+	} {
+		if plan[key] != want {
+			return fmt.Errorf("repeated add Prepared plan differs: %s", key)
+		}
+	}
+	activation, ok := outcome["activation"].(map[string]any)
+	if !ok {
+		return fmt.Errorf("repeated add activation result missing")
+	}
+	for key, want := range map[string]string{
+		"activation": "prepared", "authentication": "not_checked", "policy": "allowed", "verification": "installation_verified",
+	} {
+		if activation[key] != want {
+			return fmt.Errorf("repeated add Prepared activation differs: %s", key)
+		}
 	}
 	return nil
 }
@@ -164,5 +214,5 @@ func (c *controller) trustedUAP(label, scope string, mutated, absent bool, args 
 	if !bytes.HasPrefix(body, []byte(progress)) {
 		return fmt.Errorf("public progress diagnostics differ")
 	}
-	return trustedPublicOutcome(body[len(progress):], mutated)
+	return trustedPublicOutcome(body[len(progress):], args[0], label, mutated)
 }
