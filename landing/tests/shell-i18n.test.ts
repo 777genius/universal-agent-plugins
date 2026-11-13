@@ -373,15 +373,17 @@ test('hero localizes structured fallback diagnostics and retains unknown origina
   assert.doesNotMatch(source, /fallback_reason\.(?:match|replace|split|includes)/);
 });
 
-// The original migration-copy browser assertions also exercise these rows after generation.
-test('download and client strip retain every original support qualification', () => {
-  for (const file of ['components/registry/ClientStrip.vue', 'components/sections/DownloadSection.vue']) {
+// Agent support remains on dedicated pages; download shows installation methods only.
+test('client strip retains agent support while download stays focused', () => {
+  for (const file of ['components/registry/ClientStrip.vue']) {
     const source = read(file);
     assert.match(source, /registryUi\.clients\.\$\{client.id\}\.status/);
     assert.doesNotMatch(source, /shell\.clients/);
   }
-  const source = read('components/sections/DownloadSection.vue');
-  for (const field of ['note', 'activation']) assert.ok(source.includes(`registryUi.clients.${'${client.id}'}.${field}`));
+  const download = read('components/sections/DownloadSection.vue');
+  assert.doesNotMatch(download, /clientLandingPages|registryUi\.clients|clientPath/);
+  assert.match(download, /download-section__install-tabs-row/);
+  assert.match(download, /download-section__command/);
   assert.equal(clientLandingPages.length, 16);
   assert.ok(clientLandingPages.every((client) => client.id !== 'vscode'));
   for (const id of ['hermes', 'antigravity']) {
@@ -390,7 +392,7 @@ test('download and client strip retain every original support qualification', ()
 });
 
 test('shell agent links keep language prefixes and canonical trailing slashes', () => {
-  for (const file of ['components/registry/ClientStrip.vue', 'components/sections/DownloadSection.vue']) {
+  for (const file of ['components/registry/ClientStrip.vue']) {
     const expression = read(file).match(/const clientPath = ([\s\S]*?);/)![1];
     const locale = ref('en');
     const clientPath = new Function('locale', 'localizedPath', 'isKnownLocale',

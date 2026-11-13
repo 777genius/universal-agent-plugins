@@ -33,14 +33,14 @@ for (const target of publishedLocales.filter((locale) => locale !== 'en')) {
         await expect(page.locator('.download-section__platform-note')).toContainText(
           wording('en')('download.platforms.linux'),
         );
-        const selected = page.locator('.download-section__install-tab[aria-pressed="true"]');
+        const selected = page.locator('.download-section__install-tab[aria-selected="true"]');
         const selectionIndex = await page
           .locator('.download-section__install-tab')
           .evaluateAll((tabs) =>
-            tabs.findIndex((tab) => tab.getAttribute('aria-pressed') === 'true'),
+            tabs.findIndex((tab) => tab.getAttribute('aria-selected') === 'true'),
           );
         expect(selectionIndex).toBeGreaterThanOrEqual(0);
-        const commands = await page.locator('.download-section__steps code').allTextContents();
+        const commands = await page.locator('.download-section__command code').allTextContents();
         expect(commands.length).toBeGreaterThan(0);
         expect(commands.join('\n')).toContain('curl');
         const initialUrl = page.url();
@@ -76,9 +76,9 @@ for (const target of publishedLocales.filter((locale) => locale !== 'en')) {
         await expect(selected).toHaveCount(1);
         await expect(
           page.locator('.download-section__install-tab').nth(selectionIndex),
-        ).toHaveAttribute('aria-pressed', 'true');
+        ).toHaveAttribute('aria-selected', 'true');
         await expect
-          .poll(() => page.locator('.download-section__steps code').allTextContents())
+          .poll(() => page.locator('.download-section__command code').allTextContents())
           .toEqual(commands);
         if (width < 768) await page.getByRole('button', { name: wording(target)('shell.navigation.open'), exact: true }).click();
         await switcher.click();

@@ -15,6 +15,8 @@ const normalize = html => html.replace(/<[^>]*>/g, ' ').replace(/&nbsp;|&#160;/g
 export function routePaths(clients, locales) {
   assert(clients.length && locales.length);
   const routes = [
+    { route: '/' },
+    { route: '/download/' },
     ...clients.map(({ id, slug }) => {
       assert(/^[a-z0-9-]+$/.test(id) && /^[a-z0-9-]+$/.test(slug));
       return { route: `/agents/${slug}/`, id };
@@ -86,8 +88,11 @@ export function validateContract(contract, expected) {
   assert(Array.isArray(contract.routes) && contract.routes.length > 9 && contract.routes.length <= 100);
   assert.equal(new Set(contract.routes.map(value => value.route)).size, contract.routes.length);
   assert.equal(contract.routes.filter(value => value.route.startsWith('/docs/')).length, 9, 'nine compatibility locales');
+  for (const required of ['/', '/download/']) {
+    assert(contract.routes.some(entry => entry.route === required), `missing essential live route ${required}`);
+  }
   for (const entry of contract.routes) {
-    assert(/^\/(?:agents\/[a-z0-9-]+\/|docs\/[a-z]{2}\/reference\/client-compatibility)$/.test(entry.route));
+    assert(entry.route === '/' || entry.route === '/download/' || /^\/(?:agents\/[a-z0-9-]+\/|docs\/[a-z]{2}\/reference\/client-compatibility)$/.test(entry.route));
     assert(/^[a-f0-9]{64}$/.test(entry.sha256));
     assert(Number.isInteger(entry.bytes) && entry.bytes > 0 && entry.bytes <= maxBytes);
   }
@@ -147,8 +152,21 @@ export async function live(root, filename, fetcher = fetch, pause = milliseconds
   const contract = JSON.parse(await readFile(filename, 'utf8'));
   const pin = JSON.parse(await readFile(path.join(root, 'website/production-source.json'), 'utf8'));
   validateContract(contract, environmentIdentity(pin));
-  const provenance = JSON.parse((await getBytes(origin + '/BUILD_PROVENANCE.json', fetcher)).toString('utf8'));
-  for (const key of fields) assert.equal(provenance[key], contract[key], `live provenance ${key}`);
+  // GitHub Pages can briefly serve the previous build after a successful deployment.
+  // Accept only the exact run in the contract, even while waiting for propagation.
+  let provenanceFailure;
+  for (let attempt = 0; attempt < 12; attempt++) {
+    try {
+      const provenance = JSON.parse((await getBytes(origin + '/BUILD_PROVENANCE.json', fetcher)).toString('utf8'));
+      for (const key of fields) assert.equal(provenance[key], contract[key], `live provenance ${key}`);
+      provenanceFailure = undefined;
+      break;
+    } catch (error) {
+      provenanceFailure = error;
+      if (attempt < 11) await pause(10000);
+    }
+  }
+  if (provenanceFailure) throw provenanceFailure;
   for (const entry of contract.routes) {
     // Retry propagation/network failures, never accept a redirect or stale content.
     let failure;

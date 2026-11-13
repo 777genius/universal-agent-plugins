@@ -62,6 +62,28 @@ def checked_list(cli, env, project):
     return [item.get("name") for item in rows if isinstance(item, dict)]
 
 
+def checked_plugin(cli, env, project, path, manifest, enabled=None):
+    """Observe the exact physical artifact, never a same-name registration."""
+    rows = json.loads(run(cli, "plugin", "list", "--json", env=env, cwd=project))
+    if not isinstance(rows, list):
+        raise AssertionError("Native inventory is not an array")
+    matches = [row for row in rows if isinstance(row, dict)
+               and (row.get("path") == str(path) or row.get("name") == path.name)]
+    if len(matches) != 1:
+        raise AssertionError("Native inventory omitted or duplicated the exact owned path")
+    row = matches[0]
+    if (row.get("path") != str(path) or row.get("name") != path.name
+            or row.get("version") != manifest["version"]):
+        raise AssertionError("Native inventory changed physical identity or version")
+    if not isinstance(row.get("enabled"), bool):
+        raise AssertionError("Native inventory omitted boolean enablement")
+    if enabled is not None and row["enabled"] is not enabled:
+        raise AssertionError("Native enablement readback differs from requested state")
+    if row.get("skills") != ["native-smoke"] or sorted(row.get("mcpServers", [])) != ["native-http", "native-stdio"]:
+        raise AssertionError("Native inventory did not discover the selected components")
+    return row
+
+
 def tree_snapshot(root):
     """Record every fixture entry, including empty directories and file bytes."""
     result = {}
@@ -254,9 +276,38 @@ def main():
         run(agy, "plugin", "install", plugin, env=vendor_env, cwd=project)
         if NAME not in checked_list(agy, vendor_env, project):
             raise AssertionError("Pinned agy did not list its explicitly imported plugin")
+        imported = Path(vendor_env["HOME"]) / ".gemini" / "config" / "plugins" / NAME
+        imported_manifest = json.loads((imported / "plugin.json").read_text(encoding="utf-8"))
+        imported_snapshot = tree_snapshot(imported)
+        foreign_import = imported.parent / "foreign-disabled"
+        foreign_import.mkdir()
+        (foreign_import / "plugin.json").write_text(json.dumps({
+            "$schema": "https://antigravity.google/schemas/v1/plugin.json",
+            "name": "foreign-disabled", "version": "1.0.0",
+            "description": "Foreign disabled plugin must retain its state",
+        }), encoding="utf-8")
+        (foreign_import / "sentinel").write_text("foreign must survive\n", encoding="utf-8")
+        run(agy, "plugin", "disable", "foreign-disabled", env=vendor_env, cwd=project)
+        foreign_snapshot = tree_snapshot(foreign_import)
+        for state in (False, True):
+            run(agy, "plugin", "enable" if state else "disable", NAME,
+                env=vendor_env, cwd=project)
+            checked_plugin(agy, vendor_env, project, imported, imported_manifest, state)
+            if tree_snapshot(imported) != imported_snapshot or tree_snapshot(plugin) != projected_snapshot:
+                raise AssertionError("Vendor enablement changed imported or UAP-owned package bytes")
+            rows = json.loads(run(agy, "plugin", "list", "--json", env=vendor_env, cwd=project))
+            foreign_rows = [row for row in rows if row.get("path") == str(foreign_import)]
+            if (len(foreign_rows) != 1 or foreign_rows[0].get("enabled") is not False
+                    or tree_snapshot(foreign_import) != foreign_snapshot):
+                raise AssertionError("Selected vendor toggle changed foreign plugin or disablement")
         run(agy, "plugin", "uninstall", NAME, env=vendor_env, cwd=project)
         if NAME in checked_list(agy, vendor_env, project):
             raise AssertionError("Pinned agy retained the uninstalled test plugin")
+        rows = json.loads(run(agy, "plugin", "list", "--json", env=vendor_env, cwd=project))
+        foreign_rows = [row for row in rows if row.get("path") == str(foreign_import)]
+        if (len(foreign_rows) != 1 or foreign_rows[0].get("enabled") is not False
+                or tree_snapshot(foreign_import) != foreign_snapshot):
+            raise AssertionError("Vendor uninstall changed foreign plugin or disablement")
 
         if hashlib.sha256(vendor_manifest.read_bytes()).hexdigest() != projected_hash:
             raise AssertionError("Native CLI changed UAP-owned staged source")
@@ -296,18 +347,26 @@ def main():
             raise AssertionError("UAP User scope omitted the selected Skill")
         assert_native_mcp(user_plugin, root)
         run(agy, "plugin", "validate", "--strict", user_plugin, env=user_native_env, cwd=project_b)
-        # Current agy can validate a prepared native User bundle without
-        # automatically registering it. Record discovery, but never equate
-        # native files or list membership with runtime enablement.
-        user_listed = NAME in checked_list(agy, user_native_env, project_b)
-        print(f"Native UAP User bundle validated; agy listed={user_listed}; "
-              "activation was not attested.", flush=True)
+        # Pinned agy discovers direct User bundles by physical directory name,
+        # which differs from UAP's declared package name. No import is needed.
+        # Inventory enablement is not IDE loading or live MCP execution.
+        before_inventory = tree_snapshot(Path(user_native_env["HOME"]).parent)
+        observed = checked_plugin(agy, user_native_env, project_b, user_plugin, user_manifest)
+        if tree_snapshot(Path(user_native_env["HOME"]).parent) != before_inventory:
+            raise AssertionError("Read-only native inventory changed the selected User profile")
+        print(f"Native UAP User bundle discovered at exact owned path; "
+              f"enabled={observed['enabled']}; IDE activation was not attested.", flush=True)
         user_removed = run(
             uap, "remove", NAME, "--target", "antigravity", "--scope", "user",
             "--yes", "--format", "json", env=user_native_env, cwd=project_b,
         )
         if not json.loads(user_removed) or user_plugin.exists():
             raise AssertionError("UAP User-scoped plugin survived exact-owned removal")
+        rows = json.loads(run(agy, "plugin", "list", "--json", env=user_native_env, cwd=project_b))
+        if not isinstance(rows, list) or any(
+                row.get("path") == str(user_plugin) or row.get("name") == user_plugin.name
+                for row in rows if isinstance(row, dict)):
+            raise AssertionError("Native inventory retained the removed physical User identity")
         if not plugin.is_dir() or hashlib.sha256(vendor_manifest.read_bytes()).hexdigest() != projected_hash:
             raise AssertionError("UAP User-scoped removal changed Project-scoped plugin")
 
