@@ -17,6 +17,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 
 
 NAME = "uap-agy-native-smoke"
@@ -352,34 +353,105 @@ def closed_config(body):
     return value
 
 
+def bridge_exchange(helper, frame, *, timeout=35):
+    """Bound the parent transport; only the Go receipt attests native cleanup."""
+    if len(frame) > 16384 or not frame.endswith(b"\n") or frame.count(b"\n") != 1:
+        raise AssertionError("Supervised request frame refused")
+    deadline = time.monotonic() + timeout
+    cleanup_deadline = deadline + 5
+    child = subprocess.Popen([str(helper)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE, bufsize=0)
+    captures = [bytearray(), bytearray()]
+    failed = threading.Event()
+    def drain(pipe, target, bound):
+        try:
+            while chunk := pipe.read(16384):
+                room = bound - len(target)
+                target.extend(chunk[:room])
+                if len(chunk) > room:
+                    failed.set()  # Continue draining, without retaining excess bytes.
+        except (OSError, ValueError):
+            failed.set()
+        finally:
+            pipe.close()
+    def send():
+        try:
+            pending = memoryview(frame)
+            while pending:
+                sent = child.stdin.write(pending)
+                if not sent:
+                    raise OSError("request pipe closed")
+                pending = pending[sent:]
+        except (OSError, ValueError):
+            failed.set()
+    threads = [threading.Thread(target=drain, args=(pipe, target, bound), daemon=True)
+               for pipe, target, bound in ((child.stdout, captures[0], 2 << 20),
+                                           (child.stderr, captures[1], 65536))]
+    threads.append(threading.Thread(target=send, daemon=True))
+    failure, cleanup_failed = None, False
+    try:
+        for thread in threads:
+            thread.start()
+        while child.poll() is None or any(thread.is_alive() for thread in threads):
+            if failed.is_set() or time.monotonic() >= deadline:
+                raise AssertionError("Supervised transport bound; owned profile retained")
+            time.sleep(.01)
+        if failed.is_set() or child.returncode != 0 or captures[1]:
+            raise AssertionError("Supervised command receipt refused; owned profile retained")
+    except BaseException as exc:
+        failure = exc
+    finally:
+        # Raw FileIO avoids a buffered writer lock. EOF cancels the Go bridge's
+        # original context; keep draining while its existing supervisor settles.
+        try:
+            child.stdin.close()
+        except (OSError, ValueError):
+            cleanup_failed = True
+        if child.poll() is None:
+            try:
+                child.wait(timeout=max(0, min(4, cleanup_deadline - time.monotonic() - 1)))
+            except subprocess.TimeoutExpired:
+                cleanup_failed = True
+                try:
+                    child.kill()  # Exact helper only; never a native cleanup attestation.
+                except OSError:
+                    cleanup_failed = True
+                try:
+                    child.wait(timeout=max(0, cleanup_deadline - time.monotonic()))
+                except subprocess.TimeoutExpired:
+                    cleanup_failed = True
+        for thread in threads:
+            if thread.ident is not None:
+                thread.join(timeout=max(0, cleanup_deadline - time.monotonic()))
+        cleanup_failed |= child.poll() is None or any(thread.is_alive() for thread in threads)
+    if failure is not None:
+        if cleanup_failed:
+            raise failure from AssertionError("Helper cleanup unproved; owned profile retained")
+        raise failure
+    if cleanup_failed or failed.is_set():
+        raise AssertionError("Supervised helper cleanup refused; owned profile retained")
+    return bytes(captures[0])
+
+
 def supervised_action(helper, agy, root, selector, action, source_identity, original_pins):
     if tuple(hashlib.sha256(path.read_bytes()).hexdigest() for path in (agy, helper)) != original_pins:
         raise AssertionError("Original executable pin changed")
     pin = original_pins[0]
     req = dict(binary=str(agy), binary_sha256=pin, root=str(root), selector=selector, action=action,
                source_commit=source_identity[0], source_tree=source_identity[1], deadline_unix_ns=time.time_ns() + 29_000_000_000)
-    child = subprocess.Popen([str(helper)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    try:
-        child.stdin.write(json.dumps(req).encode() + b"\n"); child.stdin.flush()
-        # The Go bridge closes its finite output only after native containment settles.
-        output = child.stdout.read((2 << 20) + 1)
-        error = child.stderr.read(65537)
-        if child.wait(timeout=5) != 0 or error or len(output) > 2 << 20 or not output.endswith(b"\n") or output.count(b"\n") != 1:
-            raise AssertionError("Supervised command receipt refused; owned profile retained")
-        if tuple(hashlib.sha256(path.read_bytes()).hexdigest() for path in (agy, helper)) != original_pins:
-            raise AssertionError("Executable runtime pin changed")
-        value = closed_config(output)
-        keys = {"source_commit", "source_tree", "root", "selector", "action", "binary_sha256", "cleanup_complete", "stdout_base64", "stdout_bytes", "stdout_sha256"}
-        if set(value) != keys or any(value[key] != req[key] for key in ("source_commit", "source_tree", "root", "selector", "action", "binary_sha256")) or value["cleanup_complete"] is not True:
-            raise AssertionError("Command receipt identity differs")
-        body = base64.b64decode(value["stdout_base64"], validate=True)
-        if type(value["stdout_bytes"]) is not int or len(body) != value["stdout_bytes"] or hashlib.sha256(body).hexdigest() != value["stdout_sha256"]:
-            raise AssertionError("Command receipt stream differs")
-        return body
-    finally:
-        child.stdin.close()
-        child.stdout.close(); child.stderr.close()
-        if child.poll() is None: child.wait(timeout=40)
+    output = bridge_exchange(helper, json.dumps(req).encode() + b"\n")
+    if not output.endswith(b"\n") or output.count(b"\n") != 1:
+        raise AssertionError("Supervised command receipt refused; owned profile retained")
+    if tuple(hashlib.sha256(path.read_bytes()).hexdigest() for path in (agy, helper)) != original_pins:
+        raise AssertionError("Executable runtime pin changed")
+    value = closed_config(output)
+    keys = {"source_commit", "source_tree", "root", "selector", "action", "binary_sha256", "cleanup_complete", "stdout_base64", "stdout_bytes", "stdout_sha256"}
+    if set(value) != keys or any(value[key] != req[key] for key in ("source_commit", "source_tree", "root", "selector", "action", "binary_sha256")) or value["cleanup_complete"] is not True:
+        raise AssertionError("Command receipt identity differs")
+    body = base64.b64decode(value["stdout_base64"], validate=True)
+    if type(value["stdout_bytes"]) is not int or len(body) != value["stdout_bytes"] or hashlib.sha256(body).hexdigest() != value["stdout_sha256"]:
+        raise AssertionError("Command receipt stream differs")
+    return body
 
 
 def direct_user_enable(agy, uap, source, executable_dir, root_parent):
@@ -440,6 +512,88 @@ def admission_contracts():
     import unittest
     from unittest.mock import patch
     class Contracts(unittest.TestCase):
+        def exercise_bridge(self, code, frame=b'{}\n', *, interrupt=False, timeout=5, partial=False, expected_exit=None):
+            actual_popen, actual_thread, actual_sleep = subprocess.Popen, threading.Thread, time.sleep
+            children, readers, writes = [], [], []
+            def spawn(argv, **kwargs):
+                self.assertEqual(argv, ["inert-helper"])
+                child = actual_popen([sys.executable, "-I", "-c", code], **kwargs)
+                if partial:
+                    original = child.stdin
+                    class PartialWriter:
+                        def write(self, body):
+                            writes.append(len(body)); return original.write(body[:1024])
+                        def close(self): return original.close()
+                        @property
+                        def closed(self): return original.closed
+                    child.stdin = PartialWriter()
+                children.append(child)
+                return child
+            def thread(*args, **kwargs):
+                value = actual_thread(*args, **kwargs); readers.append(value); return value
+            raised = False
+            def tick(seconds):
+                nonlocal raised
+                if interrupt and not raised:
+                    raised = True
+                    raise KeyboardInterrupt("inert cancellation")
+                actual_sleep(seconds)
+            try:
+                with patch.object(subprocess, "Popen", side_effect=spawn), patch.object(threading, "Thread", side_effect=thread), patch.object(time, "sleep", side_effect=tick):
+                    return bridge_exchange("inert-helper", frame, timeout=timeout)
+            finally:
+                for child in children:
+                    self.assertIsNotNone(child.returncode, "helper was not reaped")
+                    self.assertTrue(all(pipe.closed for pipe in (child.stdin, child.stdout, child.stderr)))
+                    if expected_exit is not None: self.assertEqual(child.returncode, expected_exit)
+                self.assertFalse(any(reader.is_alive() for reader in readers), "bridge thread survived")
+                if partial: self.assertGreater(len(writes), 1)
+
+        def test_bridge_drains_both_streams_and_reaps_every_refusal(self):
+            prefix = "import sys,time; sys.stdin.buffer.readline(); "
+            self.assertEqual(self.exercise_bridge(prefix + "sys.stdout.buffer.write(b'bounded\\n')"), b'bounded\n')
+            cases = {
+                "stderr-first": prefix + "sys.stderr.buffer.write(b'e' * (1 << 20)); sys.stderr.flush(); sys.stdout.buffer.write(b'late\\n')",
+                "stdout-flood": prefix + "sys.stdout.buffer.write(b'x' * ((2 << 20) + 1)); sys.stdout.flush()",
+                "nonempty-stderr": prefix + "sys.stderr.buffer.write(b'e'); sys.stdout.buffer.write(b'bounded\\n')",
+                "early-exit": "import sys; sys.exit(3)",
+                "await-control-eof": prefix + "sys.stdin.buffer.read(); sys.exit(3)",
+                "ignores-control": "import time; time.sleep(60)",
+            }
+            for name, code in cases.items():
+                with self.subTest(name=name), self.assertRaises(AssertionError):
+                    self.exercise_bridge(code, timeout=.3 if name in {"await-control-eof", "ignores-control"} else 5,
+                                         expected_exit=3 if name in {"early-exit", "await-control-eof"} else None)
+            with self.assertRaises(KeyboardInterrupt):
+                self.exercise_bridge(prefix + "sys.stdin.buffer.read(); sys.exit(3)", interrupt=True, expected_exit=3)
+
+        def test_bridge_refuses_request_overflow_before_spawn_and_handles_partial_writes(self):
+            with patch.object(subprocess, "Popen") as spawn, self.assertRaises(AssertionError):
+                bridge_exchange("inert-helper", b'x' * 16384 + b'\n')
+            spawn.assert_not_called()
+            frame = b'x' * 16383 + b'\n'
+            code = "import sys; body=sys.stdin.buffer.readline(); sys.stdout.write(str(len(body)) + '\\n')"
+            self.assertEqual(self.exercise_bridge(code, frame, partial=True, expected_exit=0), b'16384\n')
+            with self.assertRaises(AssertionError):
+                self.exercise_bridge("import sys; sys.exit(3)", frame)
+
+        def test_supervised_receipt_still_requires_exact_identity_and_cleanup(self):
+            actual_popen = subprocess.Popen
+            with tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary); agy, helper = root / "agy", root / "helper"
+                agy.write_bytes(b'inert-agy'); helper.write_bytes(b'inert-helper')
+                pins = tuple(hashlib.sha256(path.read_bytes()).hexdigest() for path in (agy, helper))
+                for change in ("", "r['cleanup_complete']=False", "r['source_tree']='wrong'", "r['stdout_bytes']=4"):
+                    code = ("import sys,json,base64,hashlib; r=json.loads(sys.stdin.buffer.readline()); del r['binary']; del r['deadline_unix_ns']; "
+                            "r.update(cleanup_complete=True,stdout_base64=base64.b64encode(b'[]\\n').decode(),stdout_bytes=3,stdout_sha256=hashlib.sha256(b'[]\\n').hexdigest()); "
+                            + (change + "; " if change else "") + "print(json.dumps(r))")
+                    def spawn(_argv, **kwargs): return actual_popen([sys.executable, "-I", "-c", code], **kwargs)
+                    with self.subTest(change=change), patch.object(subprocess, "Popen", side_effect=spawn):
+                        if change:
+                            with self.assertRaises(AssertionError): supervised_action(helper, agy, root, "owned", "list", ("a" * 40, "b" * 40), pins)
+                        else:
+                            self.assertEqual(supervised_action(helper, agy, root, "owned", "list", ("a" * 40, "b" * 40), pins), b'[]\n')
+
         def test_ledger_accepts_only_selected_atomic_config_delta(self):
             with tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)

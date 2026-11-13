@@ -395,3 +395,40 @@ Correct inert fixtures now author0700 and a real ledger negative checks0600,
 0755 and0777 are refused before os.read can reach that inode. Other files,
 1MiB/16MiB limits, baseline identities, scanner content pins and qualification
 flags are unchanged. Nine inert contracts pass; no native execution occurred.
+
+## Bound both bridge streams and cancellation before receipt admission
+
+Review PRR_kwDORxw17c8AAAABXyzTmA identified a real parent deadlock: reading
+stdout to EOF before stderr can block on a stderr-first flood, before the old
+wait timeout is reached. The old finally block also waited without terminating
+a stuck helper, and closing buffered stdin could replace the original failure.
+
+The narrowly local transport now uses unbuffered pipes, concurrent stdout and
+stderr drainers with unchanged separate 2MiB/64KiB bounds, and a bounded16KiB
+writer that handles partial writes. Overflow is retained as a refusal while
+excess bytes are discarded so the existing supervisor can finish cleanup.
+One monotonic35s transport deadline and absolute40s total deadline include all
+joins and shutdown; the original29s native request deadline is unchanged.
+
+On any exception, timeout or overflow, close only the control pipe first.
+Its EOF cancels the Go bridge's original context and existing ordinary native
+process supervisor. Continue draining, then reap the helper. If it cannot exit
+within the cleanup reserve, kill and reap that exact helper and refuse capture.
+This fallback is not proof that native descendants settled: retain the fixture,
+make no next native action, and never emit cleanup or qualification success.
+No new tree supervisor, runner exemption, native action or product label is added.
+
+Success still needs exit0, all three transport threads finished, no stream or
+writer errors, empty stderr and the original closed identity/byte/hash receipt
+with literal CleanupComplete=true. A child exit alone cannot admit unread output.
+Existing original-source/executable and profile-ledger guards remain in charge.
+
+Independent R1 accepted this two-existing-file scope and explicitly retained
+the distinction between helper reaping and native cleanup authority. Estimated
+runtime/test correction180–220 changed lines. Real inert Python children cover
+stderr-first and stdout floods, nonempty stderr, early exit before request
+consumption, full16KiB/partial writes, control-EOF cancellation, a helper ignoring
+control, KeyboardInterrupt and closed streams/reaped helpers/no surviving threads.
+The successful receipt plus wrong source/cleanup/hash-count cases use the full
+supervised_action boundary. Source review and new exact-source native execution
+remain required; prior b378 Linux/Windows native successes do not prove this fix.
