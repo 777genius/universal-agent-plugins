@@ -132,16 +132,19 @@ def same_inventory_directory(before, held):
     require(stat.S_ISDIR(before.st_mode) and stat.S_ISDIR(held.st_mode), "held inventory directory required")
     if artifacts.WINDOWS:
         left, right = artifacts.windows_identity(before), artifacts.windows_identity(held)
-        return left[:2] == right[:2] and left[3:] == right[3:]
+        # Cross-API attributes may differ for the same ordinary directory.
+        # Both windows_identity calls reject reparse points, while each
+        # domain's full attributes are checked again before and after use.
+        return left[:2] == right[:2] and left[3:7] == right[3:7]
     return artifacts.same_opened(before, held)
 
 
 def check_inventory_directory(before, held, label):
-    """Fail closed with bounded Windows field *names*, never paths or values.
+    """Fail closed with bounded cross-API field *names*, never paths or values.
 
     Windows path lstat and held directory fstat can synthesize different
-    metadata for the same file ID. Do not relax the identity gate on an
-    unobserved difference: report only which existing comparison failed.
+    mode and attribute flags for the same file ID. Both domains independently
+    enforce non-reparse identity and preserve full before/after snapshots.
     """
     if same_inventory_directory(before, held):
         return
@@ -149,7 +152,7 @@ def check_inventory_directory(before, held, label):
     if artifacts.WINDOWS:
         left, right = artifacts.windows_identity(before), artifacts.windows_identity(held)
         fields = ((0, "device"), (1, "inode"), (3, "links"), (4, "bytes"),
-                  (5, "mtime"), (6, "birth"), (7, "attributes"))
+                  (5, "mtime"), (6, "birth"))
         detail = " (Windows metadata: " + ",".join(
             name for index, name in fields if left[index] != right[index]) + ")"
     raise RuntimeError(label + detail)

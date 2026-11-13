@@ -331,6 +331,10 @@ class ProfileAdmissionContracts(unittest.TestCase):
         with mock.patch.object(CASE["artifacts"], "WINDOWS", True):
             original = SimpleNamespace(**base)
             self.assertTrue(CASE["same_inventory_directory"](original, SimpleNamespace(**dict(base, st_mode=stat.S_IFDIR | 0o700))))
+            # Verified on the real Windows runner: path lstat and held fstat
+            # can disagree on ordinary-directory attribute flags.
+            self.assertTrue(CASE["same_inventory_directory"](
+                original, SimpleNamespace(**dict(base, st_file_attributes=32))))
             self.assertFalse(CASE["same_inventory_directory"](original, SimpleNamespace(**dict(base, st_ino=6))))
             for change in ({"st_file_attributes": 16 | 0x400}, {"st_reparse_tag": 1}, {"st_birthtime_ns": None}):
                 with self.assertRaises(ValueError): CASE["same_inventory_directory"](original, SimpleNamespace(**dict(base, **change)))
@@ -345,11 +349,13 @@ class ProfileAdmissionContracts(unittest.TestCase):
             CASE["check_inventory_directory"](
                 original, SimpleNamespace(**dict(base, st_mode=stat.S_IFDIR | 0o700)),
                 "inventory directory changed at open")
+            CASE["check_inventory_directory"](
+                original, SimpleNamespace(**dict(base, st_file_attributes=32)),
+                "inventory directory changed at open")
             for field, value, label in (
                 ("st_dev", 6, "device"), ("st_ino", 6, "inode"),
                 ("st_nlink", 2, "links"), ("st_size", 123456789, "bytes"),
                 ("st_mtime_ns", 101, "mtime"), ("st_birthtime_ns", 91, "birth"),
-                ("st_file_attributes", 32, "attributes"),
             ):
                 with self.subTest(field=field), self.assertRaises(RuntimeError) as caught:
                     CASE["check_inventory_directory"](
