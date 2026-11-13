@@ -87,12 +87,16 @@ test('automatic authentication shows a release-dependent client once, not both o
 
 test('Pi agent page describes extensions, Skills and MCP in user and project scopes', async ({ page }) => {
   const errors = await offline(page);
-  await projections(page, pluginWithOnlyCodex());
+  const index = pluginWithOnlyCodex();
+  // The alternate Git route requires a reviewed active portable source; the
+  // generic projection seed deliberately has no reviewed trust declaration.
+  index.plugins[0]!.trust_state = 'reviewed';
+  await projections(page, index);
   await navigate(page, '/agents/pi', 'en');
   const main = page.locator('main.agent-page');
   await expect(main).toContainText('Install compatible Pi extensions, Skills, and stdio/Streamable HTTP MCP servers');
   await expect(main).toContainText('user or project scope');
-  await expect(main).toContainText('Project source routes for Pi: 1');
+  await expect(main).toContainText('Packages with install or setup options for Pi: 1');
   await expect(main).toContainText('a Git source is not a signed Pi grant');
   await expect(main).not.toContainText('Portable skills and MCP projection are outside');
   expect(errors).toEqual([]);

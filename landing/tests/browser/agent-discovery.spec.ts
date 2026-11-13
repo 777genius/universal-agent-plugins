@@ -121,9 +121,9 @@ test('modern agent examples explain own-package prerequisites and link existing 
     const example = page.locator('.agent-page__install');
     await expect(example.locator('code')).toContainText(`add ./my-plugin --target ${agent}`);
     await expect(example).toContainText(
-      'after creating a compatible Agent Plugins package at ./my-plugin',
+      'First create a compatible Agent Plugins package at ./my-plugin.',
     );
-    await expect(example).toContainText('no eligible signed catalog example');
+    await expect(example).toContainText('There is no eligible signed catalog example for this agent here');
     await expect(example.getByRole('link', { name: 'Install individual Skills' })).toHaveAttribute(
       'href',
       /\/agent-skills\//,
