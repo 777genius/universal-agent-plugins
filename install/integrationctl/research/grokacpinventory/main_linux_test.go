@@ -46,8 +46,10 @@ func TestClosedJSONAndOriginalMonotonicDeadline(t *testing.T) {
 	if e := closed([]byte(`{"x":`+strings.Repeat("[", 22)+`0`+strings.Repeat("]", 22)+`}`), &v, "x"); e == nil {
 		t.Fatal("depth admitted")
 	}
-	if _, e := remaining(1, 1+int64(30*time.Second), 30*time.Second); e == nil {
-		t.Fatal("expired original budget admitted")
+	for _, limit := range []time.Duration{30 * time.Second, 35 * time.Second} {
+		if _, e := remaining(1, 1+int64(limit), limit); e == nil {
+			t.Fatal("expired original budget admitted", limit)
+		}
 	}
 	if _, e := remaining(2, 1, 30*time.Second); e == nil {
 		t.Fatal("future start admitted")
@@ -138,10 +140,22 @@ func TestParentEOFPropagatesAndNeverRenewsBudget(t *testing.T) {
 	if !errors.Is(child.Err(), context.Canceled) {
 		t.Fatal(child.Err())
 	}
-	final, end, e := finalBudget(parent, 1)
+	now, e := monoNow()
+	if e != nil {
+		t.Fatal(e)
+	}
+	final, end, e := finalBudget(parent, now)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer end()
+	if !errors.Is(final.Err(), context.Canceled) {
+		t.Fatal("parent cancellation did not propagate", final.Err())
+	}
+	expired, release, e := finalBudget(context.Background(), now-int64(35*time.Second))
 	if e == nil {
-		end()
-		t.Fatal("ancient budget renewed", final)
+		release()
+		t.Fatal("expired or invalid original budget renewed", expired)
 	}
 }
 func TestClosedRequestAndFixedLaunch(t *testing.T) {
