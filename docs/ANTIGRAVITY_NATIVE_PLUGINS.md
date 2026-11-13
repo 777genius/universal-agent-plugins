@@ -40,13 +40,17 @@ unexpected raw `mcp_config.json` and unsafe remote MCP destinations.
 Never silently execute downloaded hook scripts or copy foreign native files.
 An Antigravity plugin folder being present does not prove it was indexed,
 enabled, trusted or authenticated. Report **Prepared**, not Active.
-A pinned `agy 1.5.3` User-scope smoke confirms that native validation can
-succeed while `agy plugin list --json` does **not** show the UAP-prepared User
-bundle. UAP does not silently invoke `agy plugin install`: that vendor
-registration can have additional, separately owned side effects and must
-remain a deliberate user-managed action until a safe transactional lifecycle
-is independently qualified. Do not report automatic User activation from a
-successful UAP file install; UAP removes only the directory it owns.
+The pinned `agy 1.5.3` CLI discovers a directly prepared User bundle in
+`plugin list --json` under its **physical directory basename**, which differs
+from the manifest's declared package name. The native lifecycle smoke checks
+its exact path, version, Skills, MCP names and observed boolean enabled state;
+it also checks that this inventory read changes no profile bytes. The earlier
+name-only lookup missed this native entry. This is CLI discovery, not IDE
+loading or successful MCP execution. UAP does not silently invoke
+`agy plugin install`: that command copies assets globally and writes a vendor
+import registry, so it cannot establish Project activation. Vendor enable and
+disable also write shared configuration and remain outside ordinary UAP
+installation consent. UAP removes only the directory it owns.
 
 **Merge qualification:** Require passing pinned `agy plugin validate --strict`,
 separate disposable vendor CLI import/list/uninstall, UAP User and Project
@@ -76,6 +80,15 @@ exercise idempotent update, refusal of partially modified packages without
 changing their bytes, and exact-revision recovery of an entirely missing owned
 bundle. A partial digest mismatch remains an ownership refusal; the smoke does
 not weaken that gate or report partial-file repair as supported.
+
+The cross-platform harness additionally verifies direct User discovery by exact
+physical identity. Its separate disposable vendor-import profile exercises
+disable/enable/readback while preserving imported and UAP source bytes and a
+foreign disabled plugin. Linux source CI runs this harness after its existing
+shell lifecycle; macOS and Windows use the same cross-platform assertions.
+These checks leave UAP's Prepared status unchanged. The local Linux execution
+on 2026-11-13 passed the full ordinary UAP lifecycle with pinned agy 1.5.3;
+new hosted platform executions remain required for final-commit acceptance.
 
 ### Actual IDE checkpoint: authentication reachability (2026-11-10)
 
