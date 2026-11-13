@@ -109,12 +109,29 @@ func TestPiAllSignedTestOnlySavedMarketplace(t *testing.T) {
 					t.Fatalf("%s: install changed another Pi user/project scope", name)
 				}
 				j.run(t, root, "deps", "sync", "--locked", "--yes")
-				if len(j.state(t, root).EnvironmentReceipts) != expected {
+				replayed := j.state(t, root)
+				if len(replayed.Installations) != expected || len(replayed.EnvironmentReceipts) != expected {
 					t.Fatalf("%s: locked replay lost immutable saved dependencies", name)
+				}
+				// A receipt count alone cannot detect a changed source, release, or feed.
+				// Compare immutable installed identities, not mutable timestamps.
+				for _, previous := range state.Installations {
+					found := false
+					for _, current := range replayed.Installations {
+						if reflect.DeepEqual(previous.Directory, current.Directory) &&
+							reflect.DeepEqual(previous.Source, current.Source) &&
+							previous.Package.ManifestDigest == current.Package.ManifestDigest {
+							found = true
+							break
+						}
+					}
+					if !found {
+						t.Fatalf("%s: locked replay changed a pinned saved dependency", name)
+					}
 				}
 				j.run(t, root, "remove", distribution.ProductID, "--target", "pi", "--yes")
 				removed := j.state(t, root)
-				if len(removed.EnvironmentReceipts) != 0 {
+				if len(removed.Installations) != 0 || len(removed.EnvironmentReceipts) != 0 {
 					t.Fatalf("%s: saved removal left owned state", name)
 				}
 				if distribution.Kind == domain.DistributionUpstream {
