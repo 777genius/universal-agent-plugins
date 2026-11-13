@@ -224,3 +224,39 @@ func TestReadClineProjectionRejectsAmbiguousOrLinkedJSON(t *testing.T) {
 		}
 	})
 }
+
+func TestProjectClineManagedStdioRejectsMalformedAuthoredFieldsBeforeDefaults(t *testing.T) {
+	root, data := t.TempDir(), t.TempDir()
+	plan := domain.DeliveryPlan{Scope: domain.ScopeUser, ActivePath: root}
+	for _, tc := range []struct {
+		name string
+		field string
+		value any
+	}{
+		{"null-env", "env", nil},
+		{"null-cwd", "cwd", nil},
+		{"numeric-cwd", "cwd", 5},
+		{"null-command", "command", nil},
+		{"null-url", "url", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			decoded := map[string]any{"command": "go", "args": []any{"--version"}}
+			decoded[tc.field] = tc.value
+			original, err := json.Marshal(decoded)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = projectClineServer(root, domain.MCPServer{Type: "stdio", Decoded: decoded}, plan, data)
+			if err == nil {
+				t.Fatalf("malformed authored %s was normalized before validation", tc.field)
+			}
+			after, err := json.Marshal(decoded)
+			if err != nil || string(after) != string(original) {
+				t.Fatalf("failed projection mutated authored configuration: %v", err)
+			}
+		})
+	}
+	if _, err := projectClineServer(root, domain.MCPServer{Type: "stdio"}, plan, data); err == nil {
+		t.Fatal("missing stdio object was accepted")
+	}
+}

@@ -17,6 +17,14 @@ import (
 func projectClineServer(root string, source domain.MCPServer, plan domain.DeliveryPlan, data string) (nativeconfig.Server, error) {
 	portable := source
 	if source.Type == "stdio" {
+		// Preserve authored type errors before the shared stdio contract fills
+		// absent env/cwd defaults. Explicit null must never look like absence.
+		if source.Decoded == nil {
+			return nativeconfig.Server{}, fmt.Errorf("cline authored stdio MCP configuration is missing")
+		}
+		if _, err := ClineNeutralServer(source); err != nil {
+			return nativeconfig.Server{}, fmt.Errorf("cline authored stdio fields invalid: %w", err)
+		}
 		portable.Decoded = shared.CloneObject(source.Decoded)
 		if err := shared.ApplyStdioDataContract(portable.Decoded, plan.ActivePath, data, root); err != nil {
 			return nativeconfig.Server{}, err
