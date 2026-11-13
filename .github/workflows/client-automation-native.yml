@@ -9,6 +9,8 @@ on:
       - 'install/integrationctl/research/grokacpinventory/**'
       - 'scripts/devin_structured_inventory_admission.py'
       - 'scripts/test_devin_structured_inventory_admission.py'
+      - 'scripts/devin_ordinary_metadata_admission.py'
+      - 'scripts/test_devin_ordinary_metadata_admission.py'
       - '.github/workflows/client-automation-native.yml'
   workflow_dispatch:
 permissions:
@@ -73,6 +75,34 @@ jobs:
         with:
           name: devin-structured-inventory-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/devin-structured-inventory/upload/research.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  devin-ordinary-inventory:
+    name: Devin 3000.12.57 ordinary local-policy metadata research
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+      EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Test private and ordinary metadata preservation contracts
+        run: python3 -m unittest discover -s scripts -p 'test_devin_*admission.py' -v
+      - name: Capture pinned ordinary inventory in an authored local-policy profile
+        run: |
+          python3 scripts/devin_ordinary_metadata_admission.py \
+            --output "$RUNNER_TEMP/devin-ordinary-inventory"
+      - name: Preserve original ordinary metadata research evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: devin-ordinary-inventory-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/devin-ordinary-inventory/upload/research.zip
           if-no-files-found: error
           retention-days: 14
 

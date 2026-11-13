@@ -373,7 +373,10 @@ def bridge_exchange(helper, frame, *, timeout=35):
         except (OSError, ValueError):
             failed.set()
         finally:
-            pipe.close()
+            try:
+                pipe.close()
+            except (OSError, ValueError):
+                failed.set()
     def send():
         try:
             pending = memoryview(frame)
@@ -510,7 +513,7 @@ def direct_user_enable(agy, uap, source, executable_dir, root_parent):
 def admission_contracts():
     """Inert filesystem and receipt refusals; no native binary or account."""
     import unittest
-    from unittest.mock import patch
+    from unittest.mock import Mock, patch
     class Contracts(unittest.TestCase):
         def exercise_bridge(self, code, frame=b'{}\n', *, interrupt=False, timeout=5, partial=False, expected_exit=None):
             actual_popen, actual_thread, actual_sleep = subprocess.Popen, threading.Thread, time.sleep
@@ -583,11 +586,19 @@ def admission_contracts():
                 root = Path(temporary); agy, helper = root / "agy", root / "helper"
                 agy.write_bytes(b'inert-agy'); helper.write_bytes(b'inert-helper')
                 pins = tuple(hashlib.sha256(path.read_bytes()).hexdigest() for path in (agy, helper))
-                for change in ("", "r['cleanup_complete']=False", "r['source_tree']='wrong'", "r['stdout_bytes']=4"):
+                for change in ("", "r['cleanup_complete']=False", "r['source_tree']='wrong'", "r['stdout_bytes']=4", "close-stdout", "close-stderr"):
                     code = ("import sys,json,base64,hashlib; r=json.loads(sys.stdin.buffer.readline()); del r['binary']; del r['deadline_unix_ns']; "
                             "r.update(cleanup_complete=True,stdout_base64=base64.b64encode(b'[]\\n').decode(),stdout_bytes=3,stdout_sha256=hashlib.sha256(b'[]\\n').hexdigest()); "
-                            + (change + "; " if change else "") + "print(json.dumps(r))")
-                    def spawn(_argv, **kwargs): return actual_popen([sys.executable, "-I", "-c", code], **kwargs)
+                            + (change + "; " if change and not change.startswith("close-") else "") + "print(json.dumps(r))")
+                    def spawn(_argv, **kwargs):
+                        child = actual_popen([sys.executable, "-I", "-c", code], **kwargs)
+                        if change.startswith("close-"):
+                            stream = change.removeprefix("close-"); pipe = getattr(child, stream)
+                            def refuse_close():
+                                pipe.close()
+                                raise OSError("inert stream close refusal")
+                            setattr(child, stream, Mock(read=pipe.read, close=refuse_close))
+                        return child
                     with self.subTest(change=change), patch.object(subprocess, "Popen", side_effect=spawn):
                         if change:
                             with self.assertRaises(AssertionError): supervised_action(helper, agy, root, "owned", "list", ("a" * 40, "b" * 40), pins)

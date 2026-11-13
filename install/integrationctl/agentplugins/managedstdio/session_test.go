@@ -38,8 +38,8 @@ func TestSessionRejectsInvalidProcessBeforeChangingDirectory(t *testing.T) {
 }
 
 func TestFailedNativeExecRestoresCallingProcessDirectory(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("POSIX process replacement only")
+	if !Supported() || runtime.GOOS == "windows" {
+		t.Skip("supported POSIX process replacement only")
 	}
 	before, err := os.Getwd()
 	if err != nil {
@@ -47,9 +47,7 @@ func TestFailedNativeExecRestoresCallingProcessDirectory(t *testing.T) {
 	}
 	cwd := t.TempDir()
 	missing := filepath.Join(cwd, "missing-native-executable")
-	if err := StartSession(missing, []string{missing}, cwd, []string{"PATH=/unused"}); err == nil {
-		t.Fatal("missing executable unexpectedly replaced process")
-	}
+	execErr := StartSession(missing, []string{missing}, cwd, []string{"PATH=/unused"})
 	after, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
@@ -57,6 +55,9 @@ func TestFailedNativeExecRestoresCallingProcessDirectory(t *testing.T) {
 	if after != before {
 		_ = os.Chdir(before)
 		t.Fatalf("failed native exec changed process cwd: %q -> %q", before, after)
+	}
+	if !errors.Is(execErr, os.ErrNotExist) {
+		t.Fatalf("missing native executable error: got %v, want %v", execErr, os.ErrNotExist)
 	}
 }
 

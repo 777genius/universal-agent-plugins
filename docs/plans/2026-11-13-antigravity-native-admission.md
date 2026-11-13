@@ -432,3 +432,10 @@ control, KeyboardInterrupt and closed streams/reaped helpers/no surviving thread
 The successful receipt plus wrong source/cleanup/hash-count cases use the full
 supervised_action boundary. Source review and new exact-source native execution
 remain required; prior b378 Linux/Windows native successes do not prove this fix.
+
+A follow-up review reproduced an actual false acceptance on 061f512e: a real
+inert child returned the complete valid receipt, but its stdout wrapper closed
+the real pipe and then raised OSError outside the drainer's exception guard.
+The thread ended without setting failure. Close errors now mark transport
+failure too; the full receipt test injects this error independently for stdout
+and stderr and requires refusal. Native commands and cleanup authority are unchanged.

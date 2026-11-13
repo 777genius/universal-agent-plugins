@@ -343,6 +343,15 @@ def read_bootstrap_file(ctx, relative, expected, inventory):
 
 
 class BootstrapEffects:
+    config_path, config_mode = METADATA_CONFIG, 0o600
+    metadata_route = "explicit-owned-config; not ordinary default startup"
+
+    @classmethod
+    def prepare(cls, ctx):
+        path = ctx.root / cls.config_path
+        path.write_text('{"read_config_from":{"cloud":false}}\n'); path.chmod(cls.config_mode)
+        return ["--config", str(path)]
+
     def __init__(self, ctx, baseline):
         self.ctx, self.baseline = ctx, baseline
         require(DEFINITIONS_CACHE not in baseline, "definition cache preexists original baseline")
@@ -353,7 +362,7 @@ class BootstrapEffects:
     def verify(self, current):
         ctx, baseline = self.ctx, self.baseline
         require(root_identity(ctx.root) == ctx.original_output_identity, "bootstrap root replaced")
-        require(all(key in current and (key == METADATA_CONFIG or current[key] == value) for key, value in baseline.items()), "protected original authority changed")
+        require(all(key in current and (key == self.config_path or current[key] == value) for key, value in baseline.items()), "protected original authority changed")
         if self.definitions_identity is not None:
             require(all(current.get(key) == value for key, value in self.definitions_identity.items()),
                     "definition cache original identity changed")
@@ -361,15 +370,15 @@ class BootstrapEffects:
         logs = {key for key in new if BOOTSTRAP_LOG.fullmatch(key)}
         require(len(new) <= 24 and len(logs) <= 8, "bootstrap membership count")
         total, records = 0, {}
-        for relative in sorted(new | {METADATA_CONFIG}):
+        for relative in sorted(new | {self.config_path}):
             ctx.budget.check()
             info = current[relative]
             require(info[0] == ctx.original_output_identity[0], "bootstrap filesystem changed")
             if relative in BOOTSTRAP_DIRS:
                 require(len(info) == 5 and info[2] == stat.S_IFDIR | 0o755 and tuple(info[3:]) == ctx.original_output_identity[3:], "bootstrap directory ownership/mode")
                 continue
-            require(relative in BOOTSTRAP_FIXED or relative in (METADATA_CONFIG, INSTALLATION_ID, MAINTENANCE) or relative in logs, "unknown native bootstrap path")
-            mode = 0o600 if relative in (METADATA_CONFIG, DEFINITIONS_CACHE) else 0o644
+            require(relative in BOOTSTRAP_FIXED or relative in (self.config_path, INSTALLATION_ID, MAINTENANCE) or relative in logs, "unknown native bootstrap path")
+            mode = self.config_mode if relative == self.config_path else (0o600 if relative == DEFINITIONS_CACHE else 0o644)
             require(len(info) == 9 and info[2] == stat.S_IFREG | mode and info[3] == 1, "bootstrap ordinary file mode/link")
             body = read_bootstrap_file(ctx, relative, info, current)
             # One separately pinned native cache does not enlarge mutable-file allowance.
@@ -389,21 +398,24 @@ class BootstrapEffects:
                 self.installation_sha = digest
             elif relative == MAINTENANCE:
                 require(re.fullmatch(rb"[1-9][0-9]{0,9}\n", body), "unmeasured maintenance lock format")
-            elif relative == METADATA_CONFIG:
-                require(len(body) <= 256, "metadata config byte bound")
-                value = strict_json(body)
-                allowed = {"read_config_from": {"cloud": False}}
-                if "version" in value:
-                    require(type(value["version"]) is int and value["version"] == 1, "metadata config version")
-                    allowed["version"] = 1
-                require(value == allowed and value["read_config_from"]["cloud"] is False, "metadata config unexpected settings")
-                require(not self.version_seen or "version" in value, "metadata config version regressed")
-                self.version_seen |= "version" in value
+            elif relative == self.config_path:
+                self.verify_config(body, info)
             elif relative in logs:
                 datetime.strptime(Path(relative).name[6:21], "%Y%m%d-%H%M%S")
             records[relative] = {"bytes": len(body), "sha256": digest}
         require(self.installation_sha is None or INSTALLATION_ID in current, "installation ID disappeared")
         self.proofs.append(records)
+
+    def verify_config(self, body, _info):
+        require(len(body) <= 256, "metadata config byte bound")
+        value = strict_json(body)
+        allowed = {"read_config_from": {"cloud": False}}
+        if "version" in value:
+            require(type(value["version"]) is int and value["version"] == 1, "metadata config version")
+            allowed["version"] = 1
+        require(value == allowed and value["read_config_from"]["cloud"] is False, "metadata config unexpected settings")
+        require(not self.version_seen or "version" in value, "metadata config version regressed")
+        self.version_seen |= "version" in value
 
     def verify_command(self, before, after):
         require(len({key for key in after.keys() - before.keys() if BOOTSTRAP_LOG.fullmatch(key)}) <= 1, "multiple logs born in one command")
@@ -414,6 +426,8 @@ class BootstrapEffects:
         # outer verification independently holds its original inode/owner/mode.
         parents = {str(Path(key).parent) for key in BOOTSTRAP_DIRS}
         for key in before.keys() | after.keys():
+            if key == self.config_path:
+                continue  # Independently bounded content/identity predicate above.
             if key in before:
                 left, right = dict(before[key]), dict(after.get(key, {}))
                 if key in parents and left.get("kind") == right.get("kind") == "directory":
@@ -608,20 +622,20 @@ def publish_with_readout(summary, ctx, output, identity, state):
         pass
 
 
-def collect(ctx, probes, readout_state=None):
+def collect(ctx, probes, readout_state=None, *, effects_type=BootstrapEffects):
+    ctx.summary["metadata_route"] = effects_type.metadata_route
     nonce = secrets.token_hex(32)
     expected, startup, marker = fixture(ctx, {key: value.url for key, value in probes.items()}, nonce)
     roots = {"home": ctx.home, "temporary": ctx.root / "tmp", **ctx.projects}
     identities = {name: root_identity(path) for name, path in roots.items()}
-    metadata_config = ctx.private / "metadata-config.json"
-    metadata_config.write_text('{"read_config_from":{"cloud":false}}\n'); metadata_config.chmod(0o600)
+    prefix = effects_type.prepare(ctx)
     for scope in ("a", "b"):
         exclude = ctx.projects[scope] / ".git/info/exclude"
         with exclude.open("ab") as stream: stream.write(b".devin/mcp_config.local.json\n")
     baseline = snapshot(ctx)
     ctx.known_file_diagnostics = KnownFileDiagnostics(ctx.root, ctx.original_output_identity, baseline)
     outer_before = metadata_inventory(ctx.root, ctx.budget)
-    effects = BootstrapEffects(ctx, outer_before)
+    effects = effects_type(ctx, outer_before)
     ctx.summary["prospective_bootstrap_effects"] = effects.proofs
     ctx.identities[marker] = hashlib.sha256(marker.read_bytes()).hexdigest()
     ctx.summary["stdio_effect_guard"] = {"path": str(marker), "sha256": ctx.identities[marker], "python": sys.executable}
@@ -635,7 +649,7 @@ def collect(ctx, probes, readout_state=None):
         effects.verify(command_outer_before)
         effects.verify_snapshot(baseline, before)
         try:
-            record, out, err = ctx.probe(label, ["--config", str(metadata_config), *arguments], project=scope)
+            record, out, err = ctx.probe(label, [*prefix, *arguments], project=scope)
             require(record["exit"] == 0, "native metadata command refused")
             return out, err
         finally:
@@ -670,7 +684,6 @@ def collect(ctx, probes, readout_state=None):
             if label == "a": first_a[kind] = out
             if label == "a-repeat": require(out == first_a[kind], "metadata repeat differs")
     ctx.summary["prospective_bootstrap_effects"] = effects.proofs
-    ctx.summary["metadata_route"] = "explicit-owned-config; not ordinary default startup"
     ctx.summary.update(fixture_after=snapshot(ctx), metadata_capture_complete=True,
                        native_json_schema=METADATA_SCHEMA, exact_source_admission=METADATA_SCHEMA,
                        probe_methods={name: list(probe.methods()) for name, probe in probes.items()},
@@ -690,13 +703,15 @@ def observe_connections(probe):
     return probe
 
 
-def run(output):
+def run(output, *, collector=collect, recipe="private"):
+    require(recipe in ("private", "ordinary") and ((collector is collect) == (recipe == "private")), "unknown Devin research recipe")
     shared.native.require_hosted("linux-amd64")
     require(output.is_absolute() and output.resolve() == output and not output.exists()
             and shared.SOURCE not in output.parents, "fresh output outside source required")
     output.mkdir(mode=0o700, parents=True)
     identity = root_identity(output)
-    summary = {"client": "windsurf", "phase": "observe", "candidate": "devin-structured-inventory-" + VERSION,
+    prefix = "devin-structured-inventory-" if recipe == "private" else "devin-ordinary-inventory-"
+    summary = {"client": "windsurf", "phase": "observe", "candidate": prefix + VERSION, "metadata_recipe": recipe,
                "collection_complete": False, "metadata_capture_complete": False, "admission_qualified": False,
                "qualification": {name: False for name in shared.QUALIFICATION_CASES}, "commands": [],
                "host": {key: os.environ.get(key) for key in ("RUNNER_OS", "RUNNER_ARCH", "ImageOS", "ImageVersion", "GITHUB_RUN_ID", "GITHUB_RUN_ATTEMPT")}}
@@ -728,7 +743,7 @@ def run(output):
                         probes[key] = observe_connections(stack.enter_context(PiHTTPMCPProbe(nonce=secrets.token_hex(32))))
                     try:
                         readout_state["phase"] = "fixture"
-                        collect(ctx, probes, readout_state)
+                        collector(ctx, probes, readout_state)
                     finally:
                         summary.update(probe_methods={name: list(probe.methods()) for name, probe in probes.items()},
                                        accepted_connections={name: len(probe.accepted_connections) for name, probe in probes.items()})
@@ -774,7 +789,8 @@ def run(output):
         # Unproved cleanup retains a fixed failure report, never raw captures.
         if not summary.get("cleanup_complete"):
             safe = {"collection_complete": False, "admission_qualified": False,
-                    "qualification": summary["qualification"], "commands": [], "cleanup_complete": False}
+                    "qualification": summary["qualification"], "commands": [], "cleanup_complete": False,
+                    "metadata_recipe": recipe}
             publish_with_readout(safe, None, output, identity, readout_state)
         else:
             try:
@@ -784,7 +800,8 @@ def run(output):
             except (ValueError, KeyError, TypeError, OSError):
                 summary["collection_complete"] = False
                 safe = {"collection_complete": False, "admission_qualified": False, "commands": [],
-                        "qualification": summary["qualification"], "artifact_admission_failed": True}
+                        "qualification": summary["qualification"], "artifact_admission_failed": True,
+                        "metadata_recipe": recipe}
                 publish_with_readout(safe, None, output, identity, readout_state)
     return 0 if summary["collection_complete"] else 1
 
