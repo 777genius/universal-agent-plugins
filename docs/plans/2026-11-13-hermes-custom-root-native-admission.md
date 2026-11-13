@@ -904,3 +904,22 @@ Independent R2 source review accepted the exact normalization scope, unchanged
 held-handle comparisons and regular-file guards. The combined correction passed
 57 profile contracts and all 14 owned-build cleanup tests locally on Linux.
 These contracts do not qualify the pending Windows native execution.
+
+## Windows diagnostic fixture uses a representable directory mode
+
+Source `95f8648b4ffe03b729c16c3a8b1506f922f33f4e`,
+[run 43505052472, job 132163259773](https://github.com/777genius/universal-agent-plugins/actions/runs/43505052472/job/132163259773),
+passed the prior official-argv fixture but failed the temporal field diagnostic
+before the native User lifecycle. Its synthetic `st_mode=123456789` raised
+`OverflowError: mode out of range` in the real Windows `stat.S_ISDIR` call.
+The missing `caught.exception` error is a consequence of that unexpected type.
+
+Give this existing fixture a real directory mode and change only its execute
+permission bit for the mode negative. All other field mutations, exact refusal
+messages and single-snapshot assertions remain unchanged. Runtime code and
+Windows directory normalization are unchanged; no additional skip is added.
+The original hosted failure is the red evidence. Linux contracts can validate
+the revised fixture, but cannot reproduce or qualify the Windows runtime.
+On the unchanged Hermes sources at `f8025bfabdfbe40ea2a0f6e5b2a09f6273d97308`,
+the corrected 57 profile tests and all 14 cleanup tests passed locally on Linux,
+with no skips; the diff whitespace check passed. Fresh Windows CI is required.

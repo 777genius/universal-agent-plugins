@@ -626,8 +626,10 @@ if effect == 'alias': backup.unlink(); os.link(home / 'config.yaml', backup)
                         stat_call.assert_not_called(); read.assert_not_called(); unlink.assert_not_called(); read_bytes.assert_not_called()
 
     def test_directory_temporal_refusal_names_domain_and_fields_without_values(self):
+        import stat
         fields = CASE["STABLE_FIELDS"] + (("st_birthtime_ns", "st_file_attributes", "st_reparse_tag") if CASE["artifacts"].WINDOWS else ())
         base = {field: 100 for field in fields}
+        base["st_mode"] = stat.S_IFDIR | 0o700
         original = SimpleNamespace(**base)
         path = mock.Mock(name="private-directory-path")
         path.resolve.return_value, path.lstat.return_value = path, original
@@ -635,7 +637,8 @@ if effect == 'alias': backup.unlink(); os.link(home / 'config.yaml', backup)
             CASE["verify_inventory_directory"](path, original, 17, original)
             for domain in ("path", "handle"):
                 for field in fields:
-                    changed = SimpleNamespace(**dict(base, **{field: 123456789}))
+                    value = base[field] ^ 0o100 if field == "st_mode" else 123456789
+                    changed = SimpleNamespace(**dict(base, **{field: value}))
                     path.lstat.return_value = changed if domain == "path" else original
                     opened.return_value = changed if domain == "handle" else original
                     path.lstat.reset_mock(); opened.reset_mock()
