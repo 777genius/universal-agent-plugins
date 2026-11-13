@@ -16,6 +16,12 @@ name: Hermes native User tools call - scripted localhost provider, no vendor aut
     - scripts/e2e/hermes-native-lifecycle.py
     - install/integrationctl/agentplugins/clients/hermes/**
     - install/integrationctl/agentplugins/adapters/nativeconfig/hermes_yaml*
+    - cli/**
+    - install/integrationctl/**
+    - go.mod
+    - go.sum
+    - go.work
+    - go.work.sum
   push:
     branches:
     - main
@@ -29,6 +35,12 @@ name: Hermes native User tools call - scripted localhost provider, no vendor aut
     - scripts/e2e/hermes-native-lifecycle.py
     - install/integrationctl/agentplugins/clients/hermes/**
     - install/integrationctl/agentplugins/adapters/nativeconfig/hermes_yaml*
+    - cli/**
+    - install/integrationctl/**
+    - go.mod
+    - go.sum
+    - go.work
+    - go.work.sum
   workflow_dispatch: {}
 permissions:
   contents: read
