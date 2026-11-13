@@ -14,7 +14,7 @@ import devin_structured_inventory_admission as case
 class DevinAdmissionContracts(unittest.TestCase):
     def test_unique_bounded_native_json(self):
         self.assertEqual(case.strict_json(b'[{"name":"owned","enabled":false}]'), [{"name": "owned", "enabled": False}])
-        for body in (b'{"a":1,"a":2}', b'{} {}', b'{"a":NaN}', b'null', b'x' * ((1 << 20) + 1), b'[' * 18 + b'0' + b']' * 18):
+        for body in (b'{"a":1,"a":2}', b'{} {}', b'{"a":NaN}', b'{"x":1e9999}', b'{"x":-1e9999}', b'null', b'x' * ((1 << 20) + 1), b'[' * 18 + b'0' + b']' * 18):
             with self.subTest(body=body[:40]), self.assertRaises(ValueError):
                 case.strict_json(body)
 

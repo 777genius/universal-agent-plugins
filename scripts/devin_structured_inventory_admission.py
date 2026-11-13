@@ -4,6 +4,7 @@ import argparse
 from contextlib import ExitStack
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -79,6 +80,9 @@ def strict_json(body):
                        parse_constant=lambda _value: (_ for _ in ()).throw(ValueError("nonfinite JSON")))
     def visit(item, depth=0):
         require(depth <= 16, "native JSON depth")
+        # Exponent-overflow JSON numbers may become +/-inf without parse_constant.
+        if isinstance(item, float):
+            require(math.isfinite(item), "nonfinite native JSON number")
         if isinstance(item, (dict, list)):
             require(len(item) <= 512, "native JSON cardinality")
             for child in item.values() if isinstance(item, dict) else item:
