@@ -25,6 +25,12 @@ func (adapter *Adapter) PlanSession(ctx context.Context, env clients.Env, req cl
 	if err != nil {
 		return clients.SessionPlan{}, err
 	}
+	// A selected Project MCP file may hold foreign credentials. Refuse
+	// unauthorized bindings before even reading native configuration.
+	names, err := adapter.sessionServers(env, req)
+	if err != nil {
+		return clients.SessionPlan{}, err
+	}
 	path := clineProjectComponents(req.ProjectRoot).ConfigPaths.JSON
 	file, err := env.NativeConfig.ReadExactFile(path)
 	if err != nil {
@@ -32,10 +38,6 @@ func (adapter *Adapter) PlanSession(ctx context.Context, env clients.Env, req cl
 	}
 	if !file.Exists || len(file.Body) > 1<<20 {
 		return clients.SessionPlan{}, fmt.Errorf("owned Cline project MCP configuration is missing or oversized")
-	}
-	names, err := adapter.sessionServers(env, req)
-	if err != nil {
-		return clients.SessionPlan{}, err
 	}
 	after, err := env.NativeConfig.ReadExactFile(path)
 	if err != nil {

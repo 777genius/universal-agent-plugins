@@ -20,6 +20,24 @@ func TestSessionRequiresInstalledClientBeforeFileAccess(t *testing.T) {
 	}
 }
 
+// An unrelated binding must never trigger a native MCP config read.
+// Nil NativeConfig makes an attempted unauthorized read fail immediately.
+func TestSessionRejectsForeignBindingBeforeNativeConfigRead(t *testing.T) {
+	root := t.TempDir()
+	req := clients.SessionRequest{
+		Client: domain.DetectedClient{
+			ClientID: domain.ClientCline, Status: domain.DetectionDetected,
+			ExecutablePath: filepath.Join(root, "cline"),
+			Surfaces: []domain.ClientSurface{{ID: "cline_cli", Detected: true}},
+		},
+		ProjectRoot: root,
+		Bindings: []domain.ClientBinding{{Scope: "user"}},
+	}
+	if _, err := New().PlanSession(context.Background(), clients.Env{}, req); err == nil || !strings.Contains(err.Error(), "Project scope") {
+		t.Fatalf("foreign binding was not refused before file access: %v", err)
+	}
+}
+
 func TestSessionWholeFileRefusesForeignDisabledAndMalformedMembers(t *testing.T) {
 	// Use platform-native absolute paths, including Windows drive/share paths.
 	// Relative launchers must never be resolved through the host PATH or cwd.
