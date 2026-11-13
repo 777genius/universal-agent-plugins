@@ -9,7 +9,7 @@ import { projectRegistry } from '../utils/registryProjection.ts';
 const fixture = JSON.parse(
   readFileSync(new URL('./fixtures/registry-responses/gitlab.json', import.meta.url), 'utf8'),
 ) as RegistryIndex;
-function onlyTarget(client: 'codex' | 'chatgpt') {
+function onlyTarget(client: 'codex' | 'chatgpt' | 'grok' | 'kimi') {
   const plugin = structuredClone(fixture.plugins[0]!) as RegistryPlugin;
   plugin.name = client;
   plugin.trust_state = 'reviewed';
@@ -18,7 +18,7 @@ function onlyTarget(client: 'codex' | 'chatgpt') {
       release.targets = [
         {
           client,
-          delivery: client === 'codex' ? 'managed' : 'manual_activation',
+          delivery: client === 'chatgpt' ? 'manual_activation' : 'managed',
           authentication: 'required',
           scopes: ['user'],
           ...(client === 'chatgpt'
@@ -68,3 +68,15 @@ test('agent examples prefer eligible Context7 and retain Web-only aggregate targ
   assert.equal(agentInstallExample([web], 'chatgpt')?.target, 'chatgptweb');
   assert.equal(agentInstallExample([web], 'hermes'), undefined);
 });
+
+for (const target of ['grok', 'kimi'] as const) {
+  test(`${target} examples use eligible Context7 and skip it when only another package is eligible`, () => {
+    const context7 = onlyTarget(target);
+    context7.name = 'context7';
+    const alternative = onlyTarget(target);
+    alternative.name = 'another-package';
+    assert.deepEqual(agentInstallExample([alternative, context7], target), { plugin: context7, target });
+    context7.distributions[0]!.releases[0]!.blocking_clients.push(target);
+    assert.deepEqual(agentInstallExample([context7, alternative], target), { plugin: alternative, target });
+  });
+}
