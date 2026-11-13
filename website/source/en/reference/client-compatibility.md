@@ -48,17 +48,23 @@ a later client version, another scope or an untested package. UAP is independent
 community tooling; these are bounded maintainer observations, not vendor
 certification or a claim of universal production readiness.
 
-## Hermes and Antigravity: source qualification {#hermes-antigravity-source}
+## Hermes and Antigravity: released installer support {#hermes-antigravity-source}
 
-At the 2026-11-10 checkpoint, published CLI `0.1.102` does not include Hermes or Antigravity. The following results qualify source, not a published artifact. Qualification against the immutable release binary and signed Directory eligibility remain separate pending checks. Client capability does not authorize a Directory package for that target.
+Native CLI **0.1.108** was published on 2026-11-13 and includes Hermes and Antigravity. Release qualification and promotion succeeded; signed Directory package eligibility remains separate. This does not assert npm 0.1.108 publication, vendor authentication or automatic activation.
+
+[0.1.108](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.108) · [43337036671](https://github.com/777genius/universal-agent-plugins/actions/runs/43337036671) · [43454712919](https://github.com/777genius/universal-agent-plugins/actions/runs/43454712919) · source `8c3cfa28e332c533b0cc0845739c0275730a4285`.
+
+**Historical lifecycle evidence (2026-11-10):**
 
 **Hermes 0.23.0:** User Skills and owned stdio/Streamable HTTP MCP configuration; Project Skills only. Project MCP is refused without redirecting to User configuration. Linux x64, macOS arm64 and native Windows x64 passed first/repeated add, update, repair, removal, untrusted Project discovery and A/B isolation in [42813277862](https://github.com/777genius/universal-agent-plugins/actions/runs/42813277862) at UAP `a50c8a245f1c273efb3d171f4c54ed540475336a`. Four loopback HTTP `initialize`/`tools/list` exchanges per OS prove connection and tool discovery, not `tools/call`, model use, authentication or trusted Project execution. SSE and hooks are unsupported. Portable commands are projected as Skills; explicit-only commands are withheld when explicit invocation cannot be enforced.
+
+Later native evidence [#884](https://github.com/777genius/universal-agent-plugins/pull/884) proves Hermes 0.23.0 User stdio `tools/call` on Linux/macOS/Windows through the official legacy `run_agent.py` driver and a local scripted provider. Default `hermes chat`, vendor authentication and trusted Project execution remain unqualified.
 
 **Antigravity:** owned native plugin bundles with Skills and stdio/Streamable HTTP MCP in User and Project scopes remain **Prepared**. Actual `agy` 1.5.3 passed strict validation and isolated CLI import/list/uninstall on Linux, macOS and Windows in [42804680737](https://github.com/777genius/universal-agent-plugins/actions/runs/42804680737). These CLI observations do not prove actual IDE discovery or enablement, MCP startup, tool execution or authentication; IDE qualification remains separate. UAP does not grant project trust.
 
 ## Pi extensions, Skills and MCP {#pi-native-extensions}
 
-Published CLI `0.1.102` accepts `--target pi` for compatible Agent Plugins 1.0
+Since CLI `0.1.102`, the published CLI accepts `--target pi` for compatible Agent Plugins 1.0
 packages containing native [Pi extensions](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_CONTRACT.md),
 Skills and/or stdio/Streamable HTTP MCP servers. User and eligible **project**
 scopes are supported; SSE and generic app components are not. Project extension
@@ -97,7 +103,7 @@ activation.
 OpenCode has separate [V1/V2 native project lifecycle evidence (#626)](https://github.com/777genius/universal-agent-plugins/pull/626)
 and source-bound [V2 MCP handshake qualification (#638)](https://github.com/777genius/universal-agent-plugins/pull/638).
 The latter confirms real V2 client `initialize` and `tools/list` with a
-controlled stdio server; `tools/call` and real-model use remain unqualified.
+controlled stdio server; subsequent [native call #655](https://github.com/777genius/universal-agent-plugins/pull/655) proves native Project stdio `tools/call` on Linux/macOS/Windows through a local scripted model. Vendor-model use remains unqualified.
 These tests do not establish desktop notifications, audio, terminal focus or
 third-party model authorization.
 

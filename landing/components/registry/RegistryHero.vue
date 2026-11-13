@@ -176,7 +176,7 @@ const targetOptions = computed(() =>
           : t('shell.hero.notAvailableForPlugin');
       return target
         ? t(`shell.hero.delivery.${target.delivery}`)
-        : t('shell.hero.notAvailableForPlugin');
+        : t('registryUi.install.noCompatibleSignedRelease', { agent: client.name });
     })(),
   })),
 );

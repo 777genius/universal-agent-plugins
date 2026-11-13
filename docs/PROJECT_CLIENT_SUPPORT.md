@@ -20,13 +20,9 @@ authority. Client paths below are relative to the selected project. Configuratio
 ownership and native discovery are separate: Prepared means further client
 selection, reload, trust or session work can remain.
 
-## Hermes and Antigravity: source-qualified additions {#hermes-antigravity-source}
+## Hermes and Antigravity: released installer support {#hermes-antigravity-source}
 
-At the 2026-11-10 checkpoint, published CLI `0.1.102` did not include these
-targets. The later observations below qualify their named source revisions;
-they do not establish the contents or qualification of another CLI release.
-Immutable release-artifact proof and signed Directory eligibility remain separate
-from native client capability.
+Published [native CLI 0.1.108](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.108) (2026-11-13, source `8c3cfa28e332c533b0cc0845739c0275730a4285`) includes Hermes and Antigravity; [qualification](https://github.com/777genius/universal-agent-plugins/actions/runs/43337036671) and [promotion](https://github.com/777genius/universal-agent-plugins/actions/runs/43454712919) succeeded. Signed Directory package eligibility remains separate: client capability does not authorize a package target. Package-manager channels may lag; this is not an npm 0.1.108 publication claim.
 
 | Client | Component delivery and scope | Native evidence and remaining boundary |
 | --- | --- | --- |

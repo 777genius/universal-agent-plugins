@@ -359,7 +359,7 @@
         "nextStep": "Después de instalar"
       },
       "scrollHint": "Desplázate horizontalmente para ver todas las columnas.",
-      "note": "Automática: UAP instala los componentes compatibles. Guiada: sigue las indicaciones del agente. Preparada: activa los archivos preparados. Manual: termina la configuración en la aplicación. La instalación no inicia sesión ni concede confianza. Se muestran las capacidades del código fuente actual; la CLI publicada puede ser distinta. La disponibilidad depende del complemento y de la versión del agente.",
+      "note": "Automática: UAP instala los componentes compatibles. Guiada: sigue las indicaciones del agente. Preparada: activa los archivos preparados. Manual: termina la configuración en la aplicación. La instalación no inicia sesión ni concede confianza. La disponibilidad depende del complemento y de la versión del agente. Referencia: CLI nativo 0.1.108. La publicación en npm es independiente y puede demorarse. Admitir un agente no garantiza una versión firmada del catálogo compatible con cada plugin y ámbito.",
       "details": "Ver detalles de compatibilidad",
       "capabilities": {
         "pluginsSkillsMcp": "Complementos, habilidades, MCP",
@@ -828,7 +828,7 @@
           "extensions": "Extensiones"
         }
       },
-      "piNoCompatibleRelease": "Pi es compatible, pero la versión firmada de este plugin no incluye un destino compatible con Pi.",
+      "noCompatibleSignedRelease": "UAP admite {agent}, pero este plugin no tiene una versión firmada compatible con el ámbito seleccionado.",
       "piPinnedProjectSource": "Proyecto: instala en Pi desde la fuente Git fijada a un SHA exacto (no es un destino Pi firmado); la CLI comprueba la compatibilidad."
     },
     "authentication": {

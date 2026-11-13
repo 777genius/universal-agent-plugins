@@ -152,10 +152,10 @@ const targetOptions = computed(() =>
       if (client.id === 'pi' && !target)
         return pinnedPiSource.value && current.value
           ? t('registryUi.install.piPinnedProjectSource')
-          : t('registryUi.install.piNoCompatibleRelease');
+          : t('registryUi.install.noCompatibleSignedRelease', { agent: client.name });
       return target
         ? t(`registryUi.delivery.${target.delivery}`)
-        : t('registryUi.card.notInstallableFromAnActiveRelease');
+        : t('registryUi.install.noCompatibleSignedRelease', { agent: client.name });
     })(),
   })),
 );

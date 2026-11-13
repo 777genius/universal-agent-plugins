@@ -1,6 +1,8 @@
 # Google Antigravity native plugins
 
-**Source tracking:** PR #815. Merging source or passing native CLI tests does not establish a published UAP release, model authentication, or Antigravity IDE activation.
+Published [native CLI 0.1.108](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.108) (2026-11-13, source `8c3cfa28e332c533b0cc0845739c0275730a4285`) includes Hermes and Antigravity; [qualification](https://github.com/777genius/universal-agent-plugins/actions/runs/43337036671) and [promotion](https://github.com/777genius/universal-agent-plugins/actions/runs/43454712919) succeeded. Signed Directory package eligibility remains separate: client capability does not authorize a package target. Package-manager channels may lag; this is not an npm 0.1.108 publication claim.
+
+**Source tracking:** PR #815. Native CLI tests do not establish model authentication or Antigravity IDE activation.
 
 The Antigravity target ID is `antigravity`. The adapter prepares one
 source-verified package in the vendor's documented **plugin discovery folder**,
@@ -31,9 +33,9 @@ Its runtime `PLUGIN_DATA` identifies a vendor-managed persistent directory,
 which is separate from UAP's explicitly expanded data paths. UAP does not claim
 that these directories are identical or manage the vendor's runtime data.
 
-These targets remain source capabilities until a qualified CLI release includes
-them. Public install actions retain the released target set; the SDK-generated
-capability inventory still describes every source adapter.
+The released adapter supports User and Project preparation. Each signed Directory
+package must separately authorize this target; the SDK capability inventory does
+not grant package eligibility.
 
 **Security:** Reject unqualified hooks, rules, subagents, unknown components,
 unexpected raw `mcp_config.json` and unsafe remote MCP destinations.
