@@ -943,3 +943,34 @@ and byte guard. The native family remains 720 seconds and admission scans remain
 remain unchanged; this does not add 600 seconds beyond either outer limit.
 The new budget is prospective, not a measured native pass. A fresh task-owned
 Windows build must complete cleanup and admission before it can qualify.
+
+## Owned build cleanup deadline after the original Windows 95f failure
+
+Run 43505052472, job 132163259326 built the official pinned payload. The initial
+metadata census completed at 21:21:13 UTC: payload 134259 members / 6258975024
+logical bytes, cache 57890 / 4836389126 and work 263 / 3179853. At 21:22:53 UTC
+the 120-second shared cleanup clock expired while rejoining the payload ancestor
+after an alias unlink. The native profile observer never ran. This is a real
+cleanup deadline failure, not a successful Windows custom-root result.
+
+The source correction gives the complete census, detach and final closure at
+most 600 seconds, and makes build plus cleanup share one absolute 9000-second
+clock. The official builder gets only positive remaining time; cleanup receives
+the earlier of that original deadline and entry time plus 600 seconds. It cannot
+renew the total budget. The 180-minute workflow, 720-second native family,
+120-second payload scan budgets and all entry, byte, ownership and alias limits
+remain unchanged.
+
+Closed progress lines contain only fixed status, selected-alias count, verified
+alias count and elapsed seconds. They appear at admission, each 1024 fully
+verified aliases and completion or refusal; no paths or file contents are emitted.
+A failed post-unlink join can leave a removed alias uncounted; verified_aliases
+is a lower bound on fully verified transitions, never proof that no other effect
+happened. Only final census and full payload closure permit completed status.
+
+Root and independent R1 accepted this bounded correction. Actual-file regressions
+expire the clock immediately after the first unlink and require the original
+payload and remaining alias to survive. Build-clock tests prohibit a renewed
+cleanup allowance after the total deadline. All 16 cleanup contracts passed
+locally on Linux. Original hosted execution must still establish Windows
+completion and performance. No native qualification changes.

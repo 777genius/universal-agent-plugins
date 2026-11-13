@@ -3,9 +3,11 @@ package agentpluginscli
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecasetest"
 )
@@ -47,6 +49,19 @@ func TestDoctorNativeProjectionWithoutConfigVisibilityIsInconclusive(t *testing.
 		domain.ClientBinding{ClientID: string(domain.ClientGemini), NativeObjects: []domain.NativeObjectOwnership{{Kind: "owned_native_projection"}}}, "sha256:package")
 	if len(findings) != 1 || findings[0].Status != "unknown" || findings[0].Code != "native_projection_not_checked" || len(activator.requests) != 0 {
 		t.Fatalf("findings = %+v, calls = %d", findings, len(activator.requests))
+	}
+}
+
+func TestDoctorNativeProjectionIndeterminateIsNotReportedAsDrift(t *testing.T) {
+	activator := &doctorProjectionActivator{err: fmt.Errorf("verify selected profile: %w", &ports.VerificationError{
+		Kind: ports.VerificationIndeterminate, Err: errors.New("exact version was not observed"),
+	})}
+	findings := checkNativeProjectionIntegrity(context.Background(), App{Lifecycle: usecasetest.NewService(usecase.Service{Activator: activator})},
+		domain.DetectedClient{ClientID: domain.ClientWindsurf, ConfigRoot: "/legacy"}, domain.DeliveryTarget{},
+		domain.Installation{InstallationID: "installation-id", DeclaredName: "demo"},
+		domain.ClientBinding{ClientID: string(domain.ClientWindsurf), NativeObjects: []domain.NativeObjectOwnership{{Kind: "owned_native_projection"}}}, "sha256:package")
+	if len(findings) != 1 || findings[0].Status != "unknown" || findings[0].Code != "native_projection_not_checked" || len(activator.requests) != 1 || !activator.requests[0].VerifyOnly {
+		t.Fatalf("findings = %+v, verification requests = %+v", findings, activator.requests)
 	}
 }
 

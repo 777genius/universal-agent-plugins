@@ -19,6 +19,7 @@ API = runpy.run_path(str(Path(__file__).parent / "e2e/hermes-profile-admission.p
 require, stable = API["require"], API["stable_file"]
 DOMAIN_MEMBERS, DEPTH, BYTES = API["PAYLOAD_MEMBERS"], API["PAYLOAD_DEPTH"], API["PAYLOAD_BYTES"]
 LIMIT, UNION_BYTES = 3 * DOMAIN_MEMBERS, 3 * BYTES
+BUILD_SECONDS, CLEANUP_SECONDS = 9000, 600
 
 
 def check_time(deadline):
@@ -214,9 +215,28 @@ def windows_delete(path, expected):
                 raise ctypes.WinError(ctypes.get_last_error())
 
 
+def cleanup_progress(progress, started, status):
+    print("HERMES_BUILD_CLEANUP=" + json.dumps({"schema_version": 1, "status": status,
+          **progress, "elapsed_seconds": round(time.monotonic() - started, 3)}, sort_keys=True), flush=True)
+
+
 def detach(owned, deadline):
+    started = time.monotonic()
+    progress = {"selected_aliases": None, "verified_aliases": 0}
+    try:
+        count = detach_owned_aliases(owned, deadline, progress, started)
+    except BaseException:
+        cleanup_progress(progress, started, "incomplete")
+        raise
+    cleanup_progress(progress, started, "completed")
+    return count
+
+
+def detach_owned_aliases(owned, deadline, progress, started):
     records = census(owned, deadline)
     selected = alias_plan(records)  # Whole union admitted before the first unlink.
+    progress["selected_aliases"] = len(selected)
+    cleanup_progress(progress, started, "running")
     expected = {(info.st_dev, info.st_ino): info for _, info in selected}
     anchors = {(info.st_dev, info.st_ino): key for key, info in records.items()
                if key[0] == "payload" and stat.S_ISREG(info.st_mode)}
@@ -254,6 +274,9 @@ def detach(owned, deadline):
             require(all(getattr(after, field) == getattr(previous, field) for field in fields)
                     and after.st_nlink == previous.st_nlink - 1, "owned build payload changed during unlink")
             expected[inode] = after  # Exact own nlink decrement/ctime transition only.
+        progress["verified_aliases"] += 1
+        if progress["verified_aliases"] % 1024 == 0:
+            cleanup_progress(progress, started, "running")
     final = census(owned, deadline)
     require(not alias_plan(final), "owned build aliases remain")
     API["payload_snapshot"](owned.roots["payload"], owned.identities["payload"], deadline)
@@ -261,6 +284,7 @@ def detach(owned, deadline):
 
 
 def build(source, runner, pin):
+    deadline = time.monotonic() + BUILD_SECONDS
     roots = {label: runner / ("hermes-profile-" + leaf)
              for label, leaf in (("work", "work"), ("cache", "cache"), ("payload", "payload"))}
     for root in roots.values():
@@ -271,10 +295,13 @@ def build(source, runner, pin):
         with (roots["work"] / ".native-preparation").open("x", encoding="utf-8") as marker:
             marker.write(str(source))
         owned.verify()
+        remaining = deadline - time.monotonic()
+        require(remaining > 0, "official owned build deadline")
         subprocess.run([sys.executable, "-S", "-B", str(source / "scripts/bundles/native_build.py"),
                         "--source", str(source), "--work", str(roots["work"]),
                         "--cache", str(roots["cache"]), "--out", str(roots["payload"]),
-                        "--commit", pin], check=True, timeout=9000)
-        return detach(owned, time.monotonic() + 600)
+                        "--commit", pin], check=True, timeout=remaining)
+        check_time(deadline)
+        return detach(owned, min(deadline, time.monotonic() + CLEANUP_SECONDS))
     finally:
         owned.close()  # Keep all remaining build state on every outcome.

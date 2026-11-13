@@ -491,10 +491,13 @@ The authored package lives beneath the original held private cleanup root.
 
 Ordinary public doctor returns read_only=true and a truthful Prepared result.
 Its exact current findings are activation_pending (degraded),
-authentication_not_checked (unknown) and native_projection_changed (degraded).
-The last code follows the ordinary detector's absent version probe and the
-Global exact-version verifier; the separate receipt and byte checks establish
-the selected file state. This is not a healthy/native-activation assertion.
+authentication_not_checked (unknown) and native_projection_not_checked (unknown).
+Ordinary detection deliberately does not execute a version probe. With a valid
+selected primary executable and original Global root, the version verifier now
+returns the existing typed VerificationIndeterminate error when that observation
+is absent. Doctor maps that error to unknown instead of falsely claiming native
+projection drift. The separate receipt and byte checks establish the selected
+file state. This is not a healthy/native-activation assertion.
 The complete doctor frame must remain unchanged. Owned Skill rows are checked
 with the same exact scope-qualified naming and closed metadata fields as the
 ordinary source validator.
@@ -523,3 +526,71 @@ is exactly one then two committed directory_swap entries, preserving the first
 entry unchanged; doctor preserves the complete frame. Inert regressions cover
 these failures, including the original accepted extra Skill file and a tripwire
 that proves refusal now precedes every post-public content read.
+
+### Independent receipt, public output and doctor review
+
+Independent review of `f8025bfabdfbe40ea2a0f6e5b2a09f6273d97308`
+reproduced two remaining false acceptances with actual temporary state files:
+retained removal accepted a corrupt or missing state-level removal receipt, and
+repair accepted unrelated operation IDs/digest ancestry. A generic successful
+public envelope with empty data also did not prove the selected lifecycle.
+The narrow R1 correction was accepted before implementation: reuse the existing
+37-command sequence and 900-second bound, join the real public DTOs to state and
+effects, and preserve the bounded own-build provenance already implemented.
+The initial estimate was 200–350 runtime and 150–250 test lines, complexity 4/10,
+reliability 8/10 and confidence 7/10 pending genuine native execution. The delta
+against the existing correction uses about 140 runtime and 220 test lines.
+
+Each swap receipt now joins the exact group, `group-001` operation, integer
+sequence, committed directory_swap kind, binding, active path and preceding
+digest. Groups are distinct and the final group matches the installation.
+Retained removal requires exactly one new committed directory_remove receipt,
+the original final package digest, the next sequence, and no after digest.
+The original binding receipts and retained installation/data remain unchanged.
+
+The public consumer uses the actual Go add/repair/remove batch serializers,
+usecase AddResult/RemoveResult and retained-data projection as its schema basis.
+It joins group and installation IDs, selected target, exact source and revision,
+Prepared component/activation facts, mutation/confirmation booleans and all
+retained-data facts. The raw command argv/cwd and both stream lengths/digests
+are checked before JSON/state acceptance. Five finite response/state joins then
+bind the raw state hash to its command effect and parsed installation/group at
+completion. Root R2 requested this early command join; wrong argv, cwd and hash
+counterexamples now preserve the accepted inventory, binding, labels, state
+history and effect ledger. No additional native command is introduced.
+
+The doctor correction was reviewed independently in both directions. Invalid
+client, executable, root or explicit unsupported version still fail normally.
+Missing observed version still refuses activation/preflight, including mutation
+paths; the existing receipt-bound remove behavior without a current version is
+unchanged. No detector probe or client-ID exception was added to doctor.
+The Python oracle requires unknown/native_projection_not_checked and rejects
+the previous false native_projection_changed finding. Root's full Windsurf
+package and focused doctor tests passed; independent R2 reran the actual adapter
+refusal test (12 conditions across VerifyOnly true/false, with zero native/FileIO
+effects) and the doctor projection suite, both passing in 0.012 seconds.
+
+Local validation after the R2 sequencing correction: all 77 combined structured,
+ordinary and Global Python contracts passed in 1.820 seconds; git diff --check
+passed. Counterexamples include malformed removal receipts, coherently forged
+swap groups, detached public source/revision/retention data and detached final
+state/response/effect joins. These are inert contracts; final-source Global
+native execution and original-artifact review remain required.
+
+### Later original metadata evidence
+
+[Run 43495420970](https://github.com/777genius/universal-agent-plugins/actions/runs/43495420970)
+on source `b397682f3600a75207237a72a617b45b2737be17`, tree
+`cf823249a6d6f413e15d3d628db3db54f6d966f3`, passed the ordinary and private-config
+metadata jobs. Ordinary artifact `14078650118` has outer SHA256
+`f994aff79f41c912cf64a686bec7f5d62d9f081f26f40093d891dbafb5547670`;
+private artifact `14077503119` has outer SHA256
+`6d609eecefd7a791485cf0ef6b3d7bab518cd1caff914bae2aedf129cda394a2`.
+Independent review verified each original outer/inner ZIP, 40 stream length/hash
+joins, the exact 20-command source/argv/cwd sequence and 13 effects. All eight
+original MCP/Skills outputs replayed successfully through the pinned validators.
+The ordinary first User config migration agrees with both held receipts and
+the Git exclude remains unchanged; private config does not qualify ordinary
+startup. Both captures report complete cleanup and zero probe effects. Neither
+contains Global public lifecycle commands or receipts, and all five runtime
+qualification flags remain false.

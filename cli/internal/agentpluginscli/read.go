@@ -338,6 +338,10 @@ func checkNativeProjectionIntegrity(ctx context.Context, app App, client domain.
 		VerifyOnly:            true,
 	})
 	if err != nil {
+		var verification *ports.VerificationError
+		if errors.As(err, &verification) && verification.Kind == ports.VerificationIndeterminate {
+			return []doctorFinding{scopedFinding("unknown", "native_projection_not_checked", installation, binding.ClientID, "the exact owned native client projection could not be checked", "restore client configuration visibility and rerun doctor before relying on this installation")}
+		}
 		return []doctorFinding{scopedFinding("degraded", "native_projection_changed", installation, binding.ClientID, "an owned native client configuration entry or skill is missing or differs from its recorded projection", repairAction(installation, binding))}
 	}
 	if outcome.Activation != domain.ActivationActive || outcome.Verification != domain.VerificationInstalled {

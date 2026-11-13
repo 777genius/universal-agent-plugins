@@ -5,6 +5,23 @@ on:
       - 'scripts/client_automation_native_probe.py'
       - 'scripts/test_client_automation_native_probe.py'
       - 'scripts/grok_acp_inventory_admission.py'
+      - 'scripts/grok_acp_bootstrap.py'
+      - 'scripts/test_grok_acp_inventory_admission.py'
+      - 'install/integrationctl/research/grokacpinventory/**'
+      - 'scripts/devin_structured_inventory_admission.py'
+      - 'scripts/test_devin_structured_inventory_admission.py'
+      - 'scripts/devin_ordinary_metadata_admission.py'
+      - 'scripts/test_devin_ordinary_metadata_admission.py'
+      - 'scripts/devin_global_lifecycle_admission.py'
+      - 'scripts/test_devin_global_lifecycle_admission.py'
+      - '.github/workflows/client-automation-native.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/client_automation_native_probe.py'
+      - 'scripts/test_client_automation_native_probe.py'
+      - 'scripts/grok_acp_inventory_admission.py'
+      - 'scripts/grok_acp_bootstrap.py'
       - 'scripts/test_grok_acp_inventory_admission.py'
       - 'install/integrationctl/research/grokacpinventory/**'
       - 'scripts/devin_structured_inventory_admission.py'

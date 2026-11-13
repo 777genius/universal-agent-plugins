@@ -69,7 +69,7 @@ def owned_skill_row(ctx, profile, scope):
                 display_name=SKILL, warnings=[], errors=[])
 
 
-def doctor_result(data, identifier):
+def doctor_result(data, identifier, binding):
     base.require(type(data) is dict and data.get("read_only") is True
                  and type(data.get("installation_count")) is int and data["installation_count"] == 1
                  and type(data.get("open_operation_count")) is int and data["open_operation_count"] == 0,
@@ -78,22 +78,108 @@ def doctor_result(data, identifier):
     base.require(type(item) is dict, "Global doctor installation shape")
     clients, findings = item.get("clients"), data.get("findings")
     base.require(item.get("installation_id") == identifier and item.get("name") == NAME
+                 and item.get("version") == "1.0.0" and item.get("source") == "local"
+                 and item.get("mixed_version") is False and item.get("needs_rebind", False) is False
+                 and data.get("project_readiness") == []
                  and type(clients) is list and len(clients) == 1 and type(clients[0]) is dict
+                 and clients[0].get("package_revision") == binding["package_revision"]
                  and all(clients[0].get(key) == value for key, value in {
                      "client_id": "windsurf", "scope": "user", "activation": "prepared",
                      "materialization": "materialized", "authentication": "not_checked",
                      "policy": "allowed", "verification": "installation_verified"}.items()),
                  "Global doctor selected lifecycle")
     # Ordinary Detect never executes a version probe. Its VerifyOnly therefore
-    # refuses the exact version gate; this diagnostic is not native corruption.
+    # refuses the exact version gate as indeterminate, without claiming drift.
     wanted = {("degraded", "activation_pending"), ("unknown", "authentication_not_checked"),
-              ("degraded", "native_projection_changed")}
+              ("unknown", "native_projection_not_checked")}
     base.require(type(findings) is list and len(findings) == len(wanted)
                  and all(type(row) is dict and row.get("installation_id") == identifier
                          and row.get("installation_name") == NAME and row.get("client_id") == "windsurf"
                          for row in findings)
                  and {(row.get("status"), row.get("code")) for row in findings} == wanted,
                  "Global doctor truthful findings")
+
+
+def receipt_join(row, binding, group, sequence, before, *, removed=False):
+    base.require(type(group) is str and re.fullmatch(r"[A-Za-z0-9_-]{1,128}", group)
+                 and type(row) is dict and row.get("operation_group_id") == group
+                 and row.get("operation_id") == group + "-001"
+                 and type(row.get("sequence")) is int and row["sequence"] == sequence
+                 and row.get("mutation_type") == ("directory_remove" if removed else "directory_swap")
+                 and row.get("phase") == "committed"
+                 and row.get("client_binding_id") == binding["client_binding_id"]
+                 and row.get("active_path") == binding["target_locator"]
+                 and row.get("before_digest", "") == before
+                 and (row.get("after_digest", "") == "" if removed else
+                      type(row.get("after_digest")) is str and re.fullmatch(r"sha256:[0-9a-f]{64}", row["after_digest"])),
+                 "Global operation receipt join")
+
+
+def public_result(data, verb, item, binding):
+    """Join the actual public group/outcome to the independently read state."""
+    group = item.get("operation_group_id")
+    targets = data.get("targets") if type(data) is dict else None
+    base.require(type(targets) is list and len(targets) == 1 and type(targets[0]) is dict
+                 and data.get("batch") is True and type(data.get("succeeded")) is int and data["succeeded"] == 1
+                 and type(data.get("failed")) is int and data["failed"] == 0 and data.get("operation_id") == group
+                 and data.get("plugin") == NAME and data.get("dry_run") is False
+                 and data.get("status") == ("data_retained" if verb == "remove" else "completed")
+                 and targets[0].get("target") == "windsurf" and targets[0].get("status") == "external_completed"
+                 and not targets[0].get("error"), "Global public batch outcome")
+    output = targets[0].get("output")
+    base.require(type(output) is dict and output.get("operation_id") == group
+                 and output.get("plugin") == NAME and output.get("version") == "1.0.0"
+                 and output.get("source") == ("direct local source" if verb == "add" else "local")
+                 and output.get("tree_digest") == item["source"]["tree_digest"]
+                 and output.get("manifest_digest") == item["package"]["manifest_digest"]
+                 and output.get("dry_run") is False, "Global public source/revision")
+    outcome = output.get("result")
+    common = {"installation_id", "requires_confirmation", "mutated", "group_phase"}
+    base.require(type(outcome) is dict and outcome.get("installation_id") == item["installation_id"]
+                 and outcome.get("requires_confirmation") is False and outcome.get("mutated") is True
+                 and outcome.get("group_phase") == "external_completed", "Global public selected mutation")
+    if verb == "remove":
+        receipt = item["data_receipts"][binding["data_receipt_id"]]
+        base.require(set(outcome) == common | {"plugin", "client_id", "affected_surfaces", "deactivation"}
+                     and outcome.get("plugin") == NAME and outcome.get("client_id") == "windsurf"
+                     and outcome.get("affected_surfaces") == ["windsurf"]
+                     and outcome.get("deactivation") == {"activation": "not_required", "artifact_removal_allowed": True,
+                                                          "external_removal_complete": True}
+                     and all(outcome["deactivation"].get(key) is True for key in ("artifact_removal_allowed", "external_removal_complete"))
+                     and data.get("status") == "data_retained" and data.get("data_retained") is True
+                     and data.get("plugin_data_preserved") is True and item.get("data_retained") is True,
+                     "Global public retained removal")
+        base.require(data.get("retained_data") == [{key: receipt[key] for key in
+                     ("data_receipt_id", "physical_backend_id", "scope", "state")}], "Global public retained data receipt")
+        return
+    if verb == "add":
+        base.require(all(data.get(key) == output[key] for key in ("version", "source", "tree_digest", "manifest_digest"))
+                     and data.get("revision", "") == "" and output.get("revision", "") == "", "Global public add source join")
+    base.require(verb in ("add", "repair") and set(outcome) == common | {"plan", "activation"},
+                 "Global public install outcome shape")
+    plan, activation = outcome.get("plan"), outcome.get("activation")
+    base.require(type(plan) is dict and type(activation) is dict
+                 and plan.get("client_id") == "windsurf" and plan.get("scope") == "user"
+                 and plan.get("physical_artifact_id") == binding["physical_artifact_id"]
+                 and plan.get("activation") == "prepared" and plan.get("verification") == "package_validated"
+                 and activation.get("activation") == "prepared" and activation.get("authentication") == "not_checked"
+                 and activation.get("policy") == "allowed" and activation.get("verification") == "installation_verified",
+                 "Global public Prepared lifecycle")
+    components = [{"kind": "skill", "name": SKILL, "support": "prepared"}]
+    components.extend({"kind": "mcp_server", "name": name, "support": "prepared"} for name in SERVERS)
+    observed = plan.get("components")
+    base.require(type(observed) is list and len(observed) == 3 and all(type(row) is dict for row in observed)
+                 and sorted(observed, key=lambda row: (row.get("kind", ""), row.get("name", "")))
+                 == sorted(components, key=lambda row: (row["kind"], row["name"])), "Global public exact components")
+
+
+def public_command_join(record, label, arguments, cwd, stdout, stderr):
+    base.require(record.get("probe") == label and record.get("argv") == arguments
+                 and record.get("cwd") == str(cwd), "Global public command identity")
+    for kind, body in (("stdout", stdout), ("stderr", stderr)):
+        base.require(record.get(kind + "_file") == label + "." + kind + ".log"
+                     and type(record.get(kind + "_bytes")) is int and record[kind + "_bytes"] == len(body)
+                     and record.get(kind + "_sha256") == sha(body), "Global public original stream join")
 
 
 def build_installer(ctx, installer):
@@ -430,9 +516,16 @@ class Journey:
         if removed:
             base.require(self.installation_basis is not None and item["clients"] == {} and item.get("data_retained") is True,
                          "Global removal did not retain owned data")
+            receipts = value.get("transaction_receipts")
+            base.require(type(receipts) is list and len(receipts) == 1 and self.binding is not None
+                         and item.get("operation_group_id") != self.binding["receipts"][-1]["operation_group_id"],
+                         "Global state-level removal receipt")
+            receipt_join(receipts[0], self.binding, item.get("operation_group_id"), len(self.binding["receipts"]) + 1,
+                         self.binding["receipts"][-1]["after_digest"], removed=True)
             self.closed_home(inventory, removed=True)
             return value
-        base.require(len(item["clients"]) == 1 and item.get("data_retained", False) is False, "Global single binding")
+        base.require(len(item["clients"]) == 1 and item.get("data_retained", False) is False
+                     and value.get("transaction_receipts", []) == [], "Global single binding")
         binding = next(iter(item["clients"].values()))
         binding_id = "client_" + sha("\0".join((current, "windsurf", "user", str(active))).encode())[:24]
         data_id = "data_" + sha("\0".join((current, physical, "user")).encode())[:24]
@@ -485,6 +578,13 @@ class Journey:
                              and re.fullmatch(r"sha256:[0-9a-f]{64}", row["after_digest"]) for index, row in enumerate(receipts))
                      and receipts[:len(prior)] == prior and len(receipts) <= len(prior) + 1,
                      "Global committed public receipts")
+        groups = []
+        for index, row in enumerate(receipts):
+            group = row.get("operation_group_id")
+            receipt_join(row, binding, group, index + 1, receipts[index - 1]["after_digest"] if index else "")
+            groups.append(group)
+        base.require(len(set(groups)) == len(groups) and groups[-1] == item.get("operation_group_id"),
+                     "Global installation operation group")
         digest = receipts[-1]["after_digest"]
         base.require(digest == package_digest, "Global committed package digest differs")
         entries = base.strict_json(self.read(self.profile / "mcp_config.json", inventory))["mcpServers"]
@@ -585,12 +685,13 @@ class Journey:
         env = {**self.ctx.env, "AGENTPLUGINS_HOME": str(self.home),
                "PATH": str(Path(self.ctx.argv[0]).parent) + os.pathsep + self.ctx.env["PATH"]}
         confirmation = [] if label.startswith("uap-doctor") else ["--yes"]
-        record, out, _ = self.ctx.command(label, [str(self.installer), *argv, *confirmation, "--target", "windsurf",
-                                                  "--scope", "user", "--format", "json"],
+        arguments = [str(self.installer), *argv, *confirmation, "--target", "windsurf", "--scope", "user", "--format", "json"]
+        record, out, err = self.ctx.command(label, arguments,
                                            self.ctx.projects["user"], env, 90)
         base.require(type(record.get("exit")) is int and record["exit"] == 0 and record.get("error") is None,
                      "public Global lifecycle refused")
         base.require(installer_pin(self.installer, self.ctx.budget) == self.cli_pin, "prebuilt installer changed during public command")
+        public_command_join(record, label, arguments, self.ctx.projects["user"], out, err)
         response = base.strict_json(out)
         base.require(set(response) == {"schema_version", "command", "result", "data"}
                      and type(response["schema_version"]) is int and response["schema_version"] == 1
@@ -619,8 +720,9 @@ class Journey:
             sequence = 2 if label == "uap-repair" or "uap-repair" in self.public_labels else 1
             base.require(len(self.binding["receipts"]) == sequence, "Global public receipt sequence")
         if label.startswith("uap-doctor"):
-            doctor_result(response["data"], self.identifier)
+            doctor_result(response["data"], self.identifier, self.binding)
         else:
+            public_result(response["data"], argv[0], state["installations"][0], self.binding)
             self.verify_public_delta(before, after, removed)
         self.removed, self.skill_quarantined = removed, False
         self.verified_inventory = after  # Only after the complete source/state/receipt/byte joins.
@@ -628,6 +730,9 @@ class Journey:
         if label.startswith("uap-doctor"):
             base.require(now == old, "Global doctor wrote fixture")
         self.record_effect(label, before, after, old, now)
+        self.ctx.summary.setdefault("global_public_joins", []).append({"label": label,
+            "response_sha256": sha(out), "state_sha256": now[(self.home / "state-v2.json").relative_to(self.ctx.root).as_posix()]["sha256"],
+            "installation_id": self.identifier, "operation_group_id": state["installations"][0]["operation_group_id"]})
         self.state_history.append(state)
         self.public_labels.append(label)
         base.zero_effects(self.probes, self.ctx.root / "stdio-started")
@@ -821,6 +926,25 @@ def completion(summary):
             base.require(len(changes) <= 4096 and all(type(delta) is dict and set(delta) == {"before", "after"}
                          and (delta["before"] is not None or delta["after"] is not None) for delta in changes.values()),
                          "Global effect delta shape")
+    joins, history = summary.get("global_public_joins"), summary.get("global_state_history")
+    base.require(type(joins) is list and type(history) is list and len(joins) == len(history) == len(PUBLIC),
+                 "Global public state/command join count")
+    previous_hash = None
+    for joined, state, label in zip(joins, history, PUBLIC):
+        base.require(type(joined) is dict and set(joined) == {"label", "response_sha256", "state_sha256", "installation_id", "operation_group_id"}
+                     and joined["label"] == label, "Global public state/command join shape")
+        command = next(row for row in commands if row["probe"] == label)
+        effect = next(row for row in effects if row["label"] == label)
+        delta = effect["changes"].get("home/uap-state/state-v2.json")
+        if delta is not None:
+            base.require(type(delta.get("after")) is dict, "Global public state effect missing")
+            previous_hash = delta["after"].get("sha256")
+        base.require(type(previous_hash) is str and re.fullmatch(r"[0-9a-f]{64}", previous_hash)
+                     and joined["state_sha256"] == previous_hash and joined["response_sha256"] == command.get("stdout_sha256")
+                     and type(state) is dict and len(state.get("installations", [])) == 1
+                     and joined["installation_id"] == state["installations"][0].get("installation_id")
+                     and joined["operation_group_id"] == state["installations"][0].get("operation_group_id"),
+                     "Global public state/effect/command join")
     validate_build_receipt(summary.get("global_build_receipt"), summary)
 
 

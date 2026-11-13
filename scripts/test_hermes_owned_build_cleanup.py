@@ -54,7 +54,11 @@ class OwnedBuildCleanupTests(unittest.TestCase):
                         with mock.patch.object(os, "unlink", side_effect=AssertionError("unlink before full union")), mock.patch.object(os, "read", side_effect=AssertionError("regular body read")):
                             with self.assertRaisesRegex(RuntimeError, "owned build byte bound"):
                                 cleanup.detach(owned, time.monotonic() + 5)
-                    fact = json.loads(output.getvalue().removeprefix("HERMES_BUILD_CENSUS="))
+                    lines = output.getvalue().splitlines()
+                    self.assertEqual(len(lines), 2)
+                    fact = json.loads(lines[0].removeprefix("HERMES_BUILD_CENSUS="))
+                    progress = json.loads(lines[1].removeprefix("HERMES_BUILD_CLEANUP="))
+                    self.assertEqual((progress["status"], progress["selected_aliases"], progress["verified_aliases"]), ("incomplete", None, 0))
                     self.assertEqual((fact["status"], fact["role"]), ("refused", "cache"))
                     self.assertEqual(set(fact["domains"]), {"payload", "work", "cache"})
                     self.assertNotIn(str(roots["cache"]), output.getvalue())
@@ -131,11 +135,54 @@ class OwnedBuildCleanupTests(unittest.TestCase):
             roots = self.fixture(temporary)
             owned = cleanup.OwnedRoots(roots)
             try:
-                with mock.patch.object(cleanup.time, "monotonic", side_effect=[1, 9]), mock.patch.object(os, "unlink", side_effect=AssertionError("unlink")):
+                with mock.patch.object(cleanup.time, "monotonic", side_effect=[1, 1, 9, 9]), mock.patch.object(os, "unlink", side_effect=AssertionError("unlink")):
                     with self.assertRaisesRegex(RuntimeError, "deadline"):
                         cleanup.detach(owned, 5)
             finally:
                 owned.close()
+
+    def test_deadline_after_first_unlink_preserves_payload_and_remaining_alias(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            roots = self.fixture(temporary)
+            member = roots["payload"] / "member"
+            member.write_bytes(b"payload")
+            aliases = [roots["cache"] / "first", roots["cache"] / "second"]
+            for alias in aliases:
+                os.link(member, alias)
+            owned, clock, output = cleanup.OwnedRoots(roots), [1], io.StringIO()
+            owner, name = (cleanup, "windows_delete") if os.name == "nt" else (os, "unlink")
+            original = getattr(owner, name)
+            def expire(*args, **kwargs):
+                result = original(*args, **kwargs)
+                clock[0] = 6
+                return result
+            try:
+                with mock.patch.object(cleanup.time, "monotonic", side_effect=lambda: clock[0]), mock.patch.object(owner, name, side_effect=expire), redirect_stdout(output):
+                    with self.assertRaisesRegex(RuntimeError, "deadline"):
+                        cleanup.detach(owned, 5)
+                self.assertEqual(member.read_bytes(), b"payload")
+                self.assertEqual(member.stat().st_nlink, 2)
+                self.assertEqual(sum(alias.exists() for alias in aliases), 1)
+                last = json.loads(output.getvalue().splitlines()[-1].removeprefix("HERMES_BUILD_CLEANUP="))
+                self.assertEqual((last["status"], last["selected_aliases"], last["verified_aliases"]), ("incomplete", 2, 0))
+            finally:
+                owned.close()
+
+    def test_official_build_and_cleanup_share_one_absolute_total_deadline(self):
+        for elapsed, expected in ((300, 1000), (8800, 9100), (9001, None)):
+            with self.subTest(elapsed=elapsed), tempfile.TemporaryDirectory() as temporary:
+                runner, clock = Path(temporary).resolve(), [100]
+                def built(*args, **kwargs):
+                    self.assertEqual(kwargs["timeout"], 9000)
+                    clock[0] += elapsed
+                with mock.patch.object(cleanup.time, "monotonic", side_effect=lambda: clock[0]), mock.patch.object(cleanup.subprocess, "run", side_effect=built), mock.patch.object(cleanup, "detach", return_value=0) as detach:
+                    if expected is None:
+                        with self.assertRaisesRegex(RuntimeError, "deadline"):
+                            cleanup.build(runner / "source", runner, "pinned")
+                        detach.assert_not_called()
+                    else:
+                        self.assertEqual(cleanup.build(runner / "source", runner, "pinned"), 0)
+                        self.assertEqual(detach.call_args.args[1], expected)
 
     def test_byte_bound_refuses_before_read_or_unlink(self):
         with tempfile.TemporaryDirectory() as temporary:

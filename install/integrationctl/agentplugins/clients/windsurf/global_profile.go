@@ -7,6 +7,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 )
 
 // The original Host supplies the XDG or APPDATA authority. ConfigRoot keeps
@@ -39,9 +40,8 @@ func originalDevinGlobalRoot(host clients.Host) (string, error) {
 }
 
 func requireSelectedDevinGlobal(client domain.DetectedClient) (string, error) {
-	if client.ClientID != domain.ClientWindsurf || !primaryDevinExecutable(client.ExecutablePath) ||
-		(client.Version != "3000.11.205" && client.Version != "3000.12.57") {
-		return "", fmt.Errorf("devin Global configuration requires the explicitly selected primary devin executable with observed exact version 3000.11.205 or 3000.12.57")
+	if client.ClientID != domain.ClientWindsurf || !primaryDevinExecutable(client.ExecutablePath) {
+		return "", fmt.Errorf("devin Global configuration requires the explicitly selected primary devin executable")
 	}
 	root := client.NativeConfigRoot
 	if !filepath.IsAbs(root) || filepath.Clean(root) != root || filepath.Base(root) != "devin" {
@@ -49,6 +49,15 @@ func requireSelectedDevinGlobal(client domain.DetectedClient) (string, error) {
 	}
 	if root == client.ConfigRoot || filepath.Dir(root) == root {
 		return "", fmt.Errorf("devin global root aliases legacy Cascade authority")
+	}
+	// Read-only detection deliberately does not execute a version probe. Lack
+	// of that observation prevents verification; it is not evidence of drift.
+	if client.Version == "" {
+		return "", &ports.VerificationError{Kind: ports.VerificationIndeterminate,
+			Err: fmt.Errorf("devin Global configuration requires an observed exact version before verification or mutation")}
+	}
+	if client.Version != "3000.11.205" && client.Version != "3000.12.57" {
+		return "", fmt.Errorf("devin Global configuration requires observed exact version 3000.11.205 or 3000.12.57")
 	}
 	return root, nil
 }

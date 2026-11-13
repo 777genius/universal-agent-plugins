@@ -42,7 +42,7 @@ class GlobalLifecycleContracts(unittest.TestCase):
         first = ("source-commit", "source-tree", "source-clean", "git-init-a", "git-init-b", "git-init-c") + case.base.METADATA_PROBES
         tail = ("uap-add", *case.NATIVE[:4], "uap-doctor-installed", "uap-repair", *case.NATIVE[4:8],
                 "uap-doctor-repaired", "uap-remove", *case.NATIVE[8:], "source-final-clean")
-        return {"commands": [{"probe": name, "exit": 0, "error": None} for name in first + tail],
+        value = {"commands": [{"probe": name, "exit": 0, "error": None} for name in first + tail],
                 "command_effects": [dict(label=name, changes={}, outer_changes={}) for name in case.base.METADATA_PROBES + tail[:-1]],
                 "global_lifecycle_capture_complete": True, "metadata_capture_complete": True, "ordinary_metadata_capture_complete": True,
                 "metadata_recipe": "ordinary-global", "metadata_route": case.ordinary.OrdinaryEffects.metadata_route,
@@ -52,6 +52,56 @@ class GlobalLifecycleContracts(unittest.TestCase):
                 "probe_methods": dict.fromkeys(("a", "b", "user", "local", "legacy"), []),
                 "accepted_connections": dict.fromkeys(("a", "b", "user", "local", "legacy"), 0),
                 "source_commit": "a" * 40, "source_tree": "b" * 40, "global_build_receipt": self.build_receipt()}
+        value["global_public_joins"], value["global_state_history"] = [], []
+        for index, label in enumerate(case.PUBLIC):
+            group = "group-" + str(0 if index < 2 else 2 if index < 4 else 4)
+            item = dict(installation_id="12345678-1234-4234-8234-123456789abc", operation_group_id=group)
+            value["global_state_history"].append(dict(schema_version=5, installations=[item]))
+            value["global_public_joins"].append(dict(label=label, response_sha256="d" * 64, state_sha256="e" * 64, **item))
+            next(row for row in value["commands"] if row["probe"] == label)["stdout_sha256"] = "d" * 64
+            if not label.startswith("uap-doctor"):
+                next(row for row in value["command_effects"] if row["label"] == label)["changes"]["home/uap-state/state-v2.json"] = {
+                    "before": None, "after": {"sha256": "e" * 64}}
+        return value
+
+    def public_data(self, item, binding, verb):
+        outcome = dict(installation_id=item["installation_id"], requires_confirmation=False,
+                       mutated=True, group_phase="external_completed")
+        if verb == "remove":
+            outcome.update(plugin=case.NAME, client_id="windsurf", affected_surfaces=["windsurf"],
+                           deactivation=dict(activation="not_required", artifact_removal_allowed=True, external_removal_complete=True))
+        else:
+            components = [dict(kind="skill", name=case.SKILL, support="prepared")]
+            components += [dict(kind="mcp_server", name=name, support="prepared") for name in case.SERVERS]
+            outcome.update(plan=dict(client_id="windsurf", scope="user", physical_artifact_id=binding["physical_artifact_id"],
+                                activation="prepared", verification="package_validated", components=components),
+                           activation=dict(activation="prepared", authentication="not_checked", policy="allowed", verification="installation_verified"))
+        output = dict(operation_id=item["operation_group_id"], plugin=case.NAME, version="1.0.0", dry_run=False,
+                      source="direct local source" if verb == "add" else "local", tree_digest=item["source"]["tree_digest"],
+                      manifest_digest=item["package"]["manifest_digest"], result=outcome)
+        data = dict(batch=True, succeeded=1, failed=0, operation_id=item["operation_group_id"], plugin=case.NAME, dry_run=False, status="completed",
+                    targets=[dict(target="windsurf", status="external_completed", output=output)])
+        if verb == "add": data.update({key: output[key] for key in ("version", "source", "tree_digest", "manifest_digest")})
+        if verb == "remove":
+            receipt = item["data_receipts"][binding["data_receipt_id"]]
+            data.update(status="data_retained", data_retained=True, plugin_data_preserved=True,
+                        retained_data=[{key: receipt[key] for key in ("data_receipt_id", "physical_backend_id", "scope", "state")}])
+        return data
+
+    def command_record(self, label, arguments, cwd, stdout, stderr=b""):
+        row = dict(probe=label, argv=arguments, cwd=str(cwd), exit=0, error=None)
+        for kind, body in (("stdout", stdout), ("stderr", stderr)):
+            row.update({kind + "_file": label + "." + kind + ".log", kind + "_bytes": len(body), kind + "_sha256": case.sha(body)})
+        return row
+
+    def removal_state(self, value, binding):
+        retained = copy.deepcopy(value)
+        retained["installations"][0].update(clients={}, data_retained=True, operation_group_id="group-remove")
+        retained["transaction_receipts"] = [dict(operation_id="group-remove-001", operation_group_id="group-remove",
+            phase="committed", mutation_type="directory_remove", sequence=len(binding["receipts"]) + 1,
+            client_binding_id=binding["client_binding_id"], active_path=binding["target_locator"],
+            before_digest=binding["receipts"][-1]["after_digest"])]
+        return retained
 
     @contextmanager
     def installed_state(self):
@@ -120,10 +170,10 @@ class GlobalLifecycleContracts(unittest.TestCase):
                            target_locator=str(active), native_profile_root=str(journey.profile), data_receipt_id=data_id,
                            materialization="materialized", activation="prepared", authentication="not_checked", policy="allowed",
                            verification="installation_verified", package_revision=dict(version="1.0.0", tree_digest=journey.source_sha, manifest_digest=manifest),
-                           native_objects=objects, receipts=[dict(operation_id="operation-1", phase="committed", sequence=1,
+                           native_objects=objects, receipts=[dict(operation_id="group-install-001", operation_group_id="group-install", phase="committed", sequence=1,
                            mutation_type="directory_swap",
                            client_binding_id=binding_id, active_path=str(active), after_digest=digest)])
-            item = dict(installation_id=identifier, declared_name=case.NAME, clients={binding_id: binding}, data_receipts={data_id: marker},
+            item = dict(installation_id=identifier, declared_name=case.NAME, operation_group_id="group-install", clients={binding_id: binding}, data_receipts={data_id: marker},
                         source=dict(source_binding_id="src_" + case.sha((str(source) + "\0\0").encode())[:24],
                                     requested_source=str(source), canonical_source=str(source), resolved_revision="", tree_digest=journey.source_sha),
                         package=dict(loader_kind="agent_plugins", format_id="agent-plugins/1.0.0",
@@ -433,11 +483,12 @@ class GlobalLifecycleContracts(unittest.TestCase):
             before = case.base.metadata_inventory(root, ctx.budget)
             journey.frame = mock.Mock(return_value=(before, {}))
             ctx.env, ctx.projects = {'PATH': '/usr/bin'}, {'user': root}
-            def command(*args):
+            def command(label, arguments, cwd, *_args):
                 state.rename(root / 'retained-original-state')
                 state.mkdir()
                 (state / 'state-v2.json').write_bytes(b'foreign private state')
-                return {'exit': 0}, b'{"schema_version":1,"command":"doctor","result":"success","data":{}}', b''
+                out = b'{"schema_version":1,"command":"doctor","result":"success","data":{}}'
+                return self.command_record(label, arguments, cwd, out), out, b''
             ctx.command = command
             with mock.patch.object(case, 'installer_pin', return_value=journey.cli_pin):
                 with mock.patch.object(os, 'read', side_effect=AssertionError('foreign state bytes read')):
@@ -460,10 +511,11 @@ class GlobalLifecycleContracts(unittest.TestCase):
                 journey.frame = mock.Mock(return_value=(before, {}))
                 journey.state = lambda inventory, **kwargs: case.regular(ctx, "component-source/plugin.json", inventory)
                 ctx.env, ctx.projects = {"PATH": "/usr/bin"}, {"user": root}
-                def command(*args):
+                def command(label, arguments, cwd, *_args):
                     replacement = root / "replacement"; replacement.write_bytes(b"foreign private source")
                     replacement.replace(member)
-                    return {"exit": 0}, json.dumps(dict(schema_version=1, command=operation, result="success", data={})).encode(), b""
+                    out = json.dumps(dict(schema_version=1, command=operation, result="success", data={})).encode()
+                    return self.command_record(label, arguments, cwd, out), out, b""
                 ctx.command = command
                 with mock.patch.object(case, "installer_pin", return_value=journey.cli_pin):
                     with mock.patch.object(os, "read", side_effect=AssertionError("foreign source bytes read")) as read:
@@ -521,8 +573,7 @@ class GlobalLifecycleContracts(unittest.TestCase):
             marker_before = marker.stat(); marker_body = marker.read_bytes()
             shutil.rmtree(active)
             shutil.rmtree(journey.profile / "skills" / case.SKILL)
-            retained = copy.deepcopy(value)
-            retained["installations"][0].update(clients={}, data_retained=True)
+            retained = self.removal_state(value, binding)
             path.write_text(json.dumps(retained))
             self.assertEqual(journey.state(case.base.metadata_inventory(journey.ctx.root, journey.ctx.budget), removed=True), retained)
             self.assertTrue(os.path.samestat(original, data.stat()))
@@ -549,12 +600,14 @@ class GlobalLifecycleContracts(unittest.TestCase):
         with self.installed_state() as (journey, value, path, _active, _data):
             binding = next(iter(value["installations"][0]["clients"].values()))
             original = copy.deepcopy(binding["receipts"][0])
-            second = dict(original, operation_id="operation-2", sequence=2)
+            second = dict(original, operation_id="group-repair-001", operation_group_id="group-repair", sequence=2,
+                          before_digest=original["after_digest"])
             for receipts in ([dict(original, mutation_type="entry_write")], [dict(original, sequence=True)],
                              [original, original], [original, dict(second, sequence=3)]):
                 binding["receipts"] = receipts; path.write_text(json.dumps(value))
                 with self.subTest(receipts=receipts), self.assertRaisesRegex(ValueError, "Global committed public receipts"):
                     journey.state(case.base.metadata_inventory(journey.ctx.root, journey.ctx.budget))
+            value["installations"][0]["operation_group_id"] = "group-repair"
             binding["receipts"] = [original, second]; path.write_text(json.dumps(value))
             journey.state(case.base.metadata_inventory(journey.ctx.root, journey.ctx.budget))
             for receipts in ([original], [dict(original, operation_id="rewritten"), second], [second]):
@@ -568,12 +621,18 @@ class GlobalLifecycleContracts(unittest.TestCase):
                 journey.installer = journey.ctx.private / "hosted-agentplugins"
                 journey.public_labels = ["uap-add", "uap-doctor-installed"]
                 journey.ctx.env = {"PATH": os.defpath}
-                def command(*_args):
+                def command(label, arguments, cwd, *_args):
                     if append:
-                        binding = next(iter(value["installations"][0]["clients"].values()))
-                        binding["receipts"].append(dict(binding["receipts"][0], operation_id="operation-2", sequence=2))
+                        item = value["installations"][0]
+                        binding = next(iter(item["clients"].values()))
+                        binding["receipts"].append(dict(binding["receipts"][0], operation_id="group-repair-001",
+                            operation_group_id="group-repair", sequence=2, before_digest=binding["receipts"][0]["after_digest"]))
+                        item["operation_group_id"] = "group-repair"
                         path.write_text(json.dumps(value))
-                    return {"exit": 0, "error": None}, json.dumps(dict(schema_version=1, command="repair", result="success", data={})).encode(), b""
+                    item = value["installations"][0]
+                    out = json.dumps(dict(schema_version=1, command="repair", result="success",
+                                     data=self.public_data(item, next(iter(item["clients"].values())), "repair"))).encode()
+                    return self.command_record(label, arguments, cwd, out), out, b""
                 journey.ctx.command = command
                 with mock.patch.object(case, "installer_pin", return_value=journey.cli_pin):
                     if append:
@@ -627,22 +686,27 @@ class GlobalLifecycleContracts(unittest.TestCase):
 
     def test_doctor_accepts_only_the_truthful_prepared_result(self):
         identifier = "owned-id"
-        data = dict(read_only=True, installation_count=1, open_operation_count=0,
-                    installation=dict(installation_id=identifier, name=case.NAME, clients=[dict(client_id="windsurf", scope="user",
+        binding = dict(package_revision=dict(version="1.0.0", tree_digest="sha256:" + "a" * 64, manifest_digest="sha256:" + "b" * 64))
+        data = dict(read_only=True, installation_count=1, open_operation_count=0, project_readiness=[],
+                    installation=dict(installation_id=identifier, name=case.NAME, version="1.0.0", source="local", mixed_version=False,
+                    clients=[dict(client_id="windsurf", scope="user", package_revision=copy.deepcopy(binding["package_revision"]),
                         activation="prepared", materialization="materialized", authentication="not_checked", policy="allowed",
                         verification="installation_verified")]),
                     findings=[dict(status=status, code=code, installation_id=identifier, installation_name=case.NAME, client_id="windsurf")
                               for status, code in (("degraded", "activation_pending"), ("unknown", "authentication_not_checked"),
-                                                   ("degraded", "native_projection_changed"))])
-        case.doctor_result(data, identifier)
-        for change in ("write", "healthy", "active", "count", "missing"):
+                                                   ("unknown", "native_projection_not_checked"))])
+        case.doctor_result(data, identifier, binding)
+        for change in ("write", "healthy", "false-drift", "active", "count", "missing", "version", "source", "revision"):
             wrong = copy.deepcopy(data)
             if change == "write": wrong["read_only"] = False
             elif change == "healthy": wrong["findings"][2].update(status="healthy", code="no_degradation_detected")
+            elif change == "false-drift": wrong["findings"][2].update(status="degraded", code="native_projection_changed")
             elif change == "active": wrong["installation"]["clients"][0]["activation"] = "active"
             elif change == "count": wrong["open_operation_count"] = False
+            elif change in ("version", "source"): wrong["installation"][change] = "unrelated"
+            elif change == "revision": wrong["installation"]["clients"][0]["package_revision"]["tree_digest"] = "sha256:" + "c" * 64
             else: wrong["findings"].pop()
-            with self.subTest(change=change), self.assertRaises(ValueError): case.doctor_result(wrong, identifier)
+            with self.subTest(change=change), self.assertRaises(ValueError): case.doctor_result(wrong, identifier, binding)
 
     def test_global_completion_requires_two_original_build_streams(self):
         value = self.completed_summary()
@@ -744,6 +808,119 @@ class GlobalLifecycleContracts(unittest.TestCase):
                     with self.assertRaisesRegex(ValueError, "fresh installer output"): case.build_installer(ctx, installer)
                     self.assertEqual(execute.call_count, 2)
 
+
+
+    def test_removal_requires_original_binding_digest_and_new_committed_group(self):
+        with self.installed_state() as (journey, value, path, active, _data):
+            shutil.rmtree(active); shutil.rmtree(journey.profile / "skills" / case.SKILL)
+            retained = self.removal_state(value, journey.binding)
+            for change in ("missing", "extra", "phase", "kind", "binding", "path", "sequence", "group", "operation", "before", "after", "reused"):
+                wrong = copy.deepcopy(retained)
+                row = wrong["transaction_receipts"][0]
+                if change == "missing": del wrong["transaction_receipts"]
+                elif change == "extra": wrong["transaction_receipts"].append(copy.deepcopy(row))
+                elif change == "reused":
+                    group = journey.binding["receipts"][-1]["operation_group_id"]
+                    wrong["installations"][0]["operation_group_id"] = group
+                    row.update(operation_group_id=group, operation_id=group + "-001")
+                else:
+                    key = {"phase": "phase", "kind": "mutation_type", "binding": "client_binding_id", "path": "active_path",
+                           "sequence": "sequence", "group": "operation_group_id", "operation": "operation_id",
+                           "before": "before_digest", "after": "after_digest"}[change]
+                    row[key] = True if change == "sequence" else "unrelated"
+                path.write_text(json.dumps(wrong))
+                with self.subTest(change=change), self.assertRaises(ValueError):
+                    journey.state(case.base.metadata_inventory(journey.ctx.root, journey.ctx.budget), removed=True)
+            path.write_text(json.dumps(retained))
+            self.assertEqual(journey.state(case.base.metadata_inventory(journey.ctx.root, journey.ctx.budget), removed=True), retained)
+
+    def test_swap_operation_ids_and_digest_chain_cannot_be_forged(self):
+        for change in ("group", "operation", "before", "missing-group", "reused-group", "installation-group", "transaction"):
+            with self.subTest(change=change), self.installed_state() as (journey, value, path, _active, _data):
+                item = value["installations"][0]; binding = next(iter(item["clients"].values()))
+                original = binding["receipts"][0]
+                second = dict(original, operation_group_id="group-repair", operation_id="group-repair-001",
+                              sequence=2, before_digest=original["after_digest"])
+                item["operation_group_id"] = "group-repair"
+                binding["receipts"].append(second)
+                if change == "missing-group": del second["operation_group_id"]
+                elif change == "reused-group":
+                    second.update(operation_group_id="group-install", operation_id="group-install-001")
+                    item["operation_group_id"] = "group-install"
+                elif change == "installation-group": item["operation_group_id"] = "other-installation-group"
+                elif change == "transaction": value["transaction_receipts"] = [dict(phase="committed")]
+                else: second[{"group": "operation_group_id", "operation": "operation_id", "before": "before_digest"}[change]] = "unrelated"
+                path.write_text(json.dumps(value))
+                with self.assertRaises(ValueError): journey.state(case.base.metadata_inventory(journey.ctx.root, journey.ctx.budget))
+
+
+    def test_public_actual_dto_joins_target_revision_prepared_and_retained_facts(self):
+        with self.installed_state() as (journey, value, _path, _active, _data):
+            for verb in ("add", "repair", "remove"):
+                item = copy.deepcopy(value["installations"][0]); binding = journey.binding
+                if verb == "remove": item.update(clients={}, data_retained=True)
+                original = self.public_data(item, binding, verb)
+                case.public_result(original, verb, item, binding)
+                for change in ("empty", "count", "target", "status", "batch-group", "output-group", "version", "source", "tree", "dry", "identity", "mutated", "confirmation", "phase", "detail"):
+                    wrong = copy.deepcopy(original); output = wrong["targets"][0]["output"]; outcome = output["result"]
+                    if change == "empty": wrong = {}
+                    elif change == "count": wrong["succeeded"] = True
+                    elif change == "target": wrong["targets"][0]["target"] = "unselected"
+                    elif change == "status": wrong["targets"][0]["status"] = "state_committed"
+                    elif change == "batch-group": wrong["operation_id"] = "unrelated"
+                    elif change == "output-group": output["operation_id"] = "unrelated"
+                    elif change in ("version", "source"): output[change] = "unrelated"
+                    elif change == "tree": output["tree_digest"] = "sha256:" + "0" * 64
+                    elif change == "dry": output["dry_run"] = 0
+                    elif change == "identity": outcome["installation_id"] = "unrelated"
+                    elif change == "mutated": outcome["mutated"] = 1
+                    elif change == "confirmation": outcome["requires_confirmation"] = True
+                    elif change == "phase": outcome["group_phase"] = "state_committed"
+                    elif verb == "remove": wrong["plugin_data_preserved"] = False
+                    else: outcome["plan"]["components"][0]["support"] = "unsupported"
+                    with self.subTest(verb=verb, change=change), self.assertRaises(ValueError):
+                        case.public_result(wrong, verb, item, binding)
+
+    def test_public_repair_refuses_empty_success_or_wrong_command_before_effect_acknowledgement(self):
+        for failure in ("empty", "argv", "cwd", "stream"):
+            with self.subTest(failure=failure), self.installed_state() as (journey, value, path, _active, _data):
+                journey.installer = journey.ctx.private / "hosted-agentplugins"
+                journey.public_labels = ["uap-add", "uap-doctor-installed"]
+                binding_before = copy.deepcopy(journey.binding)
+                accepted = copy.deepcopy((journey.verified_inventory, journey.public_labels,
+                                          journey.state_history, journey.removed))
+                def command(label, arguments, cwd, *_args):
+                    item = value["installations"][0]; binding = next(iter(item["clients"].values()))
+                    binding["receipts"].append(dict(binding["receipts"][0], sequence=2, operation_id="group-repair-001",
+                        operation_group_id="group-repair", before_digest=binding["receipts"][0]["after_digest"]))
+                    item["operation_group_id"] = "group-repair"; path.write_text(json.dumps(value))
+                    data = {} if failure == "empty" else self.public_data(item, binding, "repair")
+                    out = json.dumps(dict(schema_version=1, command="repair", result="success", data=data)).encode()
+                    row = self.command_record(label, arguments, cwd, out)
+                    if failure == "argv": row["argv"] = arguments + ["--unbound"]
+                    elif failure == "cwd": row["cwd"] = str(journey.ctx.projects["b"])
+                    elif failure == "stream": row["stdout_sha256"] = "0" * 64
+                    return row, out, b""
+                journey.ctx.command = command
+                with mock.patch.object(case, "installer_pin", return_value=journey.cli_pin), self.assertRaises(ValueError):
+                    journey.public("uap-repair", ["repair", journey.identifier])
+                self.assertEqual(journey.ctx.summary.get("command_effects", []), [])
+                self.assertEqual(journey.ctx.summary.get("global_public_joins", []), [])
+                self.assertEqual((journey.verified_inventory, journey.public_labels,
+                                  journey.state_history, journey.removed), accepted)
+                if failure != "empty": self.assertEqual(journey.binding, binding_before)
+
+    def test_completion_rejects_detached_public_response_state_or_effect(self):
+        for change in ("missing", "response", "state", "effect", "installation", "group"):
+            value = self.completed_summary()
+            joined = value["global_public_joins"][0]
+            if change == "missing": value["global_public_joins"].pop()
+            elif change == "response": joined["response_sha256"] = "f" * 64
+            elif change == "state": joined["state_sha256"] = "f" * 64
+            elif change == "effect": next(row for row in value["command_effects"] if row["label"] == "uap-add")["changes"] = {}
+            elif change == "installation": joined["installation_id"] = "unrelated"
+            else: joined["operation_group_id"] = "unrelated"
+            with self.subTest(change=change), self.assertRaises(ValueError): case.completion(value)
 
 
 if __name__ == "__main__":
