@@ -189,7 +189,7 @@ def installed_config(client, project, name, nonce, events, installer, probe):
     if (not actual_probe.is_file() or actual_probe.is_symlink()
             or digest(actual_probe.read_bytes()) != digest(probe.read_bytes())):
         raise ValueError("owned MCP probe differs from source-built fixture")
-    return target
+    return active
 
 
 def permission_fixture(client, project, server):
@@ -197,7 +197,7 @@ def permission_fixture(client, project, server):
         emit(project / ".cursor" / "cli.json", {
             "permissions": {
                 "allow": ["Mcp(" + server + ":inspect_runtime)"],
-                "deny": ["Shell(*)", "Write(**/*)"],
+                "deny": ["Shell(*)", "Read(**/*)", "Write(**/*)"],
             },
         })
     else:
@@ -206,7 +206,7 @@ def permission_fixture(client, project, server):
                     "enabledProjectMcpServers": [server]},
             "permissions": {
                 "allow": ["mcp__" + server + "__inspect_runtime"],
-                "deny": ["Bash", "Edit", "Write", "WebFetch", "WebSearch"],
+                "deny": ["Bash", "Read", "Edit", "Write", "WebFetch", "WebSearch"],
             },
         })
 
@@ -283,7 +283,7 @@ def run(client, output, expected):
         if result.get("command") != "add" or result.get("result") != "success":
             raise ValueError("UAP add returned no success receipt")
         identifier = installation_id(result, client)
-        installed_config(client, project_a, server, nonce, events, installer, probe)
+        selected_root = installed_config(client, project_a, server, nonce, events, installer, probe)
         if b_config.read_bytes() != before_b:
             raise ValueError("Project B changed after Project A install")
         permission_fixture(client, project_a, server)
@@ -305,6 +305,12 @@ def run(client, output, expected):
             raise ValueError("native model response did not carry server-only result")
         log = events.read_bytes() if events.is_file() else b""
         observed = require_server_call(log, nonce=nonce, started=start, ended=end)
+        from project_native_missing_call_proof import read_events
+        calls = [event["facts"] for event in read_events(log) if event["method"] == "tools/call"]
+        if (len(calls) != 1 or calls[0].get("literal") != server_only
+                or calls[0].get("plugin_root") != str(selected_root)
+                or calls[0].get("revision") != "call-a"):
+            raise ValueError("server call belongs to another plugin or produced uncorrelated result")
         before_negative = log
 
         # The two negative model sessions use the same real binary, but
