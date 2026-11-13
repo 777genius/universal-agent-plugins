@@ -170,3 +170,51 @@ source/stream/hash/preservation review are still required before acceptance.
 No native executable, authentication, ACP, model, policy, pin, workflow, production
 adapter or public capability changed. Local22 inert tests pass through both
 discovery and direct execution; none is a native observation.
+
+## Saved User preparation and cold agreement coverage
+
+The composed public fixture exposed a concrete difference between fresh saved
+User `add` / `deps import --install` and imperative `add --no-save`. With a
+Run-only rejecting runner, the latter selected the existing Prepare intent;
+the saved paths rejected automatic MCP preflight because the facade did not
+carry that preparation decision. The ZIP diagnostic reproduced both refusals
+with zero native calls and unchanged original User configuration. A Project
+export or a warm imperative install does not prove fresh saved User support.
+
+The private facade now retries one complete dry preview only for a fresh,
+supported Automatic User install whose registered activation preflight fails
+again for the same client, plan and backend. Existing scoped traits must permit
+Prepare without personal mapping; Project, unsupported plans, completion
+attestations, updates and recorded installations/preferences do not qualify.
+Cancellation and an available automatic preflight retain their prior behavior.
+The original sealed source, installation ID and recorded state remain fixed;
+only the failed preview's unconfirmed plan captures are discarded. The complete
+prepared preview reruns the existing source, ownership and component guards.
+Apply passes its agreed intent even if duplex becomes available later.
+
+An early same-IID absence check is only an early refusal. The authoritative
+check is in the existing non-capture confirmation planner, which core Add
+invokes while holding the ordinary mutation lock. A cooperating writer that
+publishes a retained same-IID installation before that lock is acquired causes
+ErrPlanChanged before inner planning. The regression uses real install/remove
+receipts and the actual lock, preserving exact retained state bytes, native
+files and data. No new Request field, state schema, flag or lock is introduced.
+
+The existing three-OS Git/ZIP fixture adds a separate fresh User world after
+its unchanged Project journey: saved add, exact repeat, changed update, an
+owned-Skill quarantine and repair, User agreement export, fresh User locked
+import/install and remove. Exact source/binding identity, current revision,
+original complete data receipts and a held retained-data marker are joined.
+All original User policy and A/B same-name foreign MCP/Skill sentinels stay
+protected. Preparation owns exact native file receipts; the historical User
+trait still leaves NativeProfileRoot empty. Existing Kiro receipt verification
+joins those files to the original User configuration root without claiming a
+native registration observation.
+
+The rejecting runner counts every process attempt; all public steps must retain
+Prepare, package-valid verification and unattested outcomes with zero calls.
+These are public file-lifecycle contracts, not native Kiro startup, discovery,
+login, MCP initialization or model-use evidence. The original eighteen no-auth
+native probes and their budgets are unchanged. Local composed ZIP execution
+passes; final-source three-OS Git/ZIP CI and the separately retained native
+negative originals remain required for acceptance.

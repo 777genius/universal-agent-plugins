@@ -2,10 +2,14 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/kiro"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 // This is the production CLI/dependency/installer/native-filesystem composition
@@ -33,6 +37,8 @@ func TestProjectKiroComposedSourceLifecycle(t *testing.T) {
 				t.Fatal("Kiro project-A lifecycle changed user or project-B native configuration/state")
 			}
 			f.assertKiroOwned(t, f.b, projectJourneySkill, "https://managed.test/v1")
+			t.Run("user", func(t *testing.T) { kiroUserPreparedSourceLifecycle(t, transport) })
+			f.assertProtected(t)
 		})
 	}
 }
@@ -102,4 +108,120 @@ func kiroProjectRemove(t *testing.T, f kiroProjectJourney) {
 	if len(f.state(t, f.a).EnvironmentReceipts) != 0 {
 		t.Fatal("Kiro removal retained an environment ownership receipt")
 	}
+}
+
+// A Run-only rejecting runner exercises the public prepared file lifecycle.
+// It does not certify native Kiro startup, login or MCP initialization.
+func kiroUserPreparedSourceLifecycle(t *testing.T, transport *projectJourneyTransport) {
+	t.Helper()
+	skill := kiroUserCommitSource(t, transport, "original User pin")
+	f := newKiroJourney(t, transport, true)
+	f.run(t, "", "add", transport.endpoint, "--alias", "user-docs", "--target", "kiro", "--scope", "user", "--yes")
+	original, binding := f.assertKiroUserOwned(t, skill)
+	projectJourneyDataMarker(t, f.projectJourney, "", original)
+	for _, receipt := range original.DataReceipts {
+		f.preserve(t, filepath.Join(receipt.Locator, "keep.txt"))
+	}
+	f.run(t, "", "add", transport.endpoint, "--alias", "user-docs", "--target", "kiro", "--scope", "user", "--yes")
+	repeated, repeatedBinding := f.assertKiroUserOwned(t, skill)
+	if !reflect.DeepEqual(original, repeated) || !reflect.DeepEqual(binding, repeatedBinding) {
+		t.Fatal("Kiro saved User repeat changed original installation or binding authority")
+	}
+	updated, selected, updatedSkill := kiroUserUpdateAndRepair(t, f, original, binding)
+	kiroUserTransfer(t, f, updated, updatedSkill)
+	f.run(t, "", "remove", "user-docs", "--target", "kiro", "--scope", "user", "--yes")
+	projectJourneyAbsent(t, selected.TargetLocator, filepath.Join(f.kiroRoot(""), "skills", "uap-user-docs"))
+	state := f.state(t, "")
+	if len(state.Installations) != 1 || state.Installations[0].InstallationID != original.InstallationID || len(state.Installations[0].Clients) != 0 || !state.Installations[0].DataRetained ||
+		!reflect.DeepEqual(state.Installations[0].DataReceipts, original.DataReceipts) || len(state.EnvironmentReceipts) != 0 {
+		t.Fatal("Kiro User remove lost retained original data authority")
+	}
+	servers, _, _, _, err := kiro.ReadMCPConfig(filepath.Join(f.kiroRoot(""), "settings", "mcp.json"))
+	if err != nil || servers["uap_user_probe"] != nil {
+		t.Fatal("Kiro User remove retained selected MCP configuration")
+	}
+	f.assertProtected(t)
+}
+
+func kiroUserUpdateAndRepair(t *testing.T, f kiroProjectJourney, original domain.Installation, binding domain.ClientBinding) (domain.Installation, domain.ClientBinding, string) {
+	t.Helper()
+	skill := kiroUserCommitSource(t, f.transport, "updated User pin")
+	f.run(t, "", "update", "user-docs", "--target", "kiro", "--scope", "user", "--yes")
+	updated, selected := f.assertKiroUserOwned(t, skill)
+	expectedSource := original.Source
+	expectedSource.ResolvedRevision, expectedSource.TreeDigest = updated.Source.ResolvedRevision, updated.Source.TreeDigest
+	if original.Source.SourceKind == "archive" {
+		expectedSource.ArchiveSHA256 = updated.Source.ArchiveSHA256
+		if updated.Source.ResolvedRevision != "sha256:"+updated.Source.ArchiveSHA256 {
+			t.Fatal("Kiro User archive revision does not join its exact archive digest")
+		}
+	}
+	if updated.InstallationID != original.InstallationID || updated.Source != expectedSource || updated.Source.ResolvedRevision == original.Source.ResolvedRevision || updated.Source.TreeDigest == original.Source.TreeDigest ||
+		selected.ClientBindingID != binding.ClientBindingID || selected.TargetLocator != binding.TargetLocator || !reflect.DeepEqual(updated.DataReceipts, original.DataReceipts) {
+		t.Fatal("Kiro User update changed source/binding/data authority instead of advancing its pin")
+	}
+	// The exact receipt-verified owned Skill is quarantined as a declared test
+	// fault. No original peer/policy tree is deleted or rebaselined.
+	source := filepath.Join(f.kiroRoot(""), "skills", "uap-user-docs")
+	if err := os.Rename(source, filepath.Join(f.home, "owned-skill-quarantine")); err != nil {
+		t.Fatal(err)
+	}
+	f.run(t, "", "repair", updated.InstallationID, "--target", "kiro", "--scope", "user", "--yes")
+	repaired, repairedBinding := f.assertKiroUserOwned(t, skill)
+	if repaired.InstallationID != updated.InstallationID || !reflect.DeepEqual(repaired.Source, updated.Source) || !reflect.DeepEqual(repaired.Package, updated.Package) ||
+		!reflect.DeepEqual(repaired.DataReceipts, original.DataReceipts) || repairedBinding.ClientBindingID != selected.ClientBindingID || repairedBinding.TargetLocator != selected.TargetLocator {
+		t.Fatal("Kiro User repair changed the last accepted revision or original data authority")
+	}
+	return repaired, repairedBinding, skill
+}
+
+func kiroUserTransfer(t *testing.T, f kiroProjectJourney, updated domain.Installation, skill string) {
+	t.Helper()
+	pair := f.assertPortablePair(t, f.cache)
+	exchange := projectJourneyTemp(t)
+	f.run(t, "", "deps", "export", exchange, "--scope", "user", "--yes")
+	if pair != f.assertPortablePair(t, exchange) {
+		t.Fatal("Kiro User export changed portable pins")
+	}
+	cold := newKiroJourney(t, f.transport, true)
+	projectJourneyAbsent(t, cold.cache)
+	cold.run(t, "", "deps", "import", exchange, "--install", "--scope", "user", "--yes")
+	restored, _ := cold.assertKiroUserOwned(t, skill)
+	if restored.Source != updated.Source || pair != cold.assertPortablePair(t, cold.cache) {
+		t.Fatal("Kiro cold User import changed selected source or agreement pins")
+	}
+	for _, receipt := range restored.DataReceipts {
+		for _, original := range updated.DataReceipts {
+			if receipt.Locator == original.Locator {
+				t.Fatal("Kiro cold User import reused another world's data authority")
+			}
+		}
+	}
+	cold.assertProtected(t)
+}
+
+func kiroUserCommitSource(t *testing.T, transport *projectJourneyTransport, content string) string {
+	t.Helper()
+	oldSkill := filepath.Join(transport.repo, "skills", "docs")
+	if _, err := os.Stat(oldSkill); err == nil {
+		if err := os.Rename(oldSkill, filepath.Join(transport.repo, "skills", "uap-user-docs")); err != nil {
+			t.Fatal(err)
+		}
+	} else if !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	skill := "---\nname: uap-user-docs\ndescription: Inert User fixture\n---\n" + content + "\n"
+	projectJourneyWrite(t, filepath.Join(transport.repo, "skills", "uap-user-docs", "SKILL.md"), skill)
+	projectJourneyWrite(t, filepath.Join(transport.repo, "mcp.json"), `{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"uap_user_probe":{"type":"stdio","command":"go","args":["version"],"env":{"DATA":"${PLUGIN_DATA}"}}}}`)
+	projectJourneyGit(t, transport.repo, "add", ".")
+	projectJourneyGit(t, transport.repo, "commit", "-m", "select inert User components")
+	projectJourneyGit(t, transport.repo, "push", "--quiet", transport.remote, "main")
+	archive, archiveErr := exec.CommandContext(t.Context(), "git", "-C", transport.repo, "archive", "--format=zip", "--prefix=provider-wrapper/", "HEAD").Output()
+	if archiveErr != nil || len(archive) > 1<<20 {
+		t.Fatal("create bounded owned User archive", archiveErr)
+	}
+	transport.mu.Lock()
+	transport.archive = archive
+	transport.mu.Unlock()
+	return skill
 }

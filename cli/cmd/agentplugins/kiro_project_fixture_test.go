@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -12,21 +14,35 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/specregistry"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/kiro"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/sourcespec"
+	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
-type kiroProjectDetector struct{ root string }
+type kiroProjectDetector struct{ root, executable string }
 
 func (detector kiroProjectDetector) Detect(context.Context) ([]domain.DetectedClient, error) {
-	return []domain.DetectedClient{{ClientID: domain.ClientKiro, ConfigRoot: detector.root, Status: domain.DetectionDetected}}, nil
+	return []domain.DetectedClient{{ClientID: domain.ClientKiro, ConfigRoot: detector.root, ExecutablePath: detector.executable, Status: domain.DetectionDetected}}, nil
+}
+
+type kiroNoNativeRunner struct{ calls int }
+
+func (runner *kiroNoNativeRunner) Run(_ context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
+	runner.calls++
+	return legacyports.CommandResult{}, fmt.Errorf("unexpected Kiro process: %v", command.Argv)
 }
 
 // Reuse the core journey's production CLI/state helpers and real TLS Git/ZIP
 // transports. Kiro supplies its own detected profile and native layout.
 type kiroProjectJourney struct {
 	projectJourney
-	protected map[string]kiroProtectedTree
+	protected  map[string]kiroProtectedTree
+	native     *kiroNoNativeRunner
+	foreignMCP map[string]any
 }
 
 type kiroProtectedTree struct {
@@ -35,6 +51,11 @@ type kiroProtectedTree struct {
 }
 
 func newKiroProjectJourney(t *testing.T, transport *projectJourneyTransport) kiroProjectJourney {
+	t.Helper()
+	return newKiroJourney(t, transport, false)
+}
+
+func newKiroJourney(t *testing.T, transport *projectJourneyTransport, userScope bool) kiroProjectJourney {
 	t.Helper()
 	f := kiroProjectJourney{projectJourney: projectJourney{home: projectJourneyTemp(t), a: projectJourneyTemp(t), b: projectJourneyTemp(t), transport: transport}, protected: map[string]kiroProtectedTree{}}
 	f.cache = filepath.Join(f.home, "uap")
@@ -49,7 +70,19 @@ func newKiroProjectJourney(t *testing.T, transport *projectJourneyTransport) kir
 	user := f.kiroRoot("")
 	projectJourneyWrite(t, filepath.Join(user, "settings", "mcp.json"), `{"mcpServers":{"docs":{"url":"https://user-peer.invalid/mcp","disabled":true},"foreign":{"url":"https://foreign.test/mcp","disabled":true}},"foreignPreference":"keep"}`)
 	projectJourneyWrite(t, filepath.Join(user, "skills", "docs", "SKILL.md"), "Original same-name User skill.\n")
-	f.preserve(t, user, filepath.Join(f.kiroRoot(f.a), "agents"), filepath.Join(f.kiroRoot(f.b), "agents"))
+	if userScope {
+		f.native = &kiroNoNativeRunner{}
+		for _, project := range []string{f.a, f.b} {
+			projectJourneyWrite(t, filepath.Join(f.kiroRoot(project), "settings", "mcp.json"), `{"mcpServers":{"uap_user_probe":{"url":"https://project-peer.invalid/mcp","disabled":true},"foreign":{"url":"https://foreign.test/mcp","disabled":true}},"foreignPreference":"keep"}`)
+			projectJourneyWrite(t, filepath.Join(f.kiroRoot(project), "skills", "uap-user-docs", "SKILL.md"), "Original same-name project Skill.\n")
+		}
+		if err := json.Unmarshal([]byte(projectJourneyRead(t, filepath.Join(user, "settings", "mcp.json"))), &f.foreignMCP); err != nil {
+			t.Fatal(err)
+		}
+		f.preserve(t, f.a, f.b, filepath.Join(user, "agents"), filepath.Join(user, "skills", "docs"), filepath.Join(user, "skills", "foreign"), filepath.Join(user, "hooks.json"))
+	} else {
+		f.preserve(t, user, filepath.Join(f.kiroRoot(f.a), "agents"), filepath.Join(f.kiroRoot(f.b), "agents"))
+	}
 	registry, err := specregistry.New()
 	if err != nil {
 		t.Fatal(err)
@@ -58,7 +91,7 @@ func newKiroProjectJourney(t *testing.T, transport *projectJourneyTransport) kir
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.app = configureKiroProjectJourney(app, f.home, transport)
+	f.app = configureKiroProjectJourney(t, app, f.home, transport, f.native)
 	return f
 }
 
@@ -94,6 +127,23 @@ func (f kiroProjectJourney) preserve(t *testing.T, roots ...string) {
 
 func (f kiroProjectJourney) assertProtected(t *testing.T) {
 	t.Helper()
+	if f.native != nil {
+		if f.native.calls != 0 {
+			t.Fatal("file-only Kiro lifecycle executed a native or MCP process")
+		}
+		var current map[string]any
+		if err := json.Unmarshal([]byte(projectJourneyRead(t, filepath.Join(f.kiroRoot(""), "settings", "mcp.json"))), &current); err != nil {
+			t.Fatal(err)
+		}
+		servers, ok := current["mcpServers"].(map[string]any)
+		if !ok {
+			t.Fatal("Kiro foreign MCP mapping changed shape")
+		}
+		delete(servers, "uap_user_probe")
+		if !reflect.DeepEqual(current, f.foreignMCP) {
+			t.Fatal("Kiro changed an original foreign User MCP field")
+		}
+	}
 	for root, snapshot := range f.protected {
 		if !reflect.DeepEqual(snapshot.entries, securityFixtureTree(t, root)) {
 			t.Fatalf("Kiro changed original policy or peer bytes/membership: %s", root)
@@ -113,21 +163,127 @@ func (f kiroProjectJourney) assertProtected(t *testing.T) {
 func (f kiroProjectJourney) run(t *testing.T, project string, args ...string) {
 	t.Helper()
 	f.assertProtected(t)
-	f.projectJourney.run(t, project, args...)
+	if f.native != nil {
+		f.assertPreparedState(t, project)
+	}
+	output := f.projectJourney.run(t, project, args...)
 	f.assertProtected(t)
+	if f.native != nil {
+		var value any
+		// execute joins stdout and diagnostic stderr; decode the public object
+		// before the separately rendered preparation guidance.
+		if err := json.NewDecoder(strings.NewReader(output)).Decode(&value); err != nil {
+			t.Fatal(err)
+		}
+		body, err := json.Marshal(value)
+		if err != nil || strings.Contains(string(body), `"activation_attested":true`) || strings.Contains(string(body), `"authentication_attested":true`) {
+			t.Fatal("Kiro public output asserted unobserved activation or authentication")
+		}
+	}
+	f.assertPreparedState(t, project)
+}
+
+func (f kiroProjectJourney) assertPreparedState(t *testing.T, project string) {
+	t.Helper()
 	for _, installation := range f.state(t, project).Installations {
 		for _, binding := range installation.Clients {
-			if binding.Activation != domain.ActivationPrepared || binding.Verification != domain.VerificationInstalled {
+			verification := domain.VerificationInstalled
+			if project == "" {
+				verification = domain.VerificationPackageValid
+				if binding.InstallIntent != domain.InstallIntentPrepare {
+					t.Fatal("Kiro User preparation was not selected by the public lifecycle")
+				}
+			}
+			if binding.Activation != domain.ActivationPrepared || binding.Verification != verification {
 				t.Fatal("Kiro policy/peer fixture upgraded prepared file verification")
 			}
 		}
 	}
 }
 
+func (f kiroProjectJourney) assertKiroUserOwned(t *testing.T, skill string) (domain.Installation, domain.ClientBinding) {
+	t.Helper()
+	installation, binding := f.owned(t, "")
+	kind := sourcespec.KindArchive
+	if strings.HasSuffix(f.transport.endpoint, "/repo.git") {
+		kind = sourcespec.KindGit
+	}
+	if installation.Source.SourceKind != string(kind) || installation.Source.SourceURL != f.transport.endpoint || installation.Source.RequestedSource != f.transport.endpoint ||
+		installation.Source.CanonicalSource != sourcespec.Key(kind, f.transport.endpoint, "") || installation.Source.PackageSubpath != "" {
+		t.Fatal("Kiro User source does not match its authored transport identity")
+	}
+	// User preparation owns exact native file receipts; the historical User
+	// trait does not record a native registration profile root.
+	if binding.Scope != string(domain.ScopeUser) || binding.NativeProfileRoot != "" || binding.InstallIntent != domain.InstallIntentPrepare ||
+		binding.Activation != domain.ActivationPrepared || binding.Verification != domain.VerificationPackageValid || len(kiro.NativeObjects(binding.NativeObjects)) != 2 ||
+		binding.PendingNativeIntent != nil || binding.NativeActivationAttempt != "" {
+		t.Fatalf("Kiro User preparation lost scope or component receipts: %+v", binding)
+	}
+	if err := pathpolicy.RequireContainedChild(f.cache, binding.TargetLocator); err != nil {
+		t.Fatal(err)
+	}
+	if err := kiro.VerifyNativeObjects(f.kiroRoot(""), binding.NativeObjects, false); err != nil {
+		t.Fatal(err)
+	}
+	for _, root := range []string{binding.TargetLocator, f.kiroRoot("")} {
+		if projectJourneyRead(t, filepath.Join(root, "skills", "uap-user-docs", "SKILL.md")) != skill {
+			t.Fatal("Kiro User selected Skill differs from its owned package")
+		}
+	}
+	receipt, ok := installation.DataReceipts[binding.DataReceiptID]
+	if !ok || len(installation.DataReceipts) != 1 || receipt.DataReceiptID != binding.DataReceiptID || receipt.Scope != string(domain.ScopeUser) {
+		t.Fatal("Kiro User data authority missing")
+	}
+	if err := pathpolicy.RequireContainedChild(filepath.Join(f.cache, "plugin-data"), receipt.Locator); err != nil {
+		t.Fatal(err)
+	}
+	servers, _, _, _, err := kiro.ReadMCPConfig(filepath.Join(f.kiroRoot(""), "settings", "mcp.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	server, ok := servers["uap_user_probe"].(map[string]any)
+	if !ok {
+		t.Fatal("Kiro User selected MCP server missing")
+	}
+	env, ok := server["env"].(map[string]any)
+	if !ok || env["DATA"] != receipt.Locator {
+		t.Fatal("Kiro User MCP projection lost its original data receipt")
+	}
+	return installation, binding
+}
+
 // Preserve the production scoped composer, installer, ownership kernel, store,
 // registry and solver. Only host discovery and security assessment are inert.
-func configureKiroProjectJourney(app agentpluginscli.App, home string, transport *projectJourneyTransport) agentpluginscli.App {
+func configureKiroProjectJourney(t *testing.T, app agentpluginscli.App, home string, transport *projectJourneyTransport, runner *kiroNoNativeRunner) agentpluginscli.App {
+	t.Helper()
 	app.Detector = kiroProjectDetector{root: filepath.Join(home, ".kiro")}
+	if runner != nil {
+		app.Detector = kiroProjectDetector{root: filepath.Join(home, ".kiro"), executable: filepath.Join(home, "never-start", "kiro-cli")}
+		helper, err := os.Executable()
+		if err != nil {
+			t.Fatal(err)
+		}
+		stateRoot := filepath.Dir(app.ManagedRoot)
+		engine, err := installer.New(installer.Config{StateRoot: stateRoot, ManagedRoot: app.ManagedRoot, ProjectRoot: app.ProjectRoot,
+			OperationsDir: filepath.Join(stateRoot, "operations-v2"), TempRoot: filepath.Join(stateRoot, "installer-tmp"),
+			Registry: app.ClientRegistry, Runner: runner, EnableNativeObserver: true, HelperExecutable: helper, HelperVersion: version})
+		if err != nil {
+			t.Fatal(err)
+		}
+		app.Installer = engine
+		activator, ok := app.Lifecycle.Activator.(providers.Activator)
+		if !ok {
+			t.Fatal("production Kiro activator missing")
+		}
+		activator.Runner = runner
+		app.Lifecycle.Activator = activator
+		observer, ok := app.Lifecycle.NativeObserver.(providers.NativeIdentityObserver)
+		if !ok {
+			t.Fatal("production Kiro observer missing")
+		}
+		observer.Runner = runner
+		app.Lifecycle.NativeObserver = observer
+	}
 	app.SecurityIndex, app.DirectoryClient, app.DiscoveryClient = nil, nil, nil
 	app.SecurityEvaluator = projectJourneySecurity{}
 	app.SecurityEvaluatorForDryRun = func(string) ports.PackageSecurityEvaluator { return projectJourneySecurity{} }
@@ -142,7 +298,7 @@ func configureKiroProjectJourney(app agentpluginscli.App, home string, transport
 		if err != nil {
 			return selected, err
 		}
-		return configureKiroProjectJourney(selected, home, transport), nil
+		return configureKiroProjectJourney(t, selected, home, transport, runner), nil
 	}
 	return app
 }

@@ -33,6 +33,10 @@ func (p confirmationPlanner) Plan(ctx context.Context, request domain.PlanReques
 		if err != nil {
 			return domain.DeliveryPlan{}, err
 		}
+		// The core calls this planner again while holding its mutation lock.
+		if err := confirmHostedPreparation(p.prepared, state); err != nil {
+			return domain.DeliveryPlan{}, err
+		}
 		if err := confirmRecordedDeliveries(p.prepared, state); err != nil {
 			return domain.DeliveryPlan{}, err
 		}
