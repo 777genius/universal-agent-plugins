@@ -11,6 +11,8 @@ on:
       - 'scripts/test_devin_structured_inventory_admission.py'
       - 'scripts/devin_ordinary_metadata_admission.py'
       - 'scripts/test_devin_ordinary_metadata_admission.py'
+      - 'scripts/devin_global_lifecycle_admission.py'
+      - 'scripts/test_devin_global_lifecycle_admission.py'
       - '.github/workflows/client-automation-native.yml'
   workflow_dispatch:
 permissions:
@@ -103,6 +105,41 @@ jobs:
         with:
           name: devin-ordinary-inventory-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/devin-ordinary-inventory/upload/research.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  devin-global-lifecycle:
+    name: Devin ordinary Global public CLI lifecycle (research)
+    needs: devin-ordinary-inventory
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+      EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.11'
+          cache: false
+      - name: Test Global lifecycle contracts
+        run: python3 -m unittest discover -s scripts -p 'test_devin_*admission.py' -v
+      - name: Build ordinary production CLI from exact current source
+        run: go build -o "$RUNNER_TEMP/devin-uap" ./cli/cmd/agentplugins
+      - name: Observe public Global add repair remove and exact native source inventories
+        run: |
+          python3 scripts/devin_global_lifecycle_admission.py \
+            --installer "$RUNNER_TEMP/devin-uap" --output "$RUNNER_TEMP/devin-global-lifecycle"
+      - name: Preserve original Global lifecycle evidence without runtime qualification
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: devin-global-lifecycle-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/devin-global-lifecycle/upload/research.zip
           if-no-files-found: error
           retention-days: 14
 

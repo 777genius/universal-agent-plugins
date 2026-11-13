@@ -297,7 +297,7 @@ MAINTENANCE = "home/data/devin/cli/logs/.log-maintenance.lock"
 BOOTSTRAP_LOG = re.compile(r"home/data/devin/cli/logs/devin_[0-9]{8}-[0-9]{6}_[1-9][0-9]{0,9}\.log\Z")
 
 
-def read_bootstrap_file(ctx, relative, expected, inventory):
+def read_bootstrap_file(ctx, relative, expected, inventory, *, maximum=None, digest_only=False):
     """Only the prospective fixed bootstrap recipe calls this anchored reader."""
     def stable(info):
         return (info.st_dev, info.st_ino, info.st_mode, info.st_nlink, info.st_uid, info.st_gid,
@@ -321,28 +321,31 @@ def read_bootstrap_file(ctx, relative, expected, inventory):
         descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent)
         stack.callback(os.close, descriptor)
         before = os.fstat(descriptor)
-        maximum = DEFINITIONS_BYTES if relative == DEFINITIONS_CACHE else 16384
+        maximum = (DEFINITIONS_BYTES if relative == DEFINITIONS_CACHE else 16384) if maximum is None else maximum
+        require(type(maximum) is int and 0 < maximum <= 512 << 20, "declared research file bound")
         require(stable(before) == tuple(expected) and stat.S_ISREG(before.st_mode) and before.st_nlink == 1
                 and before.st_size <= maximum and (before.st_uid, before.st_gid) == ctx.original_output_identity[3:]
                 and (relative != DEFINITIONS_CACHE or before.st_size == DEFINITIONS_BYTES), "bootstrap opened file differs")
-        chunks, remaining = [], maximum + 1
+        chunks, remaining, digest, count = [], maximum + 1, hashlib.sha256(), 0
         while remaining:
             ctx.budget.check()
-            chunk = os.read(descriptor, remaining)
+            chunk = os.read(descriptor, min(65536, remaining))
             if not chunk: break
-            chunks.append(chunk)
+            if not digest_only: chunks.append(chunk)
+            digest.update(chunk); count += len(chunk)
             remaining -= len(chunk)
         body = b"".join(chunks)
-        require(len(body) == before.st_size and stable(os.fstat(descriptor)) == stable(before)
+        require(count == before.st_size and stable(os.fstat(descriptor)) == stable(before)
                 and stable(os.stat(name, dir_fd=parent, follow_symlinks=False)) == stable(before), "bootstrap file changed")
         for ancestor, leaf, child, identity in chain:
             require(KnownFileDiagnostics.identity(os.fstat(child)) == identity
                     and KnownFileDiagnostics.identity(os.stat(leaf, dir_fd=ancestor, follow_symlinks=False)) == identity, "bootstrap parent changed")
         require(root_identity(ctx.root) == ctx.original_output_identity, "bootstrap root changed during read")
-        return body
+        return digest.hexdigest() if digest_only else body
 
 
 class BootstrapEffects:
+    max_logs, max_members = 8, 24
     metadata_first = False
     config_path, config_mode = METADATA_CONFIG, 0o600
     metadata_route = "explicit-owned-config; not ordinary default startup"
@@ -369,7 +372,7 @@ class BootstrapEffects:
                     "definition cache original identity changed")
         new = set(current) - set(baseline)
         logs = {key for key in new if BOOTSTRAP_LOG.fullmatch(key)}
-        require(len(new) <= 24 and len(logs) <= 8, "bootstrap membership count")
+        require(len(new) <= self.max_members and len(logs) <= self.max_logs, "bootstrap membership count")
         total, records = 0, {}
         for relative in sorted(new | {self.config_path}):
             ctx.budget.check()
@@ -569,7 +572,11 @@ def closed_readout(summary, state):
             and summary.get('cleanup_complete') is True and type(summary.get('metadata_capture_complete')) is bool
             and summary.get('artifact_admission_failed', False) is False, 'readout admission')
     if summary['collection_complete']:
-        require_complete_metadata(summary)
+        if summary.get('metadata_recipe') == 'ordinary-global':
+            from devin_global_lifecycle_admission import completion
+            completion(summary)
+        else:
+            require_complete_metadata(summary)
         require(state['phase'] == 'source-final-clean' and state['reason'] == 'metadata-complete', 'readout completion')
     qualification = summary['qualification']
     require(type(qualification) is dict and set(qualification) == set(shared.QUALIFICATION_CASES)
@@ -623,7 +630,7 @@ def publish_with_readout(summary, ctx, output, identity, state):
         pass
 
 
-def collect(ctx, probes, readout_state=None, *, effects_type=BootstrapEffects):
+def collect(ctx, probes, readout_state=None, *, effects_type=BootstrapEffects, continuation=None):
     ctx.summary["metadata_route"] = effects_type.metadata_route
     nonce = secrets.token_hex(32)
     expected, startup, marker = fixture(ctx, {key: value.url for key, value in probes.items()}, nonce)
@@ -697,6 +704,8 @@ def collect(ctx, probes, readout_state=None, *, effects_type=BootstrapEffects):
                        native_json_schema=METADATA_SCHEMA, exact_source_admission=METADATA_SCHEMA,
                        probe_methods={name: list(probe.methods()) for name, probe in probes.items()},
                        accepted_connections={name: len(probe.accepted_connections) for name, probe in probes.items()})
+    if continuation is not None:
+        continuation(ctx, probes, expected, nonce, effects)
 
 
 def observe_connections(probe):
@@ -712,8 +721,8 @@ def observe_connections(probe):
     return probe
 
 
-def run(output, *, collector=collect, recipe="private"):
-    require(recipe in ("private", "ordinary") and ((collector is collect) == (recipe == "private")), "unknown Devin research recipe")
+def run(output, *, collector=collect, recipe="private", completion=require_complete_metadata, seconds=360):
+    require(recipe in ("private", "ordinary", "ordinary-global") and ((collector is collect) == (recipe == "private")), "unknown Devin research recipe")
     shared.native.require_hosted("linux-amd64")
     require(output.is_absolute() and output.resolve() == output and not output.exists()
             and shared.SOURCE not in output.parents, "fresh output outside source required")
@@ -727,7 +736,7 @@ def run(output, *, collector=collect, recipe="private"):
     ctx, held_cleanup, probes_settled = None, {}, True
     readout_state = dict(phase="preparation", reason="capture-incomplete", deadline=None)
     try:
-        with shared.Budget(360) as budget:
+        with shared.Budget(seconds) as budget:
             readout_state["deadline"] = budget.deadline
             ctx = AdmissionContext(output, summary, budget)
             ctx.original_output_identity = identity
@@ -763,7 +772,7 @@ def run(output, *, collector=collect, recipe="private"):
             readout_state["phase"] = "source-final-clean"
             record, out, err = ctx.command("source-final-clean", ["/usr/bin/git", "status", "--porcelain", "--untracked-files=normal"], shared.SOURCE, ctx.env, 10)
             require(record["exit"] == 0 and not out and not err, "source changed")
-            require_complete_metadata(summary)
+            completion(summary)
             summary["collection_complete"] = True
             readout_state["reason"] = "metadata-complete"
     except Exception as error:

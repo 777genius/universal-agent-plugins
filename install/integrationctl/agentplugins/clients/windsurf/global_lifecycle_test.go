@@ -60,7 +60,15 @@ func globalOfflineFixture(t *testing.T) (domain.DetectedClient, domain.DeliveryP
 }
 
 func TestDevinGlobalOfflineNativeLifecycleRelocatedStateAndLegacyParity(t *testing.T) {
+	for _, version := range []string{"3000.11.205", "3000.12.57"} {
+		t.Run(version, func(t *testing.T) { testDevinGlobalOfflineLifecycle(t, version) })
+	}
+}
+
+func testDevinGlobalOfflineLifecycle(t *testing.T, version string) {
+	t.Helper()
 	client, plan, envelope := globalOfflineFixture(t)
+	client.Version = version
 	objects, err := devinGlobalObjects(plan.ActivePath, envelope, plan)
 	if err != nil || len(objects) != 3 {
 		t.Fatalf("global projection failed: %d objects, %v", len(objects), err)
@@ -187,6 +195,9 @@ func TestDevinGlobalSelectedUserProfileIsNotLegacyOrProject(t *testing.T) {
 	for _, mutate := range []func(*domain.DetectedClient, *domain.DeliveryPlan){
 		func(c *domain.DetectedClient, _ *domain.DeliveryPlan) { c.Version = "" },
 		func(c *domain.DetectedClient, _ *domain.DeliveryPlan) { c.Version = "3000.11.204" },
+		func(c *domain.DetectedClient, _ *domain.DeliveryPlan) { c.Version = "3000.12.56" },
+		func(c *domain.DetectedClient, _ *domain.DeliveryPlan) { c.Version = "3000.12.58" },
+		func(c *domain.DetectedClient, _ *domain.DeliveryPlan) { c.Version = "3000.12.57\n" },
 		func(c *domain.DetectedClient, _ *domain.DeliveryPlan) { c.NativeConfigRoot += "-other" },
 		func(_ *domain.DetectedClient, p *domain.DeliveryPlan) { p.NativeRegistryRoot = client.ConfigRoot },
 		func(_ *domain.DetectedClient, p *domain.DeliveryPlan) {

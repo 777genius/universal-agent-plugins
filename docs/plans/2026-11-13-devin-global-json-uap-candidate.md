@@ -1,13 +1,13 @@
 # Devin 3000.12.57: ordinary metadata gate and public UAP Global E2E
 
-Status: Step 1 candidate implemented locally; hosted execution and original
-evidence review remain pending. Step 2 is still prospective. The plan was prepared
-from commit `672a769c8954365726e96485bff3868e1936e41b`; the Step 1 implementation
-uses `a84a20e70110f7ee035eda0d364507b554e08c41`. The existing Devin files and this
-workflow are unchanged through `bb5b9c033ddf5d5d03139bbc71ef42d7f3a3cb4f`; the
-coordinator owns current-source integration, hosted execution and merge. The
-narrow effect predicate was accepted for this checkpoint. No native PASS or
-production version admission follows from the local implementation.
+Status: the ordinary local-policy metadata gate passed on source
+`5f0af370e2b4ac7d2424bddfc33516aaca6902b5` and its original archive was independently
+reviewed. The Step 2 candidate composes the exact `3000.12.57` version allowance
+with the public Global lifecycle consumer. Genuine final-source Global execution,
+required checks and independent review remain prerequisites to merge. The earlier
+Step 1 descriptions below retain their chronological design context; the latest
+original evidence is recorded at the end of this plan. No native MCP call,
+authentication, model inference or other-platform qualification is inferred.
 
 ## Purpose and existing evidence
 
@@ -318,3 +318,122 @@ help stay mandatory. Wrong first mode, repeat chmod/replacement, different JSON,
 owner/link/size/parent drift still refuse. No baseline renewal, native rerun,
 production version change, task-born-log allowance or workflow change belongs
 to this causal correction. The later full lifecycle remains a separate gate.
+
+## Concrete Global research consumer checkpoint (2026-11-13)
+
+The sibling `devin_global_lifecycle_admission.py` consumes the existing ordinary
+metadata collector through one explicit continuation after its eight inventories.
+The default private/ordinary collector,360-second budget and exact completion
+validator remain unchanged. The Global recipe has900seconds and an exact37-call
+sequence: six source/Git setup, five help/version,20inventories,five public UAP
+commands and one final source check. The workflow depends on a successful same
+source ordinary job; skipped dependencies never count as lifecycle proof.
+
+The public consumer performs add,doctor, deliberate exact owned Skill quarantine,
+repair,doctor,remove, with fresh A/B MCP/Skills readbacks after add/repair/remove.
+Original HOME/XDG and original native source selection stay unchanged; only the
+independent UAP state root and selected real Devin PATH are supplied to UAP.
+Public existing --yes confirms installer operations only, never native tool or
+model execution. The real production exact-version guard remains unchanged in
+this checkpoint, so3000.12.57 add will refuse until Step1 is independently
+qualified and its separate exact-version allowance is reviewed. Do not publish
+this held workflow as completed product support on the strength of inert tests.
+
+Every fixture regular file is hashed through the existing descriptor-relative
+metadata-first reader. Ordinary1MiB/member and16MiB aggregate limits remain.
+Only the already pinned213734376-byte Devin executable, exact prebuilt installer
+copy (at most128MiB), and verified GNU Lintai0.1.3 scanner9989584bytes/SHA256
+b6723451f155eb49e84acb34d1f06de929bddfcff6238cd4e38cdc6519396fba have separate
+streaming-hash roles; they are never copied to evidence. Scanner execution and
+security policy are preserved. Unknown UAP state files/directories/journals,
+source changes, foreign MCP members, missing/mismatched owned receipts, package
+members, helper metadata or data ownership refuse. Completed operations must
+leave no transaction journal files. Native inventory cannot write UAP state,
+owned package/data/profile components or any foreign file.
+
+No speculative log rotation is admitted. Existing pre-baseline logs and earlier
+task-born logs remain exact across subsequent native commands. At most one
+validated new native log per call,20total, plus the existing exact auxiliary
+recipe (36entries maximum), is allowed. First-born command/hash facts are
+recorded; no rewritten/removed/compressed log is adopted. The unconsumed
+hypothetical gzip TaskBornLogs experiment is excluded from this candidate.
+All source/control/native endpoint guards and failed-process publication fences
+stay in force. Initial and final lifecycle captures keep authentication/model/
+MCPcall and product qualification false; Prepared and manual production native
+inspection remain unchanged. Genuine final-source ordinary and lifecycle
+captures plus independent original review are still required.
+
+Source review also binds the single normal security assessment cache member:
+`securityscan/cache.go::CacheKey` hashes the exact source tree/manifest, scanner
+and policy tuple. Its finite JSON must match the actual successful public add's
+security assessment (apart from the cache's omitted evidence_source), and that
+subject must match the installed state. Only this derived cache filename is
+admitted, never a directory wildcard; scanner/policy/count/subject negatives are
+covered. This preserves the actual security scanner and prevents the consumer
+from rejecting every normal installation solely for writing its owned cache.
+The independent native User config and all original foreign files remain outside
+this UAP-state authority. No existing user cache is adopted.
+
+Independent consumer review corrected three concrete flow errors: the finite
+research recipe guard now admits ordinary-global; removal forwards removed=True;
+every native command performs a metadata-only nonauxiliary identity gate before
+post-command body capture. The validated metadata snapshot is reused by anchored
+reads, and original auxiliary verification remains mandatory. Real entrypoint,
+removal forwarding and replaced-config/no-read regressions join 53 passing inert
+Devin tests. No genuine lifecycle or production qualification is inferred.
+
+## Held production composition and public post-command root correction
+
+The candidate is composed against the current six-client branch with the planned
+exact 3000.12.57 alternative beside 3000.11.205. The ordinary eight-inventory gate
+and independent original review below clear the prerequisite for this candidate;
+its genuine public Global lifecycle remains required before merge. No range, executable
+selection, profile policy, capability status or other-platform claim changes.
+The existing full Global file lifecycle runs for both exact versions, preserving
+foreign entries, legacy Cascade and receipt-based offline removal. It failed
+on 3000.12.57 before the allowance and passes afterward. Adjacent versions and
+decorated version text still refuse at the actual planning precondition.
+
+Root review found a separate pre-read gap after a successful public command:
+the subsequent state reader used a newly captured metadata map before rejoining
+the three original User/UAP/source roots. The consumer now checks those original
+directory identities before any state body, reusing the same subsequent metadata
+snapshot. A real rename/replacement through the public consumer triggers a byte
+read tripwire before the fix and refuses before reading after it. No foreign root
+is adopted and no command, effect allowance or recovery authority is added.
+
+## Genuine ordinary gate admitted on 2026-11-13
+
+[Run 43481260621, job 132080442708](https://github.com/777genius/universal-agent-plugins/actions/runs/43481260621/job/132080442708)
+passed on source `5f0af370e2b4ac7d2424bddfc33516aaca6902b5`, tree
+`b7871e9ede8825a31aaab19f02b7c2a255fafe69`. Original artifact `14069186503` is
+45,899 bytes, SHA256 `745a82929fa37cff575a54a01eca5c20a308849fd92768edf756a7440fd32f75`;
+its inner archive is 350,179 bytes, SHA256
+`ee116728ab88568d23536b73ac7c44adac91f3266d38d7e0e987722b993f4596`.
+Independent review and coordinator readback verified both ZIP CRCs, exact 41
+members, all 40 original stream length/hash joins, 20 successful commands,
+source/tree identity and positive cleanup. The retained outputs pass all four
+MCP and four Skills source validators, including User/A/B precedence, local
+disabled entries, legacy and Builtin semantics. The five help/version commands
+remain effect-free; no private --config operand is used.
+
+The only changed original file is the first MCP inventory's already measured
+37-byte/0644 to 57-byte/0600 User config migration. The postimage remains exact
+for later commands. All five endpoint counts are zero, method lists are empty,
+and the stdio guard stays untouched. `ordinary_metadata_capture_complete` and
+`cleanup_complete` are true; all five runtime qualification flags and
+`admission_qualified` remain false. This admits finite ordinary metadata for the
+authored local-policy fixture. It does not prove Global UAP installation, MCP
+execution, login, inference or cloud-enabled organization policy.
+
+
+### Public post-command metadata fence
+
+Independent review found that a successful public command could replace an
+immutable authored source leaf before the state consumer read it. The consumer
+now checks the finite allowed metadata prefixes before any state/payload body;
+doctor permits no metadata delta at all. Existing semantic removal checks and
+full doctor frame equality remain afterward. An actual same-directory leaf swap
+regression failed on the prior code for both repair and doctor by triggering the
+foreign-byte read tripwire; the corrected15-test suite passes locally. This is
+inert consumer evidence, not a native Global lifecycle pass.
