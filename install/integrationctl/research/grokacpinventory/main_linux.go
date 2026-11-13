@@ -119,8 +119,8 @@ func validateRequest(r request, root string, uid, gid int) error {
 	if r.Schema != 1 || r.Commit != sourceCommit || r.Tree != sourceTree || !hex40.MatchString(sourceCommit) || !hex40.MatchString(sourceTree) || !hex64.MatchString(collectorSHA) || !hex64.MatchString(r.HelperSHA) || !noncePattern.MatchString(r.Nonce) || r.UID != uid || r.GID != gid || uid <= 0 || gid <= 0 || uid > 1<<30 || gid > 1<<30 {
 		return errors.New("request-identity-refused")
 	}
-	if r.Mode != "" && (r.Mode != sessionMode || r.Scope != "a") {
-		return errors.New("request-mode-refused")
+	if e := validateSessionRequest(r); e != nil {
+		return e
 	}
 	if r.Scope != "user" && r.Scope != "a" && r.Scope != "b" {
 		return errors.New("request-scope-refused")

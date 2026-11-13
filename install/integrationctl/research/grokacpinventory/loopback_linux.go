@@ -16,6 +16,13 @@ func sessionFields(mode, original, extra string) string {
 	return original
 }
 
+func validateSessionRequest(r request) error {
+	if r.Mode != "" && (r.Mode != sessionMode || r.Scope != "a") {
+		return errors.New("request-mode-refused")
+	}
+	return nil
+}
+
 // This sealed constant is the ONLY privileged Python code in session mode.
 // It runs after unshare, before unchanged setpriv; imports no fixture code.
 const loopbackBootstrap = `import fcntl, os, socket, struct, sys
