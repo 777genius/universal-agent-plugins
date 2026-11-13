@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"syscall"
 	"testing"
@@ -184,5 +185,126 @@ func TestVersionUsesOnlyPinnedFixedAction(t *testing.T) {
 	})
 	if err != nil || len(result) == 0 {
 		t.Fatal("version refused", err)
+	}
+}
+
+func publicFixture(t *testing.T) request {
+	t.Helper()
+	req := fixture(t)
+	name := "agy"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	if err := os.Mkdir(filepath.Join(req.Root, "bin"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(req.Binary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(req.Root, "bin", name), body, 0700); err != nil {
+		t.Fatal(err)
+	}
+	req.Binary = filepath.Join(t.TempDir(), "inert-uap")
+	body = []byte("inert compiled public UAP fixture; never executed")
+	if err = os.WriteFile(req.Binary, body, 0700); err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256(body)
+	installerSHA = hex.EncodeToString(digest[:])
+	req.BinarySHA, req.Action, req.Selector = installerSHA, "uap-repeat", "uap-agy-native-smoke"
+	req.Deadline = time.Now().Add(234 * time.Second).UnixNano()
+	return req
+}
+
+func TestPublicActionsHaveFixedSelectorsArgvPinsAndEnvironment(t *testing.T) {
+	req := publicFixture(t)
+	t.Setenv("OPENAI_API_KEY", "inert-not-forwarded")
+	source := "https://github.com/777genius/universal-agent-plugins/tree/" + sourceCommit + "/repotests/testdata/agentplugins_native_probe"
+	local := filepath.Join(req.Root, "source")
+	common := []string{"--target", "antigravity", "--scope", "user", "--yes", "--format", "json"}
+	for action, args := range map[string][]string{
+		"uap-add": {"add", local, "--no-save"}, "uap-repeat": {"add", local, "--no-save"},
+		"uap-missing-backend": {"add", local, "--no-save"},
+		"uap-update":          {"update", "uap-agy-native-smoke"}, "uap-repair": {"repair", "uap-agy-native-smoke"},
+		"uap-remove": {"remove", "uap-agy-native-smoke"}, "uap-saved-add": {"add", source},
+		"uap-cold-install": {"install", "--locked"}, "uap-cold-repeat": {"install", "--locked"},
+	} {
+		req.Action, req.Selector = action, publicSelector(action)
+		if err := validateRequest(req); err != nil {
+			t.Fatal(action, err)
+		}
+		tail := common
+		if action == "uap-cold-install" || action == "uap-cold-repeat" {
+			tail = []string{"--scope", "user", "--yes", "--format", "json"}
+		}
+		want := append(append([]string{req.Binary}, args...), tail...)
+		if !slices.Equal(fixedArgv(req), want) {
+			t.Fatal("fixed public argv differs", action, fixedArgv(req), want)
+		}
+		for _, entry := range commandEnvironment(req) {
+			if strings.HasPrefix(entry, "OPENAI_") || strings.HasPrefix(entry, "GITHUB_TOKEN=") {
+				t.Fatal("credential inherited", entry)
+			}
+		}
+		bad := req
+		bad.Selector = "other"
+		if validateRequest(bad) == nil {
+			t.Fatal("arbitrary public selector admitted")
+		}
+		bad = req
+		bad.BinarySHA = nativeSHA
+		if validateRequest(bad) == nil {
+			t.Fatal("native pin admitted as UAP")
+		}
+	}
+}
+
+func TestPublicNegativeExitStillRequiresStrictFamilyAndRuntimeProof(t *testing.T) {
+	for _, kind := range []string{"negative", "cleanup", "no-child", "error", "context", "stdout-bound", "stderr-bound", "native-pin"} {
+		t.Run(kind, func(t *testing.T) {
+			req := publicFixture(t)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			body, err := execute(ctx, req, func(_ context.Context, cmd ports.Command, grace time.Duration) (ports.CommandResult, error) {
+				if grace != 5*time.Second || cmd.Dir != filepath.Join(req.Root, "project") || commandBudget(req.Action) != 235*time.Second {
+					t.Fatal("original public budget or cwd changed", cmd)
+				}
+				value := ports.CommandResult{CleanupComplete: true, ExitCode: 1, Stdout: []byte("refused"), Stderr: []byte("fixed failure")}
+				switch kind {
+				case "cleanup":
+					value.CleanupComplete = false
+				case "no-child":
+					value.NoChildStarted = true
+				case "error":
+					return value, errors.New("capture failure")
+				case "context":
+					cancel()
+				case "stdout-bound":
+					value.Stdout = make([]byte, 1<<20)
+				case "stderr-bound":
+					value.Stderr = make([]byte, 32768)
+				case "native-pin":
+					name := "agy"
+					if runtime.GOOS == "windows" {
+						name += ".exe"
+					}
+					if e := os.WriteFile(filepath.Join(req.Root, "bin", name), []byte("changed"), 0700); e != nil {
+						t.Fatal(e)
+					}
+				}
+				return value, nil
+			})
+			if kind != "negative" {
+				if err == nil || body != nil {
+					t.Fatal("negative exit became a cleanup proof", err)
+				}
+				return
+			}
+			var receipt map[string]any
+			if err != nil || json.Unmarshal(body, &receipt) != nil || len(receipt) != 14 || receipt["exit"] != float64(1) || receipt["cleanup_complete"] != true || receipt["stderr_bytes"] != float64(13) {
+				t.Fatal("settled negative receipt differs", err, receipt)
+			}
+		})
 	}
 }

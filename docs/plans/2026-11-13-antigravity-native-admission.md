@@ -686,3 +686,83 @@ These inert cases do not qualify the ordinary process environment, descendant
 cleanup or arbitrary profile effects. Genuine three-OS public-path acceptance
 and the remaining intact-repair/historical-Active observation design are still
 separate work.
+
+
+## Supervised public User consumption acceptance amendment
+
+Five existing paths only: this plan, the Antigravity native harness/workflow and
+existing antigravityinventory Go main/test. No production, release input, pin,
+shared runner, public schema or independent workflow changes. The released lane
+retains its old command sequence; only source runs with the existing capture
+object execute the new public journey.
+
+The same ordinary process.OS supervisor now admits nine fixed public-UAP
+operations. The original eight request fields and four native actions/ten-field
+receipts remain intact. Public selectors/argv are literal local-fixture or
+current-commit public-fixture operations; no caller argv/env/cwd is accepted.
+A separate compiled installerSHA binds the exact built UAP binary. Its native
+shim also has the original official1.5.3 pin held/rejoined/hashed across command
+execution. Root authority is held from creation. Public roots are independently
+authored, never adopted or path-deleted, and retained on every outcome.
+
+Public commands keep the original240s bound:234s caller wall deadline, maximum
+235s helper acceptance and5s descendant grace, with the caller's original
+monotonic deadline checked before launch and final admission. Native30/5s
+budgets are unchanged. Parent EOF/extra bytes/signals cancel the same context.
+Only actual CleanupComplete, nil execution/context, closed bounded streams and
+final original pins clear capture.pending. A negative CLI exit is not cleanup
+proof. Any unproved public family suppresses the entire original raw archive;
+a later known effects failure retains only the previously settled direct bytes.
+
+The real public UAP journey covers User add/repeat, changed2.0 update, exact
+absent-bundle repair/remove, an independently initially-disabled fixture and
+four separate missing-config/malformed-config/foreign-collision/config-symlink
+refusal fixtures plus a successful file-only Prepared missing-backend case,
+matching the published b778 correction. Unqualified backend absence is never
+labeled a native observation or an unavailable-error proof. Existing ProjectA/B, three User/vendor worlds
+and original source remain protected. No config is restored after refusal.
+Each public action has only fixed enum/exit/cleanup readout; raw public stderr
+is bounded and retained only in the validated public receipt, never printed. Read-only result requires the actual
+installation_verified domain value and exact adapter observation action.
+
+User cold restore uses the actual User dependency root (uap-state), not Project
+cwd agreements. Only original uap.toml/uap.lock are copied into a fresh root;
+install--locked joins source commit/tree/manifest, committed environment receipt,
+owned User data receipt, actual native manifest, exact public Go source bytes
+and complete MCP command/args/cwd/env projection. Cold repeat is real locked
+install; it is not falsely labeled a native callback. No standalone Git init,
+manual state transfer, fake backend, trust, enable, authentication or model call.
+The genuine closed HOME/USERPROFILE production child environment, particularly
+Windows, still requires the ensuing native jobs; local test mocks do not prove it.
+
+Actual inert Go suite/scoped lint pass; Python25 contracts pass, including
+cleanup/stream/pin/frame/deadline refusal with no archive output. Windowsamd64
+and Darwinarm64 helper tests cross-compile; those are not native execution.
+Standard final make lint passes all existing gates with the138-rule baseline
+unchanged. Independent source review and actual three-platform native acceptance
+remain publication requirements.
+The existing fourteen direct request/receipt labels and semantics remain separate.
+Source capture schema2 adds twenty fixed public pairs in explicit world/action
+order, with source/installer/native/helper pins and per-member byte/SHA joins.
+The same held-root atomic publisher admits at most69 members/32MiB; original
+direct-frame16KiB and public-frame2MiB limits are distinct. Partial or late effects
+keep public_capture_complete/capture_complete false; an unproved family suppresses
+all raw output. A full20-pair effects-negative regression verifies that fence.
+
+Only the two exact uap-state mutation.lock/environment.lock control files may
+refresh their literal positive integer PID and UTC RFC3339Nano acquisition time.
+Closed schema, bounded owner-checked reads, same inode/device/owner/mode, single
+link and all other state/native/foreign bytes remain mandatory. POSIX0600 is
+required; Windows uses the existing owner/nonreparse authority and unchanged
+actual mode, rather than pretending OpenFile0600 maps to POSIX bits. An actual
+same-inode write regression distinguishes valid metadata refresh from unknown
+fields, malformed values, new/missing/replaced locks and unrelated state changes.
+No store directory or persistent state is blanket-excluded.
+
+Control lock metadata/size/owner/link/mode authority is checked before any body
+read; only those exact leaves bypass the generic snapshot body walk. Full
+same-domain path/FD metadata is rejoined after reading. Windows uses the existing
+artifact cross-open projection excluding only path-versus-FD ctime semantics,
+retaining owner-checked handles and positive birth/reparse identity. New oversized,
+owner-refusal and changed-open metadata tripwires confirm no body is read; all25
+Python contracts pass locally. Hosted native acceptance remains pending.

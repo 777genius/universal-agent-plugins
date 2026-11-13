@@ -15,6 +15,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -23,7 +24,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
-var sourceCommit, sourceTree, nativeSHA string
+var sourceCommit, sourceTree, nativeSHA, installerSHA string
 var requestFields = map[string]bool{"binary": true, "binary_sha256": true, "root": true, "selector": true, "action": true, "source_commit": true, "source_tree": true, "deadline_unix_ns": true}
 
 var safeName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
@@ -82,9 +83,12 @@ func validateRequest(req request) error {
 	if req.Commit != sourceCommit || req.Tree != sourceTree || len(req.Commit) != 40 || len(req.Tree) != 40 ||
 		!safeName.MatchString(req.Selector) || req.Selector == "." || req.Selector == ".." ||
 		!filepath.IsAbs(req.Binary) || filepath.Clean(req.Binary) != req.Binary || !filepath.IsAbs(req.Root) || filepath.Clean(req.Root) != req.Root ||
-		!strings.HasPrefix(filepath.Base(req.Root), "uap-agy-direct-") || len(req.BinarySHA) != 64 || req.BinarySHA != nativeSHA ||
-		(req.Action != "list" && req.Action != "enable" && req.Action != "disable" && req.Action != "version") {
+		!strings.HasPrefix(filepath.Base(req.Root), "uap-agy-direct-") || len(req.BinarySHA) != 64 || req.BinarySHA != commandPin(req.Action) ||
+		(!publicAction(req.Action) && !nativeAction(req.Action)) {
 		return errors.New("closed request identity refused")
+	}
+	if publicAction(req.Action) && req.Selector != publicSelector(req.Action) {
+		return errors.New("public selector refused")
 	}
 	if _, err := hex.DecodeString(req.BinarySHA); err != nil {
 		return err
@@ -145,6 +149,9 @@ func closeCapture(file *os.File, body []byte, resultErr error) ([]byte, error) {
 }
 
 func fixedArgv(req request) []string {
+	if publicAction(req.Action) {
+		return publicArgv(req)
+	}
 	argv := []string{req.Binary, "plugin", req.Action, req.Selector}
 	if req.Action == "list" {
 		argv = []string{req.Binary, "plugin", "list", "--json"}
@@ -169,18 +176,24 @@ func execute(ctx context.Context, req request, run runner) (body []byte, resultE
 	if digest != req.BinarySHA {
 		return nil, errors.New("binary pin differs")
 	}
-	argv := fixedArgv(req)
-	home := filepath.Join(req.Root, "home")
-	env := []string{"HOME=" + home, "USERPROFILE=" + home, "APPDATA=" + filepath.Join(home, "AppData", "Roaming"), "LOCALAPPDATA=" + filepath.Join(home, "AppData", "Local"),
-		"XDG_CONFIG_HOME=" + filepath.Join(req.Root, "config"), "XDG_CACHE_HOME=" + filepath.Join(req.Root, "cache"), "TMP=" + filepath.Join(req.Root, "tmp"), "TEMP=" + filepath.Join(req.Root, "tmp"), "TMPDIR=" + filepath.Join(req.Root, "tmp")}
-	for _, key := range []string{"PATH", "SystemRoot", "LANG"} {
-		if value, ok := os.LookupEnv(key); ok {
-			env = append(env, key+"="+value)
+	native, nativeInfo, nativePath, err := publicNative(req)
+	if err != nil {
+		return nil, err
+	}
+	if native != nil {
+		defer func() { body, resultErr = closeCapture(native, body, resultErr) }()
+	}
+	if err = errors.Join(verify(req.Binary, binary, binaryInfo), verify(req.Root, root, rootInfo), ctx.Err()); err != nil {
+		return nil, err
+	}
+	if native != nil {
+		if err = verify(nativePath, native, nativeInfo); err != nil {
+			return nil, err
 		}
 	}
-	result, err := run(ctx, ports.Command{Argv: argv, Env: env, Dir: filepath.Join(req.Root, "project"), StdoutLimitBytes: 1 << 20}, 5*time.Second)
-	if err != nil || ctx.Err() != nil || !result.CleanupComplete || result.NoChildStarted || result.ExitCode != 0 || len(result.Stdout) >= 1<<20 || len(result.Stderr) != 0 {
-		return nil, errors.New("command capture or cleanup refused")
+	result, err := run(ctx, ports.Command{Argv: fixedArgv(req), Env: commandEnvironment(req), Dir: filepath.Join(req.Root, "project"), StdoutLimitBytes: 1 << 20}, 5*time.Second)
+	if err = admittedResult(ctx, req, result, err); err != nil {
+		return nil, err
 	}
 	if err = verify(req.Binary, binary, binaryInfo); err != nil {
 		return nil, err
@@ -188,20 +201,15 @@ func execute(ctx context.Context, req request, run runner) (body []byte, resultE
 	if err = verify(req.Root, root, rootInfo); err != nil {
 		return nil, err
 	}
-	// Hash the held executable again after descendants settle; no pathname reopening.
-	if _, err = binary.Seek(0, io.SeekStart); err != nil {
+	if native != nil {
+		if err = errors.Join(verify(nativePath, native, nativeInfo), verifyDigest(native, nativeSHA)); err != nil {
+			return nil, err
+		}
+	}
+	if err = errors.Join(verifyDigest(binary, digest), ctx.Err()); err != nil {
 		return nil, err
 	}
-	hash := sha256.New()
-	if _, err = io.Copy(hash, io.LimitReader(binary, (512<<20)+1)); err != nil || hex.EncodeToString(hash.Sum(nil)) != digest {
-		return nil, errors.New("binary runtime pin changed")
-	}
-	if ctx.Err() != nil {
-		return nil, ctx.Err()
-	}
-	outputHash := sha256.Sum256(result.Stdout)
-	return json.Marshal(map[string]any{"source_commit": req.Commit, "source_tree": req.Tree, "root": req.Root, "selector": req.Selector, "action": req.Action,
-		"binary_sha256": digest, "cleanup_complete": true, "stdout_base64": base64.StdEncoding.EncodeToString(result.Stdout), "stdout_bytes": len(result.Stdout), "stdout_sha256": hex.EncodeToString(outputHash[:])})
+	return commandReceipt(req, result, digest)
 }
 
 func run(control io.Reader, output io.Writer, nativeRun runner) error {
@@ -215,7 +223,7 @@ func run(control io.Reader, output io.Writer, nativeRun runner) error {
 		return err
 	}
 	remaining := time.Until(time.Unix(0, req.Deadline))
-	if remaining <= 0 || remaining > 30*time.Second {
+	if remaining <= 0 || remaining > commandBudget(req.Action) {
 		return errors.New("original deadline refused")
 	}
 	signalCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -227,6 +235,9 @@ func run(control io.Reader, output io.Writer, nativeRun runner) error {
 	if err != nil {
 		return err
 	}
+	if err = ctx.Err(); err != nil {
+		return err
+	}
 	_, err = fmt.Fprintln(output, string(result))
 	return err
 }
@@ -235,4 +246,136 @@ func main() {
 		fmt.Fprintln(os.Stderr, "antigravity command refused")
 		os.Exit(1)
 	}
+}
+
+func publicAction(action string) bool {
+	switch action {
+	case "uap-add", "uap-repeat", "uap-update", "uap-repair", "uap-remove", "uap-saved-add", "uap-cold-install", "uap-cold-repeat", "uap-missing-backend":
+		return true
+	}
+	return false
+}
+
+func commandPin(action string) string {
+	if publicAction(action) {
+		return installerSHA
+	}
+	return nativeSHA
+}
+
+func commandBudget(action string) time.Duration {
+	if publicAction(action) {
+		return 235 * time.Second // Reserve five seconds inside the old240s public command bound.
+	}
+	return 30 * time.Second
+}
+
+func publicSelector(action string) string {
+	if action == "uap-saved-add" || action == "uap-cold-repeat" || action == "uap-cold-install" {
+		return "uap-cline-public-probe"
+	}
+	return "uap-agy-native-smoke"
+}
+
+func publicArgv(req request) []string {
+	operation := strings.TrimPrefix(req.Action, "uap-")
+	args := []string{req.Binary}
+	switch operation {
+	case "add", "repeat", "missing-backend":
+		args = append(args, "add", filepath.Join(req.Root, "source"), "--no-save")
+	case "saved-add":
+		args = append(args, "add", "https://github.com/777genius/universal-agent-plugins/tree/"+sourceCommit+"/repotests/testdata/agentplugins_native_probe")
+	case "cold-install", "cold-repeat":
+		return append(args, "install", "--locked", "--scope", "user", "--yes", "--format", "json")
+	default:
+		args = append(args, operation, publicSelector(req.Action))
+	}
+	return append(args, "--target", "antigravity", "--scope", "user", "--yes", "--format", "json")
+}
+
+func commandEnvironment(req request) []string {
+	home := filepath.Join(req.Root, "home")
+	env := []string{"HOME=" + home, "USERPROFILE=" + home, "APPDATA=" + filepath.Join(home, "AppData", "Roaming"), "LOCALAPPDATA=" + filepath.Join(home, "AppData", "Local"),
+		"XDG_CONFIG_HOME=" + filepath.Join(req.Root, "config"), "XDG_CACHE_HOME=" + filepath.Join(req.Root, "cache"), "TMP=" + filepath.Join(req.Root, "tmp"), "TEMP=" + filepath.Join(req.Root, "tmp"), "TMPDIR=" + filepath.Join(req.Root, "tmp")}
+	for _, key := range []string{"PATH", "SystemRoot", "LANG"} {
+		if value, ok := os.LookupEnv(key); ok {
+			if key == "PATH" && publicAction(req.Action) {
+				value = filepath.Join(req.Root, "bin") + string(os.PathListSeparator) + value
+			}
+			env = append(env, key+"="+value)
+		}
+	}
+	if publicAction(req.Action) {
+		env = append(env, "AGENTPLUGINS_HOME="+filepath.Join(req.Root, "uap-state"), "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL="+os.DevNull, "GIT_TERMINAL_PROMPT=0")
+	}
+	return env
+}
+
+func publicNative(req request) (*os.File, os.FileInfo, string, error) {
+	if !publicAction(req.Action) {
+		return nil, nil, "", nil
+	}
+	name := "agy"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	path := filepath.Join(req.Root, "bin", name)
+	if req.Action == "uap-missing-backend" {
+		if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
+			return nil, nil, "", errors.New("missing native fixture refused")
+		}
+		path = filepath.Join(req.Root, "bin", "retained-native")
+	}
+	file, info, digest, err := fingerprint(path, false)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	if digest != nativeSHA {
+		return nil, nil, "", errors.Join(errors.New("native fixture pin differs"), file.Close())
+	}
+	return file, info, path, nil
+}
+
+func admittedExit(req request, result ports.CommandResult) bool {
+	if publicAction(req.Action) {
+		return result.ExitCode >= 0 && result.ExitCode <= 255
+	}
+	return result.ExitCode == 0 && len(result.Stderr) == 0
+}
+
+func verifyDigest(file *os.File, want string) error {
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
+	hash := sha256.New()
+	if _, err := io.Copy(hash, io.LimitReader(file, (512<<20)+1)); err != nil || hex.EncodeToString(hash.Sum(nil)) != want {
+		return errors.New("binary runtime pin changed")
+	}
+	return nil
+}
+
+func commandReceipt(req request, result ports.CommandResult, digest string) ([]byte, error) {
+	outputHash := sha256.Sum256(result.Stdout)
+	value := map[string]any{"source_commit": req.Commit, "source_tree": req.Tree, "root": req.Root, "selector": req.Selector, "action": req.Action,
+		"binary_sha256": digest, "cleanup_complete": true, "stdout_base64": base64.StdEncoding.EncodeToString(result.Stdout), "stdout_bytes": len(result.Stdout), "stdout_sha256": hex.EncodeToString(outputHash[:])}
+	if publicAction(req.Action) {
+		errorHash := sha256.Sum256(result.Stderr)
+		value["exit"], value["stderr_base64"], value["stderr_bytes"], value["stderr_sha256"] = result.ExitCode, base64.StdEncoding.EncodeToString(result.Stderr), len(result.Stderr), hex.EncodeToString(errorHash[:])
+	}
+	return json.Marshal(value)
+}
+
+func nativeAction(action string) bool {
+	switch action {
+	case "list", "enable", "disable", "version":
+		return true
+	}
+	return false
+}
+
+func admittedResult(ctx context.Context, req request, result ports.CommandResult, err error) error {
+	if err != nil || ctx.Err() != nil || !result.CleanupComplete || result.NoChildStarted || !admittedExit(req, result) || len(result.Stdout) >= 1<<20 || len(result.Stderr) >= 32768 {
+		return errors.New("command capture or cleanup refused")
+	}
+	return nil
 }

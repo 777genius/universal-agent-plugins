@@ -135,11 +135,12 @@ jobs:
           $commit = (git rev-parse HEAD).Trim()
           $tree = (git rev-parse 'HEAD^{tree}').Trim()
           $nativeSHA = (Get-FileHash -LiteralPath $env:AGY_BIN -Algorithm SHA256).Hash.ToLowerInvariant()
+          $installerSHA = (Get-FileHash -LiteralPath $env:UAP_BIN -Algorithm SHA256).Hash.ToLowerInvariant()
           $suffix = if ($IsWindows) { '.exe' } else { '' }
           $helper = Join-Path $env:RUNNER_TEMP ('agy-user-admission' + $suffix)
           go -C install/integrationctl test ./research/antigravityinventory -count=1
           if ($LASTEXITCODE -ne 0) { throw 'Antigravity bridge contracts failed' }
-          go -C install/integrationctl build -ldflags "-X main.sourceCommit=$commit -X main.sourceTree=$tree -X main.nativeSHA=$nativeSHA" -o $helper ./research/antigravityinventory
+          go -C install/integrationctl build -ldflags "-X main.sourceCommit=$commit -X main.sourceTree=$tree -X main.nativeSHA=$nativeSHA -X main.installerSHA=$installerSHA" -o $helper ./research/antigravityinventory
           if ($LASTEXITCODE -ne 0) { throw 'Antigravity bridge build failed' }
           $python = if ($IsWindows) { 'python' } else { 'python3' }
           & $python scripts/e2e/antigravity-native-cross.py --contracts
@@ -261,11 +262,12 @@ jobs:
           $commit = (git rev-parse HEAD).Trim()
           $tree = (git rev-parse 'HEAD^{tree}').Trim()
           $nativeSHA = (Get-FileHash -LiteralPath $env:AGY_BIN -Algorithm SHA256).Hash.ToLowerInvariant()
+          $installerSHA = (Get-FileHash -LiteralPath $env:UAP_BIN -Algorithm SHA256).Hash.ToLowerInvariant()
           $suffix = if ($IsWindows) { '.exe' } else { '' }
           $helper = Join-Path $env:RUNNER_TEMP ('agy-user-admission' + $suffix)
           go -C install/integrationctl test ./research/antigravityinventory -count=1
           if ($LASTEXITCODE -ne 0) { throw 'Antigravity bridge contracts failed' }
-          go -C install/integrationctl build -ldflags "-X main.sourceCommit=$commit -X main.sourceTree=$tree -X main.nativeSHA=$nativeSHA" -o $helper ./research/antigravityinventory
+          go -C install/integrationctl build -ldflags "-X main.sourceCommit=$commit -X main.sourceTree=$tree -X main.nativeSHA=$nativeSHA -X main.installerSHA=$installerSHA" -o $helper ./research/antigravityinventory
           if ($LASTEXITCODE -ne 0) { throw 'Antigravity bridge build failed' }
           $python = if ($IsWindows) { 'python' } else { 'python3' }
           & $python scripts/e2e/antigravity-native-cross.py --contracts
@@ -384,11 +386,12 @@ jobs:
           $commit = (git rev-parse HEAD).Trim()
           $tree = (git rev-parse 'HEAD^{tree}').Trim()
           $nativeSHA = (Get-FileHash -LiteralPath $env:AGY_BIN -Algorithm SHA256).Hash.ToLowerInvariant()
+          $installerSHA = (Get-FileHash -LiteralPath $env:UAP_BIN -Algorithm SHA256).Hash.ToLowerInvariant()
           $suffix = if ($IsWindows) { '.exe' } else { '' }
           $helper = Join-Path $env:RUNNER_TEMP ('agy-user-admission' + $suffix)
           go -C install/integrationctl test ./research/antigravityinventory -count=1
           if ($LASTEXITCODE -ne 0) { throw 'Antigravity bridge contracts failed' }
-          go -C install/integrationctl build -ldflags "-X main.sourceCommit=$commit -X main.sourceTree=$tree -X main.nativeSHA=$nativeSHA" -o $helper ./research/antigravityinventory
+          go -C install/integrationctl build -ldflags "-X main.sourceCommit=$commit -X main.sourceTree=$tree -X main.nativeSHA=$nativeSHA -X main.installerSHA=$installerSHA" -o $helper ./research/antigravityinventory
           if ($LASTEXITCODE -ne 0) { throw 'Antigravity bridge build failed' }
           $python = if ($IsWindows) { 'python' } else { 'python3' }
           & $python scripts/e2e/antigravity-native-cross.py --contracts
