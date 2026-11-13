@@ -176,3 +176,51 @@ func TestProjectClineManagedStdioRemoteOnlyDoesNotReadProjection(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestReadClineProjectionRejectsAmbiguousOrLinkedJSON(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, ClineProjectionFile)
+	invalid := []string{
+		`{"servers":{"owned":{"type":"stdio"},"owned":{"type":"sse"}}}`,
+		`{"servers":{"owned":{"type":"stdio","type":"sse"}}}`,
+		`{"servers":{"owned":{"type":"stdio","TYPE":"sse"}}}`,
+		`{"SERVERS":{"owned":{"type":"stdio"}},"servers":{}}`,
+		`{"servers":{}} {"servers":{}}`,
+	}
+	for _, body := range invalid {
+		if err := os.WriteFile(path, []byte(body), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := ReadClineProjection(root); err == nil {
+			t.Fatalf("ambiguous Cline projection accepted: %s", body)
+		}
+	}
+	if err := os.WriteFile(path, []byte(`{"servers":{}}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ReadClineProjection(root); err != nil {
+		t.Fatalf("unambiguous Cline projection refused: %v", err)
+	}
+	t.Run("symlink", func(t *testing.T) {
+		foreign := filepath.Join(t.TempDir(), "foreign.json")
+		if err := os.WriteFile(foreign, []byte(`{"servers":{}}`), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Remove(path); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(foreign, path); err != nil {
+			if os.IsPermission(err) {
+				t.Skipf("symlinks unavailable on this runner: %v", err)
+			}
+			t.Fatal(err)
+		}
+		if _, err := ReadClineProjection(root); err == nil {
+			t.Fatal("linked Cline projection was admitted")
+		}
+		body, err := os.ReadFile(foreign)
+		if err != nil || string(body) != `{"servers":{}}` {
+			t.Fatal("foreign projection was changed", err)
+		}
+	})
+}

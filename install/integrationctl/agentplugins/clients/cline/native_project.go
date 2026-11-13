@@ -3,7 +3,6 @@ package cline
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -124,13 +123,24 @@ func clineMCPOwnership(stagingRoot, root string, component domain.ComponentDecis
 }
 
 func ReadClineProjection(root string) (ClineProjection, error) {
-	body, err := os.ReadFile(filepath.Join(root, ClineProjectionFile))
+	file, err := nativeconfig.New().ReadExactFile(filepath.Join(root, ClineProjectionFile))
 	if err != nil {
 		return ClineProjection{}, fmt.Errorf("read projected Cline MCP configuration: %w", err)
 	}
-	var projection ClineProjection
-	if err := json.Unmarshal(body, &projection); err != nil || projection.Servers == nil {
+	if !file.Exists || len(file.Body) > 1<<20 {
+		return ClineProjection{}, fmt.Errorf("projected Cline MCP configuration is missing or oversized")
+	}
+	// Ownership must not depend on JSON's last-write-wins behavior for
+	// duplicate (including case-ambiguous) server or transport keys.
+	if _, err := shared.DecodeStrictJSONObject(file.Body); err != nil {
 		return ClineProjection{}, fmt.Errorf("decode projected Cline MCP configuration: %w", err)
+	}
+	var projection ClineProjection
+	if err := json.Unmarshal(file.Body, &projection); err != nil {
+		return ClineProjection{}, fmt.Errorf("decode projected Cline MCP configuration: %w", err)
+	}
+	if projection.Servers == nil {
+		return ClineProjection{}, fmt.Errorf("projected Cline MCP configuration has no servers object")
 	}
 	for name, server := range projection.Servers {
 		server.StdioValuesResolved = server.Type == "stdio"
