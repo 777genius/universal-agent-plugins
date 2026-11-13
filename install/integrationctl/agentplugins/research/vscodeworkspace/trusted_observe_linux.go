@@ -165,7 +165,13 @@ func (c *controller) trustedObserve(stage, scope, trust, operation string, insta
 	}
 	nativeLog := unavailableNativeLog()
 	if installed && runErr != nil {
-		nativeLog = logBaseline.collect(child.TreeReaped && c.work.Err() == nil, deadline, f.Packages[scope].Name)
+		var code nativeLogCheck
+		nativeLog, code = logBaseline.collectChecked(child.TreeReaped && c.work.Err() == nil, deadline, f.Packages[scope].Name)
+		if nativeLog.Status == "unavailable" {
+			if frame := nativeLogRefusalFrame(code); len(frame) != 0 {
+				_, _ = os.Stderr.Write(frame)
+			}
+		}
 	}
 	c.observations = append(c.observations, map[string]any{"native_log": nativeLog, "nonce": f.Nonce, "stage": stage, "project": scope, "complete": runErr == nil, "observation": observed, "error": clipped(runErr)})
 	return runErr

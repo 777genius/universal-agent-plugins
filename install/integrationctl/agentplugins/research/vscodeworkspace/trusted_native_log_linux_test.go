@@ -3,9 +3,12 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -48,8 +51,8 @@ func TestNativeLogSettledAuthority(t *testing.T) {
 	if baseline.collect(false, deadline, "owned").Status != "unavailable" || baseline.collect(true, time.Now(), "owned").Status != "unavailable" {
 		t.Fatal("unsettled/late read admitted")
 	}
-	if facts := baseline.collect(true, deadline, "owned"); facts.Status != "observed" || !facts.TransportStart {
-		t.Fatalf("settled projection %+v", facts)
+	if facts, reason := baseline.collectChecked(true, deadline, "owned"); facts.Status != "observed" || !facts.TransportStart {
+		t.Fatalf("settled projection refused at own predicate %s", reason)
 	}
 	if err := os.Link(leaf, filepath.Join(profile, "alias")); err != nil {
 		t.Fatal(err)
@@ -128,5 +131,74 @@ func TestNativeLogBodyAuthorityPrecedesRead(t *testing.T) {
 	}
 	if body, err := readNativeLogBody(strings.NewReader("safe"), 4, func() bool { return true }); err != nil || string(body) != "safe" {
 		t.Fatal("stable bounded body refused")
+	}
+}
+
+type nativeLogStatView struct {
+	os.FileInfo
+	value syscall.Stat_t
+}
+
+func (v nativeLogStatView) Sys() any { return &v.value }
+func TestNativeLogPrivatePredicateNames(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "private-cookie-path")
+	if err := os.WriteFile(path, []byte("secret"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	original, err := os.Lstat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{"links", "ctime", "uid", "gid"} {
+		value := *original.Sys().(*syscall.Stat_t)
+		switch field {
+		case "links":
+			value.Nlink++
+		case "ctime":
+			value.Ctim.Sec++
+		case "uid":
+			value.Uid++
+		case "gid":
+			value.Gid++
+		}
+		if code := nativeLogDifference(original, nativeLogStatView{original, value}); code != nativeLogCheck(field) {
+			t.Fatalf("wrong fixed predicate %s", code)
+		}
+	}
+	if nativeLogCode(fmt.Errorf("private-cookie-path secret")) != "io" {
+		t.Fatal("arbitrary error escaped")
+	}
+	baseline, err := beginNativeLog(filepath.Dir(path), os.Getuid())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer baseline.close()
+	facts, code := baseline.collectChecked(false, time.Now().Add(time.Second), "owned")
+	if code != "initial" {
+		t.Fatal("unsettled fixed predicate differs")
+	}
+	body, err := json.Marshal(facts)
+	if err != nil || strings.Contains(string(body), "initial") || strings.Contains(string(body), "predicate") {
+		t.Fatal("private reason entered public facts")
+	}
+	if baseline.collect(false, time.Now().Add(time.Second), "owned") != facts {
+		t.Fatal("runtime refusal semantics changed")
+	}
+}
+
+func TestNativeLogRefusalFrameIsClosed(t *testing.T) {
+	const prefix = "UAP_VSCODE_NATIVE_LOG_REFUSAL_V1 "
+	if frame := nativeLogRefusalFrame("logs-held-ctime"); string(frame) != prefix+"logs-held-ctime\n" {
+		t.Fatal("fixed refusal frame differs")
+	}
+	for _, field := range []string{"stat", "stat-type", "identity", "mode", "size", "mtime", "links", "ctime", "uid", "gid", "identity-type", "none"} {
+		if frame := nativeLogRefusalFrame(nativeLogCheck("leaf-held-" + field)); string(frame) != prefix+"leaf-held-"+field+"\n" {
+			t.Fatal("fixed metadata predicate refused")
+		}
+	}
+	for _, code := range []nativeLogCheck{"none", "PRIVATE_COOKIE", "/private/profile", "logs-held-ctime\nPRIVATE", "logs-held-ctime:PRIVATE", nativeLogCheck(strings.Repeat("x", 97))} {
+		if frame := nativeLogRefusalFrame(code); len(frame) != 0 {
+			t.Fatal("unadmitted text entered stderr frame")
+		}
 	}
 }

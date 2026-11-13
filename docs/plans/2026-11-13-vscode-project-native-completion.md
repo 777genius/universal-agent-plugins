@@ -620,3 +620,24 @@ mode/kind and equality with the immutable driver-failure nonce. These values
 are checked internally and never exported as log facts. Historical negative
 archives without native_log remain readable. Counter sum is at most 255 and a
 nonempty last state requires a corresponding observed count.
+
+The first b586 hosted Core and Required runs both refused the inert positive
+TestNativeLogSettledAuthority fixture; all four hosted lint jobs passed. The
+same exact fixture passes locally, including the full controller package's
+native-log test. No runtime predicate relaxation is justified. A private
+checked-return seam records only fixed layer/metadata-field names for the
+inert test failure message, including identity/mode/size/mtime/ctime/link/owner
+joins. Runtime collect discards this code and retains the same unavailable
+JSON schema, original deadlines and every pre/post-read refusal. Actual cause
+remains unknown until the next genuine hosted test supplies that fixed code.
+
+The same finite reader predicate may also be emitted once on the existing
+bounded controller stderr stream for a failed installed-stage observation.
+The fixed UAP_VSCODE_NATIVE_LOG_REFUSAL_V1 prefix and exhaustive finite
+matcher admit no paths, labels, numbers, vendor errors or log bytes. Existing
+64 KiB stderr capture, hashes, archive membership and stdout/HANDOFF remain
+unchanged; native_log still reports unavailable and original failure remains.
+These added stderr lines and their pure privacy contract were authored during
+executor unavailability and have not been locally executed. The original
+three-file diagnostic source was recovered only after exact frozen SHA256
+matches; the interrupted full core result remains unknown.

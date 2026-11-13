@@ -32,6 +32,68 @@ type nativeLogFacts struct {
 	Error          int    `json:"error"`
 }
 
+// Private predicate names diagnose inert guards, never public artifact fields.
+type nativeLogCheck string
+type nativeLogCheckError struct{ code nativeLogCheck }
+
+func (e nativeLogCheckError) Error() string      { return "native log authority refused" }
+func nativeLogFailure(code nativeLogCheck) error { return nativeLogCheckError{code} }
+func nativeLogCode(err error) nativeLogCheck {
+	var refusal nativeLogCheckError
+	if errors.As(err, &refusal) {
+		return refusal.code
+	}
+	switch err.Error() {
+	case "native log directory bound":
+		return "member-bound"
+	case "native log directory name":
+		return "name"
+	case "native log directory ambiguous":
+		return "ambiguous"
+	case "native log directory missing":
+		return "missing"
+	default:
+		return "io"
+	}
+}
+func nativeLogDifference(a, b os.FileInfo) nativeLogCheck {
+	if a == nil || b == nil {
+		return "stat"
+	}
+	left, ok := a.Sys().(*syscall.Stat_t)
+	right, rok := b.Sys().(*syscall.Stat_t)
+	if !ok || !rok {
+		return "stat-type"
+	}
+	if left.Dev != right.Dev || left.Ino != right.Ino {
+		return "identity"
+	}
+	if a.Mode() != b.Mode() {
+		return "mode"
+	}
+	if a.Size() != b.Size() {
+		return "size"
+	}
+	if !a.ModTime().Equal(b.ModTime()) {
+		return "mtime"
+	}
+	if left.Nlink != right.Nlink {
+		return "links"
+	}
+	if left.Ctim != right.Ctim {
+		return "ctime"
+	}
+	if left.Uid != right.Uid {
+		return "uid"
+	}
+	if left.Gid != right.Gid {
+		return "gid"
+	}
+	if !os.SameFile(a, b) {
+		return "identity-type"
+	}
+	return "none"
+}
 func unavailableNativeLog() nativeLogFacts {
 	return nativeLogFacts{Status: "unavailable", Last: "none"}
 }
@@ -159,7 +221,18 @@ func holdNativeLogDirectory(parent *os.Root, name string, owner, group uint32, d
 	}
 	st, ok := info.Sys().(*syscall.Stat_t)
 	if !ok || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || st.Uid != owner || st.Gid != group || st.Dev != device {
-		return d, fmt.Errorf("native log directory authority")
+		switch {
+		case !ok:
+			return d, nativeLogFailure("stat-type")
+		case !info.IsDir() || info.Mode()&os.ModeSymlink != 0:
+			return d, nativeLogFailure("type")
+		case st.Uid != owner:
+			return d, nativeLogFailure("uid")
+		case st.Gid != group:
+			return d, nativeLogFailure("gid")
+		default:
+			return d, nativeLogFailure("device")
+		}
 	}
 	d.original = info
 	d.root, err = parent.OpenRoot(name)
@@ -178,7 +251,13 @@ func (d nativeLogDirectory) verify() error {
 	}
 	held, err := d.root.Stat(".")
 	if err != nil || !sameFile(d.original, named) || !sameFile(d.original, held) {
-		return fmt.Errorf("native log ancestor changed")
+		if err != nil {
+			return nativeLogFailure("held-stat")
+		}
+		if code := nativeLogDifference(d.original, named); code != "none" {
+			return nativeLogFailure("named-" + code)
+		}
+		return nativeLogFailure("held-" + nativeLogDifference(d.original, held))
 	}
 	return nil
 }
@@ -209,79 +288,124 @@ func selectNativeLogName(root *os.Root, pattern *regexp.Regexp, prior map[string
 	return selected, nil
 }
 func (b *nativeLogBaseline) collect(settled bool, deadline time.Time, label string) nativeLogFacts {
+	facts, _ := b.collectChecked(settled, deadline, label)
+	return facts
+}
+func (b *nativeLogBaseline) collectChecked(settled bool, deadline time.Time, label string) (nativeLogFacts, nativeLogCheck) {
 	unavailable := unavailableNativeLog()
 	if b == nil || !settled || !time.Now().Before(deadline) || !nativeLogLabel.MatchString(label) {
-		return unavailable
+		return unavailable, "initial"
 	}
 	current, err := anchoredInfo(b.profile)
 	st := b.original.Sys().(*syscall.Stat_t)
 	if err != nil || !os.SameFile(current, b.original) || current.Mode() != b.original.Mode() {
-		return unavailable
+		return unavailable, "profile"
 	}
 	now, ok := current.Sys().(*syscall.Stat_t)
 	if !ok || now.Uid != st.Uid || now.Gid != st.Gid {
-		return unavailable
+		return unavailable, "profile-owner"
 	}
 	logs, err := holdNativeLogDirectory(b.root, "logs", st.Uid, st.Gid, st.Dev)
 	if err != nil {
-		return unavailable
+		return unavailable, "logs-" + nativeLogCode(err)
 	}
 	defer func() { _ = logs.root.Close() }()
 	if b.logsOriginal != nil && (!os.SameFile(b.logsOriginal, logs.original) || b.logsOriginal.Mode() != logs.original.Mode()) {
-		return unavailable
+		return unavailable, "logs-original"
 	}
 	session, err := selectNativeLogName(logs.root, nativeLogSession, b.sessions, true)
 	if err != nil {
-		return unavailable
+		return unavailable, "session-name-" + nativeLogCode(err)
 	}
 	run, err := holdNativeLogDirectory(logs.root, session, st.Uid, st.Gid, st.Dev)
 	if err != nil {
-		return unavailable
+		return unavailable, "session-" + nativeLogCode(err)
 	}
 	defer func() { _ = run.root.Close() }()
 	window, err := selectNativeLogName(run.root, nativeLogWindow, nil, false)
 	if err != nil {
-		return unavailable
+		return unavailable, "window-name-" + nativeLogCode(err)
 	}
 	view, err := holdNativeLogDirectory(run.root, window, st.Uid, st.Gid, st.Dev)
 	if err != nil {
-		return unavailable
+		return unavailable, "window-" + nativeLogCode(err)
 	}
 	defer func() { _ = view.root.Close() }()
-	return b.readNativeLog(deadline, label, current, logs, run, view)
+	return b.readNativeLogChecked(deadline, label, current, logs, run, view)
 }
-func (b *nativeLogBaseline) readNativeLog(deadline time.Time, label string, current os.FileInfo, logs, run, view nativeLogDirectory) nativeLogFacts {
+func (b *nativeLogBaseline) readNativeLogChecked(deadline time.Time, label string, current os.FileInfo, logs, run, view nativeLogDirectory) (nativeLogFacts, nativeLogCheck) {
 	unavailable := unavailableNativeLog()
+	reason := nativeLogCheck("leaf-stat-type-link-size")
 	st := b.original.Sys().(*syscall.Stat_t)
 	name := "mcpServer.mcp.config.ws0." + label + ".log"
 	info, err := view.root.Lstat(name)
 	if err != nil || !regular(info, 64<<10) {
-		return unavailable
+		return unavailable, reason
 	}
+	reason = "leaf-owner-device"
 	leaf, ok := info.Sys().(*syscall.Stat_t)
 	if !ok || leaf.Uid != st.Uid || leaf.Gid != st.Gid || leaf.Dev != st.Dev {
-		return unavailable
+		return unavailable, reason
 	}
+	reason = "leaf-open"
 	f, err := view.root.OpenFile(name, os.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0)
 	if err != nil {
-		return unavailable
+		return unavailable, reason
 	}
 	defer func() { _ = f.Close() }()
 	verify := func() bool {
-		named, e := view.root.Lstat(name)
-		held, he := f.Stat()
-		profile, pe := anchoredInfo(b.profile)
-		return e == nil && he == nil && pe == nil && sameFile(profile, current) && sameFile(info, named) && sameFile(info, held) && logs.verify() == nil && run.verify() == nil && view.verify() == nil && time.Now().Before(deadline)
+		reason = nativeLogFileJoins(b.profile, current, info, view, name, f)
+		if reason != "none" {
+			return false
+		}
+		for _, join := range []struct {
+			prefix    nativeLogCheck
+			directory nativeLogDirectory
+		}{{"logs-", logs}, {"session-", run}, {"window-", view}} {
+			if err := join.directory.verify(); err != nil {
+				reason = join.prefix + nativeLogCode(err)
+				return false
+			}
+		}
+		if !time.Now().Before(deadline) {
+			reason = "deadline"
+			return false
+		}
+		return true
 	}
+	reason = "body"
 	body, err := readNativeLogBody(f, info.Size(), verify)
 	if err != nil {
-		return unavailable
+		if reason == "body" || reason == "none" {
+			reason = "body-" + nativeLogCode(err)
+		}
+		return unavailable, reason
 	}
+	reason = "parser-or-deadline"
 	out, err := parseNativeLog(body, label)
 	if err != nil || !time.Now().Before(deadline) {
-		return unavailable
+		return unavailable, reason
 	}
-	return out
+	return out, "none"
+}
+
+func nativeLogFileJoins(profilePath string, current, original os.FileInfo, view nativeLogDirectory, name string, file *os.File) nativeLogCheck {
+	named, e := view.root.Lstat(name)
+	held, he := file.Stat()
+	profile, pe := anchoredInfo(profilePath)
+	if e != nil || he != nil || pe != nil {
+		return "verify-stat"
+	}
+	for _, join := range []struct {
+		prefix nativeLogCheck
+		a, b   os.FileInfo
+	}{{"profile-", current, profile}, {"leaf-named-", original, named}, {"leaf-held-", original, held}} {
+		if !sameFile(join.a, join.b) {
+			return join.prefix + nativeLogDifference(join.a, join.b)
+		}
+	}
+
+	return "none"
 }
 
 // Only fixed strings are exported; no source log bytes, labels or paths.
@@ -293,11 +417,26 @@ func (b *nativeLogBaseline) close() {
 
 func readNativeLogBody(reader io.Reader, expected int64, verify func() bool) ([]byte, error) {
 	if !verify() {
-		return nil, fmt.Errorf("native log pre-read authority")
+		return nil, nativeLogFailure("pre-read")
 	}
 	body, err := io.ReadAll(io.LimitReader(reader, (64<<10)+1))
-	if err != nil || int64(len(body)) != expected || len(body) > 64<<10 || !verify() {
-		return nil, fmt.Errorf("native log post-read authority")
+	if err != nil {
+		return nil, nativeLogFailure("read")
+	}
+	if int64(len(body)) != expected || len(body) > 64<<10 {
+		return nil, nativeLogFailure("size")
+	}
+	if !verify() {
+		return nil, nativeLogFailure("post-read")
 	}
 	return body, nil
+}
+
+var nativeLogRefusalCode = regexp.MustCompile(`^(initial|profile|profile-owner|logs-original|leaf-stat-type-link-size|leaf-owner-device|leaf-open|verify-stat|deadline|parser-or-deadline|body-(pre-read|read|size|post-read|io)|(session|window)-name-(member-bound|name|ambiguous|missing|io)|(profile|leaf-named|leaf-held)-(stat|stat-type|identity|mode|size|mtime|links|ctime|uid|gid|identity-type|none)|(logs|session|window)-(io|stat-type|type|uid|gid|device|held-stat|(named|held)-(stat|stat-type|identity|mode|size|mtime|links|ctime|uid|gid|identity-type|none)))$`)
+
+func nativeLogRefusalFrame(code nativeLogCheck) []byte {
+	if len(code) > 96 || !nativeLogRefusalCode.MatchString(string(code)) {
+		return nil
+	}
+	return []byte("UAP_VSCODE_NATIVE_LOG_REFUSAL_V1 " + code + "\n")
 }
