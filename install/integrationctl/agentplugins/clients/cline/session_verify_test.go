@@ -64,6 +64,17 @@ func TestSessionNativeInventoryExitAndCapability(t *testing.T) {
 	plan := clients.SessionPlan{Executable: "/native/cline", Directory: "/project", Servers: []string{"owned"},
 		Environment: map[string]string{"CLINE_MCP_SETTINGS_PATH": "/project/mcp.json", "CLINE_NO_AUTO_UPDATE": "1"}}
 	good := []byte(`[{"name":"owned","path":"/project/mcp.json","transportType":"stdio","disabled":false}]`)
+	// No real Cline executable is installed or launched in this regression.
+	// Revoked consent must prevent even the runner entry point from being called.
+	preCanceled, cancelBefore := context.WithCancel(context.Background())
+	cancelBefore()
+	preRunner := &sessionObservationRunner{result: legacyports.CommandResult{Stdout: good, CleanupComplete: true}}
+	if err := New().VerifySession(preCanceled, clients.Env{Runner: preRunner}, plan); !errors.Is(err, context.Canceled) {
+		t.Fatalf("pre-canceled observation returned %v, want context.Canceled", err)
+	}
+	if preRunner.command.Argv != nil {
+		t.Fatalf("pre-canceled observation reached native runner: %+v", preRunner.command)
+	}
 	for _, failure := range []struct {
 		result legacyports.CommandResult
 		err    error

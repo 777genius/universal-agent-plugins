@@ -18,6 +18,11 @@ import (
 // This native command lists configuration only; it starts no MCP/model and
 // cannot turn the persisted Prepared receipt into Active.
 func (*Adapter) VerifySession(ctx context.Context, env clients.Env, plan clients.SessionPlan) error {
+	// A context canceled before admission must never reach the native runner.
+	// Some runners may observe cancellation only after spawning a child.
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("cline selected-source observation canceled before start: %w", err)
+	}
 	if env.Runner == nil {
 		return fmt.Errorf("cline native configuration observer unavailable")
 	}
