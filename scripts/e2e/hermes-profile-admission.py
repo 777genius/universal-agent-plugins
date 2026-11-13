@@ -136,6 +136,25 @@ def same_inventory_directory(before, held):
     return artifacts.same_opened(before, held)
 
 
+def check_inventory_directory(before, held, label):
+    """Fail closed with bounded Windows field *names*, never paths or values.
+
+    Windows path lstat and held directory fstat can synthesize different
+    metadata for the same file ID. Do not relax the identity gate on an
+    unobserved difference: report only which existing comparison failed.
+    """
+    if same_inventory_directory(before, held):
+        return
+    detail = ""
+    if artifacts.WINDOWS:
+        left, right = artifacts.windows_identity(before), artifacts.windows_identity(held)
+        fields = ((0, "device"), (1, "inode"), (3, "links"), (4, "bytes"),
+                  (5, "mtime"), (6, "birth"), (7, "attributes"))
+        detail = " (Windows metadata: " + ",".join(
+            name for index, name in fields if left[index] != right[index]) + ")"
+    raise RuntimeError(label + detail)
+
+
 def verify_inventory_directory(path, before, descriptor, held, parent=None):
     linked = path.lstat() if parent is None else os.stat(path.name, dir_fd=parent, follow_symlinks=False)
     require((parent is not None or path.resolve() == path) and stable_file(linked) == stable_file(before)
@@ -176,7 +195,7 @@ def inventory(root, sentinels=()):
             descriptor = open_inventory_directory(path, parent)
             try:
                 held = os.fstat(descriptor)
-                require(same_inventory_directory(info, held), "inventory directory changed at open")
+                check_inventory_directory(info, held, "inventory directory changed at open")
                 verify_inventory_directory(path, info, descriptor, held, parent)
                 with os.scandir(path if artifacts.WINDOWS else descriptor) as entries:
                     for entry in entries:
@@ -237,7 +256,7 @@ def metadata_census(root, expected, deadline):
             descriptor = open_inventory_directory(path, parent)
             try:
                 held = os.fstat(descriptor)
-                require(same_inventory_directory(info, held), "census directory changed at open")
+                check_inventory_directory(info, held, "census directory changed at open")
                 verify_inventory_directory(path, info, descriptor, held, parent)
                 with os.scandir(path if artifacts.WINDOWS else descriptor) as entries:
                     for entry in entries:

@@ -306,6 +306,41 @@ class ProfileAdmissionContracts(unittest.TestCase):
             for change in ({"st_file_attributes": 16 | 0x400}, {"st_reparse_tag": 1}, {"st_birthtime_ns": None}):
                 with self.assertRaises(ValueError): CASE["same_inventory_directory"](original, SimpleNamespace(**dict(base, **change)))
 
+    def test_windows_directory_mismatch_reports_only_field_names(self):
+        import stat
+        base = dict(st_dev=4, st_ino=5, st_mode=stat.S_IFDIR | 0o755,
+                    st_nlink=1, st_size=0, st_mtime_ns=100, st_birthtime_ns=90,
+                    st_file_attributes=16, st_reparse_tag=0)
+        original = SimpleNamespace(**base)
+        with mock.patch.object(CASE["artifacts"], "WINDOWS", True):
+            CASE["check_inventory_directory"](
+                original, SimpleNamespace(**dict(base, st_mode=stat.S_IFDIR | 0o700)),
+                "inventory directory changed at open")
+            for field, value, label in (
+                ("st_dev", 6, "device"), ("st_ino", 6, "inode"),
+                ("st_nlink", 2, "links"), ("st_size", 123456789, "bytes"),
+                ("st_mtime_ns", 101, "mtime"), ("st_birthtime_ns", 91, "birth"),
+                ("st_file_attributes", 32, "attributes"),
+            ):
+                with self.subTest(field=field), self.assertRaises(RuntimeError) as caught:
+                    CASE["check_inventory_directory"](
+                        original, SimpleNamespace(**dict(base, **{field: value})),
+                        "inventory directory changed at open")
+                message = str(caught.exception)
+                self.assertIn("Windows metadata: " + label, message)
+                self.assertNotIn("123456789", message)
+                self.assertNotIn("\\", message)
+            for change in ({"st_file_attributes": 16 | 0x400},
+                           {"st_reparse_tag": 1}, {"st_birthtime_ns": None}):
+                with self.assertRaises(ValueError):
+                    CASE["check_inventory_directory"](
+                        original, SimpleNamespace(**dict(base, **change)),
+                        "inventory directory changed at open")
+            with self.assertRaises(RuntimeError):
+                CASE["check_inventory_directory"](
+                    original, SimpleNamespace(**dict(base, st_mode=stat.S_IFREG | 0o755)),
+                    "inventory directory changed at open")
+
     def test_inventory_does_not_eagerly_enumerate_past_membership_bound(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
