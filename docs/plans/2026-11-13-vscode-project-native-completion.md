@@ -726,3 +726,34 @@ skips encryption-availability lookup and uses InMemoryStorageService. The final
 controller package passes its complete lint gate. The earlier full-core failure
 is retained; the one-line publisher-vector addition is checked by the new Go
 wire test, exact TypeScript validator, strict compiler and40 pinned-Node tests.
+
+### Final publication audit and public modified-entry refusal
+
+The final source audit closes the earlier unsafe-upload handoff concern:
+publication exceptions clear archive bindings, original held directory and ZIP
+identities gate the receipt, and the workflow stages both private ZIP copies
+before publishing any upload path. Its upload steps require successful parent
+collection. All23 focused real-file publication/handoff contracts pass, including
+late ZIP exceptions, unknown cleanup, output/ZIP replacement and second-copy
+failure. The trusted workflow already has a path-scoped main-push trigger and
+binds checkout/EXPECTED_COMMIT to the push SHA for postmerge execution.
+
+Root accepted one additional public CLI contract, keeping the ten native GUI
+stages unchanged. The existing real Cobra/installer/SDK/native-kernel composition
+adds A/B from a local TLS ZIP, externally changes exactly A's owned native MCP
+entry, then requires public repair, changed-source update and removal to refuse
+with complete A/B/User tree preservation and zero native-client dispatches.
+The focused test passes locally. The initial Git variant stopped at this host's
+existing process-supervision refusal; the passing ZIP route uses the existing
+real TLS acquisition fixture without a substituted acquisition or state engine.
+This is public file/receipt evidence. The native restart stage remains a fresh
+process restart, and does not claim an in-window Reload command or persisted
+authentication/keyring qualification.
+
+Root R2 accepted the two-file source candidate: the exact owned-object refusal
+uses the actual public composition and preserves A/B/User plus zero native
+dispatches. After the existing shared lint holder finished, the ordinary full
+make lint gate passed all eight modules and the unchanged 138-rule baseline.
+The already-started full core gate finished with the same 92 failing test names
+and ten failing packages as the earlier environment-bound run; both failure
+sets are equal. That local gate remains failed, with hosted results required.
