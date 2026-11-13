@@ -673,8 +673,8 @@ Live version output must equal the captured bytes `1.5.3\n`; decorative
 DetectedClient.Version never replaces the held-binary live check.
 
 Native readback remains in Activate: ordinary Prepared repeat, a changed-package
-update and absent-bundle repair still reach it. Intact repair and a previously
-fully converged historical Active binding retain their earlier file-only path;
+update and absent-bundle repair still reach it. Direct Service.Repair of an intact
+bundle and a previously fully converged historical Active binding retain their earlier file-only path;
 they are not newly qualified native observations. Project and targeted info
 receive no new native route. No enablement, IDE loading, authentication or model
 readiness is inferred, and no generic Prepared-to-Active acceptance is added.
@@ -684,8 +684,32 @@ real-provider dry-run and collision refusal before native execution, and exact
 version framing. The existing repeat/update/absent-repair cases remain required.
 These inert cases do not qualify the ordinary process environment, descendant
 cleanup or arbitrary profile effects. Genuine three-OS public-path acceptance
-and the remaining intact-repair/historical-Active observation design are still
+and the remaining direct-repair/historical-Active observation design are still
 separate work.
+
+## Confirmed public lifecycle resumption
+
+The scoped Prepared capability now sends a fully converged historical binding
+through the existing resume path when a dynamic verifier is available and the
+static native-directory trait is false. Resume verifies the owned package, returns
+RequiresConfirmation without starting a child during preview, and invokes the
+adapter only after confirmation. It retains existing receipts and authentication;
+new native observation still reports Prepared. Static ownership/coherence and
+the generic read-only verifier stay unchanged. Pi, Grok and frozen VSCode keep
+their existing trait/classifier decisions.
+
+For an already complete lifecycle with a pending scoped Prepared plan, the public
+TTY add route reaches its existing confirmation/apply stage rather than returning
+through the completed-attestation shortcut. Existing consent rules and manual
+activation prompts are preserved. Public repair already uses a dry-run group
+preview followed by confirmed group staging and activation, including intact
+packages; that route needs no production change. Direct Service.Repair retains
+its previous file-only boundary.
+
+The public Cobra contracts cover JSON/--yes/TTY historical repeat, inert dry-run
+and unconfirmed preview, receipt/authentication continuity, and actual grouped
+intact repair. The runner returns bounded native-shaped fixture data and starts
+no vendor process; genuine three-OS public native acceptance remains pending.
 
 
 ## Supervised public User consumption acceptance amendment

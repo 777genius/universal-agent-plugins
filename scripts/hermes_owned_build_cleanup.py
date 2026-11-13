@@ -86,7 +86,8 @@ def census(owned, deadline):
             with os.scandir(path if os.name == "nt" else fd) as entries:
                 for entry in entries:
                     visit(label, path / entry.name, None if os.name == "nt" else fd, depth + 1)
-            API["verify_inventory_directory"](path, info, fd, held, parent)
+            API["verify_inventory_directory"](path, info, fd, held, parent,
+                                              diagnostic=(label, relative))
         finally:
             os.close(fd)
 

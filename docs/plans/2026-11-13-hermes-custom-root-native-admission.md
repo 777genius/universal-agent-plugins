@@ -767,3 +767,67 @@ and reports runtime inventory growth of76 entries/1407659 bytes. That aggregate
 does not identify the changed runtime members. The later observer-only `-B`
 correction remains unqualified by this old run; immutable payload guards and
 all native/product/authentication/model qualification boundaries stay intact.
+
+## Separate final User control and exact Project config observations
+
+Root approved a bounded correction after inspection of the original 920 macOS
+archive. All 17 recorded shared effects belong to the deliberate `list-user`,
+not the preceding Project commands or `remove-mcp-a`. Pinned `config_home.py`,
+`config.py`, `config_backups.py`, `default_soul.py` and `hermes_logging.py` explain
+the finite cold User bootstrap. This original remains a failed partial journey.
+The fresh authored User fixture uses explicit UTF-8 bytes, keeping the same
+279-byte config preimage on Windows without text-mode LF-to-CRLF translation.
+
+Move the same User control after both Project removals and absence checks.
+Every Project command must preserve the complete original User snapshot before
+and after execution and may change only its exact selected runtime subtree.
+The original baseline is never renewed. The final User control admits only
+the three same-object directory permission transitions, ten exact new directory
+names, the pinned 667-byte SOUL/hash, two empty logs, and exactly one timestamped
+backup with the original 279-byte config/hash/mode and a distinct inode. Every
+other original User file and both Project trees remain exact. Windows uses its
+source-supported portable stat mode domain; this does not prove ACLs or claim a
+Windows native pass. Unknown effects still refuse. Keep original raw deltas;
+only the validated final control is excluded from unadmitted shared effects.
+
+Add exactly four prospective first-party observations: `config path` and
+`config get mcp_servers --json` once in A and once in B, after each root guard.
+The path must be the exact selected config plus LF or CRLF; JSON must have unique
+keys and equal the whole selected loopback MCP map. No `--raw`, User/default
+fallback or human-list parsing. These commands may initialize their selected
+runtime; they are bounded observations with pre/post effect guards, not a
+blanket promise of no writes. The existing protocol ledger requires zero probe
+events for all four commands. Each uses the same source/root/config authority.
+
+The closed command catalog gains exactly four labels and twelve fixed
+stdout/stderr/status member names (62 to 74 total declared names). The 720-second
+family deadline, 60-second command limit, 1 MiB/member, 16 MiB aggregate,
+configuration inventory and immutable payload bounds remain unchanged. No new
+workflow, exporter, artifact type, native runtime policy or product gate changes.
+Real inert children exercise the actual effect and stream validators, including
+Project-phase leakage, foreign changes, alias/identity, copied config digest,
+exact readout framing and zero-endpoint negative cases. Their success cannot
+qualify native Hermes; genuine three-platform original evidence remains required.
+
+## Original 8a Windows inert fixture corrections
+
+Source8a run43480021547, Windows User job132076721507 stopped before the native
+lifecycle: 53 inert contracts reported one error and one failure (three separate
+POSIX-only cases were skipped). The mocked official argv used `/payload/python`
+while the real Path argument used Windows separators, so the strict
+observer shape check correctly refused. Build that inert argv from the same
+platform Path string. The real bytecode fixture wrote text-mode CRLF then
+required exact LF bytes; write its authored module as explicit bytes. Keep both
+production guards and the real isolated child/bytecode assertions unchanged.
+These corrections are not native Windows qualification or a cleanup-census fix.
+
+## Windows owned-build census attribute diagnostic
+
+The original 8a Windows bundled job132076721240 refused during its first complete
+build-root census, before alias planning or unlink, on `path:st_file_attributes`.
+Keep that equality and refusal. Only this Windows failure path may append a
+closed JSON diagnostic (at most 512 ASCII bytes): fixed work/cache/payload role,
+SHA256 of the already-computed relative member, and four uint32 attributes from
+the existing path/handle before/after snapshots. No new stat, file read or unlink
+is added; malformed context omits the diagnostic and preserves the refusal.
+No bit meaning, affected role or native qualification is inferred before capture.

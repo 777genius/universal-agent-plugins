@@ -73,7 +73,7 @@ func (session *applySession) finishExistingLifecycle(current domain.ClientBindin
 			return true, session.result, fmt.Errorf("prepare installed MCP runtime: %w", err)
 		}
 	}
-	if !lifecycleConverged(current) {
+	if !lifecycleConverged(current) || session.service.canResumePreparedObservation(session.input, session.plan) {
 		result, err := session.service.resume(session.ctx, session.input, session.result, session.installationID, session.clientBindingID, current)
 		return true, result, err
 	}
@@ -93,6 +93,16 @@ func (session *applySession) finishExistingLifecycle(current domain.ClientBindin
 		}
 	}
 	return session.persistReadOnlyObservation(current)
+}
+
+// A scoped prepared observer may refresh historical lifecycle evidence through
+// the existing confirmation and package-verification path. It does not change
+// static native ownership classification or make Prepared lifecycle converge.
+func (service Service) canResumePreparedObservation(input AddInput, plan domain.DeliveryPlan) bool {
+	return plan.SelectedDelivery.IsZero() &&
+		plan.SelectedDelivery.EffectiveTraitsForScope(input.Client.ClientID, input.Scope).LifecycleKind == domain.LifecyclePrepared &&
+		!domain.ShouldReadOnlyVerifyForScope(input.Client.ClientID, input.Scope, input.BackendExecutable, input.InstallIntent) &&
+		service.clientVerifierAvailable(input, plan)
 }
 
 func (session *applySession) persistReadOnlyObservation(current domain.ClientBinding) (bool, AddResult, error) {

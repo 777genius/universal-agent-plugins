@@ -5,6 +5,7 @@ from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
+import re
 import runpy
 import secrets
 import shutil
@@ -163,7 +164,7 @@ def check_inventory_directory(before, held, label):
     raise RuntimeError(label + detail)
 
 
-def verify_inventory_directory(path, before, descriptor, held, parent=None):
+def verify_inventory_directory(path, before, descriptor, held, parent=None, *, diagnostic=None):
     linked = path.lstat() if parent is None else os.stat(path.name, dir_fd=parent, follow_symlinks=False)
     require(parent is not None or path.resolve() == path, "inventory directory changed (canonical)")
     opened = os.fstat(descriptor)
@@ -175,6 +176,24 @@ def verify_inventory_directory(path, before, descriptor, held, parent=None):
         names = [name for name in fields if getattr(previous, name, None) != getattr(current, name, None)]
         if names:
             details.append(domain + ":" + ",".join(names))
+    if artifacts.WINDOWS and type(diagnostic) is tuple and len(diagnostic) == 2:
+        role, relative = diagnostic
+        values = [getattr(info, "st_file_attributes", None) for info in (before, linked, held, opened)]
+        if (type(role) is str and role in {"work", "cache", "payload"}
+                and type(relative) is str and 0 < len(relative) <= 4096
+                and "\\" not in relative and ":" not in relative
+                and (relative == "." or not any(part in {"", ".", ".."} for part in relative.split("/")))
+                and all(type(value) is int and 0 <= value < 2**32 for value in values)
+                and (values[0] != values[1] or values[2] != values[3])):
+            try:
+                report = {"kind": "owned_census_windows_attributes", "role": role,
+                          "member_sha256": hashlib.sha256(relative.encode("utf-8")).hexdigest()}
+                report.update(zip(("path_before", "path_after", "handle_before", "handle_after"), values))
+                encoded = json.dumps(report, sort_keys=True, separators=(",", ":"))
+                if len(encoded) <= 512:
+                    details.append("attributes:" + encoded)
+            except (TypeError, ValueError, UnicodeError):
+                pass  # A diagnostic cannot replace the original refusal.
     raise RuntimeError("inventory directory changed (" + ";".join(details) + ")")
 
 
@@ -680,6 +699,76 @@ def protected_unchanged(before, after, paths):
         require(before.get(name) == after.get(name), "protected original User changed: " + name)
 
 
+def profile_tree(snapshot, prefix):
+    return {name: record for name, record in snapshot.items() if name == prefix or name.startswith(prefix + "/")}
+
+
+def user_control_boundary(before, after, prefix):
+    """Admit only the pinned cold User control, after every Project action."""
+    old, new = profile_tree(before, prefix), profile_tree(after, prefix)
+    private_dir, public_dir = (0o777, 0o777) if os.name == "nt" else (0o700, 0o755)
+    private_file, log_mode = (0o666, 0o666) if os.name == "nt" else (0o600, 0o644)
+    secured = {prefix + suffix for suffix in ("", "/sessions", "/skills")}
+    require(secured <= old.keys() and all(old[name]["type"] == "directory" and old[name]["mode"] == public_dir for name in secured),
+            "User control directory preimage differs")
+    for name, record in old.items():
+        require(new.get(name) == ({**record, "mode": private_dir} if name in secured else record),
+                "User control changed original object")
+    directories = {name: private_dir for name in ("cron", "logs", "logs/curator", "memories", "pairing", "hooks", "image_cache", "audio_cache")}
+    directories.update({"backups": public_dir, "backups/config": public_dir})
+    added = {name[len(prefix) + 1:]: record for name, record in new.items() if name not in old}
+    backups = [name for name in added if re.fullmatch(r"backups/config/config\.yaml\.good\.[0-9]{8}-[0-9]{6}", name)]
+    require(len(backups) == 1, "User control backup count/name differs")
+    config = old.get(prefix + "/config.yaml", {})
+    require(config.get("type") == "file" and config.get("bytes") == 279 and config.get("mode") == private_file,
+            "User control config preimage differs")
+    files = {"SOUL.md": (private_file, 667, "36c1f5a2e92cd1d018311eaf4c8f1e8886672eae78212e033c681d0e3d5d506f"),
+             "logs/agent.log": (log_mode, 0, hashlib.sha256(b"").hexdigest()),
+             "logs/errors.log": (log_mode, 0, hashlib.sha256(b"").hexdigest()),
+             backups[0]: (private_file, config["bytes"], config["sha256"])}
+    require(set(added) == set(directories) | set(files), "User control unknown/missing bootstrap member")
+    for name, record in added.items():
+        expected = ({"type": "directory", "mode": directories[name]} if name in directories else
+                    dict(zip(("mode", "bytes", "sha256"), files[name]), type="file"))
+        require({key: value for key, value in record.items() if key not in {"device", "inode"}} == expected,
+                "User control bootstrap metadata differs")
+    require((added[backups[0]]["device"], added[backups[0]]["inode"]) != (config["device"], config["inode"]),
+            "User control backup aliases original config")
+
+
+def profile_effect_boundary(label, scope, baseline, before, after, user, selected):
+    require(profile_tree(before, user) == profile_tree(baseline, user), "original User changed before command")
+    delta = changes(before, after)
+    if scope == "user":
+        require(label == "list-user" and all(name == user or name.startswith(user + "/") for name in delta),
+                "User control changed outside original User")
+        user_control_boundary(before, after, user)
+    else:
+        require(scope in {"a", "b"} and profile_tree(after, user) == profile_tree(baseline, user),
+                "Project command changed original User")
+        require(all(name == selected or name.startswith(selected + "/") for name in delta),
+                "Project command changed outside selected runtime")
+
+
+def config_readout(kind, body, selected):
+    if kind == "path":
+        expected = str(Path(selected["root"]) / "config.yaml").encode("utf-8")
+        require(body in (expected + b"\n", expected + b"\r\n"), "native config path differs")
+        return
+    require(kind == "mcp", "unknown native config readout")
+    def unique(pairs):
+        value = {}
+        for name, item in pairs:
+            require(name not in value, "native config duplicate JSON key")
+            value[name] = item
+        return value
+    try:
+        value = json.loads(body.decode("utf-8"), object_pairs_hook=unique)
+    except (UnicodeError, ValueError) as error:
+        raise RuntimeError("native config JSON framing differs") from error
+    require(type(value) is dict and value == {selected["server"]: selected["entry"]}, "native config MCP source differs")
+
+
 def validate_guards(value):
     require(set(value) == {"gateway_running", "default_gateway_pid", "served_profiles", "service_manager", "memory_provider"},
             "source guard fields differ")
@@ -807,7 +896,7 @@ def observe_profiles(probes):
         path = original / name
         require(not path.exists(), "original User fixture collision")
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(body, encoding="utf-8")
+        path.write_bytes(body.encode("utf-8"))
         path.chmod(0o600)
     spec, records, shared = {}, [], []
     for scope in ("a", "b"):
@@ -856,6 +945,9 @@ def observe_profiles(probes):
                             None if name in removed else spec[name]["config_sha256"])
         before = inventory(outer)
         require(before == current, "unmeasured inter-command mutation")
+        user_prefix = original.relative_to(outer).as_posix()
+        require(profile_tree(before, user_prefix) == profile_tree(baseline, user_prefix), "original User changed before command")
+        require(scope != "user" or (label == "list-user" and removed == {"a", "b"}), "User control must follow Project removal")
         selected = spec[scope]
         env = {**os.environ, "HERMES_HOME": selected["root"]}
         require(env["HOME"] == str(user) and env["USERPROFILE"] == str(user), "OS User home changed")
@@ -882,9 +974,15 @@ def observe_profiles(probes):
         for name, root in root_paths.items():
             config_boundary(root, spec[name]["server"], spec[name]["url"], name in removed,
                             None if name in removed else spec[name]["config_sha256"])
-        shared.extend({"label": label, "path": path, **change} for path, change in delta.items()
-                      if not any(path == str(root.relative_to(outer)).replace('\\', '/')
-                                 or path.startswith(str(root.relative_to(outer)).replace('\\', '/') + "/") for root in roots))
+        shared_delta = [{"label": label, "path": path, **change} for path, change in delta.items()
+                        if not any(path == root.relative_to(outer).as_posix()
+                                   or path.startswith(root.relative_to(outer).as_posix() + "/") for root in roots)]
+        try:
+            profile_effect_boundary(label, scope, baseline, before, after, user_prefix,
+                                    Path(selected["root"]).relative_to(outer).as_posix())
+        except BaseException:
+            shared.extend(shared_delta)
+            raise
         protected_unchanged(baseline, after, protected)
         for other in (name for name in ("a", "b") if name != scope):
             prefix = str(Path(spec[other]["root"]).relative_to(outer)).replace('\\', '/')
@@ -914,17 +1012,20 @@ def observe_profiles(probes):
         require(b"hermes" in command("version-a", "a", ["--version"]).lower(), "bundled native version absent")
         for scope in ("a", "b"):
             command("guard-" + scope, scope, guard=True)
+            # Bounded native observation may initialize only its selected home.
+            config_readout("path", command("config-path-" + scope, scope, ["config", "path"]), spec[scope])
+            config_readout("mcp", command("config-mcp-" + scope, scope, ["config", "get", "mcp_servers", "--json"]), spec[scope])
             output = command("list-" + scope, scope, ["mcp", "list"])
             require(spec[scope]["server"].encode() in output, "selected native MCP name absent")
             command("test-" + scope, scope, ["mcp", "test", spec[scope]["server"]])
         command("test-a-restart", "a", ["mcp", "test", spec["a"]["server"]])
-        output = command("list-user", "user", ["mcp", "list"])
-        require(b"foreign" in output and all(spec[x]["server"].encode() not in output for x in ("a", "b")), "original User MCP selection changed")
         for scope in ("a", "b"):
             command("remove-mcp-" + scope, scope, ["mcp", "remove", spec[scope]["server"]])
             output = command("removed-list-" + scope, scope, ["mcp", "list"])
             require(spec[scope]["server"].encode() not in output, "removed MCP still listed")
             command("removed-test-" + scope, scope, ["mcp", "test", spec[scope]["server"]], expected_failure=True)
+        output = command("list-user", "user", ["mcp", "list"])
+        require(b"foreign" in output and all(spec[x]["server"].encode() not in output for x in ("a", "b")), "original User MCP selection changed")
         write_json(evidence / "original-user-final.json", inventory(outer))
     finally:
         write_json(evidence / "profile-command-deltas.json", {"commands": records, "unadmitted_shared_effects": shared,
@@ -932,7 +1033,7 @@ def observe_profiles(probes):
                    "methods": {name: list(probe.methods()) for name, probe in probes.items()}})
 
 
-COMMANDS = ({prefix + x for prefix in ("git-", "guard-", "list-", "test-", "remove-mcp-", "removed-list-", "removed-test-") for x in ("a", "b")}
+COMMANDS = ({prefix + x for prefix in ("git-", "guard-", "config-path-", "config-mcp-", "list-", "test-", "remove-mcp-", "removed-list-", "removed-test-") for x in ("a", "b")}
             | {"test-a-restart", "list-user", "version-a"})
 MEMBERS = ({name + suffix for name in COMMANDS for suffix in (".stdout", ".stderr", ".status.json")}
            | {"original-user-baseline.json", "original-user-final.json", "source-guards.json", "profile-endpoints.json",

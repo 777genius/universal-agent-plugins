@@ -12,8 +12,122 @@ CASE = runpy.run_path(str(Path(__file__).parent / "e2e/hermes-profile-admission.
 
 
 class ProfileAdmissionContracts(unittest.TestCase):
+    def test_real_child_user_bootstrap_is_admitted_only_as_final_user_control(self):
+        import sys
+        # Exact public DEFAULT_SOUL_MD at the pinned vendor revision; no vendor is imported.
+        soul = ("You are Hermes Agent, built by Nous Research. Be direct: match the length of your reply to the weight of "
+                "the ask — a one-line question gets a one-line answer, and finished work gets a short report of what "
+                "changed, what's verified, and what's left, never a replay of the process. No filler (\"Great question,\" "
+                "\"I'd be happy to\"), no restating the request back, no re-summarizing what you already said, no narrating "
+                "tool calls the user can see. Plain claims over adjectives; when unsure, say so plainly. Agree because it's "
+                "right, not because the user said it. Depth is earned — give it when the user asks for detail, teaches, or "
+                "the stakes demand it, not by default.")
+        child = """
+import os, shutil, sys
+from pathlib import Path
+home, sibling, effect, soul = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3], sys.argv[4]
+for name in ('', 'sessions', 'skills'):
+    (home / name).chmod(0o700)
+for name in ('cron', 'logs', 'logs/curator', 'memories', 'pairing', 'hooks', 'image_cache', 'audio_cache', 'backups', 'backups/config'):
+    path = home / name
+    path.mkdir(); path.chmod(0o755 if name.startswith('backups') else 0o700)
+for name, body, mode in (('SOUL.md', soul.encode('utf-8'), 0o600), ('logs/agent.log', b'', 0o644), ('logs/errors.log', b'', 0o644)):
+    path = home / name; path.write_bytes(body); path.chmod(mode)
+backup = home / 'backups/config/config.yaml.good.20261113-175542'
+shutil.copy2(home / 'config.yaml', backup)
+if effect == 'unknown': (home / 'unexpected').write_bytes(b'foreign')
+if effect == 'backup': backup.write_bytes(b'x' * 279)
+if effect == 'original':
+    path = home / 'auth.json'; body = path.read_bytes(); path.rename(home / 'held-auth'); path.write_bytes(body); path.chmod(0o600)
+if effect == 'directory':
+    path = home / 'sessions'; old = home / 'held-sessions'; path.rename(old); shutil.copytree(old, path); shutil.rmtree(old)
+if effect == 'log': (home / 'logs/agent.log').write_bytes(b'not an admitted empty log')
+if effect == 'sibling': sibling.write_bytes(b'changed')
+if effect == 'alias': backup.unlink(); os.link(home / 'config.yaml', backup)
+"""
+        for effect in ("valid", "unknown", "backup", "original", "directory", "log", "sibling", "alias"):
+            with self.subTest(effect=effect), tempfile.TemporaryDirectory() as temporary:
+                parent = Path(temporary).resolve(); outer = parent / "outer"; outer.mkdir()
+                home = outer / "user/.hermes"
+                for name in ("sessions", "skills/foreign"):
+                    (home / name).mkdir(parents=True)
+                for name in ("", "sessions", "skills"):
+                    (home / name).chmod(0o755)
+                nonce = "c" * 64
+                config = (f"model: USER_MODEL_{nonce}\nproviders:\n  custom:\n    base_url: http://127.0.0.1:9/USER_PROVIDER_{nonce}\n"
+                          "mcp_servers:\n  foreign:\n    command: echo\n    args: [retained]\n")
+                for name, body in {"config.yaml": config, "auth.json": "retained auth marker", ".env": "# inert\n",
+                                   "sessions/history": "retained history", "skills/foreign/SKILL.md": "retained Skill"}.items():
+                    (home / name).write_bytes(body.encode()); (home / name).chmod(0o600)
+                for role in ("a", "b"):
+                    root = outer / ("project-" + role) / ".uap/hermes-runtime"
+                    root.mkdir(parents=True); (root / "config.yaml").write_bytes(b"independent")
+                baseline = CASE["inventory"](outer)
+                before = baseline
+                if effect == "valid":
+                    selected = "project-a/.uap/hermes-runtime"
+                    CASE["bounded"]([sys.executable, "-I", "-c", "from pathlib import Path; import sys; Path(sys.argv[1]).write_bytes(b'owned bootstrap')", outer / selected / "cache"],
+                                    outer, dict(os.environ), parent / "inert-project", timeout=5)
+                    before = CASE["inventory"](outer)
+                    CASE["profile_effect_boundary"]("config-path-a", "a", baseline, baseline, before, "user/.hermes", selected)
+                    with self.assertRaisesRegex(RuntimeError, "outside selected runtime"):
+                        CASE["profile_effect_boundary"]("config-path-b", "b", baseline, baseline, before, "user/.hermes", "project-b/.uap/hermes-runtime")
+                CASE["bounded"]([sys.executable, "-I", "-c", child, home, root / "config.yaml", effect, soul],
+                                outer, dict(os.environ), parent / "inert-user-control", timeout=5)
+                if effect == "alias":
+                    with self.assertRaisesRegex(RuntimeError, "inventory member refused"):
+                        CASE["inventory"](outer)
+                    continue
+                after = CASE["inventory"](outer)
+                boundary = CASE["profile_effect_boundary"]
+                args = (baseline, before, after, "user/.hermes", "user/.hermes")
+                with self.assertRaisesRegex(RuntimeError, "Project command changed original User"):
+                    boundary("config-path-a", "a", *args)
+                if effect == "valid":
+                    boundary("list-user", "user", *args)
+                    with self.assertRaisesRegex(RuntimeError, "original User changed before command"):
+                        boundary("list-user", "user", baseline, after, after, "user/.hermes", "user/.hermes")
+                    with self.assertRaisesRegex(RuntimeError, "User control changed outside original User"):
+                        boundary("unknown-user-action", "user", *args)
+                else:
+                    with self.assertRaises(RuntimeError):
+                        boundary("list-user", "user", *args)
+
+    def test_native_config_readouts_use_exact_retained_real_child_streams(self):
+        import sys
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            selected = {"root": str(root / "project-a/.uap/hermes-runtime"), "server": "owned", "entry": {"url": "http://127.0.0.1:19/mcp"}}
+            path = str(Path(selected["root"]) / "config.yaml").encode()
+            body = json.dumps({"owned": selected["entry"]}).encode()
+            cases = [("path", path + b"\n", True), ("path", path + b"\r\n", True), ("mcp", body + b"\n", True),
+                     ("path", path.replace(b"project-a", b"project-b") + b"\n", False),
+                     ("path", path + b"\nextra\n", False), ("path", path, False), ("path", b" " + path + b"\n", False),
+                     ("mcp", b'{"owned":{},"owned":' + json.dumps(selected["entry"]).encode() + b'}', False),
+                     ("mcp", b'{"owned":{"url":null,"url":"http://127.0.0.1:19/mcp"}}', False),
+                     ("mcp", b'{}', False), ("mcp", body[:-1] + b',"extra":{}}', False),
+                     ("mcp", b'{"owned":{"url":true}}', False), ("mcp", b'{"owned":{"url":"http://127.0.0.1:20/mcp"}}', False),
+                     ("mcp", body + b'{}', False), ("mcp", b'\xff', False), ("mcp", b'[]', False)]
+            for index, (kind, raw, valid) in enumerate(cases):
+                with self.subTest(kind=kind, index=index):
+                    evidence = root / str(index); evidence.mkdir()
+                    output = evidence / ("config-" + kind + "-a")
+                    captured = CASE["bounded"]([sys.executable, "-I", "-c", "import sys; sys.stdout.buffer.write(bytes.fromhex(sys.argv[1]))", raw.hex()],
+                                               root, dict(os.environ), output, timeout=5)
+                    self.assertEqual(captured, raw)
+                    CASE["admit_evidence"](evidence)
+                    if valid:
+                        CASE["config_readout"](kind, captured, selected)
+                    else:
+                        with self.assertRaises(RuntimeError):
+                            CASE["config_readout"](kind, captured, selected)
+            CASE["protocol_join"]({"a": [], "b": []}, {"a": [], "b": []}, None, 0)
+            with self.assertRaisesRegex(RuntimeError, "probe contacted"):
+                CASE["protocol_join"]({"a": [], "b": []}, {"a": ["initialize"], "b": []}, None, 0)
+
     def test_observer_runtime_preserves_official_bootstrap_and_arguments(self):
-        official = ["/payload/python", "-I", "-c", "opaque official bootstrap", "--child"]
+        python = str(Path("/payload/python"))
+        official = [python, "-I", "-c", "opaque official bootstrap", "--child"]
         make = mock.Mock(return_value=official)
         command = CASE["observer_runtime_command"](make, Path("/payload/source"),
                     Path("/payload/python"), code="observer", args=["--child"])
@@ -38,7 +152,7 @@ class ProfileAdmissionContracts(unittest.TestCase):
                 directory = root / str(protected)
                 directory.mkdir()
                 module = directory / "uap_inert_observer_module.py"
-                module.write_text("value = 17\n", encoding="utf-8")
+                module.write_bytes(b"value = 17\n")
                 code = (f"import sys; sys.path.insert(0, {str(directory)!r}); "
                         "import uap_inert_observer_module as probe; "
                         "print(sys.dont_write_bytecode, probe.value)")
@@ -438,6 +552,44 @@ class ProfileAdmissionContracts(unittest.TestCase):
             field = "path:st_ctime_ns" if change == "path" else "handle:st_file_attributes"
             self.assertEqual(str(caught.exception), "inventory directory changed (" + field + ")")
 
+
+    def test_owned_census_attribute_diagnostic_preserves_refusal_and_io(self):
+        import hashlib
+        import stat
+        base = dict(st_dev=4, st_ino=5, st_mode=stat.S_IFDIR | 0o755, st_nlink=1,
+                    st_uid=6, st_gid=7, st_size=0, st_mtime_ns=100, st_ctime_ns=90,
+                    st_birthtime_ns=80, st_file_attributes=16, st_reparse_tag=0)
+        before, held = SimpleNamespace(**base), SimpleNamespace(**dict(base, st_file_attributes=32))
+        path, relative = mock.Mock(), "private/member"
+        path.resolve.return_value = path
+        cases = [(16, 32, ("cache", relative), False), (0x80000010, 32, ("cache", relative), True),
+                 (16, 48, ("payload", relative), True), (48, 64, ("work", "."), True)]
+        cases += [(48, 32, context, False) for context in (None, ("private-role", relative),
+                  ("cache", "/private"), ("cache", "../private"), ("cache", "x" * 4097), ("cache", "\udcff"))]
+        cases += [(value, 32, ("cache", relative), False) for value in (True, -1, 2**32)]
+        for left, right, context, diagnostic in cases:
+            path.lstat.return_value = SimpleNamespace(**dict(base, st_file_attributes=left))
+            opened = SimpleNamespace(**dict(base, st_file_attributes=right))
+            path.lstat.reset_mock()
+            with self.subTest(left=left, right=right, context=context), mock.patch.object(CASE["artifacts"], "WINDOWS", True):
+                with mock.patch.object(os, "fstat", return_value=opened) as fstat, mock.patch.object(os, "stat") as stat_call:
+                    with mock.patch.object(os, "read") as read, mock.patch.object(os, "unlink") as unlink, mock.patch.object(Path, "read_bytes") as read_bytes:
+                        if (left, right) == (16, 32):
+                            CASE["verify_inventory_directory"](path, before, 17, held, diagnostic=context)
+                        else:
+                            with self.assertRaisesRegex(RuntimeError, "inventory directory changed") as caught:
+                                CASE["verify_inventory_directory"](path, before, 17, held, diagnostic=context)
+                            message = str(caught.exception)
+                            self.assertEqual("attributes:" in message, diagnostic)
+                            self.assertNotIn("private", message)
+                            if diagnostic:
+                                encoded = message.split("attributes:", 1)[1][:-1]
+                                self.assertLessEqual(len(encoded.encode("ascii")), 512)
+                                self.assertEqual(json.loads(encoded), dict(kind="owned_census_windows_attributes", role=context[0],
+                                    member_sha256=hashlib.sha256(context[1].encode()).hexdigest(),
+                                    path_before=16, path_after=left, handle_before=32, handle_after=right))
+                        path.lstat.assert_called_once_with(); fstat.assert_called_once_with(17)
+                        stat_call.assert_not_called(); read.assert_not_called(); unlink.assert_not_called(); read_bytes.assert_not_called()
 
     def test_directory_temporal_refusal_names_domain_and_fields_without_values(self):
         fields = CASE["STABLE_FIELDS"] + (("st_birthtime_ns", "st_file_attributes", "st_reparse_tag") if CASE["artifacts"].WINDOWS else ())
