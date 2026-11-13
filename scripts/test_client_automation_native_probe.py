@@ -515,6 +515,13 @@ class GrokRouteContracts(unittest.TestCase):
                         (inner.home / ".grok/config.toml").write_text("changed=true")
                     if mode == "write-profile-sibling":
                         (inner.home / ".grok/foreign-state.json").write_text("foreign")
+                    if mode == "native-bootstrap":
+                        docs = inner.home / ".grok/docs/user-guide"
+                        docs.mkdir(parents=True)
+                        (docs / "07-mcp-servers.md").write_text("bundled native guide")
+                        logs = inner.home / ".grok/logs"
+                        logs.mkdir(parents=True)
+                        (logs / "unified.jsonl").write_text("{}\\n")
                     if mode == "full-id":
                         return 0, json.dumps([{"name": NAME, "scope": "project",
                             "path": str(inner.a / ".grok/plugins/project-probe"),
@@ -546,6 +553,16 @@ class GrokRouteContracts(unittest.TestCase):
         self.assertFalse(any("enable" in args and "--help" not in args for _, args in item.calls))
         with self.assertRaises(ValueError):
             probe.require_admission(dict(item.evidence, research_completed=True))
+
+    def test_pinned_native_bootstrap_is_reported_but_does_not_grant_trust(self):
+        item = self.fixture("native-bootstrap")
+        item.grok()
+        self.assertEqual(item.evidence["native_bootstrap"],
+                         ["docs", "docs/user-guide", "docs/user-guide/07-mcp-servers.md",
+                          "logs", "logs/unified.jsonl"])
+        self.assertFalse(item.evidence["native_api_admitted"])
+        self.assertEqual(item.evidence["before"]["a"], item.evidence["after"]["a"])
+        self.assertEqual(item.evidence["before"]["b"], item.evidence["after"]["b"])
 
     def test_full_identity_alone_does_not_authorize_mutation(self):
         item = self.fixture("full-id")

@@ -138,6 +138,28 @@ def snapshot(root):
         os.close(root_fd)
 
 
+def grok_profile_bootstrap(before, after):
+    """Report only new native docs/logs in a disposable Grok HOME.
+
+    Any change to existing user entries or either project remains a hard fail.
+    This is not workspace trust, plugin admission or product acceptance.
+    """
+    original = before["user_profile"]
+    observed = after["user_profile"]
+    added = sorted(set(observed) - set(original))
+    def expected_native_file(path, value):
+        return (path.startswith("docs/user-guide/")
+                and re.fullmatch(r"docs/user-guide/[0-9]{2}-[a-z0-9-]+\\.md", path)
+                and "sha256" in value or path == "logs/unified.jsonl" and "sha256" in value)
+    directories = {"docs", "docs/user-guide", "logs"}
+    require(before["a"] == after["a"] and before["b"] == after["b"]
+            and all(observed.get(path) == value for path, value in original.items())
+            and all((path in directories and observed[path].get("kind") == "directory")
+                    or expected_native_file(path, observed[path]) for path in added),
+            "read-only collection changed fixture state")
+    return added
+
+
 def native_json(body):
     """Strict bounded native JSON, never help text or an exit-code substitute."""
     require(isinstance(body, (str, bytes)) and 0 < len(body) <= 1 << 20, "native JSON bound")
@@ -307,7 +329,7 @@ class Probe:
         finally:
             after = {name: snapshot(path) for name, path in watched.items()}
             self.evidence["after"] = after
-            require(after == before, "read-only collection changed fixture state")
+            self.evidence["native_bootstrap"] = grok_profile_bootstrap(before, after)
             require(not config.is_symlink() and config.read_bytes() == original_config,
                     "read-only collection changed Grok user configuration")
             trust = self.home / ".grok/trusted_folders.toml"
