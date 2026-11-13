@@ -234,6 +234,24 @@ func inventoryCommand(ctx context.Context, env clients.Env, home, dir string, ar
 	return result.Stdout, nil
 }
 
+// The caller verifies the receipt-bound package before activation. Rejoin the
+// existing filesystem namespace before each new native command: a later foreign
+// manifest or aliased target cannot borrow the selected package's ownership.
+func verifyInventoryNamespace(ctx context.Context, req domain.ActivationRequest) error {
+	if req.Plan.DeclaredName != req.DeclaredName {
+		return errInventoryUnavailable
+	}
+	canonical, err := filepath.EvalSymlinks(req.Plan.ActivePath)
+	if err != nil || canonical != req.Plan.ActivePath {
+		return errInventoryUnavailable
+	}
+	finding, err := New().InspectPreparedRegistry(req.Plan, req.DeclaredName, true)
+	if err != nil || finding != clients.RegistryExpected {
+		return errInventoryUnavailable
+	}
+	return ctx.Err()
+}
+
 func observeUserInventory(ctx context.Context, env clients.Env, req domain.ActivationRequest) (enabled, present, attempted bool, resultErr error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -267,7 +285,7 @@ func observeUserInventory(ctx context.Context, env clients.Env, req domain.Activ
 		return false, false, false, errInventoryUnavailable
 	}
 	for index, argv := range [][]string{{req.BackendExecutable, "--version"}, {req.BackendExecutable, "plugin", "list", "--json"}} {
-		if err = errors.Join(config.verify(ctx), binary.verify(ctx), config.identity(), binary.identity(), ctx.Err()); err != nil {
+		if err = errors.Join(verifyInventoryNamespace(ctx, req), config.verify(ctx), binary.verify(ctx), config.identity(), binary.identity(), ctx.Err()); err != nil {
 			return false, false, attempted, errInventoryUnavailable
 		}
 		attempted = true
@@ -275,11 +293,11 @@ func observeUserInventory(ctx context.Context, env clients.Env, req domain.Activ
 		if commandErr != nil {
 			return false, false, true, commandErr
 		}
-		if err = errors.Join(config.verify(ctx), binary.verify(ctx), config.identity(), binary.identity(), ctx.Err()); err != nil {
+		if err = errors.Join(verifyInventoryNamespace(ctx, req), config.verify(ctx), binary.verify(ctx), config.identity(), binary.identity(), ctx.Err()); err != nil {
 			return false, false, true, errInventoryUnavailable
 		}
 		if index == 0 {
-			if strings.TrimSpace(string(body)) != "1.5.3" {
+			if !bytes.Equal(body, []byte("1.5.3\n")) {
 				return false, false, true, errInventoryUnavailable
 			}
 		} else {

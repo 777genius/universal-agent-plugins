@@ -143,9 +143,8 @@ func (*Adapter) Deactivate(ctx context.Context, _ clients.Env, request domain.De
 func userInventoryOutcome(ctx context.Context, env clients.Env, request domain.ActivationRequest, outcome domain.ActivationOutcome) (domain.ActivationOutcome, error) {
 	required := request.VerifyOnly || request.PackageUnchanged
 	if !New().VerifierAvailable(request.Client, request.Plan, request.BackendExecutable) || env.Runner == nil {
-		if required {
-			return outcome, errInventoryUnavailable
-		}
+		// An unqualified profile retains file-only ownership on every operation.
+		// SDK callers do not supply the detector's canonical HOME provenance.
 		return outcome, nil
 	}
 	enabled, present, attempted, err := observeUserInventory(ctx, env, request)

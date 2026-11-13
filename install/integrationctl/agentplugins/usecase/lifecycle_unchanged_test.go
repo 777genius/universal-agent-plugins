@@ -225,3 +225,53 @@ func TestAntigravityRealProviderUpdateAndAbsentBundleRepairRetainPrepared(t *tes
 		t.Fatal("repair promoted runtime activation", repaired, err)
 	}
 }
+
+func TestAntigravityRealProviderDryRepairRemainsFileOnly(t *testing.T) {
+	fixture := antigravityReadFixture(t)
+	before, err := fixture.store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture.input.DryRun, fixture.input.Confirmed = true, false
+	fixture.input.OperationID = "antigravity-dry-repair"
+	result, err := fixture.service.Repair(t.Context(), fixture.input)
+	if err != nil || fixture.runner.calls != 0 || result.Activation.Activation != domain.ActivationPrepared {
+		t.Fatal("dry repair launched native inventory or lost Prepared materialization", result, err, fixture.runner.calls)
+	}
+	after, err := fixture.store.Load()
+	if err != nil || !reflect.DeepEqual(before, after) {
+		t.Fatal("dry repair changed recorded ownership", err)
+	}
+}
+
+func TestAntigravityRealProviderRepeatRefusesForeignManifestBeforeNativeCommand(t *testing.T) {
+	fixture := antigravityReadFixture(t)
+	fixture.service.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{Stager: fixture.service.Stager, Runner: fixture.runner})
+	foreign := filepath.Join(fixture.installed.Plan.TargetRoot, "foreign-same-name")
+	if err := os.MkdirAll(foreign, 0700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(foreign, "plugin.json")
+	body := []byte(`{"$schema":"https://antigravity.google/schemas/v1/plugin.json","name":"demo","version":"1.0.0"}`)
+	if err := os.WriteFile(path, body, 0600); err != nil {
+		t.Fatal(err)
+	}
+	before, err := fixture.store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	binding := onlyBinding(before.Installations[0])
+	observation, err := fixture.service.NativeObserver.ObserveNativeIdentity(t.Context(), fixture.input.Client, fixture.installed.Plan, &binding)
+	if err != nil || observation.State != domain.NativeIdentityUnmanaged || fixture.runner.calls != 0 {
+		t.Fatal("fixture must prove an existing filesystem collision", observation, err, fixture.runner.calls)
+	}
+	result, err := fixture.service.Add(t.Context(), fixture.input)
+	if err == nil || fixture.runner.calls != 0 || result.Activation.NativeEffect != domain.NativeEffectUnchanged {
+		t.Fatal("known collision reached native commands", result, err, fixture.runner.calls)
+	}
+	after, loadErr := fixture.store.Load()
+	current, readErr := os.ReadFile(path)
+	if loadErr != nil || readErr != nil || string(current) != string(body) || !reflect.DeepEqual(before, after) {
+		t.Fatal("collision refusal changed foreign bytes or recorded ownership", loadErr, readErr)
+	}
+}

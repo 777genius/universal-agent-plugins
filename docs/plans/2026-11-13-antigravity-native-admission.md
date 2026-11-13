@@ -621,10 +621,12 @@ legacy lint findings require the standard changed-line/architecture gate.
 A separate draft acceptance amendment, EXCLUDED from this RO-only freeze,
 adds genuine PUBLIC UAP User repeat,
 changed2.0 update, completely absent owned-bundle repair and exact remove. A
-separate disabled fixture must retain its initial false state. Five independently
+separate disabled fixture must retain its initial false state. Four independently
 authored negative fixtures require repeat refusal for missing config, malformed
-config, foreign same-manifest collision, actual config symlink and absent native
-backend; no baseline is restored after a refusal. An unavailable symlink
+config, foreign same-manifest collision and actual config symlink; no baseline is
+restored after a refusal. An absent backend or absent canonical detector provenance
+must instead retain file-only Prepared, without a native inventory success claim.
+An unavailable symlink
 prerequisite fails the test rather than skipping or spoofing an OS. Original
 ProjectA/B, source and three independent User/vendor profiles remain protected.
 
@@ -645,3 +647,42 @@ closed HOME/USERPROFILE child environment works; no ambient provider variables
 are added. These added public/native journeys have NOT run locally and remain
 mandatory hosted acceptance. The original14 retained direct exchanges retain
 exactly their original scope and are not relabeled as product-command streams.
+
+## Corrective lifecycle routing boundary
+
+Identical inert reproductions on source920 and4ad found three routing regressions.
+The public SDK Prepare/Apply/VerifyPreparedBinding path proved both User and
+Project ownership on920. On4ad, User repair preparation refused because the SDK
+does not supply canonical native HOME provenance; Project materialization
+verified but the generic Active-only coherence gate could never accept the
+adapter's truthful Prepared result. Separately, an eligible User dry-run repair
+started both metadata commands, and repeated add started them despite a foreign
+same-manifest collision already recognized by the existing filesystem observer.
+
+The correction restores Antigravity's previous VerifiesNativeDirectory trait.
+It preserves the generic Active-only contract and the existing filesystem
+ownership route used by SDK/management recovery. Unqualified canonical
+provenance, backend or runner returns the adapter's file-only Prepared outcome;
+an eligible canonical-profile repeat still refuses missing/malformed config and
+every attempted failed observation. The native lifecycle rechecks the existing
+filesystem namespace and exact declared/physical identity before and after each
+command. A foreign same-manifest entry appearing during the final list refuses
+the observation and preserves that entry for inspection; this is not atomic
+exclusion of concurrent writers.
+Live version output must equal the captured bytes `1.5.3\n`; decorative
+DetectedClient.Version never replaces the held-binary live check.
+
+Native readback remains in Activate: ordinary Prepared repeat, a changed-package
+update and absent-bundle repair still reach it. Intact repair and a previously
+fully converged historical Active binding retain their earlier file-only path;
+they are not newly qualified native observations. Project and targeted info
+receive no new native route. No enablement, IDE loading, authentication or model
+readiness is inferred, and no generic Prepared-to-Active acceptance is added.
+
+The corrective contracts exercise public SDK recovery without state mutation,
+real-provider dry-run and collision refusal before native execution, and exact
+version framing. The existing repeat/update/absent-repair cases remain required.
+These inert cases do not qualify the ordinary process environment, descendant
+cleanup or arbitrary profile effects. Genuine three-OS public-path acceptance
+and the remaining intact-repair/historical-Active observation design are still
+separate work.

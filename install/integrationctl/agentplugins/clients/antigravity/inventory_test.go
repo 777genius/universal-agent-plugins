@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -51,7 +52,7 @@ func inventoryFixture(t *testing.T) (domain.ActivationRequest, clients.Env, *inv
 	req := domain.ActivationRequest{
 		Client: domain.DetectedClient{ClientID: domain.ClientAntigravity, ConfigRoot: root, NativeConfigRoot: root, ExecutablePath: binary, Version: "decorative"},
 		Plan: domain.DeliveryPlan{ClientID: domain.ClientAntigravity, Scope: domain.ScopeUser, NativeRegistryRoot: root,
-			NativeRegistryExecutable: binary, TargetRoot: filepath.Dir(active), ActivePath: active, DeclaredVersion: "1.0.0",
+			NativeRegistryExecutable: binary, TargetRoot: filepath.Dir(active), ActivePath: active, DeclaredName: "demo", DeclaredVersion: "1.0.0",
 			Components: []domain.ComponentDecision{{Kind: domain.ComponentSkill, Name: "skill", Support: domain.SupportNative}, {Kind: domain.ComponentMCPServer, Name: "server", Support: domain.SupportNative}}},
 		Delivery:     domain.StagedDelivery{ClientID: domain.ClientAntigravity, ActivePath: active},
 		DeclaredName: "demo", BackendExecutable: binary,
@@ -97,7 +98,7 @@ func TestInventoryUsesOnlyQualifiedUserMetadataAndRetainsPrepared(t *testing.T) 
 	}
 }
 
-func TestInventoryUnavailableCannotSucceedOnResume(t *testing.T) {
+func TestInventoryIneligibleKeepsFileOnlyAndEligibleFailureRefusesResume(t *testing.T) {
 	for _, unavailable := range []string{"backend", "runner", "provenance", "missing-config", "missing-override", "malformed-config", "unknown-config"} {
 		for _, phase := range []string{"initial", "resume", "verify-only"} {
 			t.Run(unavailable+"/"+phase, func(t *testing.T) {
@@ -127,8 +128,10 @@ func TestInventoryUnavailableCannotSucceedOnResume(t *testing.T) {
 					}
 				}
 				outcome, err := New().Activate(context.Background(), env, req)
-				if (err != nil) != (phase != "initial") || outcome.Activation != domain.ActivationPrepared || len(runner.calls) != 0 {
-					t.Fatal("unavailable observation became successful resume or started a child", outcome, err, runner.calls)
+				eligible := unavailable != "backend" && unavailable != "runner" && unavailable != "provenance"
+				if (err != nil) != (eligible && phase != "initial") || outcome.Activation != domain.ActivationPrepared || len(runner.calls) != 0 ||
+					strings.Contains(strings.Join(outcome.UserActions, " "), "enabled in CLI inventory") {
+					t.Fatal("file-only fallback claimed native evidence or eligible failure succeeded", outcome, err, runner.calls)
 				}
 			})
 		}
@@ -192,6 +195,56 @@ func TestInventoryRefusesUnsettledDirtyOversizedUnknownVersionAndLateContext(t *
 			out, err := New().Activate(ctx, env, req)
 			if err == nil || out.Activation == domain.ActivationActive || len(runner.calls) != 1 || out.NativeEffect != domain.NativeEffectUncertain {
 				t.Fatal("invalid native exchange became observation", out, err, runner.calls)
+			}
+		})
+	}
+}
+
+func TestInventoryRefusesForeignManifestCreatedDuringFinalList(t *testing.T) {
+	req, env, runner := inventoryFixture(t)
+	foreign := filepath.Join(req.Plan.TargetRoot, "late-foreign")
+	body := []byte(`{"$schema":"https://antigravity.google/schemas/v1/plugin.json","name":"demo"}`)
+	runner.reply = func(_ context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
+		stdout := []byte("1.5.3\n")
+		if len(command.Argv) == 4 {
+			if err := os.Mkdir(foreign, 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(foreign, "plugin.json"), body, 0600); err != nil {
+				t.Fatal(err)
+			}
+			stdout = inventoryBody(t, req.Plan, true)
+		}
+		return legacyports.CommandResult{CleanupComplete: true, Stdout: stdout}, nil
+	}
+	outcome, err := New().Activate(t.Context(), env, req)
+	if err == nil || len(runner.calls) != 2 || outcome.NativeEffect != domain.NativeEffectUncertain || outcome.Activation != domain.ActivationPrepared {
+		t.Fatal("final list borrowed newly colliding namespace evidence", outcome, err, runner.calls)
+	}
+	after, err := os.ReadFile(filepath.Join(foreign, "plugin.json"))
+	if err != nil || !bytes.Equal(after, body) {
+		t.Fatal("failed observation rewrote or removed foreign evidence", err)
+	}
+}
+
+func TestInventoryVersionAcceptsOnlyCapturedLF(t *testing.T) {
+	for _, version := range []string{"1.5.3\n", "1.5.3", "1.5.3\r\n", " 1.5.3\n", "1.5.3\n\n", "\u00a01.5.3\n"} {
+		t.Run(fmt.Sprintf("%q", version), func(t *testing.T) {
+			req, env, runner := inventoryFixture(t)
+			runner.reply = func(_ context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
+				body := []byte(version)
+				if len(command.Argv) == 4 {
+					body = inventoryBody(t, req.Plan, true)
+				}
+				return legacyports.CommandResult{CleanupComplete: true, Stdout: body}, nil
+			}
+			outcome, err := New().Activate(t.Context(), env, req)
+			accepted, calls := version == "1.5.3\n", 1
+			if accepted {
+				calls = 2
+			}
+			if (err == nil) != accepted || len(runner.calls) != calls || outcome.Activation != domain.ActivationPrepared {
+				t.Fatal("version framing changed the admitted native protocol", outcome, err, runner.calls)
 			}
 		})
 	}

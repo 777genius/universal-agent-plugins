@@ -162,14 +162,16 @@ func TestPiNativeEffectTrackingIsProjectScoped(t *testing.T) {
 	}
 }
 
-func TestAntigravityReadOnlyRoutingKeepsPreparedScopesWithoutNativeEffects(t *testing.T) {
+func TestAntigravityPreparedScopesKeepFileOnlyVerificationRouting(t *testing.T) {
 	for _, scope := range []InstallScope{ScopeUser, ScopeProject} {
 		traits := (SelectedDelivery{}).EffectiveTraitsForScope(ClientAntigravity, scope)
-		if traits.LifecycleKind != LifecyclePrepared || traits.TracksNativeEffects || !traits.VerifiesNativeDirectory {
+		if traits.LifecycleKind != LifecyclePrepared || traits.TracksNativeEffects || traits.VerifiesNativeDirectory {
 			t.Fatalf("Antigravity scope %s changed lifecycle effects: %+v", scope, traits)
 		}
-		if !ShouldReadOnlyVerifyForScope(ClientAntigravity, scope, "", InstallIntentAutomatic) {
-			t.Fatal("missing backend bypassed authoritative resume error routing", scope)
+		for _, backend := range []string{"", "/selected/agy"} {
+			if ShouldReadOnlyVerifyForScope(ClientAntigravity, scope, backend, InstallIntentAutomatic) {
+				t.Fatal("Prepared ownership entered generic Active-only verification", scope, backend)
+			}
 		}
 	}
 }
