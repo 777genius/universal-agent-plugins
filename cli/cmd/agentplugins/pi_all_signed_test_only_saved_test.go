@@ -62,25 +62,41 @@ func TestPiAllSignedTestOnlySavedMarketplace(t *testing.T) {
 				if len(state.Installations) != expected || len(state.EnvironmentReceipts) != expected {
 					t.Fatalf("%s: expected %d persisted signed saved packages, got %d installations / %d receipts", name, expected, len(state.Installations), len(state.EnvironmentReceipts))
 				}
-				foundRoot := false
+				// Verify *every* saved node against the frozen signed source,
+				// not merely the root and the number of Marketing Kit children.
+				pinnedByID := make(map[string]domain.DirectoryRelease, len(snapshot.Distributions))
+				for _, pinnedDistribution := range snapshot.Distributions {
+					if len(pinnedDistribution.Releases) != 1 {
+						t.Fatal("frozen source has ambiguous release cardinality")
+					}
+					pinnedByID[pinnedDistribution.ID] = pinnedDistribution.Releases[0]
+				}
+				installedIDs := make(map[string]bool, expected)
 				for _, installed := range state.Installations {
 					if installed.Directory == nil || installed.Directory.FeedID != piUpstreamTestFeedID {
 						t.Fatalf("%s: saved child lost independent TEST-only feed identity", name)
 					}
-					if installed.Directory.DistributionID == distribution.ID {
-						pinned := distribution.Releases[0]
-						if foundRoot || installed.Source.Repository != pinned.PackageSource.Repository ||
-							installed.Source.PackageSubpath != pinned.PackageSource.Path ||
-							installed.Source.ResolvedRevision != pinned.PackageSource.Revision ||
-							installed.Source.TreeDigest != pinned.TreeDigest ||
-							installed.Package.ManifestDigest != pinned.ManifestDigest {
-							t.Fatalf("%s: root did not bind to the exact immutable upstream/registry source", name)
-						}
-						foundRoot = true
+					id := installed.Directory.DistributionID
+					pinned, exists := pinnedByID[id]
+					if !exists || installedIDs[id] ||
+						installed.Source.Repository != pinned.PackageSource.Repository ||
+						installed.Source.PackageSubpath != pinned.PackageSource.Path ||
+						installed.Source.ResolvedRevision != pinned.PackageSource.Revision ||
+						installed.Source.TreeDigest != pinned.TreeDigest ||
+						installed.Package.ManifestDigest != pinned.ManifestDigest {
+						t.Fatalf("%s: unexpected, duplicate or unpinned saved child %q", name, id)
 					}
+					installedIDs[id] = true
 				}
-				if !foundRoot {
-					t.Fatalf("%s: installed source root missing", name)
+				if len(installedIDs) != expected || !installedIDs[distribution.ID] {
+					t.Fatalf("%s: exact saved source closure is incomplete", name)
+				}
+				if distribution.ProductID == "marketing-kit" {
+					for _, id := range []string{"777genius/marketing-kit", "777genius/hubspot-crm", "777genius/notion", "777genius/playwright-bridge"} {
+						if !installedIDs[id] {
+							t.Fatalf("%s: mandatory pinned Marketing Kit dependency %s missing", name, id)
+						}
+					}
 				}
 				if distribution.Kind == domain.DistributionUpstream {
 					if distribution.ID != "github/github" && distribution.ID != "upstash/context7" {
