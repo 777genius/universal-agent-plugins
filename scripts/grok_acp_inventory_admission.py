@@ -173,6 +173,8 @@ def session_rpc_frame(value, state, req, send):
 LIMIT = 1 << 20
 SCOPES = ('user', 'a', 'b')
 LABELS = ('version', 'help', 'agent-help', 'stdio-help', 'acp')
+METADATA_LABELS = LABELS[:4] + ('mcp-inventory',) + LABELS[4:]
+STARTUP_NAME = 'uap-acp-startup-witness'
 FALSE = dict.fromkeys(('inventory_admitted', 'native_enablement', 'workspace_trust', 'native_mcp_call',
                        'provider_authentication', 'real_model_inference', 'production_project_activation'), False)
 BOOTSTRAP_LIMIT = 256 << 10
@@ -406,6 +408,14 @@ def collector_result(req):
             require(row['error'] is None, 'help-command')
         help_admitted(result['commands'])
         result['reason'] = 'protocol-refused'
+        if not session:
+            command_in_flight = True
+            row = command([str(native), 'inspect', '--json'], 'mcp-inventory', root / req['scope'], env,
+                          min(deadline, time.monotonic() + 5),
+                          LIMIT - sum(item['merged_bytes'] for item in result['commands']), result['rpc'], req)
+            command_in_flight = False
+            result['commands'].append(row)
+            startup_inventory(row, root, req['scope'])
         command_in_flight = True
         row = command([str(native), 'agent', '--no-leader', 'stdio'], 'acp', root / req['scope'], env, deadline,
                       LIMIT - sum(row['merged_bytes'] for row in result['commands']), result['rpc'], req)
@@ -506,11 +516,12 @@ def validate_receipt(receipt, request):
         require(type(result[key]) is type(request[key]) and result[key] == request[key], 'collector-identity')
     require(type(result['semantic_complete']) is bool and result['reason'] in ('complete', 'protocol-refused', 'help-refused', 'isolation-refused', 'collector-refused'), 'semantic-state')
     require(result['semantic_complete'] == (result['reason'] == 'complete'), 'semantic-state')
-    require(type(result['commands']) is list and len(result['commands']) <= (4 if lock else 5), 'command-count')
+    labels = LOCK_LABELS if lock else LABELS if session else METADATA_LABELS
+    require(type(result['commands']) is list and len(result['commands']) <= len(labels), 'command-count')
     total = 0
     for index, row in enumerate(result['commands']):
         closed(row, 'label argv exit error merged_base64 merged_bytes merged_sha256')
-        require(row['label'] == (LOCK_LABELS if lock else LABELS)[index] and type(row['argv']) is list and all(type(x) is str for x in row['argv'])
+        require(row['label'] == labels[index] and type(row['argv']) is list and all(type(x) is str for x in row['argv'])
                 and (row['exit'] is None or type(row['exit']) is int)
                 and row['error'] in (None, 'deadline', 'stream-bound', 'process-refused', 'protocol-refused'), 'command-record')
         raw = base64.b64decode(row['merged_base64'], validate=True)
@@ -973,6 +984,38 @@ def lock_readout(members, packet, deadline):
         return refused
 
 
+def startup_fixture_config(root):
+    """One eligible, unrelated User MCP records any unexpected native startup."""
+    path = root / 'home/.grok/config.toml'
+    require(not path.exists(), 'startup-config-collision')
+    args = ['-I', str(root / 'startup-witness.py'), str(root / 'unexpected-startup')]
+    body = ('[marketplace]\ndefault_skills_installs_purged = true\n'
+            '[mcp_servers.' + STARTUP_NAME + ']\ncommand = "/usr/bin/python3"\nargs = '
+            + json.dumps(args) + '\nenabled = true\n').encode()
+    path.write_bytes(body)
+    path.chmod(0o600)
+    witness = root / 'startup-witness.py'
+    witness.write_text("import pathlib,sys\npathlib.Path(sys.argv[1]).write_bytes(b'unexpected')\nraise SystemExit(93)\n")
+    witness.chmod(0o600)
+    return body
+
+
+def startup_inventory(row, root, scope):
+    require(row['exit'] == 0 and row['error'] is None, 'startup-inventory-exit')
+    body = base64.b64decode(row['merged_base64'], validate=True)
+    report = document(body)
+    require(type(report) is dict and report.get('grokVersion') == '1.0.70'
+            and report.get('cwd') == str(root / scope), 'startup-inventory-source')
+    servers = report.get('mcpServers')
+    require(type(servers) is list and len(servers) == 1, 'startup-inventory-count')
+    server = servers[0]
+    require(type(server) is dict and server.get('name') == STARTUP_NAME
+            and server.get('transport') == 'stdio' and server.get('target') == '/usr/bin/python3'
+            and server.get('source') == {'type': 'configToml', 'path': str(root / 'home/.grok/config.toml')}
+            and server.get('disabled', False) is False and server.get('disabledReason') is None
+            and report.get('mcpConfigProblems', []) == [], 'startup-inventory-enabled')
+
+
 def fixtures(root, nonce):
     from client_automation_native_probe import put
     roots = {'user_profile': root / 'home/.grok', 'a': root / 'a', 'b': root / 'b'}
@@ -1129,7 +1172,7 @@ def rename_pending(descriptor):
 def publish(output, bodies, held=None, expected=None, *, mode=None):
     """Single descriptor-anchored attempt; only the returned receipt permits upload."""
     import native_client_project_artifacts as artifacts
-    allowed = {'admission.json', 'acquisition.json'} | {scope + '.rpc.json' for scope in SCOPES} | {scope + '.ledger.json' for scope in SCOPES} | {scope + '-' + label + '.merged.log' for scope in SCOPES for label in LABELS}
+    allowed = {'admission.json', 'acquisition.json'} | {scope + '.rpc.json' for scope in SCOPES} | {scope + '.ledger.json' for scope in SCOPES} | {scope + '-' + label + '.merged.log' for scope in SCOPES for label in METADATA_LABELS}
     if mode == LOCK_MODE:
         allowed = {'admission.json','acquisition.json'} | {phase+suffix for phase in LOCK_PHASES for suffix in ('.rpc.json','.ledger.json')} | {phase+'-'+label+'.merged.log' for phase in LOCK_PHASES for label in LOCK_LABELS}
     else:
@@ -1172,18 +1215,18 @@ def publication_readout(raw, packet, deadline, *, mode=None):
             require(type(deadline) is float and time.monotonic() < deadline, 'readout-deadline')
         budget()
         require(type(raw) is bytes and 0 < len(raw) <= 17 << 20, 'readout-archive-bound')
-        allowed = {'admission.json', 'acquisition.json'} | {s + suffix for s in SCOPES for suffix in ('.rpc.json', '.ledger.json')} | {s + '-' + label + '.merged.log' for s in SCOPES for label in LABELS}
+        allowed = {'admission.json', 'acquisition.json'} | {s + suffix for s in SCOPES for suffix in ('.rpc.json', '.ledger.json')} | {s + '-' + label + '.merged.log' for s in SCOPES for label in METADATA_LABELS}
         if mode == LOCK_MODE:
             allowed = {'admission.json','acquisition.json'} | {phase+suffix for phase in LOCK_PHASES for suffix in ('.rpc.json','.ledger.json')} | {phase+'-'+label+'.merged.log' for phase in LOCK_PHASES for label in LOCK_LABELS}
         require(len(raw) >= 22, 'readout-eocd')
         end = struct.unpack('<4s4H2LH', raw[-22:])
         require(end[0] == b'PK\x05\x06' and end[1] == end[2] == 0
-                and end[3] == end[4] and 0 < end[4] <= 23 and end[5] <= 16 << 10
+                and end[3] == end[4] and 0 < end[4] <= 26 and end[5] <= 16 << 10
                 and end[6] + end[5] == len(raw) - 22 and end[7] == 0, 'readout-central-bound')
         with zipfile.ZipFile(io.BytesIO(raw)) as archive:
             infos = archive.infolist()
             require(len(infos) == end[4], 'readout-central-count')
-            require(0 < len(infos) <= 23 and len({i.filename for i in infos}) == len(infos)
+            require(0 < len(infos) <= 26 and len({i.filename for i in infos}) == len(infos)
                     and all(i.filename in allowed and not i.is_dir() and not i.flag_bits & 1
                             and i.compress_type in (zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED)
                             and 0 <= i.file_size <= LIMIT for i in infos)
@@ -1227,12 +1270,12 @@ def publication_readout(raw, packet, deadline, *, mode=None):
             require(type(reason) is str and reason in ('complete', 'protocol-refused', 'help-refused', 'isolation-refused', 'collector-refused')
                     and type(result['semantic_complete']) is bool and result['semantic_complete'] == (reason == 'complete'), 'readout-reason')
             commands = result['commands']
-            require(type(commands) is list and len(commands) <= 5, 'readout-commands')
+            require(type(commands) is list and len(commands) <= len(METADATA_LABELS), 'readout-commands')
             failed = 0
             for number, row in enumerate(commands):
                 budget()
-                require(type(row) is dict and row.get('label') == LABELS[number]
-                        and row.get('merged_file') == scope + '-' + LABELS[number] + '.merged.log'
+                require(type(row) is dict and row.get('label') == METADATA_LABELS[number]
+                        and row.get('merged_file') == scope + '-' + METADATA_LABELS[number] + '.merged.log'
                         and type(row.get('merged_bytes')) is int and 0 <= row['merged_bytes'] <= LIMIT
                         and type(row.get('merged_sha256')) is str and re.fullmatch('[0-9a-f]{64}', row['merged_sha256'])
                         and (row.get('exit') is None or type(row['exit']) is int)
@@ -1344,6 +1387,7 @@ def run(output, *, session_only=False, lock_qualification=False):
                             + ' -X main.collectorSHA=' + digest(ordinary(collector)), '-o', str(helper), './research/grokacpinventory'],
                            cwd=shared.SOURCE / 'install/integrationctl', check=True, timeout=60)
             roots = fixtures(root, nonce)
+            startup_config = startup_fixture_config(root) if not session_only and not lock_qualification else None
             if session_only:
                 session_fixture_config(root, nonce)
                 summary['mode'] = SESSION_MODE
@@ -1353,7 +1397,7 @@ def run(output, *, session_only=False, lock_qualification=False):
             (root / 'request.json').write_bytes(b'{}\n')
             baseline = None if session_only or lock_qualification else metadata_inventory(root, budget)
             profiles = {name: snapshot(path) for name, path in roots.items()}
-            bootstrap = NativeBootstrap()
+            bootstrap = NativeBootstrap(original_config=startup_config)
             bodies['acquisition.json'] = json.dumps(receipt, sort_keys=True).encode()
             native_ids, lock_created = {}, None
             phases = LOCK_PHASES if lock_qualification else (('a',) if session_only else SCOPES)

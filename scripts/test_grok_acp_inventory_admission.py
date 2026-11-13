@@ -37,6 +37,14 @@ def plugin_row(root, scope, name):
     return row
 
 
+def startup_row(root, scope):
+    body = json.dumps(dict(grokVersion='1.0.70', cwd=str(root / scope), mcpServers=[dict(
+        name=case.STARTUP_NAME, transport='stdio', target='/usr/bin/python3',
+        source=dict(type='configToml', path=str(root / 'home/.grok/config.toml')))])).encode()
+    return dict(label='mcp-inventory', argv=['/sealed/grok', 'inspect', '--json'], exit=0, error=None,
+                merged_base64=base64.b64encode(body).decode(), merged_bytes=len(body), merged_sha256=case.digest(body))
+
+
 
 class AdmissionContracts(unittest.TestCase):
     def request(self, root):
@@ -210,7 +218,7 @@ sys.stdin.read()
                     if write_fd is not None: os.close(write_fd)
 
     def test_incomplete_each_command_never_emits_collector_json(self):
-        for failed_index in range(5):
+        for failed_index in range(len(case.METADATA_LABELS)):
             with self.subTest(command=failed_index), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
                 request = root / 'request.json'
@@ -220,7 +228,7 @@ sys.stdin.read()
                     index = len(calls)
                     calls.append(args)
                     if index == failed_index: raise OSError('inert incomplete pipe/wait')
-                    return help_rows()[index]
+                    return help_rows()[index] if index < 4 else startup_row(root, 'user')
                 output = mock.Mock()
                 with mock.patch.object(case, 'isolation', return_value={}), mock.patch.object(case, 'command', incomplete), mock.patch.object(case.sys, 'stdout', output):
                     with self.assertRaises(OSError): case.collect(request)
@@ -639,7 +647,7 @@ case['collect'](pathlib.Path(sys.argv[2]))
 
 
 @contextmanager
-def native_bootstrap_fixture(*, companions=True):
+def native_bootstrap_fixture(*, companions=True, startup=False):
     """Real owned files and authored pins; no vendor or recorded-current adoption."""
     import project_native_research as shared
     from devin_structured_inventory_admission import metadata_inventory
@@ -648,6 +656,7 @@ def native_bootstrap_fixture(*, companions=True):
         root = Path(directory).resolve()
         with mock.patch.object(case.subprocess, 'run'):
             roots = case.fixtures(root, 'a' * 32)
+        original_config = case.startup_fixture_config(root) if startup else None
         (root / 'request.json').write_bytes(b'{}')
         before = metadata_inventory(root, budget)
         profiles = {name: snapshot(path) for name, path in roots.items()}
@@ -656,6 +665,9 @@ def native_bootstrap_fixture(*, companions=True):
             path = native / name; path.mkdir(parents=True, exist_ok=True); path.chmod(mode)
         pins = {}
         for name in bootstrap_case.PINNED:
+            if name == 'config.toml' and startup:
+                pins[name] = bootstrap_case.PINNED[name]
+                continue
             body = b'' if name.endswith('.lock') else ('PRIVATE_NATIVE_' + name).encode()
             path = native / name; path.write_bytes(body); path.chmod(0o644)
             pins[name] = (len(body), case.digest(body), 0o644)
@@ -667,7 +679,7 @@ def native_bootstrap_fixture(*, companions=True):
             path = native / name
             path.write_bytes(b'x' * (32768 if name.endswith('-shm') else 4096))
             path.chmod(0o644)
-        ledger = bootstrap_case.NativeBootstrap()
+        ledger = bootstrap_case.NativeBootstrap(original_config=original_config)
         with mock.patch.object(bootstrap_case, 'PINNED', pins):
             yield dict(root=root, roots=roots, native=native, before=before, profiles=profiles,
                        budget=budget, bootstrap=ledger, uuid=uuid,
@@ -675,6 +687,63 @@ def native_bootstrap_fixture(*, companions=True):
 
 
 class NativeBootstrapContracts(unittest.TestCase):
+    def test_startup_tripwire_is_eligible_and_only_authored_config_is_preexisting(self):
+        import tomllib
+        with native_bootstrap_fixture(startup=True) as f:
+            config = tomllib.loads((f['native'] / 'config.toml').read_text())
+            selected = config['mcp_servers'][case.STARTUP_NAME]
+            self.assertIs(selected['enabled'], True)
+            self.assertEqual(selected['command'], '/usr/bin/python3')
+            ledger = f['capture']()
+            self.assertTrue(ledger['accepted'])
+            self.assertEqual(set(ledger['native_bootstrap']), bootstrap_case.NAMES - {'config.toml'})
+            self.assertEqual(ledger['profiles_before']['user_profile']['config.toml'],
+                             ledger['profiles_after']['user_profile']['config.toml'])
+            self.assertTrue(f['capture']()['accepted'])
+            # Positive control executes only our authored script; a native launch
+            # uses the identical argv and produces an unadmitted persistent leaf.
+            result = subprocess.run([selected['command'], *selected['args']], check=False, timeout=3)
+            self.assertEqual(result.returncode, 93)
+            self.assertEqual((f['root'] / 'unexpected-startup').read_bytes(), b'unexpected')
+            self.assertFalse(f['capture']()['accepted'])
+
+    def test_startup_config_replacement_change_and_missing_other_pin_refuse_before_reads(self):
+        import client_automation_native_probe as snapshot_case
+        for kind in ('replace', 'change', 'remove-pin', 'mode'):
+            with self.subTest(kind=kind), native_bootstrap_fixture(startup=True) as f:
+                target = f['native'] / 'config.toml'
+                if kind == 'replace':
+                    replacement = f['native'] / 'replacement'
+                    replacement.write_bytes(target.read_bytes()); replacement.chmod(0o600); replacement.replace(target)
+                elif kind == 'change': target.write_bytes(target.read_bytes() + b'# concurrent\n')
+                elif kind == 'mode': target.chmod(0o644)
+                else: (f['native'] / '.metadata_version').unlink()
+                with mock.patch.object(snapshot_case, 'snapshot') as reader:
+                    self.assertFalse(f['capture']()['accepted'])
+                reader.assert_not_called()
+
+    def test_startup_inventory_requires_effective_native_source_and_never_treats_absence_as_safe(self):
+        root = Path('/tmp/uap-owned')
+        for scope in case.SCOPES:
+            case.startup_inventory(startup_row(root, scope), root, scope)
+        for mutation in ('empty', 'duplicate', 'disabled', 'blocked', 'source', 'target', 'name', 'version', 'cwd', 'problems'):
+            row = startup_row(root, 'a')
+            report = json.loads(base64.b64decode(row['merged_base64']))
+            selected = report['mcpServers'][0]
+            if mutation == 'empty': report['mcpServers'] = []
+            elif mutation == 'duplicate': report['mcpServers'].append(copy.deepcopy(selected))
+            elif mutation == 'disabled': selected['disabled'] = True
+            elif mutation == 'blocked': selected['disabledReason'] = 'not allowed'
+            elif mutation == 'source': selected['source']['path'] = '/foreign/config.toml'
+            elif mutation == 'target': selected['target'] = '/usr/bin/false'
+            elif mutation == 'name': selected['name'] = 'foreign'
+            elif mutation == 'version': report['grokVersion'] = '1.0.69'
+            elif mutation == 'cwd': report['cwd'] = str(root / 'b')
+            else: report['mcpConfigProblems'] = [{'server': case.STARTUP_NAME}]
+            row['merged_base64'] = base64.b64encode(json.dumps(report).encode()).decode()
+            with self.subTest(mutation=mutation), self.assertRaises(ValueError):
+                case.startup_inventory(row, root, 'a')
+
     def test_exact_initial_memberships_capture_absent_companions_without_renewal(self):
         for companions in (False, True):
             with self.subTest(companions=companions), native_bootstrap_fixture(companions=companions) as f:

@@ -75,7 +75,10 @@ def matches_snapshot(value, meta):
 
 
 class NativeBootstrap:
-    def __init__(self):
+    def __init__(self, *, original_config=None):
+        require(original_config is None or type(original_config) is bytes
+                and 0 < len(original_config) <= 16384, "bootstrap authored config bound")
+        self.original_config = original_config
         self.created = None
         self.uuid_hash = None
 
@@ -92,7 +95,13 @@ class NativeBootstrap:
                 require(after[path] == previous, "original member changed")
         added = set(after) - set(before)
         names = frozenset(path.removeprefix(PREFIX) for path in added)
-        require(names in (NAMES, NAMES - COMPANIONS) and added == {PREFIX + name for name in names},
+        expected = NAMES - ({"config.toml"} if self.original_config is not None else set())
+        if self.original_config is not None:
+            config = record(before[PREFIX + "config.toml"], 9)
+            require(stat.S_ISREG(config[2]) and stat.S_IMODE(config[2]) == 0o600
+                    and config[0] == root[0] and config[3] == 1 and config[4:6] == root[3:]
+                    and config[6] == len(self.original_config), "bootstrap authored config authority")
+        require(names in (expected, expected - COMPANIONS) and added == {PREFIX + name for name in names},
                 "unknown or missing native bootstrap")
         require(self.created is None or names == set(self.created), "bootstrap creation membership changed")
         for name in names:
@@ -140,6 +149,8 @@ class NativeBootstrap:
                 require(type(value) is dict and key in after, "snapshot member missing")
                 matches_snapshot(value, after[key])
         for name, (size, digest, mode) in PINNED.items():
+            if name == "config.toml" and self.original_config is not None:
+                size, digest, mode = len(self.original_config), hashlib.sha256(self.original_config).hexdigest(), 0o600
             value = current[name]
             require((value["bytes"], value["sha256"], value["mode"]) == (size, digest, mode),
                     "bootstrap pinned content")

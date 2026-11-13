@@ -1,10 +1,33 @@
 # Grok 1.0.70 isolated ACP inventory admission
 
+## Prospective sessionless startup negative
+
+The next metadata capture adds one task-authored enabled User MCP server whose
+only action is writing an `unexpected-startup` marker and exiting. Before each
+sessionless ACP exchange, `grok inspect --json` must report exactly that eligible
+stdio server, its User config path, and the pinned executable. A missing,
+disabled, blocked, foreign or ambiguous inventory refuses before ACP. The test
+has an inert positive control for the exact marker argv.
+
+This narrowly supersedes the historical zero-MCP fixture below. It authors only
+the User config before Baseline0, including the already measured marketplace
+default, and subtracts only that leaf from the fixed native-created bootstrap
+set. Its original bytes, mode and identity remain fixed in every post-ledger.
+Any marker or additional native effect refuses after strict process-family
+cleanup. The raw archive now has at most 26 members (18 command streams), with
+unchanged time, stream, aggregate and containment limits. Session and lock
+measurements retain their separate original fixtures.
+
+This proves no more than the exact `initialize` then `_x.ai/plugins/list` route
+with an unknown session ID. It does not qualify `session/new`, trust, enablement,
+MCP runtime or model calls. Local inert contracts pass; a fresh original hosted
+capture and independent review remain required before production consumption.
+
 ## Current measured bootstrap and prospective scope contract
 
 The measured 43-name native bootstrap in
 [the native bootstrap amendment](2026-11-13-grok-acp-native-bootstrap.md)
-supersedes the unpublished 35-name preseed recipe. Do not author
+supersedes the unpublished 35-name preseed recipe. For the original zero-MCP capture, do not author
 `default_skills_installs_purged` or `session_search = false` in the fixture.
 Keep a single native-created bootstrap route and the original fixture baseline.
 Both original fc8 and 4994 archives agree on all 33 immutable file pins,
@@ -132,8 +155,9 @@ Public extensions/plugins.rs129-157 accepts camelCase sessionId. An unknown
 session lazily builds the launch-cwd registry. agent/app.rs279-290 starts auth
 refresh, managed policy and settings/model-catalog work before dispatch, so this
 is not claimed side-effect-free or network-idle. acp_agent.rs534 also starts
-launch MCP configuration discovery. Fixtures therefore contain ZERO MCP/hooks/
-LSP/envrc/executable components. Empty MCP discovery may emit the one reviewed
+launch MCP configuration discovery. The original fixtures therefore contained ZERO MCP/hooks/
+LSP/envrc/executable components; the prospective startup negative above adds only
+its explicit task-owned MCP witness. Empty MCP discovery may emit the one reviewed
 notification below; it is not an MCP tool call.
 
 folder_trust.rs294-308 maps allow_prompt=false to FailClosed;131-135/259-284 record
