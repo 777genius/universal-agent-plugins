@@ -155,7 +155,7 @@ def build_helper(repo, root, output, budget):
         raise ValueError("exact pinned Go version differs")
     executable = root / "controller"
     argv = [go, "build", "-trimpath", "-p=1", "-ldflags", "-X main.buildCommit=" + os.environ["EXPECTED_COMMIT"],
-            "-o", str(executable), "./install/integrationctl/research/vscodeworkspace"]
+            "-o", str(executable), "./install/integrationctl/agentplugins/research/vscodeworkspace"]
     record, _, _ = run_probe(argv, repo, env, output, "helper-build", timeout=min(60, budget.check()), limit=1 << 20)
     if record["error"] is not None or record["exit"] != 0:
         raise ValueError("exact-source helper build failed or exceeded its bound")

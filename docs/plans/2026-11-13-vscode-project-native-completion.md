@@ -110,3 +110,54 @@ required. This changes the fixture qualification host, not released support.
 
 The dedicated workflow also runs on filtered main pushes, retaining the exact
 checkout source guard for postmerge native acceptance without manual dispatch.
+
+## Observed isolated-module build correction
+
+CodeQL run `43362525386`, Go job `131679156333`, failed its isolated
+`GOWORK=off` parent-module build on reviewed head
+`ba8e0f4cb55372367df50cec1d2c3037769d231b`. Go 1.26.11 initialized normally;
+the restored research controller imported the child agentplugins module from
+the parent integrationctl module. Workspace builds had masked the missing
+module dependency. The parent must not depend on its child, which already
+depends on the parent's shared adapters and ports (docs/ARCHITECTURE.md).
+
+Move the whole 36-file controller package unchanged into
+`install/integrationctl/agentplugins/research/vscodeworkspace`, except for its
+source-inspection test's additional parent directory. Update active workflow,
+build and Python source-test paths. Preserve historical evidence and plan paths,
+module manifests, isolated CodeQL builds and lint exemptions. This locates the
+research executable with its existing dependencies; it adds no reverse module
+edge, new module, product behavior or qualification claim. Verify both parent
+and child with `GOWORK=off go build ./...`, relocated controller tests and the
+focused vendor-free Python contracts before fresh exact-source CI acceptance.
+
+## Observed first-stage failure and closed diagnostics
+
+Actual trusted run `43356611063` on `ba8e0f4cb55372367df50cec1d2c3037769d231b`
+failed at first `empty-a`, phase `publisher-startup`, before public installation.
+The driver emitted only `closed-stage-contract-refused`; its catch discarded the
+underlying exception and finally zeroed native diagnostic memory. No underlying
+AppArmor, Electron sandbox or other host cause is established by that artifact.
+The native cleanup remained unproved; all qualification flags remain false.
+
+Add inline pure failure diagnostics only: fixed own-error/capture-error reason
+vocabulary, whitelisted exit/signal values, proof/endpoint-seen booleans and capped
+byte counts. Fixed booleans may identify known native startup text signatures;
+these are observations of literal text, not an inferred host cause. Never output
+exception messages, diagnostic bytes, endpoint/DevTools URLs, cookies or profile
+contents. Existing failure UI metadata now emits fixed kinds/booleans only.
+
+Inert tests execute only the actual extracted pure TypeScript helper block via
+Node's built-in stripTypeScriptTypes and a VM. Test arbitrary private error/buffer
+values, unknown reasons/signals, capped numbers and all fixed startup signatures.
+No extra runtime file or wildcard manifest is introduced. Native argv, sandbox,
+UID/NNP, trust flow, pins, deadlines, capture bounds, cleanup and failure verdicts
+remain unchanged. Root and independent critic review before fresh genuine CI;
+no native IDE or vendor authentication is run locally.
+
+The final bounded-capture review found that the old onData concatenation retained
+further chunks after detecting overflow. Retain at most LIMIT+1 bytes BEFORE the
+existing overflow refusal, including repeated post-overflow chunks. Keep total
+byte accounting, the same overflow reason/termination and all existing process
+semantics. An inert flood contract executes the exact inline append helper with
+256 chunks and one oversized chunk, verifying the retained cap and closed report.

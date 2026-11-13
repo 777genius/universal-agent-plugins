@@ -40,7 +40,7 @@ GUI = ("empty-a", "empty-b", "installed-a", "installed-b", "stable-a", "updated-
        "restart-a", "removed-a", "remaining-b")
 PREPARATION = ("source-commit", "source-tree", "source-clean", "source-final-clean", "go-version",
                "controller-build", "installer-build", "probe-build", "trusted-node-version", "trusted-npm-ci",
-               "trusted-tsc-version", "trusted-tsc", "publisher-version", "publisher-help")
+               "trusted-tsc-version", "trusted-tsc", "trusted-driver-diagnostics", "publisher-version", "publisher-help")
 SCANNER_ARCHIVE = "2b3d176db752433b904a4b42375543ff398f4841d22e48f7d4f23ded925b72da"
 
 
@@ -187,7 +187,7 @@ class Preparation:
         executable = self.root / "executables"
         executable.mkdir(mode=0o700)
         controller, installer, probe = (self.root / "controller", executable / "agentplugins", executable / "native-probe")
-        builds = (("controller-build", SOURCE, controller, "./install/integrationctl/research/vscodeworkspace"),
+        builds = (("controller-build", SOURCE, controller, "./install/integrationctl/agentplugins/research/vscodeworkspace"),
                   ("installer-build", SOURCE / "cli", installer, "./cmd/agentplugins"),
                   ("probe-build", SOURCE, probe, "./repotests/testdata/agentplugins_native_probe"))
         for label, cwd, target, package in builds:

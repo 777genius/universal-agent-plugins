@@ -40,6 +40,59 @@ type PublisherProof = {
   interfaces: string[]; capabilities_zero: true; no_new_privileges: true;
 };
 
+// BEGIN CLOSED FAILURE DIAGNOSTICS: pure functions, tested without loading the driver.
+function appendDiagnostic(current: Buffer, chunk: Buffer): Buffer {
+  const room = LIMIT + 1 - current.length;
+  if (room <= 0) return current.subarray(0, LIMIT + 1);
+  return Buffer.concat([current, chunk.subarray(0, room)]);
+}
+function failureReason(error: unknown): string {
+  if (!(error instanceof Error)) return 'unclassified';
+  switch (error.message) {
+    case 'publisher startup failed': return 'publisher-startup-failed';
+    case 'publisher spawn failed': return 'publisher-spawn-failed';
+    case 'native merged stream overflow': return 'publisher-stream-overflow';
+    case 'publisher proof bound exceeded': return 'publisher-proof-bound';
+    case 'publisher proof missing': return 'publisher-proof-missing';
+    case 'publisher same-process admission differs': return 'publisher-proof-mismatch';
+    case 'malformed publisher admission stream': return 'publisher-stream-malformed';
+    case 'unexpected pre-verifier stderr': return 'publisher-pre-verifier-stderr';
+    case 'ambiguous native DevTools endpoint': return 'publisher-endpoint-ambiguous';
+    case 'native DevTools endpoint refused': return 'publisher-endpoint-refused';
+    case 'native DevTools port refused': return 'publisher-port-refused';
+    case 'stage deadline exceeded': return 'stage-deadline';
+    case 'bounded operation deadline': return 'operation-deadline';
+    case 'native browser contexts differ': return 'browser-context-mismatch';
+    case 'multiple native workbench pages': return 'workbench-pages-ambiguous';
+    case 'native workbench page missing': return 'workbench-page-missing';
+    case 'publisher graceful shutdown incomplete': return 'publisher-shutdown-incomplete';
+    case 'publisher terminal result differs': return 'publisher-terminal-result-mismatch';
+    case 'observer result deadline exceeded': return 'observer-deadline';
+    case 'driver output bound exceeded': return 'driver-output-bound';
+    default: return 'unclassified';
+  }
+}
+function failureFacts(error: unknown, capture: unknown, code: unknown, signal: unknown,
+  proofSeen: boolean, endpointSeen: boolean, diagnostic: Buffer, mergedBytes: number, stderrBytes: number): ObjectValue {
+  const count = (value: number): number => Number.isSafeInteger(value) && value >= 0 ? Math.min(value, LIMIT + 1) : 0;
+  const signals = ['SIGTERM', 'SIGKILL', 'SIGABRT', 'SIGTRAP', 'SIGSEGV', 'SIGILL', 'SIGBUS', 'SIGFPE', 'SIGHUP'];
+  const body = diagnostic.subarray(0, LIMIT).toString('utf8');
+  return { reason: failureReason(error), captureReason: capture === undefined ? 'none' : failureReason(capture),
+    publisherExitCode: typeof code === 'number' && Number.isInteger(code) && code >= 0 && code <= 255 ? code : null,
+    publisherSignal: signal === null || signal === undefined ? 'none' : typeof signal === 'string' && signals.includes(signal) ? signal : 'other',
+    proofSeen: proofSeen === true, endpointSeen: endpointSeen === true,
+    publisherMergedBytes: count(mergedBytes), preVerifierStderrBytes: count(stderrBytes),
+    mergedBytesCapped: mergedBytes > LIMIT + 1, stderrBytesCapped: stderrBytes > LIMIT + 1,
+    startupSignatures: {
+      sandboxUnavailable: body.includes('No usable sandbox!') || body.includes('Running as root without --no-sandbox is not supported'),
+      namespaceDenied: body.includes('Failed to move to new namespace') || body.includes('Failed to unshare'),
+      sharedLibraryMissing: body.includes('error while loading shared libraries:'),
+      glibcVersionMissing: body.includes('GLIBC_') && body.includes('not found'),
+      displayUnavailable: body.includes('Missing X server or $DISPLAY') || body.includes('cannot open display:')
+    } };
+}
+// END CLOSED FAILURE DIAGNOSTICS
+
 function strictJSON(body: string): unknown {
   if (Buffer.byteLength(body) > LIMIT) throw new Error('JSON body exceeds bound');
   let position = 0, nodes = 0;
@@ -375,10 +428,6 @@ async function focusWorkbench(page: Page, req: Request, stageDeadline: number): 
 async function failureUI(page: Page | undefined): Promise<ObjectValue[]> {
   if (!page || page.isClosed()) return [];
   const result: ObjectValue[] = [];
-  const safe = (value: string | null): string => (value ?? '').slice(0, 256)
-    .replace(/(?:https?|wss?):\/\/[^\s<>"']+/gu, '[private-url]')
-    .replace(/[A-Za-z0-9_-]{40,}/gu, '[opaque-value]')
-    .replace(/[\x00-\x1f\x7f]/gu, ' ');
   const add = (row: ObjectValue): void => {
     if (result.length < 16 && Buffer.byteLength(JSON.stringify([...result, row])) <= 4096) result.push(row);
   };
@@ -386,15 +435,14 @@ async function failureUI(page: Page | undefined): Promise<ObjectValue[]> {
     const dialogs = page.getByRole('dialog').filter({ visible: true });
     for (let index = 0; index < Math.min(await dialogs.count(), 4); index++) {
       const dialog = dialogs.nth(index), title = dialog.locator('.dialog-message');
-      add({ kind: 'dialog', label: safe(await dialog.getAttribute('aria-label', { timeout: 100 })),
-        title: await title.count() === 1 ? safe(await title.textContent({ timeout: 100 })) : '' });
+      add({ kind: 'dialog', messagePresent: await title.count() === 1 });
     }
     const inputs = page.locator('.quick-input-widget:visible input');
     for (let index = 0; index < Math.min(await inputs.count(), 2); index++)
-      add({ kind: 'quick-input', placeholder: safe(await inputs.nth(index).getAttribute('placeholder', { timeout: 100 })) });
+      add({ kind: 'quick-input' });
     const names = page.locator('.quick-input-widget:visible .monaco-list-row .label-name');
     for (let index = 0; index < Math.min(await names.count(), 16); index++)
-      add({ kind: 'quick-label', label: safe(await names.nth(index).textContent({ timeout: 100 })) });
+      add({ kind: 'quick-label' });
   } catch { /* Partial bounded metadata is useful; no fallback action is taken. */ }
   return result;
 }
@@ -404,11 +452,12 @@ async function main(): Promise<void> {
   const namespace = statSync('/proc/self/ns/net').ino;
   if (!Number.isSafeInteger(namespace) || String(namespace) === req.originalNetworkNamespace) throw new Error('driver isolation namespace differs');
   let child: ChildProcess | undefined, browser: Browser | undefined, page: Page | undefined;
-  let phase = 'publisher-startup';
-  let diagnostic = Buffer.alloc(0), first = true, proof: PublisherProof | undefined, endpoint = '', captureError: Error | undefined;
+  let phase = 'publisher-startup', mergedBytes = 0, stderrBytes = 0;
+  let diagnostic: Buffer = Buffer.alloc(0), first = true, proof: PublisherProof | undefined, endpoint = '', captureError: Error | undefined;
   const onData = (chunk: Buffer): void => {
+    mergedBytes = Math.min(Number.MAX_SAFE_INTEGER, mergedBytes + chunk.length);
     try {
-    diagnostic = Buffer.concat([diagnostic, chunk]);
+    diagnostic = appendDiagnostic(diagnostic, chunk);
     if (diagnostic.length > LIMIT) { captureError = new Error('native merged stream overflow'); child?.kill('SIGTERM'); return; }
     if (first) {
       const index = diagnostic.indexOf(10);
@@ -441,7 +490,10 @@ async function main(): Promise<void> {
       JSON.stringify(req.publisherEnv), JSON.stringify([req.publisher, ...req.publisherArgs])],
     { cwd: req.project, env: { PATH: '/usr/bin:/bin', LANG: 'C.UTF-8' }, stdio: ['ignore', 'pipe', 'pipe'], shell: false });
     child.stdout?.on('data', onData);
-    child.stderr?.on('data', (chunk: Buffer) => { if (chunk.length) captureError = new Error('unexpected pre-verifier stderr'); });
+    child.stderr?.on('data', (chunk: Buffer) => {
+      stderrBytes = Math.min(Number.MAX_SAFE_INTEGER, stderrBytes + chunk.length);
+      if (chunk.length) captureError = new Error('unexpected pre-verifier stderr');
+    });
     child.on('error', () => { captureError = new Error('publisher spawn failed'); });
     while (!endpoint || !proof) {
       if (captureError) throw captureError;
@@ -495,10 +547,11 @@ async function main(): Promise<void> {
     // callback before this leader exits. No publisher child remains here.
     phase = 'parent-planned-shutdown';
     await parentShutdown();
-  } catch {
+  } catch (error) {
     const metadata = await within(failureUI(page), Math.max(1, Math.min(500, deadline - performance.now()))).catch(() => []);
     process.stdout.write(JSON.stringify({ type: 'driver-failure', stage: req.stage, nonce: req.nonce, phase,
-      code: 'closed-stage-contract-refused', visibleNativeUI: metadata }) + '\n');
+      code: 'closed-stage-contract-refused', visibleNativeUI: metadata,
+      diagnostics: failureFacts(error, captureError, child?.exitCode, child?.signalCode, proof !== undefined, endpoint !== '', diagnostic, mergedBytes, stderrBytes) }) + '\n');
     throw new Error('reported closed driver failure');
   } finally {
     clearTimeout(timer);

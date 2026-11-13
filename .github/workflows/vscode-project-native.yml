@@ -9,7 +9,7 @@ on:
       - 'scripts/vscode-project-runtime-observer/**'
       - 'repotests/agentplugins_vscode_project_native_gateway_test.go'
       - 'repotests/testdata/agentplugins_native_probe/**'
-      - 'install/integrationctl/research/vscodeworkspace/**'
+      - 'install/integrationctl/agentplugins/research/vscodeworkspace/**'
   push:
     branches: [main]
     paths:
@@ -20,7 +20,7 @@ on:
       - 'scripts/vscode-project-runtime-observer/**'
       - 'repotests/agentplugins_vscode_project_native_gateway_test.go'
       - 'repotests/testdata/agentplugins_native_probe/**'
-      - 'install/integrationctl/research/vscodeworkspace/**'
+      - 'install/integrationctl/agentplugins/research/vscodeworkspace/**'
   workflow_dispatch:
 permissions:
   contents: read
@@ -87,7 +87,7 @@ jobs:
                       (['/usr/bin/python3', '-m', 'unittest', 'discover', '-s', 'scripts', '-p', 'test_project_native_vscode_toolchain.py'], 30),
                       (['/usr/bin/python3', '-m', 'unittest', 'discover', '-s', 'scripts', '-p', 'test_vscode_workspace_research.py'], 30),
                       (['/usr/bin/python3', '-m', 'unittest', 'discover', '-s', 'scripts', '-p', 'test_vscode_project_research.py'], 30),
-                      ([str(go), 'test', '-p=1', './install/integrationctl/research/vscodeworkspace'], 240),
+                      ([str(go), 'test', '-p=1', './install/integrationctl/agentplugins/research/vscodeworkspace'], 240),
                       ([str(go), 'test', '-p=1', './repotests', '-run', '^TestVSCodeProjectGatewayEvidence', '-count=1'], 240)]
           for index, (argv, seconds) in enumerate(commands):
               record, stdout, stderr = module.shared.run_probe(argv, root, env, home, 'contract-' + str(index), timeout=seconds, limit=1048576, memory_only=True)
