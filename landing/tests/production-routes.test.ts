@@ -238,7 +238,7 @@ test('prepare and live bind selected modules, built HTML, provenance and environ
       return fetcher(input, options);
     };
     const delays: number[] = [];
-    assert.equal(await live(root, contractPath, staleThenCurrent, async ms => { delays.push(ms); }), 25);
+    assert.equal(await live(root, contractPath, staleThenCurrent, async ms => { delays.push(ms); }), 27);
     assert.equal(provenanceReads, 3);
     assert.deepEqual(delays, [10000, 10000]);
     process.env.GITHUB_RUN_ATTEMPT = '3';
