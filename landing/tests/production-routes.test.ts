@@ -218,13 +218,31 @@ test('prepare and live bind selected modules, built HTML, provenance and environ
     assert.equal(requested.length, 26);
     assert(requested.includes('/agents/hermes/'));
     assert(requested.includes('/docs/ar/reference/client-compatibility'));
+    // A successful Pages deploy can briefly return the previous run's provenance.
+    // The verifier must wait for the exact run, not accept or silently skip it.
+    let provenanceReads = 0;
+    const staleThenCurrent: typeof fetch = async (input, options) => {
+      const url = String(input);
+      if (new URL(url).pathname === '/BUILD_PROVENANCE.json' && provenanceReads++ < 2) {
+        const response = new Response(JSON.stringify({ ...provenance, run_id: '122' }));
+        Object.defineProperty(response, 'url', { value: url });
+        return response;
+      }
+      return fetcher(input, options);
+    };
+    const delays: number[] = [];
+    assert.equal(await live(root, contractPath, staleThenCurrent, async ms => { delays.push(ms); }), 25);
+    assert.equal(provenanceReads, 3);
+    assert.deepEqual(delays, [10000, 10000]);
     process.env.GITHUB_RUN_ATTEMPT = '3';
     await assert.rejects(live(root, contractPath, fetcher, noDelay), /contract run_attempt/);
     process.env.GITHUB_RUN_ATTEMPT = identity.run_attempt;
     published.set('/agents/hermes/', published.get('/agents/hermes/')!.replace('Project installation', 'Project INSTALLATION'));
     await assert.rejects(live(root, contractPath, fetcher, noDelay), /SHA256|byte length/);
     published.set('/BUILD_PROVENANCE.json', JSON.stringify({ ...provenance, source_tree: 'd'.repeat(40) }));
+    const readsBeforeFailure = requested.filter(value => value === '/BUILD_PROVENANCE.json').length;
     await assert.rejects(live(root, contractPath, fetcher, noDelay), /live provenance source_tree/);
+    assert.equal(requested.filter(value => value === '/BUILD_PROVENANCE.json').length - readsBeforeFailure, 12);
   } finally {
     for (const key of envKeys) {
       if (previous[key] === undefined) delete process.env[key];
