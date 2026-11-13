@@ -1,8 +1,7 @@
 # Grok session-only measurement inside a fresh loopback namespace
 
-Status: API-authored review candidate; tests, AST, Go formatting/compilation and
-native execution are UNEXECUTED because the workspace execution service is
-unavailable. No branch ref is changed by this candidate. Root owns publication.
+Original candidate status: API-authored during the outage; tests and native execution
+were then UNEXECUTED. Later evidence is recorded below. Root owns publication.
 This implements the separately reviewed session-only plan, not plugin enablement.
 Source design is exact b79c2ac0; reconciliation preserves fbb3a1cb (including b526d963) and its
 ordinary Devin workflow job.
@@ -72,7 +71,7 @@ an unreturned provider construction or incomplete capture/join emits no result.
 This one-session measurement does NOT adopt unknown session persistence, SQLite,
 logs or trust files into the metadata41-or-43 envelope. After strict family settlement,
 the parent takes a bounded metadata-only delta and checks original authored
-entries. It reads NO newly created bodies. Returned real-session inventory may
+entries. Only the bounded original-config diagnostic below reads a postimage. Returned real-session inventory may
 suppress untrusted Project plugins; do not impose the old unknown-session full
 registry behavior, fabricate identity or grant trust to force their presence.
 
@@ -160,3 +159,41 @@ Missing phases stay missing; source/stream/schema/cleanup failures or the SAME
 original180s caller deadline yield fixed readout-refused without revoking the
 original ZIP. No raw errors, argv, IDs, paths or names are projected. All new
 positive/negative archive and real-publication contracts remain UNEXECUTED.
+
+## Measured agent_build phase and selected config diagnostic
+
+Original session run43453065814/job132000359819/artifact14058338742 comes from
+9cb6341f42ae833f08f8445db6a14db6b7df93d7, tree02c03ada4906196db11544a40a205075cb54271e.
+Replaying the actual stream reproduces refusal at frame10, phase agent_build;
+the earlier nine frames pass. No session/new result or inventory was returned.
+Public2bdd session_setup.rs blob061460db05fa95afe7d0fa8aba726c34a7bbec5d lacks that
+phase. Only this measured literal is added; public-source equivalence is not claimed.
+Closed fields,32 notifications, two per phase, actual session ID joins and terminal
+ordering remain enforced. Replaying a partial original does not complete it or
+retroactively make its stored RPC equal the newly parsed notification sequence.
+
+Only the original config.toml changed:405 to458 bytes via atomic replacement,
+same0600/singlelink/device/owner; body unread. accepted=false is intentional.
+protected_originals_unchanged=false accurately reports the replacement. Public
+marketplace migration and the52-byte ACP marker suggest a cause, without proof.
+
+The next normal session attempt can capture only home/.grok/config.toml after
+both validated family-cleanup receipts. Existing before snapshots remain the
+authority: root/home/.grok identities and all other original entries must match.
+Require regular0600, singlelink, original device/UID/GID and at most16KiB before
+reading. Reuse Devin read_bootstrap_file's descriptor-relative nofollow reader,
+then require equality of the complete after metadata map. No new reader or
+whole-profile snapshot is introduced; session/cache/log bodies stay unread.
+
+Optional selected_config_capture stays inside the existing a.ledger.json: closed
+schema1, original identity/bytes/SHA joined to the shared snapshot and unchanged
+nonce-based authored recipe, then post identity/bytes/SHA/base64. Failure retains
+null with no partial body. The existing readout validates these bounded joins,
+accepts historical records without this field, and prints no new raw information.
+ZIP names, wire schemas, commands, provider policy and deadlines stay unchanged.
+Metadata accepted=false, computed original-preservation, collection_complete=false,
+all qualification flags and the final workflow fence remain unchanged.
+
+Inert contracts cover phase/order/bounds, real pre-read hooks, atomic postimages,
+midstream/whole-metadata changes and malformed optional records. Native validation
+remains pending; no enablement, recovery or Project activation is claimed.

@@ -17,8 +17,10 @@ import sys
 import time
 
 SESSION_MODE = 'session-only-v1'
+SESSION_CONFIG, SESSION_CONFIG_LIMIT = 'home/.grok/config.toml', 16 << 10
+# agent_build is measured in original 14058338742, not the supplementary public enum.
 SETUP_PHASES = frozenset(('auth', 'resolve_workspace', 'folder_trust', 'plugin_registry', 'mcp_merge',
-    'local_workspace', 'persistence_init', 'spawn_session_actor', 'workspace_handshake', 'model_switch',
+    'local_workspace', 'persistence_init', 'spawn_session_actor', 'agent_build', 'workspace_handshake', 'model_switch',
     'model_not_allowed', 'git_discovery', 'finalize_response', 'tool_overrides', 'response_ready'))
 
 
@@ -520,16 +522,20 @@ def validate_receipt(receipt, request):
 
 
 
-def session_fixture_config(root, nonce):
+def session_config_body(nonce):
     url = 'http://127.0.0.1:' + str(session_port(nonce)) + '/v1'
     text = ('[features]\ntelemetry = false\ntitle_refresh = false\n'
             '[models]\ndefault = "uap-local-driver"\nsession_summary = "uap-local-driver"\nprompt_suggestion = "uap-local-driver"\n'
             '[endpoints]\nmodels_base_url = "' + url + '"\n'
             '[model.uap-local-driver]\nmodel = "uap-local-driver"\nbase_url = "' + url + '"\n'
             'api_backend = "chat_completions"\napi_key = "uap-inert-local-driver"\ncontext_window = 64000\n')
-    path = root / 'home/.grok/config.toml'
+    return text.encode()
+
+
+def session_fixture_config(root, nonce):
+    path = root / SESSION_CONFIG
     require(not path.exists(), 'session-config-collision')
-    path.write_text(text)
+    path.write_bytes(session_config_body(nonce))
     path.chmod(0o600)
 
 
@@ -539,6 +545,66 @@ def session_metadata_ledger(root, before, budget):
     protected = all(after.get(name) == identity for name, identity in before.items())
     # First capture is never a new bootstrap/effect admission. No new body read.
     return dict(before=before, after=after, accepted=False, protected_originals_unchanged=protected)
+
+
+def session_config_metadata(ledger):
+    before, after = ledger['before'], ledger['after']
+    owner = before['.']
+    require(type(owner) in (list, tuple) and len(owner) == 5 and all(type(v) is int for v in owner), 'session-config-owner')
+    for parent in ('.', 'home', 'home/.grok'):
+        info = before[parent]
+        require(type(info) in (list, tuple) and len(info) == 5 and all(type(v) is int for v in info)
+                and stat.S_ISDIR(info[2]) and info[0] == owner[0] and tuple(info[3:]) == tuple(owner[3:])
+                and info == after.get(parent), 'session-config-parent')
+    require(all(name == SESSION_CONFIG or after.get(name) == value for name, value in before.items()), 'session-config-originals')
+    rows = [before[SESSION_CONFIG], after[SESSION_CONFIG]]
+    for info in rows:
+        require(type(info) in (list, tuple) and len(info) == 9 and all(type(v) is int for v in info)
+                and info[2] == stat.S_IFREG | 0o600 and info[3] == 1 and info[0] == owner[0]
+                and tuple(info[4:6]) == tuple(owner[3:]) and 0 <= info[6] <= SESSION_CONFIG_LIMIT,
+                'session-config-authority')
+    return rows
+
+
+def validate_session_config_capture(ledger, capture, nonce):
+    closed(capture, 'schema_version before after')
+    require(type(capture['schema_version']) is int and capture['schema_version'] == 1, 'session-config-schema')
+    identities = session_config_metadata(ledger)
+    for label, identity in zip(('before', 'after'), identities):
+        row = closed(capture[label], 'identity bytes sha256' + (' body_base64' if label == 'after' else ''))
+        require(type(row['identity']) is list and all(type(v) is int for v in row['identity'])
+                and tuple(row['identity']) == tuple(identity) and type(row['bytes']) is int
+                and row['bytes'] == identity[6] and type(row['sha256']) is str
+                and re.fullmatch('[0-9a-f]{64}', row['sha256']), 'session-config-record')
+        body = session_config_body(nonce)
+        if label == 'after':
+            require(type(row['body_base64']) is str and len(row['body_base64']) == 4 * ((row['bytes'] + 2) // 3),
+                    'session-config-bound')
+            body = base64.b64decode(row['body_base64'], validate=True)
+        require(len(body) == row['bytes'] and digest(body) == row['sha256'], 'session-config-content')
+
+
+def capture_session_config(root, ledger, original, nonce, budget, receipt):
+    """One selected postimage after positive family settlement; never admit effects."""
+    from types import SimpleNamespace
+    from devin_structured_inventory_admission import metadata_inventory, read_bootstrap_file
+    try:
+        require(type(receipt) is dict and receipt.get('cleanup_complete') is True
+                and receipt.get('sealed_cleanup_complete') is True, 'session-config-cleanup')
+        budget.check()
+        before, after = session_config_metadata(ledger)
+        require(original == dict(bytes=before[6], device=before[0], inode=before[1], mode=0o600,
+                                 sha256=digest(session_config_body(nonce))), 'session-config-original-snapshot')
+        ctx = SimpleNamespace(root=root, original_output_identity=tuple(ledger['before']['.']), budget=budget)
+        body = read_bootstrap_file(ctx, SESSION_CONFIG, after, ledger['after'])
+        capture = dict(schema_version=1, before=dict(identity=list(before), bytes=original['bytes'], sha256=original['sha256']),
+                       after=dict(identity=list(after), bytes=len(body), sha256=digest(body), body_base64=base64.b64encode(body).decode()))
+        validate_session_config_capture(ledger, capture, nonce)
+        require(metadata_inventory(root, budget) == ledger['after'], 'session-config-final-metadata')
+        require(len(json.dumps(dict(ledger, selected_config_capture=capture)).encode()) <= LIMIT, 'session-config-ledger-bound')
+        return capture
+    except (KeyError, TypeError, ValueError, OSError):
+        return None  # Failed diagnostics retain no partial body or changed acceptance.
 
 
 def session_readout(members, packet, deadline):
@@ -609,6 +675,8 @@ def session_readout(members, packet, deadline):
             ledger = document(members['a.ledger.json'])
             require(type(ledger['before']) is dict and type(ledger['after']) is dict
                     and len(ledger['before']) <= 4096 and len(ledger['after']) <= 4096 and ledger['accepted'] is False, 'session-ledger')
+            if ledger.get('selected_config_capture') is not None:
+                validate_session_config_capture(ledger, ledger['selected_config_capture'], packet['nonce'])
             before, after = ledger['before'], ledger['after']
             facts.update(session_reply=rpc['session'] is not None, inventory_reply=rpc['plugins'] is not None,
                          provider_requests=provider['requests'], provider_forbidden=provider['forbidden'],
@@ -1264,6 +1332,8 @@ def run(output, *, session_only=False, lock_qualification=False):
                 result = validate_receipt(receipt, request)
                 cleanup_proved = True
                 ledger = lock_ledger(root,baseline,stage,authored,budget) if lock_qualification else session_metadata_ledger(root, baseline, budget) if session_only else post_ledger(root, baseline, roots, profiles, budget, bootstrap)
+                if session_only:
+                    ledger['selected_config_capture'] = capture_session_config(root, ledger, profiles['user_profile']['config.toml'], nonce, budget, receipt)
                 bodies[prefix + '.ledger.json'] = json.dumps(ledger, sort_keys=True).encode()
                 for row in result['commands']:
                     name = prefix + '-' + row['label'] + '.merged.log'

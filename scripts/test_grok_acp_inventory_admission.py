@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from types import SimpleNamespace
 import unittest
 from unittest import mock
 import zipfile
@@ -886,6 +887,22 @@ class NativeBootstrapContracts(unittest.TestCase):
 
 
 class SessionOnlyContracts(unittest.TestCase):
+    def config_capture_fixture(self, root):
+        import devin_structured_inventory_admission as metadata
+        from client_automation_native_probe import snapshot
+        (root/'home/.grok').mkdir(parents=True)
+        case.session_fixture_config(root,'c'*32)
+        (root/'foreign').write_bytes(b'preserve')
+        original=snapshot(root/'home/.grok')['config.toml']
+        budget=SimpleNamespace(check=lambda:None)
+        before=metadata.metadata_inventory(root,budget)
+        replacement=root/'replacement'
+        replacement.write_bytes(case.session_config_body('c'*32)+b'\n[marketplace]\ndefault_skills_installs_purged = true\n')
+        replacement.chmod(0o600);replacement.replace(root/case.SESSION_CONFIG)
+        ledger=case.session_metadata_ledger(root,before,budget)
+        receipt=dict(cleanup_complete=True,sealed_cleanup_complete=True)
+        return metadata,budget,original,ledger,receipt
+
     def req(self):
         return dict(nonce='c'*32, scope='a', input_root='/tmp/owned', mode=case.SESSION_MODE)
 
@@ -926,6 +943,77 @@ class SessionOnlyContracts(unittest.TestCase):
         case.session_rpc_frame({'jsonrpc':'2.0','id':2,'result':{'sessionId':'owned'}},state,req,sent.append)
         with self.assertRaises(ValueError):
             case.session_rpc_frame({'jsonrpc':'2.0','method':'_x.ai/session/setup','params':{'method':'session/new','phase':'response_ready','sessionId':'foreign'}},state,req,sent.append)
+
+    def test_measured_agent_build_sequence_preserves_phase_bounds_and_real_id_join(self):
+        state,req,sent=self.state(),self.req(),[];self.init(state,req,sent)
+        for phase in ('auth','resolve_workspace','folder_trust','plugin_registry','mcp_merge','persistence_init','spawn_session_actor','agent_build'):
+            notice={'jsonrpc':'2.0','method':'_x.ai/session/setup','params':{'method':'session/new','phase':phase,
+                    'sessionId':'native-owned' if phase in ('persistence_init','spawn_session_actor','agent_build') else None}}
+            self.assertFalse(case.session_rpc_frame(notice,state,req,sent.append))
+            if phase=='persistence_init':
+                case.session_rpc_frame({'jsonrpc':'2.0','method':'_x.ai/mcp/servers_updated','params':{'mcpServers':[]}},state,req,sent.append)
+        self.assertIsNone(state['session']);self.assertIsNone(state['plugins'])
+        self.assertEqual([row['method'] for row in sent],['session/new'])
+        with self.assertRaisesRegex(ValueError,'session-notification-identity'):
+            case.session_rpc_frame({'jsonrpc':'2.0','id':2,'result':{'sessionId':'foreign'}},copy.deepcopy(state),req,sent.append)
+        with self.assertRaisesRegex(ValueError,'setup-notification'):
+            case.session_rpc_frame(dict(notice,params=dict(notice['params'],phase='agent_build_unknown')),state,req,sent.append)
+        case.session_rpc_frame(notice,state,req,sent.append)
+        with self.assertRaisesRegex(ValueError,'setup-notification'):
+            case.session_rpc_frame(notice,state,req,sent.append)
+        state['notifications']=[notice]*32
+        with self.assertRaisesRegex(ValueError,'notification-bound'):
+            case.session_rpc_frame(notice,state,req,sent.append)
+
+    def test_selected_config_capture_refuses_before_read_and_never_accepts_effects(self):
+        for change in ('none','cleanup','sealed','symlink','hardlink','oversize','mode','owner','parent','foreign','snapshot'):
+            with self.subTest(change=change),tempfile.TemporaryDirectory() as temporary:
+                root=Path(temporary).resolve();metadata,budget,original,ledger,receipt=self.config_capture_fixture(root)
+                path=root/case.SESSION_CONFIG
+                if change in ('cleanup','sealed'):receipt['cleanup_complete' if change=='cleanup' else 'sealed_cleanup_complete']=False
+                elif change=='symlink':path.unlink();path.symlink_to(root/'foreign')
+                elif change=='hardlink':os.link(path,root/'alias')
+                elif change=='oversize':path.write_bytes(b'x'*(case.SESSION_CONFIG_LIMIT+1));ledger['after'][case.SESSION_CONFIG]=case.stable(path.lstat())
+                elif change=='mode':path.chmod(0o644);ledger['after'][case.SESSION_CONFIG]=case.stable(path.lstat())
+                elif change=='owner':
+                    info=list(ledger['after'][case.SESSION_CONFIG]);info[4]+=1;ledger['after'][case.SESSION_CONFIG]=info
+                elif change=='parent':path.parent.rename(root/'moved');path.parent.mkdir()
+                elif change=='foreign':(root/'foreign').write_bytes(b'changed');ledger['after']=metadata.metadata_inventory(root,budget)
+                elif change=='snapshot':original['sha256']='f'*64
+                with mock.patch.object(metadata.os,'read',wraps=os.read) as read:
+                    capture=case.capture_session_config(root,ledger,original,'c'*32,budget,receipt)
+                if change!='none':self.assertIsNone(capture);read.assert_not_called();continue
+                self.assertGreater(read.call_count,0)
+                self.assertEqual(base64.b64decode(capture['after']['body_base64']),path.read_bytes())
+                self.assertEqual(capture['before']['sha256'],original['sha256'])
+                self.assertFalse(ledger['accepted']);self.assertFalse(ledger['protected_originals_unchanged'])
+                self.assertNotEqual(capture['before']['identity'][1],capture['after']['identity'][1])
+                self.assertEqual(metadata.metadata_inventory(root,budget),ledger['after'])
+
+    def test_selected_config_capture_discards_bytes_when_final_metadata_changes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary).resolve();metadata,budget,original,ledger,receipt=self.config_capture_fixture(root)
+            read=metadata.read_bootstrap_file
+            def change_after_read(*args):
+                body=read(*args);(root/'foreign').write_bytes(b'changed after read');return body
+            with mock.patch.object(metadata,'read_bootstrap_file',side_effect=change_after_read) as captured:
+                self.assertIsNone(case.capture_session_config(root,ledger,original,'c'*32,budget,receipt))
+            captured.assert_called_once()
+            self.assertNotIn('body_base64',json.dumps(ledger))
+
+    def test_selected_config_capture_discards_midstream_rewrite(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary).resolve();metadata,budget,original,ledger,receipt=self.config_capture_fixture(root)
+            read,changes=os.read,[]
+            def mutate(descriptor,limit):
+                body=read(descriptor,limit)
+                if not changes:
+                    with (root/case.SESSION_CONFIG).open('ab') as stream:stream.write(b'!')
+                    changes.append(True)
+                return body
+            with mock.patch.object(metadata.os,'read',side_effect=mutate):
+                self.assertIsNone(case.capture_session_config(root,ledger,original,'c'*32,budget,receipt))
+            self.assertEqual(changes,[True])
 
     def test_fixed_provider_accepts_only_bounded_gets_and_never_exports_headers(self):
         import socket
@@ -1037,9 +1125,10 @@ class SessionOnlyContracts(unittest.TestCase):
         import zipfile
         packet=dict(source_commit='a'*40,source_tree='b'*40,nonce='c'*32)
         frames=[{'jsonrpc':'2.0','id':1,'result':{'protocolVersion':1,'_meta':{'agentVersion':'1.0.70'}}},
+                {'jsonrpc':'2.0','method':'_x.ai/session/setup','params':{'method':'session/new','phase':'agent_build','sessionId':'PRIVATE_NATIVE_ID'}},
                 {'jsonrpc':'2.0','id':2,'result':{'sessionId':'PRIVATE_NATIVE_ID'}},
                 {'jsonrpc':'2.0','id':3,'result':{'result':{'plugins':[]}}}]
-        rpc=dict(initialize=frames[0],session=frames[1],plugins=frames[2],notifications=[])
+        rpc=dict(initialize=frames[0],session=frames[2],plugins=frames[3],notifications=[frames[1]])
         members={'acquisition.json':b'{}','a.rpc.json':json.dumps(rpc).encode(),
                  'a.ledger.json':json.dumps(dict(before={},after={},accepted=False)).encode()}
         commands=[]
@@ -1074,7 +1163,7 @@ class SessionOnlyContracts(unittest.TestCase):
                 changed['a.rpc.json']=json.dumps(detached).encode()
             elif kind in ('no-lf','late-notification'):
                 body=changed['a-acp.merged.log'][:-1] if kind=='no-lf' else changed['a-acp.merged.log']+json.dumps(
-                    {'jsonrpc':'2.0','method':'_x.ai/session/setup','params':{'method':'session/new','phase':'response_ready','sessionId':'PRIVATE_NATIVE_ID'}}).encode()+b'\n'
+                    {'jsonrpc':'2.0','method':'_x.ai/session/setup','params':{'method':'session/new','phase':'agent_build','sessionId':'PRIVATE_NATIVE_ID'}}).encode()+b'\n'
                 changed['a-acp.merged.log']=body
                 result['commands'][-1]['merged_bytes']=len(body);result['commands'][-1]['merged_sha256']=case.digest(body)
             else:
@@ -1085,6 +1174,24 @@ class SessionOnlyContracts(unittest.TestCase):
                 self.assertEqual(read(changed),dict(schema_version=1,mode=case.SESSION_MODE,reason='readout-refused'))
             result.clear();result.update(original)
             summary['scopes']=[receipt]
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary).resolve();_,budget,original,ledger,settled=self.config_capture_fixture(root)
+            ledger['selected_config_capture']=case.capture_session_config(root,ledger,original,'c'*32,budget,settled)
+            for change in ('none','null','schema','extra','hash','before-hash','identity','bound','parent','record-type'):
+                candidate=copy.deepcopy(ledger);capture=candidate['selected_config_capture']
+                if change=='null':candidate['selected_config_capture']=None
+                elif change=='schema':capture['schema_version']=True
+                elif change=='extra':capture['unknown']='private'
+                elif change in ('hash','before-hash'):capture['before' if change=='before-hash' else 'after']['sha256']='f'*64
+                elif change=='identity':capture['after']['identity'][1]+=1
+                elif change=='bound':capture['after']['body_base64']='x'*(4*((case.SESSION_CONFIG_LIMIT+2)//3)+4)
+                elif change=='parent':candidate['before']['home']=candidate['after']['home']='invalid'
+                elif change=='record-type':candidate['selected_config_capture']=False
+                changed=dict(members);changed['a.ledger.json']=json.dumps(candidate).encode()
+                with self.subTest(capture=change):
+                    facts=read(changed)
+                    self.assertEqual(facts['reason'],'measurement-only' if change in ('none','null') else 'readout-refused')
+                    self.assertNotIn('body_base64',json.dumps(facts))
 
     def test_session_readout_refuses_unknown_or_private_values(self):
         packet=dict(source_commit='a'*40,source_tree='b'*40,nonce='c'*32)
