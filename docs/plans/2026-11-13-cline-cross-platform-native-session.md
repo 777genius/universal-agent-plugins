@@ -134,3 +134,25 @@ contracts. Root R1 initially scoped two Go files plus this plan; after the exter
 16bb6b0d seam, this follow-up changes only the existing test and plan. Linux
 cross-compilation/lint can validate source, but actual Windows execution is still
 required; no containment, consent boundary or platform support claim is broadened.
+
+## Original empty-array evidence preservation
+
+The b79c2ac0 Windows [job 131933636575](https://github.com/777genius/universal-agent-plugins/actions/runs/43439520201/job/131933636575)
+completed the first direct exchange and all eleven recorded command cleanups,
+but correctly refused its event join: the original tools/call and transcript
+contained `argv: []`, while re-encoding the decoded report produced `argv: null`.
+The ordered methods, session, nonce, PID and other facts matched. This failed
+capture does not qualify the remaining native lifecycle or cold restore.
+
+The concurrent cf454ea7/b4c6abe9 correction preserves a non-nil empty array in
+the existing shared strict decoder and covers empty, nested and null values.
+This follow-up changes only this plan and the existing clinesession Go test:
+serialize both real owned-probe write/read reports through the final facts
+field, decode them independently with encoding/json, and require complete
+agreement with the original tools/call event, including its empty argv array.
+No second decoder, normalization or protocol runtime change is added. The
+strict Python comparison, original probe, process bounds and qualification
+flags remain unchanged. Independent static review accepted this regression.
+Local execution is unavailable: red/green, lint and cross-platform execution
+have not been performed for this follow-up. The test is designed to detect
+the historical mismatch; fresh exact-source CI remains required.

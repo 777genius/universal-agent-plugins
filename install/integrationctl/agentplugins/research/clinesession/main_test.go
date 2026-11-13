@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -172,6 +173,7 @@ func TestProtocolAgainstRealOwnedProbePreservesMarker(t *testing.T) {
 		t.Fatalf("build exact owned fixture: %v: %s", err, output)
 	}
 	data, events := filepath.Join(root, "data"), filepath.Join(root, "events.jsonl")
+	var reported []map[string]any
 	for _, revision := range []string{"0", "1"} {
 		transport := transport{CWD: root, Env: map[string]string{"PLUGIN_ROOT": root, "PLUGIN_DATA": data, "UAP_TEST_ROOT": root,
 			"UAP_TEST_EVENTS": events, "UAP_TEST_NONCE": "owned", "UAP_TEST_REVISION": revision, "UAP_TEST_REPORT_OPERATION": "1"}}
@@ -206,14 +208,52 @@ func TestProtocolAgainstRealOwnedProbePreservesMarker(t *testing.T) {
 		if exchangeErr != nil || readErr != nil || waitErr != nil || len(tail) != 0 || len(client.transcript) != 4 {
 			t.Fatalf("real fixture exchange %s: %v %v %v", revision, exchangeErr, readErr, waitErr)
 		}
+		var report bytes.Buffer
+		if err := json.NewEncoder(&report).Encode(map[string]any{"facts": client.facts}); err != nil {
+			t.Fatal(err)
+		}
+		var published struct {
+			Facts map[string]any `json:"facts"`
+		}
+		if err := json.Unmarshal(report.Bytes(), &published); err != nil {
+			t.Fatal(err)
+		}
+		reported = append(reported, published.Facts)
 	}
 	body, err := os.ReadFile(filepath.Join(data, "native-marker.txt"))
 	if err != nil || string(body) != "kept-owned" {
 		t.Fatal("marker was not preserved", err)
 	}
 	body, err = os.ReadFile(events)
-	if err != nil || bytes.Count(body, []byte{'\n'}) != 6 {
-		t.Fatal("missing original protocol events", err)
+	if err != nil || len(reported) != 2 || bytes.Count(body, []byte{'\n'}) != 6 {
+		t.Fatal("missing original protocol events or reports", err)
+	}
+	lines := bytes.Split(bytes.TrimSpace(body), []byte{'\n'})
+	for index, line := range lines {
+		var event struct {
+			Method string         `json:"method"`
+			Facts  map[string]any `json:"facts"`
+		}
+		if err := json.Unmarshal(line, &event); err != nil {
+			t.Fatal(err)
+		}
+		if event.Method != []string{"initialize", "tools/list", "tools/call"}[index%3] {
+			t.Fatal("original event sequence differs")
+		}
+		if index%3 != 2 {
+			if event.Facts != nil {
+				t.Fatal("facts appeared before tools/call")
+			}
+			continue
+		}
+		argv, ok := event.Facts["argv"].([]any)
+		if !ok || len(argv) != 0 {
+			t.Fatal("original no-argument probe did not report an empty array")
+		}
+		facts := reported[index/3]
+		if facts == nil || !reflect.DeepEqual(facts, event.Facts) {
+			t.Fatalf("serialized facts differ from original probe event %d: report=%#v event=%#v", index, facts, event.Facts)
+		}
 	}
 }
 func TestColdInstallUsesOnlyAgreementTargets(t *testing.T) {
