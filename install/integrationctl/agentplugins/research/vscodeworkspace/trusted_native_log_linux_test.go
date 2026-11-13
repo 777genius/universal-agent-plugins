@@ -48,7 +48,9 @@ func TestNativeLogSettledAuthority(t *testing.T) {
 		t.Fatal(err)
 	}
 	deadline := time.Now().Add(time.Second)
-	if baseline.collect(false, deadline, "owned").Status != "unavailable" || baseline.collect(true, time.Now(), "owned").Status != "unavailable" {
+	unsettled, _ := baseline.collectChecked(false, deadline, "owned")
+	late, _ := baseline.collectChecked(true, time.Now(), "owned")
+	if unsettled.Status != "unavailable" || late.Status != "unavailable" {
 		t.Fatal("unsettled/late read admitted")
 	}
 	if facts, reason := baseline.collectChecked(true, deadline, "owned"); facts.Status != "observed" || !facts.TransportStart {
@@ -57,7 +59,7 @@ func TestNativeLogSettledAuthority(t *testing.T) {
 	if err := os.Link(leaf, filepath.Join(profile, "alias")); err != nil {
 		t.Fatal(err)
 	}
-	if baseline.collect(true, deadline, "owned").Status != "unavailable" {
+	if facts, _ := baseline.collectChecked(true, deadline, "owned"); facts.Status != "unavailable" {
 		t.Fatal("foreign hardlink admitted")
 	}
 	if err := os.Remove(filepath.Join(profile, "alias")); err != nil {
@@ -70,7 +72,7 @@ func TestNativeLogSettledAuthority(t *testing.T) {
 	if err := os.Symlink(old, session); err != nil {
 		t.Fatal(err)
 	}
-	if baseline.collect(true, deadline, "owned").Status != "unavailable" {
+	if facts, _ := baseline.collectChecked(true, deadline, "owned"); facts.Status != "unavailable" {
 		t.Fatal("aliased window admitted")
 	}
 }
@@ -85,7 +87,7 @@ func TestNativeLogNoPriorSessionAdoption(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer baseline.close()
-	if baseline.collect(true, time.Now().Add(time.Second), "owned").Status != "unavailable" {
+	if facts, _ := baseline.collectChecked(true, time.Now().Add(time.Second), "owned"); facts.Status != "unavailable" {
 		t.Fatal("old session adopted")
 	}
 	if err := os.Rename(filepath.Join(profile, "logs"), filepath.Join(profile, "original-logs")); err != nil {
@@ -98,7 +100,7 @@ func TestNativeLogNoPriorSessionAdoption(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(replacement, "mcpServer.mcp.config.ws0.owned.log"), []byte("2026-11-13 18:00:00.001 [info] Starting server owned\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if baseline.collect(true, time.Now().Add(time.Second), "owned").Status != "unavailable" {
+	if facts, _ := baseline.collectChecked(true, time.Now().Add(time.Second), "owned"); facts.Status != "unavailable" {
 		t.Fatal("replacement logs root adopted")
 	}
 	original := profile + "-original"
@@ -110,7 +112,7 @@ func TestNativeLogNoPriorSessionAdoption(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = os.Remove(profile) }()
-	if baseline.collect(true, time.Now().Add(time.Second), "owned").Status != "unavailable" {
+	if facts, _ := baseline.collectChecked(true, time.Now().Add(time.Second), "owned"); facts.Status != "unavailable" {
 		t.Fatal("replacement profile adopted")
 	}
 }
@@ -181,7 +183,7 @@ func TestNativeLogPrivatePredicateNames(t *testing.T) {
 	if err != nil || strings.Contains(string(body), "initial") || strings.Contains(string(body), "predicate") {
 		t.Fatal("private reason entered public facts")
 	}
-	if baseline.collect(false, time.Now().Add(time.Second), "owned") != facts {
+	if actual, _ := baseline.collectChecked(false, time.Now().Add(time.Second), "owned"); actual != facts {
 		t.Fatal("runtime refusal semantics changed")
 	}
 }

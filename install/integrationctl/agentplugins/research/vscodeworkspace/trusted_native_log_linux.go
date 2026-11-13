@@ -287,10 +287,6 @@ func selectNativeLogName(root *os.Root, pattern *regexp.Regexp, prior map[string
 	}
 	return selected, nil
 }
-func (b *nativeLogBaseline) collect(settled bool, deadline time.Time, label string) nativeLogFacts {
-	facts, _ := b.collectChecked(settled, deadline, label)
-	return facts
-}
 func (b *nativeLogBaseline) collectChecked(settled bool, deadline time.Time, label string) (nativeLogFacts, nativeLogCheck) {
 	unavailable := unavailableNativeLog()
 	if b == nil || !settled || !time.Now().Before(deadline) || !nativeLogLabel.MatchString(label) {

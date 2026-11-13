@@ -641,3 +641,9 @@ These added stderr lines and their pure privacy contract were authored during
 executor unavailability and have not been locally executed. The original
 three-file diagnostic source was recovered only after exact frozen SHA256
 matches; the interrupted full core result remains unknown.
+
+After execution resumed, the exact published fec988 reader/frame and frontend
+contracts passed locally. Full lint identified one obsolete test-only collect
+wrapper after the real consumer switched to collectChecked. Removing that
+wrapper and testing the actual checked seam preserves all runtime decisions,
+JSON and stderr behavior; it introduces no additional native action.
