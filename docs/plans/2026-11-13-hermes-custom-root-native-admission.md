@@ -869,3 +869,38 @@ keep the actual parent move, failure requirement and payload-preservation check.
 No production guard, ownership rule or native effect allowance changes.
 This one-line test correction is source-reviewed through the official API after
 executor loss; it has not been executed locally and needs genuine CI validation.
+
+## Windows named-directory attribute correction (2026-11-13)
+
+The original Windows bundled job `132127261446` in run `43495420584`
+refused the owned build census: a named directory changed attributes from
+`0x10000010` to `0x10`, while both held-handle snapshots stayed `0x10`.
+The reported member-name SHA-256 was
+`b0f5646479f0ae4474e9ed3c91bf6b21700e9d02c2e5aa754ea3036fc6914325`.
+No native profile admission followed that refusal.
+
+[CPython issue 126253](https://github.com/python/cpython/issues/126253)
+records the same NTFS discrepancy. The
+[Microsoft file-attribute contract](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/ca28ec38-f155-4768-81d6-4bfeb8586fc9)
+defines the directory bit as `0x10`; the extra `0x10000000` is not a public
+file attribute. Normalize only this one observed bit on ordinary named
+Windows directories already carrying `0x10`, with no reparse flag or tag.
+Every held-handle attribute, other named bit, file identity, owner, timestamp,
+mode and link guard remains exact. Regular files are unchanged. The payload
+metadata and subsequent hash pass use the same named-directory identity;
+the build cleanup ancestor checks use that same helper.
+
+Scope: the existing profile collector, its tests, build cleanup and this plan.
+Estimate: 25 runtime and 40 test lines; complexity 2/10, reliability 8/10,
+confidence 8/10 before genuine Windows execution. Regression cases exercise
+the original temporal comparison in both directions, unrelated attribute and
+ownership changes, reparse substitution, exact held-handle refusal and
+unchanged regular-file semantics. Independent source review and hosted native
+execution remain required; no Windows pass is inferred from inert tests.
+
+The inert official-bootstrap contract also compares the native `Path` string,
+not a POSIX-only literal, so Windows can reach the genuine admission stage.
+Independent R2 source review accepted the exact normalization scope, unchanged
+held-handle comparisons and regular-file guards. The combined correction passed
+57 profile contracts and all 14 owned-build cleanup tests locally on Linux.
+These contracts do not qualify the pending Windows native execution.

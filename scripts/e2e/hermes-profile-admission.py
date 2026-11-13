@@ -31,6 +31,23 @@ def stable_file(info):
     return artifacts.identity(info) + (info.st_uid, info.st_gid)
 
 
+def stable_named_entry(info):
+    """Normalize only NTFS's redundant directory bit on named directory stats.
+
+    CPython issue 126253 records 0x10000010 versus 0x10 for the same ordinary
+    NTFS directory. Held-handle snapshots and every other attribute stay exact.
+    """
+    identity = stable_file(info)
+    attributes = getattr(info, "st_file_attributes", None)
+    if (artifacts.WINDOWS and stat.S_ISDIR(info.st_mode)
+            and type(attributes) is int and 0 <= attributes < 2**32
+            and attributes & 0x10 and not attributes & 0x400
+            and getattr(info, "st_reparse_tag", None) == 0):
+        # artifacts.identity places Windows attributes after birth time.
+        return identity[:8] + (attributes & ~0x10000000,) + identity[9:]
+    return identity
+
+
 def same_opened_capture(before, held):
     """Join Windows path/fd by stable file ID, not synthetic cross-API mode.
 
@@ -168,7 +185,7 @@ def verify_inventory_directory(path, before, descriptor, held, parent=None, *, d
     linked = path.lstat() if parent is None else os.stat(path.name, dir_fd=parent, follow_symlinks=False)
     require(parent is not None or path.resolve() == path, "inventory directory changed (canonical)")
     opened = os.fstat(descriptor)
-    if stable_file(linked) == stable_file(before) and stable_file(opened) == stable_file(held):
+    if stable_named_entry(linked) == stable_named_entry(before) and stable_file(opened) == stable_file(held):
         return
     fields = STABLE_FIELDS + (("st_birthtime_ns", "st_file_attributes", "st_reparse_tag") if artifacts.WINDOWS else ())
     details = []
@@ -359,7 +376,7 @@ def payload_hash_files(root, records, expected, deadline):
         linked = lambda: path.lstat() if parent is None else os.stat(path.name, dir_fd=parent, follow_symlinks=False)
         name, info = path.relative_to(root).as_posix(), linked()
         record = records.get(name)
-        require(record is not None and stable_file(info) == record["identity"], "payload metadata changed before hashing")
+        require(record is not None and stable_named_entry(info) == record["identity"], "payload metadata changed before hashing")
         if name == ".":
             require((info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_gid) == tuple(expected), "payload original root changed")
         if record["type"] == "link":
@@ -417,7 +434,7 @@ def payload_snapshot(root, expected, deadline):
         if depth == 0:
             require((info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_gid) == tuple(expected), "payload original root changed")
         name = path.relative_to(root).as_posix()
-        record = {"identity": stable_file(info)}
+        record = {"identity": stable_named_entry(info)}
         reparse = getattr(info, "st_file_attributes", 0) & 0x400
         if stat.S_ISLNK(info.st_mode) or reparse:
             require(not reparse or getattr(info, "st_reparse_tag", 0) in (0xA0000003, 0xA000000C), "unknown payload reparse point")

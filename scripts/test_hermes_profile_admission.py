@@ -134,7 +134,7 @@ if effect == 'alias': backup.unlink(); os.link(home / 'config.yaml', backup)
         make.assert_called_once_with(Path("/payload/source"), python=Path("/payload/python"),
                                      code="observer", args=["--child"])
         self.assertEqual(command, [official[0], "-I", "-B", *official[2:]])
-        self.assertEqual(official, ["/payload/python", "-I", "-c", "opaque official bootstrap", "--child"])
+        self.assertEqual(official, [python, "-I", "-c", "opaque official bootstrap", "--child"])
         invalid = (tuple(official), official[1:], ["/foreign/python", *official[1:]],
                    [official[0], "-S", *official[2:]], [*official, "extra"],
                    [*official[:3], None, "--child"], [*official[:4], "changed"])
@@ -551,6 +551,40 @@ if effect == 'alias': backup.unlink(); os.link(home / 'config.yaml', backup)
                             CASE["verify_inventory_directory"](path, before, 17, held)
             field = "path:st_ctime_ns" if change == "path" else "handle:st_file_attributes"
             self.assertEqual(str(caught.exception), "inventory directory changed (" + field + ")")
+
+    def test_windows_named_directory_accepts_only_the_observed_ntfs_bit(self):
+        import stat
+        base = dict(st_dev=4, st_ino=5, st_mode=stat.S_IFDIR | 0o755, st_nlink=1,
+                    st_uid=6, st_gid=7, st_size=0, st_mtime_ns=100, st_ctime_ns=90,
+                    st_birthtime_ns=80, st_file_attributes=16, st_reparse_tag=0)
+        path = mock.Mock()
+        path.resolve.return_value = path
+        original = SimpleNamespace(**base)
+        reported = SimpleNamespace(**dict(base, st_file_attributes=0x10000010))
+        verify = CASE["verify_inventory_directory"]
+        with mock.patch.object(CASE["artifacts"], "WINDOWS", True):
+            for before, after in ((original, reported), (reported, original)):
+                path.lstat.return_value = after
+                with mock.patch.object(os, "fstat", return_value=original), mock.patch.object(os, "read", side_effect=AssertionError("body read")):
+                    verify(path, before, 17, original)
+            for change in ({"st_file_attributes": 17}, {"st_file_attributes": 0x80000010},
+                           {"st_file_attributes": 0x10000410}, {"st_reparse_tag": 1},
+                           {"st_ino": 6}, {"st_uid": 8}, {"st_gid": 8},
+                           {"st_mode": stat.S_IFDIR | 0o700}, {"st_ctime_ns": 91}):
+                path.lstat.return_value = SimpleNamespace(**dict(base, **change))
+                with self.subTest(change=change), mock.patch.object(os, "fstat", return_value=original):
+                    with self.assertRaisesRegex(RuntimeError, "inventory directory changed"):
+                        verify(path, reported, 17, original)
+            path.lstat.return_value = original
+            with mock.patch.object(os, "fstat", return_value=reported):
+                with self.assertRaisesRegex(RuntimeError, "handle:st_file_attributes"):
+                    verify(path, reported, 17, original)
+            regular = SimpleNamespace(**dict(base, st_mode=stat.S_IFREG | 0o600, st_file_attributes=32))
+            extra = SimpleNamespace(**dict(vars(regular), st_file_attributes=0x10000020))
+            self.assertNotEqual(CASE["stable_named_entry"](regular), CASE["stable_named_entry"](extra))
+            self.assertNotEqual(CASE["stable_file"](original), CASE["stable_file"](reported))
+        with mock.patch.object(CASE["artifacts"], "WINDOWS", False):
+            self.assertEqual(CASE["stable_named_entry"](original), CASE["stable_file"](original))
 
 
     def test_owned_census_attribute_diagnostic_preserves_refusal_and_io(self):

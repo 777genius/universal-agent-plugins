@@ -148,7 +148,7 @@ def held_parent(owned, key, records, deadline):
             path /= part
             expected = records[label, path.relative_to(root).as_posix()]
             linked = path.lstat() if os.name == "nt" else os.stat(part, dir_fd=parent, follow_symlinks=False)
-            require(stable(linked) == stable(expected), "owned build ancestor changed")
+            require(API["stable_named_entry"](linked) == API["stable_named_entry"](expected), "owned build ancestor changed")
             fd = API["open_inventory_directory"](path, None if os.name == "nt" else parent)
             stack.callback(os.close, fd)
             API["check_inventory_directory"](linked, os.fstat(fd), "owned build ancestor changed at open")
@@ -161,7 +161,7 @@ def held_parent(owned, key, records, deadline):
                 expected = records[label, ancestor.relative_to(root).as_posix()]
                 linked = ancestor.lstat() if os.name == "nt" else os.stat(ancestor.name, dir_fd=parent_fd, follow_symlinks=False)
                 held = os.fstat(fd)
-                require(stable(linked) == stable(expected), "owned build ancestor link changed")
+                require(API["stable_named_entry"](linked) == API["stable_named_entry"](expected), "owned build ancestor link changed")
                 API["check_inventory_directory"](linked, held, "owned build ancestor handle changed")
                 require(stable(held) == stable(held_before), "owned build ancestor handle drift")
         def record_parent_change():
