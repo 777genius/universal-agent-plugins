@@ -14,6 +14,9 @@ import test_devin_structured_inventory_admission as existing
 
 base = case.base
 MIGRATED = b'{"read_config_from":{"cloud":false},"version":1}\n'
+# Match the measured byte count/projection; original raw migrated bytes were
+# intentionally not retained by the closed known-file diagnostic.
+MIGRATED_57_BYTES = b'{\n"read_config_from": {\n"cloud": false\n},\n"version": 1\n}\n'
 
 
 class OrdinaryMetadataContracts(unittest.TestCase):
@@ -46,10 +49,13 @@ class OrdinaryMetadataContracts(unittest.TestCase):
         with self.fixture() as (ctx, effects, user):
             baseline, original = copy.deepcopy(effects.baseline), copy.deepcopy(effects.before)
             before = self.advance_help(ctx, effects)
-            replacement = user.with_suffix('.replacement'); replacement.write_bytes(MIGRATED); replacement.chmod(0o644)
+            replacement = user.with_suffix('.replacement'); replacement.write_bytes(MIGRATED_57_BYTES); replacement.chmod(0o600)
             replacement.replace(user)
             current = base.metadata_inventory(ctx.root, ctx.budget)
             effects.verify_command(before, current)
+            self.assertEqual(len(MIGRATED_57_BYTES), 57)
+            self.assertEqual(effects.after['identity'][2], base.stat.S_IFREG | 0o600)
+            self.assertEqual(effects.after['sha256'], case.hashlib.sha256(MIGRATED_57_BYTES).hexdigest())
             self.assertNotEqual(original['identity'], effects.after['identity'])
             self.assertNotEqual(original['sha256'], effects.after['sha256'])
             for _ in base.METADATA_PROBES[effects.step:]: effects.verify_command(current, current)
@@ -63,9 +69,32 @@ class OrdinaryMetadataContracts(unittest.TestCase):
                   MIGRATED.replace(b'1}', b'1,"permissions":{}}'), MIGRATED.replace(b'1}', b'1,"version":1}'), b' ' * 257)
         for body in bodies:
             with self.subTest(body=body[:60]), self.fixture() as (ctx, effects, user):
-                before = self.advance_help(ctx, effects); user.write_bytes(body)
+                before = self.advance_help(ctx, effects); user.write_bytes(body); user.chmod(0o600)
                 with self.assertRaises(ValueError): effects.verify_command(before, base.metadata_inventory(ctx.root, ctx.budget))
                 self.assertIsNone(effects.report['after'])
+
+    def test_first_wrong_mode_and_later_mode_regression_refuse_before_bytes(self):
+        for mode in (0o644, 0o640, 0o400, 0o666):
+            with self.subTest(first_mode=mode), self.fixture() as (ctx, effects, user):
+                before = self.advance_help(ctx, effects)
+                user.write_bytes(MIGRATED_57_BYTES); user.chmod(mode)
+                current = base.metadata_inventory(ctx.root, ctx.budget)
+                with patch.object(base.os, 'read', side_effect=AssertionError('wrong-mode bytes read')):
+                    with self.assertRaisesRegex(ValueError, 'pre-read authority'):
+                        effects.verify_command(before, current)
+                self.assertIsNone(effects.after)
+        with self.fixture() as (ctx, effects, user):
+            original = copy.deepcopy(effects.baseline)
+            before = self.advance_help(ctx, effects)
+            user.write_bytes(MIGRATED_57_BYTES); user.chmod(0o600)
+            current = base.metadata_inventory(ctx.root, ctx.budget)
+            effects.verify_command(before, current)
+            admitted = copy.deepcopy(effects.after)
+            user.chmod(0o644)
+            with patch.object(base.os, 'read', side_effect=AssertionError('late-mode bytes read')):
+                with self.assertRaisesRegex(ValueError, 'pre-read authority'):
+                    effects.verify_command(current, base.metadata_inventory(ctx.root, ctx.budget))
+            self.assertEqual((effects.after, effects.baseline), (admitted, original))
 
     def test_early_late_and_same_bytes_replacement_never_renew_baseline(self):
         for change in ('help', 'before-mcp', 'late-bytes', 'late-identity'):
@@ -74,9 +103,10 @@ class OrdinaryMetadataContracts(unittest.TestCase):
                 if change != 'help': before = self.advance_help(ctx, effects)
                 user.write_bytes(MIGRATED)
                 if change.startswith('late'):
+                    user.chmod(0o600)
                     effects.verify_command(before, base.metadata_inventory(ctx.root, ctx.budget))
                     replacement = user.with_suffix('.replacement')
-                    replacement.write_bytes(MIGRATED if change == 'late-identity' else case.ORIGINAL); replacement.chmod(0o644)
+                    replacement.write_bytes(MIGRATED if change == 'late-identity' else case.ORIGINAL); replacement.chmod(0o600)
                     replacement.replace(user)
                 with self.assertRaises(ValueError): effects.verify(base.metadata_inventory(ctx.root, ctx.budget))
                 self.assertEqual(effects.baseline, original)
@@ -84,12 +114,12 @@ class OrdinaryMetadataContracts(unittest.TestCase):
     def test_original_alias_mode_and_parent_replacement_refuse(self):
         for change in ('hardlink', 'symlink', 'mode', 'parent'):
             with self.subTest(change=change), self.fixture() as (ctx, effects, user):
-                before = self.advance_help(ctx, effects); user.write_bytes(MIGRATED)
+                before = self.advance_help(ctx, effects); user.write_bytes(MIGRATED); user.chmod(0o600)
                 if change == 'hardlink': os.link(user, ctx.root / 'alias')
                 elif change == 'symlink': user.unlink(); user.symlink_to(ctx.root / 'missing')
-                elif change == 'mode': user.chmod(0o600)
+                elif change == 'mode': user.chmod(0o644)
                 else:
-                    parent = user.parent; parent.rename(ctx.root / 'replaced-parent'); parent.mkdir(); user.write_bytes(MIGRATED)
+                    parent = user.parent; parent.rename(ctx.root / 'replaced-parent'); parent.mkdir(); user.write_bytes(MIGRATED); user.chmod(0o600)
                 with patch.object(base.os, 'read', side_effect=AssertionError('unadmitted bytes read')):
                     with self.assertRaises((ValueError, OSError)): effects.verify_command(before, base.metadata_inventory(ctx.root, ctx.budget))
 
@@ -123,6 +153,7 @@ class OrdinaryMetadataContracts(unittest.TestCase):
                     if label == 'mcp-a':
                         path = root / (case.OrdinaryEffects.config_path if ordinary else base.METADATA_CONFIG)
                         path.write_bytes(MIGRATED)
+                        if ordinary: path.chmod(0o600)
                         return {'exit': 1}, b'[]', b'inert native refusal'
                     return {'exit': 0}, b'devin 3000.12.57 (96542e930752)\n' if label == 'version' else b'--json', b''
                 ctx.probe = probe
@@ -151,11 +182,11 @@ class OrdinaryPreReadContracts(unittest.TestCase):
             with self.subTest(change=change), self.fixture() as (ctx, effects, user):
                 before = self.advance_help(ctx, effects)
                 if change in ('leaf', 'mtime'):
-                    user.write_bytes(MIGRATED)
+                    user.write_bytes(MIGRATED); user.chmod(0o600)
                     effects.verify_command(before, base.metadata_inventory(ctx.root, ctx.budget))
                     if change == 'leaf':
                         replacement = user.with_suffix('.replacement')
-                        replacement.write_bytes(MIGRATED); replacement.chmod(0o644); replacement.replace(user)
+                        replacement.write_bytes(MIGRATED); replacement.chmod(0o600); replacement.replace(user)
                     else:
                         info = user.stat()
                         os.utime(user, ns=(info.st_atime_ns, info.st_mtime_ns - 60_000_000_000))
@@ -192,7 +223,7 @@ class OrdinaryPreReadContracts(unittest.TestCase):
                 snapshots.append(True); return original_snapshot(context)
             try:
                 with patch.object(base, 'snapshot', side_effect=snapshot):
-                    with self.assertRaisesRegex(ValueError, 'pre-read authority'): case.collect(ctx, probes)
+                    with self.assertRaisesRegex(ValueError, 'migration changed policy or version'): case.collect(ctx, probes)
                 self.assertTrue(snapshots)
                 effect = ctx.summary['command_effects'][-1]
                 self.assertEqual(effect['label'], 'mcp-a')

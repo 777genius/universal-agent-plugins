@@ -216,3 +216,34 @@ This is a source-proven defect consistent with the original Windows failure
 stage; the failed bridge did not publish a command receipt, so its precise
 original stderr has not been established. Local execution is unavailable:
 red/green, lint and native confirmation remain pending on the published source.
+
+
+## Genuine da680 three-platform managed-session acceptance
+
+Source `da680106744dc984f05159c61d9d884545d65e36`, tree
+`eba42accb9e32aee0340fae8ef0541eeaffa4747`, run43468549116 produced passing
+original managed-session evidence on Linux, macOS and Windows.
+
+| Host | Artifact | Bytes | Original SHA256 |
+| --- | ---: | ---: | --- |
+| Linux | 14063056472 | 30837 | `133749258cdb521e43f1c4f6522807d693c5bd240672280948373b0b350ea3dd` |
+| macOS | 14062478694 | 30827 | `b6eb254e364e53a8d63b3606cca6de442ee67f9f8d7e26b824ba3c450d023e61` |
+| Windows | 14060084359 | 30717 | `fa69efe5cb5ff4b6e58c0eff8a3188de94832e4d34050560b64a3d0d939da869` |
+
+Each exact single-member archive passes its API digest/size and whole ZIP CRC.
+Independent parsing verifies source/tree, all30 fixed command receipts, complete
+process-family cleanup, all60 bounded original/duplicate stream joins and the
+same native/installer/probe/runtime pins across the journey. Native pin selection
+matches the existing platform acquisition table. Each host has five independent
+nonce/PID/session-bound direct-installed MCP sessions and exactly15 events in
+initialize/list/call order; the existing event verifier passes on retained bytes.
+
+Install, changed update and repair retain the client binding and data receipt.
+Prepared and unchecked authentication remain truthful. Cold restore uses only
+saved agreement/lock files in a separate empty world, joins the immutable public
+source commit, package manifest/tree digests and committed environment receipt,
+and preserves data across its independent repeat session. Genuine Cline inventory
+observes the explicitly selected Project source. These direct-installed MCP calls
+are explicitly not Cline-native tools/call; vendor login and model invocation
+remain false. The final published source still needs its own applicable checks;
+these original da680 passes are not relabeled as a later commit's acceptance.

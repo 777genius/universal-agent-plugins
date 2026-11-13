@@ -293,3 +293,28 @@ with all recorded length/digest joins and private argv/cwd checked. Historical
 replay does not prove the new ordinary route. Its dedicated Linux hosted job
 must still finish, and its original artifact must pass independent review before
 any Step 2 mutation or exact production-version admission.
+
+## Measured ordinary migration permissions (2026-11-13)
+
+Original da680 job132034082326/run43468549490 failed at the first mcp-a,
+not log rotation. Artifact14062286765 has39681 bytes and SHA256
+`d96ae88f7771e24932a5205dcb3b580d8552c3b69d5bb5818bcb6baf5d0435b0`;
+outer/inner CRC and24 stream joins were independently checked. All12 commands
+returned zero: six source/Git setup, five help/version, one MCP inventory.
+Cleanup completed and all native/runtime qualification flags remained false.
+The thirteen-command metadata gate was not complete; no B/User/repeat proof.
+
+The original37-byte0644 config became a57-byte0600 ordinary single-link file.
+The independently captured closed projection is exactly cloud=false plus integer
+version1; after-body SHA256 is
+`55b8bf88950e8bf1a201a23619e328a2b1bf8d036fa52f9139b3164774dd7cb8`.
+Raw migrated bytes were intentionally not retained. The test reproduces its
+57-byte length and exact semantic projection, without claiming byte-identical
+reconstruction of that native output.
+
+Permit0600 only in the existing first mcp-a migration postcondition, then retain
+the immutable complete after identity/body hash. Original0644 and effect-free
+help stay mandatory. Wrong first mode, repeat chmod/replacement, different JSON,
+owner/link/size/parent drift still refuse. No baseline renewal, native rerun,
+production version change, task-born-log allowance or workflow change belongs
+to this causal correction. The later full lifecycle remains a separate gate.

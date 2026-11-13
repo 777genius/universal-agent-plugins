@@ -412,3 +412,50 @@ publication fence, and assert the inert child is still alive at observed EOF.
 The actual new subprocess contract FAILS on the unchanged collector at its
 three-second EOF deadline, then PASSES after the four-line correction. All19
 inert contracts pass (no vendor execution); the code/test delta is38 lines.
+
+
+## Original da680 complete metadata capture (2026-11-13)
+
+Run43468549490/job132034082503 completed successfully at source
+`da680106744dc984f05159c61d9d884545d65e36`, tree
+`eba42accb9e32aee0340fae8ef0541eeaffa4747`. Artifact14063270962 is99998bytes,
+SHA256 `30cacaa7a17acb93ea4da1c63619fe5fb916a8aa2696c40afec5871e16e7a78c`.
+Its466461-byte inner ZIP is SHA256
+`32f13bd69615f53f3f838660162d4f9cbe82bcee22fa40288344a4691e245edd`.
+Both CRCs, exact23-member closure, source/tree/nonce joins, complete strict
+cleanup receipts, all15 merged streams and the bounded archive readout pass.
+Each scope has four successful version/help commands; its ACP exchange finishes
+with native exit143 under the existing owned cleanup protocol, with no command
+error. The readout records that exit faithfully; this is not an ordinary exit0.
+All three scopes report semantic_complete and accepted ledgers. Every runtime,
+trust, enablement, authentication, model and product qualification stays false.
+
+All eight native rows independently confirm full identity as
+scope + '/' + SHA256(physical root)[:8] + '/' + name. User has two User rows;
+ProjectA/B each select their own two Project rows plus the foreign User row.
+The deliberate same-name Project entry shadows the User entry with an explicit
+conflict; no name-only selector becomes authority. All selected enabled states
+are false; Project trusted remains false.
+
+The newly retained original bootstrap capture contains the exact52-byte config:
+`[marketplace]\ndefault_skills_installs_purged = true\n`, SHA256
+`fe7b6bc7eb3f5321649cb10fd4ce35096cee471f9c8d04fd34958e848039ff92`.
+There is no plugins table. This establishes the default-shape input for the held
+pure preparer; appending into only an already-present enabled array is insufficient.
+
+Native metadata is not effect-free: each cumulative ledger has41 task-born
+entries relative to its single original baseline. Successive A/B metadata changes
+include agent_id metadata, unified.jsonl and session_search.sqlite, alongside
+the harness control request. The existing task-owned bootstrap envelope admits
+those research effects; it grants no recovery authority over real User files.
+Production mutation/readback still requires verified exact recovery. The session
+and real config-lock dependent jobs are now eligible but have not yet supplied
+accepted originals. No enable/trust/model command is inferred from this capture.
+
+The concurrent `8d008cdb056f9e2f429c2177c59f28745e63a729` correction moves
+the real lock into the Go supervisor so collector exit cannot release it before
+whole-family cleanup. Its source was independently reviewed; focused Go and64
+Python contracts pass on the combined tree. The queued da680 lock measurement
+predates that lifetime correction and cannot satisfy final lock qualification,
+even if its native commands otherwise complete. Fresh corrected-source proof
+remains necessary.

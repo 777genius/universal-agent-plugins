@@ -11,8 +11,15 @@ ORIGINAL = b'{"read_config_from":{"cloud":false}}\n'
 
 class OrdinaryEffects(base.BootstrapEffects):
     metadata_first = True
-    config_path, config_mode = "home/config/devin/config.json", 0o644
+    config_path = "home/config/devin/config.json"
     metadata_route = "ordinary-original-user-config; authored local-policy profile only"
+
+    @property
+    def config_mode(self):
+        # Measured native first migration makes the original0644 file private.
+        # Only the first mcp-a postcondition can enter migrating=True. Once
+        # admitted, the complete after identity/hash stays frozen at0600.
+        return 0o600 if self.migrating or self.after is not None else 0o644
 
     @classmethod
     def prepare(cls, ctx):
