@@ -1,10 +1,12 @@
 """Inert tests execute actual parser, capture fence and artifacts; no vendor."""
 import base64
 import copy
-from contextlib import contextmanager
+from contextlib import contextmanager, redirect_stdout
+import io
 import json
 import os
 from pathlib import Path
+import re
 import selectors
 import subprocess
 import sys
@@ -43,6 +45,75 @@ def startup_row(root, scope):
         source=dict(type='configToml', path=str(root / 'home/.grok/config.toml')))])).encode()
     return dict(label='mcp-inventory', argv=['/sealed/grok', 'inspect', '--json'], exit=0, error=None,
                 merged_base64=base64.b64encode(body).decode(), merged_bytes=len(body), merged_sha256=case.digest(body))
+
+
+class FrontendPublicationContracts(unittest.TestCase):
+    def preflight_refusal(self):
+        import project_native_research as shared
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / 'not-created'
+            with (mock.patch.object(shared.native, 'require_hosted', side_effect=ValueError('PRIVATE path/token')),
+                  mock.patch.object(shared, 'acquire', side_effect=AssertionError('native acquisition')),
+                  redirect_stdout(io.StringIO()) as stream):
+                self.assertEqual(case.frontend(output), 1)
+            self.assertFalse(output.exists())
+            return stream.getvalue().encode()
+
+    def test_preflight_refusal_is_one_closed_frame_without_exception_text(self):
+        body = self.preflight_refusal()
+        self.assertNotIn(b'PRIVATE', body)
+        self.assertEqual(case.document(body), dict(schema_version=1, kind='frontend-publication-refused',
+            stage='preflight', error_class='contract', source_identity_checked=False,
+            cleanup_complete=False, publication_attempted=False))
+
+    def test_negative_frame_requires_exact_types_enums_exit_and_one_frame(self):
+        body = self.preflight_refusal()
+        packet = case.document(body)
+        for key, value in (('schema_version', True), ('kind', 'PRIVATE'), ('stage', 'PRIVATE'), ('stage', []),
+                ('error_class', 'PRIVATE'), ('error_class', []), ('cleanup_complete', 1), ('publication_attempted', 0),
+                ('source_identity_checked', None), ('publication', {}), ('extra', 'PRIVATE')):
+            changed = dict(packet, **{key: value})
+            raw = json.dumps(changed, separators=(',', ':')).encode() + b'\n'
+            with self.subTest(key=key), redirect_stdout(io.StringIO()) as stream, self.assertRaises(ValueError):
+                case.frontend_packet(raw, 1)
+            self.assertEqual(stream.getvalue(), '')
+        for key in packet:
+            changed = {name: value for name, value in packet.items() if name != key}
+            raw = json.dumps(changed, separators=(',', ':')).encode() + b'\n'
+            with self.subTest(missing=key), redirect_stdout(io.StringIO()) as stream, self.assertRaises(ValueError):
+                case.frontend_packet(raw, 1)
+            self.assertEqual(stream.getvalue(), '')
+        for raw, exit_code in ((body, 0), (body, True), (body, 2), (body + b'\n', 1),
+                (body + b'{}\n', 1), (b'{}\n' + body, 1), (b'', 1)):
+            with self.subTest(exit=exit_code, size=len(raw)), redirect_stdout(io.StringIO()) as stream, self.assertRaises(ValueError):
+                case.frontend_packet(raw, exit_code)
+            self.assertEqual(stream.getvalue(), '')
+
+    def test_actual_workflow_blocks_refusal_before_staging_or_upload_output(self):
+        import native_client_research as native
+        workflow = (Path(__file__).parents[1] / '.github/workflows/client-automation-native.yml').read_text()
+        blocks = re.findall(r"(?ms)^          python3 - <<'PYTHON'\n(.*?)^          PYTHON$", workflow)
+        blocks = [block for block in blocks if 'capture.frontend_packet' in block]
+        self.assertEqual(len(blocks), 3)
+        body = self.preflight_refusal()
+        with tempfile.TemporaryDirectory() as temporary:
+            github_output = Path(temporary) / 'github-output'
+            github_output.write_bytes(b'original output\n')
+            for block in blocks:
+                for error, exit_code in ((None, 1), ('PRIVATE bounded capture refusal', 1), (None, 2), (None, 0)):
+                    expected = ValueError if error is None and exit_code in (0, 1) else SystemExit
+                    with (self.subTest(error=error, exit=exit_code),
+                          mock.patch.dict(os.environ, RUNNER_TEMP=temporary, GITHUB_OUTPUT=str(github_output)),
+                          mock.patch.object(native, 'run_probe', return_value=({'error': error, 'exit': exit_code}, body, b'PRIVATE stderr')) as probe,
+                          mock.patch.object(case, 'admit_publication', side_effect=AssertionError('negative upload')) as admit,
+                          mock.patch.object(tempfile, 'mkdtemp', side_effect=AssertionError('negative staging')),
+                          redirect_stdout(io.StringIO()) as stream, self.assertRaises(expected)):
+                        exec(compile('\n'.join(line[10:] for line in block.splitlines()), '<workflow>', 'exec'), {})
+                    self.assertEqual(probe.call_args.kwargs, dict(timeout=180, limit=1 << 20, memory_only=True))
+                    admit.assert_not_called()
+                    self.assertEqual(github_output.read_bytes(), b'original output\n')
+                    self.assertNotIn('PRIVATE', stream.getvalue())
+                    self.assertEqual(stream.getvalue(), 'GROK_FRONTEND_REFUSAL=' + body.decode() if error is None and exit_code == 1 else '')
 
 
 
@@ -1618,9 +1689,11 @@ class LockReadoutContracts(unittest.TestCase):
     def test_real_run_never_completes_after_second_phase_source_or_cleanup_refusal(self):
         import io
         import project_native_research as shared
+        import native_client_project_artifacts as artifacts
         from project_native_collectors.grok import ACQUISITION
         commit, tree, native = 'a' * 40, 'b' * 40, b'inert transport fixture; never executed'
-        for refusal in ('none', 'second-phase', 'source-final', 'cleanup'):
+        write_zip, remove_root = artifacts.write_zip, case.shutil.rmtree
+        for refusal in ('none', 'second-phase', 'source-final', 'cleanup', 'helper-missing', 'cleanup-io', 'archive'):
             with self.subTest(refusal=refusal), tempfile.TemporaryDirectory() as temporary:
                 packet, members = self.fixture()
                 receipts = case.document(members['admission.json'])['scopes']
@@ -1647,6 +1720,8 @@ class LockReadoutContracts(unittest.TestCase):
                     request = case.document((root / 'request.json').read_bytes())
                     index = case.LOCK_PHASES.index(request['phase'])
                     calls.append(request['phase'])
+                    if refusal == 'helper-missing':
+                        raise ValueError('PRIVATE helper stderr/path')
                     receipt = copy.deepcopy(receipts[index])
                     for value in (receipt, receipt['result']):
                         for key in ('source_commit', 'source_tree', 'nonce'):
@@ -1660,6 +1735,14 @@ class LockReadoutContracts(unittest.TestCase):
                     if index == 1 and refusal == 'cleanup':
                         receipt['cleanup_complete'] = False
                     return receipt
+                def archive(*args, **kwargs):
+                    if refusal == 'archive':
+                        raise OSError('PRIVATE archive path')
+                    return write_zip(*args, **kwargs)
+                def cleanup(*args, **kwargs):
+                    if refusal == 'cleanup-io':
+                        raise OSError('PRIVATE cleanup path')
+                    return remove_root(*args, **kwargs)
                 try:
                     with (mock.patch.object(shared.native, 'require_hosted'),
                           mock.patch.object(shared, 'acquire', return_value=({}, {'grok': native})),
@@ -1669,16 +1752,39 @@ class LockReadoutContracts(unittest.TestCase):
                           mock.patch.object(case.subprocess, 'run', side_effect=process),
                           mock.patch.object(case, 'helper_capture', side_effect=capture),
                           mock.patch.object(case, 'lock_ledger', return_value=dict(accepted=True, before={}, after={})),
-                          mock.patch.object(sys, 'stdout', io.StringIO())):
-                        status = case.run(Path(temporary) / 'output', lock_qualification=True)
-                    with zipfile.ZipFile(Path(temporary) / 'output/upload/research.zip') as archive:
-                        summary = case.document(archive.read('admission.json'))
+                          mock.patch.object(artifacts, 'write_zip', side_effect=archive),
+                          mock.patch.object(case.shutil, 'rmtree', side_effect=cleanup),
+                          mock.patch.object(sys, 'stdout', io.StringIO()) as stream):
+                        status = case.frontend(Path(temporary) / 'output', lock_qualification=True)
+                    stdout = stream.getvalue().encode()
+                    self.assertNotIn(b'PRIVATE', stdout)
+                    packet = case.document(stdout)
+                    path = Path(temporary) / 'output/upload/research.zip'
+                    if refusal in ('cleanup-io', 'archive'):
+                        self.assertFalse(path.exists())
+                    else:
+                        with zipfile.ZipFile(path) as published:
+                            summary = case.document(published.read('admission.json'))
+                        self.assertEqual(summary.get('measurement_complete') is True, refusal == 'none')
+                        self.assertIs(summary['collection_complete'], False)
+                        self.assertTrue(all(value is False for value in summary['qualification'].values()))
                     self.assertEqual(status, 0 if refusal == 'none' else 1)
-                    self.assertEqual(summary.get('measurement_complete') is True, refusal == 'none')
-                    self.assertIs(summary['collection_complete'], False)
-                    self.assertTrue(all(value is False for value in summary['qualification'].values()))
-                    self.assertEqual([value for value in calls if value in case.LOCK_PHASES], list(case.LOCK_PHASES))
-                    self.assertEqual(calls.count('source'), 2 if refusal in ('none', 'source-final') else 1)
+                    if refusal in ('cleanup', 'helper-missing', 'cleanup-io', 'archive'):
+                        self.assertEqual(packet, dict(schema_version=1, kind='frontend-publication-refused',
+                            stage={'cleanup': 'receipt', 'helper-missing': 'helper', 'cleanup-io': 'cleanup', 'archive': 'archive'}[refusal],
+                            error_class='io' if refusal in ('cleanup-io', 'archive') else 'contract', source_identity_checked=True,
+                            cleanup_complete=refusal == 'archive', publication_attempted=refusal != 'cleanup-io'))
+                        with redirect_stdout(io.StringIO()) as diagnostics, self.assertRaisesRegex(ValueError, '^frontend-publication-refused$'):
+                            case.frontend_packet(stdout, status)
+                        self.assertEqual(diagnostics.getvalue(), 'GROK_FRONTEND_REFUSAL=' + stdout.decode())
+                    else:
+                        self.assertEqual(stdout, json.dumps(dict(schema_version=1, source_commit=commit, source_tree=tree,
+                            nonce=packet['nonce'], publication=packet['publication']), separators=(',', ':')).encode() + b'\n')
+                        with redirect_stdout(io.StringIO()) as diagnostics:
+                            self.assertEqual(case.frontend_packet(stdout, status), packet)
+                        self.assertEqual(diagnostics.getvalue(), '')
+                    self.assertEqual([value for value in calls if value in case.LOCK_PHASES], list(case.LOCK_PHASES[:1] if refusal == 'helper-missing' else case.LOCK_PHASES))
+                    self.assertEqual(calls.count('source'), 2 if refusal in ('none', 'source-final', 'cleanup-io', 'archive') else 1)
                 finally:
                     for root, identity in owned:
                         if root.exists():

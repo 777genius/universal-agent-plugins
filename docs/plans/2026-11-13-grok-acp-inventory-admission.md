@@ -510,3 +510,55 @@ at source `0dd77f85` failed at the frontend's empty publication-frame parse.
 No artifact or frontend stderr was retained. The confirmed supervisor mismatch
 can produce that path, but the available log does not establish it as the sole
 cause of this particular run. Fresh hosted native acceptance remains pending.
+
+## Closed diagnosis when no frontend publication receipt exists (2026-11-13)
+
+The original metadata job `132191359702` in run `43512381883`, at exact source
+`0dd77f85ca682989dadbde430fc371b6574f61c3`, passed 74 Python contracts and the
+Go helper contracts. At `2026-11-13T22:39:19Z`, the workflow then failed in
+`document(stdout)` with `json-bound`; no artifact was published. The preceding
+parent gate had accepted only frontend exit 0 or 1 with no bounded-capture error.
+At that source, `run_probe(memory_only=True)` returns byte buffers capped at the
+same 1 MiB bound and records overflow as an error. The failed bound therefore
+establishes an empty stdout, not a particular native failure.
+
+Two inert executions of the exact original `run_probe` and `document` functions
+reproduced this ambiguity: a Python child raising `ValueError` and a child
+returning exit 1 without output both produced `error=None`, exit 1, empty stdout,
+and the same `json-bound` refusal. Their stderr lengths were 101 and 0 bytes.
+Neither execution used Grok, acquisition, authentication, or native isolation.
+The existing original cannot identify the missing receipt's inner cause; this
+change does not retroactively supply that evidence.
+
+R1 accepted a diagnostic-only change in these four existing paths: this plan,
+the frontend, its tests, and the three existing workflow call sites. The estimate
+was 70–110 runtime and 80–130 test lines. The implementation keeps the current
+successful publication receipt and `admit_publication` authority unchanged.
+Only when no receipt was emitted does the frontend, after the existing cleanup
+path returns or raises, emit one canonical negative frame. Preflight refusal
+reports that no cleanup or publication completion was observed. Fixed stage and
+error-category enums, plus actual internal booleans for source checking, cleanup
+completion, and publication attempt, are the entire diagnostic. Exception text,
+paths, private-data hashes, child output, and arbitrary class names are absent.
+No `BaseException`/signal behavior, native command, deadline, stream bound, ZIP
+membership, cleanup rule, or supported product behavior changes.
+
+The workflow still requires its original bounded frontend record first. A
+negative frame additionally requires exact exit 1, exact closed keys and types,
+known enums, and one canonical JSON frame. The parent can print only that finite
+diagnostic, then fails before staging an admitted ZIP or writing `GITHUB_OUTPUT`.
+No negative frame is publication, cleanup, native-session, MCP, or runtime
+qualification. A diagnostic `cleanup_complete` boolean is not a cleanup receipt
+and is never used as authority by the parent or uploader. Mixed success/failure
+shapes, missing or extra fields, promoted booleans, unknown strings, and extra
+frames refuse without printing their contents.
+
+The current 83 Python contracts pass (1.453 seconds). The actual inert `run`
+path now covers preflight refusal, missing helper receipt, rejected native
+cleanup receipt, and injected root-cleanup and ZIP-writer failures. Poisoned
+exception messages do not appear in the frame. Successful and clean negative
+archive receipts retain the original exact output framing. Tests execute all
+three actual workflow Python blocks and prove that a refusal leaves an existing
+`GITHUB_OUTPUT` byte-for-byte unchanged, never calls publication admission or
+staging, and never exposes the supplied private stderr. These are local contract
+results; a future ordinary workflow must still provide the genuine observation.

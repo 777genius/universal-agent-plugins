@@ -195,9 +195,7 @@ jobs:
               pathlib.Path.cwd(), dict(os.environ), temporary, 'grok-acp-frontend', timeout=180, limit=1 << 20, memory_only=True)
           if record['error'] is not None or record['exit'] not in (0, 1):
               raise SystemExit('Frontend did not prove bounded completion; no upload admitted')
-          packet = capture.document(stdout)
-          if stdout != __import__('json').dumps(packet, separators=(',', ':')).encode() + b'\n':
-              raise SystemExit('Frontend publication receipt is not one exact closed frame')
+          packet = capture.frontend_packet(stdout, record['exit'])
           destination = pathlib.Path(tempfile.mkdtemp(prefix='grok-acp-admitted-', dir=temporary))
           destination.rmdir()
           expected_tree = subprocess.check_output(['/usr/bin/git', 'rev-parse', 'HEAD^{tree}'], text=True).strip()
@@ -260,9 +258,7 @@ jobs:
               pathlib.Path.cwd(), dict(os.environ), temporary, 'grok-session-frontend', timeout=180, limit=1 << 20, memory_only=True)
           if record['error'] is not None or record['exit'] not in (0, 1):
               raise SystemExit('Frontend did not prove bounded completion; no upload admitted')
-          packet = capture.document(stdout)
-          if stdout != __import__('json').dumps(packet, separators=(',', ':')).encode() + b'\n':
-              raise SystemExit('Frontend publication receipt is not one exact closed frame')
+          packet = capture.frontend_packet(stdout, record['exit'])
           destination = pathlib.Path(tempfile.mkdtemp(prefix='grok-session-admitted-', dir=temporary))
           destination.rmdir()
           expected_tree = subprocess.check_output(['/usr/bin/git', 'rev-parse', 'HEAD^{tree}'], text=True).strip()
@@ -325,9 +321,7 @@ jobs:
               pathlib.Path.cwd(), dict(os.environ), temporary, 'grok-lock-frontend', timeout=180, limit=1 << 20, memory_only=True)
           if record['error'] is not None or record['exit'] not in (0, 1):
               raise SystemExit('Frontend did not prove bounded completion; no upload admitted')
-          packet = capture.document(stdout)
-          if stdout != __import__('json').dumps(packet, separators=(',', ':')).encode() + b'\n':
-              raise SystemExit('Frontend publication receipt is not one exact closed frame')
+          packet = capture.frontend_packet(stdout, record['exit'])
           destination = pathlib.Path(tempfile.mkdtemp(prefix='grok-lock-admitted-', dir=temporary))
           destination.rmdir()
           expected_tree = subprocess.check_output(['/usr/bin/git', 'rev-parse', 'HEAD^{tree}'], text=True).strip()

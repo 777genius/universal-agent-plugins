@@ -191,6 +191,9 @@ LIMIT = 1 << 20
 SCOPES = ('user', 'a', 'b')
 LABELS = ('version', 'help', 'agent-help', 'stdio-help', 'acp')
 METADATA_LABELS = LABELS[:4] + ('mcp-inventory',) + LABELS[4:]
+FRONTEND_STAGES = frozenset(('preflight', 'source', 'acquisition', 'build', 'fixtures', 'baseline',
+    'helper', 'receipt', 'ledger', 'inventory', 'source-final', 'cleanup', 'archive', 'receipt-output'))
+FRONTEND_ERRORS = frozenset(('none', 'contract', 'io', 'process', 'other'))
 STARTUP_NAME = 'uap-acp-startup-witness'
 FALSE = dict.fromkeys(('inventory_admitted', 'native_enablement', 'workspace_trust', 'native_mcp_call',
                        'provider_authentication', 'real_model_inference', 'production_project_activation'), False)
@@ -237,6 +240,52 @@ def document(body, limit=LIMIT):
                 walk(child, depth + 1)
     walk(value)
     return value
+
+
+def frontend_packet(body, exit_code):
+    """A closed negative frame is diagnostic only and never publication authority."""
+    packet = document(body)
+    require(body == json.dumps(packet, separators=(',', ':')).encode() + b'\n', 'publication-frame')
+    if type(packet) is dict and set(packet) == set('schema_version source_commit source_tree nonce publication'.split()):
+        return packet
+    closed(packet, 'schema_version kind stage error_class source_identity_checked cleanup_complete publication_attempted')
+    require(type(exit_code) is int and exit_code == 1 and packet['kind'] == 'frontend-publication-refused'
+            and type(packet['schema_version']) is int and packet['schema_version'] == 1
+            and type(packet['stage']) is str and packet['stage'] in FRONTEND_STAGES
+            and type(packet['error_class']) is str and packet['error_class'] in FRONTEND_ERRORS
+            and all(type(packet[key]) is bool for key in ('source_identity_checked', 'cleanup_complete', 'publication_attempted')),
+            'frontend-refusal-frame')
+    print('GROK_FRONTEND_REFUSAL=' + json.dumps(packet, separators=(',', ':')))
+    raise ValueError('frontend-publication-refused')
+
+
+def frontend_state():
+    return dict(stage='preflight', failure_stage=None, error_class='none', source_identity_checked=False,
+                cleanup_complete=False, publication_attempted=False, receipt_emitted=False)
+
+
+def frontend_error(state, error):
+    state['failure_stage'] = state['stage']
+    state['error_class'] = ('contract' if isinstance(error, ValueError) else 'io' if isinstance(error, OSError)
+                            else 'process' if isinstance(error, subprocess.SubprocessError) else 'other')
+
+
+def frontend(output, *, session_only=False, lock_qualification=False):
+    """Report a missing receipt only after run's existing cleanup/finally path."""
+    state = frontend_state()
+    try:
+        status = run(output, session_only=session_only, lock_qualification=lock_qualification, _frontend=state)
+    except Exception as error:
+        frontend_error(state, error)
+        status = 1
+    if not state['receipt_emitted']:
+        packet = dict(schema_version=1, kind='frontend-publication-refused',
+                      stage=state['failure_stage'] or state['stage'], error_class=state['error_class'],
+                      source_identity_checked=state['source_identity_checked'], cleanup_complete=state['cleanup_complete'],
+                      publication_attempted=state['publication_attempted'])
+        print(json.dumps(packet, separators=(',', ':')))
+        return 1
+    return status
 
 
 def stable(info):
@@ -1371,7 +1420,8 @@ def observation_exit(summary, *, lock_qualification=False):
     return 0 if summary['collection_complete'] or lock_complete else 1
 
 
-def run(output, *, session_only=False, lock_qualification=False):
+def run(output, *, session_only=False, lock_qualification=False, _frontend=None):
+    progress = frontend_state() if _frontend is None else _frontend
     import project_native_research as shared
     from grok_acp_bootstrap import NativeBootstrap
     from project_native_collectors.grok import ACQUISITION
@@ -1392,6 +1442,7 @@ def run(output, *, session_only=False, lock_qualification=False):
     bodies, cleanup_proved = {}, True
     try:
         with shared.Budget(150) as budget:
+            progress['stage'] = 'source'
             def source(args):
                 value = subprocess.run(['/usr/bin/git', *args], cwd=shared.SOURCE, capture_output=True, timeout=5, check=True,
                                        env={'PATH': '/usr/bin:/bin', 'GIT_CONFIG_NOSYSTEM': '1', 'GIT_CONFIG_GLOBAL': '/dev/null'})
@@ -1401,6 +1452,8 @@ def run(output, *, session_only=False, lock_qualification=False):
             require(commit == os.environ.get('EXPECTED_COMMIT') and re.fullmatch('[0-9a-f]{40}', commit)
                     and re.fullmatch('[0-9a-f]{40}', tree) and not source(['status', '--porcelain', '--untracked-files=normal']), 'source-identity')
             summary.update(source_commit=commit, source_tree=tree, nonce=nonce, run=os.environ.get('GITHUB_RUN_ID'), attempt=os.environ.get('GITHUB_RUN_ATTEMPT'))
+            progress['source_identity_checked'] = True
+            progress['stage'] = 'acquisition'
             receipt, contents = shared.acquire(ACQUISITION, budget)
             require(digest(contents['grok']) == ACQUISITION['binary_sha256'], 'native-pin')
             (root / 'grok').write_bytes(contents['grok'])
@@ -1408,9 +1461,11 @@ def run(output, *, session_only=False, lock_qualification=False):
             collector = Path(__file__).resolve()
             (root / 'collector.py').write_bytes(ordinary(collector))
             helper = root / 'helper'
+            progress['stage'] = 'build'
             subprocess.run(['go', 'build', '-trimpath', '-ldflags', '-X main.sourceCommit=' + commit + ' -X main.sourceTree=' + tree
                             + ' -X main.collectorSHA=' + digest(ordinary(collector)), '-o', str(helper), './research/grokacpinventory'],
                            cwd=shared.SOURCE / 'install/integrationctl', check=True, timeout=60)
+            progress['stage'] = 'fixtures'
             roots = fixtures(root, nonce)
             startup_config = startup_fixture_config(root) if not session_only and not lock_qualification else None
             if session_only:
@@ -1420,6 +1475,7 @@ def run(output, *, session_only=False, lock_qualification=False):
                 authored = lock_fixture_config(root)
                 summary['mode'] = LOCK_MODE
             (root / 'request.json').write_bytes(b'{}\n')
+            progress['stage'] = 'baseline'
             baseline = None if session_only or lock_qualification else metadata_inventory(root, budget)
             profiles = {name: snapshot(path) for name, path in roots.items()}
             bootstrap = NativeBootstrap(original_config=startup_config)
@@ -1442,9 +1498,12 @@ def run(output, *, session_only=False, lock_qualification=False):
                     require(baseline is None, 'session-baseline-renewal')
                     baseline = metadata_inventory(root, budget)
                 cleanup_proved = False
+                progress['stage'] = 'helper'
                 receipt = helper_capture(helper, root, min(origin + 150, request['start_monotonic_ns'] / 1e9 + 35))
+                progress['stage'] = 'receipt'
                 result = validate_receipt(receipt, request)
                 cleanup_proved = True
+                progress['stage'] = 'ledger'
                 ledger = lock_ledger(root,baseline,stage,authored,budget,created=lock_created) if lock_qualification else session_metadata_ledger(root, baseline, budget) if session_only else post_ledger(root, baseline, roots, profiles, budget, bootstrap)
                 if session_only:
                     ledger['selected_config_capture'] = capture_session_config(root, ledger, profiles['user_profile']['config.toml'], nonce, budget, receipt)
@@ -1471,31 +1530,42 @@ def run(output, *, session_only=False, lock_qualification=False):
                     require(ledger['protected_originals_unchanged'] and result['semantic_complete'], 'native-refused')
                     continue  # Unknown session effects never become an admitted envelope.
                 require(ledger['accepted'] and result['semantic_complete'], 'native-refused')
+                progress['stage'] = 'inventory'
                 observed_ids = inventory_rows(result, root, scope)
                 require(all(path not in native_ids or native_ids[path] == value for path, value in observed_ids.items()), 'native-id-changed')
                 native_ids.update(observed_ids)
                 result.pop('rpc')
+            progress['stage'] = 'source-final'
             require(not source(['status', '--porcelain', '--untracked-files=normal']), 'source-changed')
             summary['collection_complete'] = not session_only and not lock_qualification
             if lock_qualification:
                 summary['measurement_complete'] = True
-    except Exception:
+    except Exception as error:
+        frontend_error(progress, error)
         summary['error'] = 'admission-refused'
     finally:
+        progress['stage'] = 'cleanup'
         if cleanup_proved and stable(root.lstat())[:2] == held:
             shutil.rmtree(root)
             summary['cleanup_complete'] = True
+        progress['cleanup_complete'] = summary['cleanup_complete']
         if not summary['cleanup_complete']:
+            if progress['failure_stage'] is None:
+                progress['failure_stage'] = 'cleanup'
             summary = dict(schema_version=1, collection_complete=False, cleanup_complete=False, qualification=dict(FALSE), scopes=[])
             bodies = {}
         bodies['admission.json'] = json.dumps(summary, sort_keys=True).encode() + b'\n'
         try:
+            progress['stage'] = 'archive'
+            progress['publication_attempted'] = True
             publication = publish(output, bodies, output_fd, output_identity, mode=LOCK_MODE) if lock_qualification else publish(output, bodies, output_fd, output_identity)
         finally:
             os.close(output_fd)
+        progress['stage'] = 'receipt-output'
         if summary['cleanup_complete'] and all(key in summary for key in ('source_commit', 'source_tree', 'nonce')):
             print(json.dumps(dict(schema_version=1, source_commit=summary['source_commit'], source_tree=summary['source_tree'],
                                   nonce=summary['nonce'], publication=publication), separators=(',', ':')))
+            progress['receipt_emitted'] = True
     return observation_exit(summary, lock_qualification=lock_qualification)
 
 
@@ -1510,4 +1580,4 @@ if __name__ == '__main__':
         collect(args.collect)
     else:
         require(args.output is not None and args.collect is None, 'mode')
-        raise SystemExit(run(args.output, session_only=args.session_only, lock_qualification=args.lock_qualification))
+        raise SystemExit(frontend(args.output, session_only=args.session_only, lock_qualification=args.lock_qualification))
