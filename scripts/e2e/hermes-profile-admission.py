@@ -855,7 +855,8 @@ def config_document_boundary(body, value, server, url, removed=False, authored_s
     allowed = {"mcp_servers"}
     if removed and type(value) is dict and value == {"_config_version": 52}:
         # Exact pinned native final-server removal postimage, never a new input.
-        require(type(value["_config_version"]) is int and body == b"_config_version: 52\n",
+        stamp = b"_config_version: 52\r\n" if os.name == "nt" else b"_config_version: 52\n"
+        require(type(value["_config_version"]) is int and body == stamp,
                 "unadmitted removed config stamp")
         allowed.add("_config_version")
     require(isinstance(value, dict) and set(value) <= allowed, "unadmitted custom config fields")

@@ -974,3 +974,41 @@ payload and remaining alias to survive. Build-clock tests prohibit a renewed
 cleanup allowance after the total deadline. All 16 cleanup contracts passed
 locally on Linux. Original hosted execution must still establish Windows
 completion and performance. No native qualification changes.
+
+## Original Windows profile progress and exact removal newline
+
+Source `b7f96040e26e09a0c12a64eae8b909a90a8a32bc`, tree
+`fc9a3ed45c87e166a51f8a149651bdebc211e76d`,
+[run 43515526775, Windows job 132197261357](https://github.com/777genius/universal-agent-plugins/actions/runs/43515526775/job/132197261357)
+completed owned build cleanup with 33071 detached aliases. The original payload
+remained 134259 members / 6258975026 logical bytes. The subsequent native profile
+observer failed after successful A/B config/list/test and A restart commands,
+at the first final-server removal. This advances the earlier cleanup timeout;
+the complete Windows profile lifecycle is still failed and unqualified.
+
+Original artifact `14084285338` has 27008 bytes and SHA-256
+`1cdcfeda716f8ae3faca92f2061e0a902447f22eefc6cff312989842f7463f34`.
+Root independently verified its CRC, all 52 members, 51 complete stream hashes,
+15 status/output joins and 13 command deltas. Both source identities and the
+complete before/after bundled runtime match; cleanup completed. The original
+method ledger contains selected initialize/list sequences for A, B and A restart,
+without tools/call. It records no unadmitted shared effects. All final native,
+authentication, inference and ordinary-source qualification flags remain false.
+
+The `remove-mcp-a` command exited zero, but `config_document_boundary` then
+refused `unadmitted removed config stamp`. Its recorded postimage is 21 bytes,
+SHA-256 `9d2f633e8e0a5553913286ecc1b88d2511a69e545da69760b24135d02db75f3e`,
+which exactly joins the candidate bytes `_config_version: 52\r\n`. The Unix
+20-byte LF spelling has the separately established digest
+`8bddefe963a867c332591ef2f50ec056944d1a323229b6294a4de7d9718a69cb`.
+The original raw YAML was not uploaded; this conclusion uses its exact length
+and digest, rather than inferring bytes from the runner OS alone.
+
+The oracle now requires the measured CRLF spelling only on Windows and the
+existing LF spelling elsewhere, with the same strict integer, exact mapping,
+removal-only and authored-byte checks. It does not normalize arbitrary whitespace
+or accept both spellings on every platform. A portable inert contract joins the
+original Windows hash and refuses the opposite platform newline, missing newline,
+duplicate carriage return and trailing content. Native effects, process bounds,
+cleanup, publication and qualification gates are unchanged. A corrected-source
+original Windows run is still required; no historical archive is reclassified.

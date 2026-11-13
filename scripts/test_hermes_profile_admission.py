@@ -1005,13 +1005,14 @@ if effect == 'alias': backup.unlink(); os.link(home / 'config.yaml', backup)
 
     def test_removed_config_accepts_only_measured_native_schema_stamp(self):
         # Pinned vendor save_config retains schema version 52 after removing the
-        # final server. This source-derived body matches the original native
-        # 20-byte postimage digest; the original YAML bytes were not uploaded.
-        body = b"_config_version: 52\n"
-        digest = "8bddefe963a867c332591ef2f50ec056944d1a323229b6294a4de7d9718a69cb"
+        # final server. These bodies match the original native postimage hashes;
+        # the original YAML bytes themselves were not uploaded.
+        body = b"_config_version: 52\r\n" if os.name == "nt" else b"_config_version: 52\n"
+        digest = ("9d2f633e8e0a5553913286ecc1b88d2511a69e545da69760b24135d02db75f3e" if os.name == "nt"
+                  else "8bddefe963a867c332591ef2f50ec056944d1a323229b6294a4de7d9718a69cb")
         boundary = CASE["config_document_boundary"]
         value = {"_config_version": 52}
-        self.assertEqual(len(body), 20)
+        self.assertEqual(len(body), 21 if os.name == "nt" else 20)
         self.assertEqual(CASE["hashlib"].sha256(body).hexdigest(), digest)
         self.assertEqual(boundary(body, value, "owned", "http://localhost/mcp", removed=True), digest)
         for changed_body, changed_value, removed in (
@@ -1027,6 +1028,20 @@ if effect == 'alias': backup.unlink(); os.link(home / 'config.yaml', backup)
                 boundary(changed_body, changed_value, "owned", "http://localhost/mcp", removed=removed)
         with self.assertRaisesRegex(RuntimeError, "config bytes changed"):
             boundary(body, value, "owned", "http://localhost/mcp", removed=True, authored_sha="0" * 64)
+
+    def test_removed_config_newline_is_exact_for_the_observed_platform(self):
+        boundary = CASE["config_document_boundary"]
+        bodies = {"posix": b"_config_version: 52\n", "nt": b"_config_version: 52\r\n"}
+        # Original b7 Windows artifact 14084285338 records this exact 21-byte hash.
+        self.assertEqual(CASE["hashlib"].sha256(bodies["nt"]).hexdigest(),
+                         "9d2f633e8e0a5553913286ecc1b88d2511a69e545da69760b24135d02db75f3e")
+        for platform, accepted in bodies.items():
+            with self.subTest(platform=platform), mock.patch.object(CASE["os"], "name", platform):
+                boundary(accepted, {"_config_version": 52}, "owned", "http://localhost/mcp", removed=True)
+                for body in (bodies["nt" if platform == "posix" else "posix"], accepted + b"\n",
+                             b"_config_version: 52\r", b"_config_version: 52\r\r\n", b"_config_version: 52"):
+                    with self.subTest(body=body), self.assertRaisesRegex(RuntimeError, "config stamp"):
+                        boundary(body, {"_config_version": 52}, "owned", "http://localhost/mcp", removed=True)
 
     def test_safe_failure_envelope_keeps_every_qualification_false(self):
         with tempfile.TemporaryDirectory() as temporary:
