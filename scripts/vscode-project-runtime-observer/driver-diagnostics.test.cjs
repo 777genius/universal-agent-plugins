@@ -255,13 +255,13 @@ test('actual MCP substeps retain a fixed phase before an operation can fail', as
   for (const failure of ['list', 'server', 'action', 'start', 'trust']) {
     let phase, picks = 0;
     const stop = () => { throw new Error('private injected operation'); };
-    const context = { Error, performance: { now: () => 0 },
+    const context = { Error, performance: { now: () => 0 }, launchDiagnostic: () => {}, within: async value => value,
       listServers: async (_page, mark) => { mark('mcp-server-picker'); if (failure === 'list') stop(); },
       pick: async () => { picks++; if ((failure === 'server' && picks === 1) || (failure === 'start' && picks === 2)) stop(); },
       quickInput: async () => { if (failure === 'action') stop(); }, visibleDialogs: async () => stop() };
     vm.createContext(context);
     vm.runInContext(stripTypeScriptTypes(section('async function startServer(', 'async function input('), { mode: 'strip' }) + '\nglobalThis.run = startServer;', context);
-    await assert.rejects(context.run({}, { label: 'owned' }, 60000, value => { phase = value; }), /private injected operation/);
+    await assert.rejects(context.run({ evaluate: async () => ({}) }, { label: 'owned' }, 60000, value => { phase = value; }), /private injected operation/);
     assert.equal(phase, { list: 'mcp-server-picker', server: 'mcp-server-selection', action: 'mcp-action-picker', start: 'mcp-start-action', trust: 'mcp-trust' }[failure]);
   }
 });
@@ -339,10 +339,11 @@ test('actual start rejects a late Running row after diagnostic exhausts original
   for (const throws of [false, true]) {
     let clock = 0, rows = 0;
     const context = { Error, performance: { now: () => clock }, listServers: async () => {}, pick: async () => {}, quickInput: async () => {},
-      visibleDialogs: async () => ({ count: async () => 0 }), delay: async () => {}, launchDiagnostic: () => {}, within: async work => work,
+      startInputReady: async () => true, visibleDialogs: async () => ({ count: async () => 0 }), delay: async () => {}, launchDiagnostic: () => {}, within: async work => work,
       labelRow: async () => { rows++; return { locator: () => ({ innerText: async () => 'Running' }) }; } };
     vm.createContext(context); vm.runInContext(stripTypeScriptTypes(section('async function startServer(', 'async function input('), { mode: 'strip' }) + '\nglobalThis.run = startServer;', context);
-    const page = { evaluate: async () => { clock = 15000; if (throws) throw new Error('private'); return {}; } };
+    let evaluated = 0;
+    const page = { evaluate: async () => { if (++evaluated === 1) return {}; clock = 15000; if (throws) throw new Error('private'); return {}; } };
     await assert.rejects(context.run(page, { label: 'owned' }, 60000, () => {}), /native MCP startup deadline exceeded/);
     assert.equal(rows, 0);
   }
@@ -351,8 +352,33 @@ test('actual start rejects a late Running row after diagnostic exhausts original
 test('actual start rejects Running when final state read exhausts original budget', async () => {
   let clock = 0;
   const context = { Error, performance: { now: () => clock }, listServers: async () => {}, pick: async () => {}, quickInput: async () => {},
-    visibleDialogs: async () => ({ count: async () => 0 }), delay: async () => {}, launchDiagnostic: () => {}, within: async work => work,
+    startInputReady: async () => true, visibleDialogs: async () => ({ count: async () => 0 }), delay: async () => {}, launchDiagnostic: () => {}, within: async work => work,
     labelRow: async () => ({ locator: () => ({ innerText: async () => { clock = 15000; return 'Running'; } }) }) };
   vm.createContext(context); vm.runInContext(stripTypeScriptTypes(section('async function startServer(', 'async function input('), { mode: 'strip' }) + '\nglobalThis.run = startServer;', context);
-  await assert.rejects(context.run({ evaluate: async () => ({}) }, { label: 'owned' }, 60000, () => {}), /native MCP startup deadline exceeded/);
+  let evaluated = 0;
+  await assert.rejects(context.run({ evaluate: async () => ({ outputVisible: ++evaluated > 1 }) }, { label: 'owned' }, 60000, () => {}), /native MCP startup deadline exceeded/);
+});
+
+test('actual start preserves pending inputs and requires a fresh Output before catalog observation', async () => {
+  for (const mode of ['old-then-hidden', 'foreign', 'multiple', 'late-input', 'old-forever', 'no-output', 'preexisting', 'trust', 'late-dialog']) {
+    let clock = 0, started = false, polls = 0, palette = 0, acceptedTrust = 0, dialogs = 0;
+    const context = { Error, performance: { now: () => clock }, within: async value => value, launchDiagnostic: () => {},
+      delay: async ms => { clock += ms; }, listServers: async () => { if (started) palette++; },
+      pick: async (_page, label) => { if (label === 'Start Server') started = true; }, quickInput: async () => {}, noDialog: async () => {},
+      visibleDialogs: async () => ({ count: async () => { if (mode === 'late-dialog' && ++dialogs === 2) clock = 15000; return mode === 'trust' && !acceptedTrust ? 1 : 0; } }), one: async value => value,
+      exactDialog: async () => ({ getByRole: role => role === 'link' ? { getAttribute: async () => 'owned-origin' } : { click: async () => { acceptedTrust++; } }, waitFor: async () => {} }),
+      labelRow: async () => ({ locator: () => ({ innerText: async () => 'Running' }) }) };
+    vm.createContext(context);
+    vm.runInContext(stripTypeScriptTypes(section('async function startInputReady(', 'async function input('), { mode: 'strip' }) + '\nglobalThis.run = startServer;', context);
+    const page = { keyboard: { press: async () => {} }, locator: () => ({
+      count: async () => { polls++; return mode === 'multiple' ? 2 : ['foreign','late-input','old-forever'].includes(mode) || mode === 'old-then-hidden' && polls < 3 ? 1 : 0; },
+      getAttribute: async () => { if (mode === 'late-input') clock = 15000; return mode === 'foreign' ? 'PRIVATE_INPUT' : "Select action for 'owned'"; }
+    }), evaluate: async () => ({ outputVisible: mode === 'preexisting' || started && mode !== 'no-output', launchError: 'none' }) };
+    const operation = context.run(page, { label: 'owned', originUri: 'owned-origin' }, 60000, () => {});
+    if (['old-then-hidden','trust'].includes(mode)) { assert.equal((await operation).nativeState, 'Running'); assert.equal(palette, 1); }
+    else { await assert.rejects(operation, /native UI selection|native MCP startup deadline/); assert.equal(palette, 0); }
+    if (mode === 'preexisting') assert.equal(started, false);
+    if (mode === 'trust') assert.equal(acceptedTrust, 1);
+    assert(clock <= 15000);
+  }
 });

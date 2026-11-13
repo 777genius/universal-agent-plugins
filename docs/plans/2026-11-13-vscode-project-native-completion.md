@@ -465,3 +465,44 @@ free text and oversized facts; acceptance and all failure qualifications remain
 unchanged. Run Node, pinned strict TS and focused Go before independent review;
 root publishes only the coherent reviewed candidate. Actual next hosted capture
 is required; this plan neither repairs nor diagnoses the29ad underlying cause.
+
+## Source-bound Start completion barrier after actual802 failure
+
+Actual8026457/run43437526181/job131926369376 again failed installed-a at
+mcp-state/mcp-start-deadline (89 sampled Stopped, zero sampled Starting/Running).
+The new closed facts were launchNotification=false, outputVisible=false and
+launchError=none. Both original ZIPs passed CRC/hash, exact source/tree/prepared
+binding and48 stream joins; emptyA/B, all8 owned child trees/root cleanup and
+private-view release completed. No native startup cause is proved by those facts.
+
+Pinned quickInputController.pick resolves an item and hides its quick picker on
+single selection; mcpCommands then awaits server.start before server.showOutput.
+Opening another QuickInput calls oldController.didHide (controller:727–729), so
+our previous200ms-then-palette observation could interfere with a pending native
+input. This is a source-proven interference hazard, not proof of the802 cause.
+
+Root authorized only driver.ts, existing driver-diagnostics.test.cjs and this
+plan. Before Start, require the exact expected native Output is not already
+visible (ambiguous/refused observation also refuses). Startselected continues to
+mean click receipt, not native action invocation. After Start and after the
+existing exact single-server Trust handler, wait inside the SAME original15s/
+stage deadline for action-picker dismissal and newly visible expected Output.
+Only then reopen ListServers and independently require Running as before.
+Output visibility alone never qualifies runtime or successful MCP connection.
+
+A single visible old action-picker input with exact expected-label placeholder
+may settle naturally; multiple or any other input refuses without Escape,
+Control+Shift+P, fill or selection. No config input is authorized: the authored
+fixture has neither input nor command variables. Source resolveWithInteraction
+prompts only configured input variables; installed discovery uses Trusted and
+no resolveServerLanch callback. Existing exact server Trust title/origin/button
+checks remain, with no new consent, workspace trust grant or multi-server picker.
+All new reads and checks use remaining original time; neither poll nor Trust
+resets the startup budget. Failure reasons/phases remain in the existing schema.
+
+Inert tests execute actual startInputReady/startServer: old→hidden succeeds only
+after fresh Output; foreign/multiple input and permanent action/no Output refuse
+with zero post-Start palette commands; preexisting Output refuses before Start;
+late placeholder read refuses; the sole exact authorized Trust flow remains.
+Existing late-diagnostic and late-Running deadline negatives remain. Source
+changes are admission-only; genuine next hosted evidence remains necessary.

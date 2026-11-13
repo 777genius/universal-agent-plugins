@@ -14,6 +14,19 @@ on:
       - 'npm/agentplugins/scripts/release-assets.js'
       - '.github/workflows/agentplugins-release.yml'
       - '.github/workflows/antigravity-native-e2e.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'install/integrationctl/agentplugins/clients/antigravity/**'
+      - 'install/integrationctl/agentplugins/domain/clients_catalog.go'
+      - 'scripts/e2e/antigravity-native.sh'
+      - 'scripts/e2e/antigravity-native-cross.py'
+      - 'docs/ANTIGRAVITY_NATIVE_PLUGINS.md'
+      - 'scripts/e2e/released-native-proof.py'
+      - 'scripts/test_released_native_proof.py'
+      - 'npm/agentplugins/scripts/release-assets.js'
+      - '.github/workflows/agentplugins-release.yml'
+      - '.github/workflows/antigravity-native-e2e.yml'
   workflow_dispatch:
   workflow_call:
     inputs:
@@ -52,7 +65,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.frozen_commit || github.sha }}
+          ref: ${{ inputs.frozen_commit || github.event.pull_request.head.sha || github.sha }}
       - name: Test release proof boundaries
         shell: bash
         run: ${{ runner.os == 'Windows' && 'python' || 'python3' }} scripts/test_released_native_proof.py
@@ -120,6 +133,7 @@ jobs:
             python3 scripts/e2e/released-native-proof.py run --client antigravity --target "linux-amd64" --tag "$RELEASE_TAG" --commit "$FROZEN_COMMIT" --checksums-sha256 "$EXPECTED_CHECKSUMS_SHA256" --assets-artifact "$RELEASE_ASSETS_ARTIFACT" --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" --source "$GITHUB_WORKSPACE" --assets "$RUNNER_TEMP/released-native-assets" --proofs "$RUNNER_TEMP/released-native-proof"
           else
             bash scripts/e2e/antigravity-native.sh
+            python3 scripts/e2e/antigravity-native-cross.py
           fi
       - name: Retain release-native receipt and transcript
         if: ${{ always() && inputs.release_tag != '' }}
@@ -138,7 +152,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.frozen_commit || github.sha }}
+          ref: ${{ inputs.frozen_commit || github.event.pull_request.head.sha || github.sha }}
       - name: Test release proof boundaries
         shell: bash
         run: ${{ runner.os == 'Windows' && 'python' || 'python3' }} scripts/test_released_native_proof.py
@@ -240,7 +254,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.frozen_commit || github.sha }}
+          ref: ${{ inputs.frozen_commit || github.event.pull_request.head.sha || github.sha }}
       - name: Test release proof boundaries
         shell: bash
         run: ${{ runner.os == 'Windows' && 'python' || 'python3' }} scripts/test_released_native_proof.py

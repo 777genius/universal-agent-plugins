@@ -391,6 +391,21 @@ async function workspaceTrust(page: Page, req: Request): Promise<boolean> {
   await dialog.waitFor({ state: 'hidden', timeout: 3000 });
   return true;
 }
+async function startInputReady(page: Page, label: string, deadline: number): Promise<boolean> {
+  const remaining = (): number => {
+    if (performance.now() >= deadline) throw new Error('native MCP startup deadline exceeded');
+    return deadline - performance.now();
+  };
+  const input = page.locator('.quick-input-widget:visible input');
+  const count = await within(input.count(), remaining());
+  remaining();
+  if (count > 1) throw new Error('native UI selection is absent or ambiguous');
+  if (!count) return true;
+  const placeholder = await within(input.getAttribute('placeholder', { timeout: remaining() }), remaining());
+  remaining();
+  if (placeholder !== "Select action for '" + label + "'") throw new Error('native UI selection is absent or ambiguous');
+  return false;
+}
 async function startServer(page: Page, server: Server, stageDeadline: number, setPhase: (phase: McpPhase) => void, mcp: ObjectValue = {}): Promise<ObjectValue> {
   const deadline = Math.min(stageDeadline, performance.now() + 15000);
   await listServers(page, setPhase);
@@ -399,6 +414,9 @@ async function startServer(page: Page, server: Server, stageDeadline: number, se
   setPhase('mcp-action-picker');
   await quickInput(page, "Select action for '" + server.label + "'");
   setPhase('mcp-start-action');
+  const before = await within(page.evaluate(launchDiagnostic, server.label), Math.max(1, deadline - performance.now()));
+  if (performance.now() >= deadline) throw new Error('native MCP startup deadline exceeded');
+  if (before.outputVisible === true || before.launchError === 'diagnostic-refused') throw new Error('native UI selection is absent or ambiguous');
   await pick(page, 'Start Server');
   mcp.startSelected = true;
   let trusted = false, catalogOpen = false;
@@ -413,8 +431,18 @@ async function startServer(page: Page, server: Server, stageDeadline: number, se
       await dialog.waitFor({ state: 'hidden', timeout: 3000 });
       trusted = true; mcp.trustAccepted = true; catalogOpen = false;
     } else if (!catalogOpen) {
-      await delay(200);
-      if (await (await visibleDialogs(page)).count()) continue;
+      if (!await startInputReady(page, server.label, deadline)) { await delay(Math.min(50, deadline - performance.now())); continue; }
+      let observed: ObjectValue;
+      try { observed = await within(page.evaluate(launchDiagnostic, server.label), Math.max(1, deadline - performance.now())); }
+      catch { observed = { launchError: 'diagnostic-refused' }; }
+      if (performance.now() >= deadline) throw new Error('native MCP startup deadline exceeded');
+      Object.assign(mcp, observed);
+      if (observed.launchError === 'diagnostic-refused') throw new Error('native UI selection is absent or ambiguous');
+      if (observed.outputVisible !== true) { await delay(Math.min(50, deadline - performance.now())); continue; }
+      if (!await startInputReady(page, server.label, deadline)) continue;
+      const dialogCount = await (await visibleDialogs(page)).count();
+      if (performance.now() >= deadline) throw new Error('native MCP startup deadline exceeded');
+      if (dialogCount) continue;
       await listServers(page, setPhase); catalogOpen = true;
     } else {
       setPhase('mcp-state');
