@@ -208,6 +208,7 @@ def inventory(root, sentinels=()):
     require(directory_identity(root) == identity, "inventory root replaced")
     return result
 
+CENSUS_MEMBERS = 131072
 CENSUS_CAP = (1 << 53) - 1
 CENSUS_GROUPS = ("cache", "tools", "installs", "bootstrap-other", "projectA", "projectB", "User-other", "outer-other")
 CENSUS_KINDS = ("directory", "regular", "symlink", "reparse", "other")
@@ -233,8 +234,12 @@ def metadata_census(root, expected, deadline):
             result["overflow"] = True
         return min(value, CENSUS_CAP)
     def budget(depth):
-        if time.monotonic() >= deadline or recorded >= 32768 or depth > 32:
-            raise Partial()
+        if time.monotonic() >= deadline:
+            raise Partial("time-limit")
+        if recorded >= CENSUS_MEMBERS:
+            raise Partial("member-limit")
+        if depth > 32:
+            raise Partial("depth-limit")
     def visit(path, parts, parent=None):
         nonlocal recorded
         budget(len(parts))
@@ -267,13 +272,13 @@ def metadata_census(root, expected, deadline):
     try:
         require(directory_identity(root) == tuple(expected), "census original root differs")
         visit(root, ())
-        if time.monotonic() >= deadline:
-            raise Partial()
         require(directory_identity(root) == tuple(expected), "census original root changed")
+        if time.monotonic() >= deadline:
+            raise Partial("time-limit")
         result.update(status="complete" if not result["overflow"] else "partial", reason="none" if not result["overflow"] else "overflow")
         result["complete"] = not result["overflow"]
-    except Partial:
-        result.update(status="partial", reason="budget")
+    except Partial as error:
+        result.update(status="partial", reason=error.args[0])
     except (OSError, RuntimeError, ValueError):
         result.update(status="refused", reason="authority")
     result["entries"] = sum(group["entries"] for group in groups.values())
@@ -358,18 +363,19 @@ def validate_census_member(name, body):
         require(value["complete"] is False and value["status"] == "refused" and value["reason"] == "request", "census refusal")
         return
     require(type(value["overflow"]) is bool and (value["status"], value["reason"]) in
-            (("complete", "none"), ("partial", "budget"), ("partial", "overflow"), ("refused", "authority")), "census status")
+            (("complete", "none"), ("partial", "time-limit"), ("partial", "member-limit"), ("partial", "depth-limit"), ("partial", "overflow"), ("refused", "authority")), "census status")
     require(value["complete"] == (value["status"] == "complete") and not (value["complete"] and value["overflow"]), "census completeness")
     closed(value["groups"], " ".join(CENSUS_GROUPS))
     for row in value["groups"].values():
         closed(row, "entries kinds logical_regular_bytes max_regular_bytes max_links regular_hardlinked_entries")
         closed(row["kinds"], " ".join(CENSUS_KINDS))
-        for number in row["kinds"].values(): integer(number, 32768)
+        for number in row["kinds"].values(): integer(number, CENSUS_MEMBERS)
         for key, number in row.items():
             if key != "kinds": integer(number)
-        require(sum(row["kinds"].values()) == row["entries"] <= 32768
+        require(sum(row["kinds"].values()) == row["entries"] <= CENSUS_MEMBERS
                 and row["regular_hardlinked_entries"] <= row["kinds"]["regular"], "census group join")
-    integer(value["entries"], 32768); integer(value["logical_regular_bytes"])
+    integer(value["entries"], CENSUS_MEMBERS); integer(value["logical_regular_bytes"])
+    require(value["reason"] != "member-limit" or value["entries"] == CENSUS_MEMBERS, "census member limit join")
     require(sum(row["entries"] for row in value["groups"].values()) == value["entries"]
             and min(CENSUS_CAP, sum(row["logical_regular_bytes"] for row in value["groups"].values())) == value["logical_regular_bytes"], "census total join")
 

@@ -323,3 +323,42 @@ from the three authored fixture entries' actual nofollow metadata, while
 retaining the independent exact two-regular-hardlinks and logical-byte checks.
 No runtime bound, census semantics or admission changes; macOS native evidence
 remains pending after this test-only correction.
+
+## Actual 32ee Windows inert contracts
+
+Original Windows job131819394095 passed the unchanged official version probe:
+timed_out=false, exit_code=0 and output_present=true. It then refused two inert
+contracts before either native capture, so no artifact exists for this platform.
+The overflow injection only patched the POSIX dir_fd stat path; Windows uses
+Path.lstat and received ordinary fixture metadata instead. Inject the same
+authored oversized regular-file metadata through that actual Windows path too.
+The real before-open directory replacement correctly raises the existing Windows
+reparse-identity ValueError; include that documented refusal class in the test.
+No native validator, directory identity, link refusal, runtime limit or timeout
+changes. Root plus independent source review and the inert suite precede the
+next ordinary hosted lane; a passing unit test is not native admission.
+
+## Bounded 32ee census follow-up
+
+Actual macOS and Linux 32ee census receipts were partial at 32768 entries. The
+old combined budget reason checked time first, so these receipts do not prove
+which bound stopped traversal. Increase only the metadata census member cap to
+131072; keep the original five-second soft budget, depth 32, 16 KiB closed
+receipts, no content or link-target reads, settled-child/root authority and
+false admission qualifications. This changes no ordinary-file admission limit.
+
+Use distinct closed partial reasons `time-limit`, `member-limit`, `depth-limit`
+and `overflow`. A member-limit receipt must join exactly 131072 recorded entries;
+all kind/group counters use that same bound. Exhaustive completion requires full
+iterator exhaustion, unchanged original root, a final time check and no counter
+overflow. An exhausted clock or any refused identity never qualifies completion.
+The next genuine run may still be partial; no layout completeness is promised.
+
+Integration note: remote source 23b49ff891513fc601e1c44c8d55f5da0d58ef8d
+already contains Windows inert repairs. Preserve their Path.lstat-based Windows
+injection while correcting its POSIX fallback: Path.resolve passes a Path operand
+and follow_symlinks to os.stat, which cannot be forwarded to Path.lstat. The root
+29-test integration run reproduced that TypeError. The fallback now follows the
+actual patched API, and the Windows injection is scoped to the exact fixture file.
+This follow-up also adds the reviewed census bound, distinct exhaustion reasons
+and their contracts on top of that source.

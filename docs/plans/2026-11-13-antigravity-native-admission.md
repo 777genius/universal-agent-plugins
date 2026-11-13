@@ -66,3 +66,238 @@ direct UAP User exact-path/component discovery (`enabled=true` observed), and
 both scopes' removal/source preservation. Python syntax and diff whitespace
 checks passed. macOS/Windows and final-commit hosted execution remain pending;
 no IDE loading, MCP call or authenticated model turn was observed.
+
+## Follow-up plan: direct ordinary UAP User enable admission
+
+Plan-only base: merged main `54d211042fcab4845b96f975187cdd4da9de530d`.
+No production change is authorized by this admission plan. Integrate current
+main before implementation; do not cancel useful earlier native captures.
+
+### Existing evidence and remaining question
+
+The original pinned observations above already identify shared config storage
+as `config.json` → `plugins[physical-folder].enabled` and demonstrate a renamed
+native folder. The merged harness toggles a separately imported vendor fixture;
+its ordinary UAP User fixture receives only read-only inventory. The remaining
+question is whether this exact ordinarily delivered directory can be selected
+and toggled without altering any other profile authority. Reproduce storage and
+selection facts on this fixture; do not infer them from the imported fixture.
+A fixture inverse does not establish production ownership/recovery or IDE state.
+
+### Exact file allowance and budget
+
+- `scripts/e2e/antigravity-native-cross.py`: reuse existing profiles, command
+  runner, exact inventory oracle, package snapshots and lifecycle fixture.
+- `.github/workflows/antigravity-native-e2e.yml`: only if necessary to select
+  the same source harness on all three existing OS lanes; preserve pins/release
+  logic and original source/release separation.
+- This plan file only. No adapter, public capability, receipt schema, generic
+  process runner, dependency or production configuration changes.
+
+Expected runtime/inert-contract delta: 100–160 lines. If held authority, bounded
+storage admission or meaningful negative contracts require more, report the
+concrete revised budget before expanding; do not omit checks to meet a number.
+
+### Finite fixture sequence and consent
+
+Use only the existing disposable direct-UAP User profile, pinned agy 1.5.3 and
+verified ordinary `uap add --scope user` delivery. Explicit consent is limited
+to this generated profile and exact selected physical directory identity.
+No real profile, account, model, IDE, Project enablement, import, second copy,
+marketplace install, trust bypass or native server startup is part of the test.
+
+1. Record the immutable initial selected-profile ledger and source/package
+   snapshots. Read native JSON inventory; admit one exact selected path and
+   physical basename, manifest identity/version and selected component names.
+   Absence, duplicate identity, unexpected same-name resolution or wrong path
+   refuses before mutation. Record initial boolean enablement without forcing it.
+2. In that profile include a separately named foreign directory with the same
+   declared manifest name and a separately disabled foreign sentinel. Their
+   bytes, selected path and disabled state must remain unchanged throughout.
+3. Immediately before each mutation rejoin the full original selected-profile
+   authority, source identity, exact owned directory/manifest/components and
+   unique native row. Issue only `agy plugin enable PHYSICAL_BASENAME`; read
+   inventory and profile effects. Then, only if fully admitted, issue the fixed
+   disable command and repeat the same checks.
+4. Restore the originally observed boolean only if all previous operations and
+   effects remain admitted. Re-read inventory and original foreign/source state.
+   This is an isolated inverse observation, not automatic production recovery.
+
+The maximum sequence is initial list, enable, list, disable, list, and, if the
+initial state was enabled, enable and final list. No retries or alternate name,
+path, import or scope selectors. Each command retains existing finite runner
+bounds; the whole sequence remains inside existing parent supervision.
+
+### Immutable ledger, bytes and refusal policy
+
+Hold original profile/root/parent identities, admit ordinary nofollow files
+and bounded membership/bytes, and compare before/after metadata and hashes for
+every command. The initial ledger is never renewed. Inventory must remain
+read-only. Only the expected selected `plugins[physical-folder].enabled`
+boolean may differ from the original profile state during the toggle sequence;
+all other original keys, files, foreign disabled state and package bytes remain
+identical. Revalidate the full source/profile binding immediately before every
+mutation and after command settlement. Unknown files or fields, rewritten
+foreign values, aliases, replacement parents or unexplained metadata changes
+remain captured negative observations and stop further native mutation.
+
+Retain bounded command output and a closed effect receipt. Expose only reviewed
+schema keys and boolean/null state, task-authored fixture literals and fixed
+identity facts; unfamiliar native strings/keys/numbers receive type/size/hash
+projections. No generic raw profile/config/cache dump or credentials are read.
+Before/after originals remain separately identified; do not restore over unknown
+writes or silently adopt native bootstrap state. Cleanup removes only the owned
+disposable fixture after existing child settlement proof; unknown settlement
+withholds successful capture and any recovery claim.
+
+### Acceptance and negative contracts
+
+Require positive exact-path readback, both initial boolean cases, same-declared-
+name foreign preservation, foreign-disabled preservation, package/source bytes,
+and final equality to the initial selected state. Inert contracts must reject
+wrong/duplicate paths or identities, declared-name fallback, unknown profile
+writes, changed foreign keys, replaced/aliased parents/files and incomplete
+command/cleanup. An unknown first effect must prevent every later mutation.
+
+All original three-OS logs must show exact source and pinned executable identity;
+queued, skipped or earlier-head results are not acceptance. Keep production
+Prepared and every IDE/MCP/auth/model qualification unchanged regardless of the
+fixture outcome. A subsequent production design still needs specific user
+consent, exact selected profile authority and ownership-aware conditional
+recovery over concurrent foreign edits; no such design is inferred here.
+
+### Review correction: two authored initial states and exact leaf authority
+
+Run the sequence in TWO independently authored ordinary UAP User fixtures,
+with distinct disposable HOME/USERPROFILE and complete original baselines.
+Before either immutable baseline, seed only the known task-literal schema
+`{"plugins":{"SELECTED_PHYSICAL_BASENAME":{"enabled":true|false},
+"FOREIGN_PHYSICAL_BASENAME":{"enabled":false}}}` in that fixture's exact
+configuration leaf. Select true in one fixture and false in the other; author
+this input once rather than using vendor toggles to manufacture the initial
+state. Validate initial native inventory against the authored boolean before
+any mutation. A pre-disabled fixture is interface measurement only, never
+permission to override a real user's prior disablement.
+
+The exact leaf is `<HOME>/.gemini/config/config.json` on Linux/macOS and
+`<USERPROFILE>\\.gemini\\config\\config.json` on Windows. Existing cross-harness
+`profile()` sets HOME and USERPROFILE to the SAME `base/home`; its
+XDG_CONFIG_HOME (`base/config`) is a separate directory, not this config leaf.
+The adapter's DetectProfile derives `HomeDir()/.gemini/config`; the pinned
+observations above identify config.json under that root. Official path reference:
+https://antigravity.google/docs/remote-control/ (settings-file path on each OS).
+Do not substitute XDG, APPDATA, another profile, or project `.gemini/config.json`.
+
+Finite admission limits: at most 4096 profile ledger entries/depth24, each
+ordinary file <=1MiB and aggregate <=16MiB; known config <=16KiB, strict unique
+JSON object/depth8/at most128 members per object. Directory traversal and file
+opens are nofollow, with original held root/parent identities and platform-native
+no-reparse/no-alias guards. Files require single links, task UID/GID and original
+device (or the existing equivalent Windows ownership/volume identity); metadata,
+file length and hash must remain stable throughout each read. Unknown ownership
+or unavailable platform identity proof refuses, rather than pretending POSIX
+UID/GID proves Windows ownership. These are admission bounds, not widened
+production or package limits.
+
+ONLY the exact already-authored config leaf may be independently atomically
+replaced by a vendor toggle. Keep separate before and after identities, and
+require each opened version independently ordinary/single-link/owned/bounded
+and stable; keep original parent/root authority continuously held. Admit only
+the selected plugins[physical-basename].enabled boolean transition. All other
+schema keys, nested values and foreign configuration must remain identical to
+the ORIGINAL baseline. Config serialization length/hash and leaf inode/mtime/
+ctime may change for that exact admitted transition; mode, ownership, device,
+link count and all parent identities remain fixed. No other metadata change,
+new path, temporary sibling left behind, foreign leaf replacement or unknown
+field is admitted. First unknown effect stops the sequence without an inverse,
+restore, retry or adoption. Final inverse must restore original semantic config
+and selected enabled state; byte changes confined to vendor serialization stay
+explicitly recorded, never relabeled original byte equality.
+
+The same-manifest foreign fixture has a physical basename DIFFERENT from the
+selected basename. Validate BOTH physical paths, basenames, manifest identities,
+component inventories and enablement before EVERY mutation; refuse any missing,
+duplicate, wrong-path or declared-name-fallback row. The unrelated disabled
+foreign fixture additionally retains its original disabled state and bytes.
+
+### Implementation review: portable command bridge and revised budget
+
+Implementation base is prepared main integration34aa17966, which includes54d;
+this is not an acceptance result. Revised allowance is the three paths above
+plus exactly `install/integrationctl/research/antigravityinventory/main.go` and
+`main_test.go`, in the parent integrationctl module. Candidate budget420–500
+code/inert-contract lines. No generic runner edits, privileged bootstrap, new
+framework or production adapter. Report a concrete amendment if actual held
+Windows authority cannot fit; never remove a check to satisfy the estimate.
+
+The dedicated unprivileged Go bridge receives ONE bounded strict JSON request
+(<=16KiB, duplicate/unknown fields and wrong types refused), containing only the
+pinned agy executable path/hash, generated fixture profile root, selected safe
+physical basename, action enum `list|enable|disable`, immutable source identity,
+and original finite deadline. No arbitrary argv, environment, cwd or shell API.
+Derive literal `plugin list --json` or `plugin enable|disable BASENAME`, fixed
+fixture cwd and fresh allowlisted HOME/USERPROFILE/APPDATA/LOCALAPPDATA/XDG/TEMP
+paths. Only fixed platform essentials such as PATH/SystemRoot/LANG may survive;
+no provider credentials, profile files or caller-defined native flags.
+
+Reuse process.OS.RunWithDescendantExitGrace with a30s command context and5s
+natural descendant grace, within the original bounded whole sequence. Signal
+and parent cancellation preserve cleanup. Set finite StdoutLimitBytes=1MiB;
+existing stderr cap32KiB is not a complete transcript guarantee. Refuse stdout
+at the ceiling and any stderr, so silently truncated diagnostics cannot become
+successful evidence. Emit one bounded closed receipt only after runErr=nil,
+context unexpired, exit0 and literal CleanupComplete=true. NoChildStarted may
+classify a negative, never authorize another mutation. Any capture/containment
+failure yields no successful receipt, no subsequent snapshot admission/mutation.
+
+Hold and verify the selected executable's pinned bytes/identity and original
+fixture-root authority before and after each command. Python validates closed
+receipt identity, action and source against its request before touching the
+next ledger/readback. Per-command supervision is necessary: wrapping the entire
+Python harness alone would not prove descendants settled between mutations.
+Both stdout receipt framing and output lengths/hash joins are finite; no raw
+native error or caller-controlled diagnostic field is printed by the bridge.
+
+Windows positive file/volume/birth/reparse identity alone is not SID ownership.
+Retain real task-created root/parent authority and Windows no-delete-held
+handles; require actual owner-security identity where the plan claims ownership.
+Existing Python synthetic UID/GID cannot satisfy that check. Use existing
+platform APIs without a new generic abstraction, or refuse that platform and
+report the exact missing authority. A portable fixture result must not disguise
+unavailable Windows ownership or process cleanup as an accepted observation.
+
+Inert contracts additionally exercise closed request type/field/action/path
+refusals, wrong executable/source/profile identity, incomplete/truncated output,
+cleanup false/NoChildStarted, and prevention of every later mutation after an
+unproved command. Verify both initial booleans and immutable-ledger/foreign
+negative contracts independently before any hosted native acceptance claim.
+
+Parent cancellation contract: stdin starts with exactly ONE bounded JSON+LF
+request frame (not read-until-EOF). Python keeps the same parent-control pipe
+open while the helper runs. A finite existing-pattern watcher cancels the
+ORIGINAL command context on parent EOF or any extra input byte; signal.NotifyContext
+also cancels it. Neither event resets the deadline or skips process cleanup.
+The helper exits only after the existing runner has returned and containment
+cleanup is classified. Parent death is never inferred solely from a signal or
+successful native leader exit. Request prefetch/trailing bytes remain visible
+to the control watcher; duplicate frames are not silently discarded.
+
+
+Implementation budget measured during authoring: root approved780 code/contracts
+lines across these same five paths. The added actual portable process bridge,
+parent EOF/extra-byte negatives and held Windows HANDLE/SID identity required
+more than the initial420–500 estimate. No checks were compressed away and no
+shared supervisor, foreign policy, production receipt or legacy lint exemption
+changed. Source/inert results are not native acceptance; source workflow lanes
+exercise the new bridge while the existing release-proof path remains separate.
+
+
+Final safety correction: the TWO NEW independent disposable-host fixture roots
+are retained on ALL outcomes. Release held descriptors and emit only the fixed
+fixtures_retained=true fact; do not recursively delete by pathname after closing
+original handles. Existing outer-harness cleanup remains unchanged. This avoids
+a new deletion engine and grants no profile-filesystem cleanup or recovery
+success. Native-family CleanupComplete is still mandatory before every ledger
+or next mutation. Root approved820 code/contracts only for the concrete atime,
+strict boolean/number and retained-unknown-effect negative contracts. Metadata
+stability excludes atime only; config semantic equality preserves literal types.

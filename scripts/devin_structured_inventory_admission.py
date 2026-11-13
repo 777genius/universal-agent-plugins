@@ -2,6 +2,7 @@
 """Finite Devin metadata capture; no product or MCP runtime qualification."""
 import argparse
 import base64
+from datetime import datetime
 from contextlib import ExitStack
 import hashlib
 import json
@@ -150,6 +151,7 @@ def fixture(ctx, urls, nonce):
     body = json.dumps({"mcpServers": {"same-name": {"url": urls["local"], "disabled": True}}}).encode()
     local.write_bytes(body)
     expected["local"] = {"path": str(local), "sha256": hashlib.sha256(body).hexdigest(), "url": urls["local"]}
+    expected["legacy_url"] = urls["legacy"]
     return expected, startup, marker
 
 
@@ -279,14 +281,162 @@ class KnownFileDiagnostics:
         self.stack.close()
 
 
+BOOTSTRAP_DIRS = frozenset(("home/cache/devin", "home/cache/devin/cli", "home/config/devin/cli", "home/data/devin",
+    "home/data/devin/cli", "home/data/devin/cli/logs", "home/data/devin/cli/plugins", "home/data/devin/mcp", "home/data/devin/mcp/oauth"))
+BOOTSTRAP_FIXED = {
+    "home/cache/devin/telemetry_state.json": (16, "7445ff8769cba2e1b004c754a770a85293e7548228e4fa3d363263c96c9b6290"),
+    "home/data/devin/cli/plugins/lock.json": (57, "cbce3a5464482eb4cfb7b152ad15183bcb5db5c5557c625ee0cec1edb582aa88"),
+    "home/data/devin/cli/plugins/lock.json.lock": (0, hashlib.sha256(b"").hexdigest())}
+METADATA_CONFIG = "private/metadata-config.json"
+INSTALLATION_ID = "home/data/devin/cli/installation_id"
+MAINTENANCE = "home/data/devin/cli/logs/.log-maintenance.lock"
+BOOTSTRAP_LOG = re.compile(r"home/data/devin/cli/logs/devin_[0-9]{8}-[0-9]{6}_[1-9][0-9]{0,9}\.log\Z")
+
+
+def read_bootstrap_file(ctx, relative, expected, inventory):
+    """Only the prospective fixed bootstrap recipe calls this anchored reader."""
+    def stable(info):
+        return (info.st_dev, info.st_ino, info.st_mode, info.st_nlink, info.st_uid, info.st_gid,
+                info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+    require(root_identity(ctx.root) == ctx.original_output_identity, "bootstrap original root changed")
+    with ExitStack() as stack:
+        parent = os.open(ctx.root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        stack.callback(os.close, parent)
+        require(KnownFileDiagnostics.identity(os.fstat(parent)) == ctx.original_output_identity, "bootstrap opened root differs")
+        chain, prefix = [], Path()
+        for name in Path(relative).parts[:-1]:
+            child = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent)
+            stack.callback(os.close, child)
+            identity = KnownFileDiagnostics.identity(os.fstat(child))
+            prefix /= name
+            require(identity == tuple(inventory[prefix.as_posix()])
+                    and identity[0] == ctx.original_output_identity[0]
+                    and identity[3:] == ctx.original_output_identity[3:], "bootstrap parent authority differs")
+            chain.append((parent, name, child, identity)); parent = child
+        name = Path(relative).name
+        descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent)
+        stack.callback(os.close, descriptor)
+        before = os.fstat(descriptor)
+        require(stable(before) == tuple(expected) and stat.S_ISREG(before.st_mode) and before.st_nlink == 1
+                and before.st_size <= 16384 and (before.st_uid, before.st_gid) == ctx.original_output_identity[3:], "bootstrap opened file differs")
+        body = os.read(descriptor, 16385)
+        require(len(body) == before.st_size and stable(os.fstat(descriptor)) == stable(before)
+                and stable(os.stat(name, dir_fd=parent, follow_symlinks=False)) == stable(before), "bootstrap file changed")
+        for ancestor, leaf, child, identity in chain:
+            require(KnownFileDiagnostics.identity(os.fstat(child)) == identity
+                    and KnownFileDiagnostics.identity(os.stat(leaf, dir_fd=ancestor, follow_symlinks=False)) == identity, "bootstrap parent changed")
+        require(root_identity(ctx.root) == ctx.original_output_identity, "bootstrap root changed during read")
+        return body
+
+
+class BootstrapEffects:
+    def __init__(self, ctx, baseline):
+        self.ctx, self.baseline = ctx, baseline
+        self.installation_sha, self.version_seen = None, False
+        self.proofs = []
+
+    def verify(self, current):
+        ctx, baseline = self.ctx, self.baseline
+        require(root_identity(ctx.root) == ctx.original_output_identity, "bootstrap root replaced")
+        require(all(key in current and (key == METADATA_CONFIG or current[key] == value) for key, value in baseline.items()), "protected original authority changed")
+        new = set(current) - set(baseline)
+        logs = {key for key in new if BOOTSTRAP_LOG.fullmatch(key)}
+        require(len(new) <= 24 and len(logs) <= 8, "bootstrap membership count")
+        total, records = 0, {}
+        for relative in sorted(new | {METADATA_CONFIG}):
+            ctx.budget.check()
+            info = current[relative]
+            require(info[0] == ctx.original_output_identity[0], "bootstrap filesystem changed")
+            if relative in BOOTSTRAP_DIRS:
+                require(len(info) == 5 and info[2] == stat.S_IFDIR | 0o755 and tuple(info[3:]) == ctx.original_output_identity[3:], "bootstrap directory ownership/mode")
+                continue
+            require(relative in BOOTSTRAP_FIXED or relative in (METADATA_CONFIG, INSTALLATION_ID, MAINTENANCE) or relative in logs, "unknown native bootstrap path")
+            mode = 0o600 if relative == METADATA_CONFIG else 0o644
+            require(len(info) == 9 and info[2] == stat.S_IFREG | mode and info[3] == 1, "bootstrap ordinary file mode/link")
+            body = read_bootstrap_file(ctx, relative, info, current)
+            total += len(body); require(total <= 256 << 10, "bootstrap byte count")
+            digest = hashlib.sha256(body).hexdigest()
+            if relative in BOOTSTRAP_FIXED:
+                require((len(body), digest) == BOOTSTRAP_FIXED[relative], "bootstrap fixed bytes differ")
+            elif relative == INSTALLATION_ID:
+                require(re.fullmatch(rb"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", body), "unmeasured installation ID format")
+                require(self.installation_sha in (None, digest), "installation ID continuity changed")
+                self.installation_sha = digest
+            elif relative == MAINTENANCE:
+                require(re.fullmatch(rb"[1-9][0-9]{0,9}\n", body), "unmeasured maintenance lock format")
+            elif relative == METADATA_CONFIG:
+                require(len(body) <= 256, "metadata config byte bound")
+                value = strict_json(body)
+                allowed = {"read_config_from": {"cloud": False}}
+                if "version" in value:
+                    require(type(value["version"]) is int and value["version"] == 1, "metadata config version")
+                    allowed["version"] = 1
+                require(value == allowed and value["read_config_from"]["cloud"] is False, "metadata config unexpected settings")
+                require(not self.version_seen or "version" in value, "metadata config version regressed")
+                self.version_seen |= "version" in value
+            elif relative in logs:
+                datetime.strptime(Path(relative).name[6:21], "%Y%m%d-%H%M%S")
+            records[relative] = {"bytes": len(body), "sha256": digest}
+        require(self.installation_sha is None or INSTALLATION_ID in current, "installation ID disappeared")
+        self.proofs.append(records)
+
+    def verify_command(self, before, after):
+        require(len({key for key in after.keys() - before.keys() if BOOTSTRAP_LOG.fullmatch(key)}) <= 1, "multiple logs born in one command")
+        self.verify(after)
+
+    def verify_snapshot(self, before, after):
+        # Auxiliary parent size can reflect exactly the permitted child creation;
+        # outer verification independently holds its original inode/owner/mode.
+        parents = {str(Path(key).parent) for key in BOOTSTRAP_DIRS}
+        for key in before.keys() | after.keys():
+            if key in before:
+                left, right = dict(before[key]), dict(after.get(key, {}))
+                if key in parents and left.get("kind") == right.get("kind") == "directory":
+                    left.pop("size", None); right.pop("size", None)
+                require(left == right, "original fixture bytes or identity changed")
+            else:
+                require(key.startswith("home/") and (key in BOOTSTRAP_DIRS or key in BOOTSTRAP_FIXED
+                        or key in (INSTALLATION_ID, MAINTENANCE) or BOOTSTRAP_LOG.fullmatch(key)), "unknown fixture effect")
+
+
+def verify_metadata_sources(body, ctx, expected, scope):
+    rows = strict_json(body)
+    require(type(rows) is list and all(type(row) is dict for row in rows), "MCP inventory rows")
+    wanted = {name: (entry, Path(expected["user"]["root"]) / "mcp_config.json") for name, entry in expected["user"]["mcp"].items()}
+    if scope in ("a", "b"):
+        wanted.update({name: (entry, Path(expected[scope]["root"]) / "mcp_config.json") for name, entry in expected[scope]["mcp"].items()})
+    if scope == "a":
+        wanted["same-name"] = ({"url": expected["local"]["url"], "disabled": True}, Path(expected["local"]["path"]))
+    wanted["legacy-foreign"] = ({"url": expected["legacy_url"], "disabled": True}, ctx.home / ".codeium/windsurf/mcp_config.json")
+    require(len(rows) == len(wanted) and {row.get("name") for row in rows} == set(wanted), "MCP original scope members differ")
+    for row in rows:
+        require(set(row) == {"name", "enabled", "disabled_reason", "transport", "command", "args", "url", "disabled_tools", "source"}, "unreviewed MCP row schema")
+        entry, source = wanted[row["name"]]
+        spelling = {str(source)}
+        if source.is_relative_to(ctx.home): spelling.add("~/" + source.relative_to(ctx.home).as_posix())
+        enabled = not entry.get("disabled", False)
+        require(row.get("source") in spelling and row.get("enabled") is enabled
+                and row.get("disabled_reason") == (None if enabled else "disabled")
+                and row.get("transport") == ("stdio" if "command" in entry else "http")
+                and row.get("url") == entry.get("url") and row.get("command") == entry.get("command")
+                and row.get("args") == entry.get("args", []) and row.get("disabled_tools") == entry.get("disabledTools", []), "explicit config changed MCP source or semantics")
+
+
 def collect(ctx, probes):
     nonce = secrets.token_hex(32)
     expected, startup, marker = fixture(ctx, {key: value.url for key, value in probes.items()}, nonce)
     roots = {"home": ctx.home, "temporary": ctx.root / "tmp", **ctx.projects}
     identities = {name: root_identity(path) for name, path in roots.items()}
+    metadata_config = ctx.private / "metadata-config.json"
+    metadata_config.write_text('{"read_config_from":{"cloud":false}}\n'); metadata_config.chmod(0o600)
+    for scope in ("a", "b"):
+        exclude = ctx.projects[scope] / ".git/info/exclude"
+        with exclude.open("ab") as stream: stream.write(b".devin/mcp_config.local.json\n")
     baseline = snapshot(ctx)
     ctx.known_file_diagnostics = KnownFileDiagnostics(ctx.root, ctx.original_output_identity, baseline)
     outer_before = metadata_inventory(ctx.root, ctx.budget)
+    effects = BootstrapEffects(ctx, outer_before)
+    ctx.summary["prospective_bootstrap_effects"] = effects.proofs
     ctx.identities[marker] = hashlib.sha256(marker.read_bytes()).hexdigest()
     ctx.summary["stdio_effect_guard"] = {"path": str(marker), "sha256": ctx.identities[marker], "python": sys.executable}
     ctx.summary.update(fixture=expected, fixture_before=baseline, outer_before=outer_before, command_effects=[],
@@ -294,10 +444,11 @@ def collect(ctx, probes):
 
     def command(label, arguments, scope="a"):
         before = snapshot(ctx)
-        require(before == baseline, "unmeasured fixture change")
-        require(metadata_inventory(ctx.root, ctx.budget) == outer_before, "unmeasured outer/runtime change")
+        command_outer_before = metadata_inventory(ctx.root, ctx.budget)
+        effects.verify(command_outer_before)
+        effects.verify_snapshot(baseline, before)
         try:
-            record, out, err = ctx.probe(label, arguments, project=scope)
+            record, out, err = ctx.probe(label, ["--config", str(metadata_config), *arguments], project=scope)
             require(record["exit"] == 0, "native metadata command refused")
             return out, err
         finally:
@@ -309,8 +460,10 @@ def collect(ctx, probes):
                            for key in outer_before.keys() | outer_after.keys() if outer_before.get(key) != outer_after.get(key)}
             ctx.summary["command_effects"].append({"label": label, "changes": delta, "outer_changes": outer_delta})
             require({name: root_identity(path) for name, path in roots.items()} == identities, "fixture root replaced")
-            require(after == baseline, "native inventory changed original authority or fixture")
-            require(outer_after == outer_before, "native metadata changed outer/runtime inventory")
+            if label in {name for name, _arguments in HELP}:
+                require(outer_after == outer_before and after == baseline, "help changed original or metadata input")
+            effects.verify_command(command_outer_before, outer_after)
+            effects.verify_snapshot(baseline, after)
             zero_effects(probes, startup)
 
     for label, arguments in HELP:
@@ -325,6 +478,9 @@ def collect(ctx, probes):
         for kind in ("mcp", "skills"):
             out, _err = command(kind + "-" + label, [kind, "list", "--json"], scope)
             strict_json(out)
+            if kind == "mcp": verify_metadata_sources(out, ctx, expected, scope)
+    ctx.summary["prospective_bootstrap_effects"] = effects.proofs
+    ctx.summary["metadata_route"] = "explicit-owned-config; not ordinary default startup"
     ctx.summary.update(fixture_after=snapshot(ctx), metadata_capture_complete=True,
                        native_json_schema="requires-independent-original-review",
                        probe_methods={name: list(probe.methods()) for name, probe in probes.items()},
@@ -385,7 +541,8 @@ def run(output):
             shared.verify_files(ctx.identities, budget)
             record, out, err = ctx.command("source-final-clean", ["/usr/bin/git", "status", "--porcelain", "--untracked-files=normal"], shared.SOURCE, ctx.env, 10)
             require(record["exit"] == 0 and not out and not err, "source changed")
-            summary["collection_complete"] = True
+            # Full native schema/effects admission remains an independent gate.
+            summary["collection_complete"] = False
     except Exception as error:
         summary["error"] = type(error).__name__ + ": " + str(error)[:300]
     finally:

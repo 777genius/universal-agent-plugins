@@ -44,7 +44,7 @@ class ProfileAdmissionContracts(unittest.TestCase):
             original = CASE["directory_identity"](root)
             (root / "file").write_bytes(b"unused")
             partial = CASE["metadata_census"](root, original, time.monotonic() - 1)
-            self.assertEqual((partial["status"], partial["reason"], partial["entries"]), ("partial", "budget", 0))
+            self.assertEqual((partial["status"], partial["reason"], partial["entries"]), ("partial", "time-limit", 0))
             with mock.patch.object(CASE["time"], "monotonic", side_effect=[0, 10]):
                 partial = CASE["metadata_census"](root, original, 5)
             self.assertEqual((partial["status"], partial["entries"]), ("partial", 1))
@@ -52,10 +52,10 @@ class ProfileAdmissionContracts(unittest.TestCase):
             def huge(path, *args, **kwargs):
                 # POSIX traverses by dir_fd; Windows' path-based inventory calls Path.lstat.
                 if (path == "file" and kwargs.get("dir_fd") is not None) or (
-                    isinstance(path, Path) and path.name == "file"
+                    os.name == "nt" and isinstance(path, Path) and path == root / "file"
                 ):
                     return SimpleNamespace(st_mode=stat.S_IFREG | 0o600, st_nlink=1 << 54, st_size=1 << 54)
-                return actual_lstat(path, *args, **kwargs) if isinstance(path, Path) else actual_stat(path, *args, **kwargs)
+                return actual_lstat(path, *args, **kwargs) if os.name == "nt" else actual_stat(path, *args, **kwargs)
             patch = (mock.patch.object(Path, "lstat", autospec=True, side_effect=huge) if os.name == "nt"
                      else mock.patch.object(os, "stat", side_effect=huge))
             with patch:
@@ -66,6 +66,35 @@ class ProfileAdmissionContracts(unittest.TestCase):
             with mock.patch.object(os, "scandir", side_effect=AssertionError("foreign root enumerated")):
                 refused = CASE["metadata_census"](root, original, time.monotonic() + 5)
             self.assertEqual(refused["status"], "refused")
+
+    def test_census_member_depth_and_exhaustion_are_distinct(self):
+        import time
+        self.assertEqual(CASE["CENSUS_MEMBERS"], 131072)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            for index in range(8): (root / str(index)).touch()
+            expected = CASE["directory_identity"](root)
+            with mock.patch.dict(CASE["metadata_census"].__globals__, {"CENSUS_MEMBERS": 8}):
+                value = CASE["metadata_census"](root, expected, time.monotonic() + 5)
+                self.assertEqual((value["reason"], value["entries"], value["complete"]), ("member-limit", 8, False))
+                CASE["validate_census_member"]("bootstrap-census.json", json.dumps(value).encode())
+                value["reason"] = "time-limit"
+                CASE["validate_census_member"]("bootstrap-census.json", json.dumps(value).encode())
+                value["reason"], value["entries"] = "member-limit", 7
+                group = value["groups"]["outer-other"]
+                group["entries"] -= 1; group["kinds"]["regular"] -= 1
+                with self.assertRaisesRegex(RuntimeError, "census member limit join"):
+                    CASE["validate_census_member"]("bootstrap-census.json", json.dumps(value).encode())
+            complete = CASE["metadata_census"](root, expected, time.monotonic() + 5)
+            self.assertEqual((complete["complete"], complete["entries"]), (True, 9))
+            with mock.patch.object(CASE["time"], "monotonic", side_effect=[0] * 9 + [10]):
+                expired = CASE["metadata_census"](root, expected, 5)
+            self.assertEqual((expired["reason"], expired["entries"], expired["complete"]), ("time-limit", 9, False))
+            nested = root
+            for _ in range(33): nested = nested / "d"; nested.mkdir()
+            deep = CASE["metadata_census"](root, expected, time.monotonic() + 5)
+            self.assertEqual((deep["reason"], deep["complete"]), ("depth-limit", False))
+            CASE["validate_census_member"]("bootstrap-census.json", json.dumps(deep).encode())
 
     def test_census_request_requires_settlement_and_closed_identity_before_walk(self):
         import time

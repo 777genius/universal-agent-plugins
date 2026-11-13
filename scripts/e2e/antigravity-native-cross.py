@@ -5,6 +5,10 @@ No browser/model authentication, no foreign profile mutation, no IDE activation 
 All fixtures, binaries and state live below RUNNER_TEMP.
 """
 import hashlib
+import math
+import base64
+import stat
+import time
 import json
 import os
 from pathlib import Path
@@ -122,6 +126,342 @@ def assert_native_mcp(plugin, fixture_root):
         raise AssertionError("Native Streamable HTTP URL or headers were not preserved")
     if "${PLUGIN_" in json.dumps(config):
         raise AssertionError("A client-managed placeholder remained in native MCP configuration")
+
+
+def owned_handle(path, directory=False, parent=None):
+    """Open the owned fixture without following aliases; Windows holds directories."""
+    if os.name != "nt":
+        return os.open(path.name if parent is not None else path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | (os.O_DIRECTORY if directory else 0), dir_fd=parent)
+    import ctypes
+    from ctypes import wintypes as w
+    import msvcrt
+    kernel, security = ctypes.WinDLL("kernel32", use_last_error=True), ctypes.WinDLL("advapi32", use_last_error=True)
+    kernel.CreateFileW.argtypes = [w.LPCWSTR, w.DWORD, w.DWORD, ctypes.c_void_p, w.DWORD, w.DWORD, w.HANDLE]
+    kernel.CreateFileW.restype = w.HANDLE
+    kernel.CloseHandle.argtypes = [w.HANDLE]
+    kernel.CloseHandle.restype = w.BOOL
+    # READ_CONTROL + GENERIC_READ; held directory denies deletion/replacement.
+    handle = kernel.CreateFileW(str(path), 0x80020000, 3 if directory else 7, None, 3, 0x02200000, None)
+    if handle in (None, ctypes.c_void_p(-1).value):
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        security.GetSecurityInfo.argtypes = [w.HANDLE, w.DWORD, w.DWORD, ctypes.POINTER(ctypes.c_void_p), ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.POINTER(ctypes.c_void_p)]
+        security.GetSecurityInfo.restype = w.DWORD
+        owner, descriptor, token = ctypes.c_void_p(), ctypes.c_void_p(), w.HANDLE()
+        security.OpenProcessToken.argtypes = [w.HANDLE, w.DWORD, ctypes.POINTER(w.HANDLE)]
+        security.GetTokenInformation.argtypes = [w.HANDLE, w.DWORD, ctypes.c_void_p, w.DWORD, ctypes.POINTER(w.DWORD)]
+        security.EqualSid.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+        kernel.LocalFree.argtypes = [ctypes.c_void_p]
+        if security.GetSecurityInfo(handle, 1, 1, ctypes.byref(owner), None, None, None, ctypes.byref(descriptor)):
+            raise AssertionError("Owned Windows security identity unavailable")
+        try:
+            if not security.OpenProcessToken(w.HANDLE(-1), 8, ctypes.byref(token)):
+                raise ctypes.WinError(ctypes.get_last_error())
+            try:
+                needed = w.DWORD()
+                security.GetTokenInformation(token, 1, None, 0, ctypes.byref(needed))
+                if not 0 < needed.value <= 65536:
+                    raise AssertionError("Windows token identity bound")
+                body = ctypes.create_string_buffer(needed.value)
+                if not security.GetTokenInformation(token, 1, body, needed, ctypes.byref(needed)):
+                    raise ctypes.WinError(ctypes.get_last_error())
+                if not security.EqualSid(owner, ctypes.cast(body, ctypes.POINTER(ctypes.c_void_p))[0]):
+                    raise AssertionError("Windows owner differs from task token")
+            finally:
+                if not kernel.CloseHandle(token): raise ctypes.WinError(ctypes.get_last_error())
+        finally:
+            if kernel.LocalFree(descriptor): raise AssertionError("Windows security release failed")
+        fd = msvcrt.open_osfhandle(handle, os.O_RDONLY | os.O_BINARY)
+    except BaseException:
+        kernel.CloseHandle(handle)
+        raise
+    return fd
+
+
+def object_identity(info, directory=False):
+    if stat.S_ISLNK(info.st_mode) or not (stat.S_ISDIR(info.st_mode) if directory else stat.S_ISREG(info.st_mode)):
+        raise AssertionError("Owned ordinary object required")
+    if os.name == "nt":
+        if not info.st_ino or not info.st_dev or getattr(info, "st_reparse_tag", None) != 0 or getattr(info, "st_file_attributes", 0x400) & 0x400:
+            raise AssertionError("Windows owned identity unavailable")
+    elif (info.st_uid, info.st_gid) != (os.getuid(), os.getgid()):
+        raise AssertionError("Owned UID/GID differs")
+    return (info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_gid)
+
+
+def stable_file(info):
+    # Reading may legitimately advance atime; it grants no mutation authority.
+    return (*object_identity(info), info.st_nlink, info.st_size, info.st_mtime_ns, info.st_ctime_ns,
+            getattr(info, "st_birthtime_ns", None), getattr(info, "st_file_attributes", None), getattr(info, "st_reparse_tag", None))
+
+
+class ProfileLedger:
+    def __init__(self, root):
+        self.root, self.held = root, {}
+        try:
+            self.base = self.scan()
+        except BaseException:
+            self.close()
+            raise
+
+    def directory(self, path, parent=None):
+        linked = object_identity(path.lstat(), True)
+        if path not in self.held:
+            fd = owned_handle(path, True, parent)
+            opened = object_identity(os.fstat(fd), True)
+            if opened[:2] != linked[:2]: os.close(fd); raise AssertionError("Opened directory differs")
+            self.held[path] = (fd, linked, opened)
+        fd, original, opened = self.held[path]
+        if path != self.root and linked[0] != self.held[self.root][1][0]:
+            raise AssertionError("Directory crossed original volume")
+        if linked != original or object_identity(os.fstat(fd), True) != opened:
+            raise AssertionError("Original directory replaced")
+        return linked
+
+    def scan(self):
+        result, aggregate = {}, 0
+        def visit(path, depth, parent=None):
+            nonlocal aggregate
+            if depth > 24 or len(result) >= 4096: raise AssertionError("Profile membership bound")
+            identity = self.directory(path, parent)
+            result[path.relative_to(self.root).as_posix()] = ("directory", identity)
+            descriptor = self.held[path][0]
+            with os.scandir(path if os.name == "nt" else descriptor) as entries:
+                for entry in entries:
+                    if len(result) >= 4096: raise AssertionError("Profile membership bound")
+                    child = path / entry.name
+                    info = child.lstat() if os.name == "nt" else os.stat(entry.name, dir_fd=descriptor, follow_symlinks=False)
+                    if stat.S_ISDIR(info.st_mode): visit(child, depth + 1, None if os.name == "nt" else descriptor); continue
+                    identity = object_identity(info)
+                    if info.st_nlink != 1 or info.st_size > 1 << 20 or info.st_dev != identity_root[0]: raise AssertionError("Profile file bound/alias/device")
+                    fd = owned_handle(child, parent=None if os.name == "nt" else descriptor)
+                    try:
+                        opened = os.fstat(fd)
+                        if object_identity(opened)[:2] != identity[:2]: raise AssertionError("Opened file differs")
+                        before = stable_file(opened)
+                        body = os.read(fd, (1 << 20) + 1)
+                        after = os.fstat(fd)
+                        if len(body) != info.st_size or before != stable_file(after) or stable_file(child.lstat() if os.name == "nt" else os.stat(entry.name, dir_fd=descriptor, follow_symlinks=False)) != stable_file(info):
+                            raise AssertionError("Profile file changed during read")
+                    finally: os.close(fd)
+                    aggregate += len(body)
+                    if aggregate > 16 << 20: raise AssertionError("Profile bytes bound")
+                    result[child.relative_to(self.root).as_posix()] = ("file", identity, info.st_nlink, info.st_size, info.st_mtime_ns, info.st_ctime_ns, hashlib.sha256(body).hexdigest(), body)
+            self.directory(path)
+        identity_root = self.directory(self.root)
+        visit(self.root, 0)
+        for path in self.held: self.directory(path)
+        return result
+
+    def verify(self, expected, config):
+        current = self.scan()
+        if set(current) != set(self.base): raise AssertionError("Unknown profile path effect")
+        for key, value in self.base.items():
+            if key != config and current[key] != value: raise AssertionError("Foreign profile effect")
+        before, after = self.base[config], current[config]
+        if before[0] != "file" or after[0] != "file" or before[1][0] != after[1][0] or before[1][2:] != after[1][2:] or after[2] != 1 or after[3] > 16384:
+            raise AssertionError("Known config replacement authority differs")
+        if json.dumps(closed_config(after[-1]), sort_keys=True) != json.dumps(expected, sort_keys=True): raise AssertionError("Unknown config semantic effect")
+        return hashlib.sha256(after[-1]).hexdigest()
+
+    def close(self):
+        for fd, _linked, _opened in self.held.values(): os.close(fd)
+        self.held.clear()
+
+
+def closed_config(body):
+    def unique(pairs):
+        if len(pairs) > 128: raise AssertionError("Config member bound")
+        value = {}
+        for key, item in pairs:
+            if key in value: raise AssertionError("Duplicate config field")
+            value[key] = item
+        return value
+    if len(body) > 16384: raise AssertionError("Config byte bound")
+    value = json.loads(body, object_pairs_hook=unique, parse_constant=lambda _: (_ for _ in ()).throw(AssertionError("Config nonfinite")))
+    def depth(item, level=0):
+        if level > 8 or isinstance(item, float) and not math.isfinite(item): raise AssertionError("Config depth/number bound")
+        if isinstance(item, (dict, list)):
+            for child in item.values() if isinstance(item, dict) else item: depth(child, level + 1)
+    depth(value)
+    if not isinstance(value, dict): raise AssertionError("Config object required")
+    return value
+
+
+def supervised_action(helper, agy, root, selector, action, source_identity, original_pins):
+    if tuple(hashlib.sha256(path.read_bytes()).hexdigest() for path in (agy, helper)) != original_pins:
+        raise AssertionError("Original executable pin changed")
+    pin = original_pins[0]
+    req = dict(binary=str(agy), binary_sha256=pin, root=str(root), selector=selector, action=action,
+               source_commit=source_identity[0], source_tree=source_identity[1], deadline_unix_ns=time.time_ns() + 29_000_000_000)
+    child = subprocess.Popen([str(helper)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    try:
+        child.stdin.write(json.dumps(req).encode() + b"\n"); child.stdin.flush()
+        # The Go bridge closes its finite output only after native containment settles.
+        output = child.stdout.read((2 << 20) + 1)
+        error = child.stderr.read(65537)
+        if child.wait(timeout=5) != 0 or error or len(output) > 2 << 20 or not output.endswith(b"\n") or output.count(b"\n") != 1:
+            raise AssertionError("Supervised command receipt refused; owned profile retained")
+        if tuple(hashlib.sha256(path.read_bytes()).hexdigest() for path in (agy, helper)) != original_pins:
+            raise AssertionError("Executable runtime pin changed")
+        value = closed_config(output)
+        keys = {"source_commit", "source_tree", "root", "selector", "action", "binary_sha256", "cleanup_complete", "stdout_base64", "stdout_bytes", "stdout_sha256"}
+        if set(value) != keys or any(value[key] != req[key] for key in ("source_commit", "source_tree", "root", "selector", "action", "binary_sha256")) or value["cleanup_complete"] is not True:
+            raise AssertionError("Command receipt identity differs")
+        body = base64.b64decode(value["stdout_base64"], validate=True)
+        if type(value["stdout_bytes"]) is not int or len(body) != value["stdout_bytes"] or hashlib.sha256(body).hexdigest() != value["stdout_sha256"]:
+            raise AssertionError("Command receipt stream differs")
+        return body
+    finally:
+        child.stdin.close()
+        child.stdout.close(); child.stderr.close()
+        if child.poll() is None: child.wait(timeout=40)
+
+
+def direct_user_enable(agy, uap, source, executable_dir, root_parent):
+    helper = Path(os.environ["AGY_ADMISSION_HELPER"]).resolve(strict=True)
+    source_identity = (os.environ["AGY_ADMISSION_COMMIT"], os.environ["AGY_ADMISSION_TREE"])
+    original_pins = tuple(hashlib.sha256(path.read_bytes()).hexdigest() for path in (agy, helper))
+    for initial in (False, True):
+        root = Path(tempfile.mkdtemp(prefix="uap-agy-direct-", dir=root_parent))
+        print('{"fixtures_retained":true,"scope":"disposable-cli-user-only"}', flush=True)
+        env = profile(root, executable_dir)
+        for path in (root / "tmp", root / "project"): path.mkdir()
+        run(uap, "add", source, "--target", "antigravity", "--scope", "user", "--no-save", "--yes", "--format", "json", env=env, cwd=root / "project")
+        plugins = Path(env["HOME"]) / ".gemini" / "config" / "plugins"
+        candidates = list(plugins.iterdir())
+        if len(candidates) != 1: raise AssertionError("Exact ordinary UAP directory missing")
+        selected = candidates[0]
+        manifest = json.loads((selected / "plugin.json").read_bytes())
+        for name in ("same-manifest-foreign", "foreign-disabled"):
+            target = plugins / name
+            shutil.copytree(selected, target)
+        config = plugins.parent / "config.json"
+        baseline = {"plugins": {selected.name: {"enabled": initial}, "same-manifest-foreign": {"enabled": False}, "foreign-disabled": {"enabled": False}}}
+        config.write_text(json.dumps(baseline) + "\n"); config.chmod(0o600)
+        held = ProfileLedger(root)
+        config_key = config.relative_to(root).as_posix()
+        expected = json.loads(json.dumps(baseline))
+        def action(kind):
+            held.verify(expected, config_key)
+            body = supervised_action(helper, agy, root, selected.name, kind, source_identity, original_pins)
+            if kind != "list": expected["plugins"][selected.name]["enabled"] = kind == "enable"
+            digest = held.verify(expected, config_key)
+            print(json.dumps({"scope": "disposable-cli-user-only", "action": kind, "initial_enabled": initial, "config_sha256": digest, "native_project_qualified": False}), flush=True)
+            return body
+        def inventory():
+            rows = json.loads(action("list"))
+            if not isinstance(rows, list) or not all(isinstance(row, dict) for row in rows):
+                raise AssertionError("Native inventory array/object required")
+            for path, state in ((selected, expected["plugins"][selected.name]["enabled"]), (plugins / "same-manifest-foreign", False), (plugins / "foreign-disabled", False)):
+                matches = [row for row in rows if row.get("path") == str(path) or row.get("name") == path.name]
+                if len(matches) != 1 or matches[0].get("path") != str(path) or matches[0].get("name") != path.name or matches[0].get("enabled") is not state or matches[0].get("version") != manifest["version"] or matches[0].get("skills") != ["native-smoke"] or sorted(matches[0].get("mcpServers", [])) != ["native-http", "native-stdio"]:
+                    raise AssertionError("Selected or foreign physical identity differs")
+        try:
+            inventory()
+            action("enable"); inventory()
+            action("disable"); inventory()
+            if initial: action("enable"); inventory()
+            held.verify(baseline, config_key)
+        except BaseException:
+            held.close()  # Retain the owned profile on every unproved/unknown effect.
+            raise
+        held.close()
+        # These independent ephemeral-host fixtures are retained, never path-deleted.
+
+
+def admission_contracts():
+    """Inert filesystem and receipt refusals; no native binary or account."""
+    import unittest
+    from unittest.mock import patch
+    class Contracts(unittest.TestCase):
+        def test_ledger_accepts_only_selected_atomic_config_delta(self):
+            with tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                config = root / "config.json"
+                before = {"plugins": {"owned": {"enabled": False}, "foreign": {"enabled": False}}}
+                config.write_text(json.dumps(before))
+                held = ProfileLedger(root)
+                try:
+                    after = json.loads(json.dumps(before)); after["plugins"]["owned"]["enabled"] = True
+                    replacement = root / "pending"
+                    replacement.write_text(json.dumps(after)); replacement.chmod(config.stat().st_mode & 0o777)
+                    replacement.replace(config)
+                    held.verify(after, "config.json")
+                    config.write_text(json.dumps(before))
+                    held.verify(before, "config.json")
+                    for wrong in ({"plugins": {"owned": {"enabled": False}}}, {"unexpected": True}, {"plugins": {"owned": {"enabled": 0}, "foreign": {"enabled": False}}}):
+                        config.write_text(json.dumps(wrong))
+                        with self.assertRaises(AssertionError): held.verify(before, "config.json")
+                finally: held.close()
+
+        def test_ledger_refuses_unknown_alias_large_parent_and_late_race(self):
+            for kind in ("new", "alias", "hardlink", "large", "parent", "race"):
+                with self.subTest(kind=kind), tempfile.TemporaryDirectory() as temporary:
+                    root = Path(temporary) / "owned"; root.mkdir()
+                    config = root / "config.json"; config.write_text('{}')
+                    held = ProfileLedger(root)
+                    try:
+                        if kind == "new": (root / "new").write_text('private')
+                        elif kind == "alias": config.unlink(); config.symlink_to(root / "outside")
+                        elif kind == "hardlink": os.link(config, root / "linked")
+                        elif kind == "large": config.write_bytes(b'x' * ((1 << 20) + 1))
+                        elif kind == "parent":
+                            if os.name == "nt": continue  # Held no-delete directory already fences replacement.
+                            root.rename(root.with_name('old')); root.mkdir(); (root / 'foreign').write_text('preserve')
+                        if kind == "race":
+                            original = os.read
+                            def raced(fd, count):
+                                body = original(fd, count); config.write_text('{"changed":true}'); return body
+                            with patch('os.read', side_effect=raced), self.assertRaises(AssertionError): held.verify({}, 'config.json')
+                        else:
+                            with self.assertRaises((AssertionError, OSError)): held.verify({}, 'config.json')
+                        if kind == 'parent': self.assertEqual((root / 'foreign').read_text(), 'preserve')
+                    finally: held.close()
+
+        def test_read_only_atime_advance_does_not_refuse(self):
+            with tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary); config = root / "config.json"; config.write_text('{}')
+                os.utime(config, ns=(1, config.stat().st_mtime_ns))
+                held = ProfileLedger(root)
+                try: held.verify({}, "config.json")
+                finally: held.close()
+                before = config.stat()
+                from types import SimpleNamespace
+                changed = SimpleNamespace(**{name: getattr(before, name) for name in dir(before) if name.startswith('st_')})
+                changed.st_atime_ns += 1
+                self.assertEqual(stable_file(before), stable_file(changed))
+
+        def test_unknown_first_effect_prevents_every_later_mutation(self):
+            with tempfile.TemporaryDirectory() as temporary:
+                parent = Path(temporary); binary = parent / "inert"; binary.write_text("never executed")
+                calls = []
+                def deliver(_binary, *_args, env, cwd):
+                    plugin = Path(env["HOME"]) / ".gemini/config/plugins/owned-physical"
+                    plugin.mkdir(parents=True)
+                    (plugin / "plugin.json").write_text('{"name":"inert","version":"1.0.0"}')
+                    return '[]'
+                def command(_helper, _agy, root, selector, action, _source, _pins):
+                    calls.append(action)
+                    if action != "list":
+                        (root / "unexpected").write_text("unknown")
+                        return b''
+                    return json.dumps([{"name": name, "path": str(root / "home/.gemini/config/plugins" / name),
+                                        "enabled": False, "version": "1.0.0", "skills": ["native-smoke"],
+                                        "mcpServers": ["native-http", "native-stdio"]}
+                                       for name in (selector, "same-manifest-foreign", "foreign-disabled")]).encode()
+                with patch.dict(os.environ, {"AGY_ADMISSION_HELPER": str(binary), "AGY_ADMISSION_COMMIT": "a" * 40, "AGY_ADMISSION_TREE": "b" * 40}), patch.dict(globals(), {"run": deliver, "supervised_action": command}), self.assertRaises(AssertionError):
+                    direct_user_enable(binary, binary, parent, parent, parent)
+                self.assertEqual(calls, ["list", "enable"])
+                retained = list(parent.glob("uap-agy-direct-*"))
+                self.assertEqual(len(retained), 1)
+                self.assertEqual((retained[0] / "unexpected").read_text(), "unknown")
+
+        def test_config_is_closed_and_bounded(self):
+            for body in (b'{"x":1,"x":2}', b'{} {}', b'{"x":NaN}', b'{"x":1e999}', b'[' * 10 + b'0' + b']' * 10, b'x' * 16385):
+                with self.assertRaises((AssertionError, ValueError)): closed_config(body)
+    result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(Contracts))
+    if not result.wasSuccessful(): raise SystemExit(1)
 
 
 def main():
@@ -381,6 +721,8 @@ def main():
             raise AssertionError("UAP removal modified a foreign User plugin")
         if tree_snapshot(source) != source_snapshot:
             raise AssertionError("Native lifecycle changed the verified portable source")
+        if os.environ.get("AGY_ADMISSION_HELPER"):
+            direct_user_enable(agy, uap, source, executable_dir, root_parent)
         print("PASS: real agy strict validation of Skills + stdio/HTTP MCP, separate CLI "
               "import/list/uninstall; UAP User/Project add/remove, idempotent update, "
               "partial-drift refusal and exact absent-bundle repair. Foreign User state "
@@ -389,7 +731,7 @@ def main():
 
 if __name__ == "__main__":
     try:
-        main()
+        admission_contracts() if sys.argv[1:] == ["--contracts"] else main()
     except (AssertionError, KeyError, OSError, RuntimeError, subprocess.TimeoutExpired,
             json.JSONDecodeError) as error:
         print(f"Antigravity native E2E failed: {error}", file=sys.stderr)
