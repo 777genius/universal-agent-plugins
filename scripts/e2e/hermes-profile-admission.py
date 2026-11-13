@@ -85,8 +85,13 @@ def directory_identity(path):
 
 
 def verify_root_identities(roots, held):
+    # Keep the refusal exact, reporting only fixed field labels, never values or paths.
+    fields = ("device", "inode", "mode", "uid", "gid")
     for name, root in roots.items():
-        require(directory_identity(root) == tuple(held[name]), "original custom root directory changed")
+        actual, expected = directory_identity(root), tuple(held[name])
+        if actual != expected:
+            differences = ",".join(field for field, left, right in zip(fields, actual, expected) if left != right)
+            raise RuntimeError("original custom root directory changed (" + (differences or "shape") + ")")
 
 
 def inventory_member(relative, info):
@@ -790,7 +795,8 @@ def observe_profiles(probes):
         (project / "foreign.txt").write_text(nonce + scope)
         bounded(["git", "init", "-q", str(project)], outer, dict(os.environ), evidence / ("git-" + scope), timeout=30)
         root = project / ".uap" / "hermes-runtime"
-        root.mkdir(parents=True)
+        # The selected disposable credential/config root starts private.
+        root.mkdir(mode=0o700, parents=True)
         entry = {"url": probes[scope].url}
         config = root / "config.yaml"
         config.write_text(yaml.safe_dump({"mcp_servers": {"uap-root-" + scope: entry}}), encoding="utf-8")

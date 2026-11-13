@@ -745,8 +745,12 @@ class ProfileAdmissionContracts(unittest.TestCase):
                     root.mkdir(mode=0o700)
                 else:
                     root.chmod(0o500)
-                with self.assertRaises(RuntimeError):
+                with self.assertRaisesRegex(RuntimeError, "original custom root directory changed") as caught:
                     CASE["verify_root_identities"]({"a": root}, held)
+                message = str(caught.exception)
+                self.assertNotIn(str(root), message)
+                if mutation == "mode":
+                    self.assertIn("(mode)", message)
 
     def test_exact_config_boundary_rejects_extra_server_wrong_url_and_other_settings(self):
         # These are mapping/byte contracts. The hosted child alone imports the
