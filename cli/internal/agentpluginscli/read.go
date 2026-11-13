@@ -311,8 +311,11 @@ func checkNativeProjectionIntegrity(ctx context.Context, app App, client domain.
 	if !nativeConfigLifecycle(domain.ClientID(binding.ClientID), domain.InstallScope(binding.Scope)) || !hasOwnedNativeProjection(binding.NativeObjects) {
 		return nil
 	}
+	if err := ctx.Err(); err != nil {
+		return nativeProjectionNotChecked(installation, binding)
+	}
 	if app.Lifecycle.Activator == nil || strings.TrimSpace(client.ConfigRoot) == "" {
-		return []doctorFinding{scopedFinding("unknown", "native_projection_not_checked", installation, binding.ClientID, "the exact owned native client projection could not be checked", "restore client configuration visibility and rerun doctor before relying on this installation")}
+		return nativeProjectionNotChecked(installation, binding)
 	}
 	// The provider activator owns the exact config codecs and skill receipt
 	// verification. VerifyOnly routes through those same verifiers without
@@ -335,13 +338,22 @@ func checkNativeProjectionIntegrity(ctx context.Context, app App, client domain.
 		VerifyOnly:            true,
 	})
 	var verification *ports.VerificationError
-	if err != nil && !(errors.As(err, &verification) && verification.Kind == ports.VerificationIndeterminate) {
+	if err != nil {
+		// A canceled or time-bounded observer does not prove native drift.
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) ||
+			(errors.As(err, &verification) && verification.Kind == ports.VerificationIndeterminate) {
+			return nativeProjectionNotChecked(installation, binding)
+		}
 		return []doctorFinding{scopedFinding("degraded", "native_projection_changed", installation, binding.ClientID, "an owned native client configuration entry or skill is missing or differs from its recorded projection", repairAction(installation, binding))}
 	}
-	if err != nil || outcome.Activation != domain.ActivationActive || outcome.Verification != domain.VerificationInstalled {
-		return []doctorFinding{scopedFinding("unknown", "native_projection_not_checked", installation, binding.ClientID, "the exact owned native client projection could not be checked", "restore client configuration visibility and rerun doctor before relying on this installation")}
+	if outcome.Activation != domain.ActivationActive || outcome.Verification != domain.VerificationInstalled {
+		return nativeProjectionNotChecked(installation, binding)
 	}
 	return nil
+}
+
+func nativeProjectionNotChecked(installation domain.Installation, binding domain.ClientBinding) []doctorFinding {
+	return []doctorFinding{scopedFinding("unknown", "native_projection_not_checked", installation, binding.ClientID, "the exact owned native client projection could not be checked", "restore client configuration visibility and rerun doctor before relying on this installation")}
 }
 
 func hasOwnedNativeProjection(objects []domain.NativeObjectOwnership) bool {
