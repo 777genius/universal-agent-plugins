@@ -106,8 +106,8 @@ func piUpstreamTestOnlyClient(t *testing.T, cacheRoot string) (*directoryv1.Clie
 		}},
 		Trust: trust, Embedded: directoryv1.EmbeddedBundle{Snapshot: body, Envelope: envelope},
 		RequireEmbeddedBootstrap: true,
-		Cache: directoryv1.Cache{Path: filepath.Join(cacheRoot, "pi-upstream-positive-test-only-cache.json")},
-		Now: func() time.Time { return time.Date(2026, 11, 12, 1, 0, 0, 0, time.UTC) },
+		Cache:                    directoryv1.Cache{Path: filepath.Join(cacheRoot, "pi-upstream-positive-test-only-cache.json")},
+		Now:                      func() time.Time { return time.Date(2026, 11, 12, 1, 0, 0, 0, time.UTC) },
 	}
 	return client, snapshot
 }
