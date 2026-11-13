@@ -191,7 +191,8 @@ func validateResult(body []byte, r request, parent uint64) error {
 	if e := closed(body, &got, lockResultFields(r.Mode, sessionFields(r.Mode, "schema_version source_commit source_tree scope nonce semantic_complete reason isolation commands rpc", "mode provider"))); e != nil {
 		return e
 	}
-	if got.Schema != 1 || got.Commit != r.Commit || got.Tree != r.Tree || got.Scope != r.Scope || got.Nonce != r.Nonce || len(got.Commands) > 5 {
+	commandLimit := map[string]int{"": 6, sessionMode: 5, lockMode: 4}[r.Mode]
+	if got.Schema != 1 || got.Commit != r.Commit || got.Tree != r.Tree || got.Scope != r.Scope || got.Nonce != r.Nonce || len(got.Commands) > commandLimit {
 		return errors.New("result-identity-refused")
 	}
 	if e := validateLockResult(got, r); e != nil {

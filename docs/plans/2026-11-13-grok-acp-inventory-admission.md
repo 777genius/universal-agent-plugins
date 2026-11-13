@@ -483,3 +483,30 @@ Python contracts pass on the combined tree. The queued da680 lock measurement
 predates that lifetime correction and cannot satisfy final lock qualification,
 even if its native commands otherwise complete. Fresh corrected-source proof
 remains necessary.
+
+## Eligible MCP witness and supervisor command bound (2026-11-13)
+
+The metadata collector now records six fixed commands: four version/help
+commands, `inspect --json` for the eligible foreign MCP witness, then ACP.
+Its Python receipt validator, archive member catalog and readout already use
+that six-command sequence. The Go supervisor at both `0dd77f85` and `4c096eea`
+still rejected every result containing more than five commands. Its unchanged
+blob was `482443c689d3f0b620e651922affea3ff97e64a0`.
+
+The bounded correction gives metadata six commands, session-only five and lock
+qualification four. Existing source, isolation, frame, stream, deadline, cleanup
+and publication checks remain mandatory. Command count alone never admits a
+native observation or changes any qualification flag.
+
+The new inert contract first failed on the unchanged supervisor, before the
+injected cleanup outcome could be returned, then passed through the real
+`supervisedCapture`/`exchange`/`validateResult` path. A cleanup failure still
+releases no raw capture. Invalid isolation, a seventh metadata command, a sixth
+session command and a fifth lock command remain refusals, including incomplete
+semantic results. These tests do not execute a vendor process or a cgroup family.
+
+[Original job132191359702](https://github.com/777genius/universal-agent-plugins/actions/runs/43512381883/job/132191359702)
+at source `0dd77f85` failed at the frontend's empty publication-frame parse.
+No artifact or frontend stderr was retained. The confirmed supervisor mismatch
+can produce that path, but the available log does not establish it as the sole
+cause of this particular run. Fresh hosted native acceptance remains pending.

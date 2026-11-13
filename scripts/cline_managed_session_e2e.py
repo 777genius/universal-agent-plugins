@@ -1,6 +1,7 @@
 """Actual UAP install/run lifecycle with pinned Cline, without a model or login."""
 import argparse
 import base64
+import copy
 import hashlib
 import json
 import os
@@ -210,6 +211,7 @@ class SessionJourney:
         self.user_before = read_owned(self.user_config, root)
         self.user_identity = file_identity(self.user_config)
         self.b_before = snapshot(self.b)
+        self.warm_origin = self.warm_pin = self.marker_before = None
 
     def check(self):
         verify_files(self.identities, self.budget)
@@ -218,6 +220,8 @@ class SessionJourney:
                 and read_owned(self.user_config, self.root) == self.user_before
                 and file_identity(self.user_config) == self.user_identity, "original User MCP changed")
         require(snapshot(self.b) == self.b_before, "Project B changed")
+        if self.marker_before is not None:
+            require(self.marker_facts() == self.marker_before, "original warm data marker changed")
 
     def run(self, action, expected=(0,)):
         self.check()
@@ -268,6 +272,15 @@ class SessionJourney:
 
     def session(self, stage, revision, create=False):
         installation, binding, active = self.owned()
+        identity, pin = self.warm_facts(installation, binding, revision)
+        require(identity == self.warm_origin, "original warm installation authority changed")
+        require(stage in ("installed", "updated", "repaired"), "unknown warm phase")
+        if stage == "updated":
+            require(pin["source"]["tree_digest"] != self.warm_pin["source"]["tree_digest"]
+                    and pin["package"]["manifest_digest"] != self.warm_pin["package"]["manifest_digest"],
+                    "warm update did not advance its exact revision")
+        else:
+            require(pin == self.warm_pin, "warm repair or repeat changed the accepted revision")
         state = read_owned(self.a / ".uap/state-v2.json", self.root)
         body = self.run("session-inspect")
         rows = document(body)
@@ -287,9 +300,66 @@ class SessionJourney:
         require(native_cwd == active and native_cwd.resolve() == active and native_cwd.is_dir(),
                 "native Cline MCP cwd differs from the owned plugin root")
         direct = self.direct("direct-create" if create else "direct-session", revision)
+        if create:
+            require(self.marker_before is None, "warm marker already acknowledged")
+            self.marker_before = self.marker_facts()
+            require(self.marker_before[1] == ("kept-" + self.nonce).encode(), "initial warm marker differs")
+        require(self.marker_facts() == self.marker_before, "original warm data marker changed")
+        self.warm_pin = copy.deepcopy(pin)
         self.evidence["stages"].append({"stage": stage, "binding": binding, "native_inventory": rows,
-                                         "direct_installed_mcp": direct})
+                                         "package_revision": pin, "direct_installed_mcp": direct})
         return installation, binding, active
+
+    def warm_facts(self, installation, binding, revision):
+        source, package, pin = installation["source"], installation["package"], binding["package_revision"]
+        manifest = read_owned(self.source / "plugin.json", self.root)
+        authored = document(manifest)
+        require(authored.get("name") == NAME and authored.get("version") == "1.0." + revision
+                and source.get("requested_source") == source.get("canonical_source") == str(self.source)
+                and bool(source.get("source_binding_id")) and not source.get("repository") and not source.get("package_subpath")
+                and package.get("declared_name") == NAME and package.get("version") == pin.get("version") == "1.0." + revision
+                and package.get("manifest_digest") == pin.get("manifest_digest") == "sha256:" + hashlib.sha256(manifest).hexdigest()
+                and bool(source.get("tree_digest")) and source["tree_digest"] == pin.get("tree_digest")
+                and source.get("resolved_revision", "") == pin.get("resolved_revision", ""), "warm source/revision join differs")
+        physical, receipt_id = binding["physical_artifact_id"], binding["data_receipt_id"]
+        require(isinstance(physical, str) and physical not in ("", ".", "..") and Path(physical).name == physical,
+                "warm physical artifact is not a basename")
+        data = self.a / ".uap/plugin-data" / physical
+        receipts = installation["data_receipts"]
+        require(data.is_relative_to(self.a / ".uap/plugin-data") and data.resolve() == data
+                and bool(installation.get("installation_id")) and bool(binding.get("client_binding_id"))
+                and binding.get("native_profile_root") == str(self.a) and binding.get("verification") == "installation_verified"
+                and binding.get("native_activation_attempt", "") == "" and binding.get("pending_native_intent") is None
+                and isinstance(receipt_id, str) and set(receipts) == {receipt_id}, "warm data selection differs")
+        receipt = receipts[receipt_id]
+        require(receipt.get("data_receipt_id") == receipt_id and receipt.get("physical_backend_id") == physical
+                and receipt.get("scope") == "project" and receipt.get("state") == "owned"
+                and receipt.get("locator") == str(data) and bool(receipt.get("ownership_digest"))
+                and document(read_owned(data / ".agentplugins-data-owner.json", self.root)) == receipt,
+                "warm original data receipt differs")
+        identity = {key: installation[key] for key in ("installation_id", "declared_name", "data_receipts")}
+        identity["source"] = {key: value for key, value in source.items() if key not in ("resolved_revision", "tree_digest")}
+        identity["binding"] = {key: binding.get(key) for key in ("client_binding_id", "client_id", "scope", "target_locator",
+            "physical_artifact_id", "native_profile_root", "data_receipt_id", "authentication", "policy")}
+        return copy.deepcopy(identity), copy.deepcopy({"source": source, "package": package, "binding_revision": pin})
+
+    def marker_facts(self):
+        original = self.warm_origin
+        receipt = original["data_receipts"][original["binding"]["data_receipt_id"]]
+        path = Path(receipt["locator"]) / "native-marker.txt"
+        before = file_identity(path)
+        body = read_owned(path, self.root, 256)
+        require(file_identity(path) == before, "original warm marker changed during read")
+        return before, body
+
+    def verify_retained(self, state):
+        require(state.get("schema_version") == 5 and len(state["installations"]) == 1, "retained installation count differs")
+        retained = state["installations"][0]
+        require(retained["clients"] == {} and retained["data_retained"] is True
+                and all(retained[key] == self.warm_origin[key] for key in ("installation_id", "declared_name", "data_receipts"))
+                and retained["source"] == self.warm_pin["source"] and retained["package"] == self.warm_pin["package"],
+                "retained original installation/data authority differs")
+        require(self.marker_facts() == self.marker_before, "original warm data marker lost")
 
     def direct(self, action, revision):
         cold = action.startswith("cold-")
@@ -332,6 +402,9 @@ class SessionJourney:
         require(self.run("native-version").strip() == b"3.0.73", "pinned version differs")
         self.author("0")
         self.install("install")
+        first, binding, _ = self.owned()
+        self.warm_origin, self.warm_pin = self.warm_facts(first, binding, "0")
+        self.evidence["warm_authority"] = copy.deepcopy(self.warm_origin)
         state_path = self.a / ".uap/state-v2.json"
         state = read_owned(state_path, self.root)
         self.run("declined-start", expected=(1,))
@@ -358,12 +431,7 @@ class SessionJourney:
         self.install("remove")
         self.run("removed-package-refusal", expected=(1,))
         require(not active.exists(), "owned package survives removal")
-        state = document(read_owned(state_path, self.root))
-        retained = state["installations"][0]
-        require(retained["clients"] == {} and retained["data_retained"] is True
-                and retained["data_receipts"] == repaired["data_receipts"], "retained data authority differs")
-        data = Path(repaired["data_receipts"][current["data_receipt_id"]]["locator"])
-        require(read_owned(data / "native-marker.txt", self.root).decode() == "kept-" + self.nonce, "user data lost")
+        self.verify_retained(document(read_owned(state_path, self.root)))
         original = document(self.run("ordinary-native-user-source"))
         require(len(original) == 1 and original[0]["name"] == "original-user"
                 and original[0]["path"] == str(self.user_config), "ordinary startup did not retain User source")

@@ -245,6 +245,24 @@ def collect(ctx):
     ctx.summary["boundary"] = "exact original help/12 denials plus status syntax gate/3 status denials; no native status, schema validation or loading qualified"
 
 
+def final_source(ctx):
+    """Rejoin the original checkout after all native observations, without rebaselining."""
+    expected = {key: ctx.summary[key] for key in ("source_commit", "source_tree")}
+    research.verify_files(ctx.identities, ctx.budget)
+    try:
+        for label, arguments, body in (
+            ("source-final-commit", ("rev-parse", "HEAD"), (expected["source_commit"] + "\n").encode("ascii")),
+            ("source-final-tree", ("rev-parse", "HEAD^{tree}"), (expected["source_tree"] + "\n").encode("ascii")),
+            ("source-final-clean", ("status", "--porcelain", "--untracked-files=normal"), b""),
+        ):
+            record, stdout, stderr = ctx.command(label, ["/usr/bin/git", *arguments], research.SOURCE, ctx.env, 10)
+            if not exact_success(record, stdout, stderr, body):
+                raise ValueError("final source identity changed: " + label)
+    finally:
+        research.verify_files(ctx.identities, ctx.budget)
+    ctx.summary["source_final"] = dict(expected, clean=True)
+
+
 def run(output):
     research.native.require_hosted("linux-amd64")
     if output.resolve() != output or output.exists() or output == research.SOURCE or research.SOURCE in output.parents:
@@ -264,7 +282,9 @@ def run(output):
             summary["acquisition"] = receipt
             binary, identities = research.materialize(output / "client", kiro.ACQUISITION, receipt, contents)
             ctx.argv, ctx.identities = [str(binary)], identities
+            summary["runtime_files"] = [{"path": str(path), "sha256": digest} for path, digest in identities.items()]
             collect(ctx)
+            final_source(ctx)
             summary["collection_complete"] = True
     except Exception as error:
         summary["error"] = type(error).__name__ + ": " + str(error)[:512]

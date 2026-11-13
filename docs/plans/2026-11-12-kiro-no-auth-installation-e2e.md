@@ -50,6 +50,21 @@ no #878 file, production refusal or runtime qualification oracle is changed.
 
 ## Files
 
+The no-auth collector rejoins the original source commit, tree and clean status
+after all 18 native observations, using three fixed Git commands through the
+existing bounded capture mechanism. It never replaces the original provenance
+with a later baseline. Materialized runtime file hashes are retained in the
+summary and rechecked around that final readback. The original 360-second budget,
+native argv, private-profile isolation and all qualification flags are unchanged.
+There are 27 total captured commands and 55 evidence members, below the existing
+60-command/128-member/32-MiB limits. A final mismatch leaves collection incomplete;
+the separate finite native-capture fact does not override that failure.
+
+The local run-level contract covers unchanged provenance and changed commit,
+tree, dirty status, command error and a boolean exit impostor. All 24 inert
+no-auth contracts passed locally. This does not establish hosted execution of
+the amended collector, User saved preparation or Kiro native loading.
+
 - scripts/project_native_kiro_no_auth.py: finite new runner reusing existing helpers.
 - scripts/test_project_native_kiro_no_auth.py: inert negative/guard contracts.
 - .github/workflows/kiro-no-auth-installation.yml: three-OS UAP lifecycle plus

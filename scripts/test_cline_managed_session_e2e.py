@@ -9,8 +9,9 @@ from pathlib import Path
 import tempfile
 import json
 import hashlib
+import copy
 
-from cline_managed_session_e2e import SessionJourney, SERVER, cline_owned_stdio, read_owned, snapshot, validate_events
+from cline_managed_session_e2e import NAME, SessionJourney, SERVER, cline_owned_stdio, read_owned, snapshot, validate_events, write
 from project_native_collectors.cline import ACQUISITION, platform_acquisition
 
 
@@ -139,6 +140,115 @@ class ClinePortableFixtureTests(unittest.TestCase):
         for invalid in ([], rows[:-1], rows + rows[:1], [dict(rows[0], session="foreign"), *rows[1:]]):
             with self.assertRaises(ValueError):
                 validate_events(result, encode(invalid))
+
+
+class ClineWarmContinuityTests(unittest.TestCase):
+    def fixture(self, root):
+        probe = root / "probe"
+        probe.write_bytes(b"inert fixture")
+        journey = SessionJourney(root, probe, probe, probe, probe, {"commands": [], "stages": []}, None, {})
+        physical, receipt_id = "owned-package", "data-original"
+        data = journey.a / ".uap/plugin-data" / physical
+        active = journey.a / ".uap/managed/clients/cline" / physical
+        active.mkdir(parents=True)
+        receipt = {"data_receipt_id": receipt_id, "physical_backend_id": physical, "scope": "project", "state": "owned",
+                   "locator": str(data), "ownership_digest": "sha256:" + "a" * 64,
+                   "created_at": "2026-11-13T00:00:00Z", "updated_at": "2026-11-13T00:00:00Z"}
+        binding = {"client_binding_id": "binding-original", "client_id": "cline", "scope": "project", "activation": "prepared",
+                   "target_locator": str(active), "physical_artifact_id": physical, "native_profile_root": str(journey.a),
+                   "verification": "installation_verified", "authentication": "unchecked", "policy": "not_required",
+                   "data_receipt_id": receipt_id}
+        installation = {"installation_id": "installation-original", "declared_name": NAME,
+                        "source": {"source_binding_id": "source-original", "requested_source": str(journey.source),
+                                   "canonical_source": str(journey.source), "resolved_revision": ""},
+                        "package": {"declared_name": NAME, "loader_kind": "standard", "inventory": {}},
+                        "clients": {"cline": binding}, "data_receipts": {receipt_id: receipt}}
+        state = {"schema_version": 5, "installations": [installation]}
+        def save():
+            write(journey.a / ".uap/state-v2.json", state)
+            for value in installation["data_receipts"].values():
+                write(Path(value["locator"]) / ".agentplugins-data-owner.json", value)
+        def revision(value):
+            journey.author(value)
+            manifest = "sha256:" + hashlib.sha256((journey.source / "plugin.json").read_bytes()).hexdigest()
+            tree = "sha256:" + hashlib.sha256(("tree-" + value).encode()).hexdigest()
+            installation["source"]["tree_digest"] = tree
+            installation["package"].update(version="1.0." + value, manifest_digest=manifest)
+            binding["package_revision"] = {"version": "1.0." + value, "tree_digest": tree, "manifest_digest": manifest}
+            save()
+        revision("0")
+        (active / "helper").write_bytes(b"owned helper")
+        write(journey.a / ".uap/clients/cline/mcp.json", {"mcpServers": {SERVER: {"transport": {
+            "type": "stdio", "command": str(active / "helper"), "cwd": str(active),
+            "env": {"PLUGIN_ROOT": str(active), "UAP_TEST_NONCE": journey.nonce}}}}})
+        accepted, selected, _ = journey.owned()
+        journey.warm_origin, journey.warm_pin = journey.warm_facts(accepted, selected, "0")
+        write(data / "native-marker.txt", "kept-" + journey.nonce)
+        journey.marker_before = journey.marker_facts()
+        return journey, state, save, revision
+
+    def test_rebound_authority_or_copied_marker_refuses_before_bridge(self):
+        for change in ("installation", "source", "binding", "data", "marker", "manifest", "pending"):
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as tmp:
+                journey, state, save, _ = self.fixture(Path(tmp).resolve())
+                installed = state["installations"][0]
+                binding = installed["clients"]["cline"]
+                if change == "installation": installed["installation_id"] = "foreign"
+                if change == "source": installed["source"]["source_binding_id"] = "foreign"
+                if change == "binding": binding["client_binding_id"] = "foreign"
+                if change == "pending": binding["pending_native_intent"] = {}
+                if change == "manifest": write(journey.source / "plugin.json", {"name": NAME, "version": "1.0.0"})
+                if change == "data":
+                    old = next(iter(installed["data_receipts"].values()))
+                    replacement = dict(old, data_receipt_id="data-replaced", physical_backend_id="relocated",
+                                       locator=str(journey.a / ".uap/plugin-data/relocated"))
+                    installed["data_receipts"] = {"data-replaced": replacement}
+                    binding.update(data_receipt_id="data-replaced", physical_artifact_id="relocated",
+                                   target_locator=str(journey.a / ".uap/managed/clients/cline/relocated"))
+                    Path(binding["target_locator"]).mkdir()
+                    write(Path(replacement["locator"]) / "native-marker.txt", "kept-" + journey.nonce)
+                if change == "marker":
+                    marker = Path(next(iter(installed["data_receipts"].values()))["locator"]) / "native-marker.txt"
+                    marker.rename(marker.with_name("old-marker")); write(marker, "kept-" + journey.nonce)
+                save()
+                with mock.patch("cline_managed_session_e2e.invoke_bridge", side_effect=AssertionError("native tripwire")) as bridge:
+                    with self.assertRaises(ValueError): journey.session("repaired", "0")
+                    bridge.assert_not_called()
+
+    def test_update_repair_and_remove_use_first_authority_and_last_accepted_revision(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            journey, state, save, revision = self.fixture(Path(tmp).resolve())
+            original = copy.deepcopy(journey.warm_origin)
+            config = journey.a / ".uap/clients/cline/mcp.json"
+            rows = [{"name": SERVER, "path": str(config), "transportType": "stdio", "disabled": False}]
+            record = {"exit": 0, "runtime_sha256": {key: "a" * 64 for key in ("native", "installer", "probe", "git", "go", "fixture_source")}}
+            with mock.patch("cline_managed_session_e2e.invoke_bridge", return_value=(record, json.dumps(rows).encode(), b"")) as bridge, \
+                 mock.patch.object(journey, "direct", return_value={"facts": {}}):
+                journey.session("installed", "0")
+                revision("1")
+                journey.session("updated", "1")
+                journey.session("repaired", "1")
+                self.assertEqual(bridge.call_count, 3)
+                self.assertEqual(journey.warm_origin, original)
+                self.assertEqual(journey.warm_pin["package"]["version"], "1.0.1")
+                revision("2")
+                with self.assertRaises(ValueError): journey.session("repaired", "2")
+                self.assertEqual(bridge.call_count, 3)
+            revision("1")
+            retained = state["installations"][0]
+            retained["clients"], retained["data_retained"] = {}, True
+            save()
+            journey.verify_retained(state)
+            for change in ("installation", "receipt", "revision", "marker"):
+                invalid = copy.deepcopy(state)
+                item = invalid["installations"][0]
+                if change == "installation": item["installation_id"] = "replaced"
+                if change == "receipt": next(iter(item["data_receipts"].values()))["updated_at"] = "renewed"
+                if change == "revision": item["package"]["version"] = "1.0.2"
+                if change == "marker":
+                    marker = Path(next(iter(item["data_receipts"].values()))["locator"]) / "native-marker.txt"
+                    marker.rename(marker.with_name("held-marker")); write(marker, "kept-" + journey.nonce)
+                with self.subTest(change=change), self.assertRaises(ValueError): journey.verify_retained(invalid)
 
 
 class UnavailablePOSIXResearchContracts(unittest.TestCase):

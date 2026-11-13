@@ -13,6 +13,57 @@ STATUS_HELP = b"Get status\n\nUsage: kiro-cli mcp status [OPTIONS] --name <NAME>
 
 
 class NoAuthContracts(unittest.TestCase):
+    def test_run_rejoins_final_source_before_completing_original_capture(self):
+        commit, tree = "a" * 40, "b" * 40
+        for failure in (None, "commit", "tree", "clean", "error", "typed-exit"):
+            with self.subTest(failure=failure):
+                output = self.root / ("final-" + str(failure))
+                calls, published = [], []
+                def source(ctx):
+                    ctx.summary.update(source_commit=commit, source_tree=tree)
+                def materialize(root, *_args):
+                    root.mkdir(mode=0o700)
+                    binary = root / "kiro-cli"
+                    binary.write_bytes(b"inert pinned runtime")
+                    binary.chmod(0o700)
+                    return binary, {binary: research.hashlib.sha256(binary.read_bytes()).hexdigest()}
+                def command(ctx, label, argv, cwd, env, timeout):
+                    self.assertEqual(cwd, research.SOURCE)
+                    self.assertIs(env, ctx.env)
+                    self.assertEqual(timeout, 10)
+                    self.assertEqual(argv[0], "/usr/bin/git")
+                    suffix = label.removeprefix("source-final-")
+                    expected = {"commit": ["rev-parse", "HEAD"], "tree": ["rev-parse", "HEAD^{tree}"],
+                                "clean": ["status", "--porcelain", "--untracked-files=normal"]}
+                    self.assertEqual(argv[1:], expected[suffix])
+                    calls.append(label)
+                    body = {"commit": (commit + "\n").encode(), "tree": (tree + "\n").encode(), "clean": b""}[suffix]
+                    if failure == suffix: body = b"changed\n"
+                    return {"exit": True if failure == "typed-exit" else 0,
+                            "error": "timeout" if failure == "error" else None}, body, b""
+                def publish(summary, _ctx, _output):
+                    published.append(json.loads(json.dumps(summary)))
+                with patch.object(research.native, "require_hosted"), \
+                     patch.object(research.Context, "source_and_projects", source), \
+                     patch.object(research.Context, "command", command), \
+                     patch.object(research, "acquire", return_value=({}, {})), \
+                     patch.object(research, "materialize", side_effect=materialize), \
+                     patch.object(noauth, "collect", side_effect=lambda ctx: ctx.summary.update(finite_capture_complete=True)), \
+                     patch.object(research, "publish", side_effect=publish), patch("builtins.print"):
+                    self.assertEqual(noauth.run(output), int(failure is not None))
+                result = published[0]
+                self.assertEqual(result["source_commit"], commit)
+                self.assertEqual(result["source_tree"], tree)
+                self.assertEqual(len(result["runtime_files"]), 1)
+                self.assertIs(result["collection_complete"], failure is None)
+                self.assertFalse(any(result["qualification"].values()))
+                if failure is None:
+                    self.assertEqual(calls, ["source-final-commit", "source-final-tree", "source-final-clean"])
+                    self.assertEqual(result["source_final"], {"source_commit": commit, "source_tree": tree, "clean": True})
+                else:
+                    self.assertNotIn("source_final", result)
+                    self.assertIn("final source identity changed", result["error"])
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)

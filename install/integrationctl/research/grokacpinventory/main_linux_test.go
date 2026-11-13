@@ -125,6 +125,93 @@ func TestResultIdentityIsolationAndWholeStream(t *testing.T) {
 		t.Fatal("partial frame admitted")
 	}
 }
+
+func inertCatalogResult(t *testing.T, r request, labels []string) []byte {
+	t.Helper()
+	var body map[string]any
+	if e := json.Unmarshal(inertResult(t, r), &body); e != nil {
+		t.Fatal(e)
+	}
+	commands := make([]map[string]any, 0, len(labels))
+	empty := sha256.Sum256(nil)
+	for _, label := range labels {
+		commands = append(commands, map[string]any{"label": label, "argv": []string{"/sealed/grok"}, "exit": 0,
+			"error": nil, "merged_base64": "", "merged_bytes": 0, "merged_sha256": hex.EncodeToString(empty[:])})
+	}
+	body["commands"] = commands
+	switch r.Mode {
+	case sessionMode:
+		body["mode"], body["provider"] = sessionMode, map[string]any{"requests": 0, "models_get": 0, "root_get": 0, "forbidden": 0, "settled": true}
+		body["isolation"].(map[string]any)["loopback_up"] = true
+		body["rpc"].(map[string]any)["session"] = nil
+	case lockMode:
+		body["mode"], body["phase"], body["lock_held"] = lockMode, r.Phase, true
+	}
+	raw, e := json.Marshal(body)
+	if e != nil {
+		t.Fatal(e)
+	}
+	return append(raw, '\n')
+}
+
+func TestMetadataWitnessCaptureStillRequiresStrictCompletion(t *testing.T) {
+	r := inertRequest()
+	body := inertCatalogResult(t, r, []string{"version", "help", "agent-help", "stdio-help", "mcp-inventory", "acp"})
+	for _, cleanupFails := range []bool{false, true} {
+		settled := false
+		run := func(_ context.Context, _ ports.Command, exchange func(io.Writer, io.Reader) error) error {
+			if e := exchange(io.Discard, bytes.NewReader(body)); e != nil {
+				return e
+			}
+			settled = true
+			if cleanupFails {
+				return errors.New("tree unknown after six-command exchange")
+			}
+			return nil
+		}
+		raw, e := supervisedCapture(context.Background(), ports.Command{}, r, 1, run)
+		if !settled {
+			t.Fatal("metadata witness frame refused before cleanup boundary", e)
+		}
+		if cleanupFails {
+			if e == nil || raw != nil {
+				t.Fatal("unproved cleanup released six-command capture")
+			}
+		} else if e != nil || !bytes.Equal(raw, body) {
+			t.Fatal("settled metadata witness capture lost", e)
+		}
+	}
+	changed := bytes.Replace(body, []byte(`"capabilities_zero":true`), []byte(`"capabilities_zero":false`), 1)
+	if bytes.Equal(changed, body) || validateResult(changed, r, 1) == nil {
+		t.Fatal("six commands bypassed isolation proof")
+	}
+}
+
+func TestResultCommandBoundsRemainModeSpecific(t *testing.T) {
+	for _, item := range []struct {
+		mode   string
+		labels []string
+	}{
+		{"", []string{"version", "help", "agent-help", "stdio-help", "mcp-inventory", "acp"}},
+		{sessionMode, []string{"version", "help", "agent-help", "stdio-help", "acp"}},
+		{lockMode, []string{"version", "mcp-help", "disable-help", "writer"}},
+	} {
+		t.Run(item.mode, func(t *testing.T) {
+			r := inertRequest()
+			r.Mode = item.mode
+			if r.Mode == lockMode {
+				r.Phase = "locked-writer"
+			}
+			if e := validateResult(inertCatalogResult(t, r, item.labels), r, 1); e != nil {
+				t.Fatal("fixed command catalog refused", e)
+			}
+			if e := validateResult(inertCatalogResult(t, r, append(item.labels, "extra")), r, 1); e == nil {
+				t.Fatal("excess command admitted, even with negative semantics")
+			}
+		})
+	}
+}
+
 func TestParentEOFPropagatesAndNeverRenewsBudget(t *testing.T) {
 	reader, writer := io.Pipe()
 	defer func() { _ = reader.Close() }()

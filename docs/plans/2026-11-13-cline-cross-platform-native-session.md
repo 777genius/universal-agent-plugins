@@ -247,3 +247,23 @@ observes the explicitly selected Project source. These direct-installed MCP call
 are explicitly not Cline-native tools/call; vendor login and model invocation
 remain false. The final published source still needs its own applicable checks;
 these original da680 passes are not relabeled as a later commit's acceptance.
+
+## Warm lifecycle keeps the first accepted data authority
+
+After the first public add, the collector joins the existing owned binding to
+the literal local source, raw manifest digest, package revision, canonical
+Project data locator and its original ownership marker. It retains installation,
+source and binding identity plus the whole original DataReceipts map. The
+producer returns the existing data receipt unchanged on update and repair;
+those operations do not legitimately renew its timestamps.
+
+Each warm session checks that authority before its bridge call. Only changed
+update may advance the package/source revision; repair must retain the last
+accepted update. The first marker locator remains authoritative, with exact
+same-domain physical identity and bounded bytes checked before and after later
+commands. Remove must retain the original installation/data authority and last
+accepted source/package revision. A copied marker at a replacement locator is
+insufficient. Cold agreement-only restoration, native actions and budgets are
+unchanged. Local consumer contracts exercise coherent identity/data replacement,
+same-byte marker replacement, legal update/repair and retained-state refusals;
+new three-platform native acceptance remains pending on the published source.
