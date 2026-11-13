@@ -219,3 +219,69 @@ test('actual picker bounds delayed and stale text reads by its own remaining bud
   await assert.rejects(stale.labelRow(stale.page, 'owned'), /inert detached row/);
   assert(source.includes('shutdownDeadline ??= performance.now() + 5000;'));
 });
+
+function inputHarness(states) {
+  let now = 0, polls = 0, current, reads = 0;
+  const context = { Error, performance: { now: () => now }, delay: async ms => { now += ms; }, clearTimeout,
+    setTimeout: (fn, ms) => setTimeout(() => { now += ms; fn(); }, Math.min(ms, 5)) };
+  vm.createContext(context);
+  vm.runInContext(stripTypeScriptTypes(section('async function quickInput(', 'async function labelRow(')
+    + section('async function within<', 'async function focusWorkbench'), { mode: 'strip' }) + '\nglobalThis.run = quickInput;', context);
+  const input = { count: async () => { current = states[Math.min(polls++, states.length - 1)]; if (current.countHang) return new Promise(() => {}); return current.count ?? 1; },
+    isVisible: async () => current.visible !== false, getAttribute: async (_key, options) => {
+      reads++; assert(options.timeout > 0 && options.timeout <= 3000 - now);
+      if (current.hang) return new Promise(() => {});
+      if (current.slow) now += 4000;
+      if (current.throw) throw new Error('private detached input text');
+      return current.placeholder;
+    } };
+  return { run: () => context.run({ locator: () => input }, 'expected'), input, reads: () => reads, polls: () => polls };
+}
+test('actual input transition waits through visible old, absent and detached inputs', async () => {
+  for (const initial of [{ placeholder: 'old' }, { count: 0 }, { throw: true }, { visible: false }]) {
+    const h = inputHarness([initial, { placeholder: 'expected' }]);
+    assert.equal(await h.run(), h.input); assert.equal(h.polls(), 2);
+  }
+});
+test('actual input transition refuses duplicates and one shared expired read budget', async () => {
+  for (const state of [{ placeholder: 'wrong' }, { count: 0 }, { count: 2 }, { countHang: true }, { hang: true }, { slow: true, placeholder: 'expected' }, { throw: true }]) {
+    const h = inputHarness([state]);
+    await assert.rejects(h.run(), /native picker differs|native picker input is ambiguous|bounded operation deadline/);
+    assert(h.polls() <= 61);
+    if (state.count === 2) assert.equal(h.reads(), 0);
+  }
+});
+test('actual MCP substeps retain a fixed phase before an operation can fail', async () => {
+  for (const failure of ['list', 'server', 'action', 'start', 'trust']) {
+    let phase, picks = 0;
+    const stop = () => { throw new Error('private injected operation'); };
+    const context = { Error, performance: { now: () => 0 },
+      listServers: async (_page, mark) => { mark('mcp-server-picker'); if (failure === 'list') stop(); },
+      pick: async () => { picks++; if ((failure === 'server' && picks === 1) || (failure === 'start' && picks === 2)) stop(); },
+      quickInput: async () => { if (failure === 'action') stop(); }, visibleDialogs: async () => stop() };
+    vm.createContext(context);
+    vm.runInContext(stripTypeScriptTypes(section('async function startServer(', 'async function input('), { mode: 'strip' }) + '\nglobalThis.run = startServer;', context);
+    await assert.rejects(context.run({}, { label: 'owned' }, 60000, value => { phase = value; }), /private injected operation/);
+    assert.equal(phase, { list: 'mcp-server-picker', server: 'mcp-server-selection', action: 'mcp-action-picker', start: 'mcp-start-action', trust: 'mcp-trust' }[failure]);
+  }
+});
+test('owned picker errors map to finite reasons while arbitrary text stays opaque', () => {
+  for (const [message, reason] of [['native picker differs', 'picker-input-deadline'], ['native picker input is ambiguous', 'picker-input-ambiguous'],
+    ['native picker label missing', 'picker-label-missing'], ['native picker label is ambiguous', 'picker-label-ambiguous'],
+    ['native picker row bound exceeded', 'picker-row-bound'], ['native MCP trust origin differs', 'mcp-trust-origin']])
+    assert.equal(normal(new Error(message)).reason, reason);
+  assert.equal(normal(new Error('private arbitrary picker text')).reason, 'unclassified');
+});
+
+test('actual server-list transition marks command and expected picker separately', async () => {
+  for (const failAt of [1, 2]) {
+    let phase, calls = 0;
+    const context = { Error, noDialog: async () => {}, pick: async () => {}, quickInput: async () => {
+      if (++calls === failAt) throw new Error('inert picker failure'); return { fill: async () => {} };
+    } };
+    vm.createContext(context);
+    vm.runInContext(stripTypeScriptTypes(section('async function listServers(', 'async function workspaceTrust('), { mode: 'strip' }) + '\nglobalThis.run = listServers;', context);
+    await assert.rejects(context.run({ keyboard: { press: async () => {} } }, value => { phase = value; }), /inert picker failure/);
+    assert.equal(phase, failAt === 1 ? 'mcp-command-palette' : 'mcp-server-picker');
+  }
+});

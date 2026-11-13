@@ -251,3 +251,25 @@ wait/control helpers: initial empty, empty event, delayed control, stale URI,
 wrong type, duplicate, headers, timeout, count/read failures, copied absence
 snapshot, and independently delayed gateway. These tests establish the observer
 contract only; actual native stages remain unqualified until final-source E2E.
+
+## Actual 762 picker failure and bounded transition follow-up
+
+Original trusted run43395924942/job131786675995 on exact7621f9e7/tree4a3a626a
+completed empty-a/empty-b with genuine canonical desktop appRoot and post-exec
+vscode label/UID/caps/NNP/cgroup proofs. Private view released all exact mounts;
+all owned trees reaped and cleanup completed. First installed-a failed in
+native-mcp-start/unclassified. Four quick-label kind facts expose no label text
+and cannot identify which picker failed. This is not native lifecycle acceptance.
+
+Pinned publisher source mcpCommands.ts blob1addb6dad8938da5442b43160b4400cf4a4adbce
+confirms the existing exact server/action placeholders and Start Server label.
+The driver nevertheless checked an expected placeholder immediately after a
+visible-input wait: a still-visible previous picker can satisfy that wait during
+an asynchronous transition. This is a source-proven race opportunity, not proof
+of the actual762 error. Await only the exact expected placeholder under one
+original3s budget, including count/attribute reads; duplicates immediately refuse,
+old/missing/detached inputs grant no selection. No extra click, trust or fallback.
+Add finite own-error reasons and fixed MCP substep phases so the next genuine run
+can distinguish command, server, action, trust and state failures without raw UI
+labels/errors. Inert actual-helper tests and strict TS/Go validation precede
+independent review and new final-source native admission.

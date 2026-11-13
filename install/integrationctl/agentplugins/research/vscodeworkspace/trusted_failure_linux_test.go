@@ -168,3 +168,19 @@ func TestTrustedFailureUIRejectsMalformedAndPrivateRows(t *testing.T) {
 		}
 	}
 }
+
+func TestTrustedFailureMCPSubstepsRemainClosedAndNegative(t *testing.T) {
+	for _, phase := range strings.Fields("mcp-command-palette mcp-server-picker mcp-server-selection mcp-action-picker mcp-start-action mcp-trust mcp-state") {
+		value := closedFailureFixture()
+		value["phase"] = phase
+		value["diagnostics"].(map[string]any)["reason"] = "picker-input-deadline"
+		failure, err := admitTrustedFailure(failureBody(t, value), "empty-a", "inert-nonce")
+		if err != nil || failure == nil || failure.phase != phase {
+			t.Fatal("closed negative MCP substep refused", failure, err)
+		}
+		value["phase"] = phase + " private"
+		if _, err := admitTrustedFailure(failureBody(t, value), "empty-a", "inert-nonce"); err == nil {
+			t.Fatal("arbitrary substep admitted")
+		}
+	}
+}

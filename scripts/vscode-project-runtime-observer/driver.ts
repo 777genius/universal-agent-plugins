@@ -72,6 +72,17 @@ function failureReason(error: unknown): string {
     case 'publisher terminal result differs': return 'publisher-terminal-result-mismatch';
     case 'observer result deadline exceeded': return 'observer-deadline';
     case 'driver output bound exceeded': return 'driver-output-bound';
+    case 'native picker differs': return 'picker-input-deadline';
+    case 'native picker input is ambiguous': return 'picker-input-ambiguous';
+    case 'native picker label missing': return 'picker-label-missing';
+    case 'native picker label is ambiguous': return 'picker-label-ambiguous';
+    case 'native picker row bound exceeded': return 'picker-row-bound';
+    case 'native UI selection is absent or ambiguous': return 'ui-selection-refused';
+    case 'unexpected native dialog': return 'ui-dialog-unexpected';
+    case 'unplanned native dialog': return 'ui-dialog-unplanned';
+    case 'native MCP trust origin differs': return 'mcp-trust-origin';
+    case 'native MCP failed or unknown state': return 'mcp-state-refused';
+    case 'native MCP startup deadline exceeded': return 'mcp-start-deadline';
     default: return 'unclassified';
   }
 }
@@ -269,11 +280,27 @@ async function noDialog(page: Page): Promise<void> {
   if (await (await visibleDialogs(page)).count() !== 0) throw new Error('unplanned native dialog');
 }
 async function quickInput(page: Page, placeholder?: string): Promise<Locator> {
-  const input = page.locator('.quick-input-widget:visible input');
-  await input.waitFor({ state: 'visible', timeout: 3000 });
-  await one(input);
-  if (placeholder !== undefined && await input.getAttribute('placeholder') !== placeholder) throw new Error('native picker differs');
-  return input;
+  const input = page.locator('.quick-input-widget:visible input'), deadline = performance.now() + 3000;
+  const remaining = (): number => {
+    const value = deadline - performance.now();
+    if (value <= 0) throw new Error('native picker differs');
+    return value;
+  };
+  while (true) {
+    const count = await within(input.count(), remaining());
+    if (count > 1) throw new Error('native picker input is ambiguous');
+    if (count === 1) {
+      try {
+        if (await within(input.isVisible(), remaining())) {
+          const budget = remaining();
+          const actual = placeholder === undefined ? undefined : await within(input.getAttribute('placeholder', { timeout: budget }), budget);
+          remaining();
+          if (actual === placeholder) return input;
+        }
+      } catch { remaining(); } // Detached/old inputs never acquire selection authority.
+    }
+    await delay(Math.min(50, remaining()));
+  }
 }
 async function labelRow(page: Page, label: string): Promise<Locator> {
   const deadline = performance.now() + 3000;
@@ -300,12 +327,15 @@ async function labelRow(page: Page, label: string): Promise<Locator> {
 async function pick(page: Page, label: string): Promise<void> {
   await (await labelRow(page, label)).click({ timeout: 3000 });
 }
-async function listServers(page: Page): Promise<void> {
+type McpPhase = 'mcp-command-palette' | 'mcp-server-picker' | 'mcp-server-selection' | 'mcp-action-picker' | 'mcp-start-action' | 'mcp-trust' | 'mcp-state';
+async function listServers(page: Page, setPhase: (phase: McpPhase) => void): Promise<void> {
+  setPhase('mcp-command-palette');
   await noDialog(page);
   await page.keyboard.press('Control+Shift+P');
   const input = await quickInput(page);
   await input.fill('>MCP: List Servers');
   await pick(page, 'MCP: List Servers');
+  setPhase('mcp-server-picker');
   await quickInput(page, 'Select an MCP Server');
 }
 async function workspaceTrust(page: Page, req: Request): Promise<boolean> {
@@ -322,14 +352,18 @@ async function workspaceTrust(page: Page, req: Request): Promise<boolean> {
   await dialog.waitFor({ state: 'hidden', timeout: 3000 });
   return true;
 }
-async function startServer(page: Page, server: Server, stageDeadline: number): Promise<ObjectValue> {
+async function startServer(page: Page, server: Server, stageDeadline: number, setPhase: (phase: McpPhase) => void): Promise<ObjectValue> {
   const deadline = Math.min(stageDeadline, performance.now() + 15000);
-  await listServers(page);
+  await listServers(page, setPhase);
+  setPhase('mcp-server-selection');
   await pick(page, server.label);
+  setPhase('mcp-action-picker');
   await quickInput(page, "Select action for '" + server.label + "'");
+  setPhase('mcp-start-action');
   await pick(page, 'Start Server');
   let trusted = false, catalogOpen = false;
   while (performance.now() < deadline) {
+    setPhase('mcp-trust');
     const dialogs = await visibleDialogs(page);
     if (await dialogs.count()) {
       const dialog = await exactDialog(page, 'Trust and run MCP server ' + server.label + '?');
@@ -341,8 +375,9 @@ async function startServer(page: Page, server: Server, stageDeadline: number): P
     } else if (!catalogOpen) {
       await delay(200);
       if (await (await visibleDialogs(page)).count()) continue;
-      await listServers(page); catalogOpen = true;
+      await listServers(page, setPhase); catalogOpen = true;
     } else {
+      setPhase('mcp-state');
       const row = await labelRow(page, server.label);
       const state = (await row.locator('.label-description').innerText()).trim();
       if (state === 'Running') { await page.keyboard.press('Escape'); await noDialog(page); return { label: server.label, originUri: server.originUri, trustPromptAccepted: trusted, nativeState: state }; }
@@ -610,7 +645,7 @@ async function main(): Promise<void> {
     phase = 'workspace-trust';
     const trustPromptAccepted = await workspaceTrust(page, req), servers: ObjectValue[] = [];
     phase = 'native-mcp-start';
-    for (const server of req.expectedServers) servers.push(await startServer(page, server, deadline));
+    for (const server of req.expectedServers) servers.push(await startServer(page, server, deadline, next => { phase = next; }));
     await noDialog(page);
     writeFileSync(req.triggerFile, JSON.stringify({ stage: req.stage, nonce: req.nonce }) + '\n', { encoding: 'utf8', mode: 0o600, flag: 'wx' });
     phase = 'observer-result';

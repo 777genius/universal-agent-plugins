@@ -35,7 +35,7 @@ func failureChoice(value any, choices string) bool {
 	return ok && strings.Contains(" "+choices+" ", " "+s+" ") && s != "" && !strings.ContainsAny(s, " \t\r\n")
 }
 
-const failureReasons = "unclassified publisher-startup-failed publisher-spawn-failed publisher-stream-overflow publisher-proof-bound publisher-proof-missing publisher-proof-mismatch publisher-stream-malformed publisher-pre-verifier-stderr publisher-endpoint-ambiguous publisher-endpoint-refused publisher-port-refused stage-deadline operation-deadline browser-context-mismatch workbench-pages-ambiguous workbench-page-missing publisher-shutdown-incomplete publisher-terminal-result-mismatch observer-deadline driver-output-bound"
+const failureReasons = "unclassified publisher-startup-failed publisher-spawn-failed publisher-stream-overflow publisher-proof-bound publisher-proof-missing publisher-proof-mismatch publisher-stream-malformed publisher-pre-verifier-stderr publisher-endpoint-ambiguous publisher-endpoint-refused publisher-port-refused stage-deadline operation-deadline browser-context-mismatch workbench-pages-ambiguous workbench-page-missing publisher-shutdown-incomplete publisher-terminal-result-mismatch observer-deadline driver-output-bound picker-input-deadline picker-input-ambiguous picker-label-missing picker-label-ambiguous picker-row-bound ui-selection-refused ui-dialog-unexpected ui-dialog-unplanned mcp-trust-origin mcp-state-refused mcp-start-deadline"
 
 func admitTrustedFailure(body []byte, stage, nonce string) (*trustedDriverFailure, error) {
 	value, err := uniqueJSON(body)
@@ -53,7 +53,7 @@ func admitTrustedFailure(body []byte, stage, nonce string) (*trustedDriverFailur
 		return nil, fmt.Errorf("unknown trusted terminal envelope")
 	}
 	if !exactFailureKeys(outer, "type stage nonce phase code visibleNativeUI diagnostics") || outer["stage"] != stage || outer["nonce"] != nonce || outer["code"] != "closed-stage-contract-refused" ||
-		!failureChoice(outer["phase"], "publisher-startup native-devtools-admission workbench-focus workspace-trust native-mcp-start observer-result publisher-shutdown driver-result-publication parent-planned-shutdown") {
+		!failureChoice(outer["phase"], "publisher-startup native-devtools-admission workbench-focus workspace-trust native-mcp-start mcp-command-palette mcp-server-picker mcp-server-selection mcp-action-picker mcp-start-action mcp-trust mcp-state observer-result publisher-shutdown driver-result-publication parent-planned-shutdown") {
 		return nil, fmt.Errorf("closed driver failure context refused")
 	}
 	if err := validateTrustedFailureUI(outer["visibleNativeUI"]); err != nil {
