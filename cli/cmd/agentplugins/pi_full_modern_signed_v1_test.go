@@ -115,6 +115,10 @@ func piFullSignedTestDirectory(t *testing.T, cacheRoot string) (*directoryv1.Cli
 }
 
 func piFullRealSavedJourney(t *testing.T) (projectJourney, domain.DirectorySnapshot) {
+	return piFullRealSavedJourneyWithClient(t, piFullSignedTestDirectory)
+}
+
+func piFullRealSavedJourneyWithClient(t *testing.T, makeClient func(*testing.T, string) (*directoryv1.Client, domain.DirectorySnapshot)) (projectJourney, domain.DirectorySnapshot) {
 	t.Helper()
 	journey := projectJourney{
 		home: projectJourneyTemp(t),
@@ -131,7 +135,7 @@ func piFullRealSavedJourney(t *testing.T) (projectJourney, domain.DirectorySnaps
 			t.Fatal(err)
 		}
 	}
-	client, snapshot := piFullSignedTestDirectory(t, journey.cache)
+	client, snapshot := makeClient(t, journey.cache)
 	registry, err := specregistry.New()
 	if err != nil {
 		t.Fatal(err)
