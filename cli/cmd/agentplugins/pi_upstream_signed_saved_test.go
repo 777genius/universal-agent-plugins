@@ -158,9 +158,9 @@ func assertPiUpstreamTestOnlyNativeMCP(t *testing.T, j projectJourney, root, pro
 				t.Fatalf("GitHub native remote MCP definition is incorrect: %+v", owned)
 			}
 		case "context7":
-			if owned.Command != "node" || len(owned.Args) != 1 ||
-				!strings.HasSuffix(filepath.ToSlash(owned.Args[0]), "/io.github.777genius.agentplugins/runtime/launcher.mjs") {
-				t.Fatalf("Context7 native stdio MCP definition is incorrect: %+v", owned)
+			// The upstream source is HTTP, unlike the separate Registry overlay package.
+			if owned.URL != "https://mcp.context7.com/mcp/oauth" || owned.Command != "" {
+				t.Fatalf("Context7 native remote MCP definition is incorrect: %+v", owned)
 			}
 		default:
 			t.Fatalf("unreviewed owned Pi MCP server %q", product)
