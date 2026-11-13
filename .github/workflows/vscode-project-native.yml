@@ -134,8 +134,13 @@ jobs:
           import json
           value = json.loads(frames[0], object_pairs_hook=module.publisher.bounds.unique_object,
                              parse_constant=module.publisher.bounds.invalid_constant)
+          readout = []
           paths = module.stage_handoff(value, Path(env['AGENTPLUGINS_VSCODE_PROJECT_OUTPUT']),
-                                       Path(os.environ['RUNNER_TEMP']), env['EXPECTED_COMMIT'], env['EXPECTED_TREE'])
+                                       Path(os.environ['RUNNER_TEMP']), env['EXPECTED_COMMIT'], env['EXPECTED_TREE'],
+                                       readout=readout)
+          print('UAP_VSCODE_CLOSED_READOUT ' + json.dumps({'schema_version': 1,
+                'source_commit': env['EXPECTED_COMMIT'], 'source_tree': env['EXPECTED_TREE'],
+                'readout': readout[0]}, sort_keys=True, separators=(',', ':')))
           native_passed = record['exit'] == 0 and passed and value['collection_complete'] is True
           # Both files are staged before any output exists. Uploads additionally
           # require this collection step to finish successfully.

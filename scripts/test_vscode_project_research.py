@@ -4,10 +4,13 @@ import contextlib
 import os
 import hashlib
 import json
+import re
 import stat
 import importlib.util
+import io
 from pathlib import Path
 import tempfile
+import time
 import unittest
 import zipfile
 from unittest import mock
@@ -318,6 +321,97 @@ class ArtifactHandoffTests(unittest.TestCase):
         collector.publish_frontend_capture(path.parent, path.parent.lstat(), summary, handoff)
         return summary
 
+    def native_capture(self, output, held):
+        summary = dict(source_commit=self.commit, source_tree=self.tree, collection_complete=False,
+                       qualification={key: False for key in collector.QUALIFICATIONS})
+        native = output / 'native'
+        collector.toolchain.write_new(native / 'vscode-project-research.json', json.dumps(summary).encode())
+        collector.toolchain.write_new(native / 'trusted-host-policy.json', json.dumps(HostPolicyMeasurementTests.receipt()).encode())
+        collector.publish_native_capture(native, native.lstat(), summary, held)
+        return summary
+
+    def test_readout_refusal_preserves_both_admitted_originals_and_staged_copies(self):
+        with tempfile.TemporaryDirectory() as parent, contextlib.ExitStack() as stack:
+            output, held = self.setup_capture(parent, stack)
+            self.frontend(output, held)
+            summary = self.native_capture(output, held)
+            receipt = json.loads(held.receipt(summary))
+            originals = {label: (output / label / 'upload/research.zip').read_bytes() for label in ('frontend', 'native')}
+            readout = []
+            with mock.patch.object(collector, 'closed_native_readout', side_effect=ValueError('PRIVATE_ERROR')), mock.patch('builtins.print') as printed:
+                paths = collector.stage_handoff(receipt, output, Path(parent), self.commit, self.tree, readout=readout)
+                printed.assert_not_called()
+            self.assertEqual(readout, [{'status': 'refused', 'failures': []}])
+            self.assertNotIn('PRIVATE', json.dumps(readout))
+            self.assertEqual(set(paths), {'frontend', 'native'})
+            for label in paths:
+                self.assertEqual(Path(paths[label]).read_bytes(), originals[label])
+                self.assertEqual((output / label / 'upload/research.zip').read_bytes(), originals[label])
+                self.assertEqual(hashlib.sha256(originals[label]).hexdigest(), receipt['archives'][label]['sha256'])
+
+    def test_late_readout_uses_original_deadline_without_revoking_admitted_copies(self):
+        with tempfile.TemporaryDirectory() as parent, contextlib.ExitStack() as stack:
+            output, held = self.setup_capture(parent, stack)
+            self.frontend(output, held)
+            summary = self.native_capture(output, held)
+            receipt = json.loads(held.receipt(summary))
+            originals = {label: (output / label / 'upload/research.zip').read_bytes() for label in ('frontend', 'native')}
+            readout, clock = [], [time.monotonic()]
+            original_readout = collector.closed_native_readout
+            def late(body, deadline):
+                self.assertEqual(deadline, clock[0] + 5)
+                clock[0] = deadline + 1
+                return original_readout(body, deadline)
+            with (mock.patch.object(collector.time, 'monotonic', side_effect=lambda: clock[0]),
+                  mock.patch.object(collector, 'closed_native_readout', side_effect=late)):
+                paths = collector.stage_handoff(receipt, output, Path(parent), self.commit, self.tree, readout=readout)
+            self.assertEqual(readout, [{'status': 'refused', 'failures': []}])
+            self.assertEqual(set(paths), {'frontend', 'native'})
+            for label in paths:
+                self.assertEqual(Path(paths[label]).read_bytes(), originals[label])
+                self.assertEqual((output / label / 'upload/research.zip').read_bytes(), originals[label])
+
+    def test_staging_refusal_never_commits_partial_readout_or_prints(self):
+        for kind in ('root', 'zip', 'hash', 'staging'):
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as parent, contextlib.ExitStack() as stack:
+                output, held = self.setup_capture(parent, stack)
+                self.frontend(output, held)
+                summary = self.native_capture(output, held)
+                receipt = json.loads(held.receipt(summary))
+                if kind == 'root':
+                    output.rename(Path(parent) / 'original')
+                    output.mkdir(mode=0o700)
+                    (output / 'frontend').mkdir(mode=0o700); (output / 'native').mkdir(mode=0o700)
+                elif kind == 'zip':
+                    archive = output / 'native/upload/research.zip'
+                    archive.write_bytes(archive.read_bytes() + b'changed')
+                elif kind == 'hash':
+                    receipt['archives']['native']['sha256'] = '0' * 64
+                original_open = collector.os.open
+                def open_staging(path, *args, **kwargs):
+                    if kind == 'staging' and path == 'native.zip':
+                        raise OSError('PRIVATE_STAGING_ERROR')
+                    return original_open(path, *args, **kwargs)
+                readout = []
+                with mock.patch.object(collector.os, 'open', side_effect=open_staging), mock.patch('builtins.print') as printed:
+                    with self.assertRaises((ValueError, OSError)):
+                        collector.stage_handoff(receipt, output, Path(parent), self.commit, self.tree, readout=readout)
+                        print('must only occur after successful return')
+                    printed.assert_not_called()
+                self.assertEqual(readout, [])
+                self.assertFalse(list(Path(parent).glob('vscode-admitted-*')))
+
+    def test_successful_staging_without_failure_rows_and_missing_native_are_explicit(self):
+        for with_native in (False, True):
+            with self.subTest(with_native=with_native), tempfile.TemporaryDirectory() as parent, contextlib.ExitStack() as stack:
+                output, held = self.setup_capture(parent, stack)
+                summary = self.frontend(output, held)
+                if with_native: summary = self.native_capture(output, held)
+                receipt = json.loads(held.receipt(summary)); readout = []
+                paths = collector.stage_handoff(receipt, output, Path(parent), self.commit, self.tree, readout=readout)
+                self.assertEqual(readout, [{'status': 'observed' if with_native else 'unavailable', 'failures': []}])
+                self.assertEqual(set(paths), {'frontend', 'native'} if with_native else {'frontend'})
+
     def test_artifact_root_refusal_still_attempts_independent_preparation_cleanup(self):
         import shutil
         for cleanup_failure in (False, True):
@@ -501,6 +595,92 @@ class ArtifactHandoffTests(unittest.TestCase):
                         collector.stage_handoff(receipt, output, Path(parent), self.commit, self.tree)
                 self.assertEqual((output / 'frontend/upload/foreign-sentinel').read_bytes(), b'preserved')
                 self.assertFalse(list(Path(parent).glob('vscode-admitted-*')))
+
+
+class ClosedNativeReadoutTests(unittest.TestCase):
+    def failure(self):
+        return {'type': 'driver-failure', 'stage': 'installed-a', 'nonce': 'PRIVATE_NONCE',
+                'phase': 'mcp-state', 'code': 'closed-stage-contract-refused',
+                'visibleNativeUI': [{'private': 'PRIVATE_UI'}],
+                'diagnostics': {'reason': 'mcp-start-deadline', 'private': 'PRIVATE_ENDPOINT',
+                    'mcp': {'startSelected': True, 'trustAccepted': False, 'lastState': 'Stopped',
+                            'stopped': 17, 'starting': 0, 'running': 0, 'other': 0}}}
+
+    def archive(self, members):
+        output = io.BytesIO()
+        with zipfile.ZipFile(output, 'w', compression=zipfile.ZIP_STORED) as archive:
+            for name, body in members:
+                archive.writestr(name, body if isinstance(body, bytes) else json.dumps(body).encode())
+        return output.getvalue()
+
+    def test_readout_vocabularies_match_actual_go_failure_admission(self):
+        source = (ROOT.parent / 'install/integrationctl/agentplugins/research/vscodeworkspace/trusted_failure_linux.go').read_text()
+        reasons = re.search(r'const failureReasons = "([^"]+)"', source)
+        phases = re.search(r'failureChoice\(outer\["phase"\], "([^"]+)"\)', source)
+        self.assertIsNotNone(reasons); self.assertIsNotNone(phases)
+        self.assertEqual(collector.READOUT_REASONS, frozenset(reasons.group(1).split()))
+        self.assertEqual(collector.READOUT_PHASES, frozenset(phases.group(1).split()))
+
+    def test_actual_projection_exposes_only_fixed_state_facts(self):
+        failure = self.failure()
+        body = self.archive([('empty-a.observation.json', {'type': 'driver-result', 'private': 'PRIVATE_RESULT'}),
+                             ('installed-a.observation.json', failure)])
+        rows = collector.closed_native_readout(body, time.monotonic() + 5)
+        self.assertEqual(rows, [{'stage': 'installed-a', 'phase': 'mcp-state',
+                                'reason': 'mcp-start-deadline', 'mcp': failure['diagnostics']['mcp']}])
+        self.assertNotIn('PRIVATE', json.dumps(rows))
+
+    def test_unknown_context_fields_and_numeric_boolean_facts_refuse(self):
+        for kind in ('stage', 'phase', 'reason', 'unknown-type', 'extra-outer', 'extra-mcp',
+                     'state', 'boolean', 'numeric-boolean', 'count', 'missing-count'):
+            with self.subTest(kind=kind):
+                value = self.failure(); mcp = value['diagnostics']['mcp']
+                if kind in ('stage', 'phase'): value[kind] = 'PRIVATE_TEXT'
+                elif kind == 'reason': value['diagnostics']['reason'] = 'PRIVATE_ERROR'
+                elif kind == 'unknown-type': value['type'] = 'unknown'
+                elif kind == 'extra-outer': value['private'] = 'PRIVATE'
+                elif kind == 'extra-mcp': mcp['private'] = 'PRIVATE'
+                elif kind == 'state': mcp['lastState'] = 'PRIVATE_STATE'
+                elif kind == 'boolean': mcp['trustAccepted'] = 'true'
+                elif kind == 'numeric-boolean': mcp['stopped'] = True
+                elif kind == 'count': mcp['stopped'] = 256
+                else: del mcp['stopped']
+                with self.assertRaises(ValueError):
+                    collector.closed_native_readout(self.archive([('installed-a.observation.json', value)]), time.monotonic() + 5)
+
+    def test_duplicate_nonfinite_oversize_foreign_members_and_crc_refuse(self):
+        for name, body in [('installed-a.observation.json', b'{"type":1,"type":2}'),
+                           ('installed-a.observation.json', b'{"private":NaN}'),
+                           ('installed-a.observation.json', b'x' * ((1 << 20) + 1)),
+                           ('../foreign.json', b'{}')]:
+            with self.assertRaises(ValueError):
+                collector.closed_native_readout(self.archive([(name, body)]), time.monotonic() + 5)
+        with self.assertWarns(UserWarning):
+            duplicate = self.archive([('installed-a.observation.json', self.failure())] * 2)
+        with self.assertRaises(ValueError): collector.closed_native_readout(duplicate, time.monotonic() + 5)
+        encoded = json.dumps(self.failure()).encode()
+        damaged = bytearray(self.archive([('installed-a.observation.json', encoded)]))
+        damaged[damaged.index(encoded)] ^= 1
+        with self.assertRaises(zipfile.BadZipFile):
+            collector.closed_native_readout(bytes(damaged), time.monotonic() + 5)
+        with self.assertRaises(ValueError):
+            collector.closed_native_readout(self.archive([]), time.monotonic() - 1)
+
+    def test_zip_metadata_allocation_is_bounded_before_zipfile(self):
+        original = self.archive([('installed-a.observation.json', self.failure())])
+        for kind in ('count', 'central-size', 'trailing'):
+            with self.subTest(kind=kind):
+                changed = bytearray(original)
+                if kind == 'count':
+                    collector.struct.pack_into('<H', changed, len(changed) - 12, len(collector.native_names()) + 1)
+                elif kind == 'central-size':
+                    collector.struct.pack_into('<L', changed, len(changed) - 10, 16385)
+                else:
+                    changed.extend(b'PRIVATE_TRAILING')
+                with mock.patch.object(collector.zipfile, 'ZipFile') as archive:
+                    with self.assertRaises(ValueError):
+                        collector.closed_native_readout(bytes(changed), time.monotonic() + 5)
+                    archive.assert_not_called()
 
 
 if __name__ == "__main__":

@@ -9,6 +9,7 @@ import argparse
 import contextlib
 import hashlib
 import importlib.util
+import io
 import json
 import math
 import os
@@ -17,9 +18,11 @@ import platform
 import re
 import shutil
 import stat
+import struct
 import sys
 import tempfile
 import time
+import zipfile
 
 
 def adjacent(name, filename):
@@ -576,10 +579,70 @@ def validate_handoff(value, commit, tree):
     return value
 
 
-def stage_handoff(value, output, parent, commit, tree):
+READOUT_PHASES = frozenset(('publisher-startup native-devtools-admission workbench-focus workspace-trust native-mcp-start mcp-command-palette mcp-server-picker mcp-server-selection mcp-action-picker mcp-start-action mcp-trust mcp-state ui-trigger-publication observer-result publisher-shutdown driver-result-publication parent-planned-shutdown').split())
+READOUT_REASONS = frozenset(('unclassified publisher-startup-failed publisher-spawn-failed publisher-stream-overflow publisher-proof-bound publisher-proof-missing publisher-proof-mismatch publisher-stream-malformed publisher-pre-verifier-stderr publisher-endpoint-ambiguous publisher-endpoint-refused publisher-port-refused stage-deadline operation-deadline browser-context-mismatch workbench-pages-ambiguous workbench-page-missing publisher-shutdown-incomplete publisher-terminal-result-mismatch observer-deadline driver-output-bound picker-input-deadline picker-input-ambiguous picker-label-missing picker-label-ambiguous picker-row-bound ui-selection-refused ui-dialog-unexpected ui-dialog-unplanned mcp-trust-origin mcp-state-refused mcp-start-deadline trigger-publication-refused').split())
+
+
+def closed_native_readout(body, deadline):
+    """Projection of already receipt-bound native bytes, not a new native proof."""
+    if not isinstance(body, bytes) or not 0 < len(body) <= 32 << 20:
+        raise ValueError('readout ZIP bound refused')
+    if len(body) < 22 or body[-22:-18] != b'PK\x05\x06':
+        raise ValueError('readout ZIP end record refused')
+    disk, central_disk, disk_count, total, central_size, offset, comment = struct.unpack_from('<4H2LH', body, len(body) - 18)
+    if (disk or central_disk or comment or disk_count != total or total > len(native_names())
+            or central_size > 16384 or offset + central_size != len(body) - 22):
+        raise ValueError('readout ZIP metadata bound refused')
+    rows = []
+    with zipfile.ZipFile(io.BytesIO(body)) as archive:
+        members = archive.infolist()
+        names = [item.filename for item in members]
+        if len(names) > len(native_names()) or len(set(names)) != len(names) or not set(names) <= native_names():
+            raise ValueError('readout closed members refused')
+        for stage in GUI:
+            if time.monotonic() >= deadline:
+                raise ValueError('readout original staging deadline')
+            name = stage + '.observation.json'
+            if name not in names:
+                continue
+            member = archive.getinfo(name)
+            if member.is_dir() or member.flag_bits & 1 or not 0 < member.file_size <= 1 << 20:
+                raise ValueError('readout observation bound refused')
+            with archive.open(member) as stream:
+                raw = stream.read((1 << 20) + 1)
+            if len(raw) != member.file_size or time.monotonic() >= deadline:
+                raise ValueError('readout observation incomplete')
+            value = json.loads(raw.decode('utf-8', 'strict'), object_pairs_hook=publisher.bounds.unique_object,
+                               parse_constant=publisher.bounds.invalid_constant)
+            if type(value) is not dict:
+                raise ValueError('readout observation type refused')
+            if value.get('type') in ('driver-result', 'observer-partial'):
+                continue
+            if (set(value) != set('type stage nonce phase code visibleNativeUI diagnostics'.split())
+                    or value.get('type') != 'driver-failure' or value.get('stage') != stage
+                    or value.get('code') != 'closed-stage-contract-refused'
+                    or type(value.get('phase')) is not str or value['phase'] not in READOUT_PHASES):
+                raise ValueError('readout failure context refused')
+            facts = value['diagnostics']
+            if type(facts) is not dict or type(facts.get('reason')) is not str or facts['reason'] not in READOUT_REASONS:
+                raise ValueError('readout reason refused')
+            mcp = facts.get('mcp')
+            if (type(mcp) is not dict or set(mcp) != set('startSelected trustAccepted lastState stopped starting running other'.split())
+                    or any(type(mcp[key]) is not bool for key in ('startSelected', 'trustAccepted'))
+                    or type(mcp['lastState']) is not str or mcp['lastState'] not in ('none', 'Stopped', 'Starting', 'Running', 'other')
+                    or any(type(mcp[key]) is not int or not 0 <= mcp[key] <= 255 for key in ('stopped', 'starting', 'running', 'other'))):
+                raise ValueError('readout MCP facts refused')
+            rows.append(dict(stage=stage, phase=value['phase'], reason=facts['reason'], mcp=dict(mcp)))
+    if time.monotonic() >= deadline or len(json.dumps(rows).encode('ascii')) > 16384:
+        raise ValueError('readout result bound refused')
+    return rows
+
+
+def stage_handoff(value, output, parent, commit, tree, *, readout=None):
     """Trusted parent only; the receipt never chooses source or target paths."""
     validate_handoff(value, commit, tree)
     deadline, paths = time.monotonic() + 5, {}
+    projection, native_body = {'status': 'unavailable', 'failures': []}, None
     stage = Path(tempfile.mkdtemp(prefix='vscode-admitted-', dir=parent))
     stage_id = artifact_identity(stage.lstat())
     try:
@@ -596,6 +659,8 @@ def stage_handoff(value, output, parent, commit, tree):
                 observed, body = held.archive(label, deadline)
                 if observed != binding:
                     raise ValueError('ZIP receipt differs')
+                if label == 'native' and readout is not None:
+                    native_body = body
                 name = label + '.zip'
                 fd = os.open(name, os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600, dir_fd=destination)
                 with os.fdopen(fd, 'w+b') as stream:
@@ -611,6 +676,14 @@ def stage_handoff(value, output, parent, commit, tree):
                 raise ValueError('staging descriptor changed')
         if artifact_identity(stage.lstat()) != stage_id or time.monotonic() >= deadline:
             raise ValueError('staging authority or deadline refused')
+        if readout is not None:
+            if native_body is not None:
+                try:
+                    projection = {'status': 'observed', 'failures': closed_native_readout(native_body, deadline)}
+                except Exception:
+                    # Diagnostic refusal cannot discard already admitted archives or expose raw text.
+                    projection = {'status': 'refused', 'failures': []}
+            readout.append(projection)
         return paths
     except BaseException:
         if artifact_identity(stage.lstat()) == stage_id:
