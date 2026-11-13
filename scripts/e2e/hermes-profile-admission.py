@@ -29,6 +29,21 @@ def stable_file(info):
     return artifacts.identity(info) + (info.st_uid, info.st_gid)
 
 
+def same_opened_capture(before, held):
+    """Join Windows path/fd by stable file ID, not synthetic cross-API mode.
+
+    A path stat and an opened Windows handle may synthesize permission/execute
+    bits differently. The complete mode is still compared within each API
+    domain before and after capture; only cross-domain mode equality is omitted.
+    """
+    if not artifacts.WINDOWS:
+        return artifacts.same_opened(before, held)
+    require(stat.S_ISREG(before.st_mode) and stat.S_ISREG(held.st_mode),
+            "opened Windows member is not an ordinary file")
+    from_path, from_handle = artifacts.windows_identity(before), artifacts.windows_identity(held)
+    return from_path[:2] == from_handle[:2] and from_path[3:] == from_handle[3:]
+
+
 def ordinary_bytes(path, expected=None):
     path = Path(path)
     require(path.is_absolute() and path.resolve() == path, "ordinary file alias")
@@ -41,7 +56,7 @@ def ordinary_bytes(path, expected=None):
     descriptor = artifacts.open_member(path)
     try:
         held = os.fstat(descriptor)
-        require(artifacts.same_opened(before, held)
+        require(same_opened_capture(before, held)
                 and (held.st_uid, held.st_gid) == (before.st_uid, before.st_gid),
                 "file changed at open: " + ",".join(
                     field for field in STABLE_FIELDS

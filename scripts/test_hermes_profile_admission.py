@@ -175,21 +175,31 @@ class ProfileAdmissionContracts(unittest.TestCase):
                 values.update(st_birthtime_ns=1234567, st_file_attributes=0, st_reparse_tag=0)
                 if held:
                     values["st_ctime_ns"] += 100000
+                    # Windows path and opened-handle APIs can synthesize
+                    # execute permission bits differently on the same file.
+                    values["st_mode"] ^= 0o111
                 values.update(changes)
                 return SimpleNamespace(**values)
-            for mutation in (None, "path-ctime", "held-ctime", "inode", "birth", "reparse"):
+            for mutation in (None, "path-ctime", "held-ctime", "path-mode", "held-mode",
+                             "file-type", "inode", "birth", "reparse"):
                 counts = {"path": 0, "held": 0}
                 def path_stat(p):
                     counts["path"] += 1
                     value = win_info(real_lstat(p))
                     if mutation == "path-ctime" and counts["path"] > 1:
                         value.st_ctime_ns += 1
+                    if mutation == "path-mode" and counts["path"] > 1:
+                        value.st_mode ^= 0o200
                     return value
                 def held_stat(fd):
                     counts["held"] += 1
                     value = win_info(real_fstat(fd), held=True)
                     if mutation == "held-ctime" and counts["held"] > 1:
                         value.st_ctime_ns += 1
+                    if mutation == "held-mode" and counts["held"] > 1:
+                        value.st_mode ^= 0o200
+                    if mutation == "file-type":
+                        value.st_mode = (value.st_mode & 0o7777) | 0o040000
                     if mutation == "inode": value.st_ino += 1
                     if mutation == "birth": value.st_birthtime_ns += 1
                     if mutation == "reparse": value.st_reparse_tag = 1
