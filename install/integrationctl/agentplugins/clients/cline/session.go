@@ -106,6 +106,18 @@ func exactSessionServers(body []byte, names []string) error {
 		if !ok {
 			return fmt.Errorf("cline owned server is missing")
 		}
+		// A reviewed Project session may run only the owned managed stdio
+		// launcher. Reject an altered transport during plan/dry-run, before
+		// starting the native client or relying on its inventory output.
+		transport, ok := server["transport"].(map[string]any)
+		if !ok || transport["type"] != "stdio" {
+			return fmt.Errorf("cline server %q has no owned stdio transport", name)
+		}
+		command, commandOK := transport["command"].(string)
+		cwd, cwdOK := transport["cwd"].(string)
+		if !commandOK || command == "" || !cwdOK || cwd == "" {
+			return fmt.Errorf("cline server %q has an incomplete managed stdio launcher", name)
+		}
 		if disabled, present := server["disabled"]; present && disabled != false {
 			return fmt.Errorf("cline server %q was disabled; startup does not override that choice", name)
 		}
