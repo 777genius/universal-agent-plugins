@@ -78,6 +78,12 @@ func replaceSessionContext(ctx context.Context, command string, args []string, c
 		_ = cmd.Wait()
 		return fmt.Errorf("assign managed stdio process: %w", err)
 	}
+	// Consent may be withdrawn after the suspended process joins our Job Object.
+	// Terminate and reap it through the existing cancellation boundary; never
+	// resume a child after consent has been withdrawn.
+	if ctx.Err() != nil {
+		return waitSessionContext(ctx, cmd, &job)
+	}
 	if err := resumeSessionProcess(cmd.Process.Pid); err != nil {
 		_ = windows.TerminateJobObject(job, 1)
 		_ = cmd.Wait()

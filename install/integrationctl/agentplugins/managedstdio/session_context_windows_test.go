@@ -76,6 +76,41 @@ func testSessionContextCancellation(t *testing.T, terminationFailure bool) {
 	}
 }
 
+// Cancellation during suspended-process setup must not resume the child.
+func TestSessionContextCancellationBeforeResume(t *testing.T) {
+	dir := t.TempDir()
+	executable, err := os.Executable()
+	if err != nil { t.Fatal(err) }
+	body, err := os.ReadFile(executable)
+	if err != nil { t.Fatal(err) }
+	fixture := filepath.Join(dir, "fixture.exe")
+	if err := os.WriteFile(fixture, body, 0700); err != nil { t.Fatal(err) }
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	original := assignProcessToJobObject
+	assignProcessToJobObject = func(job, process windows.Handle) error {
+		if err := original(job, process); err != nil { return err }
+		cancel() // Exact boundary: job owns a still-suspended child.
+		return nil
+	}
+	t.Cleanup(func() { assignProcessToJobObject = original })
+	done := make(chan error, 1)
+	go func() {
+		done <- StartSessionContext(ctx, fixture,
+			[]string{fixture, "-test.run=^TestWindowsJobFixture$", "pre-resume", dir}, dir,
+			append(os.Environ(), "UAP_WINDOWS_JOB_FIXTURE=1"))
+	}()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) { t.Fatalf("cancelled suspended session: %v", err) }
+	case <-time.After(5 * time.Second):
+		t.Fatal("cancelled suspended session was not reaped")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "pre-resume.pid")); !os.IsNotExist(err) {
+		t.Fatalf("suspended child executed after cancellation: %v", err)
+	}
+}
+
 // The managed Cline session can select a project on a network share. The
 // process-layer guard must agree with StartSessionContext's filepath.IsAbs,
 // rather than recognizing only drive-letter absolute paths.
