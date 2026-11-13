@@ -74,7 +74,8 @@ Run vendor-free Python frontend/toolchain/workspace contracts and observer shape
 contracts, controller package tests, wrapper/evidence contracts and relevant
 lint/test-core gates with the genuine provisioned Go toolchain. Never fake hosted
 admission or execute acquired VS Code/scanner/public native fixture locally.
-Genuine Ubuntu 22.04 GitHub-hosted execution remains the native oracle. If the
+Genuine Ubuntu 24.04 GitHub-hosted execution, under the reviewed runner amendment
+below, remains the native oracle. If the
 runner or download is blocked, report the exact boundary and retain false flags;
 no queued/skipped/evidence-only result establishes success.
 
@@ -90,3 +91,22 @@ Accept only a final exact-source successful public project lifecycle, native
 restart/removal, MCP initialize/tools-list/tools-call and complete cleanup.
 User installation, vendor authentication, real model and released-client flags
 remain false. Root owns all remote writes and commits until separately delegated.
+
+## Reviewed runner compatibility amendment
+
+Root approved this amendment before implementation on 2026-11-13. Current main
+selects the pinned GNU lintai asset on glibc hosts; deferred PR530's portable
+current-source scanner policy did not land. Replaying that broad production and
+shared harness change is outside this leaf. The recorded Ubuntu22 GNU loader
+failure requires GLIBC_2.39. Use a genuine `ubuntu-24.04` GitHub-hosted runner,
+matching actual ImageOS `ubuntu24` and actual `/etc/os-release` VERSION_ID 24.04.
+Acquire current main's existing GNU archive SHA256
+`2b3d176db752433b904a4b42375543ff398f4841d22e48f7d4f23ded925b72da`
+and its exact supported `linux-amd64` private cache route. Reject any other pin.
+No production scanner, shared native matrix, runtime selector, host spoofing,
+sandbox, UID, capability, trust or deadline change is made. Previous Ubuntu22
+results remain failed evidence; fresh Ubuntu24 exact-source native proof is
+required. This changes the fixture qualification host, not released support.
+
+The dedicated workflow also runs on filtered main pushes, retaining the exact
+checkout source guard for postmerge native acceptance without manual dispatch.
