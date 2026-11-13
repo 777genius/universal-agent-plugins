@@ -75,3 +75,24 @@ func testSessionContextCancellation(t *testing.T, terminationFailure bool) {
 		}
 	}
 }
+
+// The managed Cline session can select a project on a network share. The
+// process-layer guard must agree with StartSessionContext's filepath.IsAbs,
+// rather than recognizing only drive-letter absolute paths.
+func TestWindowsSessionUNCAbsolutePaths(t *testing.T) {
+	for _, value := range []string{
+		`C:\project`,
+		`\\server\share\project`,
+		`\\?\C:\project`,
+		`\\?\UNC\server\share\project`,
+	} {
+		if !filepathIsAbs(value) {
+			t.Errorf("valid Windows absolute directory refused: %q", value)
+		}
+	}
+	for _, value := range []string{"", "project", `C:project`, `\project`} {
+		if filepathIsAbs(value) {
+			t.Errorf("relative Windows directory accepted: %q", value)
+		}
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"os"
 	"os/exec"
 	"syscall"
@@ -133,8 +134,10 @@ func firstProcessThread(pid uint32) (windows.Handle, error) {
 	return 0, fmt.Errorf("enumerate managed stdio threads: %w", err)
 }
 
+// Use the same Windows path semantics as StartSessionContext. A drive-letter
+// heuristic wrongly refuses absolute UNC and extended-length project roots.
 func filepathIsAbs(path string) bool {
-	return len(path) >= 3 && ((path[0] >= 'A' && path[0] <= 'Z') || (path[0] >= 'a' && path[0] <= 'z')) && path[1] == ':' && (path[2] == '\\' || path[2] == '/')
+	return filepath.IsAbs(path)
 }
 
 func resumeSessionProcess(pid int) (resultErr error) {
