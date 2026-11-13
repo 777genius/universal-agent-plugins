@@ -4,6 +4,12 @@ import { stripTypeScriptTypes } from 'node:module';
 import { test } from 'node:test';
 import { runInNewContext } from 'node:vm';
 import { computed, ref } from 'vue';
+import { installTargets, canonicalInstallTarget } from '../data/installTargets.ts';
+import { hasPluginInstallTarget, pluginInstallAvailability } from '../utils/pluginInstallAvailability.ts';
+import { agentInstallExample } from '../utils/agentInstallExample.ts';
+import { pluginCommands } from '../utils/commands.ts';
+import { resolveDistribution, vendorInstallSource } from '../utils/registry.ts';
+import { isFullyRetired } from '../utils/filter.ts';
 import { isKnownLocale } from '../data/i18n.ts';
 import { catalogVisiblePlugins } from '../utils/filter.ts';
 import { pluginBenefit } from '../data/catalogCuration.ts';
@@ -37,37 +43,17 @@ for (const base of ['/', '/universal-agent-plugins/']) {
             .replace(/^import[\s\S]*?from '[^']+';\n/gm, '');
           let options: any;
           const client = { id: 'codex', slug: 'codex', name: 'Codex', presentationKey: 'fixture' };
-          const plugin = {
-            name: 'context7',
-            display_name: 'Context7',
-            trust_state: 'reviewed',
-            description: 'Fixture',
-            version: '1.0.0',
-            license: 'MIT',
-            keywords: [],
-            author: { name: 'Fixture', url: 'https://author.test/' },
-            client_support: { clients: ['codex'], delivery: { codex: 'managed' } },
-            distributions: [
-              {
-                id: 'fixture/context7',
-                kind: 'community',
-                releases: [{ release_status: 'active' }],
-              },
-            ],
-          };
+          const fixture = JSON.parse(readFileSync(new URL('./fixtures/registry-responses/gitlab.json', import.meta.url), 'utf8'));
+          const plugin = { ...structuredClone(fixture.plugins[0]), name: 'context7', display_name: 'Context7', trust_state: 'reviewed', author: { name: 'Fixture', url: 'https://author.test/' } };
           await runInNewContext(`(async () => {${stripTypeScriptTypes(source)}\n})()`, {
             computed,
             ref,
             isKnownLocale,
             catalogVisiblePlugins,
             pluginBenefit,
-            // URL-only fixture: the reviewed detail page's auto-imported policy
-            // adapters are inert; its schema URL construction stays under test.
-            resolveDistribution: (_plugin: unknown, targets: readonly string[]) => ({
-              distribution: { targets: targets.map((client) => ({ client, delivery: 'managed' })) },
-            }),
-            vendorInstallSource: () => undefined,
-            isFullyRetired: () => false,
+            installTargets, canonicalInstallTarget, hasPluginInstallTarget,
+            pluginInstallAvailability, agentInstallExample, pluginCommands,
+            resolveDistribution, vendorInstallSource, isFullyRetired,
             useDirectoryStatus: () => ({
               current: ref(true), expired: ref(false), published: ref(true),
             }),

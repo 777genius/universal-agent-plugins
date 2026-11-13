@@ -5,6 +5,10 @@ import { test } from 'node:test';
 import { runInNewContext } from 'node:vm';
 import { computed, ref, watch, toValue } from 'vue';
 import { clients, clientLandingBySlug, clientLandingById } from '../data/clients.ts';
+import { installTargets, canonicalInstallTarget } from '../data/installTargets.ts';
+import { hasPluginInstallTarget, pluginInstallAvailability } from '../utils/pluginInstallAvailability.ts';
+import { agentInstallExample } from '../utils/agentInstallExample.ts';
+import { pluginCommands } from '../utils/commands.ts';
 import { localizedPath } from '../utils/localizedRoutes.ts';
 import { productRootUrl, seoDescription, spdxLicenseUrl } from '../utils/seo.ts';
 import { catalogVisiblePlugins, isFullyRetired } from '../utils/filter.ts';
@@ -28,6 +32,7 @@ async function page(
   await runInNewContext(`(async () => { ${discoverySource}\n${stripTypeScriptTypes(source)} })()`, {
     computed, ref, watch, clients, clientLandingBySlug, clientLandingById, localizedPath, productRootUrl, seoDescription, spdxLicenseUrl, catalogVisiblePlugins,
     resolveDistribution, vendorInstallSource, isFullyRetired, pluginBenefit,
+    installTargets, canonicalInstallTarget, hasPluginInstallTarget, pluginInstallAvailability, agentInstallExample, pluginCommands,
     useDirectoryStatus: () => ({ current: ref(true), expired: ref(false), published: ref(true) }),
     // Synthetic key markers test reactivity without creating translations.
     useI18n: () => ({ locale, t: (key: string) => `${locale.value}:${key}`, n: (value: number) => String(value) }),

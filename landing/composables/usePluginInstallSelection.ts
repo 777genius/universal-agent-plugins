@@ -2,12 +2,12 @@ import { computed, ref, watch, type Ref } from 'vue';
 import {
   installTargets,
   reconcileLocalChatGPTTargets,
-  canonicalInstallTarget,
   canonicalInstallTargets,
   type InstallTargetID,
 } from '../data/installTargets.ts';
+import { pluginInstallAvailability, hasPluginInstallTarget } from '../utils/pluginInstallAvailability.ts';
 import { useInstallPreferencesStore } from '../stores/installPreferences.ts';
-import { reachableTargetPolicies, resolveDistribution } from '../utils/registry.ts';
+import { resolveDistribution } from '../utils/registry.ts';
 import { pinnedPiProjectSelection, projectCatalogAutomaticSelection, projectCatalogSelection } from '../utils/projectCatalogSource.ts';
 import type { DistributionResolution, InstallScope, RegistryPlugin } from '../types/registry';
 
@@ -37,22 +37,9 @@ export function usePluginInstallSelection(
   const pinnedPiReleaseComponents = computed(() =>
     pinnedPiSelected.value ? eligiblePinnedPi.value?.components : undefined,
   );
-  const availableClients = computed(() => {
-    const policies = reachableTargetPolicies(plugin().distributions);
-    return installTargets.filter((client) => {
-      if (client.id === 'chatgptweb') {
-        if (plugin().trust_state === 'conformant_unreviewed') return false;
-        // A summary of reachable targets is de-duplicated by client/auth.
-        // Read the selected signed release so an earlier unbound policy
-        // cannot hide a later eligible Web app binding.
-        return Boolean(resolveDistribution(plugin(), ['chatgpt'], 'user').distribution?.targets.some(
-          (target) => target.client === 'chatgpt' && Boolean(target.app_binding),
-        ));
-      }
-      return (client.id === 'pi' && Boolean(eligiblePinnedPi.value)) ||
-        policies.some((policy) => policy.client === canonicalInstallTarget(client.id));
-    });
-  });
+  const availableClients = computed(() =>
+    installTargets.filter(client => hasPluginInstallTarget(plugin(), client.id)),
+  );
   const select = (selected: InstallTargetID[]): DistributionResolution => {
     // A local Desktop plugin belongs to the Codex user profile, not a project.
     if (scope.value === 'project' && selected.includes('chatgpt'))
@@ -83,6 +70,10 @@ export function usePluginInstallSelection(
         installTargets.map((client) => [client.id, select([client.id]).distribution]),
       ),
   );
+  const targetAvailability = computed(() => new Map(installTargets.map(client =>
+    [client.id, pluginInstallAvailability(plugin(), [client.id], scope.value)])));
+  const availability = computed(() => pluginInstallAvailability(plugin(), targets.value, scope.value));
+  const guidedWebSelected = computed(() => !autoDetect.value && availability.value?.kind === 'guided_web');
   // One authorized project source is enough to offer CLI-side target discovery.
   // This must not broaden any signed release scope or assume local client state.
   const projectAutomatic = computed(() => projectCatalogAutomaticSelection(plugin()));
@@ -159,7 +150,7 @@ export function usePluginInstallSelection(
     const next = values.filter(
       (value): value is InstallTargetID =>
         installTargets.some((client) => client.id === value) &&
-        (Boolean(targetDistributions.value.get(value as InstallTargetID)) ||
+        (Boolean(targetAvailability.value.get(value as InstallTargetID)) ||
           (value === 'pi' && Boolean(pinnedPiSource.value)) ||
           targets.value.includes(value as InstallTargetID)),
     );
@@ -210,6 +201,9 @@ export function usePluginInstallSelection(
     installExpanded,
     availableClients,
     targetDistributions,
+    targetAvailability,
+    availability,
+    guidedWebSelected,
     pinnedPiSource,
     pinnedPiSelected,
     pinnedPiReleaseSource,

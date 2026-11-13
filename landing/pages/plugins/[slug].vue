@@ -5,9 +5,14 @@ import { mdiArrowLeft, mdiDownload, mdiOpenInNew } from '@mdi/js';
 import { clientLandingById } from '~/data/clients';
 import { productRootUrl, seoDescription, spdxLicenseUrl } from '~/utils/seo';
 import { isFullyRetired } from '~/utils/filter';
-import { resolveDistribution, vendorInstallSource } from '~/utils/registry';
+import { vendorInstallSource } from '~/utils/registry';
 import { pluginBenefit } from '~/data/catalogCuration';
-import type { InstallTargetID } from '~/data/installTargets';
+import {
+  installTargets,
+  canonicalInstallTarget,
+  type InstallTargetID,
+} from '~/data/installTargets';
+import { pluginInstallAvailability } from '~/utils/pluginInstallAvailability';
 const { t, locale } = useI18n();
 const localePath = useLocalePath();
 
@@ -25,34 +30,63 @@ if (!plugin || plugin.trust_state === 'conformant_unreviewed') {
 const iconURL = pluginIcon(plugin);
 const benefit = pluginBenefit(plugin);
 const { current, expired, published } = useDirectoryStatus();
-// The card's install picker resolves each agent against an active release. Do
-// the same here: client_support is an aggregate that may include retired targets
-// or a different delivery mode from the currently selectable release.
-const userClientDelivery = clients.flatMap((client) => {
-  const distribution = resolveDistribution(plugin, [client.id], 'user').distribution;
-  const policy = distribution?.targets.find((target) => target.client === client.id);
-  return policy ? [{ client, delivery: policy.delivery }] : [];
+// Use the picker's existing routes, preserving public Desktop/Web surface names.
+const clientDelivery = installTargets.flatMap((client) => {
+  const user = pluginInstallAvailability(plugin, [client.id], 'user');
+  if (user?.kind === 'guided_web')
+    return [{ client, delivery: 'manual_activation', route: 'user' }];
+  if (user?.kind === 'signed') {
+    const policy = user.resolution.distribution?.targets.find(
+      (target) => target.client === canonicalInstallTarget(client.id),
+    );
+    return policy ? [{ client, delivery: policy.delivery, route: 'user' }] : [];
+  }
+  const project = pluginInstallAvailability(plugin, [client.id], 'project');
+  if (project?.kind === 'signed') {
+    const policy = project.resolution.distribution?.targets.find(
+      (target) => target.client === canonicalInstallTarget(client.id),
+    );
+    return policy ? [{ client, delivery: policy.delivery, route: 'signed_project' }] : [];
+  }
+  return project?.kind === 'pinned_git'
+    ? [{ client, delivery: 'prepared', route: 'pinned_project' }]
+    : [];
 });
-const supportedClients = userClientDelivery.map(({ client }) => client);
+const supportedClients = clientDelivery.map(({ client }) => client);
 const clientGroups = computed(() =>
   [
     {
       label: t('registryUi.detail.managedByCli'),
-      clients: userClientDelivery
-        .filter(({ delivery }) => delivery === 'managed')
+      clients: clientDelivery
+        .filter(({ delivery, route }) => delivery === 'managed' && route === 'user')
         .map(({ client }) => client),
     },
     {
       label: t('registryUi.detail.requiresAFinalStepInTheApp'),
-      clients: userClientDelivery
-        .filter(({ delivery }) => delivery === 'prepared' || delivery === 'manual_activation')
+      clients: clientDelivery
+        .filter(
+          ({ delivery, route }) =>
+            route === 'user' && (delivery === 'prepared' || delivery === 'manual_activation'),
+        )
+        .map(({ client }) => client),
+    },
+    {
+      label: t('registryUi.detail.signedProjectRelease'),
+      clients: clientDelivery
+        .filter(({ route }) => route === 'signed_project')
+        .map(({ client }) => client),
+    },
+    {
+      label: t('registryUi.detail.exactGitProjectSource'),
+      clients: clientDelivery
+        .filter(({ route }) => route === 'pinned_project')
         .map(({ client }) => client),
     },
   ].filter((group) => group.clients.length > 0),
 );
 const initialTarget =
   supportedClients.find((client) => client.id === 'cursor')?.id ?? supportedClients[0]?.id;
-const targets = ref<InstallTargetID[]>(initialTarget ? [initialTarget === 'chatgpt' ? 'chatgptweb' : initialTarget] : []);
+const targets = ref<InstallTargetID[]>(initialTarget ? [initialTarget] : []);
 const autoDetect = ref(true);
 const installAvailable = computed(
   () =>
@@ -192,9 +226,8 @@ usePageSeo(() => t('registryUi.detail.title', { name: plugin.display_name }), de
                     class="plugin-detail__status"
                     :class="{ 'plugin-detail__status--muted': !installAvailable }"
                     tabindex="0"
-                  >{{
-                    trustLabel
-                  }}</span></template
+                    >{{ trustLabel }}</span
+                  ></template
                 >
                 <p class="app-tooltip__compact">
                   {{ t('registryUi.detail.reviewedListingTooltip') }}
@@ -253,7 +286,11 @@ usePageSeo(() => t('registryUi.detail.title', { name: plugin.display_name }), de
                 <NuxtLink
                   v-for="client in group.clients"
                   :key="client.id"
-                  :to="localePath(`/agents/${clientLandingById.get(client.id)?.slug}/`)"
+                  :to="
+                    localePath(
+                      `/agents/${clientLandingById.get(client.id === 'chatgptweb' ? 'chatgpt' : client.id)?.slug}/`,
+                    )
+                  "
                   class="plugin-detail__client"
                 >
                   <img :src="asset(`client-icons/${client.icon}`)" alt="" width="22" height="22" />

@@ -8,6 +8,7 @@ import {
   catalogQuery,
   restoreCatalogQuery,
 } from '~/utils/filter';
+import type { CatalogClientFilter } from '~/utils/filter';
 import type { LocationQueryRaw } from 'vue-router';
 import type { RegistryPlugin } from '~/types/registry';
 import { canonicalPath } from '~/utils/seo';
@@ -121,9 +122,14 @@ const trustOptions = computed(() => [
 ]);
 const clientOptions = computed(() => [
   { value: 'all', label: t('registryUi.catalog.allAgents') },
+  {
+    value: 'chatgpt-desktop',
+    label: 'ChatGPT Desktop',
+    icon: asset(`client-icons/${clients.find((item) => item.id === 'chatgpt')!.icon}`),
+  },
   ...clients.map((item) => ({
     value: item.id,
-    label: item.name,
+    label: item.id === 'chatgpt' ? 'ChatGPT Web' : item.name,
     icon: asset(`client-icons/${item.icon}`),
   })),
 ]);
@@ -151,7 +157,7 @@ const visible = computed(() =>
           : (component.value as RegistryPlugin['components'][number]),
       source: source.value as 'all' | 'upstream' | 'community_bridge' | 'community' | 'direct',
       trust: trust.value as 'all' | 'reviewed' | 'conformant_unreviewed',
-      client: client.value as 'all' | RegistryPlugin['client_support']['clients'][number],
+      client: client.value as 'all' | CatalogClientFilter,
       authentication: authentication.value as 'all' | 'none' | 'required_or_unknown',
       owner: owner.value === 'all' ? '' : owner.value,
       order: sort.value === 'name' ? 'name' : 'recommended',
@@ -278,7 +284,11 @@ watch([query, category, component, source, trust, client, authentication, owner,
       </div>
       <p>{{ intro ?? t('registryUi.catalog.searchByCapabilityComponentOrSource') }}</p>
     </div>
-    <div class="catalog-controls catalog-controls--plugins" role="search" :aria-label="t('registryUi.catalog.filterPlugins')">
+    <div
+      class="catalog-controls catalog-controls--plugins"
+      role="search"
+      :aria-label="t('registryUi.catalog.filterPlugins')"
+    >
       <CatalogSearchField
         v-model="query"
         :label="t('registryUi.catalog.searchPlugins')"
@@ -363,7 +373,11 @@ watch([query, category, component, source, trust, client, authentication, owner,
         </div>
       </div>
     </div>
-    <div v-if="activeChips.length" class="catalog-active-filters" :aria-label="t('registryUi.catalog.activeFilters')">
+    <div
+      v-if="activeChips.length"
+      class="catalog-active-filters"
+      :aria-label="t('registryUi.catalog.activeFilters')"
+    >
       <button
         v-for="chip in activeChips"
         :key="chip.index"
@@ -374,17 +388,16 @@ watch([query, category, component, source, trust, client, authentication, owner,
       >
         {{ chip.label }} <span aria-hidden="true">×</span>
       </button>
-      <button
-        type="button"
-        class="catalog-filter-reset"
-        @click="clearFilters"
-      >
+      <button type="button" class="catalog-filter-reset" @click="clearFilters">
         {{ t('registryUi.catalog.resetFilters') }}
       </button>
     </div>
     <div class="catalog-meta">
       <div>
         <div class="catalog-count" aria-live="polite">{{ catalogSummary }}</div>
+        <p v-if="client !== 'all'" class="catalog-agent-scope-note">
+          {{ t('registryUi.catalog.agentScopeHint') }}
+        </p>
         <p v-if="!query.trim() && sort === 'recommended'" class="catalog-curation-note">
           {{ t('registryUi.catalog.curationNote') }}
         </p>
@@ -396,7 +409,6 @@ watch([query, category, component, source, trust, client, authentication, owner,
           <template v-if="discovery.state === 'loading'">{{
             t('registryUi.catalog.findingMoreCommunityPluginsOnGithub')
           }}</template>
-
 
           <template v-else-if="discovery.state === 'unavailable'">{{
             t(

@@ -25,6 +25,8 @@ const selection = usePluginInstallSelection(() => props.plugin, { targets, autoD
 const {
   scope,
   targetDistributions,
+  targetAvailability,
+  guidedWebSelected,
   pinnedPiSource,
   pinnedPiSelected,
   pinnedPiReleaseSource,
@@ -34,6 +36,8 @@ const {
   updateAutoDetect,
   updateScope,
 } = selection;
+// A guided Web-only add prints setup instructions without creating an installation.
+const guidedWebOnly = computed(() => guidedWebSelected.value && targets.value.length === 1 && targets.value[0] === 'chatgptweb');
 const autoOption = computed(() => ({
   label: t('registryUi.install.allInstalledAgentsRecommended'),
   summary: t('registryUi.install.allInstalledAgents'),
@@ -46,7 +50,7 @@ const targetOptions = computed(() =>
     icon: asset(`client-icons/${client.icon}`),
     // Keep invalid explicitly saved selections visible for recovery, but an
     // auto-detected project must never make a stale Cursor placeholder selectable.
-    disabled: !targetDistributions.value.get(client.id) &&
+    disabled: !targetAvailability.value.get(client.id) &&
       !(client.id === 'pi' && pinnedPiSource.value && current.value) &&
       (autoDetect.value || !targets.value.includes(client.id)),
     description: (() => {
@@ -65,6 +69,8 @@ const targetOptions = computed(() =>
         return target
           ? t('registryUi.desktopGuide.description')
           : t('registryUi.install.noActiveReleaseSupportsThisClient');
+      if (client.id === 'chatgptweb' && targetAvailability.value.get(client.id)?.kind === 'guided_web')
+        return t('registryUi.install.guidedChatgptSetup');
       if (client.id === 'chatgptweb')
         return target?.app_binding
           ? t('registryUi.install.verifiedConnectionFinishSetupInChatgpt')
@@ -122,7 +128,7 @@ const expectedSource = computed(() =>
 const expectedSourceLabel = computed(() =>
   expectedSource.value ? t(`registryUi.distribution.${expectedSource.value.kind}`) : '',
 );
-const hasCompleteSource = computed(() => Boolean(expectedSource.value || pinnedPiSelected.value));
+const hasCompleteSource = computed(() => Boolean(expectedSource.value || pinnedPiSelected.value || guidedWebSelected.value));
 const pinnedPiProvenanceURL = computed(() => {
   const source = pinnedPiReleaseSource.value;
   if (!source?.revision) return '';
@@ -137,7 +143,7 @@ const selectedTargets = computed(
 const chatgptSelected = computed(
   () =>
     !autoDetect.value &&
-    selectedTargets.value.some((target) => target.client === 'chatgpt' && target.app_binding),
+    (guidedWebSelected.value || selectedTargets.value.some((target) => target.client === 'chatgpt' && target.app_binding)),
 );
 const unavailableDiscoveryReason = computed(() => {
   if (props.plugin.discovery?.availability === 'unavailable')
@@ -239,6 +245,9 @@ const vendorInstall = computed(() =>
           :command="commands.add"
         />
       </div>
+      <p v-if="guidedWebSelected && commands" class="install-panel__notice" role="status">
+        {{ t('registryUi.install.guidedChatgptSetup') }}
+      </p>
       <ChatGPTDesktopGuide v-if="showDesktopGuide" />
       <InstallOutcome
         v-if="commands && !autoDetect && expectedSource"
@@ -246,7 +255,7 @@ const vendorInstall = computed(() =>
         :targets="targets"
         :scope="scope"
       />
-      <p v-if="commands?.saveMode" class="install-panel__notice">
+      <p v-if="commands?.saveMode && !guidedWebOnly" class="install-panel__notice">
         {{
           t(
             `registryUi.install.dependencySaving.${scope === 'project' && commands.saveMode === 'saved' ? 'projectSaved' : commands.saveMode}`,
@@ -254,19 +263,19 @@ const vendorInstall = computed(() =>
         }}
       </p>
       <CommandSnippet
-        v-if="commands"
+        v-if="commands && !guidedWebOnly"
         :label="t('registryUi.install.update')"
         kind="update"
         :command="commands.update"
       />
       <CommandSnippet
-        v-if="commands"
+        v-if="commands && !guidedWebOnly"
         :label="t('registryUi.install.repair')"
         kind="repair"
         :command="commands.repair"
       />
       <CommandSnippet
-        v-if="commands"
+        v-if="commands && !guidedWebOnly"
         :label="t('registryUi.install.remove')"
         kind="remove"
         :command="commands.remove"

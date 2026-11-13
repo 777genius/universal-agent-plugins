@@ -92,8 +92,8 @@ test('Pi agent page describes extensions, Skills and MCP in user and project sco
   const main = page.locator('main.agent-page');
   await expect(main).toContainText('Install compatible Pi extensions, Skills, and stdio/Streamable HTTP MCP servers');
   await expect(main).toContainText('user or project scope');
-  await expect(main).toContainText('Signed catalog packages for Pi: 0');
-  await expect(main).toContainText('Compatible Skills, MCP servers and extensions can also be installed');
+  await expect(main).toContainText('Project source routes for Pi: 1');
+  await expect(main).toContainText('a Git source is not a signed Pi grant');
   await expect(main).not.toContainText('Portable skills and MCP projection are outside');
   expect(errors).toEqual([]);
 });
@@ -119,5 +119,19 @@ test('automatic authentication uses the selected User or Project scope, not a po
   await project.click();
   await expect(indicator).toHaveAttribute('data-authentication', 'required');
   await expect(indicator).toHaveAttribute('data-varies', 'false');
+  expect(errors).toEqual([]);
+});
+
+test('detail distinguishes a signed Project-only route from an exact Git alternative', async ({ page }) => {
+  const errors = await offline(page);
+  const index = pluginWithOnlyCodex();
+  const distribution = index.plugins[0]!.distributions[0]!;
+  distribution.releases[0]!.targets[0]!.scopes = ['project'];
+  distribution.targets = distribution.releases[0]!.targets;
+  await projections(page, index);
+  await navigate(page, '/plugins/i18n-state-00', 'en');
+  const detail = page.locator('.plugin-detail');
+  await expect(detail).toContainText('Signed release for a project');
+  await expect(detail.locator('.plugin-detail__summary-block').filter({ hasText: 'Signed release for a project' })).not.toContainText('Exact Git source');
   expect(errors).toEqual([]);
 });

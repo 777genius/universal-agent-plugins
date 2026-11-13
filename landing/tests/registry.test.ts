@@ -21,6 +21,7 @@ import {
   resolveDistribution,
   vendorInstallSource,
 } from '../utils/registry.ts';
+import { hasPluginInstallTarget } from '../utils/pluginInstallAvailability.ts';
 import { projectRegistry } from '../utils/registryProjection.ts';
 import type { DiscoveryRecord, DiscoverySnapshot } from '../types/discovery.ts';
 
@@ -79,7 +80,9 @@ describe('unified registry landing', () => {
         }[];
       }[];
     };
-    const nativeClients = clients.filter((client) => ['grok', 'kimi', 'qoder', 'pi'].includes(client.id));
+    const nativeClients = clients.filter((client) =>
+      ['grok', 'kimi', 'qoder', 'pi'].includes(client.id),
+    );
     const distribution = fixture.distributions.find((item) => item.id === '777genius/context7')!;
     for (const policy of distribution.release_policies) {
       policy.targets = nativeClients.map((client) => ({
@@ -126,7 +129,9 @@ describe('unified registry landing', () => {
     );
     assert.ok(
       projectRegistry(registry, { kind: 'client', value: client }).plugins.every((item) =>
-        item.client_support.clients.includes(client),
+        client === 'chatgpt'
+          ? hasPluginInstallTarget(item, 'chatgpt') || hasPluginInstallTarget(item, 'chatgptweb')
+          : hasPluginInstallTarget(item, client),
       ),
     );
     assert.equal(
@@ -418,7 +423,9 @@ describe('unified registry landing', () => {
     assert.equal(query.campaign, 'launch');
     assert.equal(query.sort, 'name');
     assert.equal(restoreCatalogQuery({ sort: 'untrusted' }).at(-1), 'recommended');
-    assert.deepEqual(catalogQuery(['', ...Array(7).fill('all'), 'recommended'], query), { campaign: 'launch' });
+    assert.deepEqual(catalogQuery(['', ...Array(7).fill('all'), 'recommended'], query), {
+      campaign: 'launch',
+    });
     assert.deepEqual(restoreCatalogQuery({ q: ['calendar', 'ignored'], owner: null }), [
       'calendar',
       ...Array(7).fill('all'),
