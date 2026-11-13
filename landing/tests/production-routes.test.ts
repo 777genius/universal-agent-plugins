@@ -90,6 +90,9 @@ test('contract rejects identity, cardinality, digest and path changes', () => {
   const missing = contract();
   missing.routes.pop();
   assert.throws(() => validateContract(missing, identity), /nine compatibility/);
+  const missingHomepage = contract();
+  missingHomepage.routes = missingHomepage.routes.filter(entry => entry.route !== '/');
+  assert.throws(() => validateContract(missingHomepage, identity), /missing essential live route/);
   const missingDownload = contract();
   missingDownload.routes = missingDownload.routes.filter(entry => entry.route !== '/download/');
   assert.throws(() => validateContract(missingDownload, identity), /missing essential live route/);
@@ -100,7 +103,7 @@ test('contract rejects identity, cardinality, digest and path changes', () => {
   digest.routes[0].sha256 = 'not-a-digest';
   assert.throws(() => validateContract(digest, identity));
   const invalid = contract();
-  invalid.routes[0].route = '//outside.example/';
+  invalid.routes.find(entry => entry.route.startsWith('/agents/'))!.route = '//outside.example/';
   assert.throws(() => validateContract(invalid, identity));
 });
 
@@ -254,9 +257,10 @@ test('prepare and live bind selected modules, built HTML, provenance and environ
     published.set('/agents/hermes/', published.get('/agents/hermes/')!.replace('Project installation', 'Project INSTALLATION'));
     await assert.rejects(live(root, contractPath, fetcher, noDelay), /SHA256|byte length/);
     published.set('/BUILD_PROVENANCE.json', JSON.stringify({ ...provenance, source_tree: 'd'.repeat(40) }));
-    const readsBeforeFailure = requested.filter(value => value === '/BUILD_PROVENANCE.json').length;
+    const readsBeforeFailure = requested.length;
     await assert.rejects(live(root, contractPath, fetcher, noDelay), /live provenance source_tree/);
-    assert.equal(requested.filter(value => value === '/BUILD_PROVENANCE.json').length - readsBeforeFailure, 12);
+    // A persistent provenance mismatch must never request any shipped HTML route.
+    assert.deepEqual(requested.slice(readsBeforeFailure), Array(12).fill('/BUILD_PROVENANCE.json'));
   } finally {
     for (const key of envKeys) {
       if (previous[key] === undefined) delete process.env[key];
