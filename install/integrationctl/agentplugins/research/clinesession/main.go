@@ -363,7 +363,7 @@ func validateSelected(root, project, action string, t transport) (transport, err
 	childPath, childSHA := filepath.Join(active, "bin", "probe"+suffix()), probeSHA
 	if strings.HasPrefix(action, "cold-") {
 		child = "go"
-		childArgs = []string{"run", filepath.Join(active, "main.go")}
+		childArgs = []string{"run", active + "/main.go"}
 		childPath, childSHA = filepath.Join(active, "main.go"), fixtureSHA
 	}
 	if err := pin(childPath, root, childSHA); err != nil {

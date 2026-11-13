@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/pathcontract"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
@@ -677,4 +678,67 @@ func TestRuntimeRetainsOriginalContainmentRoots(t *testing.T) {
 			t.Fatal("partially opened runtime leases were not released")
 		}
 	})
+}
+
+func TestColdSelectedArgumentsPreserveAuthoredInterpolation(t *testing.T) {
+	r := fixedFixture(t)
+	project := filepath.Join(r.Root, "cold")
+	active := filepath.Join(project, ".uap", "managed", "clients", "cline", "fixture")
+	data := filepath.Join(project, ".uap", "plugin-data", "fixture")
+	helper := filepath.Join(active, managedstdio.RelativeDirectory, managedstdio.ExecutableName)
+	if err := os.MkdirAll(filepath.Dir(helper), 0700); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{helper, filepath.Join(active, "main.go")} {
+		if err := os.WriteFile(path, []byte("inert"), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(r.Root, "nonce.txt"), bytes.Repeat([]byte("n"), 32), 0600); err != nil {
+		t.Fatal(err)
+	}
+	previousFixture := fixtureSHA
+	fixtureSHA = installerSHA
+	t.Cleanup(func() { fixtureSHA = previousFixture })
+	body, err := os.ReadFile("../../../../../repotests/testdata/agentplugins_native_probe/mcp.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixture struct {
+		Servers map[string]map[string]any `json:"mcpServers"`
+	}
+	if err = json.Unmarshal(body, &fixture); err != nil {
+		t.Fatal(err)
+	}
+	config := fixture.Servers["uap_public_probe"]
+	if err = shared.ApplyStdioDataContract(config, active, data); err != nil {
+		t.Fatal(err)
+	}
+	body, err = json.Marshal(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var projected transport
+	if err = json.Unmarshal(body, &projected); err != nil {
+		t.Fatal(err)
+	}
+	projected.Args = managedstdio.Arguments(active, data, projected.CWD, pathcontract.Plugin, projected.Command, projected.Args)
+	projected.Command = helper
+	for _, change := range []string{"none", "wrong-path", "extra-argument"} {
+		candidate := projected
+		candidate.Args = slices.Clone(projected.Args)
+		if change == "wrong-path" {
+			candidate.Args[len(candidate.Args)-1] = active + "/other.go"
+		}
+		if change == "extra-argument" {
+			candidate.Args = append(candidate.Args, "unexpected")
+		}
+		_, err = validateSelected(r.Root, project, "cold-session", candidate)
+		if (err == nil) != (change == "none") {
+			t.Fatalf("%s: %v", change, err)
+		}
+		if err != nil && !strings.Contains(err.Error(), "managed arguments refused") {
+			t.Fatalf("%s reached a different refusal: %v", change, err)
+		}
+	}
 }

@@ -196,3 +196,23 @@ Windows first attempts the real symlink; only actual
 [ERROR_PRIVILEGE_NOT_HELD 1314](https://learn.microsoft.com/en-us/windows/win32/debug/system-error-codes--1300-1699-)
 skips that separate subtest. Other failures remain errors, and the portable lexical
 check runs independently. No blanket platform skip or contained-link rejection is added.
+
+## Cold Windows arguments preserve the authored placeholder spelling
+
+The public fixture authors `["run", "${PLUGIN_ROOT}/main.go"]`.
+Production `shared.ApplyStdioDataContract` expands the placeholder once and
+preserves the following slash; `managedstdio.Arguments` and the Cline codec keep
+child arguments opaque. The research validator previously built that argument
+with `filepath.Join`, changing its separator on Windows and refusing the
+otherwise matching projection before the fixed cold-build command could run.
+Expect only the exact authored interpolation `active + "/main.go"`; retain
+native path joining for file pinning and the fixed build command. Full argument
+equality, source pins and all ownership guards remain mandatory.
+
+A portable contract reads the real public MCP fixture, uses the production
+expander and argument wrapper, and validates the selected transport against
+owned inert files. Wrong-path and additional-argument controls still refuse.
+This is a source-proven defect consistent with the original Windows failure
+stage; the failed bridge did not publish a command receipt, so its precise
+original stderr has not been established. Local execution is unavailable:
+red/green, lint and native confirmation remain pending on the published source.
