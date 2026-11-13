@@ -994,8 +994,8 @@
     }
   ],
   "download": {
-    "title": "Install your first plugin",
-    "note": "Choose how to run the CLI, select one or more agents, and copy the command."
+    "title": "Install Universal Agent Plugins",
+    "note": "Choose a method and copy the command into your terminal."
   },
   "installChannels": [
     {
