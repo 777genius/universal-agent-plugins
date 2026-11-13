@@ -122,16 +122,20 @@ def acquire_vendor(client, work, env, private):
         native.verify_files(held, budget)
     if not acquisition["pin_verified"] or not binary.is_file():
         raise ValueError("pinned original native executable unavailable")
-    alias = work / "native-alias"
-    alias.mkdir(mode=0o700, exist_ok=True)
-    # Alias serves UAP's real native detector. The model is invoked with the
-    # exact checked executable path, not an arbitrary PATH-selected client.
+    # Cursor's verified launcher depends on its sibling bundled Node/index.
+    # Detect it via the original distribution directory, never a relocated
+    # alias whose shell-relative directory could point to missing resources.
     if client == "cursor":
-        (alias / "agent").symlink_to(binary)
-        (alias / "cursor-agent").symlink_to(binary)
+        search = binary.parent
     else:
+        alias = work / "native-alias"
+        alias.mkdir(mode=0o700, exist_ok=True)
         (alias / "qoder").symlink_to(binary)
-    env["PATH"] = str(alias) + ":" + env.get("PATH", "/usr/bin:/bin")
+        search = alias
+    env["PATH"] = str(search) + ":" + env.get("PATH", "/usr/bin:/bin")
+    selected = shutil.which("cursor-agent" if client == "cursor" else "qoder", path=env["PATH"])
+    if selected is None or Path(selected).resolve(strict=True) != binary.resolve(strict=True):
+        raise ValueError("native UAP detector resolves to the wrong pinned client")
     text, _ = invoke("native-version", [binary, "--version"], work / "a", env, private, 30)
     if text.strip().decode("utf-8", "strict") != EXPECTED_VERSIONS[client]:
         raise ValueError("selected native version differs")
