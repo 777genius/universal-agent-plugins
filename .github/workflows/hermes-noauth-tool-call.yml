@@ -286,10 +286,15 @@ jobs:
         # Full vendor preparation and verification: no patched builder, omitted
         # extras, mutable source ref, or bootstrap-suppression environment.
         started = time.monotonic()
+        # uv defaults to cache hardlinks on Windows. Keep the official payload
+        # independent of the external cache so closed-alias admission remains strict.
+        preparation_env = dict(os.environ)
+        if os.name == 'nt':
+            preparation_env['UV_LINK_MODE'] = 'copy'
         subprocess.run([sys.executable, '-S', '-B', str(source / 'scripts/bundles/native_build.py'),
                         '--source', str(source), '--work', str(runner / 'hermes-profile-work'),
                         '--cache', str(runner / 'hermes-profile-cache'), '--out', str(payload),
-                        '--commit', pin], check=True, timeout=9000)
+                        '--commit', pin], check=True, timeout=9000, env=preparation_env)
         (runner / 'hermes-profile-build.json').write_text(json.dumps({
             'commit': pin, 'exit_code': 0, 'timeout_seconds': 9000,
             'elapsed_seconds': round(time.monotonic() - started, 3)}) + '\n', encoding='utf-8')
