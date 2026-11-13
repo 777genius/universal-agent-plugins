@@ -55,6 +55,19 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
           git diff --exit-code
+      # Docker Hub's source-authored MCP manifest requires a real Docker CLI
+      # on PATH. Hosted macOS images do not guarantee it; do not shim it or
+      # bypass package readiness checks. This does not start a Docker daemon.
+      - name: Install genuine Docker CLI for macOS Docker Hub readiness
+        if: matrix.os == 'macos-15'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v docker >/dev/null 2>&1; then
+            HOMEBREW_NO_AUTO_UPDATE=1 brew install --formula docker
+          fi
+          command -v docker
+          docker --version
       - name: Execute original full source saved install, locked replay and remove
         shell: bash
         env:
