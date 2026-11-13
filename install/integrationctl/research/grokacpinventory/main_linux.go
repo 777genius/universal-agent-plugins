@@ -309,6 +309,7 @@ type scopeState struct {
 	safeToDelete bool
 	directory    *directoryAuthority
 	input        *directoryAuthority
+	lock         *lockAuthority
 	systems      map[string]systemFact
 }
 
@@ -323,6 +324,7 @@ func (s *scopeState) close() error {
 	if s.directory != nil {
 		e = errors.Join(e, s.directory.file.Close())
 	}
+	e = errors.Join(e, s.lock.close())
 	if s.input != nil {
 		e = errors.Join(e, s.input.file.Close())
 	}
@@ -412,10 +414,7 @@ func (s *scopeState) prepare(ctx context.Context, root string, r request) error 
 	return s.directory.seal()
 }
 func (s *scopeState) verify(ctx context.Context, requestFile heldFile) error {
-	if e := s.input.verify(); e != nil {
-		return e
-	}
-	if e := s.directory.verify(); e != nil {
+	if e := s.verifyRoots(); e != nil {
 		return e
 	}
 	for _, h := range append(s.held, requestFile) {
@@ -449,6 +448,9 @@ func runScope(ctx, parent context.Context, root string, r request, requestFile h
 		return errors.New("input-root-mode-refused")
 	}
 	if e := s.prepare(ctx, root, r); e != nil {
+		return e
+	}
+	if e := s.prepareLock(r); e != nil {
 		return e
 	}
 	if e := s.verify(ctx, requestFile); e != nil {

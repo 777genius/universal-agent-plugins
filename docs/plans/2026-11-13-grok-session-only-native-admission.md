@@ -125,11 +125,20 @@ only a task-owned tripwire script; any execution creates an unexpected member
 and refuses. No configured MCP is launched intentionally; no session/model,
 vendor credentials, trust grant, plugin enable or original User data is used.
 
-After help, unprivileged collector opens the existing empty0600 regular
-single-link native .config-init.lock through fixed nofollow parents. It holds
-exclusive flock through native writer refusal AND the whole strict shutdown.
-The root supervisor reaps the entire family, releasing the collector FD;
-only then may parent take the authoritative original-baseline metadata ledger.
+Before launching the locked family, the Go supervisor opens the existing empty
+0600 regular single-link native .config-init.lock through descriptor-relative
+nofollow parents anchored to its original input directory. It binds caller
+UID/GID, device, directory identities and mounts, then holds exclusive flock
+through positive strict family cleanup and the final authority check. Only
+deferred supervisor cleanup closes the FD. No config content is read or written.
+Help now runs under this lock: if it needs the lock, measurement refuses without
+fallback. The native writer still runs only after all live help/version gates.
+After help, the unprivileged collector probes a separate FD: the locked phase
+must receive EAGAIN/EWOULDBLOCK; the released phase must acquire and immediately
+unlock it. Other errors or the wrong state refuse. Collector FD teardown cannot
+release the supervisor lock. Failed family cleanup grants no lifetime or raw
+capture proof. Only after proved cleanup may the parent take the authoritative
+original-baseline metadata ledger.
 Locked phase permits no effect. Released phase invokes exactly the same writer
 without acquiring flock. Only two known semantic witness changes are permitted:
 disabled_mcp_servers becomes [uap-lock-witness], and its server.enabled becomes

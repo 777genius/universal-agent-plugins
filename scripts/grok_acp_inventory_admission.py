@@ -623,10 +623,8 @@ def session_readout(members, packet, deadline):
 
 LOCK_MODE, LOCK_PHASES = 'lock-qualification-v1', ('locked-writer', 'released-writer')
 LOCK_LABELS, LOCK_NAME = ('version', 'mcp-help', 'disable-help', 'writer'), 'uap-lock-witness'
-LOCK_FDS = []  # Kept open until strict parent kills/reaps this entire collector family.
-
-
-def lock_file(root, acquire):
+def lock_file(root, expected_held):
+    import errno
     import fcntl
     import stat
     held = []
@@ -644,15 +642,20 @@ def lock_file(root, acquire):
         fd = os.open('.config-init.lock', os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, dir_fd=parent)
         held.append(fd)
         require(stable(before) == stable(os.fstat(fd)), 'lock-open-identity')
-        if acquire:
+        try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as error:
+            require(error.errno in (errno.EAGAIN, errno.EWOULDBLOCK) and expected_held, 'supervisor-lock-proof')
+            observed_held = True
+        else:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+            require(not expected_held, 'supervisor-lock-missing')
+            observed_held = False
         require(stable(before) == stable(os.fstat(fd))
                 == stable(os.stat('.config-init.lock', dir_fd=parent, follow_symlinks=False)), 'lock-linked-identity')
-        LOCK_FDS.extend(held)
-        return fd
-    except BaseException:
+        return observed_held
+    finally:
         for fd in reversed(held): os.close(fd)
-        raise
 
 
 def lock_help(rows):
@@ -688,8 +691,7 @@ def lock_collector_result(req):
             in_flight = False
             result['commands'].append(row)
         lock_help(result['commands'])
-        lock_file(root, req['phase'] == LOCK_PHASES[0])
-        result['lock_held'] = req['phase'] == LOCK_PHASES[0]
+        result['lock_held'] = lock_file(root, req['phase'] == LOCK_PHASES[0])
         result['reason'] = 'protocol-refused'
         in_flight = True
         row = command([str(native),'mcp','disable',LOCK_NAME],'writer',root/'a',env,

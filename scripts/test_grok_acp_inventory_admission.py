@@ -1110,23 +1110,32 @@ class LockQualificationContracts(unittest.TestCase):
                      merged_bytes=len(body),merged_sha256=case.digest(body))
                 for label,body in zip(case.LOCK_LABELS,values)]
 
-    def test_actual_flock_retained_until_explicit_fixture_teardown_and_aliases_refuse(self):
+    def test_actual_flock_proves_supervisor_state_without_releasing_its_lock(self):
         import fcntl
         with tempfile.TemporaryDirectory() as temporary:
-            root=Path(temporary);self.fixture(root);prior=len(case.LOCK_FDS)
-            try:
-                case.lock_file(root,True)
-                with (root/'home/.grok/.config-init.lock').open('r+b') as second:
-                    with self.assertRaises(BlockingIOError):fcntl.flock(second.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB)
-                    for fd in reversed(case.LOCK_FDS[prior:]):os.close(fd)
-                    del case.LOCK_FDS[prior:]
-                    fcntl.flock(second.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB)
-            finally:
-                for fd in reversed(case.LOCK_FDS[prior:]):os.close(fd)
-                del case.LOCK_FDS[prior:]
+            root=Path(temporary);self.fixture(root)
             lock=root/'home/.grok/.config-init.lock'
+            with lock.open('rb') as supervisor:
+                fcntl.flock(supervisor.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB)
+                self.assertIs(case.lock_file(root,True),True)
+                with self.assertRaises(ValueError):case.lock_file(root,False)
+                with lock.open('rb') as second:
+                    with self.assertRaises(BlockingIOError):fcntl.flock(second.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB)
+            self.assertIs(case.lock_file(root,False),False)
+            with self.assertRaises(ValueError):case.lock_file(root,True)
+            self.assertIs(case.lock_file(root,False),False)
             os.link(lock,root/'alias')
             with self.assertRaises(ValueError):case.lock_file(root,True)
+
+    def test_flock_other_errors_never_prove_supervisor_ownership(self):
+        import errno
+        import fcntl
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);self.fixture(root)
+            for error in (OSError(errno.EACCES,'permission'),BlockingIOError(errno.EPERM,'wrong refusal')):
+                with mock.patch.object(fcntl,'flock',side_effect=error),self.assertRaises((OSError,ValueError)):
+                    case.lock_file(root,True)
+            self.assertIs(case.lock_file(root,False),False)
 
     def test_actual_help_gate_rejects_missing_advertisement_and_wrong_usage(self):
         case.lock_help(self.rows())
@@ -1148,7 +1157,7 @@ class LockQualificationContracts(unittest.TestCase):
                 row=dict(rows[len(labels)-1])
                 if failure=='help' and label=='disable-help':row['exit']=1
                 return row
-            with mock.patch.object(case,'isolation',return_value={}),mock.patch.object(case,'lock_file') as lock, mock.patch.object(case,'command',side_effect=command):
+            with mock.patch.object(case,'isolation',return_value={}),mock.patch.object(case,'lock_file',return_value=True) as lock, mock.patch.object(case,'command',side_effect=command):
                 if failure=='capture':
                     with self.assertRaises(ValueError):case.lock_collector_result(req)
                 else:

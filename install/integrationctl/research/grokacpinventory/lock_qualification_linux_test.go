@@ -3,10 +3,20 @@
 package main
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
+	"io"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+
+	"golang.org/x/sys/unix"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
 func TestLockQualificationIsFixedScopeAndHistoricalMode(t *testing.T) {
@@ -79,5 +89,153 @@ func TestLockQualificationUsesUnchangedUnprivilegedCollectorArgv(t *testing.T) {
 	locked, e := fixedCommand("/tmp/sealed", "/tmp/input", r, systems)
 	if e != nil || !reflect.DeepEqual(ordinary, locked) {
 		t.Fatal("lock mode changed privilege drop, environment or collector command")
+	}
+}
+
+func supervisorLockFixture(t *testing.T, phase string) (*scopeState, request, string) {
+	t.Helper()
+	root := t.TempDir()
+	path := filepath.Join(root, "home", ".grok", ".config-init.lock")
+	if e := os.MkdirAll(filepath.Dir(path), 0700); e != nil {
+		t.Fatal(e)
+	}
+	if e := os.WriteFile(path, nil, 0600); e != nil {
+		t.Fatal(e)
+	}
+	r := inertRequest()
+	r.UID, r.GID, r.Mode, r.Phase = os.Getuid(), os.Getgid(), lockMode, phase
+	input, e := holdDirectory(root, r.UID, r.GID)
+	if e != nil {
+		t.Fatal(e)
+	}
+	s := &scopeState{input: input}
+	t.Cleanup(func() {
+		if s.input != nil {
+			if e := s.close(); e != nil {
+				t.Error(e)
+			}
+		}
+	})
+	return s, r, path
+}
+
+func assertIndependentFlock(t *testing.T, path string, blocked bool) {
+	t.Helper()
+	file, e := os.Open(path)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer func() { _ = file.Close() }()
+	e = unix.Flock(int(file.Fd()), unix.LOCK_EX|unix.LOCK_NB)
+	if blocked {
+		if !errors.Is(e, unix.EWOULDBLOCK) {
+			t.Fatalf("independent lock was not blocked: %v", e)
+		}
+	} else if e != nil {
+		t.Fatal(e)
+	}
+}
+
+func TestSupervisorLockOutlivesCollectorExchangeAndCleanup(t *testing.T) {
+	s, r, path := supervisorLockFixture(t, "locked-writer")
+	if e := s.prepareLock(r); e != nil {
+		t.Fatal(e)
+	}
+	var result map[string]any
+	if e := json.Unmarshal(inertResult(t, r), &result); e != nil {
+		t.Fatal(e)
+	}
+	result["mode"], result["phase"], result["lock_held"] = lockMode, r.Phase, true
+	body, e := json.Marshal(result)
+	if e != nil {
+		t.Fatal(e)
+	}
+	body = append(body, '\n')
+	cleanupReturned := false
+	raw, e := supervisedCapture(context.Background(), ports.Command{}, r, 1,
+		func(_ context.Context, _ ports.Command, exchange func(io.Writer, io.Reader) error) error {
+			if e := exchange(io.Discard, bytes.NewReader(body)); e != nil {
+				return e
+			}
+			// Collector output has reached EOF; family cleanup has not returned.
+			assertIndependentFlock(t, path, true)
+			cleanupReturned = true
+			return nil
+		})
+	if e != nil || !cleanupReturned || !bytes.Equal(raw, body) {
+		t.Fatalf("capture did not reach the cleanup boundary: %v", e)
+	}
+	if e = s.lock.verify(); e != nil {
+		t.Fatal(e)
+	}
+	assertIndependentFlock(t, path, true)
+	if e = s.close(); e != nil {
+		t.Fatal(e)
+	}
+	s.input, s.lock = nil, nil
+	assertIndependentFlock(t, path, false)
+}
+
+func TestSupervisorLockPhaseAndReplacedParents(t *testing.T) {
+	s, r, path := supervisorLockFixture(t, "released-writer")
+	if e := s.prepareLock(r); e != nil {
+		t.Fatal(e)
+	}
+	assertIndependentFlock(t, path, false)
+	locked, request, original := supervisorLockFixture(t, "locked-writer")
+	if e := locked.prepareLock(request); e != nil {
+		t.Fatal(e)
+	}
+	parent := filepath.Dir(original)
+	if e := os.Rename(parent, parent+"-retained"); e != nil {
+		t.Fatal(e)
+	}
+	if e := os.Mkdir(parent, 0700); e != nil {
+		t.Fatal(e)
+	}
+	if e := os.WriteFile(original, nil, 0600); e != nil {
+		t.Fatal(e)
+	}
+	if locked.lock.verify() == nil {
+		t.Fatal("replacement parent granted lock authority")
+	}
+	assertIndependentFlock(t, filepath.Join(parent+"-retained", ".config-init.lock"), true)
+	assertIndependentFlock(t, original, false)
+}
+
+func TestSupervisorLockRefusesForeignAndMalformedLeaves(t *testing.T) {
+	for _, fault := range []string{"busy", "symlink", "hardlink", "bytes", "mode", "owner"} {
+		t.Run(fault, func(t *testing.T) {
+			s, r, path := supervisorLockFixture(t, "locked-writer")
+			var e error
+			switch fault {
+			case "busy":
+				var file *os.File
+				file, e = os.Open(path)
+				if e == nil {
+					defer func() { _ = file.Close() }()
+					e = unix.Flock(int(file.Fd()), unix.LOCK_EX|unix.LOCK_NB)
+				}
+			case "symlink":
+				e = os.Rename(path, path+"-retained")
+				if e == nil {
+					e = os.Symlink(path+"-retained", path)
+				}
+			case "hardlink":
+				e = os.Link(path, path+"-alias")
+			case "bytes":
+				e = os.WriteFile(path, []byte("foreign"), 0600)
+			case "mode":
+				e = os.Chmod(path, 0640)
+			case "owner":
+				r.UID++
+			}
+			if e != nil {
+				t.Fatal(e)
+			}
+			if s.prepareLock(r) == nil {
+				t.Fatal("unowned lock admitted")
+			}
+		})
 	}
 }
