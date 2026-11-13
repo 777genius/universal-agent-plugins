@@ -110,6 +110,44 @@ func TestClineProjectSessionComposedLifecycle(t *testing.T) {
 	if before != projectJourneyRead(t, statePath) {
 		t.Fatal("run promoted activation or changed installation state")
 	}
+
+	// A retained native attempt is not authority to start a new client session.
+	// Keep the original receipts and owned files intact to isolate this guard.
+	savedState := projectJourneyRead(t, statePath)
+	var retained domain.StateFileV2
+	if err := json.Unmarshal([]byte(savedState), &retained); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for i := range retained.Installations {
+		for key, binding := range retained.Installations[i].Clients {
+			if binding.ClientID != string(domain.ClientCline) || binding.Scope != "project" {
+				continue
+			}
+			binding.NativeActivationAttempt = "unresolved-session-attempt"
+			retained.Installations[i].Clients[key] = binding
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("missing Cline project binding in retained-attempt regression")
+	}
+	withAttempt, err := json.Marshal(retained)
+	if err != nil {
+		t.Fatal(err)
+	}
+	projectJourneyWrite(t, statePath, string(withAttempt))
+	if output, err := executeSession(journey, args...); err == nil || !strings.Contains(err.Error(), "unresolved native activation attempt") {
+		t.Fatalf("session accepted unresolved native effect: %v\\n%s", err, output)
+	}
+	if len(starts) != 1 || probes != 1 {
+		t.Fatal("refused native attempt triggered a client start or inventory probe")
+	}
+	projectJourneyWrite(t, statePath, savedState)
+	if savedState != projectJourneyRead(t, statePath) {
+		t.Fatal("refusal changed the retained installation state")
+	}
+
 	original := projectJourneyRead(t, settings)
 	var config map[string]any
 	if err := json.Unmarshal([]byte(original), &config); err != nil {
