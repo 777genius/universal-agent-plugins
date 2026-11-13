@@ -575,7 +575,7 @@ def admission_contracts():
                 bridge_exchange("inert-helper", b'x' * 16384 + b'\n')
             spawn.assert_not_called()
             frame = b'x' * 16383 + b'\n'
-            code = "import sys; body=sys.stdin.buffer.readline(); sys.stdout.write(str(len(body)) + '\\n')"
+            code = "import sys; body=sys.stdin.buffer.readline(); sys.stdout.buffer.write((str(len(body)) + '\\n').encode('ascii'))"
             self.assertEqual(self.exercise_bridge(code, frame, partial=True, expected_exit=0), b'16384\n')
             with self.assertRaises(AssertionError):
                 self.exercise_bridge("import sys; sys.exit(3)", frame)
