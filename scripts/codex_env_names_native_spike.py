@@ -28,9 +28,9 @@ import urllib.parse
 ENV_NAME = "UAP_E2E_SYNTHETIC_TOKEN"
 FOREIGN_ENV_NAME = "UAP_E2E_FOREIGN_PASSWORD"
 # Explicit restricted-token sandbox only for disposable native Windows CI.
-# Official Codex 0.167.1 package smoke tests use windows.sandbox="unelevated".
+# Official Codex 0.169.0 package smoke tests use windows.sandbox="unelevated".
 WINDOWS_NATIVE_SANDBOX_CONFIG = '[windows]\nsandbox = "unelevated"\n'
-PINNED_VENDOR_VERSION = "codex-cli 0.167.1"
+PINNED_VENDOR_VERSION = "codex-cli 0.169.0"
 SHELL_CALL = "call_uap_shell_snapshot"
 SHELL_MARKER = "UAP_SHELL_COMPLETED"
 SHELL_ENV_PRESENT = "UAP_SHELL_ENV_PRESENT"

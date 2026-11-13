@@ -25,17 +25,17 @@ jobs:
           persist-credentials: false
       - name: Verify deterministic synthetic MCP and snapshot oracles
         run: python3 -m unittest discover -s scripts -p 'test_codex_env_names_native_spike.py'
-      - name: Install verified official Codex 0.167.1 executable
+      - name: Install verified official Codex 0.169.0 executable
         id: native-binary
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/codex-native"
           curl -fSL --retry 3 --connect-timeout 15 --max-time 200 \
-            https://github.com/openai/codex/releases/download/rust-v0.167.1/codex-x86_64-unknown-linux-musl.tar.gz \
+            https://github.com/openai/codex/releases/download/rust-v0.169.0/codex-x86_64-unknown-linux-musl.tar.gz \
             -o "$RUNNER_TEMP/codex-native/codex.tar.gz"
           printf '%s  %s\n' \
-            '64bcc99c32e434b4bcb0508a97df9b7aeecdb97e956d976fb13661096ec4e3e2' \
+            '9af4d751fce183faedea629437d5252dbf458eeb04130cf4f97be844621ea985' \
             "$RUNNER_TEMP/codex-native/codex.tar.gz" | sha256sum -c -
           tar -xzf "$RUNNER_TEMP/codex-native/codex.tar.gz" -C "$RUNNER_TEMP/codex-native"
           test -s "$RUNNER_TEMP/codex-native/codex-x86_64-unknown-linux-musl"
@@ -192,16 +192,16 @@ jobs:
           test "$(uname -m)" = arm64
       - name: Verify synthetic-only Python oracles
         run: python3 -m unittest discover -s scripts -p 'test_codex_env_names_native_spike.py'
-      - name: Install official SHA-pinned Codex 0.167.1 macOS ARM64
+      - name: Install official SHA-pinned Codex 0.169.0 macOS ARM64
         id: install
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/codex-native"
           curl -fSL --retry 3 --connect-timeout 15 --max-time 240 \
-            https://github.com/openai/codex/releases/download/rust-v0.167.1/codex-aarch64-apple-darwin.tar.gz \
+            https://github.com/openai/codex/releases/download/rust-v0.169.0/codex-aarch64-apple-darwin.tar.gz \
             -o "$RUNNER_TEMP/codex-native/codex.tar.gz"
-          printf '%s  %s\n' '4c97fbdafba21e172254107939489691195f34712cf0cb31293e5e21be8f5bfa' \
+          printf '%s  %s\n' '7f4c49c80bae1d0b4e347acfcdf11faa3475d87ae5e65a5eb1261d3c358145ee' \
             "$RUNNER_TEMP/codex-native/codex.tar.gz" | shasum -a 256 -c -
           tar -xzf "$RUNNER_TEMP/codex-native/codex.tar.gz" -C "$RUNNER_TEMP/codex-native"
           test -s "$RUNNER_TEMP/codex-native/codex-aarch64-apple-darwin"
@@ -246,7 +246,7 @@ jobs:
       - name: Verify synthetic-only Python oracles
         shell: pwsh
         run: python -m unittest discover -s scripts -p 'test_codex_env_names_native_spike.py'
-      - name: Install complete official SHA-pinned Codex 0.167.1 Windows package
+      - name: Install complete official SHA-pinned Codex 0.169.0 Windows package
         id: install
         shell: pwsh
         run: |
@@ -256,9 +256,9 @@ jobs:
           # Use the exact official installer layout, not a reconstructed
           # standalone executable missing native exec-server/other resources.
           $archive = Join-Path $dir 'codex-package.tar.gz'
-          Invoke-WebRequest -Uri 'https://github.com/openai/codex/releases/download/rust-v0.167.1/codex-package-x86_64-pc-windows-msvc.tar.gz' -OutFile $archive
+          Invoke-WebRequest -Uri 'https://github.com/openai/codex/releases/download/rust-v0.169.0/codex-package-x86_64-pc-windows-msvc.tar.gz' -OutFile $archive
           $sha = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($sha -ne 'a327ba32f46e39079486ffa29e160e9da9ab2b2f73744d6101509729c26c1c1b') {
+          if ($sha -ne '456db280d16f4393cd99a398f11b4a14a3ede68b6bd31610ce41fb10d6b65737') {
             throw 'Official Codex Windows full-package SHA256 mismatch'
           }
           tar -xzf $archive -C $dir
@@ -278,7 +278,7 @@ jobs:
             }
           }
           $metadata = Get-Content -LiteralPath (Join-Path $dir 'codex-package.json') -Raw | ConvertFrom-Json
-          if ($metadata.version -ne '0.167.1' -or
+          if ($metadata.version -ne '0.169.0' -or
               $metadata.target -ne 'x86_64-pc-windows-msvc' -or
               $metadata.entrypoint -ne 'bin/codex.exe' -or
               $metadata.execServer -ne 'bin/codex-exec-server.exe') {
@@ -403,7 +403,7 @@ jobs:
                                  if pattern in native_report))
                   raise SystemExit(1)
 
-              # Codex 0.167.1 defaults to login=true for exec_command. For
+              # Codex 0.169.0 defaults to login=true for exec_command. For
               # PowerShell this OMITS -NoProfile, unlike the control above.
               # Independently verify the vendor-default launch form with
               # strictly no credential names or values in the environment.
