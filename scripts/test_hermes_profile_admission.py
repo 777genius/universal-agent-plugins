@@ -48,12 +48,17 @@ class ProfileAdmissionContracts(unittest.TestCase):
             with mock.patch.object(CASE["time"], "monotonic", side_effect=[0, 10]):
                 partial = CASE["metadata_census"](root, original, 5)
             self.assertEqual((partial["status"], partial["entries"]), ("partial", 1))
-            actual = os.stat
+            actual_stat, actual_lstat = os.stat, Path.lstat
             def huge(path, *args, **kwargs):
-                if path == "file" and kwargs.get("dir_fd") is not None:
+                # POSIX traverses by dir_fd; Windows' path-based inventory calls Path.lstat.
+                if (path == "file" and kwargs.get("dir_fd") is not None) or (
+                    isinstance(path, Path) and path.name == "file"
+                ):
                     return SimpleNamespace(st_mode=stat.S_IFREG | 0o600, st_nlink=1 << 54, st_size=1 << 54)
-                return actual(path, *args, **kwargs)
-            with mock.patch.object(os, "stat", side_effect=huge):
+                return actual_lstat(path, *args, **kwargs) if isinstance(path, Path) else actual_stat(path, *args, **kwargs)
+            patch = (mock.patch.object(Path, "lstat", autospec=True, side_effect=huge) if os.name == "nt"
+                     else mock.patch.object(os, "stat", side_effect=huge))
+            with patch:
                 value = CASE["metadata_census"](root, original, time.monotonic() + 5)
             self.assertTrue(value["overflow"]); self.assertFalse(value["complete"])
             self.assertEqual(value["logical_regular_bytes"], (1 << 53) - 1)
@@ -208,7 +213,8 @@ class ProfileAdmissionContracts(unittest.TestCase):
                             raise
                     return entries
                 with mock.patch.dict(CASE["inventory"].__globals__, {"inventory_member": checked}), mock.patch.object(os, "scandir", side_effect=scanning):
-                    with self.assertRaises((RuntimeError, OSError)):
+                    # Windows rejects a replaced directory through its typed identity guard.
+                    with self.assertRaises((RuntimeError, OSError, ValueError)):
                         CASE["inventory"](root)
                 self.assertEqual(sentinel.read_bytes(), b"foreign contents")
 
