@@ -123,6 +123,19 @@ def session_rpc_frame(value, state, req, send):
         if value['method'] == '_x.ai/mcp/servers_updated':
             require(value['params'] == {'mcpServers': []}
                     and not any(x['method'] == value['method'] for x in state['notifications']), 'notification-refused')
+        elif value['method'] == '_x.ai/mcp_initialized':
+            params = closed(value['params'], 'sessionId mcpToolCount elapsedMs')
+            require(state['initialize'] is not None and state['plugins'] is None
+                    and not any(x['method'] == value['method'] for x in state['notifications']), 'notification-refused')
+            require(type(params['mcpToolCount']) is int and params['mcpToolCount'] == 0
+                    and type(params['elapsedMs']) is int and 0 <= params['elapsedMs'] <= 30000,
+                    'mcp-initialized-bound')
+            sid = params['sessionId']
+            require(type(sid) is str and 0 < len(sid) <= 256 and sid.isascii()
+                    and all(32 <= ord(x) <= 126 for x in sid), 'session-id')
+            for item in state['notifications']:
+                if item['method'] == '_x.ai/session/setup':
+                    require(item['params']['sessionId'] in (None, sid), 'session-notification-identity')
         else:
             require(value['method'] == '_x.ai/session/setup', 'notification-refused')
             params = closed(value['params'], 'method phase sessionId')
@@ -132,8 +145,12 @@ def session_rpc_frame(value, state, req, send):
             require(params['sessionId'] is None or type(params['sessionId']) is str
                     and 0 < len(params['sessionId']) <= 256 and params['sessionId'].isascii()
                     and all(32 <= ord(x) <= 126 for x in params['sessionId']), 'session-id')
-        if state['session'] is not None and value['method'] == '_x.ai/session/setup':
-            require(value['params']['sessionId'] in (None, state['session']['result']['sessionId']), 'session-notification-identity')
+        if value['method'] in ('_x.ai/session/setup', '_x.ai/mcp_initialized'):
+            if state['session'] is not None:
+                require(value['params']['sessionId'] in (None, state['session']['result']['sessionId']), 'session-notification-identity')
+            for item in state['notifications']:
+                if item['method'] == '_x.ai/mcp_initialized':
+                    require(value['params']['sessionId'] in (None, item['params']['sessionId']), 'session-notification-identity')
         state['notifications'].append(value)
         return False
     if state['initialize'] is None:
@@ -151,7 +168,7 @@ def session_rpc_frame(value, state, req, send):
         require(type(sid) is str and 0 < len(sid) <= 256 and sid.isascii()
                 and all(32 <= ord(x) <= 126 for x in sid), 'session-id')
         for item in state['notifications']:
-            if item['method'] == '_x.ai/session/setup':
+            if item['method'] in ('_x.ai/session/setup', '_x.ai/mcp_initialized'):
                 require(item['params']['sessionId'] in (None, sid), 'session-notification-identity')
         if '_meta' in result:
             require(type(result['_meta']) is dict, 'session-meta')

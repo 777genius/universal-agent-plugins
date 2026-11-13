@@ -1034,6 +1034,71 @@ class SessionOnlyContracts(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'notification-bound'):
             case.session_rpc_frame(notice,state,req,sent.append)
 
+    def mcp_initialized_fixture(self):
+        state,req,sent=self.state(),self.req(),[];self.init(state,req,sent)
+        for phase in ('auth','resolve_workspace','folder_trust','plugin_registry','mcp_merge',
+                      'persistence_init','spawn_session_actor','agent_build','model_switch'):
+            sid=None if phase in ('auth','resolve_workspace','folder_trust','plugin_registry','mcp_merge') else 'native-owned'
+            case.session_rpc_frame({'jsonrpc':'2.0','method':'_x.ai/session/setup',
+                'params':{'method':'session/new','phase':phase,'sessionId':sid}},state,req,sent.append)
+            if phase=='persistence_init':
+                case.session_rpc_frame({'jsonrpc':'2.0','method':'_x.ai/mcp/servers_updated',
+                    'params':{'mcpServers':[]}},state,req,sent.append)
+        # Original b397 frame12, with only its native session ID anonymized.
+        notice={'jsonrpc':'2.0','method':'_x.ai/mcp_initialized',
+                'params':{'sessionId':'native-owned','mcpToolCount':0,'elapsedMs':0}}
+        return state,req,sent,notice
+
+    def test_measured_mcp_initialized_prefix_keeps_no_tools_and_real_session_join(self):
+        state,req,sent,notice=self.mcp_initialized_fixture()
+        self.assertEqual(len(state['notifications']),10)
+        self.assertFalse(case.session_rpc_frame(notice,state,req,sent.append))
+        self.assertEqual(len(state['notifications']),11)
+        self.assertIsNone(state['session']);self.assertIsNone(state['plugins'])
+        self.assertEqual([row['method'] for row in sent],['session/new'])
+        for future in ({'jsonrpc':'2.0','id':2,'result':{'sessionId':'foreign'}},
+                       {'jsonrpc':'2.0','method':'_x.ai/session/setup',
+                        'params':{'method':'session/new','phase':'response_ready','sessionId':'foreign'}}):
+            with self.assertRaisesRegex(ValueError,'session-notification-identity'):
+                case.session_rpc_frame(future,copy.deepcopy(state),req,sent.append)
+        case.session_rpc_frame({'jsonrpc':'2.0','id':2,'result':{'sessionId':'native-owned'}},state,req,sent.append)
+        self.assertTrue(case.session_rpc_frame({'jsonrpc':'2.0','id':3,'result':{'result':{'plugins':[]}}},state,req,sent.append))
+        self.assertEqual([row['method'] for row in sent],['session/new','_x.ai/plugins/list'])
+
+    def test_mcp_initialized_payload_is_closed_typed_and_bounded(self):
+        changes=[('mcpToolCount',True),('mcpToolCount',1),('mcpToolCount',-1),('mcpToolCount',0.0),
+                 ('elapsedMs',False),('elapsedMs',-1),('elapsedMs',30001),('elapsedMs',0.0),
+                 ('sessionId',None),('sessionId',''),('sessionId',True),('sessionId','foreign'),
+                 ('sessionId','x'*257),('sessionId','bad\n'),('sessionId','nonascii-\u00e9'),('extra',0)]
+        for key,value in changes:
+            with self.subTest(key=key,value=value):
+                state,req,sent,notice=self.mcp_initialized_fixture();notice['params'][key]=value
+                with self.assertRaises(ValueError):case.session_rpc_frame(notice,state,req,sent.append)
+                self.assertEqual(len(state['notifications']),10)
+        for key in ('sessionId','mcpToolCount','elapsedMs'):
+            state,req,sent,notice=self.mcp_initialized_fixture();del notice['params'][key]
+            with self.subTest(missing=key),self.assertRaises(ValueError):
+                case.session_rpc_frame(notice,state,req,sent.append)
+        state,req,sent,notice=self.mcp_initialized_fixture();notice['params']['elapsedMs']=30000
+        self.assertFalse(case.session_rpc_frame(notice,state,req,sent.append))
+
+    def test_mcp_initialized_order_duplicate_unknown_and_total_bounds_refuse(self):
+        for change in ('before-initialize','duplicate','after-inventory','wrong-returned-id','unknown-method','callback','total-bound'):
+            state,req,sent,notice=self.mcp_initialized_fixture()
+            if change=='before-initialize':state=self.state()
+            elif change=='duplicate':case.session_rpc_frame(notice,state,req,sent.append)
+            elif change in ('after-inventory','wrong-returned-id'):
+                # Existing setup identity is checked when the session reply arrives.
+                case.session_rpc_frame({'jsonrpc':'2.0','id':2,'result':{'sessionId':'native-owned'}},state,req,sent.append)
+                if change=='after-inventory':
+                    case.session_rpc_frame({'jsonrpc':'2.0','id':3,'result':{'result':{'plugins':[]}}},state,req,sent.append)
+                else:notice['params']['sessionId']='foreign'
+            elif change=='unknown-method':notice['method']='_x.ai/mcp_initialized_unknown'
+            elif change=='callback':notice['id']=4
+            else:state['notifications']*=4
+            with self.subTest(change=change),self.assertRaises(ValueError):
+                case.session_rpc_frame(notice,state,req,sent.append)
+
     def test_selected_config_capture_refuses_before_read_and_never_accepts_effects(self):
         for change in ('none','cleanup','sealed','symlink','hardlink','oversize','mode','owner','parent','foreign','snapshot'):
             with self.subTest(change=change),tempfile.TemporaryDirectory() as temporary:
@@ -1195,9 +1260,10 @@ class SessionOnlyContracts(unittest.TestCase):
         packet=dict(source_commit='a'*40,source_tree='b'*40,nonce='c'*32)
         frames=[{'jsonrpc':'2.0','id':1,'result':{'protocolVersion':1,'_meta':{'agentVersion':'1.0.70'}}},
                 {'jsonrpc':'2.0','method':'_x.ai/session/setup','params':{'method':'session/new','phase':'agent_build','sessionId':'PRIVATE_NATIVE_ID'}},
+                {'jsonrpc':'2.0','method':'_x.ai/mcp_initialized','params':{'sessionId':'PRIVATE_NATIVE_ID','mcpToolCount':0,'elapsedMs':0}},
                 {'jsonrpc':'2.0','id':2,'result':{'sessionId':'PRIVATE_NATIVE_ID'}},
                 {'jsonrpc':'2.0','id':3,'result':{'result':{'plugins':[]}}}]
-        rpc=dict(initialize=frames[0],session=frames[2],plugins=frames[3],notifications=[frames[1]])
+        rpc=dict(initialize=frames[0],session=frames[3],plugins=frames[4],notifications=frames[1:3])
         members={'acquisition.json':b'{}','a.rpc.json':json.dumps(rpc).encode(),
                  'a.ledger.json':json.dumps(dict(before={},after={},accepted=False)).encode()}
         commands=[]
@@ -1219,7 +1285,7 @@ class SessionOnlyContracts(unittest.TestCase):
         good=read(dict(members))
         self.assertTrue(good['session_reply']);self.assertTrue(good['inventory_reply'])
         self.assertNotIn('PRIVATE_NATIVE_ID',json.dumps(good))
-        for kind in ('scope','schema','reason','empty','missing','forged','truncated','no-receipt','no-lf','late-notification'):
+        for kind in ('scope','schema','reason','empty','missing','forged','truncated','no-receipt','no-lf','late-notification','missing-notification'):
             original=copy.deepcopy(result);changed=dict(members)
             if kind=='no-receipt':summary['scopes']=[]
             elif kind=='scope':result['scope']='b'
@@ -1229,6 +1295,9 @@ class SessionOnlyContracts(unittest.TestCase):
             elif kind=='missing':del changed['a-acp.merged.log']
             elif kind=='forged':
                 detached=copy.deepcopy(rpc);detached['session']['result']['sessionId']='OTHER'
+                changed['a.rpc.json']=json.dumps(detached).encode()
+            elif kind=='missing-notification':
+                detached=copy.deepcopy(rpc);detached['notifications'].pop()
                 changed['a.rpc.json']=json.dumps(detached).encode()
             elif kind in ('no-lf','late-notification'):
                 body=changed['a-acp.merged.log'][:-1] if kind=='no-lf' else changed['a-acp.merged.log']+json.dumps(

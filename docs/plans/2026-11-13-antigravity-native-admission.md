@@ -996,3 +996,27 @@ normal Core/provider/CLI tests and fresh genuine three-OS admission are still
 required for the correction. The separately reviewed support-table edit
 retains main's historical evidence and Kimi text without promoting runtime
 or authentication capability.
+
+### Preserve the actual cause of a negative-contract failure (2026-11-13)
+
+Source `0dd77f85ca682989dadbde430fc371b6574f61c3`,
+[run 43512382040, Windows job 132193845411](https://github.com/777genius/universal-agent-plugins/actions/runs/43512382040/job/132193845411),
+reported the known opened-file mode failure and a second failure in the
+missing-backend contract's nonempty-stdout case. That case reached its final
+assertion with the raw-capture family still pending. Its broad `assertRaises`
+had swallowed an earlier assertion, whose message the original log does not
+retain. This does not establish that the earlier assertion was the intended
+semantic refusal, and it does not justify clearing the cleanup fence.
+
+The negative contract now requires the exact missing-backend semantic assertion.
+An earlier runtime, identity or stream refusal is consequently reported with its
+actual cause. Production admission, pending-state transitions, stream checks and
+publication rules are unchanged. The second Windows failure remains unresolved
+until an actual corrected-source run; this diagnostic correction is not a native
+PASS and does not reinterpret the original capture.
+
+After execution was restored, exact `b5512a38` passed all 35 portable Python
+contracts, the affected Antigravity/provider selection tests and public Cobra
+tests, plus all eight `make lint` passes with the unchanged 138-rule baseline.
+The stronger diagnostic candidate also passed all 35 contracts on Linux.
+No new Windows/native result or full Core success is inferred from these checks.

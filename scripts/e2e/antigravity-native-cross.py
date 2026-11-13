@@ -1304,7 +1304,7 @@ def admission_contracts():
                                 if condition == "exact":
                                     self.assertEqual(public_uap(runtime, root, authority, "uap-missing-backend", refused=True), b"")
                                 else:
-                                    with self.assertRaises(AssertionError):
+                                    with self.assertRaisesRegex(AssertionError, "^Missing backend did not produce the exact public detection refusal$"):
                                         public_uap(runtime, root, authority, "uap-missing-backend", refused=True)
                             self.assertFalse(capture.pending)
                             self.assertEqual(len(capture.public_slots), len(PUBLIC_ACTIONS))

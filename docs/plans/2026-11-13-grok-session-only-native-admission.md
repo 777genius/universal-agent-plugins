@@ -292,3 +292,47 @@ was not replayed. The reconciled runtime delta adds only the separately reviewed
 lock-startup envelope, and preserves both the selected-config capture call and
 the lock-created identity argument in their respective modes. Both independent
 original da captures above remain attributed to their actual historical source.
+
+## Measured no-MCP initialization notification (2026-11-13)
+
+Original source `b397682f3600a75207237a72a617b45b2737be17`, tree
+`cf823249a6d6f413e15d3d628db3db54f6d966f3`,
+[run 43495420970, session job 132172862340](https://github.com/777genius/universal-agent-plugins/actions/runs/43495420970/job/132172862340)
+produced artifact `14080385857`: outer ZIP 11300 bytes,
+SHA-256 `18243d45163f931e2b909f676a0b230e5499ce1654a167ab8bbf02d94e472c14`;
+inner `research.zip` 54987 bytes,
+SHA-256 `57473d7afafd6aadc04cbe25c7dc1e51abe00e38c17e32818303e79c72368813`.
+Both CRC checks, all five stream joins and the original source/receipt join were
+independently verified. Both cleanup facts were true. The ACP command ended
+with exit -9 and `protocol-refused`; no session or inventory reply was received.
+
+Replay located the first refusal at frame 12: `_x.ai/mcp_initialized`, with
+exact parameters `sessionId`, `mcpToolCount: 0`, `elapsedMs: 0`. Its nonnull
+session ID matches all four preceding nonnull setup IDs. The 143-byte frame's
+SHA-256 is `a1b6e208ca78d06c715de73be1fb9b1a3dbfecd94806938e28ebb51b73f94709`.
+The correction admits only this closed notification after initialize and before
+terminal inventory, once per session. Its tool count must be strict integer
+zero; elapsed time must be a strict integer within 0..30000 milliseconds, the
+existing finite session budget. The bounded printable ASCII ID must join prior
+and subsequent setup IDs and the actual `session/new` result. Unknown methods,
+keys, callbacks, duplicate notices, booleans, negative values and foreign IDs
+still refuse. Existing frame, notification, phase and process bounds remain.
+
+Three new inert parser contracts reproduce the old `notification-refused` and
+pass with this correction; all 77 existing-file contracts pass. The actual
+12-frame original prefix now parses with 11 notifications, no session/inventory
+reply and only the planned `session/new` request. Its historical detached RPC
+contains only 10 notifications, so original readout still refuses at
+`session-wire-join`. Original archives and qualifications are unchanged; the
+fresh native run must establish any subsequent progress. No effect envelope,
+native command, prompt, trust, enablement or collection-complete rule changes.
+
+The separate lock original from the same source and run, job `132172862093`,
+artifact `14079492925` (10101 bytes, SHA-256
+`ce01526399da4e503ecfb9cec0895f3415a134f1b6239780351b790da590fda3`), also
+passed independent outer/inner CRC, eight stream and two receipt joins. Its
+unaltered reader reports both held and released phases as measurement-only:
+the native writer refuses under the held lock, then succeeds after release;
+31 exact startup members and the immutable original baseline remain joined.
+This confirms the measured lock behavior, without enabling Project activation,
+accepting session effects or supplying the still-separate recovery proof.
