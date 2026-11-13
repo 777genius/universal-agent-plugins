@@ -1,5 +1,41 @@
 # Grok 1.0.70 isolated ACP inventory admission
 
+## Reviewed next measurement: finite bootstrap bytes
+
+Root R1 authorizes exactly this plan, the existing admission script and its test,
+with 130–170 changed runtime/test lines. The first User invocation keeps the
+existing controller, network isolation, deadline, strict cleanup receipts and
+original effect baseline. After both cleanup proofs, the parent captures ten
+literal candidates under its disposable home/.grok: .config-init.lock,
+.metadata_version, README.md, agent_id, config.toml,
+installed-plugins/registry.lock, managed_config.lock, and
+sessions/session_search.sqlite, its -shm and -wal sidecars.
+
+The optional bootstrap_capture field stays inside user.ledger.json, with
+closed schema-version/files fields and exactly those ten keys. An absent file
+is JSON null; a present file records its original post-ledger identity, byte
+count, SHA256 and base64 bytes. Each ordinary no-follow, single-link read joins
+both physical metadata and the existing content snapshot. Decoded bytes total
+at most 256 KiB; the existing 1 MiB per-file/ledger and archive bounds remain.
+Recheck the complete outer metadata after capture. The parent readout validates
+the same joins without printing these bodies.
+
+All bytes remain candidates, including README/version strings. This does not
+change accepted, collection completion, any qualification, scope order or the
+existing semantic refusal. It does not authorize trust or enablement or adopt
+the measured state as a new baseline. A capture failure preserves the existing
+settled negative ledger/transcript and publishes no partial candidate bodies.
+One genuine hosted original and independent content review are required before
+any separate bootstrap admission proposal. SQLite analysis uses copies only;
+this measurement never opens the native database through SQLite.
+
+Independent R2 found a gap between the outer identity check and the reader's
+own lstat. Pass the recorded identity into the existing reader and reject a
+replacement before open. The actual replacement regression verifies no open
+occurred. All 31 inert contracts pass; runtime/test changes total 164 lines.
+The separate legacy native-api lane's empty Project listings remain a genuine
+unresolved admission failure; this measurement does not change that lane.
+
 ### Original fc8 capture and measured reply correction
 
 The original artifact `14033028378` from run `43418573214` was retrieved after

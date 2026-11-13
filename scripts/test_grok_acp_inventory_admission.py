@@ -258,6 +258,102 @@ case['collect'](pathlib.Path(sys.argv[2]))
             (root / 'unknown').mkdir()
             self.assertFalse(case.post_ledger(root, baseline, roots, profiles, budget)['accepted'])
 
+    def bootstrap_ledger(self, root, budget, payloads=None):
+        from devin_structured_inventory_admission import metadata_inventory
+        from client_automation_native_probe import snapshot
+        with mock.patch.object(case.subprocess, 'run'): roots = case.fixtures(root, 'a' * 32)
+        baseline = metadata_inventory(root, budget)
+        profiles = {name: snapshot(path) for name, path in roots.items()}
+        for name, body in (payloads or {'config.toml': b'unreviewed native config\x00'}).items():
+            target = root / 'home/.grok' / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(body)
+        return case.post_ledger(root, baseline, roots, profiles, budget)
+
+    def test_bootstrap_capture_joins_bytes_and_stays_unqualified(self):
+        from project_native_research import Budget
+        with tempfile.TemporaryDirectory() as directory, Budget(10) as budget:
+            root = Path(directory).resolve()
+            ledger = self.bootstrap_ledger(root, budget)
+            original = copy.deepcopy(ledger)
+            capture = case.capture_bootstrap_files(root, ledger, budget)
+            selected = 'home/.grok/config.toml'
+            self.assertEqual(base64.b64decode(capture['files'][selected]['body_base64']), b'unreviewed native config\x00')
+            self.assertEqual(sum(row is None for row in capture['files'].values()), 9)
+            self.assertEqual(ledger, original)
+            self.assertFalse(ledger['accepted'])
+            for change in ('extra', 'hash', 'bytes', 'identity', 'null', 'missing', 'boolean', 'base64'):
+                altered = copy.deepcopy(capture)
+                row = altered['files'][selected]
+                if change == 'extra': altered['files']['home/.grok/trusted_folders.toml'] = None
+                elif change == 'hash': row['sha256'] = '0' * 64
+                elif change == 'bytes': row['bytes'] += 1
+                elif change == 'identity': row['identity'][1] += 1
+                elif change == 'null': altered['files'][selected] = None
+                elif change == 'missing': del altered['files'][selected]
+                elif change == 'boolean': row['identity'][3] = True
+                else: row['body_base64'] = '!'
+                with self.subTest(change=change), self.assertRaises(ValueError):
+                    case.validate_bootstrap_capture(ledger, altered)
+            packet, members = self.readout_fixture()
+            ledger['bootstrap_capture'] = capture
+            members['user.ledger.json'] = json.dumps(ledger).encode()
+            readout = case.publication_readout(self.readout_zip(members), packet, time.monotonic() + 5)
+            self.assertFalse(readout['collection_complete'])
+            self.assertFalse(readout['scopes'][0]['ledger_accepted'])
+            self.assertTrue(all(value is False for value in json.loads(members['admission.json'])['qualification'].values()))
+            capture['files'][selected]['sha256'] = '0' * 64
+            members['user.ledger.json'] = json.dumps(ledger).encode()
+            self.assertEqual(case.publication_readout(self.readout_zip(members), packet, time.monotonic() + 5)['reason'], 'readout-refused')
+
+    def test_bootstrap_capture_refuses_replacement_and_final_metadata_changes(self):
+        from project_native_research import Budget
+        for replacement in (True, False):
+            with tempfile.TemporaryDirectory() as directory, Budget(10) as budget:
+                root = Path(directory).resolve()
+                ledger = self.bootstrap_ledger(root, budget)
+                original_read = case.ordinary
+                def changed(path, limit, **kwargs):
+                    body = original_read(path, limit, **kwargs)
+                    new = root / 'unadmitted-new-file'
+                    new.write_bytes(body)
+                    if replacement: new.replace(path)
+                    return body
+                with mock.patch.object(case, 'ordinary', changed), self.assertRaises(ValueError):
+                    case.capture_bootstrap_files(root, ledger, budget)
+                self.assertFalse(ledger['accepted'])
+                self.assertNotIn('bootstrap_capture', ledger)
+
+    def test_bootstrap_capture_refuses_gap_replacement_before_open(self):
+        from project_native_research import Budget
+        with tempfile.TemporaryDirectory() as directory, Budget(10) as budget:
+            root = Path(directory).resolve()
+            ledger = self.bootstrap_ledger(root, budget)
+            original_read = case.ordinary
+            def replaced(path, limit, **kwargs):
+                replacement = root / 'replacement'
+                replacement.write_bytes(b'foreign candidate bytes')
+                replacement.replace(path)
+                return original_read(path, limit, **kwargs)
+            with mock.patch.object(case, 'ordinary', replaced), mock.patch.object(case.os, 'open', wraps=case.os.open) as opened:
+                with self.assertRaisesRegex(ValueError, 'original-identity'):
+                    case.capture_bootstrap_files(root, ledger, budget)
+                opened.assert_not_called()
+
+    def test_bootstrap_capture_keeps_exact_aggregate_and_leaf_bounds(self):
+        from project_native_research import Budget
+        for mode in ('aggregate', 'file', 'hardlink', 'symlink'):
+            with tempfile.TemporaryDirectory() as directory, Budget(10) as budget:
+                root = Path(directory).resolve()
+                bodies = {'README.md': b'x' * (case.BOOTSTRAP_LIMIT // 2), 'config.toml': b'y' * (case.BOOTSTRAP_LIMIT // 2 + 1)}
+                if mode != 'aggregate': bodies = {'config.toml': b'x' * (case.BOOTSTRAP_LIMIT + 1 if mode == 'file' else 1)}
+                ledger = self.bootstrap_ledger(root, budget, bodies)
+                target = root / 'home/.grok/config.toml'
+                if mode == 'hardlink': os.link(target, root / 'alias')
+                if mode == 'symlink': target.rename(root / 'alias'); target.symlink_to(root / 'alias')
+                with self.subTest(mode=mode), self.assertRaises(ValueError):
+                    case.capture_bootstrap_files(root, ledger, budget)
+
     def test_root_receipt_requires_both_cleanup_proofs_and_held_system_hashes(self):
         req = {key: value for key, value in self.request(Path('/tmp/fixture')).items() if key in ('schema_version', 'source_commit', 'source_tree', 'nonce', 'scope')}
         result = dict(req, semantic_complete=False, reason='help-refused', isolation={}, commands=[], rpc=case.rpc_state())

@@ -11,6 +11,7 @@ import re
 import selectors
 import shutil
 import socket
+import stat
 import subprocess
 import sys
 import time
@@ -20,6 +21,11 @@ SCOPES = ('user', 'a', 'b')
 LABELS = ('version', 'help', 'agent-help', 'stdio-help', 'acp')
 FALSE = dict.fromkeys(('inventory_admitted', 'native_enablement', 'workspace_trust', 'native_mcp_call',
                        'provider_authentication', 'real_model_inference', 'production_project_activation'), False)
+BOOTSTRAP_LIMIT = 256 << 10
+BOOTSTRAP_FILES = tuple('home/.grok/' + name for name in (
+    '.config-init.lock', '.metadata_version', 'README.md', 'agent_id', 'config.toml',
+    'installed-plugins/registry.lock', 'managed_config.lock', 'sessions/session_search.sqlite',
+    'sessions/session_search.sqlite-shm', 'sessions/session_search.sqlite-wal'))
 
 
 def require(value, reason):
@@ -65,9 +71,10 @@ def stable(info):
             info.st_size, info.st_mtime_ns, info.st_ctime_ns)
 
 
-def ordinary(path, limit=LIMIT):
+def ordinary(path, limit=LIMIT, *, expected=None):
     import stat
     info = path.lstat()
+    require(expected is None or stable(info) == tuple(expected), 'original-identity')
     require(stat.S_ISREG(info.st_mode) and info.st_nlink == 1 and 0 <= info.st_size <= limit, 'ordinary-bound')
     fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
     with os.fdopen(fd, 'rb') as stream:
@@ -356,6 +363,59 @@ def post_ledger(root, before, roots, profiles, budget):
     return dict(accepted=accepted, before=before, after=after, profiles_before=profiles, profiles_after=current, native_bootstrap=added)
 
 
+def validate_bootstrap_capture(ledger, capture):
+    """Join candidate bytes to both original post-ledgers; this admits no effects."""
+    closed(capture, 'schema_version files')
+    require(type(capture['schema_version']) is int and capture['schema_version'] == 1, 'bootstrap-schema')
+    files = capture['files']
+    require(type(files) is dict and set(files) == set(BOOTSTRAP_FILES), 'bootstrap-files')
+    owner = ledger['before']['.']
+    require(len(owner) == 5 and all(type(v) is int for v in owner), 'bootstrap-owner')
+    total = 0
+    for path, row in files.items():
+        if path not in ledger['after']:
+            require(row is None, 'bootstrap-absent')
+            continue
+        closed(row, 'identity bytes sha256 body_base64')
+        identity = row['identity']
+        require(type(identity) in (list, tuple) and len(identity) == 9
+                and all(type(v) is int for v in identity)
+                and tuple(identity) == tuple(ledger['after'][path])
+                and stat.S_ISREG(identity[2]) and identity[3] == 1
+                and identity[0] == owner[0] and tuple(identity[4:6]) == tuple(owner[3:5]), 'bootstrap-identity')
+        require(type(row['bytes']) is int and 0 <= row['bytes'] <= min(LIMIT, BOOTSTRAP_LIMIT - total)
+                and row['bytes'] == identity[6] and type(row['body_base64']) is str
+                and len(row['body_base64']) <= 4 * ((row['bytes'] + 2) // 3), 'bootstrap-bound')
+        body = base64.b64decode(row['body_base64'], validate=True)
+        profile = ledger['profiles_after']['user_profile'][path.removeprefix('home/.grok/')]
+        require(len(body) == row['bytes'] and digest(body) == row['sha256'] == profile['sha256']
+                and profile['bytes'] == row['bytes'] and profile['device'] == identity[0]
+                and profile['inode'] == identity[1] and profile['mode'] == stat.S_IMODE(identity[2]), 'bootstrap-content')
+        total += len(body)
+
+
+def capture_bootstrap_files(root, ledger, budget):
+    """Read only ten task-owned candidates after the strict controller has settled."""
+    from devin_structured_inventory_admission import metadata_inventory
+    capture, total = dict(schema_version=1, files={}), 0
+    for path in BOOTSTRAP_FILES:
+        budget.check()
+        if path not in ledger['after']:
+            capture['files'][path] = None
+            continue
+        target = root / path
+        require(tuple(ledger['after'][path]) == stable(target.lstat()), 'bootstrap-original-identity')
+        body = ordinary(target, min(LIMIT, BOOTSTRAP_LIMIT - total), expected=ledger['after'][path])
+        require(tuple(ledger['after'][path]) == stable(target.lstat()), 'bootstrap-final-identity')
+        capture['files'][path] = dict(identity=list(ledger['after'][path]), bytes=len(body),
+                                     sha256=digest(body), body_base64=base64.b64encode(body).decode())
+        total += len(body)
+    validate_bootstrap_capture(ledger, capture)
+    require(metadata_inventory(root, budget) == ledger['after'], 'bootstrap-final-metadata')
+    require(len(json.dumps(dict(ledger, bootstrap_capture=capture)).encode()) <= LIMIT, 'bootstrap-ledger-bound')
+    return capture
+
+
 def inventory_rows(result, root, scope):
     rows = result['rpc']['plugins']['result']['result']['plugins']
     wanted = {str(root / 'home/.grok/plugins' / name): ('user', name) for name in ('uap-acp-collision', 'uap-acp-foreign-user')}
@@ -523,6 +583,9 @@ def publication_readout(raw, packet, deadline):
             ledger = document(members[scope + '.ledger.json'])
             require(type(ledger) is dict and type(ledger.get('accepted')) is bool
                     and all(type(ledger.get(k)) is dict and len(ledger[k]) <= 4096 for k in ('before', 'after')), 'readout-ledger')
+            if 'bootstrap_capture' in ledger:
+                require(scope == 'user', 'bootstrap-scope')
+                validate_bootstrap_capture(ledger, ledger['bootstrap_capture'])
             before, after = ledger['before'], ledger['after']
             facts.append(dict(scope=scope, reason=reason, semantic_complete=result['semantic_complete'],
                               ledger_accepted=ledger['accepted'], commands=len(commands), failed_commands=failed,
@@ -641,6 +704,9 @@ def run(output):
                 bodies[scope + '.rpc.json'] = json.dumps(result.pop('rpc'), sort_keys=True).encode()
                 summary['scopes'].append(receipt)
                 result['rpc'] = document(bodies[scope + '.rpc.json'])
+                if scope == 'user':
+                    ledger['bootstrap_capture'] = capture_bootstrap_files(root, ledger, budget)
+                    bodies[scope + '.ledger.json'] = json.dumps(ledger, sort_keys=True).encode()
                 require(ledger['accepted'] and result['semantic_complete'], 'native-refused')
                 observed_ids = inventory_rows(result, root, scope)
                 require(all(path not in native_ids or native_ids[path] == value for path, value in observed_ids.items()), 'native-id-changed')
