@@ -729,3 +729,41 @@ This proves an observer defect and its correction, not that the historical
 13 runtime members were bytecode. Complete runtime inventory guards and all
 native admission/qualification gates remain unchanged. New genuine captures
 must establish the resulting native behavior.
+
+## Original 920 custom-root removal postimage
+
+Run43471155964 used source `92026773461a1b8e1a2856c4fd32efaf0cb8de71`,
+tree `b65d840a66409f1fa8505d727aaa9139f32fd1f5`, and the unchanged pinned
+Hermes source `2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19`.
+The three original bundle archives pass API size/digest, whole ZIP CRC and
+source/vendor before/after joins. Linux14063173258 (1042bytes,
+SHA256 `65c76242ec86513d60bda14159848a46215e7e144aeaced156284eb455d2773b`)
+and Windows14064123045 (1079bytes,
+SHA256 `7699c8ac0b05b32373ceb0f2433d8bafb612620ac0b02c22845fd5052b9041e0`)
+repeat the exact prior external-hardlink refusal members. They predate the
+4ad owned-build alias cleanup; they do not test or qualify that correction.
+
+macOS14063198477 has24154bytes and SHA256
+`53369c03443743b08dc9f9086391e848dd1a68a651d502090d6f4a039d470f09`.
+Its43 closed members and42 stream joins pass. Literal native version, selected
+A/B inventory, three selective initialize/list sessions, independent native
+root-resolution guards and the original User inventory finish before the first
+`mcp remove`. That successful native command replaces the63-byte authored
+config with a private20-byte ordinary file; the observer then refuses its fields.
+The recorded postimage hash is
+`8bddefe963a867c332591ef2f50ec056944d1a323229b6294a4de7d9718a69cb`.
+Pinned `hermes_cli/mcp_config.py:_remove_mcp_server` removes the last server
+key and calls the official save path, which preserves schema version52 from
+`hermes_cli/config_defaults.py`. The source-derived bytes
+`_config_version: 52\n` exactly match the original length and digest. Original
+raw YAML was not uploaded; this is a verified reconstruction, not a raw capture.
+
+Admit only that exact integer/byte postimage after the existing successful
+remove transition. Initial/pre-remove authored config authority is unchanged;
+wrong versions/types/bytes, extra settings or servers still refuse. The new
+regression fails on the prior observer before the correction. The full native
+journey must still pass: 920 stops before removed absence checks and B removal,
+and reports runtime inventory growth of76 entries/1407659 bytes. That aggregate
+does not identify the changed runtime members. The later observer-only `-B`
+correction remains unqualified by this old run; immutable payload guards and
+all native/product/authentication/model qualification boundaries stay intact.

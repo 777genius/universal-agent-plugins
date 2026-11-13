@@ -814,6 +814,31 @@ class ProfileAdmissionContracts(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 boundary(body, value, "owned", url, authored_sha=digest)
 
+    def test_removed_config_accepts_only_measured_native_schema_stamp(self):
+        # Pinned vendor save_config retains schema version 52 after removing the
+        # final server. This source-derived body matches the original native
+        # 20-byte postimage digest; the original YAML bytes were not uploaded.
+        body = b"_config_version: 52\n"
+        digest = "8bddefe963a867c332591ef2f50ec056944d1a323229b6294a4de7d9718a69cb"
+        boundary = CASE["config_document_boundary"]
+        value = {"_config_version": 52}
+        self.assertEqual(len(body), 20)
+        self.assertEqual(CASE["hashlib"].sha256(body).hexdigest(), digest)
+        self.assertEqual(boundary(body, value, "owned", "http://localhost/mcp", removed=True), digest)
+        for changed_body, changed_value, removed in (
+            (body, value, False), (body + b"\n", value, True),
+            (b"_config_version: 51\n", {"_config_version": 51}, True),
+            (body, {"_config_version": 52.0}, True),
+            (body, {"_config_version": "52"}, True),
+            (body, {"_config_version": True}, True),
+            (body, {**value, "auth": {}}, True),
+            (body, {**value, "mcp_servers": {}}, True),
+        ):
+            with self.subTest(value=changed_value, body=changed_body, removed=removed), self.assertRaises(RuntimeError):
+                boundary(changed_body, changed_value, "owned", "http://localhost/mcp", removed=removed)
+        with self.assertRaisesRegex(RuntimeError, "config bytes changed"):
+            boundary(body, value, "owned", "http://localhost/mcp", removed=True, authored_sha="0" * 64)
+
     def test_safe_failure_envelope_keeps_every_qualification_false(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = CASE["safe_failure_evidence"](Path(temporary).resolve())
