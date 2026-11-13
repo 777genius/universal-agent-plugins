@@ -38,7 +38,7 @@ func (c *controller) finish(runErr, cleanupErr error, out, stderr []byte) error 
 	if e = c.publish(); e != nil {
 		return errors.Join(runErr, cleanupErr, e)
 	}
-	public, e := encode(map[string]any{"collection_complete": runErr == nil && cleanupErr == nil, "cleanup_complete": cleanupErr == nil, "error": clipped(errors.Join(runErr, cleanupErr))}, controlLimit)
+	public, e := encode(map[string]any{"collection_complete": summary["collection_complete"] == true, "cleanup_complete": cleanupErr == nil, "error": clipped(errors.Join(runErr, cleanupErr))}, controlLimit)
 	if e != nil {
 		return errors.Join(runErr, cleanupErr, e)
 	}

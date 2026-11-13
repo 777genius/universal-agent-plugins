@@ -740,16 +740,24 @@ def run_capture(output, origin_ns, handoff):
         summary["collection_complete"] = False
         summary["error"] = type(error).__name__ + ": " + str(error)[:2048]
     finally:
-        handoff.verify()
+        cleanup_streams = {}
         if root is not None:
             try:
                 summary["frontend_cleanup"] = legacy.cleanup_frontend(root, root_identity, native, memory_only=True)
-                for name, body in summary["frontend_cleanup"].pop("_streams").items():
-                    write_owned(native, native_identity, "cleanup." + name + ".log", body)
+                cleanup_streams = summary["frontend_cleanup"].pop("_streams")
             except Exception as error:
                 summary["frontend_cleanup"] = {"complete": False, "error": type(error).__name__}
             if summary["frontend_cleanup"].get("complete") is not True:
                 summary["collection_complete"] = False
+        # Preparation cleanup owns an independent identity. Artifact refusal
+        # cannot suppress it, and still forbids every subsequent output write.
+        handoff.verify()
+        try:
+            for name, body in cleanup_streams.items():
+                write_owned(native, native_identity, "cleanup." + name + ".log", body)
+        except Exception as error:
+            summary["frontend_cleanup"] = {"complete": False, "error": type(error).__name__}
+            summary["collection_complete"] = False
         if frontend_hash is not None:
             try:
                 if hashlib.sha256(toolchain.ordinary_bytes(frontend / "upload/research.zip", 32 << 20)).hexdigest() != frontend_hash:

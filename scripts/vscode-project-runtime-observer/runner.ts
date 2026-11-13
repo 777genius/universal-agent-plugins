@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { constants, closeSync, fstatSync, lstatSync, openSync, readSync,
   realpathSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { request as httpRequest } from 'node:http';
-import { dirname, isAbsolute, normalize } from 'node:path';
+import { basename, dirname, isAbsolute, normalize } from 'node:path';
 import { performance } from 'node:perf_hooks';
 
 const LIMIT = 1 << 20;
@@ -37,10 +37,11 @@ function path(value: unknown, directory: boolean): string {
   if (directory ? !info.isDirectory() : !info.isFile() || info.nlink !== 1) throw new Error('ordinary path required');
   return selected;
 }
-function read(pathname: string, maximum = LIMIT): Buffer {
-  path(pathname, false);
+function read(pathname: string, maximum = LIMIT, parent?: number, expected?: { dev: number; ino: number }): Buffer {
+  if (parent === undefined) path(pathname, false);
+  else pathname = `/proc/self/fd/${parent}/${basename(pathname)}`;
   const before = lstatSync(pathname);
-  if (before.size > maximum) throw new Error('file bound exceeded');
+  if ((expected && (before.dev !== expected.dev || before.ino !== expected.ino)) || !before.isFile() || before.nlink !== 1 || before.size > maximum) throw new Error('file bound exceeded');
   const fd = openSync(pathname, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   try {
     const held = fstatSync(fd);
@@ -53,7 +54,7 @@ function read(pathname: string, maximum = LIMIT): Buffer {
       count += size;
     }
     const after = fstatSync(fd), linked = lstatSync(pathname);
-    if (count !== before.size || after.size !== held.size || after.mtimeMs !== held.mtimeMs || after.ctimeMs !== held.ctimeMs
+    if (count !== before.size || [after, linked].some(info => ['dev', 'ino', 'mode', 'uid', 'gid', 'nlink', 'size', 'mtimeMs', 'ctimeMs'].some(key => info[key as keyof typeof info] !== held[key as keyof typeof held]))
       || linked.dev !== held.dev || linked.ino !== held.ino || linked.mtimeMs !== held.mtimeMs || linked.ctimeMs !== held.ctimeMs) throw new Error('file changed during read');
     return body.subarray(0, count);
   } finally { closeSync(fd); }
@@ -208,20 +209,42 @@ function rejectAbsentServers(rows: readonly { label: string }[], absent: readonl
 }
 // END NATIVE INVENTORY READINESS
 async function waitReady(req: Request, deadline: number): Promise<void> {
-  const ready = literal(process.env.UAP_VSCODE_TRUSTED_READY);
-  path(dirname(ready), true);
-  while (performance.now() < deadline) {
-    try {
-      const value = object(json(read(ready, 4096)));
-      keys(value, ['stage', 'nonce']);
-      if (value.stage !== req.stage || value.nonce !== req.nonce) throw new Error('UI handoff differs');
-      return;
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+  const ready = literal(process.env.UAP_VSCODE_TRUSTED_READY), parent = dirname(ready);
+  path(parent, true); const original = lstatSync(parent), fd = openSync(parent, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+  const target = `/proc/self/fd/${fd}/${basename(ready)}`, pending = target + '.pending';
+  const verifyParent = (): void => {
+    const held = fstatSync(fd), linked = lstatSync(parent);
+    if (realpathSync(parent) !== parent || [held, linked].some(info => info.dev !== original.dev || info.ino !== original.ino
+      || info.mode !== original.mode || info.uid !== original.uid || info.gid !== original.gid)) throw new Error('UI trigger parent changed');
+  };
+  let pair: { dev: number; ino: number } | undefined;
+  try {
+    while (performance.now() < deadline) {
+      verifyParent();
+      try {
+        const info = lstatSync(target);
+        if (!info.isFile() || info.uid !== original.uid || info.gid !== original.gid || info.size > 4096 || ![1, 2].includes(info.nlink)
+          || (pair && (info.dev !== pair.dev || info.ino !== pair.ino))) throw new Error('UI trigger identity differs');
+        pair = { dev: info.dev, ino: info.ino };
+        if (info.nlink === 2) {
+          try {
+            const other = lstatSync(pending);
+            if (!other.isFile() || other.dev !== info.dev || other.ino !== info.ino || other.nlink !== 2) throw new Error('UI trigger pair differs');
+          } catch (error) {
+            if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; const current = lstatSync(target);
+            if (current.dev !== info.dev || current.ino !== info.ino || current.nlink !== 1) throw new Error('UI trigger pair differs');
+          }
+        } else {
+          try { lstatSync(pending); throw new Error('UI trigger pending collision'); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+          const value = object(json(read(ready, 4096, fd, info))); keys(value, ['stage', 'nonce']);
+          if (value.stage !== req.stage || value.nonce !== req.nonce) throw new Error('UI handoff differs');
+          verifyParent(); return;
+        }
+      } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; if (pair) throw new Error('UI trigger identity differs'); }
+      await delay(25);
     }
-    await delay(25);
-  }
-  throw new Error('UI handoff deadline');
+    throw new Error('UI handoff deadline');
+  } finally { closeSync(fd); }
 }
 
 type Reply = { status: number; session: string; body: Buffer };

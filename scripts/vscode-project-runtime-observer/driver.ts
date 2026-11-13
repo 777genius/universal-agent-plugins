@@ -5,7 +5,7 @@
 import { createHash } from 'node:crypto';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { constants, closeSync, fstatSync, lstatSync, openSync, readSync,
-  realpathSync, renameSync, statSync, writeFileSync } from 'node:fs';
+  realpathSync, renameSync, statSync, writeFileSync, linkSync, unlinkSync } from 'node:fs';
 import { basename, dirname, isAbsolute, normalize, relative } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { chromium, type Browser, type Locator, type Page } from 'playwright-core';
@@ -72,6 +72,7 @@ function failureReason(error: unknown): string {
     case 'publisher terminal result differs': return 'publisher-terminal-result-mismatch';
     case 'observer result deadline exceeded': return 'observer-deadline';
     case 'driver output bound exceeded': return 'driver-output-bound';
+    case 'trigger publication refused': return 'trigger-publication-refused';
     case 'native picker differs': return 'picker-input-deadline';
     case 'native picker input is ambiguous': return 'picker-input-ambiguous';
     case 'native picker label missing': return 'picker-label-missing';
@@ -87,11 +88,15 @@ function failureReason(error: unknown): string {
   }
 }
 function failureFacts(error: unknown, capture: unknown, code: unknown, signal: unknown,
-  proofSeen: boolean, endpointSeen: boolean, diagnostic: Buffer, mergedBytes: number, stderrBytes: number): ObjectValue {
+  proofSeen: boolean, endpointSeen: boolean, diagnostic: Buffer, mergedBytes: number, stderrBytes: number, mcp: ObjectValue = {}): ObjectValue {
   const count = (value: number): number => Number.isSafeInteger(value) && value >= 0 ? Math.min(value, LIMIT + 1) : 0;
   const signals = ['SIGTERM', 'SIGKILL', 'SIGABRT', 'SIGTRAP', 'SIGSEGV', 'SIGILL', 'SIGBUS', 'SIGFPE', 'SIGHUP'];
   const body = diagnostic.subarray(0, LIMIT).toString('utf8');
-  return { reason: failureReason(error), captureReason: capture === undefined ? 'none' : failureReason(capture),
+  const state = mcp.lastState === undefined ? 'none' : typeof mcp.lastState === 'string' && ['none', 'Stopped', 'Starting', 'Running', 'other'].includes(mcp.lastState) ? mcp.lastState : 'other';
+  const observations = (value: unknown): number => typeof value === 'number' ? Math.min(255, count(value)) : 0;
+  return { mcp: { startSelected: mcp.startSelected === true, trustAccepted: mcp.trustAccepted === true, lastState: state,
+    stopped: observations(mcp.stopped), starting: observations(mcp.starting),
+    running: observations(mcp.running), other: observations(mcp.other) }, reason: failureReason(error), captureReason: capture === undefined ? 'none' : failureReason(capture),
     publisherExitCode: typeof code === 'number' && Number.isInteger(code) && code >= 0 && code <= 255 ? code : null,
     publisherSignal: signal === null || signal === undefined ? 'none' : typeof signal === 'string' && signals.includes(signal) ? signal : 'other',
     proofSeen: proofSeen === true, endpointSeen: endpointSeen === true,
@@ -352,7 +357,7 @@ async function workspaceTrust(page: Page, req: Request): Promise<boolean> {
   await dialog.waitFor({ state: 'hidden', timeout: 3000 });
   return true;
 }
-async function startServer(page: Page, server: Server, stageDeadline: number, setPhase: (phase: McpPhase) => void): Promise<ObjectValue> {
+async function startServer(page: Page, server: Server, stageDeadline: number, setPhase: (phase: McpPhase) => void, mcp: ObjectValue = {}): Promise<ObjectValue> {
   const deadline = Math.min(stageDeadline, performance.now() + 15000);
   await listServers(page, setPhase);
   setPhase('mcp-server-selection');
@@ -361,6 +366,7 @@ async function startServer(page: Page, server: Server, stageDeadline: number, se
   await quickInput(page, "Select action for '" + server.label + "'");
   setPhase('mcp-start-action');
   await pick(page, 'Start Server');
+  mcp.startSelected = true;
   let trusted = false, catalogOpen = false;
   while (performance.now() < deadline) {
     setPhase('mcp-trust');
@@ -371,7 +377,7 @@ async function startServer(page: Page, server: Server, stageDeadline: number, se
       if (await link.getAttribute('href') !== server.originUri) throw new Error('native MCP trust origin differs');
       await (await one(dialog.getByRole('button', { name: 'Trust', exact: true }))).click({ timeout: 3000 });
       await dialog.waitFor({ state: 'hidden', timeout: 3000 });
-      trusted = true; catalogOpen = false;
+      trusted = true; mcp.trustAccepted = true; catalogOpen = false;
     } else if (!catalogOpen) {
       await delay(200);
       if (await (await visibleDialogs(page)).count()) continue;
@@ -380,6 +386,9 @@ async function startServer(page: Page, server: Server, stageDeadline: number, se
       setPhase('mcp-state');
       const row = await labelRow(page, server.label);
       const state = (await row.locator('.label-description').innerText()).trim();
+      mcp.lastState = ['Stopped', 'Starting', 'Running'].includes(state) ? state : 'other';
+      const key = state === 'Stopped' ? 'stopped' : state === 'Starting' ? 'starting' : state === 'Running' ? 'running' : 'other';
+      mcp[key] = Math.min(255, Number(mcp[key] ?? 0) + 1);
       if (state === 'Running') { await page.keyboard.press('Escape'); await noDialog(page); return { label: server.label, originUri: server.originUri, trustPromptAccepted: trusted, nativeState: state }; }
       if (state !== 'Starting' && state !== 'Stopped') throw new Error('native MCP failed or unknown state');
       await delay(100);
@@ -548,6 +557,40 @@ function publisherRuntime(pid: number, req: Request): ObjectValue {
     uid: req.uid, gid: req.gid, capabilities_zero: true, no_new_privileges: true };
 }
 
+function publishTrigger(req: Request): void {
+  const destination = outputPath(req.triggerFile), parent = dirname(destination), before = lstatSync(parent);
+  const directory = openSync(parent, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+  const target = `/proc/self/fd/${directory}/${basename(destination)}`, pending = target + '.pending';
+  const body = Buffer.from(JSON.stringify({ stage: req.stage, nonce: req.nonce }) + '\n');
+  const verifyParent = (): void => {
+    const held = fstatSync(directory), linked = lstatSync(parent);
+    if (realpathSync(parent) !== parent || [held, linked].some(info => info.dev !== before.dev || info.ino !== before.ino
+      || info.mode !== before.mode || info.uid !== before.uid || info.gid !== before.gid)) throw new Error('trigger publication refused');
+  };
+  try {
+    verifyParent();
+    const fd = openSync(pending, constants.O_RDWR | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+    try {
+      writeFileSync(fd, body); const original = fstatSync(fd);
+      const verify = (links: number, selected: string): void => {
+        verifyParent(); const current = fstatSync(fd), linked = lstatSync(selected), bytes = Buffer.alloc(body.length + 1);
+        if (!current.isFile() || current.dev !== original.dev || current.ino !== original.ino || current.dev !== before.dev || current.uid !== req.uid || current.gid !== req.gid
+          || current.mode !== original.mode || current.nlink !== links || current.size !== body.length
+          || linked.dev !== current.dev || linked.ino !== current.ino || linked.nlink !== links
+          || readSync(fd, bytes, 0, bytes.length, 0) !== body.length || !bytes.subarray(0, body.length).equals(body)) throw new Error('trigger publication refused');
+        const after = fstatSync(fd);
+        if (['dev', 'ino', 'mode', 'uid', 'gid', 'nlink', 'size', 'mtimeMs', 'ctimeMs'].some(key => after[key as keyof typeof after] !== current[key as keyof typeof current])) throw new Error('trigger publication refused');
+      };
+      verify(1, pending); linkSync(pending, target); verify(2, target);
+      const source = lstatSync(pending);
+      if (source.dev !== original.dev || source.ino !== original.ino || source.nlink !== 2) throw new Error('trigger publication refused');
+      unlinkSync(pending); verify(1, target);
+      const published = lstatSync(target);
+      if (published.dev !== original.dev || published.ino !== original.ino || published.nlink !== 1) throw new Error('trigger publication refused');
+    } finally { closeSync(fd); }
+  } finally { closeSync(directory); }
+}
+
 async function failureUI(page: Page | undefined): Promise<ObjectValue[]> {
   if (!page || page.isClosed()) return [];
   const result: ObjectValue[] = [];
@@ -575,6 +618,7 @@ async function main(): Promise<void> {
   const namespace = statSync('/proc/self/ns/net').ino;
   if (!Number.isSafeInteger(namespace) || String(namespace) === req.originalNetworkNamespace) throw new Error('driver isolation namespace differs');
   let child: ChildProcess | undefined, browser: Browser | undefined, page: Page | undefined;
+  let mcp: ObjectValue = {};
   let phase = 'publisher-startup', mergedBytes = 0, stderrBytes = 0;
   let publisherClosed: Promise<void> | undefined, shutdownDeadline: number | undefined;
   let diagnostic: Buffer = Buffer.alloc(0), first = true, proof: PublisherProof | undefined, endpoint = '', captureError: Error | undefined;
@@ -645,9 +689,10 @@ async function main(): Promise<void> {
     phase = 'workspace-trust';
     const trustPromptAccepted = await workspaceTrust(page, req), servers: ObjectValue[] = [];
     phase = 'native-mcp-start';
-    for (const server of req.expectedServers) servers.push(await startServer(page, server, deadline, next => { phase = next; }));
+    for (const server of req.expectedServers) { mcp = {}; servers.push(await startServer(page, server, deadline, next => { phase = next; }, mcp)); }
     await noDialog(page);
-    writeFileSync(req.triggerFile, JSON.stringify({ stage: req.stage, nonce: req.nonce }) + '\n', { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+    phase = 'ui-trigger-publication';
+    publishTrigger(req);
     phase = 'observer-result';
     const result = collectedResult(await waitResult(req, deadline), req);
     if (captureError) throw captureError;
@@ -688,7 +733,7 @@ async function main(): Promise<void> {
       if (!await stopped(child, Math.max(1, failureShutdownDeadline - performance.now()))) throw new Error('publisher graceful shutdown incomplete');
     }
     if (publisherClosed) await within(publisherClosed, Math.max(1, failureShutdownDeadline - performance.now()));
-    const facts = failureFacts(error, captureError, child?.exitCode, child?.signalCode, proof !== undefined, endpoint !== '', diagnostic, mergedBytes, stderrBytes);
+    const facts = failureFacts(error, captureError, child?.exitCode, child?.signalCode, proof !== undefined, endpoint !== '', diagnostic, mergedBytes, stderrBytes, mcp);
     const output = JSON.stringify({ type: 'driver-failure', stage: req.stage, nonce: req.nonce, phase,
       code: 'closed-stage-contract-refused', visibleNativeUI: metadata, diagnostics: facts }) + '\n';
     if (Buffer.byteLength(output) > LIMIT) throw new Error('driver output bound exceeded');

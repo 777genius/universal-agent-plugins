@@ -273,3 +273,99 @@ Add finite own-error reasons and fixed MCP substep phases so the next genuine ru
 can distinguish command, server, action, trust and state failures without raw UI
 labels/errors. Inert actual-helper tests and strict TS/Go validation precede
 independent review and new final-source native admission.
+
+## Current-source review corrections after ba2
+
+Exact ba2 trusted job131810182967 reaches the selected MCP row and fails at
+mcp-state/mcp-start-deadline; both original artifacts and all48 stream joins are
+verified, with every owned tree reaped and the private publisher view released.
+This does not establish which permitted Starting/Stopped states occurred or a
+native startup cause. The driver follow-up owns that separate diagnosis.
+
+Current source independently confirms five review issues in the E2E oracle:
+stdout completion is computed before trusted summary validation; initial package
+receipt equality can adopt extra installed files before protection; projected
+skill membership/executable mode is not checked; artifact verification can skip
+independent preparation cleanup; direct unittest invocation omits later tests.
+
+Root scope: existing sealed_output_linux.go, trusted_receipt_linux.go and tests,
+trusted_package_linux.go plus a focused sealed_output_linux_test.go; existing
+research-vscode-project.py/test and this plan. About250–320 code/test lines.
+Derive public completion from the same validated summary, preserving independent
+cleanup truth. Compare one bounded installed capture to the frozen authored
+source plus ONLY the exact known transformed mcp.json, two managed-launcher
+directories and the independently pinned sealed launcher bytes. Recheck captured
+source against its original digest. Compute the installed ownership digest from
+that same admitted capture, reusing its existing framing, not a second tree read.
+For the projected skill require exactly the authored non-executable SKILL.md in
+one bounded capture and compute the ownership digest from those actual bytes.
+Existing path/noalias/size/context checks remain; no production adapter changes.
+
+Critique1: adding a protected baseline in the initial-inventory negative hides the
+reviewed gap; exercise altered installed files plus a matching rewritten receipt
+before protection exists. Include generated projection, executable mode and empty
+directory negatives. Critique2: cleanup authority is independent from artifact
+publication authority; always attempt the existing owned-root cleanup while any
+failed artifact verification still prevents handoff. No generic duplex API change:
+actual typed negative driver results already follow planned shutdown and prove
+cleanup; unknown transport/containment failures remain unproved and refuse.
+
+Run actual targeted IO contracts, full lint/core for Go, and final-source hosted
+native/required gates after independent source review. False/queued diagnostics
+are not qualification. User/Local/hooks and all original native deadlines remain.
+
+Independent review caught a missing expected producer entry before publication:
+managedstdio.Source.Deliver also writes metadata.json. Include its exact protocol1,
+sealed-installer SHA and source-default CLI version0.1.0-development; Preparation
+builds that CLI without a version override. The inert fixture now calls the real
+Source.Deliver for both binary and metadata, and an altered metadata plus rewritten
+managed receipt is refused. No installed metadata is adopted as its expectation.
+
+Root integration review additionally reproduced disappearance of both names after
+the runner had observed the two-link publication: the generic ENOENT catch waited
+until the deadline instead of refusing lost authority. Pin every first observed
+valid target inode and allow initial absence only before that observation. The
+real unlink regression fails with the old deadline error and passes with immediate
+identity refusal; the legitimate pending-only unlink race still succeeds. This
+adds seven test lines and two changed production lines to the reviewed handoff.
+
+### Actual ba2 native result and bounded trigger follow-up
+
+The genuine trusted run 43402972735 at ba2ce30bd5ca81721161f7240a49b93ea30e0298
+failed in installed-a with `mcp-state/mcp-start-deadline`. Private publisher view,
+post-exec desktop confinement, both empty stages and owned cleanup were observed;
+this does not qualify native MCP. The retained state loop only establishes that
+its accepted nonterminal states were encountered, not which state or why. The
+follow-up retains fixed state observation counts (saturated at 255), the last
+fixed state enum, Start selection and trust-acceptance booleans. It emits no
+native labels, errors, notification text or config content.
+
+A separate source-confirmed race exposed a newly created ready trigger before
+its bytes were complete. Publish a fresh, held, task-owned `.pending` inode, link
+it exclusively to the fixed trigger and unlink the pending name. Preserve every
+collision. The reader holds the original parent, retries only the proved
+same-inode two-link transition under its original deadline, and reads only the
+final single-link exact stage/nonce object. A changed parent, unknown alias,
+partial body or foreign inode refuses. This race is not claimed as the cause of
+the actual MCP deadline. Existing process, sandbox, consent and cleanup gates
+remain required. Root approved a 220 changed code/test line cap for this narrow
+follow-up; actual native acceptance awaits a new reviewed hosted run.
+
+## Combined reviewed follow-up validation
+
+Root full make lint passes all eight module passes, with 138 exclusions unchanged.
+Full local make test-core completes with the same 92 top-level failures in the
+same ten packages as the retained picker baseline, with no added or removed
+failure names. This comparison does not waive the failed local gate. Focused
+receipt/installed/projected/completion and failure-envelope tests pass; direct
+Python frontend contracts pass all 29 cases. Actual Node helper contracts pass
+all 28 cases with no skips, and strict pinned TypeScript 7.0.2 compilation passes
+on the exact final three source inputs. Independent reviews accepted the full
+receipt/source/metadata inventory, cleanup ordering and final handoff races.
+
+The original ba2 trusted run reached installed-a MCP state, then the original
+startup deadline; all owned trees and three private mounts were released.
+The old receipt does not distinguish Stopped from Starting or identify a launch
+cause. Closed telemetry is measurement only. New exact-source hosted trusted
+lifecycle, untrusted regression, full applicable CI and original-artifact review
+remain mandatory before merge. User/Local/hooks and release boundaries remain.

@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -84,13 +85,25 @@ func trustedReceiptFixture(t *testing.T) (*controller, domain.StateFileV2, strin
 		if err := c.trustedWrite(p.Skill, skill, 0600); err != nil {
 			t.Fatal(err)
 		}
-		for path, body := range map[string][]byte{filepath.Join(active, "bin", "probe"): probe, filepath.Join(active, filepath.FromSlash(managedstdio.RelativeDirectory), managedstdio.ExecutableName): installer} {
-			if err := c.trustedWrite(path, body, 0700); err != nil {
-				t.Fatal(err)
-			}
+		if err := c.trustedWrite(filepath.Join(active, "bin", "probe"), probe, 0700); err != nil {
+			t.Fatal(err)
+		}
+		launcher, err := managedstdio.NewSource(filepath.Join(base, "executables", "agentplugins"), trustedInstallerVersion)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := launcher.Deliver(active); err != nil {
+			t.Fatal(err)
 		}
 		p.Binding = b
 		expected := trustedExpectedServer(f, p, scope)
+		projection, err := json.MarshalIndent(map[string]any{"mcpServers": map[string]any{p.Name: expected}}, "", "  ")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := c.trustedWrite(filepath.Join(active, "mcp.json"), append(projection, '\n'), 0644); err != nil {
+			t.Fatal(err)
+		}
 		config := filepath.Join(f.Projects[scope], ".vscode", "mcp.json")
 		if err := c.trustedJSON(config, map[string]any{"servers": map[string]any{p.Name: expected}}); err != nil {
 			t.Fatal(err)
@@ -210,30 +223,71 @@ func TestTrustedSourceAndPreexistingUserSkillAreFrozenBeforeNativeObservation(t 
 }
 
 func TestTrustedInstalledPackageCannotAdoptExtraFileAndRewrittenReceipt(t *testing.T) {
-	c, state, statePath := trustedReceiptFixture(t)
-	p := c.trustedState.Packages["a"]
-	if err := c.trustedProtect(p.Binding.TargetLocator); err != nil {
-		t.Fatal(err)
+	for _, change := range []string{"extra-file", "extra-directory", "source-executable", "generated-projection", "launcher-metadata"} {
+		t.Run(change, func(t *testing.T) {
+			c, state, statePath := trustedReceiptFixture(t)
+			root := c.trustedState.Packages["a"].Binding.TargetLocator
+			if _, protected := c.trustedState.Protected[root]; protected {
+				t.Fatal("test hid initial receipt gap behind a protected installed baseline")
+			}
+			var err error
+			switch change {
+			case "extra-file":
+				err = os.WriteFile(filepath.Join(root, "unreviewed-extra"), []byte("native added payload"), 0600)
+			case "extra-directory":
+				err = os.Mkdir(filepath.Join(root, "unreviewed-empty"), 0700)
+			case "source-executable":
+				err = os.Chmod(filepath.Join(root, "plugin.json"), 0700)
+			case "generated-projection":
+				err = os.WriteFile(filepath.Join(root, "mcp.json"), []byte("{}\n"), 0600)
+			case "launcher-metadata":
+				err = os.WriteFile(filepath.Join(root, filepath.FromSlash(managedstdio.RelativeDirectory), "metadata.json"), []byte("{}"), 0600)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			digest, err := trustedInstalledPackageDigest(c.work, root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			b := state.Installations[0].Clients["client-fixture"]
+			for index := range b.NativeObjects {
+				if b.NativeObjects[index].Kind == "managed_package_directory" {
+					b.NativeObjects[index].ManagedDigest = digest
+				}
+			}
+			state.Installations[0].Clients["client-fixture"] = b
+			if err := c.trustedJSON(statePath, state); err != nil {
+				t.Fatal(err)
+			}
+			if err := c.trustedReceipt("a"); err == nil {
+				t.Fatal("changed initial tree and matching rewritten receipt were adopted")
+			}
+		})
 	}
-	if err := os.WriteFile(filepath.Join(p.Binding.TargetLocator, "unreviewed-extra"), []byte("native added payload"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	digest, err := trustedInstalledPackageDigest(c.work, p.Binding.TargetLocator)
-	if err != nil {
-		t.Fatal(err)
-	}
-	b := state.Installations[0].Clients["client-fixture"]
-	for index := range b.NativeObjects {
-		if b.NativeObjects[index].Kind == "managed_package_directory" {
-			b.NativeObjects[index].ManagedDigest = digest
-		}
-	}
-	state.Installations[0].Clients["client-fixture"] = b
-	if err := c.trustedJSON(statePath, state); err != nil {
-		t.Fatal(err)
-	}
-	if err := c.trustedReceipt("a"); err == nil {
-		t.Fatal("native extra and rewritten receipt were adopted after public install")
+}
+
+func TestTrustedProjectedSkillRequiresActualMembershipAndExecutableMode(t *testing.T) {
+	for _, change := range []string{"extra-file", "extra-directory", "executable"} {
+		t.Run(change, func(t *testing.T) {
+			c, _, _ := trustedReceiptFixture(t)
+			path := c.trustedState.Packages["a"].Skill
+			var err error
+			switch change {
+			case "extra-file":
+				err = os.WriteFile(filepath.Join(filepath.Dir(path), "unreviewed-extra"), []byte("foreign content"), 0600)
+			case "extra-directory":
+				err = os.Mkdir(filepath.Join(filepath.Dir(path), "unreviewed-empty"), 0700)
+			case "executable":
+				err = os.Chmod(path, 0700)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := c.trustedReceipt("a"); err == nil {
+				t.Fatal("changed actual projected skill accepted against authored digest")
+			}
+		})
 	}
 }
 

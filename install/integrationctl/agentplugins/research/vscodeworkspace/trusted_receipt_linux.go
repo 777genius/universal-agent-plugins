@@ -12,9 +12,13 @@ import (
 	"reflect"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
 )
+
+// Preparation builds the exact CLI source without overriding main.version.
+const trustedInstallerVersion = "0.1.0-development"
 
 func (c *controller) trustedReceipt(scope string) error {
 	if scope != "a" && scope != "b" {
@@ -51,7 +55,7 @@ func (c *controller) trustedReceipt(scope string) error {
 func (c *controller) trustedReceiptObjects(scope string, p *trustedPackage, skill []byte) error {
 	binding := p.Binding
 	active := binding.TargetLocator
-	digest, err := c.trustedReceiptFiles(p)
+	digest, err := c.trustedReceiptFiles(scope, p)
 	if err != nil {
 		return err
 	}
@@ -152,24 +156,83 @@ func (c *controller) trustedProjectReceipt(scope string, p *trustedPackage, i do
 	return nil
 }
 
-func (c *controller) trustedReceiptFiles(p *trustedPackage) (string, error) {
-	active := p.Binding.TargetLocator
-	// Preserve every untransformed source file, especially the actual probe.
-	for _, relative := range []string{"plugin.json", "skills/" + p.Name + "/SKILL.md"} {
-		want, err := readOrdinary(filepath.Join(p.Source, filepath.FromSlash(relative)), 1<<20)
-		if err != nil {
-			return "", err
-		}
-		got, err := readOrdinary(filepath.Join(active, filepath.FromSlash(relative)), 1<<20)
-		if err != nil || !bytes.Equal(got, want) {
-			return "", fmt.Errorf("managed package differs from frozen authored source")
-		}
-	}
-	digest, err := trustedInstalledPackageDigest(c.work, active)
+func (c *controller) trustedReceiptFiles(scope string, p *trustedPackage) (string, error) {
+	want, err := c.trustedExpectedPackage(scope, p)
 	if err != nil {
 		return "", err
 	}
-	return digest, nil
+	actual, err := trustedCapturePackage(c.work, p.Binding.TargetLocator)
+	if err != nil {
+		return "", err
+	}
+	if len(actual) != len(want) {
+		return "", fmt.Errorf("installed inventory differs from independent source and generated files")
+	}
+	for _, entry := range actual {
+		expected, ok := want[entry.Path]
+		if !ok || !reflect.DeepEqual(entry, expected) {
+			return "", fmt.Errorf("installed entry differs from independent bytes, kind or executable mode")
+		}
+	}
+	return trustedInstalledCapturedDigest(c.work, actual)
+}
+
+func (c *controller) trustedExpectedPackage(scope string, p *trustedPackage) (map[string]packagedigest.CapturedEntry, error) {
+	source, err := trustedCapturePackage(c.work, p.Source)
+	if err != nil {
+		return nil, err
+	}
+	digest, err := packagedigest.DigestCaptured(c.work, source)
+	if err != nil || digest != p.SourceDigest {
+		return nil, fmt.Errorf("independent source capture differs from original identity")
+	}
+	want := make(map[string]packagedigest.CapturedEntry, len(source)+4)
+	for _, entry := range source {
+		want[entry.Path] = entry
+	}
+	if original, present := want["mcp.json"]; !present || original.Kind != "file" || original.Executable {
+		return nil, fmt.Errorf("authored MCP input is missing or nonordinary")
+	}
+	projection, err := json.MarshalIndent(map[string]any{"mcpServers": map[string]any{p.Name: trustedExpectedServer(c.trustedState, p, scope)}}, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	want["mcp.json"] = packagedigest.CapturedEntry{Path: "mcp.json", Kind: "file", Content: append(projection, '\n')}
+	launcher, err := readOrdinary(filepath.Join(c.request.Base, "executables", "agentplugins"), 128<<20)
+	if err != nil {
+		return nil, err
+	}
+	sum := sha256.Sum256(launcher)
+	if hex.EncodeToString(sum[:]) != c.request.Input.Trusted.InstallerSHA256 {
+		return nil, fmt.Errorf("independent launcher differs from sealed pin")
+	}
+	metadata := []byte(fmt.Sprintf(`{"protocol":1,"sha256":%q,"cliVersion":%q}`, c.request.Input.Trusted.InstallerSHA256, trustedInstallerVersion))
+	generated := []packagedigest.CapturedEntry{
+		{Path: domain.ExtensionNamespace, Kind: "directory"},
+		{Path: managedstdio.RelativeDirectory, Kind: "directory"},
+		{Path: managedstdio.RelativeDirectory + "/" + managedstdio.ExecutableName, Kind: "file", Executable: true, Content: launcher},
+		{Path: managedstdio.RelativeDirectory + "/metadata.json", Kind: "file", Content: metadata},
+	}
+	for _, entry := range generated {
+		if _, exists := want[entry.Path]; exists {
+			return nil, fmt.Errorf("authored source occupies generated launcher inventory")
+		}
+		want[entry.Path] = entry
+	}
+	return want, nil
+}
+
+func (c *controller) trustedProjectedSkillDigest(path string, expected []byte) (string, error) {
+	actual, err := trustedCapturePackage(c.work, filepath.Dir(path))
+	if err != nil {
+		return "", err
+	}
+	want := []packagedigest.CapturedEntry{{Path: "SKILL.md", Kind: "file", Content: expected}}
+	if !reflect.DeepEqual(actual, want) {
+		return "", fmt.Errorf("projected skill membership, mode or bytes differ")
+	}
+	sum := sha256.Sum256(append(append([]byte("f\x00SKILL.md\x00-\x00"), actual[0].Content...), 0))
+	return "sha256:" + hex.EncodeToString(sum[:]), nil
 }
 
 func (c *controller) trustedProjectObjects(scope string, p *trustedPackage, skill []byte, want map[string]domain.NativeObjectOwnership) error {
@@ -185,9 +248,12 @@ func (c *controller) trustedProjectObjects(scope string, p *trustedPackage, skil
 			return fmt.Errorf("installed probe/launcher differs from sealed exact binary")
 		}
 	}
-	sum := sha256.Sum256(append(append([]byte("f\x00SKILL.md\x00-\x00"), skill...), 0))
+	skillDigest, err := c.trustedProjectedSkillDigest(p.Skill, skill)
+	if err != nil {
+		return err
+	}
 	kind := "vscode_project_skill_directory"
-	want[kind] = domain.NativeObjectOwnership{ObjectID: kind + ":" + p.Name, Kind: kind, LogicalName: p.Name, Path: filepath.Dir(p.Skill), SourceRelative: "skills/" + p.Name, ManagedDigest: "sha256:" + hex.EncodeToString(sum[:]), ProtectionClass: "managed"}
+	want[kind] = domain.NativeObjectOwnership{ObjectID: kind + ":" + p.Name, Kind: kind, LogicalName: p.Name, Path: filepath.Dir(p.Skill), SourceRelative: "skills/" + p.Name, ManagedDigest: skillDigest, ProtectionClass: "managed"}
 	object, err := c.trustedMCPObject(scope, p)
 	if err != nil {
 		return err

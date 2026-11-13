@@ -18,7 +18,7 @@ import (
 
 func closedFailureFixture() map[string]any {
 	return map[string]any{"type": "driver-failure", "stage": "empty-a", "nonce": "inert-nonce", "phase": "publisher-startup", "code": "closed-stage-contract-refused", "visibleNativeUI": []any{map[string]any{"kind": "dialog", "messagePresent": false}, map[string]any{"kind": "quick-input"}, map[string]any{"kind": "quick-label"}}, "diagnostics": map[string]any{
-		"reason": "publisher-startup-failed", "captureReason": "none", "publisherExitCode": nil, "publisherSignal": "none", "proofSeen": true, "endpointSeen": false, "publisherMergedBytes": 0, "preVerifierStderrBytes": 0, "mergedBytesCapped": false, "stderrBytesCapped": false,
+		"mcp": map[string]any{"startSelected": false, "trustAccepted": false, "lastState": "none", "stopped": 0, "starting": 0, "running": 0, "other": 0}, "reason": "publisher-startup-failed", "captureReason": "none", "publisherExitCode": nil, "publisherSignal": "none", "proofSeen": true, "endpointSeen": false, "publisherMergedBytes": 0, "preVerifierStderrBytes": 0, "mergedBytesCapped": false, "stderrBytesCapped": false,
 		"startupSignatures": map[string]any{"sandboxUnavailable": false, "namespaceDenied": false, "sharedLibraryMissing": false, "glibcVersionMissing": false, "displayUnavailable": false}}}
 }
 func failureBody(t *testing.T, value any) []byte {
@@ -31,7 +31,7 @@ func failureBody(t *testing.T, value any) []byte {
 }
 
 func TestTrustedFailureClosedEnvelopeRefusesForeignAndMalformedFacts(t *testing.T) {
-	for _, mutation := range []string{"valid", "type", "nonce", "stage", "phase", "code", "extra", "reason", "capture", "signal", "count", "exit", "boolean", "signature", "signature-extra"} {
+	for _, mutation := range []string{"valid", "type", "nonce", "stage", "phase", "code", "extra", "reason", "capture", "signal", "count", "exit", "boolean", "signature", "signature-extra", "mcp-state", "mcp-count", "mcp-bool", "mcp-extra"} {
 		t.Run(mutation, func(t *testing.T) {
 			value := closedFailureFixture()
 			facts := value["diagnostics"].(map[string]any)
@@ -54,6 +54,14 @@ func TestTrustedFailureClosedEnvelopeRefusesForeignAndMalformedFacts(t *testing.
 				facts["proofSeen"] = "true"
 			case "signature":
 				facts["startupSignatures"].(map[string]any)["sandboxUnavailable"] = "secret"
+			case "mcp-state":
+				facts["mcp"].(map[string]any)["lastState"] = "private text"
+			case "mcp-count":
+				facts["mcp"].(map[string]any)["stopped"] = 256
+			case "mcp-bool":
+				facts["mcp"].(map[string]any)["trustAccepted"] = 1
+			case "mcp-extra":
+				facts["mcp"].(map[string]any)["raw"] = "secret"
 			case "signature-extra":
 				facts["startupSignatures"].(map[string]any)["raw"] = "secret"
 			}

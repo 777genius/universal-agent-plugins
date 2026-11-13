@@ -285,3 +285,33 @@ test('actual server-list transition marks command and expected picker separately
     assert.equal(phase, failAt === 1 ? 'mcp-command-palette' : 'mcp-server-picker');
   }
 });
+
+test('actual trigger publisher is exclusive, complete and single-link; collisions preserve foreign bytes', () => {
+  const fs = require('node:fs'), os = require('node:os'), paths = require('node:path');
+  const directory = fs.mkdtempSync(paths.join(os.tmpdir(), 'uap-trigger-'));
+  const triggerFile = paths.join(directory, 'ready'), req = { triggerFile, uid: process.getuid(), gid: process.getgid(), stage: 'a', nonce: 'nonce' };
+  function publisher(overrides = {}) {
+    const box = { ...fs, ...paths, Buffer, Error, outputPath: value => value, ...overrides };
+    vm.createContext(box);
+    vm.runInContext(stripTypeScriptTypes(source.slice(source.indexOf('function publishTrigger('), source.indexOf('async function failureUI(')), { mode: 'strip' }) + '\nglobalThis.publish = publishTrigger;', box);
+    return box.publish;
+  }
+  try {
+    publisher()(req); assert.equal(fs.readFileSync(triggerFile, 'utf8'), JSON.stringify({ stage: 'a', nonce: 'nonce' }) + '\n');
+    assert.equal(fs.statSync(triggerFile).nlink, 1); assert.equal(fs.existsSync(triggerFile + '.pending'), false);
+    assert.throws(() => publisher()(req)); assert.equal(fs.statSync(triggerFile).nlink, 1);
+    fs.unlinkSync(triggerFile); fs.unlinkSync(triggerFile + '.pending');
+    fs.writeFileSync(triggerFile + '.pending', 'foreign'); assert.throws(() => publisher()(req));
+    assert.equal(fs.readFileSync(triggerFile + '.pending', 'utf8'), 'foreign'); fs.unlinkSync(triggerFile + '.pending');
+    assert.throws(() => publisher({ linkSync(from, to) { fs.writeFileSync(to, 'foreign'); fs.linkSync(from, to); } })(req));
+    assert.equal(fs.readFileSync(triggerFile, 'utf8'), 'foreign');
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+});
+
+test('MCP telemetry is finite and never coerces or emits hostile state values', () => {
+  const hostile = { toString() { throw new Error('private'); }, valueOf() { throw new Error('private'); } };
+  const row = facts(new Error('trigger publication refused'), undefined, null, null, true, true, Buffer.alloc(0), 0, 0,
+    { startSelected: true, trustAccepted: false, lastState: hostile, stopped: hostile, starting: 999, running: -1, other: NaN, private: 'secret' });
+  assert.deepEqual(row.mcp, { startSelected: true, trustAccepted: false, lastState: 'other', stopped: 0, starting: 255, running: 0, other: 0 });
+  assert.equal(row.reason, 'trigger-publication-refused'); assert.equal(JSON.stringify(row).includes('secret'), false);
+});

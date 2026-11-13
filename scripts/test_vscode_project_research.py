@@ -301,10 +301,6 @@ class TrustedProjectArtifactTests(unittest.TestCase):
             self.assertTrue(all(value is False for value in record["qualification"].values()))
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class ArtifactHandoffTests(unittest.TestCase):
     commit, tree = 'a' * 40, 'b' * 40
 
@@ -321,6 +317,42 @@ class ArtifactHandoffTests(unittest.TestCase):
         collector.toolchain.write_new(path, json.dumps(summary).encode())
         collector.publish_frontend_capture(path.parent, path.parent.lstat(), summary, handoff)
         return summary
+
+    def test_artifact_root_refusal_still_attempts_independent_preparation_cleanup(self):
+        import shutil
+        for cleanup_failure in (False, True):
+            with self.subTest(cleanup_failure=cleanup_failure), tempfile.TemporaryDirectory() as temporary, contextlib.ExitStack() as stack:
+                output, handoff = self.setup_capture(temporary, stack)
+                preparation = mock.Mock()
+                def fail_source():
+                    output.rename(output.with_name('original-output'))
+                    output.mkdir(mode=0o700)
+                    (output / 'foreign').write_bytes(b'retained')
+                    raise ValueError('preparation failed')
+                preparation.source.side_effect = fail_source
+                cleaned = []
+                def cleanup(root, original, native, *, memory_only):
+                    self.assertTrue(memory_only)
+                    self.assertEqual((root.lstat().st_dev, root.lstat().st_ino), (original.st_dev, original.st_ino))
+                    cleaned.append(root)
+                    shutil.rmtree(root)
+                    if cleanup_failure:
+                        raise OSError('inert cleanup diagnostic failure')
+                    return {'complete': True, '_streams': {'stdout': b'owned cleanup', 'stderr': b''}}
+                with (mock.patch.dict(os.environ, EXPECTED_COMMIT=self.commit, EXPECTED_TREE=self.tree),
+                      mock.patch.object(collector, 'Preparation', return_value=preparation),
+                      mock.patch.object(collector.legacy, 'cleanup_frontend', side_effect=cleanup) as cleanup_call,
+                      mock.patch.object(collector, 'write_owned') as write,
+                      mock.patch.object(collector, 'publish_frontend_capture') as frontend,
+                      mock.patch.object(collector, 'publish_native_capture') as native,
+                      mock.patch.object(handoff, 'receipt') as receipt):
+                    with self.assertRaisesRegex(ValueError, 'original artifact directory changed'):
+                        collector.run_capture(output, collector.time.monotonic_ns(), handoff)
+                cleanup_call.assert_called_once()
+                self.assertEqual(len(cleaned), 1)
+                self.assertFalse(cleaned[0].exists())
+                self.assertEqual((output / 'foreign').read_bytes(), b'retained')
+                write.assert_not_called(); frontend.assert_not_called(); native.assert_not_called(); receipt.assert_not_called()
 
     def test_real_completed_zip_binding_and_private_staged_copy(self):
         with tempfile.TemporaryDirectory() as parent, contextlib.ExitStack() as stack:
@@ -469,3 +501,7 @@ class ArtifactHandoffTests(unittest.TestCase):
                         collector.stage_handoff(receipt, output, Path(parent), self.commit, self.tree)
                 self.assertEqual((output / 'frontend/upload/foreign-sentinel').read_bytes(), b'preserved')
                 self.assertFalse(list(Path(parent).glob('vscode-admitted-*')))
+
+
+if __name__ == "__main__":
+    unittest.main()

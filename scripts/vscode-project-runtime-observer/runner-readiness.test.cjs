@@ -82,3 +82,45 @@ test('disposal failure rejects without masking read failure, including synchrono
   await assert.rejects(sandbox.wait(() => [http()], subscribe, rows => sandbox.definition(rows, control), performance.now() + 1000), /dispose failed/);
   await assert.rejects(sandbox.wait(() => { throw new Error('original read failed'); }, subscribe, () => true, performance.now() + 1000), /original read failed/);
 });
+
+test('actual trigger reader waits only for the owned two-link transition and rejects aliases/collisions', async () => {
+  const fs = require('node:fs'), paths = require('node:path'), os = require('node:os');
+  const directory = fs.mkdtempSync(paths.join(os.tmpdir(), 'uap-ready-')), ready = paths.join(directory, 'ready');
+  const req = { stage: 'a', nonce: 'nonce' }, body = JSON.stringify(req) + '\n';
+  const box = { ...fs, ...paths, Buffer, Error, TextDecoder, performance, process: { env: { UAP_VSCODE_TRUSTED_READY: ready } }, LIMIT: 1 << 20,
+    delay: async () => { if (fs.existsSync(ready + '.pending')) fs.unlinkSync(ready + '.pending'); },
+    readSync(fd, ...args) { assert.equal(fs.fstatSync(fd).nlink, 1); return fs.readSync(fd, ...args); } };
+  vm.createContext(box);
+  const helpers = source.slice(source.indexOf('function object('), source.indexOf('function same('));
+  vm.runInContext(stripTypeScriptTypes(helpers + source.slice(source.indexOf('async function waitReady('), source.indexOf('type Reply =')), { mode: 'strip' }) + '\nglobalThis.wait = waitReady;', box);
+  try {
+    fs.writeFileSync(ready + '.pending', body); fs.linkSync(ready + '.pending', ready);
+    await box.wait(req, performance.now() + 1000); assert.equal(fs.statSync(ready).nlink, 1);
+    fs.linkSync(ready, ready + '.foreign'); await assert.rejects(box.wait(req, performance.now() + 1000), /pair differs/);
+    fs.unlinkSync(ready + '.foreign'); fs.linkSync(ready, ready + '.pending');
+    let raced = false;
+    box.lstatSync = pathname => {
+      if (!raced && pathname.endsWith('/ready.pending')) { raced = true; fs.unlinkSync(ready + '.pending'); }
+      return fs.lstatSync(pathname);
+    };
+    await box.wait(req, performance.now() + 1000); assert.equal(raced, true); box.lstatSync = fs.lstatSync;
+    fs.linkSync(ready, ready + '.pending');
+    box.lstatSync = pathname => {
+      if (pathname.endsWith('/ready.pending')) { fs.unlinkSync(ready + '.pending'); fs.unlinkSync(ready); }
+      return fs.lstatSync(pathname);
+    };
+    await assert.rejects(box.wait(req, performance.now() + 100), /identity differs/);
+    box.lstatSync = fs.lstatSync; fs.writeFileSync(ready, body);
+    fs.writeFileSync(ready + '.pending', 'foreign');
+    await assert.rejects(box.wait(req, performance.now() + 1000), /pending collision/);
+    fs.unlinkSync(ready + '.pending'); fs.writeFileSync(ready, '{}'); await assert.rejects(box.wait(req, performance.now() + 1000));
+    fs.writeFileSync(ready, body); fs.linkSync(ready, ready + '.pending'); fs.linkSync(ready, ready + '.third');
+    await assert.rejects(box.wait(req, performance.now() + 1000), /identity differs/);
+    fs.unlinkSync(ready + '.third'); fs.unlinkSync(ready + '.pending');
+    const originalRead = box.readSync;
+    let swapped = false;
+    box.readSync = (fd, ...args) => { if (!swapped) { swapped = true; fs.renameSync(directory, directory + '.old'); fs.mkdirSync(directory); fs.writeFileSync(ready, 'foreign'); } return originalRead(fd, ...args); };
+    await assert.rejects(box.wait(req, performance.now() + 1000), /parent changed/);
+    assert.equal(fs.readFileSync(ready, 'utf8'), 'foreign'); fs.rmSync(directory + '.old', { recursive: true });
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+});

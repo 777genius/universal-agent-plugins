@@ -36,6 +36,10 @@ func trustedInstalledPackageDigest(ctx context.Context, root string) (string, er
 	if err != nil {
 		return "", err
 	}
+	return trustedInstalledCapturedDigest(ctx, captured)
+}
+
+func trustedInstalledCapturedDigest(ctx context.Context, captured []packagedigest.CapturedEntry) (string, error) {
 	if _, err := packagedigest.DigestCaptured(ctx, captured); err != nil {
 		return "", err
 	}
