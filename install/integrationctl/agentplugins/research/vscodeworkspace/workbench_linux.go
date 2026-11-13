@@ -153,6 +153,9 @@ func (c *controller) checkPublisher() error {
 			return errors.Join(fmt.Errorf("sealed publisher digest changed"), err)
 		}
 	}
+	if c.publisherView != nil && c.publisherView.active {
+		return c.publisherView.verifyActive()
+	}
 	return nil
 }
 func (c *controller) setupDisplay() error {

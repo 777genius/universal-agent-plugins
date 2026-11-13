@@ -67,7 +67,7 @@ func (c *controller) trustedRequests(stage, scope, operation string, installed b
 		ui = append(ui, map[string]any{"label": p.Name, "originUri": (&url.URL{Scheme: "file", Path: config}).String()})
 	}
 	return map[string]any{"mode": trustedProjectMode, "stage": stage, "nonce": f.Nonce, "project": project, "home": f.Home,
-		"appRoot": filepath.Join(c.request.Base, "publisher", publisherPrefix, "resources", "app"), "skills": skills, "absentSkills": absentSkills,
+		"appRoot": filepath.Join(canonicalPublisherRoot, "resources", "app"), "skills": skills, "absentSkills": absentSkills,
 		"readinessControl": control,
 		"servers":          servers, "absentServers": absentServers, "operation": operation, "marker": f.Marker}, ui, nil
 }
@@ -210,7 +210,7 @@ func (c *controller) trustedObservationRequest(stage, scope, trust, operation st
 func (c *controller) trustedDriverFrame(stage, scope, trust, requestPath, ready, result, driverResult string, servers []any) ([]byte, error) {
 	f := c.trustedState
 	project := f.Projects[scope]
-	publisher := filepath.Join(c.request.Base, "publisher", publisherPrefix, "code")
+	publisher := filepath.Join(canonicalPublisherRoot, "code")
 	observer := filepath.Join(c.request.Base, "tools", "observer")
 	args := []string{"--new-window", "--disable-crash-reporter", "--locale", "en", "--user-data-dir", f.Profile, "--extensions-dir", f.Extensions,
 		"--extensionDevelopmentPath", observer, "--enable-proposed-api", "uap-research.project-runtime-observer", "--remote-debugging-port=0", project}

@@ -238,3 +238,102 @@ entry presence; AppArmor enabled fact. No recursive include collector or dpkg
 execution. The official known-file SHA is an explicit comparison/reference only,
 not a required actual-host hash. Native stage execution remains before any final
 measurement refusal is joined. The private mount implementation is still gated.
+
+
+## Actual 79af prerequisite receipt and remaining gate
+
+The original trusted run43380446623/job131736726329 checked out
+`79af2028af50da4ac56f7bec03c376386544f8d9`, tree
+`cf4c131b3bd8b8279c42904ff79276d1032ce8f6`, on Ubuntu24.04.5 image
+`20261101.360.1`. Its inert contracts passed; first native empty-a failed
+publisher-startup/publisher-startup-failed with SIGTRAP, isolation proof present,
+endpoint absent,586 diagnostic bytes and sandboxUnavailable=true (other four
+signature flags false). This identifies a sandbox-startup message class only;
+neither a SUID subtype nor AppArmor causation is established.
+
+Original native artifact14017523300 was independently checked: outer13509bytes
+SHA256 `b2841893624a81c6d604b6a8c925633e96ec4b1d7871e344bc73131f5a08f571`;
+inner48209bytes SHA256
+`978333812057aceee07c0bf816d8217da0076ae4a6aa0ab0b8ea123894a13b9a`;
+both ZIP CRCs pass. The original paired frontend artifact and native artifact
+previously passed41 stream byte/hash joins. Controller retains the stage failure;
+empty-a and Xvfb both planned_stop/tree_reaped=true, controller cleanup complete,
+frontend cleanup complete, and controller_reaped=true. Collection and all native
+qualification remain false. No completed native stage is admitted.
+
+The host-policy receipt is observed/reason none, with identical before/after:
+known-ubuntu-vscode-userns grammar, known_profile_match=true and installed code
+SHA256 `9fd4a3cc5f3bf64aefbed6ff4cab30fd60563d655ae2896197f152d07b726e9a`.
+Optional local/code, disable/code and force-complain/code are absent; AppArmor
+enabled=true, exact loaded vscode membership mode=unconfined, code leaf absent.
+Sysctls: apparmor_userns=1, apparmor_unconfined=0, userns_clone=1,
+max_user_namespaces=58121. Fixed include hashes:
+abi/4.0 `e510bb8f6788b45e48de2f859a6f94a7b8416cbac5a1051814cfce925fa911bd`;
+tunables/global `2c1d72013b53bf103fb8abe2199ce5775f8493df1acd3ef497046156c09fdf7c`;
+tunables/alias `e7b8b278db3f7aca74e0176f22cbd3adc3c89212cc9e66a90a2787b3ceee8030`.
+All captured files root-owned ordinary mode0644, single-link. Held root/usr/share
+directory facts respectively: device66305; inode2/1701/23364; mode0755/0755/0777;
+UID/GID0; mountID28. Stable captured metadata is identical before/after.
+This receipt explicitly sets native_qualified=false and
+loaded_equals_disk_qualified=false. Disk hashes and loaded membership do not
+prove loaded bytes equal disk, resolve every include, or prove post-exec native
+attachment.
+
+The current2dd source changes only the deterministic inert-test timestamp fixture
+relative to79af; this does not turn79af into final-source2dd native acceptance.
+Root must independently review source/runtime equivalence and interpret these
+facts before authorizing ANY private-view code. No such implementation is
+authorized by this amendment.
+
+Additional mandatory mount-topology gate before any future setup: read a bounded
+actual mountinfo projection for the held original /usr/share subtree and REFUSE
+any existing descendant mount beneath it, an ambiguous/unreadable topology,
+overflow, or topology drift. A plain lower bind plus overlay does not establish
+preservation of nested mounts. Do not recursively clone/adopt foreign descendant
+mounts or introduce a general mount framework. Root mountID28 alone cannot prove
+this gate: the current receipt does not measure descendant topology. Verify the
+same absence and held original mount identity again before release, retaining
+original failure and withholding Base deletion on uncertainty.
+
+## Explicit implementation authorization
+
+After independent original79af artifact review, runtime-equivalence review to2dd,
+and matching all four fixed policy/include hashes against the official Ubuntu
+package without installing or executing it, root explicitly authorized this
+dedicated private-view implementation. This authorizes source and inert tests
+only; no local mounts, native execution, policy or foreign metadata changes.
+The no-descendant-mount/topology-drift gate above is mandatory. Actual post-exec
+label, unchanged isolation and final-source native lifecycle/cleanup remain
+unproved until genuine hosted admission; all refusal paths stay unqualified.
+
+Concrete size amendment: root approved up to1050 changed lines including plan and
+inert tests for held layers, partial mount release, and actual post-exec proof.
+This replaces the earlier500–800 estimate; no new framework, dependencies, shared
+runner changes or omitted guards are authorized. Inert tests cannot qualify a
+mount, label transition or real native lifecycle; genuine final-source CI remains
+mandatory.
+
+Actual current2dd trusted run43383113491/job131750009531 subsequently failed the
+same first publisher-startup stage: SIGTRAP, proof present, endpoint absent,
+585bytes, sandboxUnavailable=true only. Actual image20261101.360.1; policy remains
+observed/none and before==after, with the same fixed policy/include hashes,
+loaded membership and sysctls. Empty-a and Xvfb planned/reaped and cleanup complete.
+This confirms final-source failure evidence, not native acceptance or causation.
+
+Second concrete size amendment: root approved up to1200 changed lines for fixed
+actual-sudo-parent namespace authority and live-driver cgroup joins. The current
+controller mount namespace must differ from the actual held immediate sudo
+parent namespace, which must equal the frontend's original namespace value.
+Fixed no-fork unshare and sealed unix.Exec preserve this direct ancestry; refuse
+any unknown parent/executable/start identity without scanning or fallback.
+Recheck before each mount/remount. Publisher cgroup must match the actual live
+supervised driver, whose dedicated cgroup differs from the outer controller's;
+join driver PID start identity around the bounded membership read. No shared
+process runner change or local native/mount execution is authorized.
+
+Final reviewed size amendment: root approved up to1300 physical changed lines
+for the fourteen dedicated private-view files, including the plan and inert
+tests. The frontend additionally admits the closed view summary, requires full
+three-mount release on success, and joins original share identity/mount ID to
+the independently captured host policy before artifact publication. The source
+and inert review do not qualify actual mounts or the native lifecycle.

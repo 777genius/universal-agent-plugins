@@ -4,6 +4,7 @@ on:
     paths:
       - '.github/workflows/vscode-project-native.yml'
       - 'scripts/research-vscode-project.py'
+      - 'scripts/test_vscode_project_research.py'
       - 'scripts/research-vscode-workspace.py'
       - 'scripts/project_native_vscode_toolchain.py'
       - 'scripts/vscode-project-runtime-observer/**'
@@ -15,6 +16,7 @@ on:
     paths:
       - '.github/workflows/vscode-project-native.yml'
       - 'scripts/research-vscode-project.py'
+      - 'scripts/test_vscode_project_research.py'
       - 'scripts/research-vscode-workspace.py'
       - 'scripts/project_native_vscode_toolchain.py'
       - 'scripts/vscode-project-runtime-observer/**'
@@ -96,7 +98,8 @@ jobs:
                   print(stderr.decode('utf-8', errors='replace'))
                   raise SystemExit('required inert trusted project contracts failed')
           PYTHON
-      - name: Run exact public-install and native-gateway lifecycle
+      - name: Collect exact public-install and native-gateway lifecycle
+        id: collection
         env:
           AGENTPLUGINS_VSCODE_PROJECT_NATIVE_E2E: '1'
           AGENTPLUGINS_VSCODE_PROJECT_OUTPUT: ${{ runner.temp }}/vscode-project-native
@@ -122,43 +125,44 @@ jobs:
           selected = b'=== RUN   TestAgentpluginsVSCodeNativeProjectGatewayLifecycle' in stdout
           passed = b'--- PASS: TestAgentpluginsVSCodeNativeProjectGatewayLifecycle ' in stdout
           skipped = b'--- SKIP: TestAgentpluginsVSCodeNativeProjectGatewayLifecycle' in stdout
-          if record['error'] is not None or record['exit'] != 0 or not selected or not passed or skipped:
-              print(stderr.decode('utf-8', errors='replace'))
-              raise SystemExit('exact trusted native lifecycle failed or did not execute')
-          PYTHON
-      - name: Admit only the two exact closed ZIP files
-        id: admission
-        if: ${{ always() }}
-        env:
-          EVIDENCE: ${{ runner.temp }}/vscode-project-native
-        run: |
-          /usr/bin/python3 -I - <<'PYTHON'
-          import os, stat
-          from pathlib import Path
-          root = Path(os.environ['EVIDENCE'])
-          for label in ('frontend', 'native'):
-              path = root / label / 'upload/research.zip'
-              if not path.exists():
-                  continue
-              before = path.lstat()
-              if path.resolve() != path or not stat.S_ISREG(before.st_mode) or before.st_nlink != 1 or before.st_uid != os.getuid() or before.st_size > 32 * 1024 * 1024:
-                  raise SystemExit('refusing aliased or unbounded trusted evidence ZIP')
-              with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
-                  output.write(label + '=true\n')
+          if record['error'] is not None or record['exit'] not in (0, 1) or not selected or skipped:
+              raise SystemExit('native wrapper process/capture/selection unproved')
+          lines = stdout.decode('utf-8', errors='strict').splitlines()
+          frames = [line[len(module.HANDOFF_PREFIX):] for line in lines if line.startswith(module.HANDOFF_PREFIX)]
+          if len(frames) != 1 or len(frames[0].encode()) > 16384:
+              raise SystemExit('unique complete artifact handoff required')
+          import json
+          value = json.loads(frames[0], object_pairs_hook=module.publisher.bounds.unique_object,
+                             parse_constant=module.publisher.bounds.invalid_constant)
+          paths = module.stage_handoff(value, Path(env['AGENTPLUGINS_VSCODE_PROJECT_OUTPUT']),
+                                       Path(os.environ['RUNNER_TEMP']), env['EXPECTED_COMMIT'], env['EXPECTED_TREE'])
+          native_passed = record['exit'] == 0 and passed and value['collection_complete'] is True
+          # Both files are staged before any output exists. Uploads additionally
+          # require this collection step to finish successfully.
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              for label, path in sorted(paths.items()):
+                  output.write(label + '=' + path + '\n')
+              output.write('native_passed=' + str(native_passed).lower() + '\n')
           PYTHON
       - name: Upload exact source, compiler and prepared-input receipt
-        if: ${{ always() && steps.admission.outputs.frontend == 'true' }}
+        if: ${{ success() && steps.collection.outcome == 'success' && steps.collection.outputs.frontend != '' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
           name: vscode-1.143.1-trusted-project-frontend-linux-amd64
-          path: ${{ runner.temp }}/vscode-project-native/frontend/upload/research.zip
+          path: ${{ steps.collection.outputs.frontend }}
           if-no-files-found: error
           retention-days: 14
       - name: Upload exact admitted native lifecycle evidence
-        if: ${{ always() && steps.admission.outputs.native == 'true' }}
+        if: ${{ success() && steps.collection.outcome == 'success' && steps.collection.outputs.native != '' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
           name: vscode-1.143.1-trusted-project-native-linux-amd64
-          path: ${{ runner.temp }}/vscode-project-native/native/upload/research.zip
+          path: ${{ steps.collection.outputs.native }}
           if-no-files-found: error
           retention-days: 14
+      - name: Require actual native lifecycle success after diagnostic uploads
+        if: ${{ always() }}
+        env:
+          NATIVE_PASSED: ${{ steps.collection.outputs.native_passed }}
+        run: |
+          test "$NATIVE_PASSED" = true

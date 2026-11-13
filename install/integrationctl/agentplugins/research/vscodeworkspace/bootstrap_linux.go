@@ -342,8 +342,13 @@ func runSealed(base string) (err error) {
 		return err
 	}
 	cleaned := false
+	var c *controller
 	defer func() {
 		if !cleaned {
+			if c != nil && c.publisherView != nil && !c.publisherView.released {
+				err = errors.Join(err, fmt.Errorf("sealed-root deletion withheld with unreleased publisher view"))
+				return
+			}
 			err = errors.Join(err, cleanSealed(base))
 		}
 	}()
@@ -356,7 +361,7 @@ func runSealed(base string) (err error) {
 		return err
 	}
 	defer cancel()
-	c, err := newSealedController(work, req, cancel, final)
+	c, err = newSealedController(work, req, cancel, final)
 	if err != nil {
 		return err
 	}
@@ -365,22 +370,34 @@ func runSealed(base string) (err error) {
 	if req.Input.Mode == trustedProjectMode {
 		hostPolicy = beginHostPolicyMeasurement()
 	}
-	runErr := c.execute()
+	err = c.runSealedCapture(hostPolicy)
+	cleaned = true
+	return err
+}
+func (c *controller) runSealedCapture(hostPolicy *hostPolicyMeasurement) error {
+	var runErr error
+	if c.request.Input.Mode == trustedProjectMode {
+		runErr = c.preparePublisherView(hostPolicy)
+	}
+	if runErr == nil {
+		runErr = c.execute()
+	}
 	scannerErr := c.closeTrustedScanner()
+	viewErr := c.closePublisherView()
+	runErr = errors.Join(runErr, viewErr)
 	if hostPolicy != nil {
 		runErr = hostPolicy.finish(c, hostPolicy.snapshot(), runErr)
 	}
 	var out, stderr []byte
 	var baseErr error
-	if scannerErr == nil {
-		out, stderr, baseErr = cleanSealedCapture(base)
+	if scannerErr == nil && viewErr == nil {
+		out, stderr, baseErr = cleanSealedCapture(c.request.Base)
 	} else {
 		// A foreign or unreleased mount must never grant recursive deletion
 		// authority over whichever tree currently occupies that task path.
-		baseErr = fmt.Errorf("sealed-root deletion withheld after scanner mount release failure")
+		baseErr = fmt.Errorf("sealed-root deletion withheld after mount release failure")
 	}
-	cleanupErr := errors.Join(baseErr, c.displayCleanupErr, scannerErr)
-	cleaned = true
+	cleanupErr := errors.Join(baseErr, c.displayCleanupErr, scannerErr, viewErr)
 	return c.finish(runErr, cleanupErr, out, stderr)
 }
 func loadSealedRequest(base string) (sealedRequest, error) {

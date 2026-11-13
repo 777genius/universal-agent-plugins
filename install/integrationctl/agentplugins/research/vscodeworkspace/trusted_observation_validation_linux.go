@@ -18,7 +18,7 @@ func (c *controller) trustedDriverEnvelope(body []byte, stage, trust string, dri
 	if err != nil {
 		return nil, isolationProof{}, err
 	}
-	outer, err := objectKeys(value, strings.Fields("type stage nonce trustPromptAccepted servers publisherProof publisherExit result"), nil)
+	outer, err := objectKeys(value, strings.Fields("type stage nonce trustPromptAccepted servers publisherProof publisherRuntime publisherExit result"), nil)
 	f := c.trustedState
 	if err != nil || outer["type"] != "driver-result" || outer["stage"] != stage || outer["nonce"] != f.Nonce || outer["trustPromptAccepted"] != (trust == "prompt") {
 		return nil, isolationProof{}, fmt.Errorf("trusted driver envelope differs")
@@ -33,6 +33,9 @@ func (c *controller) trustedDriverEnvelope(body []byte, stage, trust string, dri
 	}
 	if publisher.Namespace != driver.Namespace || publisher.PID == driver.PID {
 		return nil, isolationProof{}, fmt.Errorf("publisher and driver process/namespace relationship differs")
+	}
+	if err := c.validatePublisherRuntime(outer["publisherRuntime"], publisher, driver); err != nil {
+		return nil, isolationProof{}, err
 	}
 	exit, err := objectKeys(outer["publisherExit"], []string{"code", "signal"}, nil)
 	if err != nil {

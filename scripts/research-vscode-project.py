@@ -6,6 +6,7 @@ does not grant trust, register MCP servers or call a probe; the reviewed native
 controller owns those public-install/UI/gateway observations and all cleanup.
 """
 import argparse
+import contextlib
 import hashlib
 import importlib.util
 import json
@@ -203,7 +204,9 @@ def admit_native_host_policy(directory, collection_complete):
     return value
 
 
-def controller_result(body, commit, tree):
+def controller_record(body):
+    if type(body) is not bytes or len(body) > 1 << 20:
+        raise ValueError("trusted controller record bound refused")
     def finite(text):
         value = float(text)
         if not math.isfinite(value):
@@ -211,6 +214,13 @@ def controller_result(body, commit, tree):
         return value
     value = json.loads(body.decode("utf-8", "strict"), object_pairs_hook=shared.legacy.unique_object,
                        parse_constant=shared.legacy.invalid_constant, parse_float=finite)
+    if type(value) is not dict:
+        raise ValueError("trusted controller record is not an object")
+    return value
+
+
+def controller_result(body, commit, tree):
+    value = controller_record(body)
     if (not isinstance(value, dict) or value.get("evidence_kind") != "vscode-pinned-trusted-project-gateway-lifecycle"
             or value.get("mode") != MODE or value.get("source_commit") != commit or value.get("source_tree") != tree
             or value.get("version") != publisher.VERSION or value.get("publisher_commit") != publisher.COMMIT
@@ -220,6 +230,7 @@ def controller_result(body, commit, tree):
             or value.get("qualification") != {name: True for name in QUALIFICATIONS}
             or value.get("cleanup", {}).get("complete") is not True or value.get("cleanup", {}).get("error") != ""):
         raise ValueError("trusted controller did not prove exact full lifecycle, source and cleanup")
+    validate_publisher_view(value.get("publisher_view"), True)
     if any(type(value["qualification"][name]) is not bool for name in QUALIFICATIONS):
         raise ValueError("trusted qualification must be exact booleans")
     children = value.get("children")
@@ -234,6 +245,81 @@ def controller_result(body, commit, tree):
     if labels != {*PUBLIC, *GUI, "Xvfb"} or value.get("completed_stages") != list(GUI):
         raise ValueError("trusted controller required stage identity/order differs")
     return value
+
+
+def validate_publisher_view(view, complete, policy=None):
+    if type(complete) is not bool:
+        raise ValueError("private publisher view status refused")
+    if view is None and complete is False:
+        return
+    closed_artifact(view, ('scope', 'mount_namespace', 'original_mount_namespace',
+        'original_mount_id', 'original_share_identity', 'acquired_mounts', 'released',
+        'remaining_mounts', 'mount_identity_uncertain', 'label_required',
+        'sudo_parent_pid', 'sudo_parent_executable_sha256'))
+    def number(value, minimum=0, maximum=(1 << 64) - 1):
+        if type(value) is not int or not minimum <= value <= maximum:
+            raise ValueError('private publisher view integer refused')
+    if view['scope'] != 'private-publisher-view-v1' or view['label_required'] != 'vscode (unconfined)':
+        raise ValueError('private publisher view scope refused')
+    for key in ('mount_namespace', 'original_mount_namespace'):
+        number(view[key], 1)
+    if view['mount_namespace'] == view['original_mount_namespace']:
+        raise ValueError('publisher namespace is not private')
+    number(view['original_mount_id'])
+    number(view['sudo_parent_pid'], maximum=(1 << 31) - 1)
+    if type(view['sudo_parent_executable_sha256']) is not str or (view['sudo_parent_executable_sha256'] and not re.fullmatch(r'[0-9a-f]{64}', view['sudo_parent_executable_sha256'])):
+        raise ValueError('publisher actual sudo identity digest refused')
+    number(view['remaining_mounts'], maximum=3)
+    if type(view['released']) is not bool or type(view['mount_identity_uncertain']) is not bool:
+        raise ValueError('publisher release proof is not literal boolean')
+    identity = view['original_share_identity']
+    closed_artifact(identity, ('device', 'inode', 'mode', 'uid', 'gid', 'links', 'size', 'mtime_ns', 'ctime_ns'))
+    for key in ('device', 'inode', 'links'):
+        number(identity[key])
+    for key in ('mode', 'uid', 'gid'):
+        number(identity[key], maximum=(1 << 32) - 1)
+    number(identity['size'], maximum=(1 << 63) - 1)
+    for key in ('mtime_ns', 'ctime_ns'):
+        number(identity[key], -(1 << 63), (1 << 63) - 1)
+    mounts = view['acquired_mounts']
+    if mounts is None and complete is False:
+        mounts = []
+    if type(mounts) is not list or len(mounts) > 3:
+        raise ValueError('publisher acquired mount count refused')
+    ids = set()
+    for index, mount in enumerate(mounts):
+        closed_artifact(mount, ('kind', 'mount_id', 'parent_mount_id'))
+        number(mount['mount_id'], 1)
+        number(mount['parent_mount_id'], 1)
+        if (mount['kind'] != ('lower', 'overlay', 'publisher')[index]
+                or mount['mount_id'] == mount['parent_mount_id'] or mount['mount_id'] in ids
+                or mount['mount_id'] == view['original_mount_id']):
+            raise ValueError('publisher acquired mount chain refused')
+        ids.add(mount['mount_id'])
+        if index == 1 and mount['parent_mount_id'] != view['original_mount_id']:
+            raise ValueError('publisher overlay original mount differs')
+        if index == 2 and mount['parent_mount_id'] != mounts[1]['mount_id']:
+            raise ValueError('publisher canonical parent mount differs')
+    if complete is True and (view['released'] is not True or view['remaining_mounts'] != 0
+            or view['mount_identity_uncertain'] is not False or len(mounts) != 3
+            or view['original_mount_id'] == 0 or view['sudo_parent_pid'] <= 1
+            or not view['sudo_parent_executable_sha256'] or identity['uid'] != 0 or identity['gid'] != 0
+            or identity['mode'] != stat.S_IFDIR | 0o777 or identity['inode'] == 0):
+        raise ValueError('publisher full release/ownership not proved')
+    if policy is not None and view['original_mount_id']:
+        expected = policy['before']['directories']['usr_share']
+        if identity != expected['identity'] or view['original_mount_id'] != expected['mount_id']:
+            raise ValueError('publisher view and independent host receipt differ')
+
+def admit_native_publisher_view(directory, complete, policy):
+    try:
+        body = toolchain.ordinary_bytes(Path(directory) / "vscode-workspace-controller.json", 1 << 20)
+    except FileNotFoundError:
+        if complete is False:
+            return
+        raise ValueError("successful capture omitted publisher controller") from None
+    controller = controller_record(body)
+    validate_publisher_view(controller.get("publisher_view"), complete, policy)
 
 
 class Preparation:
@@ -353,6 +439,210 @@ def acquire_scanner(root, budget):
     return binary, identities[binary], receipt
 
 
+# Artifact authority is held independently of the mutable output pathname.
+HANDOFF_PREFIX = 'UAP_VSCODE_ARTIFACT_HANDOFF '
+DIR_FIELDS = ('device', 'inode', 'mode', 'uid', 'gid')
+ZIP_FIELDS = DIR_FIELDS + ('links', 'size', 'mtime_ns', 'ctime_ns')
+
+
+def artifact_identity(info, archive=False):
+    row = dict(device=info.st_dev, inode=info.st_ino, mode=info.st_mode, uid=info.st_uid, gid=info.st_gid)
+    if archive:
+        row.update(links=info.st_nlink, size=info.st_size, mtime_ns=info.st_mtime_ns, ctime_ns=info.st_ctime_ns)
+    return row
+
+
+class ArtifactHandoff:
+    def __init__(self, output, stack):
+        self.output, self.stack, self.fds, self.identities = output, stack, {}, {}
+        self.bindings = dict(frontend=None, native=None)
+        self.captures = []
+        flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+        for label in ('root', 'frontend', 'native'):
+            fd = os.open(output if label == 'root' else label, flags,
+                         **({} if label == 'root' else {'dir_fd': self.fds['root']}))
+            stack.callback(os.close, fd)
+            self.fds[label] = fd
+            self.identities[label] = artifact_identity(os.fstat(fd))
+        self.verify()
+
+    def verify(self):
+        if self.output.resolve() != self.output:
+            raise ValueError('artifact output alias refused')
+        for label, fd in self.fds.items():
+            current = self.output.lstat() if label == 'root' else os.stat(label, dir_fd=self.fds['root'], follow_symlinks=False)
+            expected = self.identities[label]
+            if (artifact_identity(current) != expected or artifact_identity(os.fstat(fd)) != expected
+                    or expected['uid'] != os.getuid() or expected['gid'] != os.getgid()
+                    or expected['mode'] != stat.S_IFDIR | 0o700):
+                raise ValueError('original artifact directory changed')
+
+        for label, upload, archive, binding in self.captures:
+            if (artifact_identity(os.fstat(upload)) != binding['upload']
+                    or artifact_identity(os.stat('upload', dir_fd=self.fds[label], follow_symlinks=False)) != binding['upload']
+                    or artifact_identity(os.fstat(archive), True) != binding['zip']
+                    or artifact_identity(os.stat('research.zip', dir_fd=upload, follow_symlinks=False), True) != binding['zip']):
+                raise ValueError('held upload or ZIP changed')
+
+    def clear(self, label):
+        self.bindings[label] = None
+        self.captures = [capture for capture in self.captures if capture[0] != label]
+
+    def archive(self, label, deadline):
+        self.verify()
+        flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+        upload = os.open('upload', flags, dir_fd=self.fds[label])
+        self.stack.callback(os.close, upload)
+        upload_id = artifact_identity(os.fstat(upload))
+        if upload_id['uid'] != os.getuid() or not stat.S_ISDIR(upload_id['mode']):
+            raise ValueError('archive parent owner refused')
+        fd = os.open('research.zip', os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, dir_fd=upload)
+        self.stack.callback(os.close, fd)
+        before = artifact_identity(os.fstat(fd), True)
+        if (not stat.S_ISREG(before['mode']) or before['links'] != 1 or before['uid'] != os.getuid()
+                or not 0 < before['size'] <= 32 << 20):
+            raise ValueError('archive identity refused')
+        chunks, size = [], 0
+        while True:
+            if time.monotonic() >= deadline:
+                raise ValueError('artifact copy deadline')
+            chunk = os.read(fd, min(1 << 20, (32 << 20) + 1 - size))
+            if not chunk:
+                break
+            chunks.append(chunk); size += len(chunk)
+            if size > 32 << 20:
+                raise ValueError('artifact ZIP bound')
+        if size != before['size']:
+            raise ValueError('archive length changed')
+        body = b''.join(chunks)
+        binding = {'upload': upload_id, 'zip': before, 'bytes': size, 'sha256': hashlib.sha256(body).hexdigest()}
+        self.captures.append((label, upload, fd, binding))
+        self.verify()
+        return binding, body
+
+    def bind(self, label, deadline):
+        binding, _ = self.archive(label, deadline)
+        self.bindings[label] = binding
+
+    def receipt(self, summary):
+        self.verify()
+        deadline = time.monotonic() + 5
+        for label, binding in self.bindings.items():
+            if binding is not None and self.archive(label, deadline)[0] != binding:
+                raise ValueError('bound artifact changed')
+        value = dict(schema_version=1, source_commit=summary['source_commit'], source_tree=summary['source_tree'],
+                     collection_complete=summary['collection_complete'], output=self.identities, archives=self.bindings)
+        body = json.dumps(value, sort_keys=True, separators=(',', ':')).encode()
+        if len(body) > 16 << 10:
+            raise ValueError('artifact receipt bound')
+        return body
+
+
+def closed_artifact(value, keys):
+    if type(value) is not dict or set(value) != set(keys):
+        raise ValueError('closed artifact fields refused')
+
+
+def validate_handoff(value, commit, tree):
+    closed_artifact(value, ('schema_version', 'source_commit', 'source_tree', 'collection_complete', 'output', 'archives'))
+    if (type(value['schema_version']) is not int or value['schema_version'] != 1
+            or value['source_commit'] != commit or value['source_tree'] != tree
+            or not re.fullmatch('[0-9a-f]{40}', commit) or not re.fullmatch('[0-9a-f]{40}', tree)
+            or type(value['collection_complete']) is not bool):
+        raise ValueError('artifact source or status refused')
+    closed_artifact(value['output'], ('root', 'frontend', 'native'))
+    closed_artifact(value['archives'], ('frontend', 'native'))
+    def identity(row, archive=False):
+        closed_artifact(row, ZIP_FIELDS if archive else DIR_FIELDS)
+        if any(type(number) is not int for number in row.values()):
+            raise ValueError('artifact identity types refused')
+        if row['device'] < 0 or row['inode'] <= 0 or row['uid'] != os.getuid() or row['gid'] != os.getgid():
+            raise ValueError('artifact identity owner refused')
+        if archive:
+            if not stat.S_ISREG(row['mode']) or row['links'] != 1 or not 0 < row['size'] <= 32 << 20:
+                raise ValueError('artifact ZIP identity refused')
+        elif not stat.S_ISDIR(row['mode']):
+            raise ValueError('artifact directory type refused')
+    for row in value['output'].values():
+        identity(row)
+    for binding in value['archives'].values():
+        if binding is None:
+            continue
+        closed_artifact(binding, ('upload', 'zip', 'bytes', 'sha256'))
+        identity(binding['upload']); identity(binding['zip'], True)
+        if (type(binding['bytes']) is not int or binding['bytes'] != binding['zip']['size']
+                or type(binding['sha256']) is not str or not re.fullmatch('[0-9a-f]{64}', binding['sha256'])):
+            raise ValueError('artifact digest refused')
+    return value
+
+
+def stage_handoff(value, output, parent, commit, tree):
+    """Trusted parent only; the receipt never chooses source or target paths."""
+    validate_handoff(value, commit, tree)
+    deadline, paths = time.monotonic() + 5, {}
+    stage = Path(tempfile.mkdtemp(prefix='vscode-admitted-', dir=parent))
+    stage_id = artifact_identity(stage.lstat())
+    try:
+        with contextlib.ExitStack() as stack:
+            destination = os.open(stage, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+            stack.callback(os.close, destination)
+            held = ArtifactHandoff(output, stack)
+            if held.identities != value['output']:
+                raise ValueError('original output root replaced')
+            for label in ('frontend', 'native'):
+                binding = value['archives'][label]
+                if binding is None:
+                    continue
+                observed, body = held.archive(label, deadline)
+                if observed != binding:
+                    raise ValueError('ZIP receipt differs')
+                name = label + '.zip'
+                fd = os.open(name, os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600, dir_fd=destination)
+                with os.fdopen(fd, 'w+b') as stream:
+                    stream.write(body); stream.flush(); stream.seek(0)
+                    if hashlib.sha256(stream.read((32 << 20) + 1)).hexdigest() != binding['sha256']:
+                        raise ValueError('staged ZIP differs')
+                    identity = artifact_identity(os.fstat(stream.fileno()), True)
+                    if identity['size'] != binding['bytes'] or artifact_identity(os.stat(name, dir_fd=destination, follow_symlinks=False), True) != identity:
+                        raise ValueError('staged ZIP identity differs')
+                paths[label] = str(stage / name)
+            held.verify()
+            if artifact_identity(os.fstat(destination)) != stage_id:
+                raise ValueError('staging descriptor changed')
+        if artifact_identity(stage.lstat()) != stage_id or time.monotonic() >= deadline:
+            raise ValueError('staging authority or deadline refused')
+        return paths
+    except BaseException:
+        if artifact_identity(stage.lstat()) == stage_id:
+            shutil.rmtree(stage)
+        raise
+
+
+def trusted_mount_launcher(stack):
+    path = Path('/usr/bin/unshare').resolve(strict=True)
+    for parent in path.parents:
+        info = parent.lstat()
+        if not stat.S_ISDIR(info.st_mode) or info.st_uid != 0 or stat.S_IMODE(info.st_mode) & 0o22:
+            raise ValueError('fixed mount launcher ancestor refused')
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+    stack.callback(os.close, fd)
+    before = artifact_identity(os.fstat(fd), True)
+    if (not stat.S_ISREG(before['mode']) or before['uid'] != 0 or before['links'] != 1
+            or before['mode'] & 0o22 or not before['mode'] & 0o111 or not 0 < before['size'] <= 128 << 20):
+        raise ValueError('fixed mount launcher authority refused')
+    body = os.read(fd, (128 << 20) + 1)
+    if (len(body) != before['size'] or artifact_identity(os.fstat(fd), True) != before
+            or artifact_identity(path.lstat(), True) != before):
+        raise ValueError('fixed mount launcher changed')
+    return str(path), {'path': str(path), 'sha256': hashlib.sha256(body).hexdigest()}
+
+
+def quarantine_artifact(directory, identity, handoff=None):
+    if handoff is not None:
+        handoff.verify()
+    legacy.quarantine_output(directory, identity)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path)
@@ -377,12 +667,22 @@ def main():
     frontend.mkdir(mode=0o700)
     native.mkdir(mode=0o700)
     native_identity, frontend_identity = native.lstat(), frontend.lstat()
+    with contextlib.ExitStack() as stack:
+        handoff = ArtifactHandoff(output, stack)
+        return run_capture(output, origin_ns, handoff)
+
+
+def run_capture(output, origin_ns, handoff):
+    frontend, native = output / 'frontend', output / 'native'
+    output_identity, frontend_identity, native_identity = output.lstat(), frontend.lstat(), native.lstat()
     summary = {"evidence_kind": "vscode-trusted-project-frontend", "mode": MODE, "source_commit": os.environ["EXPECTED_COMMIT"],
+               "source_tree": os.environ["EXPECTED_TREE"],
                "version": publisher.VERSION, "publisher_commit": publisher.COMMIT, "collection_complete": False,
                "host": {"ImageOS": os.environ.get("ImageOS"), "ImageVersion": os.environ.get("ImageVersion")},
                "qualification": {name: False for name in QUALIFICATIONS}, "vendor_authentication_qualified": False,
                "real_model_qualified": False, "user_public_state": "not-installed", "user_native_install_qualified": False}
     root, prep, frontend_hash = None, None, None
+    frontend_publication_attempted = False
     try:
         root = Path(tempfile.mkdtemp(prefix="vscode-workspace-input-", dir="/tmp"))
         root_identity = root.lstat()
@@ -413,18 +713,20 @@ def main():
                        "scanner_path": str(scanner), "scanner_sha256": scanner_sha, "scanner_archive_sha256": SCANNER_ARCHIVE}
             request = {"mode": MODE, "uid": os.getuid(), "gid": os.getgid(), "euid": os.geteuid(), "egid": os.getegid(),
                        "start_monotonic_ns": origin_ns, "source_commit": os.environ["EXPECTED_COMMIT"], "source_tree": tree,
-                       "observer_root": "", "output_root": str(native), "helper_sha256": prep.identities[controller], "trusted": trusted}
+                       "observer_root": "", "output_root": str(native),
+                       "original_mount_namespace": os.stat('/proc/self/ns/mnt').st_ino, "helper_sha256": prep.identities[controller], "trusted": trusted}
             toolchain.write_new(root / "request.json", json.dumps(request, sort_keys=True).encode() + b"\n")
             frontend_summary = {**summary, "evidence_kind": "vscode-trusted-project-prepared-inputs", "build_complete": True,
                                 "collection_complete": True, "commands": prep.records, "trusted_inputs": trusted}
             toolchain.write_new(frontend / "vscode-project-frontend.json", json.dumps(frontend_summary, sort_keys=True, indent=2).encode() + b"\n")
-            admitted = legacy.publish_from_memory(frontend, frontend_summary, allowed_names=frontend_names())
-            if admitted["complete"] is not True:
+            frontend_publication_attempted = True
+            if not publish_frontend_capture(frontend, frontend_identity, frontend_summary, handoff):
                 raise ValueError("trusted source/build input artifact admission failed")
             frontend_hash = hashlib.sha256(toolchain.ordinary_bytes(frontend / "upload/research.zip", 32 << 20)).hexdigest()
             if remaining(origin_ns, 840) < 75:
                 raise ValueError("trusted controller cannot start inside its cleanup reserve")
-        argv = ["/usr/bin/sudo", "-n", "--preserve-env=" + ",".join(legacy.GUARD_KEYS), str(controller), "--input-root", str(root)]
+        launcher, summary['mount_launcher'] = trusted_mount_launcher(handoff.stack)
+        argv = ["/usr/bin/sudo", "-n", "--preserve-env=" + ",".join(legacy.GUARD_KEYS), launcher, "--mount", "--propagation", "private", "--", str(controller), "--input-root", str(root)]
         summary["controller"] = legacy.capture_controller(argv, SOURCE, native, origin_ns, trusted_project=True, memory_only=True)
         for name, body in summary["controller"].pop("_streams").items():
             write_owned(native, native_identity, "controller." + name + ".log", body)
@@ -438,6 +740,7 @@ def main():
         summary["collection_complete"] = False
         summary["error"] = type(error).__name__ + ": " + str(error)[:2048]
     finally:
+        handoff.verify()
         if root is not None:
             try:
                 summary["frontend_cleanup"] = legacy.cleanup_frontend(root, root_identity, native, memory_only=True)
@@ -454,17 +757,19 @@ def main():
             except Exception as error:
                 summary["collection_complete"] = False
                 summary["frontend_archive_error"] = type(error).__name__
+                handoff.clear('frontend')
                 try:
-                    legacy.quarantine_output(frontend, frontend_identity)
+                    quarantine_artifact(frontend, frontend_identity, handoff)
                 except (ValueError, OSError):
-                    legacy.quarantine_output(output, output_identity)
+                    quarantine_artifact(output, output_identity, handoff)
                     return 2
-        elif prep is not None:
+        elif prep is not None and not frontend_publication_attempted:
             failure = {**summary, "commands": prep.records, "collection_complete": False}
             path = frontend / "vscode-project-frontend.json"
             if not path.exists():
                 toolchain.write_new(path, json.dumps(failure, sort_keys=True, indent=2).encode() + b"\n")
-            legacy.publish_from_memory(frontend, failure, allowed_names=frontend_names())
+            frontend_publication_attempted = True
+            publish_frontend_capture(frontend, frontend_identity, failure, handoff)
         summary["elapsed_seconds"] = (time.monotonic_ns() - origin_ns) / 1e9
         summary["prepared_input_zip_sha256"] = frontend_hash
         if summary["elapsed_seconds"] > 900:
@@ -474,34 +779,52 @@ def main():
         try:
             write_owned(native, native_identity, "vscode-project-research.json", json.dumps(summary, sort_keys=True, indent=2).encode() + b"\n")
         except (ValueError, OSError):
-            legacy.quarantine_output(output, output_identity)
+            quarantine_artifact(output, output_identity, handoff)
             return 2
-        publish_native_capture(native, native_identity, summary)
-    print(json.dumps({key: summary.get(key) for key in ("source_commit", "source_tree", "collection_complete", "qualification", "elapsed_seconds")}))
+        publish_native_capture(native, native_identity, summary, handoff)
+    print(handoff.receipt(summary).decode('ascii'))
     return 0 if summary["collection_complete"] else 2
 
 
-def publish_native_capture(native, identity, summary):
-    """Withhold stale success records when the complete capture is refused."""
+def publish_frontend_capture(frontend, identity, summary, handoff=None):
+    return publish_capture(frontend, identity, summary, frontend_names(), 'frontend', handoff)
+
+
+def publish_native_capture(native, identity, summary, handoff=None):
+    return publish_capture(native, identity, summary, native_names(), 'native', handoff)
+
+
+def publish_capture(directory, identity, summary, names, label, handoff):
+    if handoff is not None:
+        handoff.clear(label)
+    deadline = time.monotonic() + 5
     try:
-        admit_native_host_policy(native, summary.get("collection_complete"))
-        admission = legacy.publish_from_memory(native, summary, allowed_names=native_names())
+        if handoff is not None:
+            handoff.verify()
+        if label == 'native':
+            policy = admit_native_host_policy(directory, summary.get('collection_complete'))
+            admit_native_publisher_view(directory, summary.get('collection_complete'), policy)
+        admission = legacy.publish_from_memory(directory, summary, allowed_names=names)
+        complete = admission.get('complete') is True
+        retain = complete or (summary.get('collection_complete') is False
+                              and admission.get('child_reaped') is True
+                              and admission.get('archive_failure_allowed') is True)
+        if retain and handoff is not None:
+            handoff.bind(label, deadline)
     except BaseException:
-        summary["collection_complete"] = False
-        summary["qualification"] = {name: False for name in QUALIFICATIONS}
-        legacy.quarantine_output(native, identity)
+        if handoff is not None:
+            handoff.clear(label)
+        summary['collection_complete'] = False
+        summary['qualification'] = {name: False for name in QUALIFICATIONS}
+        quarantine_artifact(directory, identity, handoff)
         raise
-    if admission["complete"] is True:
-        return
-    was_complete = summary["collection_complete"] is True
-    summary["collection_complete"] = False
-    summary["qualification"] = {name: False for name in QUALIFICATIONS}
-    # The previously written summary cannot remain a canonical success record.
-    # Do not rewrite/re-publish through a directory whose admission just failed.
-    # A preexisting negative capture may retain the publisher's failure-only ZIP.
-    if was_complete or not (admission.get("child_reaped") is True
-                            and admission.get("archive_failure_allowed") is True):
-        legacy.quarantine_output(native, identity)
+    if not retain:
+        if label == 'native':
+            summary['collection_complete'] = False
+            summary['qualification'] = {name: False for name in QUALIFICATIONS}
+        quarantine_artifact(directory, identity, handoff)
+    return complete
+
 
 
 def contracts():
@@ -516,6 +839,17 @@ def contracts():
                 "qualification": {name: True for name in QUALIFICATIONS}, "cleanup": {"complete": True, "error": ""},
                 "children": [{"label": name, "tree_reaped": True, "merged_overflow": False, "error": ""}
                              for name in (*PUBLIC, *GUI, "Xvfb")], "completed_stages": list(GUI)}
+    positive["publisher_view"] = {
+        "scope": "private-publisher-view-v1", "mount_namespace": 2, "original_mount_namespace": 1,
+        "original_mount_id": 1, "original_share_identity": {"device": 1, "inode": 2,
+            "mode": stat.S_IFDIR | 0o777, "uid": 0, "gid": 0, "links": 1, "size": 0,
+            "mtime_ns": 1, "ctime_ns": 1}, "acquired_mounts": [
+            {"kind": "lower", "mount_id": 2, "parent_mount_id": 1},
+            {"kind": "overlay", "mount_id": 3, "parent_mount_id": 1},
+            {"kind": "publisher", "mount_id": 4, "parent_mount_id": 3}],
+        "released": True, "remaining_mounts": 0, "mount_identity_uncertain": False,
+        "label_required": "vscode (unconfined)", "sudo_parent_pid": 2,
+        "sudo_parent_executable_sha256": "a" * 64}
     controller_result(json.dumps(positive).encode(), "a" * 40, "b" * 40)
     for change in ("wrong-source", "bad-cleanup", "missing-child", "wrong-order", "numeric-flag", "stale-user-prepared", "stale-add-user"):
         value = json.loads(json.dumps(positive))

@@ -2,6 +2,7 @@
  * It starts the genuine publisher in this driver's already isolated namespace.
  * Native gateway operations belong to runner.ts; this file never calls a probe.
  */
+import { createHash } from 'node:crypto';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { constants, closeSync, fstatSync, lstatSync, openSync, readSync,
   realpathSync, renameSync, statSync, writeFileSync } from 'node:fs';
@@ -199,7 +200,7 @@ function request(value: unknown): Request {
     || v.uid !== process.getuid?.() || v.gid !== process.getgid?.()
     || v.timeoutMs !== 60000 || !['prompt', 'persisted'].includes(String(v.trustExpected))) throw new Error('stage identity or limits differ');
   const project = canonical(v.project, true), publisher = canonical(v.publisher, false);
-  if (basename(publisher) !== 'code') throw new Error('exact publisher entrypoint required');
+  if (publisher !== '/usr/share/code/code' || basename(publisher) !== 'code') throw new Error('exact publisher entrypoint required');
   const args = v.publisherArgs;
   if (!Array.isArray(args) || args.some(arg => typeof arg !== 'string') || args.length !== 14) throw new Error('fixed publisher argv required');
   const a = args as string[];
@@ -471,6 +472,47 @@ async function focusWorkbench(page: Page, req: Request, stageDeadline: number): 
   if (!after) throw new Error('native workbench did not acquire focus');
 }
 
+// Read only fixed proc facts of our still-owned publisher. No raw proc bytes leave
+// this function; PID start time and executable identity are rechecked after reads.
+function publisherRuntime(pid: number, req: Request): ObjectValue {
+  const root = `/proc/${pid}`;
+  const read = (path: string, limit: number): Buffer => {
+    const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    try {
+      const before = fstatSync(fd), buffer = Buffer.alloc(limit + 1);
+      if (!before.isFile()) throw new Error('publisher post-exec proof refused');
+      let size = 0;
+      while (size < buffer.length) { const n = readSync(fd, buffer, size, buffer.length - size, null); if (!n) break; size += n; }
+      const after = fstatSync(fd);
+      if (size > limit || before.dev !== after.dev || before.ino !== after.ino || before.mode !== after.mode
+        || before.mtimeMs !== after.mtimeMs || before.ctimeMs !== after.ctimeMs) throw new Error('publisher post-exec proof refused');
+      return buffer.subarray(0, size);
+    } finally { closeSync(fd); }
+  };
+  const start = (): string => {
+    const value = read(`${root}/stat`, 8192).toString('utf8'), end = value.lastIndexOf(')');
+    const token = value.slice(end + 2).trim().split(/\s+/u)[19];
+    if (end < 0 || !token || !/^[0-9]+$/u.test(token)) throw new Error('publisher post-exec proof refused');
+    return token;
+  };
+  const born = start(), original = statSync(req.publisher), executable = statSync(`${root}/exe`);
+  if (original.dev !== executable.dev || original.ino !== executable.ino || !executable.isFile()) throw new Error('publisher post-exec proof refused');
+  const label = read(`${root}/attr/current`, 128).toString('ascii');
+  if (label !== 'vscode (unconfined)\n') throw new Error('publisher post-exec proof refused');
+  const status = new Map(read(`${root}/status`, 16384).toString('ascii').trim().split('\n').map(line => { const colon = line.indexOf(':'); return [line.slice(0, colon), line.slice(colon + 1).trim()]; }));
+  for (const name of ['Uid', 'Gid']) { const expected = name === 'Uid' ? req.uid : req.gid; if (status.get(name)?.split(/\s+/u).some(value => Number(value) !== expected) || status.get(name)?.split(/\s+/u).length !== 4) throw new Error('publisher post-exec proof refused'); }
+  if (status.get('NoNewPrivs') !== '1' || ['CapInh', 'CapPrm', 'CapEff', 'CapBnd', 'CapAmb'].some(name => !/^0+$/u.test(status.get(name) ?? ''))) throw new Error('publisher post-exec proof refused');
+  const mount = statSync(`${root}/ns/mnt`).ino, network = statSync(`${root}/ns/net`).ino;
+  if (mount !== statSync('/proc/self/ns/mnt').ino || network !== statSync('/proc/self/ns/net').ino) throw new Error('publisher post-exec proof refused');
+  const cgroup = read(`${root}/cgroup`, 4096), ownCgroup = read('/proc/self/cgroup', 4096);
+  if (!cgroup.equals(ownCgroup) || start() !== born) throw new Error('publisher post-exec proof refused');
+  const final = statSync(`${root}/exe`);
+  if (final.dev !== executable.dev || final.ino !== executable.ino) throw new Error('publisher post-exec proof refused');
+  return { pid, mount_namespace: mount, network_namespace: network, apparmor_label: 'vscode (unconfined)',
+    executable_device: executable.dev, executable_inode: executable.ino, cgroup_sha256: createHash('sha256').update(cgroup).digest('hex'),
+    uid: req.uid, gid: req.gid, capabilities_zero: true, no_new_privileges: true };
+}
+
 async function failureUI(page: Page | undefined): Promise<ObjectValue[]> {
   if (!page || page.isClosed()) return [];
   const result: ObjectValue[] = [];
@@ -549,6 +591,8 @@ async function main(): Promise<void> {
       await delay(25);
     }
     phase = 'native-devtools-admission';
+    if (!child.pid) throw new Error('publisher post-exec proof refused');
+    const runtime = publisherRuntime(child.pid, req);
     browser = await chromium.connectOverCDP(endpoint, { timeout: Math.min(10000, deadline - performance.now()) });
     const contexts = browser.contexts();
     if (contexts.length !== 1) throw new Error('native browser contexts differ');
@@ -575,6 +619,7 @@ async function main(): Promise<void> {
     if (performance.now() >= deadline) throw new Error('stage deadline exceeded');
     clearTimeout(timer);
     phase = 'publisher-shutdown';
+    if (JSON.stringify(publisherRuntime(child.pid, req)) !== JSON.stringify(runtime)) throw new Error('publisher post-exec proof refused');
     shutdownDeadline = performance.now() + 5000;
     await within(browser.close(), Math.max(1, Math.min(1000, shutdownDeadline - performance.now()))); browser = undefined;
     child.kill('SIGTERM');
@@ -582,7 +627,7 @@ async function main(): Promise<void> {
     publisherTerminal(child.exitCode, child.signalCode);
     await finalCapture(publisherClosed, Math.max(1, shutdownDeadline - performance.now()), () => captureError);
     const output = JSON.stringify({ type: 'driver-result', stage: req.stage, nonce: req.nonce, trustPromptAccepted,
-      servers, publisherProof: proof, publisherExit: { code: child.exitCode, signal: child.signalCode }, result }) + '\n';
+      servers, publisherProof: proof, publisherRuntime: runtime, publisherExit: { code: child.exitCode, signal: child.signalCode }, result }) + '\n';
     if (Buffer.byteLength(output) > LIMIT) throw new Error('driver output bound exceeded');
     phase = 'driver-result-publication';
     outputPath(req.driverResultFile);

@@ -3,6 +3,7 @@
 package pluginkitairepo_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -62,6 +64,120 @@ func vscodeProjectGatewayResult(body []byte, commit, tree string) error {
 	return nil
 }
 
+const vscodeArtifactPrefix = "UAP_VSCODE_ARTIFACT_HANDOFF "
+
+func vscodeArtifactObject(value any, fields string) (map[string]any, error) {
+	row, ok := value.(map[string]any)
+	names := strings.Fields(fields)
+	if !ok || len(row) != len(names) {
+		return nil, fmt.Errorf("closed artifact fields required")
+	}
+	for _, name := range names {
+		if _, ok := row[name]; !ok {
+			return nil, fmt.Errorf("artifact field missing")
+		}
+	}
+	return row, nil
+}
+func vscodeArtifactIdentity(value any, archive bool) error {
+	fields := "device inode mode uid gid"
+	if archive {
+		fields += " links size mtime_ns ctime_ns"
+	}
+	row, e := vscodeArtifactObject(value, fields)
+	if e != nil {
+		return e
+	}
+	numbers := map[string]int64{}
+	for key, value := range row {
+		number, ok := value.(json.Number)
+		if !ok {
+			return fmt.Errorf("artifact identity type differs")
+		}
+		n, e := number.Int64()
+		if e != nil || n < 0 {
+			return fmt.Errorf("artifact number refused")
+		}
+		numbers[key] = n
+	}
+	if numbers["inode"] <= 0 || numbers["uid"] != int64(os.Getuid()) || numbers["gid"] != int64(os.Getgid()) {
+		return fmt.Errorf("artifact owner differs")
+	}
+	if archive {
+		if numbers["mode"]&syscall.S_IFMT != syscall.S_IFREG || numbers["links"] != 1 || numbers["size"] <= 0 || numbers["size"] > 32<<20 {
+			return fmt.Errorf("artifact ZIP identity differs")
+		}
+	} else if numbers["mode"]&syscall.S_IFMT != syscall.S_IFDIR {
+		return fmt.Errorf("artifact directory differs")
+	}
+	return nil
+}
+func vscodeArtifactBinding(value any) error {
+	if value == nil {
+		return nil
+	}
+	binding, e := vscodeArtifactObject(value, "upload zip bytes sha256")
+	if e != nil {
+		return e
+	}
+	if e = vscodeArtifactIdentity(binding["upload"], false); e != nil {
+		return e
+	}
+	if e = vscodeArtifactIdentity(binding["zip"], true); e != nil {
+		return e
+	}
+	size, ok := binding["bytes"].(json.Number)
+	zip := binding["zip"].(map[string]any)
+	sha, shaOK := binding["sha256"].(string)
+	if !ok || size != zip["size"] || !shaOK || !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(sha) {
+		return fmt.Errorf("artifact ZIP binding differs")
+	}
+	return nil
+}
+func vscodeProjectArtifactHandoff(body []byte, commit, tree string) ([]byte, error) {
+	if len(body) == 0 || len(body) > 16<<10 || bytes.Count(body, []byte{'\n'}) != 1 || !bytes.HasSuffix(body, []byte{'\n'}) {
+		return nil, fmt.Errorf("single bounded artifact frame required")
+	}
+	value, e := shared.DecodeStrictJSONObject(body)
+	if e != nil {
+		return nil, e
+	}
+	row, e := vscodeArtifactObject(value, "schema_version source_commit source_tree collection_complete output archives")
+	if e != nil {
+		return nil, e
+	}
+	_, status := row["collection_complete"].(bool)
+	if row["schema_version"] != json.Number("1") || row["source_commit"] != commit || row["source_tree"] != tree || !vscodeProjectIdentity.MatchString(commit) || !vscodeProjectIdentity.MatchString(tree) || !status {
+		return nil, fmt.Errorf("artifact handoff source differs")
+	}
+	output, e := vscodeArtifactObject(row["output"], "root frontend native")
+	if e != nil {
+		return nil, e
+	}
+	for _, identity := range output {
+		if e = vscodeArtifactIdentity(identity, false); e != nil {
+			return nil, e
+		}
+	}
+	archives, e := vscodeArtifactObject(row["archives"], "frontend native")
+	if e != nil {
+		return nil, e
+	}
+	for _, binding := range archives {
+		if e = vscodeArtifactBinding(binding); e != nil {
+			return nil, e
+		}
+	}
+	return bytes.TrimSuffix(body, []byte{'\n'}), nil
+}
+
+func vscodeProjectForwardHandoff(r ports.CommandResult, runErr, contextErr error, commit, tree string) ([]byte, error) {
+	if runErr != nil || contextErr != nil || !r.CleanupComplete || (r.ExitCode != 0 && r.ExitCode != 2) || len(r.Stderr) != 0 || len(r.Stdout) >= 1<<20 {
+		return nil, fmt.Errorf("artifact process/capture/cleanup unproved")
+	}
+	return vscodeProjectArtifactHandoff(r.Stdout, commit, tree)
+}
+
 // The test delegates privileged host ownership to the existing reviewed strict
 // controller. No client, sudo, fake HOME or fabricated hosted eligibility is
 // introduced by this wrapper; ordinary full-tree supervision contains Python.
@@ -100,8 +216,13 @@ func TestAgentpluginsVSCodeNativeProjectGatewayLifecycle(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 930*time.Second)
 	defer cancel()
 	r, runErr := (process.OS{}).RunWithDescendantExitGrace(ctx, ports.Command{Argv: []string{"/usr/bin/python3", filepath.Join(source, "scripts", "research-vscode-project.py"), "--output", output}, Env: env, Dir: source, StdoutLimitBytes: 1 << 20}, 5*time.Second)
-	if runErr != nil || ctx.Err() != nil || r.ExitCode != 0 || len(r.Stderr) != 0 {
-		t.Fatalf("trusted project frontend/process/cleanup failed; inspect the two closed CI envelopes (exit %d, error %v)", r.ExitCode, runErr)
+	handoff, err := vscodeProjectForwardHandoff(r, runErr, ctx.Err(), commit, tree)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println(vscodeArtifactPrefix + string(handoff))
+	if r.ExitCode != 0 {
+		t.Fatal("trusted native collection failed; admitted negative handoff retained")
 	}
 	path := filepath.Join(output, "native", "vscode-project-research.json")
 	canonical, err := filepath.EvalSymlinks(path)
@@ -156,5 +277,45 @@ func TestVSCodeProjectGatewayEvidenceRejectsIncompleteAndWrongSource(t *testing.
 		if (err == nil) != (kind == "valid") {
 			t.Fatalf("%s gateway evidence: %v", kind, err)
 		}
+	}
+}
+
+func TestVSCodeProjectGatewayEvidenceArtifactForwarding(t *testing.T) {
+	commit, tree := strings.Repeat("a", 40), strings.Repeat("b", 40)
+	identity := map[string]any{"device": 1, "inode": 2, "mode": syscall.S_IFDIR | 0700, "uid": os.Getuid(), "gid": os.Getgid()}
+	value := map[string]any{"schema_version": 1, "source_commit": commit, "source_tree": tree, "collection_complete": false, "output": map[string]any{"root": identity, "frontend": identity, "native": identity}, "archives": map[string]any{"frontend": nil, "native": nil}}
+	body, e := json.Marshal(value)
+	if e != nil {
+		t.Fatal(e)
+	}
+	body = append(body, '\n')
+	valid := ports.CommandResult{CleanupComplete: true, ExitCode: 2, Stdout: body}
+	if _, e = vscodeProjectForwardHandoff(valid, nil, nil, commit, tree); e != nil {
+		t.Fatal(e)
+	}
+	for _, kind := range []string{"cleanup", "capture", "cancel", "exit", "trailing", "duplicate", "wrong-source"} {
+		t.Run(kind, func(t *testing.T) {
+			r := valid
+			var runErr, contextErr error
+			switch kind {
+			case "cleanup":
+				r.CleanupComplete = false
+			case "capture":
+				runErr = fmt.Errorf("inert late capture error")
+			case "cancel":
+				contextErr = context.Canceled
+			case "exit":
+				r.ExitCode = 1
+			case "trailing":
+				r.Stdout = append(append([]byte{}, body...), 'x')
+			case "duplicate":
+				r.Stdout = append(append([]byte{}, body...), body...)
+			case "wrong-source":
+				r.Stdout = bytes.Replace(body, []byte(tree), []byte(commit), 1)
+			}
+			if _, e := vscodeProjectForwardHandoff(r, runErr, contextErr, commit, tree); e == nil {
+				t.Fatal("unproved handoff forwarded")
+			}
+		})
 	}
 }
