@@ -80,8 +80,13 @@ go run ./cli/cmd/agentplugins run \
 
 Installation `--yes` does not authorize startup. `run` requires one explicit
 target and Project scope; actual startup requires human output and
-`--confirm-client-start`, including for `--inspect`. Extra child arguments are
-not accepted. `--dry-run --format json` is available for a structured preview.
+`--confirm-client-start`, including for `--inspect`. For this Cline route, that
+consent authorizes a native `config mcp --json` verification process followed by
+the selected client command. The second process is an interactive session by
+default, or another configuration inventory with `--inspect`. A failed
+verification prevents the second process. Extra child arguments are not accepted.
+`--dry-run --format json` is available for a structured preview; a dry-run starts
+neither process.
 
 Before startup, UAP verifies package/component ownership and the whole selected
 MCP file, checks native inventory against that exact source, and rechecks the

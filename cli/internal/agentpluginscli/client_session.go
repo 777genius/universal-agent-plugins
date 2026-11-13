@@ -30,8 +30,8 @@ func newRunClientCommand(app App, opts *options) *cobra.Command {
 			return runClientSession(cmd.Context(), cmd, selected, opts, inspect, confirmed)
 		},
 	}
-	command.Flags().BoolVar(&confirmed, "confirm-client-start", false, "allow this one native client process with the reviewed Project MCP source; does not grant workspace trust")
-	command.Flags().BoolVar(&inspect, "inspect", false, "run the native configuration inventory instead of an interactive session; no model call")
+	command.Flags().BoolVar(&confirmed, "confirm-client-start", false, "allow native inventory verification and the selected client command with the reviewed Project MCP source; does not grant workspace trust")
+	command.Flags().BoolVar(&inspect, "inspect", false, "run the native configuration inventory after verification instead of an interactive session; no model call")
 	return command
 }
 
@@ -69,7 +69,7 @@ func runClientSession(ctx context.Context, cmd *cobra.Command, app App, opts *op
 		if opts.format == "json" {
 			return writeJSONOutput(cmd.OutOrStdout(), "run", map[string]any{"client": plan.ClientID, "scope": "project", "servers": plan.Servers, "starts_process": false, "requires_client_start_consent": true})
 		}
-		_, err = fmt.Fprintf(cmd.OutOrStdout(), "Client: %s\nProject: %s\nOwned MCP servers: %s\nThis process selects the whole Project MCP source; User MCP entries are not merged. No trust, activation or login state is changed by UAP.\n",
+		_, err = fmt.Fprintf(cmd.OutOrStdout(), "Client: %s\nProject: %s\nOwned MCP servers: %s\nConfirmed startup first verifies the native inventory, then runs the selected client command.\nThese commands select the whole Project MCP source; User MCP entries are not merged. No trust, activation or login state is changed by UAP.\n",
 			prompt.SafeText(string(plan.ClientID)), prompt.SafeText(plan.Directory), prompt.SafeText(strings.Join(plan.Servers, ", ")))
 		return err
 	}

@@ -53,3 +53,25 @@ output parsing and the existing public composed lifecycle remain separate
 checks. No consent, transport, shared runner, status or ownership rule changes.
 The focused `TestSessionNativeInventory` cases pass locally; coherent lint/core,
 independent review and native current-source acceptance remain required.
+
+## Native process consent wording — 2026-11-13
+
+Source review at `0dd77f85ca682989dadbde430fc371b6574f61c3` confirmed that
+`runClientSession` calls `VerifySession` before `StartNativeSession`, including
+with `--inspect`. For Cline, the first call runs the bounded native inventory
+command; the second runs the selected interactive or inventory command. The
+previous help promised one native client process and did not disclose this
+sequence accurately.
+
+The three help/preview strings and Cline guidance now disclose native inventory
+verification followed by the selected command. Failed verification still
+prevents startup, and dry-run starts neither process. Generic wording uses
+"selected client command" because inspection does not start an interactive
+session. No process path, consent predicate, JSON field, receipt, trust setting,
+exit status or public capability changes.
+
+Root and an independent reviewer checked the text against the current call
+sequence. This wording-only correction adds no implementation-mirroring test.
+The execution environment was unavailable during this correction, so no fresh
+local Go, lint or native run is claimed. Existing exact-source hosted gates and
+full native acceptance remain mandatory before merge; this PR remains Draft.
