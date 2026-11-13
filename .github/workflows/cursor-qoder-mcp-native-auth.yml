@@ -2,11 +2,12 @@ name: Cursor Qoder native Project MCP tools/call
 
 on:
   pull_request:
-    types: [labeled, synchronize, reopened]
+    # Only a fresh label event after exact-HEAD review may expose vendor
+    # credentials. Future pushes cannot inherit that permission silently.
+    types: [labeled]
     paths:
       - 'scripts/project_native_missing_call_runner.py'
       - 'scripts/project_native_missing_call_proof.py'
-      - 'scripts/project_native_missing_call_runner.py'
       - 'scripts/test_project_native_missing_call_proof.py'
       - 'scripts/test_project_native_missing_call_runner.py'
       - '.github/workflows/cursor-qoder-mcp-native-auth.yml'
@@ -24,7 +25,9 @@ jobs:
     # The opt-in label is applied only after a human has reviewed the exact
     # branch code. This job is not selected by ordinary docs/contract CI.
     if: >-
-      ${{ github.event.pull_request.number == 793 &&
+      ${{ github.event.action == 'labeled' &&
+          github.event.label.name == 'ci:github-hosted' &&
+          github.event.pull_request.number == 793 &&
           github.event.pull_request.head.repo.full_name == github.repository &&
           contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') }}
     runs-on: ubuntu-24.04
