@@ -4,7 +4,9 @@ on:
   pull_request:
     paths:
       - 'scripts/project_native_missing_call_proof.py'
+      - 'scripts/project_native_missing_call_runner.py'
       - 'scripts/test_project_native_missing_call_proof.py'
+      - 'scripts/test_project_native_missing_call_runner.py'
       - '.github/workflows/cursor-qoder-mcp-proof.yml'
   workflow_dispatch:
 
@@ -26,4 +28,4 @@ jobs:
           persist-credentials: false
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Run fail-closed receipt contract tests
-        run: python3 -m unittest discover -s scripts -p 'test_project_native_missing_call_proof.py' -v
+        run: python3 -m unittest discover -s scripts -p 'test_project_native_missing_call_*.py' -v
