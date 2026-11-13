@@ -923,3 +923,23 @@ the revised fixture, but cannot reproduce or qualify the Windows runtime.
 On the unchanged Hermes sources at `f8025bfabdfbe40ea2a0f6e5b2a09f6273d97308`,
 the corrected 57 profile tests and all 14 cleanup tests passed locally on Linux,
 with no skips; the diff whitespace check passed. Fresh Windows CI is required.
+
+## Finite owned-build cleanup budget after the Windows census
+
+Original source `95f8648b4ffe03b729c16c3a8b1506f922f33f4e`,
+[run 43505052472, job 132163259326](https://github.com/777genius/universal-agent-plugins/actions/runs/43505052472/job/132163259326),
+completed the official Windows build and the full initial census. The payload
+held 134259 entries and 6258975024 logical bytes; cache held 57890 entries and
+4836389126 bytes; work held 263 entries and 3179853 bytes. The census finished
+after about 20 seconds. The original 120-second cleanup deadline then expired
+inside the payload-anchor join during alias detachment, before final closure
+and before any native profile observation. No identity or alias refusal occurred.
+
+Allow one fixed 600-second budget at the existing cleanup entrypoint. Initial
+census, exact alias unlink/rejoin, final census and payload hash all share that
+same deadline; no phase renews it. Preserve every ownership, inode, alias, member
+and byte guard. The native family remains 720 seconds and admission scans remain
+120 seconds. The existing 180-minute job and 9000-second build elapsed receipt
+remain unchanged; this does not add 600 seconds beyond either outer limit.
+The new budget is prospective, not a measured native pass. A fresh task-owned
+Windows build must complete cleanup and admission before it can qualify.

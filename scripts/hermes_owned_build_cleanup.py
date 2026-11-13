@@ -275,6 +275,6 @@ def build(source, runner, pin):
                         "--source", str(source), "--work", str(roots["work"]),
                         "--cache", str(roots["cache"]), "--out", str(roots["payload"]),
                         "--commit", pin], check=True, timeout=9000)
-        return detach(owned, time.monotonic() + 120)
+        return detach(owned, time.monotonic() + 600)
     finally:
         owned.close()  # Keep all remaining build state on every outcome.
