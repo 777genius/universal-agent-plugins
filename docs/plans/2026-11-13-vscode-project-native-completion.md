@@ -530,3 +530,38 @@ plus absent/hidden/foreign/duplicate cases. Driver, existing Node test and this
 plan are the only paths. No new command, consent, raw content, acceptance or
 qualification is introduced. Tests are unexecuted until an execution gate is
 available; source correction does not prove the cause of actual177.
+
+## Closed input and native-start diagnostic after 269
+
+Actual 269 run43455201997/job131987375585 failed installed-a at
+mcp-trust/mcp-start-deadline. Its original job-log readout reports Start selected,
+no accepted Trust, no Output/launch notification, no sampled connection state.
+The same-container selector correction alone did not resolve startup. These
+negative facts do not establish picker dismissal, trust denial or launch cause.
+
+Pinned VS Code e646868227c3e3a9e3f24277c8c7220be42c0be7
+mcpServer.ts883–899 can await an interactive Error state; lines919–953 emit
+selected-label native-start or command-not-found notifications. mcpCommands.ts
+752–759 shows Output only after awaited start returns. The old registry-only
+matcher could miss these notifications. Add only fixed native-start and
+command-not-found classes, with exact expected-label attribution and existing
+bounded text inspection. Never export the command, error or any raw UI text;
+the debugpy variant without a server label remains unattributed and ignored.
+
+Record one closed postStartInput enum from the actual existing helper after its
+original deadline checks: unobserved, none, action-picker, trust-picker, other,
+multiple. Expected old action input still waits; unknown/multiple input still
+refuses. mcpRegistry.ts425's trust-picker placeholder belongs only to the
+multi-server Pick Trusted branch; classify and refuse it, never select/grant.
+Its presence in current 269 is not established. Keep lastState semantics intact.
+
+Seven existing paths carry the closed schema through driver, Go admission and
+frontend readout with real-helper, serialized-envelope and actual archive tests.
+Late reads record no new input state. Strict type/unknown/missing enum and privacy
+negatives remain. No new command/click, consent, deadline, acceptance or native
+qualification is added. All new execution is unrun pending the genuine CI gate.
+
+Reconciled on external e1ba (following 681) without replaying the superseded review patch.
+Preserve its incremental RPC IDs, runner tests and cleanup/no-child evidence.
+Mixed held/current pending-link snapshots remain pending via the existing helper;
+the original post-HTTP deadline is checked before accepting a tool catalog.

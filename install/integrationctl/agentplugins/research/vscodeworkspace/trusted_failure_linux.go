@@ -72,8 +72,8 @@ func admitTrustedFailure(body []byte, stage, nonce string) (*trustedDriverFailur
 }
 
 func validateTrustedMCPState(value any) error {
-	mcp, err := objectKeys(value, strings.Fields("startSelected trustAccepted lastState stopped starting running other launchNotification outputVisible launchError"), nil)
-	if err != nil || !failureChoice(mcp["lastState"], "none Stopped Starting Running other") || !failureChoice(mcp["launchError"], "none variable-resolution other diagnostic-refused") {
+	mcp, err := objectKeys(value, strings.Fields("startSelected trustAccepted lastState stopped starting running other launchNotification outputVisible launchError postStartInput"), nil)
+	if err != nil || !failureChoice(mcp["lastState"], "none Stopped Starting Running other") || !failureChoice(mcp["launchError"], "none variable-resolution native-start command-not-found other diagnostic-refused") || !failureChoice(mcp["postStartInput"], "unobserved none action-picker trust-picker other multiple") {
 		return fmt.Errorf("closed MCP state refused")
 	}
 	for _, key := range []string{"startSelected", "trustAccepted", "launchNotification", "outputVisible"} {

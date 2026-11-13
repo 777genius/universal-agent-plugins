@@ -627,9 +627,10 @@ def closed_native_readout(body, deadline):
             if type(facts) is not dict or type(facts.get('reason')) is not str or facts['reason'] not in READOUT_REASONS:
                 raise ValueError('readout reason refused')
             mcp = facts.get('mcp')
-            if (type(mcp) is not dict or set(mcp) != set('startSelected trustAccepted lastState stopped starting running other launchNotification outputVisible launchError'.split())
+            if (type(mcp) is not dict or set(mcp) != set('startSelected trustAccepted lastState stopped starting running other launchNotification outputVisible launchError postStartInput'.split())
                     or any(type(mcp[key]) is not bool for key in ('startSelected', 'trustAccepted', 'launchNotification', 'outputVisible'))
-                    or type(mcp['launchError']) is not str or mcp['launchError'] not in ('none', 'variable-resolution', 'other', 'diagnostic-refused')
+                    or type(mcp['launchError']) is not str or mcp['launchError'] not in ('none', 'variable-resolution', 'native-start', 'command-not-found', 'other', 'diagnostic-refused')
+                    or type(mcp['postStartInput']) is not str or mcp['postStartInput'] not in ('unobserved', 'none', 'action-picker', 'trust-picker', 'other', 'multiple')
                     or type(mcp['lastState']) is not str or mcp['lastState'] not in ('none', 'Stopped', 'Starting', 'Running', 'other')
                     or any(type(mcp[key]) is not int or not 0 <= mcp[key] <= 255 for key in ('stopped', 'starting', 'running', 'other'))):
                 raise ValueError('readout MCP facts refused')

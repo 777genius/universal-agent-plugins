@@ -237,6 +237,13 @@ func TestDisplayPublicationPendingUnlinkAcceptsOnlyMatchingInodeAsNotReady(t *te
 	if err != nil || !pendingDisplayLock(one, one, proof) {
 		t.Fatal("same-inode single-link transitional snapshot rejected", err)
 	}
+	for _, current := range []os.FileInfo{two, one} {
+		for _, held := range []os.FileInfo{two, one} {
+			if !pendingDisplayLock(current, held, proof) || !pendingDisplayLock(held, current, proof) || !pendingDisplayLock(held, one, proof) {
+				t.Fatal("matching mixed pending-unlink snapshots refused")
+			}
+		}
+	}
 	foreign := filepath.Join(filepath.Dir(lock), "foreign-lock")
 	if err := os.WriteFile(foreign, body, 0444); err != nil {
 		t.Fatal(err)

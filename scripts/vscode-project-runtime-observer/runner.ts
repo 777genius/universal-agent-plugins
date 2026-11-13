@@ -312,6 +312,7 @@ async function callGateway(server: vscode.McpGatewayServer, expected: Server, re
     while (performance.now() < deadline) {
       const id = nextId++;
       const listed = await gatewayHTTP(address, 'POST', session, { jsonrpc: '2.0', id, method: 'tools/list', params: {} }, deadline);
+      if (performance.now() >= deadline) throw new Error('exact gateway tool catalog differs');
       const observed = rpc(listed, id);
       if (listed.session !== session || !Array.isArray(observed.tools) || observed.tools.length > 1)
         throw new Error('exact gateway tool catalog differs');

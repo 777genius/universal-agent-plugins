@@ -18,7 +18,7 @@ import (
 
 func closedFailureFixture() map[string]any {
 	return map[string]any{"type": "driver-failure", "stage": "empty-a", "nonce": "inert-nonce", "phase": "publisher-startup", "code": "closed-stage-contract-refused", "visibleNativeUI": []any{map[string]any{"kind": "dialog", "messagePresent": false}, map[string]any{"kind": "quick-input"}, map[string]any{"kind": "quick-label"}}, "diagnostics": map[string]any{
-		"mcp": map[string]any{"startSelected": false, "trustAccepted": false, "lastState": "none", "launchNotification": false, "outputVisible": false, "launchError": "none", "stopped": 0, "starting": 0, "running": 0, "other": 0}, "reason": "publisher-startup-failed", "captureReason": "none", "publisherExitCode": nil, "publisherSignal": "none", "proofSeen": true, "endpointSeen": false, "publisherMergedBytes": 0, "preVerifierStderrBytes": 0, "mergedBytesCapped": false, "stderrBytesCapped": false,
+		"mcp": map[string]any{"startSelected": false, "trustAccepted": false, "lastState": "none", "launchNotification": false, "outputVisible": false, "launchError": "none", "postStartInput": "unobserved", "stopped": 0, "starting": 0, "running": 0, "other": 0}, "reason": "publisher-startup-failed", "captureReason": "none", "publisherExitCode": nil, "publisherSignal": "none", "proofSeen": true, "endpointSeen": false, "publisherMergedBytes": 0, "preVerifierStderrBytes": 0, "mergedBytesCapped": false, "stderrBytesCapped": false,
 		"startupSignatures": map[string]any{"sandboxUnavailable": false, "namespaceDenied": false, "sharedLibraryMissing": false, "glibcVersionMissing": false, "displayUnavailable": false}}}
 }
 func failureBody(t *testing.T, value any) []byte {
@@ -215,13 +215,36 @@ func TestTrustedFailureMCPSubstepsRemainClosedAndNegative(t *testing.T) {
 }
 
 func TestTrustedFailureLaunchDiagnosticPrivacy(t *testing.T) {
-	for _, key := range []string{"launchNotification", "outputVisible", "launchError", "private"} {
+	if _, err := admitTrustedFailure(failureBody(t, closedFailureFixture()), "empty-a", "inert-nonce"); err != nil {
+		t.Fatal("unmodified serialized fixture refused", err)
+	}
+	for _, key := range []string{"launchNotification", "outputVisible", "launchError", "postStartInput", "private"} {
 		value := closedFailureFixture()
 		facts := value["diagnostics"].(map[string]any)
 		mcp := facts["mcp"].(map[string]any)
 		mcp[key] = "private-cookie-path"
-		if err := validateTrustedMCPState(mcp); err == nil {
+		if _, err := admitTrustedFailure(failureBody(t, value), "empty-a", "inert-nonce"); err == nil {
 			t.Fatal("private diagnostic admitted", key)
+		}
+	}
+}
+
+func TestTrustedFailurePostStartInputAndNativeErrorEnums(t *testing.T) {
+	for _, input := range strings.Fields("unobserved none action-picker trust-picker other multiple") {
+		for _, launch := range strings.Fields("native-start command-not-found") {
+			value := closedFailureFixture()
+			mcp := value["diagnostics"].(map[string]any)["mcp"].(map[string]any)
+			mcp["postStartInput"], mcp["launchError"] = input, launch
+			if _, err := admitTrustedFailure(failureBody(t, value), "empty-a", "inert-nonce"); err != nil {
+				t.Fatal("closed diagnostic enum refused", input, launch, err)
+			}
+		}
+	}
+	for _, input := range []any{nil, true, 1, "PRIVATE_INPUT", map[string]any{"text": "PRIVATE"}} {
+		value := closedFailureFixture()
+		value["diagnostics"].(map[string]any)["mcp"].(map[string]any)["postStartInput"] = input
+		if _, err := admitTrustedFailure(failureBody(t, value), "empty-a", "inert-nonce"); err == nil {
+			t.Fatal("unknown input diagnostic admitted")
 		}
 	}
 }

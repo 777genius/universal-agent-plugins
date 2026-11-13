@@ -149,7 +149,7 @@ test('actual trigger reader waits only for the owned two-link transition and rej
 const gatewayStart = source.indexOf('async function callGateway(');
 const gatewayEnd = source.indexOf('async function observe(', gatewayStart);
 assert(gatewayStart > 0 && gatewayEnd > gatewayStart);
-function harness(catalogs, wrongSession = false) {
+function harness(catalogs, wrongSession = false, behavior = '') {
   let clock = 0, listed = 0;
   const events = [], session = 'owned-session';
   const tool = { name: 'inspect_runtime', description: 'Inspect only disposable fixture runtime facts.',
@@ -176,10 +176,16 @@ function harness(catalogs, wrongSession = false) {
       if (payload.method === 'initialize') return { status: 200, session, id: payload.id,
         result: { protocolVersion: '2025-06-18', serverInfo: { name: 'VS Code MCP Gateway', version: '1.0.0' } } };
       if (payload.method === 'notifications/initialized') return { status: 202, session, body: Buffer.alloc(0) };
-      if (payload.method === 'tools/list') return { status: 200, session: wrongSession ? 'foreign' : session,
-        id: payload.id, result: { tools: catalogs[Math.min(listed++, catalogs.length - 1)] } };
-      if (payload.method === 'tools/call') return { status: 200, session, id: payload.id,
-        result: { isError: false, content: [{ type: 'text', text: JSON.stringify(facts) }] } };
+      if (payload.method === 'tools/list') {
+        if (behavior === 'late-catalog') clock = 1000;
+        return { status: 200, session: wrongSession ? 'foreign' : session,
+          id: payload.id, result: { tools: catalogs[Math.min(listed++, catalogs.length - 1)] } };
+      }
+      if (payload.method === 'tools/call') {
+        if (behavior === 'call-fails') throw new Error('inert call failed');
+        return { status: 200, session, id: payload.id,
+          result: { isError: false, content: [{ type: 'text', text: JSON.stringify(facts) }] } };
+      }
       throw new Error('unreviewed method');
     } };
   vm.createContext(sandbox);
@@ -216,4 +222,15 @@ test('persistent empty catalog expires the original deadline without tool invoca
   assert(h.events.filter(entry => entry[0] === 'tools/list').length <= 10);
   assert.equal(h.events.some(entry => entry[0] === 'tools/call'), false);
   assert.equal(h.events.at(-1)[0], 'DELETE');
+});
+
+test('late catalog cannot invoke tools/call and a failed tool call is never retried', async () => {
+  const tool = harness([[]]).tool;
+  for (const behavior of ['late-catalog', 'call-fails']) {
+    const h = harness([[tool]], false, behavior);
+    await assert.rejects(h.run(), behavior === 'late-catalog' ? /exact gateway tool catalog differs/ : /inert call failed/);
+    assert.equal(h.events.filter(entry => entry[0] === 'tools/call').length, behavior === 'call-fails' ? 1 : 0);
+    assert.equal(h.events.filter(entry => entry[0] === 'DELETE').length, 1);
+    assert.deepEqual(h.events.find(entry => entry[0] === 'tools/list'), ['tools/list', 2]);
+  }
 });

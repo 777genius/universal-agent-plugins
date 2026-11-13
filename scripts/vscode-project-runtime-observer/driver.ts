@@ -66,14 +66,22 @@ function launchDiagnostic(label: string, root: LaunchDocument = (globalThis as u
         text += value;
       }
       const prefix = 'Error starting ' + label + ': ';
-      if (!text.startsWith(prefix)) continue;
+      const commandSuffix = '" needed to run ' + label + ' was not found.';
+      if (text.startsWith(prefix)) {
+        const suffix = text.slice(prefix.length);
+        launchError = suffix.startsWith('CodeExpectedError: Variable ') && [
+          ' can not be resolved because no environment variable name is given.',
+          ' can not be resolved because no settings name is given.',
+          ' can not be resolved because setting ', ': can not find workspace folder of '
+        ].some(literal => suffix.includes(literal)) ? 'variable-resolution' : 'other';
+      } else if (text.startsWith('The MCP server ' + label + ' could not be started: ')) {
+        launchError = 'native-start';
+      } else if (text.startsWith('The command "') && text.endsWith(commandSuffix)) {
+        const command = text.slice('The command "'.length, -commandSuffix.length);
+        if (!command || command.includes('"')) continue;
+        launchError = 'command-not-found';
+      } else continue;
       if (++matched > 1) return refused;
-      const suffix = text.slice(prefix.length);
-      launchError = suffix.startsWith('CodeExpectedError: Variable ') && [
-        ' can not be resolved because no environment variable name is given.',
-        ' can not be resolved because no settings name is given.',
-        ' can not be resolved because setting ', ': can not find workspace folder of '
-      ].some(literal => suffix.includes(literal)) ? 'variable-resolution' : 'other';
     }
     let shown = 0;
     for (const node of outputs) if (node.getClientRects().length && node.getAttribute('aria-label') === 'MCP: ' + label + ' - Output') shown++;
@@ -128,9 +136,10 @@ function failureFacts(error: unknown, capture: unknown, code: unknown, signal: u
   const state = mcp.lastState === undefined ? 'none' : typeof mcp.lastState === 'string' && ['none', 'Stopped', 'Starting', 'Running', 'other'].includes(mcp.lastState) ? mcp.lastState : 'other';
   const observations = (value: unknown): number => typeof value === 'number' ? Math.min(255, count(value)) : 0;
   return { mcp: { startSelected: mcp.startSelected === true, trustAccepted: mcp.trustAccepted === true, lastState: state,
+    postStartInput: typeof mcp.postStartInput === 'string' && ['unobserved', 'none', 'action-picker', 'trust-picker', 'other', 'multiple'].includes(mcp.postStartInput) ? mcp.postStartInput : 'unobserved',
     stopped: observations(mcp.stopped), starting: observations(mcp.starting),
     running: observations(mcp.running), other: observations(mcp.other), launchNotification: mcp.launchNotification === true, outputVisible: mcp.outputVisible === true,
-    launchError: typeof mcp.launchError === 'string' && ['none', 'variable-resolution', 'other', 'diagnostic-refused'].includes(mcp.launchError) ? mcp.launchError : 'none' }, reason: failureReason(error), captureReason: capture === undefined ? 'none' : failureReason(capture),
+    launchError: typeof mcp.launchError === 'string' && ['none', 'variable-resolution', 'native-start', 'command-not-found', 'other', 'diagnostic-refused'].includes(mcp.launchError) ? mcp.launchError : 'none' }, reason: failureReason(error), captureReason: capture === undefined ? 'none' : failureReason(capture),
     publisherExitCode: typeof code === 'number' && Number.isInteger(code) && code >= 0 && code <= 255 ? code : null,
     publisherSignal: signal === null || signal === undefined ? 'none' : typeof signal === 'string' && signals.includes(signal) ? signal : 'other',
     proofSeen: proofSeen === true, endpointSeen: endpointSeen === true,
@@ -391,7 +400,7 @@ async function workspaceTrust(page: Page, req: Request): Promise<boolean> {
   await dialog.waitFor({ state: 'hidden', timeout: 3000 });
   return true;
 }
-async function startInputReady(page: Page, label: string, deadline: number): Promise<boolean> {
+async function startInputReady(page: Page, label: string, deadline: number, mcp: ObjectValue = {}): Promise<boolean> {
   const remaining = (): number => {
     if (performance.now() >= deadline) throw new Error('native MCP startup deadline exceeded');
     return deadline - performance.now();
@@ -399,11 +408,12 @@ async function startInputReady(page: Page, label: string, deadline: number): Pro
   const input = page.locator('.quick-input-widget:visible input');
   const count = await within(input.count(), remaining());
   remaining();
-  if (count > 1) throw new Error('native UI selection is absent or ambiguous');
-  if (!count) return true;
+  if (count > 1) { mcp.postStartInput = 'multiple'; throw new Error('native UI selection is absent or ambiguous'); }
+  if (!count) { mcp.postStartInput = 'none'; return true; }
   const placeholder = await within(input.getAttribute('placeholder', { timeout: remaining() }), remaining());
   remaining();
-  if (placeholder !== "Select action for '" + label + "'") throw new Error('native UI selection is absent or ambiguous');
+  mcp.postStartInput = placeholder === "Select action for '" + label + "'" ? 'action-picker' : placeholder === 'Select MCP servers to trust' ? 'trust-picker' : 'other';
+  if (mcp.postStartInput !== 'action-picker') throw new Error('native UI selection is absent or ambiguous');
   return false;
 }
 async function startServer(page: Page, server: Server, stageDeadline: number, setPhase: (phase: McpPhase) => void, mcp: ObjectValue = {}): Promise<ObjectValue> {
@@ -431,7 +441,7 @@ async function startServer(page: Page, server: Server, stageDeadline: number, se
       await dialog.waitFor({ state: 'hidden', timeout: 3000 });
       trusted = true; mcp.trustAccepted = true; catalogOpen = false;
     } else if (!catalogOpen) {
-      if (!await startInputReady(page, server.label, deadline)) { await delay(Math.min(50, deadline - performance.now())); continue; }
+      if (!await startInputReady(page, server.label, deadline, mcp)) { await delay(Math.min(50, deadline - performance.now())); continue; }
       let observed: ObjectValue;
       try { observed = await within(page.evaluate(launchDiagnostic, server.label), Math.max(1, deadline - performance.now())); }
       catch { observed = { launchError: 'diagnostic-refused' }; }
@@ -439,7 +449,7 @@ async function startServer(page: Page, server: Server, stageDeadline: number, se
       Object.assign(mcp, observed);
       if (observed.launchError === 'diagnostic-refused') throw new Error('native UI selection is absent or ambiguous');
       if (observed.outputVisible !== true) { await delay(Math.min(50, deadline - performance.now())); continue; }
-      if (!await startInputReady(page, server.label, deadline)) continue;
+      if (!await startInputReady(page, server.label, deadline, mcp)) continue;
       const dialogCount = await (await visibleDialogs(page)).count();
       if (performance.now() >= deadline) throw new Error('native MCP startup deadline exceeded');
       if (dialogCount) continue;

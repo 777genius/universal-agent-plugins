@@ -312,7 +312,7 @@ test('MCP telemetry is finite and never coerces or emits hostile state values', 
   const hostile = { toString() { throw new Error('private'); }, valueOf() { throw new Error('private'); } };
   const row = facts(new Error('trigger publication refused'), undefined, null, null, true, true, Buffer.alloc(0), 0, 0,
     { startSelected: true, trustAccepted: false, lastState: hostile, stopped: hostile, starting: 999, running: -1, other: NaN, private: 'secret' });
-  assert.deepEqual(row.mcp, { startSelected: true, trustAccepted: false, lastState: 'other', stopped: 0, starting: 255, running: 0, other: 0, launchNotification: false, outputVisible: false, launchError: 'none' });
+  assert.deepEqual(row.mcp, { startSelected: true, trustAccepted: false, lastState: 'other', postStartInput: 'unobserved', stopped: 0, starting: 255, running: 0, other: 0, launchNotification: false, outputVisible: false, launchError: 'none' });
   assert.equal(row.reason, 'trigger-publication-refused'); assert.equal(JSON.stringify(row).includes('secret'), false);
 });
 
@@ -397,4 +397,49 @@ test('launch Output uses the exact labelled document container, never its generi
   for (const rows of [[], [node('MCP: foreign - Output')], [node('MCP: owned - Output', false)]])
     assert.equal(inspect(rows).outputVisible, false);
   assert.equal(inspect([node('MCP: owned - Output'), node('MCP: owned - Output')]).launchError, 'diagnostic-refused');
+});
+
+test('actual pending-input helper records only current closed observations without acting or renewing budget', async () => {
+  for (const kind of ['none', 'action-picker', 'trust-picker', 'other', 'multiple', 'late-count', 'late-placeholder']) {
+    let clock = 0, attributes = 0;
+    const box = { Error, performance: { now: () => clock }, within: async value => value };
+    vm.createContext(box);
+    vm.runInContext(stripTypeScriptTypes(section('async function startInputReady(', 'async function startServer('), { mode: 'strip' }) + '\nglobalThis.read = startInputReady;', box);
+    const mcp = {};
+    const page = { locator: () => ({
+      count: async () => { if (kind === 'late-count') clock = 100; return kind === 'none' ? 0 : kind === 'multiple' ? 2 : 1; },
+      getAttribute: async () => { attributes++; if (kind === 'late-placeholder') clock = 100;
+        return kind === 'action-picker' ? "Select action for 'owned'" : kind === 'trust-picker' ? 'Select MCP servers to trust' : 'PRIVATE_INPUT'; }
+    }) };
+    if (['none', 'action-picker'].includes(kind)) assert.equal(await box.read(page, 'owned', 100, mcp), kind === 'none');
+    else await assert.rejects(box.read(page, 'owned', 100, mcp), /native UI selection|native MCP startup deadline/);
+    if (kind.startsWith('late-')) assert.equal(Object.hasOwn(mcp, 'postStartInput'), false);
+    else assert.equal(mcp.postStartInput, kind);
+    if (['none', 'multiple', 'late-count'].includes(kind)) assert.equal(attributes, 0);
+    assert.equal(JSON.stringify(mcp).includes('PRIVATE'), false);
+  }
+});
+
+test('selected-server native notifications are classified without exporting command/error text', () => {
+  const inspect = texts => JSON.parse(JSON.stringify(sandbox.launch('owned', {
+    querySelectorAll: selector => selector === '.notification-list-item-message' ? texts.map(text => ({ text, getClientRects: () => [1] })) : [],
+    createTreeWalker: node => { let done = false; return { nextNode: () => done ? null : (done = true, { nodeValue: node.text }) }; }
+  })));
+  for (const [text, error] of [
+    ['The MCP server owned could not be started: PRIVATE_ERROR', 'native-start'],
+    ['The command "/PRIVATE/command" needed to run owned was not found.', 'command-not-found'],
+    ['The MCP server foreign could not be started: PRIVATE_ERROR', 'none'],
+    ['The command "/PRIVATE/command" needed to run foreign was not found.', 'none'],
+    ['The command "/PRIVATE/debugpy" was not found. You can specify the path to debugpy in the dev.debug.debugpyPath option.', 'none'],
+    ['The command "" needed to run owned was not found.', 'none']
+  ]) {
+    const value = inspect([text]);
+    assert.equal(value.launchError, error); assert.equal(value.launchNotification, error !== 'none');
+    assert.equal(JSON.stringify(value).includes('PRIVATE'), false);
+  }
+  assert.equal(inspect(['The MCP server owned could not be started: PRIVATE', 'The command "/PRIVATE" needed to run owned was not found.']).launchError, 'diagnostic-refused');
+  for (const state of ['unobserved', 'none', 'action-picker', 'trust-picker', 'other', 'multiple']) {
+    assert.equal(facts(undefined, undefined, null, null, false, false, Buffer.alloc(0), 0, 0, { postStartInput: state }).mcp.postStartInput, state);
+  }
+  assert.equal(facts(undefined, undefined, null, null, false, false, Buffer.alloc(0), 0, 0, { postStartInput: { toString() { throw new Error('PRIVATE'); } } }).mcp.postStartInput, 'unobserved');
 });

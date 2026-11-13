@@ -123,7 +123,7 @@ func (p *displayLockPublication) ready(lock, temp string, proof isolationProof) 
 	if err != nil {
 		return false, err
 	}
-	if !transientDisplayLock(held, proof) || !transientDisplayLock(current, proof) || !pendingDisplayLock(held, other, proof) {
+	if !pendingDisplayLock(current, held, proof) || !pendingDisplayLock(held, current, proof) || !pendingDisplayLock(held, other, proof) {
 		return false, fmt.Errorf("display lock publication pair refused")
 	}
 	return false, nil

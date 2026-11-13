@@ -605,7 +605,7 @@ class ClosedNativeReadoutTests(unittest.TestCase):
                 'diagnostics': {'reason': 'mcp-start-deadline', 'private': 'PRIVATE_ENDPOINT',
                     'mcp': {'startSelected': True, 'trustAccepted': False, 'lastState': 'Stopped',
                             'stopped': 17, 'starting': 0, 'running': 0, 'other': 0,
-                            'launchNotification': True, 'outputVisible': False, 'launchError': 'other'}}}
+                            'launchNotification': True, 'outputVisible': False, 'launchError': 'other', 'postStartInput': 'unobserved'}}}
 
     def archive(self, members):
         output = io.BytesIO()
@@ -633,7 +633,7 @@ class ClosedNativeReadoutTests(unittest.TestCase):
 
     def test_unknown_context_fields_and_numeric_boolean_facts_refuse(self):
         for kind in ('stage', 'phase', 'reason', 'unknown-type', 'extra-outer', 'extra-mcp',
-                     'state', 'boolean', 'numeric-boolean', 'count', 'launch-boolean', 'output-boolean', 'launch-enum', 'missing-count'):
+                     'state', 'boolean', 'numeric-boolean', 'count', 'launch-boolean', 'output-boolean', 'launch-enum', 'input-enum', 'input-type', 'missing-input', 'missing-count'):
             with self.subTest(kind=kind):
                 value = self.failure(); mcp = value['diagnostics']['mcp']
                 if kind in ('stage', 'phase'): value[kind] = 'PRIVATE_TEXT'
@@ -648,6 +648,9 @@ class ClosedNativeReadoutTests(unittest.TestCase):
                 elif kind == 'launch-boolean': mcp['launchNotification'] = 1
                 elif kind == 'output-boolean': mcp['outputVisible'] = 'PRIVATE'
                 elif kind == 'launch-enum': mcp['launchError'] = 'PRIVATE'
+                elif kind == 'input-enum': mcp['postStartInput'] = 'PRIVATE_INPUT'
+                elif kind == 'input-type': mcp['postStartInput'] = True
+                elif kind == 'missing-input': del mcp['postStartInput']
                 else: del mcp['stopped']
                 with self.assertRaises(ValueError):
                     collector.closed_native_readout(self.archive([('installed-a.observation.json', value)]), time.monotonic() + 5)
@@ -685,6 +688,17 @@ class ClosedNativeReadoutTests(unittest.TestCase):
                     with self.assertRaises(ValueError):
                         collector.closed_native_readout(bytes(changed), time.monotonic() + 5)
                     archive.assert_not_called()
+
+
+    def test_actual_archive_preserves_only_closed_input_and_native_error_enums(self):
+        for state in ('unobserved', 'none', 'action-picker', 'trust-picker', 'other', 'multiple'):
+            for error in ('native-start', 'command-not-found'):
+                value = self.failure()
+                value['diagnostics']['mcp'].update(postStartInput=state, launchError=error)
+                rows = collector.closed_native_readout(self.archive([('installed-a.observation.json', value)]), time.monotonic() + 5)
+                self.assertEqual(rows[0]['mcp']['postStartInput'], state)
+                self.assertEqual(rows[0]['mcp']['launchError'], error)
+                self.assertNotIn('PRIVATE', json.dumps(rows))
 
 
 if __name__ == "__main__":
