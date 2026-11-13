@@ -289,6 +289,8 @@ class ProfileLedger:
                     if info.st_nlink != 1 or info.st_size > limit or info.st_dev != identity_root[0]:
                         profile_file_refusal(self.root, child, info, identity_root[0])
                     if scanner and info.st_size != limit: raise AssertionError("Pinned scanner length differs")
+                    if scanner and os.name != "nt" and stat.S_IMODE(info.st_mode) != 0o700:
+                        raise AssertionError("Pinned scanner mode differs")
                     fd = owned_handle(child, parent=None if os.name == "nt" else descriptor)
                     try:
                         opened = os.fstat(fd)
@@ -502,7 +504,7 @@ def admission_contracts():
                 with self.subTest(effect=effect), tempfile.TemporaryDirectory() as temporary, patch.dict(globals(), {"LINTAI_PINS": pins}):
                     root = Path(temporary); (root / "config.json").write_text('{}')
                     scanner = root / lintai_member()[0]
-                    scanner.parent.mkdir(parents=True); scanner.write_bytes(body)
+                    scanner.parent.mkdir(parents=True); scanner.write_bytes(body); scanner.chmod(0o700)
                     held = ProfileLedger(root, lintai=True)
                     try:
                         held.verify({}, "config.json")
@@ -528,6 +530,22 @@ def admission_contracts():
                     if effect == "missing":
                         with self.assertRaises(AssertionError): ProfileLedger(root, lintai=True)
 
+        @unittest.skipIf(os.name == "nt", "Windows chmod has a different documented permission domain")
+        def test_scanner_initial_posix_mode_is_exact_before_hashing(self):
+            body = b's' * ((1 << 20) + 17)
+            pins = {key: (len(body), hashlib.sha256(body).hexdigest()) for key in LINTAI_PINS}
+            for mode in (0o600, 0o755, 0o777):
+                with self.subTest(mode=mode), tempfile.TemporaryDirectory() as temporary, patch.dict(globals(), {"LINTAI_PINS": pins}):
+                    root = Path(temporary); scanner = root / lintai_member()[0]
+                    scanner.parent.mkdir(parents=True); scanner.write_bytes(body); scanner.chmod(mode)
+                    original = os.read
+                    def guarded(fd, count):
+                        if os.fstat(fd).st_ino == scanner.stat().st_ino:
+                            raise AssertionError("scanner bytes read before mode admission")
+                        return original(fd, count)
+                    with patch('os.read', side_effect=guarded), self.assertRaisesRegex(AssertionError, "Pinned scanner mode differs"):
+                        ProfileLedger(root, lintai=True)
+
         def test_unknown_first_effect_prevents_every_later_mutation(self):
             with tempfile.TemporaryDirectory() as temporary:
                 parent = Path(temporary); binary = parent / "inert"; binary.write_text("never executed")
@@ -537,7 +555,7 @@ def admission_contracts():
                     plugin.mkdir(parents=True)
                     (plugin / "plugin.json").write_text('{"name":"inert","version":"1.0.0"}')
                     scanner = Path(env["AGENTPLUGINS_HOME"]).parent / lintai_member()[0]
-                    scanner.parent.mkdir(parents=True); scanner.write_bytes(b'scanner')
+                    scanner.parent.mkdir(parents=True); scanner.write_bytes(b'scanner'); scanner.chmod(0o700)
                     return '[]'
                 def command(_helper, _agy, root, selector, action, _source, _pins):
                     calls.append(action)

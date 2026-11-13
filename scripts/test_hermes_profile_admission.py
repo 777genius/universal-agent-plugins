@@ -797,6 +797,71 @@ class BundledRuntimeContracts(unittest.TestCase):
                     CASE["payload_contract"](root, source, target)
                 document[key] = original
 
+    def test_two_internal_regular_aliases_are_closed_before_stream_hashes(self):
+        import hashlib
+        import time
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve(); (root / "first").write_bytes(b"owned runtime")
+            os.link(root / "first", root / "second")
+            identity = CASE["directory_identity"](root)
+            first = CASE["payload_snapshot"](root, identity, time.monotonic() + 5)
+            self.assertEqual(first["logical_regular_bytes"], 2 * len(b"owned runtime"))
+            self.assertEqual(first["entries"], 3)
+            self.assertEqual(first, CASE["payload_snapshot"](root, identity, time.monotonic() + 5))
+            self.assertNotIn("owned runtime", json.dumps(first))
+
+    def test_outside_regular_alias_refuses_without_reading_any_file_body(self):
+        import time
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary).resolve(); root = parent / "payload"; root.mkdir()
+            foreign = parent / "private"; foreign.write_bytes(b"FOREIGN-PRIVATE-BYTES")
+            os.link(foreign, root / "borrowed")
+            identity = CASE["directory_identity"](root)
+            with mock.patch.object(os, "read", side_effect=AssertionError("foreign body read")):
+                with self.assertRaisesRegex(RuntimeError, "hardlink escapes runtime"):
+                    CASE["payload_snapshot"](root, identity, time.monotonic() + 5)
+            self.assertEqual(foreign.read_bytes(), b"FOREIGN-PRIVATE-BYTES")
+
+    def test_late_outside_alias_is_rejoined_before_first_hash_read(self):
+        import time
+        function = CASE["payload_hardlink_closure"]
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary).resolve(); root = parent / "payload"; root.mkdir()
+            leaf = root / "runtime"; leaf.write_bytes(b"owned bytes")
+            identity = CASE["directory_identity"](root)
+            def add_alias(records):
+                function(records)
+                os.link(leaf, parent / "late-foreign")
+            with mock.patch.dict(CASE["payload_snapshot"].__globals__, {"payload_hardlink_closure": add_alias}), mock.patch.object(os, "read", side_effect=AssertionError("hash before late-link check")):
+                with self.assertRaisesRegex(RuntimeError, "metadata changed before hashing"):
+                    CASE["payload_snapshot"](root, identity, time.monotonic() + 5)
+            self.assertEqual((parent / "late-foreign").read_bytes(), b"owned bytes")
+
+    def test_same_inode_aliases_must_have_identical_complete_metadata(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve(); first = root / "first"; first.write_bytes(b"owned")
+            os.link(first, root / "second")
+            before = CASE["stable_file"](first.stat())
+            info = first.stat(); os.utime(first, ns=(info.st_atime_ns, info.st_mtime_ns - 60_000_000_000))
+            after = CASE["stable_file"]((root / "second").stat())
+            self.assertEqual(before[:2], after[:2]); self.assertNotEqual(before, after)
+            records = {"first": {"type": "file", "identity": before}, "second": {"type": "file", "identity": after}}
+            with mock.patch.object(os, "read", side_effect=AssertionError("body before metadata closure")):
+                with self.assertRaisesRegex(RuntimeError, "hardlink metadata differs"):
+                    CASE["payload_hardlink_closure"](records)
+
+    def test_complete_metadata_pass_keeps_original_deadline_and_byte_bound(self):
+        import time
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve(); (root / "runtime").write_bytes(b"owned")
+            identity = CASE["directory_identity"](root)
+            with mock.patch.dict(CASE["payload_snapshot"].__globals__, {"PAYLOAD_BYTES": 1}), mock.patch.object(os, "read", side_effect=AssertionError("body before byte bound")):
+                with self.assertRaisesRegex(RuntimeError, "payload byte bound"):
+                    CASE["payload_snapshot"](root, identity, time.monotonic() + 5)
+            with mock.patch.object(os, "read", side_effect=AssertionError("body after deadline")):
+                with self.assertRaisesRegex(RuntimeError, "payload scan deadline"):
+                    CASE["payload_snapshot"](root, identity, time.monotonic() - 1)
+
     def test_payload_streams_large_bytes_but_configuration_remains_bounded(self):
         import time
         with tempfile.TemporaryDirectory() as temporary:

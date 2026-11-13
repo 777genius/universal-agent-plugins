@@ -348,18 +348,21 @@ def fixtures(root, nonce):
     return roots
 
 
-def post_ledger(root, before, roots, profiles, budget):
+def post_ledger(root, before, roots, profiles, budget, bootstrap):
     from devin_structured_inventory_admission import metadata_inventory
-    from client_automation_native_probe import snapshot, grok_profile_bootstrap
+    from client_automation_native_probe import snapshot
     after = metadata_inventory(root, budget)
-    def allowed(path):
-        return path == 'request.json' or path in ('home/.grok/docs', 'home/.grok/docs/user-guide', 'home/.grok/logs') or bool(re.fullmatch(r'home/\.grok/docs/user-guide/[0-9]{2}-[a-z0-9-]+\.md', path)) or path == 'home/.grok/logs/unified.jsonl'
-    accepted = all(after.get(path) == value for path, value in before.items() if not allowed(path)) and all(path in before or allowed(path) for path in after)
-    current = {name: snapshot(path) for name, path in roots.items()}
+    current, added, accepted = {}, [], False
     try:
-        added = grok_profile_bootstrap(profiles, current)
-    except ValueError:
-        added, accepted = [], False
+        bootstrap.metadata(before, after)  # All membership/authority before any new byte read.
+        budget.check()
+        current = {name: snapshot(path) for name, path in roots.items()}
+        uuid_body = ordinary(root / 'home/.grok/agent_id', 36)
+        require(metadata_inventory(root, budget) == after, 'profile changed while hashing')
+        added = bootstrap.admit(before, after, profiles, current, uuid_body)
+        accepted = True
+    except (ValueError, OSError):
+        current = {}  # Never publish a partial/refused byte snapshot as complete.
     return dict(accepted=accepted, before=before, after=after, profiles_before=profiles, profiles_after=current, native_bootstrap=added)
 
 
@@ -397,6 +400,8 @@ def validate_bootstrap_capture(ledger, capture):
 def capture_bootstrap_files(root, ledger, budget):
     """Read only ten task-owned candidates after the strict controller has settled."""
     from devin_structured_inventory_admission import metadata_inventory
+    require(type(ledger.get('profiles_after')) is dict
+            and type(ledger['profiles_after'].get('user_profile')) is dict, 'bootstrap-profile-snapshot')
     capture, total = dict(schema_version=1, files={}), 0
     for path in BOOTSTRAP_FILES:
         budget.check()
@@ -644,6 +649,7 @@ def admit_publication(output, packet, expected_commit, expected_tree, destinatio
 
 def run(output):
     import project_native_research as shared
+    from grok_acp_bootstrap import NativeBootstrap
     from project_native_collectors.grok import ACQUISITION
     from devin_structured_inventory_admission import metadata_inventory
     from client_automation_native_probe import snapshot
@@ -684,6 +690,7 @@ def run(output):
             (root / 'request.json').write_bytes(b'{}\n')
             baseline = metadata_inventory(root, budget)
             profiles = {name: snapshot(path) for name, path in roots.items()}
+            bootstrap = NativeBootstrap()
             bodies['acquisition.json'] = json.dumps(receipt, sort_keys=True).encode()
             native_ids = {}
             for scope in SCOPES:
@@ -695,7 +702,7 @@ def run(output):
                 receipt = helper_capture(helper, root, min(origin + 150, request['start_monotonic_ns'] / 1e9 + 35))
                 result = validate_receipt(receipt, request)
                 cleanup_proved = True
-                ledger = post_ledger(root, baseline, roots, profiles, budget)
+                ledger = post_ledger(root, baseline, roots, profiles, budget, bootstrap)
                 bodies[scope + '.ledger.json'] = json.dumps(ledger, sort_keys=True).encode()
                 for row in result['commands']:
                     name = scope + '-' + row['label'] + '.merged.log'
@@ -704,7 +711,7 @@ def run(output):
                 bodies[scope + '.rpc.json'] = json.dumps(result.pop('rpc'), sort_keys=True).encode()
                 summary['scopes'].append(receipt)
                 result['rpc'] = document(bodies[scope + '.rpc.json'])
-                if scope == 'user':
+                if scope == 'user' and ledger['accepted']:
                     ledger['bootstrap_capture'] = capture_bootstrap_files(root, ledger, budget)
                     bodies[scope + '.ledger.json'] = json.dumps(ledger, sort_keys=True).encode()
                 require(ledger['accepted'] and result['semantic_complete'], 'native-refused')

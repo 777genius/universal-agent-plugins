@@ -1,6 +1,7 @@
 """Inert tests execute actual parser, capture fence and artifacts; no vendor."""
 import base64
 import copy
+from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
@@ -13,6 +14,7 @@ import unittest
 from unittest import mock
 import zipfile
 import grok_acp_inventory_admission as case
+import grok_acp_bootstrap as bootstrap_case
 
 
 def help_rows():
@@ -241,22 +243,17 @@ case['collect'](pathlib.Path(sys.argv[2]))
         command.assert_called_once()
 
     def test_unknown_write_and_trust_store_never_renew_original_baseline(self):
-        import project_native_research as shared
-        from devin_structured_inventory_admission import metadata_inventory
-        from client_automation_native_probe import snapshot
-        with tempfile.TemporaryDirectory() as directory, shared.Budget(10) as budget:
-            root = Path(directory).resolve()
-            with mock.patch.object(case.subprocess, 'run'): roots = case.fixtures(root, 'a' * 32)
-            (root / 'request.json').write_text('{}')
-            baseline = metadata_inventory(root, budget)
-            profiles = {name: snapshot(path) for name, path in roots.items()}
-            self.assertTrue(case.post_ledger(root, baseline, roots, profiles, budget)['accepted'])
+        with native_bootstrap_fixture() as fixture:
+            root, capture, ledger = fixture['root'], fixture['capture'], fixture['bootstrap']
+            self.assertTrue(capture()['accepted'])
+            original = copy.deepcopy(ledger.created)
             trust = root / 'home/.grok/trusted_folders.toml'
             trust.write_text('unadmitted')
-            self.assertFalse(case.post_ledger(root, baseline, roots, profiles, budget)['accepted'])
+            self.assertFalse(capture()['accepted'])
             trust.unlink()
             (root / 'unknown').mkdir()
-            self.assertFalse(case.post_ledger(root, baseline, roots, profiles, budget)['accepted'])
+            self.assertFalse(capture()['accepted'])
+            self.assertEqual(ledger.created, original)
 
     def bootstrap_ledger(self, root, budget, payloads=None):
         from devin_structured_inventory_admission import metadata_inventory
@@ -268,7 +265,28 @@ case['collect'](pathlib.Path(sys.argv[2]))
             target = root / 'home/.grok' / name
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(body)
-        return case.post_ledger(root, baseline, roots, profiles, budget)
+        # Preserve the original negative capture schema for historical-reader
+        # contracts; new live capture additionally requires full admission.
+        return dict(accepted=False, before=baseline, after=metadata_inventory(root, budget),
+                    profiles_before=profiles, profiles_after={name: snapshot(path) for name, path in roots.items()},
+                    native_bootstrap=[])
+
+    def test_bootstrap_capture_cannot_read_after_new_metadata_refusal(self):
+        with native_bootstrap_fixture() as fixture:
+            (fixture['root'] / 'home/.grok/trusted_folders.toml').write_text('unadmitted')
+            ledger = fixture['capture']()
+            self.assertFalse(ledger['accepted'])
+            with mock.patch.object(case, 'ordinary') as read, self.assertRaisesRegex(ValueError, 'bootstrap-profile-snapshot'):
+                case.capture_bootstrap_files(fixture['root'], ledger, fixture['budget'])
+            read.assert_not_called()
+
+    def test_bootstrap_capture_still_joins_admitted_originals(self):
+        with native_bootstrap_fixture() as fixture:
+            ledger = fixture['capture']()
+            self.assertTrue(ledger['accepted'])
+            capture = case.capture_bootstrap_files(fixture['root'], ledger, fixture['budget'])
+            self.assertEqual(set(capture['files']), set(case.BOOTSTRAP_FILES))
+            case.validate_bootstrap_capture(ledger, capture)
 
     def test_bootstrap_capture_joins_bytes_and_stays_unqualified(self):
         from project_native_research import Budget
@@ -582,6 +600,164 @@ case['collect'](pathlib.Path(sys.argv[2]))
                 self.assertEqual(case.publication_readout(bytes(changed), packet, time.monotonic() + 5),
                                  dict(schema_version=1, reason='readout-refused', scopes=[]))
                 parser.assert_not_called()
+
+
+@contextmanager
+def native_bootstrap_fixture():
+    """Real owned files and authored pins; no vendor or recorded-current adoption."""
+    import project_native_research as shared
+    from devin_structured_inventory_admission import metadata_inventory
+    from client_automation_native_probe import snapshot
+    with tempfile.TemporaryDirectory() as directory, shared.Budget(10) as budget:
+        root = Path(directory).resolve()
+        with mock.patch.object(case.subprocess, 'run'):
+            roots = case.fixtures(root, 'a' * 32)
+        (root / 'request.json').write_bytes(b'{}')
+        before = metadata_inventory(root, budget)
+        profiles = {name: snapshot(path) for name, path in roots.items()}
+        native = roots['user_profile']
+        for name, mode in bootstrap_case.DIRECTORIES.items():
+            path = native / name; path.mkdir(parents=True, exist_ok=True); path.chmod(mode)
+        pins = {}
+        for name in bootstrap_case.PINNED:
+            body = b'' if name.endswith('.lock') else ('PRIVATE_NATIVE_' + name).encode()
+            path = native / name; path.write_bytes(body); path.chmod(0o644)
+            pins[name] = (len(body), case.digest(body), 0o644)
+        uuid = b'01234567-89ab-4cde-8fab-0123456789ab'
+        (native / 'agent_id').write_bytes(uuid); (native / 'agent_id').chmod(0o600)
+        for name in bootstrap_case.MUTABLE:
+            path = native / name
+            path.write_bytes(b'x' * (32768 if name.endswith('-shm') else 4096))
+            path.chmod(0o644)
+        ledger = bootstrap_case.NativeBootstrap()
+        with mock.patch.object(bootstrap_case, 'PINNED', pins):
+            yield dict(root=root, roots=roots, native=native, before=before, profiles=profiles,
+                       budget=budget, bootstrap=ledger, uuid=uuid,
+                       capture=lambda: case.post_ledger(root, before, roots, profiles, budget, ledger))
+
+
+class NativeBootstrapContracts(unittest.TestCase):
+    def test_real_first_creation_repeat_uuid_chmod_and_bounded_cache_changes(self):
+        with native_bootstrap_fixture() as f:
+            original = copy.deepcopy(f['before'])
+            first = f['capture']()
+            self.assertTrue(first['accepted'])
+            self.assertEqual(set(first['native_bootstrap']), set(bootstrap_case.NAMES))
+            held = copy.deepcopy(f['bootstrap'].created)
+            (f['root'] / 'request.json').write_bytes(b'{"scope":"a"}')
+            (f['native'] / 'agent_id').chmod(0o600)
+            with (f['native'] / 'logs/unified.jsonl').open('ab') as output:
+                output.write(b'PRIVATE_LOG')
+            repeated = f['capture']()
+            self.assertTrue(repeated['accepted'])
+            self.assertEqual(f['bootstrap'].created, held)
+            self.assertEqual(f['before'], original)
+            serialized = json.dumps(repeated)
+            self.assertNotIn('PRIVATE_NATIVE', serialized)
+            self.assertNotIn('PRIVATE_LOG', serialized)
+            self.assertNotIn(f['uuid'].decode(), serialized)
+
+    def test_unreviewed_members_modes_missing_pins_and_bounds_refuse_before_reads(self):
+        import client_automation_native_probe as snapshot_case
+        for kind in ('unknown', 'missing', 'mode', 'size', 'cache', 'shm'):
+            with self.subTest(kind=kind), native_bootstrap_fixture() as f:
+                native = f['native']
+                if kind == 'unknown': (native / 'unexpected-token.json').write_bytes(b'PRIVATE')
+                elif kind == 'missing': (native / 'README.md').unlink()
+                elif kind == 'mode': (native / 'README.md').chmod(0o666)
+                elif kind == 'size': (native / 'README.md').write_bytes(b'')
+                elif kind == 'cache': (native / 'logs/unified.jsonl').write_bytes(b'x' * ((128 << 10) + 1))
+                else: (native / 'sessions/session_search.sqlite-shm').write_bytes(b'x')
+                with mock.patch.object(snapshot_case, 'snapshot') as reader:
+                    result = f['capture']()
+                reader.assert_not_called()
+                self.assertFalse(result['accepted'])
+                self.assertEqual(result['profiles_after'], {})
+                self.assertIsNone(f['bootstrap'].created)
+
+    def test_wrong_pinned_bytes_and_uuid_grammar_never_become_creation_authority(self):
+        for name in ('README.md', 'config.toml', 'agent_id'):
+            with self.subTest(name=name), native_bootstrap_fixture() as f:
+                path = f['native'] / name
+                path.write_bytes(b'!' * path.stat().st_size)
+                result = f['capture']()
+                self.assertFalse(result['accepted'])
+                self.assertEqual(result['profiles_after'], {})
+                self.assertIsNone(f['bootstrap'].created)
+
+    def test_created_inode_same_bytes_original_project_and_uuid_content_replacement_refuse(self):
+        for kind in ('cache-inode', 'pin-inode', 'directory-inode', 'project', 'uuid'):
+            with self.subTest(kind=kind), native_bootstrap_fixture() as f:
+                self.assertTrue(f['capture']()['accepted'])
+                held = copy.deepcopy(f['bootstrap'].created)
+                if kind in ('cache-inode', 'pin-inode'):
+                    path = f['native'] / ('logs/unified.jsonl' if kind == 'cache-inode' else 'README.md')
+                    replacement = path.with_name('.replacement')
+                    replacement.write_bytes(path.read_bytes()); replacement.chmod(0o644)
+                    replacement.replace(path)
+                elif kind == 'directory-inode':
+                    path = f['native'] / 'installed-plugins'
+                    child = (path / 'registry.lock').read_bytes()
+                    (path / 'registry.lock').unlink(); path.rmdir(); path.mkdir(mode=0o755)
+                    (path / 'registry.lock').write_bytes(child)
+                elif kind == 'project':
+                    (f['roots']['b'] / 'foreign').write_bytes(b'changed')
+                else:
+                    (f['native'] / 'agent_id').write_bytes(b'11234567-89ab-4cde-8fab-0123456789ab')
+                result = f['capture']()
+                self.assertFalse(result['accepted'])
+                self.assertEqual(result['profiles_after'], {})
+                self.assertEqual(f['bootstrap'].created, held)
+
+    def test_real_aliases_refuse_without_new_content_read(self):
+        import client_automation_native_probe as snapshot_case
+        for hardlink in (False, True):
+            with self.subTest(hardlink=hardlink), native_bootstrap_fixture() as f:
+                if hardlink:
+                    os.link(f['native'] / 'README.md', f['root'] / 'external-alias')
+                else:
+                    path = f['native'] / 'README.md'; path.unlink(); path.symlink_to(f['root'] / 'request.json')
+                with mock.patch.object(snapshot_case, 'snapshot') as reader, self.assertRaises(ValueError):
+                    f['capture']()
+                reader.assert_not_called()
+
+    def test_owner_volume_link_and_control_authority_are_checked_without_body_reads(self):
+        from devin_structured_inventory_admission import metadata_inventory
+        for field, index in (('device', 0), ('owner', 4), ('group', 5), ('links', 3)):
+            with self.subTest(field=field), native_bootstrap_fixture() as f:
+                after = metadata_inventory(f['root'], f['budget'])
+                key = 'home/.grok/README.md'; changed = list(after[key]); changed[index] += 1
+                after[key] = tuple(changed)
+                with self.assertRaises(ValueError): f['bootstrap'].metadata(f['before'], after)
+        with native_bootstrap_fixture() as f:
+            after = metadata_inventory(f['root'], f['budget'])
+            value = list(after['request.json']); value[1] += 1; after['request.json'] = tuple(value)
+            with self.assertRaises(ValueError): f['bootstrap'].metadata(f['before'], after)
+
+    def test_late_snapshot_or_metadata_mismatch_cannot_commit_a_partial_baseline(self):
+        import client_automation_native_probe as snapshot_case
+        import devin_structured_inventory_admission as metadata_case
+        for kind in ('snapshot', 'metadata'):
+            with self.subTest(kind=kind), native_bootstrap_fixture() as f:
+                if kind == 'snapshot':
+                    real = snapshot_case.snapshot
+                    def changed(path):
+                        value = real(path)
+                        if path == f['native']: value['agent_id']['inode'] += 1
+                        return value
+                    patch = mock.patch.object(snapshot_case, 'snapshot', changed)
+                else:
+                    real_metadata, calls = metadata_case.metadata_inventory, []
+                    def changed_metadata(root, budget):
+                        value = real_metadata(root, budget); calls.append(True)
+                        if len(calls) == 2:
+                            row = list(value['.']); row[1] += 1; value['.'] = tuple(row)
+                        return value
+                    patch = mock.patch.object(metadata_case, 'metadata_inventory', changed_metadata)
+                with patch: result = f['capture']()
+                self.assertFalse(result['accepted'])
+                self.assertEqual(result['profiles_after'], {})
+                self.assertIsNone(f['bootstrap'].created)
 
 
 if __name__ == '__main__':

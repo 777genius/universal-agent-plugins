@@ -268,6 +268,80 @@ def payload_links(root, records, deadline):
                 require(selected["type"] == "directory", "payload link traverses non-directory")
 
 
+
+def payload_hardlink_closure(records):
+    """Close every regular inode's complete alias set before any content read."""
+    groups = {}
+    for name, record in records.items():
+        if record["type"] != "file":
+            continue
+        identity = record["identity"]
+        key = tuple(identity[:2])
+        if key not in groups:
+            groups[key] = (identity, [])
+        original, names = groups[key]
+        require(identity == original, "payload hardlink metadata differs")
+        names.append(name)
+    for identity, names in groups.values():
+        require(type(identity[3]) is int and len(names) == identity[3], "payload hardlink escapes runtime")
+
+
+def payload_hash_files(root, records, expected, deadline):
+    """Rejoin the metadata-first authority through held ancestors before bytes."""
+    children = {}
+    for name in records:
+        if name != ".":
+            children.setdefault(Path(name).parent.as_posix(), set()).add(name)
+
+    def visit(path, parent=None):
+        require(time.monotonic() < deadline, "payload scan deadline")
+        linked = lambda: path.lstat() if parent is None else os.stat(path.name, dir_fd=parent, follow_symlinks=False)
+        name, info = path.relative_to(root).as_posix(), linked()
+        record = records.get(name)
+        require(record is not None and stable_file(info) == record["identity"], "payload metadata changed before hashing")
+        if name == ".":
+            require((info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_gid) == tuple(expected), "payload original root changed")
+        if record["type"] == "link":
+            return
+        if record["type"] == "directory":
+            descriptor = open_inventory_directory(path, parent)
+            try:
+                held = os.fstat(descriptor)
+                check_inventory_directory(info, held, "payload hash directory changed at open")
+                verify_inventory_directory(path, info, descriptor, held, parent)
+                names = set()
+                with os.scandir(path if artifacts.WINDOWS else descriptor) as entries:
+                    for entry in entries:
+                        member = (path / entry.name).relative_to(root).as_posix()
+                        require(member in children.get(name, set()), "payload new member before hashing")
+                        names.add(member)
+                        visit(path / entry.name, None if artifacts.WINDOWS else descriptor)
+                require(names == children.get(name, set()), "payload member disappeared before hashing")
+                verify_inventory_directory(path, info, descriptor, held, parent)
+            finally:
+                os.close(descriptor)
+            return
+        descriptor = (artifacts.open_member(path) if parent is None else
+                      os.open(path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent))
+        try:
+            held = os.fstat(descriptor)
+            require(same_opened_capture(info, held) and (info.st_uid, info.st_gid) == (held.st_uid, held.st_gid), "payload file changed at open")
+            digest, size = hashlib.sha256(), 0
+            while size <= info.st_size:
+                require(time.monotonic() < deadline, "payload scan deadline")
+                chunk = os.read(descriptor, min(LIMIT, info.st_size + 1 - size))
+                if not chunk:
+                    break
+                size += len(chunk)
+                digest.update(chunk)
+            require(size == info.st_size and stable_file(os.fstat(descriptor)) == stable_file(held)
+                    and stable_file(linked()) == stable_file(info), "payload file changed during capture")
+            record["sha256"] = digest.hexdigest()
+        finally:
+            os.close(descriptor)
+
+    visit(root)
+
 def payload_snapshot(root, expected, deadline):
     """Stream all payload bytes with held no-follow directory/file authority."""
     require(directory_identity(root) == tuple(expected), "payload original root changed")
@@ -292,25 +366,8 @@ def payload_snapshot(root, expected, deadline):
             links += 1
         elif stat.S_ISREG(info.st_mode):
             require(0 <= info.st_size <= PAYLOAD_BYTES - total and info.st_nlink > 0, "payload byte bound")
-            descriptor = (artifacts.open_member(path) if parent is None else
-                          os.open(path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent))
-            try:
-                held = os.fstat(descriptor)
-                require(same_opened_capture(info, held) and (info.st_uid, info.st_gid) == (held.st_uid, held.st_gid), "payload file changed at open")
-                digest, size = hashlib.sha256(), 0
-                while size <= info.st_size:
-                    require(time.monotonic() < deadline, "payload scan deadline")
-                    chunk = os.read(descriptor, min(LIMIT, info.st_size + 1 - size))
-                    if not chunk:
-                        break
-                    size += len(chunk)
-                    digest.update(chunk)
-                require(size == info.st_size and stable_file(os.fstat(descriptor)) == stable_file(held)
-                        and stable_file(linked()) == stable_file(info), "payload file changed during capture")
-                total += size
-                record.update(type="file", sha256=digest.hexdigest())
-            finally:
-                os.close(descriptor)
+            total += info.st_size
+            record.update(type="file")
         else:
             require(stat.S_ISDIR(info.st_mode), "nonordinary payload member")
             record["type"] = "directory"
@@ -330,6 +387,8 @@ def payload_snapshot(root, expected, deadline):
 
     visit(root, 0)
     payload_links(root, records, deadline)
+    payload_hardlink_closure(records)
+    payload_hash_files(root, records, expected, deadline)
     digest = hashlib.sha256()
     for name, record in sorted(records.items()):
         require(time.monotonic() < deadline, "payload scan deadline")

@@ -383,3 +383,15 @@ These focused follow-ups revise the earlier source-size estimate because of
 observed hosted failures; they add no native action or production capability.
 Post-outage source edits remain unexecuted; current-head hosted tests and native
 originals must pass before acceptance. No production enablement is added.
+
+## Exact initial POSIX scanner permissions
+
+Follow-up to external cab330c8, preserving its four independently verified
+archive-derived pins and explicit fully-ledgered AGENTPLUGINS_HOME: require
+POSIX0700 for the known scanner before any scanner byte read, matching
+securityscan/release.go's actual temporary.Chmod(0700). Windows retains its
+existing complete native metadata domain; do not infer POSIX bits there.
+Correct inert fixtures now author0700 and a real ledger negative checks0600,
+0755 and0777 are refused before os.read can reach that inode. Other files,
+1MiB/16MiB limits, baseline identities, scanner content pins and qualification
+flags are unchanged. Nine inert contracts pass; no native execution occurred.

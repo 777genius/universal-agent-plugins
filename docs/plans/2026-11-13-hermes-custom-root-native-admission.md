@@ -505,3 +505,31 @@ equality is not used as object identity. The original fc8 receipt proved a field
 mismatch but did not capture the differing bits; synthetic masks in contracts are
 not an observation of the hosted values. This does not qualify custom-root native
 loading or relax temporal metadata checks within either authority domain.
+
+## Complete regular hardlink closure before bundled payload bytes
+
+Follow-up to official standalone-builder route9c8bfca0 on current672a769c.
+Independent inert review showed one payload regular name hardlinked to a sibling
+outside payload was previously hashed and accepted. Captured symlink closure did
+not close regular inode aliases. Preserve the official builder, canonical bundled
+launcher, separate runtime domain and source_install_custom_root_qualified=false;
+do not replace this route with the separate developer-runtime proposal.
+
+The first anchored bounded walk now captures metadata ONLY for regular files,
+including per-name logical size; no regular bytes are read. Resolve the existing
+captured symlink graph, then group all regular names by device/file ID. Require
+identical full captured metadata and exact group cardinality == original nlink.
+Any outside alias or inconsistent successive observations refuses before hashing.
+A second anchored walk joins each original path/ancestor/held-file identity and
+exact member set before streaming contents. A late link-count/mtime/identity
+change refuses before that file's first os.read; changes while hashing still use
+existing held/linked before/after checks. No renewed deadline, baseline, ownership
+or native trust is introduced. Existing262144-member/depth64/8GiB bounds remain
+exact, with logical bytes charged once per NAME in the metadata pass.
+
+Five meaningful inert contracts cover two internal aliases, outside-alias no-read,
+late outside alias before first hash, same-inode metadata divergence, and original
+byte/deadline bounds before content. All44 existing/new contracts pass. Production
+change78 additions/19 removals and65 test additions remain inside reviewed scope;
+no vendor/native execution or workflow/qualification change occurred. Actual
+final-source hosted builder/capture and original-artifact review remain required.
