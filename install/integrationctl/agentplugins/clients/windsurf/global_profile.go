@@ -39,8 +39,9 @@ func originalDevinGlobalRoot(host clients.Host) (string, error) {
 }
 
 func requireSelectedDevinGlobal(client domain.DetectedClient) (string, error) {
-	if err := requireCurrentDevin(client); err != nil {
-		return "", err
+	if client.ClientID != domain.ClientWindsurf || !primaryDevinExecutable(client.ExecutablePath) ||
+		(client.Version != "3000.11.205" && client.Version != "3000.12.57") {
+		return "", fmt.Errorf("devin Global configuration requires the explicitly selected primary devin executable with observed exact version 3000.11.205 or 3000.12.57")
 	}
 	root := client.NativeConfigRoot
 	if !filepath.IsAbs(root) || filepath.Clean(root) != root || filepath.Base(root) != "devin" {

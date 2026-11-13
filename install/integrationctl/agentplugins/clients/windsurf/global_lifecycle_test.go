@@ -251,3 +251,34 @@ func TestDevinGlobalPreflightAllowsUnstagedButActivationRequiresExactDelivery(t 
 		t.Fatal("Global activation accepted missing delivered identity after preflight")
 	}
 }
+
+func TestDevinGlobalNewVersionDoesNotAdmitProjectOrNonprimaryClient(t *testing.T) {
+	client, plan, _ := globalOfflineFixture(t)
+	client.Version = "3000.12.57"
+	if _, err := devinGlobalPlanRoot(client, plan); err != nil {
+		t.Fatal(err)
+	}
+	target := domain.TargetContext{Scope: domain.ScopeProject,
+		ProjectRoot: filepath.Dir(client.NativeConfigRoot), UserConfigRoot: client.ConfigRoot}
+	project := plan
+	project.Scope, project.TargetContext = domain.ScopeProject, target
+	project.NativeRegistryRoot = filepath.Join(target.ProjectRoot, ".devin")
+	globalOfflineWrite(t, filepath.Join(project.NativeRegistryRoot, "config.json"), "{}")
+	if err := New().CheckPlanPrecondition(clients.PlanInput{TargetContext: target, Client: client}, &project); err == nil || !strings.Contains(err.Error(), "observed exact version 3000.11.205") {
+		t.Fatalf("Global version qualification admitted an unobserved Project profile: %v", err)
+	}
+	client.Version = "3000.11.205"
+	if err := New().CheckPlanPrecondition(clients.PlanInput{TargetContext: target, Client: client}, &project); err != nil {
+		t.Fatalf("historical Project admission changed: %v", err)
+	}
+	for _, executable := range []string{"windsurf", "devin-wrapper", ""} {
+		client.Version, client.ExecutablePath = "3000.12.57", executable
+		if _, err := requireSelectedDevinGlobal(client); err == nil {
+			t.Fatalf("nonprimary Global executable accepted: %q", executable)
+		}
+	}
+	client.ClientID, client.ExecutablePath = domain.ClientGemini, filepath.Join(filepath.Dir(plan.NativeRegistryRoot), "devin")
+	if _, err := requireSelectedDevinGlobal(client); err == nil {
+		t.Fatal("Global version accepted another client identity")
+	}
+}
