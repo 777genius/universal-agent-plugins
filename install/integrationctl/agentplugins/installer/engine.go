@@ -138,9 +138,11 @@ func (e *Engine) lifecycle(helper *managedstdio.Source, facts BindingFacts, dete
 		facts:        facts,
 	}
 	transitions := opencode.NativeTransitions{ProjectRoot: e.cfg.ProjectRoot, PackageVerifier: stager, State: transaction.Kernel{StateStore: e.store}, Kernel: nativeKernel}
-	inner := providers.Activator{OpenCodeTransitions: transitions, Runner: e.cfg.Runner, Registry: e.cfg.Registry, NativeConfig: &nativeKernel}
+	directoryKernel := transaction.Kernel{Namespace: e.cfg.StateRoot, PhysicalAuthority: plan, NativeRecovery: transitions, StateStore: e.store, Directory: dirswap.Manager{Namespace: e.cfg.StateRoot, JournalDir: e.cfg.OperationsDir}}
+	projectRoots := transaction.ProjectRootPublisher{Kernel: directoryKernel}
+	inner := providers.Activator{ProjectRoots: projectRoots, OpenCodeTransitions: transitions, Runner: e.cfg.Runner, Registry: e.cfg.Registry, NativeConfig: &nativeKernel}
 	var observer usecase.NativeIdentityObserver
-	identity := providers.NativeIdentityObserver{Stager: stager, NativeConfig: &nativeKernel, Registry: e.cfg.Registry}
+	identity := providers.NativeIdentityObserver{ProjectRoots: projectRoots, Stager: stager, NativeConfig: &nativeKernel, Registry: e.cfg.Registry}
 	if e.cfg.EnableNativeObserver && e.cfg.Runner != nil {
 		identity.Runner = e.cfg.Runner
 		observer = identity
@@ -154,7 +156,7 @@ func (e *Engine) lifecycle(helper *managedstdio.Source, facts BindingFacts, dete
 		Activator:         seamActivator{independent: e.cfg.IndependentActivations, profileCheck: profileCheck, inner: inner, onCommitted: e.cfg.OnCommittedBinding, store: e.store, facts: facts},
 		PluginData:        providers.PluginDataManager{Base: e.cfg.PluginDataBase},
 		Lock:              processlock.Lock{Path: e.cfg.LockFile},
-		Kernel:            transaction.Kernel{Namespace: e.cfg.StateRoot, PhysicalAuthority: plan, NativeRecovery: transitions, StateStore: e.store, Directory: dirswap.Manager{Namespace: e.cfg.StateRoot, JournalDir: e.cfg.OperationsDir}},
+		Kernel:            directoryKernel,
 		PhysicalAuthority: plan, PhysicalProfiles: profileClients(detected),
 		NativeObserver:     observer,
 		NamespacePreflight: providers.OpenCodeNamespacePreflight{Kernel: nativeKernel},

@@ -37,9 +37,9 @@ func TestDevinGlobalMissingVersionRefusesBeforeConfigOrProcessEffects(t *testing
 				env := clients.Env{Runner: effects, NativeConfig: nativeconfig.NewWithFileIO(effects)}
 				request := domain.ActivationRequest{Client: client, Plan: plan, VerifyOnly: verifyOnly,
 					Delivery: domain.StagedDelivery{ClientID: domain.ClientWindsurf, ActivePath: plan.ActivePath}}
-				errorsSeen := []error{New().PreflightActivation(env, request)}
+				errorsSeen := [2]error{New().PreflightActivation(env, request)}
 				_, err := New().Activate(context.Background(), env, request)
-				errorsSeen = append(errorsSeen, err)
+				errorsSeen[1] = err
 				for _, failure := range errorsSeen {
 					var verification *ports.VerificationError
 					indeterminate := errors.As(failure, &verification) && verification.Kind == ports.VerificationIndeterminate

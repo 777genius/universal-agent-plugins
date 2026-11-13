@@ -63,8 +63,8 @@ func components(plan domain.DeliveryPlan, selectedPackage string) (shared.Projec
 	return layout, nil
 }
 
-func buildSkillObjects(ctx context.Context, staged string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan) ([]domain.NativeObjectOwnership, error) {
-	layout, err := components(plan, staged)
+func (adapter *Adapter) buildSkillObjects(ctx context.Context, staged string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan) ([]domain.NativeObjectOwnership, error) {
+	layout, err := adapter.componentLayout(plan, staged)
 	if err != nil {
 		return nil, err
 	}
@@ -73,44 +73,52 @@ func buildSkillObjects(ctx context.Context, staged string, envelope domain.Packa
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		if component.Kind == domain.ComponentMCPServer {
-			if plan.Scope != domain.ScopeUser || component.Support == domain.SupportUnsupported {
-				return nil, fmt.Errorf("hermes MCP has User authority only")
-			}
-			server, err := readHermesMCPServer(staged, component.Name)
-			if err != nil {
-				return nil, err
-			}
-			object, err := layout.MCPObject(component.Name, server, layout.ConfigPaths.JSON)
-			if err != nil {
-				return nil, err
-			}
-			objects = append(objects, object)
-			continue
-		}
-		if component.Kind != domain.ComponentSkill || component.Support == domain.SupportUnsupported {
-			return nil, fmt.Errorf("hermes package contains an unsupported component")
-		}
-		skill, ok := envelope.Skills[component.Name]
-		if !ok {
-			return nil, fmt.Errorf("hermes selected skill %q is missing from verified package", component.Name)
-		}
-		relative := filepath.ToSlash(filepath.Join("skills", component.Name))
-		if skill.RelativePath != "" {
-			relative = filepath.ToSlash(filepath.Dir(filepath.FromSlash(skill.RelativePath)))
-		}
-		object, err := layout.SkillObject(component.Name, relative, staged)
+		object, err := adapter.projectComponent(staged, envelope, plan.Scope, layout, component)
 		if err != nil {
 			return nil, err
 		}
 		objects = append(objects, object)
 	}
+	if err := layout.ValidateObjects(objects); err != nil {
+		return nil, err
+	}
+	if adapter.hasProjectSession(plan) {
+		objects = append(objects, sessionRootObject(plan.TargetContext.ProjectRoot))
+	}
 	sort.Slice(objects, func(i, j int) bool { return objects[i].ObjectID < objects[j].ObjectID })
-	return objects, layout.ValidateObjects(objects)
+	return objects, nil
 }
 
-func (*Adapter) Project(ctx context.Context, in clients.ProjectionInput) ([]domain.NativeObjectOwnership, error) {
-	if in.Plan.Scope == domain.ScopeUser {
+func (adapter *Adapter) projectComponent(staged string, envelope domain.PackageEnvelope, scope domain.InstallScope, layout shared.ProjectComponents, component domain.ComponentDecision) (domain.NativeObjectOwnership, error) {
+	if component.Support == domain.SupportUnsupported {
+		return domain.NativeObjectOwnership{}, fmt.Errorf("hermes package contains an unsupported component")
+	}
+	if component.Kind == domain.ComponentMCPServer {
+		if scope != domain.ScopeUser && !adapter.selectedProject {
+			return domain.NativeObjectOwnership{}, fmt.Errorf("hermes MCP has User authority only")
+		}
+		server, err := readHermesMCPServer(staged, component.Name)
+		if err != nil {
+			return domain.NativeObjectOwnership{}, err
+		}
+		return layout.MCPObject(component.Name, server, layout.ConfigPaths.JSON)
+	}
+	if component.Kind != domain.ComponentSkill {
+		return domain.NativeObjectOwnership{}, fmt.Errorf("hermes package contains an unsupported component")
+	}
+	skill, ok := envelope.Skills[component.Name]
+	if !ok {
+		return domain.NativeObjectOwnership{}, fmt.Errorf("hermes selected skill %q is missing from verified package", component.Name)
+	}
+	relative := filepath.ToSlash(filepath.Join("skills", component.Name))
+	if skill.RelativePath != "" {
+		relative = filepath.ToSlash(filepath.Dir(filepath.FromSlash(skill.RelativePath)))
+	}
+	return layout.SkillObject(component.Name, relative, staged)
+}
+
+func (adapter *Adapter) Project(ctx context.Context, in clients.ProjectionInput) ([]domain.NativeObjectOwnership, error) {
+	if in.Plan.Scope == domain.ScopeUser || adapter.hasProjectSession(in.Plan) {
 		if err := shared.ProjectMCPServers(shared.MCPProjection{
 			Root: in.StagingPath, Envelope: in.Envelope,
 			Names:   shared.SupportedMCPNames(in.Plan),
@@ -120,14 +128,14 @@ func (*Adapter) Project(ctx context.Context, in clients.ProjectionInput) ([]doma
 			return nil, err
 		}
 	}
-	return buildSkillObjects(ctx, in.StagingPath, in.Envelope, in.Plan)
+	return adapter.buildSkillObjects(ctx, in.StagingPath, in.Envelope, in.Plan)
 }
 
-func (*Adapter) ProjectActiveNative(ctx context.Context, root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, _ string) ([]domain.NativeObjectOwnership, error) {
+func (adapter *Adapter) ProjectActiveNative(ctx context.Context, root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, _ string) ([]domain.NativeObjectOwnership, error) {
 	if root != plan.ActivePath {
 		return nil, fmt.Errorf("hermes active package differs from recorded installation")
 	}
-	return buildSkillObjects(ctx, root, envelope, plan)
+	return adapter.buildSkillObjects(ctx, root, envelope, plan)
 }
 
 func (*Adapter) VerifierAvailable(_ domain.DetectedClient, plan domain.DeliveryPlan, _ string) bool {
@@ -201,7 +209,7 @@ func readHermesMCPServer(root, name string) (nativeconfig.Server, error) {
 func hermesDesiredServers(root string, objects []domain.NativeObjectOwnership) (map[string]nativeconfig.Server, error) {
 	out := make(map[string]nativeconfig.Server)
 	for _, object := range objects {
-		if object.Kind != userMCPKind {
+		if object.Kind != userMCPKind && object.Kind != projectSessionMCPKind {
 			continue
 		}
 		server, err := readHermesMCPServer(root, object.LogicalName)

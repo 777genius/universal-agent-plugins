@@ -55,7 +55,7 @@ func newHermesSkillFixture(t *testing.T, root string, scope domain.InstallScope)
 			"document": {Name: "document", RelativePath: "skills/document/SKILL.md"},
 		},
 	}
-	objects, err := buildSkillObjects(context.Background(), active, envelope, plan)
+	objects, err := New().buildSkillObjects(context.Background(), active, envelope, plan)
 	if err != nil {
 		t.Fatal(err)
 	}

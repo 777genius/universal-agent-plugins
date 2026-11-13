@@ -35,6 +35,9 @@ func (kernel Kernel) ApplyDirectory(ctx context.Context, mutation DirectoryMutat
 	if err != nil {
 		return domain.MutationReceipt{}, fmt.Errorf("encode state before directory transaction: %w", err)
 	}
+	if err := validateStandalonePublication(mutation, beforeStateJSON); err != nil {
+		return domain.MutationReceipt{}, err
+	}
 	if operationIDExists(beforeState, mutation.OperationID) {
 		return domain.MutationReceipt{}, fmt.Errorf("mutation operation id %q was already used", mutation.OperationID)
 	}
@@ -83,17 +86,7 @@ func (kernel Kernel) ApplyDirectory(ctx context.Context, mutation DirectoryMutat
 		EnvironmentAuthority: mutation.EnvironmentAuthority,
 		Phase:                ReceiptPhaseStateCommitted,
 	}
-	client.Receipts = append(client.Receipts, receipt)
-	client.NativeObjects = committedDirectoryObjects(beforeState, mutation.InstallationID, mutation.ClientBindingID, mutation.NativeObjects)
-	client.Materialization = domain.MaterializationMaterialized
-	client.Activation = mutation.Activation
-	client.Authentication = mutation.Authentication
-	client.Policy = mutation.Policy
-	client.Verification = mutation.Verification
-	installation := state.Installations[installationIndex]
-	installation.OperationGroupID = mutation.OperationID
-	installation.Clients[mutation.ClientBindingID] = client
-	state.Installations[installationIndex] = installation
+	recordDirectoryMutation(&state, beforeState, installationIndex, client, mutation, receipt)
 	if oldState, err := kernel.persistCommitDecision(state, beforeStateJSON); err != nil {
 		if oldState {
 			if rollbackErr := kernel.Directory.Rollback(context.Background(), directoryReceipt); rollbackErr != nil {
@@ -106,7 +99,12 @@ func (kernel Kernel) ApplyDirectory(ctx context.Context, mutation DirectoryMutat
 		return receipt, fmt.Errorf("finalize committed directory mutation: %w", err)
 	}
 	receipt.Phase = ReceiptPhaseCommitted
-	state.Installations[installationIndex].Clients[mutation.ClientBindingID] = replaceReceipt(client, receipt)
+	if mutation.Standalone {
+		state.TransactionReceipts[len(state.TransactionReceipts)-1] = receipt
+	} else {
+		current := state.Installations[installationIndex].Clients[mutation.ClientBindingID]
+		state.Installations[installationIndex].Clients[mutation.ClientBindingID] = replaceReceipt(current, receipt)
+	}
 	if err := kernel.StateStore.Save(state); err != nil {
 		return receipt, fmt.Errorf("finalize transaction receipt state: %w", err)
 	}
@@ -507,4 +505,3 @@ func (kernel Kernel) RemoveDirectoryGroup(ctx context.Context, group DirectoryRe
 	}
 	return result, nil
 }
-

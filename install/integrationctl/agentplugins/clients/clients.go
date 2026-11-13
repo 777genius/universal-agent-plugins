@@ -38,6 +38,7 @@ type Env struct {
 	// LookupExecutable is used only by an explicitly requested native session.
 	// File-only installation/detection never resolves this into execution authority.
 	LookupExecutable    func(string) (string, error)
+	ProjectRoots        ports.NativeProjectRootPublisher
 	OpenCodeTransitions ports.OpenCodeTransitionRecorder
 	Runner              ports.CommandRunner
 	NativeConfig        nativeconfig.Kernel

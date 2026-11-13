@@ -10,6 +10,9 @@ import (
 // first for the entire group before any filesystem effect, then per item as
 // earlier items update desired state. Do not remove either checkpoint.
 func validateDirectoryGroupItem(before, state domain.StateFileV2, mutation DirectoryMutation, index int, operations, paths map[string]struct{}) (int, domain.ClientBinding, error) {
+	if mutation.Standalone {
+		return 0, domain.ClientBinding{}, fmt.Errorf("standalone publication cannot join a package group")
+	}
 	if mutation.Sequence < 1 || mutation.OperationID == "" {
 		return 0, domain.ClientBinding{}, fmt.Errorf("mutation %d has incomplete identity", index)
 	}

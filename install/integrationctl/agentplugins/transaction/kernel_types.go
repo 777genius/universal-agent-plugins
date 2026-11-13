@@ -54,6 +54,10 @@ type StateStore interface {
 }
 
 type DirectoryMutation struct {
+	// Standalone retains an auxiliary directory receipt independently of the
+	// package binding. Only fresh publication is allowed; it never replaces a
+	// package or changes its materialization/native ownership.
+	Standalone      bool
 	OperationID     string
 	InstallationID  string
 	ClientBindingID string

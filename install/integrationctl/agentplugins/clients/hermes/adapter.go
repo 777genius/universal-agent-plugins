@@ -18,7 +18,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
-type Adapter struct{}
+type Adapter struct{ selectedProject bool }
 
 func New() *Adapter                  { return &Adapter{} }
 func (*Adapter) ID() domain.ClientID { return domain.ClientHermes }
@@ -101,7 +101,10 @@ func (*Adapter) ResolveProfileRoot(root string) (string, error) {
 
 // ValidateBindingProfile refuses historical or replayed receipts that point
 // into a different selected native profile. No legacy Hermes migrations exist.
-func (*Adapter) ValidateBindingProfile(root string, binding domain.ClientBinding) error {
+func (adapter *Adapter) ValidateBindingProfile(root string, binding domain.ClientBinding) error {
+	if adapter.selectedProject && binding.Scope == string(domain.ScopeProject) {
+		return validateProjectSessionBinding(root, binding)
+	}
 	if binding.ClientID != string(domain.ClientHermes) || !cleanRoot(root) {
 		return fmt.Errorf("hermes recorded binding has different client or profile authority")
 	}
@@ -189,13 +192,13 @@ func (*Adapter) CheckPlanPrecondition(in clients.PlanInput, plan *domain.Deliver
 
 // A package with required MCP/hooks/extensions must not silently become
 // Skills-only. Hermes' MCP configuration has User authority even in projects.
-func (*Adapter) QualifyPlan(_ clients.PlanInput, plan *domain.DeliveryPlan) error {
+func (adapter *Adapter) QualifyPlan(_ clients.PlanInput, plan *domain.DeliveryPlan) error {
 	if plan.Status == domain.PlanUnsupported {
 		return nil
 	}
 	for _, component := range plan.Components {
 		allowed := component.Kind == domain.ComponentSkill ||
-			component.Kind == domain.ComponentMCPServer && plan.Scope == domain.ScopeUser
+			component.Kind == domain.ComponentMCPServer && (plan.Scope == domain.ScopeUser || adapter.selectedProject)
 		if !allowed || component.Support == domain.SupportUnsupported {
 			plan.Status = domain.PlanUnsupported
 			plan.Warnings = shared.AppendUnique(plan.Warnings, "Hermes supports User Skills/MCP and Project Skills; project MCP and unqualified package components cannot be redirected or discarded")

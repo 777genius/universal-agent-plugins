@@ -19,6 +19,16 @@ func LegacyIdentity(_ string, info os.FileInfo) (string, error) {
 	return fmt.Sprintf("%d:%d", stat.Dev, stat.Ino), nil
 }
 
+// LegacyHandleIdentity preserves the legacy encoding from an already held
+// ordinary directory. It does not opt this consumer into physical profiles.
+func LegacyHandleIdentity(file *os.File) (string, error) {
+	info, err := file.Stat()
+	if err != nil || !info.IsDir() {
+		return "", fmt.Errorf("held ordinary directory unavailable")
+	}
+	return LegacyIdentity("", info)
+}
+
 func canonicalize(p string) (string, error) {
 	if err := validatePath(p, platformScheme()); err != nil {
 		return "", err

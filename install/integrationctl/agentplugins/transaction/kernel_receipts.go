@@ -36,6 +36,43 @@ func committedDirectoryObjects(before domain.StateFileV2, installationID, bindin
 	return objects
 }
 
+func recordDirectoryMutation(state *domain.StateFileV2, before domain.StateFileV2, index int, client domain.ClientBinding, mutation DirectoryMutation, receipt domain.MutationReceipt) {
+	if mutation.Standalone {
+		state.TransactionReceipts = append(state.TransactionReceipts, receipt)
+		return
+	}
+	client.Receipts = append(client.Receipts, receipt)
+	client.NativeObjects = committedDirectoryObjects(before, mutation.InstallationID, mutation.ClientBindingID, mutation.NativeObjects)
+	client.Materialization = domain.MaterializationMaterialized
+	client.Activation = mutation.Activation
+	client.Authentication = mutation.Authentication
+	client.Policy = mutation.Policy
+	client.Verification = mutation.Verification
+	installation := state.Installations[index]
+	installation.OperationGroupID = mutation.OperationID
+	installation.Clients[mutation.ClientBindingID] = client
+	state.Installations[index] = installation
+}
+
+func validateStandalonePublication(mutation DirectoryMutation, before []byte) error {
+	if !mutation.Standalone {
+		return nil
+	}
+	if !mutation.RequireAbsent || mutation.Verify == nil || mutation.BeforeDigest != "" ||
+		len(mutation.NativeObjects) != 0 || mutation.Activation != "" || mutation.Authentication != "" ||
+		mutation.Policy != "" || mutation.Verification != "" {
+		return fmt.Errorf("standalone publication requires verified fresh contents without binding changes")
+	}
+	desired, err := marshalComparableState(mutation.DesiredState)
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(before, desired) {
+		return fmt.Errorf("standalone publication cannot change installation state")
+	}
+	return nil
+}
+
 func groupReceipts(items []appliedGroupMutation) []domain.MutationReceipt {
 	result := make([]domain.MutationReceipt, 0, len(items))
 	for _, item := range items {

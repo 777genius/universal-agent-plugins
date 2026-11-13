@@ -21,3 +21,19 @@ type OpenCodeTransitionRecorder interface {
 type NativeTransitionActivationFence interface {
 	HoldsActivation(installationID, bindingID string) (bool, error)
 }
+
+// NativeProjectRoot describes one adapter-selected private runtime directory.
+// Its marker is source ownership; the publisher also requires its retained
+// directory transaction receipt before reusing a root.
+type NativeProjectRoot struct {
+	Path       string
+	Marker     domain.NativeObjectOwnership
+	MarkerBody []byte
+}
+
+// NativeProjectRootPublisher publishes an absent selected root using the same
+// directory kernel and state store as the enclosing installation.
+type NativeProjectRootPublisher interface {
+	PublishProjectRoot(context.Context, domain.ActivationRequest, NativeProjectRoot) error
+	VerifyProjectRoot(context.Context, string, domain.NativeObjectOwnership) error
+}
