@@ -3,6 +3,7 @@
 package managedstdio
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -14,6 +15,7 @@ import (
 )
 
 var assignProcessToJobObject = windows.AssignProcessToJobObject
+var terminateSessionJob = windows.TerminateJobObject
 
 // Windows cannot replace the current process with execve. A private Job
 // Object gives the managed helper equivalent process-tree ownership: the
@@ -26,6 +28,13 @@ func replaceProcess(command string, args []string, cwd string) error {
 }
 
 func replaceProcessEnvironment(command string, args []string, cwd string, environment []string) error {
+	return replaceSessionContext(context.Background(), command, args, cwd, environment)
+}
+
+func replaceSessionContext(ctx context.Context, command string, args []string, cwd string, environment []string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if command == "" || !filepathIsAbs(cwd) {
 		return errors.New("managed stdio requires an absolute command and cwd")
 	}
@@ -39,7 +48,11 @@ func replaceProcessEnvironment(command string, args []string, cwd string, enviro
 	if err != nil {
 		return fmt.Errorf("create managed stdio job: %w", err)
 	}
-	defer windows.CloseHandle(job)
+	defer func() {
+		if job != 0 {
+			_ = windows.CloseHandle(job)
+		}
+	}()
 	limits := windows.JOBOBJECT_EXTENDED_LIMIT_INFORMATION{}
 	limits.BasicLimitInformation.LimitFlags = windows.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
 	if _, err := windows.SetInformationJobObject(job, windows.JobObjectExtendedLimitInformation,
@@ -64,20 +77,37 @@ func replaceProcessEnvironment(command string, args []string, cwd string, enviro
 		_ = cmd.Wait()
 		return fmt.Errorf("assign managed stdio process: %w", err)
 	}
-	thread, err := firstProcessThread(uint32(cmd.Process.Pid))
-	if err != nil {
+	if err := resumeSessionProcess(cmd.Process.Pid); err != nil {
 		_ = windows.TerminateJobObject(job, 1)
 		_ = cmd.Wait()
 		return err
 	}
-	if _, err := windows.ResumeThread(thread); err != nil {
-		_ = windows.CloseHandle(thread)
-		_ = windows.TerminateJobObject(job, 1)
-		_ = cmd.Wait()
-		return fmt.Errorf("resume managed stdio process: %w", err)
+	return waitSessionContext(ctx, cmd, &job)
+}
+
+func waitSessionContext(ctx context.Context, cmd *exec.Cmd, job *windows.Handle) error {
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		select {
+		case err := <-done:
+			return err
+		default:
+		}
+		terminateErr := terminateSessionJob(*job, 1)
+		if terminateErr != nil {
+			// Last-handle close enforces KILL_ON_JOB_CLOSE if termination fails.
+			closeErr := windows.CloseHandle(*job)
+			if closeErr == nil {
+				*job = 0
+			}
+			terminateErr = errors.Join(terminateErr, closeErr)
+		}
+		return errors.Join(ctx.Err(), terminateErr, <-done)
 	}
-	_ = windows.CloseHandle(thread)
-	return cmd.Wait()
 }
 
 func firstProcessThread(pid uint32) (windows.Handle, error) {
@@ -105,4 +135,19 @@ func firstProcessThread(pid uint32) (windows.Handle, error) {
 
 func filepathIsAbs(path string) bool {
 	return len(path) >= 3 && ((path[0] >= 'A' && path[0] <= 'Z') || (path[0] >= 'a' && path[0] <= 'z')) && path[1] == ':' && (path[2] == '\\' || path[2] == '/')
+}
+
+func resumeSessionProcess(pid int) (resultErr error) {
+	if pid <= 0 || uint64(pid) > uint64(^uint32(0)) {
+		return fmt.Errorf("invalid native process ID")
+	}
+	thread, err := firstProcessThread(uint32(pid))
+	if err != nil {
+		return err
+	}
+	defer func() { resultErr = errors.Join(resultErr, windows.CloseHandle(thread)) }()
+	if _, err := windows.ResumeThread(thread); err != nil {
+		return fmt.Errorf("resume managed stdio process: %w", err)
+	}
+	return nil
 }

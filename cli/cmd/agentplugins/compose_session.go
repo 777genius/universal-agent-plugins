@@ -20,7 +20,7 @@ func configureNativeSession(app *agentpluginscli.App, facade *installer.Engine, 
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		return managedstdio.StartSession(plan.Executable, append([]string{plan.Executable}, plan.Arguments...),
+		return managedstdio.StartSessionContext(ctx, plan.Executable, append([]string{plan.Executable}, plan.Arguments...),
 			plan.Directory, plan.ChildEnvironment(os.Environ()))
 	}
 }

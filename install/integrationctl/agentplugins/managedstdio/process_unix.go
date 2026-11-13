@@ -3,6 +3,7 @@
 package managedstdio
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -29,4 +30,11 @@ func replaceProcessEnvironment(command string, args []string, cwd string, enviro
 		return errors.Join(execErr, fmt.Errorf("restore cwd after failed native exec: %w", restoreErr))
 	}
 	return execErr
+}
+
+func replaceSessionContext(ctx context.Context, command string, args []string, cwd string, environment []string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return replaceProcessEnvironment(command, args, cwd, environment)
 }

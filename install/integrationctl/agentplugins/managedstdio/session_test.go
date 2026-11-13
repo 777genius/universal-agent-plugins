@@ -2,6 +2,7 @@ package managedstdio
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -108,4 +109,31 @@ func TestSessionTargetChild(t *testing.T) {
 		t.Fatal("unselected parent environment leaked")
 	}
 	_, _ = os.Stdout.WriteString("native-session-ok\n")
+}
+
+func TestSessionPreCancelledDoesNotSpawn(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	receipt := filepath.Join(dir, "unexpected-child")
+	err = StartSessionContext(ctx, executable, []string{executable, "-test.run=^TestSessionPreCancelledTarget$"}, dir,
+		append(os.Environ(), "UAP_PRE_CANCEL_RECEIPT="+receipt))
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("pre-cancel: %v", err)
+	}
+	if _, err := os.Stat(receipt); !os.IsNotExist(err) {
+		t.Fatalf("pre-cancel spawned child: %v", err)
+	}
+}
+
+func TestSessionPreCancelledTarget(t *testing.T) {
+	if receipt := os.Getenv("UAP_PRE_CANCEL_RECEIPT"); receipt != "" {
+		if err := os.WriteFile(receipt, []byte("unexpected spawn"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
 }

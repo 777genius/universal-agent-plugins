@@ -1,6 +1,7 @@
 package managedstdio
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,15 @@ import (
 // Object boundary. The caller must obtain explicit consent and verify all owned
 // configuration before reaching this function. It performs no shell evaluation.
 func StartSession(command string, args []string, cwd string, environment []string) error {
+	return StartSessionContext(context.Background(), command, args, cwd, environment)
+}
+
+// StartSessionContext observes cancellation before launch and, on Windows,
+// terminates and reaps the owned Job Object. Unix retains process replacement.
+func StartSessionContext(ctx context.Context, command string, args []string, cwd string, environment []string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if !Supported() || !filepath.IsAbs(command) || !filepath.IsAbs(cwd) || len(args) == 0 || args[0] != command {
 		return fmt.Errorf("native session requires a supported host and exact absolute command/directory")
 	}
@@ -18,5 +28,5 @@ func StartSession(command string, args []string, cwd string, environment []strin
 			return fmt.Errorf("native session contains a NUL byte")
 		}
 	}
-	return replaceProcessEnvironment(command, args, cwd, environment)
+	return replaceSessionContext(ctx, command, args, cwd, environment)
 }
