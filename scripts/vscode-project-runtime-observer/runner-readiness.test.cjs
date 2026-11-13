@@ -160,7 +160,7 @@ function harness(catalogs, wrongSession = false, behavior = '') {
   const expected = { label: 'owned', facts: { ...facts } };
   delete expected.facts.pid;
   delete expected.facts.session;
-  const sandbox = { Error, Buffer, URL, createHash, observations: [], phase: 'start',
+  const sandbox = { Error, Buffer, URL, LIMIT: 1 << 20, createHash, observations: [], phase: 'start',
     performance: { now: () => clock }, delay: async ms => { clock += ms; },
     object: value => { if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('object required'); return value; },
     keys: (value, keys) => assert.equal(JSON.stringify(Object.keys(value).sort()), JSON.stringify(keys.slice().sort())),
