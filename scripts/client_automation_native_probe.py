@@ -99,10 +99,11 @@ def snapshot(root):
                 == (observed.st_dev, observed.st_ino, observed.st_mode)
                 and stat.S_ISDIR(observed.st_mode),
                 "snapshot root changed")
-        # Include the watched directory itself. Without this record, a native
-        # command could chmod a watched Project/User root without adding or
-        # changing any child and the no-effect comparison would still pass.
-        out = {".": {"kind": "directory", "mode": stat.S_IMODE(observed.st_mode)}}
+        # Include watched directory identity as well as mode. A native command
+        # could replace an empty foreign directory with a same-mode directory
+        # (or swap the root between probes) without changing any file bytes.
+        out = {".": {"kind": "directory", "mode": stat.S_IMODE(observed.st_mode),
+                     "device": observed.st_dev, "inode": observed.st_ino}}
         # Bound directory entries as well as regular files. Eager sorting or
         # counting only captured files lets a native-generated directory tree
         # exhaust memory/CPU before the snapshot limit can fire.
@@ -118,6 +119,7 @@ def snapshot(root):
                 out[str(relative)] = {
                     "kind": "directory",
                     "mode": read_anchored_directory_mode(root_fd, relative.parts, meta),
+                    "device": meta.st_dev, "inode": meta.st_ino,
                 }
                 continue
             require(stat.S_ISREG(meta.st_mode) and meta.st_size <= 1 << 20,
