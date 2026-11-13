@@ -355,6 +355,53 @@ class ProspectiveBootstrapContracts(unittest.TestCase):
                     with self.assertRaises(ValueError): case.verify_metadata_sources(json.dumps(bad).encode(), ctx, expected, scope)
 
 
+class SkillsMetadataContracts(unittest.TestCase):
+    def fixture(self):
+        root = Path('/owned'); ctx = SimpleNamespace(root=root, home=root / 'home', projects={key: root / ('project-' + key) for key in ('a', 'b')})
+        expected = {key: {'skill': str(root / ('home/config/devin' if key == 'user' else 'project-' + key + '/.devin') / 'skills/same-skill/SKILL.md')} for key in ('a', 'b', 'user')}
+        def row(name, description, provider, base, display, triggers):
+            return dict(name=name, description=description, triggers=triggers, provider=provider, base_dir=base, display_name=display, warnings=[], errors=[])
+        rows = [row('legacy-foreign', 'Preserve legacy Windsurf skill.', 'Windsurf', '/owned/home/.codeium/windsurf/skills/legacy-foreign', 'legacy-foreign', ['user', 'model'])]
+        for source in ('user', 'a'):
+            rows.append(row('/owned/project-a:same-skill', 'Inert ' + source + ' ' + 'f' * 64, 'Devin', str(Path(expected[source]['skill']).parent), 'same-skill', ['user', 'model']))
+        rows += [
+            row('devin-cli', 'Look up Devin CLI documentation (skills, extensibility, configuration, commands, models, troubleshooting)', 'Builtin', '/owned/client/share/devin', 'devin-cli', ['model']),
+            row('declarative-repo-setup', 'Generate and verify a working environment.yaml (Devin snapshot-setup blueprint) for a repo', 'Builtin', '', 'declarative-repo-setup', ['model', 'user']),
+            row('upload-secrets', 'Securely upload local secrets (dotenv files, env vars, API keys) to the Devin Cloud secrets manager — values never enter the conversation', 'Builtin', '', 'upload-secrets', ['model', 'user'])]
+        return ctx, expected, rows
+
+    def test_same_native_name_is_admitted_only_with_distinct_original_sources(self):
+        ctx, expected, rows = self.fixture()
+        self.assertEqual(rows[1]['name'], rows[2]['name'])
+        case.verify_skill_metadata_sources(json.dumps(rows).encode(), ctx, expected, 'a', 'f' * 64)
+        user = copy.deepcopy(rows); del user[2]; user[1]['name'] = 'same-skill'
+        case.verify_skill_metadata_sources(json.dumps(user).encode(), ctx, expected, 'user', 'f' * 64)
+        b = copy.deepcopy(rows)
+        for i in (1, 2): b[i]['name'] = '/owned/project-b:same-skill'
+        b[2].update(base_dir=str(Path(expected['b']['skill']).parent), description='Inert b ' + 'f' * 64)
+        case.verify_skill_metadata_sources(json.dumps(b).encode(), ctx, expected, 'b', 'f' * 64)
+
+    def test_foreign_duplicate_missing_legacy_builtin_and_changed_semantics_refuse(self):
+        ctx, expected, original = self.fixture()
+        for change in ('sibling', 'duplicate', 'missing', 'legacy', 'builtin-path', 'builtin-extra', 'nonce', 'name', 'triggers', 'warning', 'errors', 'extra-field', 'wrong-type'):
+            rows = copy.deepcopy(original)
+            if change == 'sibling': rows[2]['base_dir'] = str(Path(expected['b']['skill']).parent)
+            elif change == 'duplicate': rows[2] = copy.deepcopy(rows[1])
+            elif change == 'missing': rows.pop(2)
+            elif change == 'legacy': rows[0]['provider'] = 'Devin'
+            elif change == 'builtin-path': rows[3]['base_dir'] = '/foreign/share/devin'
+            elif change == 'builtin-extra': rows.append(copy.deepcopy(rows[-1]))
+            elif change == 'nonce': rows[2]['description'] = 'Inert a stale-nonce'
+            elif change == 'name': rows[2]['name'] = 'same-skill'
+            elif change == 'triggers': rows[2]['triggers'] = ['user']
+            elif change == 'warning': rows[2]['warnings'] = ['native warning']
+            elif change == 'errors': rows[2]['errors'] = {}
+            elif change == 'extra-field': rows[2]['unexpected'] = True
+            else: rows[2]['base_dir'] = []
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                case.verify_skill_metadata_sources(json.dumps(rows).encode(), ctx, expected, 'a', 'f' * 64)
+
+
 class ClosedDevinReadoutContracts(unittest.TestCase):
     def fixture(self):
         summary = dict(collection_complete=False, metadata_capture_complete=False, admission_qualified=False,
@@ -378,6 +425,56 @@ class ClosedDevinReadoutContracts(unittest.TestCase):
             self.assertNotIn(word, json.dumps(value))
         self.assertEqual(case.readout_reason(ValueError('unknown PRIVATE_CONFIG')), 'unclassified-refusal')
         self.assertEqual(case.readout_reason(ValueError('unknown native bootstrap path')), 'bootstrap-path-refused')
+
+    def complete_fixture(self):
+        summary, state = self.fixture()
+        summary.pop('error')
+        summary.update(collection_complete=True, metadata_capture_complete=True,
+                       native_json_schema=case.METADATA_SCHEMA, exact_source_admission=case.METADATA_SCHEMA,
+                       probe_methods=dict.fromkeys(('a', 'b', 'user', 'local', 'legacy'), []),
+                       accepted_connections=dict.fromkeys(('a', 'b', 'user', 'local', 'legacy'), 0))
+        names = ('source-commit', 'source-tree', 'source-clean', 'git-init-a', 'git-init-b', 'git-init-c') + case.METADATA_PROBES + ('source-final-clean',)
+        summary['commands'] = [dict(probe=name, exit=0, error=None) for name in names]
+        summary['command_effects'] = [dict(label=name, changes={}, outer_changes={}) for name in case.METADATA_PROBES]
+        state.update(phase='source-final-clean', reason='metadata-complete')
+        return summary, state
+
+    def test_completion_requires_original_order_effects_and_zero_endpoint_activity(self):
+        summary, state = self.complete_fixture()
+        self.assertTrue(case.closed_readout(summary, state)['collection_complete'])
+        for change in ('missing', 'order', 'bool-exit', 'error', 'effect', 'endpoint', 'methods', 'schema', 'cleanup', 'artifact', 'reason'):
+            summary, state = self.complete_fixture()
+            if change == 'missing': summary['commands'].pop()
+            elif change == 'order': summary['commands'][0], summary['commands'][1] = summary['commands'][1], summary['commands'][0]
+            elif change == 'bool-exit': summary['commands'][0]['exit'] = False
+            elif change == 'error': summary['error'] = 'late failure'
+            elif change == 'effect': summary['command_effects'].pop()
+            elif change == 'endpoint': summary['accepted_connections']['legacy'] = 1
+            elif change == 'methods': summary['probe_methods']['user'] = ['initialize']
+            elif change == 'schema': summary['native_json_schema'] = 'unreviewed'
+            elif change == 'cleanup': summary['cleanup_complete'] = False
+            elif change == 'artifact': summary['artifact_admission_failed'] = True
+            else: state['reason'] = 'capture-incomplete'
+            with self.subTest(change=change), self.assertRaises(ValueError): case.closed_readout(summary, state)
+
+    def test_successful_metadata_publication_preserves_false_runtime_and_failed_join_revokes_success(self):
+        import zipfile
+        for corrupt in (False, True):
+            with self.subTest(corrupt=corrupt), tempfile.TemporaryDirectory() as temporary:
+                summary, state = self.complete_fixture(); captures = {}
+                for command in summary['commands']:
+                    for stream in ('stdout', 'stderr'):
+                        name = command['probe'] + '.' + stream + '.log'; captures[name] = b''
+                        command.update({stream + '_file': name, stream + '_bytes': 0, stream + '_sha256': hashlib.sha256(b'').hexdigest()})
+                if corrupt: summary['commands'][-1]['stdout_sha256'] = '0' * 64
+                root = Path(temporary).resolve()
+                with patch.object(case.os, 'write'):
+                    case.publish_with_readout(summary, SimpleNamespace(captures=captures, secrets=[]), root, case.root_identity(root), state)
+                with zipfile.ZipFile(root / 'upload/research.zip') as archive:
+                    self.assertIsNone(archive.testzip()); committed = json.loads(archive.read('research.json'))
+                self.assertIs(committed['collection_complete'], not corrupt)
+                self.assertTrue(all(value is False for value in committed['qualification'].values()))
+                if not corrupt: self.assertFalse(committed['admission_qualified'])
 
     def test_unknown_types_flags_bounds_and_deadline_refuse(self):
         for change in ('phase', 'reason', 'metadata', 'qualification', 'admission', 'cleanup', 'artifact', 'commands', 'missing-exit', 'effects', 'deadline'):

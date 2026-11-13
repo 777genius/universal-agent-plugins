@@ -191,3 +191,55 @@ per object/depth4 and boolean/null values; other values/keys expose type/size/ha
 Git after lines expose only exact baseline lines or bounded .devin relative
 patterns; other lines expose bytes/hash. No raw unrelated config/cache content,
 new vendor command, retry, restore, baseline renewal or qualification change.
+
+
+## Reviewed exact metadata admission (2026-11-13)
+
+The completed original capture on source `4994e4e1c780a7f45d65ed26aa576ebd8a429355`,
+tree `394b8fd3ed4e5e5e44c121d1832000a6da76bcee`, was independently inspected.
+[Run 43420259044 / job 131868182977](https://github.com/777genius/universal-agent-plugins/actions/runs/43420259044/job/131868182977)
+remains historically failed: the preceding recipe deliberately returned failure
+for every result pending independent schema review. Its original artifact
+`14034925324` is 45,572 bytes, outer SHA-256
+`87a74b40acda924e2908dd1eb87c8bbde142f342fca6a3476d482fe0355ebcc8`;
+inner `research.zip` SHA-256
+`d61be4edb2597537f7c5ccfd31f766feaba4f39c2fff823ad015ea68bdbaaf22`.
+Both ZIP CRCs and all 40 original stream lengths/digests agree.
+
+All 20 commands exited 0; the eight MCP/Skills inventories cover A/B/User/A-repeat.
+The actual binary reports `devin 3000.12.57 (96542e930752)`. Source/tree and clean
+state, complete cleanup, original User/project/local/legacy bytes and modes,
+zero connections/methods on all five fixture endpoints, and exact A-repeat
+outputs were verified. The successful capture has no error and records
+`metadata_capture_complete=true`; its historical `collection_complete=false`
+and runtime qualification flags are retained as originally published.
+
+Root reviewed the plan and original native rows before implementation. The
+narrow amendment closes Skills admission by the exact provider/base_dir/display
+identity, eight-field schema, authored description/nonce, triggers, empty
+warnings/errors and complete source set. The native client gives User and
+Project same-name Skills the SAME name in a project; their different physical
+base_dir values distinguish them. Legacy Windsurf and the three exact built-ins
+remain independently required. Unexpected siblings, roots, providers or fields
+refuse. Existing MCP local-override and disabled-state admission stays intact.
+
+Both A-repeat JSON streams must match their originals. Completion requires the
+measured 20-command / 13-effect sequence, all commands successful, final clean
+source and zero endpoint activity; cleanup or artifact admission failure still
+revokes success. The bounded readout admits only the new fixed metadata verdict.
+`admission_qualified` and every runtime qualification stay false. This is an
+explicit-owned-config metadata route, not ordinary default startup or a UAP
+installation lifecycle. No production version profile, binary pin, shared
+runner, effect allowance, cleanup authority or diagnostic bound changes.
+
+Estimate: 70–110 collector lines, 80–130 focused contract lines and this addendum;
+complexity 4/10, confidence 8/10. New inert negatives cover collision/source swaps,
+legacy/builtin substitution, malformed schemas, incomplete command/effect joins,
+late errors, endpoint activity and failed original-stream publication. Genuine
+execution of the final integrated source remains required.
+
+The final candidate passed all 31 inert Devin contracts. The new MCP and Skills
+validators also replayed successfully against all eight original native
+streams, including the command/effect completion joins and bounded readout.
+That replay leaves the historical artifact unchanged and does not count as
+a new native run of this candidate.

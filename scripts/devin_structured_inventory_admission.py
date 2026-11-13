@@ -447,6 +447,65 @@ def verify_metadata_sources(body, ctx, expected, scope):
                 and row.get("args") == entry.get("args", []) and row.get("disabled_tools") == entry.get("disabledTools", []), "explicit config changed MCP source or semantics")
 
 
+def verify_skill_metadata_sources(body, ctx, expected, scope, nonce):
+    """Pinned native rows identify collisions by source, never by display name."""
+    def row(name, description, provider, base_dir, display_name, triggers=("user", "model")):
+        return dict(name=name, description=description, triggers=list(triggers), provider=provider,
+                    base_dir=str(base_dir), display_name=display_name, warnings=[], errors=[])
+    wanted = [row("legacy-foreign", "Preserve legacy Windsurf skill.", "Windsurf",
+                  ctx.home / ".codeium/windsurf/skills/legacy-foreign", "legacy-foreign")]
+    selected = ("user", scope) if scope in ("a", "b") else ("user",)
+    name = str(ctx.projects[scope]) + ":same-skill" if scope in ("a", "b") else "same-skill"
+    wanted.extend(row(name, "Inert " + source + " " + nonce, "Devin",
+                      Path(expected[source]["skill"]).parent, "same-skill") for source in selected)
+    wanted.extend((
+        row("devin-cli", "Look up Devin CLI documentation (skills, extensibility, configuration, commands, models, troubleshooting)",
+            "Builtin", ctx.root / "client/share/devin", "devin-cli", ("model",)),
+        row("declarative-repo-setup", "Generate and verify a working environment.yaml (Devin snapshot-setup blueprint) for a repo",
+            "Builtin", "", "declarative-repo-setup", ("model", "user")),
+        row("upload-secrets", "Securely upload local secrets (dotenv files, env vars, API keys) to the Devin Cloud secrets manager — values never enter the conversation",
+            "Builtin", "", "upload-secrets", ("model", "user"))))
+    rows = strict_json(body)
+    require(type(rows) is list and len(rows) == len(wanted), "Skills original scope members differ")
+    keys = ("provider", "base_dir", "display_name")
+    remaining = {tuple(item[key] for key in keys): item for item in wanted}
+    for item in rows:
+        require(type(item) is dict and set(item) == set(wanted[0])
+                and all(type(item[key]) is str for key in (*keys, "name", "description")), "unreviewed Skills row schema")
+        key = tuple(item[field] for field in keys)
+        require(key in remaining and item == remaining.pop(key), "Skills original source or semantics differ")
+    require(not remaining, "Skills original scope members differ")
+
+
+METADATA_SCHEMA = "devin-3000.12.57-exact-metadata"
+INVENTORY_PROBES = tuple(kind + "-" + scope for scope in ("a", "b", "user", "a-repeat") for kind in ("mcp", "skills"))
+METADATA_PROBES = tuple(name for name, _ in HELP) + INVENTORY_PROBES
+
+
+def require_complete_metadata(summary):
+    """Completion joins the finite measured sequence without qualifying runtime."""
+    require(summary.get("metadata_capture_complete") is True and summary.get("admission_qualified") is False
+            and summary.get("exact_source_admission") == summary.get("native_json_schema") == METADATA_SCHEMA
+            and "error" not in summary, "metadata completion state")
+    qualification = summary.get("qualification")
+    require(type(qualification) is dict and set(qualification) == set(shared.QUALIFICATION_CASES)
+            and all(value is False for value in qualification.values()), "metadata runtime qualification")
+    commands = summary.get("commands")
+    probes = ("source-commit", "source-tree", "source-clean", "git-init-a", "git-init-b", "git-init-c") + METADATA_PROBES + ("source-final-clean",)
+    require(type(commands) is list and len(commands) == len(probes)
+            and all(type(command) is dict and command.get("probe") == probe
+                    and type(command.get("exit")) is int and command["exit"] == 0
+                    and "error" in command and command["error"] is None for command, probe in zip(commands, probes)), "metadata command sequence")
+    effects = summary.get("command_effects")
+    require(type(effects) is list and len(effects) == len(METADATA_PROBES)
+            and all(type(effect) is dict and effect.get("label") == probe
+                    for effect, probe in zip(effects, METADATA_PROBES)), "metadata effect sequence")
+    for field, empty in (("probe_methods", []), ("accepted_connections", 0)):
+        values = summary.get(field)
+        require(type(values) is dict and set(values) == {"a", "b", "user", "local", "legacy"}
+                and all(type(value) is type(empty) and value == empty for value in values.values()), "metadata endpoint effects")
+
+
 READOUT_LABELS = frozenset(name for name, _ in HELP) | frozenset(kind + '-' + scope for kind in ('mcp', 'skills') for scope in ('a', 'b', 'user', 'a-repeat'))
 READOUT_PHASES = READOUT_LABELS | frozenset(('preparation', 'source', 'acquisition', 'materialization', 'probes', 'fixture', 'source-final-clean'))
 READOUT_ERRORS = {
@@ -469,6 +528,10 @@ READOUT_ERRORS = {
     'MCP original scope members differ': 'mcp-members-refused',
     'explicit config changed MCP source or semantics': 'mcp-source-refused',
     'unreviewed MCP row schema': 'mcp-schema-refused',
+    'Skills original scope members differ': 'skills-members-refused',
+    'Skills original source or semantics differ': 'skills-source-refused',
+    'unreviewed Skills row schema': 'skills-schema-refused',
+    'metadata repeat differs': 'metadata-repeat-refused',
     'native metadata launched stdio': 'stdio-effect-refused',
     'native metadata contacted MCP endpoint': 'endpoint-effect-refused',
 }
@@ -486,10 +549,13 @@ def closed_readout(summary, state):
         require(type(state['deadline']) is float and time.monotonic() < state['deadline'], 'readout deadline')
     budget()
     require(type(state['phase']) is str and state['phase'] in READOUT_PHASES
-            and type(state['reason']) is str and state['reason'] in set(READOUT_ERRORS.values()) | {'capture-incomplete', 'capture-finished-unqualified', 'unclassified-refusal'}, 'readout state')
-    require(summary.get('collection_complete') is False and summary.get('admission_qualified') is False
+            and type(state['reason']) is str and state['reason'] in set(READOUT_ERRORS.values()) | {'capture-incomplete', 'capture-finished-unqualified', 'metadata-complete', 'unclassified-refusal'}, 'readout state')
+    require(type(summary.get('collection_complete')) is bool and summary.get('admission_qualified') is False
             and summary.get('cleanup_complete') is True and type(summary.get('metadata_capture_complete')) is bool
             and summary.get('artifact_admission_failed', False) is False, 'readout admission')
+    if summary['collection_complete']:
+        require_complete_metadata(summary)
+        require(state['phase'] == 'source-final-clean' and state['reason'] == 'metadata-complete', 'readout completion')
     qualification = summary['qualification']
     require(type(qualification) is dict and set(qualification) == set(shared.QUALIFICATION_CASES)
             and all(value is False for value in qualification.values()), 'readout qualification')
@@ -521,7 +587,7 @@ def closed_readout(summary, state):
                 and type(effect['label']) is str and effect['label'] in READOUT_LABELS and effect['label'] not in seen, 'readout effect')
         seen.add(effect['label'])
         rows.append(dict(phase=effect['label'], fixture=counts(effect['changes']), outer=counts(effect['outer_changes'])))
-    value = dict(schema_version=1, phase=state['phase'], reason=state['reason'], collection_complete=False,
+    value = dict(schema_version=1, phase=state['phase'], reason=state['reason'], collection_complete=summary['collection_complete'],
                  metadata_capture_complete=summary['metadata_capture_complete'], cleanup_complete=True,
                  commands=len(commands), failed_commands=failed, effects=rows)
     budget()
@@ -595,15 +661,18 @@ def collect(ctx, probes, readout_state=None):
             require(re.fullmatch(r"devin 3000\.12\.57 \([0-9a-f]{7,40}\)\n", text), "native version/build grammar differs")
         if label.endswith("list-help"):
             require("--json" in text, "native help omits JSON inventory")
+    first_a = {}
     for label, scope in (("a", "a"), ("b", "b"), ("user", "user"), ("a-repeat", "a")):
         for kind in ("mcp", "skills"):
             out, _err = command(kind + "-" + label, [kind, "list", "--json"], scope)
-            strict_json(out)
             if kind == "mcp": verify_metadata_sources(out, ctx, expected, scope)
+            else: verify_skill_metadata_sources(out, ctx, expected, scope, nonce)
+            if label == "a": first_a[kind] = out
+            if label == "a-repeat": require(out == first_a[kind], "metadata repeat differs")
     ctx.summary["prospective_bootstrap_effects"] = effects.proofs
     ctx.summary["metadata_route"] = "explicit-owned-config; not ordinary default startup"
     ctx.summary.update(fixture_after=snapshot(ctx), metadata_capture_complete=True,
-                       native_json_schema="requires-independent-original-review",
+                       native_json_schema=METADATA_SCHEMA, exact_source_admission=METADATA_SCHEMA,
                        probe_methods={name: list(probe.methods()) for name, probe in probes.items()},
                        accepted_connections={name: len(probe.accepted_connections) for name, probe in probes.items()})
 
@@ -670,10 +739,11 @@ def run(output):
             readout_state["phase"] = "source-final-clean"
             record, out, err = ctx.command("source-final-clean", ["/usr/bin/git", "status", "--porcelain", "--untracked-files=normal"], shared.SOURCE, ctx.env, 10)
             require(record["exit"] == 0 and not out and not err, "source changed")
-            # Full native schema/effects admission remains an independent gate.
-            summary["collection_complete"] = False
-            readout_state["reason"] = "capture-finished-unqualified"
+            require_complete_metadata(summary)
+            summary["collection_complete"] = True
+            readout_state["reason"] = "metadata-complete"
     except Exception as error:
+        summary["collection_complete"] = False
         readout_state["reason"] = readout_reason(error)
         summary["error"] = type(error).__name__ + ": " + str(error)[:300]
     finally:
