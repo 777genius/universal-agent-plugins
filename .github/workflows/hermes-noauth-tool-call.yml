@@ -11,6 +11,8 @@ name: Hermes native User tools call - scripted localhost provider, no vendor aut
     - scripts/e2e/hermes-noauth-tool-call.py
     - scripts/e2e/hermes-profile-admission.py
     - scripts/test_hermes_profile_admission.py
+    - scripts/hermes_original_archive_readout.py
+    - scripts/test_hermes_original_archive_readout.py
     - scripts/hermes_local_provider_fixture.py
     - scripts/test_hermes_local_provider_fixture.py
     - scripts/pi_project_components_native_e2e.py
@@ -32,6 +34,8 @@ name: Hermes native User tools call - scripted localhost provider, no vendor aut
     - scripts/e2e/hermes-noauth-tool-call.py
     - scripts/e2e/hermes-profile-admission.py
     - scripts/test_hermes_profile_admission.py
+    - scripts/hermes_original_archive_readout.py
+    - scripts/test_hermes_original_archive_readout.py
     - scripts/hermes_local_provider_fixture.py
     - scripts/test_hermes_local_provider_fixture.py
     - scripts/pi_project_components_native_e2e.py
@@ -305,3 +309,37 @@ jobs:
         path: ${{ runner.temp }}/hermes-profile-admission-evidence-*/upload/
         if-no-files-found: error
         retention-days: 14
+
+  original-archive-readout:
+    name: Hermes fixed original read-only diagnosis (${{ matrix.case }})
+    if: github.event_name == 'pull_request' && github.event.pull_request.number == 878
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - case: mac-b79
+          artifact: '14046328482'
+        - case: win-0a1
+          artifact: '14052063757'
+    timeout-minutes: 5
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
+        persist-credentials: false
+    - name: Inert fixed archive reader contracts
+      run: python3 -m unittest discover -s scripts -p test_hermes_original_archive_readout.py
+    - name: Read immutable original artifact
+      env:
+        GH_TOKEN: ${{ github.token }}
+        ORIGINAL_ID: ${{ matrix.artifact }}
+        ORIGINAL_CASE: ${{ matrix.case }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        gh api "repos/777genius/universal-agent-plugins/actions/artifacts/$ORIGINAL_ID/zip" > "$RUNNER_TEMP/hermes-original.zip"
+        python3 scripts/hermes_original_archive_readout.py "$ORIGINAL_CASE" "$RUNNER_TEMP/hermes-original.zip"

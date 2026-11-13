@@ -559,3 +559,51 @@ The record is ≤1 KiB; non-uint64 integers become null with a saturation flag. 
 Diagnostic inputs must be the captured 9/12-field identity tuple and a nonempty list of at most PAYLOAD_MEMBERS string names; malformed containers retain the original refusal without reads or diagnostic authority.
 
 Focused contracts cover actual outside hardlink no-read, retained internal-pair success, long/non-ASCII/surrogate names, malformed containers, oversized and wrongly typed link counts, saturation and existing publisher retention. Local execution is unavailable: this candidate has static review only; exact-source hosted contracts and native evidence remain required.
+
+## Fixed historical original archive diagnosis
+
+Add one read-only job and a Hermes-only reader for exactly two original artifacts:
+macOS artifact14046328482/run43439520227 at b79c2ac0b0bf2021b3697bb691108df24438c01d
+(9945 bytes, SHA256 ed0d57c5bea2e29991d7ff59d752d62209ce7842088bad2291d880a22f3af877),
+and Windows artifact14052063757/run43449616323 at
+0a1ecf16d41708b5c3cfc4add1e3cf8f0c6c96d8
+(1077 bytes, SHA256 1be40362fd5f15c4e71519e2d73eb0dcbc102a92add9453a44496a9e59c01c55).
+Use the ordinary official gh API artifact download with actions:read/contents:read;
+no local executor, native binary, bootstrap, new action or trust operation.
+
+Before ZipFile allocation check exact original bytes/hash and fixed bounded EOCD
+count/central-directory limits. Read only frozen flat historical MEMBERS,
+bounded each/aggregate, regular metadata, full CRC, unique membership; never extract.
+Require original source/tree/run/attempt/pin, unchanged before/after identities,
+all false qualification fields, completed cleanup and every proof.streams
+length/hash/member join. Original bytes remain unchanged. Project only fixed
+failure class/guard index, chronological known command label where present,
+exact harness basename/line frames, counts/hashes and the closed Windows
+hardlink metadata record (no relative member text). No raw exception, profile,
+nonce, code, path, config or stream contents are printed. Unknown decode emits
+one fixed diagnostic refusal, never native qualification.
+
+Four paths: scripts/hermes_original_archive_readout.py, its inert unittest,
+the existing Hermes workflow and this plan. Reader187 lines, tests102, workflow27;
+source-only tests are unexecuted until genuine CI. Three review passes: author
+source/closure review, independent critic, then root exact immutable diff review.
+This diagnostic measures historical failures and does not change inventory
+admission, pins, process limits, runtime qualification or production behavior.
+
+### Review corrections for temporary original reader
+
+The job is restricted to pull_request number878, with two fixed matrix cases
+and fail-fast:false; expiry cannot create a permanent main failure. A refused
+diagnostic prints its fixed JSON and exits1. Before reading ZipExtFile, validate
+local headers/names/size/CRC/data descriptors and exact contiguous central-bound
+ranges, then reuse read-authoring-evidence-zip.check_expansion for actual deflate
+EOF, full expanded bytes/CRC and trailing-data refusal. Catch struct/zlib decode
+errors as fixed refusal. Accepted readout includes fixed artifactID, original
+size/SHA, member count, verified CRC and stream-join count. Runtime presence,
+before/after equality and second runtime-error presence are separate booleans,
+so a second failure is retained without leaking runtime contents. Preserve the
+already approved closed Windows canonical bounded relative member alongside
+its digest/numeric metadata; it is not a raw profile or stderr path.
+Reader223 lines, tests147; workflow34-line job. Added forged declared expansion,
+trailing compressed data, runtime-second-failure and refused-exit contracts.
+All new contracts remain unexecuted.
