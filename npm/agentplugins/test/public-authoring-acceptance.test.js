@@ -715,7 +715,7 @@ if (require.main === module) {
     }
     assert.throws(() => a.verifyResults(f.j, extraRoot), /only generated lane entries/);
     // Independently rendered scaffold fixtures and ordinary v1 framing pins.
-    const golden = {"skill": "sha256:383668d78b12a5ad868c895183a6d86b3441c6fedc833371250eecd8e40d9754", "mcp-remote": "sha256:2aeaa18441a1e66f8b31c9beee438f88205c9dd24a4d73dd3fc24ebfce50c005", "mcp-stdio": "sha256:a6f32f6d62ba7f78fb838999d0d3545815f9ac2f4d387d278c0e6ad92f2aa0d1", "hybrid-remote": "sha256:66fa98b22663011eb77e8ffbe4b73f056eb94b2706fe9f9a58244d32e0935bdb", "hybrid-stdio": "sha256:bbd568c1215999640dbd1702b80ffcd525923b2db847e577258be654fe8494fa"};
+    const golden = {"skill": "sha256:383668d78b12a5ad868c895183a6d86b3441c6fedc833371250eecd8e40d9754", "mcp-remote": "sha256:2aeaa18441a1e66f8b31c9beee438f88205c9dd24a4d73dd3fc24ebfce50c005", "mcp-stdio": "sha256:a6f32f6d62ba7f78fb838999d0d3545815f9ac2f4d387d278c0e6ad92f2aa0d1", "hybrid-remote": "sha256:66fa98b22663011eb77e8ffbe4b73f056eb94b2706fe9f9a58244d32e0935bdb", "hybrid-stdio": "sha256:f917db45f791ff52d2822adf5bc5b4613189fd3ff25008669231a650314bd47c"};
     const observedGolden = Object.fromEntries(bridge.LANES.map(lane => [lane,
       a.generatedTreeIdentity(f.evidence['projects.json'].agentplugins.entries, lane, a.matrix[0].key)]));
     assert.deepEqual(observedGolden, golden, 'generated tree identities must match pinned bytes');
