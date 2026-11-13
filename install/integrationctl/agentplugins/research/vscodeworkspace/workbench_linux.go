@@ -188,12 +188,7 @@ func (c *controller) prepareDisplayParent() error {
 	if parentInfo.Mode().Perm()&0002 != 0 && parentInfo.Mode()&os.ModeSticky == 0 {
 		return fmt.Errorf("display parent is not protected by sticky ownership")
 	}
-	for _, name := range []string{"/tmp/.X93-lock", "/tmp/.X11-unix/X93"} {
-		if _, err := os.Lstat(name); !os.IsNotExist(err) {
-			return fmt.Errorf("display/lock collision; refusing to attach: %s", name)
-		}
-	}
-	return nil
+	return requireFreshDisplayLocks("/tmp/.X93-lock", "/tmp/.tX93-lock", "/tmp/.X11-unix/X93")
 }
 func (c *controller) systemIdentities() error {
 	for _, path := range []string{"/usr/bin/Xvfb", "/usr/bin/xauth"} {
@@ -254,36 +249,40 @@ func (c *controller) setupAuthority() error {
 	}
 	return os.Chmod(file, 0440)
 }
-func (c *controller) displayReady(ctx context.Context, proof isolationProof) error {
+func (c *controller) displayReady(ctx context.Context, proof isolationProof) (resultErr error) {
+	publication := &displayLockPublication{}
+	defer func() { resultErr = errors.Join(resultErr, publication.close()) }()
 	deadline := time.NewTimer(10 * time.Second)
 	defer deadline.Stop()
 	tick := time.NewTicker(25 * time.Millisecond)
 	defer tick.Stop()
-	for {
-		lock, err := readOrdinary("/tmp/.X93-lock", 64)
-		if err == nil {
+	return waitDisplayReadiness(ctx, deadline.C, tick.C, func() (bool, error) {
+		ready, err := publication.ready("/tmp/.X93-lock", "/tmp/.tX93-lock", proof)
+		if err != nil {
+			return false, err
+		}
+		if ready {
+			lock, err := readOrdinary("/tmp/.X93-lock", 64)
+			if err != nil {
+				return false, err
+			}
 			lockInfo, le := os.Lstat("/tmp/.X93-lock")
 			if le != nil {
-				return le
+				return false, le
+			}
+			if err := publication.finalInfo(lockInfo); err != nil {
+				return false, err
 			}
 			info, se := os.Lstat("/tmp/.X11-unix/X93")
 			if se == nil {
-				return c.retainReadyDisplay(lock, lockInfo, info, proof)
+				return true, c.retainReadyDisplay(lock, lockInfo, info, proof)
 			}
 			if !os.IsNotExist(se) {
-				return se
+				return false, se
 			}
-		} else if !os.IsNotExist(err) {
-			return err
 		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-deadline.C:
-			return fmt.Errorf("display readiness exceeded ten seconds")
-		case <-tick.C:
-		}
-	}
+		return false, nil
+	})
 }
 func (c *controller) removeA() error {
 	base := filepath.Join(c.request.Base, "projects", "A")

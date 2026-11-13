@@ -135,10 +135,10 @@ func trustedFailureForShutdown(err error) (error, error) {
 func runTrustedDisplay(outer func(func(context.Context, isolationProof) error) (childRecord, error), ready func(context.Context, isolationProof) error, sequence func(context.Context) error) (childRecord, error) {
 	var sequenceErr error
 	record, err := outer(func(ctx context.Context, proof isolationProof) error {
-		if err := ready(ctx, proof); err != nil {
-			return err
+		sequenceErr = ready(ctx, proof)
+		if sequenceErr == nil {
+			sequenceErr = sequence(ctx)
 		}
-		sequenceErr = sequence(ctx)
 		return nil
 	})
 	return record, errors.Join(sequenceErr, err)

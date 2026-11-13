@@ -369,3 +369,30 @@ The old receipt does not distinguish Stopped from Starting or identify a launch
 cause. Closed telemetry is measurement only. New exact-source hosted trusted
 lifecycle, untrusted regression, full applicable CI and original-artifact review
 remain mandatory before merge. User/Local/hooks and release boundaries remain.
+
+### Actual ee7 display-readiness refusal
+
+Run 43420598599/job 131869322874 at ee7c661261d49d6fb2223127bf1f85edb5574d45
+failed before any GUI stage: the fixed `/tmp/.X93-lock` read refused its ordinary
+single-link/64-byte gate. The artifact does not identify the failed predicate.
+Xvfb cleanup was unproved, the private view remained mounted, and host-policy
+readback saw that private overlay. This is neither an MCP result nor evidence of
+a global AppArmor/sysctl change; all native qualifications remain false.
+
+The official X.Org 21.1.11 source archive (`https://www.x.org/releases/individual/xserver/xorg-server-21.1.11.tar.xz`,
+SHA256 `1d3dadbd57fb86b16a018e9f5f957aeeadf744f56c0553f55737628d06d326ef`)
+shows `os/utils.c` LockServer writing the 11-byte PID, chmod0444 and closing the
+temporary file before link(final), then unlink(temporary). This proves a legitimate
+two-link publication interval, not the actual unrecorded ee7 stat or runner's
+Xserver package version. It does not justify a zero-size-final retry.
+
+Require both fixed lock names absent before launch. Retain an O_PATH inode during
+readiness; retry only the owner/proof-UID, 11-byte0444 two-link pair with the exact
+known temporary inode, or fresh same-inode single-link progress after its unlink.
+Unknown aliases, owners, modes or sizes in the two-link interval refuse. The existing ten-second timer,
+supervised cancellation, final no-follow single-link/PID/socket checks and real
+cleanup proof remain mandatory. The private display poll checks the original
+budget before and after observation; no deadline is renewed. Readiness failure
+is retained outside the existing planned-shutdown callback, so cleanup may be
+proved without running or qualifying the failed sequence. No global unlink,
+manual TreeReaped, shared process change or local native/mount execution is added.

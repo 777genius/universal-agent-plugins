@@ -150,6 +150,27 @@ func TestTrustedDisplayRetainsSequenceFailureAndCleanupFailure(t *testing.T) {
 	}
 }
 
+func TestTrustedDisplayRetainsReadinessFailureWithoutRunningSequence(t *testing.T) {
+	readyErr := errors.New("inert display readiness refused")
+	for _, cleanupFailed := range []bool{false, true} {
+		runner := &failureCleanupRunner{inertDuplexRunner: inertDuplexRunner{body: testProof()}}
+		if cleanupFailed {
+			runner.err = errors.New("inert display cleanup failed")
+		}
+		c := testController(t, runner)
+		sequenceCalled := false
+		record, err := runTrustedDisplay(func(exchange func(context.Context, isolationProof) error) (childRecord, error) {
+			return c.strict(t.Context(), "Xvfb", []string{"/inert"}, "/", nil, exchange)
+		}, func(context.Context, isolationProof) error { return readyErr }, func(context.Context) error {
+			sequenceCalled = true
+			return nil
+		})
+		if !errors.Is(err, readyErr) || sequenceCalled || record.TreeReaped == cleanupFailed || record.PlannedStop == cleanupFailed {
+			t.Fatal("readiness refusal lost, sequence ran, or cleanup inferred", record, err)
+		}
+	}
+}
+
 type failureCleanupRunner struct {
 	inertDuplexRunner
 	err error
