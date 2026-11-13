@@ -57,7 +57,7 @@ def read_events(body):
         if not isinstance(value, dict) or set(value) != {
                 "method", "pid", "session", "nonce", "timestamp", "facts"}:
             raise ValueError("unexpected event schema")
-        if value["method"] not in METHODS or type(value["pid"]) is not int or value["pid"] <= 0:
+        if type(value["method"]) is not str or value["method"] not in METHODS or type(value["pid"]) is not int or value["pid"] <= 0:
             raise ValueError("unexpected method or server PID")
         if type(value["session"]) is not str or not SESSION.fullmatch(value["session"]):
             raise ValueError("invalid server session")
