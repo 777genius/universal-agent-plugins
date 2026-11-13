@@ -130,12 +130,15 @@ func TestPiUpstreamSignedTestOnlyPositiveSaved(t *testing.T) {
 	for _, subject := range cases {
 		for _, scope := range []domain.InstallScope{domain.ScopeUser, domain.ScopeProject} {
 			name := fmt.Sprintf("%s/%s", subject.distribution, scope)
+			executed := false
 			passed := t.Run(name, func(t *testing.T) {
 				j, snapshot := piFullRealSavedJourneyWithClient(t, piUpstreamTestOnlyClient)
 				seen := false
+				var pinned domain.DirectoryRelease
 				for _, distribution := range snapshot.Distributions {
-					if distribution.ID == subject.distribution && distribution.ProductID == subject.product {
+					if distribution.ID == subject.distribution && distribution.ProductID == subject.product && len(distribution.Releases) == 1 {
 						seen = true
+						pinned = distribution.Releases[0]
 					}
 				}
 				if !seen {
@@ -158,9 +161,15 @@ func TestPiUpstreamSignedTestOnlyPositiveSaved(t *testing.T) {
 					t.Fatalf("positive saved lifecycle has wrong receipts: installations=%d, receipts=%d",
 						len(state.Installations), len(state.EnvironmentReceipts))
 				}
-				if state.Installations[0].Directory == nil ||
-					state.Installations[0].Directory.FeedID != piUpstreamTestFeedID {
-					t.Fatal("upstream saved installation lost isolated signed feed identity")
+				installed := state.Installations[0]
+				if installed.Directory == nil || installed.Directory.FeedID != piUpstreamTestFeedID ||
+					installed.Directory.DistributionID != subject.distribution ||
+					installed.Source.Repository != pinned.PackageSource.Repository ||
+					installed.Source.PackageSubpath != pinned.PackageSource.Path ||
+					installed.Source.ResolvedRevision != pinned.PackageSource.Revision ||
+					installed.Source.TreeDigest != pinned.TreeDigest ||
+					installed.Package.ManifestDigest != pinned.ManifestDigest {
+					t.Fatal("upstream saved installation was not bound to the exact immutable signed TEST-only source and feed")
 				}
 				if !reflect.DeepEqual(originalB, securityFixtureTree(t, piSignedProjectNativeRoot(j, j.b))) {
 					t.Fatal("upstream install modified independent project B")
@@ -183,8 +192,9 @@ func TestPiUpstreamSignedTestOnlyPositiveSaved(t *testing.T) {
 				if !reflect.DeepEqual(originalOther, securityFixtureTree(t, piSignedProjectNativeRoot(j, other))) {
 					t.Fatal("upstream saved lifecycle modified the unselected user/project scope")
 				}
+				executed = true
 			})
-			if !passed {
+			if !passed || !executed {
 				t.Fatalf("test-only positive upstream case %s did not complete", name)
 			}
 			completed = append(completed, name)
