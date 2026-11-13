@@ -147,8 +147,21 @@ export async function live(root, filename, fetcher = fetch, pause = milliseconds
   const contract = JSON.parse(await readFile(filename, 'utf8'));
   const pin = JSON.parse(await readFile(path.join(root, 'website/production-source.json'), 'utf8'));
   validateContract(contract, environmentIdentity(pin));
-  const provenance = JSON.parse((await getBytes(origin + '/BUILD_PROVENANCE.json', fetcher)).toString('utf8'));
-  for (const key of fields) assert.equal(provenance[key], contract[key], `live provenance ${key}`);
+  // GitHub Pages can briefly serve the previous build after a successful deployment.
+  // Accept only the exact run in the contract, even while waiting for propagation.
+  let provenanceFailure;
+  for (let attempt = 0; attempt < 12; attempt++) {
+    try {
+      const provenance = JSON.parse((await getBytes(origin + '/BUILD_PROVENANCE.json', fetcher)).toString('utf8'));
+      for (const key of fields) assert.equal(provenance[key], contract[key], `live provenance ${key}`);
+      provenanceFailure = undefined;
+      break;
+    } catch (error) {
+      provenanceFailure = error;
+      if (attempt < 11) await pause(10000);
+    }
+  }
+  if (provenanceFailure) throw provenanceFailure;
   for (const entry of contract.routes) {
     // Retry propagation/network failures, never accept a redirect or stale content.
     let failure;

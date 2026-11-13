@@ -8,6 +8,7 @@ import { catalogVisiblePlugins, groupCatalogPlugins } from '~/utils/filter';
 import { expectedDistribution, resolveDistribution } from '~/utils/registry';
 
 const { t, locale } = useI18n();
+const localePath = useLocalePath();
 const props = defineProps<{ registry: RegistryIndex }>();
 const config = useRuntimeConfig();
 const { current, expired, published } = useDirectoryStatus();
@@ -344,12 +345,10 @@ function updateTargets(values: string[]) {
                     <p v-else class="install-panel__notice" role="status">
                       {{ t('shell.hero.refreshNotice') }}
                     </p>
-                    <a
+                    <NuxtLink
                       class="hero-quick-start__more-install"
-                      href="https://github.com/777genius/universal-agent-plugins#install-the-cli"
-                      target="_blank"
-                      rel="noreferrer"
-                      >{{ t('shell.hero.otherMethods') }} <span aria-hidden="true">↗</span></a
+                      :to="localePath('/download/')"
+                      >{{ t('shell.hero.otherMethods') }} <span aria-hidden="true">→</span></NuxtLink
                     >
                   </div>
                 </li>

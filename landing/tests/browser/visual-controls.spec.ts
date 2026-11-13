@@ -10,7 +10,7 @@ test('flat filters retain keyboard selection, category search, and reset', async
   await expect(page.locator('.hero-quick-start__label').filter({ hasText: 'Copy and run' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Other installation methods' })).toHaveAttribute(
     'href',
-    'https://github.com/777genius/universal-agent-plugins#install-the-cli',
+    /\/download\/$/,
   );
   await expect(page.getByText('No target flag means auto-detect')).toHaveCount(0);
   const controls = page.getByRole('search', { name: 'Filter plugins' });
