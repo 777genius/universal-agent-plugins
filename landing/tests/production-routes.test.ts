@@ -52,12 +52,14 @@ const contract = () => ({ schema_version: 1, ...identity, routes: routePaths(nat
   return { route, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') };
 }) });
 
-test('selected public source determines 16 routes or legitimate 14-client rollback without H/A', () => {
+test('selected public source binds homepage and download with 16-client or 14-client routes', () => {
   const selected = routePaths(nativeClients, locales);
-  assert.equal(selected.length, 25);
+  assert.equal(selected.length, 27);
+  assert(selected.some(value => value.route === '/'));
+  assert(selected.some(value => value.route === '/download/'));
   assert(selected.some(value => value.route === '/agents/hermes/'));
   const rollback = routePaths(oldClients, locales);
-  assert.equal(rollback.length, 23);
+  assert.equal(rollback.length, 25);
   assert(!rollback.some(value => /hermes|antigravity/.test(value.route)));
   assert.equal(rollback.filter(value => value.route.startsWith('/docs/')).length, 9);
   assert.throws(() => routePaths([...oldClients, oldClients[0]], locales));
@@ -88,6 +90,9 @@ test('contract rejects identity, cardinality, digest and path changes', () => {
   const missing = contract();
   missing.routes.pop();
   assert.throws(() => validateContract(missing, identity), /nine compatibility/);
+  const missingDownload = contract();
+  missingDownload.routes = missingDownload.routes.filter(entry => entry.route !== '/download/');
+  assert.throws(() => validateContract(missingDownload, identity), /missing essential live route/);
   const duplicate = contract();
   duplicate.routes[1] = duplicate.routes[0];
   assert.throws(() => validateContract(duplicate, identity));
@@ -202,7 +207,7 @@ test('prepare and live bind selected modules, built HTML, provenance and environ
     const contractPath = path.join(root, 'contract.json');
     await prepare(root, contractPath);
     const actual = JSON.parse(await readFile(contractPath, 'utf8'));
-    assert.equal(actual.routes.length, 25);
+    assert.equal(actual.routes.length, 27);
     const requested: string[] = [];
     const fetcher: typeof fetch = async (input, options) => {
       const url = String(input);
@@ -214,13 +219,18 @@ test('prepare and live bind selected modules, built HTML, provenance and environ
       return result;
     };
     const noDelay = async () => {};
-    assert.equal(await live(root, contractPath, fetcher, noDelay), 25);
-    assert.equal(requested.length, 26);
+    assert.equal(await live(root, contractPath, fetcher, noDelay), 27);
+    assert.equal(requested.length, 28);
+    assert(requested.includes('/'));
+    assert(requested.includes('/download/'));
     assert(requested.includes('/agents/hermes/'));
     assert(requested.includes('/docs/ar/reference/client-compatibility'));
     process.env.GITHUB_RUN_ATTEMPT = '3';
     await assert.rejects(live(root, contractPath, fetcher, noDelay), /contract run_attempt/);
     process.env.GITHUB_RUN_ATTEMPT = identity.run_attempt;
+    published.set('/download/', published.get('/download/')!.replace('<body>', '<BODY>'));
+    await assert.rejects(live(root, contractPath, fetcher, noDelay), /SHA256|byte length/);
+    published.set('/download/', html('/download/').toString());
     published.set('/agents/hermes/', published.get('/agents/hermes/')!.replace('Project installation', 'Project INSTALLATION'));
     await assert.rejects(live(root, contractPath, fetcher, noDelay), /SHA256|byte length/);
     published.set('/BUILD_PROVENANCE.json', JSON.stringify({ ...provenance, source_tree: 'd'.repeat(40) }));
@@ -238,6 +248,8 @@ test('docs canonical public route maps to the actual assembled HTML file', () =>
   const route = '/docs/ar/reference/client-compatibility';
   assert.equal(builtHtmlPath(route), 'docs/ar/reference/client-compatibility.html');
   assert.equal(builtHtmlPath('/agents/hermes/'), 'agents/hermes/index.html');
+  assert.equal(builtHtmlPath('/'), 'index.html');
+  assert.equal(builtHtmlPath('/download/'), 'download/index.html');
   checkHtml(html(route), route);
   const wrong = Buffer.from(html(route).toString().replace('client-compatibility"', 'client-compatibility.html"'));
   assert.throws(() => checkHtml(wrong, route), /canonical/);
