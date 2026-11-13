@@ -29,17 +29,23 @@ Interpreta la compatibilidad como comprobaciones independientes:
 
 La entrega de proyecto suele quedar **Prepared** mientras falten confianza, recarga, configuración explícita o una nueva sesión. ChatGPT rechaza la instalación de proyecto. Consulta [la compatibilidad por proyecto](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md) y [el índice de pruebas de proyecto](https://github.com/777genius/universal-agent-plugins/blob/main/docs/evidence/PROJECT_INSTALLATION.md).
 
-## Hermes y Antigravity: verificación del código fuente {#hermes-antigravity-source}
+## Hermes y Antigravity: soporte en el CLI publicado {#hermes-antigravity-source}
 
-A fecha de 2026-11-10, el CLI publicado `0.1.102` no incluye Hermes ni Antigravity. Los siguientes resultados verifican el código fuente, no un artefacto publicado. La verificación del binario de publicación inmutable y la elegibilidad en el Directory firmado siguen pendientes por separado. La capacidad del cliente no autoriza un paquete del Directory para ese destino.
+El CLI nativo **0.1.108** se publicó el 2026-11-13 e incluye Hermes y Antigravity. La verificación de la versión y su promoción finalizaron correctamente; la elegibilidad de cada paquete del Directory firmado sigue siendo independiente. Esto no afirma la publicación de npm 0.1.108, autenticación del proveedor ni activación automática.
+
+[0.1.108](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.108) · [43337036671](https://github.com/777genius/universal-agent-plugins/actions/runs/43337036671) · [43454712919](https://github.com/777genius/universal-agent-plugins/actions/runs/43454712919) · source `8c3cfa28e332c533b0cc0845739c0275730a4285`.
+
+**Evidencia histórica del ciclo de vida (2026-11-10):**
 
 **Hermes 0.23.0:** Skills de usuario y configuración MCP stdio/Streamable HTTP administrada por UAP; en proyectos, solo Skills. Project MCP se rechaza sin redirigir a la configuración de usuario. Linux x64, macOS arm64 y Windows x64 nativo superaron la primera adición y su repetición, actualización, reparación, eliminación, detección en proyectos sin confianza e aislamiento A/B: [42813277862](https://github.com/777genius/universal-agent-plugins/actions/runs/42813277862), UAP `a50c8a245f1c273efb3d171f4c54ed540475336a`. Cuatro intercambios HTTP de bucle local `initialize`/`tools/list` por sistema prueban conexión y detección de herramientas, pero no `tools/call`, uso de modelos, autenticación ni ejecución en proyectos de confianza. SSE y hooks no están admitidos. Los comandos portátiles se proyectan como Skills; se omiten los que requieren invocación exclusivamente explícita si el cliente no puede imponerla.
+
+La evidencia posterior [#884](https://github.com/777genius/universal-agent-plugins/pull/884) prueba `tools/call` nativo User stdio de Hermes 0.23.0 en Linux/macOS/Windows mediante el controlador oficial heredado `run_agent.py` y un proveedor local programado. El `hermes chat` predeterminado, la autenticación del proveedor y la ejecución Project de confianza siguen sin calificarse.
 
 **Antigravity:** los paquetes de plugins nativos administrados por UAP con Skills y MCP stdio/Streamable HTTP en ámbitos de usuario y proyecto permanecen **Prepared**. El `agy` 1.5.3 real superó la validación estricta y las operaciones CLI import/list/uninstall aisladas en Linux, macOS y Windows: [42804680737](https://github.com/777genius/universal-agent-plugins/actions/runs/42804680737). Estas observaciones no prueban detección ni habilitación en el IDE real, inicio de MCP, ejecución de herramientas o autenticación; la verificación del IDE sigue siendo independiente. UAP no concede confianza al proyecto.
 
 ## Extensiones Pi, Skills y MCP {#pi-native-extensions}
 
-El CLI publicado `0.1.102` acepta `--target pi` para paquetes Agent Plugins 1.0 compatibles: [extensiones nativas de Pi](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_CONTRACT.md), Skills y MCP stdio/Streamable HTTP. Admite los ámbitos de usuario y proyecto elegible; no admite MCP SSE ni componentes App genéricos. En proyectos, las extensiones se preparan en `.pi/extensions`, Skills en `.pi/skills` y las entradas MCP administradas por UAP en `.pi/mcp.json`. Pi puede requerir confianza en el proyecto, recarga o nueva sesión.
+Desde CLI `0.1.102`, el CLI publicado acepta `--target pi` para paquetes Agent Plugins 1.0 compatibles: [extensiones nativas de Pi](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_CONTRACT.md), Skills y MCP stdio/Streamable HTTP. Admite los ámbitos de usuario y proyecto elegible; no admite MCP SSE ni componentes App genéricos. En proyectos, las extensiones se preparan en `.pi/extensions`, Skills en `.pi/skills` y las entradas MCP administradas por UAP en `.pi/mcp.json`. Pi puede requerir confianza en el proyecto, recarga o nueva sesión.
 
 **La capacidad del CLI no equivale a autorización en el Directorio firmado.** A 9 de noviembre de 2026, ninguna de las 37 políticas activas del Directory incluye `pi`. Por eso `add context7 --target pi` con el nombre corto se rechaza correctamente. Una fuente exacta `github:owner/repo@FULL_SHA//path` es una ruta explícita distinta, que también valida el CLI; no reemplaza la autoridad del Directorio.
 

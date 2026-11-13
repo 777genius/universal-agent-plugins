@@ -376,7 +376,7 @@
         "nextStep": "What you do after installing"
       },
       "scrollHint": "Scroll sideways to see every column.",
-      "note": "Automatic = UAP installs the supported components; Guided = follow client prompts; Prepared = files are ready but need activation; Manual = complete setup in the app. Installing never signs you in or grants trust. These are current source capabilities; the published CLI may be older. Availability depends on the plugin and client version.",
+      "note": "Automatic = UAP installs the supported components; Guided = follow client prompts; Prepared = files are ready but need activation; Manual = complete setup in the app. Installing never signs you in or grants trust. Availability depends on the plugin and client version. Baseline: native CLI 0.1.108. npm publication is separate and may lag. Agent support does not guarantee a compatible signed catalog release for every plugin and scope.",
       "details": "Check compatibility details",
       "capabilities": {
         "pluginsSkillsMcp": "Plugins, Skills, MCP",
@@ -845,7 +845,7 @@
           "extensions": "Extensions"
         }
       },
-      "piNoCompatibleRelease": "Pi is supported, but this plugin's signed release has no compatible Pi target.",
+      "noCompatibleSignedRelease": "{agent} is supported by UAP, but this plugin has no compatible signed release for the selected scope.",
       "piPinnedProjectSource": "Project: install Pi from this package's exact pinned Git source (not a signed Pi target); CLI checks compatibility."
     },
     "authentication": {

@@ -24,7 +24,7 @@ function pluginWithOnlyCodex() {
 }
 
 for (const width of [1440, 390]) {
-  test('unsupported package targets explain Pi capability and ChatGPT Web binding at ' + width + 'px', async ({ page }) => {
+  test('unsupported package targets explain agent capability and ChatGPT Web binding at ' + width + 'px', async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     const errors = await offline(page);
     await projections(page, pluginWithOnlyCodex());
@@ -32,15 +32,32 @@ for (const width of [1440, 390]) {
     const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]').first();
     await card.locator('.plugin-card__install-toggle').click();
     await card.locator('.app-multiselect__trigger').click();
-    const pi = page.getByRole('checkbox', { name: /^Pi(?:\s|$)/ });
     const web = page.getByRole('checkbox', { name: /^ChatGPT Web/ });
-    await expect(pi).toBeDisabled();
-    await expect(pi).toContainText("Pi is supported, but this plugin's signed release has no compatible Pi target.");
+    for (const agent of ['Pi', 'Hermes Agent', 'Google Antigravity']) {
+      const option = page.getByRole('checkbox', { name: new RegExp(`^${agent}(?:\\s|$)`) });
+      await expect(option).toBeDisabled();
+      await expect(option).toContainText(`${agent} is supported by UAP, but this plugin has no compatible signed release for the selected scope.`);
+    }
     await expect(web).toBeDisabled();
     await expect(web).toContainText('No verified ChatGPT Web app binding for this plugin.');
     await expect(web).toContainText('Connect Web apps inside ChatGPT.');
     await page.keyboard.press('Escape');
     await expect(card.locator('.plugin-card__install .command-snippet code')).not.toContainText('chatgptweb');
+    await page.locator('.hero-shell .app-multiselect__trigger').click();
+    for (const agent of ['Pi', 'Hermes Agent', 'Google Antigravity']) {
+      const option = page.getByRole('checkbox', { name: new RegExp(`^${agent}(?:\\s|$)`) });
+      await expect(option).toBeDisabled();
+      await expect(option).toContainText(`${agent} is supported by UAP, but this plugin has no compatible signed release for the selected scope.`);
+    }
+    await page.keyboard.press('Escape');
+    await card.locator('.plugin-card__title-link').click();
+    const detail = page.locator('.plugin-detail[data-install-source="i18n-state-00"]');
+    await detail.locator('.app-multiselect__trigger').click();
+    for (const agent of ['Pi', 'Hermes Agent', 'Google Antigravity']) {
+      const option = page.getByRole('checkbox', { name: new RegExp(`^${agent}(?:\\s|$)`) });
+      await expect(option).toBeDisabled();
+      await expect(option).toContainText(`${agent} is supported by UAP, but this plugin has no compatible signed release for the selected scope.`);
+    }
     expect(errors).toEqual([]);
   });
 }

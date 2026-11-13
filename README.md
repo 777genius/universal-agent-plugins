@@ -301,7 +301,9 @@ workspace. Agents may still ask you to trust the project, sign in, or restart.
 **Setup terms:** Automatic = UAP installs supported components; Guided = follow
 client prompts; Prepared = files are ready but need activation; Manual = complete
 setup in the app. UAP never signs you in or grants workspace trust. This matrix
-describes **current main-source** capabilities; the published CLI may be older.
+describes the released installer capabilities of [native CLI 0.1.108](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.108). Hermes and Antigravity
+are included; signed Directory packages still need an eligible target. Native
+release qualification does not prove agent activation or npm publication.
 
 See the [compatibility reference](https://universal-agent-plugins.com/docs/en/reference/client-compatibility.html)
 for tested versions, platforms, and setup steps.
@@ -309,7 +311,7 @@ for tested versions, platforms, and setup steps.
 <details>
 <summary>Client-specific setup and limits</summary>
 
-Published CLI 0.1.102 supports Pi [native extensions](docs/PI_NATIVE_EXTENSION_CONTRACT.md),
+Since CLI 0.1.102, the published CLI supports Pi [native extensions](docs/PI_NATIVE_EXTENSION_CONTRACT.md),
 Skills and stdio/Streamable HTTP MCP in user and eligible project scope.
 Each signed Directory release still needs an explicit Pi target; direct pinned
 Git sources use a separate CLI-validated installation path. For scoped trust,

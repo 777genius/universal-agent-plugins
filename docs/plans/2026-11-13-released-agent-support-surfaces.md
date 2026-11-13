@@ -65,3 +65,26 @@ No signed Directory target grants are added or fabricated. No new CLI release,
 provider login, trust bypass or vendor-model execution. No unrelated legacy
 five-target component cleanup. Public deployment remains a separate final
 action from preparing and reviewing this correction.
+
+## Audit and review results
+
+- The verified production Directory mirror is sequence 47, source
+  `121633366dc5255aaf638845fb7cb0cb50013340`, generated 2026-11-11.
+  It contains no Pi, Hermes or Antigravity target grants. Existing reviewed
+  package choices must stay disabled; standalone Skills use a separate path.
+- Registry #451 owns the ongoing Pi signed-feed compatibility work. The legacy
+  registry target schema excludes these three IDs, and the landing catalog
+  decoder still excludes Hermes/Antigravity. Compatible feed/schema/reader
+  qualification is separate work; this presentation patch grants no targets.
+- Independent reviews confirmed the release/source/npm and native-runtime
+  boundaries, and unchanged selection/command generation. Root corrected the
+  browser test's string escaping and verified the actual name expressions.
+  All nine current compatibility headings retain their historical explicit anchor.
+- Local registry suite: 504 passed, zero failures/skips. Locale parity and
+  landing i18n checks passed. Final source checks and hosted browser results
+  will be recorded in the PR description.
+- Local browser execution is unavailable: the pinned browser download returned
+  an invalid archive; installed Chromium separately refused its Unix socket
+  with `Operation not permitted`. No local browser PASS is claimed and no
+  sandbox or socket restriction was changed. The live published UI inspection
+  is separate from testing the modified source.
