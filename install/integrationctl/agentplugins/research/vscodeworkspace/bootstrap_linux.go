@@ -361,8 +361,15 @@ func runSealed(base string) (err error) {
 		return err
 	}
 	defer func() { _ = c.output.Close() }()
+	var hostPolicy *hostPolicyMeasurement
+	if req.Input.Mode == trustedProjectMode {
+		hostPolicy = beginHostPolicyMeasurement()
+	}
 	runErr := c.execute()
 	scannerErr := c.closeTrustedScanner()
+	if hostPolicy != nil {
+		runErr = hostPolicy.finish(c, hostPolicy.snapshot(), runErr)
+	}
 	var out, stderr []byte
 	var baseErr error
 	if scannerErr == nil {

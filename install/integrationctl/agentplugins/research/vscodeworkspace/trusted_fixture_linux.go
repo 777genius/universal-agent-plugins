@@ -274,8 +274,9 @@ func (c *controller) trustedProjectFixtures(foreign map[string]any) error {
 			return err
 		}
 		if scope != "user" {
-			f.Foreign[scope] = foreign
-			if err := c.trustedJSON(filepath.Join(project, ".vscode", "mcp.json"), map[string]any{"servers": map[string]any{"uap-foreign-" + scope: foreign}, "inputs": []any{}}); err != nil {
+			projectForeign := map[string]any{"type": foreign["type"], "url": "http://127.0.0.1:9/preserved-foreign/" + f.Nonce + "/" + scope}
+			f.Foreign[scope] = projectForeign
+			if err := c.trustedJSON(filepath.Join(project, ".vscode", "mcp.json"), map[string]any{"servers": map[string]any{"uap-foreign-" + scope: projectForeign}, "inputs": []any{}}); err != nil {
 				return err
 			}
 			if err := c.trustedWrite(filepath.Join(project, ".github", "mcp.json"), []byte("untouched Copilot control "+scope+"\n"), 0600); err != nil {

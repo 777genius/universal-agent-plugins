@@ -40,7 +40,8 @@ GUI = ("empty-a", "empty-b", "installed-a", "installed-b", "stable-a", "updated-
        "restart-a", "removed-a", "remaining-b")
 PREPARATION = ("source-commit", "source-tree", "source-clean", "source-final-clean", "go-version",
                "controller-build", "installer-build", "probe-build", "trusted-node-version", "trusted-npm-ci",
-               "trusted-tsc-version", "trusted-tsc", "trusted-driver-diagnostics", "publisher-version", "publisher-help")
+               "trusted-tsc-version", "trusted-tsc", "trusted-driver-diagnostics", "trusted-runner-readiness",
+               "publisher-version", "publisher-help")
 SCANNER_ARCHIVE = "2b3d176db752433b904a4b42375543ff398f4841d22e48f7d4f23ded925b72da"
 
 
@@ -68,7 +69,7 @@ def remaining(origin_ns, seconds):
 
 def native_names():
     names = {"vscode-workspace-controller.json", "vscode-project-research.json", "system-executables.json", "xauth.json",
-             "Xvfb.merged.log", "probe-a-events.log", "probe-b-events.log"}
+             "Xvfb.merged.log", "probe-a-events.log", "probe-b-events.log", "trusted-host-policy.json"}
     for label in ("xauth", "root-cleanup", "controller", "cleanup"):
         names.update({label + ".stdout.log", label + ".stderr.log"})
     names.update(label + ".merged.log" for label in PUBLIC)
@@ -97,6 +98,109 @@ def write_owned(directory, expected, name, body):
             raise ValueError("trusted output directory replaced during publication")
     finally:
         os.close(descriptor)
+
+
+HOST_POLICY_REFERENCE = "9fd4a3cc5f3bf64aefbed6ff4cab30fd60563d655ae2896197f152d07b726e9a"
+
+
+def validate_host_policy(body):
+    """Admit facts only; installed bytes and loaded membership are not equivalent."""
+    if not isinstance(body, bytes) or len(body) > 16 << 10:
+        raise ValueError("host policy artifact bound refused")
+    value = json.loads(body.decode("utf-8", "strict"), object_pairs_hook=shared.legacy.unique_object,
+                       parse_constant=shared.legacy.invalid_constant)
+
+    def keys(obj, expected):
+        if type(obj) is not dict or set(obj) != set(expected.split()):
+            raise ValueError("closed host policy fields refused")
+
+    def integer(number, maximum, minimum=0):
+        if type(number) is not int or not minimum <= number <= maximum:
+            raise ValueError("host policy integer refused")
+
+    def identity(obj, directory=False):
+        keys(obj, "device inode mode uid gid links size mtime_ns ctime_ns")
+        for key in ("device", "inode", "links"):
+            integer(obj[key], (1 << 64) - 1, 1 if key != "device" else 0)
+        for key in ("mode", "uid", "gid"):
+            integer(obj[key], (1 << 32) - 1)
+        integer(obj["size"], (1 << 63) - 1)
+        for key in ("mtime_ns", "ctime_ns"):
+            integer(obj[key], (1 << 63) - 1, -(1 << 63))
+        if obj["uid"] != 0 or (stat.S_IFMT(obj["mode"]) != (stat.S_IFDIR if directory else stat.S_IFREG)):
+            raise ValueError("host policy object type/owner refused")
+        if not directory and (obj["links"] != 1 or obj["size"] > 16 << 10 or obj["mode"] & 0o22):
+            raise ValueError("host policy ordinary file refused")
+
+    keys(value, "schema_version status reason reference_profile_sha256 before after native_qualified loaded_equals_disk_qualified")
+    reasons = {"none", "file-unsafe", "file-capture-refused", "directory-refused", "code-leaf-refused", "entry-refused",
+               "grammar-refused", "loaded-profile-refused", "loaded-profile-absent", "apparmor-disabled", "enabled-fact-refused",
+               "sysctl-refused", "held-identity-changed", "descriptor-close-refused", "measurement-changed"}
+    if (type(value["schema_version"]) is not int or value["schema_version"] != 1
+            or value["status"] not in ("observed", "refused") or type(value["reason"]) is not str or value["reason"] not in reasons
+            or (value["status"] == "observed") != (value["reason"] == "none")
+            or value["reference_profile_sha256"] != HOST_POLICY_REFERENCE
+            or value["native_qualified"] is not False or value["loaded_equals_disk_qualified"] is not False):
+        raise ValueError("host policy status/qualification refused")
+    for name in ("before", "after"):
+        snap = value[name]
+        keys(snap, "files directories entries sysctls grammar known_profile_match loaded_vscode_mode apparmor_enabled code_absent")
+        keys(snap["files"], "code local_code abi global alias")
+        for record in snap["files"].values():
+            keys(record, "state sha256 identity")
+            if record["state"] == "present":
+                if type(record["sha256"]) is not str or not re.fullmatch(r"[0-9a-f]{64}", record["sha256"]):
+                    raise ValueError("host policy digest refused")
+                identity(record["identity"])
+            elif record["state"] not in ("absent", "unmeasured", "refused") or record["sha256"] != "" or record["identity"] is not None:
+                raise ValueError("host policy file state refused")
+        keys(snap["directories"], "root usr usr_share")
+        for record in snap["directories"].values():
+            keys(record, "identity mount_id")
+            if record["identity"] is None:
+                if type(record["mount_id"]) is not int or record["mount_id"] != 0:
+                    raise ValueError("host policy absent mount refused")
+            else:
+                identity(record["identity"], directory=True)
+                integer(record["mount_id"], (1 << 64) - 1, 1)
+        keys(snap["entries"], "disable_code force_complain_code")
+        if any(item not in ("absent", "symlink", "ordinary", "other", "unmeasured", "refused") for item in snap["entries"].values()):
+            raise ValueError("host policy entry refused")
+        keys(snap["sysctls"], "apparmor_userns apparmor_unconfined userns_clone max_user_namespaces")
+        for key, number in snap["sysctls"].items():
+            if number is not None:
+                integer(number, 2147483647 if key == "max_user_namespaces" else 1)
+        if (snap["grammar"] not in ("unmeasured", "refused", "known-ubuntu-vscode-userns")
+                or type(snap["known_profile_match"]) is not bool
+                or snap["known_profile_match"] != (snap["files"]["code"]["sha256"] == HOST_POLICY_REFERENCE)
+                or snap["loaded_vscode_mode"] not in ("unmeasured", "", "absent", "unconfined", "enforce", "complain", "kill")
+                or any(item is not None and type(item) is not bool for item in (snap["apparmor_enabled"], snap["code_absent"]))):
+            raise ValueError("host policy projection refused")
+        if value["status"] == "observed" and (snap["grammar"] != "known-ubuntu-vscode-userns"
+                or snap["files"]["code"]["state"] != "present" or snap["loaded_vscode_mode"] in ("unmeasured", "", "absent")
+                or snap["apparmor_enabled"] is not True or snap["code_absent"] is None
+                or any(record["state"] not in ("present", "absent") for record in snap["files"].values())
+                or any(record["identity"] is None for record in snap["directories"].values())
+                or any(number is None for number in snap["sysctls"].values())
+                or any(state in ("unmeasured", "refused") for state in snap["entries"].values())):
+            raise ValueError("incomplete host policy marked observed")
+    if value["status"] == "observed" and value["before"] != value["after"]:
+        raise ValueError("changed host policy marked observed")
+    return value
+
+
+def admit_native_host_policy(directory, collection_complete):
+    """Called inside publication's refusal boundary, including failed captures."""
+    try:
+        body = toolchain.ordinary_bytes(Path(directory) / "trusted-host-policy.json", 16 << 10)
+    except FileNotFoundError:
+        if collection_complete is False:
+            return None  # controller may have refused before its trusted-only hook
+        raise ValueError("successful capture omitted host policy measurement") from None
+    value = validate_host_policy(body)
+    if collection_complete is not False and value["status"] != "observed":
+        raise ValueError("successful capture has refused host policy measurement")
+    return value
 
 
 def controller_result(body, commit, tree):
@@ -372,18 +476,37 @@ def main():
         except (ValueError, OSError):
             legacy.quarantine_output(output, output_identity)
             return 2
-        admission = legacy.publish_from_memory(native, summary, allowed_names=native_names())
-        if admission["complete"] is not True:
-            summary["collection_complete"] = False
-            if not (admission.get("child_reaped") and admission.get("archive_failure_allowed")):
-                legacy.quarantine_output(native, native_identity)
+        publish_native_capture(native, native_identity, summary)
     print(json.dumps({key: summary.get(key) for key in ("source_commit", "source_tree", "collection_complete", "qualification", "elapsed_seconds")}))
     return 0 if summary["collection_complete"] else 2
 
 
+def publish_native_capture(native, identity, summary):
+    """Withhold stale success records when the complete capture is refused."""
+    try:
+        admit_native_host_policy(native, summary.get("collection_complete"))
+        admission = legacy.publish_from_memory(native, summary, allowed_names=native_names())
+    except BaseException:
+        summary["collection_complete"] = False
+        summary["qualification"] = {name: False for name in QUALIFICATIONS}
+        legacy.quarantine_output(native, identity)
+        raise
+    if admission["complete"] is True:
+        return
+    was_complete = summary["collection_complete"] is True
+    summary["collection_complete"] = False
+    summary["qualification"] = {name: False for name in QUALIFICATIONS}
+    # The previously written summary cannot remain a canonical success record.
+    # Do not rewrite/re-publish through a directory whose admission just failed.
+    # A preexisting negative capture may retain the publisher's failure-only ZIP.
+    if was_complete or not (admission.get("child_reaped") is True
+                            and admission.get("archive_failure_allowed") is True):
+        legacy.quarantine_output(native, identity)
+
+
 def contracts():
     """Pure admission checks; no native process, host spoofing or acquisition."""
-    if len(native_names()) != 46 or len(frontend_names()) > 64 or set(PUBLIC) & set(GUI):
+    if len(native_names()) != 47 or len(frontend_names()) > 64 or set(PUBLIC) & set(GUI):
         raise AssertionError("closed trusted artifact table differs")
     positive = {"evidence_kind": "vscode-pinned-trusted-project-gateway-lifecycle", "mode": MODE,
                 "source_commit": "a" * 40, "source_tree": "b" * 40, "version": publisher.VERSION,

@@ -215,3 +215,39 @@ names, no newly failing test. Explicit socket/proc and Codex environment refusal
 are retained; opaque immutable-tree, permission-cleanup and progress-timeout
 causes are not invented or waived. Genuine0d hosted test-core passed separately;
 the next published source still requires its own hosted gates.
+
+
+### MCP inventory initialization correction (2026-11-13)
+
+The proposed native definitions API can initially return an empty array. An
+empty snapshot alone cannot establish absence for empty/removal stages. The
+pinned publisher e646868227c3e3a9e3f24277c8c7220be42c0be7 initializes its
+workbench and workspace inventories empty, awaits the resource-management
+initial scan, and reads the current workspace `.vscode/mcp.json` directly.
+Its installed discovery then publishes each complete collection; no persistent
+server-configuration cache bootstraps this chain. Primary source:
+[mcpWorkbenchManagementService.ts](https://github.com/microsoft/vscode/blob/e646868227c3e3a9e3f24277c8c7220be42c0be7/src/vs/workbench/services/mcp/common/mcpWorkbenchManagementService.ts#L600),
+[mcpManagementService.ts](https://github.com/microsoft/vscode/blob/e646868227c3e3a9e3f24277c8c7220be42c0be7/src/vs/platform/mcp/common/mcpManagementService.ts#L368),
+[mcpResourceScannerService.ts](https://github.com/microsoft/vscode/blob/e646868227c3e3a9e3f24277c8c7220be42c0be7/src/vs/platform/mcp/common/mcpResourceScannerService.ts#L290),
+and [installedMcpServersDiscovery.ts](https://github.com/microsoft/vscode/blob/e646868227c3e3a9e3f24277c8c7220be42c0be7/src/vs/workbench/contrib/mcp/common/discovery/installedMcpServersDiscovery.ts#L63).
+
+Reuse the existing inert foreign Project server as a same-collection positive
+control: assign a nonce/scope-bound HTTP URI once when each Project fixture is
+authored; preserve that exact object through every lifecycle snapshot. Keep the
+User foreign definition unchanged. Every stage starts a fresh supervised
+publisher after all configuration writes finish. Subscribe before reading;
+within the original deadline wait for exactly one matching HTTP definition and
+full URI, then check owned presence/absence against that same copied snapshot.
+Independently wait for the gateway's matching unique label through its documented
+`onDidChangeServers` event. This gateway label establishes channel propagation;
+it does not prove the original URI or successful server execution. Never inspect,
+publish, start, trust, or call the control gateway endpoint. Calls remain limited
+to the existing independently selected owned servers.
+
+The closed request adds `readinessControl: {label, uri}` and successful observation
+adds `readiness: {label, uri, definitionsReady: true, gatewayReady: true}`. All
+Go/driver/request validators must agree. Bounded inert tests exercise the actual
+wait/control helpers: initial empty, empty event, delayed control, stale URI,
+wrong type, duplicate, headers, timeout, count/read failures, copied absence
+snapshot, and independently delayed gateway. These tests establish the observer
+contract only; actual native stages remain unqualified until final-source E2E.

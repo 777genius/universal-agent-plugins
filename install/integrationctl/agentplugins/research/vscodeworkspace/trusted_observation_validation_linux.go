@@ -45,7 +45,7 @@ func (c *controller) trustedDriverEnvelope(body []byte, stage, trust string, dri
 }
 
 func (c *controller) trustedObserverIdentity(outer map[string]any, stage, scope string, request map[string]any, driver, publisher isolationProof) (map[string]any, int64, error) {
-	observed, err := objectKeys(outer["result"], strings.Fields("schemaVersion mode stage nonce collected version appRoot appHost folder home trusted observerPID networkNamespace skills definitions calls"), nil)
+	observed, err := objectKeys(outer["result"], strings.Fields("schemaVersion mode stage nonce collected version appRoot appHost folder home trusted observerPID networkNamespace skills definitions calls readiness"), nil)
 	if err != nil {
 		return nil, 0, fmt.Errorf("native observer incomplete or unknown: %w", err)
 	}
@@ -64,6 +64,17 @@ func (c *controller) trustedObserverContext(observed map[string]any, stage, scop
 	f := c.trustedState
 	if observed["schemaVersion"] != json.Number("1") || observed["mode"] != trustedProjectMode || observed["stage"] != stage || observed["nonce"] != f.Nonce || observed["collected"] != true || observed["version"] != publisherVersion || observed["appRoot"] != request["appRoot"] || observed["appHost"] != "desktop" || observed["folder"] != f.Projects[scope] || observed["home"] != f.Home || observed["trusted"] != true {
 		return fmt.Errorf("native observer identity differs")
+	}
+	return trustedObservedReadiness(observed["readiness"], request["readinessControl"])
+}
+
+func trustedObservedReadiness(value, expected any) error {
+	actual, err := objectKeys(value, strings.Fields("label uri definitionsReady gatewayReady"), nil)
+	control, controlErr := objectKeys(expected, []string{"label", "uri"}, nil)
+	label, labelOK := control["label"].(string)
+	uri, uriOK := control["uri"].(string)
+	if err != nil || controlErr != nil || !labelOK || !uriOK || label == "" || uri == "" || actual["label"] != label || actual["uri"] != uri || actual["definitionsReady"] != true || actual["gatewayReady"] != true {
+		return fmt.Errorf("native inventory readiness differs")
 	}
 	return nil
 }

@@ -104,9 +104,118 @@ test('terminal failure publication follows publisher cleanup and waits for super
   assert(reporting.includes('visibleNativeUI: metadata'));
   assert(reporting.indexOf('failureUI(page)') < reporting.indexOf('browser.close()'));
   assert(!/String\(error\)|error\.message|diagnostic\.toString|endpoint\s*[,}]/u.test(reporting));
-  const settled = reporting.indexOf('if (!await stopped(child, 5000)) throw');
+  const settled = reporting.indexOf('if (!await stopped(child, Math.max(1, failureShutdownDeadline');
   const publication = reporting.indexOf('renameSync(pending, req.driverResultFile)');
-  assert(settled >= 0 && publication > settled);
+  const drained = reporting.indexOf('if (publisherClosed) await within(publisherClosed');
+  assert(settled >= 0 && drained > settled && publication > drained);
+  assert(reporting.indexOf('const facts = failureFacts(') > drained);
   assert(reporting.indexOf('await parentShutdown()') > publication);
   assert(reporting.includes('diagnostic.fill(0)'));
+});
+
+// Actual asynchronous picker and terminal handoff helpers.
+function section(start, end) { return source.slice(source.indexOf(start), source.indexOf(end, source.indexOf(start))); }
+function helpers(rowsByPoll, textRead) {
+  let now = 0, polls = 0;
+  const sandbox = { Error, performance: { now: () => now }, delay: async ms => { now += ms; },
+    setTimeout, clearTimeout };
+  vm.createContext(sandbox);
+  const actual = section('function object(', 'function text(')
+    + section('async function labelRow(', 'async function pick(')
+    + section('function collectedResult(', 'async function focusWorkbench');
+  vm.runInContext(stripTypeScriptTypes(actual, { mode: 'strip' })
+    + '\nglobalThis.api = {labelRow, collectedResult, publisherTerminal, finalCapture, stopped};', sandbox);
+  const page = { locator() {
+    const labels = rowsByPoll[Math.min(polls++, rowsByPoll.length - 1)];
+    return { count: async () => labels.length, nth: i => ({ label: labels[i], locator: () => ({
+      count: async () => 1, innerText: async options => textRead ? textRead(labels[i], options) : labels[i] }) }) };
+  } };
+  return { ...sandbox.api, page, polls: () => polls };
+}
+test('actual picker waits for asynchronously populated exact label', async () => {
+  const h = helpers([[], ['foreign'], ['owned']]);
+  assert.equal((await h.labelRow(h.page, 'owned')).label, 'owned');
+  assert.equal(h.polls(), 3);
+});
+test('actual picker retains uniqueness, cardinality and finite missing deadline', async () => {
+  for (const rows of [['owned', 'owned'], Array(257).fill('owned'), ['foreign']]) {
+    const h = helpers([rows]);
+    await assert.rejects(h.labelRow(h.page, 'owned'), /ambiguous|bound exceeded|missing/);
+    assert(h.polls() <= 61);
+  }
+});
+const identity = { mode: 'trusted-project-v1', stage: 'empty-a', nonce: 'a'.repeat(32) };
+const control = { label: 'uap-foreign-a', uri: `http://127.0.0.1:9/preserved-foreign/${identity.nonce}/a` };
+const req = { ...identity, readinessControl: control };
+const result = { schemaVersion: 1, ...identity, collected: true, version: '1', appRoot: '/app', appHost: 'desktop',
+  folder: '/a', home: '/home', trusted: true, observerPID: 1, networkNamespace: 2, skills: [], definitions: [], calls: [],
+  readiness: { ...control, definitionsReady: true, gatewayReady: true } };
+test('actual observer handoff rejects failure, identity mismatch and unknown envelope', () => {
+  const h = helpers([[]]);
+  assert.equal(h.collectedResult(result, req), result);
+  for (const invalid of [null, [], { ...result, collected: false }, { ...result, nonce: 'other' },
+    { ...result, stage: 'other' }, { ...result, skills: 'malformed' }, { ...result, extra: 'private' }]) {
+    assert.throws(() => h.collectedResult(invalid, req));
+  }
+});
+test('actual handoff requires both readiness channels joined to the sealed control', () => {
+  const h = helpers([[]]);
+  for (const readiness of [undefined, {}, { ...result.readiness, definitionsReady: false },
+    { ...result.readiness, gatewayReady: 1 }, { ...result.readiness, uri: control.uri + '-stale' },
+    { ...result.readiness, label: 'uap-foreign-b' }, { ...result.readiness, endpoint: 'private' }]) {
+    assert.throws(() => h.collectedResult({ ...result, readiness }, req));
+  }
+  for (const readinessControl of [{ ...control, uri: 'http://127.0.0.1:9/foreign' },
+    { ...control, extra: 'private' }, { label: 'uap-foreign-b', uri: control.uri }]) {
+    assert.throws(() => h.collectedResult(result, { ...req, readinessControl }));
+  }
+});
+test('actual stop callback late capture is refused before successful handoff', async () => {
+  const h = helpers([[]]);
+  let capture;
+  const child = { exitCode: null, signalCode: null, removeListener() {}, once(event, callback) {
+    assert.equal(event, 'exit');
+    capture = new Error('native merged stream overflow');
+    callback();
+  } };
+  assert.equal(await h.stopped(child, 100), true);
+  let closed;
+  const drained = new Promise(resolve => { closed = resolve; });
+  capture = undefined;
+  const handoff = h.finalCapture(drained, 100, () => capture);
+  capture = new Error('native merged stream overflow');
+  closed();
+  await assert.rejects(handoff, /native merged stream overflow/);
+  await h.finalCapture(Promise.resolve(), 100, () => undefined);
+  const main = source.slice(source.indexOf('const result = collectedResult('));
+  assert(main.indexOf('await finalCapture(publisherClosed') > main.indexOf('await stopped(child'));
+  assert(main.indexOf('await finalCapture(publisherClosed') < main.indexOf("type: 'driver-result'"));
+});
+
+test('actual final capture refuses pipes that never close within the stop budget', async () => {
+  const h = helpers([[]]);
+  await assert.rejects(h.finalCapture(new Promise(() => {}), 5, () => undefined), /bounded operation deadline/);
+});
+
+test('actual publisher terminal guard refuses nonzero exits and foreign signals', () => {
+  const h = helpers([[]]);
+  h.publisherTerminal(0, null);
+  h.publisherTerminal(null, 'SIGTERM');
+  for (const [code, signal] of [[1, null], [null, 'SIGTRAP'], [null, null], [0, 'SIGTERM']])
+    assert.throws(() => h.publisherTerminal(code, signal), /publisher terminal result differs/);
+});
+
+test('actual picker bounds delayed and stale text reads by its own remaining budget', async () => {
+  const h = helpers([['owned']], async (label, options) => {
+    assert(options.timeout > 0 && options.timeout <= 3000);
+    await new Promise(resolve => setTimeout(resolve, 5));
+    return label;
+  });
+  assert.equal((await h.labelRow(h.page, 'owned')).label, 'owned');
+  const stale = helpers([['owned']], async (_label, options) => {
+    assert(options.timeout > 0 && options.timeout <= 3000);
+    throw new Error('inert detached row');
+  });
+  await assert.rejects(stale.labelRow(stale.page, 'owned'), /inert detached row/);
+  assert(source.includes('shutdownDeadline ??= performance.now() + 5000;'));
 });

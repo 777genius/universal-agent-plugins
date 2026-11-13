@@ -18,6 +18,10 @@ import (
 func (c *controller) trustedRequests(stage, scope, operation string, installed bool) (map[string]any, []any, error) {
 	f := c.trustedState
 	project := f.Projects[scope]
+	control, err := trustedReadinessControl(f, scope)
+	if err != nil {
+		return nil, nil, err
+	}
 	digest, err := hashFile(f.UserSkill, 1<<20)
 	if err != nil {
 		return nil, nil, err
@@ -64,7 +68,17 @@ func (c *controller) trustedRequests(stage, scope, operation string, installed b
 	}
 	return map[string]any{"mode": trustedProjectMode, "stage": stage, "nonce": f.Nonce, "project": project, "home": f.Home,
 		"appRoot": filepath.Join(c.request.Base, "publisher", publisherPrefix, "resources", "app"), "skills": skills, "absentSkills": absentSkills,
-		"servers": servers, "absentServers": absentServers, "operation": operation, "marker": f.Marker}, ui, nil
+		"readinessControl": control,
+		"servers":          servers, "absentServers": absentServers, "operation": operation, "marker": f.Marker}, ui, nil
+}
+
+func trustedReadinessControl(f *trustedLifecycle, scope string) (map[string]any, error) {
+	foreign, err := objectKeys(f.Foreign[scope], []string{"type", "url"}, nil)
+	uri := "http://127.0.0.1:9/preserved-foreign/" + f.Nonce + "/" + scope
+	if err != nil || (scope != "a" && scope != "b") || foreign["type"] != "http" || foreign["url"] != uri {
+		return nil, fmt.Errorf("native inventory readiness fixture differs")
+	}
+	return map[string]any{"label": "uap-foreign-" + scope, "uri": uri}, nil
 }
 
 func trustedEvents(path string) ([]byte, error) {

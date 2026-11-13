@@ -27,12 +27,14 @@ os.execve(json.loads(argv)[0],json.loads(argv),json.loads(env))
 
 type ObjectValue = Record<string, unknown>;
 type Server = { label: string; originUri: string };
+type ReadinessControl = { label: string; uri: string };
 type Request = {
   mode: 'trusted-project-v1'; stage: string; project: string;
   publisher: string; publisherArgs: string[]; publisherEnv: Record<string, string>;
   originalNetworkNamespace: string; uid: number; gid: number;
   expectedServers: Server[]; triggerFile: string; resultFile: string; driverResultFile: string;
   nonce: string; timeoutMs: number; trustExpected: 'prompt' | 'persisted';
+  readinessControl: ReadinessControl;
 };
 type PublisherProof = {
   pid: number; network_namespace: number; parent_network_namespace: number;
@@ -220,6 +222,7 @@ function request(value: unknown): Request {
     || project === home || contained(project, home) || contained(home, project) || triggerFile === resultFile) throw new Error('original profile or handoff differs');
   const observerRequest = object(ordinaryJSON(canonical(env.UAP_VSCODE_TRUSTED_REQUEST, false)));
   if (observerRequest.stage !== v.stage || observerRequest.nonce !== v.nonce) throw new Error('observer request stage differs');
+  const control = readinessControl(observerRequest.readinessControl, String(v.nonce));
   if (!Array.isArray(v.expectedServers) || v.expectedServers.length > 8) throw new Error('server selection bound differs');
   const servers: Server[] = [], seen = new Set<string>();
   for (const entry of v.expectedServers) {
@@ -230,7 +233,7 @@ function request(value: unknown): Request {
     seen.add(label); servers.push({ label, originUri });
   }
   return { ...v, project, publisher, publisherArgs: a, publisherEnv: env, expectedServers: servers,
-    triggerFile, resultFile, driverResultFile } as Request;
+    triggerFile, resultFile, driverResultFile, readinessControl: control } as Request;
 }
 
 function ordinaryJSON(path: string): unknown {
@@ -272,19 +275,26 @@ async function quickInput(page: Page, placeholder?: string): Promise<Locator> {
   return input;
 }
 async function labelRow(page: Page, label: string): Promise<Locator> {
-  const rows = page.locator('.quick-input-widget:visible .monaco-list-row');
-  const count = await rows.count();
-  if (count > 256) throw new Error('native picker row bound exceeded');
-  let selected: Locator | undefined;
-  for (let index = 0; index < count; index++) {
-    const row = rows.nth(index), names = row.locator('.label-name');
-    if (await names.count() === 1 && await names.innerText() === label) {
-      if (selected) throw new Error('native picker label is ambiguous');
-      selected = row;
+  const deadline = performance.now() + 3000;
+  while (true) {
+    const rows = page.locator('.quick-input-widget:visible .monaco-list-row');
+    const count = await rows.count();
+    if (count > 256) throw new Error('native picker row bound exceeded');
+    let selected: Locator | undefined;
+    for (let index = 0; index < count; index++) {
+      const row = rows.nth(index), names = row.locator('.label-name');
+      const remaining = deadline - performance.now();
+      if (remaining <= 0) throw new Error('native picker label missing');
+      if (await names.count() === 1 && await within(names.innerText({ timeout: remaining }), remaining) === label) {
+        if (selected) throw new Error('native picker label is ambiguous');
+        selected = row;
+      }
     }
+    if (performance.now() >= deadline) throw new Error('native picker label missing');
+    if (selected) return selected;
+    if (performance.now() >= deadline) throw new Error('native picker label missing');
+    await delay(Math.min(50, deadline - performance.now()));
   }
-  if (!selected) throw new Error('native picker label missing');
-  return selected;
 }
 async function pick(page: Page, label: string): Promise<void> {
   await (await labelRow(page, label)).click({ timeout: 3000 });
@@ -381,6 +391,40 @@ async function waitResult(req: Request, deadline: number): Promise<unknown> {
   }
   throw new Error('observer result deadline exceeded');
 }
+function collectedResult(value: unknown, req: Request): ObjectValue {
+  const result = object(value);
+  keys(result, ['schemaVersion', 'mode', 'stage', 'nonce', 'collected', 'version', 'appRoot', 'appHost',
+    'folder', 'home', 'trusted', 'observerPID', 'networkNamespace', 'skills', 'definitions', 'calls', 'readiness']);
+  if (result.schemaVersion !== 1 || result.mode !== req.mode || result.stage !== req.stage
+    || result.nonce !== req.nonce || result.collected !== true
+    || ['version', 'appRoot', 'appHost', 'folder', 'home'].some(key => typeof result[key] !== 'string')
+    || typeof result.trusted !== 'boolean'
+    || !['observerPID', 'networkNamespace'].every(key => Number.isSafeInteger(result[key]) && Number(result[key]) > 0)
+    || !['skills', 'definitions', 'calls'].every(key => Array.isArray(result[key]))) throw new Error('observer result refused');
+  const control = readinessControl(req.readinessControl, req.nonce), observed = object(result.readiness);
+  keys(observed, ['label', 'uri', 'definitionsReady', 'gatewayReady']);
+  if (observed.label !== control.label || observed.uri !== control.uri
+    || observed.definitionsReady !== true || observed.gatewayReady !== true) throw new Error('observer readiness differs');
+  return result;
+}
+function readinessControl(value: unknown, nonce: string): ReadinessControl {
+  const control = object(value);
+  keys(control, ['label', 'uri']);
+  const { label, uri } = control;
+  if (typeof label !== 'string' || typeof uri !== 'string' || !/^uap-foreign-[ab]$/u.test(label)
+    || !/^[0-9a-f]{32,64}$/u.test(nonce)
+    || uri !== `http://127.0.0.1:9/preserved-foreign/${nonce}/${label.slice(-1)}`) throw new Error('readiness control differs');
+  return { label, uri };
+}
+function publisherTerminal(code: number | null, signal: NodeJS.Signals | null): void {
+  if (!((code === 0 && signal === null) || (code === null && signal === 'SIGTERM')))
+    throw new Error('publisher terminal result differs');
+}
+async function finalCapture(closed: Promise<void>, milliseconds: number, capture: () => Error | undefined): Promise<void> {
+  await within(closed, milliseconds);
+  const error = capture();
+  if (error) throw error;
+}
 async function stopped(child: ChildProcess, milliseconds: number): Promise<boolean> {
   if (child.exitCode !== null || child.signalCode !== null) return true;
   return new Promise(resolve => {
@@ -455,6 +499,7 @@ async function main(): Promise<void> {
   if (!Number.isSafeInteger(namespace) || String(namespace) === req.originalNetworkNamespace) throw new Error('driver isolation namespace differs');
   let child: ChildProcess | undefined, browser: Browser | undefined, page: Page | undefined;
   let phase = 'publisher-startup', mergedBytes = 0, stderrBytes = 0;
+  let publisherClosed: Promise<void> | undefined, shutdownDeadline: number | undefined;
   let diagnostic: Buffer = Buffer.alloc(0), first = true, proof: PublisherProof | undefined, endpoint = '', captureError: Error | undefined;
   const onData = (chunk: Buffer): void => {
     mergedBytes = Math.min(Number.MAX_SAFE_INTEGER, mergedBytes + chunk.length);
@@ -491,6 +536,7 @@ async function main(): Promise<void> {
     child = spawn('/usr/bin/python3', ['-I', '-c', isolationVerifier, req.originalNetworkNamespace, String(req.uid), String(req.gid),
       JSON.stringify(req.publisherEnv), JSON.stringify([req.publisher, ...req.publisherArgs])],
     { cwd: req.project, env: { PATH: '/usr/bin:/bin', LANG: 'C.UTF-8' }, stdio: ['ignore', 'pipe', 'pipe'], shell: false });
+    publisherClosed = new Promise<void>(resolve => child?.once('close', () => resolve()));
     child.stdout?.on('data', onData);
     child.stderr?.on('data', (chunk: Buffer) => {
       stderrBytes = Math.min(Number.MAX_SAFE_INTEGER, stderrBytes + chunk.length);
@@ -524,17 +570,17 @@ async function main(): Promise<void> {
     await noDialog(page);
     writeFileSync(req.triggerFile, JSON.stringify({ stage: req.stage, nonce: req.nonce }) + '\n', { encoding: 'utf8', mode: 0o600, flag: 'wx' });
     phase = 'observer-result';
-    const result = await waitResult(req, deadline);
+    const result = collectedResult(await waitResult(req, deadline), req);
     if (captureError) throw captureError;
     if (performance.now() >= deadline) throw new Error('stage deadline exceeded');
     clearTimeout(timer);
     phase = 'publisher-shutdown';
-    const shutdownDeadline = performance.now() + 5000;
-    await within(browser.close(), 1000); browser = undefined;
+    shutdownDeadline = performance.now() + 5000;
+    await within(browser.close(), Math.max(1, Math.min(1000, shutdownDeadline - performance.now()))); browser = undefined;
     child.kill('SIGTERM');
     if (!await stopped(child, Math.max(1, shutdownDeadline - performance.now()))) throw new Error('publisher graceful shutdown incomplete');
-    if (!((child.exitCode === 0 && child.signalCode === null) || (child.exitCode === null && child.signalCode === 'SIGTERM')))
-      throw new Error('publisher terminal result differs');
+    publisherTerminal(child.exitCode, child.signalCode);
+    await finalCapture(publisherClosed, Math.max(1, shutdownDeadline - performance.now()), () => captureError);
     const output = JSON.stringify({ type: 'driver-result', stage: req.stage, nonce: req.nonce, trustPromptAccepted,
       servers, publisherProof: proof, publisherExit: { code: child.exitCode, signal: child.signalCode }, result }) + '\n';
     if (Buffer.byteLength(output) > LIMIT) throw new Error('driver output bound exceeded');
@@ -551,15 +597,18 @@ async function main(): Promise<void> {
     await parentShutdown();
   } catch (error) {
     const metadata = await within(failureUI(page), Math.max(1, Math.min(500, deadline - performance.now()))).catch(() => []);
-    const facts = failureFacts(error, captureError, child?.exitCode, child?.signalCode, proof !== undefined, endpoint !== '', diagnostic, mergedBytes, stderrBytes);
     // Settle the owned publisher before handing off a terminal failure. The
     // driver remains alive so the supervisor can prove its planned tree stop.
     clearTimeout(timer);
-    if (browser) { await within(browser.close(), 1000).catch(() => undefined); browser = undefined; }
+    shutdownDeadline ??= performance.now() + 5000;
+    const failureShutdownDeadline = shutdownDeadline;
+    if (browser) { await within(browser.close(), Math.max(1, Math.min(1000, failureShutdownDeadline - performance.now()))).catch(() => undefined); browser = undefined; }
     if (child && child.exitCode === null && child.signalCode === null) {
       child.kill('SIGTERM');
-      if (!await stopped(child, 5000)) throw new Error('publisher graceful shutdown incomplete');
+      if (!await stopped(child, Math.max(1, failureShutdownDeadline - performance.now()))) throw new Error('publisher graceful shutdown incomplete');
     }
+    if (publisherClosed) await within(publisherClosed, Math.max(1, failureShutdownDeadline - performance.now()));
+    const facts = failureFacts(error, captureError, child?.exitCode, child?.signalCode, proof !== undefined, endpoint !== '', diagnostic, mergedBytes, stderrBytes);
     const output = JSON.stringify({ type: 'driver-failure', stage: req.stage, nonce: req.nonce, phase,
       code: 'closed-stage-contract-refused', visibleNativeUI: metadata, diagnostics: facts }) + '\n';
     if (Buffer.byteLength(output) > LIMIT) throw new Error('driver output bound exceeded');
@@ -573,8 +622,8 @@ async function main(): Promise<void> {
     await parentShutdown();
   } finally {
     clearTimeout(timer);
-    if (browser) await within(browser.close(), 1000).catch(() => undefined);
-    if (child && child.exitCode === null && child.signalCode === null) { child.kill('SIGTERM'); await stopped(child, 5000); }
+    if (browser) await within(browser.close(), Math.max(1, Math.min(1000, (shutdownDeadline ?? performance.now() + 5000) - performance.now()))).catch(() => undefined);
+    if (child && child.exitCode === null && child.signalCode === null) { child.kill('SIGTERM'); await stopped(child, Math.max(1, (shutdownDeadline ?? performance.now() + 5000) - performance.now())); }
     diagnostic.fill(0); endpoint = '';
   }
 }

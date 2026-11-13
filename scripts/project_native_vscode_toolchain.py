@@ -29,7 +29,8 @@ DECLARATIONS = {
 INPUTS = {"extension.ts": "observer/extension.ts", "runner.ts": "observer/runner.ts",
           "driver.ts": "driver/driver.ts", "package.json": "observer/package.json",
           "driver-package.json": "driver/package.json",
-          "driver-diagnostics.test.cjs": "driver/driver-diagnostics.test.cjs"}
+          "driver-diagnostics.test.cjs": "driver/driver-diagnostics.test.cjs",
+          "runner-readiness.test.cjs": "observer/runner-readiness.test.cjs"}
 RUNTIME_FILES = ("observer/extension.js", "observer/runner.js", "driver/driver.js")
 COMPILER_MEMBER = "lib/tsc"
 COMPILER_BYTES = 24101026
@@ -299,6 +300,7 @@ def prepare(root, sources, budget, capture):
     shared.verify_files(identities, budget)
     capture("trusted-tsc", [compiler, "--project", root / "tsconfig.json"], root, env, 60)
     capture("trusted-driver-diagnostics", [node, "--test", root / "build/driver/driver-diagnostics.test.cjs"], root, env, 30)
+    capture("trusted-runner-readiness", [node, "--test", root / "build/observer/runner-readiness.test.cjs"], root, env, 30)
     shared.verify_files(identities, budget)
     for name, expected in source_hashes.items():
         if hashlib.sha256(ordinary_bytes(sources / name, 256 << 10)).hexdigest() != expected:

@@ -14,9 +14,10 @@ type ObjectValue = Record<string, unknown>;
 type Skill = { name: string; path: string; sha256: string; source: string };
 type Server = { label: string; command: string; args: string[]; env: Record<string, string>;
   cwd: string; facts: ObjectValue };
+type ReadinessControl = { label: string; uri: string };
 type Request = { mode: 'trusted-project-v1'; stage: string; nonce: string; project: string;
   home: string; appRoot: string; skills: Skill[]; absentSkills: string[];
-  servers: Server[]; absentServers: string[]; operation: 'write' | 'read'; marker: string };
+  readinessControl: ReadinessControl; servers: Server[]; absentServers: string[]; operation: 'write' | 'read'; marker: string };
 
 function object(value: unknown): ObjectValue {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) throw new Error('expected object');
@@ -131,9 +132,13 @@ function strings(value: unknown, maximum: number): string[] {
 }
 function decodeRequest(value: unknown): Request {
   const v = object(value);
-  keys(v, ['mode', 'stage', 'nonce', 'project', 'home', 'appRoot', 'skills', 'absentSkills', 'servers', 'absentServers', 'operation', 'marker']);
+  keys(v, ['mode', 'stage', 'nonce', 'project', 'home', 'appRoot', 'skills', 'absentSkills', 'servers', 'absentServers', 'operation', 'marker', 'readinessControl']);
   if (v.mode !== 'trusted-project-v1' || !/^[a-z][a-z0-9-]{0,80}$/u.test(literal(v.stage))
     || !/^[0-9a-f]{32,64}$/u.test(literal(v.nonce)) || !['write', 'read'].includes(String(v.operation))) throw new Error('request identity differs');
+  const readinessControl = object(v.readinessControl);
+  keys(readinessControl, ['label', 'uri']);
+  const label = literal(readinessControl.label), uri = literal(readinessControl.uri);
+  if (!/^uap-foreign-[ab]$/u.test(label) || uri !== `http://127.0.0.1:9/preserved-foreign/${v.nonce}/${label.slice(-1)}`) throw new Error('readiness control differs');
   const project = path(v.project, true), home = path(v.home, true), appRoot = path(v.appRoot, true);
   if (project === home || process.env.HOME !== home || process.env.UAP_VSCODE_WORKSPACE_FOLDER !== project) throw new Error('original home/workspace differs');
   if (!Array.isArray(v.skills) || v.skills.length > 8 || !Array.isArray(v.servers) || v.servers.length > 8) throw new Error('fixture bound exceeded');
@@ -149,11 +154,59 @@ function decodeRequest(value: unknown): Request {
     return { label: literal(row.label), command: path(row.command, false), args: strings(row.args, 16),
       env: env as Record<string, string>, cwd: row.cwd === '' ? '' : path(row.cwd, true), facts: object(row.facts) };
   });
-  if (new Set(skills.map(row => row.name)).size !== skills.length || new Set(servers.map(row => row.label)).size !== servers.length) throw new Error('ambiguous fixture identity');
-  return { ...v, project, home, appRoot, skills, servers,
+  if (servers.some(row => row.label === label) || strings(v.absentServers, 16).includes(label)
+    || new Set(skills.map(row => row.name)).size !== skills.length || new Set(servers.map(row => row.label)).size !== servers.length) throw new Error('ambiguous fixture identity');
+  return { ...v, project, home, appRoot, skills, servers, readinessControl: { label, uri },
     absentSkills: strings(v.absentSkills, 16), absentServers: strings(v.absentServers, 16), marker: literal(v.marker) } as Request;
 }
 function delay(ms: number): Promise<void> { return new Promise(resolve => setTimeout(resolve, ms)); }
+// BEGIN NATIVE INVENTORY READINESS: inert tests execute this actual block.
+function waitInventory<T>(read: () => readonly T[], subscribe: (changed: () => void) => { dispose(): void },
+  ready: (snapshot: readonly T[]) => boolean, deadline: number): Promise<readonly T[]> {
+  return new Promise((resolve, reject) => {
+    let settled = false, subscription: { dispose(): void } | undefined;
+    const remaining = deadline - performance.now();
+    if (remaining <= 0) { reject(new Error('native inventory readiness deadline')); return; }
+    const timer = setTimeout(() => finish(new Error('native inventory readiness deadline')), remaining);
+    function finish(error?: unknown, snapshot?: readonly T[]): void {
+      if (settled) return;
+      settled = true; clearTimeout(timer);
+      try { subscription?.dispose(); } catch (disposeError) { error ??= disposeError; }
+      if (error) reject(error); else resolve(snapshot!);
+    }
+    function check(): void {
+      if (settled) return;
+      try {
+        if (performance.now() >= deadline) throw new Error('native inventory readiness deadline');
+        const current = read();
+        if (current.length > 256) throw new Error('native inventory count bound');
+        const snapshot = [...current];
+        if (ready(snapshot)) finish(undefined, snapshot);
+      } catch (error) { finish(error); }
+    }
+    // Synchronous registration callbacks are covered by the immediate read after
+    // registration returns, when the disposable is available for every outcome.
+    try { subscription = subscribe(() => { if (subscription) check(); }); } catch (error) { finish(error); }
+    if (!settled) check();
+  });
+}
+function definitionControlReady(rows: readonly vscode.McpServerDefinition[], control: ReadinessControl): boolean {
+  const matches = rows.filter(row => row.label === control.label);
+  if (!matches.length) return false;
+  const row = matches[0];
+  if (matches.length !== 1 || !(row instanceof vscode.McpHttpServerDefinition) || row.uri.toString() !== control.uri
+    || Object.keys(row.headers).length !== 0) throw new Error('native readiness control differs');
+  return true;
+}
+function gatewayControlReady(rows: readonly vscode.McpGatewayServer[], control: ReadinessControl): boolean {
+  const matches = rows.filter(row => row.label === control.label);
+  if (matches.length > 1) throw new Error('gateway readiness control ambiguous');
+  return matches.length === 1;
+}
+function rejectAbsentServers(rows: readonly { label: string }[], absent: readonly string[]): void {
+  if (absent.some(label => rows.some(row => row.label === label))) throw new Error('other/removed server visible');
+}
+// END NATIVE INVENTORY READINESS
 async function waitReady(req: Request, deadline: number): Promise<void> {
   const ready = literal(process.env.UAP_VSCODE_TRUSTED_READY);
   path(dirname(ready), true);
@@ -282,11 +335,13 @@ async function observe(req: Request, deadline: number): Promise<ObjectValue> {
     }
     if (req.absentSkills.some(name => skills.some(row => row.name === name))) throw new Error('other/removed skill visible');
     phase = 'native-definitions';
-    const definitions = vscode.lm.mcpServerDefinitions;
+    const definitions = await waitInventory(() => vscode.lm.mcpServerDefinitions,
+      changed => vscode.lm.onDidChangeMcpServerDefinitions(changed),
+      rows => definitionControlReady(rows, req.readinessControl), deadline);
     observations.push({ phase, definitions: definitions.slice(0, 256).map(row => row instanceof vscode.McpStdioServerDefinition
       ? { label: row.label, command: row.command, args: row.args, env: row.env, cwd: row.cwd?.fsPath }
       : { label: row.label, kind: 'http' }) });
-    if (definitions.length > 256 || req.absentServers.some(label => definitions.some(row => row.label === label))) throw new Error('other/removed server visible');
+    rejectAbsentServers(definitions, req.absentServers);
     const definitionEvidence: ObjectValue[] = [];
     for (const expected of req.servers) {
       const matches = definitions.filter(row => row.label === expected.label);
@@ -300,9 +355,11 @@ async function observe(req: Request, deadline: number): Promise<ObjectValue> {
     if (!gateway) throw new Error('native gateway unavailable');
     const calls: ObjectValue[] = [];
     try {
-      if (gateway.servers.length > 256 || req.absentServers.some(label => gateway.servers.some(row => row.label === label))) throw new Error('gateway server scope differs');
+      const gatewayServers = await waitInventory(() => gateway.servers, changed => gateway.onDidChangeServers(changed),
+        rows => gatewayControlReady(rows, req.readinessControl), deadline);
+      rejectAbsentServers(gatewayServers, req.absentServers);
       for (const expected of req.servers) {
-        const matches = gateway.servers.filter(row => row.label === expected.label);
+        const matches = gatewayServers.filter(row => row.label === expected.label);
         if (matches.length !== 1 || !matches[0]) throw new Error('gateway server missing or ambiguous');
         calls.push(await callGateway(matches[0], expected, req, deadline));
       }
@@ -310,7 +367,8 @@ async function observe(req: Request, deadline: number): Promise<ObjectValue> {
     return { schemaVersion: 1, mode: req.mode, stage: req.stage, nonce: req.nonce, collected: true,
       version: vscode.version, appRoot: vscode.env.appRoot, appHost: vscode.env.appHost,
       folder: req.project, home: req.home, trusted: vscode.workspace.isTrusted, observerPID: process.pid,
-      networkNamespace: Number(statSync('/proc/self/ns/net').ino), skills: skillEvidence, definitions: definitionEvidence, calls };
+      networkNamespace: Number(statSync('/proc/self/ns/net').ino), skills: skillEvidence, definitions: definitionEvidence, calls,
+      readiness: { ...req.readinessControl, definitionsReady: true, gatewayReady: true } };
   } finally { clearTimeout(timer); token.dispose(); }
 }
 
