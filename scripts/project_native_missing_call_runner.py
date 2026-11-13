@@ -246,10 +246,12 @@ def run(client, output, expected):
             invoke("git-" + project, ["/usr/bin/git", "init", "--quiet", "--initial-branch=main"],
                    work / project, env, private)
         if client == "qoder":
-            # Explicit test-owned directory consent is distinct from per-server
-            # approval and applies only to Project A in the disposable HOME.
+            # Explicit trust covers only disposable A/B/outside test roots.
+            # B/outside still have no owned MCP source or named-tool approval:
+            # a native negative must not pass merely because trust was denied.
             emit(work / "home" / ".qoder" / "settings.json", {
-                "permissions": {"trustDirectories": [str(work / "a")]}
+                "permissions": {"trustDirectories": [
+                    str(work / "a"), str(work / "b"), str(work / "outside")]}
             })
         binary, vendor_files, acquisition = acquire_vendor(client, work, env, private)
         server = NAMES[client]
