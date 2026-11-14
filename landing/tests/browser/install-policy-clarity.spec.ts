@@ -275,6 +275,30 @@ test('detail distinguishes a signed Project-only route from an exact Git alterna
   expect(errors).toEqual([]);
 });
 
+test('a mounted plugin installer withdraws source commands on Directory expiry', async ({ page }) => {
+  const errors = await offline(page);
+  const index = pluginWithOnlyCodex();
+  index.plugins[0]!.trust_state = 'reviewed';
+  const start = new Date();
+  index.expires_at = new Date(start.getTime() + 10 * 60_000).toISOString();
+  await page.clock.install({ time: start });
+  await projections(page, index);
+  await navigate(page, '/plugins/i18n-state-00', 'en');
+
+  const panel = page.locator('.install-panel');
+  await targets(page, panel, ['Google Antigravity']);
+  await expect(panel.locator('.command-snippet--add code'))
+    .toContainText('universal-agent-plugins@0.1.108 add github:');
+  await expect(panel.locator('.command-snippet--repair')).toHaveCount(0);
+
+  // Commands must expire on an already-open detail page, without navigation.
+  await page.clock.fastForward(11 * 60_000);
+  for (const action of ['add', 'update', 'repair', 'remove'])
+    await expect(panel.locator(`.command-snippet--${action}`)).toHaveCount(0);
+  await expect(panel).toContainText(wording('en')('registryUi.install.commandsUnavailableStaleDirectory'));
+  expect(errors).toEqual([]);
+});
+
 test('an open Antigravity agent page withdraws pinned add on Directory expiry without hiding the repair warning', async ({ page }) => {
   const errors = await offline(page);
   const index = pluginWithOnlyCodex();

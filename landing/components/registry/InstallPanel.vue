@@ -18,7 +18,7 @@ const props = defineProps<{ plugin: RegistryPlugin }>();
 const targets = defineModel<InstallTargetID[]>('targets', { required: true });
 const autoDetect = defineModel<boolean>('autoDetect', { required: true });
 const { asset, sourceUrl } = useSite();
-const { current, expired, published } = useDirectoryStatus();
+const { current, expired, published } = useDirectoryStatus(true);
 const isDiscovered = computed(() => props.plugin.trust_state === 'conformant_unreviewed');
 const canUseSource = computed(() => isDiscovered.value || current.value);
 const selection = usePluginInstallSelection(() => props.plugin, { targets, autoDetect });
