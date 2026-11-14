@@ -162,6 +162,12 @@ def native_inventory(client, binary, folder, env, private, label, absent):
         raise ValueError("unexpected project MCP source in " + label)
 
 
+def native_selected_inventory(binary, folder, env, private, server):
+    out, err = invoke("selected-native-mcp-list", [binary, "mcp", "list"], folder, env, private, 40)
+    if server.encode() not in out + b"\n" + err:
+        raise ValueError("UAP-installed selected MCP server not listed by genuine native client")
+
+
 def installed_config(client, project, name, nonce, events, installer, probe):
     target = project / CONFIG[client]
     content = json.loads(target.read_bytes())
@@ -223,12 +229,18 @@ def agent_command(client, binary, prompt):
             "--no-session-persistence", prompt]
 
 
-def run(client, output, expected):
+def run(client, output, expected, *, preflight_only=False):
     # No CI-host bypass, no local user profile, no unapproved vendor account.
     native.native.require_hosted("linux-amd64")
-    key = os.environ.get(AUTH[client], "")
-    if not 16 <= len(key) <= 4096 or any(char in key for char in "\x00\r\n"):
-        raise ValueError("authorized disposable " + client + " CI credential absent/invalid")
+    if preflight_only:
+        # This lane must be independently runnable with zero vendor credentials.
+        if any(os.environ.get(name) for name in AUTH.values()):
+            raise ValueError("credential-free preflight cannot inherit vendor authentication")
+        key = None
+    else:
+        key = os.environ.get(AUTH[client], "")
+        if not 16 <= len(key) <= 4096 or any(char in key for char in "\x00\r\n"):
+            raise ValueError("authorized disposable " + client + " CI credential absent/invalid")
     if (not output.is_absolute() or output.resolve() != output or ROOT in output.parents
             or output.exists() or output.is_symlink()):
         raise ValueError("fresh canonical evidence destination outside checkout required")
@@ -300,10 +312,49 @@ def run(client, output, expected):
         if b_config.read_bytes() != before_b:
             raise ValueError("Project B changed after Project A install")
         permission_fixture(client, project_a, server)
-        start = utc()
         if client == "cursor":
             invoke("cursor-enable-one", [binary, "mcp", "enable", server], project_a, env, private, 40)
+        native_selected_inventory(binary, project_a, env, private, server)
 
+        if preflight_only:
+            # Source/ownership/native-listing proof ONLY. No model or MCP call
+            # can be inferred from this lane, even if a client starts its
+            # server during a read-only inventory request.
+            invoke("preflight-remove-a", [
+                installer, "remove", identifier, "--scope", "project",
+                "--project-root", project_a, "--target", client, "--format", "json",
+            ], project_a, env, private, 80)
+            after = json.loads(a_config.read_bytes())
+            if after.get("mcpServers") != foreign["mcpServers"]:
+                raise ValueError("foreign Project A config changed on removal")
+            native_inventory(client, binary, project_a, env, private,
+                             "preflight-removed-a", server)
+            native_inventory(client, binary, project_b, env, private,
+                             "preflight-empty-b", server)
+            if (b_config.read_bytes() != before_b
+                    or (work / "home" / "foreign-user-control").read_bytes()
+                    != b"foreign-user-do-not-touch\n"):
+                raise ValueError("Project B or foreign user bytes changed")
+            with native.Budget(180) as budget:
+                native.verify_files(vendor_files, budget)
+            output.mkdir(mode=0o700, parents=True)
+            emit(output / "source-only-preflight.json", {
+                "schema_version": 1, "client": client, "source_commit": expected,
+                "native_version": EXPECTED_VERSIONS[client],
+                "vendor_archive_sha256": acquisition["sha256"],
+                "native_executable_sha256": digest(binary.read_bytes()),
+                "source_built_uap_and_fixture": True,
+                "genuine_native_server_listed": True,
+                "uap_owned_project_a_installed_and_removed": True,
+                "other_project_and_foreign_state_preserved": True,
+                "vendor_authentication_qualified": False,
+                "native_tools_call_qualified": False,
+                "real_model_qualified": False,
+            })
+            print(client + ": source-built UAP and native MCP listing/removal verified; tools/call NOT qualified")
+            return
+
+        start = utc()
         # Authorization is passed only to selected genuine agent sessions,
         # never to source builds, public UAP commands, or native inventories.
         session_env = {**env, AUTH[client]: key}
@@ -384,9 +435,12 @@ def main():
     parser.add_argument("--client", choices=("cursor", "qoder"), required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--expected-head", required=True)
+    parser.add_argument("--preflight-only", action="store_true",
+                        help="qualify only UAP install/native listing/remove, never MCP call")
     args = parser.parse_args()
     try:
-        run(args.client, args.output, args.expected_head)
+        run(args.client, args.output, args.expected_head,
+            preflight_only=args.preflight_only)
     except Exception as error:
         # Fail closed with a stable stage-free diagnostic. Never print a
         # vendor traceback, raw model output or credentials.
