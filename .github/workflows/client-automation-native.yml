@@ -391,3 +391,45 @@ jobs:
           path: ${{ steps.lock_capture.outputs.frontend_failure }}
           if-no-files-found: error
           retention-days: 14
+
+  fixed-original-readout:
+    name: Fixed original Grok failure read-only diagnosis
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.repository == '777genius/universal-agent-plugins' &&
+      github.event.pull_request.number == 878 &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: read
+    timeout-minutes: 5
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Inert fixed archive reader contracts
+        run: python3 -m unittest discover -s scripts -p test_native_fixed_original_readout.py -v
+      - name: Read the single immutable failed session archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          original_dir="$(mktemp -d "$RUNNER_TEMP/grok-fixed-original.XXXXXX")"
+          trap 'rm -f -- "$original_dir/archive.zip" "$original_dir/download.stderr"; rmdir -- "$original_dir"' EXIT
+          if ! (
+            ulimit -c 0 || exit 1
+            ulimit -f 64 || exit 1
+            timeout --signal=TERM --kill-after=5s 40s \
+              gh api repos/777genius/universal-agent-plugins/actions/artifacts/14100597648/zip \
+              > "$original_dir/archive.zip" 2> "$original_dir/download.stderr"
+          ) 2>/dev/null; then
+            printf '%s\n' 'FIXED_ORIGINAL_DOWNLOAD_REFUSED'
+            exit 1
+          fi
+          python3 scripts/native_fixed_original_readout.py grok-5ff-session "$original_dir/archive.zip"

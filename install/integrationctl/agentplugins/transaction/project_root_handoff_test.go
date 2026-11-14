@@ -280,7 +280,7 @@ func TestProjectRootHandoffColdRecoveryRetainsCopiedEntries(t *testing.T) {
 				operation := request.NativeAttempt.OperationID + "-root"
 				_, originalJournal := rawProjectRootJournal(t, journalDir, operation)
 				cold := Kernel{StateStore: store, Directory: dirswap.Manager{JournalDir: journalDir}}
-				for attempt := 0; attempt < 2; attempt++ {
+				for range 2 {
 					if err := cold.Recover(t.Context()); err == nil {
 						t.Fatal("cold recovery accepted the copied object")
 					}

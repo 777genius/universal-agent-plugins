@@ -1,12 +1,14 @@
 package transaction
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 func validateExpectedPublication(mutation DirectoryMutation) error {
@@ -17,6 +19,15 @@ func validateExpectedPublication(mutation DirectoryMutation) error {
 		return fmt.Errorf("original publication proof requires a fresh standalone publication")
 	}
 	return nil
+}
+
+func (kernel Kernel) groupedPublicationOwners(ctx context.Context, group DirectoryGroup) ([]domain.PhysicalProfileOwner, error) {
+	for _, mutation := range group.Mutations {
+		if !mutation.ExpectedPublication.IsZero() {
+			return nil, fmt.Errorf("original publication proof cannot join a package group")
+		}
+	}
+	return kernel.mutationOwners(ctx, group.DesiredState, group.Mutations)
 }
 
 // Retain the final information from the original open marker. The pre-write

@@ -113,12 +113,7 @@ func (kernel Kernel) ApplyDirectory(ctx context.Context, mutation DirectoryMutat
 }
 
 func (kernel Kernel) ApplyDirectoryGroup(ctx context.Context, group DirectoryGroup) ([]domain.MutationReceipt, error) {
-	for _, mutation := range group.Mutations {
-		if !mutation.ExpectedPublication.IsZero() {
-			return nil, fmt.Errorf("original publication proof cannot join a package group")
-		}
-	}
-	owners, err := kernel.mutationOwners(ctx, group.DesiredState, group.Mutations)
+	owners, err := kernel.groupedPublicationOwners(ctx, group)
 	if err != nil {
 		return nil, err
 	}

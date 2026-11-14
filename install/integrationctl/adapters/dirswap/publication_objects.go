@@ -9,7 +9,7 @@ import (
 	"hash"
 	"io"
 	"os"
-	"path"
+	slashpath "path"
 	"path/filepath"
 	"slices"
 	"sort"
@@ -83,7 +83,7 @@ type publicationObjects struct {
 }
 
 func publicationRelative(name string) bool {
-	return name != "" && utf8.ValidString(name) && path.Clean(name) == name && !strings.ContainsAny(name, "\\:\x00") &&
+	return name != "" && utf8.ValidString(name) && slashpath.Clean(name) == name && !strings.ContainsAny(name, "\\:\x00") &&
 		strings.Count(name, "/") <= 1 && filepath.IsLocal(filepath.FromSlash(name))
 }
 
@@ -148,7 +148,7 @@ func (capture *publicationObjects) collect(parent *os.Root, name, relative, root
 	}
 	capture.entries = append(capture.entries, object)
 	for _, child := range object.names {
-		if err := capture.collect(object.dir, child, path.Join(relative, child), ""); err != nil {
+		if err := capture.collect(object.dir, child, slashpath.Join(relative, child), ""); err != nil {
 			return err
 		}
 	}

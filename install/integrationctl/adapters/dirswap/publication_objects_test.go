@@ -278,9 +278,10 @@ func assertOriginalPublicationColdRefusal(t *testing.T, phase, which string) {
 			return nil
 		}
 		tree := input.ActivePath
-		if phase == PhaseBackupPending {
+		switch phase {
+		case PhaseBackupPending:
 			tree = input.StagingPath
-		} else if phase == FaultRollbackQuarantined {
+		case FaultRollbackQuarantined:
 			record, err := manager.Load(input.OperationID)
 			if err != nil {
 				return err
@@ -483,7 +484,7 @@ func assertOriginalPublicationBound(t *testing.T, variant string) {
 			t.Fatal(err)
 		}
 	case "census":
-		for index := 0; index < 9; index++ {
+		for index := range 9 {
 			if err := os.WriteFile(filepath.Join(input.StagingPath, fmt.Sprintf("extra-%d", index)), nil, 0o600); err != nil {
 				t.Fatal(err)
 			}
