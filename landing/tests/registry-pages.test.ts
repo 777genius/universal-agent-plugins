@@ -9,6 +9,7 @@ import { installTargets, canonicalInstallTarget } from '../data/installTargets.t
 import { hasPluginInstallTarget, pluginInstallAvailability } from '../utils/pluginInstallAvailability.ts';
 import { agentInstallExample } from '../utils/agentInstallExample.ts';
 import { pluginCommands } from '../utils/commands.ts';
+import { pinnedCatalogCommands, pinnedCatalogRepairLimitation } from '../utils/projectCatalogSource.ts';
 import { localizedPath } from '../utils/localizedRoutes.ts';
 import { productRootUrl, seoDescription, spdxLicenseUrl } from '../utils/seo.ts';
 import { catalogVisiblePlugins, isFullyRetired } from '../utils/filter.ts';
@@ -23,17 +24,25 @@ async function page(
   registry: unknown = fixture,
 ) {
   const locale = ref('en');
+  const directoryCurrent = ref(true);
+  let registryInitialized = false;
   const discoveryStatus = ref({ state: 'current' });
   let seo: any;
   const route = { params: parameters, query: { source: fixture.plugins[0].install_source } };
   const source = readFileSync(new URL(`../pages/${filename}`, import.meta.url), 'utf8')
     .match(/<script setup lang="ts">([\s\S]*?)<\/script>/)![1]
     .replace(/^import[\s\S]*?from '[^']+';\n/gm, '');
-  await runInNewContext(`(async () => { ${discoverySource}\n${stripTypeScriptTypes(source)} })()`, {
+  const exposed = await runInNewContext(`(async () => { ${discoverySource}\n${stripTypeScriptTypes(source)}
+    return { installCommand: typeof installCommand === 'undefined' ? undefined : installCommand,
+      pinnedRepairLimitation: typeof pinnedRepairLimitation === 'undefined' ? undefined : pinnedRepairLimitation };
+  })()`, {
     computed, ref, watch, clients, clientLandingBySlug, clientLandingById, localizedPath, productRootUrl, seoDescription, spdxLicenseUrl, catalogVisiblePlugins,
     resolveDistribution, vendorInstallSource, isFullyRetired, pluginBenefit,
-    installTargets, canonicalInstallTarget, hasPluginInstallTarget, pluginInstallAvailability, agentInstallExample, pluginCommands,
-    useDirectoryStatus: () => ({ current: ref(true), expired: ref(false), published: ref(true) }),
+    installTargets, canonicalInstallTarget, hasPluginInstallTarget, pluginInstallAvailability, agentInstallExample, pluginCommands, pinnedCatalogCommands, pinnedCatalogRepairLimitation,
+    useDirectoryStatus: () => {
+      assert.ok(registryInitialized, 'Directory status requires an awaited page projection on a cold render');
+      return { current: directoryCurrent, expired: ref(false), published: ref(true) };
+    },
     // Synthetic key markers test reactivity without creating translations.
     useI18n: () => ({ locale, t: (key: string) => `${locale.value}:${key}`, n: (value: number) => String(value) }),
     useLocalePath: () => (path: string) => localizedPath(path, locale.value as 'en' | 'uk'),
@@ -41,11 +50,16 @@ async function page(
     useRuntimeConfig: () => ({ app: { baseURL: '/universal-agent-plugins/' }, public: { siteUrl: 'https://example.test/universal-agent-plugins/' } }),
     useSite: () => ({ asset: (path: string) => path, pluginIcon: () => '', sourceUrl: () => 'https://github.com/original/source' }),
     useState: () => discoveryStatus,
-    useRegistryPage: async () => structuredClone(registry),
+    useRegistryPage: async () => {
+      await Promise.resolve();
+      registryInitialized = true;
+      return structuredClone(registry);
+    },
     usePageSeo: (title: unknown, description: unknown, options: unknown) => { seo = { title, description, options }; },
     createError: (options: object) => Object.assign(new Error(), options),
   });
-  return { locale, seo };
+  return { locale, seo, directoryCurrent, installCommand: exposed.installCommand,
+    pinnedRepairLimitation: exposed.pinnedRepairLimitation };
 }
 
 test('registry index/detail/client structured data follows locale and uses benefit copy without rewriting source metadata', async () => {
@@ -117,5 +131,24 @@ test('temporarily unlisted products never reach catalog surfaces', async () => {
     assert.ok(names.includes('GitLab'), `${filename} keeps listed products`);
     assert.ok(!names.includes('Agent Notifications'), `${filename} drops held-back products`);
     assert.equal(structured[0].numberOfItems, names.length);
+  }
+});
+
+test('agent pages use the exact source command and stop offering it when the Directory expires', async () => {
+  const registry = structuredClone(fixture);
+  registry.plugins[0].trust_state = 'reviewed';
+  for (const client of ['hermes', 'antigravity', 'pi'] as const) {
+    const { installCommand, directoryCurrent, pinnedRepairLimitation } = await page(
+      'agents/[client].vue', { slug: 'gitlab', client }, registry,
+    );
+    assert.equal(toValue(installCommand), pinnedCatalogCommands(registry.plugins[0], client, 'user').add);
+    assert.ok(toValue(installCommand).includes('@0.1.108 add github:'));
+    assert.equal(toValue(pinnedRepairLimitation)?.key,
+      client === 'antigravity' ? 'registryUi.install.antigravityRepairUnavailable' : undefined);
+    directoryCurrent.value = false;
+    assert.equal(toValue(installCommand), '', 'Expired source must never become a short-name command');
+    assert.equal(toValue(pinnedRepairLimitation)?.key,
+      client === 'antigravity' ? 'registryUi.install.antigravityRepairUnavailable' : undefined,
+      'Expired Directory must not resurrect a broken public repair claim');
   }
 });

@@ -6,7 +6,7 @@ import { publishedLocales, type PublishedLocale } from '../../data/i18n';
 import { localizedPath } from '../../utils/localizedRoutes';
 import type { DownloadOverlay } from '../../types/download';
 import { slavicPluralRule } from '../../utils/slavicPluralRule';
-import type { RegistryIndex } from '../../types/registry';
+import type { ClientID, RegistryIndex } from '../../types/registry';
 import type { SkillSpectorManifest } from '../../types/skillSpector';
 import { skillSpectorV2ProfileDigest } from '../../utils/skillSpectorCatalog';
 
@@ -146,6 +146,30 @@ export async function projections(page: Page, index: RegistryIndex) {
   await expect(page.getByRole('heading', { name: downloadHeading('en'), exact: true })).toBeVisible();
   await hydrated(page);
   await page.route('**/_payload.json*', (route) => route.fulfill({ status: 404, body: '' }));
+}
+
+// Read the built artifact independently of the production command formatter.
+export async function pinnedContext7Example(page: Page, client: ClientID) {
+  const response = await page.request.get(`./api/registry/client/${client}`);
+  expect(response.status()).toBe(200);
+  const index = await response.json() as RegistryIndex;
+  const plugin = index.plugins.find((item) => item.name === 'context7');
+  expect(plugin?.trust_state).toBe('reviewed');
+  const distribution = plugin?.distributions.find((item) => item.id === plugin.default_distribution);
+  expect(distribution?.status).toBe('active');
+  const release = distribution?.releases.find((item) => item.release_sequence === distribution.release_sequence);
+  expect(release?.selectable).toBe(true);
+  expect(release?.release_status).toBe('active');
+  expect(release?.manifest_name).toBe('context7');
+  const source = release!.source;
+  expect(source.repository).toBe('upstash/context7');
+  expect(source.revision).toMatch(/^[0-9a-f]{40}$/);
+  expect(source.path).toBe('plugins/agent-plugins/context7');
+  const selector = `github:${source.repository}@${source.revision}//${source.path}`;
+  return {
+    selector,
+    command: `npx -y universal-agent-plugins@0.1.108 add ${selector} --target ${client}`,
+  };
 }
 
 export async function targets(page: Page, scope: Locator, names: string[]) {

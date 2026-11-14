@@ -147,6 +147,9 @@ function projectSnapshot(
           release.sequence,
           `distribution ${id} release sequence`,
         );
+        const manifestName = optionalString(release, 'manifest_name');
+        if (manifestName !== undefined && !PLUGIN_NAME.test(manifestName))
+          throw new Error(`distribution ${id}: invalid release manifest name`);
         const packageSource = source(
           {
             ...(record(release.package_source) ? release.package_source : {}),
@@ -228,6 +231,7 @@ function projectSnapshot(
         );
         return {
           release_sequence: releaseSequence,
+          ...(manifestName === undefined ? {} : { manifest_name: manifestName }),
           source: packageSource,
           version:
             optionalString(release, 'version') ??
@@ -314,8 +318,8 @@ function projectSnapshot(
       source: selected.source,
       install_source: name,
       built_in: true,
-      // Only authenticated published Directory projections authorize the
-      // direct pinned-Git project path; unsigned previews remain unreviewed.
+      // Only authenticated published Directory projections expose the
+      // explicit pinned-Git path; unsigned previews remain unreviewed.
       ...(mode === 'published_snapshot' ? { trust_state: 'reviewed' as const } : {}),
       installable: !v2Preview && selected.selectable,
       components,

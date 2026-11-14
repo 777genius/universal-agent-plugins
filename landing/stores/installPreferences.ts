@@ -1,10 +1,12 @@
 import { defineStore } from 'pinia';
 import type { InstallScope } from '../types/registry';
-import { hiddenPublicClientIds } from '../data/clients.ts';
+import { installTargets } from '../data/installTargets.ts';
 
-// Retired public targets must not erase the user's explicit project scope.
+const publicTargetIds = new Set<string>(installTargets.map((target) => target.id));
+// Only known public targets survive persistence; their current install
+// eligibility is separate from the user's explicit scope and agent intent.
 const visibleTargetIds = (ids: readonly string[]) =>
-  ids.filter((id) => !hiddenPublicClientIds.has(id));
+  ids.filter((id) => publicTargetIds.has(id));
 
 const defaults = () => ({
   identity: '',
@@ -39,10 +41,12 @@ export const useInstallPreferencesStore = defineStore('installPreferences', {
       }
     },
     readPackage(identity: string, available: readonly string[]) {
-      // Keep explicit scope when a previously visible agent is retired.
+      // A known manual choice stays visible when its source is withdrawn.
+      // The installation selector must refuse it until the user chooses again.
       const targetIds = visibleTargetIds(this.package.targetIds);
       return this.package.identity === identity &&
         (this.package.scope === 'project' ||
+          !this.package.autoDetect ||
           targetIds.every((id) => available.includes(id)))
         ? { ...this.package, targetIds, autoDetect: this.package.autoDetect || !targetIds.length }
         : { ...defaults(), identity };
@@ -51,7 +55,7 @@ export const useInstallPreferencesStore = defineStore('installPreferences', {
       const targetIds = visibleTargetIds(this.package.targetIds);
       if (
         this.package.identity !== identity ||
-        (this.package.scope !== 'project' &&
+        (this.package.scope !== 'project' && this.package.autoDetect &&
           targetIds.some((id) => !available.includes(id)))
       ) {
         this.package = defaults();
@@ -74,7 +78,7 @@ export const useInstallPreferencesStore = defineStore('installPreferences', {
     ) {
       const targetIds = [...new Set(visibleTargetIds(choice.targetIds))];
       const scope = choice.scope ?? 'user';
-      if (!identity || (scope !== 'project' && targetIds.some((id) => !available.includes(id)))) {
+      if (!identity || (scope !== 'project' && choice.autoDetect && targetIds.some((id) => !available.includes(id)))) {
         this.package = defaults();
         return;
       }

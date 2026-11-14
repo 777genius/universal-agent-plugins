@@ -11,6 +11,7 @@ const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const sha = value => typeof value === 'string' && /^[a-f0-9]{40}$/.test(value);
 const fields = ['source_commit', 'source_tree', 'workflow_commit', 'run_id', 'run_attempt'];
 const normalize = html => html.replace(/<[^>]*>/g, ' ').replace(/&nbsp;|&#160;/g, ' ').replace(/\s+/g, ' ').trim();
+const sourceClients = new Set(['hermes', 'antigravity', 'pi']);
 
 export function routePaths(clients, locales) {
   assert(clients.length && locales.length);
@@ -56,7 +57,7 @@ function tags(html, name) {
   });
 }
 
-export function checkHtml(bytes, route, id) {
+export function checkHtml(bytes, route, id, command) {
   assert(bytes.length > 0 && bytes.length <= maxBytes, `${route}: HTML size`);
   const html = bytes.toString('utf8');
   const links = tags(html, 'link');
@@ -72,12 +73,51 @@ export function checkHtml(bytes, route, id) {
     }
   }
   const text = normalize(html);
-  if (id === 'hermes' || id === 'antigravity') {
-    assert(text.includes(`npx -y universal-agent-plugins add ./my-plugin --target ${id}`), `${id}: local target command`);
+  if (sourceClients.has(id)) {
+    assert(typeof command === 'string' && command, `${id}: missing independently selected target command`);
+    const code = [...html.matchAll(/<code\b[^>]*>([\s\S]*?)<\/code>/gi)].map(([, value]) => normalize(value));
+    assert.equal(code.filter(value => value === command).length, 1, `${id}: exact selected target command`);
     if (id === 'hermes')
       assert(text.includes('Project installation never modifies User MCP configuration'), 'Hermes: Project/User MCP boundary');
-    else assert(text.includes('Prepared by CLI'), 'Antigravity: Prepared boundary');
+    if (id === 'antigravity') assert(text.includes('Prepared by CLI'), 'Antigravity: Prepared boundary');
   }
+}
+
+export async function expectedAgentCommand(root, id) {
+  assert(sourceClients.has(id), 'unsupported source command route');
+  const selectedModule = relative => import(pathToFileURL(path.join(root, 'landing', relative)).href);
+  const [{ parseDirectoryData }, { projectRegistry }, { catalogVisiblePlugins },
+    { agentInstallExample }, { pluginInstallAvailability }, source, { pluginCommands }] = await Promise.all([
+    selectedModule('utils/registry.ts'), selectedModule('utils/registryProjection.ts'),
+    selectedModule('utils/filter.ts'), selectedModule('utils/agentInstallExample.ts'),
+    selectedModule('utils/pluginInstallAvailability.ts'), selectedModule('utils/projectCatalogSource.ts'),
+    selectedModule('utils/commands.ts'),
+  ]);
+  const feed = path.join(root, '.pages-dist/registry/schemas/1');
+  const pointer = JSON.parse(await readFile(path.join(feed, 'latest.json'), 'utf8'));
+  assert(/^snapshots\/[0-9]{20}\.json$/.test(pointer.snapshot_path), 'invalid copied snapshot path');
+  const snapshot = JSON.parse(await readFile(path.join(feed, pointer.snapshot_path), 'utf8'));
+  const registry = parseDirectoryData(snapshot, 'published_snapshot');
+  const projection = JSON.parse(await readFile(path.join(root, '.pages-dist/api/registry/client', id), 'utf8'));
+  // The Pages builder already authenticates and byte-verifies this mirror.
+  // Reuse its projection oracle; neither HTML nor a candidate API selects trust.
+  assert.deepEqual(projection, projectRegistry(registry, { kind: 'client', value: id }),
+    `${id}: built projection differs from the verified catalog`);
+  const plugins = catalogVisiblePlugins(projection.plugins).filter(plugin => plugin.trust_state !== 'conformant_unreviewed');
+  const example = agentInstallExample(plugins, id);
+  if (!example) return `npx -y universal-agent-plugins add ./my-plugin --target ${id}`;
+  assert.equal(example.target, id, 'agent example changed target');
+  const availability = pluginInstallAvailability(example.plugin, [id], 'user');
+  if (availability?.kind === 'pinned_git') {
+    const { repository, revision, path: subpath } = availability.selection.source;
+    assert(sha(revision), 'catalog command requires an immutable revision');
+    assert(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(source.PINNED_CATALOG_CLI_VERSION),
+      'catalog command requires a pinned public CLI');
+    const selector = `github:${repository}@${revision}${subpath ? `//${subpath}` : ''}`;
+    return `npx -y universal-agent-plugins@${source.PINNED_CATALOG_CLI_VERSION} add ${selector} --target ${id}`;
+  }
+  assert.equal(availability?.kind, 'signed', 'agent example lacks an eligible install route');
+  return pluginCommands(example.plugin, [id]).add;
 }
 
 export function validateContract(contract, expected) {
@@ -106,7 +146,8 @@ export async function prepare(root, output) {
   for (const entry of routePaths(clientLandingPages, docsLocales)) {
     const relative = builtHtmlPath(entry.route);
     const bytes = await readFile(path.join(root, '.pages-dist', relative));
-    checkHtml(bytes, entry.route, entry.id);
+    const command = sourceClients.has(entry.id) ? await expectedAgentCommand(root, entry.id) : undefined;
+    checkHtml(bytes, entry.route, entry.id, command);
     if (entry.route.startsWith('/docs/')) {
       const text = normalize(bytes.toString('utf8'));
       for (const id of ['hermes', 'antigravity']) {

@@ -831,7 +831,8 @@
         }
       },
       "noCompatibleSignedRelease": "此安装范围内没有适用于 {agent} 的目录版本。",
-      "piPinnedProjectSource": "项目：使用此插件固定到具体 SHA 的 Git 源安装到 Pi（不是已签名的 Pi 目标）；CLI 会检查兼容性。",
+      "pinnedCatalogSource": "从此固定版本的 Git 源安装。CLI 会先检查组件、依赖项和所选安装范围；之后可能仍需设置代理。",
+      "antigravityRepairUnavailable": "CLI {version} 暂不支持修复 Antigravity 的 MCP 安装，但仍可安装。",
       "guidedChatgptSetup": "引导式 ChatGPT Web 设置；请在 ChatGPT 内完成连接。",
       "catalogReleasePending": "此插件尚未发布适用于 {agent} 的版本。",
       "useComputerScope": "请为此插件选择“这台电脑”。",
@@ -1022,7 +1023,7 @@
       "directory": "插件目录",
       "version": "版本 {version}",
       "reviewedListingTooltip": "已审核条目及元数据。这不代表对插件代码、行为或安全性的认证。",
-      "exactGitProjectSource": "用于项目的确切 Git 源",
+      "exactGitSource": "固定版本的 Git 源：CLI 将在安装前检查",
       "signedProjectRelease": "用于项目的签名版本"
     },
     "community": {
@@ -1061,6 +1062,7 @@
       "activation": "激活",
       "lifecycle": "生命周期",
       "useTheSameCliToInspectUpdateRepairSwitchSourceOrRemoveThePlugin": "使用相同的 CLI 来检查、更新、修复、切换源或删除插件。",
+      "inspectUpdateRemove": "使用 CLI 检查、更新或删除插件。",
       "reviewedDirectory": "已审核目录",
       "exploreTheFullPluginDirectory": "探索完整的插件目录",
       "agentNotFound": "未找到代理",
@@ -1073,10 +1075,8 @@
       "count": "{count} 个已审核的软件包支持此客户端。 | {count} 个已审核的软件包支持此客户端。",
       "tryPlugin": "试用 {source}，或使用其他兼容插件经过审核的短名称或完整包源。",
       "localPackageHint": "将 ./my-plugin 替换为有效 Agent Plugins 1.0 包的路径。",
-      "piSignedCount": "提供 Pi 安装或设置选项的包：{count}",
-      "piDirectSourceNote": "可用选项可能包括用户或项目范围内的签名版本或确切 Git 源。CLI 会检查兼容性和设置要求；Git 源不代表已获得 Pi 签名授权。",
+      "sourceOptionsCount": "提供 {agent} 安装或设置选项的包：{count}",
       "packageExampleSourceHint": "请先在 ./my-plugin 创建兼容的 Agent Plugins 包。此处没有适用于该智能体的签名目录示例；CLI 会检查包的组件、安装范围和设置要求。",
-      "pinnedProjectHint": "部分列出的插件提供用于项目安装的确切 Git 源。这不表示签名目录已授权 Pi 支持。",
       "skillsGuide": "安装单独的 Skills"
     },
     "components": {

@@ -90,19 +90,20 @@ for (const width of [1440, 390]) {
 
     await card.locator('.app-multiselect__trigger').click();
     const pi = page.getByRole('checkbox', { name: /^Pi(?:\s|$)/ });
-    await expect(pi).toBeDisabled(); // User scope does not gain an ungranted signed Pi target.
+    await expect(pi).toBeEnabled(); // User also offers the explicit source route, without a signed Pi grant.
+    await expect(pi).toContainText('The CLI checks components, dependencies and the selected scope first');
     await page.keyboard.press('Escape');
 
     await card.getByRole('button', { name: 'This project', exact: true }).click();
     await card.locator('.app-multiselect__trigger').click();
     await expect(pi).toBeEnabled();
-    await expect(pi).toContainText('exact pinned Git source');
+    await expect(pi).toContainText('pinned Git source');
     await pi.click();
     await page.keyboard.press('Escape');
     const direct = 'github:777genius/universal-agent-plugins@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/sentry';
-    const add = `npx -y universal-agent-plugins add ${direct} --target pi --scope project`;
+    const add = `npx -y universal-agent-plugins@0.1.108 add ${direct} --target pi --scope project`;
     await expect(card.locator('.plugin-card__install .command-snippet--add code')).toHaveText(add);
-    await expect(card).toContainText('not a signed Pi target');
+    await expect(card).toContainText('The CLI checks components, dependencies and the selected scope first');
 
     // Switching routes must not combine an unsigned Pi option with signed Codex.
     await card.locator('.app-multiselect__trigger').click();
@@ -125,7 +126,7 @@ for (const width of [1440, 390]) {
     const detail = page.locator('.install-panel');
     await expect(detail.getByRole('button', { name: 'This project', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await expect(detail.locator('.command-snippet--add code')).toHaveText(add);
-    await expect(detail).toContainText('not a signed Pi target');
+    await expect(detail).toContainText('The CLI checks components, dependencies and the selected scope first');
     await expect(detail.locator('.command-snippet--repair code')).toContainText('--target pi --scope project');
     await testInfo.attach(`pi-project-detail-${width}.png`, {
       body: await detail.screenshot({ animations: 'disabled' }),

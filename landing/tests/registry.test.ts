@@ -71,6 +71,20 @@ describe('unified registry landing', () => {
     assert.ok(preview.plugins.every((plugin) => plugin.trust_state === undefined));
   });
 
+  it('retains each signed source manifest name for saved maintenance', () => {
+    const fixture = structuredClone(snapshot) as {
+      distributions: { id: string; releases: { manifest_name: string; sequence: number }[] }[];
+    };
+    const distribution = fixture.distributions.find((item) => item.id === '777genius/notion')!;
+    distribution.releases[0]!.manifest_name = 'different-source-name';
+    const parsed = parseDirectoryData(fixture, 'published_snapshot');
+    const projected = parsed.plugins.find((plugin) => plugin.name === 'notion')!
+      .distributions.find((item) => item.id === distribution.id)!;
+    assert.equal(projected.releases[0]!.manifest_name, 'different-source-name');
+    distribution.releases[0]!.manifest_name = 'unsafe;name';
+    assert.throws(() => parseDirectoryData(fixture, 'published_snapshot'), /invalid release manifest name/);
+  });
+
   it('accepts Directory target policies for newly advertised native clients without enabling undeclared targets', () => {
     const fixture = structuredClone(snapshot) as {
       distributions: {

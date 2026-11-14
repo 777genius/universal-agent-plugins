@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { agentInstallExample } from '~/utils/agentInstallExample';
 import { pluginCommands } from '~/utils/commands';
+import { pinnedCatalogCommands, pinnedCatalogRepairLimitation } from '~/utils/projectCatalogSource';
 import { productRootUrl } from '~/utils/seo';
 import { localizedPath } from '~/utils/localizedRoutes';
 import {
@@ -24,6 +25,7 @@ if (!client) {
 }
 
 const registry = await useRegistryPage({ projection: { kind: 'client', value: client.id } });
+const { current } = useDirectoryStatus(true);
 
 const reviewedPlugins = catalogVisiblePlugins(registry.plugins).filter(
   (plugin) =>
@@ -45,15 +47,19 @@ const title = computed(() => t('registryUi.agentPage.title', { name: client.name
 // Match the aggregate ChatGPT page to an eligible Desktop or Web surface.
 const example = agentInstallExample(reviewedPlugins, client.id);
 const needsLocalExample = !example;
-const exampleSource = example?.plugin.install_source ?? './my-plugin';
-const installCommand = example
-  ? pluginCommands(example.plugin, [example.target]).add
-  : `npx -y universal-agent-plugins add ./my-plugin --target ${client.id}`;
-const hasPinnedProject =
-  client.id === 'pi' &&
-  reviewedPlugins.some(
-    (plugin) => pluginInstallAvailability(plugin, ['pi'], 'project')?.kind === 'pinned_git',
-  );
+const exampleAvailability = example && pluginInstallAvailability(example.plugin, [example.target]);
+const pinnedExample = exampleAvailability?.kind === 'pinned_git' ? exampleAvailability.selection : undefined;
+// The public CLI limitation is not a Directory grant and must stay visible
+// after a snapshot expires, even though new source commands are withheld.
+const pinnedRepairLimitation = computed(() => pinnedCatalogRepairLimitation(pinnedExample));
+const exampleSource = pinnedExample?.selector ?? example?.plugin.install_source ?? './my-plugin';
+const installCommand = computed(() => pinnedExample
+  ? current.value ? pinnedCatalogCommands(example!.plugin, pinnedExample.client, 'user').add : ''
+  : example ? pluginCommands(example.plugin, [example.target]).add
+    : `npx -y universal-agent-plugins add ./my-plugin --target ${client.id}`);
+const hasPinnedSource = reviewedPlugins.some(plugin =>
+  pluginInstallAvailability(plugin, [client.id], 'user')?.kind === 'pinned_git' ||
+  pluginInstallAvailability(plugin, [client.id], 'project')?.kind === 'pinned_git');
 
 usePageSeo(title, () => t(`${client.presentationKey}.intro`), {
   translate: false,
@@ -135,6 +141,7 @@ usePageSeo(title, () => t(`${client.presentationKey}.intro`), {
                 {{ t('registryUi.agentPage.chooseAPluginAndInstallIt') }}
               </h2>
               <CommandSnippet
+                v-if="installCommand"
                 :command="installCommand"
                 kind="add"
                 :label="t('registryUi.agentPage.install')"
@@ -149,7 +156,12 @@ usePageSeo(title, () => t(`${client.presentationKey}.intro`), {
                 ></i18n-t
               >
               <p v-else>{{ t('registryUi.agentPage.packageExampleSourceHint') }}</p>
-              <p v-if="hasPinnedProject">{{ t('registryUi.agentPage.pinnedProjectHint') }}</p>
+              <p v-if="hasPinnedSource">
+                {{ t('registryUi.install.pinnedCatalogSource') }}
+                <template v-if="pinnedRepairLimitation">
+                  {{ t(pinnedRepairLimitation.key, pinnedRepairLimitation.params) }}
+                </template>
+              </p>
               <NuxtLink :to="localePath('/agent-skills/')">{{
                 t('registryUi.agentPage.skillsGuide')
               }}</NuxtLink>
@@ -183,7 +195,9 @@ usePageSeo(title, () => t(`${client.presentationKey}.intro`), {
               <p>
                 {{
                   t(
-                    'registryUi.agentPage.useTheSameCliToInspectUpdateRepairSwitchSourceOrRemoveThePlugin',
+                    pinnedRepairLimitation
+                      ? 'registryUi.agentPage.inspectUpdateRemove'
+                      : 'registryUi.agentPage.useTheSameCliToInspectUpdateRepairSwitchSourceOrRemoveThePlugin',
                   )
                 }}
               </p>
@@ -209,8 +223,8 @@ usePageSeo(title, () => t(`${client.presentationKey}.intro`), {
             <h2 id="agent-plugins-title">
               {{ t('registryUi.agentPage.availableFor', { name: client.name }) }}
             </h2>
-            <p v-if="client.id === 'pi'">
-              {{ t('registryUi.agentPage.piSignedCount', { count: n(reviewedPlugins.length) }) }}
+            <p v-if="hasPinnedSource">
+              {{ t('registryUi.agentPage.sourceOptionsCount', { agent: client.name, count: n(reviewedPlugins.length) }) }}
             </p>
             <p v-else>
               {{
@@ -221,8 +235,8 @@ usePageSeo(title, () => t(`${client.presentationKey}.intro`), {
                 )
               }}
             </p>
-            <p v-if="client.id === 'pi'" class="agent-page__directory-note">
-              {{ t('registryUi.agentPage.piDirectSourceNote') }}
+            <p v-if="hasPinnedSource" class="agent-page__directory-note">
+              {{ t('registryUi.install.pinnedCatalogSource') }}
             </p>
           </div>
           <ul class="agent-page__plugin-grid">
@@ -362,7 +376,12 @@ usePageSeo(title, () => t(`${client.presentationKey}.intro`), {
 }
 
 .agent-page__install {
+  min-width: 0;
   padding: 30px;
+}
+
+.agent-page__install p code {
+  overflow-wrap: anywhere;
 }
 
 .agent-page__install h2 {
@@ -488,7 +507,7 @@ usePageSeo(title, () => t(`${client.presentationKey}.intro`), {
 @media (max-width: 900px) {
   .agent-page__hero-grid,
   .agent-page__steps {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .agent-page__plugin-grid {

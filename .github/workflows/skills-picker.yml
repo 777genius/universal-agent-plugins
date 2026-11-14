@@ -56,7 +56,20 @@ jobs:
         working-directory: .
         run: |
           python3 -m unittest discover -s scripts -p 'test_ci_ubuntu_apt_mirrors.py'
-          sudo python3 scripts/ci_ubuntu_apt_mirrors.py
+          # GitHub-hosted images own their apt mirror configuration. Do not
+          # mutate or broaden the strict self-hosted mirror allowlist.
+          case "${RUNNER_ENVIRONMENT:-}" in
+            github-hosted)
+              echo "Using unchanged GitHub-hosted Ubuntu package mirrors"
+              ;;
+            self-hosted)
+              sudo python3 scripts/ci_ubuntu_apt_mirrors.py
+              ;;
+            *)
+              echo "::error::Unknown runner environment; refusing mirror mutation"
+              exit 1
+              ;;
+          esac
 
       - name: Install browser
         working-directory: ui/skills-picker

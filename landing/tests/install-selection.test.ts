@@ -173,8 +173,7 @@ test('project defaults to CLI detection and preserves manual project targets', (
   state.updateAutoDetect(false);
   assert.equal(state.autoDetect.value, false);
   state.updateTargets(['codex', 'cursor']);
-  assert.equal(state.resolution.value.distribution, undefined);
-  state.updateTargets(['codex']);
+  assert.deepEqual(state.targets.value, ['codex'], 'Explicit eligible choice replaces the unsupported saved placeholder');
   assert.equal(unref(state.resolution).distribution?.targets[0]?.authentication, 'required');
   assert.match(
     pluginCommands(data(), state.targets.value, true, state.scope.value).add,
@@ -223,6 +222,7 @@ test('project invalidation and remount preserve requested scope and invalid agen
   state.stop();
   state = mount(plugin);
   assert.equal(state.scope.value, 'project');
+  assert.equal(state.autoDetect.value, false);
   assert.deepEqual(state.targets.value, ['codex']);
   assert.equal(state.resolution.value.distribution, undefined);
   assert.equal(state.installExpanded.value, true);
@@ -303,3 +303,81 @@ test('missing scope and ChatGPT user-only facts never create project availabilit
   assert.equal(state.autoDetect.value, true);
   state.stop();
 });
+
+test('explicit source selection is exclusive, persists across navigation and never enters automatic commands', async () => {
+  setActivePinia(createPinia());
+  const plugin = data();
+  plugin.trust_state = 'reviewed';
+  let state = mount(plugin);
+  assert.equal(unref(state.pinnedSourceCommands), undefined);
+  state.updateAutoDetect(false);
+  state.updateTargets(['cursor', 'hermes']);
+  assert.deepEqual(state.targets.value, ['hermes']);
+  assert.match(state.pinnedSourceCommands.value?.add ?? '', /^npx -y universal-agent-plugins@0\.1\.108 add github:/);
+  assert.equal(state.resolution.value.distribution, undefined);
+  state.toggleInstall();
+  await nextTick();
+  state.stop();
+  state = mount(plugin);
+  assert.equal(state.autoDetect.value, false);
+  assert.deepEqual(state.targets.value, ['hermes']);
+  assert.equal(state.pinnedSourceSelected.value, true);
+  state.updateTargets(['hermes', 'pi']);
+  assert.deepEqual(state.targets.value, ['pi']);
+  state.updateTargets(['pi', 'codex']);
+  assert.deepEqual(state.targets.value, ['codex']);
+  assert.equal(unref(state.pinnedSourceCommands), undefined);
+  assert.ok(state.resolution.value.distribution);
+  state.updateTargets(['codex', 'antigravity']);
+  assert.equal(state.pinnedRepairLimitation.value?.key, 'registryUi.install.antigravityRepairUnavailable');
+  state.updateAutoDetect(true);
+  assert.equal(unref(state.pinnedSourceCommands), undefined);
+  assert.equal(unref(state.pinnedRepairLimitation), undefined);
+  assert.equal(pluginCommands(plugin).add, 'npx -y universal-agent-plugins add gitlab');
+  state.stop();
+});
+
+for (const [scope, client] of [['user', 'hermes'], ['project', 'pi']] as const) {
+  test(`blocked explicit ${scope} source survives save and navigation until explicit recovery`, async () => {
+    setActivePinia(createPinia());
+    const plugin = data();
+    plugin.trust_state = 'reviewed';
+    let state = mount(plugin);
+    state.updateScope(scope);
+    state.updateAutoDetect(false);
+    state.updateTargets([client]);
+    state.toggleInstall();
+    assert.equal(state.pinnedSourceSelected.value, true);
+    plugin.distributions[0]!.releases[0]!.blocking_clients.push(client);
+    await nextTick();
+    assert.equal(state.autoDetect.value, false);
+    assert.deepEqual(state.targets.value, [client]);
+    assert.equal(state.pinnedSourceSelected.value, false);
+    assert.equal(state.availability.value, undefined);
+    assert.equal(unref(state.pinnedSourceCommands), undefined);
+    // A subsequent UI edit saves the declined intent again through selectPackage.
+    state.toggleInstall();
+    state.toggleInstall();
+    await nextTick();
+    const preferences = useInstallPreferencesStore();
+    assert.deepEqual(preferences.package.targetIds, [client]);
+    assert.equal(preferences.package.autoDetect, false);
+    assert.equal(preferences.package.scope, scope);
+    state.stop();
+    state = mount(plugin);
+    assert.equal(state.scope.value, scope);
+    assert.equal(state.autoDetect.value, false);
+    assert.deepEqual(state.targets.value, [client]);
+    assert.equal(state.installExpanded.value, true);
+    assert.equal(state.availability.value, undefined);
+    assert.equal(state.resolution.value.distribution, undefined);
+    assert.equal(unref(state.pinnedSourceCommands), undefined);
+    const replacement = scope === 'user' ? 'cursor' : 'codex';
+    state.updateTargets([client, replacement]);
+    assert.deepEqual(state.targets.value, [replacement], 'The picker includes the retained checked option');
+    assert.equal(state.scope.value, scope);
+    assert.equal(state.autoDetect.value, false);
+    assert.equal(unref(state.availability)?.kind, 'signed');
+    state.stop();
+  });
+}

@@ -13,7 +13,7 @@ import type { RegistryDiagnostic, RegistryPlugin } from '~/types/registry';
 import { githubSourceUrl, reachableTargetPolicies, vendorInstallSource } from '~/utils/registry';
 import { authenticationIndicator } from '~/utils/authentication';
 import { pluginCommands } from '~/utils/commands';
-import { projectCatalogCommands, pinnedPiProjectCommands } from '~/utils/projectCatalogSource';
+import { projectCatalogCommands } from '~/utils/projectCatalogSource';
 import { pluginBenefit } from '~/data/catalogCuration';
 import { pluginTargetDescription } from '~/utils/pluginTargetDescription';
 const { t, locale, n } = useI18n();
@@ -36,10 +36,11 @@ const {
   targetDistributions,
   targetAvailability,
   guidedWebSelected,
-  pinnedPiSource,
-  pinnedPiSelected,
-  pinnedPiReleaseSource,
-  pinnedPiReleaseComponents,
+  pinnedSourceCommands,
+  pinnedRepairLimitation,
+  pinnedSourceSelected,
+  pinnedReleaseSource,
+  pinnedReleaseComponents,
   projectAvailable,
   projectAutomatic,
   updateTargets,
@@ -88,7 +89,7 @@ const canChooseInstall = computed(
 const canInstall = computed(
   () =>
     (scope.value !== 'project' || !autoDetect.value || Boolean(projectAutomatic.value?.resolution.distribution)) &&
-    ((pinnedPiSelected.value && current.value && props.plugin.installable) ||
+    ((pinnedSourceSelected.value && current.value && props.plugin.installable) ||
       (isDiscovered.value
         ? props.plugin.installable &&
           props.plugin.discovery?.availability !== 'unavailable' &&
@@ -98,8 +99,8 @@ const canInstall = computed(
 );
 const command = computed(() =>
   canInstall.value
-    ? (pinnedPiSelected.value
-        ? pinnedPiProjectCommands(props.plugin)
+    ? (pinnedSourceSelected.value
+        ? pinnedSourceCommands.value!
         : scope.value === 'project'
           ? projectCatalogCommands(props.plugin, autoDetect.value ? undefined : canonicalInstallTargets(targets.value))
           : pluginCommands(props.plugin, autoDetect.value ? undefined : cliInstallTargets(targets.value))
@@ -129,7 +130,6 @@ const targetOptions = computed(() =>
     // Keep invalid explicitly saved selections visible for recovery, but an
     // auto-detected project must never make a stale Cursor placeholder selectable.
     disabled: !targetAvailability.value.get(client.id) &&
-      !(client.id === 'pi' && pinnedPiSource.value && current.value) &&
       (autoDetect.value || !targets.value.includes(client.id)),
     description: (() => {
       const hint = pluginTargetDescription(props.plugin, client, {
@@ -161,10 +161,10 @@ const repositoryStars = computed(() =>
     maximumFractionDigits: 1,
   }).format(props.plugin.discovery?.stars ?? 0),
 );
-const assessmentSource = computed(() => pinnedPiReleaseSource.value ?? props.plugin.source);
+const assessmentSource = computed(() => pinnedReleaseSource.value ?? props.plugin.source);
 const assessedRevisionMatches = computed(() => {
-  if (!pinnedPiSelected.value) return true;
-  const selected = pinnedPiReleaseSource.value;
+  if (!pinnedSourceSelected.value) return true;
+  const selected = pinnedReleaseSource.value;
   const assessed = props.plugin.source;
   return Boolean(selected &&
     selected.repository === assessed.repository &&
@@ -173,7 +173,7 @@ const assessedRevisionMatches = computed(() => {
     selected.tree_sha256 === assessed.tree_sha256);
 });
 const provenanceURL = computed(() => {
-  const source = pinnedPiReleaseSource.value ?? selectedDistribution.value?.source ?? props.plugin.source;
+  const source = pinnedReleaseSource.value ?? selectedDistribution.value?.source ?? props.plugin.source;
   if (!source?.revision) return '';
   const suffix = source.path ? `/${source.path}` : '';
   return `https://github.com/${source.repository}/tree/${source.revision}${suffix}`;
@@ -282,7 +282,7 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
         :details-to="securityDetailURL"
       />
       <SkillSpectorAssessment
-        :applicable="(pinnedPiReleaseComponents ?? plugin.components).includes('skills')"
+        :applicable="(pinnedReleaseComponents ?? plugin.components).includes('skills')"
         :subject="{
           kind: 'plugin',
           repository: assessmentSource.repository,
@@ -413,8 +413,11 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
               @update:auto-selected="updateAutoDetect"
               @update:model-value="updateTargets"
             />
-            <p v-if="pinnedPiSelected && canInstall" class="plugin-card__author" role="status">
-              {{ t('registryUi.install.piPinnedProjectSource') }}
+            <p v-if="pinnedSourceSelected && canInstall" class="plugin-card__author" role="status">
+              {{ t('registryUi.install.pinnedCatalogSource') }}
+              <template v-if="pinnedRepairLimitation">
+                {{ t(pinnedRepairLimitation.key, pinnedRepairLimitation.params) }}
+              </template>
               <a :href="provenanceURL" target="_blank" rel="noreferrer">
                 {{ t('registryUi.card.viewSource') }}
               </a>

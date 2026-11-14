@@ -8,7 +8,7 @@ import {
 } from '~/data/installTargets';
 import type { RegistryDiagnostic, RegistryPlugin } from '~/types/registry';
 import { pluginCommands } from '~/utils/commands';
-import { projectCatalogCommands, pinnedPiProjectCommands } from '~/utils/projectCatalogSource';
+import { projectCatalogCommands } from '~/utils/projectCatalogSource';
 import { isFullyRetired } from '~/utils/filter';
 import { vendorInstallSource } from '~/utils/registry';
 import { pluginTargetDescription } from '~/utils/pluginTargetDescription';
@@ -27,9 +27,10 @@ const {
   targetDistributions,
   targetAvailability,
   guidedWebSelected,
-  pinnedPiSource,
-  pinnedPiSelected,
-  pinnedPiReleaseSource,
+  pinnedSourceCommands,
+  pinnedRepairLimitation,
+  pinnedSourceSelected,
+  pinnedReleaseSource,
   projectAvailable,
   projectAutomatic,
   updateTargets,
@@ -54,7 +55,6 @@ const targetOptions = computed(() =>
     // Keep invalid explicitly saved selections visible for recovery, but an
     // auto-detected project must never make a stale Cursor placeholder selectable.
     disabled: !targetAvailability.value.get(client.id) &&
-      !(client.id === 'pi' && pinnedPiSource.value && current.value) &&
       (autoDetect.value || !targets.value.includes(client.id)),
     description: (() => {
       const hint = pluginTargetDescription(props.plugin, client, {
@@ -79,8 +79,8 @@ const commands = computed(() =>
   props.plugin.discovery?.availability !== 'unavailable' &&
   canUseSource.value &&
   (autoDetect.value || (targets.value.length > 0 && hasCompleteSource.value))
-    ? (pinnedPiSelected.value
-        ? pinnedPiProjectCommands(props.plugin)
+    ? (pinnedSourceSelected.value
+        ? pinnedSourceCommands.value!
         : scope.value === 'project'
           ? projectCatalogCommands(props.plugin, autoDetect.value ? undefined : canonicalInstallTargets(targets.value))
           : pluginCommands(props.plugin, autoDetect.value ? undefined : cliInstallTargets(targets.value),
@@ -109,9 +109,9 @@ const expectedSource = computed(() =>
 const expectedSourceLabel = computed(() =>
   expectedSource.value ? t(`registryUi.distribution.${expectedSource.value.kind}`) : '',
 );
-const hasCompleteSource = computed(() => Boolean(expectedSource.value || pinnedPiSelected.value || guidedWebSelected.value));
-const pinnedPiProvenanceURL = computed(() => {
-  const source = pinnedPiReleaseSource.value;
+const hasCompleteSource = computed(() => Boolean(expectedSource.value || pinnedSourceSelected.value || guidedWebSelected.value));
+const pinnedProvenanceURL = computed(() => {
+  const source = pinnedReleaseSource.value;
   if (!source?.revision) return '';
   const path = source.path ? `/${source.path.split('/').map(encodeURIComponent).join('/')}` : '';
   return `https://github.com/${source.repository}/tree/${source.revision}${path}`;
@@ -213,9 +213,12 @@ const vendorInstall = computed(() =>
             @update:model-value="updateTargets"
           />
         </div>
-        <p v-if="pinnedPiSelected && commands" class="install-panel__notice" role="status">
-          {{ t('registryUi.install.piPinnedProjectSource') }}
-          <a :href="pinnedPiProvenanceURL" target="_blank" rel="noreferrer">
+        <p v-if="pinnedSourceSelected && commands" class="install-panel__notice" role="status">
+          {{ t('registryUi.install.pinnedCatalogSource') }}
+          <template v-if="pinnedRepairLimitation">
+            {{ t(pinnedRepairLimitation.key, pinnedRepairLimitation.params) }}
+          </template>
+          <a :href="pinnedProvenanceURL" target="_blank" rel="noreferrer">
             {{ t('registryUi.install.viewPackageSource') }}
           </a>
         </p>
@@ -250,7 +253,7 @@ const vendorInstall = computed(() =>
         :command="commands.update"
       />
       <CommandSnippet
-        v-if="commands && !guidedWebOnly"
+        v-if="commands && !guidedWebOnly && !pinnedRepairLimitation"
         :label="t('registryUi.install.repair')"
         kind="repair"
         :command="commands.repair"

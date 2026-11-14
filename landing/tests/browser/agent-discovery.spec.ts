@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { publishedLocales } from '../../data/i18n';
 import { localizedPath } from '../../utils/localizedRoutes';
+import { navigate, offline, projections, registryFixture } from './i18n-state.helpers';
 
 
 test('static site advertises readable agent indexes and matching catalogs', async ({ page }) => {
@@ -113,20 +114,30 @@ test('Skills overview links to the browser and remains usable on a small screen'
   await expect(page.locator('[data-initial-catalog]')).toHaveCount(0);
 });
 
-test('modern agent examples explain own-package prerequisites and link existing Skills support', async ({
+test('agents without an eligible catalog source explain own-package prerequisites and link Skills support', async ({
   page,
 }) => {
-  for (const agent of ['hermes', 'antigravity']) {
-    await page.goto(`agents/${agent}/`);
+  const errors = await offline(page);
+  const index = registryFixture();
+  index.plugins = [];
+  await projections(page, index);
+  for (const agent of ['hermes', 'antigravity', 'pi']) {
+    await navigate(page, `/agents/${agent}`, 'en');
     const example = page.locator('.agent-page__install');
-    await expect(example.locator('code')).toContainText(`add ./my-plugin --target ${agent}`);
+    const snippet = example.locator('.command-snippet--add');
+    const command = `npx -y universal-agent-plugins add ./my-plugin --target ${agent}`;
+    await expect(snippet).toHaveCount(1);
+    await expect(snippet.locator('code')).toHaveText(command);
     await expect(example).toContainText(
       'First create a compatible Agent Plugins package at ./my-plugin.',
     );
     await expect(example).toContainText('There is no eligible signed catalog example for this agent here');
+    await snippet.getByRole('button', { name: 'Copy command', exact: true }).click();
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(command);
     await expect(example.getByRole('link', { name: 'Install individual Skills' })).toHaveAttribute(
       'href',
       /\/agent-skills\//,
     );
   }
+  expect(errors).toEqual([]);
 });

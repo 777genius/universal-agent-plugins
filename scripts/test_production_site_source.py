@@ -32,6 +32,9 @@ class ProductionSourceTests(unittest.TestCase):
             def git(*args):
                 return source.git(root, *args)
             git('init', '-q')
+            # Keep Git maintenance within each command's lifetime before cleanup.
+            git('config', 'maintenance.autoDetach', 'false')
+            git('config', 'gc.autoDetach', 'false')
             git('config', 'user.name', 'Fixture')
             git('config', 'user.email', 'fixture@example.test')
             for name in ['website', 'scripts', 'landing/scripts', 'landing/public']:

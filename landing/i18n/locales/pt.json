@@ -831,7 +831,8 @@
         }
       },
       "noCompatibleSignedRelease": "Não há versão do catálogo para {agent} neste escopo.",
-      "piPinnedProjectSource": "Projeto: instale no Pi a partir do Git fixado em um SHA exato (não é um destino Pi assinado); a CLI verifica a compatibilidade.",
+      "pinnedCatalogSource": "Instale a partir deste código-fonte Git fixado. A CLI verifica primeiro os componentes, as dependências e o âmbito escolhido; ainda pode ser necessário configurar o agente.",
+      "antigravityRepairUnavailable": "CLI {version}: a reparação de MCP para Antigravity está temporariamente indisponível. A instalação continua disponível.",
       "guidedChatgptSetup": "Configuração guiada do ChatGPT Web; conclua a conexão dentro do ChatGPT.",
       "catalogReleasePending": "Este plugin ainda não foi publicado para {agent}.",
       "useComputerScope": "Para este plugin, escolha Este computador.",
@@ -1022,7 +1023,7 @@
       "directory": "Diretório de plugins",
       "version": "Versão {version}",
       "reviewedListingTooltip": "A ficha e os metadados foram revisados. Isso não certifica o código, o comportamento ou a segurança do plugin.",
-      "exactGitProjectSource": "Fonte Git exata para um projeto",
+      "exactGitSource": "Código-fonte Git fixado: a CLI verifica antes da instalação",
       "signedProjectRelease": "Versão assinada para um projeto"
     },
     "community": {
@@ -1061,6 +1062,7 @@
       "activation": "Ativação",
       "lifecycle": "Ciclo de vida",
       "useTheSameCliToInspectUpdateRepairSwitchSourceOrRemoveThePlugin": "Use a mesma CLI para inspecionar, atualizar, reparar, trocar a origem ou remover o plugin.",
+      "inspectUpdateRemove": "Use a CLI para inspecionar, atualizar ou remover o plugin.",
       "reviewedDirectory": "Diretório revisado",
       "exploreTheFullPluginDirectory": "Explore o diretório completo de plugins",
       "agentNotFound": "Agente não encontrado",
@@ -1073,10 +1075,8 @@
       "count": "{count} pacote revisado oferece suporte a este cliente. | {count} pacotes revisados oferecem suporte a este cliente.",
       "tryPlugin": "Experimente {source} ou use o nome curto revisado ou a fonte completa de outro plugin compatível.",
       "localPackageHint": "Substitua ./my-plugin pelo caminho de um pacote Agent Plugins 1.0 válido.",
-      "piSignedCount": "Pacotes com opções de instalação ou configuração para o Pi: {count}",
-      "piDirectSourceNote": "As opções disponíveis podem incluir versões assinadas ou fontes Git exatas para o usuário ou o projeto. A CLI verifica compatibilidade e configuração; uma fonte Git não é uma autorização assinada para o Pi.",
+      "sourceOptionsCount": "Pacotes com opções de instalação ou configuração para o {agent}: {count}",
       "packageExampleSourceHint": "Primeiro crie um pacote Agent Plugins compatível em ./my-plugin. Não há aqui um exemplo do catálogo assinado adequado para este agente; a CLI verifica os componentes, o escopo e os requisitos de configuração do pacote.",
-      "pinnedProjectHint": "Alguns plugins oferecem uma fonte Git exata para instalação no projeto. Isso não concede suporte assinado ao Pi no catálogo.",
       "skillsGuide": "Instalar Skills individuais"
     },
     "components": {
