@@ -333,6 +333,45 @@ class GlobalLifecycleContracts(unittest.TestCase):
                 read.assert_not_called()
             self.assertEqual(unknown.read_bytes(), b"foreign sentinel")
 
+    def test_uap_membership_refusal_reports_only_first_reason_and_member_hash_before_read(self):
+        for variant in ("unexpected-file", "missing-required", "unexpected-directory", "file-before-missing"):
+            with self.subTest(variant=variant), self.installed_state() as (journey, _value, path, _active, data):
+                original_state = path.read_bytes()
+                marker = data / ".agentplugins-data-owner.json"
+                reason = variant
+                selected = marker
+                prefix = "Global unknown UAP state member"
+                if variant in ("unexpected-file", "file-before-missing"):
+                    selected = journey.home / "a-private-unknown"
+                    selected.write_bytes(b"PRIVATE unmeasured body")
+                    (journey.home / "z-private-unknown").write_bytes(b"PRIVATE second unmeasured body")
+                    reason = "unexpected-file"
+                if variant in ("missing-required", "file-before-missing"):
+                    marker.unlink()
+                elif variant == "unexpected-directory":
+                    selected = journey.home / "private-unknown-directory"
+                    selected.mkdir()
+                    prefix = "Global unknown UAP directory"
+                expected = hashlib.sha256(b"relative-state-member-v1\0" +
+                    selected.relative_to(journey.home).as_posix().encode()).hexdigest()
+                with (mock.patch.object(os, "read", side_effect=AssertionError("membership refusal read a body")) as read,
+                      mock.patch.object(journey, "read", side_effect=AssertionError("membership refusal read state")) as state_read,
+                      self.assertRaisesRegex(ValueError, prefix) as caught):
+                    journey.frame()
+                read.assert_not_called()
+                state_read.assert_not_called()
+                message = str(caught.exception)
+                self.assertTrue(message.startswith(prefix + "; "))
+                self.assertLessEqual(len(message.encode("ascii")), 256)
+                self.assertEqual(json.loads(message.split("; ", 1)[1]),
+                                 dict(reason=reason, member_sha256=expected))
+                self.assertNotIn(str(journey.home), message)
+                self.assertNotIn(selected.name, message)
+                self.assertNotIn("PRIVATE", message)
+                self.assertEqual(path.read_bytes(), original_state)
+                self.assertEqual(journey.public_labels, [])
+                self.assertEqual(journey.native_labels, [])
+
     def test_native_skill_extra_member_is_refused_before_any_postpublic_read(self):
         with self.installed_state() as (journey, _value, _path, _active, _data):
             unknown = journey.profile / "skills" / case.SKILL / "foreign-private-token"

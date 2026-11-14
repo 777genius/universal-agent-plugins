@@ -27,9 +27,9 @@ concurrency:
 jobs:
   remaining-client-install:
     name: Full 30 ${{ matrix.kind }} / ${{ matrix.target }} (report even if blocked)
-    # Linux hosted runners do not delegate cgroup v2 for Kiro's required
-    # duplex MCP containment. Test the real native client on macOS instead
-    # of weakening that security guard or labelling a blocked Linux run green.
+    # Darwin refuses Kiro's automatic MCP duplex containment. This lane can
+    # measure the real native CLI and owned Prepared lifecycle, while keeping
+    # native activation incomplete until a contained host route is qualified.
     runs-on: ${{ matrix.target == 'kiro' && 'macos-15' || 'ubuntu-24.04' }}
     timeout-minutes: 80
     strategy:
@@ -43,6 +43,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        id: host-go
         with:
           go-version: '1.26.11'
           cache: false
@@ -262,6 +263,170 @@ jobs:
             LANG="${LANG:-C.UTF-8}" CI=true DO_NOT_TRACK=1 \
             python3 -c 'import subprocess,sys;sys.exit(subprocess.run([sys.argv[1],"--version"], timeout=30).returncode)' "$BIN" \
             | tee "$RUNNER_TEMP/vendor-proof/version.txt"
+      - name: Build stable Docker CLI for Kiro preparation
+        if: matrix.target == 'kiro' && matrix.kind == 'plugin'
+        env:
+          KIRO_GO_VERSION: ${{ steps.host-go.outputs.go-version }}
+          KIRO_NODE_BIN: ${{ steps.kiro-node.outputs.bin }}
+        shell: bash
+        run: |
+          python3 - <<'KIRO_DOCKER'
+          import hashlib, json, os, shutil, stat, sys, tempfile, time
+          from pathlib import Path
+          sys.path.insert(0, str(Path.cwd() / 'scripts'))
+          from native_client_research import run_probe
+
+          PIN = dict(repo='https://github.com/docker/cli.git', version='29.9.3',
+                     tag='5e262e04a65822eb2673011d866b422c8ce62595',
+                     commit='5457199aa57c45e990c59c89cab5f02b817238d7',
+                     tree='0b51e2783286962254ec5071e664e62646f5f4dc',
+                     homebrew='438d8fa5300704f11678319950d3d06163c5b966')
+          GIT = ['/usr/bin/git', '-c', 'core.hooksPath=/dev/null', '-c', 'core.autocrlf=false',
+                 '-c', 'credential.helper=', '-c', 'protocol.file.allow=never']
+
+          def require(value, message):
+              if not value:
+                  raise ValueError(message)
+
+          def identity(info):
+              return [info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_gid,
+                      info.st_nlink, info.st_size, info.st_mtime_ns, info.st_ctime_ns]
+
+          def executable(path):
+              before = path.lstat()
+              require(path.resolve(strict=True) == path and stat.S_ISREG(before.st_mode)
+                      and before.st_nlink == 1 and before.st_uid == os.getuid()
+                      and not before.st_mode & 0o022 and before.st_mode & 0o111
+                      and 0 < before.st_size <= 128 << 20, 'Docker build executable authority')
+              digest = hashlib.sha256()
+              with os.fdopen(os.open(path, os.O_RDONLY | os.O_NOFOLLOW), 'rb') as stream:
+                  require(identity(os.fstat(stream.fileno())) == identity(before), 'Docker build executable changed at open')
+                  remaining = before.st_size
+                  while remaining:
+                      chunk = stream.read(min(1 << 20, remaining))
+                      require(chunk, 'Docker build executable truncated')
+                      digest.update(chunk)
+                      remaining -= len(chunk)
+                  require(identity(os.fstat(stream.fileno())) == identity(before) and identity(path.lstat()) == identity(before),
+                          'Docker build executable changed during hash')
+              return dict(path=str(path), bytes=before.st_size, sha256=digest.hexdigest(),
+                          identity=identity(before))
+
+          def directory(path):
+              info = path.lstat()
+              require(path.resolve(strict=True) == path and stat.S_ISDIR(info.st_mode)
+                      and info.st_uid == os.getuid() and not info.st_mode & 0o022, 'Docker build directory authority')
+              return identity(info)[:6]
+
+          def capture(context, label, argv, cwd, environment, maximum):
+              remaining = context['deadline'] - time.monotonic()
+              require(remaining > 0, 'Docker build original deadline')
+              record, stdout, stderr = run_probe(argv, cwd, environment, context['proof'], label,
+                                                min(maximum, remaining), 64 << 10, memory_only=True)
+              context['commands'].append(record)
+              for name, body in ((record['stdout_file'], stdout), (record['stderr_file'], stderr)):
+                  with (context['proof'] / name).open('xb') as output:
+                      output.write(body)
+              require(record['exit'] == 0 and record['error'] is None, 'Docker source/build command refused: ' + label)
+              return stdout
+
+          def source_state(context, source, environment, phase):
+              require(phase in ('before', 'after'), 'unknown Docker source phase')
+              actual = capture(context, 'docker-' + phase + '-identity',
+                               GIT + ['rev-parse', 'refs/tags/v' + PIN['version'] + '^{tag}',
+                                      'HEAD^{commit}', 'HEAD^{tree}'], source, environment, 10)
+              expected = ''.join(PIN[key] + '\n' for key in ('tag', 'commit', 'tree')).encode()
+              require(actual == expected, 'Docker source ref/tree differs')
+              status = capture(context, 'docker-' + phase + '-clean',
+                               GIT + ['status', '--porcelain=v1', '--untracked-files=all', '--ignored=matching'],
+                               source, environment, 10)
+              require(status == b'', 'Docker source is not the original clean tree')
+
+          def setup_inputs():
+              require(sys.platform == 'darwin' and os.environ['RUNNER_OS'] == 'macOS'
+                      and os.environ['KIRO_GO_VERSION'] == '1.26.11', 'Docker build host/toolchain version')
+              arch = {'ARM64': ('arm64', 'arm64'), 'X64': ('x64', 'amd64')}.get(os.environ['RUNNER_ARCH'])
+              require(arch is not None, 'Docker build architecture')
+              runner = Path(os.environ['RUNNER_TEMP']).resolve(strict=True)
+              cache = Path(os.environ['RUNNER_TOOL_CACHE']).resolve(strict=True)
+              go = cache / 'go/1.26.11' / arch[0] / 'bin/go'
+              selected = shutil.which('go')
+              require(selected is not None and Path(selected).resolve(strict=True) == go,
+                      'unverified setup-go PATH executable')
+              node = os.environ['KIRO_NODE_BIN']
+              require(node and Path(node).is_absolute() and not any(c in node for c in '\r\n:'),
+                      'unverified setup-node bin')
+              return runner, go, arch[1], node, executable(go)
+
+          def output_cli(destination, arch, search):
+              binary, selected = destination / ('docker-darwin-' + arch), destination / 'docker'
+              require(selected.is_symlink() and os.readlink(selected) == binary.name,
+                      'Docker build output alias differs')
+              proof = executable(binary)
+              found = shutil.which('docker', path=search)
+              require(found is not None and Path(found).resolve(strict=True) == binary,
+                      'Docker build output is shadowed on audit PATH')
+              return dict(**proof, selected=str(selected))
+
+          def provision():
+              os.umask(0o077)
+              runner, go, arch, node, original_go = setup_inputs()
+              workspace = Path(tempfile.mkdtemp(prefix='kiro-docker-', dir=runner))
+              proof_root = runner / 'vendor-proof'
+              proof_root.mkdir(exist_ok=True)
+              directory(proof_root)
+              context = dict(deadline=time.monotonic() + 420, proof=proof_root, commands=[])
+              proof = dict(schema_version=1, kind='source-built-docker-cli', source=PIN,
+                           toolchain=original_go, version=PIN['version'], architecture=arch,
+                           status='failed', native_activation=False, daemon_started=False,
+                           commands=context['commands'])
+              try:
+                  build(context, proof, workspace, runner, go, arch, node, original_go)
+              finally:
+                  body = (json.dumps(proof, sort_keys=True) + '\n').encode()
+                  require(len(body) <= 64 << 10, 'Docker build receipt bound')
+                  with (proof_root / 'docker-runtime.json').open('xb') as output:
+                      output.write(body)
+
+          def build(context, proof, workspace, runner, go, arch, node, original_go):
+              source = workspace / 'gopath/src/github.com/docker/cli'
+              source.parent.mkdir(parents=True)
+              destination = runner / 'vendor-root/usr/bin'
+              destination.mkdir(parents=True, exist_ok=True)
+              parents = {path: directory(path) for path in (runner, runner / 'vendor-root', destination.parent, destination)}
+              for name in ('docker', 'docker-darwin-' + arch):
+                  require(not os.path.lexists(destination / name), 'Docker output must be absent')
+              for name in ('home', 'tmp', 'cache'):
+                  (workspace / name).mkdir()
+              environment = dict(PATH=str(go.parent) + ':/usr/bin:/bin:/usr/sbin:/sbin',
+                                 HOME=str(workspace / 'home'), TMPDIR=str(workspace / 'tmp'), LANG='C',
+                                 GOPATH=str(workspace / 'gopath'), GOCACHE=str(workspace / 'cache'),
+                                 GOENV='off', GOTOOLCHAIN='local', GOPROXY='off', GOSUMDB='off',
+                                 GO111MODULE='auto', GOFLAGS='-p=1', GOMAXPROCS='2', CGO_ENABLED='0',
+                                 GOOS='darwin', GOARCH=arch, GO_LINKMODE='static', TARGET=str(destination),
+                                 VERSION=PIN['version'], GITCOMMIT=PIN['commit'], SOURCE_DATE_EPOCH='1793741702',
+                                 GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL='/dev/null', GIT_TERMINAL_PROMPT='0')
+              version = capture(context, 'docker-go-version', [str(go), 'version'], workspace, environment, 10)
+              require(version == ('go version go1.26.11 darwin/' + arch + '\n').encode(), 'Docker actual Go version differs')
+              capture(context, 'docker-source-clone', GIT + ['clone', '--no-checkout', '--depth=1', '--single-branch',
+                      '--branch', 'v' + PIN['version'], PIN['repo'], str(source)], workspace, environment, 120)
+              capture(context, 'docker-source-checkout', GIT + ['checkout', '--detach', PIN['commit']], source, environment, 20)
+              source_state(context, source, environment, 'before')
+              capture(context, 'docker-source-build', ['/bin/sh', str(source / 'scripts/build/binary')],
+                      source, environment, 240)
+              source_state(context, source, environment, 'after')
+              require(executable(go) == original_go, 'Docker original Go executable changed')
+              require(all(directory(path) == original for path, original in parents.items()), 'Docker original output parents changed')
+              search = ':'.join((node, '/usr/local/sbin', '/usr/local/bin', '/usr/sbin', '/usr/bin',
+                                '/sbin', '/bin', str(destination), str(Path(os.environ['HOME']) / '.local/bin')))
+              result = output_cli(destination, arch, search)
+              require(len(context['commands']) == 8 and time.monotonic() < context['deadline'], 'Docker build completion bound')
+              proof.update(status='source-built', executable=result, source_unchanged=True,
+                           build_environment=environment, setup_go='b7ad1dad31e06c5925ef5d2fc7ad053ef454303e')
+
+          if __name__ == '__main__':
+              provision()
+          KIRO_DOCKER
       - name: Build CLI under test (not the already-published binary)
         run: go build -trimpath -ldflags='-X main.version=0.1.95' -o "$RUNNER_TEMP/agentplugins-audit" ./cli/cmd/agentplugins
       - name: Run real acquisitions and report every source and outcome

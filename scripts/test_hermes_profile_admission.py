@@ -3312,5 +3312,217 @@ class SourceObserverContracts(unittest.TestCase):
                 original(path, before, pin=(before.st_size, CASE["hashlib"].sha256(path.read_bytes()).hexdigest()), deadline=time.monotonic() - 1)
 
 
+class PublicInspectLockContracts(unittest.TestCase):
+    # Exact processlock record bytes from the real public Cobra inspect causal
+    # replay (Go log SHA256 6551fead920e329e3162e621ab020e55c84d3df20686ad9822b2dd849cbb5915).
+    original = b'{"pid":734,"acquired_at":"2000-01-01T00:00:00Z"}\n'
+    refreshed = b'{"pid":734,"acquired_at":"2026-11-14T09:42:17.272426987Z"}\n'
+
+    def fixture(self, temporary, scope="a"):
+        outer = Path(temporary).resolve() / "outer"
+        for name in ("a", "b"):
+            project = outer / ("public-" + name)
+            for path in (project / ".uap/plugin-data/owned", project / ".hermes/uap-session"):
+                path.mkdir(parents=True, mode=0o700)
+            (project / ".uap").chmod(0o700)
+            (project / ".uap/state-v2.json").write_bytes(b"original state")
+            (project / "foreign.txt").write_bytes(b"original foreign")
+            lock = project / ".uap/mutation.lock"
+            lock.write_bytes(self.original); lock.chmod(0o600)
+        project = outer / ("public-" + scope)
+        return outer, project, project / ".uap/mutation.lock"
+
+    def command(self, outer, scope, effect):
+        import ast
+        import time
+        # Execute the actual nested command through its delta guard. Inert
+        # ports replace only runtime/protocol execution; filesystem captures,
+        # the new held authority and the existing allowlist remain real.
+        source = Path(CASE["__file__"]).read_bytes()
+        owner = next(node for node in ast.parse(source).body if isinstance(node, ast.FunctionDef) and node.name == "observe_public")
+        command = next(node for node in owner.body if isinstance(node, ast.FunctionDef) and node.name == "command")
+        stop = next(index for index, node in enumerate(command.body) if isinstance(node, ast.Expr)
+                    and isinstance(node.value, ast.Call) and any(isinstance(arg, ast.Constant)
+                    and arg.value == "public action changed an unselected or unmeasured path" for arg in node.value.args))
+        command.body = command.body[:stop + 1] + [ast.Return(value=ast.Name(id="delta", ctx=ast.Load()))]
+        command.body[0] = ast.Global(names=command.body[0].names)
+        projects = {key: outer / ("public-" + key) for key in ("a", "b")}
+        proofs = {key: {"data": path / ".uap/plugin-data/owned"} for key, path in projects.items()}
+        current = CASE["inventory"](outer)
+        def snapshot(): return CASE["inventory"](outer), proofs
+        calls = []
+        def bounded(*args, **kwargs):
+            calls.append(args[0]); effect(); return b"{}"
+        namespace = dict(CASE, current=current, proofs=proofs, snapshot=snapshot, outer=outer,
+                         projects=projects, pins={"uap": {"path": "inert-uap"}}, deadline=time.monotonic() + 60,
+                         evidence=outer.parent, env={}, born={}, nonce="inert", bounded=bounded,
+                         public_runtime_pins=lambda *args, **kwargs: None, public_continuity=lambda *args, **kwargs: None,
+                         public_stdio_events=lambda *args: [], probes={key: SimpleNamespace(methods=lambda: []) for key in projects})
+        exec(compile(ast.fix_missing_locations(ast.Module(body=[command], type_ignores=[])), CASE["__file__"], "exec"), namespace)
+        return namespace["command"], calls
+
+    def test_actual_control_writer_refresh_is_scoped_to_existing_inspect_calls(self):
+        for scope in ("a", "b"):
+            for action in ("inspect", "native", "wrong-label", "wrong-args", "bad-record", "extra-state", "extra-lock-prefix", "extra-sibling"):
+                with self.subTest(scope=scope, action=action), tempfile.TemporaryDirectory() as temporary:
+                    outer, project, lock = self.fixture(temporary, scope)
+                    original = lock.stat()
+                    def effect():
+                        lock.write_bytes(self.refreshed)
+                        if action == "bad-record": lock.write_bytes(self.refreshed.replace(b"734", b"true"))
+                        if action == "extra-state": (project / ".uap/state-v2.json").write_bytes(b"changed state")
+                        if action == "extra-lock-prefix": (project / ".uap/mutation.lock-extra").write_bytes(b"unowned sibling")
+                        if action == "extra-sibling": (outer / ("public-b" if scope == "a" else "public-a") / "foreign.txt").write_bytes(b"changed foreign")
+                    command, calls = self.command(outer, scope, effect)
+                    label = "public-run-" + scope if action != "wrong-label" else "public-http-" + scope
+                    args = ["run", "--inspect", "--confirm-client-start"] if action != "wrong-args" else ["run"]
+                    with mock.patch.dict(os.environ, HERMES_BIN="inert-hermes"):
+                        invoke = lambda: command(label, scope, args, inspect=action != "native", native=action == "native")
+                        if action == "inspect":
+                            delta = invoke()
+                            self.assertEqual(set(delta), {lock.relative_to(outer).as_posix()})
+                            self.assertTrue(os.path.samestat(original, lock.stat()))
+                        else:
+                            with self.assertRaisesRegex(RuntimeError, "control role|control lock metadata|unselected or unmeasured"):
+                                invoke()
+                    self.assertEqual(len(calls), 0 if action in {"wrong-label", "wrong-args"} else 1)
+
+    def test_control_record_is_exact_canonical_writer_data(self):
+        values = [self.original, self.refreshed,
+                  b'{"pid":1,"acquired_at":"2024-02-29T23:59:59.1Z"}\n']
+        for body in values: CASE["public_lock_record"](body)
+        bad = [b"{}", b"[]", self.original + b"\n", self.original.rstrip(b"\n"),
+               self.original.replace(b"734", b"true"), self.original.replace(b"734", b"734.0"),
+               self.original.replace(b"734", b"0"), self.original.replace(b"734", b"4294967296"),
+               self.original.replace(b'"pid":734,', b'"pid":734,"pid":734,'),
+               self.original.replace(b'"pid":734,', b'"pid":734,"extra":0,'),
+               b'{"acquired_at":"2000-01-01T00:00:00Z","pid":734}\n',
+               self.original.replace(b":734", b": 734"),
+               self.original.replace(b"2000-01-01", b"2001-02-29"),
+               self.original.replace(b"00:00:00", b"24:00:00"),
+               self.original.replace(b"00:00:00", b"00:00:60"),
+               self.original.replace(b"Z", b"+00:00"),
+               self.original.replace(b"Z", b".0Z"), self.original.replace(b"Z", b".10Z"),
+               self.original.replace(b"Z", b".1234567891Z"), b"x" * 257]
+        for body in bad:
+            with self.subTest(body=body), self.assertRaises((RuntimeError, ValueError)):
+                CASE["public_lock_record"](body)
+
+    def test_preimage_replacement_and_aliases_refuse_before_body_read(self):
+        for role in ("lock", "parent", "project", "outer", "hardlink", "symlink", "missing", "metadata-row"):
+            with self.subTest(role=role), tempfile.TemporaryDirectory() as temporary:
+                outer, project, lock = self.fixture(temporary)
+                before = CASE["inventory"](outer)
+                if role == "missing": lock.unlink()
+                elif role == "metadata-row": before[lock.relative_to(outer).as_posix()]["bytes"] = True
+                elif role == "hardlink": os.link(lock, outer.parent / "second-lock-name")
+                elif role == "symlink":
+                    target = outer.parent / "original-lock"; lock.rename(target)
+                    try: lock.symlink_to(target)
+                    except OSError as error:
+                        if os.name != "nt" or getattr(error, "winerror", None) != 1314: raise
+                        # An unprivileged Windows host cannot author this link.
+                        self.assertFalse(lock.exists()); continue
+                else:
+                    path = {"lock": lock, "parent": lock.parent, "project": project, "outer": outer}[role]
+                    moved = outer.parent / ("original-" + role); path.rename(moved)
+                    if role == "lock": path.write_bytes(self.original); path.chmod(0o600)
+                    else:
+                        path.mkdir(mode=0o700)
+                        for child in moved.iterdir(): child.rename(path / child.name)
+                with mock.patch.object(os, "fdopen", side_effect=AssertionError("unowned control body read")), \
+                        self.assertRaises((RuntimeError, OSError)):
+                    with CASE["public_inspect_lock"](outer, project, before, lambda: (CASE["inventory"](outer), {})):
+                        self.fail("changed preimage accepted")
+
+    def test_original_handles_refuse_replacement_before_postimage_read(self):
+        roles = ("lock", "hardlink", "mode") + (() if os.name == "nt" else ("parent", "project", "outer"))
+        for role in roles:
+            with self.subTest(role=role), tempfile.TemporaryDirectory() as temporary:
+                outer, project, lock = self.fixture(temporary)
+                before = CASE["inventory"](outer)
+                snapshot = mock.Mock(side_effect=lambda: (CASE["inventory"](outer), {}))
+                with CASE["public_inspect_lock"](outer, project, before, snapshot) as finish:
+                    if role == "hardlink": os.link(lock, outer.parent / "second-lock-name")
+                    elif role == "mode": lock.chmod(0o400)
+                    else:
+                        path = {"lock": lock, "parent": lock.parent, "project": project, "outer": outer}[role]
+                        moved = outer.parent / ("original-" + role); path.rename(moved)
+                        if role == "lock": path.write_bytes(self.original); path.chmod(0o600)
+                        else:
+                            path.mkdir(mode=0o700)
+                            for child in moved.iterdir(): child.rename(path / child.name)
+                    with mock.patch.object(os, "fdopen", side_effect=AssertionError("replacement postimage read")), \
+                            self.assertRaisesRegex(RuntimeError, "original (parent|lock) changed"):
+                        finish()
+                    snapshot.assert_not_called()
+                if role == "mode": lock.chmod(0o600)
+
+    def test_postimage_hash_and_final_named_held_fences_are_mandatory(self):
+        for effect in ("hash", "typed-row", "after-read", "after-snapshot", "replacement"):
+            with self.subTest(effect=effect), tempfile.TemporaryDirectory() as temporary:
+                outer, project, lock = self.fixture(temporary)
+                before = CASE["inventory"](outer)
+                def snapshot():
+                    if effect == "after-read": lock.write_bytes(self.original)
+                    image = CASE["inventory"](outer)
+                    row = image[lock.relative_to(outer).as_posix()]
+                    if effect == "hash": row["sha256"] = "0" * 64
+                    elif effect == "typed-row": row["bytes"] = True
+                    elif effect == "after-snapshot": lock.write_bytes(self.original)
+                    elif effect == "replacement":
+                        lock.rename(outer.parent / "original-lock")
+                        lock.write_bytes(self.refreshed); lock.chmod(0o600)
+                    return image, {}
+                with CASE["public_inspect_lock"](outer, project, before, snapshot) as finish:
+                    lock.write_bytes(self.refreshed)
+                    with self.assertRaisesRegex(RuntimeError, "postimage differs|original lock changed"):
+                        finish()
+
+    def test_control_identity_retains_all_nonvolatile_metadata(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            _, _, lock = self.fixture(temporary)
+            info = lock.stat()
+            values = {name: getattr(info, name) for name in CASE["STABLE_FIELDS"]}
+            values.update(st_birthtime_ns=123456789, st_birthtime=0.123456789,
+                          st_file_attributes=32, st_reparse_tag=0)
+            original = SimpleNamespace(**values)
+            for field in ("st_dev", "st_ino", "st_mode", "st_nlink", "st_uid", "st_gid",
+                          "st_birthtime_ns", "st_birthtime", "st_file_attributes", "st_reparse_tag"):
+                changed = SimpleNamespace(**{**values, field: values[field] + 1})
+                with self.subTest(field=field):
+                    try: observed = CASE["public_lock_identity"](changed)
+                    except ValueError: continue
+                    self.assertNotEqual(CASE["public_lock_identity"](original), observed)
+
+    def test_read_and_child_failure_preserve_the_exception_and_close_original_handles(self):
+        for effect in ("read-change", "child-failure"):
+            with self.subTest(effect=effect), tempfile.TemporaryDirectory() as temporary:
+                outer, project, lock = self.fixture(temporary)
+                before = CASE["inventory"](outer)
+                observed, actual_stat, actual_open = set(), os.fstat, os.fdopen
+                def fstat(fd):
+                    observed.add(fd); return actual_stat(fd)
+                @CASE["contextmanager"]
+                def fdopen(*args, **kwargs):
+                    with actual_open(*args, **kwargs) as stream:
+                        def read(limit):
+                            body = stream.read(limit)
+                            lock.write_bytes(self.original)
+                            return body
+                        yield SimpleNamespace(read=read)
+                cause = RuntimeError("inert child failure")
+                with mock.patch.object(os, "fstat", side_effect=fstat), self.assertRaises(RuntimeError) as failed:
+                    with CASE["public_inspect_lock"](outer, project, before, lambda: self.fail("snapshot after refused capture")) as finish:
+                        if effect == "child-failure": raise cause
+                        lock.write_bytes(self.refreshed)
+                        with mock.patch.object(os, "fdopen", side_effect=fdopen): finish()
+                if effect == "child-failure": self.assertIs(failed.exception, cause)
+                else: self.assertIn("changed during capture", str(failed.exception))
+                self.assertEqual(len(observed), 4)
+                for descriptor in observed:
+                    with self.assertRaises(OSError): actual_stat(descriptor)
+
+
 if __name__ == "__main__":
     unittest.main()

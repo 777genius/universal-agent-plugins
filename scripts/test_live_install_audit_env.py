@@ -5379,6 +5379,235 @@ module.exports = {
                     self.assertEqual(child["PATH"], fixed)
                     self.assertNotIn("KIRO_NODE_BIN", child)
 
+    def docker_build_program(self):
+        workflow = (Path(__file__).resolve().parents[1] /
+                    ".github/workflows/live-install-remaining-clients.yml").read_text()
+        step = workflow.split("      - name: Build stable Docker CLI for Kiro preparation\n", 1)[1]
+        step = step.split("      - name:", 1)[0]
+        self.assertIn("if: matrix.target == 'kiro' && matrix.kind == 'plugin'", step)
+        source = textwrap.dedent(step.split("python3 - <<'KIRO_DOCKER'\n", 1)[1]
+                                .split("\n          KIRO_DOCKER", 1)[0])
+        namespace = {"__name__": "inert_docker_acquisition"}
+        exec(compile(source, "workflow-kiro-docker", "exec"), namespace)
+        return namespace
+
+    def test_kiro_docker_setup_rejects_wrong_toolchain_without_any_process(self):
+        program = self.docker_build_program()
+        for variant in ("selected", "version", "architecture", "shadow", "mode", "missing"):
+            with self.subTest(variant=variant), TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                cache, runner = root / "cache", root / "run"
+                runner.mkdir()
+                go = cache / "go/1.26.11/arm64/bin/go"
+                go.parent.mkdir(parents=True)
+                go.write_bytes(b"inert fixture: must never execute")
+                go.chmod(0o700)
+                foreign = root / "foreign/go"
+                foreign.parent.mkdir()
+                foreign.write_bytes(go.read_bytes())
+                foreign.chmod(0o700)
+                environment = dict(RUNNER_OS="macOS", RUNNER_ARCH="ARM64", KIRO_GO_VERSION="1.26.11",
+                                   RUNNER_TEMP=str(runner), RUNNER_TOOL_CACHE=str(cache),
+                                   KIRO_NODE_BIN=str(root / "node/bin"), PATH=str(go.parent))
+                if variant == "version":
+                    environment["KIRO_GO_VERSION"] = "1.26.10"
+                elif variant == "architecture":
+                    environment["RUNNER_ARCH"] = "unselected"
+                elif variant == "shadow":
+                    environment["PATH"] = str(foreign.parent) + os.pathsep + str(go.parent)
+                elif variant == "mode":
+                    go.chmod(0o777)
+                elif variant == "missing":
+                    go.unlink()
+                with patch.dict(os.environ, environment, clear=True), patch.object(sys, "platform", "darwin"), \
+                        patch.dict(program, run_probe=lambda *args, **kwargs: self.fail("setup launched a process")):
+                    if variant == "selected":
+                        observed = program["setup_inputs"]()
+                        self.assertEqual(observed[:4], (runner, go, "arm64", environment["KIRO_NODE_BIN"]))
+                        self.assertEqual(observed[4]["bytes"], len(b"inert fixture: must never execute"))
+                    else:
+                        with self.assertRaises((ValueError, FileNotFoundError)):
+                            program["setup_inputs"]()
+                self.assertEqual(foreign.read_bytes(), b"inert fixture: must never execute")
+                self.assertEqual(list(runner.iterdir()), [])
+
+    def test_kiro_docker_source_ref_and_tree_use_actual_git_before_build(self):
+        program = self.docker_build_program()
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            source, logs = root / "source", root / "logs"
+            source.mkdir()
+            logs.mkdir()
+            environment = dict(PATH="/usr/bin:/bin", HOME=str(root), GIT_CONFIG_NOSYSTEM="1",
+                               GIT_CONFIG_GLOBAL="/dev/null", GIT_TERMINAL_PROMPT="0")
+            git = program["GIT"] + ["-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid"]
+            def command(*args):
+                return subprocess.run(git + list(args), cwd=source, env=environment,
+                                      check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout.strip().decode()
+            command("init", "-q")
+            (source / "file").write_text("original source\n")
+            (source / ".gitignore").write_text("ignored\n")
+            command("add", ".")
+            command("commit", "-qm", "inert source")
+            command("tag", "-am", "inert tag", "v29.9.3")
+            authority = dict(program["PIN"], tag=command("rev-parse", "refs/tags/v29.9.3"),
+                             commit=command("rev-parse", "HEAD"), tree=command("rev-parse", "HEAD^{tree}"))
+            for variant in ("original", "tag", "commit", "tree", "dirty", "ignored"):
+                with self.subTest(variant=variant):
+                    destination = logs / variant
+                    destination.mkdir()
+                    expected = dict(authority)
+                    if variant in ("tag", "commit", "tree"):
+                        expected[variant] = "0" * 40
+                    elif variant == "dirty":
+                        (source / "file").write_text("foreign change\n")
+                    elif variant == "ignored":
+                        (source / "ignored").write_text("not in the pinned tree\n")
+                    context = dict(proof=destination, deadline=program["time"].monotonic() + 10, commands=[])
+                    with patch.dict(program, PIN=expected):
+                        if variant == "original":
+                            program["source_state"](context, source, environment, "before")
+                        else:
+                            with self.assertRaisesRegex(ValueError, "source ref/tree|original clean tree"):
+                                program["source_state"](context, source, environment, "before")
+                    self.assertNotIn("docker-source-build", [row["probe"] for row in context["commands"]])
+                    (source / "file").write_text("original source\n")
+                    (source / "ignored").unlink(missing_ok=True)
+
+    def test_kiro_docker_output_requires_original_owned_selection(self):
+        program = self.docker_build_program()
+        for variant in ("owned", "alias", "shadow", "missing", "hardlink", "mode"):
+            with self.subTest(variant=variant), TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                target, foreign = root / "owned", root / "foreign"
+                target.mkdir()
+                foreign.mkdir()
+                binary, link = target / "docker-darwin-arm64", target / "docker"
+                binary.write_bytes(b"inert compiler output, never a native proof")
+                binary.chmod(0o700)
+                (foreign / "docker").write_bytes(binary.read_bytes())
+                (foreign / "docker").chmod(0o700)
+                link.symlink_to(binary.name)
+                search = str(target)
+                if variant == "alias":
+                    link.unlink()
+                    link.symlink_to(foreign / "docker")
+                elif variant == "shadow":
+                    search = str(foreign) + os.pathsep + search
+                elif variant == "missing":
+                    binary.unlink()
+                elif variant == "hardlink":
+                    os.link(binary, root / "additional-alias")
+                elif variant == "mode":
+                    binary.chmod(0o777)
+                if variant == "owned":
+                    result = program["output_cli"](target, "arm64", search)
+                    self.assertEqual(result["selected"], str(link))
+                    self.assertEqual(result["bytes"], len(b"inert compiler output, never a native proof"))
+                else:
+                    with self.assertRaises((ValueError, FileNotFoundError)):
+                        program["output_cli"](target, "arm64", search)
+                self.assertEqual((foreign / "docker").read_bytes(), b"inert compiler output, never a native proof")
+
+    def test_kiro_docker_parent_retains_failed_prefix_and_never_promotes_late_refusal(self):
+        import hashlib
+
+        program = self.docker_build_program()
+        labels = ["docker-go-version", "docker-source-clone", "docker-source-checkout",
+                  "docker-before-identity", "docker-before-clean", "docker-source-build",
+                  "docker-after-identity", "docker-after-clean"]
+        counts = {"built": 8, "version": 1, "build-failure": 6, "source-change": 7,
+                  "go-replaced": 8, "parent-replaced": 8, "missing-output": 8, "expired": 6}
+        for variant, count in counts.items():
+            with self.subTest(variant=variant), TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                runner, cache = root / "run", root / "cache"
+                runner.mkdir()
+                go = cache / "go/1.26.11/arm64/bin/go"
+                go.parent.mkdir(parents=True)
+                go.write_bytes(b"inert Go fixture: never executed")
+                go.chmod(0o700)
+                destination = runner / "vendor-root/usr/bin"
+                destination.mkdir(parents=True)
+                environment = dict(RUNNER_OS="macOS", RUNNER_ARCH="ARM64", KIRO_GO_VERSION="1.26.11",
+                                   RUNNER_TEMP=str(runner), RUNNER_TOOL_CACHE=str(cache), HOME=str(root),
+                                   KIRO_NODE_BIN=str(destination), PATH=str(go.parent), DOCKER_HOST="foreign")
+                seen, clock = [], [100.0]
+
+                def probe(argv, cwd, env, output, label, timeout, limit, *, memory_only):
+                    self.assertEqual(label, labels[len(seen)])
+                    self.assertTrue(memory_only)
+                    self.assertEqual(limit, 64 << 10)
+                    self.assertGreater(timeout, 0)
+                    self.assertNotIn("DOCKER_HOST", env)
+                    self.assertEqual(env["GOENV"], "off")
+                    self.assertEqual(env["GOTOOLCHAIN"], "local")
+                    self.assertEqual(env["GOPROXY"], "off")
+                    seen.append(label)
+                    stdout, stderr, code = b"", b"", 0
+                    if label == "docker-go-version":
+                        self.assertEqual(argv, [str(go), "version"])
+                        stdout = b"wrong version\n" if variant == "version" else b"go version go1.26.11 darwin/arm64\n"
+                    elif label == "docker-source-clone":
+                        Path(argv[-1]).mkdir(parents=True)
+                    elif label.endswith("identity"):
+                        stdout = "".join(program["PIN"][key] + "\n" for key in ("tag", "commit", "tree")).encode()
+                        if variant == "source-change" and label == "docker-after-identity":
+                            stdout = b"0" * 40 + stdout[40:]
+                    elif label == "docker-source-build":
+                        self.assertEqual(argv, ["/bin/sh", str(Path(cwd) / "scripts/build/binary")])
+                        if variant == "build-failure":
+                            code, stderr = 2, b"inert compiler refusal\n"
+                        elif variant != "missing-output":
+                            binary = destination / "docker-darwin-arm64"
+                            binary.write_bytes(b"inert Docker fixture: never executed")
+                            binary.chmod(0o700)
+                            (destination / "docker").symlink_to(binary.name)
+                        if variant == "go-replaced":
+                            go.rename(go.with_name("original-go"))
+                            go.write_bytes(b"inert Go fixture: never executed")
+                            go.chmod(0o700)
+                        elif variant == "parent-replaced":
+                            previous = destination.with_name("original-bin")
+                            destination.rename(previous)
+                            destination.mkdir()
+                            for child in previous.iterdir():
+                                child.rename(destination / child.name)
+                        elif variant == "expired":
+                            clock[0] += 421
+                    record = dict(probe=label, argv=argv, cwd=str(cwd), exit=code,
+                                  error=None, elapsed_seconds=0.001)
+                    for name, body in (("stdout", stdout), ("stderr", stderr)):
+                        record.update({name + "_file": label + "." + name + ".log",
+                                       name + "_bytes": len(body), name + "_sha256": hashlib.sha256(body).hexdigest()})
+                    return record, stdout, stderr
+
+                previous_umask = os.umask(0o077)
+                try:
+                    with patch.dict(os.environ, environment, clear=True), patch.object(sys, "platform", "darwin"), \
+                            patch.dict(program, run_probe=probe), patch.object(program["time"], "monotonic", side_effect=lambda: clock[0]):
+                        if variant == "built":
+                            program["provision"]()
+                        else:
+                            with self.assertRaises(ValueError):
+                                program["provision"]()
+                finally:
+                    os.umask(previous_umask)
+                receipt = json.loads((runner / "vendor-proof/docker-runtime.json").read_bytes())
+                self.assertEqual(seen, labels[:count])
+                self.assertEqual([row["probe"] for row in receipt["commands"]], seen)
+                self.assertEqual(receipt["status"], "source-built" if variant == "built" else "failed")
+                self.assertEqual(receipt["source"], program["PIN"])
+                self.assertIs(receipt["native_activation"], False)
+                self.assertIs(receipt["daemon_started"], False)
+                self.assertEqual("executable" in receipt, variant == "built")
+                self.assertEqual("source_unchanged" in receipt, variant == "built")
+                for row in receipt["commands"]:
+                    for name in ("stdout", "stderr"):
+                        body = (runner / "vendor-proof" / row[name + "_file"]).read_bytes()
+                        self.assertEqual(len(body), row[name + "_bytes"])
+                        self.assertEqual(hashlib.sha256(body).hexdigest(), row[name + "_sha256"])
+
     def test_vendor_bootstrap_requires_reviewed_bytes_and_preserves_runner_toolchain(self):
         workflow = (Path(__file__).resolve().parents[1] /
                     ".github/workflows/live-install-remaining-clients.yml").read_text()

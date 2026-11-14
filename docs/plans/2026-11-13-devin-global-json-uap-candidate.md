@@ -828,3 +828,35 @@ All 98 existing Devin Python contracts pass in 1.699 seconds, with log SHA-256
 `8cca6979df2b0ae1789f3e4e5b4dcda38afdf93f590c4716e7046946ef3f9e03`.
 The next genuine current-source Global capture must still establish every
 state, effect and native inventory join in the unchanged completion predicate.
+
+### Bounded first-membership refusal diagnostic
+
+The later `fe6f7d31e08b560395a19d33422ddd45f17a02cb` original, artifact
+`14108443010`, retains the same `Global unknown UAP state member` refusal and
+authored-source schema diagnostic. Its Global producer and complete dependency
+closure match the original `440` capture above. Neither original retains the
+rejected member, so a specific extra file or missing DATA marker remains
+unestablished. The schema correction alone does not prove that cause.
+
+`Journey.home_metadata` now appends one bounded diagnostic only after its
+existing closed-membership predicate has already failed. The file predicate
+reports the first lexical unexpected file, or otherwise the first missing
+required file. The later directory predicate reports the first unexpected
+directory. The message retains its existing prefix and contains only a fixed
+reason plus SHA-256 of `relative-state-member-v1\0` followed by the relative
+member name. It never includes an absolute or relative path, body or raw
+exception representation. Selection uses only the already captured metadata
+inventory; it performs no new filesystem operation or body read.
+
+The predicates, their evaluation order, the pre-install refusal, source and
+identity checks, complete state/receipt/DATA checks and lifecycle budgets are
+unchanged. The original source fails all four new diagnostic cases, while
+still refusing before any read. The corrected source passes those cases and
+all 99 Devin Python contracts in 1.722 seconds. The complete test log has
+SHA-256 `5006b6ccaece286652c2244165448d74145563aa41e655140c85d87e3c978db6`.
+The new cases cover unknown files, a missing required marker, an unknown
+directory and the original file-before-missing evaluation order, with actual
+filesystem members and both body-read entrypoints trapped. Existing tests
+remain intact. This is a refusal diagnostic, not native lifecycle acceptance;
+the next genuine original must still establish the unchanged completion
+predicate.

@@ -33,6 +33,10 @@ def sha(body):
     return hashlib.sha256(body).hexdigest()
 
 
+def membership_diagnostic(reason, names):
+    member = sha(b"relative-state-member-v1\0" + min(names).encode())
+    return json.dumps(dict(reason=reason, member_sha256=member), sort_keys=True, separators=(",", ":"))
+
 
 def auxiliary(name):
     return (name in base.BOOTSTRAP_DIRS or name in base.BOOTSTRAP_FIXED
@@ -514,14 +518,20 @@ class Journey:
         if not removed:
             allowed.update((active / name).relative_to(self.home).as_posix()
                            for name in set(self.source_bodies) | {NS + "/agentplugins", NS + "/metadata.json"})
-        base.require(files <= allowed and {"state-v2.json", "mutation.lock", marker} <= files,
-                     "Global unknown UAP state member")
+        if not (files <= allowed and {"state-v2.json", "mutation.lock", marker} <= files):
+            unexpected = files - allowed
+            base.require(False, "Global unknown UAP state member; " + membership_diagnostic(
+                "unexpected-file" if unexpected else "missing-required",
+                unexpected or {"state-v2.json", "mutation.lock", marker} - files))
         dirs = {"operations-v2", "plugin-data/.agentplugins-data-operations",
                 "managed", "managed/clients", "managed/clients/windsurf"}
         for name in allowed:
             dirs.update(parent.as_posix() for parent in Path(name).parents if str(parent) != ".")
-        base.require(all(name[len(prefix):] in dirs for name, info in inventory.items()
-                         if name.startswith(prefix) and len(info) == 5), "Global unknown UAP directory")
+        if not all(name[len(prefix):] in dirs for name, info in inventory.items()
+                   if name.startswith(prefix) and len(info) == 5):
+            base.require(False, "Global unknown UAP directory; " + membership_diagnostic(
+                "unexpected-directory", {name[len(prefix):] for name, info in inventory.items()
+                    if name.startswith(prefix) and len(info) == 5 and name[len(prefix):] not in dirs}))
         for name in files:
             info = inventory[prefix + name]
             mode = 0o700 if name.endswith("/agentplugins") or name.endswith("/lintai") else (

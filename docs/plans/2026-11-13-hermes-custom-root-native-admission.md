@@ -1807,3 +1807,55 @@ before hashing, and original root/cache-parent or membership replacement. The
 ledger grouping itself performs no additional read, stat or traversal. Genuine
 current-source bootstrap, repeat/restart and recovery remain unqualified until
 their complete native original is accepted under these unchanged guards.
+
+## 2026-11-14 — preserve the original public inspection control lock
+
+The three original bundled captures at source
+`440f0666dad9255c1667c86f95654f7d960ffeb6` reach `public-run-a` and retain the
+existing unmeasured-path refusal. Their single-member failure envelopes do not
+retain the changed member or native command streams. They therefore do not
+identify the historical changed path.
+
+A separate causal replay executes the real public Cobra `run --inspect
+--confirm-client-start --target hermes --scope project --project-root P` path
+with the existing Project composition and process lock. Only session execution
+ports are inert; no vendor process starts. The command succeeds and refreshes
+the original `P/.uap/mutation.lock` PID/UTC acquisition record. Its named and
+held identity remains unchanged, as do every other fixture member, mode and
+byte. The actual Go log has SHA-256
+`6551fead920e329e3162e621ab020e55c84d3df20686ad9822b2dd849cbb5915`.
+Replaying those exact old/new record bytes through the original Python
+inventory and inspect predicate reproduces the refusal for precisely that key.
+The replay is a control-lock oracle diagnosis, not Hermes native qualification.
+
+Only the existing `public-run-a` and `public-run-b` inspection calls now hold
+the original outer, Project and `.uap` directories and the original single-link
+lock across the child command. Before reading, the named and opened objects
+must join the original inventory. Complete mode, owner, link count, device,
+file identity and applicable birth/Windows attribute/reparse facts remain
+separately pinned in both stat domains. The existing no-follow directory/file
+openers remain responsible for platform handle admission.
+
+The lock body must be at most 256 bytes and exactly the existing writer's
+ordered compact JSON plus one LF: a positive integer PID below `2**32`, and a
+valid UTC RFC3339Nano acquisition timestamp with the writer's fractional-second
+spelling. Duplicate or extra keys, Boolean/numeric coercion, alternate spacing,
+offsets, invalid dates and extra data refuse. The same held readable descriptor
+captures the postimage before the ordinary whole-tree snapshot. Its original
+named/held authority and exact captured size/hash must still join afterward.
+Only then may that exact file key differ in the existing inspect predicate.
+File size/mtime/ctime may change with this record refresh; no sibling, state,
+receipt or entire `.uap` subtree is admitted by this rule. Direct native MCP
+commands receive no such allowance. Child and capture failures keep their
+original exception, and all held descriptors close.
+
+Inert contracts execute the actual nested command through its delta guard for
+both Projects, replay the recorded writer bytes, and preserve refusal for
+native-call lock writes, other labels/argv, malformed records, state or sibling
+changes, replacement and aliases before body reads, and post-capture drift.
+All 123 prior test methods remain unchanged. POSIX replacement tests exercise
+open original parent handles; Windows directory handles retain their existing
+no-share-delete policy, with no close/reopen workaround. Native execution,
+command counts, evidence schemas, deadlines, payload/profile limits and every
+qualification flag remain unchanged. Current complete native originals are
+still required for public lifecycle acceptance.

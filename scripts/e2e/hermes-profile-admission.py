@@ -2300,6 +2300,111 @@ def public_stdio_recipe(project, probe, nonce):
         "UAP_TEST_EVENTS": "${PLUGIN_DATA}/hermes-events.jsonl", "UAP_TEST_NONCE": nonce}}
 
 
+def public_lock_record(body):
+    require(type(body) is bytes and 0 < len(body) <= 256, "public control lock body bound")
+    value = public_json(body)
+    require(type(value) is dict and set(value) == {"pid", "acquired_at"}
+            and type(value["pid"]) is int and 0 < value["pid"] < 2**32
+            and type(value["acquired_at"]) is str and re.fullmatch(
+                r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-5][0-9](?:\.[0-9]{0,8}[1-9])?Z",
+                value["acquired_at"]), "public control lock metadata differs")
+    try:
+        time.strptime(value["acquired_at"][:19], "%Y-%m-%dT%H:%M:%S")
+    except ValueError as error:
+        raise RuntimeError("public control lock timestamp differs") from error
+    canonical = json.dumps({"pid": value["pid"], "acquired_at": value["acquired_at"]}, separators=(",", ":")).encode() + b"\n"
+    require(body == canonical, "public control lock encoding differs")
+
+
+def public_lock_identity(info):
+    if artifacts.WINDOWS:
+        artifacts.windows_identity(info)
+    # Only size/mtime/ctime can change when the existing processlock writer
+    # refreshes its record. Keep complete mode and owner in each stat domain.
+    return (info.st_dev, info.st_ino, info.st_mode, info.st_nlink, info.st_uid, info.st_gid,
+            getattr(info, "st_birthtime_ns", None), getattr(info, "st_birthtime", None),
+            getattr(info, "st_file_attributes", None), getattr(info, "st_reparse_tag", None))
+
+
+@contextmanager
+def public_inspect_lock(outer, project, before, snapshot):
+    require(project.parent == outer and project.name in {"public-a", "public-b"}, "public inspect project differs")
+    lock, directories = project / ".uap/mutation.lock", []
+    key = lock.relative_to(outer).as_posix()
+    with ExitStack() as handles:
+        parent = None
+        for path in (outer, project, lock.parent):
+            require(path.is_absolute() and path.resolve() == path, "public control parent alias")
+            named = path.lstat()
+            row = {"type": "directory", "device": named.st_dev, "inode": named.st_ino, "mode": stat.S_IMODE(named.st_mode)}
+            require(stat.S_ISDIR(named.st_mode) and public_same_record(before.get(path.relative_to(outer).as_posix()), row),
+                    "public control parent differs from original image")
+            descriptor = open_inventory_directory(path, parent)
+            handles.callback(os.close, descriptor)
+            held = os.fstat(descriptor)
+            check_inventory_directory(named, held, "public control parent changed at open")
+            directories.append((path, named, descriptor, held))
+            parent = None if artifacts.WINDOWS else descriptor
+        named = lock.lstat()
+        require(stat.S_ISREG(named.st_mode) and named.st_nlink == 1 and 0 < named.st_size <= 256
+                and (named.st_uid, named.st_gid) == (directories[-1][1].st_uid, directories[-1][1].st_gid),
+                "public control lock is not an original bounded ordinary file")
+        metadata = {"type": "file", "mode": stat.S_IMODE(named.st_mode), "device": named.st_dev,
+                    "inode": named.st_ino, "bytes": named.st_size}
+        expected = before.get(key)
+        require(type(expected) is dict and set(expected) == set(metadata) | {"sha256"}
+                and public_same_record({field: expected[field] for field in metadata}, metadata),
+                "public control lock differs from original image")
+        descriptor = (artifacts.open_member(lock) if artifacts.WINDOWS else
+                      os.open(lock.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent))
+        handles.callback(os.close, descriptor)
+        held = os.fstat(descriptor)
+        require(same_opened_capture(named, held) and (named.st_uid, named.st_gid) == (held.st_uid, held.st_gid),
+                "public control lock changed at open")
+
+        def original():
+            for path, previous, fd, opened in directories:
+                require(path.resolve() == path and public_lock_identity(path.lstat()) == public_lock_identity(previous)
+                        and public_lock_identity(os.fstat(fd)) == public_lock_identity(opened),
+                        "public control original parent changed")
+            current, opened = lock.lstat(), os.fstat(descriptor)
+            require(public_lock_identity(current) == public_lock_identity(named)
+                    and public_lock_identity(opened) == public_lock_identity(held)
+                    and same_opened_capture(current, opened), "public control original lock changed")
+            return current, opened
+
+        def capture():
+            current, opened = original()
+            require(0 < current.st_size <= 256, "public control lock body bound")
+            os.lseek(descriptor, 0, os.SEEK_SET)
+            with os.fdopen(os.dup(descriptor), "rb") as stream:
+                body = stream.read(257)
+            public_lock_record(body)
+            linked, final = original()
+            require(len(body) == current.st_size and stable_file(linked) == stable_file(current)
+                    and stable_file(final) == stable_file(opened), "public control lock changed during capture")
+            row = {"type": "file", "mode": stat.S_IMODE(current.st_mode), "device": current.st_dev,
+                   "inode": current.st_ino, "bytes": len(body), "sha256": hashlib.sha256(body).hexdigest()}
+            return row, current, opened
+
+        row, _, _ = capture()
+        require(public_same_record(before.get(key), row), "public control lock preimage differs")
+        finished = False
+
+        def finish():
+            nonlocal finished
+            require(not finished, "public control lock postimage already captured")
+            finished = True
+            row, current, opened = capture()
+            result = snapshot()
+            linked, final = original()
+            require(stable_file(linked) == stable_file(current) and stable_file(final) == stable_file(opened)
+                    and public_same_record(result[0].get(key), row), "public control lock postimage differs")
+            return result
+
+        yield finish
+
+
 def observe_public(probes):
     import hermes_yaml as yaml
     evidence, user = Path(os.environ["HERMES_NATIVE_EVIDENCE"]), Path(os.environ["HOME"])
@@ -2375,9 +2480,16 @@ def observe_public(probes):
         events_before = {key: public_stdio_events(proof["data"] / "hermes-events.jsonl", nonce) if proof else [] for key, proof in previous.items()}
         argv = [os.environ["HERMES_BIN"], *args] if native else [pins["uap"]["path"], *args, "--target", "hermes", "--scope", "project", "--project-root", str(project)]
         if not native and not inspect: argv += ["--yes", "--format", "json"]
-        output = bounded(argv, project, dict(env, HERMES_HOME=str(selected)) if native else env,
-                         evidence / label, timeout=min(90, deadline-time.monotonic()-5), expected_failure=expected_failure)
-        after, proofs = snapshot()
+        with ExitStack() as handles:
+            finish = snapshot
+            if inspect:
+                require(not native and label == "public-run-" + scope and scope in {"a", "b"}
+                        and args == ["run", "--inspect", "--confirm-client-start"] and not expected_failure and test is None,
+                        "public inspect control role differs")
+                finish = handles.enter_context(public_inspect_lock(outer, project, before, snapshot))
+            output = bounded(argv, project, dict(env, HERMES_HOME=str(selected)) if native else env,
+                             evidence / label, timeout=min(90, deadline-time.monotonic()-5), expected_failure=expected_failure)
+            after, proofs = finish()
         for key, proof in previous.items():
             if proof is not None and proofs[key] is not None:
                 public_continuity(proof, proofs[key], advance=key == scope and label == "public-update-a")
@@ -2390,7 +2502,9 @@ def observe_public(probes):
             if previous[scope]: permitted.append((previous[scope]["data"] / "hermes-events.jsonl").relative_to(outer).as_posix())
         else:
             permitted += [(project / ".uap").relative_to(outer).as_posix(), (project / ".hermes/skills" / name).relative_to(outer).as_posix(), "public-uap-state"]
-        require(all(any(path == prefix or path.startswith(prefix + "/") for prefix in permitted) for path in delta), "public action changed an unselected or unmeasured path")
+        control_lock = (project / ".uap/mutation.lock").relative_to(outer).as_posix() if inspect else None
+        require(all(path == control_lock or any(path == prefix or path.startswith(prefix + "/") for prefix in permitted)
+                    for path in delta), "public action changed an unselected or unmeasured path")
         other = "b" if scope == "a" else "a"
         require(profile_tree(before, projects[other].name) == profile_tree(after, projects[other].name), "public sibling changed")
         if not native and not inspect:
