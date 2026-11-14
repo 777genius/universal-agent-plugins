@@ -229,6 +229,19 @@ def agent_command(client, binary, prompt):
             "--no-session-persistence", prompt]
 
 
+def preflight_checkpoint(enabled, label):
+    """Public, fixed-name stage receipt only; never native stdout or credentials."""
+    if enabled:
+        if label not in {
+            "source-built", "disposable-git-ready", "pinned-vendor-ready",
+            "before-install-negative-ok", "uap-installed", "managed-wrapper-verified",
+            "selected-native-listed", "uap-removed", "after-remove-negative-ok",
+            "pin-and-foreign-state-verified",
+        }:
+            raise ValueError("unregistered preflight checkpoint")
+        print("credential-free-preflight-stage: " + label, flush=True)
+
+
 def run(client, output, expected, *, preflight_only=False):
     # No CI-host bypass, no local user profile, no unapproved vendor account.
     native.native.require_hosted("linux-amd64")
@@ -253,6 +266,7 @@ def run(client, output, expected, *, preflight_only=False):
         build_env = isolated_env(work, go=True)
         verify_clean_head(expected, build_env, private)
         installer, probe = source_build(work, build_env, private)
+        preflight_checkpoint(preflight_only, "source-built")
         env = isolated_env(work)
         for project in ("a", "b", "outside"):
             invoke("git-" + project, ["/usr/bin/git", "init", "--quiet", "--initial-branch=main"],
@@ -265,7 +279,9 @@ def run(client, output, expected, *, preflight_only=False):
                 "permissions": {"trustDirectories": [
                     str(work / "a"), str(work / "b"), str(work / "outside")]}
             })
+        preflight_checkpoint(preflight_only, "disposable-git-ready")
         binary, vendor_files, acquisition = acquire_vendor(client, work, env, private)
+        preflight_checkpoint(preflight_only, "pinned-vendor-ready")
         server = NAMES[client]
         nonce = secrets.token_hex(16)
         server_only = secrets.token_hex(16)
@@ -300,6 +316,7 @@ def run(client, output, expected, *, preflight_only=False):
         native_inventory(client, binary, project_b, env, private, "empty-b", server)
         native_inventory(client, binary, outside, env, private, "empty-outside", server)
 
+        preflight_checkpoint(preflight_only, "before-install-negative-ok")
         stdout, _ = invoke("uap-add-a", [
             installer, "add", source, "--no-save", "--scope", "project",
             "--project-root", project_a, "--target", client, "--format", "json",
@@ -307,8 +324,10 @@ def run(client, output, expected, *, preflight_only=False):
         result = json.loads(stdout)
         if result.get("command") != "add" or result.get("result") != "success":
             raise ValueError("UAP add returned no success receipt")
+        preflight_checkpoint(preflight_only, "uap-installed")
         identifier = installation_id(result, client)
         selected_root = installed_config(client, project_a, server, nonce, events, installer, probe)
+        preflight_checkpoint(preflight_only, "managed-wrapper-verified")
         if b_config.read_bytes() != before_b:
             raise ValueError("Project B changed after Project A install")
         permission_fixture(client, project_a, server)
@@ -316,6 +335,7 @@ def run(client, output, expected, *, preflight_only=False):
             invoke("cursor-enable-one", [binary, "mcp", "enable", server], project_a, env, private, 40)
         native_selected_inventory(binary, project_a, env, private, server)
 
+        preflight_checkpoint(preflight_only, "selected-native-listed")
         if preflight_only:
             # Source/ownership/native-listing proof ONLY. No model or MCP call
             # can be inferred from this lane, even if a client starts its
@@ -324,6 +344,7 @@ def run(client, output, expected, *, preflight_only=False):
                 installer, "remove", identifier, "--scope", "project",
                 "--project-root", project_a, "--target", client, "--format", "json",
             ], project_a, env, private, 80)
+            preflight_checkpoint(preflight_only, "uap-removed")
             after = json.loads(a_config.read_bytes())
             if after.get("mcpServers") != foreign["mcpServers"]:
                 raise ValueError("foreign Project A config changed on removal")
@@ -331,12 +352,14 @@ def run(client, output, expected, *, preflight_only=False):
                              "preflight-removed-a", server)
             native_inventory(client, binary, project_b, env, private,
                              "preflight-empty-b", server)
+            preflight_checkpoint(preflight_only, "after-remove-negative-ok")
             if (b_config.read_bytes() != before_b
                     or (work / "home" / "foreign-user-control").read_bytes()
                     != b"foreign-user-do-not-touch\n"):
                 raise ValueError("Project B or foreign user bytes changed")
             with native.Budget(180) as budget:
                 native.verify_files(vendor_files, budget)
+            preflight_checkpoint(preflight_only, "pin-and-foreign-state-verified")
             output.mkdir(mode=0o700, parents=True)
             emit(output / "source-only-preflight.json", {
                 "schema_version": 1, "client": client, "source_commit": expected,
