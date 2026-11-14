@@ -2408,6 +2408,12 @@ def public_windows_chain(value):
     return rows
 
 
+def public_windows_image_equal(actual, expected):
+    """Fail closed on Unicode casefold aliases that Windows may not identify."""
+    return actual == expected or (actual.isascii() and expected.isascii()
+                                  and actual.lower() == expected.lower())
+
+
 def public_windows_spawn_identity(entry, first, second, native_pid, native_process, images):
     original = public_windows_identity(native_process, native_pid)
     rows = public_windows_chain(first["facts"])
@@ -2417,7 +2423,7 @@ def public_windows_spawn_identity(entry, first, second, native_pid, native_proce
             "public Windows ledger and original process lineage differ")
     require(type(images) is list and len(images) == 4
             and all(type(image) is str and image and "\0" not in image for image in images)
-            and all(row["image"].casefold() == image.casefold() for row, image in zip(rows, images)),
+            and all(public_windows_image_equal(row["image"], image) for row, image in zip(rows, images)),
             "public Windows fixed process images differ")
     # psutil 7.2.2 psutil_FiletimeToUnixTime subtracts the epoch in uint64, then casts
     # to double before division. Preserve that exact two-step conversion.

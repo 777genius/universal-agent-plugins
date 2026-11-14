@@ -6038,6 +6038,13 @@ class ObserverBoundaryDiagnosticContracts(unittest.TestCase):
 class PublicWindowsLineageContracts(unittest.TestCase):
     epoch = 116444736000000000
 
+    def test_windows_image_join_rejects_unicode_casefold_aliases(self):
+        equal = CASE["public_windows_image_equal"]
+        self.assertTrue(equal("/OWNED/AGENTPLUGINS.EXE", "/owned/agentplugins.exe"))
+        self.assertTrue(equal("/owned/Straße", "/owned/Straße"))
+        self.assertFalse(equal("/owned/Straße", "/owned/STRASSE"))
+        self.assertFalse(equal("/owned/K", "/owned/K"))
+
     @classmethod
     def original(cls):
         return {"pid": 101, "created_100ns": cls.epoch + 800000000}
@@ -6058,7 +6065,7 @@ class PublicWindowsLineageContracts(unittest.TestCase):
         self.assertEqual(fixture.verify(entry, [], events, "win32"), entry)
         for effect in ("native-pid", "native-birth", "spawner", "spawner-birth", "child-birth", "parent",
                        "cycle", "same-birth", "newer-parent", "bool-pid", "bool-birth", "extra", "short", "long",
-                       "image", "foreign-python", "second", "probe", "no-original", "legacy"):
+                       "image", "unicode-fold", "foreign-python", "second", "probe", "no-original", "legacy"):
             with self.subTest(effect=effect):
                 changed, after, original = copy.deepcopy(entry), copy.deepcopy(events), self.original()
                 rows = after[0]["facts"]["processes"]
@@ -6078,6 +6085,9 @@ class PublicWindowsLineageContracts(unittest.TestCase):
                 elif effect == "short": rows.pop()
                 elif effect == "long": rows.append(copy.deepcopy(rows[-1]))
                 elif effect == "image": rows[1]["image"] += ".foreign"
+                elif effect == "unicode-fold":
+                    rows[2]["image"] = "/captured/Straße"
+                    kwargs["native_python"] = "/captured/STRASSE"
                 elif effect == "foreign-python": kwargs["native_python"] = "/foreign/python"
                 elif effect == "second": after[1]["facts"]["processes"][2]["image"] = "/foreign/python"
                 elif effect == "probe": rows[0]["pid"] = 203
@@ -6110,6 +6120,29 @@ class PublicWindowsLineageContracts(unittest.TestCase):
                 self.assertEqual(status["exit"], code)
                 self.assertEqual("process_identity" in status, not code)
                 if not code: self.assertEqual(status["process_identity"]["pid"], seen[0].pid)
+
+    def test_bounded_optional_identity_cannot_outlive_command_deadline(self):
+        import sys
+        original_clock = CASE["time"].monotonic
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            expired = [False]
+            def clock():
+                return original_clock() + (1000 if expired[0] else 0)
+            def observe(child):
+                self.assertEqual(child.returncode, 0)
+                expired[0] = True
+                return {"pid": child.pid, "created_100ns": self.original()["created_100ns"]}
+            command = [sys.executable, "-I", "-B", "-c", "print('owned')"]
+            output = root / "public-stdio-a"
+            with mock.patch.object(CASE["time"], "monotonic", side_effect=clock):
+                with self.assertRaisesRegex(RuntimeError, "native command failed"):
+                    CASE["bounded"](command, root, dict(os.environ), output, timeout=5,
+                                    process_identity=observe)
+            status = json.loads(output.with_suffix(".status.json").read_bytes())
+            self.assertTrue(expired[0])
+            self.assertEqual(status["error"], "command timeout")
+            self.assertNotIn("process_identity", status)
 
     def test_windows_original_callback_queries_same_handle_without_pid_open(self):
         import ctypes

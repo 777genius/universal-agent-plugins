@@ -74,10 +74,18 @@ def bounded(command, cwd, env, output, timeout=90, expected_failure=False, *, pr
             failure = "output bound"
         if any(thread.is_alive() for thread in threads):
             failure = "native command left inherited capture pipe open"
+        if failure is None and time.monotonic() >= deadline:
+            failure = "command timeout"
         if process_identity is not None and failure is None and child.returncode == 0 and not expected_failure:
-            # This is still the original Popen object/handle, never a PID lookup.
-            # Invoke only after the existing command and both streams have settled.
-            captured_identity = process_identity(child)
+            # Preserve the original Popen handle, but never admit late identity.
+            try:
+                captured_identity = process_identity(child)
+            except Exception:
+                failure = "process identity unavailable"
+            if time.monotonic() >= deadline:
+                failure = "command timeout"
+            if failure is not None:
+                captured_identity = None
     finally:
         for suffix, body in zip(("stdout", "stderr"), buffers):
             output.with_suffix("." + suffix).write_bytes(body)
