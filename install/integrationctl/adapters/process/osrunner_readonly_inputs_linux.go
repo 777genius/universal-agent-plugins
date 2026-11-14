@@ -49,7 +49,7 @@ func readonlyFacts(info os.FileInfo) (readonlyObjectFacts, error) {
 	if !ok || stat == nil || stat.Ino == 0 || stat.Nlink == 0 || stat.Size < 0 {
 		return readonlyObjectFacts{}, errors.New("readonly original metadata is unavailable")
 	}
-	return readonlyObjectFacts{Device: stat.Dev, Inode: stat.Ino, Links: stat.Nlink,
+	return readonlyObjectFacts{Device: stat.Dev, Inode: stat.Ino, Links: uint64(stat.Nlink),
 		Mode: stat.Mode, UID: stat.Uid, GID: stat.Gid, Size: stat.Size, Mtime: stat.Mtim, Ctime: stat.Ctim}, nil
 }
 

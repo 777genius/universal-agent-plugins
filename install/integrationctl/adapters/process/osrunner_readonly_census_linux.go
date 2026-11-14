@@ -93,7 +93,7 @@ func readonlyNamedFacts(parent *os.File, name string) (readonlyObjectFacts, erro
 	if err != nil {
 		return readonlyObjectFacts{}, err
 	}
-	return readonlyObjectFacts{Device: stat.Dev, Inode: stat.Ino, Links: stat.Nlink,
+	return readonlyObjectFacts{Device: stat.Dev, Inode: stat.Ino, Links: uint64(stat.Nlink),
 		Mode: stat.Mode, UID: stat.Uid, GID: stat.Gid, Size: stat.Size,
 		Mtime: syscall.Timespec{Sec: stat.Mtim.Sec, Nsec: stat.Mtim.Nsec},
 		Ctime: syscall.Timespec{Sec: stat.Ctim.Sec, Nsec: stat.Ctim.Nsec}}, nil
