@@ -4,9 +4,14 @@ package process
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
+	"strconv"
+	"strings"
 	"testing"
 
 	"golang.org/x/sys/unix"
@@ -185,5 +190,210 @@ func TestReadonlyRuntimeOwnerTranslationAndCancellationAreExplicit(t *testing.T)
 	cancel()
 	if _, err := censusReadonlyRuntime(ctx, [4]readonlyRuntimeRoot{}, 0, 0); !errors.Is(err, context.Canceled) {
 		t.Fatal("runtime census reached descriptors after cancellation", err)
+	}
+}
+
+func TestReadonlyRuntimeMetadataDiagnosticRetainsFirstCapturedRow(t *testing.T) {
+	for _, kind := range []string{"root", "file", "directory"} {
+		t.Run(kind, func(t *testing.T) {
+			base, original, census, roots := readonlyRuntimeFixture(t)
+			name, path, relative := "", base, "."
+			predicates := uint8(8)
+			switch kind {
+			case "root":
+				census.uid ^= 1
+			case "file":
+				name, relative = "native", "native"
+				path = filepath.Join(base, name)
+				if err := os.WriteFile(path, []byte("original native body"), 0600); err != nil {
+					t.Fatal(err)
+				}
+				census.gid ^= 1
+				predicates = 16
+			case "directory":
+				name, relative = "bin", "bin"
+				path = filepath.Join(base, name)
+				census.uid ^= 1
+				census.gid ^= 1
+				predicates = 24
+			}
+			info, err := os.Lstat(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			before, err := readonlyFacts(info)
+			if err != nil {
+				t.Fatal(err)
+			}
+			entries, err := os.ReadDir(base)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if first, readErr := original.ReadDir(1); readErr != nil || len(first) != 1 {
+				t.Fatal("original iterator control failed", readErr)
+			}
+			census.mount, err = readonlyMountID(original, "", unix.AT_EMPTY_PATH)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if kind == "root" {
+				err = observeReadonlyRuntimeFixture(t, &census, &roots)
+			} else {
+				err = census.entry(t.Context(), original, "/usr", name, 0)
+			}
+			requireReadonlyRuntimeDiagnostic(t, err, before, census.uid, census.gid, predicates, relative)
+			if len(census.rows) != 0 || len(census.aliases) != 0 {
+				t.Fatal("rejected original became census evidence")
+			}
+			requireReadonlyRuntimeOriginalSurvives(t, path, original, len(entries), before)
+		})
+	}
+}
+
+func requireReadonlyRuntimeOriginalSurvives(t *testing.T, path string, original *os.File, entries int, before readonlyObjectFacts) {
+	t.Helper()
+	if remaining, err := original.ReadDir(-1); err != nil || len(remaining) != entries-1 {
+		t.Fatal("refusal closed or consumed the borrowed root", err)
+	}
+	info, err := os.Lstat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	after, err := readonlyFacts(info)
+	if err != nil || after != before {
+		t.Fatal("refusal changed or replaced the original row", before, after, err)
+	}
+	if before.Mode&unix.S_IFMT == unix.S_IFREG {
+		body, readErr := os.ReadFile(path)
+		if readErr != nil || string(body) != "original native body" {
+			t.Fatal("refusal changed the original file", readErr)
+		}
+	}
+}
+
+func requireReadonlyRuntimeDiagnostic(t *testing.T, err error, facts readonlyObjectFacts, uid, gid uint32, predicates uint8, relative string) {
+	t.Helper()
+	if !errors.Is(err, errReadonlyRuntimeMetadata) {
+		t.Fatal("original metadata refusal was lost", err)
+	}
+	text := err.Error()
+	wants := []string{
+		fmt.Sprintf("readonly runtime ownership or metadata differs: predicates=0x%02x ", predicates),
+		fmt.Sprintf("dev=%d ino=%d mode=%#o links=%d size=%d ", facts.Device, facts.Inode, facts.Mode, facts.Links, facts.Size),
+		fmt.Sprintf("uid=%d expected_uid=%d gid=%d expected_gid=%d ", facts.UID, uid, facts.GID, gid),
+		fmt.Sprintf("mtime_nsec=%d ctime_nsec=%d; ", facts.Mtime.Nsec, facts.Ctime.Nsec),
+		"member=" + strconv.QuoteToASCII(relative), "member_truncated=false",
+	}
+	for _, want := range wants {
+		if !strings.Contains(text, want) {
+			t.Fatalf("original refusal lacks %q: %s", want, text)
+		}
+	}
+	if len(text) > readonlyRuntimeDiagnosticLimit {
+		t.Fatal("original refusal diagnostic exceeded its bound")
+	}
+}
+
+func TestReadonlyRuntimeMetadataDiagnosticKeepsEveryOriginalPredicate(t *testing.T) {
+	original := readonlyObjectFacts{Device: 11, Inode: 22, Links: 1, Mode: unix.S_IFREG | 0700, UID: 123, GID: 456, Size: 7}
+	for _, test := range []struct {
+		name       string
+		predicates uint8
+		mutate     func(*readonlyObjectFacts)
+	}{
+		{"inode", 1, func(f *readonlyObjectFacts) { f.Inode = 0 }},
+		{"links", 2, func(f *readonlyObjectFacts) { f.Links = 0 }},
+		{"size", 4, func(f *readonlyObjectFacts) { f.Size = -1 }},
+		{"uid", 8, func(f *readonlyObjectFacts) { f.UID++ }},
+		{"gid", 16, func(f *readonlyObjectFacts) { f.GID++ }},
+		{"mtime-negative", 32, func(f *readonlyObjectFacts) { f.Mtime.Nsec = -1 }},
+		{"mtime-upper", 32, func(f *readonlyObjectFacts) { f.Mtime.Nsec = 1e9 }},
+		{"ctime-negative", 64, func(f *readonlyObjectFacts) { f.Ctime.Nsec = -1 }},
+		{"ctime-upper", 64, func(f *readonlyObjectFacts) { f.Ctime.Nsec = 1e9 }},
+		{"all", 127, func(f *readonlyObjectFacts) {
+			f.Inode, f.Links, f.Size, f.UID, f.GID = 0, 0, -1, 1, 2
+			f.Mtime.Nsec, f.Ctime.Nsec = -1, 1e9
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			facts := original
+			test.mutate(&facts)
+			result, err := readonlyRuntimeFacts(facts, original.UID, original.GID)
+			if result != (readonlyObjectFacts{}) {
+				t.Fatal("rejected facts were normalized into authority", result)
+			}
+			err = readonlyRuntimeMemberError("/usr/bin/original", err)
+			requireReadonlyRuntimeDiagnostic(t, err, facts, original.UID, original.GID, test.predicates, "bin/original")
+		})
+	}
+	upper := original
+	upper.Mtime.Nsec, upper.Ctime.Nsec = 999999999, 999999999
+	for _, facts := range []readonlyObjectFacts{original, upper} {
+		result, err := readonlyRuntimeFacts(facts, original.UID, original.GID)
+		facts.UID, facts.GID = 0, 0
+		if err != nil || result != facts {
+			t.Fatal("valid original metadata or normalization changed", result, err)
+		}
+	}
+	facts := original
+	facts.Mode |= 0022
+	_, err := readonlyRuntimeFacts(facts, original.UID, original.GID)
+	if err == nil || err.Error() != "readonly runtime contains an unsafe or special member" || errors.Is(err, errReadonlyRuntimeMetadata) {
+		t.Fatal("later original mode refusal changed", err)
+	}
+	requireReadonlyRuntimeSameError(t, readonlyRuntimeMemberError("/usr/bin/original", err), err)
+}
+
+func TestReadonlyRuntimeMemberDiagnosticUsesOriginalBoundedBytes(t *testing.T) {
+	facts := readonlyObjectFacts{Device: ^uint64(0), Inode: ^uint64(0), Links: ^uint64(0),
+		Mode: ^uint32(0), UID: ^uint32(0), GID: ^uint32(0), Size: -1}
+	facts.Mtime.Nsec, facts.Ctime.Nsec = -1, 1e9
+	_, originalErr := readonlyRuntimeFacts(facts, 0, 0)
+	if !errors.Is(originalErr, errReadonlyRuntimeMetadata) {
+		t.Fatal("original real guard did not refuse", originalErr)
+	}
+	for _, path := range []string{"/usr", "/usr/bin/tool", "/usr/lib/tab\tquote\"backslash\\", "/usr/" + strings.Repeat("a", 4000),
+		"/usr/bin/" + strings.Repeat("a", 123) + "é-tail", "/usr/" + strings.Repeat("\x01", 128) + "tail"} {
+		t.Run(strconv.Itoa(len(path)), func(t *testing.T) {
+			err := readonlyRuntimeMemberError(path, originalErr)
+			text := err.Error()
+			if !errors.Is(err, originalErr) || len(text) > readonlyRuntimeDiagnosticLimit {
+				t.Fatal("original refusal or byte bound changed", err)
+			}
+			for _, char := range text {
+				if char < 32 || char > 126 {
+					t.Fatalf("diagnostic contains unescaped rune %U", char)
+				}
+			}
+			relative := "."
+			if path != "/usr" {
+				relative = path[len("/usr/"):]
+			}
+			preview := relative[:min(len(relative), 128)]
+			digest := sha256.Sum256([]byte("agentplugins-readonly-runtime-member-v1\x00" + relative))
+			for _, want := range []string{"member=" + strconv.QuoteToASCII(preview), fmt.Sprintf("member_bytes=%d ", len(relative)),
+				fmt.Sprintf("member_sha256=%x ", digest), fmt.Sprintf("member_truncated=%t", len(relative) > 128)} {
+				if !strings.Contains(text, want) {
+					t.Fatalf("original full member projection lacks %q: %s", want, text)
+				}
+			}
+			if strings.HasSuffix(path, "é-tail") && !strings.Contains(text, `\xc3`) {
+				t.Fatal("split UTF-8 byte was not safely escaped", text)
+			}
+		})
+	}
+	for _, path := range []string{"/usr/", "/usr/../etc/passwd", "/etc/passwd", "usr/bin/tool", "/usr/x\n", "/usr/x\r", "/usr/x\x00", "/usr/x\xff", "/usr/" + strings.Repeat("a", 4096)} {
+		requireReadonlyRuntimeSameError(t, readonlyRuntimeMemberError(path, originalErr), originalErr)
+	}
+	other := errors.New("readonly runtime ownership or metadata differs")
+	requireReadonlyRuntimeSameError(t, readonlyRuntimeMemberError("/usr/bin/tool", other), other)
+	requireReadonlyRuntimeSameError(t, readonlyRuntimeMemberError("/usr", nil), nil)
+}
+
+func requireReadonlyRuntimeSameError(t *testing.T, actual, expected error) {
+	t.Helper()
+	// Exact value identity matters here: errors.Is would permit a new wrapper.
+	if reflect.ValueOf(actual) != reflect.ValueOf(expected) {
+		t.Fatalf("projection replaced the original error: %T %v; want %T %v", actual, actual, expected, expected)
 	}
 }

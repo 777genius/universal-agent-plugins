@@ -383,3 +383,60 @@ in the same readonly view and complete bounded process-family evidence before
 that verdict can be admitted. Keep the readonly mounts and existing process,
 source, lock, deadline and cleanup guards; neither a writable witness directory
 nor an assumed private-stderr forwarding path establishes the missing proof.
+
+## Original runtime-census refusal and bounded diagnostic (2026-11-14)
+
+The genuine Project run
+[43632655966](https://github.com/777genius/universal-agent-plugins/actions/runs/43632655966),
+job 132562466356, used source `67989a2f5ce219cedace716211346a7971f512af`
+and tree `3e094bb4f495360383f210c1e3a28b6f7e0082a7`.
+Artifact 14130245485 is 17,935 bytes, SHA-256
+`2d60555e76e6a0a4f1f5c049f170e79f1884d31f2059f70d30514d88ea066f76`.
+Its ZIP CRC, two original documents, 22 child streams and 20 service streams were
+joined to the original source and compiled input identities. The delegated
+service closed without forced stop or kill. Replaying the existing parent
+admission function preserves native exit 1 and `passed=false`.
+
+The first 10 recorded commands exited 0. The tagged readonly inventory command
+then exited 1 with the 205-byte original stdout containing
+`readonly runtime ownership or metadata differs`. That error comes from the
+initial held `/usr` census for the failing attempt, before that attempt starts
+its native process. Final runtime revalidation would append a different error
+suffix, and the child has a separate closed refusal. The old tagged output does
+not distinguish its two iterations: it does not prove zero native starts across
+the whole command. It also retains neither a rejected member nor the individual
+failed metadata condition. No particular owner, group, pathname or remedy is
+inferred from this generic error.
+
+The diagnostic keeps the same seven comparisons as its sole metadata guard.
+Bits 0 through 6 mean zero inode, zero link count, negative size, UID mismatch,
+GID mismatch, invalid mtime nanoseconds and invalid ctime nanoseconds. Failure
+retains the original error prefix and captured numeric facts. Only the existing
+`record` and directory `child` failure seams add the original `/usr`-relative
+member: at most 128 original bytes escaped to ASCII, the complete relative byte
+length, a domain-separated SHA-256 and a truncation flag. Root is represented
+as `.`. The complete projected error is bounded to 1536 bytes. It reads no new
+metadata or contents, rescans nothing, changes no predicate and never inserts a
+rejected row into a successful census. Other errors, mount/input/ownership
+guards, original deadlines, descriptor cleanup and native acceptance remain
+unchanged. The tagged test adds only a fixed attempt 1/2 or 2/2 log marker before
+each existing read; that marker is not a process-start receipt.
+
+The failed-command preservation field proves only its existing protected-file
+and native-lock checks. The full five-root comparison after successful readonly
+execution was not reached. The public lifecycle, enabled C1 readback, complete
+same-view startup observation and fresh final-source native acceptance remain
+unqualified. Public enablement/recovery stay closed and production records stay
+v2. Local diagnostic controls and review must be recorded separately from the
+next genuine native result.
+
+Local checks of the diagnostic passed all 7 focused runtime tests and their
+24 subcases, with no skips. Replacing only the diagnostic projection with its
+old generic error preserved the owner/translation/cancellation control and
+failed the three new root/file/directory assertions for missing original-row
+details. The tagged native test compiled; it was not executed locally. Both
+targeted lint passes reported zero issues. A separate temporary lint check also
+enforced the existing 60-line/40-statement function limits on the changed runtime
+test file without its usual test exemption; it passed. No repository lint
+configuration changed. The complete coherent commit still requires normal CI
+and a genuine hosted original before this diagnostic can identify the offender.

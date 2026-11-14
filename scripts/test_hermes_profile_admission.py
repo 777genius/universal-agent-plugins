@@ -3910,7 +3910,7 @@ class PublicInspectLockContracts(unittest.TestCase):
             calls.append(args[0]); effect(); return b"{}"
         namespace = dict(CASE, current=current, proofs=proofs, snapshot=snapshot, outer=outer,
                          projects=projects, pins={"uap": {"path": "inert-uap"}}, deadline=time.monotonic() + 60,
-                         evidence=outer.parent, env={}, born={}, nonce="inert", bounded=bounded,
+                         evidence=outer.parent, env={}, born={}, nonce="inert", bounded=bounded, native_image="inert-hermes",
                          public_runtime_pins=lambda *args, **kwargs: None, public_continuity=lambda *args, **kwargs: None,
                          public_stdio_events=lambda *args, **kwargs: [], spawn_states={key: None for key in projects},
                          native_log_locks={key: None for key in projects},

@@ -2996,3 +2996,156 @@ The executor became unavailable before the 8e7 correction was authored.
 Accordingly, this packet has source/replay review only: it does not claim
 fresh Python execution, Windows execution or native acceptance. The existing
 ordinary CI lanes must execute the final published source.
+
+## 2026-11-14: restored execution, fixture repair and native evidence closure
+
+The executor returned after publication of 67989a2f5ce219cedace716211346a7971f512af
+(tree 3e094bb4f495360383f210c1e3a28b6f7e0082a7). The preceding source-only
+statement remains historical; the following executions are separate evidence.
+An exact clean 679 CLI build completed successfully in 128.662 seconds. Its
+SHA-256 is ad473d85f855d5d7a21d2beaae98fe90c1359083d8349c858a811f7a3dda75b3.
+
+### Existing extracted-command fixture
+
+The exact 679 Python suite ran all 196 methods and reported two subtest errors,
+plus the seven existing Windows-only skips. Both errors belong to the existing
+PublicInspectLockContracts native A/B cases: the helper executes the original
+nested command without its outer observer and had not supplied the newly
+captured native_image. They were NameError refusals, not failed native probes.
+The original failed log SHA-256 is
+4769afe6e1ce85493b301d653eac32e6e60f412fce867d3435d98c3469e5e9e5.
+
+The correction supplies only native_image="inert-hermes" in that helper's
+namespace. This is its earlier inert executable selection. No native_python
+value is needed before the fixture's deliberate delta-guard cutoff. All 16
+scope/action cases, assertions, 196 test method bodies and production observer
+bytes remain unchanged. Candidate test blob
+a2f5cc297d512d5bdffbb136f811ab2f3eddf9e1 is 455533 bytes, SHA-256
+9660aee6eb68558bcff8db718694c0083c81fd0e4e217873c3f4b9c142dedf36.
+Manifest blob 7a93e726bed14ad3aca742428d9c4a5d74102446 and patch blob
+f5b7280d8ae20f9437fe99f0401cbc98b83bd38a retain the exact reviewed change.
+
+The corrected fixture passed eight focused methods, then the complete suite:
+196 methods, 189 PASS and seven existing Windows-only skips, in 11.783 seconds.
+The complete log SHA-256 is
+afcb641efc502cba11bdf7006ccf86dd85ce98a685c161f14f235de2584ddc9d;
+focused log SHA-256 is
+6fb89a2aa918a6d57fcc97ce18ca5e6d002cb8a149e35c169528d683ca35cd5a.
+An independent reviewer executed the original failing suite and joined the
+author's fixed logs, complete source hashes and exact forward/inverse change.
+Its R2 receipt SHA-256 is
+92111387d7eb337e978165438e769a31d1ffcae1f4811cb84c08cc36dbca27b5.
+These are Linux Python executions; they do not establish Windows execution or
+native admission. The unchanged source workflow runs this suite on all three
+OSes before the User tools-call and source-profile stages.
+
+### ce47 original native results
+
+Run 43626743164 at ce47d1895dac145028c8dbc9707290fcf477ccd1 completed with
+all six aggregate jobs failing. The three earlier User tools-call steps did
+succeed independently: each original contains two real native tools/call
+request/response pairs, six initialize/initialized/tools-list sessions, four
+scripted localhost provider exchanges, original source/nonce/stream joins and
+settled process/private-home cleanup. No vendor authentication or real model
+inference occurred. The three User archives are artifacts 14128346058
+(Windows), 14128250618 (macOS) and 14127728748 (Linux). Their complete original
+replay is recorded by receipt SHA-256
+ba796f20f1f4c31c2745c9fbf08a9579344bf9c31c84f92bc573f159dcb86021.
+
+The subsequent source-profile stages remain failures. macOS and Linux reached
+the original 720-second lifecycle deadline after nine and twenty retained
+statuses respectively; the active operation at timeout is not retained.
+Windows refused a modification-time change of the original User source
+installation's .hermes/bin directory after config-path-a; the same directory
+inode and remaining metadata did not authorize that write. Original deadlines,
+User census and source bootstrap boundaries are unchanged. No source custom-root
+or recovery qualification follows from the preceding successful User calls.
+
+The bundled Windows original (artifact 14128461748) refused public-stdio-a at
+spawn-identity/spawner-pid. It predates the four-process lineage correction and
+cannot verify that correction. Bundled macOS/Linux originals (14128136348 and
+14128631150) reached public-repaired-run-a and refused in the original bounded
+call. Source order requires the preceding public-repair-a and restored Skill
+byte check to have completed, but these closed failure archives do not retain
+the inner UAP error, exit/output category or raw ledger/log bodies. No specific
+historical inner error is reconstructed from their absence.
+
+### Current Go catalog blocker: causal control, not an allowance
+
+The five actual Go session/fixture files are byte-identical from ce47 to679.
+A separate scratch-only test used the existing newProjectSessionFixture and
+sessionBootstrapFixture with real New().PlanSession and
+verifyProjectSessionSource. For each of spawn-ledger.json,
+spawn-ledger.json.lock and logs/mcp-stderr.log, it executed baseline PASS,
+addition of that member with the exact fixed-catalog refusal, and removal of
+only that member with PASS restored. Three further cases retained the permitted
+cardinality and independently reached the unknown-or-unsafe-member refusal.
+The original User/config bytes and selected-root identity remained unchanged;
+runner.calls stayed zero. Seven PASS events, no skips, package 0.066 seconds.
+
+The scratch test SHA-256 is
+7cc8b119ecc887c7b9e0f2bd995fa65929ee0a686d9688a7998491dd69238cb6;
+actual log SHA-256 is
+098174b60146d5a60a540a5d14d96eb1b9e20ef3ab664b400489a39b74e1a213.
+Full causal receipt SHA-256 is
+8abf7544e8a2f84e355c9397194b39018c3b7127b44d2c1d4352f2f39050645b;
+independent source/control review SHA-256 is
+bfad94878d9638b6835f486e7d8babe28b8258ade2337f7496b7dc0db02bd7b9.
+The bodies were existing inert Python fixtures, not recovered native identities.
+This establishes two deterministic current catalog barriers before body
+consumption. It does not recover the historical inner native refusal.
+
+No product catalog allowance is part of this follow-up. The pinned process
+ledger has readers and reapers that can act on PID/birth records; accepting a
+filename, mode and size alone would not establish process ownership. A future
+correction needs its own command/source, body, continuity and lifecycle proof.
+The existing public authority, original roots/parents, User/sibling isolation,
+source/receipt/DATA joins, deadline and refusal behavior remain in force.
+
+### 679 Skills originals and remaining acceptance
+
+Windows job132562467786 and macOS job132562467895 of run43632655976 succeeded.
+Both originals are closed: artifacts14129232265 and14129526955, respectively.
+Each has 34 command stream pairs, 13 native Skill observations, twelve UAP
+successes, the expected nonmutating unsupported Project MCP refusal and four
+native MCP discovery sessions. The actual checkout is merge
+c4d8a91ee88750da29f8e78cf9745daf40e56b5b, with parents28eb24d7 and67989a2f;
+the inherited main changes do not alter the Hermes sources. tools_call and
+model_turn remain false in this lane. It is neither the 196-method suite nor
+bundled/source Project admission. The Windows/macOS audit SHA-256 values are
+8a66a102f104497a06b5f89b128ab594f83a3afc893c4f582ca125b3965d8dd6 and
+ab09694ccb7c686dcd66f4b9bbe5ceb381155801d356cbc3c60c5652f82a4be2.
+
+Final native, Required and security acceptance remains incomplete. Continue
+with ordinary source pushes and genuine current-source executions; queued,
+cancelled, skipped, local inert or compile-only results do not supply native
+acceptance. No release or public capability promotion is included here.
+
+### Later executions on the same 679 source
+
+Current source-macOS job132564940065 of run43632655958 independently reproduced
+the exact two native_image fixture errors in its 196-method run (21.032 seconds,
+seven existing skips). The later User tools-call and source-profile steps were
+skipped; they are not native failures or successes. Original-log SHA-256 is
+3ca8dcd763f7d78bfbb981b2c94118074a944015385151d18b78608d8a7ad59f;
+complete source/fixture replay receipt SHA-256 is
+7c19f5216253bae40be8fca10f4f0f77f9b50553aa4c4abcf9168680546259f4.
+
+Current bundled Linux job132564940203 in that run again reached
+public-repaired-run-a, at command line3175 and bounded call3198, before its
+generic RuntimeError. Artifact14130217533 (770 bytes) passed SHA/CRC and the
+sole 1221-byte closed-report check. Exact679 source, nonce and original console
+joins are recorded in audit SHA-256
+ac4355d234bd12609363b7bf2e79c7114cadba00578dd1eab318dcabd72a651a.
+Primary settlement is proved; public-family closure remains unproved, and all
+seven qualification flags remain false. The inner UAP error and ledger bodies
+are still not retained.
+
+Linux Skills job132562468009 also succeeded and its original artifact14130023534
+is now closed: 69 members, 34 command stream pairs, 13 native Skill observations,
+twelve UAP successes, the expected Project MCP refusal and four native discovery
+sessions. It uses the same c4d8a91e merge/source join as Windows and macOS.
+Audit SHA-256 is
+f14a2d087cb36dc49adb34124aeeeef5968b751370f71635c5fb34d9d3f49228.
+Thus all three 679 Skills native originals are closed, with tools_call and
+model_turn false; the profile and final acceptance boundaries above still hold.

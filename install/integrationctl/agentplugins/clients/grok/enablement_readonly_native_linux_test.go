@@ -56,7 +56,8 @@ func TestEnablementReadonlyNativeInventory(t *testing.T) {
 			t.Error(err)
 		}
 	})
-	for range 2 {
+	for attempt := range 2 {
+		t.Logf("GROK_READONLY_NATIVE_INVENTORY_ATTEMPT %d/2", attempt+1)
 		rows, err := readEnablementInventory(ctx, process.OS{}, inputs, profile.config.Original())
 		if err != nil {
 			t.Fatal(err)

@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -20,6 +21,10 @@ import (
 )
 
 const readonlyRuntimeEntryLimit = 262144
+
+const readonlyRuntimeDiagnosticLimit = 1536
+
+var errReadonlyRuntimeMetadata = errors.New("readonly runtime ownership or metadata differs")
 
 type readonlyRuntimeRow struct {
 	facts readonlyObjectFacts
@@ -42,9 +47,8 @@ type readonlyRuntimeCensus struct {
 // the exact namespace maps. Overflow IDs never establish new ownership.
 func readonlyRuntimeFacts(facts readonlyObjectFacts, uid, gid uint32) (readonlyObjectFacts, error) {
 	kind := facts.Mode & unix.S_IFMT
-	if facts.Inode == 0 || facts.Links == 0 || facts.Size < 0 || facts.UID != uid || facts.GID != gid ||
-		facts.Mtime.Nsec < 0 || facts.Mtime.Nsec >= 1e9 || facts.Ctime.Nsec < 0 || facts.Ctime.Nsec >= 1e9 {
-		return readonlyObjectFacts{}, errors.New("readonly runtime ownership or metadata differs")
+	if err := readonlyRuntimeMetadataRefusal(facts, uid, gid); err != nil {
+		return readonlyObjectFacts{}, err
 	}
 	if kind != unix.S_IFDIR && kind != unix.S_IFREG && kind != unix.S_IFLNK ||
 		kind != unix.S_IFLNK && facts.Mode&0022 != 0 || kind == unix.S_IFLNK && facts.Links != 1 {
@@ -54,6 +58,42 @@ func readonlyRuntimeFacts(facts readonlyObjectFacts, uid, gid uint32) (readonlyO
 	// requires NOSUID on every runtime mount and drops all capabilities.
 	facts.UID, facts.GID = 0, 0
 	return facts, nil
+}
+
+func readonlyRuntimeMetadataRefusal(facts readonlyObjectFacts, uid, gid uint32) error {
+	// This bitmap is the original metadata guard, in its original order.
+	failed := [...]bool{facts.Inode == 0, facts.Links == 0, facts.Size < 0, facts.UID != uid, facts.GID != gid,
+		facts.Mtime.Nsec < 0 || facts.Mtime.Nsec >= 1e9, facts.Ctime.Nsec < 0 || facts.Ctime.Nsec >= 1e9}
+	var predicates uint8
+	for bit, invalid := range failed {
+		if invalid {
+			predicates |= 1 << bit
+		}
+	}
+	if predicates == 0 {
+		return nil
+	}
+	return fmt.Errorf("%w: predicates=0x%02x dev=%d ino=%d mode=%#o links=%d size=%d uid=%d expected_uid=%d gid=%d expected_gid=%d mtime_nsec=%d ctime_nsec=%d",
+		errReadonlyRuntimeMetadata, predicates, facts.Device, facts.Inode, facts.Mode, facts.Links, facts.Size,
+		facts.UID, uid, facts.GID, gid, facts.Mtime.Nsec, facts.Ctime.Nsec)
+}
+
+func readonlyRuntimeMemberError(path string, err error) error {
+	if !errors.Is(err, errReadonlyRuntimeMetadata) || !readonlyAbsolute(path) || !readonlyWithin(path, "/usr") {
+		return err
+	}
+	relative := "."
+	if path != "/usr" {
+		relative = strings.TrimPrefix(path, "/usr/")
+	}
+	preview := relative[:min(len(relative), 128)]
+	digest := sha256.Sum256([]byte("agentplugins-readonly-runtime-member-v1\x00" + relative))
+	result := fmt.Errorf("%w; member=%s member_bytes=%d member_sha256=%x member_truncated=%t", err,
+		strconv.QuoteToASCII(preview), len(relative), digest, len(relative) > len(preview))
+	if len(result.Error()) > readonlyRuntimeDiagnosticLimit {
+		return err
+	}
+	return result
 }
 
 func censusReadonlyRuntime(ctx context.Context, roots [4]readonlyRuntimeRoot, uid, gid uint32) (result readonlyCensusProof, resultErr error) {
@@ -101,7 +141,7 @@ func (census *readonlyRuntimeCensus) record(path string, before readonlyObjectFa
 	}
 	facts, err := readonlyRuntimeFacts(before, census.uid, census.gid)
 	if err != nil {
-		return err
+		return readonlyRuntimeMemberError(path, err)
 	}
 	if (facts.Mode&unix.S_IFMT == unix.S_IFLNK) != (link != "") {
 		return errors.New("readonly runtime link body is inconsistent")
@@ -185,7 +225,7 @@ func (census *readonlyRuntimeCensus) entry(ctx context.Context, parent *os.File,
 
 func (census *readonlyRuntimeCensus) child(ctx context.Context, parent *os.File, name, path string, before readonlyObjectFacts, depth int) (resultErr error) {
 	if _, err := readonlyRuntimeFacts(before, census.uid, census.gid); err != nil {
-		return err
+		return readonlyRuntimeMemberError(path, err)
 	}
 	file, err := openReadonlyDirectory(parent, name)
 	if err != nil {
