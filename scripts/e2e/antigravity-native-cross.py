@@ -1385,6 +1385,58 @@ def admission_contracts():
                 extra = state / "environment.lock"; extra.write_bytes(lock.read_bytes()); extra.chmod(0o600)
                 self.assertNotEqual(public_state_snapshot(root, state), before)
 
+        def test_disabled_repeat_preserves_all_except_owned_state_parent_metadata(self):
+            import copy
+            with tempfile.TemporaryDirectory() as temporary:
+                outer = Path(temporary).resolve(); root = outer / "fixture"; root.mkdir(mode=0o700)
+                state = root / "uap-state"; state.mkdir(mode=0o700)
+                files = ("uap-state/state-v2.json", "home/config.json", "source/plugin.json", "uap-state/data/marker")
+                for relative in files:
+                    path = root / relative; path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_bytes(b"original bounded fixture bytes\n")
+                os.utime(state, ns=(1_000_000_000, 1_000_000_000))
+                before = public_state_snapshot(root, state)
+                child = state / "agentplugins-package-contract"; child.mkdir(mode=0o700)
+                (child / "sealed-source").write_bytes(b"actual temporary snapshot\n")
+                (child / "sealed-source").unlink(); child.rmdir()
+                after = public_state_snapshot(root, state)
+                self.assertNotEqual(before, after)
+                public_disabled_repeat_preserved(before, after)
+                scratch = state / "installer-tmp"; scratch.mkdir(mode=0o700)
+                os.utime(scratch, ns=(1_000_000_000, 1_000_000_000))
+                before = public_state_snapshot(root, state)
+                child = scratch / "agentplugins-package-contract"; child.mkdir(); child.rmdir()
+                with self.assertRaisesRegex(AssertionError, "Disabled repeat changed"):
+                    public_disabled_repeat_preserved(before, public_state_snapshot(root, state))
+                for relative in files:
+                    with self.subTest(changed_file=relative):
+                        before = public_state_snapshot(root, state)
+                        path = root / relative; original = path.read_bytes(); path.write_bytes(b"changed retained bytes\n")
+                        with self.assertRaisesRegex(AssertionError, "Disabled repeat changed"):
+                            public_disabled_repeat_preserved(before, public_state_snapshot(root, state))
+                        path.write_bytes(original)
+                before = public_state_snapshot(root, state)
+                extra = scratch / "unknown-member"; extra.mkdir()
+                with self.assertRaisesRegex(AssertionError, "Disabled repeat changed"):
+                    public_disabled_repeat_preserved(before, public_state_snapshot(root, state))
+                extra.rmdir()
+                before = public_state_snapshot(root, state)
+                scratch.rename(outer / "retained-original-scratch"); scratch.mkdir(mode=0o700)
+                after = public_state_snapshot(root, state)
+                self.assertEqual(set(before), set(after))
+                with self.assertRaisesRegex(AssertionError, "Disabled repeat changed"):
+                    public_disabled_repeat_preserved(before, after)
+                before = public_state_snapshot(root, state)
+                for domain in (0, 1):
+                    for field in (0, 1, 2, 3, 4, 5, 9, 10, 11):
+                        with self.subTest(api_domain=domain, field=field):
+                            changed = copy.deepcopy(before); row = changed["uap-state"]
+                            domains = list(row[2]); metadata = list(domains[domain])
+                            metadata[field] = metadata[field] + 1 if metadata[field] is not None else 1
+                            domains[domain] = tuple(metadata); changed["uap-state"] = (row[0], row[1], tuple(domains))
+                            with self.assertRaisesRegex(AssertionError, "Disabled repeat changed"):
+                                public_disabled_repeat_preserved(before, changed)
+
         def test_public_control_and_owned_read_refuse_before_any_body(self):
             import types
             with tempfile.TemporaryDirectory() as temporary:
@@ -1762,6 +1814,26 @@ def public_state_snapshot(root, state, runtime_pins=None):
     return result
 
 
+def public_disabled_repeat_preserved(before, after):
+    # The ordinary local acquirer creates/removes sealed snapshots directly
+    # beneath this owned state parent. Its final members stay exact.
+    if set(before) != set(after) or "uap-state" not in before:
+        raise AssertionError("Disabled repeat changed original fixture bytes")
+    normalized = []
+    for image in (before, after):
+        view = dict(image)
+        row = image["uap-state"]
+        if (len(row) != 3 or row[0] != "directory" or len(row[2]) != 2
+                or any(len(metadata) != 12 for metadata in row[2])):
+            raise AssertionError("Disabled repeat changed original fixture bytes")
+        # Preserve each API's dev/inode/mode/uid/gid/nlink and birth/attributes/
+        # reparse facts; only directory size/mtime/ctime may reflect scratch work.
+        view["uap-state"] = (row[0], row[1], tuple(metadata[:6] + metadata[9:] for metadata in row[2]))
+        normalized.append(view)
+    if normalized[0] != normalized[1]:
+        raise AssertionError("Disabled repeat changed original fixture bytes")
+
+
 def public_package_object(binding, declared):
     objects = binding.get("native_objects")
     if (type(objects) is not list or len(objects) != 1 or type(objects[0]) is not dict
@@ -2137,14 +2209,17 @@ def public_user_observation(runtime, source, executable_dir, parent, protected):
     with public_fixture(parent, executable_dir) as (root, env, authority):
         shutil.copytree(source, root / "source")
         public_user_result(public_uap(runtime, root, authority, "uap-add"))
-        binding = public_binding_proof(env, NAME, runtime[4])["binding"]
-        selected = Path(binding["target_locator"])
+        original = public_binding_proof(env, NAME, runtime[4])
+        selected = original["selected"]
         config = selected.parent.parent / "config.json"
         config.write_bytes((json.dumps({"plugins": {selected.name: {"enabled": False}}}) + "\n").encode())
         config.chmod(0o600)
         before = public_state_snapshot(root, Path(env["AGENTPLUGINS_HOME"]), runtime[4])
-        public_user_result(public_uap(runtime, root, authority, "uap-repeat"), observed=True, enabled=False)
-        if public_state_snapshot(root, Path(env["AGENTPLUGINS_HOME"]), runtime[4]) != before: raise AssertionError("Disabled repeat changed original fixture bytes")
+        repeated = public_user_result(public_uap(runtime, root, authority, "uap-repeat"), observed=True, enabled=False)
+        if repeated.get("mutated") is not False or repeated.get("installation_id") != original["installed"]["installation_id"]:
+            raise AssertionError("Disabled repeat changed its recorded installation")
+        public_disabled_repeat_preserved(before, public_state_snapshot(root, Path(env["AGENTPLUGINS_HOME"]), runtime[4]))
+        public_preserved(original, public_binding_proof(env, NAME, runtime[4])); unchanged()
     print('{"public_user_readonly_lifecycle":true,"historical_active_refined":true,"retained_data_verified":true,"model_invoked":false,"ide_activation":false}', flush=True)
 
 

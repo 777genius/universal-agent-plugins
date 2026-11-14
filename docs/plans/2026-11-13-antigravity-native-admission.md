@@ -1100,3 +1100,54 @@ accepted the final receipt guard and regressions. The original read-only
 checks, foreign contents and all revision/data joins remain strict. These are
 local contract results; genuine native acceptance on the corrected source
 remains required.
+
+### Disabled repeat preserves state while allowing exact state-parent metadata (2026-11-14)
+
+At source `ea7af4b185116ac57cf74064ae90e448793109aa`,
+[run 43536058947, macOS job 132270481666](https://github.com/777genius/universal-agent-plugins/actions/runs/43536058947/job/132270481666)
+and [Windows job 132270481431](https://github.com/777genius/universal-agent-plugins/actions/runs/43536058947/job/132270481431)
+reached the separate disabled User fixture. Public add and repeat completed with
+exit 0 and cleanup_complete=true. Repeat retained the installation ID, reported
+mutated=false and Prepared/installation_verified, and said the plugin remained
+disabled. The harness then refused its whole-fixture snapshot comparison.
+
+Artifacts 14091746474 and 14091198551 have SHA-256
+`457ae66776488e8f81e7b9dbd18b0bb2385348fae851d61545fc38675b9369fc` and
+`b2eeb492dd516f63940aaede736b8c7b6fcc724d21952901a6944a24ecfe9d21`.
+Both original outer/nested ZIP CRCs, 47-member closure, 46 manifest member joins
+and 32 stream joins passed. All 14 native and 9 public cleanup receipts joined;
+the capture, public-effects and harness-complete flags remained false. These
+archives contain no before/after file snapshots or state-v2.json bodies. The
+exact original changed member/metadata field is therefore unavailable.
+
+The actual local acquisition path creates and removes sealed package snapshots
+directly beneath AGENTPLUGINS_HOME. The collector compares complete directory size/mtime/ctime,
+so successful scratch cleanup can fail the previous whole-fixture equality.
+A controlled public Cobra repeat through the real SourceAcquirer and the existing
+inert inventory runner confirmed state-parent mtime/ctime changes while its
+device, inode, mode, UID/GID, link count, size and final members remained equal.
+Raw state bytes, parsed state/receipts and native fixture file bytes also stayed
+equal. Antigravity does not carry QualifiedLocalInstallerFacade, so this public
+operation does not enter the SDK resealing route. No installer-tmp or descendant
+metadata allowance is justified. This is a source-backed oracle defect, not
+proof of the sole historical cause.
+
+Only the disabled-repeat comparison now permits size/mtime/ctime changes for the
+single exact existing directory row uap-state. Each
+named/held API domain retains exact device, inode, mode, owner, link count,
+birth, attributes and reparse facts. Complete membership and every other row
+remain exact, including state bytes, receipts, native config, foreign files,
+source and retained data. The existing bounded lock refresh normalization is
+unchanged. Repeat must additionally report mutated=false and the original
+installation ID, then pass full binding proof and read-only receipt/content
+continuity. No production acquisition, native command, deadline or cleanup
+contract changes.
+
+The real state-parent create/remove case failed the extracted original equality
+predicate; all other 35 contracts passed in that replay. With the correction,
+all 36 contracts passed in 5.635 seconds with no skips. The corrected contract also requires rejection of
+installer-tmp metadata changes, changed state/config/source/data, extra members,
+replaced child directory identity and each protected named/held state-parent
+metadata field. The controlled Cobra probe passed with an inert native runner;
+it is not native qualification. Fresh genuine acceptance of the corrected source
+is still required.
