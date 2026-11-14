@@ -1,0 +1,478 @@
+name: Codex MCP env-name native secrecy spike
+
+on:
+  push:
+    branches:
+      - feat/codex-mcp-env-names-safe-20261110
+    paths:
+      - scripts/codex_env_names_native_spike.py
+      - scripts/codex_env_names_appserver_spike.py
+      - scripts/codex_env_names_windows_shell_control.py
+      - scripts/test_codex_env_names_native_spike.py
+      - .github/workflows/codex-env-names-spike.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-linux-spike:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Verify deterministic synthetic MCP and snapshot oracles
+        run: python3 -m unittest discover -s scripts -p 'test_codex_env_names_native_spike.py'
+      - name: Install verified official Codex 0.169.0 executable
+        id: native-binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/codex-native"
+          curl -fSL --retry 3 --connect-timeout 15 --max-time 200 \
+            https://github.com/openai/codex/releases/download/rust-v0.169.0/codex-x86_64-unknown-linux-musl.tar.gz \
+            -o "$RUNNER_TEMP/codex-native/codex.tar.gz"
+          printf '%s  %s\n' \
+            '9af4d751fce183faedea629437d5252dbf458eeb04130cf4f97be844621ea985' \
+            "$RUNNER_TEMP/codex-native/codex.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/codex-native/codex.tar.gz" -C "$RUNNER_TEMP/codex-native"
+          test -s "$RUNNER_TEMP/codex-native/codex-x86_64-unknown-linux-musl"
+          chmod 0755 "$RUNNER_TEMP/codex-native/codex-x86_64-unknown-linux-musl"
+          echo "CODEX_BINARY=$RUNNER_TEMP/codex-native/codex-x86_64-unknown-linux-musl" >> "$GITHUB_ENV"
+      # The pinned upstream tarball contains only the Codex binary, not
+      # codex-resources/bwrap. Install the normal Ubuntu sandbox dependency;
+      # do not disable AppArmor, userns checks or native Codex sandboxing.
+      - name: Install native Linux sandbox helper without relaxing host security
+        id: linux-sandbox-helper
+        if: steps.native-binary.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get -o Acquire::Retries=3 update -qq
+          sudo apt-get -o Acquire::Retries=3 install --yes --no-install-recommends bubblewrap
+          command -v bwrap
+          bwrap --version
+      # A minimal host-sandbox probe has NO canary or user credentials at all.
+      # Raw sandbox diagnostics are permitted only in this env -i experiment.
+      # Never log actual MCP/tool output from canary-bearing Codex processes.
+      - name: Diagnose native sandbox with an empty environment and inert true
+        id: sandbox-preflight
+        if: steps.linux-sandbox-helper.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          probe="$(mktemp -d "$RUNNER_TEMP/codex-sandbox-no-secret.XXXXXX")"
+          trap 'rm -rf "$probe"' EXIT
+          mkdir -p "$probe/.codex"
+          echo "sandbox_probe_backend=bwrap"
+          if timeout 15s env -i HOME="$probe" CODEX_HOME="$probe/.codex" PATH="/usr/bin:/bin" \
+              "$CODEX_BINARY" sandbox -- /usr/bin/true > "$probe/sandbox-log" 2>&1; then
+            echo "sandbox_probe_pass=true"
+          else
+            echo "sandbox_probe_pass=false"
+            cat "$probe/sandbox-log"
+            echo "::error::Native Linux sandbox unavailable: refusing synthetic credential probes."
+            exit 1
+          fi
+      # Keep both independent results, even if one E2E fails. Never infer PASS
+      # from the other; artifacts record only redacted boolean/hash facts.
+      - name: Run real Codex CLI shell and MCP names-only proof
+        if: steps.sandbox-preflight.outcome == 'success'
+        id: native-cli-spike
+        shell: bash
+        run: |
+          python3 -m py_compile scripts/codex_env_names_native_spike.py
+          python3 scripts/codex_env_names_native_spike.py "$CODEX_BINARY" "$RUNNER_TEMP/codex-env-spike-report.json"
+      - name: Run real Codex app-server MCP and shell snapshot proof
+        if: always() && steps.sandbox-preflight.outcome == 'success'
+        id: native-appserver-spike
+        shell: bash
+        run: |
+          python3 -m py_compile scripts/codex_env_names_appserver_spike.py
+          python3 scripts/codex_env_names_appserver_spike.py "$CODEX_BINARY" "$RUNNER_TEMP/codex-appserver-spike-report.json"
+      # Research-only mitigated control: no real user's Codex settings touched.
+      # This cannot retroactively make the default-mode snapshot leak safe.
+      - name: Compare isolated shell env filtering with real Codex CLI
+        if: always() && steps.sandbox-preflight.outcome == 'success'
+        id: native-filtered-cli
+        shell: bash
+        run: |
+          python3 scripts/codex_env_names_native_spike.py "$CODEX_BINARY" "$RUNNER_TEMP/codex-env-filtered-cli.json" filtered
+      - name: Compare isolated shell env filtering with real Codex app-server
+        if: always() && steps.sandbox-preflight.outcome == 'success'
+        id: native-filtered-appserver
+        shell: bash
+        run: |
+          python3 scripts/codex_env_names_appserver_spike.py "$CODEX_BINARY" "$RUNNER_TEMP/codex-env-filtered-appserver.json" filtered
+      # Research-only stricter built-in Codex KEY/SECRET/TOKEN filter.
+      # Does not replace project/global legacy exclude/include_only arrays.
+      - name: Test Codex built-in exclusion policy in isolated CLI control
+        if: always() && steps.sandbox-preflight.outcome == 'success'
+        id: native-default-excludes-cli
+        shell: bash
+        run: |
+          python3 scripts/codex_env_names_native_spike.py "$CODEX_BINARY" "$RUNNER_TEMP/codex-default-excludes-cli.json" default_excludes
+      - name: Test Codex built-in exclusion policy in isolated app-server control
+        if: always() && steps.sandbox-preflight.outcome == 'success'
+        id: native-default-excludes-appserver
+        shell: bash
+        run: |
+          python3 scripts/codex_env_names_appserver_spike.py "$CODEX_BINARY" "$RUNNER_TEMP/codex-default-excludes-appserver.json" default_excludes
+      # Experimental scalar core inherit policy: retain only ordinary launch
+      # basics for shell; the real native MCP subprocess must still receive
+      # explicitly named env_vars. Verify older global exclusions too.
+      # Never rewrite an existing user's inherited shell policy.
+      - name: Research core-only inherited shell environment with real Codex CLI
+        if: always() && steps.sandbox-preflight.outcome == 'success'
+        id: native-core-inherit-cli
+        shell: bash
+        run: |
+          python3 scripts/codex_env_names_native_spike.py "$CODEX_BINARY" "$RUNNER_TEMP/codex-core-inherit-cli.json" core_inherit
+      - name: Research core-only inherited shell environment with real Codex app-server
+        if: always() && steps.sandbox-preflight.outcome == 'success'
+        id: native-core-inherit-appserver
+        shell: bash
+        run: |
+          python3 scripts/codex_env_names_appserver_spike.py "$CODEX_BINARY" "$RUNNER_TEMP/codex-core-inherit-appserver.json" core_inherit
+      - name: Enforce both independently successful native proofs
+        if: always()
+        shell: bash
+        env:
+          CLI_OUTCOME: ${{ steps.native-cli-spike.outcome }}
+          APPSERVER_OUTCOME: ${{ steps.native-appserver-spike.outcome }}
+          FILTERED_CLI_OUTCOME: ${{ steps.native-filtered-cli.outcome }}
+          FILTERED_APPSERVER_OUTCOME: ${{ steps.native-filtered-appserver.outcome }}
+          DEFAULT_EXCLUDES_CLI_OUTCOME: ${{ steps.native-default-excludes-cli.outcome }}
+          DEFAULT_EXCLUDES_APPSERVER_OUTCOME: ${{ steps.native-default-excludes-appserver.outcome }}
+          CORE_INHERIT_CLI_OUTCOME: ${{ steps.native-core-inherit-cli.outcome }}
+          CORE_INHERIT_APPSERVER_OUTCOME: ${{ steps.native-core-inherit-appserver.outcome }}
+        run: |
+          test "$CLI_OUTCOME" = success
+          test "$APPSERVER_OUTCOME" = success
+          test "$FILTERED_CLI_OUTCOME" = success
+          test "$FILTERED_APPSERVER_OUTCOME" = success
+          test "$DEFAULT_EXCLUDES_CLI_OUTCOME" = success
+          test "$DEFAULT_EXCLUDES_APPSERVER_OUTCOME" = success
+          test "$CORE_INHERIT_CLI_OUTCOME" = success
+          test "$CORE_INHERIT_APPSERVER_OUTCOME" = success
+      - name: Preserve only bounded, redacted proof (no native home or child output)
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: codex-env-name-native-linux-synthetic-proof
+          path: |
+            ${{ runner.temp }}/codex-env-spike-report.json
+            ${{ runner.temp }}/codex-appserver-spike-report.json
+            ${{ runner.temp }}/codex-env-filtered-cli.json
+            ${{ runner.temp }}/codex-env-filtered-appserver.json
+            ${{ runner.temp }}/codex-default-excludes-cli.json
+            ${{ runner.temp }}/codex-default-excludes-appserver.json
+            ${{ runner.temp }}/codex-core-inherit-cli.json
+            ${{ runner.temp }}/codex-core-inherit-appserver.json
+          if-no-files-found: warn
+          retention-days: 7
+
+  native-macos-arm64-core-research:
+    # Research only; default-mode Linux vendor leak remains a failed release gate.
+    # GitHub's standard public Apple Silicon label is macos-15, NOT the
+    # runner-image repository/tag name macos-15-arm64 (never acquires a runner).
+    runs-on: macos-15
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Require genuine native Apple Silicon (no Intel fallback)
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -s)" = Darwin
+          test "$(uname -m)" = arm64
+      - name: Verify synthetic-only Python oracles
+        run: python3 -m unittest discover -s scripts -p 'test_codex_env_names_native_spike.py'
+      - name: Install official SHA-pinned Codex 0.169.0 macOS ARM64
+        id: install
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/codex-native"
+          curl -fSL --retry 3 --connect-timeout 15 --max-time 240 \
+            https://github.com/openai/codex/releases/download/rust-v0.169.0/codex-aarch64-apple-darwin.tar.gz \
+            -o "$RUNNER_TEMP/codex-native/codex.tar.gz"
+          printf '%s  %s\n' '7f4c49c80bae1d0b4e347acfcdf11faa3475d87ae5e65a5eb1261d3c358145ee' \
+            "$RUNNER_TEMP/codex-native/codex.tar.gz" | shasum -a 256 -c -
+          tar -xzf "$RUNNER_TEMP/codex-native/codex.tar.gz" -C "$RUNNER_TEMP/codex-native"
+          test -s "$RUNNER_TEMP/codex-native/codex-aarch64-apple-darwin"
+          chmod 0755 "$RUNNER_TEMP/codex-native/codex-aarch64-apple-darwin"
+          echo "CODEX_BINARY=$RUNNER_TEMP/codex-native/codex-aarch64-apple-darwin" >> "$GITHUB_ENV"
+      - name: Qualify genuine CLI core-inherit shell/MCP
+        if: steps.install.outcome == 'success'
+        id: core-cli
+        shell: bash
+        run: python3 scripts/codex_env_names_native_spike.py "$CODEX_BINARY" "$RUNNER_TEMP/codex-macos-core-cli.json" core_inherit
+      - name: Qualify genuine app-server core-inherit shell/MCP
+        if: always() && steps.install.outcome == 'success'
+        id: core-appserver
+        shell: bash
+        run: python3 scripts/codex_env_names_appserver_spike.py "$CODEX_BINARY" "$RUNNER_TEMP/codex-macos-core-appserver.json" core_inherit
+      - name: Assert both core controls passed independently
+        if: always()
+        shell: bash
+        env:
+          CLI: ${{ steps.core-cli.outcome }}
+          APP: ${{ steps.core-appserver.outcome }}
+        run: test "$CLI" = success && test "$APP" = success
+      - name: Preserve only redacted macOS research proof
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: codex-env-name-macos-arm64-core-research
+          path: |
+            ${{ runner.temp }}/codex-macos-core-cli.json
+            ${{ runner.temp }}/codex-macos-core-appserver.json
+          if-no-files-found: warn
+          retention-days: 7
+
+  native-windows-x64-core-research:
+    # Research only: do not disable or weaken the native Windows sandbox.
+    runs-on: windows-2022
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Verify synthetic-only Python oracles
+        shell: pwsh
+        run: python -m unittest discover -s scripts -p 'test_codex_env_names_native_spike.py'
+      - name: Install complete official SHA-pinned Codex 0.169.0 Windows package
+        id: install
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dir = Join-Path $env:RUNNER_TEMP 'codex-native'
+          New-Item -ItemType Directory -Path $dir -Force | Out-Null
+          # Use the exact official installer layout, not a reconstructed
+          # standalone executable missing native exec-server/other resources.
+          $archive = Join-Path $dir 'codex-package.tar.gz'
+          Invoke-WebRequest -Uri 'https://github.com/openai/codex/releases/download/rust-v0.169.0/codex-package-x86_64-pc-windows-msvc.tar.gz' -OutFile $archive
+          $sha = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($sha -ne '456db280d16f4393cd99a398f11b4a14a3ede68b6bd31610ce41fb10d6b65737') {
+            throw 'Official Codex Windows full-package SHA256 mismatch'
+          }
+          tar -xzf $archive -C $dir
+          if ($LASTEXITCODE -ne 0) { throw 'Codex package extraction failed' }
+          $required = @(
+            'codex-package.json',
+            'bin/codex.exe',
+            'bin/codex-code-mode-host.exe',
+            'bin/codex-exec-server.exe',
+            'codex-resources/codex-windows-sandbox-setup.exe',
+            'codex-resources/codex-command-runner.exe',
+            'codex-path/rg.exe'
+          )
+          foreach ($name in $required) {
+            if (-not (Test-Path -LiteralPath (Join-Path $dir $name) -PathType Leaf)) {
+              throw "Official Codex package is missing required file: $name"
+            }
+          }
+          $metadata = Get-Content -LiteralPath (Join-Path $dir 'codex-package.json') -Raw | ConvertFrom-Json
+          if ($metadata.version -ne '0.169.0' -or
+              $metadata.target -ne 'x86_64-pc-windows-msvc' -or
+              $metadata.entrypoint -ne 'bin/codex.exe' -or
+              $metadata.execServer -ne 'bin/codex-exec-server.exe') {
+            throw 'Official Codex package metadata/layout mismatch'
+          }
+          $binary = Join-Path $dir 'bin/codex.exe'
+          "CODEX_BINARY=$binary" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      # A no-secret, real sandbox smoke test. Passing is not native secrecy
+      # evidence; failure must block all canary-bearing Windows probes.
+      - name: Preflight genuine Windows read-only sandbox without credentials
+        if: steps.install.outcome == 'success'
+        id: windows-sandbox-preflight
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+          import shutil
+          import subprocess
+          import sys
+          import tempfile
+
+          sys.path.insert(0, str(Path.cwd() / "scripts"))
+          from codex_env_names_native_spike import isolated_env, ENV_NAME, FOREIGN_ENV_NAME
+
+          with tempfile.TemporaryDirectory(prefix="uap-win-sandbox-no-secret-") as tmp:
+              root = Path(tmp)
+              (root / "tmp").mkdir()
+              home = root / "home"
+              (home / ".codex").mkdir(parents=True)
+              env = isolated_env(root, home, "", "")
+              env.pop(ENV_NAME, None)
+              env.pop(FOREIGN_ENV_NAME, None)
+              shell = env.get("COMSPEC", "cmd.exe")
+              # Baseline under the SAME restricted process environment.
+              # Distinguishes a missing OS executable from native Codex
+              # sandbox failure; this is NEVER a replacement for sandboxing.
+              try:
+                  control = subprocess.run(
+                      [shell, "/d", "/c", "echo UAP_WINDOWS_NO_SECRET_CONTROL_OK"],
+                      cwd=root, env=env, capture_output=True,
+                      text=True, timeout=15)
+              except (OSError, subprocess.TimeoutExpired) as exc:
+                  print("windows_no_secret_direct_control_pass=false")
+                  print("windows_no_secret_direct_control_exception=" + type(exc).__name__)
+                  raise SystemExit(1)
+              direct_ok = (control.returncode == 0
+                           and "UAP_WINDOWS_NO_SECRET_CONTROL_OK" in control.stdout)
+              print("windows_no_secret_direct_control_pass=" + str(direct_ok).lower())
+              if not direct_ok:
+                  raise SystemExit(1)
+              command = [sys.argv[1], "sandbox", "--permission-profile",
+                         ":read-only", "--", env.get("COMSPEC", "cmd.exe"),
+                         "/d", "/c", "echo UAP_WINDOWS_NO_SECRET_SANDBOX_OK"]
+              try:
+                  result = subprocess.run(
+                      command, cwd=root, env=env, capture_output=True,
+                      text=True, timeout=60)
+              except (OSError, subprocess.TimeoutExpired) as exc:
+                  print("windows_no_secret_sandbox_probe_pass=false")
+                  print("windows_no_secret_sandbox_probe_exception=" + type(exc).__name__)
+                  raise SystemExit(1)
+              passed = (result.returncode == 0
+                        and "UAP_WINDOWS_NO_SECRET_SANDBOX_OK" in result.stdout)
+              print("windows_no_secret_sandbox_probe_pass=" + str(passed).lower())
+              if not passed:
+                  # Print only fixed labels, never raw native output or paths.
+                  observed = (result.stdout + result.stderr).lower()
+                  labels = ("helper_unknown_error", "setup refresh", "access denied",
+                            "blocked by policy", "createprocessasuserw",
+                            "windows sandbox failed", "failed to create",
+                            "sandbox token", "restricted token", "appcontainer",
+                            "sandbox", "permission", "unrecognized", "not supported",
+                            "invalid", "timed out", "failed")
+                  print("windows_no_secret_sandbox_probe_indicators=" +
+                        ",".join(label for label in labels if label in observed))
+                  raise SystemExit(1)
+
+              # Codex normally discovers PowerShell first on Windows, even
+              # when a cmd.exe sandbox smoke succeeds. Diagnose the SAME
+              # executable family without synthetic env keys or real secrets.
+              powershell = (shutil.which("pwsh", path=env.get("PATH", ""))
+                            or shutil.which("powershell", path=env.get("PATH", "")))
+              if not powershell:
+                  print("windows_no_secret_powershell_available=false")
+                  raise SystemExit(1)
+              fixed_probe = "Write-Output 'UAP_WINDOWS_POWERSHELL_NO_SECRET_OK'"
+              powershell_args = [powershell, "-NoProfile", "-Command", fixed_probe]
+              try:
+                  direct = subprocess.run(
+                      powershell_args, cwd=root, env=env, capture_output=True,
+                      text=True, timeout=20)
+              except (OSError, subprocess.TimeoutExpired) as exc:
+                  print("windows_no_secret_powershell_direct_pass=false")
+                  print("windows_no_secret_powershell_direct_exception=" + type(exc).__name__)
+                  raise SystemExit(1)
+              direct_ok = (direct.returncode == 0
+                           and "UAP_WINDOWS_POWERSHELL_NO_SECRET_OK" in direct.stdout)
+              print("windows_no_secret_powershell_direct_pass=" + str(direct_ok).lower())
+              if not direct_ok:
+                  raise SystemExit(1)
+              native_command = [sys.argv[1], "sandbox", "--permission-profile",
+                                ":read-only", "--"] + powershell_args
+              try:
+                  native = subprocess.run(
+                      native_command, cwd=root, env=env, capture_output=True,
+                      text=True, timeout=60)
+              except (OSError, subprocess.TimeoutExpired) as exc:
+                  print("windows_no_secret_powershell_sandbox_pass=false")
+                  print("windows_no_secret_powershell_sandbox_exception=" + type(exc).__name__)
+                  raise SystemExit(1)
+              native_ok = (native.returncode == 0
+                           and "UAP_WINDOWS_POWERSHELL_NO_SECRET_OK" in native.stdout)
+              print("windows_no_secret_powershell_sandbox_pass=" + str(native_ok).lower())
+              if not native_ok:
+                  native_report = (native.stdout + native.stderr).lower()
+                  patterns = ("windows sandbox failed", "sandbox", "permission",
+                              "access denied", "not found", "failed", "pwsh",
+                              "powershell", "helper", "createprocessasuserw",
+                              "not supported", "invalid", "unrecognized")
+                  print("windows_no_secret_powershell_sandbox_indicators=" +
+                        ",".join(pattern for pattern in patterns
+                                 if pattern in native_report))
+                  raise SystemExit(1)
+
+              # Codex 0.169.0 defaults to login=true for exec_command. For
+              # PowerShell this OMITS -NoProfile, unlike the control above.
+              # Independently verify the vendor-default launch form with
+              # strictly no credential names or values in the environment.
+              login_args = [powershell, "-Command", fixed_probe]
+              for scope, argv in (
+                  ("direct", login_args),
+                  ("sandbox", [sys.argv[1], "sandbox",
+                               "--permission-profile", ":read-only", "--"]
+                              + login_args),
+              ):
+                  try:
+                      login = subprocess.run(
+                          argv, cwd=root, env=env, capture_output=True,
+                          text=True, timeout=60)
+                  except (OSError, subprocess.TimeoutExpired) as exc:
+                      print("windows_no_secret_powershell_login_" + scope +
+                            "_pass=false")
+                      print("windows_no_secret_powershell_login_" + scope +
+                            "_exception=" + type(exc).__name__)
+                      raise SystemExit(1)
+                  login_ok = (
+                      login.returncode == 0 and
+                      "UAP_WINDOWS_POWERSHELL_NO_SECRET_OK" in login.stdout
+                  )
+                  print("windows_no_secret_powershell_login_" + scope +
+                        "_pass=" + str(login_ok).lower())
+                  if not login_ok:
+                      observed = (login.stdout + login.stderr).lower()
+                      categories = ("sandbox", "permission", "access denied",
+                                    "profile", "failed", "unrecognized",
+                                    "not supported", "invalid")
+                      print("windows_no_secret_powershell_login_" + scope +
+                            "_indicators=" +
+                            ",".join(k for k in categories if k in observed))
+                      raise SystemExit(1)
+          '@ | python - "$env:CODEX_BINARY"
+      # Model-driven shell control contains NO synthetic or real credentials.
+      # Native cmd/PowerShell sandbox smokes alone do not prove exec_command.
+      - name: Diagnose model-driven Windows shell without any credentials
+        if: steps.windows-sandbox-preflight.outcome == 'success'
+        id: windows-model-no-secret
+        shell: pwsh
+        run: python scripts/codex_env_names_windows_shell_control.py "$env:CODEX_BINARY" "$env:RUNNER_TEMP\codex-win-no-secret-model-shell.json"
+      - name: Qualify genuine CLI core-inherit shell/MCP
+        if: steps.windows-model-no-secret.outcome == 'success'
+        id: core-cli
+        shell: pwsh
+        run: python scripts/codex_env_names_native_spike.py "$env:CODEX_BINARY" "$env:RUNNER_TEMP\codex-win-core-cli.json" core_inherit
+      - name: Qualify genuine app-server core-inherit shell/MCP
+        if: always() && steps.windows-model-no-secret.outcome == 'success'
+        id: core-appserver
+        shell: pwsh
+        run: python scripts/codex_env_names_appserver_spike.py "$env:CODEX_BINARY" "$env:RUNNER_TEMP\codex-win-core-appserver.json" core_inherit
+      - name: Assert both core controls passed independently
+        if: always()
+        shell: pwsh
+        env:
+          CLI: ${{ steps.core-cli.outcome }}
+          APP: ${{ steps.core-appserver.outcome }}
+        run: |
+          if ($env:CLI -ne 'success' -or $env:APP -ne 'success') { throw 'Native Windows core-inherit research incomplete' }
+      - name: Preserve only redacted Windows research proof
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: codex-env-name-windows-x64-core-research
+          path: |
+            ${{ runner.temp }}/codex-win-no-secret-model-shell.json
+            ${{ runner.temp }}/codex-win-core-cli.json
+            ${{ runner.temp }}/codex-win-core-appserver.json
+          if-no-files-found: warn
+          retention-days: 7
