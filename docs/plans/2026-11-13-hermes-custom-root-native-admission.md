@@ -2609,3 +2609,64 @@ source have **not been executed locally**. Independent source R2, ordinary CI
 execution (including actual Windows cases), fresh native originals and final
 source acceptance remain required. Historical Windows HTTP evidence explains
 the fixed member's role; it does not qualify this new source.
+
+## 2026-11-14 — closed observer predicate diagnostics after original 8d failures
+
+The original `8d18cfff1e62ae8eeaf896b5b36dd14a8e98e14a` bundled observations
+retain two distinct unresolved predicates. macOS reaches `public-repair-a` and
+the original bounded-command refusal; Windows reaches `public-stdio-a` and the
+first compound identity/defaults guard in `public_spawn_entry`. The safe ZIPs
+were actually read after executor recovery, with complete CRC and whole-archive
+SHA-256 joins: macOS 767 bytes,
+`1262f74f48ae3719d6a7e3df409535e5aba751959d98b2f538a11da4277f85ba`,
+and Windows 772 bytes,
+`6156e7772c8ae060c09594150f320fecf710483649265f21a9eba677bc64afbb`.
+Each contains only its original closed `profile-admission.json`. Neither
+contains the refused command's raw streams/status or the Windows ledger body.
+The later completed Linux bundled job has the same repair callsite in its
+original log (233907 bytes, SHA-256
+`48b8f72b3f53b0272293e850fde00cfba582ebf5174179154ec3d833f96eb72b`).
+These records establish the boundary, not its undisclosed inner value.
+
+This three-path change adds only an optional closed `boundary` projection to
+the existing observer failure channel and its post-closure stdout readout.
+The bounded-command projection distinguishes nonzero exit, unexpected zero,
+output bound, timeout and inherited-pipe refusal. It uses the original
+producer's already-held `Popen` return code, exact boolean expectation,
+finite failure string and exact standard-library event state. It never polls
+the child, reopens status/streams, reads a pipe or exports exit values, PIDs,
+argv, messages, paths or content. An unknown or poisoned value omits the
+optional projection.
+
+The spawn projection names only the first failed clause of the existing
+identity/defaults expression, in its original order: native PID, child PID,
+spawner PID, distinct child, purpose, install key, install match, empty
+defaults, null port or non-isolated state. It examines only exact built-in
+scalar types in the already-parsed 16-field row. Later time, argv, event-pair
+and parent-chain refusals cannot be relabeled as an identity failure. The
+original compound guard, all later guards and every native allowance remain
+unchanged. In particular, the Windows launcher/Python PID relationship is
+still unproved by the old safe summary and is not relaxed here.
+
+Both projections require the exact retained producer code/globals and its
+immediate final owned `require` traceback, the existing own public caller and
+closed command label, and `RuntimeError` in the public phase. The parent keeps
+the original source/nonce and positive primary-family settlement joins. It
+constructs the previous valid stdout line first and only then attempts this
+bounded extension. Invalid, unrelated or oversized optional detail preserves
+that line byte-for-byte, including existing public-bootstrap detail. Both
+existing 2 KiB limits remain. This introduces no filesystem observation,
+cleanup authority, new IPC channel, ledger ownership or successful admission.
+Raw evidence remains withheld when the original cleanup is unproved; every
+qualification flag remains false.
+
+The clean `c2b9c0766b722a283e901ce7bfc8b766d36e4242` baseline was actually
+executed on Linux after restoration: 178 discovered, 171 passed and seven
+existing Windows-only skips. Six appended methods exercise real inert
+bounded-command exit/zero/output/timeout refusals, real spawn identity and
+later-guard refusals, exact code/phase/command joins, poisoned locals,
+retained-descriptor settlement and unchanged optional-failure fallback.
+The inherited-pipe category has a finite producer-local contract test, not a
+claimed native or inherited-process execution. All 178 prior test methods
+remain byte-identical. The full candidate run discovers 184 tests; actual
+Windows and fresh native outcomes remain separate required evidence.

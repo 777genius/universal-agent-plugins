@@ -111,6 +111,46 @@ class ReadonlyHelperDiagnosticContracts(unittest.TestCase):
         self.assertIsNotNone(match)
         self.assertEqual(frozenset(match.group(1).split()), case.READONLY_HELPER_CODES)
 
+    def test_primitive_filesystem_codes_remain_exact_negative_frames(self):
+        for code in ('readonly-primitive-missing', 'readonly-primitive-permission'):
+            with self.subTest(code=code), self.assertRaises(case.ReadonlyHelperRefusal) as caught:
+                self.capture(b'', ('grok-acp-controller-refused:' + code + '\n').encode(), 2)
+            progress = case.frontend_state()
+            progress.update(stage='helper', source_identity_checked=True)
+            original = dict(progress)
+            case.frontend_error(progress, caught.exception)
+            self.assertEqual(progress, dict(original, failure_stage='helper', error_class='helper-' + code))
+            packet = dict(schema_version=1, kind='frontend-publication-refused', stage='helper',
+                error_class=progress['error_class'], source_identity_checked=True,
+                cleanup_complete=False, publication_attempted=False)
+            body = json.dumps(packet, separators=(',', ':')).encode() + b'\n'
+            with redirect_stdout(io.StringIO()) as stream, self.assertRaisesRegex(ValueError, '^frontend-publication-refused$'):
+                case.frontend_packet(body, 1)
+            self.assertEqual(stream.getvalue(), 'GROK_FRONTEND_REFUSAL=' + body.decode())
+            for key, value in (('stage', 'receipt'), ('source_identity_checked', False),
+                               ('cleanup_complete', True), ('publication_attempted', True)):
+                changed = json.dumps(dict(packet, **{key:value}), separators=(',', ':')).encode() + b'\n'
+                with redirect_stdout(io.StringIO()) as stream, self.assertRaisesRegex(ValueError, 'helper-refusal-authority'):
+                    case.frontend_packet(changed, 1)
+                self.assertEqual(stream.getvalue(), '')
+
+    def test_primitive_codes_do_not_admit_contaminated_or_wrong_exit_transport(self):
+        for code in ('readonly-primitive-missing', 'readonly-primitive-permission'):
+            fixed = ('grok-acp-controller-refused:' + code + '\n').encode()
+            for stdout, stderr, status in ((b'', fixed, 0), (b'', fixed, 1),
+                    (b'', fixed.rstrip(), 2), (b'', fixed + b'PRIVATE\n', 2),
+                    (b'', fixed.replace(b'\n', b':PRIVATE\n'), 2), (b'PRIVATE\n', fixed, 2)):
+                with self.subTest(code=code, stdout=stdout, stderr=stderr, status=status), self.assertRaises(ValueError) as caught:
+                    self.capture(stdout, stderr, status)
+                self.assertNotIsInstance(caught.exception, case.ReadonlyHelperRefusal)
+                progress = case.frontend_state()
+                case.frontend_error(progress, caught.exception)
+                self.assertEqual(progress['error_class'], 'contract')
+                self.assertFalse(progress['cleanup_complete'])
+                self.assertFalse(progress['publication_attempted'])
+                self.assertFalse(progress['receipt_emitted'])
+                self.assertNotIn('PRIVATE', str(caught.exception))
+
 
 class FrontendPublicationContracts(unittest.TestCase):
     def preflight_refusal(self):

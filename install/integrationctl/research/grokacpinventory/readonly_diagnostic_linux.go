@@ -4,12 +4,14 @@ package main
 
 import (
 	"errors"
+	"os"
 	"slices"
 	"strings"
 )
 
 // These are source-owned guard names, never exception text from a native child.
 const readonlyDiagnosticCodes = `readonly-helper-unclassified readonly-primitive-refused
+readonly-primitive-missing readonly-primitive-permission
 ordinary-bwrap-refused bwrap-capability-refused readonly-identity-refused
 readonly-directory-refused readonly-directory-join-refused overflow-id-refused
 readonly-input-authority readonly-input-directory-read readonly-input-bound
@@ -34,6 +36,17 @@ type readonlyRefusal struct {
 
 func (e *readonlyRefusal) Error() string { return e.code }
 func (e *readonlyRefusal) Unwrap() error { return e.cause }
+
+func readonlyPrimitiveRefusal(cause error) error {
+	code := "readonly-primitive-refused"
+	switch {
+	case errors.Is(cause, os.ErrNotExist):
+		code = "readonly-primitive-missing"
+	case errors.Is(cause, os.ErrPermission):
+		code = "readonly-primitive-permission"
+	}
+	return errors.Join(cause, errors.New(code))
+}
 
 func readonlyDiagnostic(mode string, cause error) error {
 	if mode != readonlyMode || cause == nil {

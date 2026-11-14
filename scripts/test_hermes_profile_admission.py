@@ -5506,5 +5506,257 @@ class PublicSpawnOriginalAuthorityContracts(unittest.TestCase):
             self.assertEqual(observed, [{"a": None, "b": None}])
 
 
+class ObserverBoundaryDiagnosticContracts(unittest.TestCase):
+    nonce, source = "a" * 64, "b" * 40
+
+    @staticmethod
+    def encoded(value):
+        return json.dumps(value, sort_keys=True, separators=(",", ":")).encode("ascii") + b"\n"
+
+    @staticmethod
+    def command_code():
+        owner = CASE["observe_public"]
+        return next(code for code in owner.__code__.co_consts
+                    if type(code) is type(owner.__code__) and code.co_name == "command")
+
+    def emitted(self, error, phase="public"):
+        import io
+        import sys
+        stream = io.BytesIO()
+        with mock.patch.object(sys, "stdout", SimpleNamespace(buffer=stream)), \
+                mock.patch.dict(os.environ, HERMES_CALL_NONCE=self.nonce, HERMES_PROFILE_SOURCE_HEAD=self.source), \
+                mock.patch.object(os, "read", side_effect=AssertionError("diagnostic read")), \
+                mock.patch.object(os, "open", side_effect=AssertionError("diagnostic open")), \
+                mock.patch.object(os, "scandir", side_effect=AssertionError("diagnostic walk")), \
+                mock.patch.object(Path, "lstat", side_effect=AssertionError("diagnostic stat")), \
+                mock.patch.object(Path, "read_bytes", side_effect=AssertionError("diagnostic bytes")):
+            CASE["emit_observer_failure"](error, phase)
+        body = stream.getvalue()
+        self.assertLessEqual(len(body), 2048)
+        return body, CASE["observer_failure_document"](body, self.nonce, self.source)
+
+    def through_owned_command(self, invoke, label="public-stdio-a"):
+        from types import FunctionType
+        code = self.command_code()
+        cell = (lambda value: lambda: value)(None).__closure__[0]
+        command = FunctionType(code, CASE["observe_public"].__globals__, closure=tuple(cell for _ in code.co_freevars))
+        with mock.patch.dict(command.__globals__, public_runtime_pins=lambda *_args, **_kwargs: invoke()):
+            try:
+                command(label, "a", [], native=False, inspect=False, expected_failure=False, test=None)
+            except RuntimeError as error:
+                return error
+        self.fail("the original guard must refuse")
+
+    def real_bounded_error(self, root, code, *, expected=False, timeout=5):
+        import sys
+        return self.through_owned_command(lambda: CASE["bounded"](
+            [sys.executable, "-I", "-B", "-c", code], root, dict(os.environ), root / "PRIVATE-command",
+            timeout=timeout, expected_failure=expected), "public-repair-a")
+
+    @staticmethod
+    def producer_locals(error, function):
+        trace = error.__traceback__
+        while trace is not None:
+            if trace.tb_frame.f_code is function.__code__:
+                return dict(trace.tb_frame.f_locals)
+            trace = trace.tb_next
+        raise AssertionError("real producer frame missing")
+
+    def test_real_bounded_failures_emit_only_the_observed_closed_category(self):
+        cases = (("nonzero-exit", "raise SystemExit(7)", False, 5),
+                 ("unexpected-zero", "pass", True, 5),
+                 ("output-bound", "import sys; sys.stdout.buffer.write(b'x' * ((1 << 20) + 1))", False, 5),
+                 ("timeout", "import time; time.sleep(10)", False, .05))
+        for predicate, code, expected, timeout in cases:
+            with self.subTest(predicate=predicate), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                error = self.real_bounded_error(root, code, expected=expected, timeout=timeout)
+                original = str(error)
+                body, value = self.emitted(error)
+                self.assertEqual(str(error), original)
+                self.assertEqual(value["boundary"], {"kind": "bounded-command", "predicate": predicate})
+                self.assertEqual(value["command"], "public-repair-a")
+                self.assertEqual(value["caller"]["function_line"], self.command_code().co_firstlineno)
+                status = json.loads((root / "PRIVATE-command.status.json").read_bytes())
+                self.assertIs(type(status["exit"]), int)
+                self.assertNotIn(b"PRIVATE", body); self.assertNotIn(b"returncode", body); self.assertNotIn(b"argv", body)
+                self.assertEqual(set(value["boundary"]), {"kind", "predicate"})
+                self.assertNotIn(b'"pid":', body); self.assertNotIn(b'"exit":', body)
+
+    def test_bounded_unknown_and_poisoned_locals_are_not_normalized(self):
+        import threading
+        class Poison:
+            def __eq__(self, other): raise AssertionError("poison equality")
+            def __str__(self): raise AssertionError("poison string")
+            def __bool__(self): raise AssertionError("poison truth")
+            def poll(self): raise AssertionError("diagnostic poll")
+        with tempfile.TemporaryDirectory() as temporary:
+            error = self.real_bounded_error(Path(temporary).resolve(), "raise SystemExit(7)")
+            values = self.producer_locals(error, CASE["bounded"])
+            helper = CASE["observer_bounded_boundary"]
+            # This branch is tested against the actual producer's finite failure
+            # string; it does not claim an inherited-pipe subprocess was run.
+            self.assertEqual(helper(dict(values, failure="native command left inherited capture pipe open")),
+                             {"kind": "bounded-command", "predicate": "inherited-pipe"})
+            for key, value in (("failure", "PRIVATE unknown"), ("failure", Poison()), ("expected_failure", 1),
+                               ("expected_failure", Poison()), ("child", Poison()), ("overflow", Poison())):
+                with self.subTest(key=key, value_type=type(value).__name__), self.assertRaises(RuntimeError):
+                    helper(dict(values, **{key: value}))
+            for code in (True, None, 2**32, -(2**31)-1, Poison()):
+                with self.subTest(code_type=type(code).__name__), mock.patch.object(values["child"], "returncode", code), \
+                        self.assertRaises(RuntimeError):
+                    helper(values)
+            with mock.patch.object(values["child"], "returncode", 0), self.assertRaises(RuntimeError): helper(values)
+            flagged = threading.Event(); flagged.set()
+            with self.assertRaises(RuntimeError): helper(dict(values, overflow=flagged))
+            baseline = None
+            for result in (None, {"kind": "bounded-command", "predicate": "PRIVATE"}, Poison()):
+                with mock.patch.dict(CASE["emit_observer_failure"].__globals__, observer_bounded_boundary=lambda _v: result):
+                    body, value = self.emitted(error)
+                self.assertNotIn("boundary", value)
+                if baseline is None: baseline = body
+                self.assertEqual(body, baseline)
+
+    def test_real_spawn_identity_guard_names_first_failure_and_leaves_later_guards_unknown(self):
+        fixtures = PublicSpawnLedgerContracts()
+        cases = (("native-pid", {}, {"native_pid": True}), ("child-pid", {"pid": True}, {}),
+                 ("spawner-pid", {"spawner_pid": 102}, {}), ("distinct-child", {"pid": 101}, {}),
+                 ("purpose", {"purpose": "PRIVATE"}, {}), ("install-key", {}, {"install_id": "PRIVATE"}),
+                 ("install-match", {"install": "b" * 12}, {}), ("empty-defaults", {"host": "PRIVATE"}, {}),
+                 ("null-port", {"port": 0}, {}), ("non-isolated", {"isolated": 0}, {}),
+                 ("spawner-pid", {"spawner_pid": 102, "purpose": "PRIVATE", "isolated": True}, {}),
+                 (None, {"create_time": 100}, {}), (None, {"argv": "PRIVATE"}, {}))
+        for predicate, changed, args in cases:
+            with self.subTest(predicate=predicate, fields=tuple(changed)):
+                entry = dict(fixtures.entry("win32"), **changed)
+                error = self.through_owned_command(lambda: fixtures.verify(entry, [], fixtures.events("win32"), "win32", **args))
+                original = str(error)
+                body, value = self.emitted(error)
+                self.assertEqual(str(error), original)
+                self.assertEqual(value["caller"]["function"], "public_spawn_entry")
+                self.assertEqual(value["command"], "public-stdio-a")
+                if predicate is None:
+                    self.assertNotIn("boundary", value)
+                else:
+                    self.assertEqual(value["boundary"], {"kind": "spawn-identity", "predicate": predicate})
+                for private in (b"PRIVATE", b'"pid":', b'"spawner_pid":', b"argv", b"create_time"):
+                    self.assertNotIn(private, body)
+
+    def test_spawn_projection_refuses_poison_without_comparison_or_source_reads(self):
+        class Poison:
+            def __eq__(self, other): raise AssertionError("poison equality")
+            def __ne__(self, other): raise AssertionError("poison inequality")
+            def __str__(self): raise AssertionError("poison string")
+            def __bool__(self): raise AssertionError("poison truth")
+        fixtures = PublicSpawnLedgerContracts()
+        entry = dict(fixtures.entry("win32"), spawner_pid=102)
+        error = self.through_owned_command(lambda: fixtures.verify(entry, [], fixtures.events("win32"), "win32"))
+        values = self.producer_locals(error, CASE["public_spawn_entry"])
+        helper = CASE["observer_spawn_boundary"]
+        for key in ("pid", "spawner_pid", "purpose", "install", "host", "profile", "hermes_home", "port", "isolated"):
+            changed = dict(values, entry=dict(values["entry"], **{key: Poison()}))
+            with self.subTest(key=key), self.assertRaises(RuntimeError): helper(changed)
+        for key in ("native_pid", "install_id", "entry"):
+            with self.subTest(key=key), self.assertRaises(RuntimeError): helper(dict(values, **{key: Poison()}))
+        with self.assertRaises(RuntimeError): helper(dict(values, entry={"PRIVATE": 1}))
+        with mock.patch.dict(CASE["emit_observer_failure"].__globals__, observer_spawn_boundary=lambda _v: Poison()):
+            body, value = self.emitted(error)
+        self.assertNotIn("boundary", value); self.assertNotIn(b"PRIVATE", body)
+
+    def test_boundary_requires_exact_owned_trace_phase_command_and_closed_shape(self):
+        import copy
+        from types import FunctionType
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            error = self.real_bounded_error(root, "raise SystemExit(7)")
+            body, observed = self.emitted(error)
+            self.assertIn("boundary", observed)
+            for phase in ("profiles", "probe-cleanup"):
+                _, value = self.emitted(error, phase)
+                self.assertNotIn("boundary", value)
+            for label in ("PRIVATE", None, True, ["public-repair-a"]):
+                failure = self.through_owned_command(lambda: CASE["bounded"](
+                    [CASE["sys"].executable, "-I", "-B", "-c", "raise SystemExit(7)"], root, dict(os.environ), root / "private"), label)
+                _, value = self.emitted(failure)
+                self.assertNotIn("boundary", value)
+            # The same bytecode/filename in a fresh code object grants no
+            # producer-local authority, even when called by the owned command.
+            original = CASE["bounded"]
+            clone = FunctionType(original.__code__.replace(), original.__globals__, argdefs=original.__defaults__)
+            failure = self.through_owned_command(lambda: clone(
+                [CASE["sys"].executable, "-I", "-B", "-c", "raise SystemExit(7)"], root, dict(os.environ), root / "clone"), "public-repair-a")
+            _, value = self.emitted(failure)
+            self.assertNotIn("boundary", value)
+        invalid = []
+        for key, value in (("phase", "profiles"), ("exception_kind", "ValueError"), ("command", "version-a"),
+                           ("nonce", "c" * 64), ("source_head", "d" * 40)):
+            changed = copy.deepcopy(observed); changed[key] = value; invalid.append(changed)
+        for detail in ({"kind": "private", "predicate": "timeout"}, {"kind": "bounded-command", "predicate": True},
+                       {"kind": "bounded-command", "predicate": "timeout", "pid": 123},
+                       {"kind": "spawn-identity", "predicate": "spawner-pid"}):
+            changed = copy.deepcopy(observed); changed["boundary"] = detail; invalid.append(changed)
+        for value in invalid:
+            with self.subTest(value=value), self.assertRaises(RuntimeError):
+                CASE["observer_failure_document"](self.encoded(value), self.nonce, self.source)
+
+    def test_closed_parent_readout_preserves_settlement_baseline_and_optional_budget(self):
+        import copy
+        with tempfile.TemporaryDirectory() as temporary:
+            error = self.real_bounded_error(Path(temporary).resolve(), "raise SystemExit(7)")
+            body, observer = self.emitted(error)
+            with (Path(temporary) / "retained.stdout").open("x+b") as stream:
+                original = os.fstat(stream.fileno()); stream.write(body); stream.flush()
+                with mock.patch.object(Path, "open", side_effect=AssertionError("readout pathname reopen")):
+                    self.assertIsNone(CASE["read_observer_failure"](stream.fileno(), original, self.nonce, self.source, primary_settled=False))
+                    self.assertEqual(CASE["read_observer_failure"](stream.fileno(), original, self.nonce, self.source, primary_settled=True), observer)
+        context = dict(source_head=self.source, nonce=self.nonce, cleanup_phase="public-family",
+                       primary_family_settled=True, observer_exit=1, observer=observer)
+        fixtures, helper = FailureReadoutContracts(), CASE["admission_failure_readout"]
+        safe = fixtures.proof("bundled"); safe["native_failure"] = context
+        settled = fixtures.proof("source"); settled["runtime_distribution"] = "bundled"
+        with mock.patch.object(os, "read", side_effect=AssertionError("readout read")), \
+                mock.patch.object(Path, "read_bytes", side_effect=AssertionError("readout reread")):
+            lines = (helper(fixtures.encoded(safe), None), helper(fixtures.encoded(settled), None, native_failure=context))
+        for line in lines:
+            report = json.loads(line)
+            self.assertEqual(report["native_failure"]["observer"]["boundary"], observer["boundary"])
+            self.assertIs(report["admission_qualified"], False); self.assertIs(report["native_qualified"], False)
+            self.assertEqual(report["native_failure"]["cleanup_phase"], "public-family")
+            self.assertLessEqual(len(line.encode()) + len("HERMES_ADMISSION_FAILURE ") + 1, 2048)
+            self.assertNotIn(self.nonce, line)
+        baseline_proof = copy.deepcopy(safe); baseline_proof["native_failure"]["observer"].pop("boundary")
+        baseline = helper(fixtures.encoded(baseline_proof), None)
+        projector = CASE["observer_boundary_readout"]
+        for effect in ("source", "nonce", "unsettled", "caller", "unknown", "poison"):
+            changed = copy.deepcopy(context)
+            if effect == "source": changed["source_head"] = "c" * 40
+            if effect == "nonce": changed["nonce"] = "d" * 64
+            if effect == "unsettled": changed["primary_family_settled"] = False
+            if effect == "caller": changed["observer"]["caller"]["line"] = 999999
+            if effect == "unknown": changed["observer"]["boundary"]["predicate"] = "PRIVATE"
+            if effect == "poison": changed["observer"]["boundary"] = object()
+            with self.subTest(effect=effect): self.assertEqual(projector(baseline, changed, "bundled"), baseline)
+        self.assertEqual(projector(baseline, context, "source"), baseline)
+        serialize = json.dumps
+        def oversized(value, *args, **kwargs):
+            body = serialize(value, *args, **kwargs)
+            if type(value) is dict and type(value.get("native_failure")) is dict \
+                    and "boundary" in value["native_failure"].get("observer", {}):
+                return body + " " * 2048
+            return body
+        with mock.patch.object(json, "dumps", side_effect=oversized):
+            self.assertEqual(projector(baseline, context, "bundled"), baseline)
+        for key, value in (("status", "passed"), ("admission_qualified", True)):
+            changed = copy.deepcopy(safe); changed[key] = value
+            self.assertIsNone(helper(fixtures.encoded(changed), None))
+        public = PublicBootstrapFailureDetailContracts()
+        raw, _ = public.emitted(public.fixture(unexpected=(("PRIVATE", "file"),)))
+        proof = fixtures.proof("bundled")
+        proof["native_failure"] = dict(context, observer=json.loads(raw))
+        line = helper(fixtures.encoded(proof), None)
+        self.assertIn("public_bootstrap", json.loads(line)["native_failure"]["observer"])
+        self.assertEqual(projector(line, context, "bundled"), line)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
@@ -124,5 +125,50 @@ func TestReadonlyDiagnosticLeavesOlderModesAndSuccessUnchanged(t *testing.T) {
 			t.Fatal("ambiguous diagnostic enum", code)
 		}
 		seen[code] = true
+	}
+}
+
+func TestReadonlyPrimitiveRefusalClassifiesActualMissingExecutable(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "PRIVATE-missing-bwrap")
+	held, cause := systemFile(t.Context(), path)
+	if held.file != nil || !errors.Is(cause, os.ErrNotExist) {
+		t.Fatal("actual missing executable did not retain its filesystem error", cause)
+	}
+	refusal := readonlyDiagnostic(readonlyMode, readonlyPrimitiveRefusal(cause))
+	if !errors.Is(refusal, cause) || !errors.Is(refusal, os.ErrNotExist) {
+		t.Fatal("missing executable lost its original error", refusal)
+	}
+	if got := controllerRefusal(refusal); got != "grok-acp-controller-refused:readonly-primitive-missing" {
+		t.Fatal("missing executable diagnostic is not closed", got)
+	}
+	if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("diagnostic changed the missing input", err)
+	}
+}
+
+func TestReadonlyPrimitiveRefusalPreservesAuthorityAndPrivateErrors(t *testing.T) {
+	permission := &os.PathError{Op: "open", Path: "/PRIVATE/tool", Err: syscall.EACCES}
+	for _, item := range []struct {
+		name, code string
+		cause      error
+	}{
+		{"permission", "readonly-primitive-permission", fmt.Errorf("PRIVATE wrapper: %w", permission)},
+		{"operation-not-permitted", "readonly-primitive-permission", &os.PathError{Op: "open", Path: "/PRIVATE/tool", Err: syscall.EPERM}},
+		{"unknown", "readonly-primitive-refused", errors.New("PRIVATE filesystem failure")},
+		{"not-directory", "readonly-primitive-refused", &os.PathError{Op: "lstat", Path: "/PRIVATE/tool", Err: syscall.ENOTDIR}},
+		{"canceled", "readonly-primitive-refused", context.Canceled},
+		{"deadline", "readonly-primitive-refused", context.DeadlineExceeded},
+		{"existing-authority", "file-authority-refused", errors.Join(errors.New("file-authority-refused"), permission)},
+		{"existing-ancestor", "system-ancestor-refused", errors.New("system-ancestor-refused")},
+	} {
+		t.Run(item.name, func(t *testing.T) {
+			refusal := readonlyDiagnostic(readonlyMode, readonlyPrimitiveRefusal(item.cause))
+			if !errors.Is(refusal, item.cause) {
+				t.Fatal("primitive classification lost the original error", refusal)
+			}
+			if got := controllerRefusal(refusal); got != "grok-acp-controller-refused:"+item.code {
+				t.Fatal("primitive classification changed a guard or disclosed private text", got)
+			}
+		})
 	}
 }

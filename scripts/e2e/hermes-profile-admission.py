@@ -3351,6 +3351,34 @@ def source_user_failure_readout(line, result, proof, value, context):
         return line  # Never replace a refusal, its existing diagnostics, or an original exception.
 
 
+def observer_boundary_readout(line, context, distribution):
+    """Extend an already valid line with closed enum facts, never replace it."""
+    try:
+        require(type(distribution) is str and distribution == "bundled", "public boundary distribution differs")
+        context = native_failure_context(context)
+        require(context["primary_family_settled"] is True and context["observer"] is not None,
+                "public boundary lacks primary settlement")
+        observer = context["observer"]
+        if "boundary" not in observer:
+            return line
+        detail = observer_boundary_detail(observer["boundary"])
+        value = public_json(line.encode("ascii"))
+        require(value["source_head"] == context["source_head"]
+                and value["nonce_sha256"] == hashlib.sha256(context["nonce"].encode("ascii")).hexdigest()
+                and value["admission_qualified"] is False and value["native_qualified"] is False
+                and value["native_failure"]["primary_family_settled"] is True
+                and value["native_failure"]["observer"] == {name: observer[name]
+                    for name in ("phase", "reason", "exception_kind", "command", "caller")},
+                "public boundary original readout differs")
+        value["native_failure"]["observer"]["boundary"] = detail
+        extended = json.dumps(value, sort_keys=True, separators=(",", ":"))
+        require(len(extended.encode("ascii")) + len("HERMES_ADMISSION_FAILURE ") + 1 <= 2048,
+                "public boundary readout bound")
+        return extended
+    except BaseException:
+        return line
+
+
 def admission_failure_readout(body, source_refusal, *, native_failure=None, source_delta=None):
     """Project already staged failure bytes; never read or authorize native state."""
     try:
@@ -3399,7 +3427,8 @@ def admission_failure_readout(body, source_refusal, *, native_failure=None, sour
                       source_refusal=refusal, native_failure=native)
         line = json.dumps(result, sort_keys=True, separators=(",", ":"))
         require(len(line.encode("ascii")) + len("HERMES_ADMISSION_FAILURE ") + 1 <= 2048, "failure readout bound")
-        return source_user_failure_readout(line, result, proof, source_delta, context)
+        line = source_user_failure_readout(line, result, proof, source_delta, context)
+        return observer_boundary_readout(line, context, proof["runtime_distribution"])
     except (AttributeError, KeyError, IndexError, TypeError, ValueError, UnicodeError, RuntimeError):
         return None  # Optional diagnostics never replace the original native refusal.
 
@@ -3494,12 +3523,81 @@ def observer_source_codes():
     return {}  # No partial caller authority if the finite own-source walk overflows.
 
 
+OBSERVER_BOUNDARIES = {
+    "bounded-command": ("nonzero-exit", "unexpected-zero", "output-bound", "timeout", "inherited-pipe"),
+    "spawn-identity": ("native-pid", "child-pid", "spawner-pid", "distinct-child", "purpose",
+                       "install-key", "install-match", "empty-defaults", "null-port", "non-isolated"),
+}
+
+
+def observer_boundary_detail(value):
+    require(type(value) is dict and all(type(key) is str for key in value)
+            and set(value) == {"kind", "predicate"}
+            and type(value["kind"]) is str and value["kind"] in OBSERVER_BOUNDARIES
+            and type(value["predicate"]) is str and value["predicate"] in OBSERVER_BOUNDARIES[value["kind"]],
+            "closed observer boundary enums required")
+    return dict(value)
+
+
+def observer_bounded_boundary(values):
+    """Use producer locals only; never poll, read a pipe or reopen status files."""
+    require(type(values) is dict and all(type(key) is str for key in values), "bounded local mapping differs")
+    child, failure, expected = (values.get(name) for name in ("child", "failure", "expected_failure"))
+    require(type(child) is subprocess.Popen and type(expected) is bool
+            and (failure is None or type(failure) is str), "bounded producer local types differ")
+    code = vars(child).get("returncode")
+    require(type(code) is int and -(2**31) <= code < 2**32, "bounded producer exit is unavailable")
+    if failure is not None:
+        names = {"output bound": "output-bound", "command timeout": "timeout",
+                 "native command left inherited capture pipe open": "inherited-pipe"}
+        require(failure in names, "bounded producer failure is unknown")
+        return {"kind": "bounded-command", "predicate": names[failure]}
+    overflow = values.get("overflow")
+    require(type(overflow) is bounded.__globals__["threading"].Event
+            and vars(overflow).get("_flag") is False, "bounded overflow state is uncertain")
+    # This producer only sets the flag; observing false cannot conceal an
+    # earlier overflow. No Event or Popen methods are invoked by this projection.
+    require((code != 0) != expected, "bounded exit did not cause the refusal")
+    return {"kind": "bounded-command", "predicate": "unexpected-zero" if expected else "nonzero-exit"}
+
+
+def observer_spawn_boundary(values):
+    """Name only the first failed identity predicate, in the original order."""
+    require(type(values) is dict and all(type(key) is str for key in values), "spawn local mapping differs")
+    entry, native, install = (values.get(name) for name in ("entry", "native_pid", "install_id"))
+    fields = set("pid create_time purpose install spawner_pid spawner_create registered_at argv host port profile hermes_home isolated boot_start spawner_boot boot_id".split())
+    require(type(entry) is dict and all(type(key) is str for key in entry) and set(entry) == fields,
+            "spawn local schema differs")
+    inspected = (native, install, *(entry[key] for key in
+        ("pid", "spawner_pid", "purpose", "install", "host", "profile", "hermes_home", "port", "isolated")))
+    require(all(any(type(value) is kind for kind in (str, int, bool, float, type(None))) for value in inspected),
+            "spawn local scalar type differs")
+    checks = (
+        ("native-pid", lambda: type(native) is int and 0 < native < 2**32),
+        ("child-pid", lambda: type(entry["pid"]) is int and 0 < entry["pid"] < 2**32),
+        ("spawner-pid", lambda: type(entry["spawner_pid"]) is int and entry["spawner_pid"] == native),
+        ("distinct-child", lambda: entry["pid"] != native),
+        ("purpose", lambda: entry["purpose"] == "mcp-helper"),
+        ("install-key", lambda: type(install) is str and re.fullmatch(r"[a-f0-9]{12}", install) is not None),
+        ("install-match", lambda: entry["install"] == install),
+        ("empty-defaults", lambda: entry["host"] == entry["profile"] == entry["hermes_home"] == ""),
+        ("null-port", lambda: entry["port"] is None),
+        ("non-isolated", lambda: entry["isolated"] is False),
+    )
+    for name, check in checks:
+        if not check():
+            return {"kind": "spawn-identity", "predicate": name}
+    return None
+
+
 def observer_failure_document(body, nonce, source):
     require(type(body) is bytes and 0 < len(body) <= 2048, "observer diagnostic bound")
     value = census_document(body)
     fields = set("schema_version measurement_only admission_qualified nonce source_head phase reason exception_kind command caller".split())
     if type(value) is dict and "public_bootstrap" in value:
         fields.add("public_bootstrap")
+    if type(value) is dict and "boundary" in value:
+        fields.add("boundary")
     require(type(value) is dict and set(value) == fields, "closed observer diagnostic")
     require(type(value["schema_version"]) is int and value["schema_version"] == 1
             and value["measurement_only"] is True and value["admission_qualified"] is False
@@ -3522,6 +3620,18 @@ def observer_failure_document(body, nonce, source):
                 and caller is not None and code is public_profile.__code__
                 and type(value["command"]) is str and value["command"].startswith("public-")
                 and value["command"].endswith("-" + detail["scope"]), "public bootstrap observer binding")
+    if "boundary" in value:
+        detail = observer_boundary_detail(value["boundary"])
+        public_command = next(item for item in observe_public.__code__.co_consts
+                              if type(item) is type(observe_public.__code__) and item.co_name == "command")
+        require("public_bootstrap" not in value and value["phase"] == "public"
+                and value["exception_kind"] == "RuntimeError" and caller is not None
+                and type(value["command"]) is str and value["command"].startswith("public-"),
+                "public boundary observer binding")
+        require((detail["kind"] == "bounded-command" and code is public_command)
+                or (detail["kind"] == "spawn-identity" and code is public_spawn_entry.__code__
+                    and value["command"] in {"public-stdio-a", "public-stdio-b", "public-stdio-restart-a", "public-stdio-repaired-a"}),
+                "public boundary caller differs")
     require(body == json.dumps(value, sort_keys=True, separators=(",", ":")).encode("ascii") + b"\n", "observer diagnostic is not one canonical record")
     return value
 
@@ -3530,6 +3640,7 @@ def emit_observer_failure(error, phase):
     try:
         nonce, source = os.environ["HERMES_CALL_NONCE"], os.environ["HERMES_PROFILE_SOURCE_HEAD"]
         codes, caller, command, trace = observer_source_codes(), None, None, error.__traceback__
+        boundary, boundary_frames = None, 0
         commands = {code for owner in (observe_profiles, observe_public) for code in owner.__code__.co_consts
                     if type(code) is type(owner.__code__) and code.co_name == "command"}
         for _ in range(256):
@@ -3541,9 +3652,21 @@ def emit_observer_failure(error, phase):
                 if code in commands:
                     label = trace.tb_frame.f_locals.get("label")
                     command = label if type(label) is str and label in COMMANDS else None
+            if type(error) is RuntimeError and trace.tb_next is not None and trace.tb_next.tb_next is None:
+                inner = trace.tb_next.tb_frame
+                if inner.f_code is require.__code__ and inner.f_globals is require.__globals__:
+                    try:
+                        if code is bounded.__code__ and trace.tb_frame.f_globals is bounded.__globals__:
+                            boundary_frames += 1
+                            boundary = observer_bounded_boundary(dict(trace.tb_frame.f_locals))
+                        elif code is public_spawn_entry.__code__ and trace.tb_frame.f_globals is globals():
+                            boundary_frames += 1
+                            boundary = observer_spawn_boundary(dict(trace.tb_frame.f_locals))
+                    except BaseException:
+                        boundary = None
             trace = trace.tb_next
         if trace is not None:
-            caller, command = None, None
+            caller, command, boundary = None, None, None
         value = dict(schema_version=1, measurement_only=True, admission_qualified=False, nonce=nonce, source_head=source,
                      phase=phase, reason="uncaught-observer-exception",
                      exception_kind=type(error).__name__ if type(error) in OBSERVER_ERRORS else "other", command=command, caller=caller)
@@ -3561,6 +3684,14 @@ def emit_observer_failure(error, phase):
             value.pop("public_bootstrap")
             body = json.dumps(value, sort_keys=True, separators=(",", ":")).encode("ascii") + b"\n"
             observer_failure_document(body, nonce, source)
+        if boundary is not None and boundary_frames == 1 and "public_bootstrap" not in value:
+            try:
+                extended = dict(value, boundary=observer_boundary_detail(boundary))
+                candidate = json.dumps(extended, sort_keys=True, separators=(",", ":")).encode("ascii") + b"\n"
+                observer_failure_document(candidate, nonce, source)
+                body = candidate
+            except BaseException:
+                pass
         sys.stdout.buffer.write(body)
         sys.stdout.buffer.flush()
     except BaseException:

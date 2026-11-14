@@ -111,7 +111,7 @@ func (s *scopeState) prepareReadonlyExecutable(ctx context.Context, r request) e
 	}
 	h, e := systemFile(ctx, "/usr/bin/bwrap")
 	if e != nil {
-		return errors.Join(e, errors.New("readonly-primitive-refused"))
+		return readonlyPrimitiveRefusal(e)
 	}
 	s.held = append(s.held, h)
 	if h.path != "/usr/bin/bwrap" || h.id.Mode&(unix.S_ISUID|unix.S_ISGID) != 0 {

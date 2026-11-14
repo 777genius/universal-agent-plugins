@@ -249,6 +249,7 @@ METADATA_LABELS = LABELS[:4] + ('mcp-inventory',) + LABELS[4:]
 FRONTEND_STAGES = frozenset(('preflight', 'source', 'acquisition', 'build', 'fixtures', 'baseline',
     'helper', 'receipt', 'ledger', 'inventory', 'source-final', 'cleanup', 'archive', 'receipt-output'))
 READONLY_HELPER_CODES = frozenset('''readonly-helper-unclassified readonly-primitive-refused
+readonly-primitive-missing readonly-primitive-permission
 ordinary-bwrap-refused bwrap-capability-refused readonly-identity-refused
 readonly-directory-refused readonly-directory-join-refused overflow-id-refused
 readonly-input-authority readonly-input-directory-read readonly-input-bound

@@ -981,3 +981,56 @@ The unchanged failure-to-diagnostic mapping now belongs to
 returns nil raw bytes with the same strict cleanup error. Independent review
 accepted this exact extraction, and the complete helper package passed again
 in 0.026 seconds. No size exemption or diagnostic authority was added.
+
+## 2026-11-14: distinguish readonly primitive filesystem refusals
+
+The first completed attempt with the finite helper diagnostic used source
+`8d18cfff1e62ae8eeaf896b5b36dd14a8e98e14a`, tree
+`ad981d834c19993e652d6f0d2ab44f6647132726`, in run `43607242050`, job
+`132484906432`. Its 112 prerequisite Python tests passed. The actual readonly
+capture then emitted only `stage=helper`,
+`error_class=helper-readonly-primitive-refused`, checked source, unproved cleanup
+and no publication attempt. The raw job log is 62,399 bytes with SHA256
+`6a4d2d6220a67e346f8a0990feac3f90ab0e77844ef350c1dd36b80e631fd1e1`.
+
+The original 988-byte artifact `14120188220`, SHA256
+`2373454743a0f486ef7d401409fc261aba6cec35ada66b7c3d9be0fb59cfdc26`,
+contains one `research.zip` member. The nested archive is 1,761 bytes with
+SHA256 `9643712e3918ee10d2314649b166dfc9cf13246b2b50101e322a84009f7100f2`.
+After executor restoration, both ZIP CRCs and the complete frontend/source/
+stdout/stderr joins passed. The nested frontend report contains the same finite
+refusal and no additional underlying error code. All native qualification flags
+remain false. The earlier CLI metadata capture is a separate measurement and
+does not qualify this readonly attempt.
+
+The source call chain places this refusal at the existing
+`systemFile(ctx, "/usr/bin/bwrap")` acquisition, before the later ordinary-binary
+and capability checks, sealed collector creation and readonly native launch.
+The retained error could come from pathname resolution, an ancestor or file
+operation. The original does not establish that the executable is absent, that
+permissions were denied, or that a namespace operation failed.
+
+This six-path follow-up classifies only the error already returned by that
+single acquisition. `errors.Is` with `os.ErrNotExist` selects
+`readonly-primitive-missing`; `os.ErrPermission` selects
+`readonly-primitive-permission`. Every other error retains
+`readonly-primitive-refused`. The original error remains joined first, so an
+existing precise source-owned guard keeps its diagnostic precedence. Neither
+new category identifies a private pathname or the failing path component.
+There is no second filesystem observation or dependency installation.
+
+The Python transport adds only the same two enum entries. Its existing fixed
+command, checked source, original deadline, complete EOF/wait, empty stdout,
+exact exit 2 and one-line stderr checks remain unchanged. Both codes still
+produce a failing frontend packet with cleanup unproved and no publication or
+native authority. Old controller modes, all input/binary/mount checks and all
+public Grok capability and recovery guards remain unchanged.
+
+The new Go regressions use the actual `systemFile` missing-path error and
+wrapped permission errors, preserve the underlying error identities, check
+existing-guard precedence and retain coarse refusal for other filesystem or
+unknown errors. New Python contracts exercise real inert child pipes and
+reject contaminated streams, altered status and false source/cleanup/publication
+claims. All earlier test bodies are preserved. Go execution, formatting, lint
+and new hosted native evidence remain pending the serial validation gate;
+test results for this exact candidate are recorded separately in its freeze.
