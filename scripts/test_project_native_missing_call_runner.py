@@ -3,13 +3,15 @@
 These tests verify test harness safety, not actual vendor login or tools/call.
 """
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
 
 from project_native_missing_call_runner import (
-    agent_command, installation_id, installed_config, permission_fixture, source_build,
+    agent_command, digest, installation_id, installed_config, permission_fixture,
+    require_both_preflight_receipts, run_both_preflight, source_build, stage_shared_source,
 )
 
 
@@ -69,6 +71,120 @@ class RealClientRunnerContractTest(unittest.TestCase):
             self.assertTrue(installer.is_file())
             self.assertTrue(probe.is_file())
             self.assertEqual(labels, ["go-version", "build-installer", "build-probe"])
+
+    def test_shared_source_copies_exact_bytes_without_symlinks(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source_installer = root / "installer"
+            source_probe = root / "probe"
+            source_installer.write_bytes(b"pinned real source installer bytes")
+            source_probe.write_bytes(b"pinned source probe bytes")
+            prepared = (source_installer, source_probe,
+                        digest(source_installer.read_bytes()), digest(source_probe.read_bytes()))
+            first, second = root / "cursor", root / "qoder"
+            first.mkdir()
+            second.mkdir()
+            for target in (first, second):
+                installer, probe = stage_shared_source(target, prepared)
+                self.assertEqual(installer.read_bytes(), source_installer.read_bytes())
+                self.assertEqual(probe.read_bytes(), source_probe.read_bytes())
+                self.assertNotEqual(installer, source_installer)
+                self.assertFalse(installer.is_symlink())
+                self.assertTrue(installer.stat().st_mode & 0o111)
+            with self.assertRaises(ValueError):
+                stage_shared_source(first, prepared)
+            source_probe.write_bytes(b"tampered after first client")
+            third = root / "tampered"
+            third.mkdir()
+            with self.assertRaises(ValueError):
+                stage_shared_source(third, prepared)
+            link = root / "bad-symlink"
+            link.symlink_to(source_installer)
+            fourth = root / "symlink"
+            fourth.mkdir()
+            with self.assertRaises(ValueError):
+                stage_shared_source(fourth, (link, source_probe, prepared[2], digest(source_probe.read_bytes())))
+
+    def test_combined_batch_builds_once_and_keeps_clients_separate(self):
+        expected = "a" * 40
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            evidence = root / "evidence"
+            calls = []
+            builds = []
+
+            def fake_build(work, env, private):
+                builds.append(work)
+                installer, probe = work / "bin" / "agentplugins", work / "source" / "bin" / "probe"
+                installer.parent.mkdir(parents=True)
+                probe.parent.mkdir(parents=True)
+                installer.write_bytes(b"real source installer")
+                probe.write_bytes(b"real source probe")
+                return installer, probe
+
+            def fake_client(client, output, commit, *, preflight_only=False, prepared_source=None):
+                self.assertTrue(preflight_only)
+                self.assertEqual(commit, expected)
+                self.assertEqual(output, evidence / client)
+                self.assertEqual(prepared_source[2], digest(b"real source installer"))
+                self.assertEqual(prepared_source[3], digest(b"real source probe"))
+                calls.append(client)
+                output.mkdir(parents=True)
+                (output / "source-only-preflight.json").write_text(json.dumps({
+                    "schema_version": 1, "client": client, "source_commit": expected,
+                    "native_version": {"cursor": "2026.10.22-27dcf5f", "qoder": "1.1.78"}[client],
+                    "source_built_uap_and_fixture": True,
+                    "genuine_native_server_listed": True,
+                    "uap_owned_project_a_installed_and_removed": True,
+                    "other_project_and_foreign_state_preserved": True,
+                    "vendor_authentication_qualified": False,
+                    "native_tools_call_qualified": False,
+                    "real_model_qualified": False,
+                    "vendor_archive_sha256": "b" * 64,
+                    "native_executable_sha256": "c" * 64,
+                }))
+
+            with patch.dict(os.environ, {"RUNNER_TEMP": str(root)}, clear=False), \
+                    patch("project_native_missing_call_runner.native.native.require_hosted"), \
+                    patch("project_native_missing_call_runner.verify_clean_head"), \
+                    patch("project_native_missing_call_runner.source_build", side_effect=fake_build), \
+                    patch("project_native_missing_call_runner.run", side_effect=fake_client):
+                run_both_preflight(evidence, expected)
+            self.assertEqual(len(builds), 1)
+            self.assertEqual(calls, ["cursor", "qoder"])
+            self.assertEqual(sorted(path.name for path in evidence.iterdir()), ["cursor", "qoder"])
+
+    def test_failed_second_client_never_creates_successful_batch(self):
+        expected = "a" * 40
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            evidence = root / "evidence"
+            def fake_build(work, env, private):
+                installer, probe = work / "bin" / "agentplugins", work / "source" / "bin" / "probe"
+                installer.parent.mkdir(parents=True)
+                probe.parent.mkdir(parents=True)
+                installer.write_bytes(b"installer")
+                probe.write_bytes(b"probe")
+                return installer, probe
+            with patch.dict(os.environ, {"RUNNER_TEMP": str(root)}, clear=False), \
+                    patch("project_native_missing_call_runner.native.native.require_hosted"), \
+                    patch("project_native_missing_call_runner.verify_clean_head"), \
+                    patch("project_native_missing_call_runner.source_build", side_effect=fake_build), \
+                    patch("project_native_missing_call_runner.run", side_effect=RuntimeError("Qoder failed")):
+                with self.assertRaisesRegex(RuntimeError, "Qoder failed"):
+                    run_both_preflight(evidence, expected)
+            self.assertFalse(evidence.exists())
+
+    def test_batch_refuses_single_client_or_false_model_receipt(self):
+        expected = "a" * 40
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp)
+            (output / "cursor").mkdir()
+            proof = output / "cursor" / "source-only-preflight.json"
+            proof.write_text("{}")
+            with self.assertRaises(ValueError):
+                require_both_preflight_receipts(output, expected)
+
 
     def test_requires_public_uap_ownership_receipt(self):
         self.assertEqual(installation_id({"data": {"targets": [{
