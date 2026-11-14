@@ -44,6 +44,16 @@ func validateSessionDirectoryHandle(file *os.File, info os.FileInfo) error {
 	if err := validateSessionDirectory(info); err != nil {
 		return err
 	}
+	// The supplied FileInfo alone is not authority for the held handle.
+	// Inspect that same handle before trusting its owner or enumerating it.
+	var held syscall.ByHandleFileInformation
+	if err := syscall.GetFileInformationByHandle(syscall.Handle(file.Fd()), &held); err != nil {
+		return err
+	}
+	if held.FileAttributes&syscall.FILE_ATTRIBUTE_DIRECTORY == 0 ||
+		held.FileAttributes&syscall.FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+		return fmt.Errorf("hermes selected directory handle is not ordinary")
+	}
 	return validateSessionWindowsOwner(file)
 }
 

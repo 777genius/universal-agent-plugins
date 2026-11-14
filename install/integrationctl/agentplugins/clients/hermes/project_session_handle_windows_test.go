@@ -221,3 +221,28 @@ func TestProjectSessionWindowsTokenOwnerRejectsUnreturnedSubauthority(t *testing
 		t.Fatalf("adopted allocated bytes outside returned extent: %v", err)
 	}
 }
+
+func TestProjectSessionWindowsDirectoryRequiresDirectoryOnHeldHandle(t *testing.T) {
+	root, err := os.OpenRoot(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = root.Close() }()
+	if err := root.Mkdir("selected", 0o700); err != nil {
+		t.Fatal(err)
+	}
+	ordinaryInfo, err := root.Stat("selected")
+	if err != nil {
+		t.Fatal(err)
+	}
+	file, err := root.OpenFile("regular-file", os.O_CREATE|os.O_EXCL|os.O_RDWR, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = file.Close() }()
+	// A caller-supplied directory snapshot cannot authorize a regular-file
+	// handle, even when both objects have the same native token owner.
+	if err := validateSessionDirectoryHandle(file, ordinaryInfo); err == nil {
+		t.Fatal("directory metadata authorized a non-directory held handle")
+	}
+}
