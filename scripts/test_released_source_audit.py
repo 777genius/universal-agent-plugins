@@ -142,6 +142,73 @@ class ReceiptTests(unittest.TestCase):
             self.assertEqual(audit.state_file(root, "user"), {"installations": []})
 
 
+class SavedScopeTests(unittest.TestCase):
+    def test_other_scope_documents_and_state_are_observed_but_shared_store_is_not(self):
+        for scope in ("user", "project"):
+            with self.subTest(scope=scope), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                native = root / "other-native"
+                native.mkdir()
+                documents = root / ("project" if scope == "user" else "uap-data")
+                mutable = documents / ".uap" if scope == "user" else documents
+                mutable.mkdir(parents=True)
+                before = audit.protected_scope_snapshot(root, scope, native)
+                for path in (documents / "uap.toml", documents / "uap.lock", mutable / "state-v2.json",
+                             mutable / "operations-v2/receipt.json", mutable / "managed/plugin/plugin.json"):
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text("unwanted write", encoding="utf-8")
+                    self.assertNotEqual(before, audit.protected_scope_snapshot(root, scope, native), str(path))
+                    path.unlink()
+                    while path.parent != mutable and path.parent != documents:
+                        path.parent.rmdir()
+                        path = path.parent
+                cache = root / "uap-data/store/package"
+                cache.mkdir(parents=True, exist_ok=True)
+                (cache / "plugin.json").write_text("shared immutable cache", encoding="utf-8")
+                self.assertEqual(before, audit.protected_scope_snapshot(root, scope, native))
+
+    def test_first_command_cannot_modify_the_other_scope_then_hide_it_at_remove(self):
+        for path in ("home/.pi/agent/unwanted.json", "uap-data/uap.toml", "uap-data/state-v2.json"):
+            with self.subTest(path=path), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp) / "case"
+
+                def called(*args, **kwargs):
+                    (root / path).write_text("unwanted write", encoding="utf-8")
+                    return {"exit_code": 0, "timeout": False, "_json": {}}
+
+                with mock.patch.object(audit.live, "call", side_effect=called), \
+                     mock.patch.object(audit.live, "initialize_project_skill_git_root"):
+                    result = audit.run_case(Path("fixture-cli"), case(), root, None)
+                self.assertEqual(result["status"], "failed")
+                self.assertEqual(result["reason"], "add changed the other scope")
+                self.assertEqual([row["operation"] for row in result["trace"]], ["add"])
+
+    def test_saved_removal_rejects_dependency_target_or_lock_residue(self):
+        manifest = "schema_version = 1\n[dependencies]\n[targets]\n"
+        source_key = "github:fixture/catalog:plugins/portable"
+        mutations = (
+            (manifest, {"lock_version": 1, "packages": []}, None),
+            ('schema_version = 1\n[dependencies]\nportable = "*"\n',
+             {"lock_version": 1, "packages": []}, "saved dependency"),
+            ('schema_version = 1\n[targets]\npi = ["portable"]\n',
+             {"lock_version": 1, "packages": []}, "target assignment"),
+            (manifest, {"lock_version": 1, "packages": [{"alias": "portable"}]}, "locked package"),
+            (manifest, {"lock_version": 1, "packages": [{"alias": "other", "source_key": source_key}]}, "locked package"),
+            (manifest, {"lock_version": 1}, "invalid lock"),
+        )
+        for body, lock, failure in mutations:
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                documents = [root / "uap.toml", root / "uap.lock"]
+                documents[0].write_text(body, encoding="utf-8")
+                documents[1].write_text(json.dumps(lock), encoding="utf-8")
+                if failure:
+                    with self.assertRaisesRegex(ValueError, failure):
+                        audit.checked_saved_removal(documents, "portable", case(), root)
+                else:
+                    audit.checked_saved_removal(documents, "portable", case(), root)
+
+
 class RefusalTests(unittest.TestCase):
     selected = {"distribution": "777genius/marketing-kit", "name": "marketing-kit"}
 
