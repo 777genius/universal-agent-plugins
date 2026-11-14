@@ -530,6 +530,7 @@ def require_complete_metadata(summary):
 READOUT_LABELS = frozenset(name for name, _ in HELP) | frozenset(kind + '-' + scope for kind in ('mcp', 'skills') for scope in ('a', 'b', 'user', 'a-repeat'))
 READOUT_PHASES = READOUT_LABELS | frozenset(('preparation', 'source', 'acquisition', 'materialization', 'probes', 'fixture', 'source-final-clean'))
 READOUT_ERRORS = {
+    'prebuilt installer authority': 'executable-authority-refused',
     'native metadata command refused': 'native-command-refused',
     'native help/version diagnostic': 'native-help-diagnostic',
     'help changed original or metadata input': 'help-effects-refused',
@@ -570,11 +571,15 @@ def closed_readout(summary, state):
         require(type(state['deadline']) is float and time.monotonic() < state['deadline'], 'readout deadline')
     budget()
     labels, phases, maximum_commands, maximum_effects = READOUT_LABELS, READOUT_PHASES, 60, 13
+    build_refusal = None
     if summary.get("metadata_recipe") == "ordinary-global":
-        from devin_global_lifecycle_admission import NATIVE, PUBLIC
+        from devin_global_lifecycle_admission import NATIVE, PUBLIC, closed_build_authority_refusal
         labels = labels | frozenset(NATIVE + PUBLIC)
-        phases = phases | labels | {"build-go-version", "build-uap", "global-skill-quarantine"}
+        phases = phases | labels | {"build-go-version", "build-uap", "build-go-authority", "build-installer-authority", "global-skill-quarantine"}
         maximum_commands, maximum_effects = 37, 30
+        build_refusal = closed_build_authority_refusal(summary, state)
+    else:
+        require("global_build_authority_refusal" not in summary, 'readout build diagnostic recipe')
     require(type(state['phase']) is str and state['phase'] in phases
             and type(state['reason']) is str and state['reason'] in set(READOUT_ERRORS.values()) | {'capture-incomplete', 'capture-finished-unqualified', 'metadata-complete', 'unclassified-refusal'}, 'readout state')
     require(type(summary.get('collection_complete')) is bool and summary.get('admission_qualified') is False
@@ -622,6 +627,7 @@ def closed_readout(summary, state):
     value = dict(schema_version=1, phase=state['phase'], reason=state['reason'], collection_complete=summary['collection_complete'],
                  metadata_capture_complete=summary['metadata_capture_complete'], cleanup_complete=True,
                  commands=len(commands), failed_commands=failed, effects=rows)
+    if build_refusal is not None: value['build_authority_refusal'] = build_refusal
     budget()
     require(len(json.dumps(value).encode()) <= 16 << 10, 'readout output bound')
     return value

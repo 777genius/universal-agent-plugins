@@ -1460,3 +1460,128 @@ after the one-line guard; the wide-inode saturation control remains positive.
 After-settlement maps cannot reconstruct a vanished live lease file. The old
 native failure remains failed, and this diagnostic grants no new source or
 Project acceptance, baseline, cleanup permission or qualification.
+
+### Closed observer diagnosis when public cleanup remains unproved (2026-11-14)
+
+Original run [43542221829](https://github.com/777genius/universal-agent-plugins/actions/runs/43542221829)
+on `539e6a54a05cc297370f388116e681fbcdafa443` completed bundled Linux,
+macOS and Windows with the original `native profile observation failed` and
+subsequent `native process cleanup unproved; raw evidence withheld` refusals.
+Artifacts 14094469725, 14094526111 and 14094322467 each contain one 422-byte
+failed, unqualified summary. Their original ZIP SHA256 values are respectively
+`528a3570fa7dbc19ca0f22808b3e3cead266e2f7aa9f6fe638ad60a987bfff15`,
+`6790aa8c8afdeb25198ee3d131b74e0aa19fd9d63eae48b904687e4327878eaa`
+and `212de71a0fbb58e4876eb6dd43ee2afdd6ea35df23fb33550127c6aacbc83eed`.
+Those summaries do not identify the child predicate or prove a leaked process.
+The public cleanup guard still requires the complete validated cold receipt
+once the separate public family has started.
+
+This correction preserves that guard and the private raw-evidence boundary.
+On an exception, the observer may write one canonical JSON record of at most
+2 KiB to its existing stdout. It contains only finite phase/reason/exception
+names, the original nonce and exact UAP source head, and an optional numeric
+caller line plus function name/definition line. A nullable command label is
+selected only from the existing closed COMMANDS set, and only when the failing
+stack contains the exact own-source nested command code object. Unknown or
+non-string labels are omitted. Caller information comes only
+from code objects already loaded from this exact profile script, including its
+nested functions. No traceback paths, error messages, configuration, native
+stderr, environment values or external source contents enter the record.
+Unavailable diagnostics never replace the original exception.
+
+Before starting the observer, the parent duplicates its original, exclusively
+created stdout file descriptor. It retains that descriptor until the existing
+Windows job or POSIX primary group has positively settled. Only then may it
+read at most 2049 bytes, require the original ordinary-file identity and stable
+metadata, and accept the single closed, canonical record with the same nonce
+and source head. It never reopens the capture pathname. Missing, malformed,
+unknown, duplicate, oversized, aliased or changing output produces no observer
+diagnostic. If primary closure is not proved, it does not read the descriptor.
+The descriptor is closed without replacing any existing native refusal.
+
+The fresh safe-failure envelope may additionally include the finite cleanup
+phase and observer exit code already held by the parent, the primary-settlement
+boolean, and the validated observer record. Primary settlement is distinct from
+public-family closure: this envelope is produced through the unchanged failed
+public-cleanup branch, all existing qualification fields remain false, and no
+raw artifact, home deletion or Project admission is authorized by diagnosis.
+The 720-second native, 120-second scan, payload byte/count, original User,
+source/toolstore and lease checks remain unchanged.
+
+Six new inert contracts exercise original exception identity, exact closed
+command-label selection, nested own-source
+caller joins, the real retained descriptor with an inert Python writer, pathname
+substitution, unsettled-family no-read, duplicate/unknown/source/nonce/caller
+refusals, overflow, short or failed reads, hardlinks and concurrent file changes.
+The safe envelope still refuses public cleanup and keeps every qualification
+false. All original 97 profile test bodies remain unchanged; 103 profile and
+16 cleanup contracts passed locally on Linux. These are collector contracts,
+not a successful native rerun or a source/bootstrap qualification.
+
+### Run the source observer through the recorded PM interpreter (2026-11-14)
+
+Original [run 43546125344](https://github.com/777genius/universal-agent-plugins/actions/runs/43546125344)
+on `e5facca91c705f18ff1629b0dae9336daa1b73c1`, tree
+`72bb64428987b75dceec6ebc8984f43d958cf614`, now includes the complete settled
+User difference on both Linux and Windows. Linux artifact 14096690344 has
+15 members and ZIP SHA256
+`76b1e30f63b19ceb680b6dd911d86f90a55bf8caa0f95ae6f55a34aa73463a07`;
+Windows artifact 14096635177 has 16 members and ZIP SHA256
+`33543be01e8a2fcd56dce72c968cd717918d6ea0de9987a3455fa3413cb0b17f`.
+Independent size/CRC, 29 master-stream, 4 command-output, exact-source,
+nonce/preparation/census and closed delta joins pass. Both native observations
+remain failed before their first Project command.
+
+The source-bound producer reports exactly two settled changes, without
+truncation: metadata on `.leases` under the selected dependency generation and
+under one `pm-runtime/generations/<id>` directory. Linux changes only mtime and
+ctime; Windows changes only mtime. The Windows initial scan additionally names
+an unreadable zero-byte UUID lease under the selected dependency generation,
+with errno 13 at the first read. This identifies the observed member and the
+complete settled difference; it does not identify the kernel lock owner, prove
+which PM runtime generation was selected, or retroactively identify the missing
+member detail in older Linux 539 archives. No lease is adopted or ignored.
+
+The pinned official
+[`pm.environments.venv_command`](https://github.com/NousResearch/hermes-agent/blob/2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19/pm/environments.py)
+provides a dependency interpreter for a script or `-c` probe. Its source-install
+branch returns the supplied venv interpreter and explicit Python options.
+The vendor also uses this interface for a
+[plugin capability probe](https://github.com/NousResearch/hermes-agent/blob/2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19/hermes_cli/plugins_cmd_catalog.py).
+By contrast, the existing official `runtime_command` deliberately starts
+`hermes_bootstrap`, whose normal source startup selects and leases dependencies.
+Using that full native startup merely to host the measurement script creates a
+live source-User effect before the observer can enforce the prepared baseline.
+
+Only the source observer now uses `venv_command`. It takes the selected
+environment from the already-held source snapshot/facts, never from a new
+selection or baseline. The collector checks the pinned API's source ownership
+and accepts only `[recorded-venv-interpreter, -I, -B]`, then its own `-c` observer
+entry and private child argument. An alternate generation, store interpreter,
+payload trampoline, wrapper, extra option, foreign API or non-string argv is
+refused. The native launcher's original `runtime_command` provenance check,
+actual `HERMES_BIN` commands, source-resolution guards, OS HOME/USERPROFILE and
+A/B HERMES_HOME selection remain unchanged.
+
+The interpreter's link chain is resolved only against the original captured
+link graph, under its existing source-domain boundaries. Before and after the
+API call, the original facts, API source, pyvenv.cfg, executable and all ancestor
+identities are rejoined. Pinned bytes are checked through the existing bounded
+ordinary-file reader while the original directory handles remain held. The
+existing 128 MiB executable bound and original caller deadline remain enforced;
+no complete payload is scanned again and no PM state is written. Link targets
+must also equal their original captured text. The resulting small observer
+receipt names the original selected environment and captured input hashes; it
+is separate from the unchanged native launcher provenance and is unqualified.
+
+Five new inert contracts cover the selected interpreter and actual stdlib-venv
+observer startup without importing a bootstrap trap or creating a lease, exact
+full User/runtime preservation in that fixture, alternate generations and argv,
+API ownership, changed input bytes, a replaced generation ancestor with retained
+child identities, captured links and foreign-target refusal, retained parents
+and the original read deadline. All 103 existing profile test bodies remain
+unchanged; 108 profile contracts pass locally on Linux. The stdlib fixture is
+not a native Hermes result. The genuine source A/B first/repeat/restart commands,
+final User control, native bootstrap recovery and public Project admission must
+still satisfy their original guards. In particular, no exception is introduced
+for a later genuine User command's lease-directory changes.

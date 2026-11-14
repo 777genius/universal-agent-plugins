@@ -639,3 +639,39 @@ previous function is unchanged except the two explicit diagnostic additions;
 removing those additions gives the original build/pin AST exactly. No Go or
 native process was run. Actual delta: 13 added/2 removed runtime lines and
 56 added test lines; the observation does not identify the original failed field.
+
+### Joined build-authority refusal readout
+
+The follow-up preserves the complete `68e39a343` observation: original Go
+selection, expected owner and the initial pin metadata sink. The build wrapper
+passes that same sink to `installer_pin`; the typed refusal uses the very same
+`before` stat object that the unchanged admission conjunction evaluated. No
+additional path observation or content read is introduced. The earlier
+metadata record remains in the private research report with its existing
+cleanup requirements; the console gains only a closed failure projection.
+
+That projection contains the finite Go/installer role, first failed predicate,
+regular and owner-match booleans, permission mode, link count and byte count.
+It rejects unknown, missing, extra, malformed or inconsistent fields. A refusal
+cannot coexist with collection, metadata, later ordinary/Global completion or
+runtime qualification. The initial Go and final installer boundaries retain
+separate phases. File mode, link count, owner, size, no-follow open, streaming
+hash and held/named identity requirements remain unchanged. The failed
+historical metadata predicate is still unknown.
+
+The external real-file and between-stage chmod contracts are retained. Their
+expected summary now includes the exact failure projection, joined to the
+original pin metadata; the changed-mode case also verifies the closed readout.
+The accepted failure-only tests retain their completion and malformed-field
+counterexamples. This is diagnostic coverage, not native Global qualification;
+a genuine final-source run and original-artifact review remain required.
+
+Validation on the reconciled source: all 83 Global, ordinary and structured
+Python contracts pass in 1.875 seconds. The unchanged independent completion
+counterexample also passes (two tests, including the ten former malformed or
+complete-state failures). `git diff --check` passes. Comparison against `68e`
+confirms the exact metadata admission AST, path/lstat prefix, metadata sink,
+no-follow open/hash/identity tail and existing build receipt validator; all
+other prior production functions are unchanged except the explicit build,
+pin and completion diagnostic joins. The module still contains the same
+three `lstat` call sites. No Go or native process was run for this follow-up.

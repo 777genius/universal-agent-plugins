@@ -603,3 +603,109 @@ is still required. No production enable/recovery path changes.
 On the reconciled source, all 130 Grok Python contracts pass (2.368 seconds).
 All 55 pre-existing runtime function bodies are byte-identical to `999be5b1`;
 the three workflow Python blocks and workflow YAML parse, and diff-check passes.
+
+## Original 2b witness notification and 539 public repair refusal
+
+Run43534008555, job132261897837, artifact14093332499 is a negative native
+capture from source2b557b30, treeb042b23c. The14182-byte outer ZIP SHA256 is
+201b9b6d5ef0316f836a00008b81087f94a6688770c08350ee73d3d7d2840fd6.
+Both archive CRCs and all six original merged-stream length/hash joins pass.
+The first User inventory inspection identifies the one authored enabled stdio
+witness from its exact config path. ACP initializes, then reports that same
+witness in `_x.ai/mcp/servers_updated`. The previous parser only accepted an
+empty server list and refused this notification before the plugins reply.
+Replaying the original bytes reproduces `notification-refused`; no completed
+inventory or Project scope is inferred from this partial stream.
+
+The measurement caller now supplies only the exact authored witness row as its
+expected notification. Name, source, type, command and every argument must match;
+empty, duplicate, extra, missing and foreign values still refuse. The default
+empty notification route and the separate session-only parser remain unchanged.
+An accepted notification never completes an inventory; the bounded full-ID
+plugins reply, cleanup, original ledgers and source fences remain necessary.
+No request schema, native argv, command/frame/byte limit or deadline changes.
+
+The same original settled ledger independently shows another fixture mismatch:
+when the authored config already exists, native startup creates every member of
+the previous closed bootstrap set except `.config-init.lock`. Neither original
+nor final metadata contains that lock. The config metadata and every original
+member except the bounded request control remain unchanged; the witness marker
+is absent after both recorded cleanup proofs. This supports only observed
+nonexecution in that attempt. The refused ledger contains no final profile byte
+snapshot and does not prove a completed metadata or native lock qualification.
+
+For this exact authored-config cohort, bootstrap admission now requires absence
+of both native-created config and init lock, while retaining the original config
+identity/content proof. A preexisting or newly added init lock refuses in this
+cohort. The empty-profile cohort still requires its original pinned native lock.
+Every other membership, owner, type, mode, link, size, content and creation
+continuity predicate remains in place; this is not a general optional-file rule.
+
+Separately, source539e6a54 protocol run43542221668/job132285144989 failed on the
+first consented public repair. Artifact14092778160 is11421 bytes, SHA256
+1ec709e2552d33ba8b9d2c0ac23ead2f1d3f81294ece09105f020a9d6a660fb4.
+All20 embedded stream joins pass. The repair exits1 with
+`repair managed native state: no such file or directory`. The harness then
+checked the expected successful config transition first and obscured that
+primary failure. Failed commands now retain their original exit/capture facts,
+check the original protected-file guards without rebasing them, and report the
+command failure before any success-only config assertion. Native admission and
+qualification remain false. No config mutation is accepted by this diagnostic.
+
+An unchanged actual Cobra saved-repair test passes on539; an overlay omitting
+only its authored init lock, with assertions preserved, reproduces the same
+ENOENT and records ACP=0 with unchanged config. The hosted protocol artifact
+does not contain that path's stat, so this is a source-backed differential,
+not an independently captured hosted pathname. Native-created profile/lock
+preparation and actual lock cooperation remain separate gates. This patch does
+not create a lock in the public journeys or alter production ownership policy.
+
+Local contracts:87 ACP tests,26 protocol tests and18 inherited noauth tests pass.
+They include an actual pipe carrying the exact witness notification, unchanged
+empty/session routes, absent-lock bootstrap membership and negative replacement,
+foreign-byte and primary-error cases. These results do not supersede either
+negative native original or the historical generic/User evidence boundaries.
+
+## Prospective native profile preparation for the public journeys
+
+The separate profile helper addresses the missing native init-lock precondition
+without creating that lock in the harness. Before the existing final foreign
+fixture and protected lifecycle baseline, it authors one temporary inert MCP
+witness in the fresh disposable User profile. The already captured exact pinned
+version is joined to the same binary, which is rehashed before and after this
+step. The existing bounded `Journey.run` captures `mcp --help`,
+`mcp disable --help` and `mcp disable uap-lock-witness`; no additional process
+supervisor, session, model, login or trust operation is introduced.
+
+The lock must still be absent after both help commands and immediately before
+the native writer. Acceptance requires only the expected TOML changes:
+`disabled_mcp_servers` becomes the singleton witness name and that exact
+server's `enabled` becomes false. The complete before/help/after metadata and
+original dual-stream command receipts remain in evidence. The help validator
+receives stdout alone only after separately captured stderr is proved empty.
+No combined-stream provenance is invented.
+
+The writer must create an empty regular lock with mode 0644, one link and the original
+device/owner. All prior members remain unchanged except the exact authored
+config; the only other new entries are the existing 27 literal documentation
+pins, their three directories and the bounded native log. Witness execution,
+trust/auth state, aliases, unknown files, content drift or incomplete capture
+refuse. The existing lock-startup guard receives a projection excluding only
+the independently validated new lock; the original before/after ledgers are
+preserved without invented members or a replacement baseline.
+
+Only after full semantic and held/named byte/identity checks does the helper
+unlink its own temporary config and witness. This occurs before the existing
+final foreign fixture is authored. It never deletes a preexisting User config,
+never invokes native enablement and never writes, replaces or removes the
+native lock. The same lock and all three held/named parent identities are
+checked before and after subsequent public/native commands. `NativeJourney`
+inherits this preparation and continuity check, so both existing native lanes
+use the same implementation and existing protocol-test command.
+
+Historical artifact 14079492925 proves that the native writer cooperates with
+an existing held lock and performs this exact TOML effect after release. Its
+fixture itself authored the lock; it does not prove creation when absent.
+The new creation path is prospective until a genuine hosted original passes.
+Local inert filesystem/capture tests are not native qualification, and the
+earlier failed Project and generic/User captures remain negative evidence.

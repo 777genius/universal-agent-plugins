@@ -139,6 +139,7 @@ func assertIndependentFlock(t *testing.T, path string, blocked bool) {
 func TestSupervisorLockOutlivesCollectorExchangeAndCleanup(t *testing.T) {
 	s, r, path := supervisorLockFixture(t, "locked-writer")
 	if e := s.prepareLock(r); e != nil {
+		logSupervisorLockAuthority(t, s, r, path)
 		t.Fatal(e)
 	}
 	var result map[string]any
@@ -179,11 +180,13 @@ func TestSupervisorLockOutlivesCollectorExchangeAndCleanup(t *testing.T) {
 func TestSupervisorLockPhaseAndReplacedParents(t *testing.T) {
 	s, r, path := supervisorLockFixture(t, "released-writer")
 	if e := s.prepareLock(r); e != nil {
+		logSupervisorLockAuthority(t, s, r, path)
 		t.Fatal(e)
 	}
 	assertIndependentFlock(t, path, false)
 	locked, request, original := supervisorLockFixture(t, "locked-writer")
 	if e := locked.prepareLock(request); e != nil {
+		logSupervisorLockAuthority(t, locked, request, original)
 		t.Fatal(e)
 	}
 	parent := filepath.Dir(original)
@@ -237,5 +240,38 @@ func TestSupervisorLockRefusesForeignAndMalformedLeaves(t *testing.T) {
 				t.Fatal("unowned lock admitted")
 			}
 		})
+	}
+}
+
+func logSupervisorLockAuthority(t *testing.T, s *scopeState, r request, path string) {
+	t.Helper()
+	t.Logf("diagnostic request UID=%d GID=%d phase=%s expectedMode=%#o", r.UID, r.GID, r.Phase, unix.S_IFREG|0600)
+	named, err := os.Lstat(path)
+	if err != nil {
+		t.Logf("diagnostic named stat error=%v", err)
+	} else {
+		id, identityErr := identity(named)
+		t.Logf("diagnostic named sys=%T mode=%v identity=%+v identityError=%v", named.Sys(), named.Mode(), id, identityErr)
+	}
+	if s.lock == nil {
+		return
+	}
+	if s.lock.file.file != nil {
+		held, statErr := s.lock.file.file.Stat()
+		if statErr != nil {
+			t.Logf("diagnostic held leaf stat error=%v", statErr)
+		} else {
+			id, identityErr := identity(held)
+			t.Logf("diagnostic held leaf sys=%T mode=%v identity=%+v identityError=%v", held.Sys(), held.Mode(), id, identityErr)
+		}
+	}
+	for index, parent := range s.lock.parents {
+		held, statErr := parent.file.Stat()
+		if statErr != nil {
+			t.Logf("diagnostic parent%d stat error=%v", index, statErr)
+		} else {
+			id, identityErr := identity(held)
+			t.Logf("diagnostic parent%d expectedDev=%d expectedUID=%d expectedGID=%d expectedMode=%v sys=%T identity=%+v identityError=%v", index, parent.dev, parent.uid, parent.gid, parent.mode, held.Sys(), id, identityErr)
+		}
 	}
 }

@@ -1172,6 +1172,176 @@ if effect == 'alias': backup.unlink(); os.link(home / 'config.yaml', backup)
                 self.assertIs(proof[key], False)
 
 
+class ObserverFailureDiagnosticContracts(unittest.TestCase):
+    nonce, source = "a" * 64, "b" * 40
+
+    def encoded(self, value):
+        return json.dumps(value, sort_keys=True, separators=(",", ":")).encode("ascii") + b"\n"
+
+    def record(self):
+        code = CASE["public_cleanup_complete"].__code__
+        line = next(line for _, _, line in code.co_lines() if line is not None)
+        return dict(schema_version=1, measurement_only=True, admission_qualified=False,
+                    nonce=self.nonce, source_head=self.source, phase="public", reason="uncaught-observer-exception",
+                    exception_kind="RuntimeError", command=None, caller=dict(function=code.co_name, function_line=code.co_firstlineno, line=line))
+
+    def test_child_emits_only_closed_source_joined_failure_and_reraises_same_exception(self):
+        import io
+        import sys
+        seen, original, stream = [], [], io.BytesIO()
+        class Probe:
+            def __init__(self, *, nonce): self.nonce = nonce
+            def __enter__(self): return self
+            def __exit__(self, *args): seen.append(self)
+        def refuse(probes):
+            try:
+                CASE["source_refusal_document"](b"{}")
+            except RuntimeError as error:
+                error.args = ("PRIVATE CONFIG /outside/secret.yaml",)
+                original.append(error)
+                raise
+        with mock.patch.dict(sys.modules, {"pi_project_components_native_e2e": SimpleNamespace(PiHTTPMCPProbe=Probe)}), \
+                mock.patch.dict(os.environ, {"HERMES_CALL_NONCE": self.nonce, "HERMES_PROFILE_SOURCE_HEAD": self.source}, clear=True), \
+                mock.patch.object(sys, "stdout", SimpleNamespace(buffer=stream)), \
+                mock.patch.dict(CASE["child_case"].__globals__, source_capture_mode=lambda: False, observe_profiles=refuse):
+            with self.assertRaises(RuntimeError) as caught: CASE["child_case"]()
+        self.assertIs(caught.exception, original[0]); self.assertEqual(len(seen), 2)
+        body = stream.getvalue(); self.assertLessEqual(len(body), 2048)
+        value = CASE["observer_failure_document"](body, self.nonce, self.source)
+        self.assertEqual(value["phase"], "profiles"); self.assertEqual(value["caller"]["function"], "source_refusal_document")
+        self.assertNotIn(b"PRIVATE", body); self.assertNotIn(b"/outside", body); self.assertNotIn(b".py", body)
+        stream.seek(0); stream.truncate()
+        with mock.patch.object(sys, "stdout", SimpleNamespace(buffer=stream)), \
+                mock.patch.dict(os.environ, {"HERMES_CALL_NONCE": self.nonce, "HERMES_PROFILE_SOURCE_HEAD": self.source}):
+            try: CASE["public_json"](b'{"a":0,"a":1}')
+            except RuntimeError as error: CASE["emit_observer_failure"](error, "public")
+        nested = CASE["observer_failure_document"](stream.getvalue(), self.nonce, self.source)
+        self.assertEqual(nested["caller"]["function"], "unique")
+        # Even a closed stdout or unknown exception cannot replace the original.
+        error = RuntimeError("original")
+        with mock.patch.object(sys, "stdout", SimpleNamespace(buffer=mock.Mock(write=mock.Mock(side_effect=OSError("closed"))))), \
+                mock.patch.dict(os.environ, {"HERMES_CALL_NONCE": self.nonce, "HERMES_PROFILE_SOURCE_HEAD": self.source}):
+            CASE["emit_observer_failure"](error, "public")
+        self.assertEqual(str(error), "original")
+
+    def test_command_label_comes_only_from_the_exact_owned_nested_code(self):
+        import io
+        import sys
+        from types import FunctionType
+        owner = CASE["observe_public"]
+        code = next(value for value in owner.__code__.co_consts if type(value) is type(owner.__code__) and value.co_name == "command")
+        cell = (lambda value: lambda: value)(None).__closure__[0]
+        command = FunctionType(code, owner.__globals__, closure=tuple(cell for _ in code.co_freevars))
+        for label in ("public-repair-a", "PRIVATE /outside/config", None, ["public-add-a"], True):
+            stream = io.BytesIO()
+            with self.subTest(label=label), mock.patch.object(sys, "stdout", SimpleNamespace(buffer=stream)), \
+                    mock.patch.dict(os.environ, {"HERMES_CALL_NONCE": self.nonce, "HERMES_PROFILE_SOURCE_HEAD": self.source}), \
+                    mock.patch.dict(owner.__globals__, public_runtime_pins=mock.Mock(side_effect=RuntimeError("private"))):
+                try: command(label, "a", [], native=False, inspect=False, expected_failure=False, test=None)
+                except RuntimeError as error: CASE["emit_observer_failure"](error, "public")
+            value = CASE["observer_failure_document"](stream.getvalue(), self.nonce, self.source)
+            self.assertEqual(value["command"], "public-repair-a" if label == "public-repair-a" else None)
+            self.assertEqual(value["caller"]["function_line"], code.co_firstlineno)
+            self.assertNotIn(b"PRIVATE", stream.getvalue())
+        stream = io.BytesIO(); label = "public-add-a"  # Same local name in a foreign frame grants nothing.
+        with mock.patch.object(sys, "stdout", SimpleNamespace(buffer=stream)), \
+                mock.patch.dict(os.environ, {"HERMES_CALL_NONCE": self.nonce, "HERMES_PROFILE_SOURCE_HEAD": self.source}):
+            try: raise RuntimeError(label)
+            except RuntimeError as error: CASE["emit_observer_failure"](error, "public")
+        self.assertIsNone(CASE["observer_failure_document"](stream.getvalue(), self.nonce, self.source)["command"])
+
+    def test_diagnostic_rejects_noncanonical_unknown_unjoined_and_foreign_callers(self):
+        import copy
+        value = self.record(); valid = self.encoded(value)
+        self.assertEqual(CASE["observer_failure_document"](valid, self.nonce, self.source), value)
+        invalid = [valid + valid, valid + b" ", valid.rstrip(), b"[]\n", valid[:-2] + b',"phase":"public"}\n', b"x" * 2049]
+        for key, wrong in (("schema_version", True), ("measurement_only", 1), ("admission_qualified", 0),
+                           ("nonce", "c" * 64), ("source_head", "c" * 40), ("phase", "unknown"),
+                           ("reason", "PRIVATE MESSAGE"), ("exception_kind", "UnboundedExceptionClass"),
+                           ("command", "PRIVATE /outside"), ("command", ["public-add-a"]), ("private", "data")):
+            changed = copy.deepcopy(value); changed[key] = wrong; invalid.append(self.encoded(changed))
+        for key, wrong in (("function", "../outside.py"), ("function", "unknown"), ("function_line", True),
+                           ("function_line", 0), ("line", True), ("line", 1000000), ("path", "/private")):
+            changed = copy.deepcopy(value); changed["caller"][key] = wrong; invalid.append(self.encoded(changed))
+        for body in invalid:
+            with self.subTest(body=body[:120]), self.assertRaises((RuntimeError, ValueError, TypeError)):
+                CASE["observer_failure_document"](body, self.nonce, self.source)
+        value["caller"] = None
+        self.assertIsNone(CASE["observer_failure_document"](self.encoded(value), self.nonce, self.source)["caller"])
+
+    def test_retained_descriptor_survives_name_substitution_and_requires_primary_settlement(self):
+        import sys
+        import subprocess
+        value, reader = self.record(), CASE["read_observer_failure"]
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve(); path = root / "lifecycle.stdout"
+            with path.open("x+b") as stream:
+                descriptor = os.dup(stream.fileno()); original = os.fstat(descriptor)
+                try:
+                    # An inert Python child writes the original capture descriptor.
+                    child = subprocess.Popen([sys.executable, "-I", "-c", "import sys; sys.stdout.buffer.write(bytes.fromhex(sys.argv[1]))", self.encoded(value).hex()], stdout=stream, stderr=subprocess.PIPE)
+                    _, error = child.communicate(timeout=5)
+                    self.assertEqual(child.returncode, 0); self.assertEqual(error, b"")
+                    if os.name != "nt":
+                        path.rename(root / "original-stdout"); path.write_bytes(b"private substituted pathname")
+                    with mock.patch.object(CASE["os"], "read", side_effect=AssertionError("unsettled read")):
+                        self.assertIsNone(reader(descriptor, original, self.nonce, self.source, primary_settled=False))
+                    with mock.patch.object(Path, "open", side_effect=AssertionError("must not reopen pathname")), \
+                            mock.patch.dict(reader.__globals__, ordinary_bytes=mock.Mock(side_effect=AssertionError("raw read"))):
+                        self.assertEqual(reader(descriptor, original, self.nonce, self.source, primary_settled=True), value)
+                finally: os.close(descriptor)
+
+    def test_retained_descriptor_omits_malformed_overflow_alias_and_concurrent_change(self):
+        reader, value = CASE["read_observer_failure"], self.record()
+        for effect in ("empty", "duplicate", "overflow", "nonce", "read-error", "short", "changed", "hardlink"):
+            with self.subTest(effect=effect), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve(); path = root / "stdout"
+                with path.open("x+b") as stream:
+                    original = os.fstat(stream.fileno()); body = self.encoded(value)
+                    if effect == "empty": body = b""
+                    if effect == "duplicate": body *= 2
+                    if effect == "overflow": body = b"x" * 2049
+                    if effect == "nonce": body = self.encoded(dict(value, nonce="c" * 64))
+                    stream.write(body); stream.flush()
+                    if effect == "hardlink": os.link(path, root / "alias")
+                    actual_read = os.read
+                    def changed(descriptor, length):
+                        if effect == "read-error": raise PermissionError("private")
+                        body = actual_read(descriptor, 1 if effect == "short" else length)
+                        if effect == "changed": os.ftruncate(descriptor, 0)
+                        return body
+                    with mock.patch.object(CASE["os"], "read", side_effect=changed):
+                        self.assertIsNone(reader(stream.fileno(), original, self.nonce, self.source, primary_settled=True))
+
+    def test_safe_context_never_authorizes_failed_public_cleanup_or_exposes_raw_data(self):
+        import copy
+        record = self.record()
+        context = dict(source_head=self.source, nonce=self.nonce, cleanup_phase="public-family",
+                       primary_family_settled=True, observer_exit=1, observer=record)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve(); home = root / "home"; (home / "public-a").mkdir(parents=True)
+            for effect in ("valid", "primary-unsettled-no-record", "unsettled", "source", "extra", "phase", "exit", "caller"):
+                changed = copy.deepcopy(context)
+                if effect == "primary-unsettled-no-record": changed.update(primary_family_settled=False, observer=None)
+                if effect == "unsettled": changed["primary_family_settled"] = False
+                if effect == "source": changed["source_head"] = "c" * 40
+                if effect == "extra": changed["private"] = "PRIVATE CONFIG"
+                if effect == "phase": changed["cleanup_phase"] = "../private"
+                if effect == "exit": changed["observer_exit"] = True
+                if effect == "caller": changed["observer"]["caller"]["line"] = 999999
+                directory = CASE["safe_failure_evidence"](root, "RuntimeError", native_failure=changed)
+                raw = (directory / "upload/profile-admission.json").read_bytes(); proof = json.loads(raw)
+                self.assertEqual(proof["original_failure_kind"], "RuntimeError")
+                self.assertEqual(proof["status"], "failed"); self.assertNotIn(b"PRIVATE", raw)
+                self.assertEqual(set(path.name for path in (directory / "upload").iterdir()), {"profile-admission.json"})
+                self.assertFalse(CASE["public_cleanup_complete"](home, dict(proof, source={"commit": self.source})))
+                for key in ("admission_qualified", "production_project_mcp", "vendor_authentication", "real_model_inference",
+                            "tools_call", "source_install_custom_root_qualified", "source_bootstrap_recovery_qualified"):
+                    self.assertIs(proof[key], False)
+                if effect in ("valid", "primary-unsettled-no-record"): self.assertEqual(proof["native_failure"], changed)
+                else: self.assertNotIn("native_failure", proof)
+
+
 class BundledRuntimeContracts(unittest.TestCase):
     def fixture(self, parent):
         import hashlib
@@ -1637,7 +1807,7 @@ class PublicLifecycleContracts(unittest.TestCase):
     def test_stdio_events_require_actual_pair_nonce_fresh_session_and_no_tool_claim(self):
         import copy
         with tempfile.TemporaryDirectory() as temporary:
-            path=Path(temporary)/'events';nonce='c'*64
+            path=Path(temporary).resolve()/'events';nonce='c'*64
             rows=[dict(method=method,pid=42,session='42-123',nonce=nonce,timestamp='2026-11-13T23:50:00Z',facts=None) for method in ('initialize','tools/list')]
             def write(value):path.write_bytes(b''.join(json.dumps(row).encode()+b'\n' for row in value))
             write(rows);self.assertEqual(CASE['public_stdio_events'](path,nonce),rows)
@@ -2537,6 +2707,141 @@ class SourceRuntimeContracts(unittest.TestCase):
                             with self.assertRaises(RuntimeError): CASE["stage_evidence"](evidence)
                             self.assertFalse(scope["EVIDENCE_CLOSED"]); self.assertFalse((evidence / "upload").exists())
                             self.assertFalse(list(evidence.glob(".upload-pending-*")))
+
+
+class SourceObserverContracts(unittest.TestCase):
+    def fixture(self, temporary, *, link=False, execute=False):
+        import time
+        runner, outer, original, source, facts, env = SourceRuntimeContracts().installed_fixture(temporary)
+        environment = Path(json.loads(facts.read_bytes())["packages"]["venv"]["environment"])
+        interpreter = environment / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+        if execute:
+            import venv
+            # A stdlib venv only; no pip, vendor import, native Hermes, or hosted spoof.
+            venv.EnvBuilder(with_pip=False, symlinks=False).create(environment)
+        else:
+            interpreter.parent.mkdir()
+            if link: interpreter.symlink_to(original / "tools/managed-python/bin/python3")
+            else: interpreter.write_bytes(b"inert selected interpreter; never executed")
+        api_source = source / "pm/environments.py"; api_source.parent.mkdir()
+        suffix = "Scripts/python.exe" if os.name == "nt" else "bin/python"
+        api_body = ("def venv_command(project_root, environment, options=()):\n"
+                    f"    prefix = [str(environment / {suffix!r}), *options]\n"
+                    "    return rewrite(prefix) if rewrite is not None else prefix\n")
+        api_source.write_text(api_body)
+        scope = {"__name__": "pm.environments", "__file__": str(api_source), "rewrite": None}
+        exec(compile(api_body, str(api_source), "exec"), scope)
+        (source / "hermes_bootstrap.py").write_text("raise RuntimeError('observer unexpectedly activated Hermes bootstrap')\n")
+        with mock.patch.dict(os.environ, env):
+            inputs = CASE["source_inputs"](runner, source)
+            authority, records = CASE["directory_identity"](outer), {}
+            snapshot = CASE["source_runtime_snapshot"](inputs, authority, retain=records)
+        return dict(api=scope["venv_command"], inputs=inputs, snapshot=snapshot, records=records, authority=authority,
+                    code="assert 'hermes_bootstrap' not in sys.modules; print('observer-only')", args=("--child",), deadline=time.monotonic() + 10), scope
+
+    def test_exact_selected_interpreter_runs_observer_without_creating_bootstrap_lease(self):
+        import subprocess
+        with tempfile.TemporaryDirectory() as temporary:
+            args, _ = self.fixture(temporary, execute=True)
+            before = args["snapshot"]
+            argv, proof = CASE["source_observer_runtime_command"](**args)
+            self.assertEqual(argv[1:4], ["-I", "-B", "-c"])
+            self.assertEqual(argv[-1], "--child")
+            self.assertEqual(proof["selected_environment"], before["provenance"]["selected_environment"])
+            self.assertIs(proof["admission_qualified"], False)
+            done = subprocess.run(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=5, check=True)
+            self.assertEqual(done.stdout, b"observer-only\n"); self.assertEqual(done.stderr, b"")
+            self.assertEqual(CASE["source_runtime_snapshot"](args["inputs"], args["authority"]), before)
+            self.assertFalse(list(args["inputs"]["original"].rglob(".leases")))
+            self.assertEqual(args["inputs"]["runtime_argv"][1:3], ["-I", "-c"])  # Native launcher receipt was not replaced.
+
+    def test_wrong_generation_wrapper_flag_or_api_owner_refuses_before_observer_launch(self):
+        import time
+        for effect in ("generation", "store", "flag", "wrapper", "payload", "tuple", "element", "api-file", "api-module", "expired"):
+            with self.subTest(effect=effect), tempfile.TemporaryDirectory() as temporary:
+                args, scope = self.fixture(temporary)
+                def rewrite(prefix):
+                    if effect == "generation": return [str(Path(prefix[0]).parent.parent.with_name("other") / Path(prefix[0]).parent.name / Path(prefix[0]).name), *prefix[1:]]
+                    if effect == "store": return [str(args["inputs"]["python"]), *prefix[1:]]
+                    if effect == "flag": return [prefix[0], "-B", "-I"]
+                    if effect == "wrapper": return ["wrapper", *prefix]
+                    if effect == "payload": return [*prefix, "-S", "_venv_entry.py"]
+                    if effect == "tuple": return tuple(prefix)
+                    if effect == "element": return [Path(prefix[0]), *prefix[1:]]
+                    return prefix
+                scope["rewrite"] = rewrite
+                if effect == "api-file": scope["__file__"] = str(args["inputs"]["source"] / "foreign.py")
+                if effect == "api-module": scope["__name__"] = "foreign.module"
+                if effect == "expired": args["deadline"] = time.monotonic() - 1
+                with mock.patch.object(CASE["subprocess"], "Popen", side_effect=AssertionError("must not start refused observer")), self.assertRaises(RuntimeError):
+                    CASE["source_observer_runtime_command"](**args)
+
+    def test_held_capture_rejects_replaced_generation_ancestor_and_changed_original_bytes(self):
+        for effect in ("ancestor", "interpreter", "config", "facts", "api", "digest"):
+            with self.subTest(effect=effect), tempfile.TemporaryDirectory() as temporary:
+                args, scope = self.fixture(temporary)
+                environment = Path(args["snapshot"]["provenance"]["selected_environment"])
+                executable = environment / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+                selected = {"interpreter": executable, "config": environment / "pyvenv.cfg", "facts": args["inputs"]["facts"],
+                            "api": args["inputs"]["source"] / "pm/environments.py"}
+                def change(prefix):
+                    if effect == "ancestor":
+                        parent = environment.parent; moved = parent.with_name("moved-environments")
+                        parent.rename(moved); parent.mkdir(); (moved / environment.name).rename(environment)
+                    elif effect != "digest":
+                        path = selected[effect]; body = path.read_bytes()
+                        path.write_bytes(bytes([body[0] ^ 1]) + body[1:])
+                    return prefix
+                scope["rewrite"] = change
+                if effect == "digest":
+                    args["records"][executable.relative_to(args["inputs"]["home"]).as_posix()]["sha256"] = "0" * 64
+                with self.assertRaisesRegex(RuntimeError, "source input changed|source captured|pinned runtime bytes"):
+                    CASE["source_observer_runtime_command"](**args)
+
+    @unittest.skipIf(os.name == "nt", "POSIX source interpreter symlink shape")
+    def test_captured_link_target_is_rejoined_without_following_a_foreign_substitution(self):
+        for effect in ("valid", "changed", "outside"):
+            with self.subTest(effect=effect), tempfile.TemporaryDirectory() as temporary:
+                args, scope = self.fixture(temporary, link=True)
+                environment = Path(args["snapshot"]["provenance"]["selected_environment"])
+                executable = environment / "bin/python"
+                if effect == "valid":
+                    _, proof = CASE["source_observer_runtime_command"](**args)
+                    self.assertIn(executable.relative_to(args["inputs"]["home"]).as_posix(), proof["captured_members"])
+                    self.assertIn(args["inputs"]["python"].relative_to(args["inputs"]["home"]).as_posix(), proof["captured_members"])
+                    continue
+                foreign = Path(temporary).resolve() / "foreign-python"; foreign.write_bytes(b"must never read")
+                if effect == "changed":
+                    def replace(prefix):
+                        executable.unlink(); executable.symlink_to(foreign)
+                        return prefix
+                    scope["rewrite"] = replace
+                else:
+                    # Even a forged captured outside target cannot authorize a filesystem read.
+                    args["records"][executable.relative_to(args["inputs"]["home"]).as_posix()]["target"] = str(foreign)
+                actual = CASE["ordinary_bytes"]
+                def read(path, *positional, **keywords):
+                    self.assertNotEqual(Path(path), foreign)
+                    return actual(path, *positional, **keywords)
+                with mock.patch.dict(CASE["source_observer_runtime_command"].__globals__, ordinary_bytes=read), self.assertRaises(RuntimeError):
+                    CASE["source_observer_runtime_command"](**args)
+
+    def test_observer_verification_reuses_parent_authority_and_original_budget(self):
+        import time
+        with tempfile.TemporaryDirectory() as temporary:
+            args, _ = self.fixture(temporary)
+            paths, original = [], CASE["ordinary_bytes"]
+            def read(path, *positional, **keywords):
+                paths.append(Path(path))
+                self.assertEqual(keywords["deadline"], args["deadline"])
+                if not CASE["artifacts"].WINDOWS: self.assertIsInstance(keywords["parent"], int)
+                return original(path, *positional, **keywords)
+            with mock.patch.dict(CASE["source_observer_runtime_command"].__globals__, ordinary_bytes=read):
+                CASE["source_observer_runtime_command"](**args)
+            self.assertEqual(len(paths), 8)
+            path = args["inputs"]["facts"]; before = path.stat()
+            with mock.patch.object(CASE["os"], "read", side_effect=AssertionError("expired pinned read")), self.assertRaisesRegex(RuntimeError, "deadline"):
+                original(path, before, pin=(before.st_size, CASE["hashlib"].sha256(path.read_bytes()).hexdigest()), deadline=time.monotonic() - 1)
 
 
 if __name__ == "__main__":

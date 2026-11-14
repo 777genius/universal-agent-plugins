@@ -331,11 +331,12 @@ def rpc_state():
     return dict(initialize=None, plugins=None, notifications=[])
 
 
-def rpc_frame(value, state, req, send):
+def rpc_frame(value, state, req, send, *, expected_servers=()):
     require(type(value) is dict and value.get('jsonrpc') == '2.0', 'rpc-envelope')
     if 'method' in value:
         closed(value, 'jsonrpc method params')
-        require(value['method'] == '_x.ai/mcp/servers_updated' and value['params'] == {'mcpServers': []}
+        require(value['method'] == '_x.ai/mcp/servers_updated'
+                and value['params'] == {'mcpServers': list(expected_servers)}
                 and not state['notifications'], 'notification-refused')
         state['notifications'].append(value)
         return False
@@ -384,7 +385,7 @@ def drain_stopped(pipe, body, deadline, remaining):
                     require(len(body) <= remaining, 'stream-bound')
 
 
-def command(argv, label, cwd, env, deadline, remaining, state, req):
+def command(argv, label, cwd, env, deadline, remaining, state, req, *, expected_servers=()):
     process = subprocess.Popen(argv, cwd=cwd, env=env, stdin=subprocess.PIPE,
                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, start_new_session=True)
     body, buffer, error, completed = bytearray(), bytearray(), None, False
@@ -418,7 +419,9 @@ def command(argv, label, cwd, env, deadline, remaining, state, req):
                             line, _, buffer = buffer.partition(b'\n')
                             frames += 1
                             require(frames <= 64 and len(line) <= 64 << 10 and not completed, 'frame-bound')
-                            completed = (session_rpc_frame if req.get('mode') == SESSION_MODE else rpc_frame)(document(bytes(line), 64 << 10), state, req, send)
+                            frame = document(bytes(line), 64 << 10)
+                            completed = (session_rpc_frame(frame, state, req, send) if req.get('mode') == SESSION_MODE
+                                         else rpc_frame(frame, state, req, send, expected_servers=expected_servers))
                             require(len(json.dumps(state).encode()) <= 128 << 10, 'rpc-bound')
                             if completed:
                                 process.stdin.close()
@@ -484,7 +487,8 @@ def collector_result(req):
             startup_inventory(row, root, req['scope'])
         command_in_flight = True
         row = command([str(native), 'agent', '--no-leader', 'stdio'], 'acp', root / req['scope'], env, deadline,
-                      LIMIT - sum(row['merged_bytes'] for row in result['commands']), result['rpc'], req)
+                      LIMIT - sum(row['merged_bytes'] for row in result['commands']), result['rpc'], req,
+                      expected_servers=() if session else startup_servers(root))
         command_in_flight = False
         result['commands'].append(row)
         require(row['error'] is None and result['rpc']['plugins'] is not None, 'acp-command')
@@ -1050,11 +1054,17 @@ def lock_readout(members, packet, deadline):
         return refused
 
 
+def startup_servers(root):
+    """Exact authored witness, not an inventory learned from a native reply."""
+    return (dict(name=STARTUP_NAME, source='local', type='stdio', command='/usr/bin/python3',
+                 args=['-I', str(root / 'startup-witness.py'), str(root / 'unexpected-startup')]),)
+
+
 def startup_fixture_config(root):
     """One eligible, unrelated User MCP records any unexpected native startup."""
     path = root / 'home/.grok/config.toml'
     require(not path.exists(), 'startup-config-collision')
-    args = ['-I', str(root / 'startup-witness.py'), str(root / 'unexpected-startup')]
+    args = startup_servers(root)[0]['args']
     body = ('[marketplace]\ndefault_skills_installs_purged = true\n'
             '[mcp_servers.' + STARTUP_NAME + ']\ncommand = "/usr/bin/python3"\nargs = '
             + json.dumps(args) + '\nenabled = true\n').encode()

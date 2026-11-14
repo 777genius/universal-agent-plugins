@@ -838,7 +838,13 @@ class GlobalLifecycleContracts(unittest.TestCase):
                 else:
                     self.assertEqual(ctx.summary, {"global_build_authority": {
                         "schema_version": 1, "role": "resolved-host-go", "selected_lstat": expected,
-                        "expected_owner": {"uid": before.st_uid, "gid": before.st_gid}, "initial_pin_lstat": expected}})
+                        "expected_owner": {"uid": before.st_uid, "gid": before.st_gid}, "initial_pin_lstat": expected},
+                        "global_build_authority_refusal": {
+                            "role": "go", "predicate": {"mode": "mode", "links": "single-link", "empty": "size",
+                                                       "oversize": "size", "directory": "regular"}[effect],
+                            "regular": case.stat.S_ISREG(expected["st_mode"]), "owner_matches": True,
+                            "mode": case.stat.S_IMODE(expected["st_mode"]), "nlink": expected["st_nlink"],
+                            "bytes": expected["st_size"]}})
                     self.assertLess(len(json.dumps(ctx.summary)), 2048)
                 self.assertFalse((root / "installer").exists())
 
@@ -863,6 +869,135 @@ class GlobalLifecycleContracts(unittest.TestCase):
             for field in value["selected_lstat"]:
                 self.assertEqual(value["selected_lstat"][field], getattr(selected, field))
                 self.assertEqual(value["initial_pin_lstat"][field], getattr(gate, field))
+            expected = dict(role="go", predicate="mode", regular=True, owner_matches=True,
+                            mode=case.stat.S_IMODE(value["initial_pin_lstat"]["st_mode"]),
+                            nlink=value["initial_pin_lstat"]["st_nlink"], bytes=value["initial_pin_lstat"]["st_size"])
+            self.assertEqual(ctx.summary["global_build_authority_refusal"], expected)
+            summary = dict(self.refused_build_summary(), **ctx.summary)
+            state = dict(phase="build-go-authority", reason="executable-authority-refused",
+                         deadline=float(case.base.time.monotonic() + 10))
+            self.assertEqual(case.base.closed_readout(summary, state)["build_authority_refusal"], expected)
+
+
+
+    def test_executable_metadata_refusal_keeps_original_checks_before_any_open(self):
+        for fault, predicate in (("directory", "regular"), ("hardlink", "single-link"), ("owner", "owner"),
+                                 ("mode", "mode"), ("empty", "size"), ("large", "size")):
+            with self.subTest(fault=fault), tempfile.TemporaryDirectory() as temporary:
+                path = Path(temporary).resolve() / "executable"
+                if fault == "directory": path.mkdir(mode=0o755)
+                else:
+                    path.write_bytes(b"inert executable; never run")
+                    path.chmod(0o555 if fault == "mode" else 0o755)
+                    if fault == "hardlink": os.link(path, path.with_name("alias"))
+                    if fault in ("empty", "large"):
+                        with path.open("r+b") as stream: stream.truncate(0 if fault == "empty" else (128 << 20) + 1)
+                owner = (os.getuid() + (fault == "owner"), os.getgid())
+                before = path.lstat()
+                with mock.patch.object(case.base.shared.artifacts, "open_member") as opened:
+                    with self.assertRaises(case.ExecutableAuthorityRefusal) as caught:
+                        case.installer_pin(path, SimpleNamespace(check=lambda: 10), owner=owner)
+                opened.assert_not_called()
+                self.assertEqual(str(caught.exception), "prebuilt installer authority")
+                self.assertEqual(caught.exception.metadata, dict(predicate=predicate, regular=case.stat.S_ISREG(before.st_mode),
+                    owner_matches=(before.st_uid, before.st_gid) == owner, mode=case.stat.S_IMODE(before.st_mode),
+                    nlink=before.st_nlink, bytes=before.st_size))
+                self.assertEqual(path.lstat(), before)
+
+    def refused_build_summary(self):
+        return dict(metadata_recipe="ordinary-global", collection_complete=False, metadata_capture_complete=False,
+                    admission_qualified=False, cleanup_complete=True, commands=[], command_effects=[],
+                    qualification=dict.fromkeys(case.base.shared.QUALIFICATION_CASES, False),
+                    source_commit="a" * 40, source_tree="b" * 40)
+
+    def test_original_build_entry_reports_go_metadata_without_open_or_command(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            go, installer = root / "go", root / "installer"
+            go.write_bytes(b"inert-go"); go.chmod(0o555)
+            state = dict(phase="preparation", reason="capture-incomplete", deadline=float(case.base.time.monotonic() + 10))
+            ctx = SimpleNamespace(summary=self.refused_build_summary(), budget=SimpleNamespace(check=lambda: 20),
+                                  private=root, identities={}, process_cleanup_proved=True, global_readout_state=state)
+            with mock.patch.object(case.shutil, "which", return_value=str(go)):
+                with mock.patch.object(case.base.shared, "run_probe") as execute, mock.patch.object(case.base.shared.artifacts, "open_member") as opened:
+                    with self.assertRaises(case.ExecutableAuthorityRefusal) as caught: case.build_installer(ctx, installer)
+            execute.assert_not_called(); opened.assert_not_called()
+            self.assertNotIn("global_build_receipt", ctx.summary)
+            self.assertFalse(installer.exists())
+            self.assertEqual(state["phase"], "build-go-authority")
+            state["reason"] = case.base.readout_reason(caught.exception)
+            expected = dict(role="go", predicate="mode", regular=True, owner_matches=True, mode=0o555, nlink=1, bytes=8)
+            self.assertEqual(ctx.summary["global_build_authority_refusal"], expected)
+            readout = case.base.closed_readout(ctx.summary, state)
+            self.assertEqual(readout["build_authority_refusal"], expected)
+            self.assertEqual(readout["reason"], "executable-authority-refused")
+            self.assertFalse(readout["collection_complete"])
+            self.assertNotIn(str(go), json.dumps(readout))
+
+    def test_final_build_metadata_refusal_keeps_installer_role_and_original_commands(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            go, installer = root / "go", root / "installer"
+            go.write_bytes(b"inert-go"); go.chmod(0o755)
+            state = dict(phase="preparation", reason="capture-incomplete", deadline=float(case.base.time.monotonic() + 10))
+            ctx = SimpleNamespace(summary=self.refused_build_summary(), budget=SimpleNamespace(check=lambda: 20),
+                                  private=root, identities={}, process_cleanup_proved=True, global_readout_state=state)
+            def run(argv, cwd, _environment, _output, label, **_kwargs):
+                receipt = self.build_receipt()
+                record = receipt["commands"][0 if label == "build-go-version" else 1]
+                record["argv"], record["cwd"] = argv, str(cwd)
+                if label == "build-uap": installer.write_bytes(b"inert-built-cli"); installer.chmod(0o700)
+                return record, *(base64.b64decode(receipt["streams"][label + "." + kind + ".log"]) for kind in ("stdout", "stderr"))
+            with mock.patch.object(case.shutil, "which", return_value=str(go)):
+                with mock.patch.object(case.base.shared, "run_probe", side_effect=run) as execute:
+                    with self.assertRaises(case.ExecutableAuthorityRefusal) as caught: case.build_installer(ctx, installer)
+            self.assertEqual(execute.call_count, 2)
+            self.assertEqual([row["probe"] for row in ctx.summary["global_build_receipt"]["commands"]], ["build-go-version", "build-uap"])
+            self.assertIsNone(ctx.summary["global_build_receipt"]["installer"])
+            self.assertEqual(state["phase"], "build-installer-authority")
+            state["reason"] = case.base.readout_reason(caught.exception)
+            readout = case.base.closed_readout(ctx.summary, state)
+            self.assertEqual(readout["build_authority_refusal"]["role"], "installer")
+            self.assertEqual(readout["build_authority_refusal"]["mode"], 0o700)
+            self.assertFalse(readout["metadata_capture_complete"])
+
+    def test_build_authority_diagnostic_is_closed_and_never_accepts_success(self):
+        refused = dict(role="go", predicate="mode", regular=True, owner_matches=True, mode=0o555, nlink=1, bytes=8)
+        mutations = (("extra", "PRIVATE_CONFIG"), ("role", "foreign"), ("predicate", "unknown"), ("predicate", "size"),
+                     ("regular", 1), ("owner_matches", 0), ("mode", True), ("mode", -1), ("mode", 0o10000),
+                     ("mode", 0o755), ("nlink", True), ("nlink", -1), ("nlink", 1 << 63),
+                     ("bytes", True), ("bytes", -1), ("bytes", 1 << 63))
+        for key, value in mutations:
+            summary = self.refused_build_summary()
+            summary["global_build_authority_refusal"] = dict(refused, **{key: value})
+            state = dict(phase="build-go-authority", reason="executable-authority-refused", deadline=float(case.base.time.monotonic() + 10))
+            with self.subTest(key=key, value=value), self.assertRaises(ValueError): case.base.closed_readout(summary, state)
+        for fault in ("missing-record", "missing-field", "role-phase", "reason", "recipe", "complete", "metadata", "qualified", "runtime"):
+            summary = self.refused_build_summary()
+            summary["global_build_authority_refusal"] = dict(refused)
+            state = dict(phase="build-go-authority", reason="executable-authority-refused", deadline=float(case.base.time.monotonic() + 10))
+            if fault == "missing-record": del summary["global_build_authority_refusal"]
+            elif fault == "missing-field": del summary["global_build_authority_refusal"]["bytes"]
+            elif fault == "role-phase": state["phase"] = "build-installer-authority"
+            elif fault == "reason": state["reason"] = "capture-incomplete"
+            elif fault == "recipe": summary["metadata_recipe"] = "ordinary"
+            elif fault == "complete": summary["collection_complete"] = True
+            elif fault == "metadata": summary["metadata_capture_complete"] = True
+            elif fault == "qualified": summary["admission_qualified"] = True
+            else: summary["qualification"][next(iter(summary["qualification"]))] = True
+            with self.subTest(fault=fault), self.assertRaises(ValueError): case.base.closed_readout(summary, state)
+        for key in ("ordinary_metadata_capture_complete", "global_lifecycle_capture_complete"):
+            summary = self.refused_build_summary()
+            summary["global_build_authority_refusal"] = dict(refused)
+            state = dict(phase="build-go-authority", reason="executable-authority-refused", deadline=float(case.base.time.monotonic() + 10))
+            summary[key] = False
+            self.assertEqual(case.base.closed_readout(summary, state)["build_authority_refusal"], refused)
+            for value in (True, None, 0, "false", {}):
+                summary[key] = value
+                with self.subTest(key=key, value=value), self.assertRaises(ValueError): case.base.closed_readout(summary, state)
+        completed = self.completed_summary()
+        completed["global_build_authority_refusal"] = refused
+        with self.assertRaisesRegex(ValueError, "Global completion refused"): case.completion(completed)
 
 
 

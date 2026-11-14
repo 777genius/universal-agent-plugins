@@ -109,18 +109,20 @@ jobs:
         run: |
           set -euo pipefail
           events="$RUNNER_TEMP/uap-agreement-boundary.json"
+          errors="$RUNNER_TEMP/uap-agreement-boundary.stderr"
           : > "$events"
+          : > "$errors"
           (
             cd install/integrationctl
             go test -count=1 -timeout=5m -json ./adapters/pathpolicy -run '^TestValidateLeafID$'
-          ) >> "$events"
+          ) >> "$events" 2>> "$errors"
           go test -count=1 -timeout=8m -json ./cli/internal/agentpluginscli \
-            -run '^(TestDependencyAgreementOversizedBytesFailClosed|TestDependencyAgreementDiskBoundaryRejectsNonRegularAndOversized|TestDependencyAgreementReaderRejectsSymlinkAndKeepsTarget|TestDependencyIntentFilesRejectOversizedWriteWithoutMutation|TestSkillsReviewForeignDestinationSafeGuidance|TestSkillsReviewManagedSkillChanged|TestDependencyCandidateSizePreflightProtectsManifestAndLock|TestDependencyManagementRecoveryReaderIsBounded|TestGeneratedOversizedLockRefusesBeforeStorePublication)$' >> "$events"
+            -run '^(TestDependencyAgreementOversizedBytesFailClosed|TestDependencyAgreementDiskBoundaryRejectsNonRegularAndOversized|TestDependencyAgreementReaderRejectsSymlinkAndKeepsTarget|TestDependencyIntentFilesRejectOversizedWriteWithoutMutation|TestSkillsReviewForeignDestinationSafeGuidance|TestSkillsReviewManagedSkillChanged|TestDependencyCandidateSizePreflightProtectsManifestAndLock|TestDependencyManagementRecoveryReaderIsBounded|TestGeneratedOversizedLockRefusesBeforeStorePublication)$' >> "$events" 2>> "$errors"
           (
             cd install/integrationctl/agentplugins
             go test -count=1 -timeout=8m -json ./providers ./clients/kiro ./clients/shared ./transaction \
               -run '^(TestDigestSkillDirectoryRequiresRealDirectoryRoot|TestGeminiStagingFailureCleansPrivateTransactionAndAllowsRetry|TestGeminiLateNativeSkillDriftRefusesBeforeRename|TestClineLateNativeSkillDriftRefusesBeforeRename|TestKiroNativeBackupRejectsEditDuringRenameWithoutDeletingUserBytes|TestDirectoryVerificationFailurePreservesForeignBytesAndOriginalError|TestRemovalApplyFailureReportsRollbackFailureAndPreservesBackup)$'
-          ) | tee -a "$events"
+          ) 2>> "$errors" | tee -a "$events"
           python - "$events" <<'PY'
           import json
           import sys
@@ -320,6 +322,31 @@ jobs:
               sys.exit(1)
           print("Confirmed exact Go run+pass events, package pass, no skip: " + name)
           '
+      - name: Preserve original agreement boundary streams
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          import sys
+          temporary = Path(os.environ["RUNNER_TEMP"])
+          destination = temporary / "package-manager-e2e"
+          for original, retained in (("uap-agreement-boundary.json", "agreement-boundary.stdout"),
+                                     ("uap-agreement-boundary.stderr", "agreement-boundary.stderr")):
+              source = temporary / original
+              if not source.exists():
+                  continue
+              with source.open("rb") as stream:
+                  body = stream.read(8 * 1024 * 1024 + 1)
+              if len(body) > 8 * 1024 * 1024:
+                  raise SystemExit("Agreement boundary stream exceeds the 8 MiB evidence limit: " + original)
+              destination.mkdir(parents=True, exist_ok=True)
+              with (destination / retained).open("xb") as stream:
+                  stream.write(body)
+              if original.endswith(".stderr"):
+                  sys.stderr.buffer.write(body)
+          PY
       - name: Retain execution evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

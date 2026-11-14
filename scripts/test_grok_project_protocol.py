@@ -1,5 +1,6 @@
 """Inert contracts; these tests do not claim native Grok acceptance."""
 import base64
+from contextlib import ExitStack
 import copy
 import hashlib
 import json
@@ -17,6 +18,8 @@ from grok_project_protocol_client import (document, exercise, installed_server,
 from grok_project_protocol_e2e import observed_protocol, repair_refusal, Journey, snapshot
 from grok_project_protocol_enablement import (enabled_receipt, expect_retained_receipt,
     ordinary_repair_state, preview_enablement, timestamp_ns)
+import grok_project_protocol_profile as profile_case
+import grok_acp_bootstrap as bootstrap_case
 
 
 class ContractTests(unittest.TestCase):
@@ -276,6 +279,32 @@ class ContractTests(unittest.TestCase):
                         self.assertEqual(journey.protected[config], hashlib.sha256(after).hexdigest())
                 self.assertEqual(config.read_bytes(), after + extra)
 
+    def test_failed_command_keeps_primary_exit_and_checks_original_guards(self):
+        before = b'[plugins]\nenabled=["foreign"]\n'
+        after = b'[plugins]\nenabled=["foreign", "project/full-id/owned"]\n'
+        for exit_code, error, observed in ((1, None, before), (0, 'capture-refused', before),
+                                           (1, None, after), (1, None, b'foreign drift')):
+            with self.subTest(exit=exit_code, error=error, changed=observed != before):
+                with tempfile.TemporaryDirectory(dir=self.root) as temporary:
+                    journey = Journey(Path(temporary), Path('/unused'), Path('/unused'), {'commands': []})
+                    config = journey.home / '.grok/config.toml'
+                    config.parent.mkdir()
+                    config.write_bytes(before)
+                    prior = hashlib.sha256(before).hexdigest()
+                    journey.protected[config] = prior
+                    def failed(*_args, **_kwargs):
+                        config.write_bytes(observed)
+                        return {'exit': exit_code, 'error': error}, b'original stdout', b'original stderr'
+                    with mock.patch('native_client_research.run_probe', side_effect=failed):
+                        with self.assertRaisesRegex(ValueError, '^command failed: selected-effect$'):
+                            journey.run('selected-effect', ['/unused'], config_after=after)
+                    self.assertEqual(journey.protected[config], prior)
+                    self.assertEqual(journey.evidence['failed_command'], dict(label='selected-effect', exit=exit_code,
+                        capture_complete=error is None, protected_originals_unchanged=observed == before))
+                    record = journey.evidence['commands'][0]
+                    self.assertEqual(base64.b64decode(record['stdout_base64']), b'original stdout')
+                    self.assertEqual(base64.b64decode(record['stderr_base64']), b'original stderr')
+
     def test_snapshot_detects_empty_directory_and_mode_changes(self):
         before = snapshot(self.active)
         empty = self.active / "empty"
@@ -518,6 +547,242 @@ for line in sys.stdin:
         self.assertFalse(result["grok_model_invoked"])
         self.assertEqual(len(result["transcript"]), 9)
         self.assertEqual(result["transcript"][-1]["message"]["error"]["code"], -32602)
+
+
+class NativeProfileContracts(unittest.TestCase):
+    """Inert filesystem/capture contracts; no pinned vendor is executed."""
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name).resolve()
+        self.binary_pin = hashlib.sha256(b"inert binary identity").hexdigest()
+        self.after_help = self.after_writer = lambda: None
+        self.writer_calls = 0
+        self.pins = {}
+        for name in bootstrap_case.PINNED:
+            if name.startswith("docs/user-guide/"):
+                body = ("inert document " + name).encode()
+                self.pins[name] = (len(body), hashlib.sha256(body).hexdigest(), 0o644)
+        self.stack = ExitStack()
+        self.addCleanup(self.stack.close)
+        self.stack.enter_context(mock.patch.dict(bootstrap_case.PINNED, self.pins))
+        self.stack.enter_context(mock.patch.dict(profile_case.ACQUISITION, binary_sha256=self.binary_pin))
+        self.stack.enter_context(mock.patch("native_client_research.run_probe", side_effect=self.probe))
+        self.start_journey(self.root)
+
+    def start_journey(self, root):
+        self.root = root
+        self.journey = Journey(root, Path("/unused"), Path("/unused"), {"commands": []})
+        self.journey.grok.write_bytes(b"inert binary identity")
+        self.journey.grok.chmod(0o700)
+        self.journey.run("grok-version", [self.journey.grok, "--version"], self.root)
+
+    def probe(self, argv, cwd, env, output, label, **kwargs):
+        self.assertEqual(argv[0], str(self.journey.grok))
+        self.assertEqual(env, self.journey.env)
+        self.assertTrue(kwargs["memory_only"])
+        stderr = b""
+        if argv[1:] == ["--version"]:
+            stdout = b"grok 1.0.70 (f50904eaee6c)\n"
+        elif argv[1:] == ["mcp", "--help"]:
+            stdout = b"Usage: grok mcp [OPTIONS] <COMMAND>\nCommands:\n  disable  Disable an MCP server\n"
+        elif argv[1:] == ["mcp", "disable", "--help"]:
+            stdout = b"Usage: grok mcp disable [OPTIONS] <NAME>\n"
+            self.after_help()
+        elif argv[1:] == ["mcp", "disable", profile_case.LOCK_NAME]:
+            self.writer_calls += 1
+            self.assertFalse(os.path.lexists(self.root / profile_case.LOCK))
+            profile = self.journey.home / ".grok"
+            for name in ("docs", "docs/user-guide", "logs"):
+                (profile / name).mkdir()
+                (profile / name).chmod(0o755)
+            for name in self.pins:
+                (profile / name).write_bytes(("inert document " + name).encode())
+                (profile / name).chmod(0o644)
+            (profile / "logs/unified.jsonl").write_bytes(b"inert\n")
+            (profile / "logs/unified.jsonl").chmod(0o644)
+            config = profile / "config.toml"
+            body = config.read_bytes().replace(b"disabled_mcp_servers = []", b'disabled_mcp_servers = ["'
+                + profile_case.LOCK_NAME.encode() + b'"]').replace(b"enabled = true", b"enabled = false")
+            config.write_bytes(body)
+            lock = self.root / profile_case.LOCK
+            with lock.open("xb"):
+                pass
+            lock.chmod(0o644)
+            self.after_writer()
+            stdout = b"Disabled exact inert witness\n"
+        else:
+            self.fail("unexpected native command: " + repr(argv))
+        record = dict(probe=label, argv=argv, cwd=str(cwd), exit=0, error=None)
+        for name, body in (("stdout", stdout), ("stderr", stderr)):
+            record.update({name + "_bytes": len(body), name + "_sha256": hashlib.sha256(body).hexdigest()})
+        return record, stdout, stderr
+
+    def prepare(self):
+        profile_case.prepare_native_profile(self.journey)
+
+    def test_only_native_writer_creates_retained_lock_before_final_authored_config(self):
+        original_binary = self.journey.grok.stat()
+        self.prepare()
+        proof = self.journey.evidence["native_profile_preparation"]
+        self.assertTrue(proof["complete"] and proof["native_lock_created"] and proof["temporary_fixture_removed"])
+        self.assertEqual(self.writer_calls, 1)
+        self.assertNotIn(profile_case.LOCK, proof["before"])
+        self.assertNotIn(profile_case.LOCK, proof["before_writer"])
+        self.assertIn(profile_case.LOCK, proof["after"])
+        self.assertEqual(len(set(proof["after"]) - set(proof["before"])), 32)
+        self.assertFalse((self.root / profile_case.CONFIG).exists())
+        self.assertFalse((self.root / profile_case.WITNESS).exists())
+        self.assertEqual(profile_case.stable(self.journey.grok.stat()), profile_case.stable(original_binary))
+        self.assertEqual(self.journey.evidence["commands"][proof["writer_command_index"]]["argv"],
+                         [str(self.journey.grok), "mcp", "disable", profile_case.LOCK_NAME])
+        self.assertEqual(proof["help_command_indices"], [0, 1, 2])
+        (self.root / profile_case.CONFIG).write_bytes(b"separately authored final fixture")
+        self.journey.check()
+        with self.assertRaisesRegex(ValueError, "repeated"):
+            self.prepare()
+
+    def test_lock_created_by_help_is_not_native_writer_proof(self):
+        self.after_help = lambda: (self.root / profile_case.LOCK).touch(mode=0o644)
+        with self.assertRaisesRegex(ValueError, "before writer"):
+            self.prepare()
+        self.assertEqual(self.writer_calls, 0)
+        self.assertFalse(self.journey.evidence["native_profile_preparation"]["complete"])
+
+    def test_existing_profile_refuses_without_overwriting_any_member(self):
+        profile = self.journey.home / ".grok"
+        profile.mkdir()
+        path = profile / "config.toml"
+        path.write_bytes(b"foreign fixture bytes")
+        before = path.stat()
+        with self.assertRaisesRegex(ValueError, "not fresh"):
+            self.prepare()
+        self.assertEqual(path.read_bytes(), b"foreign fixture bytes")
+        self.assertEqual(profile_case.stable(path.stat()), profile_case.stable(before))
+        self.assertEqual(self.writer_calls, 0)
+
+    def test_changed_help_config_does_not_reach_writer(self):
+        self.after_help = lambda: (self.root / profile_case.CONFIG).write_bytes(b"changed = true\n")
+        with self.assertRaisesRegex(ValueError, "before writer"):
+            self.prepare()
+        self.assertEqual(self.writer_calls, 0)
+
+    def test_writer_must_create_lock_and_preserve_all_other_authority(self):
+        def fault(kind):
+            lock = self.root / profile_case.LOCK
+            if kind == "missing": lock.unlink()
+            elif kind == "nonempty": lock.write_bytes(b"foreign")
+            elif kind == "mode": lock.chmod(0o600)
+            elif kind == "hardlink": os.link(lock, self.root / "extra-link")
+            elif kind == "symlink":
+                lock.unlink(); lock.symlink_to(self.journey.grok)
+            elif kind == "unknown": (self.root / "unknown-native-output").write_bytes(b"unexpected")
+            elif kind == "trust": (self.journey.home / ".grok/trusted_folders.toml").write_text("[folders]\n")
+            elif kind == "witness": (self.root / profile_case.MARKER).write_bytes(b"unexpected")
+            elif kind == "config":
+                with (self.root / profile_case.CONFIG).open("ab") as stream: stream.write(b"extra = true\n")
+            elif kind == "docs": (self.journey.home / ".grok/docs/user-guide/01-getting-started.md").write_bytes(b"changed")
+            elif kind == "binary": self.journey.grok.write_bytes(b"changed binary")
+        base = self.root
+        for kind in ("missing", "nonempty", "mode", "hardlink", "symlink", "unknown", "trust", "witness", "config", "docs", "binary"):
+            with self.subTest(kind=kind):
+                # Each attempt owns a distinct fixture and cannot rebaseline the
+                # previous refusal's files or authority.
+                root = base / kind
+                root.mkdir()
+                self.start_journey(root)
+                self.after_writer = lambda: fault(kind)
+                with self.assertRaises((ValueError, OSError)):
+                    self.prepare()
+                self.assertFalse(self.journey.evidence["native_profile_preparation"]["complete"])
+                self.assertTrue((root / profile_case.CONFIG).exists())
+
+    def test_retained_empty_lock_replacement_is_refused(self):
+        self.prepare()
+        lock = self.root / profile_case.LOCK
+        retained = lock.stat()
+        lock.rename(lock.with_name("original-lock"))
+        lock.touch(mode=0o644)
+        self.assertNotEqual(lock.stat().st_ino, retained.st_ino)
+        with self.assertRaisesRegex(ValueError, "authority"):
+            self.journey.check()
+        lock.unlink()
+        lock.with_name("original-lock").rename(lock)
+        # Renaming the original also changes ctime and must stay refused.
+        with self.assertRaisesRegex(ValueError, "authority"):
+            self.journey.check()
+
+    def test_retained_lock_cannot_move_to_another_profile_identity(self):
+        self.prepare()
+        profile = self.journey.home / ".grok"
+        saved = self.journey.home / "saved-profile"
+        profile.rename(saved)
+        profile.mkdir(mode=0o700)
+        os.link(saved / ".config-init.lock", profile / ".config-init.lock")
+        with self.assertRaisesRegex(ValueError, "directory"):
+            self.journey.check()
+
+    def test_cleanup_keeps_replaced_fixture_and_complete_flag_false(self):
+        original = profile_case.remove_fixture
+        def replace_before_remove(journey, after, config):
+            path = self.root / profile_case.CONFIG
+            path.rename(path.with_name("native-original.toml"))
+            path.write_bytes(config)
+            return original(journey, after, config)
+        with mock.patch.object(profile_case, "remove_fixture", side_effect=replace_before_remove):
+            with self.assertRaisesRegex(ValueError, "authority"):
+                self.prepare()
+        self.assertTrue((self.root / profile_case.CONFIG).exists())
+        self.assertTrue((self.root / profile_case.WITNESS).exists())
+        self.assertFalse(self.journey.evidence["native_profile_preparation"]["complete"])
+
+    def test_cleanup_rejoins_witness_immediately_before_its_unlink(self):
+        original = profile_case.os.unlink
+        changed = b"foreign replacement must remain"
+        def substitute(name, *, dir_fd=None):
+            original(name, dir_fd=dir_fd)
+            if name == "config.toml":
+                path = self.root / profile_case.WITNESS
+                path.rename(path.with_suffix(".original"))
+                path.write_bytes(changed)
+        with mock.patch.object(profile_case.os, "unlink", side_effect=substitute):
+            with self.assertRaisesRegex(ValueError, "during removal"):
+                self.prepare()
+        self.assertEqual((self.root / profile_case.WITNESS).read_bytes(), changed)
+        self.assertFalse(self.journey.evidence["native_profile_preparation"]["complete"])
+        self.journey.check()
+
+    def test_incomplete_or_failed_writer_does_not_adopt_created_lock(self):
+        original = self.probe
+        def incomplete(*args, **kwargs):
+            record, stdout, stderr = original(*args, **kwargs)
+            if args[4] == "native-profile-disable-witness":
+                record.update(exit=1, error="probe deadline exceeded")
+            return record, stdout, stderr
+        with mock.patch("native_client_research.run_probe", side_effect=incomplete):
+            with self.assertRaisesRegex(ValueError, "command failed: native-profile-disable-witness"):
+                self.prepare()
+        self.assertIsNone(self.journey.native_profile)
+        self.assertFalse(self.journey.evidence["native_profile_preparation"]["complete"])
+        self.assertEqual(self.journey.evidence["failed_command"], dict(label="native-profile-disable-witness",
+            exit=1, capture_complete=False, protected_originals_unchanged=True))
+        self.assertTrue((self.root / profile_case.LOCK).exists())
+        self.assertTrue((self.root / profile_case.CONFIG).exists())
+
+    def test_help_adapter_preserves_dual_receipts_and_refuses_nonempty_stderr(self):
+        row = self.journey.evidence["commands"][0]
+        before = copy.deepcopy(row)
+        result = profile_case.stdout_for_help(row)
+        self.assertEqual(row, before)
+        self.assertEqual(result["merged_base64"], row["stdout_base64"])
+        for field, value in (("exit", True), ("stderr_bytes", True), ("stdout_sha256", "0" * 64),
+                             ("error", "capture failed"), ("stdout_bytes", 1 << 21)):
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                profile_case.stdout_for_help(dict(row, **{field: value}))
+        changed = dict(row, stderr_base64=base64.b64encode(b"foreign").decode(), stderr_bytes=7,
+                       stderr_sha256=hashlib.sha256(b"foreign").hexdigest())
+        with self.assertRaisesRegex(ValueError, "stderr"):
+            profile_case.stdout_for_help(changed)
 
 
 if __name__ == "__main__":

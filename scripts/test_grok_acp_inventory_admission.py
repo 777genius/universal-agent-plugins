@@ -186,6 +186,33 @@ class AdmissionContracts(unittest.TestCase):
                 self.assertIsNone(state['plugins'])
                 self.assertEqual(len(sent), 1)
 
+    def test_authored_startup_notification_is_exact_and_does_not_complete_inventory(self):
+        root = Path('/tmp/uap-owned')
+        expected = case.startup_servers(root)
+        req = {'nonce': 'a' * 32, 'scope': 'user'}
+        notification = dict(jsonrpc='2.0', method='_x.ai/mcp/servers_updated',
+                            params=dict(mcpServers=list(expected)))
+        state = case.rpc_state()
+        self.assertFalse(case.rpc_frame(notification, state, req, lambda _: None, expected_servers=expected))
+        self.assertIsNone(state['plugins'])
+        self.assertEqual(state['notifications'], [notification])
+        with self.assertRaises(ValueError):
+            case.rpc_frame(notification, state, req, lambda _: None, expected_servers=expected)
+        with self.assertRaises(ValueError):
+            case.rpc_frame(notification, case.rpc_state(), req, lambda _: None)
+        for mutation in ('empty', 'duplicate', 'name', 'source', 'type', 'command', 'args', 'extra', 'missing', 'params'):
+            changed = copy.deepcopy(notification)
+            rows = changed['params']['mcpServers']
+            if mutation == 'empty': rows.clear()
+            elif mutation == 'duplicate': rows.append(copy.deepcopy(rows[0]))
+            elif mutation == 'extra': rows[0]['unreviewed'] = True
+            elif mutation == 'missing': del rows[0]['source']
+            elif mutation == 'params': changed['params']['unreviewed'] = True
+            elif mutation == 'args': rows[0]['args'][2] = '/foreign/marker'
+            else: rows[0][mutation] = 'foreign'
+            with self.subTest(mutation=mutation), self.assertRaises(ValueError):
+                case.rpc_frame(changed, case.rpc_state(), req, lambda _: None, expected_servers=expected)
+
     def test_requests_unknown_notifications_ids_and_versions_refuse(self):
         for value in ({'jsonrpc': '2.0', 'id': 1, 'method': 'fs/read_text_file', 'params': {}},
                       {'jsonrpc': '2.0', 'method': '_unknown', 'params': {}},
@@ -202,19 +229,24 @@ class AdmissionContracts(unittest.TestCase):
             rows = [plugin_row(root, 'user', name)
                     for name in ('uap-acp-collision', 'uap-acp-foreign-user')]
             frames = [{'jsonrpc': '2.0', 'id': 1, 'result': {'protocolVersion': 1, '_meta': {'agentVersion': '1.0.70'}}},
+                      {'jsonrpc': '2.0', 'method': '_x.ai/mcp/servers_updated',
+                       'params': {'mcpServers': list(case.startup_servers(root))}},
                       {'jsonrpc': '2.0', 'id': 2, 'result': {'result': {'plugins': rows}}}]
             child = """import json, sys
 frames = json.loads(sys.argv[1])
-for method, frame in zip(('initialize', '_x.ai/plugins/list'), frames):
+for method, selected in zip(('initialize', '_x.ai/plugins/list'), (frames[:1], frames[1:])):
     assert json.loads(sys.stdin.readline())['method'] == method
-    print(json.dumps(frame), flush=True)
+    for frame in selected:
+        print(json.dumps(frame), flush=True)
 sys.stdin.read()
 """
             state = case.rpc_state()
             record = case.command([sys.executable, '-I', '-c', child, json.dumps(frames)], 'acp', root,
-                                  {'PATH': os.defpath}, time.monotonic() + 3, case.LIMIT, state, self.request(root))
+                                  {'PATH': os.defpath}, time.monotonic() + 3, case.LIMIT, state, self.request(root),
+                                  expected_servers=case.startup_servers(root))
             self.assertIsNone(record['error'])
-            self.assertEqual(state['plugins'], frames[1])
+            self.assertEqual(state['plugins'], frames[2])
+            self.assertEqual(state['notifications'], frames[1:2])
             captured = base64.b64decode(record['merged_base64'], validate=True)
             self.assertEqual([json.loads(line) for line in captured.splitlines()], frames)
             self.assertEqual(len(captured), record['merged_bytes'])
@@ -307,9 +339,10 @@ sys.stdin.read()
                 request = root / 'request.json'
                 request.write_text(json.dumps(self.request(root)))
                 calls = []
-                def incomplete(*args):
+                def incomplete(*args, **kwargs):
                     index = len(calls)
                     calls.append(args)
+                    self.assertEqual(kwargs, {'expected_servers': case.startup_servers(root)} if index == 5 else {})
                     if index == failed_index: raise OSError('inert incomplete pipe/wait')
                     return help_rows()[index] if index < 4 else startup_row(root, 'user')
                 output = mock.Mock()
@@ -748,7 +781,7 @@ def native_bootstrap_fixture(*, companions=True, startup=False):
             path = native / name; path.mkdir(parents=True, exist_ok=True); path.chmod(mode)
         pins = {}
         for name in bootstrap_case.PINNED:
-            if name == 'config.toml' and startup:
+            if name in ('config.toml', '.config-init.lock') and startup:
                 pins[name] = bootstrap_case.PINNED[name]
                 continue
             body = b'' if name.endswith('.lock') else ('PRIVATE_NATIVE_' + name).encode()
@@ -779,7 +812,9 @@ class NativeBootstrapContracts(unittest.TestCase):
             self.assertEqual(selected['command'], '/usr/bin/python3')
             ledger = f['capture']()
             self.assertTrue(ledger['accepted'])
-            self.assertEqual(set(ledger['native_bootstrap']), bootstrap_case.NAMES - {'config.toml'})
+            self.assertEqual(set(ledger['native_bootstrap']), bootstrap_case.NAMES - {'config.toml', '.config-init.lock'})
+            self.assertNotIn('home/.grok/.config-init.lock', ledger['before'])
+            self.assertNotIn('home/.grok/.config-init.lock', ledger['after'])
             self.assertEqual(ledger['profiles_before']['user_profile']['config.toml'],
                              ledger['profiles_after']['user_profile']['config.toml'])
             self.assertTrue(f['capture']()['accepted'])
@@ -792,7 +827,7 @@ class NativeBootstrapContracts(unittest.TestCase):
 
     def test_startup_config_replacement_change_and_missing_other_pin_refuse_before_reads(self):
         import client_automation_native_probe as snapshot_case
-        for kind in ('replace', 'change', 'remove-pin', 'mode'):
+        for kind in ('replace', 'change', 'remove-pin', 'mode', 'new-lock', 'prior-lock'):
             with self.subTest(kind=kind), native_bootstrap_fixture(startup=True) as f:
                 target = f['native'] / 'config.toml'
                 if kind == 'replace':
@@ -800,6 +835,13 @@ class NativeBootstrapContracts(unittest.TestCase):
                     replacement.write_bytes(target.read_bytes()); replacement.chmod(0o600); replacement.replace(target)
                 elif kind == 'change': target.write_bytes(target.read_bytes() + b'# concurrent\n')
                 elif kind == 'mode': target.chmod(0o644)
+                elif kind in ('new-lock', 'prior-lock'):
+                    lock = f['native'] / '.config-init.lock'
+                    lock.write_bytes(b''); lock.chmod(0o644)
+                    if kind == 'prior-lock':
+                        from devin_structured_inventory_admission import metadata_inventory
+                        key = 'home/.grok/.config-init.lock'
+                        f['before'][key] = metadata_inventory(f['root'], f['budget'])[key]
                 else: (f['native'] / '.metadata_version').unlink()
                 with mock.patch.object(snapshot_case, 'snapshot') as reader:
                     self.assertFalse(f['capture']()['accepted'])

@@ -182,6 +182,58 @@ def public_command_join(record, label, arguments, cwd, stdout, stderr):
                      and record.get(kind + "_sha256") == sha(body), "Global public original stream join")
 
 
+def authority_failure(value):
+    checks = (("regular", value["regular"]), ("single-link", value["nlink"] == 1),
+              ("owner", value["owner_matches"]), ("mode", value["mode"] == 0o755),
+              ("size", 0 < value["bytes"] <= 128 << 20))
+    return next((name for name, accepted in checks if not accepted), None)
+
+
+class ExecutableAuthorityRefusal(ValueError):
+    def __init__(self, info, owner):
+        super().__init__("prebuilt installer authority")
+        self.metadata = dict(regular=stat.S_ISREG(info.st_mode), nlink=info.st_nlink,
+                             owner_matches=(info.st_uid, info.st_gid) == owner,
+                             mode=stat.S_IMODE(info.st_mode), bytes=info.st_size)
+        self.metadata["predicate"] = authority_failure(self.metadata)
+
+
+def validate_authority_refusal(value):
+    base.require(type(value) is dict and set(value) == {"role", "predicate", "regular", "nlink", "owner_matches", "mode", "bytes"}
+                 and type(value["role"]) is str and value["role"] in ("go", "installer")
+                 and type(value["predicate"]) is str and value["predicate"] in ("regular", "single-link", "owner", "mode", "size")
+                 and all(type(value[key]) is bool for key in ("regular", "owner_matches"))
+                 and type(value["mode"]) is int and 0 <= value["mode"] <= 0o7777
+                 and all(type(value[key]) is int and 0 <= value[key] < 1 << 63 for key in ("nlink", "bytes"))
+                 and value["predicate"] == authority_failure(value), "Global build authority diagnostic")
+    return dict(value)
+
+
+def build_executable_pin(ctx, path, role, *, owner=None, metadata=None):
+    base.require(role in ("go", "installer"), "Global build executable role")
+    state = getattr(ctx, "global_readout_state", None)
+    if state is not None: state["phase"] = "build-" + role + "-authority"
+    try:
+        return installer_pin(path, ctx.budget, owner=owner, metadata=metadata)
+    except ExecutableAuthorityRefusal as error:
+        ctx.summary["global_build_authority_refusal"] = validate_authority_refusal(dict(role=role, **error.metadata))
+        raise
+
+
+def closed_build_authority_refusal(summary, state):
+    present = "global_build_authority_refusal" in summary
+    missing = state["phase"] in ("build-go-authority", "build-installer-authority") and state["reason"] == "executable-authority-refused"
+    base.require(present or not missing, "Global build authority diagnostic missing")
+    if not present: return None
+    value = validate_authority_refusal(summary["global_build_authority_refusal"])
+    base.require(summary.get("collection_complete") is False and summary.get("metadata_capture_complete") is False
+                 and all(summary.get(key, False) is False for key in ("ordinary_metadata_capture_complete", "global_lifecycle_capture_complete"))
+                 and summary.get("admission_qualified") is False
+                 and state["phase"] == "build-" + value["role"] + "-authority"
+                 and state["reason"] == "executable-authority-refused", "Global build authority diagnostic state")
+    return value
+
+
 def build_installer(ctx, installer):
     """Two bounded hosted build commands; no claim about the runner's build HOME."""
     parent = installer.parent
@@ -194,7 +246,7 @@ def build_installer(ctx, installer):
     authority = {"schema_version": 1, "role": "resolved-host-go", "selected_lstat": installer_metadata(go_info),
                  "expected_owner": {"uid": go_owner[0], "gid": go_owner[1]}, "initial_pin_lstat": {}}
     ctx.summary["global_build_authority"] = authority
-    go_pin = installer_pin(go, ctx.budget, owner=go_owner, metadata=authority["initial_pin_lstat"])
+    go_pin = build_executable_pin(ctx, go, "go", owner=go_owner, metadata=authority["initial_pin_lstat"])
     receipt = {"schema_version": 1, "source_commit": ctx.summary["source_commit"],
                "source_tree": ctx.summary["source_tree"], "environment": "original-hosted-build; GOTOOLCHAIN=local",
                "go": {"path": str(go), "bytes": go_pin[0], "sha256": go_pin[1], "uid": go_owner[0], "gid": go_owner[1], "mode": 0o755},
@@ -203,12 +255,12 @@ def build_installer(ctx, installer):
     environment = dict(os.environ, GOTOOLCHAIN="local")
     for label, arguments, timeout in (("build-go-version", ["version"], 10),
                                      ("build-uap", ["build", "-o", str(installer), "./cli/cmd/agentplugins"], 240)):
-        state = getattr(ctx, "global_readout_state", None)
-        if state is not None: state["phase"] = label
         base.require(base.root_identity(parent) == parent_identity
-                     and installer_pin(go, ctx.budget, owner=go_owner) == go_pin, "build authority changed")
+                     and build_executable_pin(ctx, go, "go", owner=go_owner) == go_pin, "build authority changed")
         if label == "build-uap":
             base.require(not installer.exists() and not installer.is_symlink(), "fresh installer output required")
+        state = getattr(ctx, "global_readout_state", None)
+        if state is not None: state["phase"] = label
         ctx.process_cleanup_proved = False
         record, stdout, stderr = base.shared.run_probe([str(go), *arguments], base.shared.SOURCE, environment,
             ctx.private, label, timeout=min(timeout, ctx.budget.check()), limit=1 << 20, memory_only=True)
@@ -220,9 +272,9 @@ def build_installer(ctx, installer):
                      "Global bounded build command failed")
         if label == "build-go-version":
             base.require(stdout == b"go version go1.26.11 linux/amd64\n" and not stderr, "Global exact Go version")
-    base.require(base.root_identity(parent) == parent_identity and installer_pin(go, ctx.budget, owner=go_owner) == go_pin,
+    base.require(base.root_identity(parent) == parent_identity and build_executable_pin(ctx, go, "go", owner=go_owner) == go_pin,
                  "build authority changed")
-    pin = installer_pin(installer, ctx.budget)
+    pin = build_executable_pin(ctx, installer, "installer")
     receipt["installer"] = {"path": str(installer), "bytes": pin[0], "sha256": pin[1],
                             "uid": os.getuid(), "gid": os.getgid(), "mode": 0o755}
     ctx.identities[installer], ctx.identities[go] = pin[1], go_pin[1]
@@ -310,9 +362,12 @@ def installer_pin(path, budget, *, owner=None, metadata=None):
     owner = (os.getuid(), os.getgid()) if owner is None else owner
     if metadata is not None:
         metadata.update(installer_metadata(before))
-    base.require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1
-                 and (before.st_uid, before.st_gid) == owner and stat.S_IMODE(before.st_mode) == 0o755
-                 and 0 < before.st_size <= 128 << 20, "prebuilt installer authority")
+    try:
+        base.require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1
+                     and (before.st_uid, before.st_gid) == owner and stat.S_IMODE(before.st_mode) == 0o755
+                     and 0 < before.st_size <= 128 << 20, "prebuilt installer authority")
+    except ValueError as error:
+        raise ExecutableAuthorityRefusal(before, owner) from error
     fd = base.shared.artifacts.open_member(path)
     try:
         held, digest, count = os.fstat(fd), hashlib.sha256(), 0
@@ -921,7 +976,8 @@ def completion(summary):
                  and summary.get("global_lifecycle_capture_complete") is True
                  and summary.get("metadata_capture_complete") is True and summary.get("admission_qualified") is False
                  and summary.get("native_json_schema") == summary.get("exact_source_admission") == base.METADATA_SCHEMA
-                 and "error" not in summary and type(summary.get("qualification")) is dict
+                 and "error" not in summary and "global_build_authority_refusal" not in summary
+                 and type(summary.get("qualification")) is dict
                  and set(summary["qualification"]) == set(base.shared.QUALIFICATION_CASES)
                  and all(value is False for value in summary["qualification"].values())
                  and summary.get("native_global_steps") == list(NATIVE)

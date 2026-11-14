@@ -65,7 +65,7 @@ def same_opened_capture(before, held):
     return from_path[:2] == from_handle[:2] and from_path[3:] == from_handle[3:]
 
 
-def ordinary_bytes(path, expected=None, *, parent=None, pin=None, package_digest=None):
+def ordinary_bytes(path, expected=None, *, parent=None, pin=None, package_digest=None, deadline=None):
     path = Path(path)
     require(parent is not None or (path.is_absolute() and path.resolve() == path), "ordinary file alias")
     def linked():
@@ -99,6 +99,7 @@ def ordinary_bytes(path, expected=None, *, parent=None, pin=None, package_digest
         else:
             digest, count = hashlib.sha256(), 0
             while count <= maximum:
+                require(deadline is None or time.monotonic() < deadline, "pinned runtime read deadline")
                 chunk = os.read(descriptor, min(65536, maximum + 1 - count))
                 if not chunk: break
                 count += len(chunk)
@@ -109,6 +110,7 @@ def ordinary_bytes(path, expected=None, *, parent=None, pin=None, package_digest
             require(body == pin[1], "pinned runtime bytes differ")
         require(count == before.st_size <= maximum and stable_file(os.fstat(descriptor)) == stable_file(held)
                 and stable_file(linked()) == stable_file(before), "file changed during bounded capture")
+        require(deadline is None or time.monotonic() < deadline, "pinned runtime read deadline")
         return body
     finally:
         os.close(descriptor)
@@ -328,11 +330,14 @@ def inventory(root, sentinels=(), *, launchers=None, public=False, launcher_mode
 PAYLOAD_MEMBERS, PAYLOAD_DEPTH, PAYLOAD_BYTES = 262144, 64, 8 << 30
 
 
-def payload_links(root, records, deadline, source=None):
+def payload_links(root, records, deadline, source=None, *, resolve=None):
     """Resolve only the captured link graph; never traverse a filesystem link."""
     lookup = {Path(name): record for name, record in records.items()}
     spellings = {Path(name): name for name in records} if source is not None else {}
     require(len(lookup) == len(records), "ambiguous payload path spelling")
+    require(resolve is None or (source is not None and type(resolve) is tuple and 0 < len(resolve) <= 4
+            and all(type(name) is str and name in records for name in resolve)), "closed captured link selection required")
+    resolved_inputs = {} if resolve is not None else None
     def parts(target, member, record):
         original_target = target
         extended = artifacts.WINDOWS and target.startswith("\\\\?\\")
@@ -354,8 +359,13 @@ def payload_links(root, records, deadline, source=None):
         return False, list(path.parts)
 
     for name, record in records.items():
-        if record["type"] != "link":
+        if resolve is not None and name not in resolve:
             continue
+        if record["type"] != "link":
+            if resolved_inputs is not None:
+                resolved_inputs[name] = (name, ())
+            continue
+        traversed = [name]
         absolute, tail = parts(record["target"], name, record)
         pending = ([] if absolute else list(Path(name).parent.parts)) + tail
         resolved, count = [], 0
@@ -377,6 +387,7 @@ def payload_links(root, records, deadline, source=None):
                 count += 1
                 require(count <= PAYLOAD_DEPTH, "payload link cycle/depth")
                 member = spellings[Path(*resolved)] if source is not None else ""
+                traversed.append(member)
                 absolute, tail = parts(selected["target"], member, selected)
                 resolved = [] if absolute else resolved[:-1]
                 pending = tail + pending
@@ -384,6 +395,9 @@ def payload_links(root, records, deadline, source=None):
                 require(selected["type"] == "directory", "payload link traverses non-directory")
         if source is not None:
             source_link_boundary(name, spellings[Path(*resolved)], source)
+        if resolved_inputs is not None:
+            resolved_inputs[name] = (spellings[Path(*resolved)], tuple(traversed))
+    return resolved_inputs
 
 
 
@@ -858,8 +872,9 @@ def source_inputs(runner, source):
             "command_sha256": hashlib.sha256(body).hexdigest()}
 
 
-def verify_source_capture_paths(home, expected, records, names, deadline):
-    """Rejoin captured ancestors and leaves; no provenance bytes are reread."""
+def verify_source_capture_paths(home, expected, records, names, deadline, *, hash_members=()):
+    """Rejoin captured ancestors/leaves and optionally verify their pinned bytes."""
+    require(type(hash_members) is tuple and set(hash_members) <= set(names), "captured byte verification differs")
     with held_census_evidence(home, expected) as (root, verify):
         require(stable_named_entry(home.lstat()) == records["."]["identity"], "source captured outer changed")
         for name in names:
@@ -884,6 +899,17 @@ def verify_source_capture_paths(home, expected, records, names, deadline):
                         verify_inventory_directory(path, info, descriptor, held, linked_parent)
                         held_directories.append((path, info, descriptor, held, linked_parent))
                         parent = descriptor
+                    elif record["type"] == "link":
+                        target = os.readlink(path) if linked_parent is None else os.readlink(part, dir_fd=parent)
+                        after = path.lstat() if linked_parent is None else os.stat(part, dir_fd=parent, follow_symlinks=False)
+                        require(target == record["target"] and stable_named_entry(after) == record["identity"], "source captured link target changed")
+                    elif name in hash_members:
+                        require(record["type"] == "file", "source captured byte verification is not a file")
+                        for authority in reversed(held_directories):
+                            verify_inventory_directory(*authority)
+                        verify()
+                        ordinary_bytes(path, info, parent=linked_parent,
+                                       pin=(record["identity"][4], record["sha256"]), deadline=deadline)
                 for authority in reversed(held_directories):
                     verify_inventory_directory(*authority)
                 verify()
@@ -1510,6 +1536,41 @@ def observer_runtime_command(runtime_command, root, python, *, code, args=()):
             and argv[:3] == [str(python), "-I", "-c"]
             and argv[4:] == list(args), "observer runtime command shape changed")
     return [argv[0], "-I", "-B", *argv[2:]]
+
+
+def source_observer_runtime_command(api, inputs, snapshot, records, authority, *, code, args, deadline):
+    """Run only our observer through PM's already-selected dependency interpreter."""
+    home, source = inputs["home"], inputs["source"]
+    provenance = snapshot["provenance"]
+    require(provenance["source"] == str(source) and provenance["python"] == str(inputs["python"])
+            and provenance["native_command"] == [str(inputs["native"])], "source observer provenance differs")
+    facts = inputs["facts"].relative_to(home).as_posix()
+    require(provenance["captured_members"][facts] == records[facts], "source observer facts are not the captured selection")
+    environment = Path(provenance["selected_environment"])
+    require(environment.is_absolute() and os.path.normpath(str(environment)) == str(environment)
+            and environment.is_relative_to(inputs["facts"].parent / "environments"), "source observer generation escaped owner")
+    interpreter = environment / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    api_source = source / "pm/environments.py"
+    require(Path(api.__code__.co_filename) == api_source and api.__code__.co_name == "venv_command"
+            and api.__globals__.get("__name__") == "pm.environments"
+            and api.__globals__.get("__file__") == str(api_source), "source observer API is not pinned-source-owned")
+    executable, config, api_name = (path.relative_to(home).as_posix() for path in (interpreter, environment / "pyvenv.cfg", api_source))
+    resolved, links = payload_links(home, records, deadline, source=inputs["layout"], resolve=(executable,))[executable]
+    require(records[resolved]["type"] == "file" and records[config]["type"] == "file"
+            and records[api_name]["type"] == "file", "source observer inputs are not captured regular files")
+    names = tuple(dict.fromkeys((facts, api_name, config, executable, *links, resolved)))
+    hashed = tuple(dict.fromkeys((facts, api_name, config, resolved)))
+    verify_source_capture_paths(home, authority, records, names, deadline, hash_members=hashed)
+    prefix = api(source, environment, options=("-I", "-B"))
+    require(type(prefix) is list and all(type(value) is str for value in prefix)
+            and prefix == [str(interpreter), "-I", "-B"], "source observer argv is not the selected source interpreter")
+    verify_source_capture_paths(home, authority, records, names, deadline, hash_members=hashed)
+    require(type(code) is str and type(args) is tuple and all(type(value) is str for value in args), "source observer code/args shape")
+    entry = f"import sys, runpy; sys.path.insert(0, {str(source)!r}); " + code
+    argv = [*prefix, "-c", entry, *args]
+    return argv, {"driver": "official pm.environments.venv_command", "selected_environment": str(environment),
+                  "interpreter": str(interpreter), "argv_sha256": hashlib.sha256(json.dumps(argv).encode()).hexdigest(),
+                  "captured_members": {name: records[name] for name in names}, "admission_qualified": False}
 
 
 GUARD_CODE = r"""
@@ -2433,14 +2494,124 @@ def stage_evidence(directory):
         pass
 
 
-def safe_failure_evidence(runner, failure_kind="unclosed-native-admission"):
+OBSERVER_PHASES = ("profile-probes", "profiles", "public-probes", "public", "probe-cleanup")
+OBSERVER_ERRORS = (RuntimeError, ValueError, TypeError, KeyError, IndexError, AttributeError,
+                   OSError, PermissionError, FileNotFoundError, FileExistsError, TimeoutError,
+                   subprocess.TimeoutExpired, AssertionError, ImportError, ModuleNotFoundError,
+                   SystemExit, KeyboardInterrupt)
+CLEANUP_PHASES = ("primary-family", "public-family", "profile-roots", "public-roots", "outer-home", "census", "remove-home")
+
+
+def observer_source_codes():
+    """Only code objects already loaded from this exact observer, never traceback paths."""
+    pending = [function.__code__ for function in globals().values()
+               if type(function) is type(observer_source_codes) and function.__globals__ is globals()]
+    result = {}
+    for _ in range(2048):
+        if not pending:
+            return result
+        code = pending.pop()
+        if code.co_filename == __file__:
+            result[(code.co_name, code.co_firstlineno)] = code
+            pending.extend(item for item in code.co_consts if type(item) is type(code))
+    return {}  # No partial caller authority if the finite own-source walk overflows.
+
+
+def observer_failure_document(body, nonce, source):
+    require(type(body) is bytes and 0 < len(body) <= 2048, "observer diagnostic bound")
+    value = census_document(body)
+    require(type(value) is dict and set(value) == set("schema_version measurement_only admission_qualified nonce source_head phase reason exception_kind command caller".split()), "closed observer diagnostic")
+    require(type(value["schema_version"]) is int and value["schema_version"] == 1
+            and value["measurement_only"] is True and value["admission_qualified"] is False
+            and type(nonce) is str and re.fullmatch(r"[a-f0-9]{64}", nonce) is not None
+            and type(source) is str and re.fullmatch(r"[a-f0-9]{40}", source) is not None
+            and value["nonce"] == nonce and value["source_head"] == source
+            and value["phase"] in OBSERVER_PHASES and value["reason"] == "uncaught-observer-exception"
+            and value["exception_kind"] in tuple(kind.__name__ for kind in OBSERVER_ERRORS) + ("other",), "observer diagnostic identity")
+    require(value["command"] is None or type(value["command"]) is str and value["command"] in COMMANDS, "observer command is not closed")
+    caller = value["caller"]
+    if caller is not None:
+        require(type(caller) is dict and set(caller) == {"function", "function_line", "line"}
+                and type(caller["function"]) is str and type(caller["function_line"]) is int
+                and type(caller["line"]) is int, "observer caller shape")
+        code = observer_source_codes().get((caller["function"], caller["function_line"]))
+        require(code is not None and caller["line"] in {line for _, _, line in code.co_lines()}, "observer caller is not own source")
+    require(body == json.dumps(value, sort_keys=True, separators=(",", ":")).encode("ascii") + b"\n", "observer diagnostic is not one canonical record")
+    return value
+
+
+def emit_observer_failure(error, phase):
+    try:
+        nonce, source = os.environ["HERMES_CALL_NONCE"], os.environ["HERMES_PROFILE_SOURCE_HEAD"]
+        codes, caller, command, trace = observer_source_codes(), None, None, error.__traceback__
+        commands = {code for owner in (observe_profiles, observe_public) for code in owner.__code__.co_consts
+                    if type(code) is type(owner.__code__) and code.co_name == "command"}
+        for _ in range(256):
+            if trace is None:
+                break
+            code = trace.tb_frame.f_code
+            if trace.tb_frame.f_globals is globals() and codes.get((code.co_name, code.co_firstlineno)) is code:
+                caller = dict(function=code.co_name, function_line=code.co_firstlineno, line=trace.tb_lineno)
+                if code in commands:
+                    label = trace.tb_frame.f_locals.get("label")
+                    command = label if type(label) is str and label in COMMANDS else None
+            trace = trace.tb_next
+        if trace is not None:
+            caller, command = None, None
+        value = dict(schema_version=1, measurement_only=True, admission_qualified=False, nonce=nonce, source_head=source,
+                     phase=phase, reason="uncaught-observer-exception",
+                     exception_kind=type(error).__name__ if type(error) in OBSERVER_ERRORS else "other", command=command, caller=caller)
+        body = json.dumps(value, sort_keys=True, separators=(",", ":")).encode("ascii") + b"\n"
+        observer_failure_document(body, nonce, source)
+        sys.stdout.buffer.write(body)
+        sys.stdout.buffer.flush()
+    except BaseException:
+        pass  # Optional diagnosis must never replace the original child exception.
+
+
+def read_observer_failure(descriptor, original, nonce, source, *, primary_settled):
+    if primary_settled is not True or descriptor is None or original is None:
+        return None
+    try:
+        before = os.fstat(descriptor)
+        fields = ("st_dev", "st_ino", "st_mode", "st_nlink", "st_uid", "st_gid")
+        require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1 and 0 < before.st_size <= 2048
+                and all(getattr(before, field) == getattr(original, field) for field in fields), "retained observer descriptor changed")
+        os.lseek(descriptor, 0, os.SEEK_SET)
+        body = os.read(descriptor, 2049)
+        require(stable_file(os.fstat(descriptor)) == stable_file(before) and len(body) == before.st_size,
+                "retained observer diagnostic changed while reading")
+        return observer_failure_document(body, nonce, source)
+    except (OSError, TypeError, ValueError, RuntimeError, RecursionError):
+        return None  # No reopen, raw fallback, or authority from incomplete diagnostics.
+
+
+def native_failure_context(value):
+    require(type(value) is dict and set(value) == {"source_head", "nonce", "cleanup_phase", "primary_family_settled", "observer_exit", "observer"}, "closed native failure context")
+    require(type(value["source_head"]) is str and re.fullmatch(r"[a-f0-9]{40}", value["source_head"]) is not None
+            and type(value["nonce"]) is str and re.fullmatch(r"[a-f0-9]{64}", value["nonce"]) is not None
+            and value["cleanup_phase"] in CLEANUP_PHASES and type(value["primary_family_settled"]) is bool
+            and (value["observer_exit"] is None or type(value["observer_exit"]) is int and -(2**32) <= value["observer_exit"] < 2**32), "native failure context identity")
+    if value["observer"] is not None:
+        require(value["primary_family_settled"] is True, "unsettled observer diagnostic")
+        observer_failure_document(json.dumps(value["observer"], sort_keys=True, separators=(",", ":")).encode("ascii") + b"\n", value["nonce"], value["source_head"])
+    return value
+
+
+def safe_failure_evidence(runner, failure_kind="unclosed-native-admission", *, native_failure=None):
     source_capture = os.environ.get("HERMES_PROFILE_SOURCE_CAPTURE") == "1"
     directory = Path(tempfile.mkdtemp(prefix="hermes-profile-source-evidence-" if source_capture else "hermes-profile-admission-evidence-", dir=runner))
-    write_json(directory / "profile-admission.json", {"status": "failed", "error": "native admission aborted before evidence closure", "original_failure_kind": failure_kind,
+    proof = {"status": "failed", "error": "native admission aborted before evidence closure", "original_failure_kind": failure_kind,
                "admission_qualified": False, "production_project_mcp": False, "vendor_authentication": False,
                "real_model_inference": False, "tools_call": False,
                "runtime_distribution": "source" if source_capture else "bundled", "source_install_custom_root_qualified": False,
-               "source_bootstrap_recovery_qualified": False})
+               "source_bootstrap_recovery_qualified": False}
+    if native_failure is not None:
+        try:
+            proof["native_failure"] = native_failure_context(native_failure)
+        except (TypeError, ValueError, RuntimeError):
+            pass
+    write_json(directory / "profile-admission.json", proof)
     stage_evidence(directory)
     return directory
 
@@ -2448,13 +2619,22 @@ def safe_failure_evidence(runner, failure_kind="unclosed-native-admission"):
 def child_case():
     from contextlib import ExitStack
     from pi_project_components_native_e2e import PiHTTPMCPProbe
-    with ExitStack() as stack:
-        probes = {name: stack.enter_context(PiHTTPMCPProbe(nonce=os.environ["HERMES_CALL_NONCE"]))
-                  for name in ("a", "b")}
-        observe_profiles(probes)
-        if not source_capture_mode():
-            public = {name: stack.enter_context(PiHTTPMCPProbe(nonce=os.environ["HERMES_CALL_NONCE"])) for name in ("a", "b")}
-            observe_public(public)
+    phase = "profile-probes"
+    try:
+        with ExitStack() as stack:
+            probes = {name: stack.enter_context(PiHTTPMCPProbe(nonce=os.environ["HERMES_CALL_NONCE"]))
+                      for name in ("a", "b")}
+            phase = "profiles"
+            observe_profiles(probes)
+            if not source_capture_mode():
+                phase = "public-probes"
+                public = {name: stack.enter_context(PiHTTPMCPProbe(nonce=os.environ["HERMES_CALL_NONCE"])) for name in ("a", "b")}
+                phase = "public"
+                observe_public(public)
+            phase = "probe-cleanup"
+    except BaseException as error:
+        emit_observer_failure(error, phase)
+        raise
 
 
 def run():
@@ -2488,6 +2668,7 @@ def run():
     payload_descriptor, runtime_before, native_started, source_installation = None, None, None, None
     source_prepared, preparation, public_pins = None, None, None
     prepared_records, after_records, source_after_capture, source_after_deadline = {}, {}, None, None
+    observer_descriptor, observer_original = None, None
     helpers = runpy.run_path(str(HERE / "hermes-native.py"), run_name="hermes_profile_process_helpers")
     lifecycle_deadline = time.monotonic() + 720
     try:
@@ -2529,6 +2710,7 @@ def run():
                         for root in (home, evidence, payload, checkout, official_source)), "public executable roots overlap native/config source")
             proof["public_runtimes_before"] = public_pins
         env["HERMES_CENSUS_EVIDENCE_ID"] = json.dumps(evidence_authority)
+        env["HERMES_PROFILE_SOURCE_HEAD"] = before["commit"]
         if not source_capture:
             for key in ("UAP_BIN", "UAP_HERMES_COLD_UAP_SHA256", "UAP_HERMES_COLD_TEST_BIN", "UAP_HERMES_COLD_TEST_SHA256",
                         "UAP_HERMES_MCP_PROBE_BIN", "UAP_HERMES_MCP_PROBE_SHA256", "EXPECTED_HEAD", "GITHUB_ACTIONS", "RUNNER_ENVIRONMENT"):
@@ -2543,15 +2725,23 @@ def run():
         if source_capture:
             require(runtime_command(runtime_root, python=python) == source_installation["runtime_argv"],
                     "installed launcher runtime command does not match the pinned official API")
-        argv = observer_runtime_command(runtime_command, runtime_root, python, args=["--child"],
-                                        code=f"runpy.run_path({str(Path(__file__).resolve())!r}, run_name='__main__')")
+        observer_code = f"runpy.run_path({str(Path(__file__).resolve())!r}, run_name='__main__')"
+        if source_capture:
+            from pm.environments import venv_command
+            argv, proof["source_observer"] = source_observer_runtime_command(
+                venv_command, source_installation, source_prepared, prepared_records, home_authority,
+                code=observer_code, args=("--child",), deadline=lifecycle_deadline)
+        else:
+            argv = observer_runtime_command(runtime_command, runtime_root, python, args=["--child"], code=observer_code)
         if payload_descriptor is not None:
             verify_inventory_directory(payload, payload_before, payload_descriptor, payload_held)
         native_started = time.monotonic()
         lifecycle_deadline = native_started + 720
         env["HERMES_PROFILE_DEADLINE"] = str(lifecycle_deadline)
         flags = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt" else {"start_new_session": True}
-        with (evidence / "lifecycle.stdout").open("wb") as out, (evidence / "lifecycle.stderr").open("wb") as err:
+        with (evidence / "lifecycle.stdout").open("x+b") as out, (evidence / "lifecycle.stderr").open("wb") as err:
+            observer_descriptor = os.dup(out.fileno())
+            observer_original = os.fstat(observer_descriptor)
             child = subprocess.Popen(argv, env=env, stdin=subprocess.DEVNULL, stdout=out, stderr=err, **flags)
             if os.name == "nt":
                 job = BASE["WindowsJob"](child)
@@ -2585,6 +2775,7 @@ def run():
         proof.update(status="failed", error=type(error).__name__ + ": " + str(error)[:300])
     finally:
         process_settled = child is None
+        primary_settled, cleanup_phase = child is None, "primary-family"
         try:
             if child is not None:
                 if job is not None:
@@ -2602,9 +2793,12 @@ def run():
                         require(time.monotonic() < deadline, "owned process group still present")
                         time.sleep(.05)
                 process_settled = True
+                primary_settled = True
+            cleanup_phase = "public-family"
             if not source_capture and not public_cleanup_complete(home, proof):
                 process_settled = False
                 raise RuntimeError("public native cleanup unproved; disposable home retained")
+            cleanup_phase = "profile-roots"
             endpoint_file = evidence / "profile-endpoints.json"
             root_paths = {name: home / ("project-" + name) / ".uap" / "hermes-runtime" for name in ("a", "b")}
             if endpoint_file.exists():
@@ -2613,6 +2807,7 @@ def run():
                 verify_root_identities(root_paths, {name: selected[name]["directory_identity"] for name in root_paths})
             else:
                 require(all(not root.exists() and not root.is_symlink() for root in root_paths.values()), "cleanup lacks original custom-root receipt")
+            cleanup_phase = "public-roots"
             public_endpoints = evidence / "public-endpoints.json"
             if not source_capture and public_endpoints.exists():
                 endpoints = public_json(ordinary_bytes(public_endpoints))
@@ -2625,18 +2820,30 @@ def run():
                     if selected.exists():
                         selected_identity = public["root_authorities"][name]
                         require(directory_identity(selected) == tuple(selected_identity[0]) and directory_identity(selected.parent) == tuple(selected_identity[1]), "public cleanup selected root changed")
+            cleanup_phase = "outer-home"
             require(home.resolve() == home and not home.is_symlink()
                     and (home.stat().st_dev, home.stat().st_ino, home.stat().st_mode) == identity, "owned outer root changed")
+            cleanup_phase = "census"
             maybe_census(evidence, home, home_authority, nonce, process_settled, lifecycle_deadline, evidence_authority)
             require(directory_identity(home) == home_authority, "owned outer root changed after census")
             if source_capture:
                 proof["cleanup"] = "owned-processes-settled; installed source and measured client-owned state retained"
             else:
+                cleanup_phase = "remove-home"
                 shutil.rmtree(home)
                 proof["cleanup"] = "completed"
         except BaseException as error:
             failure = failure or error
             proof.update(status="failed", cleanup="failed", cleanup_error=type(error).__name__)
+        try:
+            observer = (read_observer_failure(observer_descriptor, observer_original, nonce, before["commit"], primary_settled=primary_settled)
+                        if failure is not None else None)
+        finally:
+            if observer_descriptor is not None:
+                try:
+                    os.close(observer_descriptor)
+                except OSError:
+                    pass  # Optional retained diagnostics never replace native refusal.
         proof["native_family_elapsed_seconds"] = round(time.monotonic() - native_started, 3) if native_started is not None else None
         try:
             if source_prepared is not None and process_settled:
@@ -2678,7 +2885,9 @@ def run():
             retain_source_user_delta(evidence, evidence_authority, nonce, source_prepared, source_after_capture,
                                      prepared_records, after_records, "user", source_after_deadline, failure=failure, settled=process_settled)
         if not process_settled:
-            safe_failure_evidence(runner, type(failure).__name__ if failure else "process-cleanup-unproved")
+            safe_failure_evidence(runner, type(failure).__name__ if failure else "process-cleanup-unproved", native_failure={
+                "source_head": before["commit"], "nonce": nonce, "cleanup_phase": cleanup_phase,
+                "primary_family_settled": primary_settled, "observer_exit": child.returncode if child else None, "observer": observer})
             raise RuntimeError("native process cleanup unproved; raw evidence withheld") from failure
         require(evidence.resolve() == evidence and not evidence.is_symlink()
                 and (evidence.stat().st_dev, evidence.stat().st_ino, evidence.stat().st_mode) == evidence_identity,

@@ -16,6 +16,7 @@ from grok_project_protocol_client import (document, exercise, installed_server,
                                           read_owned, require, selected_installation, retained_data)
 from grok_project_protocol_enablement import (config_bytes, config_path, enable_owned,
     expect_retained_receipt, preview_enablement, remove_owned)
+from grok_project_protocol_profile import check_native_lock, prepare_native_profile
 
 NAME = "uap-grok-no-model"
 SERVER = "uap_probe"
@@ -115,6 +116,7 @@ class Journey:
             self.env["XDG_" + suffix + "_HOME"] = str(path)
         self.grok = root / "bin/grok"
         self.protected = {}
+        self.native_profile = None
 
     def run(self, label, argv, cwd=None, expected=(0,), timeout=60, *, config_after=None):
         from native_client_research import run_probe
@@ -125,19 +127,27 @@ class Journey:
         self.evidence["commands"].append(dict(record, stdout=stdout.decode("utf-8", "replace"),
             stderr=stderr.decode("utf-8", "replace"), stdout_base64=base64.b64encode(stdout).decode(),
             stderr_base64=base64.b64encode(stderr).decode()))
+        if record["error"] is not None or record["exit"] not in expected:
+            originals_unchanged = True
+            try:
+                self.check()
+            except (ValueError, OSError):
+                originals_unchanged = False
+            self.evidence["failed_command"] = dict(label=label, exit=record["exit"],
+                capture_complete=record["error"] is None, protected_originals_unchanged=originals_unchanged)
+            raise ValueError("command failed: " + label)
         if config_after is not None:
             require(isinstance(config_after, bytes) and config_bytes(self) == config_after,
                     "public operation changed more than its exact owned native member")
             self.protected[config_path(self)] = hashlib.sha256(config_after).hexdigest()
         self.check()
-        require(record["error"] is None and record["exit"] in expected,
-                "command failed: " + label)
         return stdout
 
     def check(self):
         for path, expected in self.protected.items():
             require(path.resolve() == path and path.is_file() and digest(path) == expected,
                     "protected fixture changed: " + str(path))
+        check_native_lock(self)
 
     def author(self, revision, cwd=None):
         self.fixture_cwd = cwd
@@ -286,6 +296,7 @@ class Journey:
     def execute(self):
         self.run("git-a", ["/usr/bin/git", "-c", "core.hooksPath=/dev/null", "init", "--quiet"])
         self.run("git-b", ["/usr/bin/git", "-c", "core.hooksPath=/dev/null", "init", "--quiet"], self.b)
+        prepare_native_profile(self)
         write(self.home / ".grok/config.toml", '[marketplace]\ndefault_skills_installs_purged = true\n'
               '[features]\nturn_summary = false\n[plugins]\nenabled = ["uap-foreign-enabled"]\n'
               'disabled = ["uap-foreign-disabled"]\n')

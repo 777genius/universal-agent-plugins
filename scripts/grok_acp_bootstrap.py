@@ -95,8 +95,11 @@ class NativeBootstrap:
                 require(after[path] == previous, "original member changed")
         added = set(after) - set(before)
         names = frozenset(path.removeprefix(PREFIX) for path in added)
-        expected = NAMES - ({"config.toml"} if self.original_config is not None else set())
+        # Pinned native startup does not initialize config or its init lock when
+        # this exact original config already exists (original artifact14093332499).
+        expected = NAMES - ({"config.toml", ".config-init.lock"} if self.original_config is not None else set())
         if self.original_config is not None:
+            require(PREFIX + ".config-init.lock" not in before, "bootstrap authored config has an unmeasured init lock")
             config = record(before[PREFIX + "config.toml"], 9)
             require(stat.S_ISREG(config[2]) and stat.S_IMODE(config[2]) == 0o600
                     and config[0] == root[0] and config[3] == 1 and config[4:6] == root[3:]
@@ -149,6 +152,8 @@ class NativeBootstrap:
                 require(type(value) is dict and key in after, "snapshot member missing")
                 matches_snapshot(value, after[key])
         for name, (size, digest, mode) in PINNED.items():
+            if name == ".config-init.lock" and self.original_config is not None:
+                continue  # Exact absent-lock cohort; metadata rejects any creation.
             if name == "config.toml" and self.original_config is not None:
                 size, digest, mode = len(self.original_config), hashlib.sha256(self.original_config).hexdigest(), 0o600
             value = current[name]
