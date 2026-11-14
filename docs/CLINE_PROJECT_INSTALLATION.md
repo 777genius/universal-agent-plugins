@@ -21,8 +21,10 @@ including `--auto-approve false`, and process environment values:
 - `CLINE_MCP_SETTINGS_PATH`: the selected project's absolute prepared MCP file.
 - `CLINE_NO_AUTO_UPDATE`: `1` for the suggested process.
 
-These are structured instructions for review; UAP does not execute that Cline
-session, run a prompt, connect a server, grant trust or alter authentication.
+Add/repair returns these instructions for review and does not start Cline as an
+installation side effect. The source checkout also provides the explicit `run`
+command below. Startup consent grants no workspace trust, automatic tool
+approval or authentication.
 The explicit MCP file selects the whole source. User registrations are not
 merged or copied into that session. A later process without the override reads
 its ordinary user settings again. IDE forwarding is a separate unverified path.
@@ -39,6 +41,70 @@ Same-name user/A/B skill reads selected the user skill in that table, so a
 project receipt does not promise the same-name project skill is effective.
 Project activation, MCP initialization and independent active-session versions
 remain unqualified.
+
+## Explicit startup from a source checkout
+
+The additive `run` command is implemented in the source checkout for
+[PR #878](https://github.com/777genius/universal-agent-plugins/pull/878).
+The CLI 0.1.93 release statement above covers project preparation; it does not
+announce published release availability of this startup command. Run these
+examples from a checkout containing that implementation, using the toolchain
+declared in `go.work`, and replace the absolute project path with your project.
+An unambiguous detected Cline CLI and an existing UAP-owned Project binding with
+supported stdio MCP servers are required. A Skills-only project uses ordinary
+Cline startup; this command does not create an MCP source for it.
+
+Review the selected project's owned MCP servers without starting a session:
+
+```sh
+go run ./cli/cmd/agentplugins run \
+  --target cline --scope project --project-root /absolute/path/to/project \
+  --dry-run
+```
+
+Explicitly start the interactive Cline session with that Project MCP source:
+
+```sh
+go run ./cli/cmd/agentplugins run \
+  --target cline --scope project --project-root /absolute/path/to/project \
+  --confirm-client-start --format human
+```
+
+To run native configuration inventory instead of the interactive session:
+
+```sh
+go run ./cli/cmd/agentplugins run \
+  --target cline --scope project --project-root /absolute/path/to/project \
+  --inspect --confirm-client-start --format human
+```
+
+Installation `--yes` does not authorize startup. `run` requires one explicit
+target and Project scope; actual startup requires human output and
+`--confirm-client-start`, including for `--inspect`. For this Cline route, that
+consent authorizes a native `config mcp --json` verification process followed by
+the selected client command. The second process is an interactive session by
+default, or another configuration inventory with `--inspect`. A failed
+verification prevents the second process. Extra child arguments are not accepted.
+`--dry-run --format json` is available for a structured preview; a dry-run starts
+neither process.
+
+Before startup, UAP verifies package/component ownership and the whole selected
+MCP file, checks native inventory against that exact source, and rechecks the
+plan. Missing or edited components, foreign MCP members, disabled servers,
+automatic tool approvals and pending installation recovery refuse startup.
+The child uses `--auto-approve false`, `CLINE_MCP_SETTINGS_PATH` and
+`CLINE_NO_AUTO_UPDATE=1`. UAP does not rewrite the original User configuration,
+the parent shell environment or IDE settings. A later ordinary `cline` process
+without these overrides continues to select its ordinary User source.
+
+Receipts remain **Prepared** after startup or inspection. `--inspect` observes
+configuration without a model or MCP call. A direct call through the installed
+MCP entry proves a separate transport path; it does not prove that Cline itself
+connected or called the tool. IDE behavior and native Cline tool calls require
+their own evidence. The command contract lives in
+[client_session.go](../cli/internal/agentpluginscli/client_session.go), with
+[Cline planning](../install/integrationctl/agentplugins/clients/cline/session.go)
+and [native inventory verification](../install/integrationctl/agentplugins/clients/cline/session_verify.go).
 
 ## Ownership and maintenance
 
