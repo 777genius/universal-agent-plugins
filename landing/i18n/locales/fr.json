@@ -599,6 +599,7 @@
     },
     "command": {
       "terminal": "Dans le terminal",
+      "useNativeCli": "Utiliser le CLI agentplugins installé au lieu de npx",
       "copiedLabel": "Commande copiée",
       "copyLabel": "Copier la commande",
       "copied": "Copié",

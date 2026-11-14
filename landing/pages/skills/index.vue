@@ -258,7 +258,7 @@ usePageSeo(
                 <p v-if="skillNeedsManualSelection(skill)" class="skills-detail__hint">
                   {{ t('registryUi.skills.manualSkillSelection') }}
                 </p>
-                <p class="skills-detail__hint">{{ t('registryUi.skills.checkedBeforeInstall') }}</p>
+                <NativeCliCheckbox />
               </div>
             </template>
             <p v-else class="skills-detail__hint">

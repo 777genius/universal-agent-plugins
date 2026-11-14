@@ -616,6 +616,7 @@
     },
     "command": {
       "terminal": "Terminal",
+      "useNativeCli": "Use installed agentplugins CLI instead of npx",
       "copiedLabel": "Command copied",
       "copyLabel": "Copy command",
       "copied": "Copied",

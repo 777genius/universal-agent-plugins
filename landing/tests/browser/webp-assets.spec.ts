@@ -1,32 +1,57 @@
 import { expect, test } from '@playwright/test';
 
-test('homepage raster images are valid served WebP, not PNG fallbacks', async ({ page }) => {
-  await page.goto('./');
-  const monitor = page.locator('.registry-restore__monitor');
+// Real Chromium decode of committed WebP, including Nuxt's bundled artwork
+// and both public copies produced by prepare-webp-assets.mjs.
+test('committed WebP artwork loads and decodes from generated site', async ({ page }) => {
+  await page.goto('./', { waitUntil: 'domcontentloaded' });
+  const monitor = page.locator('#restore-environment .registry-restore__monitor');
+  await expect(monitor).toHaveAttribute('src', /\\.webp(?:\\?.*)?$/);
   await monitor.scrollIntoViewIfNeeded();
-  await expect(monitor).toHaveAttribute('src', /\.webp(?:$|\?)/);
-  await expect.poll(() => monitor.evaluate((node) => (node as HTMLImageElement).naturalWidth))
-    .toBeGreaterThan(0);
+  await expect.poll(() => monitor.evaluate((node) => {
+    const img = node as HTMLImageElement;
+    return img.complete && img.naturalWidth === 1577 && img.naturalHeight === 997;
+  })).toBe(true);
 
-  // The showcase is conditional on the published reviewed directory. The
-  // WebP asset must exist even when that catalog entry is temporarily absent.
-  const showcase = await page.request.get('./showcase/agent-notifications.webp');
-  expect(showcase.ok()).toBe(true);
-  expect(showcase.headers()['content-type']).toContain('image/webp');
-  const logo = page.locator('.built-with__logo');
-  if (await logo.count()) {
-    await logo.scrollIntoViewIfNeeded();
-    await expect(logo).toHaveAttribute('src', /\.webp(?:$|\?)/);
-    await expect.poll(() => logo.evaluate((node) => (node as HTMLImageElement).naturalWidth))
-      .toBeGreaterThan(0);
+  const result = await page.evaluate(async () => {
+    const monitorUrl = (document.querySelector('.registry-restore__monitor') as HTMLImageElement).src;
+    const assets = [
+      { url: monitorUrl, width: 1577, height: 997, alphaCorner: true },
+      { url: new URL('logo-192.webp', location.href).href, width: 192, height: 192, alphaCorner: false },
+      { url: new URL('showcase/agent-notifications.webp', location.href).href, width: 0, height: 0, alphaCorner: false },
+    ];
+    const checks = [];
+    for (const asset of assets) {
+      const response = await fetch(asset.url);
+      if (!response.ok) {
+        checks.push({ url: asset.url, error: 'HTTP ' + response.status });
+        continue;
+      }
+      const blob = await response.blob();
+      if (blob.type !== 'image/webp') {
+        checks.push({ url: asset.url, error: 'Unexpected MIME: ' + blob.type });
+        continue;
+      }
+      const bitmap = await createImageBitmap(blob);
+      const dimensionsMatch = bitmap.width > 0 && bitmap.height > 0
+        && (!asset.width || (bitmap.width === asset.width && bitmap.height === asset.height));
+      let alphaMatch = true;
+      if (asset.alphaCorner) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 1;
+        canvas.height = 1;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+        ctx.drawImage(bitmap, 0, 0);
+        alphaMatch = ctx.getImageData(0, 0, 1, 1).data[3] === 0;
+      }
+      checks.push({ url: asset.url, dimensionsMatch, alphaMatch, size: blob.size });
+      bitmap.close();
+    }
+    return checks;
+  });
+  expect(result, JSON.stringify(result)).toHaveLength(3);
+  for (const item of result) {
+    expect(item, JSON.stringify(item)).not.toHaveProperty('error');
+    expect(item).toMatchObject({ dimensionsMatch: true, alphaMatch: true });
+    expect(item.size).toBeGreaterThan(0);
   }
-});
-
-test('static SEO logo is a valid WebP asset', async ({ page }) => {
-  const response = await page.request.get('./logo-192.webp');
-  expect(response.ok()).toBe(true);
-  expect(response.headers()['content-type']).toContain('image/webp');
-  const image = await response.body();
-  expect(image.toString('ascii', 0, 4)).toBe('RIFF');
-  expect(image.toString('ascii', 8, 12)).toBe('WEBP');
 });

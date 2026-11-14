@@ -599,6 +599,7 @@
     },
     "command": {
       "terminal": "Терминал",
+      "useNativeCli": "Использовать установленный CLI agentplugins вместо npx",
       "copiedLabel": "Команда скопирована",
       "copyLabel": "Копировать команду",
       "copied": "Скопировано",

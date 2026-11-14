@@ -1,0 +1,61 @@
+name: Cursor Qoder optional authenticated MCP tools/call (manual only)
+
+# Separate, optional research: this does not gate native installation/lifecycle E2E.
+# Vendor model calls require explicitly provisioned, authorized credentials.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cursor-qoder-call-native-manual-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  genuine-native:
+    # This secret-bearing experiment can only be manually invoked on main.
+    # It is not a PR/merge gate and never runs automatically after merge.
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' &&
+          github.ref == 'refs/heads/main' &&
+          github.repository == '777genius/universal-agent-plugins' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        client: [cursor, qoder]
+    env:
+      GITHUB_ACTIONS: 'true'
+      AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED: '1'
+      EXPECTED_HEAD: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Verify fail-closed provenance and receipt contracts before vendor model access
+        run: python3 -m unittest discover -s scripts -p 'test_project_native_missing_call_*.py' -v
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.11'
+          cache: false
+      - name: Real source-built UAP and pinned native selected-client Project call
+        env:
+          CURSOR_API_KEY: ${{ matrix.client == 'cursor' && secrets.CURSOR_API_KEY || '' }}
+          QODER_PERSONAL_ACCESS_TOKEN: ${{ matrix.client == 'qoder' && secrets.QODER_PERSONAL_ACCESS_TOKEN || '' }}
+          RUNNER_TEMP: ${{ runner.temp }}
+        run: |
+          python3 scripts/project_native_missing_call_runner.py \
+            --client '${{ matrix.client }}' \
+            --expected-head '${{ github.sha }}' \
+            --output '${{ runner.temp }}/mcp-call-${{ matrix.client }}-proof'
+      - name: Publish only server-side original proof and redacted provenance
+        if: ${{ success() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: mcp-native-${{ matrix.client }}-${{ github.sha }}
+          path: ${{ runner.temp }}/mcp-call-${{ matrix.client }}-proof/
+          if-no-files-found: error
+          retention-days: 14

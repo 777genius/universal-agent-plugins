@@ -599,6 +599,7 @@
     },
     "command": {
       "terminal": "الطرفية",
+      "useNativeCli": "استخدام واجهة agentplugins المثبتة بدلاً من npx",
       "copiedLabel": "تم نسخ الأمر",
       "copyLabel": "انسخ الأمر",
       "copied": "تم النسخ",

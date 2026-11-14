@@ -1,4 +1,4 @@
-<img width="2172" height="724" alt="Universal Agent Plugins - install and create plugins across AI agents with one command" src="assets/readme-banner.webp" />
+<img width="2172" height="724" alt="Universal Agent Plugins — 1,500+ plugins, supporting Agent Plugins 1.0 and the Agent Skills standard" src="assets/readme-banner.svg" />
 
 <p align="center">
     <img src="landing/public/client-icons/openai.svg" width="32" height="32" alt="Codex and ChatGPT" />&nbsp;&nbsp;
