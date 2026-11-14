@@ -2456,3 +2456,30 @@ capture and returns the full stat receipt. The previous row-only early
 state update is replaced by the successful command's prospective receipt,
 committed after all profile guards. The peer's selected-session plan is
 unchanged; no parallel sidecar registry or second admission path is added.
+
+## 2026-11-14 — Windows readout-parent negative fixture
+
+Original source/User job
+[132473514608](https://github.com/777genius/universal-agent-plugins/actions/runs/43603223618/job/132473514608)
+on `9278aed97af3278cc50f6423bea9bb738e5354c3` ran 163 inert methods and
+failed only the `during / readout-parent` subcase of
+`test_original_readout_runtime_files_and_ancestors_are_rejoined_before_and_after_api`.
+The original log is 138,637 bytes, SHA-256
+`224bbaa1a7a81ce83a812e02d2715a449ff9ded1c53de3ca4bda355c5382f06c`.
+Windows returned `PermissionError / WinError 32` at the attempted directory
+rename. The existing `held_census_evidence` handle deliberately omits
+delete sharing, so the attempted substitution never happened.
+
+The test now requires exactly that Windows kernel refusal for this one
+subcase, including the original rename source/destination, absent moved
+directory, unchanged original parent/file identities and readout digest.
+The same rename must succeed and be restored after the method exits,
+checking that the held-directory handle was released. The other nineteen
+before/during substitution cases retain the existing RuntimeError checks,
+and every case retains its exact API-call count. No subcase is skipped and
+no exception is swallowed.
+
+Only this test method and this note change. The runtime, native argv,
+readout capture, source/User guards, cleanup and qualification remain
+unchanged. There are still 171 authored methods. This is a source-reviewed
+candidate; Python and genuine Windows/native execution remain pending.

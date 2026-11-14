@@ -480,3 +480,44 @@ This is a source-level candidate and inert regression, **not** fresh native
 proof or a qualified Active status. The original Windows artifact must be
 rechecked for exact path, mode, source and command causality, and the final
 HEAD must pass Windows native/Required/security CI before guarded merge.
+
+## 2026-11-14 — managed bootstrap Python inside the original User census
+
+The ordinary macOS source job [132473514630](https://github.com/777genius/universal-agent-plugins/actions/runs/43603223618/job/132473514630)
+at UAP `9278aed97af3278cc50f6423bea9bb738e5354c3` stopped before its
+observer started. The unchanged source census refused the absolute
+`pm-runtime/generations/15429aaf91b3480fb97e5559ef964d02/bin/python`
+link outside the captured User root. The installer had already printed
+`/opt/homebrew/opt/python@3.14/bin/python3.14`; its 44 UTF-8 bytes hash to
+`b943d5b04b6c1a38452fd18788100affdbce154455f0be7a933dfcdffca5f0db`,
+exactly the recorded refused target. No external interpreter was read to make
+that join. The later owned application Python 3.14.9 did not remove the earlier
+PM generation. The raw source capture remains failed and unqualified.
+
+The pinned official [installer](https://github.com/NousResearch/hermes-agent/blob/2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19/scripts/install.sh)
+first tries a managed base interpreter, then a host interpreter of the same
+minor version, and downloads a managed interpreter only when neither exists.
+Before installed Python facts exist, [PM runtime preparation](https://github.com/NousResearch/hermes-agent/blob/2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19/pm/runtime.py)
+uses that bootstrap interpreter to create the retained PM generation. This
+explains the observed external reference without making it admissible.
+
+The existing POSIX installer command now receives only the official
+`UV_MANAGED_PYTHON=1` and
+`UV_PYTHON_INSTALL_DIR="$profile_home/bootstrap-python"` environment assignments.
+They are scoped to that command and use uv 0.13.5's existing
+[managed-only preference](https://github.com/astral-sh/uv/blob/46776a95d6686ac0160c10611327ce491e6b202f/crates/uv-cli/src/settings.rs)
+and [installation directory](https://github.com/astral-sh/uv/blob/46776a95d6686ac0160c10611327ce491e6b202f/crates/uv-python-managed/src/managed.rs)
+selection. The official installer retains its own download path and exact
+arguments. The Windows fixture already selects this owned bootstrap directory
+and is unchanged. Hermes subsequently strips these ambient UV settings before
+its explicit PM/application environment operations.
+
+The original User census captures the entire bootstrap directory and still
+requires every link to remain inside its existing allowed graph. No generation
+is deleted, no external interpreter is adopted, and no member is skipped or
+rebased. The real launcher, source/runtime pins, observer commands, Project
+source refusal, process cleanup, archive limits and observation budgets remain
+unchanged. This two-file fixture correction has source review evidence only;
+the existing hosted source capture must independently pass before any source
+runtime claim. Local execution is unavailable and no fresh native success is
+claimed by the correction.

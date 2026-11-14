@@ -113,7 +113,8 @@ jobs:
           https://github.com/NousResearch/hermes-agent.git "$source"
         git -C "$source" checkout --force --detach "$sha"
         test "$(git -C "$source" rev-parse HEAD)" = "$sha"
-        bash "$source/scripts/install.sh" --commit "$sha" \
+        UV_MANAGED_PYTHON=1 UV_PYTHON_INSTALL_DIR="$profile_home/bootstrap-python" \
+          bash "$source/scripts/install.sh" --commit "$sha" \
           --dir "$source" --hermes-home "$HERMES_HOME" \
           --non-interactive --skip-browser --skip-computer-use
         hermes="$profile_home/.local/bin/hermes"

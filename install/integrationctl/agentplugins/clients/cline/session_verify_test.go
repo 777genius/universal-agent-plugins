@@ -94,7 +94,7 @@ func TestSessionNativeInventoryExitAndCapability(t *testing.T) {
 	}
 	plan := clients.SessionPlan{Executable: "/native/cline", Directory: project, Servers: []string{"owned"},
 		ConfigDigest: fmt.Sprintf("%x", sha256.Sum256(owned)),
-		Environment: map[string]string{"CLINE_MCP_SETTINGS_PATH": path, "CLINE_NO_AUTO_UPDATE": "1"}}
+		Environment:  map[string]string{"CLINE_MCP_SETTINGS_PATH": path, "CLINE_NO_AUTO_UPDATE": "1"}}
 	good := []byte(fmt.Sprintf(`[{"name":"owned","path":%q,"transportType":"stdio","disabled":false}]`, path))
 	config := nativeconfig.New()
 	// No real Cline executable is installed or launched in this regression.
@@ -160,7 +160,7 @@ func TestSessionNativeInventoryCancellationDuringSourceRead(t *testing.T) {
 	}
 	plan := clients.SessionPlan{Executable: "/native/cline", Directory: project, Servers: []string{"owned"},
 		ConfigDigest: fmt.Sprintf("%x", sha256.Sum256(owned)),
-		Environment: map[string]string{"CLINE_MCP_SETTINGS_PATH": path, "CLINE_NO_AUTO_UPDATE": "1"}}
+		Environment:  map[string]string{"CLINE_MCP_SETTINGS_PATH": path, "CLINE_NO_AUTO_UPDATE": "1"}}
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	runner := &sessionObservationRunner{result: legacyports.CommandResult{CleanupComplete: true}}
@@ -181,7 +181,7 @@ func TestSessionNativeInventoryRefusesSelectedSourceChanges(t *testing.T) {
 	foreign := []byte(fmt.Sprintf(`{"mcpServers":{"owned":{"transport":{"type":"stdio","command":%q,"cwd":%q},"autoApprove":[]}}}`, filepath.Join(project, "foreign-probe.exe"), project))
 	plan := clients.SessionPlan{Executable: "/native/cline", Directory: project, Servers: []string{"owned"},
 		ConfigDigest: fmt.Sprintf("%x", sha256.Sum256(baseline)),
-		Environment: map[string]string{"CLINE_MCP_SETTINGS_PATH": path, "CLINE_NO_AUTO_UPDATE": "1"}}
+		Environment:  map[string]string{"CLINE_MCP_SETTINGS_PATH": path, "CLINE_NO_AUTO_UPDATE": "1"}}
 	rows := []byte(fmt.Sprintf(`[{"name":"owned","path":%q,"transportType":"stdio","disabled":false}]`, path))
 	kernel := nativeconfig.New()
 	for _, mutation := range []string{"stale-before", "changed-during", "unchanged"} {

@@ -3584,6 +3584,7 @@ class SourceNativeCommandContracts(unittest.TestCase):
                 CASE["observe_profiles"]({})
 
     def test_original_readout_runtime_files_and_ancestors_are_rejoined_before_and_after_api(self):
+        import hashlib
         for phase in ("before", "during"):
             for effect in ("launcher", "interpreter", "facts", "store-facts", "api", "bootstrap", "main", "readout", "readout-parent", "ancestor"):
                 with self.subTest(phase=phase, effect=effect), tempfile.TemporaryDirectory() as temporary:
@@ -3608,8 +3609,28 @@ class SourceNativeCommandContracts(unittest.TestCase):
                         return argv
                     if phase == "before": replace()
                     else: scope["rewrite"] = replace
-                    with self.assertRaisesRegex(RuntimeError, "source input changed|source captured|file changed|original census evidence"):
-                        CASE["source_native_runtime_command"](**args)
+                    if os.name == "nt" and phase == "during" and effect == "readout-parent":
+                        # The held Windows directory rejects this move before
+                        # substitution. Require that exact kernel refusal and
+                        # the original objects, rather than skipping the case.
+                        readout = inputs["command_file"]
+                        directory, moved = readout.parent, readout.parent.with_name("held-readout")
+                        with self.assertRaises(PermissionError) as refusal:
+                            CASE["source_native_runtime_command"](**args)
+                        self.assertEqual(refusal.exception.winerror, 32)
+                        self.assertEqual(refusal.exception.filename, str(directory))
+                        self.assertEqual(refusal.exception.filename2, str(moved))
+                        self.assertFalse(moved.exists())
+                        self.assertEqual(CASE["directory_identity"](directory), tuple(inputs["command_parent"]))
+                        self.assertEqual(CASE["stable_file"](readout.lstat()), CASE["stable_file"](inputs["command_info"]))
+                        self.assertEqual(hashlib.sha256(readout.read_bytes()).hexdigest(), inputs["command_sha256"])
+                        # The same move succeeds after the finally block has
+                        # released its directory handle; no lock is leaked.
+                        directory.rename(moved)
+                        moved.rename(directory)
+                    else:
+                        with self.assertRaisesRegex(RuntimeError, "source input changed|source captured|file changed|original census evidence"):
+                            CASE["source_native_runtime_command"](**args)
                     self.assertEqual(len(scope["calls"]), 0 if phase == "before" else 1)
 
     @unittest.skipIf(os.name == "nt", "POSIX installed store Python symlink shape")
