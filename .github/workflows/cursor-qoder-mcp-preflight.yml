@@ -1,0 +1,63 @@
+name: Cursor Qoder native Project MCP preflight (no credentials)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'scripts/project_native_missing_call_runner.py'
+      - 'scripts/project_native_missing_call_proof.py'
+      - 'scripts/test_project_native_missing_call_runner.py'
+      - 'scripts/test_project_native_missing_call_proof.py'
+      - '.github/workflows/cursor-qoder-mcp-preflight.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cursor-qoder-preflight-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  native-project-preflight:
+    # No vendor secrets, tokens or approval bypass. This is an installation,
+    # discovery and removal preflight; it cannot qualify tools/call.
+    if: >-
+      ${{ github.event.pull_request.number == 793 &&
+          github.event.pull_request.head.repo.full_name == github.repository }}
+    strategy:
+      fail-fast: false
+      matrix:
+        client: [cursor, qoder]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 27
+    env:
+      AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED: '1'
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Check strict receipt and native runner contracts
+        run: python3 -m unittest discover -s scripts -p 'test_project_native_missing_call_*.py' -v
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.11'
+          cache: false
+      - name: Genuine pinned native CLI, source-built UAP, Project A/B, removal
+        env:
+          RUNNER_TEMP: ${{ runner.temp }}
+        run: |
+          python3 scripts/project_native_missing_call_runner.py \
+            --client '${{ matrix.client }}' \
+            --expected-head '${{ github.event.pull_request.head.sha }}' \
+            --output '${{ runner.temp }}/mcp-preflight-${{ matrix.client }}-proof' \
+            --preflight-only
+      - name: Publish only explicit unqualified source/discovery receipt
+        if: ${{ success() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: mcp-preflight-${{ matrix.client }}-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/mcp-preflight-${{ matrix.client }}-proof/
+          if-no-files-found: error
+          retention-days: 14
