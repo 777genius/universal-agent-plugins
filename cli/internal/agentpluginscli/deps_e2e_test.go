@@ -377,9 +377,18 @@ func TestDependencyEnvironmentCLIEndToEnd(t *testing.T) {
 	}
 	beforeRecovery := snapshotBytes()
 	nativeBefore, callsBefore := maps.Clone(runners[0].codexIDs), runners[0].calls
-	for _, args := range [][]string{{"deps", "recover", "--yes", "--format", "json"}, {"repair", id, "--target", "codex", "--format", "json"}} {
-		if _, _, e := f.execute(false, args...); !errors.Is(e, transaction.ErrEnvironmentAuthority) {
-			t.Fatalf("mixed recovery lost its exact environment refusal: %v", e)
+	// Full environment recovery must report the foreign owner; ordinary
+	// repair refuses earlier because any pending recovery blocks preflight.
+	// Both refusals must leave the original native and state bytes unchanged.
+	for _, test := range []struct {
+		args []string
+		want error
+	}{
+		{[]string{"deps", "recover", "--yes", "--format", "json"}, transaction.ErrEnvironmentAuthority},
+		{[]string{"repair", id, "--target", "codex", "--format", "json"}, installer.ErrRecoveryRequired},
+	} {
+		if _, _, e := f.execute(false, test.args...); !errors.Is(e, test.want) {
+			t.Fatalf("mixed recovery %v returned %v, want %v", test.args, e, test.want)
 		}
 		if !maps.Equal(beforeRecovery, snapshotBytes()) || !maps.Equal(nativeBefore, runners[0].codexIDs) || runners[0].calls != callsBefore {
 			t.Fatal("refused recovery changed state, native registration or original files")
