@@ -30,7 +30,7 @@ func TestSessionContextCancellationReapsOwnedTree(t *testing.T) {
 	}
 }
 
-func testSessionContextCancellation(t *testing.T, terminationFailure bool) {
+func testSessionContextCancellation(t *testing.T, terminationFailure bool, expectedExtra ...error) {
 	t.Helper()
 	dir := t.TempDir()
 	executable, err := os.Executable()
@@ -66,6 +66,11 @@ func testSessionContextCancellation(t *testing.T, terminationFailure bool) {
 		if terminationFailure && !errors.Is(err, windows.ERROR_ACCESS_DENIED) {
 			t.Fatalf("termination failure lost: %v", err)
 		}
+		for _, expected := range expectedExtra {
+			if !errors.Is(err, expected) {
+				t.Fatalf("cancellation failed to preserve %v: %v", expected, err)
+			}
+		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("session cancellation did not reap native process")
 	}
@@ -75,6 +80,19 @@ func testSessionContextCancellation(t *testing.T, terminationFailure bool) {
 			t.Errorf("generation %d survives: status=%d err=%v", index, status, err)
 		}
 	}
+}
+
+// A failed TerminateJobObject followed by a failed last-handle close must
+// still reap the direct child rather than hanging forever in cmd.Wait.
+// The outer job handle closes during deferred cleanup and reaps descendants.
+func TestSessionContextCancellationAfterFailedJobClose(t *testing.T) {
+	originalTerminate, originalClose := terminateSessionJob, closeSessionJobAfterTerminationFailure
+	terminateSessionJob = func(windows.Handle, uint32) error { return windows.ERROR_ACCESS_DENIED }
+	closeSessionJobAfterTerminationFailure = func(windows.Handle) error { return windows.ERROR_INVALID_HANDLE }
+	t.Cleanup(func() {
+		terminateSessionJob, closeSessionJobAfterTerminationFailure = originalTerminate, originalClose
+	})
+	testSessionContextCancellation(t, true, windows.ERROR_INVALID_HANDLE)
 }
 
 // Cancellation during suspended-process setup must not resume the child.
