@@ -94,7 +94,18 @@ func TestLockQualificationUsesUnchangedUnprivilegedCollectorArgv(t *testing.T) {
 
 func supervisorLockFixture(t *testing.T, phase string) (*scopeState, request, string) {
 	t.Helper()
-	root := t.TempDir()
+	// Hosted overlay filesystems can report different devices for newly created
+	// regular files and their directories. Exercise the real same-device lock
+	// authority on a private Linux tmpfs root; never relax the production guard.
+	root, err := os.MkdirTemp("/dev/shm", "uap-grok-lock-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.RemoveAll(root); err != nil {
+			t.Error(err)
+		}
+	})
 	path := filepath.Join(root, "home", ".grok", ".config-init.lock")
 	if e := os.MkdirAll(filepath.Dir(path), 0700); e != nil {
 		t.Fatal(e)
