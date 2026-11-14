@@ -95,7 +95,7 @@ test('recommended Skills lead the original cards without changing provider data 
   await expect(picker).toBeVisible();
   await expect(picker.locator('.app-multiselect__item small')).toHaveCount(0);
   await expect(picker.getByRole('checkbox', { name: /VS Code/i })).toHaveCount(0);
-  await expect(cards.first().getByText('The CLI checks the source and Skill before installation.', { exact: true })).toHaveCount(1);
+  await expect(cards.first().getByRole('checkbox', { name: 'Use installed agentplugins CLI instead of npx' })).toHaveCount(1);
   await testInfo.attach('skills-agent-picker-without-duplicate-copy', {
     body: await page.screenshot({ animations: 'disabled' }),
     contentType: 'image/png',
