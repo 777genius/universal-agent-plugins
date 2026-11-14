@@ -1592,6 +1592,112 @@ def admission_contracts():
                     self.assertNotIn(str(root), str(refused.exception))
                     self.assertNotIn("fixture bytes", str(refused.exception))
 
+
+        def preservation_rows(self):
+            body = b"PRIVATE-A"
+            meta = (7, 11, stat.S_IFREG | 0o600, 1000, 1000, 1, len(body), 20, 21, None, None, None)
+            file_row = ("file", meta[:5], *meta[5:9], hashlib.sha256(body).hexdigest(), body, meta, meta)
+            directory = (7, 12, stat.S_IFDIR | 0o700, 1000, 1000, 2, 4096, 20, 21, None, None, None)
+            lock = meta[:6] + meta[9:]
+            return file_row, ("directory", directory[:5], (directory, directory)), ("source-control-lock", lock, lock)
+
+        def test_public_preservation_refusal_stops_before_later_snapshot_getters(self):
+            file_row, directory, _lock = self.preservation_rows()
+            changed = list(file_row); changed[6] = hashlib.sha256(b"PRIVATE-B").hexdigest(); changed[7] = b"PRIVATE-B"
+            originals = ({"file": file_row}, {"bundle": file_row}, {"file"}, directory[1])
+            differences = ({"file": tuple(changed)}, {"bundle": tuple(changed)}, {"file", "new"}, (7, 13, *directory[1][2:]))
+            for refused_at, group in enumerate(("state", "bundle", "native-membership", "native-parent")):
+                calls = [0, 0, 0, 0]
+                def observe(index):
+                    calls[index] += 1
+                    if index > refused_at:
+                        self.fail("A later snapshot getter ran after the first refusal")
+                    return differences[index] if index == refused_at else originals[index]
+                checks = tuple((original, lambda index=index: observe(index)) for index, original in enumerate(originals))
+                with self.subTest(group=group), self.assertRaisesRegex(
+                        AssertionError, "^Refused public repeat changed original membership/bytes; ") as caught:
+                    public_refusal_preservation(checks)
+                message = str(caught.exception)
+                self.assertLessEqual(len(message.encode("ascii")), 1024)
+                detail = json.loads(message.split("; ", 1)[1])
+                self.assertEqual(detail["group"], group)
+                self.assertEqual(calls, [int(index <= refused_at) for index in range(4)])
+            calls = [0, 0, 0, 0]
+            def unchanged(index):
+                calls[index] += 1
+                return originals[index]
+            with patch.dict(globals(), public_preservation_diagnostic=Mock(side_effect=AssertionError("Unchanged data reached diagnostics"))):
+                self.assertIsNone(public_refusal_preservation(tuple(
+                    (original, lambda index=index: unchanged(index)) for index, original in enumerate(originals))))
+            self.assertEqual(calls, [1, 1, 1, 1])
+
+        def test_public_preservation_maps_named_and_held_metadata_without_normalization(self):
+            names = ("device", "inode", "mode", "uid", "gid", "nlink", "size", "mtime_ns", "ctime_ns",
+                     "birthtime_ns", "file_attributes", "reparse_tag")
+            file_row, directory, lock = self.preservation_rows()
+            cases = ((file_row, names), (directory, names), (lock, names[:6] + names[9:]))
+            for row, fields in cases:
+                for view_index, view in enumerate(("named", "held")):
+                    original = row[8 + view_index] if row[0] == "file" else row[2][view_index] if row[0] == "directory" else row[1 + view_index]
+                    for index, field in enumerate(fields):
+                        values = list(original); values[index] = 1 if values[index] is None else values[index] + 1
+                        changed = list(row)
+                        if row[0] == "file":
+                            changed[8 + view_index] = tuple(values)
+                        elif row[0] == "directory":
+                            pair = list(row[2]); pair[view_index] = tuple(values); changed[2] = tuple(pair)
+                        else:
+                            changed[1 + view_index] = tuple(values)
+                        with self.subTest(kind=row[0], view=view, field=field):
+                            detail = public_preservation_diagnostic("state", {"member": row}, {"member": tuple(changed)})
+                            self.assertEqual((detail["change"], detail["view"], detail["field"]), ("metadata", view, field))
+                            self.assertNotEqual(detail["before_sha256"], detail["after_sha256"])
+            for index, field in enumerate(names[:5]):
+                changed = list(directory[1]); changed[index] += 1
+                detail = public_preservation_diagnostic("native-parent", directory[1], tuple(changed))
+                self.assertEqual((detail["view"], detail["field"]), ("identity", field))
+
+        def test_public_preservation_first_member_content_and_membership_are_closed(self):
+            row, directory, _lock = self.preservation_rows()
+            changed = list(row); changed[6] = hashlib.sha256(b"PRIVATE-B").hexdigest(); changed[7] = b"PRIVATE-B"
+            detail = public_preservation_diagnostic("state", {"z": row, "a": row}, {"z": tuple(changed), "a": tuple(changed)})
+            self.assertEqual((detail["change"], detail["view"], detail["field"]), ("content", "record", "sha256"))
+            self.assertEqual(detail["member_sha256"], hashlib.sha256(b"relative-member-v1\0a").hexdigest())
+            self.assertEqual(set(detail), {"schema", "group", "change", "member_sha256", "view", "field", "before_sha256", "after_sha256"})
+            changed[6] = row[6]
+            self.assertEqual(public_preservation_diagnostic("bundle", {"a": row}, {"a": tuple(changed)})["field"], "body")
+            for group, before, after, change in (
+                    ("state", {}, {"PRIVATE/path": row}, "added"),
+                    ("bundle", {"PRIVATE/path": row}, {}, "removed"),
+                    ("native-membership", set(), {"PRIVATE/path"}, "added"),
+                    ("native-membership", {"PRIVATE/path"}, set(), "removed")):
+                with self.subTest(group=group, change=change):
+                    detail = public_preservation_diagnostic(group, before, after)
+                    self.assertEqual((detail["change"], detail["view"], detail["field"]), (change, "membership", "presence"))
+                    self.assertNotIn("PRIVATE", json.dumps(detail))
+            detail = public_preservation_diagnostic("state", {"a": row}, {"a": directory})
+            self.assertEqual((detail["view"], detail["field"]), ("record", "kind"))
+
+        def test_public_preservation_unknown_values_never_render_or_hash_private_objects(self):
+            class Poison:
+                def __str__(self): raise AssertionError("PRIVATE str invoked")
+                def __repr__(self): raise AssertionError("PRIVATE repr invoked")
+                def __eq__(self, other): raise AssertionError("PRIVATE equality invoked")
+            row, _directory, _lock = self.preservation_rows()
+            for invalid in (Poison(), True, 1.5, float("nan"), 1 << 129, "PRIVATE"):
+                changed = list(row); metadata = list(row[8]); metadata[0] = invalid; changed[8] = tuple(metadata)
+                detail = public_preservation_diagnostic("state", {"PRIVATE/path": row}, {"PRIVATE/path": tuple(changed)})
+                self.assertEqual((detail["change"], detail["field"]), ("representation", "representation"))
+                self.assertNotIn("PRIVATE", json.dumps(detail))
+                self.assertIsNone(detail["before_sha256"]); self.assertIsNone(detail["after_sha256"])
+            for invalid in (("file",), ("PRIVATE",), (Poison(),), Poison()):
+                detail = public_preservation_diagnostic("bundle", {"PRIVATE/path": row}, {"PRIVATE/path": invalid})
+                self.assertEqual(detail["change"], "representation")
+                self.assertNotIn("PRIVATE", json.dumps(detail))
+            changed = list(row); changed[7] = b"PRIVATE" * ((1 << 20) // 7 + 1)
+            self.assertEqual(public_preservation_diagnostic("state", {"a": row}, {"a": tuple(changed)})["change"], "representation")
+            self.assertEqual(public_preservation_diagnostic("state", {b"PRIVATE": row}, {})["change"], "representation")
+
         def test_public_control_and_owned_read_refuse_before_any_body(self):
             import types
             with tempfile.TemporaryDirectory() as temporary:
@@ -2531,6 +2637,123 @@ def public_refusal_config_identity(path, alias):
                  "st_size", "st_mtime_ns", "st_ctime_ns", "st_birthtime_ns", "st_file_attributes", "st_reparse_tag"))
 
 
+
+PUBLIC_PRESERVATION_GROUPS = ("state", "bundle", "native-membership", "native-parent")
+PUBLIC_PRESERVATION_ID = ("device", "inode", "mode", "uid", "gid")
+PUBLIC_PRESERVATION_META = PUBLIC_PRESERVATION_ID + (
+    "nlink", "size", "mtime_ns", "ctime_ns", "birthtime_ns", "file_attributes", "reparse_tag")
+PUBLIC_PRESERVATION_LOCK = PUBLIC_PRESERVATION_ID + (
+    "nlink", "birthtime_ns", "file_attributes", "reparse_tag")
+
+
+def public_preservation_value(field, value):
+    """Hash only exact bounded primitives from an already captured snapshot."""
+    if value is None and field in ("body", "birthtime_ns", "file_attributes", "reparse_tag"):
+        body = b"none"
+    elif field in PUBLIC_PRESERVATION_META and type(value) is int and -(1 << 127) <= value < 1 << 128:
+        body = b"integer:" + str(value).encode("ascii")
+    elif field == "presence" and type(value) is bool:
+        body = b"boolean:true" if value else b"boolean:false"
+    elif field == "kind" and type(value) is str and value in ("file", "directory", "source-control-lock"):
+        body = b"kind:" + value.encode("ascii")
+    elif field == "sha256" and type(value) is str and len(value) == 64 and all(c in "0123456789abcdef" for c in value):
+        body = b"digest:" + value.encode("ascii")
+    elif field == "body" and type(value) is bytes and len(value) <= 1 << 20:
+        body = b"bytes:" + value
+    else:
+        return None
+    return hashlib.sha256(body).hexdigest()
+
+
+def public_preservation_fields(row):
+    if type(row) is not tuple or not row or type(row[0]) is not str:
+        return None
+    fields = [("record", "kind", row[0])]
+    def extend(view, values, names):
+        if type(values) is not tuple or len(values) != len(names):
+            return False
+        fields.extend((view, name, value) for name, value in zip(names, values))
+        return True
+    if row[0] == "file" and len(row) == 10:
+        if not extend("identity", row[1], PUBLIC_PRESERVATION_ID) or not extend(
+                "record", row[2:6], PUBLIC_PRESERVATION_META[5:9]):
+            return None
+        fields.extend((("record", "sha256", row[6]), ("record", "body", row[7])))
+        if not extend("named", row[8], PUBLIC_PRESERVATION_META) or not extend("held", row[9], PUBLIC_PRESERVATION_META):
+            return None
+    elif row[0] == "directory" and len(row) == 3:
+        if not extend("identity", row[1], PUBLIC_PRESERVATION_ID) or type(row[2]) is not tuple or len(row[2]) != 2:
+            return None
+        if not extend("named", row[2][0], PUBLIC_PRESERVATION_META) or not extend("held", row[2][1], PUBLIC_PRESERVATION_META):
+            return None
+    elif row[0] == "source-control-lock" and len(row) == 3:
+        if not extend("named", row[1], PUBLIC_PRESERVATION_LOCK) or not extend("held", row[2], PUBLIC_PRESERVATION_LOCK):
+            return None
+    else:
+        return None
+    return fields
+
+
+def public_preservation_diagnostic(group, before, after):
+    """A closed first-difference description; no filesystem or exception reads."""
+    if type(group) is not str or group not in PUBLIC_PRESERVATION_GROUPS:
+        raise AssertionError("Public preservation diagnostic group refused")
+    detail = dict(schema=1, group=group, change="representation", member_sha256=None,
+                  view="none", field="representation", before_sha256=None, after_sha256=None)
+    def difference(left, right):
+        if left is None or right is None:
+            return "invalid"
+        old_hashes = [public_preservation_value(field, value) for _view, field, value in left]
+        new_hashes = [public_preservation_value(field, value) for _view, field, value in right]
+        if any(value is None for hashes in (old_hashes, new_hashes) for value in hashes):
+            return "invalid"
+        for a, b, old, new in zip(left, right, old_hashes, new_hashes):
+            if a[:2] != b[:2]:
+                return "invalid"
+            if type(a[2]) is not type(b[2]) or a[2] != b[2]:
+                detail.update(change="content" if a[1] in ("sha256", "body") else "metadata",
+                              view=a[0], field=a[1], before_sha256=old, after_sha256=new)
+                return "changed"
+        return "same" if len(left) == len(right) else "invalid"
+    if group == "native-parent":
+        if type(before) is tuple and type(after) is tuple and len(before) == len(after) == 5:
+            difference([("identity", name, value) for name, value in zip(PUBLIC_PRESERVATION_ID, before)],
+                       [("identity", name, value) for name, value in zip(PUBLIC_PRESERVATION_ID, after)])
+        return detail
+    expected = set if group == "native-membership" else dict
+    if type(before) is not expected or type(after) is not expected or max(len(before), len(after)) > 4096:
+        return detail
+    if any(type(key) is not str or not 0 < len(key) <= 8192 for collection in (before, after) for key in collection):
+        return detail
+    for key in sorted(set(before) | set(after)):
+        present_before, present_after = key in before, key in after
+        member = hashlib.sha256(b"relative-member-v1\0" + key.encode("utf-8", "surrogatepass")).hexdigest()
+        if present_before != present_after:
+            detail.update(change="added" if present_after else "removed", member_sha256=member,
+                          view="membership", field="presence",
+                          before_sha256=public_preservation_value("presence", present_before),
+                          after_sha256=public_preservation_value("presence", present_after))
+            return detail
+        if group != "native-membership":
+            left, right = public_preservation_fields(before[key]), public_preservation_fields(after[key])
+            if difference(left, right) != "same":
+                detail["member_sha256"] = member
+                return detail
+    return detail
+
+
+def public_refusal_preservation(checks):
+    """Keep the original lazy four-way admission and only explain a refusal."""
+    for group, (before, observe) in zip(PUBLIC_PRESERVATION_GROUPS, checks, strict=True):
+        after = observe()
+        if after != before:
+            detail = public_preservation_diagnostic(group, before, after)
+            message = "Refused public repeat changed original membership/bytes; " + json.dumps(
+                detail, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False)
+            if len(message.encode("ascii")) > 1024:
+                raise AssertionError("Refused public repeat changed original membership/bytes; diagnostic bound")
+            raise AssertionError(message)
+
 def public_user_refusals(runtime, source, executable_dir, parent):
     for condition in ("missing-config", "malformed-config", "foreign-collision", "config-alias", "missing-backend"):
         with public_fixture(parent, executable_dir) as (root, env, authority):
@@ -2562,10 +2785,12 @@ def public_user_refusals(runtime, source, executable_dir, parent):
             if condition == "config-alias" and stable_file(original.lstat()) != original_identity:
                 raise AssertionError("Authored alias target changed before command")
             public_uap(runtime, root, authority, action, refused=True)
-            if (public_state_snapshot(Path(env["AGENTPLUGINS_HOME"]), Path(env["AGENTPLUGINS_HOME"]), runtime[4]) != state_before or public_snapshot(selected.parent) != bundle_before
-                    or {entry.name for entry in config.parent.iterdir()} != members
-                    or object_identity(config.parent.lstat(), True) != parent_identity):
-                raise AssertionError("Refused public repeat changed original membership/bytes")
+            public_refusal_preservation((
+                (state_before, lambda: public_state_snapshot(Path(env["AGENTPLUGINS_HOME"]), Path(env["AGENTPLUGINS_HOME"]), runtime[4])),
+                (bundle_before, lambda: public_snapshot(selected.parent)),
+                (members, lambda: {entry.name for entry in config.parent.iterdir()}),
+                (parent_identity, lambda: object_identity(config.parent.lstat(), True)),
+            ))
             if condition != "missing-config" and public_refusal_config_identity(config, condition == "config-alias") != identity:
                 raise AssertionError("Refused repeat changed original native settings")
             if condition == "config-alias" and (os.readlink(config) != alias or stable_file(original.lstat()) != original_identity

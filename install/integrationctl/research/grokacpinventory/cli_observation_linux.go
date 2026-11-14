@@ -17,6 +17,17 @@ import (
 const cliMode = "plugin-cli-observation-v1"
 
 func decodeResearchResult(body []byte, got *result, mode string) error {
+	if mode == readonlyMode {
+		var selected struct {
+			result
+			Readonly json.RawMessage `json:"readonly"`
+		}
+		if e := closed(body, &selected, "schema_version source_commit source_tree scope nonce semantic_complete reason isolation commands rpc mode readonly"); e != nil {
+			return e
+		}
+		*got = selected.result
+		return nil
+	}
 	if e := closed(body, got, lockResultFields(mode, sessionFields(mode, "schema_version source_commit source_tree scope nonce semantic_complete reason isolation commands rpc", "mode provider"))); e != nil {
 		return e
 	}

@@ -1289,3 +1289,70 @@ no branch update is authorized by that preparation alone. Existing hosted
 contracts and genuine native runs must validate the eventual reviewed head.
 No new native, IDE-loading, MCP execution, trust, model or authentication
 qualification is claimed by this source correction.
+
+
+## Prospective first-preservation-refusal diagnostic (2026-11-14)
+
+The original f6adab5a0c660909d892961285f2d8af050eae72 native run
+43569444834 failed on Linux (job 132373147150), macOS (132373147120),
+and Windows (132373146907). The original logs show the first
+missing-config negative command returned exit 1 with cleanup_complete=true,
+then the collector refused: "Refused public repeat changed original
+membership/bytes". The four-way predicate did not identify its first changed
+field. The original receipt archive contains command exchanges, not those
+filesystem before/after snapshots. This record does not infer which
+preservation predicate failed or claim a native pass.
+
+Root R1 accepted a prospective correction in this collector and this plan
+only. It preserves the same ordered state, bundle, native-membership, and
+native-parent comparisons. Each getter runs once when reached; no later
+getter runs after the first mismatch. The helper adds no filesystem reads
+and does not change admission, control-lock normalization, native actions,
+budgets, cleanup, source identity, or publication authority.
+
+An existing refusal may append one closed ASCII JSON diagnostic; the
+complete error remains at most 1 KiB. The record names a fixed group, view,
+and field, plus SHA-256 of the relative member identifier and the two
+changed primitive values. It never prints member names, paths, raw state or
+config bytes, or arbitrary object/exception representations. Only exact
+bounded integer, boolean, known-kind/digest string, optional null, or
+already-held bounded byte values are hashed. Unknown shapes/values retain
+a fixed representation diagnostic. The explicit tuple mapping includes
+all original named/held fields and the existing nine-field normalized
+control-lock shape; it grants no new normalization exception.
+
+Four new inert contract methods cover lazy getter call counts and
+unchanged success, every named/held metadata field, the first lexical
+changed member and content/membership changes, and poisoned/unsupported
+values without rendering them. Existing contracts and other collector
+functions remain byte-identical. These source changes and contracts are
+UNEXECUTED locally while the execution environment is unavailable; source
+review is not a test or native result. The prior overlay session 76044
+remains UNKNOWN and was not restarted.
+
+The initial candidate was held on
+86a619bb31d33014236e4564fb1aa7a77de16583. The current
+9326475ff499be6f836727d268dbaec87baf7835 run 43577051075 now supplies
+fresh evidence of the same preservation refusal on Linux (job
+132393456858), Windows (132393457146), and macOS (132393457172).
+All three original logs first complete cold observation and locked repeat,
+then record the missing-config public repeat at index 14 with exit 1 and
+cleanup_complete=true, followed by the same uninformative preservation
+refusal. The preceding cold two-component oracle and its seven new
+counterexamples remain byte-identical to the incoming 932 commit.
+
+The Linux original log is 54881 bytes with SHA-256
+1838845819da276b4961d501860ebb991595897f49dde1ea16036e7163d64d92.
+Its official artifact is 14107568423 (16485 bytes, SHA-256
+d99c07b33d21e68a1181cf4277ab8f2aea315e0840d29fa1d33d721ad695d866).
+The raw log and official metadata are retained; the binary ZIP has not been
+replayed in the unavailable local executor. Neither the old nor current
+log identifies which of the four snapshots changed.
+
+This revision carries the exact previously held helper and four inert
+contract methods onto 932, with the same ordered lazy comparisons.
+Removing only these additions and restoring the original predicate
+reconstructs the entire incoming collector byte-for-byte. Root R1 permits
+this diagnostic after the new actual refusal; independent source R2 and
+genuine hosted execution remain required. No failing field is normalized,
+ignored, or assumed repaired.

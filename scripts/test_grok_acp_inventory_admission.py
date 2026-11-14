@@ -2080,5 +2080,468 @@ class FixedCLIObservationContracts(unittest.TestCase):
         self.assertFalse(expired['semantic_complete']); self.assertEqual(expired['commands'],[])
 
 
+@unittest.skipUnless(sys.platform == "linux", "Linux namespace research contracts")
+class ReadonlyInventoryContracts(unittest.TestCase):
+    """Finite parser/authority counterexamples; no vendor, bwrap or sudo."""
+
+    def request(self):
+        import stat
+        from project_native_collectors.grok import ACQUISITION
+        nonce, uid, gid = 'c' * 32, 1000, 1000
+        root = '/tmp/uap-grok-acp-input-' + nonce
+        sealed = '/tmp/uap-grok-acp-sealed-123456'
+        req = dict(schema_version=1, source_commit='a' * 40, source_tree='b' * 40,
+                   uid=uid, gid=gid, nonce=nonce, scope='a', input_root=root,
+                   parent_network_namespace=102, start_monotonic_ns=time.monotonic_ns(),
+                   mode=case.READONLY_MODE)
+        roots = {name:dict(path=str(Path(root) / name),
+                 identity=[1, index + 1, stat.S_IFDIR | 0o700, uid, gid])
+                 for index, name in enumerate(case.READONLY_ROOTS)}
+        roots['sealed'] = dict(path=sealed, identity=[1, 100, stat.S_IFDIR | 0o755, 0, 0])
+        runtime = {name:dict(path='/usr' if name == '/usr' else '/usr' + name,
+                   identity=[2, 200 + index, stat.S_IFDIR | 0o755, 0, 0])
+                   for index, name in enumerate(case.READONLY_RUNTIME_ROOTS)}
+        paths = [root + '/' + name for name in case.READONLY_FILES]
+        paths += [sealed + '/grok', sealed + '/collector.py', '/usr/bin/bwrap', '/usr/bin/python3.12']
+        files = {}
+        for index, path in enumerate(paths):
+            owner, group = (uid, gid) if path.startswith(root + '/') else (0, 0)
+            mode = (0o600 if path.startswith(root + '/') else 0o555 if path == sealed + '/grok'
+                    else 0o444 if path == sealed + '/collector.py' else 0o755)
+            files[path] = dict(path=path, identity=[3, 300 + index, stat.S_IFREG | mode,
+                              1, owner, group, 0, 7, 8], sha256='e' * 64)
+        files[sealed + '/grok']['sha256'] = ACQUISITION['binary_sha256']
+        devices = {name:dict(path='/dev/' + name,
+                   identity=[4, 400 + index, stat.S_IFCHR | 0o666, 1, 0, 0, 0, 7, 8])
+                   for index, name in enumerate(case.READONLY_DEVICES)}
+        before = {name:fact['identity'] for name, fact in roots.items() if name != 'sealed'}
+        before.update({path[len(root) + 1:]:fact['identity'] for path, fact in files.items()
+                       if path.startswith(root + '/')})
+        ledger = case.readonly_ledger_digest(before)
+        req['readonly'] = dict(roots=roots, files=files, runtime=runtime, devices=devices,
+                               namespaces={name:100 + index for index, name in enumerate(case.READONLY_NAMESPACES)},
+                               overflow_uid=65534, overflow_gid=65534,
+                               input_sha256=ledger['sha256'], input_count=ledger['count'])
+        return req, before
+
+    def original(self, req):
+        namespaces = dict(req['readonly']['namespaces'])
+        namespaces['net'] += 100
+        return dict(namespaces=namespaces, runtime=dict(sha256='f' * 64, count=5))
+
+    def header(self, req, phase, original):
+        number = 10000 if phase == 'control' else 20000
+        maps = {name:dict(inside=req[name], parent=0, count=1, overflow=65534,
+                         sha256=case.digest((str(req[name]) + ' 0 1\n').encode()))
+                for name in ('uid', 'gid')}
+        body = dict(schema_version=1, mode=case.READONLY_MODE, source_commit=req['source_commit'],
+                    source_tree=req['source_tree'], nonce=req['nonce'], scope='a', phase=phase,
+                    parent_namespaces=original['namespaces'],
+                    namespaces={name:value + number for name, value in original['namespaces'].items()},
+                    maps=maps, mount_sha256='d' * 64, runtime=original['runtime'],
+                    input=dict(sha256=req['readonly']['input_sha256'], count=req['readonly']['input_count']),
+                    authority_sha256=case.digest(json.dumps(req['readonly'], sort_keys=True, separators=(',', ':')).encode()))
+        return case.READONLY_HEADER + json.dumps(body, sort_keys=True, separators=(',', ':')).encode() + b'\n'
+
+    def mount_rows(self, req):
+        root, sealed = req['input_root'], req['readonly']['roots']['sealed']['path']
+        paths = {'/', '/usr', root, sealed, root + '/readonly-witness', '/proc', '/dev', '/dev/pts'}
+        paths.update(case.READONLY_RUNTIME_ROOTS)
+        paths.update('/dev/' + name for name in case.READONLY_DEVICES)
+        rows = []
+        for index, path in enumerate(sorted(paths)):
+            fs = {'/':'tmpfs', '/dev':'tmpfs', '/proc':'proc', '/dev/pts':'devpts'}.get(path, 'ext4')
+            mode = 'rw' if path == root + '/readonly-witness' else 'ro'
+            rows.append(f'{index + 1} 99 0:1 / {path} {mode},nosuid - {fs} source rw')
+        return ('\n'.join(rows) + '\n').encode()
+
+    def test_fixed_wrapper_has_one_writable_witness_and_final_root_remount(self):
+        req, _ = self.request()
+        original = self.original(req)
+        case.readonly_request(req)
+        argv = case.readonly_bwrap_argv(req, 'native', original)
+        root = req['input_root']
+        self.assertEqual(argv.count('--bind'), 1)
+        index = argv.index('--bind')
+        self.assertEqual(argv[index + 1:index + 3], [root + '/readonly-witness'] * 2)
+        remounts = [argv[index + 1] for index, word in enumerate(argv) if word == '--remount-ro']
+        self.assertEqual(remounts, ['/proc'] + ['/dev/' + name for name in case.READONLY_DEVICES]
+                         + ['/dev/pts', '/dev', '/'])
+        self.assertNotIn('--share-net', argv)
+        self.assertNotIn('--ro-bind', argv[argv.index('--') + 1:])
+        self.assertEqual(argv[-3:-1], [req['readonly']['roots']['sealed']['path'] + '/collector-request.json', 'native'])
+        self.assertEqual(case.document(argv[-1].encode(), 512), original)
+        for phase in ('login', 'session', '', None):
+            with self.subTest(phase=phase), self.assertRaises(ValueError):
+                case.readonly_bwrap_argv(req, phase, original)
+        for key, value in (('mode', case.SESSION_MODE), ('scope', 'b')):
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                case.readonly_bwrap_argv(dict(req, **{key:value}), 'native', original)
+
+    def test_one_clock_refuses_future_zero_exact_active_and_final_expiry(self):
+        req, _ = self.request()
+        req['start_monotonic_ns'] = 100
+        for elapsed, final, accepted in ((0, False, True), (24_999_999_999, False, True),
+                (25_000_000_000, False, False), (29_999_999_999, True, True), (30_000_000_000, True, False)):
+            with self.subTest(elapsed=elapsed, final=final), mock.patch.object(case.time, 'monotonic_ns', return_value=100 + elapsed):
+                if accepted:
+                    self.assertEqual(case.readonly_deadline(req, final=final), (100 + (30 if final else 25) * 10**9) / 1e9)
+                else:
+                    with self.assertRaises(ValueError):
+                        case.readonly_deadline(req, final=final)
+        for start in (0, True, 101):
+            with self.subTest(start=start), mock.patch.object(case.time, 'monotonic_ns', return_value=100), self.assertRaises(ValueError):
+                case.readonly_deadline(dict(req, start_monotonic_ns=start))
+        with mock.patch.object(case.time, 'monotonic_ns', return_value=100 + 25 * 10**9), mock.patch.object(case.subprocess, 'Popen') as child:
+            with self.assertRaises(ValueError):
+                case.readonly_command(req, 'native', self.original(req), case.LIMIT, case.rpc_state())
+            child.assert_not_called()
+
+    def test_exact_namespace_maps_refuse_alternate_root_and_overflow(self):
+        req, _ = self.request()
+        raw = {'/proc/self/uid_map':b'      1000          0          1\n',
+               '/proc/self/gid_map':b'1000 0 1\n', '/proc/self/setgroups':b'deny\n',
+               '/proc/sys/kernel/overflowuid':b'65534\n', '/proc/sys/kernel/overflowgid':b'65534\n'}
+        def read(path, limit):
+            self.assertIn(path, raw)
+            return raw[path]
+        with mock.patch.object(case, 'readonly_fixed_proc', side_effect=read):
+            self.assertEqual(case.readonly_id_maps(req, req['readonly'])['uid']['inside'], 1000)
+            for path, value in (('/proc/self/uid_map', b'0 0 1\n'),
+                    ('/proc/self/gid_map', b'1000 1000 1\n'), ('/proc/self/uid_map', b'1000 0 2\n'),
+                    ('/proc/self/uid_map', b'1000 0 1\n1001 1 1\n'), ('/proc/self/setgroups', b'allow\n'),
+                    ('/proc/sys/kernel/overflowuid', b'1000\n'), ('/proc/sys/kernel/overflowgid', b'0\n')):
+                original = raw[path]
+                raw[path] = value
+                try:
+                    with self.subTest(path=path, value=value), self.assertRaises(ValueError):
+                        case.readonly_id_maps(req, req['readonly'])
+                finally:
+                    raw[path] = original
+
+    def test_closed_mount_table_rejects_every_unadmitted_writable_or_missing_mount(self):
+        req, _ = self.request()
+        raw = self.mount_rows(req)
+        accepted = case.readonly_mounts(raw, req)
+        self.assertEqual([name for name, value in accepted['rows'].items() if not value['readonly']],
+                         [req['input_root'] + '/readonly-witness'])
+        lines = raw.splitlines(keepends=True)
+        changes = [
+            raw.replace(b' / ro,nosuid ', b' / rw,nosuid ', 1),
+            raw.replace(b' /dev/null ro,nosuid ', b' /dev/null rw,nosuid ', 1),
+            raw + b'500 99 0:2 / /outside ro - ext4 source ro\n',
+            raw + lines[0],
+            b''.join(line for line in lines if b' /proc ' not in line),
+            raw.replace(b' - proc ', b' - tmpfs ', 1),
+            raw.replace(b'ro,nosuid', b'ro,rw,nosuid', 1)]
+        for changed in changes:
+            with self.subTest(body=changed[:100]), self.assertRaises(ValueError):
+                case.readonly_mounts(changed, req)
+        optional = raw + b'500 99 0:2 /sys /proc/sys ro,nosuid - proc proc rw\n'
+        self.assertIn('/proc/sys', case.readonly_mounts(optional, req)['rows'])
+
+    def test_runtime_link_resolution_never_reads_or_exposes_hidden_targets(self):
+        import stat
+        req, _ = self.request()
+        directory = (2, 21, stat.S_IFDIR | 0o755, 2, 0, 0, 4096, 7, 8)
+        regular = (2, 22, stat.S_IFREG | 0o755, 1, 0, 0, 1, 7, 8)
+        link = (2, 23, stat.S_IFLNK | 0o777, 1, 0, 0, 1, 7, 8)
+        rows = {'bin':directory, 'lib':directory, 'lib/runtime':regular}
+        with mock.patch.object(case.os, 'stat', side_effect=AssertionError('external stat')), \
+             mock.patch.object(case.os, 'readlink', side_effect=AssertionError('external link read')):
+            self.assertEqual(case.readonly_link_target(None, 'bin/tool', '../lib/runtime', rows, req), 'visible')
+            self.assertEqual(case.readonly_link_target(None, 'bin/tool', '/etc/alternatives/tool', rows, req), 'hidden')
+            for target in ('/', '/tmp', req['input_root'] + '/readonly-witness', '/proc/self/fd/1', '/dev/null'):
+                with self.subTest(target=target), self.assertRaisesRegex(ValueError, 'readonly-link-cross-domain'):
+                    case.readonly_link_target(None, 'bin/tool', target, rows, req)
+            self.assertEqual(case.readonly_link_target(None, 'bin/tool', '/usr/lib/missing', rows, req), 'absent')
+            rows['bin/again'] = (*link, 'again')
+            with self.assertRaisesRegex(ValueError, 'readonly-link-depth'):
+                case.readonly_link_target(None, 'bin/tool', 'again', rows, req)
+
+    def test_real_input_metadata_digest_rejects_symlinks_hardlinks_and_fifo(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            root.chmod(0o700)
+            leaf = root / 'leaf'
+            leaf.write_bytes(b'original')
+            leaf.chmod(0o600)
+            req = dict(uid=os.getuid(), gid=os.getgid(), start_monotonic_ns=time.monotonic_ns())
+            fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                rows = case.readonly_walk(fd, req, 4096)
+                expected = b''.join(name.encode() + b'\0' + ','.join(map(str, rows[name])).encode() + b'\n'
+                                    for name in sorted(rows))
+                self.assertEqual(case.readonly_ledger_digest(rows), dict(sha256=case.digest(expected), count=2))
+                for kind in ('symlink', 'hardlink', 'fifo'):
+                    member = root / kind
+                    if kind == 'symlink': member.symlink_to('/outside/not-read')
+                    elif kind == 'hardlink': os.link(leaf, member)
+                    else: os.mkfifo(member, 0o600)
+                    try:
+                        with self.subTest(kind=kind), self.assertRaises(ValueError):
+                            case.readonly_walk(fd, req, 4096)
+                    finally:
+                        member.unlink()
+                with self.assertRaises(ValueError):
+                    case.readonly_walk(fd, req, 1)
+            finally:
+                os.close(fd)
+
+    def test_parent_replacement_is_joined_before_first_regular_byte_read(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            outer = Path(temporary).resolve()
+            root = outer / 'source'
+            root.mkdir(mode=0o700)
+            leaf = root / 'object'
+            leaf.write_bytes(b'original')
+            leaf.chmod(0o600)
+            req = dict(start_monotonic_ns=time.monotonic_ns(), readonly=dict(
+                roots={'selected':dict(path=str(root), identity=list(case.readonly_metadata(root.lstat(), directory=True)))},
+                runtime={}, files={str(leaf):dict(path=str(leaf), identity=list(case.stable(leaf.lstat())),
+                                                   sha256=case.digest(b'original'))}))
+            original = case.readonly_file_parent
+            def replaced(*args):
+                held = original(*args)
+                root.rename(outer / 'retained')
+                root.mkdir(mode=0o700)
+                (root / 'object').write_bytes(b'foreign')
+                return held
+            with mock.patch.object(case, 'readonly_file_parent', side_effect=replaced), \
+                 mock.patch.object(case.os, 'read', side_effect=AssertionError('read before original parent join')) as read:
+                with self.assertRaisesRegex(ValueError, 'readonly-file-parent-before-read'):
+                    case.readonly_verify_files(req)
+                read.assert_not_called()
+            self.assertEqual((root / 'object').read_bytes(), b'foreign')
+            self.assertEqual((outer / 'retained/object').read_bytes(), b'original')
+
+    def test_real_control_marker_is_exactly_removed_with_original_handle_receipt(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            witness = root / 'readonly-witness'
+            witness.mkdir(mode=0o700)
+            req = dict(input_root=str(root), nonce='d' * 32, uid=os.getuid(), gid=os.getgid(),
+                       readonly=dict(roots={'readonly-witness':dict(path=str(witness),
+                       identity=list(case.readonly_metadata(witness.lstat(), directory=True)))}))
+            marker = witness / 'unexpected-startup'
+            body = b'uap-readonly:' + req['nonce'].encode() + b'\n'
+            marker.write_bytes(body)
+            marker.chmod(0o600)
+            original = case.stable(marker.lstat())
+            proof = case.readonly_control_marker(req)
+            self.assertEqual(proof['identity'], list(original))
+            self.assertEqual(proof['removed_identity'][3], 0)
+            self.assertEqual(list(witness.iterdir()), [])
+            case.readonly_marker_proof(dict(control_complete=True, control_marker=proof), req)
+            for field, value in (('name', 'foreign'), ('bytes', False), ('sha256', '0' * 64),
+                                 ('removed_identity', proof['identity'])):
+                with self.subTest(field=field), self.assertRaises(ValueError):
+                    case.readonly_marker_proof(dict(control_complete=True, control_marker=dict(proof, **{field:value})), req)
+            marker.write_bytes(b'foreign')
+            marker.chmod(0o600)
+            with self.assertRaisesRegex(ValueError, 'readonly-control-body'):
+                case.readonly_control_marker(req)
+            self.assertEqual(marker.read_bytes(), b'foreign')
+
+    def test_header_preserves_warnings_but_rejects_duplicate_or_wrong_original_authority(self):
+        req, _ = self.request()
+        original = self.original(req)
+        body = self.header(req, 'native', original)
+        proof, warning = case.readonly_header(body + b'non-protocol warning\n', req, 'native', original)
+        self.assertEqual(warning, b'non-protocol warning\n')
+        for changed in (body + body, body.replace(b'"phase":"native"', b'"phase":"control"'),
+                        body.replace(req['nonce'].encode(), b'0' * 32),
+                        body.replace(b'"inside":1000', b'"inside":0', 1),
+                        body.replace(b'"overflow":65534', b'"overflow":0', 1)):
+            with self.subTest(body=changed[:80]), self.assertRaises(ValueError):
+                case.readonly_header(changed, req, 'native', original)
+        self.assertNotEqual(proof['namespaces'], original['namespaces'])
+
+    def test_actual_inert_child_keeps_protocol_stdout_distinct_from_warning_stderr(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            (root / 'a').mkdir()
+            req, _ = self.request()
+            req['input_root'] = str(root)
+            frames = [
+                dict(jsonrpc='2.0', id=1, result=dict(protocolVersion=1, _meta=dict(agentVersion='1.0.70'))),
+                dict(jsonrpc='2.0', id=2, result=dict(result=dict(plugins=[])))]
+            script = ("import json,os,sys\nsys.stdin.readline()\n"
+                      "os.write(2,b'warning on stderr\\n')\n"
+                      "os.write(1," + repr(json.dumps(frames[0]).encode() + b'\n') + ")\n"
+                      "sys.stdin.readline()\nos.write(1," + repr(json.dumps(frames[1]).encode() + b'\n') + ")\n"
+                      "sys.stdin.read()\n")
+            argv = [sys.executable, '-I', '-B', '-c', script]
+            state = case.rpc_state()
+            with mock.patch.object(case, 'readonly_bwrap_argv', return_value=argv):
+                row = case.readonly_command(req, 'native', self.original(req), case.LIMIT, state)
+            raw = case.readonly_streams(row)
+            self.assertIsNone(row['error'])
+            self.assertEqual(raw['stderr'], b'warning on stderr\n')
+            self.assertEqual(raw['stdout'], b''.join(json.dumps(frame).encode() + b'\n' for frame in frames))
+            self.assertEqual(row['wrapper_argv'], argv)
+            self.assertEqual(state['plugins'], frames[1])
+
+    def test_actual_inert_child_rejects_post_completion_frame_without_losing_raw_bytes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            (root / 'a').mkdir()
+            req, _ = self.request()
+            req['input_root'] = str(root)
+            first = dict(jsonrpc='2.0', id=1, result=dict(protocolVersion=1, _meta=dict(agentVersion='1.0.70')))
+            last = dict(jsonrpc='2.0', id=2, result=dict(result=dict(plugins=[])))
+            script = ("import os,sys\nsys.stdin.readline()\nos.write(1," +
+                      repr(json.dumps(first).encode() + b'\n') + ")\nsys.stdin.readline()\nos.write(1," +
+                      repr(json.dumps(last).encode() + b'\n{"unexpected":true}\n') + ")\nsys.stdin.read()\n")
+            with mock.patch.object(case, 'readonly_bwrap_argv', return_value=[sys.executable, '-I', '-B', '-c', script]):
+                row = case.readonly_command(req, 'native', self.original(req), case.LIMIT, case.rpc_state())
+            self.assertEqual(row['error'], 'protocol-refused')
+            self.assertTrue(case.readonly_streams(row)['stdout'].endswith(b'{"unexpected":true}\n'))
+
+    def receipt(self):
+        import stat
+        req, before = self.request()
+        original = self.original(req)
+        root = Path(req['input_root'])
+        frames = [
+            dict(jsonrpc='2.0', id=1, result=dict(protocolVersion=1, _meta=dict(agentVersion='1.0.70'))),
+            dict(jsonrpc='2.0', method='_x.ai/mcp/servers_updated', params=dict(mcpServers=list(case.readonly_servers(req)))),
+            dict(jsonrpc='2.0', id=2, result=dict(result=dict(plugins=[
+                plugin_row(root, 'user', 'uap-acp-foreign-user'), plugin_row(root, 'a', 'uap-acp-collision'),
+                plugin_row(root, 'a', 'uap-acp-foreign-a')])))]
+        commands = []
+        for phase in ('control', 'native'):
+            stdout = b'' if phase == 'control' else b''.join(json.dumps(row).encode() + b'\n' for row in frames)
+            stderr = self.header(req, phase, original)
+            row = dict(label='readonly-control' if phase == 'control' else 'acp',
+                       argv=case.readonly_child_arguments(req, phase), wrapper_argv=case.readonly_bwrap_argv(req, phase, original),
+                       exit=93 if phase == 'control' else -15, error=None)
+            for name, raw in (('stdout', stdout), ('stderr', stderr)):
+                row.update({name + '_base64':base64.b64encode(raw).decode(),
+                            name + '_bytes':len(raw), name + '_sha256':case.digest(raw)})
+            commands.append(row)
+        body = b'uap-readonly:' + req['nonce'].encode() + b'\n'
+        identity = [1, 12345, stat.S_IFREG | 0o600, 1, req['uid'], req['gid'], len(body), 7, 8]
+        removed = list(identity)
+        removed[3], removed[8] = 0, 9
+        marker = dict(name='unexpected-startup', identity=identity, removed_identity=removed,
+                      directory_identity=req['readonly']['roots']['readonly-witness']['identity'],
+                      bytes=len(body), sha256=case.digest(body))
+        result = {name:req[name] for name in ('schema_version', 'source_commit', 'source_tree', 'nonce', 'scope')}
+        result.update(mode=case.READONLY_MODE, semantic_complete=True, reason='complete',
+            isolation=dict(uid=req['uid'], gid=req['gid'], euid=req['uid'], egid=req['gid'], groups=[],
+                network_namespace=original['namespaces']['net'], parent_network_namespace=req['parent_network_namespace'],
+                interfaces=['lo'], capabilities_zero=True, no_new_privileges=1),
+            commands=commands, rpc=dict(initialize=frames[0], plugins=frames[2], notifications=[frames[1]]),
+            readonly=dict(authority=req['readonly'], stage='complete', control_complete=True, original=original, control_marker=marker))
+        systems = {name:dict(path='/usr/bin/' + ('python3.12' if name == 'python3' else name), sha256='e' * 64)
+                   for name in ('unshare', 'setpriv', 'env', 'python3', 'bwrap')}
+        receipt = {name:req[name] for name in ('schema_version', 'source_commit', 'source_tree', 'nonce', 'scope')}
+        receipt.update(cleanup_complete=True, sealed_cleanup_complete=True, system_executables=systems, result=result)
+        request = {key:value for key, value in req.items() if key not in ('input_root', 'parent_network_namespace', 'readonly')}
+        return receipt, request, before
+
+    def test_complete_receipt_replays_raw_stdout_and_requires_control_namespace_and_hash_joins(self):
+        receipt, request, _ = self.receipt()
+        self.assertTrue(case.validate_readonly_receipt(copy.deepcopy(receipt), request)['semantic_complete'])
+        changes = [
+            lambda r:r['result']['readonly'].update(control_marker=None),
+            lambda r:r['result']['readonly'].update(control_complete=False),
+            lambda r:r['result']['readonly']['control_marker'].update(bytes=False),
+            lambda r:r['result']['readonly']['authority']['namespaces'].update(net=999),
+            lambda r:r['system_executables']['bwrap'].update(sha256='0' * 64),
+            lambda r:r['result']['commands'][1].update(stderr_sha256='0' * 64),
+            lambda r:r['result']['commands'][0].update(exit=0),
+            lambda r:r['result']['commands'][1].update(wrapper_argv=['/usr/bin/grok']),
+            lambda r:r.update(cleanup_complete=False),
+            lambda r:r['result']['rpc'].update(notifications=[])]
+        for change in changes:
+            altered = copy.deepcopy(receipt)
+            change(altered)
+            with self.subTest(change=repr(change)), self.assertRaises((ValueError, TypeError)):
+                case.validate_readonly_receipt(altered, request)
+
+    def test_old_source_expired_clock_is_diagnostic_only_and_cannot_renew_native_budget(self):
+        receipt, request, _ = self.receipt()
+        request['start_monotonic_ns'] = 1
+        self.assertTrue(case.validate_readonly_receipt(receipt, request)['semantic_complete'])
+        with self.assertRaises(ValueError):
+            case.readonly_deadline(request, final=True)
+
+    def test_request_refuses_alias_roots_extra_runtime_and_unowned_or_privileged_executable(self):
+        req, _ = self.request()
+        mutations = [
+            lambda r:r['readonly']['roots']['.'].update(path=r['input_root'] + '/..'),
+            lambda r:r['readonly']['runtime'].update({'/etc':r['readonly']['runtime']['/usr']}),
+            lambda r:r['readonly']['roots']['sealed']['identity'].__setitem__(3, r['uid']),
+            lambda r:r['readonly']['files']['/usr/bin/bwrap']['identity'].__setitem__(2, 0o104755),
+            lambda r:r['readonly']['files']['/usr/bin/bwrap']['identity'].__setitem__(3, 2),
+            lambda r:r['readonly']['files']['/usr/bin/bwrap']['identity'].__setitem__(4, r['uid'])]
+        for change in mutations:
+            altered = copy.deepcopy(req)
+            change(altered)
+            with self.subTest(change=repr(change)), self.assertRaises(ValueError):
+                case.readonly_request(altered)
+
+    def test_actual_inert_parent_transport_keeps_fixed_privilege_argv_and_original_clock(self):
+        req, _ = self.request()
+        original = case.subprocess.Popen
+        requested = []
+        def inert(argv, **kwargs):
+            requested.append(argv)
+            return original([sys.executable, '-I', '-B', '-c', 'import sys;sys.stdout.write("{\\"closed\\":true}\\n")'], **kwargs)
+        with mock.patch.object(case.subprocess, 'Popen', side_effect=inert):
+            value = case.readonly_helper_capture(Path('/tmp/fixed-helper'), Path(req['input_root']), req)
+        self.assertEqual(value, {'closed':True})
+        self.assertEqual(requested[0], ['/usr/bin/sudo', '-n',
+            '--preserve-env=GITHUB_ACTIONS,RUNNER_ENVIRONMENT,AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED,EXPECTED_COMMIT',
+            '/tmp/fixed-helper', '--input-root', req['input_root']])
+        with mock.patch.object(case.subprocess, 'Popen') as child, self.assertRaises(ValueError):
+            case.readonly_helper_capture(Path('/tmp/fixed-helper'), Path(req['input_root']),
+                                         dict(req, start_monotonic_ns=1))
+        child.assert_not_called()
+
+    def test_readout_requires_original_typed_ledger_and_complete_raw_stream_members(self):
+        receipt, request, before = self.receipt()
+        receipt = copy.deepcopy(receipt)
+        result = receipt['result']
+        members = {'acquisition.json':b'{}'}
+        for row in result['commands']:
+            for stream in ('stdout', 'stderr'):
+                name = row['label'] + '.' + stream
+                members[name] = base64.b64decode(row.pop(stream + '_base64'), validate=True)
+                row[stream + '_file'] = name
+        members['readonly.rpc.json'] = json.dumps(result.pop('rpc')).encode()
+        ledger = dict(before=before, after=copy.deepcopy(before), profiles_before={'fixture':['digest', 0]},
+                      profiles_after={'fixture':['digest', 0]}, protected_originals_unchanged=True, witness_absent=True)
+        members['readonly.ledger.json'] = json.dumps(ledger).encode()
+        summary = {name:request[name] for name in ('schema_version', 'source_commit', 'source_tree', 'nonce', 'start_monotonic_ns')}
+        summary.update(mode=case.READONLY_MODE, collection_complete=False, measurement_complete=True,
+                       cleanup_complete=True, qualification=dict(case.FALSE), scopes=[receipt], run='1', attempt='1', elapsed_ns=1)
+        members['admission.json'] = json.dumps(summary).encode()
+        packet = {name:request[name] for name in ('source_commit', 'source_tree', 'nonce')}
+        self.assertEqual(case.readonly_readout(copy.deepcopy(members), packet, time.monotonic()+5)['reason'], 'complete')
+        changed = copy.deepcopy(ledger)
+        changed['profiles_after']['fixture'][1] = False
+        mutated = dict(members, **{'readonly.ledger.json':json.dumps(changed).encode()})
+        with self.assertRaisesRegex(ValueError, 'readonly-readout-originals'):
+            case.readonly_readout(mutated, packet, time.monotonic()+5)
+        changed = copy.deepcopy(ledger)
+        changed['after']['home/.grok/config.toml'][6] = False
+        mutated = dict(members, **{'readonly.ledger.json':json.dumps(changed).encode()})
+        with self.assertRaisesRegex(ValueError, 'readonly-ledger-types'):
+            case.readonly_readout(mutated, packet, time.monotonic()+5)
+        for key in ('readonly-control.stderr', 'acp.stdout'):
+            altered = dict(members)
+            altered[key] += b'\n'
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                case.readonly_readout(altered, packet, time.monotonic()+5)
+        changed = copy.deepcopy(summary)
+        changed['elapsed_ns'] = 30_000_000_000
+        with self.assertRaisesRegex(ValueError, 'readonly-readout-summary'):
+            case.readonly_readout(dict(members, **{'admission.json':json.dumps(changed).encode()}), packet, time.monotonic()+5)
+
+
+
 if __name__ == '__main__':
     unittest.main()

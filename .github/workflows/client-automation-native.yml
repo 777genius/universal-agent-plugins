@@ -171,15 +171,18 @@ jobs:
       PYTHONDONTWRITEBYTECODE: '1'
       EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - id: grok_checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+      - id: grok_setup
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
         with:
           go-version: 1.26.11
           cache: false
       - name: Inert ACP framing, ownership and strict helper contracts
+        id: grok_contracts
         run: |
           python3 -m unittest discover -s scripts -p 'test_grok_acp_inventory_admission.py' -v
           cd install/integrationctl
@@ -235,6 +238,66 @@ jobs:
         with:
           name: grok-acp-frontend-failure-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ steps.grok_capture.outputs.frontend_failure }}
+          if-no-files-found: error
+          retention-days: 14
+      - name: Capture readonly inventory with the original profile and a writable witness
+        id: grok_readonly_capture
+        if: ${{ always() && !cancelled() && steps.grok_checkout.outcome == 'success' && steps.grok_setup.outcome == 'success' && steps.grok_contracts.outcome == 'success' }}
+        run: |
+          python3 - <<'PYTHON'
+          import os, pathlib, subprocess, sys, tempfile
+          sys.path.insert(0, str(pathlib.Path.cwd() / 'scripts'))
+          import grok_acp_inventory_admission as capture
+          from native_client_research import run_probe
+          temporary = pathlib.Path(os.environ['RUNNER_TEMP']).resolve()
+          output = temporary / 'grok-readonly-inventory'
+          diagnostic_deadline = __import__('time').monotonic() + 180
+          capture_tree = subprocess.check_output(['/usr/bin/git', 'rev-parse', 'HEAD^{tree}'], text=True, timeout=5).strip()
+          record, stdout, stderr = run_probe([sys.executable, 'scripts/grok_acp_inventory_admission.py', '--output', str(output), '--readonly-inventory'],
+              pathlib.Path.cwd(), dict(os.environ), temporary, 'grok-readonly-frontend', timeout=180, limit=1 << 20, memory_only=True)
+          if record['error'] is not None or record['exit'] not in (0, 1):
+              raise SystemExit('Readonly frontend did not prove bounded completion; no upload admitted')
+          failure_path, failure_facts = capture.retain_frontend_failure(temporary, record, stdout, stderr,
+              os.environ['EXPECTED_COMMIT'], capture_tree, diagnostic_deadline, mode=capture.READONLY_MODE)
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as stream:
+              stream.write('frontend_failure=' + str(failure_path) + '\n')
+          print('GROK_READONLY_FRONTEND_CAPTURE=' + __import__('json').dumps(failure_facts, separators=(',', ':')))
+          packet = capture.frontend_packet(stdout, record['exit'])
+          destination = pathlib.Path(tempfile.mkdtemp(prefix='grok-readonly-admitted-', dir=temporary))
+          destination.rmdir()
+          expected_tree = subprocess.check_output(['/usr/bin/git', 'rev-parse', 'HEAD^{tree}'], text=True, timeout=5).strip()
+          diagnostics = []
+          admitted = capture.admit_publication(output, packet, os.environ['EXPECTED_COMMIT'], expected_tree, destination,
+              diagnostics=diagnostics, diagnostic_deadline=diagnostic_deadline, mode=capture.READONLY_MODE)
+          readout = diagnostics[0]
+          complete = (readout.get('reason') == 'complete' and readout.get('semantic_complete') is True
+              and readout.get('protected_originals_unchanged') is True and readout.get('witness_absent') is True
+              and readout.get('control_complete') is True and readout.get('commands') == 2)
+          print('GROK_READONLY_READOUT=' + __import__('json').dumps(readout, separators=(',', ':')))
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as stream:
+              stream.write('admitted=' + str(admitted) + '\n' + 'observation_exit=' + str(record['exit']) + '\n'
+                  + 'native_complete=' + ('true' if complete else 'false') + '\n')
+          PYTHON
+      - name: Require complete readonly inventory and successful witness control
+        if: ${{ always() && !cancelled() && steps.grok_readonly_capture.conclusion == 'success' }}
+        env:
+          OBSERVATION_EXIT: ${{ steps.grok_readonly_capture.outputs.observation_exit }}
+          NATIVE_COMPLETE: ${{ steps.grok_readonly_capture.outputs.native_complete }}
+        run: python3 -c "import os; raise SystemExit(0 if os.environ['OBSERVATION_EXIT'] == '0' and os.environ['NATIVE_COMPLETE'] == 'true' else 1)"
+      - name: Preserve closed original readonly evidence without qualification
+        if: ${{ always() && !cancelled() && steps.grok_readonly_capture.conclusion == 'success' && steps.grok_readonly_capture.outputs.admitted != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: grok-readonly-inventory-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.grok_readonly_capture.outputs.admitted }}
+          if-no-files-found: error
+          retention-days: 14
+      - name: Preserve bounded readonly frontend refusal without native admission
+        if: ${{ always() && !cancelled() && steps.grok_readonly_capture.conclusion == 'failure' && steps.grok_readonly_capture.outputs.frontend_failure != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: grok-readonly-frontend-failure-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.grok_readonly_capture.outputs.frontend_failure }}
           if-no-files-found: error
           retention-days: 14
 
@@ -393,7 +456,7 @@ jobs:
           retention-days: 14
 
   fixed-original-readout:
-    name: Fixed original Grok failure read-only diagnosis
+    name: Fixed original failure read-only diagnosis (${{ matrix.case }})
     if: >-
       github.event_name == 'pull_request' &&
       github.repository == '777genius/universal-agent-plugins' &&
@@ -404,6 +467,22 @@ jobs:
       actions: read
       contents: read
     timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - case: grok-5ff-session
+            artifact: '14100597648'
+          - case: hermes-4cd-source-linux
+            artifact: '14104470250'
+          - case: hermes-4cd-source-windows
+            artifact: '14104186309'
+          - case: hermes-4cd-source-macos
+            artifact: '14103825881'
+          - case: grok-440-noauth
+            artifact: '14106267930'
+          - case: antigravity-440-coldrepair
+            artifact: '14106353842'
     env:
       PYTHONDONTWRITEBYTECODE: '1'
     steps:
@@ -413,23 +492,42 @@ jobs:
           persist-credentials: false
       - name: Inert fixed archive reader contracts
         run: python3 -m unittest discover -s scripts -p test_native_fixed_original_readout.py -v
-      - name: Read the single immutable failed session archive
+      - name: Read one fixed immutable failed original
         env:
           GH_TOKEN: ${{ github.token }}
+          ORIGINAL_CASE: ${{ matrix.case }}
+          ORIGINAL_ID: ${{ matrix.artifact }}
         shell: bash
         run: |
           set -euo pipefail
           umask 077
-          original_dir="$(mktemp -d "$RUNNER_TEMP/grok-fixed-original.XXXXXX")"
+          case "$ORIGINAL_CASE:$ORIGINAL_ID" in
+            grok-5ff-session:14100597648)
+              endpoint='repos/777genius/universal-agent-plugins/actions/artifacts/14100597648/zip' ;;
+            hermes-4cd-source-linux:14104470250)
+              endpoint='repos/777genius/universal-agent-plugins/actions/artifacts/14104470250/zip' ;;
+            hermes-4cd-source-windows:14104186309)
+              endpoint='repos/777genius/universal-agent-plugins/actions/artifacts/14104186309/zip' ;;
+            hermes-4cd-source-macos:14103825881)
+              endpoint='repos/777genius/universal-agent-plugins/actions/artifacts/14103825881/zip' ;;
+            grok-440-noauth:14106267930)
+              endpoint='repos/777genius/universal-agent-plugins/actions/artifacts/14106267930/zip' ;;
+            antigravity-440-coldrepair:14106353842)
+              endpoint='repos/777genius/universal-agent-plugins/actions/artifacts/14106353842/zip' ;;
+            *)
+              printf '%s\n' 'FIXED_ORIGINAL_INPUT_REFUSED'
+              exit 1 ;;
+          esac
+          original_dir="$(mktemp -d "$RUNNER_TEMP/native-fixed-original.XXXXXX")"
           trap 'rm -f -- "$original_dir/archive.zip" "$original_dir/download.stderr"; rmdir -- "$original_dir"' EXIT
           if ! (
             ulimit -c 0 || exit 1
             ulimit -f 64 || exit 1
             timeout --signal=TERM --kill-after=5s 40s \
-              gh api repos/777genius/universal-agent-plugins/actions/artifacts/14100597648/zip \
+              gh api "$endpoint" \
               > "$original_dir/archive.zip" 2> "$original_dir/download.stderr"
           ) 2>/dev/null; then
             printf '%s\n' 'FIXED_ORIGINAL_DOWNLOAD_REFUSED'
             exit 1
           fi
-          python3 scripts/native_fixed_original_readout.py grok-5ff-session "$original_dir/archive.zip"
+          python3 scripts/native_fixed_original_readout.py "$ORIGINAL_CASE" "$original_dir/archive.zip"

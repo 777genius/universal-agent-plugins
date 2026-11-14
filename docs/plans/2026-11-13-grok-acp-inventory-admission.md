@@ -776,3 +776,100 @@ authored-config cohort, matching the newly enforced measured membership.
 All 139 existing Python tests remain present, with 13 added contracts; the
 combined 152 tests pass in 3.038 seconds. This is source and inert validation;
 no Go, vendor-native execution or hosted acceptance is claimed for this union.
+
+
+## 2026-11-14: bounded readonly inventory research candidate
+
+This candidate adds only the `readonly-inventory-v1` research mode for the
+already pinned Linux AMD64 Grok 1.0.70 executable. It does not enable a public
+Project route, admit a new native version, or qualify a client lifecycle.
+Every existing qualification flag remains false. The question for an actual
+hosted observation is whether the genuine inventory command can complete
+while the original selected profile is mounted read only.
+
+The existing fixed research controller remains the privileged entry point.
+Its original `unshare --net` → `setpriv` → closed environment → sealed Python
+collector chain is unchanged. The four existing executable authorities remain
+unchanged in all prior modes. Only the new mode requires a fifth fixed
+`/usr/bin/bwrap` authority: canonical root ownership and ancestors, ordinary
+single-link executable identity and bytes, no setuid/setgid bits, and no
+`security.capability` attribute. Missing binaries, unavailable namespaces or
+unsupported options cause a refusal. The candidate does not install a
+primitive, alter host permissions or sysctls, or try a fallback.
+
+The ordinary unprivileged collector places each of two children in its own
+bubblewrap namespace. The first executes exactly the authored MCP witness
+command from the selected config. It must exit 93 after creating the exact
+nonce-bearing marker. The collector verifies the original held directory,
+single-link marker identity and bytes, unlinks that exact entry while retaining
+the file handle, and records its transition to zero links. The second executes
+the pinned `grok agent --no-leader stdio` command and permits only initialize
+and the existing full-ID plugins/list exchange. It must advertise the same
+eligible MCP witness in its metadata without starting it. There is no session,
+provider authentication or model request.
+
+The fixed namespace exposes `/usr` and its existing `/bin`, `/lib`, `/lib64`
+aliases read only, together with the original task input and sealed runtime at
+their original absolute paths. Only the disjoint task-owned witness directory
+is writable. It has fresh user, mount, PID, network, IPC and UTS namespaces,
+fresh read-only proc and dev mounts, six explicit read-only device mounts,
+read-only devpts, no console, and a final nonrecursive root remount. Standard
+input/output/error are pipes; all other descriptors and environment variables
+are closed. No existing profile, registry, trust or authentication file is
+copied or redirected.
+
+Before **each** child exec, the sealed bootstrap re-joins the captured original
+directory/file identities, bounded hashes, parent namespaces and readonly
+mount table. It verifies the exact one-row nested UID/GID maps and the separately
+captured overflow IDs; root ownership is not inferred from an overflow value.
+The runtime census is metadata only and limited to 262144 entries, depth 32,
+4096-byte paths/readlink results and 16 captured-link resolution hops. It walks
+the one admitted `/usr` tree with held directory descriptors. Hidden link
+targets are classified from captured metadata without reading or exposing
+those targets. Special files, sockets, unknown mounts and incomplete hardlink
+closure refuse the capture. The input census retains its existing 4096-entry
+bound and original typed ledger. There are no newly admitted host roots.
+
+The fixed argv and namespace-map assumptions were reviewed against the
+[official bubblewrap source at
+1fb0aa26d3eb66254f7742e704add7f82f41a582](https://github.com/containers/bubblewrap/blob/1fb0aa26d3eb66254f7742e704add7f82f41a582/bubblewrap.c).
+That source explains the nested UID/GID map, the six device bind mounts,
+conditional proc cover mounts and `PWD` initialization. It is not evidence
+that a hosted runner has that source version or supports this profile; the
+actual primitive and every child must still pass the observed checks.
+
+Native activity has 25 seconds from one original monotonic timestamp, with
+30 seconds total through strict helper completion, parent verification,
+owned cleanup and the parent's local archive publication. The new parent
+transport uses the same fixed sudo argv and existing stream caps, but does not
+renew the old transport's failure grace. The existing modes retain their
+30/35-second limits. The existing acquisition/build preparation budget stays
+150 seconds; the workflow's later bounded original-archive copy/readout is
+diagnostic and grants no native authority.
+
+Stdout and stderr are retained separately in this mode, with one combined
+1 MiB budget shared by both children. Only stdout is parsed as ACP. Stderr
+contains a bounded, source/nonce-bound bootstrap header followed by the
+unmodified wrapper/native diagnostics. The archive records both the wrapper
+argv and the inner native argv, so these bytes are never presented as a direct
+unsandboxed command capture. Existing merged-stream modes, parser branches and
+archive limits are unchanged. Successful readout replays the original protocol
+stdout and the marker, source, file, namespace, mount and typed-ledger joins.
+A refusal remains a failing native verdict even when its closed original
+evidence can be uploaded.
+
+The new block follows the old blocks in the existing inventory research job
+and runs only after its exact checkout, Go setup and inert contracts succeed.
+Its capture, verdict and uploads have separate names. All earlier workflow
+blocks remain byte identical apart from those three prerequisite step IDs.
+The current fixed-original readout job must be preserved when composing this
+candidate with the current branch.
+
+Source comparisons preserve the exact prior bodies. Added tests cover typed
+ledger and stream counterexamples, a real inert Python protocol child,
+descriptor/marker substitution and Go authority/deadline boundaries.
+The original `remaining` and `finalBudget` bodies move unchanged beside the
+new mode's budget helpers, keeping the existing main file below its prior
+effective line count. Local gofmt, Python/Go execution, lint and actual hosted
+bubblewrap/Grok results remain pending while the executor is unavailable.
+No source review or synthetic receipt is a native qualification.

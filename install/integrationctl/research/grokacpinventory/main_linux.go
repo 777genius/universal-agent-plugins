@@ -20,7 +20,6 @@ import (
 	"runtime"
 	"strconv"
 	"syscall"
-	"time"
 
 	"golang.org/x/sys/unix"
 
@@ -50,18 +49,19 @@ type request struct {
 	Phase     string `json:"phase,omitempty"`
 }
 type collectorRequest struct {
-	Schema   int    `json:"schema_version"`
-	Commit   string `json:"source_commit"`
-	Tree     string `json:"source_tree"`
-	UID      int    `json:"uid"`
-	GID      int    `json:"gid"`
-	Nonce    string `json:"nonce"`
-	Scope    string `json:"scope"`
-	Root     string `json:"input_root"`
-	ParentNS uint64 `json:"parent_network_namespace"`
-	Start    int64  `json:"start_monotonic_ns"`
-	Mode     string `json:"mode,omitempty"`
-	Phase    string `json:"phase,omitempty"`
+	Schema   int            `json:"schema_version"`
+	Commit   string         `json:"source_commit"`
+	Tree     string         `json:"source_tree"`
+	UID      int            `json:"uid"`
+	GID      int            `json:"gid"`
+	Nonce    string         `json:"nonce"`
+	Scope    string         `json:"scope"`
+	Root     string         `json:"input_root"`
+	ParentNS uint64         `json:"parent_network_namespace"`
+	Start    int64          `json:"start_monotonic_ns"`
+	Mode     string         `json:"mode,omitempty"`
+	Phase    string         `json:"phase,omitempty"`
+	Readonly *readonlyGrant `json:"readonly,omitempty"`
 }
 type isolation struct {
 	UID        int      `json:"uid"`
@@ -113,12 +113,6 @@ func monoNow() (int64, error) {
 	e := unix.ClockGettime(unix.CLOCK_MONOTONIC, &t)
 	return t.Nano(), e
 }
-func remaining(start, now int64, limit time.Duration) (time.Duration, error) {
-	if start <= 0 || now < start || now-start >= int64(limit) {
-		return 0, errors.New("original-deadline-refused")
-	}
-	return limit - time.Duration(now-start), nil
-}
 func validateRequest(r request, root string, uid, gid int) error {
 	if r.Schema != 1 || r.Commit != sourceCommit || r.Tree != sourceTree || !hex40.MatchString(sourceCommit) || !hex40.MatchString(sourceTree) || !hex64.MatchString(collectorSHA) || !hex64.MatchString(r.HelperSHA) || !noncePattern.MatchString(r.Nonce) || r.UID != uid || r.GID != gid || uid <= 0 || gid <= 0 || uid > 1<<30 || gid > 1<<30 {
 		return errors.New("request-identity-refused")
@@ -153,7 +147,7 @@ func readRequest(root string, uid, gid int) (request, heldFile, error) {
 				if e == nil && r.Mode != lockMode && r.Mode != cliMode {
 					e = errors.New("request-mode-refused")
 				}
-			} else if r.Mode != sessionMode {
+			} else if r.Mode != sessionMode && r.Mode != readonlyMode {
 				e = errors.New("request-mode-refused")
 			}
 		}
@@ -191,7 +185,7 @@ func validateResult(body []byte, r request, parent uint64) error {
 	if e := decodeResearchResult(body, &got, r.Mode); e != nil {
 		return e
 	}
-	commandLimit := map[string]int{"": 6, sessionMode: 5, lockMode: 4, cliMode: 1}[r.Mode]
+	commandLimit := map[string]int{"": 6, sessionMode: 5, lockMode: 4, cliMode: 1, readonlyMode: 2}[r.Mode]
 	if got.Schema != 1 || got.Commit != r.Commit || got.Tree != r.Tree || got.Scope != r.Scope || got.Nonce != r.Nonce || len(got.Commands) > commandLimit {
 		return errors.New("result-identity-refused")
 	}
@@ -199,6 +193,9 @@ func validateResult(body []byte, r request, parent uint64) error {
 		return e
 	}
 	if e := validateSessionResult(got, r); e != nil {
+		return e
+	}
+	if e := validateReadonlyResult(body, got, r); e != nil {
 		return e
 	}
 	if !validReason(got.Reason) || got.Complete != (got.Reason == "complete") {
@@ -289,7 +286,7 @@ func run(root string, control io.Reader, output io.Writer) (resultErr error) {
 	if e != nil {
 		return e
 	}
-	budget, e := remaining(r.Start, now, 30*time.Second)
+	budget, e := remaining(r.Start, now, researchActiveLimit(r.Mode))
 	if e != nil {
 		return e
 	}
@@ -312,6 +309,7 @@ type scopeState struct {
 	input        *directoryAuthority
 	lock         *lockAuthority
 	systems      map[string]systemFact
+	readonly     *readonlyGrant
 }
 
 func (s *scopeState) close() error {
@@ -350,6 +348,9 @@ func (s *scopeState) prepareExecutables(ctx context.Context, r request) error {
 		return e
 	}
 	s.held = append(s.held, h)
+	if e := s.prepareReadonlyExecutable(ctx, r); e != nil {
+		return e
+	}
 	return (process.OS{}).DuplexCapability()
 }
 func (s *scopeState) prepareCopies(ctx context.Context, root string, r request) error {
@@ -397,7 +398,11 @@ func (s *scopeState) prepare(ctx context.Context, root string, r request) error 
 		return e
 	}
 	s.parent = parent.Ino
-	req := collectorRequest{1, r.Commit, r.Tree, r.UID, r.GID, r.Nonce, r.Scope, root, parent.Ino, r.Start, r.Mode, r.Phase}
+	readonly, e := s.prepareReadonly(ctx, root, r)
+	if e != nil {
+		return e
+	}
+	req := collectorRequest{1, r.Commit, r.Tree, r.UID, r.GID, r.Nonce, r.Scope, root, parent.Ino, r.Start, r.Mode, r.Phase, readonly}
 	body, e := json.Marshal(req)
 	if e != nil {
 		return e
@@ -424,18 +429,6 @@ func (s *scopeState) verify(ctx context.Context, requestFile heldFile) error {
 		}
 	}
 	return nil
-}
-func finalBudget(parent context.Context, start int64) (context.Context, context.CancelFunc, error) {
-	now, e := monoNow()
-	if e != nil {
-		return nil, nil, e
-	}
-	budget, e := remaining(start, now, 35*time.Second)
-	if e != nil {
-		return nil, nil, e
-	}
-	ctx, cancel := context.WithTimeout(parent, budget)
-	return ctx, cancel, nil
 }
 func runScope(ctx, parent context.Context, root string, r request, requestFile heldFile, output io.Writer) (resultErr error) {
 	s := &scopeState{safeToDelete: true}
@@ -467,12 +460,15 @@ func runScope(ctx, parent context.Context, root string, r request, requestFile h
 		return e
 	}
 	s.safeToDelete = true
-	final, cancel, e := finalBudget(parent, r.Start)
+	final, cancel, e := researchFinalBudget(parent, r)
 	if e != nil {
 		return e
 	}
 	defer cancel()
 	if e = s.verify(final, requestFile); e != nil {
+		return e
+	}
+	if e = s.verifyReadonlyResult(raw, r); e != nil {
 		return e
 	}
 	if e = s.directory.remove(); e != nil {
@@ -486,22 +482,25 @@ func runScope(ctx, parent context.Context, root string, r request, requestFile h
 	if _, e = output.Write(append(body, '\n')); e != nil {
 		return errors.New("receipt-output-refused")
 	}
-	return nil
+	return readonlyFinalCheck(r)
 }
 func fixedCommand(sealed, root string, r request, systems map[string]systemFact, parentNS ...uint64) (ports.Command, error) {
 	if e := validateResearchMode(r); e != nil {
 		return ports.Command{}, e
 	}
-	if len(systems) != 4 {
+	if len(systems) != len(researchSystemNames(r.Mode)) {
 		return ports.Command{}, errors.New("system-selection-refused")
 	}
-	for _, key := range []string{"unshare", "setpriv", "env", "python3"} {
+	for _, key := range researchSystemNames(r.Mode) {
 		fact, ok := systems[key]
 		if !ok || fact.Path == "" || !filepath.IsAbs(fact.Path) || filepath.Clean(fact.Path) != fact.Path || !hex64.MatchString(fact.SHA) {
 			return ports.Command{}, errors.New("system-selection-refused")
 		}
 	}
 
+	if r.Mode == readonlyMode && systems["bwrap"].Path != "/usr/bin/bwrap" {
+		return ports.Command{}, errors.New("ordinary-bwrap-selection-refused")
+	}
 	argv := []string{systems["unshare"].Path, "--net", "--", systems["setpriv"].Path, "--reuid=" + strconv.Itoa(r.UID), "--regid=" + strconv.Itoa(r.GID), "--clear-groups", "--inh-caps=-all", "--ambient-caps=-all", "--bounding-set=-all", "--no-new-privs", "--", systems["env"].Path, "-i", "PATH=/usr/bin:/bin", "LANG=C.UTF-8", systems["python3"].Path, "-I", filepath.Join(sealed, "collector.py"), "--collect", filepath.Join(sealed, "collector-request.json")}
 	if r.Mode == sessionMode {
 		if len(parentNS) != 1 || parentNS[0] == 0 {

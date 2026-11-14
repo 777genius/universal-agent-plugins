@@ -14,6 +14,12 @@ import (
 const lockMode = "lock-qualification-v1"
 
 func validateResearchMode(r request) error {
+	if r.Mode == readonlyMode {
+		if r.Scope != "a" || r.Phase != "" {
+			return errors.New("readonly-scope-refused")
+		}
+		return nil
+	}
 	if r.Mode == cliMode {
 		if r.Scope != "a" || cliArguments(r) == nil {
 			return errors.New("cli-phase-refused")
