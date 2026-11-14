@@ -15,6 +15,9 @@ const props = withDefaults(
 // External SFC resources are compiled by the existing Vue I18n plugin.
 // One local composer serves this entry and its Skill children, outside global SSR payloads.
 const catalogI18n = useI18n({ useScope: 'local' });
+// One expiry timer serves the homepage hero and every visible catalog card.
+// Never schedule a separate timer for each plugin entry.
+useDirectoryStatus(true);
 // Generic control labels intentionally fall back to the global dictionaries.
 catalogI18n.missingWarn = false;
 catalogI18n.fallbackWarn = false;

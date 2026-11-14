@@ -299,6 +299,37 @@ test('a mounted plugin installer withdraws source commands on Directory expiry',
   expect(errors).toEqual([]);
 });
 
+for (const path of ['/', '/plugins/'] as const) {
+  test('catalog source commands expire without navigation on ' + path, async ({ page }) => {
+    const errors = await offline(page);
+    const index = pluginWithOnlyCodex();
+    index.plugins[0]!.trust_state = 'reviewed';
+    const start = new Date();
+    index.expires_at = new Date(start.getTime() + 10 * 60_000).toISOString();
+    await page.clock.install({ time: start });
+    await projections(page, index);
+    await navigate(page, path, 'en', path === '/' ? '?q=i18n-state-00' : '');
+
+    const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]').first();
+    await card.locator('.plugin-card__install-toggle').click();
+    await targets(page, card, ['Google Antigravity']);
+    await expect(card.locator('.command-snippet--add code'))
+      .toContainText('universal-agent-plugins@0.1.108 add github:');
+    await expect(card.locator('.command-snippet--repair')).toHaveCount(0);
+    if (path === '/') {
+      const hero = page.locator('.hero-shell');
+      await targets(page, hero, ['Google Antigravity']);
+      await expect(hero.locator('.command-snippet--add code'))
+        .toContainText('universal-agent-plugins@0.1.108 add github:');
+    }
+
+    await page.clock.fastForward(11 * 60_000);
+    await expect(card.locator('.command-snippet--add')).toHaveCount(0);
+    if (path === '/') await expect(page.locator('.hero-shell .command-snippet--add')).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+}
+
 test('an open Antigravity agent page withdraws pinned add on Directory expiry without hiding the repair warning', async ({ page }) => {
   const errors = await offline(page);
   const index = pluginWithOnlyCodex();
