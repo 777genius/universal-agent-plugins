@@ -18,7 +18,6 @@ const localePath = useLocalePath();
 const route = useRoute();
 const config = useRuntimeConfig();
 const { asset, pluginIcon } = useSite();
-const { current } = useDirectoryStatus();
 const client = clientLandingBySlug.get(String(route.params.client));
 
 if (!client) {
@@ -26,6 +25,7 @@ if (!client) {
 }
 
 const registry = await useRegistryPage({ projection: { kind: 'client', value: client.id } });
+const { current } = useDirectoryStatus();
 
 const reviewedPlugins = catalogVisiblePlugins(registry.plugins).filter(
   (plugin) =>

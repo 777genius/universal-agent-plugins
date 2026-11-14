@@ -25,6 +25,7 @@ async function page(
 ) {
   const locale = ref('en');
   const directoryCurrent = ref(true);
+  let registryInitialized = false;
   const discoveryStatus = ref({ state: 'current' });
   let seo: any;
   const route = { params: parameters, query: { source: fixture.plugins[0].install_source } };
@@ -37,7 +38,10 @@ async function page(
     computed, ref, watch, clients, clientLandingBySlug, clientLandingById, localizedPath, productRootUrl, seoDescription, spdxLicenseUrl, catalogVisiblePlugins,
     resolveDistribution, vendorInstallSource, isFullyRetired, pluginBenefit,
     installTargets, canonicalInstallTarget, hasPluginInstallTarget, pluginInstallAvailability, agentInstallExample, pluginCommands, pinnedCatalogCommands,
-    useDirectoryStatus: () => ({ current: directoryCurrent, expired: ref(false), published: ref(true) }),
+    useDirectoryStatus: () => {
+      assert.ok(registryInitialized, 'Directory status requires an awaited page projection on a cold render');
+      return { current: directoryCurrent, expired: ref(false), published: ref(true) };
+    },
     // Synthetic key markers test reactivity without creating translations.
     useI18n: () => ({ locale, t: (key: string) => `${locale.value}:${key}`, n: (value: number) => String(value) }),
     useLocalePath: () => (path: string) => localizedPath(path, locale.value as 'en' | 'uk'),
@@ -45,7 +49,11 @@ async function page(
     useRuntimeConfig: () => ({ app: { baseURL: '/universal-agent-plugins/' }, public: { siteUrl: 'https://example.test/universal-agent-plugins/' } }),
     useSite: () => ({ asset: (path: string) => path, pluginIcon: () => '', sourceUrl: () => 'https://github.com/original/source' }),
     useState: () => discoveryStatus,
-    useRegistryPage: async () => structuredClone(registry),
+    useRegistryPage: async () => {
+      await Promise.resolve();
+      registryInitialized = true;
+      return structuredClone(registry);
+    },
     usePageSeo: (title: unknown, description: unknown, options: unknown) => { seo = { title, description, options }; },
     createError: (options: object) => Object.assign(new Error(), options),
   });
