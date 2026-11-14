@@ -1,4 +1,4 @@
-name: Released exact-source lifecycle qualification
+name: Released UI npm source lifecycle
 
 on:
   pull_request:
@@ -12,6 +12,14 @@ on:
       - 'scripts/pi_project_native_e2e.py'
       - 'scripts/e2e/released-native-proof.py'
       - 'npm/agentplugins/scripts/release-assets.js'
+      - 'landing/utils/projectCatalogSource.ts'
+      - 'landing/utils/commands.ts'
+      - 'landing/utils/savedDependencies.ts'
+      - 'landing/utils/registry.ts'
+      - 'landing/utils/registry-codecs/**'
+      - 'landing/utils/catalogCategories.ts'
+      - 'landing/data/clientCapabilities.generated.json'
+      - 'landing/data/clientIds.generated.ts'
       - 'cli/cmd/agentplugins/bootstrapgen/**'
       - 'cli/cmd/agentplugins/internal/bootstrapio/**'
       - 'cli/cmd/agentplugins/directory_bootstrap_inputs/trusted-keys.json'
@@ -28,6 +36,14 @@ on:
       - 'scripts/pi_project_native_e2e.py'
       - 'scripts/e2e/released-native-proof.py'
       - 'npm/agentplugins/scripts/release-assets.js'
+      - 'landing/utils/projectCatalogSource.ts'
+      - 'landing/utils/commands.ts'
+      - 'landing/utils/savedDependencies.ts'
+      - 'landing/utils/registry.ts'
+      - 'landing/utils/registry-codecs/**'
+      - 'landing/utils/catalogCategories.ts'
+      - 'landing/data/clientCapabilities.generated.json'
+      - 'landing/data/clientIds.generated.ts'
       - 'cli/cmd/agentplugins/bootstrapgen/**'
       - 'cli/cmd/agentplugins/internal/bootstrapio/**'
       - 'cli/cmd/agentplugins/directory_bootstrap_inputs/trusted-keys.json'
@@ -45,7 +61,7 @@ concurrency:
 
 jobs:
   source-lifecycle:
-    name: Public .108 / ${{ matrix.client }} / ${{ matrix.target }}
+    name: Public npm .108 / ${{ matrix.client }} / ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 35
     strategy:
@@ -112,12 +128,12 @@ jobs:
           test "$(git -C "$source" rev-parse HEAD)" = "$sha"
           test -x "$profile/.local/bin/hermes"
           echo "AUDIT_HERMES_BIN=$profile/.local/bin/hermes" >> "$GITHUB_ENV"
-      - name: Qualify exact public-release saved source lifecycles
+      - name: Exercise copied UI commands through the public npm facade
         shell: bash
         run: |
           set -euo pipefail
           set -- --client '${{ matrix.client }}' --target '${{ matrix.target }}' \
-            --report-dir "$RUNNER_TEMP/source-receipt"
+            --report-dir "$RUNNER_TEMP/source-receipt" --entrypoint public-npm
           if [[ "${{ matrix.client }}" == hermes ]]; then
             set -- "$@" --native-bin "$AUDIT_HERMES_BIN"
           fi
@@ -126,7 +142,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
-          name: source-${{ matrix.client }}-${{ matrix.target }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: source-ui-npm-${{ matrix.client }}-${{ matrix.target }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/source-receipt/receipt.json
           if-no-files-found: warn
           retention-days: 14

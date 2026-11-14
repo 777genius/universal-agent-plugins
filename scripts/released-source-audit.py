@@ -6,12 +6,13 @@ release. A consumer must separately check current active policy and denials.
 Native activation, project trust, MCP runtime and account access are not proved.
 """
 import argparse
+import base64
 import hashlib
 import importlib.util
 import io
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
 import subprocess
 import tarfile
@@ -33,6 +34,12 @@ MAX_NATIVE_ARCHIVE_BYTES = 200 << 20
 # Digest-pinned AGY 1.5.3 payloads are 246837648 (Linux), 208900592 (macOS),
 # and 225159320 (Windows) bytes. Their compressed archives are all below 200 MiB.
 MAX_NATIVE_EXECUTABLE_BYTES = 256 << 20
+NPM_PACKAGE = "universal-agent-plugins"
+NPM_VERSION = "0.1.108"
+NPM_PREFIX = ["npx", "-y", f"{NPM_PACKAGE}@{NPM_VERSION}"]
+NPM_TARBALL = f"https://registry.npmjs.org/{NPM_PACKAGE}/-/{NPM_PACKAGE}-{NPM_VERSION}.tgz"
+NPM_INTEGRITY = "sha512-vpRRhLzGdQIaPOL7Ihf4abitwLyOmf7wUgz6W4j0WAlAQnwRZqFUvrQCDyMvoMiythdfTPulu6MSC1YUrcpv9g=="
+MAX_NPM_BYTES = 1 << 20
 
 
 def module(name, filename):
@@ -111,6 +118,139 @@ def source_case(snapshot, distribution, sequence, client, scope, refusal=False):
             "components": release["components"], "client": client, "scope": scope,
             "selector": f'github:{source["repository"]}@{source["revision"]}//{source["path"]}',
             "expected": "dependency-refusal" if refusal else "materialized-lifecycle"}
+
+
+def checked_ui_commands(value, case):
+    """Bind real UI output to the independently authenticated release tuple."""
+    selected, commands = value["selection"], value["commands"]
+    expected_source = {**case["source"], "tree_sha256": case["tree_digest"],
+                       "manifest_sha256": case["manifest_digest"]}
+    require(selected == {"selector": case["selector"], "source": expected_source,
+                         "components": case["components"], "client": case["client"],
+                         "scope": case["scope"], "manifestName": case["name"]},
+            "UI selected a different signed source, manifest name or placement")
+    require(commands.get("saveMode") == "saved", "UI did not select saved lifecycle")
+    for operation in ("add", "update", "repair", "remove"):
+        operand = case["selector"] if operation == "add" else case["name"]
+        expected = [*NPM_PREFIX, operation, operand, "--target", case["client"]]
+        if case["scope"] == "project":
+            expected += ["--scope", "project"]
+        require(commands.get(operation, "").split(" ") == expected,
+                "UI command changed exact source, manifest name, target, scope or invocation: " + operation)
+    return value
+
+
+def frontend_commands(snapshot_path, case):
+    # The production helper owns both selection and command text. No copied
+    # resolver, fixture index or independently reconstructed command is run.
+    program = """
+import { readFileSync } from 'node:fs';
+import { parseDirectoryData } from './landing/utils/registry.ts';
+import { pinnedCatalogSelection, pinnedCatalogCommands } from './landing/utils/projectCatalogSource.ts';
+const [path, distribution, client, scope] = process.argv.slice(1);
+const index = parseDirectoryData(JSON.parse(readFileSync(path, 'utf8')), 'published_snapshot');
+const plugins = index.plugins.filter(plugin => plugin.distributions.some(row => row.id === distribution));
+if (plugins.length !== 1) throw new Error('Expected one selected catalog product');
+const selection = pinnedCatalogSelection(plugins[0], client, scope);
+if (!selection) throw new Error('UI refuses this explicit source placement');
+console.log(JSON.stringify({ selection, commands: pinnedCatalogCommands(plugins[0], client, scope) }));
+"""
+    output = subprocess.run(["node", "--experimental-strip-types", "--input-type=module", "--eval", program,
+                             str(snapshot_path), case["distribution"], case["client"], case["scope"]],
+                            cwd=ROOT, capture_output=True, check=True, timeout=45)
+    require(len(output.stdout) <= 64 << 10, "oversize UI command output")
+    return checked_ui_commands(json.loads(output.stdout), case)
+
+
+def npm_reference(body):
+    """Read pinned public bytes for comparison; npx remains the only installer."""
+    require(len(body) <= MAX_NPM_BYTES, "oversize npm tarball")
+    integrity = "sha512-" + base64.b64encode(hashlib.sha512(body).digest()).decode("ascii")
+    require(integrity == NPM_INTEGRITY, "public npm tarball integrity changed")
+    files, contents = {}, {}
+    with tarfile.open(fileobj=io.BytesIO(body), mode="r:gz") as archive:
+        members = archive.getmembers()
+        require(0 < len(members) <= 32 and sum(item.size for item in members) <= MAX_NPM_BYTES,
+                "oversize npm package contents")
+        for item in members:
+            parts = PurePosixPath(item.name).parts
+            require(item.isfile() and len(parts) > 1 and parts[0] == "package" and item.name == PurePosixPath(item.name).as_posix() and
+                    all(part not in (".", "..") for part in parts) and "\\" not in item.name,
+                    "unsafe npm package member")
+            name = "/".join(parts[1:])
+            require(name not in files and 0 <= item.size <= MAX_NPM_BYTES, "duplicate or oversize npm member")
+            content = archive.extractfile(item).read(MAX_NPM_BYTES + 1)
+            require(len(content) == item.size, "npm member size changed")
+            files[name] = {"sha256": digest(content), "size": len(content)}
+            if name in ("package.json", "assets.json"):
+                contents[name] = json.loads(content)
+    package = contents["package.json"]
+    require(package["name"] == NPM_PACKAGE and package["version"] == NPM_VERSION and
+            package["bin"] == {"agentplugins": "bin/agentplugins.js"}, "unexpected public npm package")
+    return {"integrity": integrity, "tarball_sha256": digest(body), "files": files,
+            "manifest": contents["assets.json"]}
+
+
+def acquire_npm_reference():
+    with urllib.request.urlopen(NPM_TARBALL, timeout=45) as response:
+        body = response.read(MAX_NPM_BYTES + 1)
+    return npm_reference(body)
+
+
+def checked_npm_installation(root, env, target, reference, installer):
+    """Observe what the genuine npx launcher installed, without invoking it."""
+    cache = in_case(Path(env["NPM_CONFIG_CACHE"]), root)
+    packages = list(cache.glob("_npx/*/node_modules/universal-agent-plugins/package.json"))
+    require(len(packages) == 1, "expected exactly one public npm package installation")
+    package = in_case(packages[0].parent, root)
+    observed = {}
+    for path in package.rglob("*"):
+        in_case(path, root)
+        if path.is_dir():
+            continue
+        require(path.is_file() and path.stat().st_size <= MAX_NPM_BYTES, "unsafe installed npm member")
+        with path.open("rb") as stream:
+            body = stream.read(MAX_NPM_BYTES + 1)
+        require(len(body) <= MAX_NPM_BYTES, "oversize installed npm member")
+        observed[path.relative_to(package).as_posix()] = {"sha256": digest(body), "size": len(body)}
+    require(observed == reference["files"], "installed npm contents differ from public integrity pin")
+    lock_path = in_case(package.parents[1] / "package-lock.json", root)
+    require(lock_path.is_file() and lock_path.stat().st_size <= MAX_NPM_BYTES, "npm lock missing or oversize")
+    lock = json.loads(lock_path.read_text(encoding="utf-8"))["packages"]["node_modules/" + NPM_PACKAGE]
+    require(lock.get("version") == NPM_VERSION and lock.get("integrity") == NPM_INTEGRITY and
+            lock.get("resolved") == NPM_TARBALL, "npm lock refers to a different public package")
+    manifest, asset = reference["manifest"], reference["manifest"]["assets"][target]
+    require(manifest["version"] == NPM_VERSION and manifest["tag"] == RELEASE_TAG and
+            manifest["producer"]["commit"] == installer["commit"] == RELEASE_COMMIT and
+            manifest["producer"]["release_manifest"]["sha256"] == installer["manifest_sha256"] and
+            asset == {"file": installer["file"], "sha256": installer["binary_sha256"], "size": installer["size"]},
+            "npm embedded asset differs from attested public release")
+    windows = target.startswith("windows-")
+    binary_root = Path(env["LOCALAPPDATA"]) / "agentplugins/Cache" if windows else Path(env["XDG_CACHE_HOME"]) / "agentplugins"
+    binary = in_case(binary_root / NPM_VERSION / target / ("agentplugins.exe" if windows else "agentplugins"), root)
+    require(binary.is_file() and binary.stat().st_size == installer["size"], "npm bootstrap binary missing or wrong size")
+    with binary.open("rb") as stream:
+        body = stream.read(installer["size"] + 1)
+    require(len(body) == installer["size"], "npm bootstrap binary size changed")
+    actual = hashlib.sha256(body).hexdigest()
+    require(actual == installer["binary_sha256"], "npm bootstrap binary differs from attested release")
+    return {"package": NPM_PACKAGE, "version": NPM_VERSION, "integrity": reference["integrity"],
+            "tarball_sha256": reference["tarball_sha256"], "verified_package_files": len(observed),
+            "producer_repository": manifest["producer"]["repository"],
+            "cache_binary": binary.relative_to(root).as_posix(), "binary_sha256": actual, "size": installer["size"]}
+
+
+def npm_command(command, operation, env):
+    argv = command.split(" ")
+    require(argv[:4] == [*NPM_PREFIX, operation] and all(re.fullmatch(r"[A-Za-z0-9_.:/@-]+", word) for word in argv),
+            "unsafe copied npm command")
+    argv += ["--format", "json"]
+    if operation in ("add", "update", "repair", "remove"):
+        argv += ["--yes"]
+    # Windows resolves the public npx.cmd through its ordinary command shell.
+    # No shell syntax is accepted from the UI; paths remain in the process cwd.
+    process = [env.get("COMSPEC", "cmd.exe"), "/d", "/s", "/c", " ".join(argv)] if os.name == "nt" else argv
+    return argv, process
 
 
 def state_file(root, scope):
@@ -246,12 +386,19 @@ def checked_native_cleanup(selected_root, case, binding, root):
     return {"owned_logical_names": sorted(set(names)), "remaining": residuals}
 
 
-def run_case(binary, case, root, executable):
+def run_case(binary, case, root, executable, npm=None):
     root.mkdir()
     home, project, data = (root / name for name in ("home", "project", "uap-data"))
     for path in (home, project, data):
         path.mkdir()
     env = live.isolated_client_env(home, root, data)
+    if npm:
+        require(not (root / "npm-cache").exists(), "public npm case must start cold")
+        for name in ("user.npmrc", "global.npmrc"):
+            (root / name).write_text("", encoding="utf-8")
+        env.update({"NPM_CONFIG_CACHE": str(root / "npm-cache"), "NPM_CONFIG_REGISTRY": "https://registry.npmjs.org/",
+                    "NPM_CONFIG_USERCONFIG": str(root / "user.npmrc"), "NPM_CONFIG_GLOBALCONFIG": str(root / "global.npmrc"),
+                    "NPM_CONFIG_UPDATE_NOTIFIER": "false"})
     env["HERMES_HOME"] = str(home / ".hermes")
     if executable:
         env["PATH"] = str(executable.parent) + os.pathsep + env.get("PATH", "")
@@ -271,14 +418,25 @@ def run_case(binary, case, root, executable):
     documents = [saved_root / "uap.toml", saved_root / "uap.lock"]
 
     def run(operation, selector=None, success=True):
-        argv = [str(binary), operation, *([selector] if selector else []), "--target", case["client"], *scope, "--format", "json"]
-        if operation in ("add", "update", "repair", "remove"):
-            argv += ["--yes"]
+        copied = None
+        if npm:
+            copied = case["ui"]["commands"].get(operation)
+            if copied is None:
+                # info/list are audit observations, not advertised UI commands.
+                copied = " ".join([*NPM_PREFIX, operation, *([selector] if selector else []), "--target", case["client"],
+                                   *(["--scope", "project"] if case["scope"] == "project" else [])])
+            argv, process = npm_command(copied, operation, env)
+        else:
+            argv = [str(binary), operation, *([selector] if selector else []), "--target", case["client"], *scope, "--format", "json"]
+            if operation in ("add", "update", "repair", "remove"):
+                argv += ["--yes"]
+            process = argv
         for path in (root, home, project, data, native_root, project_native):
             in_case(path, root)
-        result = live.call(argv, env, project, 180, capture_files=True, capture_full=not success)
+        result = live.call(process, env, project, 180, capture_files=True, capture_full=not success)
         parsed = result.pop("_json", None)
-        trace.append({"operation": operation, "argv": argv, **result})
+        trace.append({"operation": operation, "argv": argv, "process_argv": process,
+                      "copied_ui_command": copied if operation in ("add", "update", "repair", "remove") else None, **result})
         for path in sentinels:
             require(live.preserved_regular_text(path, "unmanaged source audit neighbor\n", root), "foreign state changed")
         if success:
@@ -291,6 +449,7 @@ def run_case(binary, case, root, executable):
     before = live.snapshot([selected_root])
     try:
         _, added = run("add", case["selector"], case["expected"] != "dependency-refusal")
+        npm_evidence = checked_npm_installation(root, env, npm["target"], npm["reference"], npm["installer"]) if npm else None
         if case["expected"] == "dependency-refusal":
             refusal = checked_dependency_refusal(added, case)
             require(not state_file(root, case["scope"]).get("installations"), "refused closure left managed installation")
@@ -299,6 +458,7 @@ def run_case(binary, case, root, executable):
             outcome = {"status": "expected-dependency-refusal", "refusal": refusal}
         else:
             installation, binding, receipt = checked_binding(state_file(root, case["scope"]), case)
+            require(not npm or receipt["alias"] == case["name"], "saved alias differs from UI release manifest name")
             locator = in_case(Path(binding["target_locator"]), root)
             require(locator.is_dir() and bool(live.snapshot([locator])), "materialized artifact is missing")
             native_after = live.snapshot([selected_root])
@@ -325,7 +485,11 @@ def run_case(binary, case, root, executable):
                        "native_files_after_add": len(native_after), "native_cleanup": cleanup,
                        "update": "immutable-no-change", "repair": "healthy-repair"}
         require(live.snapshot([protected_root]) == protected, "other scope changed")
-        return {**case, **outcome, "trace": trace, "activation_qualified": False, "runtime_qualified": False}
+        if npm:
+            require(checked_npm_installation(root, env, npm["target"], npm["reference"], npm["installer"]) == npm_evidence,
+                    "public npm identity changed during lifecycle")
+        return {**case, **outcome, "trace": trace, "public_npm": npm_evidence,
+                "activation_qualified": False, "runtime_qualified": False}
     except Exception as error:
         return {**case, "status": "failed", "reason": str(error), "trace": trace,
                 "activation_qualified": False, "runtime_qualified": False}
@@ -336,6 +500,7 @@ def main():
     parser.add_argument("--client", choices=CLIENTS, required=True)
     parser.add_argument("--target", choices=("linux-amd64", "darwin-arm64", "windows-amd64"), required=True)
     parser.add_argument("--native-bin", type=Path)
+    parser.add_argument("--entrypoint", choices=("binary", "public-npm"), default="binary")
     parser.add_argument("--report-dir", type=Path, required=True)
     args = parser.parse_args()
     native.require_hosted(args.target)
@@ -345,7 +510,7 @@ def main():
     report = {"schema_version": 1, "kind": "released-exact-source-lifecycle",
               "generated_at": datetime.now(timezone.utc).isoformat(),
               "workflow_sha": os.environ.get("AUDIT_WORKFLOW_SHA"), "harness_sha": os.environ.get("EXPECTED_HEAD"), "run_id": os.environ.get("GITHUB_RUN_ID"),
-              "run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT"), "platform": args.target,
+              "run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT"), "platform": args.target, "entrypoint": args.entrypoint,
               "source_snapshot": {"ledger_commit": LEDGER, "sequence": 47, "digest": "sha256:" + SNAPSHOT_DIGEST},
               "claims": {"signed_grants": False, "native_activation": False, "mcp_runtime": False, "oauth": False},
               "status": "failed", "cases": []}
@@ -354,12 +519,19 @@ def main():
             directory = Path(temp).resolve()
             snapshot = authenticated_snapshot(directory)
             binary, report["installer"] = native.provision_release(ROOT, directory, args.target, RELEASE_TAG, RELEASE_COMMIT, REPOSITORY)
+            npm = None
+            if args.entrypoint == "public-npm":
+                npm = {"target": args.target, "installer": report["installer"], "reference": acquire_npm_reference()}
+                report["ui_helper"] = {"path": "landing/utils/projectCatalogSource.ts",
+                                       "sha256": digest((ROOT / "landing/utils/projectCatalogSource.ts").read_bytes())}
             executable, report["native_client"] = provision_native(args.client, args.target, directory, args.native_bin)
             scopes = ("user",) if args.client == "hermes" else ("user", "project")
             for scope in scopes:
                 for distribution, refusal in (("777genius/notion", False), ("777genius/marketing-kit", True)):
                     case = source_case(snapshot, distribution, 1, args.client, scope, refusal)
-                    report["cases"].append(run_case(binary, case, directory / f'{case["name"]}-{scope}', executable))
+                    if npm:
+                        case["ui"] = frontend_commands(directory / "snapshot.json", case)
+                    report["cases"].append(run_case(binary, case, directory / f'{case["name"]}-{scope}', executable, npm))
             require(all(case["status"] != "failed" for case in report["cases"]), "some exact-source lifecycle cases failed")
             report["status"] = "passed"
     except Exception as error:

@@ -848,7 +848,7 @@
         }
       },
       "noCompatibleSignedRelease": "No catalog release is available for {agent} in this scope.",
-      "piPinnedProjectSource": "Project: install Pi from this package's exact pinned Git source (not a signed Pi target); CLI checks compatibility.",
+      "pinnedCatalogSource": "Install from this pinned Git source. The CLI checks components, dependencies and the selected scope first; agent setup may still be required.",
       "guidedChatgptSetup": "Guided ChatGPT Web setup; finish connecting inside ChatGPT.",
       "catalogReleasePending": "This plugin has not been published for {agent} yet.",
       "useComputerScope": "For this plugin, choose This computer.",
@@ -1039,7 +1039,7 @@
       "directory": "Plugin directory",
       "version": "Version {version}",
       "reviewedListingTooltip": "The listing and metadata were reviewed. This does not certify the plugin’s code, behavior, or safety.",
-      "exactGitProjectSource": "Exact Git source for a project",
+      "exactGitSource": "Pinned Git source: CLI checks before installation",
       "signedProjectRelease": "Signed release for a project"
     },
     "community": {
@@ -1090,10 +1090,8 @@
       "count": "{count} reviewed package supports this client. | {count} reviewed packages support this client.",
       "tryPlugin": "Try {source}, or use another compatible plugin’s reviewed short name or complete package source.",
       "localPackageHint": "Replace ./my-plugin with the path to a valid Agent Plugins 1.0 package.",
-      "piSignedCount": "Packages with install or setup options for Pi: {count}",
-      "piDirectSourceNote": "Available options can include signed releases or exact Git sources in user or project scope. The CLI checks compatibility and setup requirements; a Git source is not a signed Pi grant.",
+      "sourceOptionsCount": "Packages with install or setup options for {agent}: {count}",
       "packageExampleSourceHint": "First create a compatible Agent Plugins package at ./my-plugin. There is no eligible signed catalog example for this agent here; the CLI checks your package’s components, scope, and setup requirements.",
-      "pinnedProjectHint": "Some listed plugins offer an exact Git source for project installation. This does not grant signed catalog support for Pi.",
       "skillsGuide": "Install individual Skills"
     },
     "components": {

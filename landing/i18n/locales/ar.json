@@ -831,7 +831,7 @@
         }
       },
       "noCompatibleSignedRelease": "لا يتوفر إصدار من الكتالوج للوكيل {agent} في هذا النطاق.",
-      "piPinnedProjectSource": "المشروع: ثبّت في Pi من مصدر Git مثبّت على SHA محدد (وليس هدف Pi موقّعًا)؛ تتحقق أداة CLI من التوافق.",
+      "pinnedCatalogSource": "ثبّت من مصدر Git هذا المثبّت على إصدار محدد. تتحقق CLI أولاً من المكوّنات والتبعيات ونطاق التثبيت المختار؛ وقد يلزم إعداد الوكيل بعد ذلك.",
       "guidedChatgptSetup": "إعداد موجّه لـ ChatGPT Web؛ أكمل الاتصال داخل ChatGPT.",
       "catalogReleasePending": "لم يُنشر هذا الملحق للوكيل {agent} بعد.",
       "useComputerScope": "لهذا الملحق، اختر هذا الكمبيوتر.",
@@ -1022,7 +1022,7 @@
       "directory": "دليل الإضافات",
       "version": "الإصدار {version}",
       "reviewedListingTooltip": "تمت مراجعة البطاقة والبيانات الوصفية. لا يُعد ذلك اعتمادًا لكود الإضافة أو سلوكها أو أمانها.",
-      "exactGitProjectSource": "مصدر Git محدد لمشروع",
+      "exactGitSource": "مصدر Git بإصدار محدد: تتحقق CLI قبل التثبيت",
       "signedProjectRelease": "إصدار موقّع لمشروع"
     },
     "community": {
@@ -1073,10 +1073,8 @@
       "count": "تدعم {count} حزمة مراجَعة هذا العميل. | تدعم {count} حزم مراجَعة هذا العميل.",
       "tryPlugin": "جرّب {source}، أو استخدم الاسم المختصر المراجَع أو مصدر الحزمة الكامل لإضافة أخرى متوافقة.",
       "localPackageHint": "استبدل ./my-plugin بمسار حزمة Agent Plugins 1.0 صالحة.",
-      "piSignedCount": "حزم لها خيارات تثبيت أو إعداد لـ Pi: {count}",
-      "piDirectSourceNote": "قد تشمل الخيارات المتاحة إصدارات موقّعة أو مصادر Git محددة على مستوى المستخدم أو المشروع. تتحقق CLI من التوافق ومتطلبات الإعداد؛ مصدر Git ليس تفويضًا موقّعًا لـ Pi.",
+      "sourceOptionsCount": "حزم لها خيارات تثبيت أو إعداد لـ {agent}: {count}",
       "packageExampleSourceHint": "أنشئ أولًا حزمة Agent Plugins متوافقة في ./my-plugin. لا يوجد هنا مثال مناسب لهذا الوكيل من الكتالوج الموقّع؛ تتحقق CLI من مكونات الحزمة ونطاق التثبيت ومتطلبات الإعداد.",
-      "pinnedProjectHint": "توفر بعض الإضافات مصدر Git محددًا للتثبيت في مشروع. لا يعني ذلك وجود دعم موقّع لـ Pi في الكتالوج.",
       "skillsGuide": "تثبيت Skills منفردة"
     },
     "components": {

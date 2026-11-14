@@ -1,8 +1,7 @@
-import capabilities from '../data/clientCapabilities.generated.json' with { type: 'json' };
 import { canonicalInstallTarget, type InstallTargetOption } from '../data/installTargets.ts';
-import type { ComponentID, InstallScope, RegistryPlugin } from '../types/registry.ts';
+import type { InstallScope, RegistryPlugin } from '../types/registry.ts';
 import { pluginInstallAvailability } from './pluginInstallAvailability.ts';
-import { projectComponentSupported } from './projectCatalogSource.ts';
+import { scopedComponentSupported } from './projectCatalogSource.ts';
 
 export interface InstallTargetMessage {
   key: string;
@@ -14,15 +13,6 @@ export interface InstallTargetContext {
   published: boolean;
   expired: boolean;
   current: boolean;
-}
-
-function userComponentSupported(client: InstallTargetOption, component: ComponentID): boolean {
-  const row = capabilities.find(item => item.id === canonicalInstallTarget(client.id));
-  if (!row) return false;
-  if (component === 'skills') return row.skill_support !== 'unsupported';
-  if (component === 'extensions') return row.extension_support !== 'unsupported';
-  return row.mcp_transports.stdio !== 'unsupported' ||
-    row.mcp_transports['streamable-http'] !== 'unsupported';
 }
 
 /** Shared explanation only. Installation authority stays in the existing resolver. */
@@ -41,7 +31,7 @@ export function pluginTargetDescription(
 
   const available = pluginInstallAvailability(plugin, [client.id], context.scope);
   if (available?.kind === 'pinned_git' && context.current)
-    return message('registryUi.install.piPinnedProjectSource');
+    return message('registryUi.install.pinnedCatalogSource');
   if (available?.kind === 'guided_web')
     return message('registryUi.install.guidedChatgptSetup');
   const canonical = canonicalInstallTarget(client.id);
@@ -65,11 +55,8 @@ export function pluginTargetDescription(
 
   // This is a broad component explanation, never a claim that a transport,
   // dependency or native activation has been qualified for this exact source.
-  if (plugin.components.length && context.scope === 'project' &&
-      !plugin.components.every(component => projectComponentSupported(canonical, component)))
-    return message('registryUi.install.unsupportedPluginComponents');
-  if (plugin.components.length && context.scope === 'user' &&
-      !plugin.components.every(component => userComponentSupported(client, component)))
+  if (plugin.components.length &&
+      !plugin.components.every(component => scopedComponentSupported(canonical, component, context.scope)))
     return message('registryUi.install.unsupportedPluginComponents');
 
   const releases = plugin.distributions.flatMap(distribution => distribution.releases);

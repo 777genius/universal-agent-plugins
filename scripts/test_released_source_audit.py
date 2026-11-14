@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Offline contract regressions; these tests are never a lifecycle receipt."""
 import copy
+import base64
+import hashlib
 import importlib.util
 import io
 import json
@@ -40,6 +42,186 @@ def state():
             "environment_receipts": [{"installation_id": "install", "client_id": "pi", "client_binding_id": "binding", "phase": "committed",
                                       "source_key": "github:fixture/catalog:plugins/portable", "package_digest": selected["tree_digest"],
                                       "environment_id": "project-default", "alias": "portable", "receipt_id": "receipt"}]}
+
+
+def ui_value(selected):
+    commands = {"saveMode": "saved"}
+    for operation in ("add", "update", "repair", "remove"):
+        operand = selected["selector"] if operation == "add" else selected["name"]
+        words = [*audit.NPM_PREFIX, operation, operand, "--target", selected["client"]]
+        if selected["scope"] == "project":
+            words += ["--scope", "project"]
+        commands[operation] = " ".join(words)
+    return {"selection": {"selector": selected["selector"], "source": {**selected["source"],
+                         "tree_sha256": selected["tree_digest"], "manifest_sha256": selected["manifest_digest"]},
+                         "components": selected["components"], "client": selected["client"],
+                         "scope": selected["scope"], "manifestName": selected["name"]}, "commands": commands}
+
+
+class CopiedUiCommandTests(unittest.TestCase):
+    def test_exact_ui_command_kept_and_only_ci_flags_added(self):
+        selected = case()
+        value = audit.checked_ui_commands(ui_value(selected), selected)
+        raw = value["commands"]["update"]
+        argv, process = audit.npm_command(raw, "update", {})
+        self.assertEqual(argv, raw.split(" ") + ["--format", "json", "--yes"])
+        self.assertNotIn("--no-save", argv)
+        self.assertNotIn("--project-root", argv)
+        if audit.os.name != "nt":
+            self.assertEqual(process, argv)
+
+    def test_wrong_source_digest_scope_or_manifest_name_is_not_ui_evidence(self):
+        for key in ("selector", "client", "scope", "manifestName", "components", "source"):
+            value = ui_value(case())
+            value["selection"][key] = "different"
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                audit.checked_ui_commands(value, case())
+
+    def test_alias_target_scope_invocation_and_fake_update_are_refused(self):
+        for change in (lambda s: s.replace("update portable", "add portable"),
+                       lambda s: s.replace("portable", "display-name"),
+                       lambda s: s.replace("--target pi", "--target codex"),
+                       lambda s: s.replace(" --scope project", ""),
+                       lambda s: s.replace("@0.1.108", "@latest"),
+                       lambda s: s + " --no-save"):
+            value = ui_value(case())
+            value["commands"]["update"] = change(value["commands"]["update"])
+            with self.subTest(command=value["commands"]["update"]), self.assertRaises(ValueError):
+                audit.checked_ui_commands(value, case())
+
+    def test_shell_operators_never_reach_windows_command_shell(self):
+        raw = ui_value(case())["commands"]["add"]
+        for suffix in (";echo-bad", " & echo-bad", " %TOKEN%", " $(command)", "\necho-bad"):
+            with self.subTest(suffix=suffix), self.assertRaises(ValueError):
+                audit.npm_command(raw + suffix, "add", {})
+        with mock.patch.object(audit.os, "name", "nt"):
+            argv, process = audit.npm_command(raw, "add", {"COMSPEC": "C:\\Windows\\System32\\cmd.exe"})
+        self.assertEqual(process, ["C:\\Windows\\System32\\cmd.exe", "/d", "/s", "/c", " ".join(argv)])
+
+    def test_real_typescript_exports_are_callable_without_a_second_command_generator(self):
+        # This committed snapshot is unit input only; hosted main() separately
+        # authenticates exact snapshot47 before using the same Node bridge.
+        path = audit.ROOT / "cli/cmd/agentplugins/directory_bootstrap_inputs/snapshot.json"
+        document = json.loads(path.read_text(encoding="utf-8"))
+        for name, client, scope in (("notion", "pi", "project"), ("marketing-kit", "hermes", "user")):
+            selected = audit.source_case(document, "777genius/" + name, 1, client, scope, name == "marketing-kit")
+            value = audit.frontend_commands(path, selected)
+            self.assertEqual(value["selection"]["manifestName"], selected["name"])
+            self.assertIn(" update " + name + " --target " + client, value["commands"]["update"])
+
+
+class PublicNpmEvidenceTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.payload = b"\x7fELFfixture-native-bytes"
+        self.installer = {"commit": audit.RELEASE_COMMIT, "manifest_sha256": "a" * 64,
+                          "file": "agentplugins_0.1.108_linux_amd64", "size": len(self.payload),
+                          "binary_sha256": hashlib.sha256(self.payload).hexdigest()}
+        self.manifest = {"version": audit.NPM_VERSION, "tag": audit.RELEASE_TAG,
+                         "producer": {"repository": "777genius/plugin-kit-ai", "commit": audit.RELEASE_COMMIT,
+                                      "release_manifest": {"sha256": "a" * 64}},
+                         "assets": {"linux-amd64": {key: self.installer[field] for key, field in
+                                    (("file", "file"), ("sha256", "binary_sha256"), ("size", "size"))}}}
+        self.contents = {"package.json": json.dumps({"name": audit.NPM_PACKAGE, "version": audit.NPM_VERSION,
+                         "bin": {"agentplugins": "bin/agentplugins.js"}}).encode(),
+                         "assets.json": json.dumps(self.manifest).encode(),
+                         "bin/agentplugins.js": b"// exact fixture launcher\n", "lib/bootstrap.js": b"// exact fixture bootstrap\n"}
+        self.body = self.archive(self.contents)
+        pin = "sha512-" + base64.b64encode(hashlib.sha512(self.body).digest()).decode()
+        patched = mock.patch.object(audit, "NPM_INTEGRITY", pin)
+        patched.start()
+        self.addCleanup(patched.stop)
+        self.reference = audit.npm_reference(self.body)
+        self.env = {"NPM_CONFIG_CACHE": str(self.root / "npm-cache"),
+                    "XDG_CACHE_HOME": str(self.root / "home/.cache"), "LOCALAPPDATA": str(self.root / "home/AppData/Local")}
+        self.package = self.root / "npm-cache/_npx/fixture/node_modules/universal-agent-plugins"
+        for name, content in self.contents.items():
+            path = self.package / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(content)
+        self.lock = self.package.parents[1] / "package-lock.json"
+        self.lock.write_text(json.dumps({"packages": {"node_modules/" + audit.NPM_PACKAGE:
+                             {"version": audit.NPM_VERSION, "integrity": pin, "resolved": audit.NPM_TARBALL}}}), encoding="utf-8")
+        self.binary = self.root / "home/.cache/agentplugins/0.1.108/linux-amd64/agentplugins"
+        self.binary.parent.mkdir(parents=True)
+        self.binary.write_bytes(self.payload)
+
+    @staticmethod
+    def archive(contents, symlink=False):
+        output = io.BytesIO()
+        with tarfile.open(fileobj=output, mode="w:gz") as package:
+            for name, content in contents.items():
+                item = tarfile.TarInfo("package/" + name)
+                item.size = len(content)
+                if symlink:
+                    item.type, item.linkname, item.size = tarfile.SYMTYPE, "outside", 0
+                package.addfile(item, io.BytesIO(content))
+        return output.getvalue()
+
+    def observe(self):
+        return audit.checked_npm_installation(self.root, self.env, "linux-amd64", self.reference, self.installer)
+
+    def test_installed_package_and_actual_cached_binary_both_match(self):
+        observed = self.observe()
+        self.assertEqual(observed["binary_sha256"], self.installer["binary_sha256"])
+        self.assertEqual(observed["verified_package_files"], len(self.contents))
+        self.assertEqual(observed["producer_repository"], "777genius/plugin-kit-ai")
+
+    def test_integrity_and_archive_bound_checked_before_members(self):
+        for body in (self.body + b"different", b"x" * (audit.MAX_NPM_BYTES + 1)):
+            with self.subTest(size=len(body)), self.assertRaises(ValueError):
+                audit.npm_reference(body)
+
+    def test_archive_traversal_alias_or_symlink_is_not_an_installed_member(self):
+        for names, symlink in (({"../outside": b"x"}, False), ({"./alias": b"x"}, False), ({"member": b"x"}, True)):
+            body = self.archive(names, symlink)
+            pin = "sha512-" + base64.b64encode(hashlib.sha512(body).digest()).decode()
+            with self.subTest(names=names), mock.patch.object(audit, "NPM_INTEGRITY", pin), self.assertRaises(ValueError):
+                audit.npm_reference(body)
+
+    def test_tampered_or_extra_launcher_files_refused(self):
+        path = self.package / "bin/agentplugins.js"
+        path.write_bytes(b"different launcher")
+        with self.assertRaisesRegex(ValueError, "contents differ"):
+            self.observe()
+        path.write_bytes(self.contents["bin/agentplugins.js"])
+        (self.package / "extra.js").write_text("unreviewed", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "contents differ"):
+            self.observe()
+
+    def test_lock_or_attested_asset_mismatch_refused(self):
+        original = self.lock.read_bytes()
+        value = json.loads(original)
+        value["packages"]["node_modules/" + audit.NPM_PACKAGE]["integrity"] = "sha512:wrong"
+        self.lock.write_text(json.dumps(value), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "different public package"):
+            self.observe()
+        self.lock.write_bytes(original)
+        self.installer["manifest_sha256"] = "b" * 64
+        with self.assertRaisesRegex(ValueError, "differs from attested"):
+            self.observe()
+
+    def test_manifest_cannot_substitute_for_real_cached_bytes(self):
+        self.binary.write_bytes(b"x" * len(self.payload))
+        with self.assertRaisesRegex(ValueError, "differs from attested"):
+            self.observe()
+        self.binary.unlink()
+        with self.assertRaisesRegex(ValueError, "missing or wrong size"):
+            self.observe()
+
+    def test_cache_outside_case_and_duplicate_package_are_refused(self):
+        original = self.env["NPM_CONFIG_CACHE"]
+        self.env["NPM_CONFIG_CACHE"] = str(self.root.parent)
+        with self.assertRaises(ValueError):
+            self.observe()
+        self.env["NPM_CONFIG_CACHE"] = original
+        second = self.root / "npm-cache/_npx/other/node_modules/universal-agent-plugins/package.json"
+        second.parent.mkdir(parents=True)
+        second.write_bytes(self.contents["package.json"])
+        with self.assertRaisesRegex(ValueError, "exactly one public npm"):
+            self.observe()
 
 
 class SourceSelectionTests(unittest.TestCase):

@@ -1,12 +1,12 @@
 import { canonicalInstallTargets, type InstallTargetID } from '../data/installTargets.ts';
 import type { ClientID, DistributionResolution, InstallScope, RegistryPlugin } from '../types/registry.ts';
 import { expectedDistribution, resolveDistribution } from './registry.ts';
-import { pinnedPiProjectSelection, projectCatalogSelection } from './projectCatalogSource.ts';
+import { pinnedCatalogSelection, projectCatalogSelection } from './projectCatalogSource.ts';
 
 export type PluginInstallAvailability =
   | { kind: 'signed'; resolution: DistributionResolution }
   | { kind: 'guided_web'; resolution: DistributionResolution }
-  | { kind: 'pinned_git'; selection: NonNullable<ReturnType<typeof pinnedPiProjectSelection>> };
+  | { kind: 'pinned_git'; selection: NonNullable<ReturnType<typeof pinnedCatalogSelection>> };
 
 function context7Preparation(plugin: RegistryPlugin, peers: ClientID[] = []) {
   if (
@@ -61,11 +61,27 @@ export function pluginInstallAvailability(
   if (scope === 'user' && web && context7Preparation(plugin,
       canonicalInstallTargets(targets.filter(target => target !== 'chatgptweb'))))
     return { kind: 'guided_web', resolution };
-  if (scope === 'project' && targets.length === 1 && targets[0] === 'pi') {
-    const selection = pinnedPiProjectSelection(plugin);
+  // Public ChatGPT aliases keep their own routes; only a canonical local
+  // agent can explicitly request an independent saved Git source.
+  if (targets.length === 1 && canonical[0] === targets[0]) {
+    const selection = pinnedCatalogSelection(plugin, canonical[0]!, scope);
     if (selection) return { kind: 'pinned_git', selection };
   }
   return undefined;
+}
+
+/** A source request is exclusive; selecting a signed peer returns to that route. */
+export function reconcilePluginSourceTargets(
+  plugin: RegistryPlugin, next: InstallTargetID[], previous: readonly InstallTargetID[],
+  scope: InstallScope = 'user',
+): InstallTargetID[] {
+  if (next.length < 2) return next;
+  const sources = next.filter(target => pluginInstallAvailability(plugin, [target], scope)?.kind === 'pinned_git');
+  if (!sources.length) return next;
+  const addedSource = sources.find(target => !previous.includes(target));
+  if (addedSource) return [addedSource];
+  const signed = next.filter(target => !sources.includes(target));
+  return signed.length ? signed : [sources[0]!];
 }
 
 export function hasPluginInstallTarget(plugin: RegistryPlugin, target: InstallTargetID): boolean {

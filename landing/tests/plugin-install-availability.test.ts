@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import type { RegistryPlugin } from '../types/registry.ts';
-import { hasPluginInstallTarget, pluginInstallAvailability } from '../utils/pluginInstallAvailability.ts';
+import { hasPluginInstallTarget, pluginInstallAvailability, reconcilePluginSourceTargets } from '../utils/pluginInstallAvailability.ts';
 
 function fixture(): RegistryPlugin {
   const data = JSON.parse(readFileSync(new URL('./fixtures/registry-responses/gitlab.json', import.meta.url), 'utf8'));
@@ -67,13 +67,37 @@ test('bound Web stays a signed route and can combine with Desktop', () => {
   assert.equal(pluginInstallAvailability(plugin, ['chatgpt', 'chatgptweb'])?.kind, 'signed');
 });
 
-test('Pi discovery includes only the existing exclusive pinned Project route', () => {
+test('explicit saved source routes use generated agent and scope capabilities', () => {
   const plugin = fixture();
-  assert.equal(pluginInstallAvailability(plugin, ['pi']), undefined);
-  assert.equal(pluginInstallAvailability(plugin, ['pi'], 'project')?.kind, 'pinned_git');
+  const before = structuredClone(plugin);
+  for (const client of ['pi', 'antigravity', 'hermes'] as const) {
+    assert.equal(pluginInstallAvailability(plugin, [client])?.kind, 'pinned_git');
+    assert.equal(hasPluginInstallTarget(plugin, client), true);
+    assert.equal(pluginInstallAvailability(plugin, [client], 'project')?.kind,
+      client === 'hermes' ? undefined : 'pinned_git');
+  }
+  assert.equal(pluginInstallAvailability(plugin, []), undefined);
   assert.equal(pluginInstallAvailability(plugin, ['pi', 'codex'], 'project'), undefined);
-  assert.equal(hasPluginInstallTarget(plugin, 'pi'), true);
-  assert.equal(hasPluginInstallTarget(plugin, 'hermes'), false);
+  assert.equal(pluginInstallAvailability(plugin, ['pi', 'hermes']), undefined);
+  assert.deepEqual(plugin, before, 'Source availability must not synthesize signed target records');
   plugin.distributions[0]!.releases[0]!.blocking_clients.push('pi');
   assert.equal(hasPluginInstallTarget(plugin, 'pi'), false);
+});
+
+test('source requests stay exclusive when adding another source or a signed peer', () => {
+  const plugin = fixture();
+  assert.deepEqual(reconcilePluginSourceTargets(plugin, ['codex', 'pi'], ['codex']), ['pi']);
+  assert.deepEqual(reconcilePluginSourceTargets(plugin, ['pi', 'hermes'], ['pi']), ['hermes']);
+  assert.deepEqual(reconcilePluginSourceTargets(plugin, ['hermes', 'codex'], ['hermes']), ['codex']);
+  assert.deepEqual(reconcilePluginSourceTargets(plugin, ['pi', 'antigravity'], ['pi'], 'project'), ['antigravity']);
+});
+
+test('canonical aliases and non-saved clients never gain a source fallback', () => {
+  const plugin = fixture();
+  plugin.distributions[0]!.releases[0]!.targets = [{
+    client: 'claude', scopes: ['user'], delivery: 'managed', authentication: 'unknown',
+  }];
+  assert.equal(pluginInstallAvailability(plugin, ['codex'])?.kind, 'pinned_git');
+  for (const client of ['chatgpt', 'chatgptweb', 'vscode'] as const)
+    assert.equal(pluginInstallAvailability(plugin, [client]), undefined);
 });

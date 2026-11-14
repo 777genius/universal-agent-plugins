@@ -831,7 +831,7 @@
         }
       },
       "noCompatibleSignedRelease": "Aucune version du catalogue n’est disponible pour {agent} dans cette portée.",
-      "piPinnedProjectSource": "Projet : installez dans Pi depuis la source Git épinglée sur un SHA exact (pas une cible Pi signée) ; la CLI vérifie la compatibilité.",
+      "pinnedCatalogSource": "Installez depuis cette révision Git fixe. La CLI vérifie d’abord les composants, les dépendances et la portée choisie ; la configuration de l’agent peut encore être nécessaire.",
       "guidedChatgptSetup": "Configuration guidée de ChatGPT Web ; terminez la connexion dans ChatGPT.",
       "catalogReleasePending": "Ce plugin n’a pas encore été publié pour {agent}.",
       "useComputerScope": "Pour ce plugin, choisissez Cet ordinateur.",
@@ -1022,7 +1022,7 @@
       "directory": "Répertoire des plugins",
       "version": "Version {version}",
       "reviewedListingTooltip": "La fiche et les métadonnées ont été examinées. Cela ne certifie pas le code, le comportement ou la sécurité du plugin.",
-      "exactGitProjectSource": "Source Git exacte pour un projet",
+      "exactGitSource": "Révision Git fixe : vérification par la CLI avant installation",
       "signedProjectRelease": "Version signée pour un projet"
     },
     "community": {
@@ -1073,10 +1073,8 @@
       "count": "{count} paquet examiné prend en charge ce client. | {count} paquets examinés prennent en charge ce client.",
       "tryPlugin": "Essayez {source}, ou utilisez le nom court vérifié ou la source complète d’un autre plugin compatible.",
       "localPackageHint": "Remplacez ./my-plugin par le chemin d’un paquet Agent Plugins 1.0 valide.",
-      "piSignedCount": "Paquets avec des options d’installation ou de configuration pour Pi : {count}",
-      "piDirectSourceNote": "Les options disponibles peuvent inclure des versions signées ou des sources Git exactes pour l’utilisateur ou le projet. La CLI vérifie la compatibilité et la configuration ; une source Git ne constitue pas une autorisation signée pour Pi.",
+      "sourceOptionsCount": "Paquets avec des options d’installation ou de configuration pour {agent} : {count}",
       "packageExampleSourceHint": "Créez d’abord un paquet Agent Plugins compatible dans ./my-plugin. Aucun exemple du catalogue signé ne convient ici à cet agent ; la CLI vérifie les composants, la portée et les exigences de configuration du paquet.",
-      "pinnedProjectHint": "Certains plugins proposent une source Git exacte pour une installation dans un projet. Cela ne constitue pas une prise en charge signée de Pi dans le catalogue.",
       "skillsGuide": "Installer des Skills individuels"
     },
     "components": {
