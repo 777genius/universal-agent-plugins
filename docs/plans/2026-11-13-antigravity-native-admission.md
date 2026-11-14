@@ -1863,3 +1863,286 @@ their corresponding fields. The two malformed cases pass the former decoder
 and refuse the correction. Both run through the actual pair and sidecar test:
 their settled receipts remain available, but measurement completion is false.
 All 52 embedded Python methods still pass after these two additional subcases.
+
+## 2026-11-14 — fresh required observation with an originally absent config
+
+This is fresh source work against the Antigravity files in merge
+`a50caa828f84657ba24e1195c0e2f4aaf35ea58b`, unchanged through
+`c2b9c0766b722a283e901ce7bfc8b766d36e4242`. The earlier six-file local
+candidate became inaccessible when the executor stopped. Its old bytes were
+later recovered, but this fresh implementation has different parent authority
+and public HOME guards. Historical executions of the earlier candidate do not
+qualify this composition. The new R1 is Git blob
+`b12a712e71a7fc32d313b97fca3ca79227a8d32e`; independent source reviewers
+accepted the narrow authority and test boundaries before implementation.
+
+Main #911 preserves native MCP selection and adds intact Project/User repair
+journeys. Those exact changes remain in this candidate. It does not change the
+User inventory guard: the current guard rejects a missing config before native
+observation, including required unchanged/verification requests.
+
+### Original absence and original parent authority
+
+Only `VerifyOnly || PackageUnchanged` may retain an originally absent final
+`config.json` leaf as observation authority. Capture the original named parent
+before acquiring its one held directory, use a terminal separator plus dot for
+directory acquisition, and rejoin both original parent records around the
+leaf's no-follow ENOENT check. Parent, backend, alias, replacement and other
+acquisition errors are unavailable observations. They cannot borrow the benign
+initial-delivery config-absence classification.
+
+The absent lease retains its original root and parent metadata throughout the
+same ten-second context, both native commands and final cleanup. It never
+reopens, creates or normalizes the missing config. Existing config bodies
+still require the exact supported schema and selected Boolean override.
+Backend absence is never admitted. A nullable expected value is allowed only
+after verifying the explicit absence lease; the native result still passes
+the original exact six-field, typed identity/version/component/uniqueness
+decoder. Initial or changed delivery with an absent config stays Prepared with
+zero native calls.
+
+Actual enabled, disabled and absent inventory observations affect only
+transient guidance. Prepared/installation_verified, ownership, original DATA,
+scope, consent, cleanup and all activation/authentication boundaries remain.
+There is no native enable action, trust write, or runtime capability promotion.
+
+### Public result joined to its actual native observation
+
+The fresh public candidate is recorded in review packet
+`0609ba1547d025106c1698b2a7a2e0c31df417f5`. It retains the exact 14 direct
+native slots, 23 public slots, two standalone missing-config calls and
+76-member archive bound. Slot 13 remains initial delivery; slot 14 must now
+complete the public repeat with an observed Prepared result. The following
+already-required native list returns its validated selected-row Boolean only
+after the original effects, semantic, deadline, receipt-seal and ledger-close
+checks. Public enabled/disabled guidance must match that actual Boolean.
+The other four refusal worlds and every existing false qualification remain.
+
+Independent R2 found and corrected a new baseline-adoption risk: four existing
+pre/post checks covered state, bundle, native-parent membership and identity,
+but a successful repeat could also affect another HOME member. The corrected
+candidate snapshots the complete original HOME before slot 14 and compares it
+after those four checks, before creating the sidecar ledger. A new contract
+writes a real other HOME file in the public-repeat callback and requires
+refusal before the sidecar runs; unchanged enabled and disabled controls must
+reach it once. The earlier lazy-domain regression now keys its injected
+change to the actual repeat action, preserving all first-failed-domain and
+no-later-read assertions. The superseded first public packet was never
+published.
+
+The saved-owned CLI repair case with missing config now requires exactly two
+native commands and the existing strict source, installation, binding,
+revision, component and transient-guidance DTO checks. Original state,
+ownership, DATA, consent, cleanup and unrelated negative cases stay unchanged.
+Windows mutation tests may distinguish exact OS prevention from a completed
+replacement only by verifying unchanged original objects and the same
+operation succeeding after the held lease is released; no broad error or
+skip can stand in for that proof.
+
+### Source review and actual local execution
+
+The three runtime/unit/provider files are frozen in packet
+`df6faeeb34a0f6df739b806e4b9a9ed41b3bc3de`. Two independent source
+reviews accepted that exact composition; the root review is
+`64ad69e2050a34130556a21f0e70d420b8618e62`. The public Python/CLI
+composition is the corrected packet above; its first version remains
+superseded and unpublished.
+
+After the executor returned, the fresh runtime was materialized in an isolated
+checkout of `c2b9c0766b722a283e901ce7bfc8b766d36e4242`. Input Git blob,
+SHA-256 and byte-length identities were independently checked before execution
+and remained unchanged afterwards. Actual Linux results are:
+
+- full Antigravity adapter: 41 top-level methods, 141 passing test/subtest
+  events, no skips or failures;
+- real-provider/usecase Antigravity coverage: six top-level methods, 21 passing
+  events, no skips or failures, including enabled/disabled/absent results for
+  both required resume and repair;
+- public CLI: all seven top-level methods and 18 test/subtest events passed,
+  with no skips or failures;
+- public E2E contracts: all 53 Python methods passed, including the actual
+  other-HOME-write rejection before sidecar baseline construction;
+- `gofmt -d` was empty and `git diff --check` passed for the reviewed
+  composition.
+
+The adapter/provider execution receipt is
+`22ccdaf39ca4cf99f2f2ef1f87de3ca57c2fcae7`. Original execution-log
+SHA-256 values are adapter
+`89594356552906b66306ef6819e9cb3a321ede16ef79faec2ee9bcb61cf2d2df`,
+provider
+`d9fd103bcb0b2881c2729ef4eb14be8ded45949192c966097044e7a2fcbaaf05`,
+CLI
+`63093d2b0df124c3fbb2455b0fc1570e869b557f9c4f7a99287113041dfaa572`
+and Python contracts
+`0459a827aeb0d26eac3cf08628c7914be5790bac400d4cb74b8267381a1679fa`.
+
+### Native evidence and remaining acceptance
+
+Original `8d18cfff1e62ae8eeaf896b5b36dd14a8e98e14a` native captures
+from run `43607242252` have now been fully decoded on all three OSes:
+outer and inner ZIP integrity, exact 76-member closure, 78 request/receipt
+frames and 64 stream joins, original source/tool/owner/DATA identities and
+the common deadline all pass. Their two standalone commands observed the
+original absent config and enabled selected row without changing the original
+44-member baseline; cleanup was complete and all seven qualifications stayed
+false. Those captures still contain the old public slot-14 refusal. They are
+evidence for the captured client behavior, not execution of this fresh
+production implementation.
+
+Whole-repository lint/Core checks, fresh native three-OS public lifecycle and
+their original archive closure, final-head Required/security and guarded
+merge/postmerge acceptance remain separate gates. Local Linux execution does
+not qualify the Windows rename-prevention branch or a real native runtime
+tool call. No release or support-level promotion is authorized by this entry.
+
+## 2026-11-14 — final literal-dot formatting and composed-tree verification
+
+This update preserves the preceding fresh v1 and `c2b9c076` execution
+records. The later local composition is based on
+`5ca208a32ae1deee7da64e502144521ecad6bc9a`, including main
+`e3943cee826064911a63ceb2e1e4b2a24a124674`. These local observations
+remain distinct from acceptance on the eventual published source.
+
+### Final reviewed source and preserved acquisition semantics
+
+The five code/test blobs in the fresh Antigravity composition are:
+
+| Path within its existing package | Final Git blob |
+| --- | --- |
+| Antigravity `inventory.go` | `1c4925e5d1dbb7ffa874e6fadaf4f00e2768a435` |
+| Antigravity `inventory_test.go` | `3c512a2c1c927a8eeb5e4f0e19b5f140d08263c7` |
+| Usecase `lifecycle_unchanged_test.go` | `86f85de33ed839d12812100efc9cf5f5d9b8b7fb` |
+| E2E `antigravity-native-cross.py` | `526e8f636d24e1184849bf4be9911dffa457f980` |
+| CLI `antigravity_public_resume_test.go` | `1307398b7fad3adfe180e6c77bdad550d03d67b4` |
+
+The initial lint followup, review packet
+`cd745a82159f5ad81d63a87a25e7a603f811dac1`, made the returned
+`record.open` error explicit and passed the original test context to the
+real FIFO-creation command. Its first non-cleaning path spelling used
+`strings.Join`; the next actual lint pass rejected that spelling under
+`stringConcatSimplify`. The final runtime adds only `fmt` and uses
+`os.OpenRoot(fmt.Sprintf("%s%c.", parent, os.PathSeparator))`.
+Independent R2 verified that reversing those two final substitutions restores
+every byte of reviewed runtime `f173795706adde52b1a4280c22467821348951a5`.
+The final runtime is 16,595 bytes, SHA-256
+`fdd5dc8a4d962f313f850e4162c6ca6c5c0b02323dd7c722fedda9f9fe5c6765`.
+
+The terminal directory component is intentional. Pinned Go 1.26.11
+`os.OpenRoot` passes the original name to the Unix open operation with
+`O_CLOEXEC`, without `O_DIRECTORY` or `O_NONBLOCK`; directory validation
+occurs after that open. A substituted FIFO at the parent name can therefore
+block before the incarnation check. The literal separator and dot force
+directory traversal before opening that final component. `filepath.Join`
+would clean away this required component. Neither the final format change
+nor the lint corrections alter the original parent lease, absent-leaf
+classification, present-config/backend rules, deadline or cleanup.
+
+### Actual composed-tree checks and causal regressions
+
+On the local `5ca208a3` composition before the final format-only change,
+the full adapter again passed 41 top-level methods and 141 test/subtest
+events; the selected real-provider/usecase tests passed six methods and 21
+events; the public CLI passed seven methods and 18 events. Each had zero
+failures and skips, with unchanged input files. All 53 Python contracts
+also passed. Their original log SHA-256 values are:
+
+| Check | Log SHA-256 |
+| --- | --- |
+| Adapter before final formatting | `c7cd3b5d505faa88e0808c1c79bf74fd13ca4d52326dc72afbacb02759dba57e` |
+| Real provider/usecase | `1384d14602a5a5d7954a61a6276225a655134c7b36b6914ed463f982921d5681` |
+| Public CLI | `2fdbdb394c61fd0592faa06cb6e98be3f69c6f1133b63c7b97c26b5f6ce9a96b` |
+| Public Python contracts | `b8060e00e204cba8c3be70cfd7e9f3ca2c85eb9f2022b7ef9c82362329d6c297` |
+
+Incoming `9cc397c42bd1d4060c5cd2458de3da3138f61d35` subsequently
+strengthened the existing missing-config-pair negative oracle with eight
+exact anchored refusal reasons. The composition retains those assertions
+and the fresh positive assertion on the returned enabled/disabled Boolean.
+Independent R2 reversed only those test edits to recover every byte of the
+reviewed `f8086484` script; all production functions, HOME preservation,
+slot counts and false qualification flags remain unchanged. The final
+combined script is 274,342 bytes, SHA-256
+`da241e6af1787f164f0415f24d31a67f51ab33224509ebbcf75b52fffba697e6`.
+All 53 Python contracts then passed again with no skips in 6.218 seconds.
+That original 13,255-byte log has SHA-256
+`da32a3a40608689ac17d17f1e0d755362d105b9f6af4b85af5f222060cf2ef74`.
+This is updated fixture validation, not another native execution.
+
+The final `1c4925e5` runtime was also executed separately: all 41
+adapter methods and 141 events passed, with no failures or skips. The
+command completed in 1.279 seconds; its log SHA-256 is
+`e59015403b38937beb69ff7626b0e8bc70742a5efe1857e923a455f76f88c52b`.
+
+Two actual Go source-overlay counterfactuals then failed their intended
+assertions, rather than failing to compile. Setting only the config
+`allowMissing` argument to false rejected all six required resume/verify-only
+controls across enabled, disabled and absent native rows. Its log SHA-256 is
+`e6a0c423c0f2a6b16e65e704cfa62142c30d6864d98601c69bcb33c3cb3679bc`.
+Replacing only the terminal-dot acquisition with `os.OpenRoot(parent)`
+(and removing the now-unused import) blocked the actual FIFO child until
+the test's original five-second context killed it. That one test failed
+with the expected blocked-before-incarnation assertion; its log SHA-256 is
+`08960a1c1732f84888bb445352a9bdbe5b449aab50537903efd2fdabbf495e43`.
+Both overlay files and the exact original-to-overlay differences were
+independently inspected. Repository source bytes stayed unchanged throughout.
+The combined final-adapter/counterfactual receipt has SHA-256
+`267f57854b65e1a95ad39359c40499c79096492d22b015a032716cdbb7b0627e`.
+
+### Lint completion and the remaining local Core limitation
+
+The ordinary full `make lint` against main `e3943cee` first completed
+all four size/architecture passes and the changed-line passes for the root,
+CLI and integrationctl modules with zero issues. Its final agentplugins
+changed-line pass reported the single `strings.Join` style finding above.
+That unsuccessful full invocation is retained with log SHA-256
+`8924f1cb5c21c92fdb4dddf49619e6ff2d8bc1d6d4015c1a84c65f0fffcfb53e`.
+
+After the reviewed format correction, the official target was resumed for
+the only changed Go module using
+`make lint LINT_MODULES=install/integrationctl/agentplugins` and the same
+`LINT_BASE=e3943cee826064911a63ceb2e1e4b2a24a124674`.
+Both module passes and the global shrink-only baseline check passed with
+exit zero. The baseline retained 138 exclusion rules; no suppression,
+exemption or gate was weakened. The passing followup log SHA-256 is
+`026c5d560882a2e21bfd9c36a7595b2117a4a3184d968b5cf23a53e4f8637221`.
+A subsequent complete invocation of the same ordinary `make lint` target,
+without a module filter and against the same main commit, then passed all
+eight module passes and the global shrink-only baseline with exit zero in
+214.793 seconds. The final source hashes remained unchanged across that run,
+including runtime `1c4925e5`; the 138 exclusion rules remained unchanged.
+Its original 20,093-byte log has SHA-256
+`583729b1152e24bbfd4ff95dfc5d902b77dfa0bdb3dac4206e87f5ae5e23289e`;
+the execution receipt has SHA-256
+`338ca53b65540de33f6ba653e00284a42d61aeb65b85067b14288ecb1b233b57`.
+This final full invocation closes the local lint gate for the reviewed Go
+composition.
+
+The last full local `make test-core CORE_TEST_PARALLELISM=1` attempt on
+the earlier `c2b9c076` composition exited 2. Its log reports unavailable
+live `/proc/.../task/.../children` interfaces, denied Unix socket fixtures,
+malformed or duplicate ambient Codex environment entries, and cleanup
+permission failures. Its original log SHA-256 is
+`f00a21ea513bbd5284b3279272e2b2cf45b27c4706f72392fd737ab96dc0b925`.
+That full target remains a failed local run; the focused passes above do not
+turn it into a pass. No containment, privilege, environment or cleanup guard
+was changed to bypass those failures. Required hosted Core verification remains.
+
+### Retained native evidence still precedes the new production behavior
+
+The later retained `c2b9c076` native run
+[43611712538](https://github.com/777genius/universal-agent-plugins/actions/runs/43611712538)
+also completed its Windows, macOS and Linux native jobs successfully.
+Original artifacts 14121667115, 14120988841 and 14122495577 were independently
+decoded: both ZIP integrity checks, exact 76-member closure, 78 frames,
+64 stream joins, original source/tool/owner/DATA identities and the common
+deadline all matched. Their two standalone commands left the original
+44-member baseline unchanged, observed the exact six-field enabled row and
+kept all seven qualifications false. Public slot 14 in those originals
+still records the old expected refusal.
+
+Those retained captures do not execute the new originally-absent production
+path. Ordinary hosted validation on the published composition must still
+prove the observed Prepared slot-14 result, unchanged original HOME and
+owner/DATA state, every retained public/native case, all three OSes and the
+original archive/source/stream joins. Final-head Required/security and guarded
+merge/postmerge checks remain required. No native tools/call, IDE activation,
+release or support-level promotion is inferred from these local results.

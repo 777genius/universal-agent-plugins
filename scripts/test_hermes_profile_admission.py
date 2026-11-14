@@ -3683,6 +3683,8 @@ class SourceNativeCommandContracts(unittest.TestCase):
         if not source_capture: inputs["python"].write_bytes(b"inert bundled fixture interpreter")
         user_tmp = user / "tmp"; user_tmp.mkdir()
         env.update({key: str(user_tmp) for key in ("TMPDIR", "TEMP", "TMP")})
+        user_state = user / "state"; user_state.mkdir(mode=0o700)
+        env["XDG_STATE_HOME"] = str(user_state)
         env["HERMES_PROFILE_DEADLINE"] = str(time.monotonic() + 10)
         for role in ("a", "b"):
             root = outer / ("project-" + role) / ".uap/hermes-runtime"
@@ -3730,16 +3732,102 @@ class SourceNativeCommandContracts(unittest.TestCase):
                 modules = {"hermes_cli._launchers": SimpleNamespace(runtime_command=scope["runtime_command"]),
                            "hermes_yaml": SimpleNamespace(safe_load=json.loads)}
                 with mock.patch.dict(os.environ, env), mock.patch.dict(sys.modules, modules):
+                    original_env = dict(os.environ)
                     namespace["command"]("list-user" if selected == "user" else "list-" + selected, selected, ["mcp", "list"])
+                    self.assertEqual(dict(os.environ), original_env)
                 argv, _, child_env = calls[0]
                 self.assertEqual(argv, [*(namespace["native_prefix"] if source_capture else namespace["native"]), "mcp", "list"])
                 target = namespace["spec"][selected]
                 expected_tmp = target["temporary"] if source_capture and selected != "user" else env["TMPDIR"]
                 self.assertEqual({child_env[key] for key in ("TMPDIR", "TEMP", "TMP")}, {expected_tmp})
+                expected_env = dict(original_env, HERMES_HOME=target["root"])
+                if source_capture and selected != "user":
+                    expected_env.update({key: expected_tmp for key in ("TMPDIR", "TEMP", "TMP", "XDG_STATE_HOME")})
+                self.assertEqual(child_env, expected_env)
                 self.assertEqual(child_env["HOME"], env["HOME"]); self.assertEqual(child_env["USERPROFILE"], env["USERPROFILE"])
                 self.assertEqual(child_env["HERMES_HOME"], target["root"])
                 if source_capture:
                     self.assertEqual(namespace["records"][0]["driver"], "official-runtime-command")
+                    self.assertEqual(namespace["records"][0]["state_root"], expected_env["XDG_STATE_HOME"])
+
+    def test_real_state_writer_stays_selected_and_old_routing_or_user_writes_still_refuse(self):
+        import sys
+        child_code = """
+import json, os, sys, tempfile
+from pathlib import Path
+state = Path(os.environ['XDG_STATE_HOME'])
+if sys.argv[1] == 'write':
+    directory = state / 'gh'
+    directory.mkdir(mode=0o755)
+    fd, temporary = tempfile.mkstemp(prefix='device-id.tmp.', dir=directory)
+    with os.fdopen(fd, 'wb') as output:
+        output.write(b'00000000-0000-4000-8000-000000000000')
+    os.link(temporary, directory / 'device-id')
+    os.unlink(temporary)
+print(json.dumps(dict(state=str(state), home=os.environ['HOME'], userprofile=os.environ['USERPROFILE'],
+                     hermes_home=os.environ['HERMES_HOME'])))
+"""
+        for selected, effect in (("a", "write"), ("b", "write"), ("a", "old-routing"),
+                                 ("user", "read"), ("user", "write")):
+            with self.subTest(selected=selected, effect=effect), tempfile.TemporaryDirectory() as temporary:
+                namespace, scope, env = self.command_fixture(temporary, user_control=selected == "user")
+                namespace["evidence"].mkdir()
+                calls = []
+                def bounded(argv, cwd, child_env, output, **_kwargs):
+                    self.assertEqual(argv, [*namespace["native_prefix"], "mcp", "list"])
+                    forwarded = dict(child_env)
+                    if effect == "old-routing": forwarded["XDG_STATE_HOME"] = env["XDG_STATE_HOME"]
+                    calls.append(forwarded)
+                    # A real isolated process reproduces only gh's state-dir,
+                    # temporary-file and link publication. No vendor is run.
+                    return CASE["bounded"]([sys.executable, "-I", "-B", "-c", child_code,
+                                            "read" if effect == "read" else "write"],
+                                           cwd, forwarded, output, timeout=10)
+                namespace["bounded"] = bounded
+                modules = {"hermes_cli._launchers": SimpleNamespace(runtime_command=scope["runtime_command"]),
+                           "hermes_yaml": SimpleNamespace(safe_load=json.loads)}
+                label = "list-user" if selected == "user" else "list-" + selected
+                refusal = ("Project command changed original User" if effect == "old-routing" else
+                           "source User control changed the measured original User" if selected == "user" and effect == "write" else None)
+                with mock.patch.dict(os.environ, env), mock.patch.dict(sys.modules, modules):
+                    original_env = dict(os.environ)
+                    if refusal is None:
+                        namespace["command"](label, selected, ["mcp", "list"])
+                    else:
+                        with self.assertRaisesRegex(RuntimeError, "^" + refusal + "$"):
+                            namespace["command"](label, selected, ["mcp", "list"])
+                    self.assertEqual(dict(os.environ), original_env)
+                self.assertEqual(len(calls), 1)
+                status = json.loads((namespace["evidence"] / (label + ".status.json")).read_bytes())
+                self.assertEqual(status["exit"], 0); self.assertIsNone(status["error"])
+                self.assertEqual((namespace["evidence"] / (label + ".stderr")).read_bytes(), b"")
+                readout = json.loads((namespace["evidence"] / (label + ".stdout")).read_bytes())
+                state_root = (env["XDG_STATE_HOME"] if selected == "user" or effect == "old-routing" else
+                              namespace["spec"][selected]["temporary"])
+                self.assertEqual(readout, dict(state=state_root, home=env["HOME"], userprofile=env["USERPROFILE"],
+                                               hermes_home=namespace["spec"][selected]["root"]))
+                expected_env = dict(original_env, HERMES_HOME=namespace["spec"][selected]["root"])
+                if selected != "user":
+                    expected_env.update({key: namespace["spec"][selected]["temporary"] for key in ("TMPDIR", "TEMP", "TMP")})
+                expected_env["XDG_STATE_HOME"] = state_root
+                self.assertEqual(calls[0], expected_env)
+                if effect != "read":
+                    path = Path(state_root) / "gh/device-id"
+                    self.assertEqual(path.read_bytes(), b"00000000-0000-4000-8000-000000000000")
+                    self.assertEqual(path.stat().st_nlink, 1)
+                    self.assertEqual(sorted(item.name for item in path.parent.iterdir()), ["device-id"])
+                user_prefix = namespace["user"].relative_to(namespace["outer"]).as_posix()
+                original_user = CASE["profile_tree"](namespace["baseline"], user_prefix)
+                current_user = CASE["profile_tree"](namespace["current"], user_prefix)
+                if refusal is None:
+                    self.assertEqual(original_user, current_user)
+                    self.assertFalse((Path(env["XDG_STATE_HOME"]) / "gh").exists())
+                else:
+                    self.assertNotEqual(original_user, current_user)
+                    self.assertTrue((Path(env["XDG_STATE_HOME"]) / "gh/device-id").is_file())
+                for other in ("a", "b"):
+                    if other != selected or effect == "old-routing":
+                        self.assertFalse((Path(namespace["spec"][other]["temporary"]) / "gh").exists())
 
     def test_actual_command_refuses_temp_replacement_and_sibling_or_user_effects(self):
         import sys
@@ -5519,6 +5607,65 @@ class ObserverBoundaryDiagnosticContracts(unittest.TestCase):
         return next(code for code in owner.__code__.co_consts
                     if type(code) is type(owner.__code__) and code.co_name == "command")
 
+    def command_fixture(self, root, script, *, spawn=False, entry_changes=None, argument_changes=None):
+        import sys
+        import time
+        from types import FunctionType
+        outer = root / "outer"; outer.mkdir()
+        projects = {scope: outer / ("public-" + scope) for scope in ("a", "b")}
+        for project in projects.values(): project.mkdir()
+        (projects["a"] / ("mcp" if spawn else "repair")).write_text(script)
+        evidence = root / "evidence"; evidence.mkdir(mode=0o700)
+        code_root = root / "runtime"; code_root.mkdir()
+        before, proofs, seen = {}, {}, []
+        values = dict(current=before, deadline=time.monotonic() + 120., env=dict(os.environ), evidence=evidence,
+                      projects=projects, pins={"uap": {"path": sys.executable}, "probe": {"path": "/build/probe"}},
+                      probes={}, spawn_preserved=lambda *args: None, windows_log_preserved=lambda *args: None,
+                      captured_events=lambda *args: [], proofs=proofs, snapshot=lambda: (before, proofs),
+                      outer=outer, code_root=code_root, code_authority=CASE["directory_identity"](code_root),
+                      evidence_authority=CASE["directory_identity"](evidence), install_id="a" * 12, nonce=self.nonce,
+                      configs={scope: set() for scope in projects}, spawn_states={scope: None for scope in projects},
+                      stdio_completed={scope: 0 for scope in projects}, born=set(), records=[],
+                      yaml=SimpleNamespace(safe_load=json.loads))
+        patches = dict(public_runtime_pins=lambda *args, **kwargs: None)
+        if spawn:
+            argument_changes = argument_changes or {}
+            values["install_id"] = argument_changes.get("install_id", values["install_id"])
+            proof = dict(target=outer / "payload-a", data=outer / "data-a", binding={"native_objects": []})
+            proofs.update(a=proof, b=None)
+            selected = projects["a"] / ".hermes/uap-session"; selected.mkdir(parents=True)
+            servers = {"hermes-public-a-http": {"url": "http://inert.invalid"}, "hermes-public-a-stdio": {}}
+            (selected / "config.yaml").write_text(json.dumps(dict(mcp_servers=servers)))
+            skill = "public-a/.hermes/skills/hermes-public-a"
+            before.update({skill: {}, skill + "/SKILL.md": {"sha256": "c" * 64},
+                           "payload-a/skills/hermes-public-a/SKILL.md": {"sha256": "c" * 64}})
+            values["probes"] = {scope: SimpleNamespace(url="http://inert.invalid", methods=lambda: []) for scope in projects}
+            def events(proof, image):
+                if proof is None: return []
+                seen.append(proof)
+                return [] if len(seen) == 1 else PublicSpawnLedgerContracts.events("win32")
+            values["captured_events"] = events
+            def spawn_capture(scope, image):
+                pid = json.loads((evidence / "public-stdio-a.status.json").read_bytes())["pid"]
+                native_pid = argument_changes.get("native_pid", pid)
+                entry = PublicSpawnLedgerContracts.entry("win32")
+                entry.update(pid=pid + 1, spawner_pid=native_pid)
+                changed = dict(entry_changes or {})
+                if type(changed.get("pid")) is int and changed["pid"] == 101: changed["pid"] = native_pid
+                if type(changed.get("spawner_pid")) is int and changed["spawner_pid"] == 102: changed["spawner_pid"] = pid + 2
+                entry.update(changed)
+                return {}, {CASE["PUBLIC_SPAWN_NAMES"][0]: json.dumps([entry]).encode()}
+            values["spawn_capture"] = spawn_capture
+            patches.update(public_continuity=lambda *args, **kwargs: None,
+                           public_spawn_launcher=lambda *args: PublicSpawnLedgerContracts.arguments())
+            if "native_pid" in argument_changes:
+                patches["public_spawn_status_pid"] = lambda *args: argument_changes["native_pid"]
+        owner = CASE["observe_public"]
+        code = self.command_code()
+        def cell(value): return (lambda: value).__closure__[0]
+        command = FunctionType(code, owner.__globals__, closure=tuple(cell(values.get(name)) for name in code.co_freevars))
+        return command, values, patches
+
     def emitted(self, error, phase="public"):
         import io
         import sys
@@ -5547,11 +5694,37 @@ class ObserverBoundaryDiagnosticContracts(unittest.TestCase):
                 return error
         self.fail("the original guard must refuse")
 
-    def real_bounded_error(self, root, code, *, expected=False, timeout=5):
+    def real_bounded_error(self, root, code, *, expected=False, timeout=5, label="public-repair-a", arguments=None, test=None):
+        import time
+        from contextlib import nullcontext
+        command, values, patches = self.command_fixture(root, code)
+        ticks = iter((100., 1000.))
+        clock = mock.patch.dict(CASE["bounded"].__globals__, time=SimpleNamespace(
+            monotonic=lambda: next(ticks), sleep=time.sleep)) if timeout < 1 else nullcontext()
+        with mock.patch.dict(command.__globals__, patches), clock:
+            try:
+                command(label, "a", ["repair", "hermes-public-a"] if arguments is None else arguments,
+                        native=False, inspect=False, expected_failure=expected, test=test)
+            except RuntimeError as error:
+                return error
+        self.fail("the original command's bounded guard must refuse")
+
+    def real_spawn_error(self, changed, arguments):
         import sys
-        return self.through_owned_command(lambda: CASE["bounded"](
-            [sys.executable, "-I", "-B", "-c", code], root, dict(os.environ), root / "PRIVATE-command",
-            timeout=timeout, expected_failure=expected), "public-repair-a")
+        with tempfile.TemporaryDirectory() as temporary:
+            command, values, patches = self.command_fixture(Path(temporary).resolve(), "print('PRIVATE NATIVE OUTPUT')\n",
+                spawn=True, entry_changes=changed, argument_changes=arguments)
+            # This exercises the original pure Windows guard, not native Windows qualification.
+            with mock.patch.object(sys, "platform", "win32"), mock.patch.dict(os.environ, HERMES_BIN=sys.executable), \
+                    mock.patch.dict(command.__globals__, patches):
+                try:
+                    command("public-stdio-a", "a", ["mcp", "test", "hermes-public-a-stdio"], native=True,
+                            inspect=False, expected_failure=False, test="stdio")
+                except RuntimeError as error:
+                    self.assertEqual(values["spawn_states"], {"a": None, "b": None})
+                    self.assertEqual(values["records"], [])
+                    return error
+        self.fail("the original spawn guard must refuse")
 
     @staticmethod
     def producer_locals(error, function):
@@ -5574,13 +5747,16 @@ class ObserverBoundaryDiagnosticContracts(unittest.TestCase):
                 original = str(error)
                 body, value = self.emitted(error)
                 self.assertEqual(str(error), original)
-                self.assertEqual(value["boundary"], {"kind": "bounded-command", "predicate": predicate})
+                if expected:
+                    self.assertNotIn("boundary", value)
+                else:
+                    self.assertEqual(value["boundary"], {"kind": "bounded-command", "predicate": predicate})
                 self.assertEqual(value["command"], "public-repair-a")
                 self.assertEqual(value["caller"]["function_line"], self.command_code().co_firstlineno)
-                status = json.loads((root / "PRIVATE-command.status.json").read_bytes())
+                status = json.loads((root / "evidence/public-repair-a.status.json").read_bytes())
                 self.assertIs(type(status["exit"]), int)
                 self.assertNotIn(b"PRIVATE", body); self.assertNotIn(b"returncode", body); self.assertNotIn(b"argv", body)
-                self.assertEqual(set(value["boundary"]), {"kind", "predicate"})
+                if not expected: self.assertEqual(set(value["boundary"]), {"kind", "predicate"})
                 self.assertNotIn(b'"pid":', body); self.assertNotIn(b'"exit":', body)
 
     def test_bounded_unknown_and_poisoned_locals_are_not_normalized(self):
@@ -5618,7 +5794,7 @@ class ObserverBoundaryDiagnosticContracts(unittest.TestCase):
                 self.assertEqual(body, baseline)
 
     def test_real_spawn_identity_guard_names_first_failure_and_leaves_later_guards_unknown(self):
-        fixtures = PublicSpawnLedgerContracts()
+        import sys
         cases = (("native-pid", {}, {"native_pid": True}), ("child-pid", {"pid": True}, {}),
                  ("spawner-pid", {"spawner_pid": 102}, {}), ("distinct-child", {"pid": 101}, {}),
                  ("purpose", {"purpose": "PRIVATE"}, {}), ("install-key", {}, {"install_id": "PRIVATE"}),
@@ -5628,10 +5804,10 @@ class ObserverBoundaryDiagnosticContracts(unittest.TestCase):
                  (None, {"create_time": 100}, {}), (None, {"argv": "PRIVATE"}, {}))
         for predicate, changed, args in cases:
             with self.subTest(predicate=predicate, fields=tuple(changed)):
-                entry = dict(fixtures.entry("win32"), **changed)
-                error = self.through_owned_command(lambda: fixtures.verify(entry, [], fixtures.events("win32"), "win32", **args))
+                error = self.real_spawn_error(changed, args)
                 original = str(error)
-                body, value = self.emitted(error)
+                with mock.patch.object(sys, "platform", "win32"):
+                    body, value = self.emitted(error)
                 self.assertEqual(str(error), original)
                 self.assertEqual(value["caller"]["function"], "public_spawn_entry")
                 self.assertEqual(value["command"], "public-stdio-a")
@@ -5643,14 +5819,13 @@ class ObserverBoundaryDiagnosticContracts(unittest.TestCase):
                     self.assertNotIn(private, body)
 
     def test_spawn_projection_refuses_poison_without_comparison_or_source_reads(self):
+        import sys
         class Poison:
             def __eq__(self, other): raise AssertionError("poison equality")
             def __ne__(self, other): raise AssertionError("poison inequality")
             def __str__(self): raise AssertionError("poison string")
             def __bool__(self): raise AssertionError("poison truth")
-        fixtures = PublicSpawnLedgerContracts()
-        entry = dict(fixtures.entry("win32"), spawner_pid=102)
-        error = self.through_owned_command(lambda: fixtures.verify(entry, [], fixtures.events("win32"), "win32"))
+        error = self.real_spawn_error({"spawner_pid": 102}, {})
         values = self.producer_locals(error, CASE["public_spawn_entry"])
         helper = CASE["observer_spawn_boundary"]
         for key in ("pid", "spawner_pid", "purpose", "install", "host", "profile", "hermes_home", "port", "isolated"):
@@ -5659,7 +5834,8 @@ class ObserverBoundaryDiagnosticContracts(unittest.TestCase):
         for key in ("native_pid", "install_id", "entry"):
             with self.subTest(key=key), self.assertRaises(RuntimeError): helper(dict(values, **{key: Poison()}))
         with self.assertRaises(RuntimeError): helper(dict(values, entry={"PRIVATE": 1}))
-        with mock.patch.dict(CASE["emit_observer_failure"].__globals__, observer_spawn_boundary=lambda _v: Poison()):
+        with mock.patch.object(sys, "platform", "win32"), \
+                mock.patch.dict(CASE["emit_observer_failure"].__globals__, observer_spawn_boundary=lambda _v: Poison()):
             body, value = self.emitted(error)
         self.assertNotIn("boundary", value); self.assertNotIn(b"PRIVATE", body)
 
@@ -5698,6 +5874,89 @@ class ObserverBoundaryDiagnosticContracts(unittest.TestCase):
         for value in invalid:
             with self.subTest(value=value), self.assertRaises(RuntimeError):
                 CASE["observer_failure_document"](self.encoded(value), self.nonce, self.source)
+
+    def test_original_deadline_roles_and_active_function_replacements_cannot_supply_detail(self):
+        import time
+        from types import FunctionType
+        namespace = CASE["emit_observer_failure"].__globals__
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            error = self.real_bounded_error(root, "raise SystemExit(7)")
+            with mock.patch.dict(namespace, observer_boundary_origin=mock.Mock(side_effect=RuntimeError("unavailable"))):
+                baseline, _ = self.emitted(error)
+            for name in ("bounded", "require", "observe_public", "public_spawn_entry"):
+                original = namespace[name]
+                clone = FunctionType(original.__code__, original.__globals__, argdefs=original.__defaults__)
+                with self.subTest(replaced=name), mock.patch.dict(namespace, **{name: clone}):
+                    body, value = self.emitted(error)
+                self.assertEqual(body, baseline); self.assertNotIn("boundary", value)
+            for clock in (0., float("inf")):
+                with self.subTest(noop_require_clock=clock), mock.patch.dict(namespace, require=lambda *_args: None), \
+                        mock.patch.object(time, "monotonic", return_value=clock):
+                    body, value = self.emitted(error)
+                self.assertEqual(body, baseline); self.assertNotIn("boundary", value)
+            for target, name in ((namespace["BASE"], "bounded"), (namespace["BASE"], "require"),
+                                 (namespace["bounded"].__globals__, "require")):
+                with self.subTest(helper_replaced=name), mock.patch.dict(target, **{name: lambda *_args: None}):
+                    body, value = self.emitted(error)
+                self.assertEqual(body, baseline); self.assertNotIn("boundary", value)
+            for clock in ((float("inf"),), (0., float("inf"))):
+                with self.subTest(clock=clock), mock.patch.object(time, "monotonic", side_effect=clock):
+                    body, value = self.emitted(error)
+                self.assertEqual(body, baseline); self.assertNotIn("boundary", value)
+            early = self.through_owned_command(lambda: CASE["bounded"](
+                [CASE["sys"].executable, "-I", "-c", "raise SystemExit(7)"], root, dict(os.environ), root / "public-repair-a"),
+                "public-repair-a")
+            _, value = self.emitted(early)
+            self.assertNotIn("boundary", value)
+        for options in (dict(label="public-repeat-a"), dict(arguments=["repair", "hermes-public-a", "extra"]), dict(test="http")):
+            with self.subTest(options=options), tempfile.TemporaryDirectory() as temporary:
+                error = self.real_bounded_error(Path(temporary).resolve(), "raise SystemExit(7)", **options)
+                _, value = self.emitted(error)
+                self.assertNotIn("boundary", value)
+        with mock.patch.object(CASE["sys"], "platform", "linux"):
+            error = self.real_spawn_error({"spawner_pid": 102}, {})
+            _, value = self.emitted(error)
+            self.assertNotIn("boundary", value)
+
+    def test_actual_parent_frontdoor_preserves_base_only_for_known_optional_failure(self):
+        import copy
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            error = self.real_bounded_error(root, "raise SystemExit(7)")
+            body, observer = self.emitted(error)
+            fixtures, helper = FailureReadoutContracts(), CASE["admission_failure_readout"]
+            proof = fixtures.native_proof(); proof["native_failure"]["observer"] = observer
+            baseline = copy.deepcopy(proof); baseline["native_failure"]["observer"].pop("boundary")
+            original = helper(fixtures.encoded(baseline), None)
+            self.assertIsNotNone(original)
+            for detail in (None, {}, {"kind": "bounded-command", "predicate": "unknown"},
+                           {"kind": "bounded-command", "predicate": "unexpected-zero"},
+                           {"kind": "bounded-command", "predicate": "nonzero-exit", "pid": 123}):
+                changed = copy.deepcopy(proof); changed["native_failure"]["observer"]["boundary"] = detail
+                with self.subTest(detail=detail):
+                    self.assertEqual(helper(fixtures.encoded(changed), None), original)
+            changed = copy.deepcopy(proof); changed["native_failure"]["observer"]["boundary"] = object()
+            self.assertEqual(CASE["native_failure_context"](changed["native_failure"]), baseline["native_failure"])
+            for field, value in (("nonce", "c" * 64), ("source_head", "c" * 40), ("unknown_root_field", "PRIVATE")):
+                changed = copy.deepcopy(proof); changed["native_failure"]["observer"][field] = value
+                with self.subTest(field=field): self.assertIsNone(helper(fixtures.encoded(changed), None))
+            serialize = json.dumps
+            def failed_optional(value, *args, **kwargs):
+                if type(value) is dict and "boundary" in value: raise ValueError("PRIVATE serialization")
+                return serialize(value, *args, **kwargs)
+            encoded = fixtures.encoded(proof)
+            with mock.patch.object(json, "dumps", side_effect=failed_optional):
+                self.assertEqual(helper(encoded, None), original)
+            bad = dict(observer, boundary={"kind": "bounded-command", "predicate": "unknown"})
+            with (root / "observer.stdout").open("x+b") as stream:
+                held = os.fstat(stream.fileno())
+                for value in (observer, bad):
+                    stream.seek(0); stream.truncate(); stream.write(self.encoded(value)); stream.flush()
+                    actual = CASE["read_observer_failure"](stream.fileno(), held, self.nonce, self.source, primary_settled=True)
+                    self.assertEqual(actual, observer if value is observer else baseline["native_failure"]["observer"])
+                stream.seek(0); stream.truncate(); stream.write(b"x" * 2049); stream.flush()
+                self.assertIsNone(CASE["read_observer_failure"](stream.fileno(), held, self.nonce, self.source, primary_settled=True))
 
     def test_closed_parent_readout_preserves_settlement_baseline_and_optional_budget(self):
         import copy

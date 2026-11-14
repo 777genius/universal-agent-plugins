@@ -261,7 +261,7 @@ class ContractTests(unittest.TestCase):
                         (self.active / "probe").write_bytes(b"unreviewed effect")
                     if fault == "ordinary-command-witness":
                         event.write_bytes(b"unreviewed effect")
-                    if fault.startswith("ordinary-command"):
+                    if fault is not None and fault.startswith("ordinary-command"):
                         raise ValueError("command failed: repair-no-enable-consent")
                     return copy.deepcopy(response)
                 self.assertEqual((label, extra), ("repair-enable-dry-run", ("--confirm-plugin-enable", "--dry-run", "--yes")))

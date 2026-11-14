@@ -102,10 +102,12 @@ func TestResumeUncheckedAuthenticationNoChangeRequiresVerifiedObservation(t *tes
 }
 
 type antigravityObservationRunner struct {
-	active  string
-	version string
-	failed  bool
-	calls   int
+	active   string
+	version  string
+	disabled bool
+	absent   bool
+	failed   bool
+	calls    int
 }
 
 func (runner *antigravityObservationRunner) Run(_ context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
@@ -114,9 +116,12 @@ func (runner *antigravityObservationRunner) Run(_ context.Context, command legac
 	if len(command.Argv) == 4 {
 		var err error
 		body, err = json.Marshal([]any{map[string]any{"name": filepath.Base(runner.active), "path": runner.active,
-			"version": runner.version, "enabled": true, "skills": []string{}, "mcpServers": []string{}}})
+			"version": runner.version, "enabled": !runner.disabled, "skills": []string{}, "mcpServers": []string{}}})
 		if err != nil {
 			return legacyports.CommandResult{}, err
+		}
+		if runner.absent {
+			body = []byte("[]")
 		}
 	}
 	return legacyports.CommandResult{CleanupComplete: !runner.failed, Stdout: body}, nil
@@ -295,7 +300,7 @@ func TestAntigravityPreparedIntactRepairObservesOnlyConfirmedQualifiedUser(t *te
 			case "foreign-provenance":
 				fixture.input.Client.NativeConfigRoot = filepath.Join(t.TempDir(), ".gemini", "config")
 			case "missing-config":
-				wantError = true
+				wantCalls = 2
 				if err := os.Remove(filepath.Join(fixture.input.Client.ConfigRoot, "config.json")); err != nil {
 					t.Fatal(err)
 				}
@@ -311,7 +316,7 @@ func TestAntigravityPreparedIntactRepairObservesOnlyConfirmedQualifiedUser(t *te
 				result.Activation.Activation == domain.ActivationActive || result.Activation.ActivationAttested || result.Activation.AuthenticationAttested {
 				t.Fatal("intact repair crossed consent, original-profile or cleanup boundary", result, err, fixture.runner.calls)
 			}
-			if condition == "confirmed" && (result.Activation.Activation != domain.ActivationPrepared ||
+			if (condition == "confirmed" || condition == "missing-config") && (result.Activation.Activation != domain.ActivationPrepared ||
 				!reflect.DeepEqual(result.Activation.UserActions, []string{"The selected User plugin is enabled in CLI inventory; open or reload Antigravity to verify IDE loading"})) {
 				t.Fatal("confirmed intact repair skipped the real scoped verifier", result)
 			}
@@ -320,5 +325,63 @@ func TestAntigravityPreparedIntactRepairObservesOnlyConfirmedQualifiedUser(t *te
 				t.Fatal("read-only intact repair changed recorded state or receipts", err)
 			}
 		})
+	}
+}
+
+func TestAntigravityMissingConfigResumeAndRepairPreserveOriginalAuthority(t *testing.T) {
+	for _, operation := range []string{"resume", "repair"} {
+		for _, native := range []string{"enabled", "disabled", "absent"} {
+			t.Run(operation+"/"+native, func(t *testing.T) {
+				fixture := antigravityReadFixture(t)
+				fixture.input.Scope = domain.ScopeUser
+				fixture.input.OperationID = "antigravity-missing-config-" + operation
+				fixture.runner.disabled, fixture.runner.absent = native == "disabled", native == "absent"
+				config := filepath.Join(fixture.input.Client.ConfigRoot, "config.json")
+				if err := os.Remove(config); err != nil {
+					t.Fatal(err)
+				}
+				before, err := fixture.store.Load()
+				if err != nil {
+					t.Fatal(err)
+				}
+				parent, err := os.Lstat(fixture.input.Client.ConfigRoot)
+				if err != nil {
+					t.Fatal(err)
+				}
+				manifest := filepath.Join(fixture.installed.Plan.ActivePath, "plugin.json")
+				packageBefore, err := os.ReadFile(manifest)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var result AddResult
+				if operation == "repair" {
+					result, err = fixture.service.Repair(t.Context(), fixture.input)
+				} else {
+					result, err = fixture.service.Add(t.Context(), fixture.input)
+				}
+				guidance := map[string]string{
+					"enabled":  "The selected User plugin is enabled in CLI inventory; open or reload Antigravity to verify IDE loading",
+					"disabled": "The selected User plugin remains disabled; decide whether to enable it in Antigravity",
+					"absent":   "The exact UAP-owned plugin is absent from native User inventory; inspect it in Antigravity",
+				}[native]
+				if err != nil || fixture.runner.calls != 2 || result.Mutated ||
+					result.Activation.Activation != domain.ActivationPrepared || result.Activation.Verification != domain.VerificationInstalled ||
+					result.Activation.ActivationAttested || result.Activation.AuthenticationAttested ||
+					!reflect.DeepEqual(result.Activation.UserActions, []string{guidance}) {
+					t.Fatal("real provider lost native missing-config evidence or escalated qualification", result, err, fixture.runner.calls)
+				}
+				after, loadErr := fixture.store.Load()
+				packageAfter, readErr := os.ReadFile(manifest)
+				current, statErr := os.Lstat(fixture.input.Client.ConfigRoot)
+				if loadErr != nil || readErr != nil || statErr != nil || !reflect.DeepEqual(before, after) ||
+					string(packageBefore) != string(packageAfter) || !os.SameFile(parent, current) ||
+					parent.Mode() != current.Mode() || parent.Size() != current.Size() || !parent.ModTime().Equal(current.ModTime()) {
+					t.Fatal("read-only observation changed owner, binding, source, DATA receipts or original parent", loadErr, readErr, statErr)
+				}
+				if _, err := os.Lstat(config); !errors.Is(err, os.ErrNotExist) {
+					t.Fatal("provider observation created or adopted a missing config", err)
+				}
+			})
+		}
 	}
 }

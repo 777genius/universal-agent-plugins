@@ -1046,7 +1046,8 @@ def admission_contracts():
                         return result
                     try:
                         with patch(__name__ + ".bridge_exchange", side_effect=exchange), patch(__name__ + ".public_runtime_pin", side_effect=pin), patch.object(time, "monotonic", return_value=100.0), patch.object(time, "time_ns", return_value=1_000_000_000_000):
-                            if fault in ("pass", "disabled", "catalog", "fields"): public_missing_config_discovery(runtime, root, env, authority, proof)
+                            if fault in ("pass", "disabled", "catalog", "fields"):
+                                self.assertIs(public_missing_config_discovery(runtime, root, env, authority, proof), fault != "disabled")
                             elif fault in native_refusals:
                                 with self.assertRaisesRegex(AssertionError, native_refusals[fault]):
                                     public_missing_config_discovery(runtime, root, env, authority, proof)
@@ -1686,6 +1687,13 @@ def admission_contracts():
                    "activation": {"activation": "prepared", "verification": "installation_verified", "user_actions": [action]}}
             packet = {"schema_version": 1, "result": "success", "data": {"result": row}}
             self.assertEqual(public_user_result(json.dumps(packet), observed=True), row)
+            disabled = json.loads(json.dumps(packet))
+            disabled["data"]["result"]["activation"]["user_actions"] = [
+                "The selected User plugin remains disabled; decide whether to enable it in Antigravity"]
+            self.assertEqual(public_user_result(json.dumps(disabled), observed=True, enabled=False), disabled["data"]["result"])
+            for native_enabled, response in ((False, packet), (True, disabled)):
+                with self.subTest(native_enabled=native_enabled), self.assertRaises(AssertionError):
+                    public_user_result(json.dumps(response), observed=True, enabled=native_enabled)
             for kind in ("active", "project", "missing-observation", "attested", "private-objects", "private-effect", "wrong-target"):
                 changed = json.loads(json.dumps(packet))
                 outcome = changed["data"]["result"]["activation"]
@@ -2471,8 +2479,8 @@ def admission_contracts():
                         return "changed" if after[0] and index == failing else "original"
                     @contextlib.contextmanager
                     def fixture(*_): yield root, env, None
-                    def command(*_, **kwargs):
-                        if kwargs.get("refused"): after[0] = True
+                    def command(*args, **_):
+                        if args[-1] == "uap-repeat": after[0] = True
                         return b"{}"
                     replacements = dict(public_fixture=fixture, public_uap=command, public_user_result=lambda *_: None,
                         public_binding_proof=lambda *_: {"binding": {"target_locator": str(selected)}},
@@ -2486,6 +2494,53 @@ def admission_contracts():
                     self.assertEqual(json.loads(str(refused.exception).split("; ", 1)[1])["group"], label)
                     self.assertLessEqual(len(str(refused.exception).encode("ascii")), 1024)
                     self.assertNotIn(str(parent), str(refused.exception))
+
+        def test_missing_config_public_repeat_preserves_home_before_native_measurement(self):
+            class NextWorld(Exception): pass
+            for changed, native_enabled in ((False, True), (False, False), (True, True)):
+                with self.subTest(changed=changed, enabled=native_enabled), tempfile.TemporaryDirectory() as temporary:
+                    parent = Path(temporary).resolve(); root = parent / "fixture"; root.mkdir()
+                    source = parent / "source"; source.mkdir()
+                    home = root / "home"
+                    selected = home / ".gemini/config/plugins/owned"; selected.mkdir(parents=True)
+                    env = {"HOME": str(home), "AGENTPLUGINS_HOME": str(root / "uap-state")}
+                    proof = {"binding": {"target_locator": str(selected)}}
+                    action = ("The selected User plugin is enabled in CLI inventory; open or reload Antigravity to verify IDE loading"
+                              if native_enabled else "The selected User plugin remains disabled; decide whether to enable it in Antigravity")
+                    packet = {"schema_version": 1, "result": "success", "data": {"result": {
+                        "plan": {"client_id": "antigravity", "scope": "user"},
+                        "activation": {"activation": "prepared", "verification": "installation_verified", "user_actions": [action]}}}}
+                    attempts, calls = [0], []
+                    @contextlib.contextmanager
+                    def fixture(*_):
+                        attempts[0] += 1
+                        if attempts[0] > 1: raise NextWorld()
+                        yield root, env, None
+                    def command(_runtime, selected_root, _authority, operation, *, refused=False):
+                        self.assertEqual(selected_root, root); self.assertFalse(refused)
+                        calls.append(operation)
+                        if operation == "uap-repeat" and changed:
+                            (home / "unmeasured.log").write_bytes(b"must not become an original HOME member\n")
+                        return json.dumps(packet).encode()
+                    sidecar = Mock(return_value=native_enabled)
+                    replacements = dict(public_fixture=fixture, public_uap=command,
+                        public_binding_proof=lambda *_: proof, public_state_snapshot=lambda *_: {},
+                        public_missing_config_discovery=sidecar)
+                    runtime = (None,) * 5
+                    with patch.dict(globals(), replacements):
+                        if changed:
+                            with self.assertRaisesRegex(AssertionError, "^Public missing-config repeat changed original User profile$"):
+                                public_user_refusals(runtime, source, parent, parent)
+                        else:
+                            with self.assertRaises(NextWorld):
+                                public_user_refusals(runtime, source, parent, parent)
+                    self.assertEqual(calls, ["uap-add", "uap-repeat"])
+                    if changed:
+                        sidecar.assert_not_called()
+                        self.assertEqual((home / "unmeasured.log").read_bytes(), b"must not become an original HOME member\n")
+                    else:
+                        sidecar.assert_called_once_with(runtime, root, env, None, proof)
+                        self.assertFalse((home / "unmeasured.log").exists())
 
         def test_refused_repeat_diagnostic_keeps_original_scratch_rule_and_actual_mismatch(self):
             import copy
@@ -3384,6 +3439,7 @@ def missing_config_inventory(body, proof):
             or row.get("version") != proof["installed"]["package"]["version"] or type(row.get("enabled")) is not bool
             or row.get("skills") != ["native-smoke"] or sorted(row.get("mcpServers", [])) != ["native-http", "native-stdio"]):
         raise AssertionError("Missing-config selected inventory identity differs")
+    return row["enabled"]
 
 
 def missing_config_exchange(runtime, root, authority, ledger, proof, pair_end, native_end, role):
@@ -3401,19 +3457,21 @@ def missing_config_exchange(runtime, root, authority, ledger, proof, pair_end, n
     capture.pending = True
     output = bridge_exchange(runtime[2], frame, deadline=native_end)
     row, streams = capture.admit_missing_config(frame, output)
+    enabled = None
     try:
         row["post_ledger"] = missing_config_original(runtime, root, authority, ledger, pair_end)
         row["effects_verified"] = True
         if row["exit"] != 0 or streams["stderr"]: raise AssertionError("Missing-config native result refused")
         if role == "missing-config-version":
             if streams["stdout"] != b"1.5.3\n": raise AssertionError("Missing-config pinned version differs")
-        else: missing_config_inventory(streams["stdout"], proof)
+        else: enabled = missing_config_inventory(streams["stdout"], proof)
         profile_deadline(pair_end)
         row["semantic_verified"] = True
     except BaseException:
         row["refusal"] = dict(reason="validation-refused", field="original-authority-or-result", member_sha256=None)
         raise
     finally: capture.seal_missing_config()
+    return enabled
 
 
 def public_missing_config_discovery(runtime, root, env, authority, proof):
@@ -3447,10 +3505,14 @@ def public_missing_config_discovery(runtime, root, env, authority, proof):
                         qualification={key: False for key in ("product_admitted", "enabled_recovery_qualified",
                             "native_project_qualified", "ide_activation", "native_mcp_call", "vendor_authentication", "real_model_inference")})
         capture.begin_missing_config(document)
+        enabled = None
         for role in MISSING_CONFIG_ACTIONS:
-            missing_config_exchange(runtime, root, authority, ledger, proof, pair_end, native_end, role)
+            enabled = missing_config_exchange(runtime, root, authority, ledger, proof, pair_end, native_end, role)
         profile_deadline(pair_end)
     finally: ledger.close()
+    if type(enabled) is not bool:
+        raise AssertionError("Missing-config original native observation is incomplete")
+    return enabled
 
 
 
@@ -3485,7 +3547,8 @@ def public_user_refusals(runtime, source, executable_dir, parent):
             original_bytes = public_owned_bytes(original) if condition == "config-alias" else None
             if condition == "config-alias" and stable_file(original.lstat()) != original_identity:
                 raise AssertionError("Authored alias target changed before command")
-            public_uap(runtime, root, authority, action, refused=True)
+            home_before = public_snapshot(Path(env["HOME"])) if condition == "missing-config" else None
+            repeated = public_uap(runtime, root, authority, action, refused=condition != "missing-config")
             public_refusal_preservation((
                 (state_before, lambda: public_state_snapshot(Path(env["AGENTPLUGINS_HOME"]), Path(env["AGENTPLUGINS_HOME"]), runtime[4])),
                 (bundle_before, lambda: public_snapshot(selected.parent)),
@@ -3497,8 +3560,12 @@ def public_user_refusals(runtime, source, executable_dir, parent):
             if condition == "config-alias" and (os.readlink(config) != alias or stable_file(original.lstat()) != original_identity
                                                  or public_owned_bytes(original) != original_bytes or stable_file(original.lstat()) != original_identity):
                 raise AssertionError("Refused alias changed the task-owned target")
-            if condition == "missing-config": public_missing_config_discovery(runtime, root, env, authority, proof)
-    print('{"public_user_refusals":5,"missing_backend_refused":true,"unknown_effects_adopted":false,"model_invoked":false}', flush=True)
+            if condition == "missing-config":
+                if public_snapshot(Path(env["HOME"])) != home_before:
+                    raise AssertionError("Public missing-config repeat changed original User profile")
+                enabled = public_missing_config_discovery(runtime, root, env, authority, proof)
+                public_user_result(repeated, observed=True, enabled=enabled)
+    print('{"public_user_refusals":4,"public_user_missing_config_observed":true,"missing_backend_refused":true,"unknown_effects_adopted":false,"model_invoked":false}', flush=True)
 
 
 def native_main(capture=None):

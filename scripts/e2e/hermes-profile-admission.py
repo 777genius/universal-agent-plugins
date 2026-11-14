@@ -1873,7 +1873,7 @@ def observe_profiles(probes):
                 temporary = Path(selected["temporary"])
                 require(temporary == Path(selected["root"]) / "tmp"
                         and directory_identity(temporary) == selected["temporary_identity"], "source native original temporary root differs")
-                env.update({key: str(temporary) for key in ("TMPDIR", "TEMP", "TMP")})
+                env.update({key: str(temporary) for key in ("TMPDIR", "TEMP", "TMP", "XDG_STATE_HOME")})
             from hermes_cli._launchers import runtime_command
             argv = source_native_runtime_command(runtime_command, inputs, source_records, outer_identity, native_prefix,
                 args=tuple(args or ()), guard=guard, deadline=float(os.environ["HERMES_PROFILE_DEADLINE"]))
@@ -1901,7 +1901,7 @@ def observe_profiles(probes):
                         "delta": delta, "error": type(failure).__name__ if failure else None})
         if source_capture:
             records[-1].update(driver="fixed-resolution-probe" if guard else "official-runtime-command",
-                               bytecode_disabled=True, temporary_root=env["TMPDIR"])
+                               bytecode_disabled=True, temporary_root=env["TMPDIR"], state_root=env["XDG_STATE_HOME"])
         current = after
         if label == "remove-mcp-" + scope and failure is None:
             removed.add(scope)
@@ -3528,6 +3528,69 @@ OBSERVER_BOUNDARIES = {
     "spawn-identity": ("native-pid", "child-pid", "spawner-pid", "distinct-child", "purpose",
                        "install-key", "install-match", "empty-defaults", "null-port", "non-isolated"),
 }
+OBSERVER_BOUNDARY_ORIGINS = tuple((name, function, function.__code__, function.__globals__) for name, function in (
+    ("observe_public", observe_public), ("public_spawn_entry", public_spawn_entry), ("bounded", bounded), ("require", require)))
+OBSERVER_PUBLIC_COMMAND = next(code for code in observe_public.__code__.co_consts
+                               if type(code) is type(observe_public.__code__) and code.co_name == "command")
+OBSERVER_BOUNDARY_POPEN, OBSERVER_BOUNDARY_EVENT = subprocess.Popen, bounded.__globals__["threading"].Event
+OBSERVER_BOUNDARY_STDIO = {"public-stdio-a": "a", "public-stdio-b": "b",
+                         "public-stdio-restart-a": "a", "public-stdio-repaired-a": "a"}
+
+
+def observer_boundary_origin(error, phase):
+    """Only the unchanged command's final producer/require chain grants detail."""
+    for name, original, code, namespace in OBSERVER_BOUNDARY_ORIGINS:
+        if not (globals().get(name) is original and original.__code__ is code and original.__globals__ is namespace):
+            raise RuntimeError("public boundary original function differs")
+    if not (BASE["bounded"] is bounded and BASE["require"] is require
+            and bounded.__globals__.get("require") is require):
+        raise RuntimeError("public boundary helper origin differs")
+    require(type(error) is RuntimeError and phase == "public", "public boundary role differs")
+    frames, trace = [], error.__traceback__
+    for _ in range(256):
+        if trace is None:
+            break
+        frames.append(trace); trace = trace.tb_next
+    require(trace is None and len(frames) >= 3, "public boundary traceback bound")
+    command, producer, guard = frames[-3:]
+    require(command.tb_frame.f_code is OBSERVER_PUBLIC_COMMAND and command.tb_frame.f_globals is globals()
+            and guard.tb_frame.f_code is require.__code__ and guard.tb_frame.f_globals is require.__globals__
+            and error.args == (guard.tb_frame.f_locals.get("message"),), "public boundary original call chain differs")
+    state, values = command.tb_frame.f_locals, producer.tb_frame.f_locals
+    deadline = state.get("deadline")
+    require(type(deadline) is float and math.isfinite(deadline) and time.monotonic() < deadline,
+            "public boundary original deadline")
+    require(state.get("inspect") is False and state.get("expected_failure") is False, "public boundary command role differs")
+    if producer.tb_frame.f_code is bounded.__code__:
+        # These relative lines pin the two unchanged command callsites, not
+        # another callback/require somewhere inside the same outer function.
+        require(producer.tb_frame.f_globals is bounded.__globals__
+                and command.tb_lineno == OBSERVER_PUBLIC_COMMAND.co_firstlineno + 23
+                and state.get("label") == "public-repair-a" and state.get("scope") == "a"
+                and state.get("args") == ["repair", "hermes-public-a"] and state.get("native") is False
+                and state.get("test") is None and values.get("expected_failure") is False
+                and values.get("command") is state.get("argv") and values.get("cwd") is state.get("project")
+                and values.get("env") is state.get("env") and guard.tb_frame.f_locals.get("value") is False
+                and guard.tb_frame.f_locals["message"] == "public-repair-a: native command failed or exceeded its capture bound"
+                and subprocess.Popen is OBSERVER_BOUNDARY_POPEN
+                and bounded.__globals__["threading"].Event is OBSERVER_BOUNDARY_EVENT, "public bounded callsite differs")
+        return observer_bounded_boundary(dict(values)), deadline
+    scope = state.get("scope")
+    require(producer.tb_frame.f_code is public_spawn_entry.__code__ and producer.tb_frame.f_globals is globals()
+            and producer.tb_lineno == public_spawn_entry.__code__.co_firstlineno + 8
+            and command.tb_lineno == OBSERVER_PUBLIC_COMMAND.co_firstlineno + 95
+            and sys.platform == values.get("system") == "win32"
+            and OBSERVER_BOUNDARY_STDIO.get(state.get("label")) == scope and scope in ("a", "b")
+            and state.get("native") is True and state.get("test") == "stdio"
+            and state.get("args") == ["mcp", "test", "hermes-public-" + scope + "-stdio"]
+            and guard.tb_frame.f_locals["message"] == "public spawn ledger identity/defaults differ",
+            "public spawn callsite differs")
+    require(values["body"] is state["bodies"][PUBLIC_SPAWN_NAMES[0]]
+            and values["before"] is state["events_before"][scope] and values["after"] is state["events_after"][scope]
+            and values["native_pid"] is state["native_pid"] and values["install_id"] is state["install_id"]
+            and values["nonce"] is state["nonce"] and values["launcher_argv"] is state["launcher"]
+            and values["probe"] is state["pins"]["probe"]["path"], "public spawn original arguments differ")
+    return observer_spawn_boundary(dict(values)), deadline
 
 
 def observer_boundary_detail(value):
@@ -3622,25 +3685,38 @@ def observer_failure_document(body, nonce, source):
                 and value["command"].endswith("-" + detail["scope"]), "public bootstrap observer binding")
     if "boundary" in value:
         detail = observer_boundary_detail(value["boundary"])
-        public_command = next(item for item in observe_public.__code__.co_consts
-                              if type(item) is type(observe_public.__code__) and item.co_name == "command")
         require("public_bootstrap" not in value and value["phase"] == "public"
                 and value["exception_kind"] == "RuntimeError" and caller is not None
                 and type(value["command"]) is str and value["command"].startswith("public-"),
                 "public boundary observer binding")
-        require((detail["kind"] == "bounded-command" and code is public_command)
+        require((detail["kind"] == "bounded-command" and code is OBSERVER_PUBLIC_COMMAND
+                 and caller["line"] == code.co_firstlineno + 23 and value["command"] == "public-repair-a"
+                 and detail["predicate"] != "unexpected-zero")
                 or (detail["kind"] == "spawn-identity" and code is public_spawn_entry.__code__
-                    and value["command"] in {"public-stdio-a", "public-stdio-b", "public-stdio-restart-a", "public-stdio-repaired-a"}),
+                    and caller["line"] == code.co_firstlineno + 8 and sys.platform == "win32"
+                    and value["command"] in OBSERVER_BOUNDARY_STDIO),
                 "public boundary caller differs")
     require(body == json.dumps(value, sort_keys=True, separators=(",", ":")).encode("ascii") + b"\n", "observer diagnostic is not one canonical record")
     return value
+
+
+def observer_failure_projection(value, nonce, source):
+    """Validate the original refusal first; optional detail cannot erase it."""
+    original = {key: item for key, item in value.items() if key != "boundary"} if type(value) is dict else value
+    body = json.dumps(original, sort_keys=True, separators=(",", ":")).encode("ascii") + b"\n"
+    observer_failure_document(body, nonce, source)
+    try:
+        body = json.dumps(value, sort_keys=True, separators=(",", ":")).encode("ascii") + b"\n"
+        observer_failure_document(body, nonce, source)
+        return value
+    except BaseException:
+        return original
 
 
 def emit_observer_failure(error, phase):
     try:
         nonce, source = os.environ["HERMES_CALL_NONCE"], os.environ["HERMES_PROFILE_SOURCE_HEAD"]
         codes, caller, command, trace = observer_source_codes(), None, None, error.__traceback__
-        boundary, boundary_frames = None, 0
         commands = {code for owner in (observe_profiles, observe_public) for code in owner.__code__.co_consts
                     if type(code) is type(owner.__code__) and code.co_name == "command"}
         for _ in range(256):
@@ -3652,21 +3728,9 @@ def emit_observer_failure(error, phase):
                 if code in commands:
                     label = trace.tb_frame.f_locals.get("label")
                     command = label if type(label) is str and label in COMMANDS else None
-            if type(error) is RuntimeError and trace.tb_next is not None and trace.tb_next.tb_next is None:
-                inner = trace.tb_next.tb_frame
-                if inner.f_code is require.__code__ and inner.f_globals is require.__globals__:
-                    try:
-                        if code is bounded.__code__ and trace.tb_frame.f_globals is bounded.__globals__:
-                            boundary_frames += 1
-                            boundary = observer_bounded_boundary(dict(trace.tb_frame.f_locals))
-                        elif code is public_spawn_entry.__code__ and trace.tb_frame.f_globals is globals():
-                            boundary_frames += 1
-                            boundary = observer_spawn_boundary(dict(trace.tb_frame.f_locals))
-                    except BaseException:
-                        boundary = None
             trace = trace.tb_next
         if trace is not None:
-            caller, command, boundary = None, None, None
+            caller, command = None, None
         value = dict(schema_version=1, measurement_only=True, admission_qualified=False, nonce=nonce, source_head=source,
                      phase=phase, reason="uncaught-observer-exception",
                      exception_kind=type(error).__name__ if type(error) in OBSERVER_ERRORS else "other", command=command, caller=caller)
@@ -3684,11 +3748,13 @@ def emit_observer_failure(error, phase):
             value.pop("public_bootstrap")
             body = json.dumps(value, sort_keys=True, separators=(",", ":")).encode("ascii") + b"\n"
             observer_failure_document(body, nonce, source)
-        if boundary is not None and boundary_frames == 1 and "public_bootstrap" not in value:
+        if "public_bootstrap" not in value:
             try:
+                boundary, deadline = observer_boundary_origin(error, phase)
                 extended = dict(value, boundary=observer_boundary_detail(boundary))
                 candidate = json.dumps(extended, sort_keys=True, separators=(",", ":")).encode("ascii") + b"\n"
                 observer_failure_document(candidate, nonce, source)
+                require(time.monotonic() < deadline, "public boundary projection deadline")
                 body = candidate
             except BaseException:
                 pass
@@ -3710,7 +3776,10 @@ def read_observer_failure(descriptor, original, nonce, source, *, primary_settle
         body = os.read(descriptor, 2049)
         require(stable_file(os.fstat(descriptor)) == stable_file(before) and len(body) == before.st_size,
                 "retained observer diagnostic changed while reading")
-        return observer_failure_document(body, nonce, source)
+        value = census_document(body)
+        require(body == json.dumps(value, sort_keys=True, separators=(",", ":")).encode("ascii") + b"\n",
+                "retained observer diagnostic is not canonical")
+        return observer_failure_projection(value, nonce, source)
     except (OSError, TypeError, ValueError, RuntimeError, RecursionError):
         return None  # No reopen, raw fallback, or authority from incomplete diagnostics.
 
@@ -3723,7 +3792,9 @@ def native_failure_context(value):
             and (value["observer_exit"] is None or type(value["observer_exit"]) is int and -(2**32) <= value["observer_exit"] < 2**32), "native failure context identity")
     if value["observer"] is not None:
         require(value["primary_family_settled"] is True, "unsettled observer diagnostic")
-        observer_failure_document(json.dumps(value["observer"], sort_keys=True, separators=(",", ":")).encode("ascii") + b"\n", value["nonce"], value["source_head"])
+        observer = observer_failure_projection(value["observer"], value["nonce"], value["source_head"])
+        if observer is not value["observer"]:
+            value = dict(value, observer=observer)
     return value
 
 

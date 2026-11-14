@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -58,6 +59,7 @@ type inventoryFile struct {
 	held      os.FileInfo
 	digest    string
 	limit     int64
+	absent    bool
 }
 
 func sameInventoryFile(left, right os.FileInfo) bool {
@@ -96,47 +98,90 @@ func inventoryDigest(ctx context.Context, file io.ReadSeeker, limit int64) (stri
 	}
 }
 
-func openInventoryFile(ctx context.Context, path string, limit int64) (record *inventoryFile, resultErr error) {
-	parent, name := filepath.Dir(path), filepath.Base(path)
-	canonical, err := filepath.EvalSymlinks(parent)
-	if err != nil || canonical != parent {
-		return nil, errInventoryUnavailable
+func openInventoryParent(ctx context.Context, parent string, original os.FileInfo) (*os.Root, os.FileInfo, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
 	}
-	root, err := os.OpenRoot(parent)
+	canonical, err := filepath.EvalSymlinks(parent)
+	if err != nil || canonical != parent || !original.IsDir() {
+		return nil, nil, errInventoryUnavailable
+	}
+	// A terminal directory component refuses a substituted FIFO before open can block.
+	root, err := os.OpenRoot(fmt.Sprintf("%s%c.", parent, os.PathSeparator))
+	if err != nil {
+		return nil, nil, err
+	}
+	held, err := root.Stat(".")
+	if err != nil || !sameInventoryFile(original, held) {
+		return nil, nil, errors.Join(errInventoryUnavailable, root.Close())
+	}
+	return root, held, nil
+}
+
+func openInventoryFile(ctx context.Context, path string, limit int64, allowMissing bool) (record *inventoryFile, resultErr error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	parent, name := filepath.Dir(path), filepath.Base(path)
+	named, err := os.Lstat(parent)
 	if err != nil {
 		return nil, err
 	}
-	record = &inventoryFile{root: root, parent: parent, name: name, limit: limit}
+	root, held, err := openInventoryParent(ctx, parent, named)
+	if err != nil {
+		return nil, err
+	}
+	record = &inventoryFile{root: root, parent: parent, name: name, rootNamed: named, rootHeld: held, limit: limit}
 	defer func() {
 		if resultErr != nil {
-			resultErr = errors.Join(resultErr, record.close())
+			if closeErr := record.close(); closeErr != nil {
+				if errors.Is(resultErr, errInventoryConfigAbsent) {
+					resultErr = errInventoryUnavailable
+				}
+				resultErr = errors.Join(resultErr, closeErr)
+			}
 			record = nil
 		}
 	}()
-	if record.rootNamed, err = os.Lstat(parent); err != nil {
-		return record, err
-	}
-	if record.rootHeld, err = root.Stat("."); err != nil || !record.rootNamed.IsDir() || !record.rootHeld.IsDir() ||
-		!os.SameFile(record.rootNamed, record.rootHeld) {
-		return record, errInventoryUnavailable
-	}
-	if record.named, err = root.Lstat(name); err != nil {
-		return record, err
-	}
-	if !record.named.Mode().IsRegular() || record.named.Size() < 0 || record.named.Size() > limit {
-		return record, errInventoryUnavailable
-	}
-	if record.file, err = atomicfile.OpenRootReadFile(root, name); err != nil {
-		return record, err
-	}
-	if record.held, err = record.file.Stat(); err != nil || !os.SameFile(record.named, record.held) {
-		return record, errInventoryUnavailable
-	}
-	if record.digest, err = inventoryDigest(ctx, record.file, limit); err != nil {
-		return record, err
-	}
-	err = record.verify(ctx)
+	err = record.open(ctx, allowMissing)
 	return record, err
+}
+
+func (record *inventoryFile) open(ctx context.Context, allowMissing bool) error {
+	if err := record.parentIdentity(); err != nil {
+		return err
+	}
+	var err error
+	record.named, err = record.root.Lstat(record.name)
+	if errors.Is(err, os.ErrNotExist) {
+		if err = errors.Join(record.parentIdentity(), ctx.Err()); err != nil {
+			return err
+		}
+		if !allowMissing {
+			return errInventoryConfigAbsent
+		}
+		record.absent = true
+		return record.verify(ctx)
+	}
+	if err != nil {
+		return err
+	}
+	if !record.named.Mode().IsRegular() || record.named.Size() < 0 || record.named.Size() > record.limit {
+		return errInventoryUnavailable
+	}
+	if record.file, err = atomicfile.OpenRootReadFile(record.root, record.name); err != nil {
+		return err
+	}
+	if record.held, err = record.file.Stat(); err != nil || !sameInventoryFile(record.named, record.held) {
+		return errInventoryUnavailable
+	}
+	if err = record.identity(); err != nil {
+		return err
+	}
+	if record.digest, err = inventoryDigest(ctx, record.file, record.limit); err != nil {
+		return err
+	}
+	return record.verify(ctx)
 }
 
 func (record *inventoryFile) close() error {
@@ -150,7 +195,7 @@ func (record *inventoryFile) close() error {
 	return err
 }
 
-func (record *inventoryFile) identity() error {
+func (record *inventoryFile) parentIdentity() error {
 	canonical, err := filepath.EvalSymlinks(record.parent)
 	if err != nil || canonical != record.parent {
 		return errInventoryUnavailable
@@ -163,7 +208,20 @@ func (record *inventoryFile) identity() error {
 	if err != nil || !sameInventoryFile(record.rootNamed, namedRoot) || !sameInventoryFile(record.rootHeld, heldRoot) {
 		return errInventoryUnavailable
 	}
+	return nil
+}
+
+func (record *inventoryFile) identity() error {
+	if err := record.parentIdentity(); err != nil {
+		return err
+	}
 	named, err := record.root.Lstat(record.name)
+	if record.absent {
+		if !errors.Is(err, os.ErrNotExist) {
+			return errInventoryUnavailable
+		}
+		return record.parentIdentity()
+	}
 	if err != nil {
 		return err
 	}
@@ -171,21 +229,30 @@ func (record *inventoryFile) identity() error {
 	if err != nil || !sameInventoryFile(record.named, named) || !sameInventoryFile(record.held, held) {
 		return errInventoryUnavailable
 	}
-	return nil
+	return record.parentIdentity()
 }
 
 func (record *inventoryFile) verify(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if err := record.identity(); err != nil {
 		return err
+	}
+	if record.absent {
+		return ctx.Err()
 	}
 	digest, err := inventoryDigest(ctx, record.file, record.limit)
 	if err != nil || digest != record.digest {
 		return errInventoryUnavailable
 	}
-	return record.identity()
+	return errors.Join(record.identity(), ctx.Err())
 }
 
 func inventoryConfig(ctx context.Context, record *inventoryFile, selector string) (*bool, error) {
+	if record.absent {
+		return nil, record.verify(ctx)
+	}
 	var expected *bool
 	if _, err := record.file.Seek(0, io.SeekStart); err != nil {
 		return nil, errInventoryUnavailable
@@ -259,8 +326,8 @@ func observeUserInventory(ctx context.Context, env clients.Env, req domain.Activ
 	if home == "" || env.Runner == nil {
 		return false, false, false, errInventoryUnavailable
 	}
-	config, err := openInventoryFile(ctx, filepath.Join(req.Plan.NativeRegistryRoot, "config.json"), 16384)
-	if errors.Is(err, os.ErrNotExist) {
+	config, err := openInventoryFile(ctx, filepath.Join(req.Plan.NativeRegistryRoot, "config.json"), 16384, req.VerifyOnly || req.PackageUnchanged)
+	if errors.Is(err, errInventoryConfigAbsent) {
 		return false, false, false, errInventoryConfigAbsent
 	}
 	if err != nil {
@@ -280,7 +347,7 @@ func observeUserInventory(ctx context.Context, env clients.Env, req domain.Activ
 	if err != nil {
 		return false, false, false, err
 	}
-	binary, err = openInventoryFile(ctx, req.BackendExecutable, 512<<20)
+	binary, err = openInventoryFile(ctx, req.BackendExecutable, 512<<20, false)
 	if err != nil {
 		return false, false, false, errInventoryUnavailable
 	}
@@ -301,7 +368,7 @@ func observeUserInventory(ctx context.Context, env clients.Env, req domain.Activ
 				return false, false, true, errInventoryUnavailable
 			}
 		} else {
-			enabled, present, err = inventoryReadback(body, req.Plan, *expected)
+			enabled, present, err = inventoryReadback(body, req.Plan, expected)
 			return enabled, present, true, err
 		}
 	}
@@ -418,9 +485,9 @@ func selectedInventory(body []byte, plan domain.DeliveryPlan) (bool, bool, error
 	return enabled, true, nil
 }
 
-func inventoryReadback(body []byte, plan domain.DeliveryPlan, expected bool) (bool, bool, error) {
+func inventoryReadback(body []byte, plan domain.DeliveryPlan, expected *bool) (bool, bool, error) {
 	enabled, present, err := selectedInventory(body, plan)
-	if err == nil && present && enabled != expected {
+	if err == nil && present && expected != nil && enabled != *expected {
 		err = errInventoryUnavailable
 	}
 	return enabled, present, err

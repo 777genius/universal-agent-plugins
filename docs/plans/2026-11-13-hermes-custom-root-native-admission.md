@@ -2670,3 +2670,140 @@ The inherited-pipe category has a finite producer-local contract test, not a
 claimed native or inherited-process execution. All 178 prior test methods
 remain byte-identical. The full candidate run discovers 184 tests; actual
 Windows and fresh native outcomes remain separate required evidence.
+
+### 2026-11-14: keep source Project state in the already owned private directory
+
+Current source observations on `c2b9c0766b722a283e901ce7bfc8b766d36e4242`
+reach the real official runtime with bytecode disabled. Linux job
+[132502053428](https://github.com/777genius/universal-agent-plugins/actions/runs/43611712620/job/132502053428)
+and macOS job
+[132502053540](https://github.com/777genius/universal-agent-plugins/actions/runs/43611712620/job/132502053540)
+both execute `version-a` with exit zero, then correctly refuse its original User
+delta: the original `user/state` directory changes and `gh/device-id` is created
+under it. The device file is 36 bytes, mode 0600, with one link. Their original
+artifacts 14122275767 and 14121865131 have SHA256
+`c204a7c48fe2b1cf56c1be9cf13fb6f6117d0de3b6868fc979fec364c87276af`
+and `f1dc40303746ac3f154d43a0481bc36228d858aeda2dd03ff86974242f2821ad`.
+Both 21-member ZIPs pass CRC and all 20 indexed stream joins. The source,
+installed runtime and full official launch prefix remain unchanged.
+
+The pinned Hermes fast-version path calls its update checker and then the
+[GitHub credential ladder](https://github.com/NousResearch/hermes-agent/blob/2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19/hermes_cli/github_api.py),
+which invokes `gh auth token` with inherited environment. The
+[official gh telemetry producer](https://github.com/cli/cli/blob/v2.97.0/internal/telemetry/telemetry.go)
+creates this state shape. Its pinned go-gh dependency's
+[StateDir implementation](https://github.com/cli/go-gh/blob/v2.13.0/pkg/config/config.go)
+selects `XDG_STATE_HOME/gh` independently of `GH_CONFIG_DIR`.
+The original archive does not record the spawned gh executable's binary identity;
+this source explanation is not a claim that the PM-lock binary was observed.
+
+Root and independent R1 accepted plan SHA256
+`a54a39c5dec83511ad41416278d9f4572a1f763f32716a7dd6457967d74ca04e`.
+Only source A/B commands now set `XDG_STATE_HOME` to the same private `tmp`
+directory already created before baseline and joined to its original identity
+before and after execution. The existing source command receipt records
+`state_root`. Every command starts from the original environment; final
+`list-user` retains original `User/state`. HOME, USERPROFILE, configuration,
+authentication, installed source, full bootstrap argv and bundled routing stay
+unchanged. No new directory, allowlist, payload partition, deadline or capability
+is introduced. Original User and sibling equality remain mandatory.
+
+The regression executes a real inert isolated process that publishes a small
+state file through temporary-file/link operations. A/B writes stay solely in
+the selected private directory. Restoring the old routing reproduces a User
+write and the original refusal. Final User read-only observation receives the
+original state path, while an actual User state write still refuses. The tests
+also retain exact environment equality, native argv and temporary-root checks.
+
+On the isolated `8f3c8c54535750b6c6bd1631eec14149deed92c6` base with this
+correction, all 179 authored methods ran in 11.874 seconds: 172 passed and seven
+existing platform-specific methods skipped. The eight source-command methods
+passed separately. Removing only the XDG override in memory caused two environment
+assertions and two real User-write guard errors; removing only the final User
+equality caused the new User-writer negative to fail. Repository bytes stayed
+unchanged during these counterfactuals. These are fixture contracts, not a fresh
+vendor run or qualification of the incoming diagnostic composition.
+
+Cold native execution remains required. Any later original User mutation still
+fails, including the separate Windows shared-launcher directory effect. The
+successful User tools/call lane, source/custom-root admission and bundled Project
+admission remain distinct; no source or bundled native pass is claimed here.
+
+## 2026-11-14: preserve the original refusal and bind optional detail to its command
+
+The incoming diagnostic on `5ca208a32ae1deee7da64e502144521ecad6bc9a`
+keeps the compact `{kind,predicate}` projection and the original execution
+guards. Further actual inert-child controls exposed three diagnostic gaps:
+an earlier callback in the public command could be mistaken for the final
+bounded callsite; a replaced active producer could become its own provenance;
+and malformed optional detail could make the parent frontdoor discard an
+otherwise valid original refusal. The counterexamples concern diagnostic
+attribution and retention, not new native admission or cleanup authority.
+
+The corrective composition freezes the original public owner, bounded helper,
+spawn parser and `require` function, including their code objects and globals.
+It checks those identities, the original helper dictionary references and the
+helper's own `require` reference directly before calling any active guard.
+A replaced guard cannot certify itself. The exact final traceback suffix must
+join the unchanged nested command, its producer and the original final guard.
+The command callsite, actual arguments and role must match the measured
+`public-repair-a` refusal or one of the four existing Windows stdio roles.
+Expected-failure commands, earlier callbacks and unrelated guards cannot supply
+this optional detail. The original command deadline is checked before classifying
+producer locals and again after the bounded serialization.
+
+The original valid failure bytes are built first. Unknown enums, poisoned
+locals, source/role/deadline drift or failed optional serialization leave those
+bytes intact. The existing reader and parent context also validate the original
+closed source/nonce-bound record before considering the optional `boundary`.
+They may discard only that known optional field. Invalid original identity,
+unknown root fields, noncanonical or unparseable input and oversized retained
+streams still refuse; the existing held-descriptor and settlement checks are
+unchanged. The actual `admission_failure_readout` frontdoor now preserves the
+same original line when this one optional projection is invalid.
+
+No command, producer guard, PID relationship, allowance, capability or
+qualification changes. The original bounded/spawn classifiers retain their
+closed enums and first-failed-predicate behavior. No raw stream, message, PID,
+path, installation value or new filesystem read is published by this detail.
+The old Windows launcher/Python relationship and the native repair failure
+remain unresolved until a genuine new capture identifies their predicate.
+
+This standalone two-file correction is based on exact `5ca208a`, before the
+separate source-XDG-state follow-up. All 178 pre-diagnostic method bodies remain
+byte-identical. The six incoming diagnostic method names and negative oracles
+remain; positive fixtures now reach the original nested command callsites with
+real inert Python children. Two new methods cover replaced original references,
+no-op guard replacement, the original deadline, exact roles and the actual
+parent/retained-reader fallback. The focused eight methods pass. The full
+standalone suite ran 186 methods: 179 passed and the same seven actual-Windows
+methods skipped on Linux. A pure Windows predicate fixture is not native
+Windows execution. The separately composed source-state method and final
+combined source require their own run; neither this local result nor earlier
+native archives qualify that final composition.
+
+### Final source composition and local execution
+
+The final two-file composition applies the source-state correction and diagnostic
+v2 to `5ca208a32ae1deee7da64e502144521ecad6bc9a`. The following `aa68f17f`
+change touches only Grok and does not alter either Hermes base. Independent R2
+replayed both application orders and both inverse patches: each yields the same
+final bytes and restores the exact original base. Its receipt has SHA256
+`5f433afed5e96df95ea3185fbe3cb0c1e28dfba781e51c4147d012bed6490cfd`.
+
+The composed runtime is blob `7f1ba9609ca5a08c0f0cbdc530dafe3355604b36`,
+SHA256 `03d326743452fde317d6804ba9a3cb9b4b9f92d1a1ca79040bef648926ea5952`.
+The composed tests are blob `81aad5b1b42f269c1301fa8b022ef0db1a51ecb9`,
+SHA256 `84269d75eebac60db075c255b0e8eb13cad082c0d2053390db1b72f40eca056b`.
+No incoming method was removed. Of the 178 original methods, only the previously
+reviewed source environment method is extended; the six incoming diagnostic
+methods and three additions form 187 methods in the final union.
+
+The complete final suite ran all 187 methods in 11.986 seconds: 180 passed and
+seven retained Windows-only methods skipped on Linux. The original full log is
+42,692 bytes with SHA256
+`fe5bf2fa847c73149b7300a5f8ade0eaeb544b37ae6b57834185dd164108e588`.
+Both source files remained unchanged during execution. This closes composition
+and local contracts; the ordinary native workflows must still exercise these
+exact changes. Earlier successful User tool calls and earlier failed Project
+captures retain their original source identities and do not qualify this union.

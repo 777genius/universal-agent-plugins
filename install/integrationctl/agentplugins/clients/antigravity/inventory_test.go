@@ -8,9 +8,14 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"reflect"
+	"runtime"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
@@ -99,7 +104,7 @@ func TestInventoryUsesOnlyQualifiedUserMetadataAndRetainsPrepared(t *testing.T) 
 }
 
 func TestInventoryIneligibleKeepsFileOnlyAndEligibleFailureRefusesResume(t *testing.T) {
-	for _, unavailable := range []string{"backend", "runner", "provenance", "missing-config", "missing-override", "malformed-config", "unknown-config"} {
+	for _, unavailable := range []string{"backend", "runner", "provenance", "missing-override", "malformed-config", "unknown-config"} {
 		for _, phase := range []string{"initial", "resume", "verify-only"} {
 			t.Run(unavailable+"/"+phase, func(t *testing.T) {
 				req, env, runner := inventoryFixture(t)
@@ -111,10 +116,6 @@ func TestInventoryIneligibleKeepsFileOnlyAndEligibleFailureRefusesResume(t *test
 					req.BackendExecutable = ""
 				case "provenance":
 					req.Client.NativeConfigRoot = ""
-				case "missing-config":
-					if err := os.Remove(filepath.Join(req.Client.ConfigRoot, "config.json")); err != nil {
-						t.Fatal(err)
-					}
 				default:
 					body := []byte("{")
 					if unavailable == "missing-override" {
@@ -476,5 +477,423 @@ func TestInventoryUserRegistryLayoutPreservesSelectionWithoutInventingProvenance
 				t.Fatal("unqualified profile manufactured native observation", outcome)
 			}
 		})
+	}
+}
+
+func missingInventoryFixture(t *testing.T) (domain.ActivationRequest, clients.Env, *inventoryRunner) {
+	t.Helper()
+	req, env, runner := inventoryFixture(t)
+	if err := os.Remove(filepath.Join(req.Client.ConfigRoot, "config.json")); err != nil {
+		t.Fatal(err)
+	}
+	return req, env, runner
+}
+
+func inventoryFixtureBytes(t *testing.T, root string) map[string]string {
+	t.Helper()
+	files := map[string]string{}
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		key := fmt.Sprintf("%s:%s", path, info.Mode())
+		if info.IsDir() {
+			files[key] = ""
+			return nil
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("unexpected fixture type at %s", path)
+		}
+		body, err := os.ReadFile(path)
+		files[key] = string(body)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return files
+}
+
+func TestInventoryMissingConfigRequiredObservationPreservesOriginalProfile(t *testing.T) {
+	for _, phase := range []string{"resume", "verify-only"} {
+		for _, state := range []string{"enabled", "disabled", "absent"} {
+			t.Run(phase+"/"+state, func(t *testing.T) {
+				req, env, runner := missingInventoryFixture(t)
+				req.PackageUnchanged, req.VerifyOnly = phase == "resume", phase == "verify-only"
+				home := filepath.Dir(filepath.Dir(req.Client.ConfigRoot))
+				before := inventoryFixtureBytes(t, home)
+				parent, err := os.Lstat(req.Client.ConfigRoot)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var firstContext context.Context
+				var deadline time.Time
+				runner.reply = func(ctx context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
+					current, ok := ctx.Deadline()
+					if !ok || time.Until(current) > 10*time.Second {
+						t.Fatal("native observation lacks its original bounded context")
+					}
+					if firstContext == nil {
+						firstContext, deadline = ctx, current
+					} else if ctx != firstContext || !current.Equal(deadline) {
+						t.Fatal("native pair renewed the context or its deadline")
+					}
+					body := []byte("1.5.3\n")
+					if len(command.Argv) == 4 {
+						body = inventoryBody(t, req.Plan, state == "enabled")
+						if state == "absent" {
+							body = []byte("[]")
+						}
+					}
+					return legacyports.CommandResult{CleanupComplete: true, Stdout: body}, nil
+				}
+				outcome, err := New().Activate(t.Context(), env, req)
+				guidance := map[string]string{
+					"enabled":  "The selected User plugin is enabled in CLI inventory; open or reload Antigravity to verify IDE loading",
+					"disabled": "The selected User plugin remains disabled; decide whether to enable it in Antigravity",
+					"absent":   "The exact UAP-owned plugin is absent from native User inventory; inspect it in Antigravity",
+				}[state]
+				if err != nil || len(runner.calls) != 2 || outcome.Activation != domain.ActivationPrepared ||
+					outcome.Verification != domain.VerificationInstalled || outcome.NativeEffect != domain.NativeEffectUnchanged ||
+					outcome.ActivationAttested || outcome.AuthenticationAttested || len(outcome.NativeObjects) != 0 ||
+					outcome.AuthoritativeObservation != (state != "enabled") || !reflect.DeepEqual(outcome.UserActions, []string{guidance}) {
+					t.Fatal("missing override changed actual native evidence or qualification", outcome, err, runner.calls)
+				}
+				after, err := os.Lstat(req.Client.ConfigRoot)
+				if err != nil || !sameInventoryFile(parent, after) || !reflect.DeepEqual(before, inventoryFixtureBytes(t, home)) {
+					t.Fatal("missing-config observation changed original profile or package", err)
+				}
+				if _, err := os.Lstat(filepath.Join(req.Client.ConfigRoot, "config.json")); !errors.Is(err, os.ErrNotExist) {
+					t.Fatal("observation created or adopted config", err)
+				}
+			})
+		}
+	}
+}
+
+func TestInventoryMissingConfigInitialDeliveryAndInvalidParentsStayDistinct(t *testing.T) {
+	for _, phase := range []string{"initial", "resume", "verify-only"} {
+		for _, fault := range []string{"none", "parent", "backend"} {
+			t.Run(phase+"/"+fault, func(t *testing.T) {
+				req, env, runner := missingInventoryFixture(t)
+				req.PackageUnchanged, req.VerifyOnly = phase == "resume", phase == "verify-only"
+				switch fault {
+				case "parent":
+					if err := os.Rename(req.Client.ConfigRoot, req.Client.ConfigRoot+"-original"); err != nil {
+						t.Fatal(err)
+					}
+				case "backend":
+					if err := os.Remove(req.BackendExecutable); err != nil {
+						t.Fatal(err)
+					}
+				}
+				prepared := domain.ActivationOutcome{Activation: domain.ActivationPrepared, Verification: domain.VerificationInstalled, NativeEffect: domain.NativeEffectUnchanged}
+				outcome, err := userInventoryOutcome(t.Context(), env, req, prepared)
+				wantError := fault == "parent" || fault == "backend" && phase != "initial"
+				wantCalls := 0
+				if fault == "none" && phase != "initial" {
+					wantCalls = 2
+				}
+				if (err != nil) != wantError || len(runner.calls) != wantCalls || outcome.Activation != domain.ActivationPrepared {
+					t.Fatal("parent/backend absence borrowed the config-only exception", outcome, err, runner.calls)
+				}
+				if wantCalls == 0 && strings.Contains(strings.Join(outcome.UserActions, " "), "enabled in CLI inventory") {
+					t.Fatal("initial or refused observation manufactured native evidence", outcome)
+				}
+			})
+		}
+	}
+}
+
+func inventoryAppear(t *testing.T, path, kind string) {
+	t.Helper()
+	var err error
+	switch kind {
+	case "file":
+		err = os.WriteFile(path, []byte(`{"plugins":{}}`), 0600)
+	case "directory":
+		err = os.Mkdir(path, 0700)
+	case "symlink":
+		err = os.Symlink("plugins", path)
+	case "dangling-symlink":
+		err = os.Symlink("not-created", path)
+	default:
+		t.Fatal("unknown fixture type", kind)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestInventoryMissingConfigRejectsLeafAppearanceAtEveryBoundary(t *testing.T) {
+	kinds := []string{"file", "directory"}
+	if runtime.GOOS != "windows" {
+		kinds = append(kinds, "symlink", "dangling-symlink")
+	}
+	for _, kind := range kinds {
+		for _, afterCall := range []int{0, 1, 2} {
+			t.Run(fmt.Sprintf("%s/after-%d", kind, afterCall), func(t *testing.T) {
+				req, env, runner := missingInventoryFixture(t)
+				req.VerifyOnly = true
+				path := filepath.Join(req.Client.ConfigRoot, "config.json")
+				pending := filepath.Join(req.Client.ConfigRoot, "absent.json")
+				inventoryAppear(t, pending, kind)
+				parent, err := os.Lstat(req.Client.ConfigRoot)
+				if err != nil {
+					t.Fatal(err)
+				}
+				appear := func() {
+					if err := os.Rename(pending, path); err != nil {
+						t.Fatal(err)
+					}
+					if err := os.Chtimes(req.Client.ConfigRoot, parent.ModTime(), parent.ModTime()); err != nil {
+						t.Fatal(err)
+					}
+					after, err := os.Lstat(req.Client.ConfigRoot)
+					if err != nil || !sameInventoryFile(parent, after) {
+						t.Fatal("leaf fixture must retain original parent metadata", err)
+					}
+				}
+				if afterCall == 0 {
+					record, err := openInventoryFile(t.Context(), path, 16384, true)
+					if err != nil {
+						t.Fatal(err)
+					}
+					defer func() {
+						if err := record.close(); err != nil {
+							t.Error(err)
+						}
+					}()
+					appear()
+					if err := record.verify(t.Context()); err == nil || len(runner.calls) != 0 {
+						t.Fatal("held original absence accepted a new leaf before native", err, runner.calls)
+					}
+					return
+				}
+				reply := runner.reply
+				runner.reply = func(ctx context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
+					if len(runner.calls) == afterCall {
+						appear()
+					}
+					return reply(ctx, command)
+				}
+				outcome, err := New().Activate(t.Context(), env, req)
+				if err == nil || len(runner.calls) != afterCall || outcome.Activation != domain.ActivationPrepared ||
+					outcome.NativeEffect != domain.NativeEffectUncertain {
+					t.Fatal("native pair adopted a leaf after original absence", outcome, err, runner.calls)
+				}
+				if _, err := os.Lstat(path); err != nil {
+					t.Fatal("refusal removed the unowned appearing leaf", err)
+				}
+			})
+		}
+	}
+}
+
+func TestInventoryMissingConfigCancellationStopsAtOriginalDeadline(t *testing.T) {
+	for _, afterCall := range []int{0, 1, 2} {
+		t.Run(fmt.Sprintf("after-%d", afterCall), func(t *testing.T) {
+			req, env, runner := missingInventoryFixture(t)
+			req.PackageUnchanged = true
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			if afterCall == 0 {
+				cancel()
+			}
+			reply := runner.reply
+			runner.reply = func(ctx context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
+				if len(runner.calls) == afterCall {
+					cancel()
+				}
+				return reply(ctx, command)
+			}
+			outcome, err := New().Activate(ctx, env, req)
+			if !errors.Is(err, context.Canceled) || len(runner.calls) != afterCall ||
+				outcome.Activation == domain.ActivationActive || afterCall > 0 && outcome.Activation != domain.ActivationPrepared ||
+				outcome.ActivationAttested || outcome.AuthenticationAttested {
+				t.Fatal("absent config swallowed cancellation or renewed native work", outcome, err, runner.calls)
+			}
+		})
+	}
+}
+
+func inventoryParentSpare(t *testing.T, req domain.ActivationRequest) (string, os.FileInfo) {
+	t.Helper()
+	original, err := os.Lstat(req.Client.ConfigRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spare := req.Client.ConfigRoot + "-spare"
+	active := filepath.Join(spare, "plugins", filepath.Base(req.Plan.ActivePath))
+	if err = os.MkdirAll(active, 0700); err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(filepath.Join(req.Plan.ActivePath, "plugin.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(active, "plugin.json"), body, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.Chmod(spare, original.Mode().Perm()); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.Chtimes(spare, original.ModTime(), original.ModTime()); err != nil {
+		t.Fatal(err)
+	}
+	replacement, err := os.Lstat(spare)
+	if err != nil || os.SameFile(original, replacement) || original.Mode() != replacement.Mode() ||
+		original.Size() != replacement.Size() || !original.ModTime().Equal(replacement.ModTime()) {
+		t.Fatal("replacement must differ only in parent incarnation", err)
+	}
+	return spare, original
+}
+
+func inventoryRenamePrevented(err error, from, to string) bool {
+	var link *os.LinkError
+	return runtime.GOOS == "windows" && errors.As(err, &link) && link.Op == "rename" &&
+		link.Old == from && link.New == to && errors.Is(link.Err, syscall.Errno(32))
+}
+
+func TestInventoryMissingConfigParentLeaseRefusesReplacementBeforeNative(t *testing.T) {
+	req, _, runner := missingInventoryFixture(t)
+	spare, original := inventoryParentSpare(t, req)
+	parent, moved := req.Client.ConfigRoot, req.Client.ConfigRoot+"-original"
+	home := filepath.Dir(filepath.Dir(parent))
+	before := inventoryFixtureBytes(t, home)
+	record, err := openInventoryFile(t.Context(), filepath.Join(parent, "config.json"), 16384, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if record != nil {
+			if err := record.close(); err != nil {
+				t.Error(err)
+			}
+		}
+	}()
+	renameErr := os.Rename(parent, moved)
+	if renameErr != nil {
+		if !inventoryRenamePrevented(renameErr, parent, moved) {
+			t.Fatal("unexpected parent rename failure", renameErr)
+		}
+		named, namedErr := os.Lstat(parent)
+		held, heldErr := record.root.Stat(".")
+		_, destinationErr := os.Lstat(moved)
+		if namedErr != nil || heldErr != nil || !sameInventoryFile(original, named) ||
+			!sameInventoryFile(record.rootHeld, held) || !errors.Is(destinationErr, os.ErrNotExist) ||
+			!reflect.DeepEqual(before, inventoryFixtureBytes(t, home)) || record.verify(t.Context()) != nil || len(runner.calls) != 0 {
+			t.Fatal("rename denial changed the original held authority", namedErr, heldErr, destinationErr)
+		}
+		if err := record.close(); err != nil {
+			t.Fatal(err)
+		}
+		record = nil
+		if err := os.Rename(parent, moved); err != nil {
+			t.Fatal("same rename must succeed after lease release", err)
+		}
+		if err := os.Rename(moved, parent); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	if err := os.Rename(spare, parent); err != nil {
+		t.Fatal(err)
+	}
+	if err := record.verify(t.Context()); err == nil || len(runner.calls) != 0 {
+		t.Fatal("same-metadata parent replacement renewed original absence", err, runner.calls)
+	}
+}
+
+func TestInventoryMissingConfigParentRaceRetainsOriginalAuthority(t *testing.T) {
+	for _, afterCall := range []int{1, 2} {
+		t.Run(fmt.Sprintf("after-%d", afterCall), func(t *testing.T) {
+			req, env, runner := missingInventoryFixture(t)
+			req.VerifyOnly = true
+			spare, original := inventoryParentSpare(t, req)
+			parent, moved := req.Client.ConfigRoot, req.Client.ConfigRoot+"-original"
+			home := filepath.Dir(filepath.Dir(parent))
+			before := inventoryFixtureBytes(t, home)
+			prevented := false
+			reply := runner.reply
+			runner.reply = func(ctx context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
+				if len(runner.calls) == afterCall {
+					if err := os.Rename(parent, moved); err != nil {
+						if !inventoryRenamePrevented(err, parent, moved) {
+							t.Fatal("unexpected attempted parent rename failure", err)
+						}
+						named, namedErr := os.Lstat(parent)
+						_, destinationErr := os.Lstat(moved)
+						if namedErr != nil || !sameInventoryFile(original, named) ||
+							!errors.Is(destinationErr, os.ErrNotExist) || !reflect.DeepEqual(before, inventoryFixtureBytes(t, home)) {
+							t.Fatal("rename denial changed original fixture", namedErr, destinationErr)
+						}
+						prevented = true
+					} else if err := os.Rename(spare, parent); err != nil {
+						t.Fatal(err)
+					}
+				}
+				return reply(ctx, command)
+			}
+			outcome, err := New().Activate(t.Context(), env, req)
+			if prevented {
+				// The real lease prevented mutation; Activate must revalidate it and close it.
+				if err != nil || len(runner.calls) != 2 || outcome.NativeEffect != domain.NativeEffectUnchanged ||
+					outcome.Activation != domain.ActivationPrepared || !reflect.DeepEqual(before, inventoryFixtureBytes(t, home)) {
+					t.Fatal("prevented mutation failed original held-parent verification", outcome, err, runner.calls)
+				}
+				if err := os.Rename(parent, moved); err != nil {
+					t.Fatal("same rename must succeed after actual operation releases its lease", err)
+				}
+				if err := os.Rename(moved, parent); err != nil {
+					t.Fatal(err)
+				}
+				return
+			}
+			if err == nil || len(runner.calls) != afterCall || outcome.Activation != domain.ActivationPrepared ||
+				outcome.NativeEffect != domain.NativeEffectUncertain {
+				t.Fatal("native observation borrowed a replacement parent", outcome, err, runner.calls)
+			}
+		})
+	}
+}
+
+func TestInventoryParentAcquisitionRejectsReplacedFIFOWithoutBlocking(t *testing.T) {
+	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
+		t.Skip("POSIX FIFO acquisition fixture")
+	}
+	const childEnv = "UAP_ANTIGRAVITY_PARENT_FIFO_TEST_CHILD"
+	if os.Getenv(childEnv) == "1" {
+		parent, err := filepath.EvalSymlinks(t.TempDir())
+		if err != nil {
+			t.Fatal(err)
+		}
+		original, err := os.Lstat(parent)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Rename(parent, parent+"-original"); err != nil {
+			t.Fatal(err)
+		}
+		if output, err := exec.CommandContext(t.Context(), "mkfifo", parent).CombinedOutput(); err != nil {
+			t.Fatal("create actual FIFO", err, string(output))
+		}
+		root, _, err := openInventoryParent(t.Context(), parent, original)
+		if root != nil {
+			_ = root.Close()
+		}
+		after, statErr := os.Lstat(parent)
+		if err == nil || statErr != nil || after.Mode()&os.ModeNamedPipe == 0 {
+			t.Fatal("substituted FIFO was opened or modified", err, statErr)
+		}
+		return
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	command := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestInventoryParentAcquisitionRejectsReplacedFIFOWithoutBlocking$")
+	command.Env = append(os.Environ(), childEnv+"=1")
+	output, err := command.CombinedOutput()
+	if err != nil || ctx.Err() != nil {
+		t.Fatal("parent acquisition blocked before its incarnation check", err, ctx.Err(), string(output))
 	}
 }

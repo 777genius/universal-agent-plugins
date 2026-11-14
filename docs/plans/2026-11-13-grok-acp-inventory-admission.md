@@ -1034,3 +1034,42 @@ reject contaminated streams, altered status and false source/cleanup/publication
 claims. All earlier test bodies are preserved. Go execution, formatting, lint
 and new hosted native evidence remain pending the serial validation gate;
 test results for this exact candidate are recorded separately in its freeze.
+
+## 2026-11-14: provision the existing readonly primitive before capture
+
+The existing readonly helper deliberately requires the system executable
+`/usr/bin/bwrap`. The native workflow did not provision that prerequisite.
+The retained `8d18` failure above occurs during its acquisition, before
+readonly native execution; its coarse error does not identify the exact
+filesystem errno. This correction does not relabel that historical refusal
+as a missing-file observation.
+
+The reviewed workflow candidate is blob
+`052fc522355c8dac503aeb9aa41dfb0a94d3fbf4`, SHA-256
+`af5db6cc2171f34c47cde20a759032f6a19ef41dc659d1199a387c371dbae08f`.
+Review packet `7efffe619516976c218983b61035aaea39cb50ba` records
+its exact original/candidate bytes and reversible patch. Root's independent
+R2 is `f8c6be4f47a619443e0d4be2cce60741e795b12f`; an additional
+independent review accepted the same source.
+
+One bounded setup step installs the Ubuntu `bubblewrap` package through the
+ordinary package manager and records the installed package and executable
+versions. It has its own three-minute limit. The existing capture starts
+only after setup succeeds, then creates its original fixtures, baseline and
+native deadline as before. Earlier metadata captures and their ordering are
+unchanged. No setup observation becomes native admission evidence.
+
+The helper still requires the same canonical system path, held identity,
+ordinary executable mode, source pins, unprivileged namespace, fixed argv and
+readonly mounts. No privilege, AppArmor, sysctl, owner, stream, timeout, cleanup
+or publication guard is weakened. The separately added missing/permission
+diagnostics remain failures, and their absence from an old report is not
+reconstructed after the fact. Unsupported kernel or native behavior must
+still refuse through the existing path.
+
+The actual helper tests on the incoming `5ca208a3` source passed 95
+test/subtest events with one existing owner-fixture skip. The frontend's
+114 Python contracts all passed. These validate the retained closed
+diagnostic and transport contracts; they do not execute the new package setup
+or readonly native capture. Fresh ordinary hosted execution, original
+artifact/source/stream joins and all native guards remain required.

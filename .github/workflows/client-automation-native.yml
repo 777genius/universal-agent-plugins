@@ -240,9 +240,18 @@ jobs:
           path: ${{ steps.grok_capture.outputs.frontend_failure }}
           if-no-files-found: error
           retention-days: 14
+      - name: Provision the readonly inventory primitive
+        id: grok_readonly_setup
+        if: ${{ always() && !cancelled() && steps.grok_checkout.outcome == 'success' && steps.grok_setup.outcome == 'success' && steps.grok_contracts.outcome == 'success' }}
+        timeout-minutes: 3
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends bubblewrap
+          dpkg-query --show --showformat='${Package} ${Version}\n' bubblewrap
+          /usr/bin/bwrap --version
       - name: Capture readonly inventory with the original profile and a writable witness
         id: grok_readonly_capture
-        if: ${{ always() && !cancelled() && steps.grok_checkout.outcome == 'success' && steps.grok_setup.outcome == 'success' && steps.grok_contracts.outcome == 'success' }}
+        if: ${{ always() && !cancelled() && steps.grok_checkout.outcome == 'success' && steps.grok_setup.outcome == 'success' && steps.grok_contracts.outcome == 'success' && steps.grok_readonly_setup.outcome == 'success' }}
         run: |
           python3 - <<'PYTHON'
           import os, pathlib, subprocess, sys, tempfile

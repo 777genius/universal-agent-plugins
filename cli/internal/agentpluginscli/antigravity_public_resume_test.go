@@ -618,7 +618,7 @@ func TestAntigravityOwnedRepairKeepsNegativeObservationAndConsentBoundaries(t *t
 			case "native-absent":
 				f.runner.absent, wantCalls = true, 2
 			case "config-absent":
-				wantError = true
+				wantCalls = 2
 				if err := os.Remove(filepath.Join(f.client.ConfigRoot, "config.json")); err != nil {
 					t.Fatal(err)
 				}
@@ -656,6 +656,8 @@ func TestAntigravityOwnedRepairKeepsNegativeObservationAndConsentBoundaries(t *t
 				assertAntigravityOwnedRepairDTO(t, stdout, installed, binding, "The selected User plugin remains disabled; decide whether to enable it in Antigravity")
 			} else if condition == "native-absent" {
 				assertAntigravityOwnedRepairDTO(t, stdout, installed, binding, "The exact UAP-owned plugin is absent from native User inventory; inspect it in Antigravity")
+			} else if condition == "config-absent" {
+				assertAntigravityOwnedRepairDTO(t, stdout, installed, binding, "The selected User plugin is enabled in CLI inventory; open or reload Antigravity to verify IDE loading")
 			} else if strings.Contains(stdout, "enabled in CLI inventory") || strings.Contains(stdout, "remains disabled") {
 				t.Fatal("unobserved repair manufactured native inventory evidence", stdout)
 			}
