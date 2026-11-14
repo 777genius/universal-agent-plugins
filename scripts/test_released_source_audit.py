@@ -249,7 +249,7 @@ class SavedScopeTests(unittest.TestCase):
             with self.subTest(variant=variant), tempfile.TemporaryDirectory() as temp:
                 root = Path(temp)
                 manifest, lock = root / "uap.toml", root / "uap.lock"
-                manifest.write_text("schema_version = 1\\n[dependencies]\\n[targets]\\n", encoding="utf-8")
+                manifest.write_text("schema_version = 1\n[dependencies]\n[targets]\n", encoding="utf-8")
                 foreign = root / "foreign.lock"
                 foreign.write_text('{"lock_version":1,"packages":[]}', encoding="utf-8")
                 if variant == "hardlink":
@@ -263,7 +263,7 @@ class SavedScopeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             manifest, lock = root / "uap.toml", root / "uap.lock"
-            manifest.write_text("schema_version = 1\\n[dependencies]\\n[targets]\\n", encoding="utf-8")
+            manifest.write_text("schema_version = 1\n[dependencies]\n[targets]\n", encoding="utf-8")
             foreign = root / "foreign.lock"
             foreign.write_text('{"lock_version":1,"packages":[]}', encoding="utf-8")
             try:
