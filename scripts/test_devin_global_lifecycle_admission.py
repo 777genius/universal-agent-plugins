@@ -819,7 +819,7 @@ class GlobalLifecycleContracts(unittest.TestCase):
 
     def test_owned_skill_row_is_closed_in_the_actual_native_consumer(self):
         profile = Path("/owned/home/config/devin")
-        for change in ("valid", "name", "description", "provider", "triggers", "warnings", "errors", "extra", "sibling"):
+        for change in ("valid", "name", "project-qualified-name", "description", "provider", "triggers", "warnings", "errors", "extra", "sibling"):
             journey = object.__new__(case.Journey)
             ctx = SimpleNamespace(root=Path("/owned"), projects={"a": Path("/owned/a"), "b": Path("/owned/b")},
                                   summary={}, budget=object())
@@ -829,6 +829,7 @@ class GlobalLifecycleContracts(unittest.TestCase):
             journey.read = lambda *_args: json.dumps({"mcpServers": {name: {} for name in case.SERVERS}}).encode()
             row = case.owned_skill_row(ctx, profile, "a")
             if change == "sibling": row["base_dir"] = str(profile / "skills/foreign")
+            elif change == "project-qualified-name": row["name"] = str(ctx.projects["a"]) + ":" + case.SKILL
             elif change == "extra": row["unreviewed"] = True
             elif change != "valid": row[change] = "different"
             ctx.probe = mock.Mock(side_effect=[({"exit": 0}, json.dumps([{"name": name} for name in case.SERVERS]).encode(), b""),

@@ -68,8 +68,11 @@ def entry_digest(name, entry):
     return "sha256:" + sha(("agentplugins-native-mcp-v1\0devin-mcpServers\0" + name + "\0" + canonical).encode())
 
 
+# The qualified native name is used only for same-name scope collisions.
+# The UAP-owned Global Skill has a unique name; pinned Devin 3000.12.57
+# reports its unqualified name even when inventory is run from Project A/B.
 def owned_skill_row(ctx, profile, scope):
-    return dict(name=str(ctx.projects[scope]) + ":" + SKILL, description="Owned Global source.",
+    return dict(name=SKILL, description="Owned Global source.",
                 triggers=["user", "model"], provider="Devin", base_dir=str(profile / "skills" / SKILL),
                 display_name=SKILL, warnings=[], errors=[])
 
