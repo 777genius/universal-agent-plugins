@@ -25,7 +25,7 @@ if (!client) {
 }
 
 const registry = await useRegistryPage({ projection: { kind: 'client', value: client.id } });
-const { current } = useDirectoryStatus();
+const { current } = useDirectoryStatus(true);
 
 const reviewedPlugins = catalogVisiblePlugins(registry.plugins).filter(
   (plugin) =>

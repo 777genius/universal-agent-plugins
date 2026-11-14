@@ -274,3 +274,26 @@ test('detail distinguishes a signed Project-only route from an exact Git alterna
   await expect(detail.locator('.plugin-detail__summary-block').filter({ hasText: 'Signed release for a project' })).not.toContainText('Exact Git source');
   expect(errors).toEqual([]);
 });
+
+test('an open Antigravity agent page withdraws pinned add on Directory expiry without hiding the repair warning', async ({ page }) => {
+  const errors = await offline(page);
+  const index = pluginWithOnlyCodex();
+  index.plugins[0]!.trust_state = 'reviewed';
+  const start = new Date();
+  index.expires_at = new Date(start.getTime() + 10 * 60_000).toISOString();
+  await page.clock.install({ time: start });
+  await projections(page, index);
+  await navigate(page, '/agents/antigravity', 'en');
+
+  const install = page.locator('.agent-page__install');
+  const repairNotice = wording('en')('registryUi.install.antigravityRepairUnavailable', { version: '0.1.108' });
+  await expect(install.locator('.command-snippet--add code'))
+    .toContainText('universal-agent-plugins@0.1.108 add github:');
+  await expect(install).toContainText(repairNotice);
+
+  // Without clock maintenance, a mounted page retains the stale add command.
+  await page.clock.fastForward(11 * 60_000);
+  await expect(install.locator('.command-snippet--add')).toHaveCount(0);
+  await expect(install).toContainText(repairNotice);
+  expect(errors).toEqual([]);
+});
