@@ -116,11 +116,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          native=()
-          if [[ "${{ matrix.client }}" == hermes ]]; then native=(--native-bin "$AUDIT_HERMES_BIN"); fi
-          ${{ runner.os == 'Windows' && 'python' || 'python3' }} scripts/released-source-audit.py \
-            --client '${{ matrix.client }}' --target '${{ matrix.target }}' \
-            --report-dir "$RUNNER_TEMP/source-receipt" "${native[@]}"
+          set -- --client '${{ matrix.client }}' --target '${{ matrix.target }}' \
+            --report-dir "$RUNNER_TEMP/source-receipt"
+          if [[ "${{ matrix.client }}" == hermes ]]; then
+            set -- "$@" --native-bin "$AUDIT_HERMES_BIN"
+          fi
+          ${{ runner.os == 'Windows' && 'python' || 'python3' }} scripts/released-source-audit.py "$@"
       - name: Retain exact receipt, including failures and explicit scope limits
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0

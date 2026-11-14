@@ -29,6 +29,10 @@ ORIGIN = f"https://raw.githubusercontent.com/777genius/universal-agent-plugins-r
 SNAPSHOT_DIGEST = "6ab80575a51378f6643b387a8eefe332e84493bcad86183370c46801243ab277"
 SNAPSHOT_SOURCE = "121633366dc5255aaf638845fb7cb0cb50013340"
 CLIENTS = ("hermes", "antigravity", "pi")
+MAX_NATIVE_ARCHIVE_BYTES = 200 << 20
+# Digest-pinned AGY 1.5.3 payloads are 246837648 (Linux), 208900592 (macOS),
+# and 225159320 (Windows) bytes. Their compressed archives are all below 200 MiB.
+MAX_NATIVE_EXECUTABLE_BYTES = 256 << 20
 
 
 def module(name, filename):
@@ -145,6 +149,40 @@ def checked_binding(state, case):
     return installation, binding, owned[0]
 
 
+def read_native_executable(stream, size, magic):
+    require(0 < size <= MAX_NATIVE_EXECUTABLE_BYTES, "native executable exceeds payload size bound")
+    body = stream.read(MAX_NATIVE_EXECUTABLE_BYTES + 1)
+    require(len(body) == size, "native executable size differs from archive metadata")
+    require(any(body.startswith(prefix) for prefix in magic), "native executable has invalid native magic")
+    return body
+
+
+def extract_antigravity_executable(body, archive):
+    # Select exactly one regular executable. Archive paths never become
+    # filesystem paths, and symlinks are never extracted or executed.
+    if archive.endswith(".zip"):
+        with zipfile.ZipFile(io.BytesIO(body)) as package:
+            candidates = [item for item in package.infolist() if not item.is_dir()
+                          and item.filename.lower().endswith(".exe")
+                          and (item.external_attr >> 16) & 0o170000 in (0, 0o100000)]
+            require(len(candidates) == 1, "native archive does not contain exactly one executable")
+            item = candidates[0]
+            with package.open(item) as stream:
+                return read_native_executable(stream, item.file_size, (b"MZ",))
+    magic = (b"\x7fELF", b"\xcf\xfa\xed\xfe", b"\xfe\xed\xfa\xcf", b"\xca\xfe\xba\xbe")
+    with tarfile.open(fileobj=io.BytesIO(body), mode="r:gz") as package:
+        candidates = []
+        for item in package.getmembers():
+            if item.isfile():
+                with package.extractfile(item) as stream:
+                    if stream.read(4) in magic:
+                        candidates.append(item)
+        require(len(candidates) == 1, "native archive does not contain exactly one executable")
+        item = candidates[0]
+        with package.extractfile(item) as stream:
+            return read_native_executable(stream, item.size, magic)
+
+
 def provision_native(client, target, directory, selected):
     if client == "hermes":
         require(selected and selected.is_file(), "real Hermes bootstrap executable is required")
@@ -155,30 +193,14 @@ def provision_native(client, target, directory, selected):
     archive = {"linux-amd64": "agy_cli_linux_x64.tar.gz", "darwin-arm64": "agy_cli_mac_arm64.tar.gz", "windows-amd64": "agy_cli_windows_x64.zip"}[target]
     url = "https://github.com/google-antigravity/antigravity-cli/releases/download/1.5.3/" + archive
     with urllib.request.urlopen(url, timeout=90) as response:
-        body = response.read((200 << 20) + 1)
-    require(len(body) <= 200 << 20, "native archive exceeds bound")
+        body = response.read(MAX_NATIVE_ARCHIVE_BYTES + 1)
+    require(len(body) <= MAX_NATIVE_ARCHIVE_BYTES, "native archive exceeds bound")
     native.verify_digest(body, "sha256:" + proof.AGY_PINS[target])
-    # Select one regular executable by native magic; archive paths never become
-    # filesystem paths, and symlinks are never extracted or executed.
-    if archive.endswith(".zip"):
-        with zipfile.ZipFile(io.BytesIO(body)) as package:
-            candidates = [package.read(item) for item in package.infolist() if not item.is_dir()
-                          and item.file_size <= 200 << 20 and item.filename.lower().endswith(".exe")
-                          and (item.external_attr >> 16) & 0o170000 != 0o120000]
-    else:
-        with tarfile.open(fileobj=io.BytesIO(body), mode="r:gz") as package:
-            candidates = []
-            for item in package.getmembers():
-                if item.isfile() and item.size <= 200 << 20:
-                    stream = package.extractfile(item)
-                    prefix = stream.read(4)
-                    if prefix in (b"\x7fELF", b"\xcf\xfa\xed\xfe", b"\xfe\xed\xfa\xcf", b"\xca\xfe\xba\xbe"):
-                        candidates.append(prefix + stream.read())
-    require(len(candidates) == 1, "native archive does not contain exactly one executable")
+    executable = extract_antigravity_executable(body, archive)
     path = directory / ("agy.exe" if target == "windows-amd64" else "agy")
-    path.write_bytes(candidates[0])
+    path.write_bytes(executable)
     path.chmod(0o700)
-    return path, {"tag": "1.5.3", "archive": archive, "sha256": proof.AGY_PINS[target], "binary_sha256": hashlib.sha256(candidates[0]).hexdigest()}
+    return path, {"tag": "1.5.3", "archive": archive, "sha256": proof.AGY_PINS[target], "binary_sha256": hashlib.sha256(executable).hexdigest()}
 
 
 def in_case(path, root):

@@ -2,10 +2,14 @@
 """Offline contract regressions; these tests are never a lifecycle receipt."""
 import copy
 import importlib.util
+import io
 import json
 from pathlib import Path
+import tarfile
 import tempfile
 import unittest
+from unittest import mock
+import zipfile
 
 SPEC = importlib.util.spec_from_file_location("released_source_audit", Path(__file__).with_name("released-source-audit.py"))
 audit = importlib.util.module_from_spec(SPEC)
@@ -183,6 +187,76 @@ class RefusalTests(unittest.TestCase):
         del output["stderr_full"]
         with self.assertRaises(ValueError):
             audit.checked_dependency_refusal(output, self.selected)
+
+
+class NativeExtractionTests(unittest.TestCase):
+    @staticmethod
+    def archive(kind, size=64, names=None, symlink=False, prefix=None):
+        prefix = prefix if prefix is not None else (b"MZ" if kind == "zip" else b"\x7fELF")
+        names = names or ["antigravity.exe" if kind == "zip" else "antigravity"]
+        output = io.BytesIO()
+
+        class Payload:
+            position = 0
+
+            def read(self, count):
+                count = min(count, size - self.position)
+                head = prefix[self.position:self.position + count]
+                self.position += count
+                return head + b"\0" * (count - len(head))
+
+        if kind == "zip":
+            with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as package:
+                for name in names:
+                    item = zipfile.ZipInfo(name)
+                    item.compress_type = zipfile.ZIP_DEFLATED
+                    item.external_attr = (0o120777 if symlink else 0o600) << 16
+                    source = Payload()
+                    with package.open(item, "w") as stream:
+                        while block := source.read(1 << 20):
+                            stream.write(block)
+        else:
+            with tarfile.open(fileobj=output, mode="w:gz") as package:
+                for name in names:
+                    item = tarfile.TarInfo(name)
+                    item.size = size
+                    if symlink:
+                        item.type, item.linkname, item.size = tarfile.SYMTYPE, "outside", 0
+                    package.addfile(item, Payload())
+        return output.getvalue()
+
+    def test_real_pinned_vendor_sizes_above_compressed_archive_bound(self):
+        # Actual metadata of the SHA256-pinned 1.5.3 Windows/Linux archives.
+        # Stream compressible fixture payloads to avoid giant test input files.
+        for kind, size in (("zip", 225159320), ("tar.gz", 246837648)):
+            with self.subTest(kind=kind):
+                body = self.archive(kind, size)
+                self.assertLess(len(body), audit.MAX_NATIVE_ARCHIVE_BYTES)
+                executable = audit.extract_antigravity_executable(body, "native." + kind)
+                self.assertEqual(len(executable), size)
+                del executable
+
+    def test_macos_native_magic_is_preserved(self):
+        body = self.archive("tar.gz", prefix=b"\xcf\xfa\xed\xfe")
+        self.assertTrue(audit.extract_antigravity_executable(body, "native.tar.gz").startswith(b"\xcf\xfa\xed\xfe"))
+
+    def test_multiple_executables_never_select_the_first(self):
+        for kind, names in (("zip", ["antigravity.exe", "updater.exe"]),
+                            ("tar.gz", ["antigravity", "updater"])):
+            with self.subTest(kind=kind), self.assertRaisesRegex(ValueError, "exactly one executable"):
+                audit.extract_antigravity_executable(self.archive(kind, names=names), "native." + kind)
+
+    def test_payload_bound_has_a_distinct_error(self):
+        for kind in ("zip", "tar.gz"):
+            with self.subTest(kind=kind), mock.patch.object(audit, "MAX_NATIVE_EXECUTABLE_BYTES", 64):
+                with self.assertRaisesRegex(ValueError, "exceeds payload size bound"):
+                    audit.extract_antigravity_executable(self.archive(kind, size=65), "native." + kind)
+
+    def test_symlink_or_non_native_payload_is_not_an_executable(self):
+        for kind in ("zip", "tar.gz"):
+            for options in ({"symlink": True}, {"prefix": b"text"}):
+                with self.subTest(kind=kind, options=options), self.assertRaises(ValueError):
+                    audit.extract_antigravity_executable(self.archive(kind, **options), "native." + kind)
 
 
 class NativeCleanupTests(unittest.TestCase):
