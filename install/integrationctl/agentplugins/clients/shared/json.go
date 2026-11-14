@@ -75,7 +75,8 @@ func decodeUniqueJSONObject(decoder *json.Decoder) (any, error) {
 }
 
 func decodeJSONArray(decoder *json.Decoder) (any, error) {
-	var array []any
+	// Preserve [] distinctly from null when decoding a zero-element array.
+	array := make([]any, 0)
 	for decoder.More() {
 		value, valueErr := DecodeUniqueJSONValue(decoder)
 		if valueErr != nil {
