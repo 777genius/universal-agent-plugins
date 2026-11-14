@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
 )
 
 func clineCycleState(raw []byte) (domain.StateFileV2, error) {
@@ -224,7 +225,11 @@ func (c *clineProjectCycle) configProof(t *testing.T, r *clineCycleRecipe, insta
 	}
 	entry, ok := servers["uapclinea"].(map[string]any)
 	env := map[string]any{"PLUGIN_ROOT": r.Active, "PLUGIN_DATA": r.Data, "UAP_TEST_ROOT": c.f.base.Root, "UAP_TEST_EVENTS": c.f.base.Events, "UAP_TEST_NONCE": r.Nonce, "UAP_TEST_REVISION": r.Revision}
-	if !ok || clineAttemptServer(entry, filepath.Join(r.Active, "bin", "probe"), r.Active, []any{"Owned Cline " + r.Scope, r.Active + "/argument"}, env) != nil {
+	// Project stdio uses the owned managed launcher; the original bundled
+	// command is a positional child argument, never the executable Cline runs.
+	launcher := filepath.Join(r.Active, filepath.FromSlash(managedstdio.RelativeDirectory), managedstdio.ExecutableName)
+	args := []any{managedstdio.Mode, r.Active, r.Data, r.Active, "plugin", "--", "./bin/probe", "Owned Cline " + r.Scope, r.Active + "/argument"}
+	if !ok || clineAttemptServer(entry, launcher, r.Active, args, env) != nil {
 		t.Fatal("Cline cycle exact source-bound transport differs")
 	}
 	return entry

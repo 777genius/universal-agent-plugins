@@ -7,6 +7,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
+	"syscall"
 	"testing"
 )
 
@@ -37,7 +39,20 @@ func TestCaptureHeldJoinsOriginalDirectory(t *testing.T) {
 		t.Fatalf("held capture changed facts: %v", err)
 	}
 	if err := os.Rename(root, root+"-retained"); err != nil {
-		t.Fatal(err)
+		// A Windows directory handle opened by os.Open denies rename with
+		// ERROR_SHARING_VIOLATION. This is a native protection, not a skip:
+		// prove the selected original identity stayed attached to its name.
+		if runtime.GOOS != "windows" || !errors.Is(err, syscall.Errno(32)) {
+			t.Fatal(err)
+		}
+		still, captureErr := CaptureHeld(t.Context(), root, file)
+		if captureErr != nil || !still.Equal(ordinary) {
+			t.Fatalf("held directory changed after native rename refusal: %v", captureErr)
+		}
+		if _, statErr := os.Lstat(root + "-retained"); !os.IsNotExist(statErr) {
+			t.Fatalf("native rename refusal published a new name: %v", statErr)
+		}
+		return
 	}
 	if err := os.Mkdir(root, 0o700); err != nil {
 		t.Fatal(err)

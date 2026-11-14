@@ -3,8 +3,11 @@
 package directoryidentity
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
+	"syscall"
 	"testing"
 )
 
@@ -31,7 +34,19 @@ func TestLegacyHeldIdentitySurvivesNamedDirectoryReplacement(t *testing.T) {
 		}
 	}()
 	if err := os.Rename(path, path+"-owned"); err != nil {
-		t.Fatal(err)
+		// Windows does not allow this rename while the original os.Open
+		// directory handle is live. Assert the native refusal and identity.
+		if runtime.GOOS != "windows" || !errors.Is(err, syscall.Errno(32)) {
+			t.Fatal(err)
+		}
+		got, heldErr := LegacyHandleIdentity(file)
+		if heldErr != nil || got != want {
+			t.Fatalf("failed rename changed held identity: %q want %q: %v", got, want, heldErr)
+		}
+		if _, statErr := os.Lstat(path + "-owned"); !os.IsNotExist(statErr) {
+			t.Fatalf("failed rename published replacement: %v", statErr)
+		}
+		return
 	}
 	if err := os.Mkdir(path, 0o700); err != nil {
 		t.Fatal(err)
