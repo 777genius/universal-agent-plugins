@@ -908,3 +908,101 @@ zero issues using the normal serial runner lock, Go 1.26.11 and golangci-lint
 Only this factual plan append follows independent R2; all six reviewed runtime
 and test file hashes remain unchanged. Full trusted native and exact-commit
 required CI results remain necessary before merge.
+
+### Docs smoke readiness after the 38a checkpoint
+
+The automatic Docs run `43530572709`, job `132246932218`, completed its build
+and docs checks, then failed in the locale UI smoke at `inspectSwitcher`:
+`goto` exceeded its existing 30-second `networkidle` wait for `/hi/use/`.
+The actual checkout was merge `f20ded25aa778f48be2b473cda07ef741077e0cc`
+of `38a5793b75e555c9260f1dde78423a159ddeb2f0` into main
+`ee6bbb04c3bf1cf2981764e5093d803dc0b57aec`. Its browser smoke sources match
+both parents. Original UI artifact `14089075744` is 10,346,438 bytes with
+SHA-256 `1b92e2784c7f024240c1c755bad462be18445e848ce7e1be892552e4d94e6c99`;
+its ZIP CRC and 765-member inventory were checked. It contains the built site
+and earlier screenshots, but no failing-page network or DOM trace, so the
+specific historical cause of the idle timeout remains unknown.
+
+R1 accepted a smoke-only readiness correction in three existing files. Only
+the locale `goto` helper changes: it waits for DOMContentLoaded, the already-used
+installed Vue application and visible document heading (or the existing manual
+language gateway), at the exact expected URL. The site's existing `cleanUrls`
+behavior maps the explicitly exercised `.html` spelling to its clean path;
+origin, query and fragment remain exact. One monotonic 30-second deadline covers
+navigation and readiness; expiration refuses rather than passing timeout zero.
+All existing HTTP/content, locale, fragment, reload/history and working-control
+assertions remain. No website content, native stage, qualification or timeout
+budget changes. Playwright's [navigation documentation](https://playwright.dev/docs/api/class-page#page-goto)
+also recommends readiness assertions in place of `networkidle` for tests.
+
+The 26 affected locale contracts pass on Node 24.22.1, including the 18 new
+top-level/subtest cases; `git diff --check` also passes. They distinguish a
+ready interface with busy background network from
+an incorrect URL, missing/unhydrated/hidden interface, late URL change and
+readiness at or beyond the original deadline. They also retain the existing
+clean-alias and manual-gateway cases. Independent R2 accepted all three frozen
+hashes, replayed the 26 contracts and joined the original artifact's VitePress
+framework to the clean-URL behavior. Reconstructing the whole browser helper
+back to 38a confirmed that every other assertion remained unchanged. New hosted
+smoke proof remains pending. Local original-site replay could not launch Chromium because
+the environment denied its process-singleton socket before the first navigation;
+browser/server cleanup completed, and no sandbox or permission bypass was used.
+The 38a trusted native result has now been preserved as described below. This
+smoke correction and the narrow native-observer correction form one candidate.
+
+### Passive pending-input observation after the 38a trusted failure
+
+Original trusted run `43530572507`, job `132246930332`, retained both diagnostic
+archives before its native-success gate failed. Native artifact `14090367223`
+is 20,493 bytes, SHA-256
+`942904dad6fc76714daee5dba75260438a5a4152af6b0abf3bf00cf0574a5320`;
+its inner archive is 99,007 bytes, SHA-256
+`e886bca1d9a04dcd583033d377c545e850c9e7101b53f968c1c00e824ae84d80`.
+Frontend artifact `14089628835` is 17,288 bytes, SHA-256
+`e4aa8f4e97922d29a08d25241667dfe4492a9bba4b9bc16ee109c22f13f27acd`;
+its inner archive is 63,358 bytes, SHA-256
+`e5fb7ff71f2ac8ec7b9a89a8ad753821fa1178bd2c9310b543530dbb5e13937f`.
+The audit joined both source identities, all 49 original stream receipts, 16
+successful frontend commands, nine reaped controller children and four exact
+driver frames. Both cleanup receipts report complete. Empty A/B and installed A
+completed; installed A includes genuine gateway initialization, tool listing and
+the nonce-bound A tool call. Installed B failed at `mcp-trust/operation-deadline`,
+with `awaitBoundary=input-placeholder`, `elapsedMs=15000`, `startSelected=true`,
+`trustAccepted=false` and the previous `postStartInput=action-picker` observation.
+Final visible native UI was empty. Native log parsing was unavailable, so these
+facts do not prove that B's Quick Pick accepted the action or that its MCP started.
+All full-lifecycle qualification flags remain false.
+
+The actual helper first counted a live `:visible` locator and then separately
+read its attribute through that live locator. A picker disappearing between
+those calls makes Playwright wait for a matching visible input to return. The
+pinned Playwright 1.64.1 implementation routes `getAttribute` through its selector
+wait loop, while `evaluateAll` reads the matched array without waiting for a
+new member. An unchanged 38a helper replay reproduces this count-to-hidden
+transition and fails its original budget. That counterexample establishes the
+observer race; the original archive does not establish the historical renderer
+or CDP timing that triggered the timeout.
+
+R1 accepted one passive `evaluateAll` observation of count and placeholder from
+the same matched array, with the original positive deadline checked before and
+after the read. It preserves the exact pending-action label, rejects foreign or
+multiple inputs, and does not wait for a closed picker to reappear. The existing
+fresh Output, exact Trust origin, Running and protocol checks still decide
+progress. Native actions, strict exact-row clicks, the 15-second budget, ten
+stages, cleanup and closed output schemas remain unchanged. Together with the
+reviewed Docs correction, this candidate changes five existing paths.
+
+The unchanged original-helper counterexample now passes against the candidate;
+all 43 driver/observer Node contracts and strict TypeScript 7.0.2 compilation
+pass. Existing late-read refusals remain, including a late empty snapshot, and
+an already expired budget starts no probe. The 26 Docs contracts also passed
+before this unrelated native helper edit. Independent combined R2, new hosted
+Docs smoke and a complete trusted lifecycle remain required before merge.
+
+Independent combined R2 subsequently accepted all five frozen paths. The
+reviewer replayed all 43 Node contracts, the unchanged original RED and candidate
+PASS, the pinned Playwright selector-read route, and the original four ZIP
+hashes/CRCs plus all 49 stream joins. Both Docs implementation/test hashes remain
+identical to their earlier accepted review. Only this factual note follows R2;
+the four runtime/test file hashes remain unchanged. New hosted Docs and complete
+trusted lifecycle success are still required, with historical timing unproved.

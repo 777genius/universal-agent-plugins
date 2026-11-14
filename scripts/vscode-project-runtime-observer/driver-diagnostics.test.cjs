@@ -431,8 +431,14 @@ test('actual start preserves pending inputs and requires a fresh Output before c
     vm.createContext(context);
     vm.runInContext(stripTypeScriptTypes(section('async function startInputReady(', 'async function input('), { mode: 'strip' }) + '\nglobalThis.run = startServer;', context);
     const page = { keyboard: { press: async () => {} }, locator: () => ({
-      count: async () => { polls++; return mode === 'multiple' ? 2 : ['foreign','late-input','old-forever'].includes(mode) || mode === 'old-then-hidden' && polls < 3 ? 1 : 0; },
-      getAttribute: async () => { if (mode === 'late-input') clock = 15000; return mode === 'foreign' ? 'PRIVATE_INPUT' : "Select action for 'owned'"; }
+      evaluateAll: async read => {
+        polls++;
+        const count = mode === 'multiple' ? 2 : ['foreign','late-input','old-forever'].includes(mode) || mode === 'old-then-hidden' && polls < 3 ? 1 : 0;
+        return read(Array.from({ length: count }, () => ({ getAttribute: name => {
+          assert.equal(name, 'placeholder'); if (mode === 'late-input') clock = 15000;
+          return mode === 'foreign' ? 'PRIVATE_INPUT' : "Select action for 'owned'";
+        } })));
+      }
     }), evaluate: async () => ({ outputVisible: mode === 'preexisting' || started && mode !== 'no-output', launchError: 'none' }) };
     const mcp = {};
     const operation = context.run(page, { label: 'owned', originUri: 'owned-origin' }, 60000, () => {}, mcp);
@@ -465,25 +471,58 @@ test('launch Output uses the exact labelled document container, never its generi
 });
 
 test('actual pending-input helper records only current closed observations without acting or renewing budget', async () => {
-  for (const kind of ['none', 'action-picker', 'trust-picker', 'other', 'multiple', 'late-count', 'late-placeholder']) {
-    let clock = 0, attributes = 0;
+  for (const kind of ['none', 'action-picker', 'trust-picker', 'other', 'multiple', 'expired', 'late-observation', 'late-placeholder', 'late-hidden']) {
+    let clock = kind === 'expired' ? 100 : 0, attributes = 0, probes = 0;
     const box = { Error, performance: { now: () => clock }, within: async value => value };
     vm.createContext(box);
     vm.runInContext(stripTypeScriptTypes(section('async function startInputReady(', 'async function startServer('), { mode: 'strip' }) + '\nglobalThis.read = startInputReady;', box);
     const mcp = {};
     const page = { locator: () => ({
-      count: async () => { if (kind === 'late-count') clock = 100; return kind === 'none' ? 0 : kind === 'multiple' ? 2 : 1; },
-      getAttribute: async () => { attributes++; if (kind === 'late-placeholder') clock = 100;
-        return kind === 'action-picker' ? "Select action for 'owned'" : kind === 'trust-picker' ? 'Select MCP servers to trust' : 'PRIVATE_INPUT'; }
+      evaluateAll: async read => {
+        probes++; if (['late-observation', 'late-hidden'].includes(kind)) clock = 100;
+        const count = ['none', 'late-hidden'].includes(kind) ? 0 : kind === 'multiple' ? 2 : 1;
+        return read(Array.from({ length: count }, () => ({ getAttribute: name => {
+          assert.equal(name, 'placeholder'); attributes++; if (kind === 'late-placeholder') clock = 100;
+          return kind === 'action-picker' ? "Select action for 'owned'" : kind === 'trust-picker' ? 'Select MCP servers to trust' : 'PRIVATE_INPUT';
+        } })));
+      }
     }) };
     if (['none', 'action-picker'].includes(kind)) assert.equal(await box.read(page, 'owned', 100, mcp), kind === 'none');
     else await assert.rejects(box.read(page, 'owned', 100, mcp), /native UI selection|native MCP startup deadline/);
-    if (kind.startsWith('late-')) assert.equal(Object.hasOwn(mcp, 'postStartInput'), false);
+    if (kind.startsWith('late-') || kind === 'expired') assert.equal(Object.hasOwn(mcp, 'postStartInput'), false);
     else assert.equal(mcp.postStartInput, kind);
-    assert.equal(mcp.awaitBoundary, ['none', 'multiple', 'late-count'].includes(kind) ? 'input-count' : 'input-placeholder');
-    if (['none', 'multiple', 'late-count'].includes(kind)) assert.equal(attributes, 0);
+    assert.equal(mcp.awaitBoundary, 'input-placeholder');
+    assert.equal(probes, kind === 'expired' ? 0 : 1);
+    if (['none', 'multiple', 'expired', 'late-hidden'].includes(kind)) assert.equal(attributes, 0);
     assert.equal(JSON.stringify(mcp).includes('PRIVATE'), false);
   }
+});
+
+test('actual pending-input helper observes disappearance without waiting for the picker to return', async () => {
+  let clock = 0, visible = true, reads = 0;
+  const box = { Error, performance: { now: () => clock }, within: async work => work };
+  vm.createContext(box);
+  vm.runInContext(stripTypeScriptTypes(section('async function startInputReady(', 'async function startServer('), { mode: 'strip' }) + '\nglobalThis.read = startInputReady;', box);
+  const node = { getAttribute(name) { assert.equal(name, 'placeholder'); reads++; return "Select action for 'owned'"; } };
+  const input = {
+    count: async () => { const count = visible ? 1 : 0; queueMicrotask(() => { visible = false; }); return count; },
+    getAttribute: async () => {
+      if (!visible) { await Promise.resolve(); clock = 100; throw new Error('operation deadline exceeded'); }
+      return node.getAttribute('placeholder');
+    },
+    evaluateAll: async read => {
+      const value = read(visible ? [node] : []);
+      queueMicrotask(() => { visible = false; });
+      return value;
+    }
+  };
+  const page = { locator: selector => { assert.equal(selector, '.quick-input-widget:visible input'); return input; } };
+  const mcp = { postStartInput: 'action-picker' };
+  const first = await box.read(page, 'owned', 100, mcp);
+  assert.equal(first || await box.read(page, 'owned', 100, mcp), true);
+  assert.equal(mcp.postStartInput, 'none');
+  assert.equal(clock, 0);
+  assert(reads <= 1);
 });
 
 test('selected-server native notifications are classified without exporting command/error text', () => {

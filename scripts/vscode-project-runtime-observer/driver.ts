@@ -416,14 +416,16 @@ async function startInputReady(page: Page, label: string, deadline: number, mcp:
     return deadline - performance.now();
   };
   const input = page.locator('.quick-input-widget:visible input');
-  mcp.awaitBoundary = 'input-count';
-  const count = await within(input.count(), remaining());
+  mcp.awaitBoundary = 'input-placeholder';
+  const budget = remaining();
+  // A pending picker can close between count() and a locator attribute read.
+  // Observe the same matched array without waiting for that input to return.
+  const { count, placeholder } = await within(input.evaluateAll(inputs => ({
+    count: inputs.length, placeholder: inputs.length === 1 ? inputs[0]?.getAttribute('placeholder') : null
+  })), budget);
   remaining();
   if (count > 1) { mcp.postStartInput = 'multiple'; throw new Error('native UI selection is absent or ambiguous'); }
   if (!count) { mcp.postStartInput = 'none'; return true; }
-  mcp.awaitBoundary = 'input-placeholder';
-  const placeholder = await within(input.getAttribute('placeholder', { timeout: remaining() }), remaining());
-  remaining();
   mcp.postStartInput = placeholder === "Select action for '" + label + "'" ? 'action-picker' : placeholder === 'Select MCP servers to trust' ? 'trust-picker' : 'other';
   if (mcp.postStartInput !== 'action-picker') throw new Error('native UI selection is absent or ambiguous');
   return false;
