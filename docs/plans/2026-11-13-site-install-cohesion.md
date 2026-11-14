@@ -60,6 +60,10 @@ Complexity 4/10; expected reliability 9/10; estimate confidence 8/10.
   scoped Pi discovery, mixed-target Web guards and source-kind presentation.
 - Round 3: independent implementation review before merge; correct findings and
   inspect the exact final commit. Do not treat queued/skipped checks as success.
+- Late review confirmed mixed guided Web setup has no Web receipt until the
+  separate registration step. Preserve its unsaved add command and explicitly
+  restrict maintenance to local peers; signed Web lifecycle remains unchanged.
+  Verify exact command strings in unit and desktop/mobile browser coverage.
 
 ## Verification and completion
 

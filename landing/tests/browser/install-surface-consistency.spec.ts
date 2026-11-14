@@ -54,8 +54,11 @@ for (const width of [1440, 390]) {
     await page.getByRole('checkbox', { name: /^Codex CLI/ }).click();
     await page.keyboard.press('Escape');
     await expect(page.locator('.install-panel .command-snippet')).toHaveCount(4);
-    await expect(page.locator('.install-panel .command-snippet--add code')).toContainText('chatgptweb');
-    await expect(page.locator('.install-panel .command-snippet--add code')).toContainText('codex');
+    await expect(page.locator('.install-panel .command-snippet--add code'))
+      .toHaveText(/add context7 --target (chatgptweb,codex|codex,chatgptweb) --no-save$/);
+    for (const action of ['update', 'repair', 'remove'])
+      await expect(page.locator(`.install-panel .command-snippet--${action} code`))
+        .toHaveText(`npx -y universal-agent-plugins ${action} context7 --target codex`);
     expect(errors).toEqual([]);
   });
 }

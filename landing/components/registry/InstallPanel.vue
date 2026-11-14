@@ -38,6 +38,9 @@ const {
 } = selection;
 // A guided Web-only add prints setup instructions without creating an installation.
 const guidedWebOnly = computed(() => guidedWebSelected.value && targets.value.length === 1 && targets.value[0] === 'chatgptweb');
+const lifecycleTargets = computed(() => guidedWebSelected.value && !guidedWebOnly.value
+  ? cliInstallTargets(targets.value.filter(target => target !== 'chatgptweb'))
+  : undefined);
 const autoOption = computed(() => ({
   label: t('registryUi.install.allInstalledAgentsRecommended'),
   summary: t('registryUi.install.allInstalledAgents'),
@@ -103,7 +106,8 @@ const commands = computed(() =>
         ? pinnedPiProjectCommands(props.plugin)
         : scope.value === 'project'
           ? projectCatalogCommands(props.plugin, autoDetect.value ? undefined : canonicalInstallTargets(targets.value))
-          : pluginCommands(props.plugin, autoDetect.value ? undefined : cliInstallTargets(targets.value))
+          : pluginCommands(props.plugin, autoDetect.value ? undefined : cliInstallTargets(targets.value),
+              undefined, 'user', lifecycleTargets.value)
       )
     : undefined,
 );
