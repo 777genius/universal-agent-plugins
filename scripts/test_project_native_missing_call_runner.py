@@ -6,9 +6,10 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from project_native_missing_call_runner import (
-    agent_command, installation_id, installed_config, permission_fixture,
+    agent_command, installation_id, installed_config, permission_fixture, source_build,
 )
 
 
@@ -44,6 +45,30 @@ class RealClientRunnerContractTest(unittest.TestCase):
             self.assertNotIn("--yolo", argv)
             self.assertNotIn("--strict-mcp-config", argv)
             self.assertNotIn("--mcp-config", argv)
+
+    def test_source_build_uses_prepared_scratch_bin(self):
+        # The runner prepares work/bin before source_build. Its mkdir must
+        # accept that existing directory rather than failing before Go runs.
+        with tempfile.TemporaryDirectory() as temp:
+            work = Path(temp)
+            (work / "bin").mkdir()
+            (work / "source").mkdir()
+            labels = []
+
+            def simulated_invoke(label, argv, cwd, env, private, timeout=35):
+                labels.append(label)
+                if label == "go-version":
+                    return b"go version go1.26.11 linux/amd64\n", b""
+                self.assertIn(label, ("build-installer", "build-probe"))
+                Path(argv[argv.index("-o") + 1]).write_bytes(b"source-built")
+                return b"", b""
+
+            with patch("project_native_missing_call_runner.shutil.which", return_value="/pinned/go"), \
+                    patch("project_native_missing_call_runner.invoke", side_effect=simulated_invoke):
+                installer, probe = source_build(work, {}, work / "private")
+            self.assertTrue(installer.is_file())
+            self.assertTrue(probe.is_file())
+            self.assertEqual(labels, ["go-version", "build-installer", "build-probe"])
 
     def test_requires_public_uap_ownership_receipt(self):
         self.assertEqual(installation_id({"data": {"targets": [{

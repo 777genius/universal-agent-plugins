@@ -102,7 +102,7 @@ def source_build(work, env, private):
     if version != b"go version go1.26.11 linux/amd64\n":
         raise ValueError("required pinned Go 1.26.11 not selected")
     installer, probe = work / "bin" / "agentplugins", work / "source" / "bin" / "probe"
-    installer.parent.mkdir(mode=0o700, parents=True)
+    installer.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     probe.parent.mkdir(mode=0o700, parents=True)
     invoke("build-installer", [compiler, "build", "-p=1", "-trimpath", "-o", installer, "./cmd/agentplugins"], ROOT / "cli", env, private, 240)
     invoke("build-probe", [compiler, "build", "-p=1", "-trimpath", "-o", probe, "./repotests/testdata/agentplugins_native_probe"], ROOT, env, private, 120)
