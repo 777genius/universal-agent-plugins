@@ -35,6 +35,11 @@ func (*Adapter) VerifySession(ctx context.Context, env clients.Env, plan clients
 	}
 	bounded, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
+	// Source verification is read-only but can be slow: revoked consent must
+	// never reach even a runner that launches before checking cancellation.
+	if err := bounded.Err(); err != nil {
+		return fmt.Errorf("cline selected-source observation canceled before native start: %w", err)
+	}
 	result, err := env.Runner.Run(bounded, legacyports.Command{
 		Argv: []string{plan.Executable, "--auto-approve", "false", "--cwd", plan.Directory, "config", "mcp", "--json"},
 		Dir:  plan.Directory, Env: plan.ChildEnvironment(os.Environ()), StdoutLimitBytes: 1 << 20,

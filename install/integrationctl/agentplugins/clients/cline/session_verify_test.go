@@ -120,6 +120,40 @@ func TestSessionNativeInventoryExitAndCapability(t *testing.T) {
 	}
 }
 
+// This read-only file seam reproduces consent revocation while the selected
+// MCP source is being read. Native runners must never see that canceled call.
+type cancelNativeSourceOnRead struct {
+	nativeconfig.FileIO
+	body   []byte
+	cancel context.CancelFunc
+}
+
+func (file cancelNativeSourceOnRead) ReadNoFollow(string) ([]byte, os.FileMode, bool, error) {
+	file.cancel()
+	return bytes.Clone(file.body), 0o600, true, nil
+}
+
+func TestSessionNativeInventoryCancellationDuringSourceRead(t *testing.T) {
+	project := t.TempDir()
+	path := filepath.Join(project, "mcp.json")
+	owned := []byte(fmt.Sprintf(`{"mcpServers":{"owned":{"transport":{"type":"stdio","command":%q,"cwd":%q},"autoApprove":[]}}}`,
+		filepath.Join(project, "owned-probe.exe"), project))
+	plan := clients.SessionPlan{Executable: "/native/cline", Directory: project, Servers: []string{"owned"},
+		ConfigDigest: fmt.Sprintf("%x", sha256.Sum256(owned)),
+		Environment: map[string]string{"CLINE_MCP_SETTINGS_PATH": path, "CLINE_NO_AUTO_UPDATE": "1"}}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	runner := &sessionObservationRunner{result: legacyports.CommandResult{CleanupComplete: true}}
+	kernel := nativeconfig.NewWithFileIO(cancelNativeSourceOnRead{body: owned, cancel: cancel})
+	err := New().VerifySession(ctx, clients.Env{Runner: runner, NativeConfig: kernel}, plan)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("source-read cancellation returned %v, want context.Canceled", err)
+	}
+	if runner.command.Argv != nil {
+		t.Fatalf("revoked consent reached native runner: %+v", runner.command)
+	}
+}
+
 func TestSessionNativeInventoryRefusesSelectedSourceChanges(t *testing.T) {
 	project := t.TempDir()
 	path := filepath.Join(project, "mcp.json")
