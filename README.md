@@ -1,4 +1,4 @@
-<img width="2172" height="724" alt="Universal Agent Plugins - install and create plugins across AI agents with one command" src="assets/readme-banner.png" />
+<img width="2172" height="724" alt="Universal Agent Plugins - install and create plugins across AI agents with one command" src="assets/readme-banner.webp" />
 
 <p align="center">
     <img src="landing/public/client-icons/openai.svg" width="32" height="32" alt="Codex and ChatGPT" />&nbsp;&nbsp;
@@ -413,7 +413,7 @@ For Go Hooks, host detection, installation, and TypeScript management, see the
 <table>
   <tr>
     <td width="104" align="center">
-      <a href="https://github.com/777genius/agent-notifications"><img src="landing/assets/images/showcase/agent-notifications.png" width="80" height="80" alt="Agent Notifications logo" /></a>
+      <a href="https://github.com/777genius/agent-notifications"><img src="landing/assets/images/showcase/agent-notifications.webp" width="80" height="80" alt="Agent Notifications logo" /></a>
     </td>
     <td>
       <strong><a href="https://github.com/777genius/agent-notifications">Agent Notifications</a></strong><br />

@@ -5,13 +5,13 @@
     "role": "Owner-approved visual reference; preserve original bytes."
   },
   "asset": {
-    "path": "landing/assets/images/restore-monitor.png",
-    "sha256": "e7519553af351146950eb16772c819df9a2fb469381116c22220c382bb10f652",
+    "path": "landing/assets/images/restore-monitor.webp",
+    "sha256": "d035d8b2cc88fbde8c305068228044526fcb27d925f70f6a37b6dbae8d293c5d",
     "size": [
       1577,
       997
     ],
-    "tool": "built-in image_gen",
+    "tool": "built-in image_gen; lossless-alpha WebP optimization (libwebp)",
     "transparent_background": true,
     "usage": "One shared decorative image for both monitors; labels, commands, copy buttons and handoff icons are HTML/SVG. Keep the site background."
   },
