@@ -1,0 +1,224 @@
+#!/usr/bin/env python3
+"""Offline contract regressions; these tests are never a lifecycle receipt."""
+import copy
+import importlib.util
+import json
+from pathlib import Path
+import tempfile
+import unittest
+
+SPEC = importlib.util.spec_from_file_location("released_source_audit", Path(__file__).with_name("released-source-audit.py"))
+audit = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(audit)
+
+
+def snapshot():
+    return {"revocations": [], "evidence": [], "distributions": [{
+        "id": "fixture/portable", "status": "active", "releases": [{
+            "sequence": 1, "manifest_name": "portable", "components": ["mcp"],
+            "package_source": {"repository": "fixture/catalog", "revision": "a" * 40, "path": "plugins/portable"},
+            "tree_digest": "sha256:" + "b" * 64, "manifest_digest": "sha256:" + "c" * 64,
+        }], "release_policies": [{"release_sequence": 1, "status": "active", "targets": [{"client": "codex"}]}],
+    }]}
+
+
+def case(value=None):
+    return audit.source_case(value or snapshot(), "fixture/portable", 1, "pi", "project")
+
+
+def state():
+    selected = case()
+    binding = {"client_id": "pi", "client_binding_id": "binding", "scope": "project", "materialization": "materialized",
+               "package_revision": {"resolved_revision": "a" * 40, "tree_digest": selected["tree_digest"], "manifest_digest": selected["manifest_digest"]}}
+    return {"installations": [{"installation_id": "install", "declared_name": "portable", "origin_mode": "direct",
+                               "source": {"repository": "fixture/catalog", "package_subpath": "plugins/portable", "resolved_revision": "a" * 40},
+                               "clients": {"binding": binding}}],
+            "environment_receipts": [{"installation_id": "install", "client_id": "pi", "client_binding_id": "binding", "phase": "committed",
+                                      "source_key": "github:fixture/catalog:plugins/portable", "package_digest": selected["tree_digest"],
+                                      "environment_id": "project-default", "alias": "portable", "receipt_id": "receipt"}]}
+
+
+class SourceSelectionTests(unittest.TestCase):
+    def test_exact_source_is_not_a_signed_target_grant(self):
+        result = case()
+        self.assertEqual(result["selector"], "github:fixture/catalog@" + "a" * 40 + "//plugins/portable")
+        self.assertEqual(result["expected"], "materialized-lifecycle")
+        self.assertNotIn("authorized", result)
+
+    def test_suspended_and_revoked_source_refused(self):
+        for field in ("distribution", "policy", "revocation"):
+            value = snapshot()
+            if field == "distribution":
+                value["distributions"][0]["status"] = "suspended"
+            elif field == "policy":
+                value["distributions"][0]["release_policies"][0]["status"] = "revoked"
+            else:
+                value["revocations"] = [{"distribution_id": "fixture/portable", "release_sequence": 1}]
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                case(value)
+
+    def test_existing_signed_target_is_never_reinterpreted(self):
+        value = snapshot()
+        value["distributions"][0]["release_policies"].append({"release_sequence": 2, "status": "revoked", "targets": [{"client": "pi"}]})
+        with self.assertRaises(ValueError):
+            case(value)
+
+    def test_existing_target_evidence_requires_review(self):
+        value = snapshot()
+        value["evidence"] = [{"client": "pi", "distribution_id": "fixture/portable", "status": "failed"}]
+        with self.assertRaises(ValueError):
+            case(value)
+
+    def test_no_extension_or_app_binding_fallback(self):
+        for kind in ("extension", "binding"):
+            value = snapshot()
+            row = value["distributions"][0]
+            if kind == "extension":
+                row["releases"][0]["components"].append("extensions")
+            else:
+                row["release_policies"][0]["targets"][0]["app_binding"] = {"app_id": "other"}
+            with self.subTest(kind=kind), self.assertRaises(ValueError):
+                case(value)
+
+    def test_source_pins_are_complete_and_safe(self):
+        for field, bad in (("revision", "main"), ("path", "../escape"), ("path", "plugins//portable"), ("repository", "evil.example/x/y")):
+            value = snapshot()
+            value["distributions"][0]["releases"][0]["package_source"][field] = bad
+            with self.subTest(field=field, bad=bad), self.assertRaises(ValueError):
+                case(value)
+
+    def test_exact_release_digest_required(self):
+        value = snapshot()
+        value["distributions"][0]["releases"][0]["tree_digest"] = "sha256:short"
+        with self.assertRaises(ValueError):
+            case(value)
+
+    def test_duplicate_distribution_rejected(self):
+        value = snapshot()
+        value["distributions"].append(copy.deepcopy(value["distributions"][0]))
+        with self.assertRaises(ValueError):
+            case(value)
+
+
+class ReceiptTests(unittest.TestCase):
+    def test_exact_saved_receipt(self):
+        installation, binding, receipt = audit.checked_binding(state(), case())
+        self.assertEqual(installation["installation_id"], "install")
+        self.assertEqual(binding["client_binding_id"], receipt["client_binding_id"])
+
+    def test_source_repository_revision_and_subpath_are_not_interchangeable(self):
+        for field in ("repository", "resolved_revision", "package_subpath"):
+            value = state()
+            value["installations"][0]["source"][field] = "different"
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                audit.checked_binding(value, case())
+
+    def test_binding_scope_digest_and_materialization_fail_closed(self):
+        for field in ("client_id", "scope", "materialization", "tree_digest", "manifest_digest", "resolved_revision"):
+            value = state()
+            binding = value["installations"][0]["clients"]["binding"]
+            target = binding["package_revision"] if field.endswith("digest") or field == "resolved_revision" else binding
+            target[field] = "different"
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                audit.checked_binding(value, case())
+
+    def test_saved_ownership_required(self):
+        for field in ("phase", "installation_id", "client_binding_id", "environment_id", "source_key", "package_digest"):
+            value = state()
+            value["environment_receipts"][0][field] = "different"
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                audit.checked_binding(value, case())
+
+    def test_state_cannot_be_supplied_by_an_acquired_package(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            foreign = root / "uap-data/cache/acquired-package/state-v2.json"
+            foreign.parent.mkdir(parents=True)
+            foreign.write_text(json.dumps(state()), encoding="utf-8")
+            self.assertEqual(audit.state_file(root, "user"), {"installations": []})
+
+
+class RefusalTests(unittest.TestCase):
+    selected = {"distribution": "777genius/marketing-kit", "name": "marketing-kit"}
+
+    @staticmethod
+    def output(message):
+        return {"exit_code": 1, "timeout": False, "stdout_full": "", "stderr_full": message,
+                "stdout_tail": "", "stderr_tail": message[-1800:]}
+
+    def test_exact_required_distribution_and_version(self):
+        for dependency, version in (("hubspot-crm", "0.1.0"), ("notion", "0.1.0"), ("playwright-bridge", "0.0.80")):
+            message = f"agentplugins: dependency conflict for directory:777genius/{dependency}: marketing-kit version {version}\n"
+            refused = audit.checked_dependency_refusal(self.output(message), self.selected)
+            self.assertEqual(refused["distribution"], "777genius/" + dependency)
+            self.assertEqual(refused["version"], version)
+
+    def test_unrelated_failures_do_not_certify_dependency_refusal(self):
+        for message in (
+            "agentplugins: no compatible candidate for 777genius/marketing-kit",
+            "agentplugins: fetch 777genius/notion failed while resolving dependency",
+            "agentplugins: dependency conflict for directory:777genius/marketing-kit: marketing-kit version 0.1.0",
+            "agentplugins: dependency conflict for directory:777genius/other: marketing-kit version 0.1.0",
+            "agentplugins: dependency conflict for directory:777genius/notion: marketing-kit version 0.2.0",
+            "agentplugins: dependency conflict for directory:777genius/notion: unrelated version 0.1.0",
+            "transport error: dependency conflict for directory:777genius/notion: marketing-kit version 0.1.0",
+        ):
+            with self.subTest(message=message), self.assertRaises(ValueError):
+                audit.checked_dependency_refusal(self.output(message), self.selected)
+
+    def test_timeout_success_or_output_injection_is_not_refusal(self):
+        message = "agentplugins: dependency conflict for directory:777genius/notion: marketing-kit version 0.1.0"
+        for field, value in (("timeout", True), ("exit_code", 0), ("exit_code", None), ("stdout_full", "unrelated failure")):
+            output = self.output(message)
+            output[field] = value
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                audit.checked_dependency_refusal(output, self.selected)
+
+    def test_truncated_tail_cannot_hide_an_unrelated_error(self):
+        message = "agentplugins: dependency conflict for directory:777genius/notion: marketing-kit version 0.1.0"
+        output = self.output(message)
+        output["stderr_full"] = "unrelated acquisition failure\n" + "x" * 2000 + "\n" + message
+        with self.assertRaises(ValueError):
+            audit.checked_dependency_refusal(output, self.selected)
+        del output["stderr_full"]
+        with self.assertRaises(ValueError):
+            audit.checked_dependency_refusal(output, self.selected)
+
+
+class NativeCleanupTests(unittest.TestCase):
+    def test_empty_owned_entries_and_foreign_config_survive(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            native = root / ".pi"
+            native.mkdir()
+            (native / "mcp.json").write_text('{"mcpServers":{"foreign":{"url":"https://portable.example/mcp"}}}', encoding="utf-8")
+            result = audit.checked_native_cleanup(native, case(), {"native_objects": [{"logical_name": "owned-api"}]}, root)
+            self.assertEqual(result["remaining"], [])
+
+    def test_new_json_or_yaml_owned_mcp_entry_blocks_pass(self):
+        for filename, text in (("mcp.json", '{"mcpServers":{"owned-api":{"url":"https://example.test"}}}'),
+                               ("config.yaml", 'mcp_servers:\n  owned-api:\n    url: https://example.test\n')):
+            with self.subTest(filename=filename), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                native = root / "profile"
+                native.mkdir()
+                (native / filename).write_text(text, encoding="utf-8")
+                # This file was absent before add, and its server identity
+                # differs from the package name. Both were former blind spots.
+                binding = {"native_objects": [{"logical_name": "owned-api", "path": str(native / filename)}]}
+                with self.assertRaisesRegex(ValueError, "owned native entries remain"):
+                    audit.checked_native_cleanup(native, case(), binding, root)
+
+    def test_retained_package_file_blocks_pass(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            native = root / ".agents"
+            package = native / "plugins/portable"
+            package.mkdir(parents=True)
+            (package / "plugin.json").write_text('{"name":"portable"}', encoding="utf-8")
+            with self.assertRaises(ValueError):
+                audit.checked_native_cleanup(native, case(), {}, root)
+
+
+if __name__ == "__main__":
+    unittest.main()

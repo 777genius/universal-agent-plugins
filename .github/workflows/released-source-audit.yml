@@ -1,0 +1,131 @@
+name: Released exact-source lifecycle qualification
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'scripts/released-source-audit.py'
+      - 'scripts/test_released_source_audit.py'
+      - 'scripts/live-install-audit.py'
+      - 'scripts/run-native-client-matrix.py'
+      - 'scripts/native_client_draft.py'
+      - 'scripts/pi_project_native_e2e.py'
+      - 'scripts/e2e/released-native-proof.py'
+      - 'npm/agentplugins/scripts/release-assets.js'
+      - 'cli/cmd/agentplugins/bootstrapgen/**'
+      - 'cli/cmd/agentplugins/internal/bootstrapio/**'
+      - 'cli/cmd/agentplugins/directory_bootstrap_inputs/trusted-keys.json'
+      - 'install/integrationctl/agentplugins/adapters/directoryv1/**'
+      - '.github/workflows/released-source-audit.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/released-source-audit.py'
+      - 'scripts/test_released_source_audit.py'
+      - 'scripts/live-install-audit.py'
+      - 'scripts/run-native-client-matrix.py'
+      - 'scripts/native_client_draft.py'
+      - 'scripts/pi_project_native_e2e.py'
+      - 'scripts/e2e/released-native-proof.py'
+      - 'npm/agentplugins/scripts/release-assets.js'
+      - 'cli/cmd/agentplugins/bootstrapgen/**'
+      - 'cli/cmd/agentplugins/internal/bootstrapio/**'
+      - 'cli/cmd/agentplugins/directory_bootstrap_inputs/trusted-keys.json'
+      - 'install/integrationctl/agentplugins/adapters/directoryv1/**'
+      - '.github/workflows/released-source-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  attestations: read
+
+concurrency:
+  group: released-source-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  source-lifecycle:
+    name: Public .108 / ${{ matrix.client }} / ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        client: [antigravity, pi]
+        platform: [linux, macos, windows]
+        include:
+          - platform: linux
+            os: ubuntu-24.04
+            target: linux-amd64
+          - platform: macos
+            os: macos-15
+            target: darwin-arm64
+          - platform: windows
+            os: windows-2025
+            target: windows-amd64
+          - os: ubuntu-24.04
+            target: linux-amd64
+            client: hermes
+    env:
+      GH_TOKEN: ${{ github.token }}
+      AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED: '1'
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      AUDIT_WORKFLOW_SHA: ${{ github.workflow_sha }}
+    steps:
+      - name: Preserve exact Windows source bytes
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.11'
+          cache: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.21.1'
+          package-manager-cache: false
+      - name: Require exact harness and exercise receipt refusals
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git diff --exit-code
+          ${{ runner.os == 'Windows' && 'python' || 'python3' }} scripts/test_released_source_audit.py
+      - name: Install pinned real Hermes for native target detection
+        if: matrix.client == 'hermes'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha=2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19
+          source="$RUNNER_TEMP/hermes-source"
+          profile="$RUNNER_TEMP/hermes-bootstrap-profile"
+          mkdir -p "$profile"
+          git clone --filter=blob:none --no-checkout https://github.com/NousResearch/hermes-agent.git "$source"
+          git -C "$source" checkout --force --detach "$sha"
+          test "$(git -C "$source" rev-parse HEAD)" = "$sha"
+          env -u GH_TOKEN -u GITHUB_TOKEN HOME="$profile" HERMES_HOME="$profile/selected" bash "$source/scripts/install.sh" \
+            --commit "$sha" --dir "$source" --hermes-home "$profile/selected" \
+            --non-interactive --skip-browser --skip-computer-use
+          test "$(git -C "$source" rev-parse HEAD)" = "$sha"
+          test -x "$profile/.local/bin/hermes"
+          echo "AUDIT_HERMES_BIN=$profile/.local/bin/hermes" >> "$GITHUB_ENV"
+      - name: Qualify exact public-release saved source lifecycles
+        shell: bash
+        run: |
+          set -euo pipefail
+          native=()
+          if [[ "${{ matrix.client }}" == hermes ]]; then native=(--native-bin "$AUDIT_HERMES_BIN"); fi
+          ${{ runner.os == 'Windows' && 'python' || 'python3' }} scripts/released-source-audit.py \
+            --client '${{ matrix.client }}' --target '${{ matrix.target }}' \
+            --report-dir "$RUNNER_TEMP/source-receipt" "${native[@]}"
+      - name: Retain exact receipt, including failures and explicit scope limits
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: source-${{ matrix.client }}-${{ matrix.target }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/source-receipt/receipt.json
+          if-no-files-found: warn
+          retention-days: 14
