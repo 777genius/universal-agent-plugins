@@ -34,7 +34,7 @@ const visibleCommand = computed(() => {
   if (!props.compact) return renderedCommand.value;
   if (renderedCommand.value.includes(' --target '))
     return renderedCommand.value.replace(' --target ', '\n--target ');
-  return renderedCommand.value.replace(/^(npx -y universal-agent-plugins\s+\S+|agentplugins\s+\S+)\s+/, '$1\n');
+  return renderedCommand.value.replace(/^(npx -y universal-agent-plugins\s+\S+|agentplugins\s+(?:add|update|repair|remove|switch))\s+/, '$1\n');
 });
 let timer: ReturnType<typeof setTimeout> | undefined;
 
