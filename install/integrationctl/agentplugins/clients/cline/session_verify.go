@@ -139,7 +139,7 @@ func pinSessionSource(path string) (selected *sessionSourcePin, resultErr error)
 		}
 	}()
 	parentInfo, err := parent.Stat()
-	if err != nil || !os.SameFile(originalParent, parentInfo) {
+	if err != nil || !sameSessionPhysicalIdentity(originalParent, parentInfo, true) {
 		return nil, errors.Join(err, nativeconfig.ErrConcurrentChange)
 	}
 	originalFile, err := os.Lstat(path)
@@ -156,7 +156,7 @@ func pinSessionSource(path string) (selected *sessionSourcePin, resultErr error)
 		}
 	}()
 	fileInfo, err := file.Stat()
-	if err != nil || !os.SameFile(originalFile, fileInfo) || originalFile.Mode() != fileInfo.Mode() {
+	if err != nil || !sameSessionPhysicalIdentity(originalFile, fileInfo, false) {
 		return nil, errors.Join(err, nativeconfig.ErrConcurrentChange)
 	}
 	selected = &sessionSourcePin{parentPath: parentPath, filePath: path, resolvedParent: resolved,
@@ -169,11 +169,11 @@ func pinSessionSource(path string) (selected *sessionSourcePin, resultErr error)
 
 func (pin *sessionSourcePin) Revalidate() error {
 	parent, err := os.Lstat(pin.parentPath)
-	if err != nil || !parent.IsDir() || !os.SameFile(parent, pin.parentInfo) || parent.Mode() != pin.parentInfo.Mode() {
+	if err != nil || !sameSessionPhysicalIdentity(pin.parentInfo, parent, true) {
 		return fmt.Errorf("cline selected MCP parent identity changed: %w", errors.Join(err, nativeconfig.ErrConcurrentChange))
 	}
 	parentHeld, err := pin.parent.Stat()
-	if err != nil || !os.SameFile(parentHeld, pin.parentInfo) || parentHeld.Mode() != pin.parentInfo.Mode() {
+	if err != nil || !sameSessionPhysicalIdentity(pin.parentInfo, parentHeld, true) {
 		return fmt.Errorf("cline held MCP parent identity changed: %w", errors.Join(err, nativeconfig.ErrConcurrentChange))
 	}
 	resolved, err := filepath.EvalSymlinks(pin.parentPath)
@@ -181,17 +181,29 @@ func (pin *sessionSourcePin) Revalidate() error {
 		return fmt.Errorf("cline selected MCP ancestry changed: %w", errors.Join(err, nativeconfig.ErrConcurrentChange))
 	}
 	named, err := os.Lstat(pin.filePath)
-	if err != nil || !named.Mode().IsRegular() || !os.SameFile(named, pin.fileInfo) ||
-		named.Mode() != pin.fileInfo.Mode() || named.Size() != pin.fileInfo.Size() ||
-		!named.ModTime().Equal(pin.fileInfo.ModTime()) {
+	if err != nil || !sameSessionPhysicalIdentity(pin.fileInfo, named, false) {
 		return fmt.Errorf("cline selected MCP file identity changed: %w", errors.Join(err, nativeconfig.ErrConcurrentChange))
 	}
 	held, err := pin.file.Stat()
-	if err != nil || !os.SameFile(held, pin.fileInfo) || held.Mode() != pin.fileInfo.Mode() ||
-		held.Size() != pin.fileInfo.Size() || !held.ModTime().Equal(pin.fileInfo.ModTime()) {
+	if err != nil || !sameSessionPhysicalIdentity(pin.fileInfo, held, false) {
 		return fmt.Errorf("cline held MCP file identity changed: %w", errors.Join(err, nativeconfig.ErrConcurrentChange))
 	}
 	return nil
+}
+
+// Physical identity is mandatory even when a replacement retains identical
+// bytes, permission bits, length and timestamps. A no-follow named observation
+// is joined against the original held object, not treated as new authority.
+func sameSessionPhysicalIdentity(original, observed os.FileInfo, directory bool) bool {
+	if original == nil || observed == nil || !os.SameFile(original, observed) ||
+		original.Mode() != observed.Mode() || original.Size() != observed.Size() ||
+		!original.ModTime().Equal(observed.ModTime()) {
+		return false
+	}
+	if directory {
+		return observed.IsDir() && observed.Mode()&os.ModeSymlink == 0
+	}
+	return observed.Mode().IsRegular()
 }
 
 func (pin *sessionSourcePin) Close() error {
