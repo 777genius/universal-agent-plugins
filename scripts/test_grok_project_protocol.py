@@ -258,7 +258,7 @@ class ContractTests(unittest.TestCase):
                 if fault == "dry-command-package": (self.active / "probe").write_bytes(b"unreviewed effect")
                 if fault == "dry-command-state": self.state_path.write_bytes(before_bytes)
                 if fault == "dry-command-witness": event.write_bytes(b"unreviewed effect")
-                if fault.startswith("dry-command"): raise ValueError("command failed: repair-enable-dry-run")
+                if fault is not None and fault.startswith("dry-command"): raise ValueError("command failed: repair-enable-dry-run")
                 if fault == "dry-state": self.state_path.write_text(json.dumps(before))
                 if fault == "dry-config": config.write_bytes(b"unreviewed dry-run effect")
                 return {"result": "success"}
