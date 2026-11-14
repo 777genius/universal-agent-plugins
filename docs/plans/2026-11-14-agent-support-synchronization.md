@@ -242,3 +242,35 @@ Estimated additional reusable qualification code: 300–450 Python LOC,
 confidence 7/10. Source qualification can proceed through ordinary no-secret
 PR CI; modern production signing still needs the protected issuer controls
 listed above. The connected tools cannot currently provision those controls.
+
+### Final review corrections and hosted qualification
+
+Registry #480 now contains the shared publisher foundation at `83e98fb`.
+The complete 119-test publication/profile/hardening/CAS suite passes, along
+with the released-contract and 31-product build checks. Independent review
+found a package/direct-import singleton mismatch and missing historical schema
+fragment aliases. Both are fixed without relaxing fixed-profile identity or
+legacy schema references; the reviewer reproduced the fixes and gave GO.
+
+UAP's external review identified a User-only explicit policy whose broad
+Project capabilities obscured the usable User route. Commit `eea082d` fixes
+the explanation using actual resolver eligibility. A positive and negative
+policy regression, all 12 affected picker tests, and independent review pass.
+`make vet` and `make generated-check` also pass. This change does not authorize
+an unavailable target or switch the selected scope automatically.
+
+Released-source qualification is isolated in UAP #909 at `e34ab8b`. Its 20
+offline regression tests pass independently; the actual released sources
+confirm all tested flags, saved identities, command envelopes and refusal
+framing. Review tightened exact mandatory-dependency refusal and native MCP
+cleanup observation. Seven real hosted lanes are pending: Antigravity and Pi
+on Linux/macOS/Windows, and Hermes User on Linux. Positive Notion evidence and
+Marketing Kit closure-refusal evidence are not yet production PASS.
+
+Several GitHub-hosted Linux jobs remained unassigned with no test steps.
+The existing configured Namespace runner did start Coverage on the same
+UAP head. The integration PR therefore returns to the repository's existing
+default runner selection for Required/Core/Landing; their test steps and
+acceptance requirements are unchanged. Real native qualification retains its
+existing GitHub-hosted disposable-runner guard. Neither runner allocation nor
+local unit tests replace the final-head browser and lifecycle results.
