@@ -73,7 +73,7 @@ func (runner *sessionObservationRunner) Run(ctx context.Context, command legacyp
 func TestSessionNativeInventoryExitAndCapability(t *testing.T) {
 	project := t.TempDir()
 	path := filepath.Join(project, "mcp.json")
-	owned := []byte(`{"mcpServers":{"owned":{"transport":{"type":"stdio","command":"/owned/probe","cwd":"/project"},"autoApprove":[]}}}`)
+	owned := []byte(fmt.Sprintf(`{"mcpServers":{"owned":{"transport":{"type":"stdio","command":%q,"cwd":%q},"autoApprove":[]}}}`, filepath.Join(project, "owned-probe.exe"), project))
 	if err := os.WriteFile(path, owned, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -123,8 +123,8 @@ func TestSessionNativeInventoryExitAndCapability(t *testing.T) {
 func TestSessionNativeInventoryRefusesSelectedSourceChanges(t *testing.T) {
 	project := t.TempDir()
 	path := filepath.Join(project, "mcp.json")
-	baseline := []byte(`{"mcpServers":{"owned":{"transport":{"type":"stdio","command":"/owned/probe","cwd":"/project"},"autoApprove":[]}}}`)
-	foreign := []byte(`{"mcpServers":{"owned":{"transport":{"type":"stdio","command":"/foreign/probe","cwd":"/project"},"autoApprove":[]}}}`)
+	baseline := []byte(fmt.Sprintf(`{"mcpServers":{"owned":{"transport":{"type":"stdio","command":%q,"cwd":%q},"autoApprove":[]}}}`, filepath.Join(project, "owned-probe.exe"), project))
+	foreign := []byte(fmt.Sprintf(`{"mcpServers":{"owned":{"transport":{"type":"stdio","command":%q,"cwd":%q},"autoApprove":[]}}}`, filepath.Join(project, "foreign-probe.exe"), project))
 	plan := clients.SessionPlan{Executable: "/native/cline", Directory: project, Servers: []string{"owned"},
 		ConfigDigest: fmt.Sprintf("%x", sha256.Sum256(baseline)),
 		Environment: map[string]string{"CLINE_MCP_SETTINGS_PATH": path, "CLINE_NO_AUTO_UPDATE": "1"}}
