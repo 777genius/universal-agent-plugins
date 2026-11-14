@@ -541,8 +541,18 @@ func TestAntigravityOwnedIntactRepairReachesReadOnlyInventory(t *testing.T) {
 			args = append(args, selector)
 		}
 		stdout, stderr, err := f.execute(false, append(args, "--scope", "user", "--format", "json")...)
-		if err != nil || stderr != "" || f.runner.calls != 0 || !strings.Contains(stdout, "\"read_only\": true") {
-			t.Fatal("doctor control unexpectedly observed native inventory", err, stdout, stderr)
+		var report struct {
+			SchemaVersion int    `json:"schema_version"`
+			Command       string `json:"command"`
+			Result        string `json:"result"`
+			Data          struct {
+				ReadOnly bool `json:"read_only"`
+			} `json:"data"`
+		}
+		decodeErr := json.Unmarshal([]byte(stdout), &report)
+		if err != nil || stderr != "" || f.runner.calls != 0 || decodeErr != nil ||
+			report.SchemaVersion != 1 || report.Command != "doctor" || report.Result != "success" || !report.Data.ReadOnly {
+			t.Fatal("doctor control unexpectedly observed native inventory", err, decodeErr, stdout, stderr)
 		}
 		unchanged()
 	}

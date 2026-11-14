@@ -321,7 +321,12 @@ func TestProjectRootHandoffKeepsOriginalMarkerHandleUntilSeal(t *testing.T) {
 	if prepared.markerFile != nil {
 		t.Fatal("seal retained the descendant marker handle")
 	}
-	if _, err := original.Stat(); !errors.Is(err, os.ErrClosed) {
+	// Windows can report ERROR_INVALID_HANDLE from Stat on a closed file.
+	// A second Close must still report the portable os.ErrClosed sentinel.
+	if _, err := original.Stat(); err == nil {
+		t.Fatal("seal retained a usable original marker after publication")
+	}
+	if err := original.Close(); !errors.Is(err, os.ErrClosed) {
 		t.Fatalf("seal did not close the original marker before publication: %v", err)
 	}
 	if err := prepared.cleanup(); err != nil {
