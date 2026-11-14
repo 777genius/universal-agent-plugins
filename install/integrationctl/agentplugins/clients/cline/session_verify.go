@@ -138,7 +138,7 @@ func pinSessionSource(path string) (selected *sessionSourcePin, resultErr error)
 	if err != nil {
 		return nil, err
 	}
-	parent, err := os.Open(parentPath)
+	parent, err := openSessionPinnedPath(parentPath, true)
 	if err != nil {
 		return nil, err
 	}
@@ -155,7 +155,7 @@ func pinSessionSource(path string) (selected *sessionSourcePin, resultErr error)
 	if err != nil || !originalFile.Mode().IsRegular() || originalFile.Size() > 1<<20 {
 		return nil, fmt.Errorf("cline selected MCP file is missing, aliased or oversized: %w", errors.Join(err, nativeconfig.ErrConcurrentChange))
 	}
-	file, err := os.Open(path)
+	file, err := openSessionPinnedPath(path, false)
 	if err != nil {
 		return nil, err
 	}
