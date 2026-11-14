@@ -118,6 +118,9 @@ func (recovery EnablementRecovery) PrepareNativeRemovalDecision(ctx context.Cont
 	if err := validateRemovalDesired(before, desired, record); err != nil {
 		return true, err
 	}
+	if err := record.revalidateParent(); err != nil {
+		return true, err
+	}
 	current, err := recovery.Kernel.ReadExactFile(filepath.Join(record.UserRoot, "config.toml"))
 	if err != nil || !current.Exists || current.Mode != os.FileMode(record.Edit.Mode) || enablementDigest(current.Body) != record.Edit.AfterDigest {
 		return true, errors.Join(err, fmt.Errorf("grok removal config changed before state decision"))

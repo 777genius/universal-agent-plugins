@@ -566,18 +566,53 @@ def readout_reason(error):
         return 'unclassified-refusal'
 
 
+def closed_membership_refusal(summary, state, phases):
+    """Project only the existing producer's bounded refusal suffix."""
+    error = summary.get("error")
+    if type(error) is not str:
+        return None
+    prefixes = (
+        ("ValueError: Global unknown UAP state member; ", {"unexpected-file", "missing-required"}),
+        ("ValueError: Global unknown UAP directory; ", {"unexpected-directory"}),
+    )
+    for prefix, reasons in prefixes:
+        if not error.startswith(prefix):
+            continue
+        require(len(error) <= 256 and error.isascii(), "readout membership diagnostic bound")
+        suffix = error[len(prefix):]
+        value = strict_json(suffix.encode("ascii"))
+        require(type(value) is dict and set(value) == {"reason", "member_sha256"}
+                and type(value.get("reason")) is str and value["reason"] in reasons
+                and type(value.get("member_sha256")) is str
+                and re.fullmatch(r"[0-9a-f]{64}", value["member_sha256"])
+                and json.dumps(value, sort_keys=True, separators=(",", ":")) == suffix,
+                "readout membership diagnostic shape")
+        require(summary.get("metadata_recipe") == "ordinary-global"
+                and summary.get("collection_complete") is False
+                and summary.get("metadata_capture_complete") is True
+                and summary.get("ordinary_metadata_capture_complete") is True
+                and summary.get("global_lifecycle_capture_complete", False) is False
+                and type(state.get("phase")) is str and state["phase"] in phases
+                and state.get("reason") == "unclassified-refusal",
+                "readout membership diagnostic context")
+        return value
+    return None
+
+
 def closed_readout(summary, state):
     def budget():
         require(type(state['deadline']) is float and time.monotonic() < state['deadline'], 'readout deadline')
     budget()
     labels, phases, maximum_commands, maximum_effects = READOUT_LABELS, READOUT_PHASES, 60, 13
     build_refusal = None
+    membership_phases = frozenset()
     if summary.get("metadata_recipe") == "ordinary-global":
         from devin_global_lifecycle_admission import NATIVE, PUBLIC, closed_build_authority_refusal
         labels = labels | frozenset(NATIVE + PUBLIC)
         phases = phases | labels | {"build-go-version", "build-uap", "build-go-authority", "build-installer-authority", "global-skill-quarantine"}
         maximum_commands, maximum_effects = 37, 30
         build_refusal = closed_build_authority_refusal(summary, state)
+        membership_phases = frozenset(NATIVE + PUBLIC) | {"global-skill-quarantine"}
     else:
         require("global_build_authority_refusal" not in summary, 'readout build diagnostic recipe')
     require(type(state['phase']) is str and state['phase'] in phases
@@ -628,6 +663,8 @@ def closed_readout(summary, state):
                  metadata_capture_complete=summary['metadata_capture_complete'], cleanup_complete=True,
                  commands=len(commands), failed_commands=failed, effects=rows)
     if build_refusal is not None: value['build_authority_refusal'] = build_refusal
+    membership_refusal = closed_membership_refusal(summary, state, membership_phases)
+    if membership_refusal is not None: value['membership_refusal'] = membership_refusal
     budget()
     require(len(json.dumps(value).encode()) <= 16 << 10, 'readout output bound')
     return value

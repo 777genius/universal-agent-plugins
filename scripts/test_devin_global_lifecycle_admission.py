@@ -1181,5 +1181,183 @@ class GlobalLifecycleContracts(unittest.TestCase):
             with self.subTest(change=change), self.assertRaises(ValueError): case.completion(value)
 
 
+    def membership_readout_summary(self, message, phase="uap-add"):
+        summary = self.refused_build_summary()
+        summary.update(metadata_capture_complete=True, ordinary_metadata_capture_complete=True,
+                       error="ValueError: " + message)
+        state = dict(phase=phase, reason="unclassified-refusal",
+                     deadline=float(case.base.time.monotonic() + 10))
+        return summary, state
+
+    def test_membership_readout_joins_real_captured_peer_refusals_without_reading(self):
+        for variant in ("unexpected-file", "missing-required", "unexpected-directory", "file-before-missing"):
+            with self.subTest(variant=variant), self.installed_state() as (journey, _value, path, _active, data):
+                original_state = path.read_bytes()
+                marker = data / ".agentplugins-data-owner.json"
+                selected, reason = marker, variant
+                if variant in ("unexpected-file", "file-before-missing"):
+                    selected = journey.home / "a-private-unknown"
+                    selected.write_bytes(b"PRIVATE member body")
+                    (journey.home / "z-private-unknown").write_bytes(b"PRIVATE later body")
+                    reason = "unexpected-file"
+                if variant in ("missing-required", "file-before-missing"):
+                    marker.unlink()
+                elif variant == "unexpected-directory":
+                    selected = journey.home / "private-unknown-directory"
+                    selected.mkdir()
+                inventory = case.base.metadata_inventory(journey.ctx.root, journey.ctx.budget)
+                original_inventory = copy.deepcopy(inventory)
+                with (mock.patch.object(case.base, "metadata_inventory", side_effect=AssertionError("second inventory")) as census,
+                      mock.patch.object(os, "read", side_effect=AssertionError("body read")) as read,
+                      mock.patch.object(journey, "read", side_effect=AssertionError("state read")) as state_read,
+                      mock.patch.object(case.base.shared, "run_probe", side_effect=AssertionError("native command")) as native):
+                    with self.assertRaises(ValueError) as caught:
+                        journey.home_metadata(inventory)
+                    summary, state = self.membership_readout_summary(str(caught.exception))
+                    original_summary = copy.deepcopy(summary)
+                    value = case.base.closed_readout(summary, state)
+                    census.assert_not_called(); read.assert_not_called()
+                    state_read.assert_not_called(); native.assert_not_called()
+                expected = dict(reason=reason, member_sha256=hashlib.sha256(
+                    b"relative-state-member-v1\0" + selected.relative_to(journey.home).as_posix().encode()).hexdigest())
+                self.assertEqual(value["membership_refusal"], expected)
+                self.assertEqual(value["reason"], "unclassified-refusal")
+                self.assertIs(value["collection_complete"], False)
+                self.assertEqual(summary, original_summary)
+                self.assertEqual(inventory, original_inventory)
+                self.assertEqual(path.read_bytes(), original_state)
+                self.assertEqual((journey.public_labels, journey.native_labels), ([], []))
+                self.assertNotIn(selected.name, json.dumps(value))
+                self.assertNotIn("PRIVATE", json.dumps(value))
+
+    def test_membership_readout_retains_only_the_producer_catalog_and_actual_phases(self):
+        for reason, prefix in (("unexpected-file", "Global unknown UAP state member"),
+                               ("missing-required", "Global unknown UAP state member"),
+                               ("unexpected-directory", "Global unknown UAP directory")):
+            message = prefix + "; " + case.membership_diagnostic(reason, {"owned-relative-fixture"})
+            for phase in (*case.PUBLIC, *case.NATIVE, "global-skill-quarantine"):
+                with self.subTest(reason=reason, phase=phase):
+                    summary, state = self.membership_readout_summary(message, phase)
+                    expected = json.loads(message.split("; ", 1)[1])
+                    value = case.base.closed_readout(summary, state)
+                    self.assertEqual(value["membership_refusal"], expected)
+                    self.assertLessEqual(len(json.dumps(value).encode()), 16 << 10)
+                    summary["global_lifecycle_capture_complete"] = False
+                    self.assertEqual(case.base.closed_readout(summary, state), value)
+                    value["membership_refusal"]["reason"] = "changed-copy"
+                    self.assertEqual(case.base.closed_readout(summary, state)["membership_refusal"], expected)
+
+    def test_membership_readout_rejects_malformed_known_suffixes_and_mixed_prefixes(self):
+        prefix = "Global unknown UAP state member; "
+        valid = case.membership_diagnostic("unexpected-file", {"private-fixture"})
+        row = json.loads(valid)
+        mutations = [
+            ("member_sha256", "A" * 64), ("member_sha256", "a" * 63),
+            ("member_sha256", "a" * 65), ("member_sha256", False), ("member_sha256", None),
+            ("reason", "foreign"), ("reason", "unexpected-directory"), ("reason", True),
+            ("reason", []), ("extra", "PRIVATE"),
+        ]
+        invalid = [json.dumps(dict(row, **{key: value}), sort_keys=True, separators=(",", ":"))
+                   for key, value in mutations]
+        invalid += [valid + " ", valid.replace(",", ", "), "[]", "null", "{",
+                    json.dumps(dict(reason="unexpected-file")),
+                    '{"reason":"unexpected-file","member_sha256":"' + row["member_sha256"] + '"}',
+                    valid[:-1] + ',"reason":"unexpected-file"}',
+                    valid.replace(row["member_sha256"], "é" * 64), valid + " " * 256]
+        for index, suffix in enumerate(invalid):
+            with self.subTest(index=index):
+                summary, state = self.membership_readout_summary(prefix + suffix)
+                with self.assertRaises(ValueError):
+                    case.base.closed_readout(summary, state)
+        for reason in ("unexpected-file", "missing-required"):
+            summary, state = self.membership_readout_summary(
+                "Global unknown UAP directory; " + case.membership_diagnostic(reason, {"fixture"}))
+            with self.subTest(reason=reason), self.assertRaises(ValueError):
+                case.base.closed_readout(summary, state)
+
+    def test_membership_readout_refuses_success_recipe_phase_and_authority_contradictions(self):
+        message = "Global unknown UAP state member; " + case.membership_diagnostic("unexpected-file", {"fixture"})
+        summary_faults = [
+            ("metadata_recipe", "ordinary"), ("metadata_recipe", "structured"),
+            ("collection_complete", True), ("metadata_capture_complete", False),
+            ("ordinary_metadata_capture_complete", False), ("ordinary_metadata_capture_complete", 1),
+            ("ordinary_metadata_capture_complete", None), ("global_lifecycle_capture_complete", True),
+            ("global_lifecycle_capture_complete", 0), ("global_lifecycle_capture_complete", None),
+            ("cleanup_complete", False), ("admission_qualified", True), ("artifact_admission_failed", True),
+            ("source_commit", "unknown"), ("source_tree", True),
+        ]
+        for key, value in summary_faults:
+            with self.subTest(key=key, value=value):
+                summary, state = self.membership_readout_summary(message)
+                summary[key] = value
+                with self.assertRaises(ValueError): case.base.closed_readout(summary, state)
+        summary, state = self.membership_readout_summary(message)
+        del summary["ordinary_metadata_capture_complete"]
+        with self.assertRaises(ValueError): case.base.closed_readout(summary, state)
+        summary, state = self.membership_readout_summary(message)
+        summary["qualification"][next(iter(summary["qualification"]))] = True
+        with self.assertRaises(ValueError): case.base.closed_readout(summary, state)
+        for key, value in (("phase", "fixture"), ("phase", "build-uap"),
+                           ("phase", "source-final-clean"), ("phase", "mcp-a"),
+                           ("reason", "capture-incomplete"), ("reason", "native-command-refused"),
+                           ("deadline", 0.0)):
+            with self.subTest(key=key, value=value):
+                summary, state = self.membership_readout_summary(message)
+                state[key] = value
+                with self.assertRaises(ValueError): case.base.closed_readout(summary, state)
+        summary = self.completed_summary()
+        summary.update(collection_complete=True, cleanup_complete=True, error="ValueError: " + message)
+        state = dict(phase="source-final-clean", reason="metadata-complete",
+                     deadline=float(case.base.time.monotonic() + 10))
+        with self.assertRaises(ValueError): case.base.closed_readout(summary, state)
+
+    def test_membership_readout_leaves_unrelated_initial_empty_and_success_outputs_unchanged(self):
+        class Poison:
+            def __str__(self): raise AssertionError("stringified unknown error")
+            def __repr__(self): raise AssertionError("represented unknown error")
+        expected = dict(schema_version=1, phase="uap-add", reason="unclassified-refusal",
+                        collection_complete=False, metadata_capture_complete=True, cleanup_complete=True,
+                        commands=0, failed_commands=0, effects=[])
+        for index, error in enumerate((None, Poison(), "ValueError: Global unknown UAP state member",
+                                       "ValueError: Global unknown UAP directory", "PRIVATE" * 256, "PRIVATE é",
+                                       "RuntimeError: Global unknown UAP state member; {}")):
+            with self.subTest(index=index):
+                summary, state = self.membership_readout_summary("unused")
+                summary["error"] = error
+                self.assertEqual(case.base.closed_readout(summary, state), expected)
+        summary = self.completed_summary()
+        summary.update(collection_complete=True, cleanup_complete=True)
+        state = dict(phase="source-final-clean", reason="metadata-complete",
+                     deadline=float(case.base.time.monotonic() + 10))
+        value = case.base.closed_readout(summary, state)
+        self.assertNotIn("membership_refusal", value)
+        self.assertEqual(set(value), set(expected))
+        self.assertEqual((value["commands"], len(value["effects"])), (37, 30))
+
+    def test_membership_projection_uses_one_existing_frame_after_unchanged_publication(self):
+        valid = "Global unknown UAP state member; " + case.membership_diagnostic("unexpected-file", {"PRIVATE"})
+        for message in (valid, valid + " "):
+            summary, state = self.membership_readout_summary(message)
+            identity, output, ctx = object(), Path("/owned-output"), object()
+            with (mock.patch.object(case.base.shared, "publish") as publish,
+                  mock.patch.object(case.base, "root_identity", return_value=identity),
+                  mock.patch.object(os, "write") as write):
+                case.base.publish_with_readout(summary, ctx, output, identity, state)
+            publish.assert_called_once_with(summary, ctx, output)
+            write.assert_called_once()
+            descriptor, body = write.call_args.args
+            self.assertEqual(descriptor, 1)
+            self.assertTrue(body.startswith(b"DEVIN_CLOSED_READOUT=") and body.endswith(b"\n"))
+            self.assertEqual(body.count(b"\n"), 1)
+            self.assertLessEqual(len(body), (16 << 10) + 32)
+            self.assertNotIn(b"PRIVATE", body)
+            value = json.loads(body[len(b"DEVIN_CLOSED_READOUT="):-1])
+            if message == valid:
+                self.assertEqual(value["membership_refusal"], json.loads(valid.split("; ", 1)[1]))
+                self.assertIs(value["collection_complete"], False)
+            else:
+                self.assertEqual(value, dict(schema_version=1, reason="readout-refused"))
+
+
 if __name__ == "__main__":
     unittest.main()

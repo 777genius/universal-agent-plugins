@@ -306,3 +306,27 @@ func TestEnablementRepeatStateChangeDoesNotReportEnabled(t *testing.T) {
 		t.Fatal("refused repeat changed the settled empty journal namespace", err)
 	}
 }
+
+func TestEnablementRemovalDecisionRefusesLostParentBeforeConfigIO(t *testing.T) {
+	fixture, desired := removalEnablementFixture(t)
+	applyRemovalFixture(t, fixture)
+	before := fixture.loaded(t)
+	beforeDigest, desiredDigest := enablementStateDigest(before), enablementStateDigest(desired)
+	journal, err := fixture.recovery.recordRoot(fixture.record.OperationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	originals := capturePrototypeFiles(t, fixture.config, fixture.state.Path, journal,
+		filepath.Join(fixture.record.UserRoot, ".config-init.lock"))
+	replaceEnablementParent(t, fixture)
+	files := &parentRefusalFileIO{}
+	fixture.recovery.Kernel = nativeconfig.NewWithFileIO(files)
+	handled, err := fixture.recovery.PrepareNativeRemovalDecision(t.Context(), fixture.record.InstallationID, fixture.record.BindingID, before, desired)
+	if !handled || !errors.Is(err, directoryidentity.ErrChanged) || files.reads != 0 || files.writes != 0 || files.removes != 0 {
+		t.Fatalf("removal decision reached config IO after parent replacement: handled=%t error=%v calls=%+v", handled, err, files)
+	}
+	if enablementStateDigest(before) != beforeDigest || enablementStateDigest(desired) != desiredDigest {
+		t.Fatal("refused removal decision changed its state arguments")
+	}
+	assertPrototypeFilesUnchanged(t, originals)
+}

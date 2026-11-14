@@ -1859,3 +1859,58 @@ no-share-delete policy, with no close/reopen workaround. Native execution,
 command counts, evidence schemas, deadlines, payload/profile limits and every
 qualification flag remain unchanged. Current complete native originals are
 still required for public lifecycle acceptance.
+
+## 2026-11-14 — show only already closed failure metadata in the job log
+
+The current `40c6bb2d27a9282755ec3a739c236eb9dc2875f2` macOS source job
+`132408965958` from run `43582150782` again refuses the absolute intermediate
+link at `payload_links.parts`, before the payload hash pass or observer start.
+Its existing source artifact `14109111276` is 1,666 bytes, SHA-256
+`2a451fbcf95ab361c2f04b9664bf43c677f46cc8967b47c50b67db00808cb961`.
+The job log and official metadata were read; this change does not claim to have
+decoded that ZIP or identified its member. The existing diagnostic already
+retains the bounded relative member, target digest and original nonce.
+
+The same run's macOS bundled job `132408965881` completed official build cleanup
+and then refused public native cleanup. Its separate safe artifact
+`14109300946` is 764 bytes, SHA-256
+`7cb9e279038fe0382a116d324c4fcbc5397263b76b5c56ee5d35285c210dbb79`.
+Linux source job `132408965934` reached an observer failure with settled cleanup;
+artifact `14109567941` is 17,208 bytes, SHA-256
+`2120cc3d3f678d4fc2441dcdcac3e78463a53a30440f20a412cbda2b620aa47f`.
+Neither inner failure is inferred from these metadata alone.
+
+The existing stage loop retains its already read admission-proof body in memory.
+Only after the original membership/identity checks, staging rename and
+`EVIDENCE_CLOSED` does one optional `HERMES_ADMISSION_FAILURE` line project
+validated failure facts. The complete ASCII line, including its fixed prefix
+and newline, is at most 2 KiB. Source refusal output retains only its existing
+closed fields: bounded relative member, digests, counters, metadata and finite
+operation/stage. The full failed source proof must carry the same nonce and
+unchanged clean source identity. No target text, error message, environment,
+configuration body, traceback path or raw nonce is printed.
+
+For an unclosed native family, the existing `native_failure_context` validator
+supplies the finite cleanup phase, settlement flag, exit code and optional
+observer phase, exception kind, command and own-source caller. For a settled
+observer failure, the same context is passed from retained parent locals through
+an optional stage argument and joined to the staged proof's source and nonce.
+This argument adds no artifact field and reads no stream or path. Both uses
+share the one context assembled from the existing locals; original safe-failure
+artifacts and their validators remain unchanged.
+
+Malformed, absent, mismatched, qualified or successful inputs omit the optional
+failure line. Log failures cannot replace the original native error or undo
+publication. Successful output and the existing census line remain unchanged.
+All output is measurement-only with native/admission qualification false.
+There is no new reader, workflow job, artifact schema, scan, retry, ownership,
+link allowance, cleanup authority or changed deadline.
+
+The six added inert contracts cover the actual captured intermediate-link
+exception without target reads, nullable and mismatched observer context,
+source/nonce/caller joins, post-rename emission with exact existing read counts,
+settled-source context without artifact changes, unchanged successful output,
+failed publication and failed stdout preserving the original error. All 130
+existing test bodies are byte-for-byte retained. These new tests, Python
+compilation and genuine native outcomes are unexecuted in the unavailable local
+executor; source review and immutable source readback do not replace those gates.

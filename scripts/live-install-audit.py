@@ -2368,6 +2368,23 @@ def published_audit_temp_parent():
     return str(parent)
 
 
+def case_observation(result):
+    """Project already retained lifecycle facts without granting native authority."""
+    row = result if type(result) is dict else {}
+    fields = ("kiro_prepared_lifecycle_verified", "repeat_verified", "removal_verified",
+              "sentinels_preserved", "failed_install_registered", "failed_install_residue")
+    observation = {name: row.get(name) if type(row.get(name)) is bool else None for name in fields}
+    for label in ("install", "list"):
+        command = row.get(label)
+        command = command if type(command) is dict else {}
+        code, timeout = command.get("exit_code"), command.get("timeout")
+        observation[label] = {
+            "exit_code": code if type(code) is int and -(2**31) <= code < 2**32 else None,
+            "timeout": timeout if type(timeout) is bool else None,
+        }
+    return observation
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--cli", required=True)
@@ -2467,6 +2484,7 @@ def main():
             if result["status"] == "incomplete-native-proof" and args.kind == "plugin":
                 line["observed_signed_release"] = result.get("signed_release_observation", [])
                 line["expected_signed_release"] = doc["signed_release_pins"].get(item)
+            line["observation"] = case_observation(result)
             print(json.dumps(line), flush=True)
     passed = sum(r["status"] == "passed" for r in report["results"])
     report["passed"] = passed

@@ -3524,5 +3524,257 @@ class PublicInspectLockContracts(unittest.TestCase):
                     with self.assertRaises(OSError): actual_stat(descriptor)
 
 
+
+class FailureReadoutContracts(unittest.TestCase):
+    nonce, head = "a" * 64, "b" * 40
+    flags = ("admission_qualified", "production_project_mcp", "vendor_authentication", "real_model_inference",
+             "tools_call", "source_install_custom_root_qualified", "source_bootstrap_recovery_qualified")
+
+    def encoded(self, value):
+        return json.dumps(value, sort_keys=True, separators=(",", ":")).encode("ascii")
+
+    def proof(self, distribution):
+        value = dict.fromkeys(self.flags, False)
+        value.update(status="failed", runtime_distribution=distribution, error="PRIVATE ERROR /outside/config")
+        if distribution == "source":
+            source = dict(commit=self.head, tree="c" * 40, dirty="")
+            value.update(capture_complete=False, nonce=self.nonce, source=source, source_after=dict(source))
+        return value
+
+    def source_refusal(self, root):
+        import stat
+        import time
+        target = str(root.parent / "PRIVATE-TARGET")
+        item = lambda inode, value: dict(type="link", target=value,
+            identity=(1, inode, stat.S_IFLNK | 0o777, 1, len(value), 10, 10, 1000, 1000))
+        records = {"user/launcher": item(2, "tools/python"), "user": dict(type="directory"),
+                   "user/tools": dict(type="directory"), "user/tools/python": item(3, target)}
+        source = dict(user="user", source="user/source", tools="user/tools", installs="user/installs", projects=())
+        with mock.patch.object(os, "read", side_effect=AssertionError("target read")), \
+                mock.patch.object(os, "open", side_effect=AssertionError("target open")), \
+                mock.patch.object(os, "scandir", side_effect=AssertionError("new walk")), \
+                mock.patch.object(Path, "lstat", side_effect=AssertionError("new stat")), \
+                self.assertRaisesRegex(RuntimeError, "^payload link escapes runtime$") as refused:
+            CASE["payload_links"](root, records, time.monotonic() + 10, source=source)
+        value = dict(refused.exception.source_payload_refusal, nonce=self.nonce, stage="parent-before-observer")
+        self.assertEqual(value["member"], "user/tools/python")
+        return value, target
+
+    def native_proof(self):
+        proof = self.proof("bundled")
+        observer = ObserverFailureDiagnosticContracts().record()
+        proof["native_failure"] = dict(source_head=self.head, nonce=self.nonce, cleanup_phase="public-family",
+                                       primary_family_settled=True, observer_exit=1, observer=observer)
+        return proof
+
+    def test_source_readout_uses_captured_intermediate_link_without_reading_target(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            refusal, target = self.source_refusal(root)
+            body = self.encoded(self.proof("source"))
+            with mock.patch.object(os, "read", side_effect=AssertionError("readout read")), \
+                    mock.patch.object(os, "open", side_effect=AssertionError("readout open")), \
+                    mock.patch.object(os, "scandir", side_effect=AssertionError("readout walk")), \
+                    mock.patch.object(Path, "lstat", side_effect=AssertionError("readout stat")):
+                line = CASE["admission_failure_readout"](body, refusal)
+            report = json.loads(line)
+            self.assertEqual(report["source_head"], self.head)
+            self.assertEqual(report["nonce_sha256"], hashlib.sha256(self.nonce.encode()).hexdigest())
+            self.assertEqual(report["source_refusal"]["stage"], "parent-before-observer")
+            self.assertEqual(report["source_refusal"]["operation"], "absolute-link-target")
+            self.assertEqual(report["source_refusal"]["member"], "user/tools/python")
+            self.assertEqual(report["source_refusal"]["member_sha256"], refusal["member_sha256"])
+            self.assertEqual(report["source_refusal"]["target_sha256"], hashlib.sha256(target.encode("utf-8", "surrogatepass")).hexdigest())
+            self.assertIsNone(report["native_failure"])
+            self.assertTrue(report["measurement_only"])
+            self.assertIs(report["admission_qualified"], False); self.assertIs(report["native_qualified"], False)
+            self.assertLessEqual(len(line.encode("ascii")) + len("HERMES_ADMISSION_FAILURE ") + 1, 2048)
+            for private in (self.nonce, target, str(root), "PRIVATE ERROR"):
+                self.assertNotIn(private, line)
+            original = RuntimeError("PRIVATE ERROR")
+            CASE["source_payload_refusal"](original, "user/" + "x" * 600,
+                                          dict(identity=(1, 2, 0o120777, 1, 0, 10, 10, 1000, 1000)), target=target)
+            long_member = dict(original.source_payload_refusal, nonce=self.nonce, stage="parent-before-observer")
+            long_report = json.loads(CASE["admission_failure_readout"](body, long_member))
+            self.assertIsNone(long_report["source_refusal"]["member"])
+            self.assertEqual(long_report["source_refusal"]["member_sha256"], long_member["member_sha256"])
+
+    def test_bundled_readout_preserves_unproved_cleanup_and_validated_observer_caller(self):
+        import copy
+        helper, proof = CASE["admission_failure_readout"], self.native_proof()
+        context = proof["native_failure"]
+        for mode in ("valid", "absent-observer", "unsettled", "source", "nonce", "caller", "phase", "extra", "exit"):
+            with self.subTest(mode=mode):
+                changed = copy.deepcopy(proof)
+                value = changed["native_failure"]
+                if mode == "absent-observer": value.update(primary_family_settled=False, observer=None, observer_exit=None)
+                if mode == "unsettled": value["primary_family_settled"] = False
+                if mode == "source": value["observer"]["source_head"] = "d" * 40
+                if mode == "nonce": value["observer"]["nonce"] = "e" * 64
+                if mode == "caller": value["observer"]["caller"]["line"] = 999999
+                if mode == "phase": value["cleanup_phase"] = "../PRIVATE"
+                if mode == "extra": value["PRIVATE"] = "raw body"
+                if mode == "exit": value["observer_exit"] = True
+                with mock.patch.object(os, "read", side_effect=AssertionError("readout read")), \
+                        mock.patch.object(Path, "read_bytes", side_effect=AssertionError("readout reopen")):
+                    line = helper(self.encoded(changed), None)
+                if mode not in ("valid", "absent-observer"):
+                    self.assertIsNone(line)
+                    continue
+                report = json.loads(line)
+                self.assertEqual(report["native_failure"]["cleanup_phase"], "public-family")
+                self.assertEqual(report["native_failure"]["primary_family_settled"], mode == "valid")
+                self.assertIs(report["native_qualified"], False); self.assertIs(report["admission_qualified"], False)
+                self.assertIsNone(report["source_refusal"])
+                if mode == "valid":
+                    self.assertEqual(report["native_failure"]["observer"]["caller"], context["observer"]["caller"])
+                    self.assertEqual(report["native_failure"]["observer"]["phase"], "public")
+                    self.assertEqual(report["native_failure"]["observer"]["exception_kind"], "RuntimeError")
+                else:
+                    self.assertIsNone(report["native_failure"]["observer"])
+                for private in (self.nonce, "PRIVATE", ".py"):
+                    self.assertNotIn(private, line)
+
+    def test_failure_readout_omits_unjoined_malformed_and_qualified_documents(self):
+        import copy
+        helper = CASE["admission_failure_readout"]
+        with tempfile.TemporaryDirectory() as temporary:
+            refusal, _ = self.source_refusal(Path(temporary).resolve())
+            for mode in ("nonce", "source", "tree", "dirty", "changed-source", "extra-source", "success",
+                         "wrong-distribution", "missing-capture", "member-hash", "refusal-extra", *self.flags):
+                with self.subTest(mode=mode):
+                    proof, observed = self.proof("source"), copy.deepcopy(refusal)
+                    if mode == "nonce": proof["nonce"] = "d" * 64
+                    if mode == "source": proof["source"]["commit"] = "not-a-source"
+                    if mode == "tree": proof["source"]["tree"] = True
+                    if mode == "dirty": proof["source"]["dirty"] = "PRIVATE"
+                    if mode == "changed-source": proof["source_after"]["commit"] = "d" * 40
+                    if mode == "extra-source": proof["source"]["PRIVATE"] = "raw"
+                    if mode == "success": proof["status"] = "passed"
+                    if mode == "wrong-distribution": proof["runtime_distribution"] = "bundled"
+                    if mode == "missing-capture": proof.pop("capture_complete")
+                    if mode == "member-hash": observed["member_sha256"] = "d" * 64
+                    if mode == "refusal-extra": observed["PRIVATE"] = "raw"
+                    if mode in self.flags: proof[mode] = True
+                    self.assertIsNone(helper(self.encoded(proof), observed))
+            body = self.encoded(self.proof("source"))
+            duplicate = body[:-1] + b',"status":"failed"}'
+            for bad in (None, b"", b"{", duplicate, b" " * (CASE["LIMIT"] + 1)):
+                self.assertIsNone(helper(bad, refusal))
+
+    def test_staged_failure_log_follows_commit_and_reuses_existing_reads(self):
+        stage, authority = CASE["stage_evidence"], CASE["stage_evidence"].__globals__
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve(); evidence = root / "evidence"; evidence.mkdir()
+            refusal, _ = self.source_refusal(root)
+            bodies = {"profile-admission.json": self.encoded(self.proof("source")),
+                      "source-payload-refusal.json": self.encoded(refusal)}
+            for name, body in bodies.items(): (evidence / name).write_bytes(body)
+            lines, reads, actual = [], [], CASE["ordinary_bytes"]
+            def read(path, *args, **kwargs):
+                self.assertFalse((evidence / "upload").exists(), "readout reopened committed evidence")
+                reads.append(path.name)
+                return actual(path, *args, **kwargs)
+            def emit(line, *, flush):
+                self.assertTrue(flush); self.assertTrue(authority["EVIDENCE_CLOSED"])
+                self.assertTrue((evidence / "upload").is_dir())
+                lines.append(line)
+            with mock.patch.dict(authority, ordinary_bytes=read, print=emit, EVIDENCE_CLOSED=False):
+                stage(evidence)
+            self.assertEqual(reads.count("profile-admission.json"), 1)
+            self.assertEqual(reads.count("source-payload-refusal.json"), 2)
+            self.assertEqual(len(lines), 2)
+            self.assertTrue(lines[0].startswith("HERMES_BOOTSTRAP_CENSUS "))
+            report = json.loads(lines[1].removeprefix("HERMES_ADMISSION_FAILURE "))
+            self.assertEqual(report["source_refusal"]["member_sha256"], refusal["member_sha256"])
+            for name, body in bodies.items():
+                self.assertEqual((evidence / name).read_bytes(), body)
+                self.assertEqual((evidence / "upload" / name).read_bytes(), body)
+
+    def test_settled_observer_context_joins_staged_profile_without_new_artifact_fields(self):
+        import copy
+        stage, authority = CASE["stage_evidence"], CASE["stage_evidence"].__globals__
+        for mode in ("valid", "nonce", "source", "success", "unsettled", "caller", "missing-source", "mixed-context"):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as temporary:
+                evidence = Path(temporary).resolve()
+                proof, context = self.proof("source"), copy.deepcopy(self.native_proof()["native_failure"])
+                if mode == "nonce": context["nonce"] = "d" * 64
+                if mode == "source": context["source_head"] = "d" * 40
+                if mode == "success": proof.update(status="passed", capture_complete=True)
+                if mode == "unsettled": context["primary_family_settled"] = False
+                if mode == "caller": context["observer"]["caller"]["line"] = -1
+                if mode == "missing-source": proof.pop("source")
+                if mode == "mixed-context": proof["native_failure"] = context
+                body = self.encoded(proof); (evidence / "profile-admission.json").write_bytes(body)
+                lines, reads, actual = [], [], CASE["ordinary_bytes"]
+                def read(path, *args, **kwargs):
+                    self.assertFalse((evidence / "upload").exists())
+                    reads.append(path.name)
+                    return actual(path, *args, **kwargs)
+                def emit(line, *, flush):
+                    self.assertTrue(flush); self.assertTrue(authority["EVIDENCE_CLOSED"])
+                    self.assertTrue((evidence / "upload").is_dir()); lines.append(line)
+                with mock.patch.dict(authority, ordinary_bytes=read, print=emit, EVIDENCE_CLOSED=False):
+                    stage(evidence, native_failure=context)
+                self.assertEqual(reads, ["profile-admission.json"])
+                self.assertEqual((evidence / "upload/profile-admission.json").read_bytes(), body)
+                self.assertEqual((evidence / "profile-admission.json").read_bytes(), body)
+                self.assertEqual(len(lines), 2 if mode == "valid" else 1)
+                if mode == "valid":
+                    self.assertNotIn("native_failure", json.loads(body))
+                    value = json.loads(lines[1].removeprefix("HERMES_ADMISSION_FAILURE "))
+                    self.assertEqual(value["source_head"], self.head)
+                    self.assertEqual(value["native_failure"]["observer"]["caller"], context["observer"]["caller"])
+                    self.assertEqual(value["native_failure"]["cleanup_phase"], "public-family")
+                    self.assertIs(value["native_failure"]["primary_family_settled"], True)
+                    self.assertIs(value["native_qualified"], False); self.assertIs(value["admission_qualified"], False)
+                    self.assertIsNone(value["source_refusal"])
+
+
+    def test_publication_failure_and_optional_log_errors_preserve_existing_outcomes(self):
+        stage, authority = CASE["stage_evidence"], CASE["stage_evidence"].__globals__
+        for mode in ("rename", "bad-join", "success", "malformed-native", "stdout-oserror", "stdout-valueerror"):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve(); evidence = root / "evidence"; evidence.mkdir()
+                proof = self.native_proof()
+                if mode in ("rename", "bad-join"):
+                    refusal, _ = self.source_refusal(root)
+                    (evidence / "source-payload-refusal.json").write_bytes(self.encoded(refusal))
+                    proof = self.proof("source")
+                    if mode == "bad-join": proof["nonce"] = "d" * 64
+                if mode == "success": proof.update(status="passed", capture_complete=True)
+                if mode == "malformed-native": proof["native_failure"]["observer"]["caller"]["line"] = -1
+                body = self.encoded(proof); (evidence / "profile-admission.json").write_bytes(body)
+                lines = []
+                def emit(line, *, flush):
+                    self.assertTrue(authority["EVIDENCE_CLOSED"])
+                    lines.append(line)
+                    if mode == "stdout-oserror": raise OSError("PRIVATE")
+                    if mode == "stdout-valueerror": raise ValueError("PRIVATE")
+                with mock.patch.dict(authority, print=emit, EVIDENCE_CLOSED=False):
+                    if mode == "rename":
+                        with mock.patch.object(Path, "rename", side_effect=OSError("inert commit refusal")), self.assertRaises(OSError):
+                            stage(evidence)
+                    elif mode == "bad-join":
+                        with self.assertRaisesRegex(RuntimeError, "source refusal proof differs"): stage(evidence)
+                    else:
+                        original = RuntimeError("original native refusal")
+                        with self.assertRaises(RuntimeError) as caught:
+                            try: raise original
+                            except RuntimeError:
+                                stage(evidence)
+                                raise
+                        self.assertIs(caught.exception, original)
+                    if mode in ("rename", "bad-join"):
+                        self.assertEqual(lines, []); self.assertFalse(authority["EVIDENCE_CLOSED"])
+                        self.assertFalse((evidence / "upload").exists())
+                    else:
+                        self.assertTrue(authority["EVIDENCE_CLOSED"])
+                        self.assertEqual((evidence / "upload/profile-admission.json").read_bytes(), body)
+                        self.assertEqual(len(lines), 1 if mode in ("success", "malformed-native") else 2)
+                self.assertEqual((evidence / "profile-admission.json").read_bytes(), body)
+
+
 if __name__ == "__main__":
     unittest.main()

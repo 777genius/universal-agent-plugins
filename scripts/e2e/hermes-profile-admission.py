@@ -2653,7 +2653,58 @@ def census_readout(value):
     return result
 
 
-def stage_evidence(directory):
+def admission_failure_readout(body, source_refusal, *, native_failure=None):
+    """Project already staged failure bytes; never read or authorize native state."""
+    try:
+        proof = public_json(body)
+        flags = ("admission_qualified", "production_project_mcp", "vendor_authentication", "real_model_inference",
+                 "tools_call", "source_install_custom_root_qualified", "source_bootstrap_recovery_qualified")
+        require(type(proof) is dict and proof.get("status") == "failed"
+                and proof.get("runtime_distribution") in ("source", "bundled")
+                and all(proof.get(key) is False for key in flags), "failure readout is not unqualified")
+        context, native, refusal = None, None, None
+        if source_refusal is not None or native_failure is not None:
+            source = proof.get("source")
+            require(proof.get("capture_complete") is False and "native_failure" not in proof
+                    and type(source) is dict and set(source) == {"commit", "tree", "dirty"} and source["dirty"] == ""
+                    and all(type(source[key]) is str and re.fullmatch(r"[a-f0-9]{40}", source[key]) is not None
+                            for key in ("commit", "tree"))
+                    and proof.get("source_after") == source, "failure readout lacks unchanged source")
+            head, nonce = source["commit"], proof.get("nonce")
+            require(type(nonce) is str and re.fullmatch(r"[a-f0-9]{64}", nonce) is not None, "failure readout nonce differs")
+            if source_refusal is not None:
+                require(type(source_refusal) is dict and proof["runtime_distribution"] == "source", "source failure readout differs")
+                value = source_refusal_document(json.dumps(source_refusal, sort_keys=True, separators=(",", ":")).encode("ascii"))
+                require(nonce == value["nonce"], "source failure readout nonce differs")
+                names = ("stage", "operation", "member", "member_sha256", "hash_encoding", "metadata", "integer_saturated",
+                         "bytes_read", "errno", "winerror", "target_sha256", "target_bytes")
+                refusal = {name: value[name] for name in names}
+                if "profile_bound" in value:
+                    refusal["profile_bound"] = value["profile_bound"]
+            if native_failure is not None:
+                context = native_failure_context(native_failure)
+                require(context["source_head"] == head and context["nonce"] == nonce
+                        and context["primary_family_settled"] is True, "settled failure context differs")
+        else:
+            context = native_failure_context(proof.get("native_failure"))
+            head, nonce = context["source_head"], context["nonce"]
+        if context is not None:
+            native = {name: context[name] for name in ("cleanup_phase", "primary_family_settled", "observer_exit")}
+            observer = context["observer"]
+            native["observer"] = ({name: observer[name] for name in ("phase", "reason", "exception_kind", "command", "caller")}
+                                  if observer is not None else None)
+        result = dict(schema_version=1, kind="hermes-admission-failure-readout", measurement_only=True,
+                      admission_qualified=False, native_qualified=False, runtime_distribution=proof["runtime_distribution"],
+                      source_head=head, nonce_sha256=hashlib.sha256(nonce.encode("ascii")).hexdigest(),
+                      source_refusal=refusal, native_failure=native)
+        line = json.dumps(result, sort_keys=True, separators=(",", ":"))
+        require(len(line.encode("ascii")) + len("HERMES_ADMISSION_FAILURE ") + 1 <= 2048, "failure readout bound")
+        return line
+    except (AttributeError, KeyError, IndexError, TypeError, ValueError, UnicodeError, RuntimeError):
+        return None  # Optional diagnostics never replace the original native refusal.
+
+
+def stage_evidence(directory, *, native_failure=None):
     global EVIDENCE_CLOSED
     identity = directory_identity(directory)
     admit_evidence(directory)
@@ -2664,9 +2715,12 @@ def stage_evidence(directory):
     pending.mkdir(mode=0o700)
     pending_identity = directory_identity(pending)
     census, source_refusal, source_delta, source_proof = None, None, None, None
+    profile_body = None
     try:
         for name, expected in sorted(sources.items()):
             body = ordinary_bytes(directory / name, expected)
+            if name == "profile-admission.json":
+                profile_body = body
             if name in ("bootstrap-census-request.json", "bootstrap-census.json"):
                 value = validate_census_member(name, body)
                 if name == "bootstrap-census.json":
@@ -2707,6 +2761,12 @@ def stage_evidence(directory):
     # This optional log statement owns no artifact or native success decision.
     try:
         print("HERMES_BOOTSTRAP_CENSUS " + json.dumps(census_readout(census), sort_keys=True, separators=(",", ":")), flush=True)
+    except (OSError, ValueError):
+        pass
+    try:
+        failure_line = admission_failure_readout(profile_body, source_refusal, native_failure=native_failure)
+        if failure_line is not None:
+            print("HERMES_ADMISSION_FAILURE " + failure_line, flush=True)
     except (OSError, ValueError):
         pass
 
@@ -3101,10 +3161,10 @@ def run():
         if source_capture:
             retain_source_user_delta(evidence, evidence_authority, nonce, source_prepared, source_after_capture,
                                      prepared_records, after_records, "user", source_after_deadline, failure=failure, settled=process_settled)
+        failure_context = {"source_head": before["commit"], "nonce": nonce, "cleanup_phase": cleanup_phase,
+                           "primary_family_settled": primary_settled, "observer_exit": child.returncode if child else None, "observer": observer}
         if not process_settled:
-            safe_failure_evidence(runner, type(failure).__name__ if failure else "process-cleanup-unproved", native_failure={
-                "source_head": before["commit"], "nonce": nonce, "cleanup_phase": cleanup_phase,
-                "primary_family_settled": primary_settled, "observer_exit": child.returncode if child else None, "observer": observer})
+            safe_failure_evidence(runner, type(failure).__name__ if failure else "process-cleanup-unproved", native_failure=failure_context)
             raise RuntimeError("native process cleanup unproved; raw evidence withheld") from failure
         require(evidence.resolve() == evidence and not evidence.is_symlink()
                 and (evidence.stat().st_dev, evidence.stat().st_ino, evidence.stat().st_mode) == evidence_identity,
@@ -3120,7 +3180,7 @@ def run():
                      run_id=os.environ["GITHUB_RUN_ID"], run_attempt=os.environ["GITHUB_RUN_ATTEMPT"], runner_os=os.environ["RUNNER_OS"])
         write_json(evidence / "profile-admission.json", proof)
         try:
-            stage_evidence(evidence)
+            stage_evidence(evidence, native_failure=failure_context if failure is not None else None)
         except BaseException:
             if failure is not None:
                 raise RuntimeError("original Hermes refusal retained; evidence publication refused") from failure

@@ -2583,7 +2583,7 @@ class ReadonlyInventoryContracts(unittest.TestCase):
         receipt, request, _ = self.receipt()
         request['start_monotonic_ns'] = 1
         self.assertTrue(case.validate_readonly_receipt(receipt, request)['semantic_complete'])
-        with self.assertRaises(ValueError):
+        with mock.patch.object(case.time, 'monotonic_ns', return_value=30_000_000_001), self.assertRaises(ValueError):
             case.readonly_deadline(request, final=True)
 
     def test_request_refuses_alias_roots_extra_runtime_and_unowned_or_privileged_executable(self):
@@ -2614,7 +2614,8 @@ class ReadonlyInventoryContracts(unittest.TestCase):
         self.assertEqual(requested[0], ['/usr/bin/sudo', '-n',
             '--preserve-env=GITHUB_ACTIONS,RUNNER_ENVIRONMENT,AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED,EXPECTED_COMMIT',
             '/tmp/fixed-helper', '--input-root', req['input_root']])
-        with mock.patch.object(case.subprocess, 'Popen') as child, self.assertRaises(ValueError):
+        with (mock.patch.object(case.time, 'monotonic_ns', return_value=30_000_000_001),
+              mock.patch.object(case.subprocess, 'Popen') as child, self.assertRaises(ValueError)):
             case.readonly_helper_capture(Path('/tmp/fixed-helper'), Path(req['input_root']),
                                          dict(req, start_monotonic_ns=1))
         child.assert_not_called()

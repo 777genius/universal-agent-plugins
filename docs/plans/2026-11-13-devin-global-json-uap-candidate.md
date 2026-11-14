@@ -860,3 +860,44 @@ filesystem members and both body-read entrypoints trapped. Existing tests
 remain intact. This is a refusal diagnostic, not native lifecycle acceptance;
 the next genuine original must still establish the unchanged completion
 predicate.
+
+### Existing membership refusal in the closed CI readout
+
+The source-only reconciliation at 3cab58db0cd950f664c778815990ee0a662b8072
+preserves its incoming Global producer and all 44 existing Global test methods.
+The producer's first lexical member diagnostic is already part of the bounded
+error string. The earlier unreferenced four-file proposal cdb348232c60d128c55cc635410736b5f7ca9988
+is superseded and is not applied; no second summary record is introduced.
+
+The existing structured collector now projects only the producer's two exact
+ValueError prefixes followed by its canonical two-key JSON. The complete
+message must be ASCII and at most 256 characters. The existing strict JSON
+decoder rejects duplicate keys and malformed values; the key set, matching
+finite reason, lowercase 64-character member digest, and canonical encoding
+must match exactly. The digest remains the producer's relative-state-member-v1
+domain; the readout does not recalculate a name or read the filesystem.
+
+Projection requires an incomplete ordinary-global capture after ordinary
+metadata completed, no completed Global lifecycle, and one of the existing
+public/native phases or the existing Skill quarantine phase. The existing
+source identity, cleanup, deadline, and all-false qualification checks remain
+required. The top-level unclassified-refusal classification remains unchanged.
+Only the existing 16 KiB DEVIN_CLOSED_READOUT frame gains an optional
+membership_refusal object. Unknown and initial-empty-home errors remain
+ordinary readouts without this object. A malformed known suffix refuses the
+projection after the unchanged artifact publication decision.
+
+Six new inert contracts exercise the actual peer producer against captured
+real-file failures with all second-census/body-read/native entrypoints trapped,
+the complete finite reason/phase catalog, malformed/duplicate/noncanonical and
+mixed-prefix refusal, contradictory success/recipe/authority states, unchanged
+initial-empty/unrelated/success output, and one existing publication frame.
+The whole incoming test file reconstructs exactly when this appended block is
+removed; the producer and its four first-membership variants are untouched.
+
+Root approved this three-file reconciliation before implementation. The
+author verified complete source inverses and immutable blob readbacks.
+Python execution, original ZIP replay, and the next genuine Global lifecycle
+remain unexecuted or pending in this workspace; no native success is inferred
+from these source-only checks. The old 440 and fe6 originals do not establish
+which extra member or required member caused their membership refusals.

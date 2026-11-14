@@ -333,6 +333,7 @@ class KiroPreparedLifecycleTest(unittest.TestCase):
                     self.assertEqual(result["status"], "incomplete-native-proof")
                     for field in ("repeat_verified", "removal_verified", "sentinels_preserved", "kiro_prepared_lifecycle_verified"):
                         self.assertIs(result[field], True)
+                        self.assertIs(audit.case_observation(result)[field], True)
                 else:
                     self.assertIs(result["kiro_prepared_lifecycle_verified"], False)
                     if fault in ("source", "duplicate"):
@@ -343,6 +344,41 @@ class KiroPreparedLifecycleTest(unittest.TestCase):
                         self.assertEqual(result["status"], "repeat-add-unqualified")
                     else:
                         self.assertEqual(result["status"], "cleanup-failed")
+
+
+    def test_console_observation_keeps_types_and_has_no_native_authority(self):
+        audit = load_audit()
+        flags = ("kiro_prepared_lifecycle_verified", "repeat_verified", "removal_verified",
+                 "sentinels_preserved", "failed_install_registered", "failed_install_residue")
+        row = dict.fromkeys(flags, True)
+        row.update(status="incomplete-native-proof", install={"exit_code": 1, "timeout": False,
+                   "stderr_tail": "private command text"}, list={"exit_code": 0, "timeout": False})
+        original = copy.deepcopy(row)
+        observed = audit.case_observation(row)
+        self.assertEqual(row, original)
+        self.assertEqual(set(observed), set(flags) | {"install", "list"})
+        self.assertTrue(all(observed[name] is True for name in flags))
+        self.assertEqual(observed["install"], {"exit_code": 1, "timeout": False})
+        self.assertEqual(observed["list"], {"exit_code": 0, "timeout": False})
+        self.assertNotIn("private command text", json.dumps(observed))
+        self.assertFalse(audit.expected_negative_coverage(row))
+        for invalid in (None, True, 1, [], "private command text"):
+            with self.subTest(row=invalid):
+                observed = audit.case_observation(invalid)
+                self.assertTrue(all(observed[name] is None for name in flags))
+                self.assertEqual(observed["install"], {"exit_code": None, "timeout": None})
+                self.assertEqual(observed["list"], {"exit_code": None, "timeout": None})
+        for value in (False, 0, 1, "true", None):
+            row = dict.fromkeys(flags, value)
+            observed = audit.case_observation(row)
+            self.assertTrue(all(observed[name] is (value if type(value) is bool else None) for name in flags))
+        for code in (True, False, -(2**31) - 1, 2**32, "1", None):
+            observed = audit.case_observation({"install": {"exit_code": code, "timeout": "false"}})
+            self.assertEqual(observed["install"], {"exit_code": None, "timeout": None})
+        for code in (-(2**31), -1, 0, 2**32 - 1):
+            observed = audit.case_observation({"install": {"exit_code": code, "timeout": True}})
+            self.assertEqual(observed["install"], {"exit_code": code, "timeout": True})
+
 
 
 if __name__ == "__main__":
