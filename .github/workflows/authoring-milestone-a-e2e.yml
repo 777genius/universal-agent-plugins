@@ -11,14 +11,6 @@ on:
       - 'website/**'
       - 'landing/**'
       - 'assets/**'
-      # No release/npm/Go input changes: dedicated Cursor/Qoder research
-      # has its own native E2E + proof contracts. Mixed diffs still run.
-      - 'scripts/project_native_missing_call_runner.py'
-      - 'scripts/project_native_missing_call_proof.py'
-      - 'scripts/test_project_native_missing_call_runner.py'
-      - 'scripts/test_project_native_missing_call_proof.py'
-      - '.github/workflows/cursor-qoder-mcp-preflight.yml'
-      - '.github/workflows/cursor-qoder-mcp-proof.yml'
   workflow_dispatch:
 
 permissions:
