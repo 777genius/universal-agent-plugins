@@ -1,6 +1,0 @@
-{
-  "description": "production-shaped Claude plugin example",
-  "mcpServers": "./.mcp.json",
-  "name": "claude-basic-prod",
-  "version": "0.1.0"
-}

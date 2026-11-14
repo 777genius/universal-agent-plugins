@@ -1,6 +1,0 @@
-api_version: v1
-name: grok-basic
-version: 0.1.0
-description: Grok packaged plugin example
-targets:
-    - grok

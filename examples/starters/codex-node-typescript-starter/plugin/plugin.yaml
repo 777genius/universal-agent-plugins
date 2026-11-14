@@ -1,6 +1,0 @@
-api_version: v1
-name: codex-node-typescript-starter
-version: 0.1.0
-description: plugin-kit-ai plugin
-targets:
-    - codex-runtime

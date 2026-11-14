@@ -1,7 +1,0 @@
-{
-  "description": "Cursor packaged plugin example",
-  "mcpServers": "./.mcp.json",
-  "name": "cursor-basic",
-  "skills": "./skills/",
-  "version": "0.1.0"
-}

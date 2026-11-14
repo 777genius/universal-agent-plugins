@@ -1,6 +1,0 @@
-api_version: v1
-name: cursor-basic
-version: 0.1.0
-description: Cursor packaged plugin example
-targets:
-    - cursor

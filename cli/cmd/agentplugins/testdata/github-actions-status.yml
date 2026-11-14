@@ -1,9 +1,0 @@
-# GitHub Actions wire vocabulary, independent of the workflows under test.
-# https://docs.github.com/en/actions/reference/evaluate-expressions-in-workflows-and-actions#status-check-functions
-# https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#needs-context
-# Keys use internal US spelling; values preserve the external protocol exactly.
-success: success
-always: always
-failure: failure
-canceled: cancelled
-skipped: skipped

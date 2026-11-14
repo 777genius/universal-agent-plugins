@@ -108,10 +108,7 @@ func runRepair(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 	retainPlannedClient(&input, planned.Plan)
 	input.Confirmed = true
 	result, repairErr := service.Repair(ctx, input)
-	if renderErr := renderRepairResult(cmd.OutOrStdout(), opts.format, installation, result, false); renderErr != nil && repairErr == nil {
-		repairErr = renderErr
-	}
-	return repairErr
+	return renderRepairCompletion(cmd.OutOrStdout(), opts.format, installation, result, repairErr)
 }
 
 func runUpdate(ctx context.Context, cmd *cobra.Command, app App, opts *options, selector string) error {

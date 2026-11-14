@@ -1,2 +1,0 @@
-runtime: go
-entrypoint: ./bin/claude-go-starter

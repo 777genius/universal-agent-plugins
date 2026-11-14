@@ -1,8 +1,0 @@
-@echo off
-setlocal
-set "ROOT=%~dp0.."
-{{- if .TypeScript }}
-node "%ROOT%\dist\main.js" %*
-{{- else }}
-node "%ROOT%\plugin\main.mjs" %*
-{{- end }}

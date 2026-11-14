@@ -1,8 +1,0 @@
-#!/bin/sh
-# Qoder lifecycle hook runtime for the qoder-basic example.
-# Invoked with the kebab event name (session-start, user-prompt-submit,
-# post-tool-use, stop); each call appends one marker line to the event log.
-event="${1:-unknown}"
-log="${TMPDIR:-/tmp}/qoder-basic-hooks.log"
-printf '%s %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "${event}" >>"${log}"
-exit 0

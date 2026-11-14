@@ -1,6 +1,0 @@
-api_version: v1
-name: codex-package-prod
-version: 0.1.0
-description: official Codex plugin bundle example
-targets:
-    - codex-package

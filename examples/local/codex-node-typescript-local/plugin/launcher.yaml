@@ -1,2 +1,0 @@
-runtime: node
-entrypoint: ./bin/codex-node-typescript-local

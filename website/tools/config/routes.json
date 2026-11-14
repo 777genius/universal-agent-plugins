@@ -1,6 +1,0 @@
-{
-  "schema": "docs-aliases-v1",
-  "englishAliases": true,
-  "excludedEnglishPages": ["/en/", "/en/404"],
-  "aliases": {}
-}

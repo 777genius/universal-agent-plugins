@@ -1,9 +1,0 @@
-{
-  "name": "opencode-basic-local",
-  "version": "0.1.0",
-  "private": true,
-  "type": "module",
-  "dependencies": {
-    "@opencode-ai/plugin": "1.4.0"
-  }
-}
