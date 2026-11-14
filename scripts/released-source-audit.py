@@ -13,6 +13,7 @@ import io
 import json
 import os
 from pathlib import Path, PurePosixPath
+import stat
 import re
 import subprocess
 import tarfile
@@ -274,19 +275,62 @@ def protected_scope_snapshot(root, scope, native_root):
     # They are deliberately absent from these scope-owned paths.
     observed = {"directories": live.scoped_snapshot(directories), "files": {}}
     for path in files:
-        require(not path.exists() or path.is_file(), "protected saved record is not a regular file")
-        observed["files"][path.relative_to(root).as_posix()] = (
-            {"digest": digest(path.read_bytes()), "mtime_ns": path.stat().st_mtime_ns,
-             "inode": path.stat().st_ino, "mode": path.stat().st_mode} if path.exists() else None)
+        observed["files"][path.relative_to(root).as_posix()] = protected_saved_record(path)
     return observed
 
 
+def read_saved_record(path):
+    """Read owned manifest/lock/state bytes only after a held identity join."""
+    try:
+        before = path.lstat()
+    except FileNotFoundError:
+        return None, None
+    require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1
+            and 0 <= before.st_size <= 1 << 20,
+            "protected saved record must be a bounded single-link regular file")
+    # Windows os.read must not translate CRLF before the exact size/digest join.
+    flags = (os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+             | getattr(os, "O_NONBLOCK", 0))
+    fd = os.open(path, flags)
+    try:
+        held = os.fstat(fd)
+        def same(left, right):
+            return (stat.S_ISREG(right.st_mode) and right.st_nlink == 1
+                    and os.path.samestat(left, right) and right.st_mode == left.st_mode
+                    and right.st_size == left.st_size and right.st_mtime_ns == left.st_mtime_ns
+                    and right.st_ctime_ns == left.st_ctime_ns)
+        require(same(before, held), "protected saved record changed before read")
+        body = bytearray()
+        while len(body) <= before.st_size:
+            chunk = os.read(fd, min(65536, before.st_size + 1 - len(body)))
+            if not chunk:
+                break
+            body.extend(chunk)
+        require(len(body) == before.st_size
+                and same(before, os.fstat(fd)) and same(before, path.lstat()),
+                "protected saved record changed during read")
+        return bytes(body), before
+    finally:
+        os.close(fd)
+
+
+def protected_saved_record(path):
+    body, before = read_saved_record(path)
+    if before is None:
+        return None
+    return {"digest": digest(body), "mtime_ns": before.st_mtime_ns,
+            "inode": before.st_ino, "mode": before.st_mode}
+
+
 def checked_saved_removal(documents, alias, case, root):
+    bodies = []
     for path in documents:
         in_case(path, root)
-        require(path.is_file(), "saved removal lost the manifest or lock")
-    manifest = tomllib.loads(documents[0].read_text(encoding="utf-8"))
-    locked = json.loads(documents[1].read_text(encoding="utf-8"))
+        body, _ = read_saved_record(path)
+        require(body is not None, "saved removal lost the manifest or lock")
+        bodies.append(body)
+    manifest = tomllib.loads(bodies[0].decode("utf-8"))
+    locked = json.loads(bodies[1].decode("utf-8"))
     dependencies, targets = manifest.get("dependencies", {}), manifest.get("targets", {})
     require(manifest.get("schema_version") == 1 and isinstance(dependencies, dict)
             and isinstance(targets, dict), "saved removal produced an invalid manifest")

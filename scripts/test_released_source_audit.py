@@ -6,6 +6,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
 import tarfile
 import tempfile
@@ -349,6 +350,53 @@ class SavedScopeTests(unittest.TestCase):
                 (cache / "plugin.json").write_text("shared immutable cache", encoding="utf-8")
                 self.assertEqual(before, audit.protected_scope_snapshot(root, scope, native))
 
+    def test_saved_records_refuse_hardlinks_and_unbounded_bytes(self):
+        for variant in ("hardlink", "oversized"):
+            with self.subTest(variant=variant), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                native = root / "other-native"
+                native.mkdir()
+                documents = root / "project"
+                documents.mkdir()
+                original = root / "control.txt"
+                original.write_text("original fixture", encoding="utf-8")
+                selected = documents / "uap.toml"
+                if variant == "hardlink":
+                    os.link(original, selected)
+                else:
+                    selected.write_bytes(b"x" * ((1 << 20) + 1))
+                with self.assertRaisesRegex(ValueError, "bounded single-link regular file"):
+                    audit.protected_scope_snapshot(root, "user", native)
+
+    def test_saved_record_refuses_symlink_even_to_in_case_file(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            native = root / "other-native"
+            native.mkdir()
+            documents = root / "project"
+            documents.mkdir()
+            original = root / "control.txt"
+            original.write_text("original fixture", encoding="utf-8")
+            selected = documents / "uap.toml"
+            try:
+                selected.symlink_to(original)
+            except (OSError, NotImplementedError) as error:
+                self.skipTest("native symlink creation unavailable: " + str(error))
+            with self.assertRaisesRegex(ValueError, "bounded single-link regular file"):
+                audit.read_saved_record(selected)
+            with self.assertRaisesRegex(ValueError, "native path escaped disposable case"):
+                audit.protected_scope_snapshot(root, "user", native)
+
+    def test_saved_record_preserves_exact_crlf_bytes_and_absence(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "uap.toml"
+            self.assertEqual(audit.read_saved_record(path), (None, None))
+            body = b"schema_version = 1\r\n[dependencies]\r\n[targets]\r\n"
+            path.write_bytes(body)
+            observed, identity = audit.read_saved_record(path)
+            self.assertEqual(observed, body)
+            self.assertEqual(identity.st_size, len(body))
+
     def test_first_command_cannot_modify_the_other_scope_then_hide_it_at_remove(self):
         for path in ("home/.pi/agent/unwanted.json", "uap-data/uap.toml", "uap-data/state-v2.json"):
             with self.subTest(path=path), tempfile.TemporaryDirectory() as temp:
@@ -389,6 +437,38 @@ class SavedScopeTests(unittest.TestCase):
                         audit.checked_saved_removal(documents, "portable", case(), root)
                 else:
                     audit.checked_saved_removal(documents, "portable", case(), root)
+
+
+    def test_saved_removal_refuses_hardlinked_or_oversized_lock(self):
+        for variant in ("hardlink", "oversized"):
+            with self.subTest(variant=variant), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                manifest, lock = root / "uap.toml", root / "uap.lock"
+                manifest.write_text("schema_version = 1\n[dependencies]\n[targets]\n", encoding="utf-8")
+                foreign = root / "foreign.lock"
+                foreign.write_text('{"lock_version":1,"packages":[]}', encoding="utf-8")
+                if variant == "hardlink":
+                    os.link(foreign, lock)
+                else:
+                    lock.write_bytes(b"x" * ((1 << 20) + 1))
+                with self.assertRaisesRegex(ValueError, "bounded single-link regular file"):
+                    audit.checked_saved_removal([manifest, lock], "portable", case(), root)
+
+    def test_saved_removal_refuses_symlinked_lock(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            manifest, lock = root / "uap.toml", root / "uap.lock"
+            manifest.write_text("schema_version = 1\n[dependencies]\n[targets]\n", encoding="utf-8")
+            foreign = root / "foreign.lock"
+            foreign.write_text('{"lock_version":1,"packages":[]}', encoding="utf-8")
+            try:
+                lock.symlink_to(foreign)
+            except (OSError, NotImplementedError) as error:
+                self.skipTest("native symlink creation unavailable: " + str(error))
+            with self.assertRaisesRegex(ValueError, "bounded single-link regular file"):
+                audit.read_saved_record(lock)
+            with self.assertRaisesRegex(ValueError, "native path escaped disposable case"):
+                audit.checked_saved_removal([manifest, lock], "portable", case(), root)
 
 
 class RefusalTests(unittest.TestCase):
