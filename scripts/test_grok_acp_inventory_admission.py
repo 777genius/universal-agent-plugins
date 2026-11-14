@@ -47,6 +47,71 @@ def startup_row(root, scope):
                 merged_base64=base64.b64encode(body).decode(), merged_bytes=len(body), merged_sha256=case.digest(body))
 
 
+class ReadonlyHelperDiagnosticContracts(unittest.TestCase):
+    def capture(self, stdout, stderr, status):
+        actual = subprocess.Popen
+        program = ('import os\n'
+                   'os.write(1,' + repr(stdout) + ')\n'
+                   'os.write(2,' + repr(stderr) + ')\n'
+                   'raise SystemExit(' + str(status) + ')\n')
+        launched = []
+        def inert(argv, **options):
+            launched.append(actual([sys.executable, '-I', '-c', program], **options))
+            return launched[-1]
+        try:
+            with mock.patch.object(case.subprocess, 'Popen', side_effect=inert):
+                case.readonly_helper_capture(Path('/tmp/inert-helper'), Path('/tmp/inert-root'),
+                    dict(start_monotonic_ns=time.monotonic_ns()))
+        finally:
+            self.assertEqual(len(launched), 1)
+            self.assertIsNotNone(launched[0].poll())
+
+    def test_actual_pipe_refusal_retains_only_the_closed_guard(self):
+        for code in ('readonly-input-authority', 'collector-frame-refused', 'json-key-refused', 'result-identity-refused'):
+            with self.subTest(code=code):
+                with self.assertRaises(case.ReadonlyHelperRefusal) as caught:
+                    self.capture(b'', ('grok-acp-controller-refused:' + code + '\n').encode(), 2)
+                progress = case.frontend_state()
+                progress.update(stage='helper', source_identity_checked=True)
+                case.frontend_error(progress, caught.exception)
+                self.assertEqual(progress['error_class'], 'helper-' + code)
+                self.assertFalse(progress['cleanup_complete'])
+                self.assertFalse(progress['publication_attempted'])
+                packet = dict(schema_version=1, kind='frontend-publication-refused', stage='helper',
+                    error_class=progress['error_class'], source_identity_checked=True,
+                    cleanup_complete=False, publication_attempted=False)
+                body = json.dumps(packet, separators=(',', ':')).encode() + b'\n'
+                with redirect_stdout(io.StringIO()) as stream, self.assertRaisesRegex(ValueError, '^frontend-publication-refused$'):
+                    case.frontend_packet(body, 1)
+                self.assertEqual(stream.getvalue(), 'GROK_FRONTEND_REFUSAL=' + body.decode())
+                for key, value in (('stage', 'receipt'), ('source_identity_checked', False),
+                                   ('cleanup_complete', True), ('publication_attempted', True)):
+                    changed = json.dumps(dict(packet, **{key:value}), separators=(',', ':')).encode() + b'\n'
+                    with redirect_stdout(io.StringIO()) as stream, self.assertRaisesRegex(ValueError, 'helper-refusal-authority'):
+                        case.frontend_packet(changed, 1)
+                    self.assertEqual(stream.getvalue(), '')
+
+    def test_prior_or_contaminated_helper_output_has_no_diagnostic_authority(self):
+        fixed = b'grok-acp-controller-refused:readonly-input-authority\n'
+        for stdout, stderr, status in ((b'', b'grok-acp-controller-refused\n', 2),
+                (b'', b'grok-acp-controller-refused:PRIVATE\n', 2), (b'', fixed + b'PRIVATE\n', 2),
+                (b'', fixed.rstrip(), 2), (b'', fixed, 1), (b'', fixed, 0),
+                (b'{"cleanup_complete":true}\n', fixed, 2)):
+            with self.subTest(stdout=stdout, stderr=stderr, status=status), self.assertRaises(ValueError) as caught:
+                self.capture(stdout, stderr, status)
+            self.assertNotIsInstance(caught.exception, case.ReadonlyHelperRefusal)
+            progress = case.frontend_state()
+            case.frontend_error(progress, caught.exception)
+            self.assertEqual(progress['error_class'], 'contract')
+            self.assertNotIn('PRIVATE', str(caught.exception))
+
+    def test_helper_and_frontend_wire_enums_agree(self):
+        source = Path(__file__).resolve().parents[1] / 'install/integrationctl/research/grokacpinventory/readonly_diagnostic_linux.go'
+        match = re.search(r'const readonlyDiagnosticCodes = `([^`]+)`', source.read_text())
+        self.assertIsNotNone(match)
+        self.assertEqual(frozenset(match.group(1).split()), case.READONLY_HELPER_CODES)
+
+
 class FrontendPublicationContracts(unittest.TestCase):
     def preflight_refusal(self):
         import project_native_research as shared

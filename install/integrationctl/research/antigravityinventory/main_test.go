@@ -309,3 +309,107 @@ func TestPublicNegativeExitStillRequiresStrictFamilyAndRuntimeProof(t *testing.T
 		})
 	}
 }
+
+func TestMissingConfigRolesPreserveClosedCommandAndSettledNegativeReceipt(t *testing.T) {
+	for _, action := range []string{"missing-config-version", "missing-config-list"} {
+		for _, fault := range []string{"pass", "negative", "cleanup", "no-child", "error", "stdout-bound", "stderr-bound", "native-pin"} {
+			t.Run(action+"/"+fault, func(t *testing.T) {
+				req := publicFixture(t)
+				req.Binary, req.BinarySHA, req.Action = filepath.Join(req.Root, "bin", "agy"), nativeSHA, action
+				if runtime.GOOS == "windows" {
+					req.Binary += ".exe"
+				}
+				if err := validateRequest(req); err != nil {
+					t.Fatal(err)
+				}
+				body, err := execute(context.Background(), req, func(_ context.Context, cmd ports.Command, grace time.Duration) (ports.CommandResult, error) {
+					tail := []string{"--version"}
+					if action == "missing-config-list" {
+						tail = []string{"plugin", "list", "--json"}
+					}
+					home := filepath.Join(req.Root, "home")
+					if !slices.Equal(cmd.Argv, append([]string{req.Binary}, tail...)) || !slices.Equal(cmd.Env, []string{"HOME=" + home, "USERPROFILE=" + home}) ||
+						cmd.Dir != filepath.Join(home, ".gemini", "config") || grace != 5*time.Second || commandBudget(action) != 10*time.Second {
+						t.Fatal("missing-config original command authority differs", cmd)
+					}
+					value := ports.CommandResult{CleanupComplete: true, Stdout: []byte("1.5.3\n")}
+					switch fault {
+					case "negative":
+						value.ExitCode, value.Stderr = 1, []byte("original refusal")
+					case "cleanup":
+						value.CleanupComplete = false
+					case "no-child":
+						value.NoChildStarted = true
+					case "error":
+						return value, errors.New("unsettled capture")
+					case "stdout-bound":
+						value.Stdout = make([]byte, 1<<20)
+					case "stderr-bound":
+						value.Stderr = make([]byte, 32768)
+					case "native-pin":
+						if e := os.WriteFile(req.Binary, []byte("replacement"), 0700); e != nil {
+							t.Fatal(e)
+						}
+					}
+					return value, nil
+				})
+				if fault != "pass" && fault != "negative" {
+					if err == nil || body != nil {
+						t.Fatal("unproved measurement returned a receipt", err)
+					}
+					return
+				}
+				var receipt map[string]any
+				if err != nil || json.Unmarshal(body, &receipt) != nil || len(receipt) != 14 || receipt["action"] != action || receipt["cleanup_complete"] != true ||
+					(fault == "negative" && (receipt["exit"] != float64(1) || receipt["stderr_bytes"] != float64(16))) {
+					t.Fatal("original settled result was not retained", err, receipt)
+				}
+			})
+		}
+	}
+}
+
+func TestMissingConfigRequestAndOriginalDeadlineRefuseBeforeRunner(t *testing.T) {
+	for _, fault := range []string{"selector", "binary", "root", "action", "source", "pin", "expired", "renewed"} {
+		t.Run(fault, func(t *testing.T) {
+			req := publicFixture(t)
+			outside := req.Binary
+			req.Binary, req.BinarySHA, req.Action = filepath.Join(req.Root, "bin", "agy"), nativeSHA, "missing-config-version"
+			if runtime.GOOS == "windows" {
+				req.Binary += ".exe"
+			}
+			req.Deadline = time.Now().Add(4 * time.Second).UnixNano()
+			switch fault {
+			case "selector":
+				req.Selector = "another"
+			case "binary":
+				req.Binary = outside
+			case "root":
+				req.Root += "-another"
+			case "action":
+				req.Action = "missing-config-enable"
+			case "source":
+				req.Tree = strings.Repeat("e", 40)
+			case "pin":
+				req.BinarySHA = installerSHA
+			case "expired":
+				req.Deadline = time.Now().Add(-time.Second).UnixNano()
+			case "renewed":
+				req.Deadline = time.Now().Add(11 * time.Second).UnixNano()
+			}
+			frame, err := json.Marshal(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var output bytes.Buffer
+			calls := 0
+			err = run(strings.NewReader(string(frame)+"\n"), &output, func(context.Context, ports.Command, time.Duration) (ports.CommandResult, error) {
+				calls++
+				return ports.CommandResult{CleanupComplete: true}, nil
+			})
+			if err == nil || calls != 0 || output.Len() != 0 {
+				t.Fatal("invalid measurement reached the runner", err, calls, output.String())
+			}
+		})
+	}
+}

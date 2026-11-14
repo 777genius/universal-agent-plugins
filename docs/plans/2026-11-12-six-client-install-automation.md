@@ -255,3 +255,94 @@ keeping the closed environment and source/ownership checks. Six controls reject
 an unwrapped transport, a foreign launcher, wrong root/data, an altered child
 command and an extra argument. This corrects test expectations for the current
 transport; it adds no production command or native qualification.
+
+## 2026-11-14 — independent retained native evidence review
+
+This review records original executions with their own source identities. It
+does not qualify subsequent changes or replace the final-head merge gates.
+
+### Cline selected sessions and cold agreement restore
+
+[Run 43588580177](https://github.com/777genius/universal-agent-plugins/actions/runs/43588580177)
+executed source `1412f416b9bf70b227d8f517e1881075f2b05a38`, tree
+`a42b970ebaf15e73a6dcbbd57f9c4c47ea1d4f57`. All three original artifact bytes were
+downloaded and checked against GitHub's digest, ZIP CRC and exact single-member
+closure. Each original contains the same 30-command lifecycle, three warm
+inspection stages, and separate agreement-only cold restore/repeat.
+
+| Host | Original artifact | Outer SHA-256 |
+| --- | ---: | --- |
+| Linux x86-64 | 14112068950 | `3a5ef19bd7ac8485db3584613b88726bb9a856d14913e7b6774a3e3ce8f50f08` |
+| macOS ARM64 | 14113185358 | `6e7a6aaf5b9722614855517df6e925b2380330dd0db0f688de88d6c3ae9841fb` |
+| Windows AMD64 | 14111523757 | `d03909ec8c4afab92239fca18bd91704d06d11aef0edfe6eefa6a3d5160de6f8` |
+
+The review independently joined all 60 original stream encodings per host,
+expected positive/negative exits, source/tree, six runtime pins and each command's
+positive cleanup receipt. It also rehashed the event stream and passed the
+existing consumer's nonce/PID/session/order checks: five distinct installed
+transport sessions per host, each with initialize, tools/list and tools/call.
+The real selected Cline process supplies configuration inspection; the five
+protocol calls are direct installed-transport calls. All originals explicitly
+retain `native_cline_tools_call=false`, no authentication and no model invocation.
+
+### Hermes existing User and Project Skills lifecycle
+
+[Run 43591958231](https://github.com/777genius/universal-agent-plugins/actions/runs/43591958231)
+passed Linux, macOS and Windows on head `f665e332fa944e46e2942119036a076f0381268a`.
+Its actual checkout `04da68fbf9cfe6435c3947d98fd52ae2c9853672` has the identical
+tree `442adc55e588a6ac4b5b8c94ac85d13a1765f04b`, independently confirmed through
+the original commit object. The pinned Hermes source remains
+`2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19`.
+
+| Host | Original artifact | Outer SHA-256 |
+| --- | ---: | --- |
+| Linux x86-64 | 14113275161 | `956861f941de9ab0b18122307fe94a2272abdba3a3ab69e97024bec7d41f6856` |
+| macOS ARM64 | 14113092711 | `e2896f1fa25e367c22e1b7afac77e58a0862fc8354a41678b5822a20da1bae43` |
+| Windows AMD64 | 14112668635 | `3862ef602953ce3eddde079e3610e1bf52f955df969c2ef3da66952e0fa849cd` |
+
+All three downloaded original archives matched the API digest and passed CRC.
+Their summaries retain lifecycle exit zero and no timeout. The observed native
+MCP sequence is four initialize/initialized/tools-list exchanges; `tools_call`
+and `model_turn` are false. Separate no-auth tool-call and isolated Project MCP
+lanes still require their own original evidence. The existing Project MCP
+refusal in this lane is preserved and is not a positive Project MCP result.
+
+### Incoming corrections executed locally
+
+The independently published `d9008f2c8bc19ee0b8a6cb62a6d50e25bf76ef91` was
+reconstructed with its exact original tree and commit SHA before running its
+unchanged tests. The environment suite passed all 217 tests in 36.434 seconds.
+The Hermes profile suite ran 140 methods in 4.286 seconds: 139 passed and the
+existing Windows-only case was skipped on Linux. That skip supplies no Windows
+coverage. These are inert contract results, separate from native qualification.
+
+The composition preserves the subsequent privacy correction
+`bd63cdcae2b74998a13af7380ff998b29c5e0d51` in all three original paths. Its
+closed diagnostic omits a foreign file-content digest; the private inventory
+still verifies that digest. The composed Hermes suite ran 143 methods in
+4.564 seconds: 142 passed and the same Windows-only case was skipped.
+
+### Devin Global and Kiro execution boundaries
+
+The original Devin Global job `132441892348` in
+[run 43589882702](https://github.com/777genius/universal-agent-plugins/actions/runs/43589882702)
+succeeded on `6d1f01deb47b05854a3a3ab7657889b44ba1cef0`, tree
+`b818ff2bc551129fbfa17ba50882e1039e79756f`. Independent original review of
+artifact `14112974433` joined outer SHA-256
+`18b26baaf56ef587d9ef1308ad572ec07fe178317402ef4e05e261be9651ea3b`, both ZIP
+CRCs, all 75 inner members, 74 native/public streams, four build streams,
+234 acquisition/runtime pins, 37 ordered commands and 30 effects. Twelve
+post-operation A/B inventories preserve foreign rows while the owned Skill
+and two MCP entries appear and are removed. Cleanup and Global lifecycle
+capture are complete; runtime initialize/list/call and Project qualifications
+remain false. This is the actual Global inventory/public lifecycle boundary.
+
+On `d9008f2c8bc19ee0b8a6cb62a6d50e25bf76ef91`, Kiro live audit
+[run 43593070067](https://github.com/777genius/universal-agent-plugins/actions/runs/43593070067)
+passed the corrected Docker preparation and the 30-Skill job. The plugin job
+ran all 30 cases: 23 correctly retain incomplete-native-proof despite verified
+prepared lifecycle/repeat/removal/sentinels, six pass, and one published
+marketing-kit negative is unsupported without residue. These prepared cases
+must not be relabeled native success. This acquisition selected Kiro 3.0.0;
+the separate no-auth lane retains its own 2.34.0 pin and needs current-source
+execution. Neither lane supplies evidence for the other's binary.

@@ -228,10 +228,10 @@ func supervisedCapture(ctx context.Context, command ports.Command, r request, pa
 	e := run(ctx, command, func(_ io.Writer, reader io.Reader) error {
 		var captureErr error
 		raw, captureErr = exchange(reader, r, parent)
-		return captureErr
+		return readonlyDiagnostic(r.Mode, captureErr)
 	})
 	if e != nil {
-		return nil, errors.New("strict-cleanup-unproved")
+		return nil, readonlyCaptureRefusal(r.Mode, e)
 	}
 	if len(raw) == 0 {
 		return nil, errors.New("strict-exchange-missing")
@@ -243,7 +243,7 @@ func main() {
 		os.Exit(2)
 	}
 	if e := run(os.Args[2], os.Stdin, os.Stdout); e != nil {
-		_, _ = fmt.Fprintln(os.Stderr, "grok-acp-controller-refused")
+		_, _ = fmt.Fprintln(os.Stderr, controllerRefusal(e))
 		os.Exit(2)
 	}
 }
@@ -432,7 +432,7 @@ func (s *scopeState) verify(ctx context.Context, requestFile heldFile) error {
 }
 func runScope(ctx, parent context.Context, root string, r request, requestFile heldFile, output io.Writer) (resultErr error) {
 	s := &scopeState{safeToDelete: true}
-	defer func() { resultErr = errors.Join(resultErr, s.close()) }()
+	defer func() { resultErr = readonlyDiagnostic(r.Mode, errors.Join(resultErr, s.close())) }()
 	var e error
 	s.input, e = holdDirectory(root, r.UID, r.GID)
 	if e != nil {

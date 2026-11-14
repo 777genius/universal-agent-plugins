@@ -1501,3 +1501,365 @@ root scratch, a held root inode mismatch and a changed descendant in the same
 snapshot. Full state, saved/cold fixture, DATA, doctor and all prior component
 negatives remain in place. This composition does not claim a completed native
 lifecycle, IDE loading, MCP execution, authentication or model qualification.
+
+## 2026-11-14: proposed missing-config discovery measurement
+
+Status: concrete plan for source review; no implementation or native execution.
+Plan base is `751f87114212bee56324ef4f58a991328da7b43f`, tree
+`28d15a70572cd230a6643a90d2424389c52ac179`. Its four relevant files are unchanged
+from `3cab58db0cd950f664c778815990ee0a662b8072`. This plan does not admit missing
+configuration in the product's `inventoryConfig`, change activation status, or
+qualify enablement recovery. The question is whether the exact pinned CLI can
+discover the already prepared User directory when its default config is absent.
+
+### Scope and existing authorities
+
+The implementation, after a separate source approval, is limited to:
+
+| Existing path | Exact proposed responsibility |
+| --- | --- |
+| `install/integrationctl/research/antigravityinventory/main.go` | Two closed research action roles using the existing process supervisor, pins, control frame and receipt. |
+| `install/integrationctl/research/antigravityinventory/main_test.go` | Real helper request/runner/receipt negatives and preservation of existing actions. |
+| `scripts/e2e/antigravity-native-cross.py` | One existing-fixture call site, the metadata-first ledger check, the fixed pair and sidecar, and embedded inert contracts. |
+| `docs/plans/2026-11-13-antigravity-native-admission.md` | Reviewed scope, limits and later evidence disposition. |
+
+No workflow, dependency, client adapter, public CLI/API, state format, feature
+flag, acquisition, copy, or separate fixture is added. Existing 14 native slots,
+23 public slots, their ordering, the five refusal cases and their conditions
+remain unchanged. The proposed additional measurement has exactly two roles;
+neither role enters those existing slot catalogs. Target additional runtime is
+220–280 lines and meaningful contracts 120–160 lines across the existing files.
+Any excess needed for a concrete authority check requires another source review;
+the 500-effective-line, 60-line/40-statement limits and existing exemptions are
+unchanged.
+
+`public_user_refusals` already owns one fixture with `condition == "missing-config"`.
+It performs ordinary `uap-add`, records the real binding, authors then removes
+that fixture's config, and receives the expected UAP repeat refusal. Product
+detection resolves the binary without running `--version`; this initial add is
+Prepared and does not constitute a native activation attempt. The new call is
+placed only after the existing state, bundle, membership, parent and applicable
+config checks all succeed, while the original `public_fixture` context is open.
+An earlier refusal or preservation failure cannot launch either new command.
+
+Retain the complete result of the existing `public_binding_proof` call instead
+of retaining only its `binding` field. Pass that already verified source/package
+revision, IID, binding ID, physical selector, committed directory receipts,
+DATA receipt/owner marker and selected path into the new fixed function. Rejoin
+them to bytes in its strict baseline. Do not obtain a replacement identity from
+new native output. The request selector and declared name remain the fixture's
+literal `NAME` (`uap-agy-native-smoke`). Its physical basename/path come from the
+verified binding and must match the unique native row; name equality alone is
+insufficient.
+
+The raw baseline is the whole existing fixture, including source, package, DATA,
+state, control lock, executable and all ordinary siblings. Use a single
+`ProfileLedger(root, public=...)` with exactly the current public runtime/scanner
+pins and caps, joined to the still-held root `(fd, named, held)` authority. It
+does not reuse `public_state_snapshot` normalization or the state/tmp scratch
+exceptions. No file is created or normalized to make this baseline pass. The
+selected `home/.gemini/config/config.json` must be absent in the complete
+metadata membership, with its original existing parents held. This measures
+default discovery with an absent file; it does not claim an absent selected
+override, environment-policy equivalence, or Project discovery.
+
+### Two fixed helper actions and one deadline
+
+Add only `missing-config-version` and `missing-config-list` to a private
+`missingConfigAction` predicate. The existing eight request fields remain exact;
+unknown, duplicate, missing, malformed and trailing input stays refused.
+`validateRequest` additionally requires the literal selector and the exact
+`<original root>/bin/agy` (`agy.exe` on Windows) for these two roles. Both use the
+existing native SHA pin, original source commit/tree, held root and binary checks.
+
+| Role | Exact native argv | Working directory | Native command environment |
+| --- | --- | --- | --- |
+| `missing-config-version` | `<pinned bin/agy> --version` | `<root>/home/.gemini/config` | Exactly `HOME=<root>/home`, `USERPROFILE=<root>/home` |
+| `missing-config-list` | `<pinned bin/agy> plugin list --json` | Same original directory | The same exact two entries |
+
+The helper derives these fields; request input supplies no argv, cwd or env.
+Only the two new roles take this branch in `fixedArgv`, `commandEnvironment`,
+the fixed directory selection, `commandBudget`, `admittedExit` and
+`commandReceipt`. All old action predicates, commands, environments and limits
+remain unchanged. The parent invokes the same pinned helper through
+`bridge_exchange`, preserving the existing public-fixture parent environment;
+it does not add PATH, TMP, credentials or XDG overrides to the native command.
+Use the same actual `process.OS.RunWithDescendantExitGrace`, not a new runner.
+
+Freeze one monotonic pair end and its wall-clock counterpart on entry:
+`pair_end = min(start + 10 seconds, capture.public_deadline - 5 seconds)`.
+The last five seconds of that pair are reserved for the existing helper/family
+cleanup, so the one native deadline is `pair_end - 5 seconds`. Both requests
+contain that identical original wall-clock deadline. The helper's new-role
+maximum is ten seconds; the parent supplies only the remaining native interval.
+The existing bridge's additional five-second cleanup window therefore ends no
+later than `pair_end`. Baseline, reservation, transport and validation consume
+this original budget. Do not start if the remaining native interval is exhausted.
+Check the original clock around and during bounded ledger work; expiry makes
+the measurement incomplete and prevents the next child. The outer 360-second
+public deadline and its final five-second reserve are never renewed.
+
+A valid settled version receipt must have exit 0, empty stderr and the exact
+already pinned version body `1.5.3\n`, followed by a complete unchanged ledger.
+Only then may list run. Nonzero exit, dirty stderr, wrong version, malformed or
+truncated receipt, changed authority, profile effect or expiry means zero list
+calls. The list JSON is decoded from the captured body without another command;
+reuse the current physical path/name, version and component predicates as pure
+checks. Require the one selected row and explicitly typed boolean enablement,
+the exact original selected path, Skill `native-smoke`, and both authored MCP
+names. An absent/duplicate/wrong row is a failed measurement. Record the observed
+boolean without forcing it or treating it as activation or recovery authority.
+
+For these roles only, reuse the existing 14-field public receipt shape, including
+typed exit 0..255 and exact base64/length/SHA joins for stdout and stderr. This
+allows a settled negative native result to remain evidence; the parent still
+refuses its success claim. Retain the current strict stdout `<1 MiB`, stderr
+`<32 KiB`, single receipt `<=2 MiB`, request `<=16 KiB`, and bridge bounds.
+No transport error, deadline cancellation, missing child, overflow, unsettled
+family or failed held-runtime check can manufacture a receipt. Such a failure
+leaves `capture.pending` true and withholds raw publication under the existing
+rule. Successful child cleanup alone never proves unchanged profile effects.
+
+### Whole-tree metadata check before any post-command body read
+
+The existing `ProfileLedger.scan` interleaves enumeration and body reads; its
+ordinary `observe` method therefore cannot enforce this new condition unchanged.
+Add narrow optional keywords `expected=None` and `deadline=None` to `scan`.
+They are used only by this fixed pair. Default callers retain the current path.
+The expected value is the original raw `ledger.base`, never a callback, adopted
+postimage, normalized view, or new set of created identities.
+
+With `expected` present, first enumerate the entire bounded tree using the
+original held directories and no content reads. Admit the exact set of relative
+members and roles, all named/held directory metadata and all named regular-file
+metadata. Reject an unknown directory before opening/adopting it. Original file
+dev/inode, owner, mode, nlink, size, mtime/ctime, birthtime, attributes/reparse
+fields and each platform's original named/held domains remain exact. Check
+known-file/opened metadata against the original row before reading it. Existing
+atime handling is unchanged. The original 4,096-member/depth-24, file-size,
+volume, single-link, owner, per-file and 16 MiB ordinary aggregate bounds apply.
+
+Only after the complete metadata pass succeeds may the existing streaming hash
+pass start. Check original expected metadata again immediately before each open
+and on the returned handle, then preserve all current post-read and final held
+parent/file fences. Compare the complete raw result with the original baseline.
+Use the optional absolute deadline for checks during bounded traversal/chunks;
+there is no renewed timeout or broad callback seam. Rehash external runtime pins
+in the parent only after this whole-fixture metadata pass: a late unknown
+profile member refuses before any parent runtime/config body read.
+
+One existing boundary needs explicit review: before returning its receipt the
+Go supervisor already rehashes its original held executable descriptor. That
+operation reads no newly selected profile member and must not be removed to
+make this plan appear stricter. The metadata-first claim above covers every
+new parent profile/pin capture; it does not assert that this existing held-FD
+rehash happens after the parent metadata pass. If the required order includes
+that original descriptor too, this four-path design needs a separate sequencing
+decision before implementation, rather than silently weakening its pin proof.
+
+Perform this check before the first child, after its settled receipt, and before
+and after the second child against the same baseline and held directory set.
+Parsing an already captured receipt in memory to establish family settlement
+does not read the filesystem. A metadata refusal records only bounded captured
+metadata and its reason; it must not read a changed/unknown member to construct
+an evidence report. It has no accepted post-hash ledger and no next child.
+No state lock, PID, timestamp, original root size or tmp entry is normalized.
+
+### One bounded sidecar and publication order
+
+Use exactly one optional member, `missing-config-discovery.json`, in the existing
+`SourceReceipts` archive. It is enabled only by the validated missing-config
+fixture call, not by arbitrary request flags. Its independent measurement status
+does not change the meanings of the existing native/public slot-completion flags.
+Default archive closure stays 75 members (29 without public slots); only this
+one explicit member permits 76. The total physical ZIP stays at most 32 MiB,
+with the existing 32 KiB manifest bound and publication identity/CRC fences.
+
+Proposed sidecar cap for review: 8 MiB. Before either child, reserve that capacity
+plus the existing 64 KiB manifest/ZIP allowance from the same 32 MiB budget.
+The already retained members must fit the remainder. Compute and bound the
+actual immutable context and baseline metadata/hash projection before launch;
+require that three complete projections, two maximum base64-encoded 2 MiB
+receipt frames, two maximum base64-encoded 16 KiB request frames, fixed fields
+and a bounded negative diagnostic fit the sidecar cap. Refuse before launching
+if they cannot. The later unchanged projections cannot grow: their membership,
+strings and metadata must equal the original. Later old public receipts count
+the actual sidecar bytes in their existing aggregate check. Do not increase the
+overall budget, clip streams/rows, omit inconvenient members or stuff frames
+into the manifest. A small descriptor alone goes in the manifest; its old slots
+remain exact.
+
+Implement fixed `SourceReceipts.begin_missing_config` and
+`admit_missing_config`/finalization methods, without a general action framework.
+They join the existing `missing-config` world root, source and native/helper/
+installer pins; require the already accepted public prefix through zero-based
+slot 14 (`missing-config` / `uap-repeat`, exactly 15 old public slots); reject
+duplicate, reordered or cross-world exchanges; and set
+the existing pending fence before launch. A typed, fully joined cleanup receipt
+permits retaining that raw exchange as negative evidence even if semantic or
+profile admission subsequently fails. Unknown cleanup keeps pending true.
+
+The sidecar uses a closed versioned object: fixed kind/world, source commit/tree,
+original root named/held authority, runtime pins, selector/cwd/two-entry env,
+one original deadline, already verified owner/revision/DATA joins, the original
+complete metadata/hash ledger, and up to two ordered exchange records. Each
+exchange contains exact original request and receipt bytes as bounded base64
+with byte count/SHA, phase, decoded typed exit, accepted post-ledger or a bounded
+metadata-only refusal, and explicit effects/semantic status. Stdout/stderr are
+retained exactly once inside the original receipt frame, never reconstructed.
+Serialize every original metadata/hash row without the control/scratch
+normalization; body hashes come from the existing bounded full content read.
+The in-memory comparison still uses the full raw ledger including its bodies.
+
+The exact top-level keys are `schema_version`, `kind`, `world`, `source_commit`,
+`source_tree`, `root`, `root_authority`, `pins`, `selector`, `cwd`, `env`,
+`deadline_unix_ns`, `owner`, `baseline`, `exchanges`, `measurement_complete` and
+`qualification`. Root authority has only `named`/`held`; pins only installer,
+native and helper byte-count/SHA pairs; env only HOME/USERPROFILE. Each exchange
+has only `role`, `request`, `receipt`, `exit`, `effects_verified`,
+`semantic_verified`, `post_ledger`, `refusal`. Raw frame records contain only
+`bytes`, `sha256`, `base64`. A post-ledger is either the complete original-shape
+metadata/hash projection or null, never a partial projection labeled complete.
+Refusal is null or a fixed-reason, fixed-field, relative-member-hash record of
+at most 1 KiB; it contains no private path, body or arbitrary exception text.
+The owner record carries the original IID/binding/physical/path identities,
+source/package/package-revision and mutation/data receipts, plus the original
+state and DATA owner-marker hashes, all joined from the already read proof.
+The ledger projection names every row and preserves every named/held metadata
+value and content hash; omitting duplicate bodies from serialization is not a
+normalization of the in-memory authority comparison.
+
+`measurement_complete` is true only for both ordered settled commands, exact
+version and selected row, unchanged complete ledgers, source/pin joins and
+deadline admission. `product_admitted`, `enabled_recovery_qualified`,
+`native_project_qualified`, `ide_activation`, `native_mcp_call`,
+`vendor_authentication` and `real_model_inference` remain literal false. A
+settled refusal retains only its actual prefix and stops this case; incomplete
+post-ledger rows are never labeled full proof. Existing harness/final source,
+pending-family, receipt-root and final publication rules still decide whether
+any archive may be exposed. No native retry, enable, trust, login, model, help,
+import, path fallback or cleanup mutation is introduced.
+The measured filesystem scope is this complete original fixture; it is not
+a proof of global host write confinement or exact production recovery.
+
+### Required causal contracts before implementation acceptance
+
+1. Exercise the existing helper's actual decode/execute/runner boundary for both
+   fixed roles. Assert exact argv/cwd/two-entry env and original source/pins;
+   wrong root/binary/selector/action, arbitrary argv/env fields and renewed or
+   expired deadline produce zero runner calls. Existing native/public actions
+   retain their exact old behavior, including old stderr/exit policy.
+2. In the actual parent function, make version fail by nonzero exit, stderr,
+   wrong version, receipt/hash/identity failure, expiry or a real filesystem
+   effect. All cases have zero list calls. A valid list fixture records an
+   observed false as a boolean observation without enablement credit; duplicate
+   or wrongly selected rows refuse.
+3. Place an unknown member late in real directory enumeration while an earlier
+   original file remains readable. Count `os.read`/owned-body and runtime-pin
+   reader calls: the metadata failure must happen before every body read.
+   Exercise same-byte inode replacement, parent replacement, changed mode/link
+   count and changed source/DATA/control/root timestamps; all refuse without
+   adopting new directories or launching the next child.
+4. Cause an effect between version admission and list launch, and another during
+   a post-read final fence. Require unchanged original baseline/held handles,
+   zero subsequent child, no false complete ledger and accurate retained prefix.
+   An earlier existing UAP refusal-preservation failure must prevent the new
+   function from launching at all.
+5. Through real `SourceReceipts.publish`, distinguish settled negative evidence
+   from an unsettled family that withholds every raw member. Test ordered two-
+   role closure, wrong source/world/pin, missing/duplicate/extra sidecar, 75/76
+   member policy, pre-child reserve exhaustion and incremental sidecar/ZIP
+   overflow without clipping. Reject manifest growth beyond 32 KiB.
+6. Preserve all old 14/23 role arrays, five refusal cases and prior contract ASTs.
+   Run the affected helper tests and complete embedded Python contracts after
+   implementation, then independent source review. Actual final-source native
+   originals on the three existing platforms remain necessary; inert contracts
+   and this plan grant no product/native qualification.
+
+
+### Implemented bounded missing-config observation candidate (2026-11-14)
+
+The four-path candidate implements the reviewed pair inside the existing
+missing-config refusal fixture. Its two new helper roles use the original
+task-owned pinned executable, the exact manifest selector, the fixed User
+configuration-directory cwd, and only the two explicit HOME/USERPROFILE
+overrides. The preceding fourteen native and twenty-three public action catalogs,
+including all five public refusal cases, are unchanged.
+
+The pair captures one original ten-second deadline, including a five-second
+cleanup reserve, below the unchanged public journey deadline. The existing
+bridge now accepts an optional absolute deadline for this pair; its default
+relative-timeout behavior is unchanged. ProfileLedger accepts the same original
+deadline during baseline construction. Every later scan closes the complete
+original metadata namespace before reading any profile body, then checks every
+held file, full bytes/hash and final directory metadata against that baseline.
+The original helper-held executable rehash remains intact.
+
+The already captured public_binding_proof now retains one private
+authored_source subtree when that exact member exists in its image. No new
+source read occurs. The pair requires the original nonempty subtree, state,
+owned package and DATA rows to match exactly. Its sidecar retains all metadata
+and file hashes, exact request/settled-receipt bytes, separate effect and semantic
+results, original source/runtime pins, and the selected IID/binding receipts.
+Normal negative exit/stderr is evidence only after the existing cleanup proof;
+an unsettled family still revokes the entire raw upload. The single fixed
+sidecar reserves eight MiB before either child inside the unchanged thirty-two
+MiB archive limit; the opt-in catalog has seventy-six members and the old
+seventy-five-member catalog is unchanged.
+
+Local validation is inert. The complete helper package passes and its scoped
+all-rule lint reports zero issues. Its new fixed-role contracts fail against
+the original helper before the implementation and pass with the candidate.
+All fifty-one Python contracts pass, preserving the original forty-eight test
+methods. Removing only the new metadata prepass produces three genuine
+zero-body-read failures: a late member, a byte-identical file replacement,
+and a change between accepted commands. Other new cases cover the absolute
+deadline before baseline/body/Popen, unchanged old refusal ordering, original
+source continuity, capacity refusal before launch, failed version with no list,
+unsettled/invalid receipts, exact inventory identity and unknown sidecar members
+or fields. These checks provide no native admission: every product, recovery,
+Project/IDE, MCP-call, authentication and model qualification field remains false.
+
+### Independent review and current public-lifecycle evidence
+
+The four existing-file base blobs were checked against published
+`f665e332fa944e46e2942119036a076f0381268a` before copying the candidate into an
+isolated review worktree. The source worktree remains unchanged. Independent
+review reproduced one post-metadata-pass race: an original directory timestamp
+changed before the content pass, but the first candidate still read its unchanged
+payload before refusing the final comparison. The content pass now rejoins each
+original directory's complete row before visiting its files. A causal test changes
+the actual root and nested directory separately after the metadata prepass and
+requires refusal with zero body reads. No default caller or allowed metadata
+transition changes. The existing exchange matrix also retains an observed
+`enabled=false` result without granting enablement or recovery qualification.
+
+The corrected candidate passes all 52 embedded Python contracts. The Go helper,
+focused Antigravity/provider tests, and public Antigravity CLI tests pass; scoped
+helper lint reports zero issues. Final combined-source review, ordinary CI and
+genuine three-platform execution of the new measurement remain required.
+
+The earlier published f665 source has independently completed its existing
+three-platform public lifecycle in run
+[43591958018](https://github.com/777genius/universal-agent-plugins/actions/runs/43591958018).
+Original macOS artifact `14113640015`, Linux `14112907762` and Windows
+`14112867344` each pass both ZIP CRC layers, their original API SHA-256, the exact
+f665 source/tree join, all 75 members, 74 request/receipt-file joins and 60 original
+stream length/hash joins. Every archive has 14 settled native commands, 23 public
+commands, and true capture/public-effects completion. Agreement-only cold install,
+unchanged saved repair with the Skill and MCP inventory witness, locked repeat,
+and all five expected public refusals are present. The release-only aggregate is
+skipped and is not counted. These originals contain no missing-config measurement
+and do not qualify this new candidate, Project native discovery, IDE loading,
+MCP calls, authentication, a model request, or production enablement recovery.
+
+R2 also identified a measurement-decoder mismatch with the production native
+decoder: the selected row admitted extra fields, and sorting an object-valued
+`mcpServers` could accept its keys as a native array. All 21 original f665 list
+captures across the three platforms contain the same six-field schema, covering
+63 typed rows. The measurement now requires exactly `name`, `path`, `version`,
+`enabled`, `skills` and `mcpServers`, with strings, a Boolean and string arrays in
+their corresponding fields. The two malformed cases pass the former decoder
+and refuse the correction. Both run through the actual pair and sidecar test:
+their settled receipts remain available, but measurement completion is false.
+All 52 embedded Python methods still pass after these two additional subcases.

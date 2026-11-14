@@ -2190,7 +2190,31 @@ def capture_public_bootstrap(root, outer, rows, backups, allowed):
         return None  # Optional metadata never replaces the existing refusal.
 
 
-def public_profile(root, image, outer, config_hashes):
+def public_stdio_log(root, row, server, sessions):
+    """The pinned client's header-only log joins the fixture's completed sessions."""
+    from datetime import datetime
+    require(server in {"hermes-public-a-stdio", "hermes-public-b-stdio"}
+            and type(sessions) is int and 0 < sessions <= (3 if server == "hermes-public-a-stdio" else 1),
+            "public stdio log lacks completed owned sessions")
+    path = root / "logs/mcp-stderr.log"
+    before = path.lstat()
+    require((before.st_dev, before.st_ino, stat.S_IMODE(before.st_mode), before.st_size) ==
+            (row["device"], row["inode"], row["mode"], row["bytes"]) and 0 < row["bytes"] <= 512,
+            "public stdio log identity or bound differs")
+    body = ordinary_bytes(path, before)
+    require(len(body) == row["bytes"] and hashlib.sha256(body).hexdigest() == row["sha256"],
+            "public stdio log differs from captured bytes")
+    newline = b"\r\n" if os.name == "nt" else b"\n"
+    pattern = (re.escape(newline) + rb"([0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2},[0-9]{3})"
+               + re.escape((" ===== starting MCP server '" + server + "' =====").encode() + newline))
+    matches = list(re.finditer(pattern, body))
+    require(len(matches) == sessions and b"".join(match.group() for match in matches) == body,
+            "public stdio log contains an unmeasured session or child output")
+    for match in matches:
+        datetime.strptime(match.group(1).decode("ascii"), "%Y-%m-%d %H:%M:%S,%f")
+
+
+def public_profile(root, image, outer, config_hashes, *, stdio=None):
     prefix = root.relative_to(outer).as_posix()
     rows = {name[len(prefix) + 1:]: row for name, row in profile_tree(image, prefix).items() if name != prefix}
     marker = ("uap-hermes-project-session-v1\n" + str(root.parent.parent) + "\n").encode()
@@ -2199,6 +2223,10 @@ def public_profile(root, image, outer, config_hashes):
             and owner.get("sha256") == hashlib.sha256(marker).hexdigest(), "public retained root marker differs")
     directories = {"cron", "sessions", "logs", "logs/curator", "memories", "pairing", "hooks", "image_cache", "audio_cache", "skills", "backups", "backups/config"}
     files = {".uap-owner", "config.yaml", "config.yaml.agentplugins.lock", "SOUL.md", "logs/agent.log", "logs/errors.log"}
+    if stdio is not None and stdio[1]:
+        require("logs/mcp-stderr.log" in rows, "public stdio log is missing")
+        public_stdio_log(root, rows["logs/mcp-stderr.log"], *stdio)
+        files.add("logs/mcp-stderr.log")
     backups = {name for name in rows if re.fullmatch(r"backups/config/config\.yaml\.good\.[0-9]{8}-[0-9]{6}", name)}
     try:
         require(len(backups) <= 5 and set(rows) <= directories | files | backups, "public native bootstrap member is unmeasured")
@@ -2518,6 +2546,7 @@ def observe_public(probes):
     protected = {key: value for key, value in current.items() if key.startswith("user/") or key.startswith("project-")
                  or key.endswith("foreign.txt") or "/skills/foreign" in key}
     configs, records, born, complete = {scope: set() for scope in projects}, [], {}, False
+    stdio_completed = {scope: 0 for scope in projects}
 
     def snapshot():
         image, bindings = public_snapshot(outer, projects, pins)
@@ -2557,7 +2586,8 @@ def observe_public(probes):
         with ExitStack() as handles:
             finish = snapshot
             if inspect:
-                require(not native and label == "public-run-" + scope and scope in {"a", "b"}
+                require(not native and (scope, label) in {("a", "public-run-a"), ("b", "public-run-b"),
+                                                       ("a", "public-repaired-run-a")}
                         and args == ["run", "--inspect", "--confirm-client-start"] and not expected_failure and test is None,
                         "public inspect control role differs")
                 finish = handles.enter_context(public_inspect_lock(outer, project, before, snapshot))
@@ -2604,7 +2634,6 @@ def observe_public(probes):
             if inspect: require(public_json(output) == servers, "actual public selected inventory differs")
         else:
             require(not servers and not (project / ".hermes/skills" / name).exists(), "public removal retained owned sources")
-        if selected.exists(): public_profile(selected, after, outer, configs[scope])
         http_after = {key: list(probe.methods()) for key, probe in probes.items()}
         protocol_join(http_before, http_after, scope if test == "http" else None, 1 if test == "http" else 0)
         for key, proof in previous.items():
@@ -2612,9 +2641,16 @@ def observe_public(probes):
             events = public_stdio_events(retained["data"] / "hermes-events.jsonl", nonce) if retained else []
             require(events[:len(events_before[key])] == events_before[key]
                     and len(events)-len(events_before[key]) == (2 if key == scope and test == "stdio" else 0), "public stdio dispatch differs")
+            if retained is not None:
+                stdio_completed[key] = len(events) // 2
             if proof is not None and not (key == scope and test == "stdio"):
                 prefix = proof["data"].relative_to(outer).as_posix()
                 require(profile_tree(before, prefix) == profile_tree(after, prefix), "public operation changed retained data")
+        log_key = selected_prefix + "/logs/mcp-stderr.log"
+        if test != "stdio":
+            require(before.get(log_key) == after.get(log_key), "public non-stdio action changed the stdio log")
+        if selected.exists():
+            public_profile(selected, after, outer, configs[scope], stdio=(name + "-stdio", stdio_completed[scope]))
         records.append({"label": label, "scope": scope, "delta": delta,
                         "http_methods": http_after, "stdio_counts": {key: len(events_before[key]) for key in projects}})
         current = after

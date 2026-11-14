@@ -918,3 +918,66 @@ remains in commit `fe6f7d31e08b560395a19d33422ddd45f17a02cb`; the readonly
 inventory research step and its ordinary evidence publication remain present.
 This supersedes the temporary preservation instruction above without turning a
 historical archive replay into current-source native acceptance.
+
+## 2026-11-14: retain a closed readonly helper refusal
+
+The original readonly attempt on `6d1f01deb47b05854a3a3ab7657889b44ba1cef0`
+in run `43589882702`, job `132438294276`, stops at the helper boundary. Its
+985-byte artifact `14112618698` has SHA256
+`1c0e7a9d77b401c8765425e6f062fdb46e506403bf91b9eef77d3384918f2d87`.
+The outer/inner ZIP CRCs and both retained frontend stream length/hash joins
+pass. The only emitted observation is `stage=helper`, `error_class=contract`,
+`cleanup_complete=false`, `publication_attempted=false`. The original helper
+stderr was neither retained nor classified. This is not evidence for a
+particular failed primitive, native command, profile effect, or cleanup.
+
+The narrow follow-up leaves the existing refusal packet's fields unchanged.
+Only the readonly controller may report one statically enumerated, source-owned
+guard name. All other controller modes retain their original generic stderr.
+The existing Python helper transport accepts the diagnostic only with exit 2,
+empty stdout and exactly one known stderr line. Unknown text, paths, extra
+bytes, a different exit, or any stdout retains the generic failure. The existing
+frontend classifier carries the known name in `error_class`; it never emits
+raw exception text. A diagnostic packet must retain helper stage, checked
+source, unproved cleanup and no publication attempt. It is always rejected as
+native acceptance.
+
+For a readonly collector exchange failure, the existing supervisor error chain
+now carries its known closed guard beside `strict-cleanup-unproved`. Only the
+actual exchange tags that category before supervision returns. Runner-only
+error text and unknown decoder errors retain the strict generic failure. Every
+failed capture still returns nil raw bytes; this does not establish cleanup or
+turn a rejected result into a receipt. All older modes retain their exact
+generic failure and successful capture behavior.
+
+The native command sequence, authority checks, source/binary pins, strict
+supervisor, stream limits, deadlines and cleanup decisions are unchanged.
+No prototype enablement capability is opened. Both real public Grok journeys
+on `f665e332fa944e46e2942119036a076f0381268a` still refuse the consented dry-run
+at the deliberately closed product capability; this diagnostic cannot satisfy
+the separate recovery prerequisite.
+
+Plan review R1 accepts reuse of the existing classifier and packet, with a
+closed code list and no effect authority. Estimated research code is 110–140
+lines, test code 190–220, production code zero; complexity 3/10, reliability
+8/10, confidence 8/10 for diagnostics only. Independent R2 accepted the frozen
+seven-file packet with manifest SHA256
+`0d255c14cd2c3805a302d83c449adf592385b41d1b1c97db7f33ffdfc477a705`;
+the actual-exchange Go regressions and three Python diagnostic contracts were
+independently rerun successfully. The actual alias filesystem refusal preserves its
+fixed guard and foreign bytes. Malformed-frame, duplicate-key and source-identity
+counterexamples execute the actual exchange and supervisor path through the
+controller sink while retaining nil raw bytes and the strict cleanup error.
+Real inert child-pipe tests carry those same closed codes through the frontend
+sink, compare the old generic message with the new exact message, and reject
+contamination and false cleanup/publication claims. All 112 ACP Python contracts and the full Go
+research helper package pass locally. This does not qualify a hosted primitive,
+Grok inventory, native recovery or product lifecycle; the next original hosted
+attempt must identify the actual controller guard.
+
+The combined whole-file lint found 504 effective lines in `main_linux.go`.
+The unchanged failure-to-diagnostic mapping now belongs to
+`readonlyCaptureRefusal` in the existing diagnostic file; the supervisor still
+returns nil raw bytes with the same strict cleanup error. Independent review
+accepted this exact extraction, and the complete helper package passed again
+in 0.026 seconds. No size exemption or diagnostic authority was added.

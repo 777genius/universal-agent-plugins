@@ -1980,3 +1980,37 @@ preserved in full. In macOS original job `132428496678`, the stricter earlier
 variants before the previous final snapshot predicate. The production
 parent guard, other variants, exception types, call counts, and original-lock
 identity checks are unchanged by this diagnostic patch.
+
+## 2026-11-14: join the pinned stdio log and repaired inspection
+
+The pinned vendor `tools/mcp_tool_config.py::_write_stderr_log_header` writes
+`logs/mcp-stderr.log` for each stdio session. Direct execution of that unchanged
+writer from Hermes `2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19` reproduced the
+81-byte timestamp/server header. Its source-file SHA256 is
+`02d05318c60b5f203610185e9ca152ec15276420d3d11060cbbef206cd651797`.
+This is a causal producer replay, not a new native lifecycle result.
+
+The public fixture now admits only this exact header-only member after the
+existing nonce/session-correlated stdio event check succeeds. Original captured
+file identity, mode, byte count and SHA remain required; the file is capped at
+512 bytes. Every byte must match the pinned timestamp/server grammar and host
+newline, with one header per completed owned session (at most three A and one B).
+Foreign names, child stderr, extra headers, invalid dates and post-snapshot
+changes refuse. No unmeasured directory or other log receives an exception.
+The verified count survives binding removal with the retained profile, while
+every command without stdio must preserve the exact existing log row.
+
+The already implemented repair journey invokes `public-repaired-run-a`; its
+inspect validator previously accepted only `public-run-a` and `public-run-b`.
+The allowlist now admits that one existing A action with the same fixed argv,
+original held control lock and all former effect checks. Repaired B and mismatched
+scope/role variants still refuse before execution.
+
+All 140 incoming test bodies are preserved. The three new contracts cover the
+actual profile predicate, the real command's protocol/profile join across
+removal, and repaired inspection through the existing lock fixture. The final
+suite ran 143 methods successfully, with one existing Windows-only skip on
+Linux; that skip is not Windows evidence. Source review and this replay do not
+qualify the new native path. The incoming closed bootstrap diagnostic is retained
+for the distinct unmeasured Windows HTTP effect. The source-installed original
+User bytecode/UV-lock refusal remains unchanged and unresolved.

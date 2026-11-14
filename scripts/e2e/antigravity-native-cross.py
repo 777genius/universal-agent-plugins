@@ -268,13 +268,18 @@ def profile_file_refusal(root, child, info, root_device):
     raise AssertionError("Profile file bound/alias/device: " + json.dumps(facts, ensure_ascii=True, sort_keys=True))
 
 
+def profile_deadline(deadline):
+    if deadline is not None and (type(deadline) is not float or not math.isfinite(deadline) or time.monotonic() >= deadline):
+        raise AssertionError("Original missing-config deadline expired")
+
+
 class ProfileLedger:
-    def __init__(self, root, *, lintai=False, public=None):
+    def __init__(self, root, *, lintai=False, public=None, deadline=None):
         self.root, self.held = root, {}
         self.scanner = lintai_member() if lintai else None
         self.public = public  # Exact public-fixture caps or original immutable size/SHA pins.
         try:
-            self.base = self.scan(strict=public is not None)
+            self.base = self.scan(strict=public is not None, deadline=deadline)
         except BaseException:
             self.close()
             raise
@@ -293,14 +298,58 @@ class ProfileLedger:
             raise AssertionError("Original directory replaced")
         return linked
 
-    def scan(self, *, strict=False):
+    def expected_metadata(self, expected, deadline):
+        """Close the whole original namespace before the first content read."""
+        if expected is not self.base or self.public is None:
+            raise AssertionError("Missing-config expected ledger is not original")
+        seen = set()
+        def visit(path, depth):
+            profile_deadline(deadline)
+            relative = path.relative_to(self.root).as_posix()
+            if depth > 24 or len(seen) >= 4096 or path not in self.held or relative not in expected:
+                raise AssertionError("Missing-config original directory membership differs")
+            row = expected[relative]
+            if row != ("directory", self.directory(path), self.directory_metadata(path)):
+                raise AssertionError("Missing-config original directory metadata differs")
+            seen.add(relative)
+            descriptor = self.held[path][0]
+            with os.scandir(path if os.name == "nt" else descriptor) as entries:
+                for entry in entries:
+                    profile_deadline(deadline)
+                    child = path / entry.name
+                    key = child.relative_to(self.root).as_posix()
+                    if key not in expected or key in seen or len(seen) >= 4096:
+                        raise AssertionError("Missing-config original file membership differs")
+                    info = child.lstat() if os.name == "nt" else os.stat(entry.name, dir_fd=descriptor, follow_symlinks=False)
+                    if stat.S_ISDIR(info.st_mode):
+                        visit(child, depth + 1)
+                    else:
+                        if expected[key][0] != "file" or stable_file(info) != expected[key][8]:
+                            raise AssertionError("Missing-config original file metadata differs")
+                        seen.add(key)
+            if row[2] != self.directory_metadata(path):
+                raise AssertionError("Missing-config parent changed during metadata scan")
+        visit(self.root, 0)
+        if seen != set(expected): raise AssertionError("Missing-config original member disappeared")
+        profile_deadline(deadline)
+
+    def scan(self, *, strict=False, expected=None, deadline=None):
+        profile_deadline(deadline)
+        if expected is not None: self.expected_metadata(expected, deadline)
         strict = strict or self.public is not None
         result, aggregate = {}, 0
         def visit(path, depth, parent=None):
             nonlocal aggregate
+            profile_deadline(deadline)
             if depth > 24 or len(result) >= 4096: raise AssertionError("Profile membership bound")
+            if expected is not None and path not in self.held:
+                raise AssertionError("Missing-config directory appeared after metadata scan")
             identity = self.directory(path, parent)
-            result[path.relative_to(self.root).as_posix()] = ("directory", identity, self.directory_metadata(path)) if strict else ("directory", identity)
+            relative = path.relative_to(self.root).as_posix()
+            row = ("directory", identity, self.directory_metadata(path)) if strict else ("directory", identity)
+            if expected is not None and row != expected.get(relative):
+                raise AssertionError("Missing-config original directory changed before body read")
+            result[relative] = row
             descriptor = self.held[path][0]
             with os.scandir(path if os.name == "nt" else descriptor) as entries:
                 for entry in entries:
@@ -308,6 +357,10 @@ class ProfileLedger:
                     child = path / entry.name
                     info = child.lstat() if os.name == "nt" else os.stat(entry.name, dir_fd=descriptor, follow_symlinks=False)
                     relative = child.relative_to(self.root).as_posix()
+                    profile_deadline(deadline)
+                    if expected is not None and (relative not in expected or
+                            (not stat.S_ISDIR(info.st_mode) and (expected[relative][0] != "file" or stable_file(info) != expected[relative][8]))):
+                        raise AssertionError("Missing-config member changed after metadata scan")
                     admission = self.public.get(relative) if self.public is not None else None
                     if admission is not None and not stat.S_ISREG(info.st_mode):
                         raise AssertionError("Public pinned/control role must be an ordinary file")
@@ -329,6 +382,8 @@ class ProfileLedger:
                     fd = owned_handle(child, parent=None if os.name == "nt" else descriptor)
                     try:
                         opened = os.fstat(fd)
+                        if expected is not None and stable_file(opened) != expected[relative][9]:
+                            raise AssertionError("Missing-config original held file differs")
                         if object_identity(opened)[:2] != identity[:2]: raise AssertionError("Opened file differs")
                         if self.public is not None:
                             if not public_opened_equal(child, info, opened) or opened.st_nlink != 1 or not 0 <= opened.st_size <= limit:
@@ -338,6 +393,7 @@ class ProfileLedger:
                         before = stable_file(opened)
                         digest, size, body = hashlib.sha256(), 0, None if pin else bytearray()
                         while size <= limit:
+                            profile_deadline(deadline)
                             chunk = os.read(fd, min(65536, limit + 1 - size))
                             if not chunk: break
                             size += len(chunk); digest.update(chunk)
@@ -368,6 +424,9 @@ class ProfileLedger:
         if self.scanner is not None and self.scanner[0] not in result: raise AssertionError("Ordinary UAP scanner is missing")
         if self.public is not None and any(pin[1] is not None and name not in result for name, pin in self.public.items()):
             raise AssertionError("Pinned public runtime is missing")
+        profile_deadline(deadline)
+        if expected is not None and result != expected:
+            raise AssertionError("Missing-config original profile bytes differ")
         return result
 
     def directory_metadata(self, path):
@@ -420,11 +479,12 @@ def closed_config(body, *, limit=16384, depth_bound=8):
     return value
 
 
-def bridge_exchange(helper, frame, *, timeout=35):
+def bridge_exchange(helper, frame, *, timeout=35, deadline=None):
     """Bound the parent transport; only the Go receipt attests native cleanup."""
     if len(frame) > 16384 or not frame.endswith(b"\n") or frame.count(b"\n") != 1:
         raise AssertionError("Supervised request frame refused")
-    deadline = time.monotonic() + timeout
+    if deadline is None: deadline = time.monotonic() + timeout
+    else: profile_deadline(deadline)
     cleanup_deadline = deadline + 5
     child = subprocess.Popen([str(helper)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                              stderr=subprocess.PIPE, bufsize=0)
@@ -546,6 +606,44 @@ PUBLIC_WORLDS = (("enabled",) * 7 + ("disabled",) * 2 + ("saved",) + ("cold",) *
                  + tuple(world for world in ("missing-config", "malformed-config", "foreign-collision",
                                              "config-alias", "missing-backend") for _ in range(2)))
 
+MISSING_CONFIG_ACTIONS = ("missing-config-version", "missing-config-list")
+MISSING_CONFIG_MEMBER, MISSING_CONFIG_BOUND = "missing-config-discovery.json", 8 << 20
+
+
+def missing_config_json(value):
+    return (json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False) + "\n").encode()
+
+
+def missing_config_rows(image):
+    return {name: row[:7] + row[8:] if row[0] == "file" else row for name, row in image.items()}
+
+
+def missing_config_frame(body):
+    return dict(bytes=len(body), sha256=hashlib.sha256(body).hexdigest(), base64=base64.b64encode(body).decode("ascii"))
+
+
+def missing_config_receipt(frame, receipt):
+    if (len(frame) > 16384 or not frame.endswith(b"\n") or frame.count(b"\n") != 1
+            or len(receipt) > 2 << 20 or not receipt.endswith(b"\n") or receipt.count(b"\n") != 1):
+        raise AssertionError("Missing-config frame bound")
+    req, value = closed_config(frame), closed_config(receipt, limit=2 << 20)
+    identity = ("source_commit", "source_tree", "root", "selector", "action", "binary_sha256")
+    fields = set(identity) | {"cleanup_complete", "exit"} | {
+        kind + "_" + suffix for kind in ("stdout", "stderr") for suffix in ("base64", "bytes", "sha256")}
+    if (set(value) != fields or value["cleanup_complete"] is not True or type(value["exit"]) is not int
+            or not 0 <= value["exit"] <= 255 or any(value[key] != req[key] for key in identity)):
+        raise AssertionError("Missing-config receipt identity/cleanup differs")
+    streams = {}
+    for kind, bound in (("stdout", 1 << 20), ("stderr", 32768)):
+        if type(value[kind + "_base64"]) is not str: raise AssertionError("Missing-config base64 type differs")
+        body = base64.b64decode(value[kind + "_base64"], validate=True)
+        if (base64.b64encode(body).decode("ascii") != value[kind + "_base64"]
+                or type(value[kind + "_bytes"]) is not int or not len(body) < bound
+                or len(body) != value[kind + "_bytes"] or hashlib.sha256(body).hexdigest() != value[kind + "_sha256"]):
+            raise AssertionError("Missing-config original stream differs")
+        streams[kind] = body
+    return req, value, streams
+
 
 class SourceReceipts:
     """Retain only validated task-fixture exchanges; never scan native profiles."""
@@ -564,6 +662,7 @@ class SourceReceipts:
         self.public_pin, self.public_effects_verified, self.public_roots = None, False, {}
         self.public_deadline = None
         self.pending, self.harness_complete = False, False
+        self.missing_config = None
 
     def verify(self, members):
         if object_identity(self.root.lstat(), True) != self.path_identity or object_identity(os.fstat(self.fd), True) != self.identity:
@@ -632,10 +731,69 @@ class SourceReceipts:
         self.public_slots.append(dict(world=world, action=req["action"], files=files))
         self.pending = False
 
+    def begin_missing_config(self, document):
+        prefix = [(row["world"], row["action"]) for row in self.public_slots]
+        if (self.pending or self.missing_config is not None or len(self.slots) != 14
+                or any(row["effects_verified"] is not True for row in self.slots)
+                or prefix != list(zip(PUBLIC_WORLDS[:15], PUBLIC_ACTIONS[:15], strict=True))
+                or document["root"] != self.public_roots.get("missing-config")
+                or (document["source_commit"], document["source_tree"]) != self.source
+                or tuple(document["pins"][key][1] for key in ("native", "helper")) != self.pins
+                or document["pins"]["installer"][1] != self.public_pin):
+            raise AssertionError("Missing-config original public prefix differs")
+        worst = (len(missing_config_json(document)) + 2 * len(missing_config_json(document["baseline"]))
+                 + 2 * (4 * (((2 << 20) + 2) // 3) + 4 * ((16384 + 2) // 3)) + 4096)
+        if worst > MISSING_CONFIG_BOUND or sum(map(len, self.members.values())) + MISSING_CONFIG_BOUND > (32 << 20) - 65536:
+            raise AssertionError("Missing-config sidecar reserve refused before launch")
+        self.missing_config = document
+        self.seal_missing_config()
+
+    def admit_missing_config(self, frame, receipt):
+        document = self.missing_config
+        req, value, streams = missing_config_receipt(frame, receipt)
+        index = len(document["exchanges"]) if document is not None else 2
+        if (not self.pending or index >= 2 or req["action"] != MISSING_CONFIG_ACTIONS[index]
+                or req != dict(binary=str(Path(document["root"]) / "bin" / ("agy.exe" if os.name == "nt" else "agy")),
+                               binary_sha256=document["pins"]["native"][1], root=document["root"], selector=NAME,
+                               action=MISSING_CONFIG_ACTIONS[index], source_commit=self.source[0], source_tree=self.source[1],
+                               deadline_unix_ns=document["deadline_unix_ns"])):
+            raise AssertionError("Missing-config original request/order differs")
+        row = dict(role=req["action"], request=missing_config_frame(frame), receipt=missing_config_frame(receipt),
+                   exit=value["exit"], effects_verified=False, semantic_verified=False, post_ledger=None, refusal=None)
+        document["exchanges"].append(row)
+        self.pending = False  # Only the exact settled helper receipt permits raw negative evidence.
+        self.seal_missing_config()
+        return row, streams
+
+    def seal_missing_config(self):
+        value = self.missing_config
+        fields = {"schema_version", "kind", "world", "source_commit", "source_tree", "root", "root_authority", "pins",
+                  "selector", "cwd", "env", "deadline_unix_ns", "owner", "baseline", "exchanges", "measurement_complete", "qualification"}
+        qualifications = {"product_admitted", "enabled_recovery_qualified", "native_project_qualified", "ide_activation",
+                          "native_mcp_call", "vendor_authentication", "real_model_inference"}
+        if (set(value) != fields or set(value["qualification"]) != qualifications
+                or any(flag is not False for flag in value["qualification"].values()) or len(value["exchanges"]) > 2):
+            raise AssertionError("Missing-config closed observation differs")
+        for index, row in enumerate(value["exchanges"]):
+            if (set(row) != {"role", "request", "receipt", "exit", "effects_verified", "semantic_verified", "post_ledger", "refusal"}
+                    or row["role"] != MISSING_CONFIG_ACTIONS[index]
+                    or any(type(row[key]) is not bool for key in ("effects_verified", "semantic_verified"))):
+                raise AssertionError("Missing-config closed exchange differs")
+        value["measurement_complete"] = len(value["exchanges"]) == 2 and all(
+            row["effects_verified"] is True and row["semantic_verified"] is True for row in value["exchanges"])
+        body = missing_config_json(value)
+        if len(body) > MISSING_CONFIG_BOUND: raise AssertionError("Missing-config sidecar overflow")
+        self.members[MISSING_CONFIG_MEMBER] = body
+
     def publish(self):
         try:
             if self.pending: return None  # An unproved family revokes every raw upload.
             self.verify(set())
+            if self.missing_config is not None:
+                self.seal_missing_config()
+                catalog = {f"{index:02d}.{kind}.json" for index in range(len(self.slots)) for kind in ("request", "receipt")}
+                catalog |= {f"public-{index:02d}.{kind}.json" for index in range(len(self.public_slots)) for kind in ("request", "receipt")}
+                if set(self.members) != catalog | {MISSING_CONFIG_MEMBER}: raise AssertionError("Missing-config archive member differs")
             public_complete = len(self.public_slots) == 23 and self.public_effects_verified
             complete = self.harness_complete and len(self.slots) == 14 and all(row["effects_verified"] for row in self.slots)
             if self.public_slots: complete = complete and public_complete
@@ -649,10 +807,15 @@ class SourceReceipts:
                 summary.update(schema_version=2, public_expected_slots=23, public_slots=self.public_slots,
                                installer_sha256=self.public_pin, public_capture_complete=public_complete,
                                public_effects_verified=self.public_effects_verified)
+            if self.missing_config is not None:
+                body = self.members[MISSING_CONFIG_MEMBER]
+                summary["missing_config_observation"] = dict(member=MISSING_CONFIG_MEMBER, bytes=len(body),
+                    sha256=hashlib.sha256(body).hexdigest(), measurement_complete=self.missing_config["measurement_complete"])
             members = dict(self.members, **{"manifest.json": (json.dumps(summary, sort_keys=True) + "\n").encode()})
             if self.public_slots and len(members["manifest.json"]) > 32768: raise AssertionError("Public manifest reserve exceeded")
             archive_bound = 32 << 20 if self.public_slots else 1 << 20
-            if len(members) > (75 if self.public_slots else 29) or sum(map(len, members.values())) > archive_bound: raise AssertionError("Receipt archive bound")
+            maximum = 76 if self.missing_config is not None else 75 if self.public_slots else 29
+            if len(members) > maximum or sum(map(len, members.values())) > archive_bound: raise AssertionError("Receipt archive bound")
             pending, final = self.root / "pending.zip", self.root / "receipts.zip"
             flags = os.O_RDWR | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
             descriptor = os.open(pending, flags, 0o600) if os.name == "nt" else os.open("pending.zip", flags, 0o600, dir_fd=self.fd)
@@ -767,6 +930,194 @@ def admission_contracts():
     import unittest
     from unittest.mock import Mock, patch
     class Contracts(unittest.TestCase):
+
+        @contextlib.contextmanager
+        def missing_config_fixture(self):
+            with tempfile.TemporaryDirectory() as temporary:
+                parent = Path(temporary).resolve(); binaries = parent / "binaries"; binaries.mkdir()
+                paths = [binaries / name for name in ("uap", "agy.exe" if os.name == "nt" else "agy", "helper")]
+                for path in paths: path.write_bytes(path.name.encode()); path.chmod(0o700)
+                pins = tuple(public_runtime_pin(path) for path in paths)
+                with public_fixture(parent, binaries) as (root, env, authority):
+                    selected = root / "home/.gemini/config/plugins/physical"
+                    data = root / "uap-state/plugin-data/physical"
+                    for path in (selected, data, root / "source"): path.mkdir(parents=True, exist_ok=True)
+                    scanner = root / lintai_member()[0]; scanner.parent.mkdir(parents=True)
+                    scanner.write_bytes(b"pin"); scanner.chmod(0o700)
+                    receipt = dict(data_receipt_id="data", physical_backend_id="physical", scope="user", state="owned", locator=str(data))
+                    package = dict(version="1.0.0", manifest_digest="manifest")
+                    source = dict(tree_digest="tree", resolved_revision="revision", source_binding_id="source")
+                    body = b'{"name":"uap-agy-native-smoke","version":"1.0.0"}'
+                    (selected / "plugin.json").write_bytes(body); (selected / "plugin.json").chmod(0o600)
+                    (root / "source/plugin.json").write_bytes(body)
+                    digest = "sha256:" + hashlib.sha256(b"file\0plugin.json\0false\0" + str(len(body)).encode() + b"\0" + body).hexdigest()
+                    binding = dict(client_id="antigravity", client_binding_id="binding", scope="user", activation="prepared",
+                                   verification="installation_verified", authentication="not_required", data_receipt_id="data",
+                                   target_locator=str(selected), physical_artifact_id="physical",
+                                   package_revision=dict(tree_digest="tree", resolved_revision="revision", **package),
+                                   receipts=[dict(operation_id="first", sequence=1, mutation_type="directory_swap", phase="committed",
+                                                  client_binding_id="binding", active_path=str(selected), after_digest=digest)],
+                                   native_objects=[dict(object_id="package:antigravity:physical", kind="managed_package_directory",
+                                                        logical_name=NAME, path=str(selected), managed_digest=digest, protection_class="managed")])
+                    installed = dict(installation_id="installation", declared_name=NAME, source=source, package=package,
+                                     clients={"binding": binding}, data_receipts={"data": receipt})
+                    (data / ".agentplugins-data-owner.json").write_bytes(missing_config_json(receipt))
+                    (root / "uap-state/state-v2.json").write_bytes(missing_config_json(dict(schema_version=5, installations=[installed])))
+                    scanner_pins = {key: (3, hashlib.sha256(b"pin").hexdigest()) for key in LINTAI_PINS}
+                    with patch.dict(globals(), {"LINTAI_PINS": scanner_pins}):
+                        proof = public_binding_proof(env, NAME, pins)
+                        # Inert preceding capture records; the new pair still uses real files, proof and parent admission.
+                        capture = self.receipt_fixture(parent, 14); capture.pins = (pins[1][1], pins[2][1])
+                        capture.public_deadline = 150.0
+                        for world, action in zip(PUBLIC_WORLDS[:15], PUBLIC_ACTIONS[:15], strict=True):
+                            req = dict(source_commit="a" * 40, source_tree="b" * 40, binary_sha256=pins[0][1],
+                                       action=action, root=str(root if world == "missing-config" else parent / world))
+                            capture.pending = True; capture.admit_public(missing_config_json(req), b'{"inert-prefix":true}\n')
+                        runtime = (*paths, capture.source, pins, capture)
+                        try: yield runtime, root, env, authority, proof
+                        finally:
+                            with contextlib.suppress(OSError): os.close(capture.fd)
+
+        def missing_config_reply(self, frame, *, output=b"1.5.3\n", error=b"", exit_code=0, cleanup=True):
+            request = json.loads(frame)
+            value = {key: request[key] for key in ("source_commit", "source_tree", "root", "selector", "action", "binary_sha256")}
+            value.update(cleanup_complete=cleanup, exit=exit_code)
+            for name, body in (("stdout", output), ("stderr", error)):
+                value.update({name + "_base64": base64.b64encode(body).decode(), name + "_bytes": len(body),
+                              name + "_sha256": hashlib.sha256(body).hexdigest()})
+            return missing_config_json(value)
+
+
+        def test_missing_config_pair_keeps_exact_original_results_and_withholds_unsettled(self):
+            faults = ("pass", "disabled", "negative", "version", "stderr", "cleanup", "hash", "late-member", "same-bytes", "late-pin", "inventory", "inventory-extra", "inventory-types", "between", "catalog", "fields")
+            for fault in faults:
+                with self.subTest(fault=fault), self.missing_config_fixture() as (runtime, root, env, authority, proof):
+                    capture, calls, read_tripwire = runtime[5], [], []
+                    actual_pin, pin_calls = public_runtime_pin, []
+                    def pin(path):
+                        result = actual_pin(path); pin_calls.append(path)
+                        if fault == "between" and len(pin_calls) == 6:
+                            (proof["selected"] / "between-commands").write_bytes(b"retained foreign addition")
+                            blocker = patch.object(os, "read", side_effect=AssertionError("late member read before next child"))
+                            read_tripwire.append((blocker, blocker.start()))
+                        return result
+                    def exchange(helper, frame, *, deadline):
+                        self.assertEqual((helper, deadline), (runtime[2], 105.0))
+                        req = json.loads(frame); calls.append(req)
+                        self.assertEqual(req["deadline_unix_ns"], 1_005_000_000_000)
+                        self.assertEqual((req["root"], req["selector"], req["binary"]), (str(root), NAME, str(root / "bin" / runtime[1].name)))
+                        output, error, code = b"1.5.3\n", b"", 0
+                        if len(calls) == 1:
+                            if fault == "negative": output, error, code = b"original refusal", b"original diagnostic", 1
+                            if fault == "version": output = b"1.5.4\n"
+                            if fault == "stderr": error = b"unexpected diagnostic"
+                            if fault in ("late-member", "same-bytes"):
+                                if fault == "late-member": (proof["selected"] / "zzz-new").write_bytes(b"private")
+                                else:
+                                    target = proof["selected"] / "plugin.json"; original, body = target.stat(), target.read_bytes()
+                                    replacement = target.with_name("replacement"); replacement.write_bytes(body)
+                                    replacement.chmod(stat.S_IMODE(original.st_mode)); os.utime(replacement, ns=(original.st_atime_ns, original.st_mtime_ns))
+                                    os.replace(replacement, target)
+                                    self.assertNotEqual(target.stat().st_ino, original.st_ino); self.assertEqual(target.read_bytes(), body)
+                                blocker = patch.object(os, "read", side_effect=AssertionError("content read before full metadata"))
+                                read_tripwire.append((blocker, blocker.start()))
+                            if fault == "late-pin": runtime[2].write_bytes(b"changed helper")
+                        else:
+                            inventory = dict(name="physical", path=str(proof["selected"]), version="wrong" if fault == "inventory" else "1.0.0",
+                                             enabled=fault != "disabled", skills=["native-smoke"], mcpServers=["native-http", "native-stdio"])
+                            if fault == "inventory-extra": inventory["unexpected"] = "unknown native field"
+                            if fault == "inventory-types": inventory["mcpServers"] = {name: None for name in inventory["mcpServers"]}
+                            output = missing_config_json([inventory])
+                        result = self.missing_config_reply(frame, output=output, error=error, exit_code=code, cleanup=fault != "cleanup")
+                        if fault == "hash":
+                            value = json.loads(result); value["stdout_sha256"] = "0" * 64; result = missing_config_json(value)
+                        return result
+                    try:
+                        with patch(__name__ + ".bridge_exchange", side_effect=exchange), patch(__name__ + ".public_runtime_pin", side_effect=pin), patch.object(time, "monotonic", return_value=100.0), patch.object(time, "time_ns", return_value=1_000_000_000_000):
+                            if fault in ("pass", "disabled", "catalog", "fields"): public_missing_config_discovery(runtime, root, env, authority, proof)
+                            else:
+                                with self.assertRaises(AssertionError): public_missing_config_discovery(runtime, root, env, authority, proof)
+                    finally:
+                        for blocker, observed in read_tripwire:
+                            blocker.stop(); self.assertEqual(observed.call_count, 0)
+                    self.assertEqual(len(calls), 2 if fault in ("pass", "disabled", "inventory", "inventory-extra", "inventory-types", "catalog", "fields") else 1)
+                    if fault in ("pass", "disabled"):
+                        for world, action in zip(PUBLIC_WORLDS[15:], PUBLIC_ACTIONS[15:], strict=True):
+                            req = dict(source_commit=capture.source[0], source_tree=capture.source[1], binary_sha256=runtime[4][0][1],
+                                       action=action, root=str(root.parent / world))
+                            capture.pending = True; capture.admit_public(missing_config_json(req), b'{"inert-prefix":true}\n')
+                    destination = root.parent / "outputs"
+                    if fault in ("catalog", "fields"):
+                        if fault == "catalog": capture.members["unknown.json"] = b"private"
+                        else: capture.missing_config["unexpected"] = True
+                        with patch.dict(os.environ, {"GITHUB_OUTPUT": str(destination)}), self.assertRaises(AssertionError): capture.publish()
+                        self.assertFalse(destination.exists()); continue
+                    with patch.dict(os.environ, {"GITHUB_OUTPUT": str(destination)}): archive = capture.publish()
+                    if fault in ("cleanup", "hash"):
+                        self.assertIsNone(archive); self.assertFalse(destination.exists()); continue
+                    with zipfile.ZipFile(archive) as stored:
+                        sidecar, manifest = json.loads(stored.read(MISSING_CONFIG_MEMBER)), json.loads(stored.read("manifest.json"))
+                        self.assertIsNone(stored.testzip()); self.assertEqual(len(stored.namelist()), 76 if fault in ("pass", "disabled") else 60)
+                        self.assertIs(sidecar["measurement_complete"], fault in ("pass", "disabled")); self.assertFalse(manifest["capture_complete"])
+                        self.assertEqual(sidecar["env"], {"HOME": str(root / "home"), "USERPROFILE": str(root / "home")})
+                        self.assertFalse(any(sidecar["qualification"].values())); self.assertFalse(manifest["native_project_qualified"])
+                        self.assertEqual(sidecar["owner"]["installation_id"], "installation")
+                        self.assertEqual(len(sidecar["exchanges"]), len(calls))
+                        if fault == "negative":
+                            retained = json.loads(base64.b64decode(sidecar["exchanges"][0]["receipt"]["base64"], validate=True))
+                            self.assertEqual((retained["exit"], base64.b64decode(retained["stderr_base64"])), (1, b"original diagnostic"))
+                        if fault == "disabled":
+                            retained = json.loads(base64.b64decode(sidecar["exchanges"][1]["receipt"]["base64"], validate=True))
+                            self.assertIs(json.loads(base64.b64decode(retained["stdout_base64"]))[0]["enabled"], False)
+
+        def test_missing_config_parent_change_after_metadata_pass_prevents_body_reads(self):
+            for changed in (".", "nested"):
+                with self.subTest(changed=changed), tempfile.TemporaryDirectory() as temporary:
+                    root = Path(temporary).resolve(); nested = root / "nested"; nested.mkdir()
+                    (nested / "payload").write_bytes(b"unchanged original file")
+                    ledger = ProfileLedger(root, public={})
+                    original_metadata = ledger.expected_metadata
+                    def change_after_metadata(expected, deadline):
+                        original_metadata(expected, deadline)
+                        target = root / changed; before = target.stat()
+                        os.utime(target, ns=(before.st_atime_ns, before.st_mtime_ns + 1_000_000_000))
+                    try:
+                        with patch.object(ledger, "expected_metadata", side_effect=change_after_metadata), patch.object(os, "read") as reads:
+                            with self.assertRaisesRegex(AssertionError, "original directory changed before body read"):
+                                ledger.scan(expected=ledger.base, deadline=time.monotonic() + 10.0)
+                            reads.assert_not_called()
+                    finally: ledger.close()
+
+
+        def test_missing_config_original_clock_refuses_before_baseline_body_or_bridge_child(self):
+            with tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                original_end, now = 105.0, [100.0]
+                # Time advances after the caller froze the original absolute deadline.
+                now[0] = 106.0
+                with patch.object(time, "monotonic", side_effect=lambda: now[0]), patch.object(os, "read") as reads, patch.object(subprocess, "Popen", side_effect=AssertionError("expired bridge reached Popen")) as spawn:
+                    with self.assertRaisesRegex(AssertionError, "Original missing-config deadline expired"):
+                        ProfileLedger(root, public={}, deadline=original_end)
+                    with self.assertRaisesRegex(AssertionError, "Original missing-config deadline expired"):
+                        bridge_exchange("never-started", b"{}\n", deadline=original_end)
+                reads.assert_not_called(); spawn.assert_not_called()
+            with patch(__name__ + ".public_missing_config_discovery") as discovery:
+                self.test_refused_repeat_reports_only_first_failed_domain_without_later_reads()
+            discovery.assert_not_called()
+
+        def test_missing_config_original_source_and_pre_reserved_capacity_are_required(self):
+            for fault in ("source", "missing-source", "capacity"):
+                with self.subTest(fault=fault), self.missing_config_fixture() as (runtime, root, env, authority, proof):
+                    if fault == "source": (root / "source/plugin.json").write_bytes(b"changed original source")
+                    if fault == "missing-source": proof = dict(proof, authored_source=None)
+                    bound = 1 if fault == "capacity" else 8 << 20
+                    with patch.dict(globals(), {"MISSING_CONFIG_BOUND": bound}), patch(__name__ + ".bridge_exchange") as bridge, patch.object(time, "monotonic", return_value=100.0):
+                        with self.assertRaises(AssertionError): public_missing_config_discovery(runtime, root, env, authority, proof)
+                    bridge.assert_not_called(); self.assertFalse(runtime[5].pending)
+                    self.assertIsNone(runtime[5].missing_config)
+                    self.assertNotIn(MISSING_CONFIG_MEMBER, runtime[5].members)
+
+
         def exercise_bridge(self, code, frame=b'{}\n', *, interrupt=False, timeout=5, partial=False, expected_exit=None):
             actual_popen, actual_thread, actual_sleep = subprocess.Popen, threading.Thread, time.sleep
             children, readers, writes = [], [], []
@@ -2405,7 +2756,8 @@ def public_binding_proof(env, declared, pins):
     return dict(identity=identity, revision=(source, package, revision), data=(receipts, payload), bundle=bundle,
                 receipts=(binding.get("receipts", []), state.get("transaction_receipts", [])),
                 selected=selected, data_path=data_path, state=state, installed=installed, binding=binding,
-                state_row=image["uap-state/state-v2.json"], state_parent=(image["uap-state"][1], image["uap-state"][2][1][:5]))
+                state_row=image["uap-state/state-v2.json"], state_parent=(image["uap-state"][1], image["uap-state"][2][1][:5]),
+                authored_source=public_subtree(image, root, root / "source") if "source" in image else None)
 
 
 def public_preserved(before, after, *, replaced=False):
@@ -2967,12 +3319,132 @@ def public_refusal_preservation(checks):
                 raise AssertionError("Refused public repeat changed original membership/bytes; diagnostic bound")
             raise AssertionError(message)
 
+
+def missing_config_owner(root, proof, image):
+    state = image["uap-state/state-v2.json"]
+    if (state != proof["state_row"] or not proof["authored_source"]
+            or public_subtree(image, root, root / "source") != proof["authored_source"]
+            or public_subtree(image, root, proof["selected"]) != proof["bundle"]
+            or public_subtree(image, root, proof["data_path"]) != proof["data"][1]):
+        raise AssertionError("Missing-config original source/state/package/DATA changed")
+    binding, installed = proof["binding"], proof["installed"]
+    marker = (proof["data_path"] / ".agentplugins-data-owner.json").relative_to(root).as_posix()
+    return dict(installation_id=installed["installation_id"], binding_id=binding["client_binding_id"],
+                physical_artifact_id=binding["physical_artifact_id"], target_locator=binding["target_locator"],
+                source=installed["source"], package=installed["package"], package_revision=binding["package_revision"],
+                mutation_receipts=proof["receipts"], data_receipts=installed["data_receipts"],
+                state_sha256=state[6], data_owner_sha256=image[marker][6])
+
+
+def missing_config_original(runtime, root, authority, ledger, deadline):
+    profile_deadline(deadline)
+    fd, named, held = authority
+    if object_identity(root.lstat(), True) != named or object_identity(os.fstat(fd), True) != held:
+        raise AssertionError("Missing-config original fixture root differs")
+    image = ledger.scan(expected=ledger.base, deadline=deadline)
+    for path, pin in zip(runtime[:3], runtime[4], strict=True):
+        profile_deadline(deadline)
+        if public_runtime_pin(path) != pin: raise AssertionError("Missing-config original runtime pin differs")
+    profile_deadline(deadline)
+    return missing_config_rows(image)
+
+
+def missing_config_inventory(body, proof):
+    wrapper = closed_config(b'{"rows":' + body + b'}', limit=(1 << 20) + 9)
+    rows = wrapper.get("rows")
+    if set(wrapper) != {"rows"} or type(rows) is not list or not all(type(row) is dict for row in rows):
+        raise AssertionError("Missing-config inventory container differs")
+    selected = proof["selected"]
+    matches = [row for row in rows if row.get("path") == str(selected) or row.get("name") == selected.name]
+    if len(matches) != 1: raise AssertionError("Missing-config selected inventory is missing or ambiguous")
+    row = matches[0]
+    if (set(row) != {"name", "path", "version", "enabled", "skills", "mcpServers"}
+            or any(type(row[key]) is not str for key in ("name", "path", "version"))
+            or type(row["enabled"]) is not bool
+            or any(type(row[key]) is not list or any(type(name) is not str for name in row[key])
+                   for key in ("skills", "mcpServers"))):
+        raise AssertionError("Missing-config selected inventory schema differs")
+    if (row.get("path") != str(selected) or row.get("name") != selected.name
+            or row.get("version") != proof["installed"]["package"]["version"] or type(row.get("enabled")) is not bool
+            or row.get("skills") != ["native-smoke"] or sorted(row.get("mcpServers", [])) != ["native-http", "native-stdio"]):
+        raise AssertionError("Missing-config selected inventory identity differs")
+
+
+def missing_config_exchange(runtime, root, authority, ledger, proof, pair_end, native_end, role):
+    capture, document = runtime[5], runtime[5].missing_config
+    index = len(document["exchanges"])
+    if (capture.pending or index >= 2 or role != MISSING_CONFIG_ACTIONS[index]
+            or index and not all(document["exchanges"][-1][key] is True for key in ("effects_verified", "semantic_verified"))):
+        raise AssertionError("Missing-config next command is not admitted")
+    missing_config_original(runtime, root, authority, ledger, pair_end)
+    profile_deadline(native_end)
+    req = dict(binary=str(root / "bin" / ("agy.exe" if os.name == "nt" else "agy")),
+               binary_sha256=runtime[4][1][1], root=str(root), selector=NAME, action=role,
+               source_commit=runtime[3][0], source_tree=runtime[3][1], deadline_unix_ns=document["deadline_unix_ns"])
+    frame = missing_config_json(req)
+    capture.pending = True
+    output = bridge_exchange(runtime[2], frame, deadline=native_end)
+    row, streams = capture.admit_missing_config(frame, output)
+    try:
+        row["post_ledger"] = missing_config_original(runtime, root, authority, ledger, pair_end)
+        row["effects_verified"] = True
+        if row["exit"] != 0 or streams["stderr"]: raise AssertionError("Missing-config native result refused")
+        if role == "missing-config-version":
+            if streams["stdout"] != b"1.5.3\n": raise AssertionError("Missing-config pinned version differs")
+        else: missing_config_inventory(streams["stdout"], proof)
+        profile_deadline(pair_end)
+        row["semantic_verified"] = True
+    except BaseException:
+        row["refusal"] = dict(reason="validation-refused", field="original-authority-or-result", member_sha256=None)
+        raise
+    finally: capture.seal_missing_config()
+
+
+def public_missing_config_discovery(runtime, root, env, authority, proof):
+    capture = runtime[5]
+    start_wall, start = time.time_ns(), time.monotonic()
+    if (type(capture.public_deadline) is not float or not math.isfinite(capture.public_deadline)
+            or env["HOME"] != str(root / "home") or env["USERPROFILE"] != str(root / "home")
+            or env["AGENTPLUGINS_HOME"] != str(root / "uap-state")
+            or capture.source != runtime[3] or capture.pins != (runtime[4][1][1], runtime[4][2][1])):
+        raise AssertionError("Missing-config original context differs")
+    pair_end = min(start + 10, capture.public_deadline - 5)
+    native_end = pair_end - 5
+    wall_deadline = start_wall + int((native_end - start) * 1_000_000_000)
+    profile_deadline(native_end)
+    fd, named, held = authority
+    if object_identity(root.lstat(), True) != named or object_identity(os.fstat(fd), True) != held:
+        raise AssertionError("Missing-config original root changed before baseline")
+    scanner = lintai_member()
+    limits = {scanner[0]: scanner[1:], "bin/" + ("agy.exe" if os.name == "nt" else "agy"): runtime[4][1]}
+    limits.update({"uap-state/" + name: (256, None) for name in ("mutation.lock", "environment.lock")})
+    ledger = ProfileLedger(root, public=limits, deadline=pair_end)
+    try:
+        if "home/.gemini/config/config.json" in ledger.base or (root / "home/.gemini/config") not in ledger.held:
+            raise AssertionError("Missing-config baseline is not absent with original parents")
+        document = dict(schema_version=1, kind="antigravity-missing-config-discovery", world="missing-config",
+                        source_commit=runtime[3][0], source_tree=runtime[3][1], root=str(root),
+                        root_authority=dict(named=named, held=held), pins=dict(zip(("installer", "native", "helper"), runtime[4], strict=True)),
+                        selector=NAME, cwd=str(root / "home/.gemini/config"), env={key: env[key] for key in ("HOME", "USERPROFILE")},
+                        deadline_unix_ns=wall_deadline, owner=missing_config_owner(root, proof, ledger.base),
+                        baseline=missing_config_rows(ledger.base), exchanges=[], measurement_complete=False,
+                        qualification={key: False for key in ("product_admitted", "enabled_recovery_qualified",
+                            "native_project_qualified", "ide_activation", "native_mcp_call", "vendor_authentication", "real_model_inference")})
+        capture.begin_missing_config(document)
+        for role in MISSING_CONFIG_ACTIONS:
+            missing_config_exchange(runtime, root, authority, ledger, proof, pair_end, native_end, role)
+        profile_deadline(pair_end)
+    finally: ledger.close()
+
+
+
 def public_user_refusals(runtime, source, executable_dir, parent):
     for condition in ("missing-config", "malformed-config", "foreign-collision", "config-alias", "missing-backend"):
         with public_fixture(parent, executable_dir) as (root, env, authority):
             shutil.copytree(source, root / "source")
             public_user_result(public_uap(runtime, root, authority, "uap-add"))
-            binding = public_binding_proof(env, NAME, runtime[4])["binding"]
+            proof = public_binding_proof(env, NAME, runtime[4])
+            binding = proof["binding"]
             selected = Path(binding["target_locator"])
             config = selected.parent.parent / "config.json"
             config.write_text(json.dumps({"plugins": {selected.name: {"enabled": True}}}) + "\n", encoding="utf-8")
@@ -3009,6 +3481,7 @@ def public_user_refusals(runtime, source, executable_dir, parent):
             if condition == "config-alias" and (os.readlink(config) != alias or stable_file(original.lstat()) != original_identity
                                                  or public_owned_bytes(original) != original_bytes or stable_file(original.lstat()) != original_identity):
                 raise AssertionError("Refused alias changed the task-owned target")
+            if condition == "missing-config": public_missing_config_discovery(runtime, root, env, authority, proof)
     print('{"public_user_refusals":5,"missing_backend_refused":true,"unknown_effects_adopted":false,"model_invoked":false}', flush=True)
 
 

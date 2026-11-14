@@ -84,14 +84,24 @@ func validateRequest(req request) error {
 		!safeName.MatchString(req.Selector) || req.Selector == "." || req.Selector == ".." ||
 		!filepath.IsAbs(req.Binary) || filepath.Clean(req.Binary) != req.Binary || !filepath.IsAbs(req.Root) || filepath.Clean(req.Root) != req.Root ||
 		!strings.HasPrefix(filepath.Base(req.Root), "uap-agy-direct-") || len(req.BinarySHA) != 64 || req.BinarySHA != commandPin(req.Action) ||
-		(!publicAction(req.Action) && !nativeAction(req.Action)) {
+		(!publicAction(req.Action) && !nativeAction(req.Action) && !missingConfigAction(req.Action)) {
 		return errors.New("closed request identity refused")
 	}
-	if publicAction(req.Action) && req.Selector != publicSelector(req.Action) {
-		return errors.New("public selector refused")
+	if err := validateActionAuthority(req); err != nil {
+		return err
 	}
 	if _, err := hex.DecodeString(req.BinarySHA); err != nil {
 		return err
+	}
+	return nil
+}
+
+func validateActionAuthority(req request) error {
+	if publicAction(req.Action) && req.Selector != publicSelector(req.Action) {
+		return errors.New("public selector refused")
+	}
+	if missingConfigAction(req.Action) && (req.Selector != "uap-agy-native-smoke" || req.Binary != nativeBinary(req.Root)) {
+		return errors.New("missing-config measurement authority refused")
 	}
 	return nil
 }
@@ -153,10 +163,10 @@ func fixedArgv(req request) []string {
 		return publicArgv(req)
 	}
 	argv := []string{req.Binary, "plugin", req.Action, req.Selector}
-	if req.Action == "list" {
+	if req.Action == "list" || req.Action == "missing-config-list" {
 		argv = []string{req.Binary, "plugin", "list", "--json"}
 	}
-	if req.Action == "version" {
+	if req.Action == "version" || req.Action == "missing-config-version" {
 		argv = []string{req.Binary, "--version"}
 	}
 	return argv
@@ -191,7 +201,7 @@ func execute(ctx context.Context, req request, run runner) (body []byte, resultE
 			return nil, err
 		}
 	}
-	result, err := run(ctx, ports.Command{Argv: fixedArgv(req), Env: commandEnvironment(req), Dir: filepath.Join(req.Root, "project"), StdoutLimitBytes: 1 << 20}, 5*time.Second)
+	result, err := run(ctx, ports.Command{Argv: fixedArgv(req), Env: commandEnvironment(req), Dir: commandDirectory(req), StdoutLimitBytes: 1 << 20}, 5*time.Second)
 	if err = admittedResult(ctx, req, result, err); err != nil {
 		return nil, err
 	}
@@ -264,6 +274,9 @@ func commandPin(action string) string {
 }
 
 func commandBudget(action string) time.Duration {
+	if missingConfigAction(action) {
+		return 10 * time.Second
+	}
 	if publicAction(action) {
 		return 235 * time.Second // Reserve five seconds inside the old240s public command bound.
 	}
@@ -299,6 +312,9 @@ func publicArgv(req request) []string {
 
 func commandEnvironment(req request) []string {
 	home := filepath.Join(req.Root, "home")
+	if missingConfigAction(req.Action) {
+		return []string{"HOME=" + home, "USERPROFILE=" + home}
+	}
 	env := []string{"HOME=" + home, "USERPROFILE=" + home, "APPDATA=" + filepath.Join(home, "AppData", "Roaming"), "LOCALAPPDATA=" + filepath.Join(home, "AppData", "Local"),
 		"XDG_CONFIG_HOME=" + filepath.Join(req.Root, "config"), "XDG_CACHE_HOME=" + filepath.Join(req.Root, "cache"), "TMP=" + filepath.Join(req.Root, "tmp"), "TEMP=" + filepath.Join(req.Root, "tmp"), "TMPDIR=" + filepath.Join(req.Root, "tmp")}
 	for _, key := range []string{"PATH", "SystemRoot", "LANG"} {
@@ -319,11 +335,7 @@ func publicNative(req request) (*os.File, os.FileInfo, string, error) {
 	if !publicAction(req.Action) {
 		return nil, nil, "", nil
 	}
-	name := "agy"
-	if runtime.GOOS == "windows" {
-		name += ".exe"
-	}
-	path := filepath.Join(req.Root, "bin", name)
+	path := nativeBinary(req.Root)
 	if req.Action == "uap-missing-backend" {
 		if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
 			return nil, nil, "", errors.New("missing native fixture refused")
@@ -341,7 +353,7 @@ func publicNative(req request) (*os.File, os.FileInfo, string, error) {
 }
 
 func admittedExit(req request, result ports.CommandResult) bool {
-	if publicAction(req.Action) {
+	if publicAction(req.Action) || missingConfigAction(req.Action) {
 		return result.ExitCode >= 0 && result.ExitCode <= 255
 	}
 	return result.ExitCode == 0 && len(result.Stderr) == 0
@@ -362,7 +374,7 @@ func commandReceipt(req request, result ports.CommandResult, digest string) ([]b
 	outputHash := sha256.Sum256(result.Stdout)
 	value := map[string]any{"source_commit": req.Commit, "source_tree": req.Tree, "root": req.Root, "selector": req.Selector, "action": req.Action,
 		"binary_sha256": digest, "cleanup_complete": true, "stdout_base64": base64.StdEncoding.EncodeToString(result.Stdout), "stdout_bytes": len(result.Stdout), "stdout_sha256": hex.EncodeToString(outputHash[:])}
-	if publicAction(req.Action) {
+	if publicAction(req.Action) || missingConfigAction(req.Action) {
 		errorHash := sha256.Sum256(result.Stderr)
 		value["exit"], value["stderr_base64"], value["stderr_bytes"], value["stderr_sha256"] = result.ExitCode, base64.StdEncoding.EncodeToString(result.Stderr), len(result.Stderr), hex.EncodeToString(errorHash[:])
 	}
@@ -382,4 +394,23 @@ func admittedResult(ctx context.Context, req request, result ports.CommandResult
 		return errors.New("command capture or cleanup refused")
 	}
 	return nil
+}
+
+func missingConfigAction(action string) bool {
+	return action == "missing-config-version" || action == "missing-config-list"
+}
+
+func nativeBinary(root string) string {
+	name := "agy"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	return filepath.Join(root, "bin", name)
+}
+
+func commandDirectory(req request) string {
+	if missingConfigAction(req.Action) {
+		return filepath.Join(req.Root, "home", ".gemini", "config")
+	}
+	return filepath.Join(req.Root, "project")
 }

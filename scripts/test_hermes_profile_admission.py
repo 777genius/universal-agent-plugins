@@ -1915,6 +1915,78 @@ class PublicLifecycleContracts(unittest.TestCase):
             foreign.unlink();backup=root/'backups/config/config.yaml.good.20261113-235000';backup.parent.mkdir(parents=True);backup.write_bytes(b'foreign');backup.chmod(0o600)
             with self.assertRaisesRegex(RuntimeError,'unowned bytes'):CASE['public_profile'](root,CASE['inventory'](outer),outer,set())
 
+    def test_public_stdio_log_joins_only_completed_owned_sessions(self):
+        # Pinned tools/mcp_tool_config.py::_write_stderr_log_header, exercised
+        # directly at vendor 2bd378ed; native MCP/session qualification is separate.
+        observed = b"\n2026-11-14 14:05:11,913 ===== starting MCP server 'hermes-public-a-stdio' =====\n"
+        newline = b"\r\n" if os.name == "nt" else b"\n"
+        original = observed.replace(b"\n", newline)
+        for effect in ("valid", "repeat", "before-stdio", "extra-session", "foreign-server", "bad-date", "child-stderr", "changed-after-snapshot"):
+            with self.subTest(effect=effect), tempfile.TemporaryDirectory() as temporary:
+                outer = Path(temporary).resolve()
+                root = outer / "public-a/.hermes/uap-session"; root.mkdir(parents=True)
+                marker = root / ".uap-owner"
+                marker.write_bytes(("uap-hermes-project-session-v1\n" + str(root.parent.parent) + "\n").encode()); marker.chmod(0o600)
+                log = root / "logs/mcp-stderr.log"; log.parent.mkdir(mode=0o700)
+                sessions = 3 if effect == "repeat" else 0 if effect == "before-stdio" else 1
+                body = original * (3 if effect == "repeat" else 2 if effect == "extra-session" else 1)
+                if effect == "foreign-server": body = body.replace(b"hermes-public-a-stdio", b"hermes-public-b-stdio")
+                if effect == "bad-date": body = body.replace(b"2026-11-14", b"2026-02-30")
+                if effect == "child-stderr": body += b"unmeasured child stderr" + newline
+                log.write_bytes(body); log.chmod(0o644)
+                image = CASE["inventory"](outer)
+                if effect == "changed-after-snapshot": log.write_bytes(original.replace(b",913", b",914"))
+                invoke = lambda: CASE["public_profile"](root, image, outer, set(), stdio=("hermes-public-a-stdio", sessions))
+                if effect in {"valid", "repeat"}: invoke()
+                else:
+                    with self.assertRaisesRegex((RuntimeError, ValueError), "stdio|unmeasured|day is out of range"):
+                        invoke()
+
+    def test_completed_stdio_log_survives_removal_without_accepting_later_writes(self):
+        import ast
+        source = Path(CASE["__file__"]).read_bytes()
+        owner = next(node for node in ast.parse(source).body if isinstance(node, ast.FunctionDef) and node.name == "observe_public")
+        command = next(node for node in owner.body if isinstance(node, ast.FunctionDef) and node.name == "command")
+        start = next(index for index, node in enumerate(command.body) if isinstance(node, ast.Assign)
+                     and any(isinstance(target, ast.Name) and target.id == "http_after" for target in node.targets))
+        stop = next(index for index, node in enumerate(command.body) if isinstance(node, ast.Expr)
+                    and isinstance(node.value, ast.Call) and isinstance(node.value.func, ast.Attribute)
+                    and isinstance(node.value.func.value, ast.Name) and node.value.func.value.id == "records")
+        # Execute the real command's protocol/profile join with original local
+        # event bytes. Runtime execution is absent; this is not native evidence.
+        check = compile(ast.Module(body=command.body[start:stop], type_ignores=[]), CASE["__file__"], "exec")
+        with tempfile.TemporaryDirectory() as temporary:
+            outer = Path(temporary).resolve(); selected = outer / "public-a/.hermes/uap-session"
+            selected.mkdir(parents=True)
+            marker = selected / ".uap-owner"
+            marker.write_bytes(("uap-hermes-project-session-v1\n" + str(selected.parent.parent) + "\n").encode()); marker.chmod(0o600)
+            log = selected / "logs/mcp-stderr.log"; log.parent.mkdir(mode=0o700)
+            data = outer / "public-a/.uap/plugin-data/owned"; data.mkdir(parents=True)
+            events = data / "hermes-events.jsonl"; nonce = "c" * 64
+            namespace = dict(CASE, outer=outer, selected=selected, selected_prefix=selected.relative_to(outer).as_posix(),
+                             scope="a", name="hermes-public-a", nonce=nonce, configs={"a": set()},
+                             proofs={"a": {"data": data}, "b": None}, previous={"a": {"data": data}, "b": None},
+                             stdio_completed={"a": 0, "b": 0}, events_before={"a": [], "b": []}, test="stdio",
+                             http_before={"a": [], "b": []}, probes={key: SimpleNamespace(methods=lambda: []) for key in ("a", "b")},
+                             before=CASE["inventory"](outer))
+            rows = [dict(method=method, pid=42, session="42-123", nonce=nonce, timestamp="2026-11-13T23:50:00Z", facts=None)
+                    for method in ("initialize", "tools/list")]
+            events.write_bytes(b"".join(json.dumps(row).encode() + b"\n" for row in rows))
+            body = b"\n2026-11-14 14:05:11,913 ===== starting MCP server 'hermes-public-a-stdio' =====\n"
+            log.write_bytes(body.replace(b"\n", b"\r\n" if os.name == "nt" else b"\n")); log.chmod(0o644)
+            namespace["after"] = CASE["inventory"](outer)
+            exec(check, namespace)
+            self.assertEqual(namespace["stdio_completed"], {"a": 1, "b": 0})
+            namespace.update(test=None, before=namespace["after"], proofs={"a": None, "b": None}, events_before={"a": rows, "b": []})
+            exec(check, namespace)  # remove retains the just-verified data receipt
+            namespace.update(previous={"a": None, "b": None}, events_before={"a": [], "b": []})
+            exec(check, namespace)  # removed list/test retain only the verified count
+            self.assertEqual(namespace["stdio_completed"], {"a": 1, "b": 0})
+            log.write_bytes(log.read_bytes().replace(b",913", b",914"))
+            namespace["after"] = CASE["inventory"](outer)
+            with self.assertRaisesRegex(RuntimeError, "non-stdio action changed the stdio log"):
+                exec(check, namespace)
+
     def test_removed_binding_keeps_exact_marker_under_the_original_retained_root(self):
         import shutil
         for effect in ('unchanged', 'altered', 'short', 'missing'):
@@ -3388,6 +3460,24 @@ class PublicInspectLockContracts(unittest.TestCase):
                             with self.assertRaisesRegex(RuntimeError, message):
                                 invoke()
                     self.assertEqual(len(calls), 0 if action in {"wrong-label", "wrong-args"} else 1)
+
+    def test_repaired_inspection_uses_the_same_original_control_lock(self):
+        for scope, label, accepted in (("a", "public-repaired-run-a", True),
+                                       ("b", "public-repaired-run-a", False),
+                                       ("b", "public-repaired-run-b", False)):
+            with self.subTest(scope=scope, label=label), tempfile.TemporaryDirectory() as temporary:
+                outer, project, lock = self.fixture(temporary, scope)
+                original = lock.stat()
+                command, calls = self.command(outer, scope, lambda: lock.write_bytes(self.refreshed))
+                args = (label, scope, ["run", "--inspect", "--confirm-client-start"])
+                if accepted:
+                    delta = command(*args, inspect=True)
+                    self.assertEqual(set(delta), {lock.relative_to(outer).as_posix()})
+                    self.assertTrue(os.path.samestat(original, lock.stat()))
+                else:
+                    with self.assertRaisesRegex(RuntimeError, "public inspect control role differs"):
+                        command(*args, inspect=True)
+                self.assertEqual(len(calls), int(accepted))
 
     def test_control_record_is_exact_canonical_writer_data(self):
         values = [self.original, self.refreshed,

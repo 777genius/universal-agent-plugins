@@ -248,7 +248,25 @@ LABELS = ('version', 'help', 'agent-help', 'stdio-help', 'acp')
 METADATA_LABELS = LABELS[:4] + ('mcp-inventory',) + LABELS[4:]
 FRONTEND_STAGES = frozenset(('preflight', 'source', 'acquisition', 'build', 'fixtures', 'baseline',
     'helper', 'receipt', 'ledger', 'inventory', 'source-final', 'cleanup', 'archive', 'receipt-output'))
-FRONTEND_ERRORS = frozenset(('none', 'contract', 'io', 'process', 'other'))
+READONLY_HELPER_CODES = frozenset('''readonly-helper-unclassified readonly-primitive-refused
+ordinary-bwrap-refused bwrap-capability-refused readonly-identity-refused
+readonly-directory-refused readonly-directory-join-refused overflow-id-refused
+readonly-input-authority readonly-input-directory-read readonly-input-bound
+readonly-input-directory-open readonly-input-directory-final readonly-input-directory-changed
+readonly-root-owner readonly-overflow-ambiguity readonly-input-proof readonly-file-proof
+readonly-file-capability-refused readonly-runtime-root readonly-device readonly-parent-namespace
+readonly-result-refused readonly-proof-type-refused readonly-stage-refused readonly-completion-refused
+readonly-original-authority-missing readonly-original-authority-changed original-deadline-refused
+file-stat-refused absolute-path-refused held-file-refused held-file-changed file-authority-refused
+file-read-refused held-content-changed system-ancestor-refused system-executable-refused sealed-copy-refused
+mount-authority-refused sealed-directory-refused sealed-directory-changed sealed-mount-changed
+sealed-deletion-unproved json-structure-refused json-key-refused json-delimiter-refused json-trailing-refused
+json-fields-refused json-field-missing result-isolation-refused result-bound-refused result-identity-refused
+result-reason-refused collector-frame-refused strict-cleanup-unproved strict-exchange-missing
+input-root-mode-refused sealed-cleanup-refused receipt-output-refused system-selection-refused
+ordinary-bwrap-selection-refused'''.split())
+READONLY_HELPER_ERRORS = frozenset('helper-' + code for code in READONLY_HELPER_CODES)
+FRONTEND_ERRORS = frozenset(('none', 'contract', 'io', 'process', 'other')) | READONLY_HELPER_ERRORS
 STARTUP_NAME = 'uap-acp-startup-witness'
 FALSE = dict.fromkeys(('inventory_admitted', 'native_enablement', 'workspace_trust', 'native_mcp_call',
                        'provider_authentication', 'real_model_inference', 'production_project_activation'), False)
@@ -262,6 +280,13 @@ BOOTSTRAP_FILES = tuple('home/.grok/' + name for name in (
 def require(value, reason):
     if not value:
         raise ValueError(reason)
+
+
+class ReadonlyHelperRefusal(ValueError):
+    def __init__(self, code):
+        require(type(code) is str and code in READONLY_HELPER_CODES, 'helper-refused')
+        self.error_class = 'helper-' + code
+        super().__init__(self.error_class)
 
 
 def digest(body):
@@ -310,6 +335,9 @@ def frontend_packet(body, exit_code):
             and type(packet['error_class']) is str and packet['error_class'] in FRONTEND_ERRORS
             and all(type(packet[key]) is bool for key in ('source_identity_checked', 'cleanup_complete', 'publication_attempted')),
             'frontend-refusal-frame')
+    if packet['error_class'] in READONLY_HELPER_ERRORS:
+        require(packet['stage'] == 'helper' and packet['source_identity_checked']
+                and not packet['cleanup_complete'] and not packet['publication_attempted'], 'helper-refusal-authority')
     print('GROK_FRONTEND_REFUSAL=' + json.dumps(packet, separators=(',', ':')))
     raise ValueError('frontend-publication-refused')
 
@@ -321,7 +349,8 @@ def frontend_state():
 
 def frontend_error(state, error):
     state['failure_stage'] = state['stage']
-    state['error_class'] = ('contract' if isinstance(error, ValueError) else 'io' if isinstance(error, OSError)
+    state['error_class'] = (error.error_class if isinstance(error, ReadonlyHelperRefusal) else
+                            'contract' if isinstance(error, ValueError) else 'io' if isinstance(error, OSError)
                             else 'process' if isinstance(error, subprocess.SubprocessError) else 'other')
 
 
@@ -2838,8 +2867,12 @@ def readonly_helper_capture(helper, root, req):
                         maximum = (2 << 20) + 16384 if key.data == 'stdout' else 65536
                         require(len(streams[key.data]) <= maximum, 'helper-stream-bound')
             readonly_deadline(req, final=True)
-            require(process.wait(timeout=max(.001, deadline - time.monotonic())) == 0
-                    and not streams['stderr'], 'helper-refused')
+            status = process.wait(timeout=max(.001, deadline - time.monotonic()))
+            if status == 2 and not streams['stdout']:
+                for code in READONLY_HELPER_CODES:
+                    if streams['stderr'] == ('grok-acp-controller-refused:' + code + '\n').encode():
+                        raise ReadonlyHelperRefusal(code)
+            require(status == 0 and not streams['stderr'], 'helper-refused')
     except Exception as error:
         failure = error
     finally:
