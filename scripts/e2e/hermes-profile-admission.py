@@ -2344,11 +2344,100 @@ def public_spawn_rows(image, outer, root):
 
 
 def public_parent_facts(value):
+    if type(value) is dict and value.get("kind") == "hermes-public-windows-lineage-v1":
+        return public_windows_chain(value)[1]["pid"]
     require(type(value) is dict and set(value) == {"kind", "parent_pid"}
             and value["kind"] == "hermes-public-parent-v1"
             and type(value["parent_pid"]) is int and 0 < value["parent_pid"] < 2**32,
             "public stdio original parent receipt differs")
     return value["parent_pid"]
+
+
+def public_windows_process_identity(child):
+    """Observe the original completed Popen handle; never reopen a numeric PID."""
+    import ctypes as C
+    from ctypes import wintypes as W
+    require(os.name == "nt" and type(child) is subprocess.Popen
+            and type(child.pid) is int and 0 < child.pid < 2**32
+            and type(child.returncode) is int and child.returncode == 0,
+            "public Windows original completed process required")
+    api = C.WinDLL("kernel32", use_last_error=True)
+    api.GetProcessId.argtypes, api.GetProcessId.restype = [W.HANDLE], W.DWORD
+    api.GetProcessTimes.argtypes = [W.HANDLE, *([C.POINTER(W.FILETIME)] * 4)]
+    api.GetProcessTimes.restype = W.BOOL
+    handle = int(child._handle)
+    def original():
+        pid = api.GetProcessId(handle)
+        if not pid:
+            raise C.WinError(C.get_last_error())
+        created, exited, kernel, user = (W.FILETIME() for _ in range(4))
+        if not api.GetProcessTimes(handle, C.byref(created), C.byref(exited), C.byref(kernel), C.byref(user)):
+            raise C.WinError(C.get_last_error())
+        return {"pid": pid, "created_100ns": (created.dwHighDateTime << 32) | created.dwLowDateTime}
+    identity = original()
+    public_windows_identity(identity, child.pid)
+    require(original() == identity, "public Windows original process changed")
+    return identity
+
+
+def public_windows_identity(value, pid):
+    require(type(pid) is int and 0 < pid < 2**32
+            and type(value) is dict and set(value) == {"pid", "created_100ns"}
+            and type(value["pid"]) is int and value["pid"] == pid and 0 < pid < 2**32
+            and type(value["created_100ns"]) is int and 116444736000000000 < value["created_100ns"] < 2**63,
+            "public Windows original process identity differs")
+    return value
+
+
+def public_windows_chain(value):
+    require(type(value) is dict and set(value) == {"kind", "processes"}
+            and value["kind"] == "hermes-public-windows-lineage-v1"
+            and type(value["processes"]) is list and len(value["processes"]) == 4,
+            "public Windows fixed lineage schema differs")
+    rows = value["processes"]
+    for row in rows:
+        require(type(row) is dict and set(row) == {"pid", "parent_pid", "created_100ns", "image"}
+                and all(type(row[key]) is int and 0 < row[key] < 2**32 for key in ("pid", "parent_pid"))
+                and type(row["created_100ns"]) is int and 116444736000000000 < row["created_100ns"] < 2**63
+                and type(row["image"]) is str and 0 < len(row["image"]) < 4096
+                and not any(character in row["image"] for character in ("\0", "\r", "\n")),
+                "public Windows lineage process differs")
+    require(len({row["pid"] for row in rows}) == 4
+            and all(child["parent_pid"] == parent["pid"] and parent["created_100ns"] < child["created_100ns"]
+                    for child, parent in zip(rows, rows[1:])), "public Windows lineage parent or birth differs")
+    return rows
+
+
+def public_windows_spawn_identity(entry, first, second, native_pid, native_process, images):
+    original = public_windows_identity(native_process, native_pid)
+    rows = public_windows_chain(first["facts"])
+    require(second["facts"] == first["facts"] and rows[0]["pid"] == first["pid"]
+            and rows[1]["pid"] == entry["pid"] and rows[2]["pid"] == entry["spawner_pid"]
+            and {key: rows[3][key] for key in original} == original,
+            "public Windows ledger and original process lineage differ")
+    require(type(images) is list and len(images) == 4
+            and all(type(image) is str and image and "\0" not in image for image in images)
+            and all(row["image"].casefold() == image.casefold() for row, image in zip(rows, images)),
+            "public Windows fixed process images differ")
+    # psutil 7.2.2 psutil_FiletimeToUnixTime subtracts the epoch in uint64, then casts
+    # to double before division. Preserve that exact two-step conversion.
+    epoch = 116444736000000000
+    require(entry["create_time"] == float(rows[1]["created_100ns"] - epoch) / 10000000.0
+            and entry["spawner_create"] == float(rows[2]["created_100ns"] - epoch) / 10000000.0,
+            "public Windows ledger birth differs from held processes")
+
+
+def public_spawn_status_document(body, argv, *, windows):
+    value = public_json(body)
+    fields = {"argv", "pid", "exit", "error", "streams"} | ({"process_identity"} if windows else set())
+    require(type(value) is dict and set(value) == fields
+            and value["argv"] == argv and type(value["pid"]) is int and 0 < value["pid"] < 2**32
+            and type(value["exit"]) is int and value["exit"] == 0 and value["error"] is None
+            and type(value["streams"]) is dict and set(value["streams"]) == {"stdout", "stderr"},
+            "public spawn command status differs")
+    if windows:
+        public_windows_identity(value["process_identity"], value["pid"])
+    return value
 
 
 def public_spawn_status(evidence, authority, label, argv, stdout, deadline):
@@ -2367,12 +2456,7 @@ def public_spawn_status(evidence, authority, label, argv, stdout, deadline):
         require(time.monotonic() < deadline, "public spawn status capture deadline")
         body = ordinary_bytes(path, info, parent=parent, maximum=16 << 10, deadline=deadline)
         files.append((path, info, body)); verify()
-        value = public_json(body)
-        require(type(value) is dict and set(value) == {"argv", "pid", "exit", "error", "streams"}
-                and value["argv"] == argv and type(value["pid"]) is int and 0 < value["pid"] < 2**32
-                and type(value["exit"]) is int and value["exit"] == 0 and value["error"] is None
-                and type(value["streams"]) is dict and set(value["streams"]) == {"stdout", "stderr"},
-                "public spawn command status differs")
+        value = public_spawn_status_document(body, argv, windows=artifacts.WINDOWS)
         for suffix in ("stdout", "stderr"):
             stream = value["streams"][suffix]
             require(type(stream) is dict and set(stream) == {"bytes", "sha256"}
@@ -2387,6 +2471,8 @@ def public_spawn_status(evidence, authority, label, argv, stdout, deadline):
                     and (suffix != "stdout" or body == stdout), "public spawn command stream differs")
             files.append((path, info, body)); verify()
     captured = dict(directory=evidence, authority=tuple(authority), files=tuple(files), pid=value["pid"])
+    if artifacts.WINDOWS:
+        captured["process_identity"] = dict(value["process_identity"])
     public_spawn_status_pid(captured, deadline)
     return captured
 
@@ -2430,7 +2516,8 @@ def public_spawn_continuity(previous, current, *, stdio=False):
                 "public stdio command replaced its original spawn lock")
 
 
-def public_spawn_entry(body, before, after, nonce, native_pid, install_id, launcher_argv, probe, system):
+def public_spawn_entry(body, before, after, nonce, native_pid, install_id, launcher_argv, probe, system,
+                       *, native_process=None, native_python=None, native_image=None):
     require(type(body) is bytes and 0 < len(body) <= 4096 and system in {"linux", "darwin", "win32"},
             "public spawn ledger bound/platform differs")
     entries = public_json(body)
@@ -2440,7 +2527,8 @@ def public_spawn_entry(body, before, after, nonce, native_pid, install_id, launc
     entry = entries[0]
     require(type(native_pid) is int and 0 < native_pid < 2**32
             and type(entry["pid"]) is int and 0 < entry["pid"] < 2**32
-            and type(entry["spawner_pid"]) is int and entry["spawner_pid"] == native_pid
+            and type(entry["spawner_pid"]) is int and 0 < entry["spawner_pid"] < 2**32
+            and (system == "win32" or entry["spawner_pid"] == native_pid)
             and entry["pid"] != native_pid and entry["purpose"] == "mcp-helper"
             and type(install_id) is str and re.fullmatch(r"[a-f0-9]{12}", install_id)
             and entry["install"] == install_id and entry["host"] == entry["profile"] == entry["hermes_home"] == ""
@@ -2479,6 +2567,12 @@ def public_spawn_entry(body, before, after, nonce, native_pid, install_id, launc
                 and public_parent_facts(row["facts"]) == parent, "public spawn ledger event identity differs")
     require((entry["pid"] == parent and first["pid"] not in {parent, native_pid}) if system == "win32" else
             (entry["pid"] == first["pid"] and parent == native_pid), "public spawn ledger process chain differs")
+    if system == "win32":
+        public_windows_spawn_identity(entry, first, second, native_pid, native_process,
+                                      [probe, launcher_argv[0], native_python, native_image])
+    else:
+        require(all(row["facts"]["kind"] == "hermes-public-parent-v1" for row in (first, second)),
+                "public POSIX parent receipt differs")
     return entry
 
 
@@ -2837,7 +2931,7 @@ def public_stdio_recipe(project, probe, nonce):
     return {"type": "stdio", "command": executable.name, "args": [], "env": {
         "PATH": str(executable.parent), "UAP_TEST_ROOT": str(project),
         "UAP_TEST_EVENTS": "${PLUGIN_DATA}/hermes-events.jsonl", "UAP_TEST_NONCE": nonce,
-        "UAP_TEST_HERMES_PUBLIC_PARENT": "1"}}
+        "UAP_TEST_HERMES_PUBLIC_PARENT": "windows-lineage-v1" if artifacts.WINDOWS else "1"}}
 
 
 def public_lock_record(body):
@@ -3076,7 +3170,8 @@ def observe_public(probes):
                         "public inspect control role differs")
                 finish = handles.enter_context(public_inspect_lock(outer, project, before, snapshot))
             output = bounded(argv, project, dict(env, HERMES_HOME=str(selected)) if native else env,
-                             evidence / label, timeout=min(90, deadline-time.monotonic()-5), expected_failure=expected_failure)
+                             evidence / label, timeout=min(90, deadline-time.monotonic()-5), expected_failure=expected_failure,
+                             **({"process_identity": public_windows_process_identity} if artifacts.WINDOWS and native and test == "stdio" else {}))
             if native and test == "stdio":
                 spawn_status = public_spawn_status(evidence, evidence_authority, label, argv, output, deadline)
             after, proofs = finish()
@@ -3148,7 +3243,10 @@ def observe_public(probes):
             launcher = public_spawn_launcher(previous[scope], servers[name + "-stdio"], pins["probe"]["path"])
             public_spawn_status_pid(spawn_status, deadline)
             public_spawn_entry(bodies[PUBLIC_SPAWN_NAMES[0]], events_before[scope], events_after[scope], nonce,
-                native_pid, install_id, launcher, pins["probe"]["path"], sys.platform)
+                native_pid, install_id, launcher, pins["probe"]["path"], sys.platform,
+                **({"native_process": spawn_status["process_identity"],
+                    "native_python": os.environ["HERMES_PROFILE_PYTHON"], "native_image": argv[0]}
+                   if artifacts.WINDOWS else {}))
             require(time.monotonic() < deadline, "public spawn entry parsing deadline")
             require(spawn_capture(scope, after) == (receipt, bodies), "public spawn pair changed after parsing")
             public_spawn_status_pid(spawn_status, deadline)
@@ -3578,8 +3676,8 @@ def observer_boundary_origin(error, phase):
         return observer_bounded_boundary(dict(values)), deadline
     scope = state.get("scope")
     require(producer.tb_frame.f_code is public_spawn_entry.__code__ and producer.tb_frame.f_globals is globals()
-            and producer.tb_lineno == public_spawn_entry.__code__.co_firstlineno + 8
-            and command.tb_lineno == OBSERVER_PUBLIC_COMMAND.co_firstlineno + 95
+            and producer.tb_lineno == public_spawn_entry.__code__.co_firstlineno + 9
+            and command.tb_lineno == OBSERVER_PUBLIC_COMMAND.co_firstlineno + 96
             and sys.platform == values.get("system") == "win32"
             and OBSERVER_BOUNDARY_STDIO.get(state.get("label")) == scope and scope in ("a", "b")
             and state.get("native") is True and state.get("test") == "stdio"
@@ -3629,6 +3727,8 @@ def observer_spawn_boundary(values):
     """Name only the first failed identity predicate, in the original order."""
     require(type(values) is dict and all(type(key) is str for key in values), "spawn local mapping differs")
     entry, native, install = (values.get(name) for name in ("entry", "native_pid", "install_id"))
+    system = values.get("system")
+    require(type(system) is str and system in {"linux", "darwin", "win32"}, "spawn local platform differs")
     fields = set("pid create_time purpose install spawner_pid spawner_create registered_at argv host port profile hermes_home isolated boot_start spawner_boot boot_id".split())
     require(type(entry) is dict and all(type(key) is str for key in entry) and set(entry) == fields,
             "spawn local schema differs")
@@ -3639,7 +3739,8 @@ def observer_spawn_boundary(values):
     checks = (
         ("native-pid", lambda: type(native) is int and 0 < native < 2**32),
         ("child-pid", lambda: type(entry["pid"]) is int and 0 < entry["pid"] < 2**32),
-        ("spawner-pid", lambda: type(entry["spawner_pid"]) is int and entry["spawner_pid"] == native),
+        ("spawner-pid", lambda: type(entry["spawner_pid"]) is int and 0 < entry["spawner_pid"] < 2**32
+         and (system == "win32" or entry["spawner_pid"] == native)),
         ("distinct-child", lambda: entry["pid"] != native),
         ("purpose", lambda: entry["purpose"] == "mcp-helper"),
         ("install-key", lambda: type(install) is str and re.fullmatch(r"[a-f0-9]{12}", install) is not None),
@@ -3694,7 +3795,7 @@ def observer_failure_document(body, nonce, source):
                  and caller["line"] == code.co_firstlineno + 23 and value["command"] == "public-repair-a"
                  and detail["predicate"] != "unexpected-zero")
                 or (detail["kind"] == "spawn-identity" and code is public_spawn_entry.__code__
-                    and caller["line"] == code.co_firstlineno + 8 and sys.platform == "win32"
+                    and caller["line"] == code.co_firstlineno + 9 and sys.platform == "win32"
                     and value["command"] in OBSERVER_BOUNDARY_STDIO),
                 "public boundary caller differs")
     require(body == json.dumps(value, sort_keys=True, separators=(",", ":")).encode("ascii") + b"\n", "observer diagnostic is not one canonical record")

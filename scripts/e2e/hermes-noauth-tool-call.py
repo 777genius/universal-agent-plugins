@@ -36,7 +36,7 @@ def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def bounded(command, cwd, env, output, timeout=90, expected_failure=False):
+def bounded(command, cwd, env, output, timeout=90, expected_failure=False, *, process_identity=None):
     """Capture both streams without an unbounded file or inherited shell."""
     child = subprocess.Popen([str(arg) for arg in command], cwd=cwd, env=env,
                              stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -54,7 +54,7 @@ def bounded(command, cwd, env, output, timeout=90, expected_failure=False):
                for pipe, buffer in zip((child.stdout, child.stderr), buffers)]
     for thread in threads:
         thread.start()
-    failure = None
+    failure, captured_identity = None, None
     try:
         deadline = time.monotonic() + timeout
         while child.poll() is None:
@@ -74,13 +74,20 @@ def bounded(command, cwd, env, output, timeout=90, expected_failure=False):
             failure = "output bound"
         if any(thread.is_alive() for thread in threads):
             failure = "native command left inherited capture pipe open"
+        if process_identity is not None and failure is None and child.returncode == 0 and not expected_failure:
+            # This is still the original Popen object/handle, never a PID lookup.
+            # Invoke only after the existing command and both streams have settled.
+            captured_identity = process_identity(child)
     finally:
         for suffix, body in zip(("stdout", "stderr"), buffers):
             output.with_suffix("." + suffix).write_bytes(body)
-        output.with_suffix(".status.json").write_text(json.dumps({"argv": [str(x) for x in command],
+        status = {"argv": [str(x) for x in command],
             "pid": child.pid, "exit": child.poll(), "error": failure,
             "streams": {suffix: {"bytes": len(body), "sha256": hashlib.sha256(body).hexdigest()}
-                        for suffix, body in zip(("stdout", "stderr"), buffers)}}) + "\n")
+                        for suffix, body in zip(("stdout", "stderr"), buffers)}}
+        if captured_identity is not None:
+            status["process_identity"] = captured_identity
+        output.with_suffix(".status.json").write_text(json.dumps(status) + "\n")
     require(not failure and not overflow.is_set() and (child.returncode != 0) == expected_failure,
             output.name + ": native command failed or exceeded its capture bound")
     return bytes(buffers[0])

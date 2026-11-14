@@ -2853,3 +2853,66 @@ same seven Windows-only skips (10.631 seconds; log SHA-256
 These are local checks on the three-path correction. Cold native execution on
 a subsequent published commit remains required; no source or bundled admission
 is promoted by this fixture correction.
+
+### Follow-up: join Windows spawn facts to the original native process handle
+
+The original Windows bundled job `132525761423`, run `43620276742`, on
+`55bf868cb98bb07a9b7ba24dfb9abfa63090818b` refused `public-stdio-a` at the
+closed `spawn-identity / spawner-pid` predicate. Its original log is 282,007
+bytes, SHA-256 `86b2138dd55d8dcbcfc696dd8ae9107e5136df58957d3dc8ee7d424bbb2b563f`.
+Artifact `14125716532` remains an 810-byte safe failure summary, SHA-256
+`8665ecac8600ad075d4aafa4beb10ede05aea55a7dd5fafcef59659f6cdc6c52`.
+The original closed report proves the failed equality, not either numeric PID
+or complete ancestry. Public cleanup remains unproved and raw evidence withheld.
+
+Pinned Hermes `2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19` builds Windows
+launchers through `scripts/build/launchers.py` and `mint_launchers.py`, using a
+PE launcher and Python wrapper. `hermes_cli/process_identity.py` records the
+Python writer's `os.getpid()` as `spawner_pid`. The outer Popen process therefore
+must not be equated to that writer without observing the intervening process.
+The POSIX launcher uses `exec`; its existing parent/PID contract stays exact.
+
+Only the four existing public stdio commands request the new Windows probe
+mode. On each initialize/list event, the probe retains handles for exactly four
+roles: probe, managed launcher, Hermes Python, and bundled launcher. Each hop
+joins `GetProcessId`, `GetProcessTimes` creation ticks, and exact executable
+path. A typed Toolhelp snapshot supplies only the parent-PID hint for that
+already held/live child: at most 4,096 entries, no retries, and no retention or
+output of other rows. The exact held child PID, birth and liveness are checked
+before and after the snapshot; missing/zero/self parent, API, close or row-bound
+failures refuse. Only the selected parent is opened and retained. Parent birth
+must be strictly earlier; repeated PIDs, unavailable or stopped processes, and
+changed final held-handle observations refuse. Liveness uses
+`WaitForSingleObject(..., 0)`, never the undefined running-process exit time.
+Every observation handle is closed; none grants termination authority.
+
+After the existing bounded native command and both streams settle, its optional
+callback reads PID and creation ticks twice through the original Popen handle.
+It never opens a process by numeric PID. These two facts are retained in that
+command's existing status document and rejoined with its original status and
+stream bytes. The four-role event chain must terminate at this exact PID/birth,
+match all four captured executable paths, and agree across both new events.
+Ledger child/spawner creation times use the exact psutil 7.2.2 conversion from
+`psutil/arch/windows/init.c` (`psutil_FiletimeToUnixTime`), with no tolerance.
+The recipe, nonce, fresh session, full argv, captured runtime, selected roots,
+original ledger/lock reads, prospective baseline and cleanup guards stay in force.
+
+The default probe mode and single-file builds retain the old event contract;
+unsupported builds explicitly refuse the new opt-in. Existing negative purposes
+remain, with Windows fixtures supplying the newly required original facts and
+diagnostic callsites joined to their exact revised source lines. Four new Python
+methods cover chain substitution, PID reuse/birth/image/event mismatches, the
+original Popen callback, and closed status shape. The complete suite ran 191
+methods: 184 passed and the same seven Windows-only methods skipped on Linux.
+The probe package passed on Linux after the final marker extraction (18.324
+seconds). Its Windows amd64 test binary
+compiled successfully; no Windows execution or native qualification is claimed.
+New Windows tests exercise retained-handle closure, hostile ancestry observations,
+child death or identity change across the snapshot, and a real inert child
+before/after exit when ordinary Windows CI runs them. No unsafe-pointer call or
+linter suppression is used. The required explicit probe size gate also exposed
+the existing shared `inspect` marker block's cognitive complexity. Extracting
+that intact operation into `applyMarkerOperation` preserves validation, owned
+path checks, write/read, error strings and event order; no rule is exempted.
+The explicit probe size/architecture and changed-lines passes both report zero
+issues for Linux and Windows with the pinned golangci-lint 2.13.2 configuration.

@@ -1665,7 +1665,7 @@ class PublicLifecycleContracts(unittest.TestCase):
                         self.assertEqual(recipe, {"type": "stdio", "command": "hermes-mcp-probe" + suffix,
                             "args": [], "env": {"PATH": str(root), "UAP_TEST_ROOT": str(project),
                             "UAP_TEST_EVENTS": "${PLUGIN_DATA}/hermes-events.jsonl", "UAP_TEST_NONCE": "original-nonce",
-                            "UAP_TEST_HERMES_PUBLIC_PARENT": "1"}})
+                            "UAP_TEST_HERMES_PUBLIC_PARENT": "windows-lineage-v1" if CASE["artifacts"].WINDOWS else "1"}})
                         self.assertEqual(recipe["env"]["PATH"].split(os.pathsep), [str(root)])
                     self.assertEqual(CASE["public_runtime_pins"](pins), pins)
                     probe = Path(pins["probe"]["path"])
@@ -2061,6 +2061,14 @@ class PublicLifecycleContracts(unittest.TestCase):
             rows = [dict(method=method, pid=42, session="42-123", nonce=nonce, timestamp="2026-11-13T23:50:00Z",
                          facts={"kind": "hermes-public-parent-v1", "parent_pid": parent})
                     for method in ("initialize", "tools/list")]
+            python_image = str(code_root.parent / "python.exe")
+            if system == "win32":
+                for row in rows:
+                    row["facts"] = PublicWindowsLineageContracts.facts()
+                    row["facts"]["processes"][0]["pid"] = row["pid"]
+                    for process, image in zip(row["facts"]["processes"],
+                                              (str(probe), str(launcher), python_image, namespace["argv"][0])):
+                        process["image"] = image
             entry = PublicSpawnLedgerContracts.entry(system, argv=" ".join([recipe["command"], *recipe["args"]]))
             entry["pid"] = 303 if system == "win32" else 42
             PublicSpawnLedgerContracts.write_pair(selected, entry)
@@ -2068,6 +2076,7 @@ class PublicLifecycleContracts(unittest.TestCase):
             for suffix, body in streams.items(): (evidence / ("public-stdio-a." + suffix)).write_bytes(body)
             (evidence / "public-stdio-a.status.json").write_bytes(json.dumps(dict(
                 argv=namespace["argv"], pid=101, exit=0, error=None,
+                **({"process_identity": PublicWindowsLineageContracts.original()} if system == "win32" else {}),
                 streams={suffix: {"bytes": len(body), "sha256": CASE["hashlib"].sha256(body).hexdigest()}
                          for suffix, body in streams.items()})).encode())
             namespace["spawn_status"] = CASE["public_spawn_status"](evidence, CASE["directory_identity"](evidence),
@@ -2076,7 +2085,8 @@ class PublicLifecycleContracts(unittest.TestCase):
             body = b"\n2026-11-14 14:05:11,913 ===== starting MCP server 'hermes-public-a-stdio' =====\n"
             log.write_bytes(body.replace(b"\n", b"\r\n" if os.name == "nt" else b"\n")); log.chmod(0o644)
             namespace["after"] = CASE["inventory"](outer)
-            exec(check, namespace)
+            with mock.patch.dict(os.environ, HERMES_PROFILE_PYTHON=python_image):
+                exec(check, namespace)
             self.assertEqual(namespace["stdio_completed"], {"a": 1, "b": 0})
             namespace.update(test=None, before=namespace["after"], proofs={"a": None, "b": None}, events_before={"a": rows, "b": []})
             exec(check, namespace)  # remove retains the just-verified data receipt
@@ -4808,7 +4818,7 @@ class PublicSpawnLedgerContracts(unittest.TestCase):
     @staticmethod
     def entry(system="linux", *, argv=None):
         return dict(pid=303 if system == "win32" else 202, create_time=100.25, purpose="mcp-helper",
-                    install="a" * 12, spawner_pid=101, spawner_create=90.5, registered_at=101.75,
+                    install="a" * 12, spawner_pid=404 if system == "win32" else 101, spawner_create=90.5, registered_at=101.75,
                     argv=argv if argv is not None else " ".join(PublicSpawnLedgerContracts.arguments()),
                     host="", port=None, profile="", hermes_home="", isolated=False,
                     boot_start=None, spawner_boot=None, boot_id=None)
@@ -4818,7 +4828,8 @@ class PublicSpawnLedgerContracts(unittest.TestCase):
         parent = 303 if system == "win32" else 101
         return [dict(method=method, pid=202, session=session, nonce="c" * 64,
                      timestamp="2026-11-14T13:30:00Z",
-                     facts={"kind": "hermes-public-parent-v1", "parent_pid": parent})
+                     facts=PublicWindowsLineageContracts.facts() if system == "win32" else
+                           {"kind": "hermes-public-parent-v1", "parent_pid": parent})
                 for method in ("initialize", "tools/list")]
 
     @staticmethod
@@ -4840,6 +4851,9 @@ class PublicSpawnLedgerContracts(unittest.TestCase):
         args = dict(body=json.dumps([entry]).encode() if body is None else body, before=before, after=after,
                     nonce="c" * 64, native_pid=101, install_id="a" * 12, launcher_argv=self.arguments(),
                     probe="/build/probe", system=system)
+        if system == "win32":
+            args.update(native_process=PublicWindowsLineageContracts.original(),
+                        native_python="/captured/python", native_image="/captured/hermes")
         args.update(changes)
         return CASE["public_spawn_entry"](**args)
 
@@ -4916,8 +4930,8 @@ class PublicSpawnLedgerContracts(unittest.TestCase):
             with self.subTest(effect=effect), self.assertRaises(RuntimeError):
                 self.verify(self.entry(), before, after)
         wrong_windows = self.events("win32")
-        for row in wrong_windows: row["facts"]["parent_pid"] = 101
-        with self.assertRaisesRegex(RuntimeError, "process chain"):
+        for row in wrong_windows: row["facts"]["processes"][0]["parent_pid"] = 101
+        with self.assertRaisesRegex(RuntimeError, "lineage parent"):
             self.verify(self.entry("win32"), [], wrong_windows, "win32")
         reused_native = self.events("win32")
         for row in reused_native: row["pid"] = 101
@@ -4937,6 +4951,7 @@ class PublicSpawnLedgerContracts(unittest.TestCase):
             status = dict(argv=argv, pid=101, exit=0, error=None, streams={
                 suffix: {"bytes": len(body), "sha256": hashlib.sha256(body).hexdigest()}
                 for suffix, body in (("stdout", stdout), ("stderr", stderr))})
+            if CASE["artifacts"].WINDOWS: status["process_identity"] = PublicWindowsLineageContracts.original()
             path = prefix.with_suffix(".status.json")
             def write(value): path.write_bytes(json.dumps(value).encode())
             write(status)
@@ -5457,7 +5472,8 @@ class PublicSpawnOriginalAuthorityContracts(unittest.TestCase):
                 outer = Path(temporary).resolve(); evidence = outer / "evidence"; evidence.mkdir()
                 (outer / "mcp").write_text("import os,sys\nprint(os.getpid())\nprint('original stderr',file=sys.stderr)\n")
                 argv = [sys.executable, "mcp", "test", "hermes-public-a-stdio"]
-                stdout = CASE["bounded"](argv, outer, dict(os.environ), evidence / "public-stdio-a", timeout=5)
+                stdout = CASE["bounded"](argv, outer, dict(os.environ), evidence / "public-stdio-a", timeout=5,
+                    **({"process_identity": CASE["public_windows_process_identity"]} if CASE["artifacts"].WINDOWS else {}))
                 authority, deadline = CASE["directory_identity"](evidence), time.monotonic() + 10
                 captured = CASE["public_spawn_status"](evidence, authority, "public-stdio-a", argv, stdout, deadline)
                 self.assertEqual(captured["pid"], int(stdout.strip()))
@@ -5568,8 +5584,8 @@ class PublicSpawnOriginalAuthorityContracts(unittest.TestCase):
             observed, expired = [], []
             def execute(code, namespace):
                 entry = namespace["public_spawn_entry"]
-                def parse(*args):
-                    result = entry(*args)
+                def parse(*args, **kwargs):
+                    result = entry(*args, **kwargs)
                     selected = namespace["selected"]
                     if effect == "ledger":
                         path = selected / "spawn-ledger.json"; body = path.read_bytes()
@@ -5715,7 +5731,8 @@ class ObserverBoundaryDiagnosticContracts(unittest.TestCase):
             command, values, patches = self.command_fixture(Path(temporary).resolve(), "print('PRIVATE NATIVE OUTPUT')\n",
                 spawn=True, entry_changes=changed, argument_changes=arguments)
             # This exercises the original pure Windows guard, not native Windows qualification.
-            with mock.patch.object(sys, "platform", "win32"), mock.patch.dict(os.environ, HERMES_BIN=sys.executable), \
+            with mock.patch.object(sys, "platform", "win32"), \
+                    mock.patch.dict(os.environ, HERMES_BIN=sys.executable, HERMES_PROFILE_PYTHON=sys.executable), \
                     mock.patch.dict(command.__globals__, patches):
                 try:
                     command("public-stdio-a", "a", ["mcp", "test", "hermes-public-a-stdio"], native=True,
@@ -5796,11 +5813,11 @@ class ObserverBoundaryDiagnosticContracts(unittest.TestCase):
     def test_real_spawn_identity_guard_names_first_failure_and_leaves_later_guards_unknown(self):
         import sys
         cases = (("native-pid", {}, {"native_pid": True}), ("child-pid", {"pid": True}, {}),
-                 ("spawner-pid", {"spawner_pid": 102}, {}), ("distinct-child", {"pid": 101}, {}),
+                 ("spawner-pid", {"spawner_pid": 0}, {}), ("distinct-child", {"pid": 101}, {}),
                  ("purpose", {"purpose": "PRIVATE"}, {}), ("install-key", {}, {"install_id": "PRIVATE"}),
                  ("install-match", {"install": "b" * 12}, {}), ("empty-defaults", {"host": "PRIVATE"}, {}),
                  ("null-port", {"port": 0}, {}), ("non-isolated", {"isolated": 0}, {}),
-                 ("spawner-pid", {"spawner_pid": 102, "purpose": "PRIVATE", "isolated": True}, {}),
+                 ("spawner-pid", {"spawner_pid": 0, "purpose": "PRIVATE", "isolated": True}, {}),
                  (None, {"create_time": 100}, {}), (None, {"argv": "PRIVATE"}, {}))
         for predicate, changed, args in cases:
             with self.subTest(predicate=predicate, fields=tuple(changed)):
@@ -5859,6 +5876,7 @@ class ObserverBoundaryDiagnosticContracts(unittest.TestCase):
             # producer-local authority, even when called by the owned command.
             original = CASE["bounded"]
             clone = FunctionType(original.__code__.replace(), original.__globals__, argdefs=original.__defaults__)
+            clone.__kwdefaults__ = original.__kwdefaults__
             failure = self.through_owned_command(lambda: clone(
                 [CASE["sys"].executable, "-I", "-B", "-c", "raise SystemExit(7)"], root, dict(os.environ), root / "clone"), "public-repair-a")
             _, value = self.emitted(failure)
@@ -6015,6 +6033,137 @@ class ObserverBoundaryDiagnosticContracts(unittest.TestCase):
         line = helper(fixtures.encoded(proof), None)
         self.assertIn("public_bootstrap", json.loads(line)["native_failure"]["observer"])
         self.assertEqual(projector(line, context, "bundled"), line)
+
+
+class PublicWindowsLineageContracts(unittest.TestCase):
+    epoch = 116444736000000000
+
+    @classmethod
+    def original(cls):
+        return {"pid": 101, "created_100ns": cls.epoch + 800000000}
+
+    @classmethod
+    def facts(cls):
+        return {"kind": "hermes-public-windows-lineage-v1", "processes": [
+            {"pid": 202, "parent_pid": 303, "created_100ns": cls.epoch + 1010000000, "image": "/build/probe"},
+            {"pid": 303, "parent_pid": 404, "created_100ns": cls.epoch + 1002500000, "image": "/owned/agentplugins"},
+            {"pid": 404, "parent_pid": 101, "created_100ns": cls.epoch + 905000000, "image": "/captured/python"},
+            {"pid": 101, "parent_pid": 77, "created_100ns": cls.epoch + 800000000, "image": "/captured/hermes"}]}
+
+    def test_windows_four_roles_require_original_birth_and_both_exact_new_events(self):
+        import copy
+        fixture = PublicSpawnLedgerContracts()
+        entry, events = fixture.entry("win32"), fixture.events("win32")
+        self.assertNotEqual(entry["spawner_pid"], self.original()["pid"])
+        self.assertEqual(fixture.verify(entry, [], events, "win32"), entry)
+        for effect in ("native-pid", "native-birth", "spawner", "spawner-birth", "child-birth", "parent",
+                       "cycle", "same-birth", "newer-parent", "bool-pid", "bool-birth", "extra", "short", "long",
+                       "image", "foreign-python", "second", "probe", "no-original", "legacy"):
+            with self.subTest(effect=effect):
+                changed, after, original = copy.deepcopy(entry), copy.deepcopy(events), self.original()
+                rows = after[0]["facts"]["processes"]
+                kwargs = {"native_process": original}
+                if effect == "native-pid": original["pid"] += 1
+                elif effect == "native-birth": original["created_100ns"] += 1
+                elif effect == "spawner": changed["spawner_pid"] = 101
+                elif effect == "spawner-birth": changed["spawner_create"] += .001
+                elif effect == "child-birth": changed["create_time"] += .001
+                elif effect == "parent": rows[1]["parent_pid"] = 101
+                elif effect == "cycle": rows[2]["pid"] = 303
+                elif effect == "same-birth": rows[2]["created_100ns"] = rows[1]["created_100ns"]
+                elif effect == "newer-parent": rows[2]["created_100ns"] = rows[1]["created_100ns"] + 1
+                elif effect == "bool-pid": rows[2]["pid"] = True
+                elif effect == "bool-birth": rows[2]["created_100ns"] = True
+                elif effect == "extra": rows[2]["unknown"] = 0
+                elif effect == "short": rows.pop()
+                elif effect == "long": rows.append(copy.deepcopy(rows[-1]))
+                elif effect == "image": rows[1]["image"] += ".foreign"
+                elif effect == "foreign-python": kwargs["native_python"] = "/foreign/python"
+                elif effect == "second": after[1]["facts"]["processes"][2]["image"] = "/foreign/python"
+                elif effect == "probe": rows[0]["pid"] = 203
+                elif effect == "no-original": kwargs["native_process"] = None
+                else: after[0]["facts"] = {"kind": "hermes-public-parent-v1", "parent_pid": 303}
+                if effect != "second": after[1]["facts"] = copy.deepcopy(after[0]["facts"])
+                with self.assertRaises(RuntimeError): fixture.verify(changed, [], after, "win32", **kwargs)
+
+    def test_bounded_optional_identity_uses_only_its_original_settled_child(self):
+        import sys
+        for code in (0, 7):
+            with self.subTest(exit=code), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve(); output = root / "public-stdio-a"
+                seen = []
+                def observe(child):
+                    self.assertIs(type(child), CASE["subprocess"].Popen)
+                    self.assertEqual(child.returncode, 0)
+                    self.assertTrue(child.stdout.closed and child.stderr.closed)
+                    seen.append(child)
+                    return {"pid": child.pid, "created_100ns": self.original()["created_100ns"]}
+                args = [sys.executable, "-I", "-B", "-c", f"import sys;print('owned');raise SystemExit({code})"]
+                if code:
+                    with self.assertRaises(RuntimeError):
+                        CASE["bounded"](args, root, dict(os.environ), output, timeout=5, process_identity=observe)
+                else:
+                    self.assertEqual(CASE["bounded"](args, root, dict(os.environ), output, timeout=5,
+                                                    process_identity=observe), b"owned\n")
+                status = json.loads(output.with_suffix(".status.json").read_bytes())
+                self.assertEqual(len(seen), 0 if code else 1)
+                self.assertEqual(status["exit"], code)
+                self.assertEqual("process_identity" in status, not code)
+                if not code: self.assertEqual(status["process_identity"]["pid"], seen[0].pid)
+
+    def test_windows_original_callback_queries_same_handle_without_pid_open(self):
+        import ctypes
+        import sys
+        from ctypes import wintypes
+        child = CASE["subprocess"].Popen([sys.executable, "-I", "-B", "-c", "pass"],
+                                       stdout=CASE["subprocess"].PIPE, stderr=CASE["subprocess"].PIPE)
+        child.communicate(timeout=5)
+        expected_handle = int(child._handle) if os.name == "nt" else 713
+        for effect in ("valid", "wrong-pid", "changed-birth", "invalid-birth"):
+            seen = []
+            def times(handle, created, *_unused):
+                self.assertEqual(handle, expected_handle); seen.append(handle)
+                ticks = self.original()["created_100ns"]
+                if effect == "changed-birth" and len(seen) == 2: ticks += 1
+                if effect == "invalid-birth": ticks = 0
+                value = ctypes.cast(created, ctypes.POINTER(wintypes.FILETIME)).contents
+                value.dwHighDateTime, value.dwLowDateTime = ticks >> 32, ticks & (2**32 - 1)
+                return 1
+            api = SimpleNamespace(GetProcessId=mock.Mock(return_value=child.pid + (effect == "wrong-pid")),
+                                  GetProcessTimes=mock.Mock(side_effect=times))
+            with self.subTest(effect=effect), mock.patch.object(os, "name", "nt"), \
+                    mock.patch.object(child, "_handle", expected_handle, create=True), \
+                    mock.patch.object(ctypes, "WinDLL", return_value=api, create=True):
+                if effect == "valid":
+                    self.assertEqual(CASE["public_windows_process_identity"](child),
+                                     {"pid": child.pid, "created_100ns": self.original()["created_100ns"]})
+                    self.assertEqual(seen, [expected_handle, expected_handle])
+                else:
+                    with self.assertRaises(RuntimeError): CASE["public_windows_process_identity"](child)
+                self.assertTrue(all(call.args == (expected_handle,) for call in api.GetProcessId.call_args_list))
+
+    def test_windows_status_requires_closed_original_handle_identity(self):
+        import copy
+        import hashlib
+        argv, body = ["/captured/hermes", "mcp", "test", "hermes-public-a-stdio"], b"owned\n"
+        status = dict(argv=argv, pid=101, exit=0, error=None, process_identity=self.original(), streams={
+            suffix: {"bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+            for suffix, data in (("stdout", body), ("stderr", b""))})
+        for effect in ("valid", "missing", "pid", "birth", "bool-birth", "extra"):
+            value = copy.deepcopy(status)
+            if effect == "missing": value.pop("process_identity")
+            elif effect == "pid": value["process_identity"]["pid"] += 1
+            elif effect == "birth": value["process_identity"]["created_100ns"] = self.epoch
+            elif effect == "bool-birth": value["process_identity"]["created_100ns"] = True
+            elif effect == "extra": value["process_identity"]["unknown"] = 0
+            with self.subTest(effect=effect):
+                invoke = lambda: CASE["public_spawn_status_document"](json.dumps(value).encode(), argv, windows=True)
+                if effect == "valid":
+                    self.assertEqual(invoke(), status)
+                else:
+                    with self.assertRaises(RuntimeError): invoke()
+        with self.assertRaises(RuntimeError):
+            CASE["public_spawn_status_document"](json.dumps(status).encode(), argv, windows=False)
 
 
 if __name__ == "__main__":

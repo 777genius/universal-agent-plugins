@@ -239,3 +239,30 @@ func assertHermesParentEvents(t *testing.T, root string, called map[string]any, 
 		}
 	}
 }
+
+func TestHermesWindowsLineageModeIsSeparateFromLegacyFacts(t *testing.T) {
+	original := hermesWindowsParent
+	t.Cleanup(func() { hermesWindowsParent = original })
+	calls := 0
+	hermesWindowsParent = func() (any, error) {
+		calls++
+		return "owned-lineage", nil
+	}
+	t.Setenv("UAP_TEST_HERMES_PUBLIC_PARENT", "windows-lineage-v1")
+	for _, method := range []string{"initialize", "tools/list"} {
+		value, err := probeEventFacts(method, nil)
+		if err != nil || value != "owned-lineage" {
+			t.Fatalf("exact Windows mode did not observe its own process: %v %v", value, err)
+		}
+	}
+	f := &facts{Nonce: "owned"}
+	value, err := probeEventFacts("tools/call", f)
+	if err != nil || value != f || calls != 2 {
+		t.Fatalf("Windows mode changed existing tool facts: %v %v calls=%d", value, err, calls)
+	}
+	t.Setenv("UAP_TEST_HERMES_PUBLIC_PARENT", "1")
+	value, err = probeEventFacts("initialize", nil)
+	if err != nil || !reflect.DeepEqual(value, map[string]any{"kind": "hermes-public-parent-v1", "parent_pid": os.Getppid()}) || calls != 2 {
+		t.Fatalf("legacy parent receipt changed: %v %v calls=%d", value, err, calls)
+	}
+}

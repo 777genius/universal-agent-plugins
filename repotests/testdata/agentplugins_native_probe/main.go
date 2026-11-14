@@ -35,6 +35,12 @@ type facts struct {
 
 var session = fmt.Sprintf("%d-%d", os.Getpid(), time.Now().UnixNano())
 
+// The Windows package supplies this opt-in observation. Single-file builds
+// retain every existing fixture mode and refuse the new mode explicitly.
+var hermesWindowsParent = func() (any, error) {
+	return nil, errors.New("hermes Windows lineage observation is unavailable")
+}
+
 func contained(path string) (string, error) {
 	root, err := filepath.EvalSymlinks(os.Getenv("UAP_TEST_ROOT"))
 	if err != nil {
@@ -75,6 +81,10 @@ func contained(path string) (string, error) {
 	return parent, nil
 }
 func probeEventFacts(method string, value *facts) (any, error) {
+	if value == nil && os.Getenv("UAP_TEST_HERMES_PUBLIC_PARENT") == "windows-lineage-v1" &&
+		(method == "initialize" || method == "tools/list") {
+		return hermesWindowsParent()
+	}
 	if value != nil || os.Getenv("UAP_TEST_HERMES_PUBLIC_PARENT") != "1" ||
 		(method != "initialize" && method != "tools/list") {
 		return value, nil
@@ -129,42 +139,8 @@ func inspect(params json.RawMessage) (any, error) {
 		return nil, err
 	}
 	f := facts{Nonce: p.Arguments.Nonce, Revision: os.Getenv("UAP_TEST_REVISION"), CWD: cwd, Argv: os.Args[1:], Root: os.Getenv("PLUGIN_ROOT"), Data: os.Getenv("PLUGIN_DATA"), Literal: os.Getenv("UAP_TEST_LITERAL"), Once: os.Getenv("UAP_TEST_ONCE"), PID: os.Getpid(), Session: session}
-	if p.Arguments.Operation != "" {
-		if p.Arguments.Operation != "write" && p.Arguments.Operation != "read" {
-			return nil, errors.New("unknown marker operation")
-		}
-		path, err := contained(filepath.Join(f.Data, "native-marker.txt"))
-		if err != nil {
-			return nil, err
-		}
-		var executedOperation string
-		if p.Arguments.Operation == "write" {
-			if len(p.Arguments.Marker) > 256 {
-				return nil, errors.New("marker too long")
-			}
-			if err = os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-				return nil, err
-			}
-			if err = os.WriteFile(path, []byte(p.Arguments.Marker), 0600); err != nil {
-				return nil, err
-			}
-			executedOperation = "write"
-		} else {
-			executedOperation = "read"
-		}
-		b, err := os.ReadFile(path)
-		if err != nil {
-			return nil, err
-		}
-		if len(b) > 256 {
-			return nil, errors.New("marker too long")
-		}
-		f.Marker = string(b)
-		// Existing native lanes admit a closed legacy facts schema. Only a
-		// fixture explicitly requesting this receipt receives the new field.
-		if os.Getenv("UAP_TEST_REPORT_OPERATION") == "1" {
-			f.Operation = executedOperation
-		}
+	if err := applyMarkerOperation(&f, p.Arguments.Operation, p.Arguments.Marker); err != nil {
+		return nil, err
 	}
 	if err := event("tools/call", &f); err != nil {
 		return nil, err
@@ -172,6 +148,49 @@ func inspect(params json.RawMessage) (any, error) {
 	b, _ := json.Marshal(f)
 	return map[string]any{"content": []any{map[string]any{"type": "text", "text": string(b)}}, "isError": false}, nil
 }
+
+func applyMarkerOperation(f *facts, operation, marker string) error {
+	if operation == "" {
+		return nil
+	}
+	if operation != "write" && operation != "read" {
+		return errors.New("unknown marker operation")
+	}
+	path, err := contained(filepath.Join(f.Data, "native-marker.txt"))
+	if err != nil {
+		return err
+	}
+	var executedOperation string
+	if operation == "write" {
+		if len(marker) > 256 {
+			return errors.New("marker too long")
+		}
+		if err = os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+			return err
+		}
+		if err = os.WriteFile(path, []byte(marker), 0600); err != nil {
+			return err
+		}
+		executedOperation = "write"
+	} else {
+		executedOperation = "read"
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	if len(b) > 256 {
+		return errors.New("marker too long")
+	}
+	f.Marker = string(b)
+	// Existing native lanes admit a closed legacy facts schema. Only a
+	// fixture explicitly requesting this receipt receives the new field.
+	if os.Getenv("UAP_TEST_REPORT_OPERATION") == "1" {
+		f.Operation = executedOperation
+	}
+	return nil
+}
+
 func handle(r request) (any, error) {
 	switch r.Method {
 	case "initialize":
