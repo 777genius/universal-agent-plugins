@@ -17,6 +17,7 @@ import (
 
 var assignProcessToJobObject = windows.AssignProcessToJobObject
 var terminateSessionJob = windows.TerminateJobObject
+var closeSessionJobAfterTerminationFailure = windows.CloseHandle
 var resumeSessionChild = resumeSessionProcess
 
 // Windows cannot replace the current process with execve. A private Job
@@ -108,9 +109,16 @@ func waitSessionContext(ctx context.Context, cmd *exec.Cmd, job *windows.Handle)
 		terminateErr := terminateSessionJob(*job, 1)
 		if terminateErr != nil {
 			// Last-handle close enforces KILL_ON_JOB_CLOSE if termination fails.
-			closeErr := windows.CloseHandle(*job)
+			closeErr := closeSessionJobAfterTerminationFailure(*job)
 			if closeErr == nil {
 				*job = 0
+			} else {
+				// Both termination and last-handle close failed. Without a
+				// direct kill, Wait can block forever on the suspended child.
+				// Preserve the close error: descendants are not proven reaped.
+				if killErr := cmd.Process.Kill(); killErr != nil && !errors.Is(killErr, os.ErrProcessDone) {
+					closeErr = errors.Join(closeErr, fmt.Errorf("kill native session child after failed job close: %w", killErr))
+				}
 			}
 			terminateErr = errors.Join(terminateErr, closeErr)
 		}
