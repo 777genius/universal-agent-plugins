@@ -1914,3 +1914,67 @@ failed publication and failed stdout preserving the original error. All 130
 existing test bodies are byte-for-byte retained. These new tests, Python
 compilation and genuine native outcomes are unexecuted in the unavailable local
 executor; source review and immutable source readback do not replace those gates.
+
+
+## 2026-11-14: hash-only public bootstrap refusal detail
+
+The original Hermes jobs at source
+`1412f416b9bf70b227d8f517e1881075f2b05a38` now identify the same
+`public_profile` membership predicate on all three bundled platforms. Linux
+job `132428496650` and macOS job `132428496354` stopped at `public-stdio-a`;
+Windows job `132428496528` reached `public-http-a`. Each genuine invocation's
+closed stdout record identifies the original function at line 2125, predicate
+at line 2135, `cleanup_phase=public-family`, settled primary observer family,
+and `RuntimeError`. These facts do not distinguish more than five admitted
+backup names from an unexpected profile member. Public cleanup, bootstrap
+admission, and native qualification remain unproved.
+
+The raw original logs are respectively 233617, 200763, and 281477 bytes, with
+SHA256 `f8dd78af06278ef1c8efcf453cb7bcd65bb7c77128d2c514cf2a883531b70538`,
+`9ed5410ea8a5f18b0a1fbba9ddb8183c37e0719300e5c3df0a692fd813e88d1a`,
+and `a82ba8fe18a99b8e0e40b04b9a8dc3de911467c62fef847e900f90452d54b64a`.
+The lines were isolated within each actual profile-admission invocation,
+excluding the synthetic diagnostic output from the preceding inert tests.
+The bounded original ZIPs have not been read in this source-only work.
+
+This change retains the exact predicate, error, inventory limits, and
+allowed members. On that predicate's existing `RuntimeError`, it can attach
+an optional closed `public_bootstrap` detail derived solely from the already
+captured ledger. Its fields are the selected `a` or `b` scope, a finite
+`backup-count`, `unmeasured-member`, or `both` predicate, exact captured member,
+backup, and unexpected-member counts, and at most the first lexicographic
+unexpected row. Count/predicate consistency is mandatory. The unexpected
+name is represented only by SHA256 over the domain separator
+`uap-hermes-public-bootstrap-member-v1\0` and its UTF-8/surrogatepass bytes.
+No raw member name, target, profile content, absolute path, or nonce is added
+to the detail. A strictly shaped ordinary file or directory row contributes
+only type, mode, byte count, and existing content digest; directory byte/hash
+fields are null. Invalid optional metadata is omitted.
+
+The existing observer record gains this one optional nested field; old
+records keep their exact closed shape. Its validator requires the actual
+owned `public_profile` code, public phase, `RuntimeError`, and an existing
+closed public command for the same selected scope. The observer emitter
+falls back to the original diagnostic if the optional detail is malformed
+or cannot be bound. The original exception still escapes. The original
+retained descriptor, positive primary-family settlement, source/nonce joins,
+canonical encoding, and 2 KiB observer bound continue to govern transport.
+The existing failure stdout projection carries the validated detail only
+after the same closed-evidence stage. Its 2 KiB line bound and false native
+and admission qualifications remain unchanged. There is no new file,
+filesystem read, traversal, process, cleanup permission, or recovery rule.
+
+Four appended inert contracts exercise the actual `public_profile` guard
+for each finite predicate, exact first-row hashing and no additional I/O;
+strict count/metadata negatives; actual owned nested command, caller, phase,
+and scope binding with optional-field fallback; and retained-descriptor plus
+safe/settled failure projections with identity, settlement, and size bounds.
+These new contracts have been authored for source review only; local Python
+and new native execution have not been claimed.
+
+The incoming peer's separate `extra-lock-prefix` fixture correction is
+preserved in full. In macOS original job `132428496678`, the stricter earlier
+`public control original parent changed` check rejected both `a` and `b`
+variants before the previous final snapshot predicate. The production
+parent guard, other variants, exception types, call counts, and original-lock
+identity checks are unchanged by this diagnostic patch.

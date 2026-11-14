@@ -318,6 +318,14 @@ jobs:
                       and info.st_uid == os.getuid() and not info.st_mode & 0o022, 'Docker build directory authority')
               return identity(info)[:6]
 
+          def output_membership(destination, expected):
+              found = set()
+              with os.scandir(destination) as entries:
+                  for entry in entries:
+                      require(entry.name in expected and entry.name not in found, 'Docker output membership differs')
+                      found.add(entry.name)
+              require(found == expected, 'Docker output membership differs')
+
           def capture(context, label, argv, cwd, environment, maximum):
               remaining = context['deadline'] - time.monotonic()
               require(remaining > 0, 'Docker build original deadline')
@@ -396,6 +404,7 @@ jobs:
               parents = {path: directory(path) for path in (runner, runner / 'vendor-root', destination.parent, destination)}
               for name in ('docker', 'docker-darwin-' + arch):
                   require(not os.path.lexists(destination / name), 'Docker output must be absent')
+              output_membership(destination, set())
               for name in ('home', 'tmp', 'cache'):
                   (workspace / name).mkdir()
               environment = dict(PATH=str(go.parent) + ':/usr/bin:/bin:/usr/sbin:/sbin',
@@ -416,7 +425,9 @@ jobs:
                       source, environment, 240)
               source_state(context, source, environment, 'after')
               require(executable(go) == original_go, 'Docker original Go executable changed')
-              require(all(directory(path) == original for path, original in parents.items()), 'Docker original output parents changed')
+              require(all(directory(path) == original for path, original in parents.items() if path != destination)
+                      and directory(destination)[:5] == parents[destination][:5], 'Docker original output parents changed')
+              output_membership(destination, {'docker', 'docker-darwin-' + arch})
               search = ':'.join((node, '/usr/local/sbin', '/usr/local/bin', '/usr/sbin', '/usr/bin',
                                 '/sbin', '/bin', str(destination), str(Path(os.environ['HOME']) / '.local/bin')))
               result = output_cli(destination, arch, search)

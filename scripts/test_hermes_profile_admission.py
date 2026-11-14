@@ -3778,5 +3778,218 @@ class FailureReadoutContracts(unittest.TestCase):
                 self.assertEqual((evidence / "profile-admission.json").read_bytes(), body)
 
 
+class PublicBootstrapFailureDetailContracts(unittest.TestCase):
+    nonce, source = "a" * 64, "b" * 40
+
+    def fixture(self, *, scope="a", backups=0, unexpected=()):
+        import hashlib
+        outer = Path("outer")
+        root = outer / ("public-" + scope) / ".hermes/uap-session"
+        prefix = root.relative_to(outer).as_posix()
+        def directory(mode=0o700):
+            return dict(type="directory", mode=0o777 if os.name == "nt" else mode, device=1, inode=2)
+        def regular(body):
+            return dict(type="file", mode=0o666 if os.name == "nt" else 0o600, device=1, inode=3,
+                        bytes=len(body), sha256=hashlib.sha256(body).hexdigest())
+        marker = ("uap-hermes-project-session-v1\n" + str(root.parent.parent) + "\n").encode()
+        config = b"mcp_servers: {}\n"
+        rows = {".uap-owner": regular(marker), "config.yaml": regular(config),
+                "backups": directory(0o755), "backups/config": directory(0o755)}
+        for index in range(backups):
+            rows["backups/config/config.yaml.good.20261114-" + f"{index:06d}"] = regular(config)
+        for name, kind in unexpected:
+            rows[name] = directory() if kind == "directory" else regular(b"PRIVATE BODY")
+        image = {prefix: directory(), **{prefix + "/" + name: row for name, row in rows.items()}}
+        return root, image, outer, {hashlib.sha256(config).hexdigest()}
+
+    def refused(self, fixture):
+        try:
+            CASE["public_profile"](*fixture)
+        except RuntimeError as error:
+            self.assertEqual(str(error), "public native bootstrap member is unmeasured")
+            return error
+        self.fail("the original membership guard must refuse")
+
+    def emitted(self, fixture, *, label="public-stdio-a", phase="public", mutate=None, foreign=False):
+        import io
+        import sys
+        from types import FunctionType
+        owner = CASE["observe_public"]
+        code = next(value for value in owner.__code__.co_consts
+                    if type(value) is type(owner.__code__) and value.co_name == "command")
+        cell = (lambda value: lambda: value)(None).__closure__[0]
+        command = FunctionType(code, owner.__globals__, closure=tuple(cell for _ in code.co_freevars))
+        details = self.refused(fixture).__dict__.get("_uap_public_bootstrap")
+        originals = []
+        def refuse(*args, **kwargs):
+            if foreign:
+                error = RuntimeError("PRIVATE FOREIGN ERROR")
+                error.__dict__["_uap_public_bootstrap"] = details
+                originals.append(error)
+                raise error
+            try:
+                CASE["public_profile"](*fixture)
+            except RuntimeError as error:
+                if mutate is not None:
+                    mutate(error)
+                originals.append(error)
+                raise
+        stream = io.BytesIO()
+        with mock.patch.dict(owner.__globals__, public_runtime_pins=refuse), \
+                mock.patch.object(sys, "stdout", SimpleNamespace(buffer=stream)), \
+                mock.patch.dict(os.environ, {"HERMES_CALL_NONCE": self.nonce, "HERMES_PROFILE_SOURCE_HEAD": self.source}):
+            try:
+                command(label, "a", [], native=False, inspect=False, expected_failure=False, test=None)
+            except RuntimeError as error:
+                self.assertIs(error, originals[0])
+                CASE["emit_observer_failure"](error, phase)
+            else:
+                self.fail("the original observer refusal must escape")
+        return stream.getvalue(), originals[0]
+
+    def test_actual_profile_guard_projects_only_captured_counts_and_first_member_hash(self):
+        import hashlib
+        private = "PRIVATE-NONCE-" + self.nonce
+        for scope, backups, unexpected, expected in (
+                ("a", 6, (), "backup-count"),
+                ("b", 0, (("z-" + private, "directory"), ("a-" + private, "file")), "unmeasured-member"),
+                ("a", 6, (("a-" + private, "directory"),), "both")):
+            with self.subTest(scope=scope, expected=expected):
+                fixture = self.fixture(scope=scope, backups=backups, unexpected=unexpected)
+                with mock.patch.object(os, "read", side_effect=AssertionError("diagnostic read")), \
+                        mock.patch.object(os, "open", side_effect=AssertionError("diagnostic open")), \
+                        mock.patch.object(os, "scandir", side_effect=AssertionError("diagnostic walk")), \
+                        mock.patch.object(Path, "lstat", side_effect=AssertionError("diagnostic stat")), \
+                        mock.patch.object(Path, "read_bytes", side_effect=AssertionError("diagnostic bytes")):
+                    error = self.refused(fixture)
+                detail = error.__dict__["_uap_public_bootstrap"]
+                self.assertEqual(CASE["public_bootstrap_detail"](detail), detail)
+                self.assertEqual((detail["scope"], detail["predicate"]), (scope, expected))
+                self.assertEqual((detail["member_count"], detail["backup_count"], detail["unmeasured_count"]),
+                                 (4 + backups + len(unexpected), backups, len(unexpected)))
+                if unexpected:
+                    name, kind = min(unexpected)
+                    first = detail["first_unmeasured"]
+                    self.assertEqual(first["member_sha256"], hashlib.sha256(
+                        b"uap-hermes-public-bootstrap-member-v1\0" + name.encode("utf-8", "surrogatepass")).hexdigest())
+                    self.assertEqual(first["type"], kind)
+                    self.assertEqual(first["bytes"], len(b"PRIVATE BODY") if kind == "file" else None)
+                    self.assertEqual(first["sha256"], hashlib.sha256(b"PRIVATE BODY").hexdigest() if kind == "file" else None)
+                else:
+                    self.assertIsNone(detail["first_unmeasured"])
+                encoded = json.dumps(detail, sort_keys=True)
+                for raw in (private, self.nonce, "PRIVATE BODY", str(fixture[0]), ".uap-owner"):
+                    self.assertNotIn(raw, encoded)
+        self.assertIsNone(CASE["public_profile"](*self.fixture(backups=5)))
+        fixture = self.fixture(unexpected=(("unknown", "file"),))
+        prefix = fixture[0].relative_to(fixture[2]).as_posix()
+        fixture[1][prefix + "/unknown"]["target"] = "/PRIVATE TARGET"
+        self.assertNotIn("_uap_public_bootstrap", self.refused(fixture).__dict__)
+
+    def test_closed_detail_rejects_false_counts_unknown_fields_and_unsafe_metadata(self):
+        import copy
+        valid = self.refused(self.fixture(unexpected=(("unknown", "file"),))).__dict__["_uap_public_bootstrap"]
+        invalid = []
+        for key, value in (("scope", "user"), ("scope", True), ("predicate", "both"), ("predicate", "unknown"),
+                           ("member_count", True), ("member_count", 0), ("member_count", 2048),
+                           ("backup_count", -1), ("backup_count", 6), ("unmeasured_count", 0),
+                           ("unmeasured_count", True), ("unmeasured_count", 6), ("member", "PRIVATE"),
+                           ("first_unmeasured", None)):
+            changed = copy.deepcopy(valid); changed[key] = value; invalid.append(changed)
+        for key, value in (("member_sha256", "F" * 64), ("member_sha256", self.nonce + "x"),
+                           ("type", "link"), ("mode", True), ("mode", 0o10000), ("bytes", -1),
+                           ("bytes", CASE["LIMIT"] + 1), ("bytes", True), ("sha256", None),
+                           ("target", "/PRIVATE"), ("member", "PRIVATE")):
+            changed = copy.deepcopy(valid); changed["first_unmeasured"][key] = value; invalid.append(changed)
+        changed = copy.deepcopy(valid); changed["first_unmeasured"]["type"] = "directory"; invalid.append(changed)
+        backup = self.refused(self.fixture(backups=6)).__dict__["_uap_public_bootstrap"]
+        changed = copy.deepcopy(backup); changed["first_unmeasured"] = valid["first_unmeasured"]; invalid.append(changed)
+        class Hostile:
+            def __eq__(self, other): raise AssertionError("foreign equality")
+            def __hash__(self): raise AssertionError("foreign hash")
+            def __str__(self): raise AssertionError("foreign text")
+        changed = copy.deepcopy(valid); changed["first_unmeasured"]["type"] = Hostile(); invalid.append(changed)
+        changed = copy.deepcopy(valid); changed["scope"] = Hostile(); invalid.append(changed)
+        for index, value in enumerate(invalid):
+            with self.subTest(index=index), self.assertRaises(RuntimeError):
+                CASE["public_bootstrap_detail"](value)
+
+    def test_owned_caller_command_scope_and_optional_fallback_preserve_original_failure(self):
+        import copy
+        fixture = self.fixture(unexpected=(("PRIVATE-" + self.nonce, "file"),))
+        body, original = self.emitted(fixture)
+        record = CASE["observer_failure_document"](body, self.nonce, self.source)
+        self.assertEqual(record["public_bootstrap"], original.__dict__["_uap_public_bootstrap"])
+        self.assertEqual(record["caller"]["function"], "public_profile")
+        self.assertEqual(record["command"], "public-stdio-a")
+        self.assertLessEqual(len(body), 2048)
+        for label, phase, mutate, foreign in (
+                ("public-stdio-b", "public", None, False),
+                ("public-stdio-a", "profiles", None, False),
+                ("PRIVATE", "public", None, False),
+                ("public-stdio-a", "public", lambda error: error.__dict__["_uap_public_bootstrap"].update(predicate="both"), False),
+                ("public-stdio-a", "public", lambda error: error.__dict__.update(_uap_public_bootstrap=object()), False),
+                ("public-stdio-a", "public", None, True)):
+            with self.subTest(label=label, phase=phase, foreign=foreign):
+                emitted, error = self.emitted(fixture, label=label, phase=phase, mutate=mutate, foreign=foreign)
+                value = CASE["observer_failure_document"](emitted, self.nonce, self.source)
+                self.assertNotIn("public_bootstrap", value)
+                self.assertEqual(value["exception_kind"], "RuntimeError")
+                self.assertEqual(str(error), "PRIVATE FOREIGN ERROR" if foreign else "public native bootstrap member is unmeasured")
+                self.assertNotIn(b"PRIVATE", emitted)
+        for key, value in (("phase", "profiles"), ("exception_kind", "ValueError"),
+                           ("command", "public-stdio-b"), ("command", None), ("caller", None)):
+            changed = copy.deepcopy(record); changed[key] = value
+            encoded = json.dumps(changed, sort_keys=True, separators=(",", ":")).encode("ascii") + b"\n"
+            with self.subTest(key=key), self.assertRaises(RuntimeError):
+                CASE["observer_failure_document"](encoded, self.nonce, self.source)
+        changed = copy.deepcopy(record)
+        changed["caller"] = ObserverFailureDiagnosticContracts().record()["caller"]
+        with self.assertRaises(RuntimeError):
+            CASE["observer_failure_document"](json.dumps(changed, sort_keys=True, separators=(",", ":")).encode("ascii") + b"\n",
+                                              self.nonce, self.source)
+
+    def test_retained_descriptor_and_failure_readout_keep_settlement_identity_and_bounds(self):
+        import copy
+        body, _ = self.emitted(self.fixture(backups=6, unexpected=(("PRIVATE-" + self.nonce, "file"),)))
+        expected = CASE["observer_failure_document"](body, self.nonce, self.source)
+        reader = CASE["read_observer_failure"]
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            with (root / "original.stdout").open("x+b") as stream:
+                original = os.fstat(stream.fileno())
+                stream.write(body); stream.flush()
+                with mock.patch.object(os, "read", side_effect=AssertionError("unsettled read")):
+                    self.assertIsNone(reader(stream.fileno(), original, self.nonce, self.source, primary_settled=False))
+                with mock.patch.object(Path, "open", side_effect=AssertionError("pathname reopen")):
+                    self.assertEqual(reader(stream.fileno(), original, self.nonce, self.source, primary_settled=True), expected)
+                    self.assertIsNone(reader(stream.fileno(), original, "c" * 64, self.source, primary_settled=True))
+                    self.assertIsNone(reader(stream.fileno(), original, self.nonce, "d" * 40, primary_settled=True))
+        context = dict(source_head=self.source, nonce=self.nonce, cleanup_phase="public-family",
+                       primary_family_settled=True, observer_exit=1, observer=expected)
+        helper = CASE["admission_failure_readout"]
+        fixtures = FailureReadoutContracts()
+        safe = fixtures.proof("bundled"); safe["native_failure"] = context
+        settled = fixtures.proof("source"); settled["runtime_distribution"] = "bundled"
+        with mock.patch.object(os, "read", side_effect=AssertionError("readout read")), \
+                mock.patch.object(Path, "read_bytes", side_effect=AssertionError("readout reopen")):
+            lines = (helper(fixtures.encoded(safe), None), helper(fixtures.encoded(settled), None, native_failure=context))
+        for line in lines:
+            report = json.loads(line)
+            self.assertEqual(report["native_failure"]["observer"]["public_bootstrap"], expected["public_bootstrap"])
+            self.assertEqual(report["native_failure"]["cleanup_phase"], "public-family")
+            self.assertIs(report["admission_qualified"], False); self.assertIs(report["native_qualified"], False)
+            self.assertLessEqual(len(line.encode("ascii")) + len("HERMES_ADMISSION_FAILURE ") + 1, 2048)
+            self.assertNotIn(self.nonce, line); self.assertNotIn("PRIVATE", line)
+        for effect in ("unsettled", "nonce", "source", "success", "malformed"):
+            changed = copy.deepcopy(safe)
+            if effect == "unsettled": changed["native_failure"]["primary_family_settled"] = False
+            if effect == "nonce": changed["native_failure"]["nonce"] = "c" * 64
+            if effect == "source": changed["native_failure"]["source_head"] = "d" * 40
+            if effect == "success": changed["status"] = "passed"
+            if effect == "malformed": changed["native_failure"]["observer"]["public_bootstrap"]["unmeasured_count"] = False
+            with self.subTest(effect=effect):
+                self.assertIsNone(helper(fixtures.encoded(changed), None))
+
 if __name__ == "__main__":
     unittest.main()

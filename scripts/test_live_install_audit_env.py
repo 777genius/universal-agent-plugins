@@ -5517,7 +5517,10 @@ module.exports = {
                   "docker-before-identity", "docker-before-clean", "docker-source-build",
                   "docker-after-identity", "docker-after-clean"]
         counts = {"built": 8, "version": 1, "build-failure": 6, "source-change": 7,
-                  "go-replaced": 8, "parent-replaced": 8, "missing-output": 8, "expired": 6}
+                  "go-replaced": 8, "parent-replaced": 8, "missing-output": 8, "expired": 6,
+                  "foreign-before": 0, "foreign-output": 8, "immutable-parent-child": 8,
+                  "output-link-count": 8}
+        original_directory = program["directory"]
         for variant, count in counts.items():
             with self.subTest(variant=variant), TemporaryDirectory() as temporary:
                 root = Path(temporary).resolve()
@@ -5529,10 +5532,22 @@ module.exports = {
                 go.chmod(0o700)
                 destination = runner / "vendor-root/usr/bin"
                 destination.mkdir(parents=True)
+                original_parent = original_directory(destination.parent)
+                if variant == "foreign-before":
+                    (destination / "foreign").write_bytes(b"original foreign output member")
                 environment = dict(RUNNER_OS="macOS", RUNNER_ARCH="ARM64", KIRO_GO_VERSION="1.26.11",
                                    RUNNER_TEMP=str(runner), RUNNER_TOOL_CACHE=str(cache), HOME=str(root),
                                    KIRO_NODE_BIN=str(destination), PATH=str(go.parent), DOCKER_HOST="foreign")
-                seen, clock = [], [100.0]
+                seen, clock, link_changes = [], [100.0], []
+
+                def directory(path):
+                    observed = original_directory(path)
+                    if variant == "output-link-count" and path == destination and "docker-source-build" in seen:
+                        # An inert metadata seam, not a claim about the original macOS stat delta.
+                        before = observed.copy()
+                        observed[5] += 1
+                        link_changes.append((before, observed.copy()))
+                    return observed
 
                 def probe(argv, cwd, env, output, label, timeout, limit, *, memory_only):
                     self.assertEqual(label, labels[len(seen)])
@@ -5575,6 +5590,10 @@ module.exports = {
                                 child.rename(destination / child.name)
                         elif variant == "expired":
                             clock[0] += 421
+                        elif variant == "foreign-output":
+                            (destination / "foreign").write_bytes(b"unexpected build output member")
+                        elif variant == "immutable-parent-child":
+                            (destination.parent / "foreign-child").mkdir()
                     record = dict(probe=label, argv=argv, cwd=str(cwd), exit=code,
                                   error=None, elapsed_seconds=0.001)
                     for name, body in (("stdout", stdout), ("stderr", stderr)):
@@ -5582,11 +5601,13 @@ module.exports = {
                                        name + "_bytes": len(body), name + "_sha256": hashlib.sha256(body).hexdigest()})
                     return record, stdout, stderr
 
+                successful = variant in ("built", "output-link-count")
                 previous_umask = os.umask(0o077)
                 try:
                     with patch.dict(os.environ, environment, clear=True), patch.object(sys, "platform", "darwin"), \
-                            patch.dict(program, run_probe=probe), patch.object(program["time"], "monotonic", side_effect=lambda: clock[0]):
-                        if variant == "built":
+                            patch.dict(program, run_probe=probe, directory=directory), \
+                            patch.object(program["time"], "monotonic", side_effect=lambda: clock[0]):
+                        if successful:
                             program["provision"]()
                         else:
                             with self.assertRaises(ValueError):
@@ -5596,12 +5617,26 @@ module.exports = {
                 receipt = json.loads((runner / "vendor-proof/docker-runtime.json").read_bytes())
                 self.assertEqual(seen, labels[:count])
                 self.assertEqual([row["probe"] for row in receipt["commands"]], seen)
-                self.assertEqual(receipt["status"], "source-built" if variant == "built" else "failed")
+                self.assertEqual(receipt["status"], "source-built" if successful else "failed")
                 self.assertEqual(receipt["source"], program["PIN"])
                 self.assertIs(receipt["native_activation"], False)
                 self.assertIs(receipt["daemon_started"], False)
-                self.assertEqual("executable" in receipt, variant == "built")
-                self.assertEqual("source_unchanged" in receipt, variant == "built")
+                self.assertEqual("executable" in receipt, successful)
+                self.assertEqual("source_unchanged" in receipt, successful)
+                self.assertEqual(len(link_changes), 1 if variant == "output-link-count" else 0)
+                for before, after in link_changes:
+                    self.assertEqual(before[:5], after[:5])
+                    self.assertEqual(after[5], before[5] + 1)
+                if variant == "foreign-before":
+                    self.assertEqual((destination / "foreign").read_bytes(), b"original foreign output member")
+                    self.assertEqual({path.name for path in destination.iterdir()}, {"foreign"})
+                elif variant == "foreign-output":
+                    self.assertEqual((destination / "foreign").read_bytes(), b"unexpected build output member")
+                elif variant == "immutable-parent-child":
+                    current_parent = original_directory(destination.parent)
+                    self.assertEqual(current_parent[:5], original_parent[:5])
+                    self.assertNotEqual(current_parent[5], original_parent[5])
+                    self.assertTrue((destination.parent / "foreign-child").is_dir())
                 for row in receipt["commands"]:
                     for name in ("stdout", "stderr"):
                         body = (runner / "vendor-proof" / row[name + "_file"]).read_bytes()

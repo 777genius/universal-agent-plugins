@@ -2122,6 +2122,74 @@ def public_snapshot(outer, projects, pins):
     return image, proofs
 
 
+def public_bootstrap_detail(value):
+    """Validate only closed captured counts and a hash-only unexpected member."""
+    fields = {"scope", "predicate", "member_count", "backup_count", "unmeasured_count", "first_unmeasured"}
+    require(type(value) is dict and all(type(key) is str for key in value) and set(value) == fields,
+            "closed public bootstrap detail")
+    require(type(value["scope"]) is str and value["scope"] in {"a", "b"}
+            and type(value["predicate"]) is str, "public bootstrap detail scope")
+    count, backups, unknown = (value[key] for key in ("member_count", "backup_count", "unmeasured_count"))
+    require(all(type(number) is int for number in (count, backups, unknown))
+            and 0 < count < 2048 and 0 <= backups <= count and 0 <= unknown <= count - backups,
+            "public bootstrap detail counts")
+    predicate = ("both" if backups > 5 and unknown else "backup-count" if backups > 5
+                 else "unmeasured-member" if unknown else None)
+    require(predicate is not None and value["predicate"] == predicate, "public bootstrap detail predicate")
+    first = value["first_unmeasured"]
+    if unknown == 0:
+        require(first is None, "public bootstrap unexpected member without count")
+    else:
+        require(type(first) is dict and all(type(key) is str for key in first)
+                and set(first) == {"member_sha256", "type", "mode", "bytes", "sha256"},
+                "closed public bootstrap member")
+        digest = lambda text: type(text) is str and re.fullmatch(r"[a-f0-9]{64}", text) is not None
+        require(digest(first["member_sha256"]) and type(first["type"]) is str
+                and first["type"] in {"file", "directory"} and type(first["mode"]) is int
+                and 0 <= first["mode"] <= 0o7777, "public bootstrap member metadata")
+        if first["type"] == "directory":
+            require(first["bytes"] is None and first["sha256"] is None, "public bootstrap directory content")
+        else:
+            require(type(first["bytes"]) is int and 0 <= first["bytes"] <= LIMIT
+                    and digest(first["sha256"]), "public bootstrap file content metadata")
+    return value
+
+
+def capture_public_bootstrap(root, outer, rows, backups, allowed):
+    """Use the already captured ledger; neither names nor content leave this helper."""
+    try:
+        require(type(rows) is dict and 0 < len(rows) < 2048 and all(type(name) is str for name in rows)
+                and type(backups) is set and type(allowed) is set
+                and all(type(name) is str for name in backups | allowed)
+                and backups <= set(rows) and backups <= allowed, "public bootstrap captured ledger")
+        scope = {"public-a/.hermes/uap-session": "a", "public-b/.hermes/uap-session": "b"}.get(
+            root.relative_to(outer).as_posix())
+        unknown = set(rows) - allowed
+        first = None
+        if unknown:
+            name = min(unknown)
+            encoded = name.encode("utf-8", "surrogatepass")
+            require(0 < len(encoded) <= 16384 and "\0" not in name and ":" not in name and "\\" not in name
+                    and all(part not in ("", ".", "..") for part in name.split("/")),
+                    "public bootstrap relative member")
+            row = rows[name]
+            require(type(row) is dict and all(type(key) is str for key in row), "public bootstrap captured row")
+            kind = row.get("type")
+            require(type(kind) is str and kind in {"file", "directory"}, "public bootstrap captured kind")
+            keys = {"type", "mode", "device", "inode"} | ({"bytes", "sha256"} if kind == "file" else set())
+            require(set(row) == keys
+                    and all(type(row[key]) is int and 0 <= row[key] < 2**64 for key in ("device", "inode")),
+                    "public bootstrap captured metadata")
+            first = dict(member_sha256=hashlib.sha256(b"uap-hermes-public-bootstrap-member-v1\0" + encoded).hexdigest(),
+                         type=kind, mode=row["mode"], bytes=row.get("bytes"), sha256=row.get("sha256"))
+        predicate = ("both" if len(backups) > 5 and unknown else "backup-count" if len(backups) > 5
+                     else "unmeasured-member")
+        return public_bootstrap_detail(dict(scope=scope, predicate=predicate, member_count=len(rows),
+            backup_count=len(backups), unmeasured_count=len(unknown), first_unmeasured=first))
+    except BaseException:
+        return None  # Optional metadata never replaces the existing refusal.
+
+
 def public_profile(root, image, outer, config_hashes):
     prefix = root.relative_to(outer).as_posix()
     rows = {name[len(prefix) + 1:]: row for name, row in profile_tree(image, prefix).items() if name != prefix}
@@ -2132,7 +2200,13 @@ def public_profile(root, image, outer, config_hashes):
     directories = {"cron", "sessions", "logs", "logs/curator", "memories", "pairing", "hooks", "image_cache", "audio_cache", "skills", "backups", "backups/config"}
     files = {".uap-owner", "config.yaml", "config.yaml.agentplugins.lock", "SOUL.md", "logs/agent.log", "logs/errors.log"}
     backups = {name for name in rows if re.fullmatch(r"backups/config/config\.yaml\.good\.[0-9]{8}-[0-9]{6}", name)}
-    require(len(backups) <= 5 and set(rows) <= directories | files | backups, "public native bootstrap member is unmeasured")
+    try:
+        require(len(backups) <= 5 and set(rows) <= directories | files | backups, "public native bootstrap member is unmeasured")
+    except RuntimeError as error:
+        detail = capture_public_bootstrap(root, outer, rows, backups, directories | files | backups)
+        if detail is not None and type(error) is RuntimeError:
+            error.__dict__["_uap_public_bootstrap"] = detail
+        raise
     for name, row in rows.items():
         directory = name in directories
         mode = 0o755 if name in {"backups", "backups/config"} else 0o700 if directory else 0o644 if name.startswith("logs/") else 0o600
@@ -2693,6 +2767,8 @@ def admission_failure_readout(body, source_refusal, *, native_failure=None):
             observer = context["observer"]
             native["observer"] = ({name: observer[name] for name in ("phase", "reason", "exception_kind", "command", "caller")}
                                   if observer is not None else None)
+            if observer is not None and "public_bootstrap" in observer:
+                native["observer"]["public_bootstrap"] = observer["public_bootstrap"]
         result = dict(schema_version=1, kind="hermes-admission-failure-readout", measurement_only=True,
                       admission_qualified=False, native_qualified=False, runtime_distribution=proof["runtime_distribution"],
                       source_head=head, nonce_sha256=hashlib.sha256(nonce.encode("ascii")).hexdigest(),
@@ -2797,7 +2873,10 @@ def observer_source_codes():
 def observer_failure_document(body, nonce, source):
     require(type(body) is bytes and 0 < len(body) <= 2048, "observer diagnostic bound")
     value = census_document(body)
-    require(type(value) is dict and set(value) == set("schema_version measurement_only admission_qualified nonce source_head phase reason exception_kind command caller".split()), "closed observer diagnostic")
+    fields = set("schema_version measurement_only admission_qualified nonce source_head phase reason exception_kind command caller".split())
+    if type(value) is dict and "public_bootstrap" in value:
+        fields.add("public_bootstrap")
+    require(type(value) is dict and set(value) == fields, "closed observer diagnostic")
     require(type(value["schema_version"]) is int and value["schema_version"] == 1
             and value["measurement_only"] is True and value["admission_qualified"] is False
             and type(nonce) is str and re.fullmatch(r"[a-f0-9]{64}", nonce) is not None
@@ -2813,6 +2892,12 @@ def observer_failure_document(body, nonce, source):
                 and type(caller["line"]) is int, "observer caller shape")
         code = observer_source_codes().get((caller["function"], caller["function_line"]))
         require(code is not None and caller["line"] in {line for _, _, line in code.co_lines()}, "observer caller is not own source")
+    if "public_bootstrap" in value:
+        detail = public_bootstrap_detail(value["public_bootstrap"])
+        require(value["phase"] == "public" and value["exception_kind"] == "RuntimeError"
+                and caller is not None and code is public_profile.__code__
+                and type(value["command"]) is str and value["command"].startswith("public-")
+                and value["command"].endswith("-" + detail["scope"]), "public bootstrap observer binding")
     require(body == json.dumps(value, sort_keys=True, separators=(",", ":")).encode("ascii") + b"\n", "observer diagnostic is not one canonical record")
     return value
 
@@ -2838,8 +2923,20 @@ def emit_observer_failure(error, phase):
         value = dict(schema_version=1, measurement_only=True, admission_qualified=False, nonce=nonce, source_head=source,
                      phase=phase, reason="uncaught-observer-exception",
                      exception_kind=type(error).__name__ if type(error) in OBSERVER_ERRORS else "other", command=command, caller=caller)
-        body = json.dumps(value, sort_keys=True, separators=(",", ":")).encode("ascii") + b"\n"
-        observer_failure_document(body, nonce, source)
+        if type(error) is RuntimeError and "_uap_public_bootstrap" in error.__dict__:
+            try:
+                value["public_bootstrap"] = public_bootstrap_detail(error.__dict__["_uap_public_bootstrap"])
+            except BaseException:
+                pass
+        try:
+            body = json.dumps(value, sort_keys=True, separators=(",", ":")).encode("ascii") + b"\n"
+            observer_failure_document(body, nonce, source)
+        except BaseException:
+            if "public_bootstrap" not in value:
+                raise
+            value.pop("public_bootstrap")
+            body = json.dumps(value, sort_keys=True, separators=(",", ":")).encode("ascii") + b"\n"
+            observer_failure_document(body, nonce, source)
         sys.stdout.buffer.write(body)
         sys.stdout.buffer.flush()
     except BaseException:
