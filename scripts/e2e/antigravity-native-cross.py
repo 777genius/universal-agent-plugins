@@ -990,6 +990,18 @@ def admission_contracts():
 
         def test_missing_config_pair_keeps_exact_original_results_and_withholds_unsettled(self):
             faults = ("pass", "disabled", "negative", "version", "stderr", "cleanup", "hash", "late-member", "same-bytes", "late-pin", "inventory", "inventory-extra", "inventory-types", "between", "catalog", "fields")
+            # A different authority or timeout failure must not count as proof
+            # that a particular original native result was rejected.
+            native_refusals = {
+                "negative": "^Missing-config native result refused$",
+                "version": "^Missing-config pinned version differs$",
+                "stderr": "^Missing-config native result refused$",
+                "cleanup": "^Missing-config receipt identity/cleanup differs$",
+                "hash": "^Missing-config original stream differs$",
+                "inventory": "^Missing-config selected inventory identity differs$",
+                "inventory-extra": "^Missing-config selected inventory schema differs$",
+                "inventory-types": "^Missing-config selected inventory schema differs$",
+            }
             for fault in faults:
                 with self.subTest(fault=fault), self.missing_config_fixture() as (runtime, root, env, authority, proof):
                     capture, calls, read_tripwire = runtime[5], [], []
@@ -1035,8 +1047,12 @@ def admission_contracts():
                     try:
                         with patch(__name__ + ".bridge_exchange", side_effect=exchange), patch(__name__ + ".public_runtime_pin", side_effect=pin), patch.object(time, "monotonic", return_value=100.0), patch.object(time, "time_ns", return_value=1_000_000_000_000):
                             if fault in ("pass", "disabled", "catalog", "fields"): public_missing_config_discovery(runtime, root, env, authority, proof)
+                            elif fault in native_refusals:
+                                with self.assertRaisesRegex(AssertionError, native_refusals[fault]):
+                                    public_missing_config_discovery(runtime, root, env, authority, proof)
                             else:
-                                with self.assertRaises(AssertionError): public_missing_config_discovery(runtime, root, env, authority, proof)
+                                with self.assertRaises(AssertionError):
+                                    public_missing_config_discovery(runtime, root, env, authority, proof)
                     finally:
                         for blocker, observed in read_tripwire:
                             blocker.stop(); self.assertEqual(observed.call_count, 0)
