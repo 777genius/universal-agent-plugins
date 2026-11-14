@@ -42,6 +42,7 @@ export function pluginCommands(
   targets?: string | readonly string[],
   savedDependenciesReleased = SAVED_DEPENDENCIES_CLI_RELEASED,
   scope: InstallScope = 'user',
+  lifecycleTargets?: readonly string[],
 ) {
   return installCommands(
     plugin.trust_state === 'conformant_unreviewed'
@@ -51,6 +52,8 @@ export function pluginCommands(
     targets,
     savedDependenciesReleased,
     scope,
+    CLI_INVOCATION,
+    lifecycleTargets,
   );
 }
 
@@ -62,15 +65,24 @@ export function installCommands(
   savedDependenciesReleased = SAVED_DEPENDENCIES_CLI_RELEASED,
   scope: InstallScope = 'user',
   invocation = CLI_INVOCATION,
+  lifecycleTargets?: readonly string[],
 ) {
   if (scope !== 'user' && scope !== 'project') throw new Error('Unsupported installation scope');
   const values = (targets === undefined ? [] : Array.isArray(targets) ? targets : [targets])
     .map((target) => target.trim())
     .filter((target, index, all) => target && all.indexOf(target) === index);
   if (targets !== undefined && !values.length) throw new Error('At least one target is required');
+  // Guided setup can defer a target without creating its installation receipt.
+  // Narrow maintenance to real peers without changing the original add/save mode.
+  const lifecycleValues = lifecycleTargets?.map((target) => target.trim())
+    .filter((target, index, all) => target && all.indexOf(target) === index) ?? values;
+  if (lifecycleTargets !== undefined &&
+      (!lifecycleValues.length || lifecycleValues.some((target) => !values.includes(target))))
+    throw new Error('Lifecycle targets must be a nonempty subset of installation targets');
   // In an interactive terminal, a targetless project add prompts for the
   // compatible installed agents. Non-interactive CLI calls require --target.
   const targetFlag = values.length ? ` --target ${values.join(',')}` : '';
+  const lifecycleTargetFlag = lifecycleValues.length ? ` --target ${lifecycleValues.join(',')}` : '';
   const scopeFlag = scope === 'project' ? ' --scope project' : '';
   const mode = dependencySaveMode(source, values);
   const owned = savedDependenciesReleased && mode === 'saved';
@@ -80,9 +92,9 @@ export function installCommands(
     update:
       owned && isPinnedGitSource(source)
         ? `${invocation} add ${source}${targetFlag}${scopeFlag}`
-        : `${invocation} update ${name}${owned ? '' : targetFlag}${scopeFlag}`,
-    repair: `${invocation} repair ${name}${targetFlag}${scopeFlag}`,
+        : `${invocation} update ${name}${owned ? '' : lifecycleTargetFlag}${scopeFlag}`,
+    repair: `${invocation} repair ${name}${lifecycleTargetFlag}${scopeFlag}`,
     switch: `${invocation} switch ${name} --to <distribution-id>${scopeFlag}`,
-    remove: `${invocation} remove ${name}${owned ? '' : targetFlag}${scopeFlag}`,
+    remove: `${invocation} remove ${name}${owned ? '' : lifecycleTargetFlag}${scopeFlag}`,
   };
 }

@@ -76,7 +76,7 @@ test('download shows only installation methods, command and release', async ({ p
 });
 
 for (const client of clientLandingPages) {
-  test(`${client.name} copies a runnable example and uses canonical catalog links`, async ({
+  test(`${client.name} copies an installation example and uses canonical catalog links`, async ({
     page,
   }) => {
     await page.addInitScript(() => {
@@ -93,12 +93,15 @@ for (const client of clientLandingPages) {
     });
     await page.goto(`./agents/${client.slug}/`);
     await hydrated(page);
-    const source = ['grok', 'kimi', 'pi', 'hermes', 'antigravity'].includes(client.id)
+    const source = ['pi', 'hermes', 'antigravity'].includes(client.id)
       ? './my-plugin'
       : 'context7';
     const command = `npx -y universal-agent-plugins add ${source} --target ${client.id}`;
     const install = page.locator('.agent-page__install');
     await expect(install.locator('code').first()).toHaveText(command);
+    if (source === './my-plugin') {
+      await expect(install).toContainText('First create a compatible Agent Plugins package at ./my-plugin');
+    }
     await install.getByRole('button', { name: 'Copy command', exact: true }).click();
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(command);
     await expect(page.locator('.agent-page__directory-link')).toHaveAttribute(

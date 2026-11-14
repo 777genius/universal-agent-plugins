@@ -205,7 +205,7 @@ function toggle(value: string) {
           {{
             autoSelected
               ? (automaticHelp ?? t('registryUi.multi.automaticHelp'))
-              : t('registryUi.multi.manualHelp')
+              : t(autoOption ? 'registryUi.multi.manualHelpWithAuto' : 'registryUi.multi.manualHelp')
           }}
         </p>
         <PopoverArrow v-if="!fullWidth" class="app-multiselect__arrow" />

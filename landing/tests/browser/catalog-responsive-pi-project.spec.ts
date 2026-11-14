@@ -83,7 +83,8 @@ for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 950 });
     const errors = await offline(page);
     await projections(page, sentryFixture());
-    await navigate(page, '/', 'en', '?q=sentry');
+    await navigate(page, '/', 'en', '?q=sentry&client=pi');
+    await expect(page.locator('.catalog-agent-scope-note')).toContainText('Choose the scope in the plugin’s installation options.');
     const card = page.locator('.plugin-card[data-install-source="sentry"]');
     await card.locator('.plugin-card__install-toggle').click();
 

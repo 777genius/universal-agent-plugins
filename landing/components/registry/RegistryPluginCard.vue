@@ -34,6 +34,8 @@ const {
   scope,
   installExpanded,
   targetDistributions,
+  targetAvailability,
+  guidedWebSelected,
   pinnedPiSource,
   pinnedPiSelected,
   pinnedPiReleaseSource,
@@ -90,9 +92,9 @@ const canInstall = computed(
       (isDiscovered.value
         ? props.plugin.installable &&
           props.plugin.discovery?.availability !== 'unavailable' &&
-          (autoDetect.value || Boolean(selectedDistribution.value))
+          (autoDetect.value || (Boolean(selectedDistribution.value) || guidedWebSelected.value))
         : current.value &&
-          (autoDetect.value ? props.plugin.installable : Boolean(selectedDistribution.value)))),
+          (autoDetect.value ? props.plugin.installable : (Boolean(selectedDistribution.value) || guidedWebSelected.value)))),
 );
 const command = computed(() =>
   canInstall.value
@@ -126,7 +128,7 @@ const targetOptions = computed(() =>
     icon: asset(`client-icons/${client.icon}`),
     // Keep invalid explicitly saved selections visible for recovery, but an
     // auto-detected project must never make a stale Cursor placeholder selectable.
-    disabled: !targetDistributions.value.get(client.id) &&
+    disabled: !targetAvailability.value.get(client.id) &&
       !(client.id === 'pi' && pinnedPiSource.value && current.value) &&
       (autoDetect.value || !targets.value.includes(client.id)),
     description: (() => {
@@ -145,6 +147,8 @@ const targetOptions = computed(() =>
         return target
           ? t('registryUi.desktopGuide.description')
           : t('registryUi.card.notInstallableFromAnActiveRelease');
+      if (client.id === 'chatgptweb' && targetAvailability.value.get(client.id)?.kind === 'guided_web')
+        return t('registryUi.install.guidedChatgptSetup');
       if (client.id === 'chatgptweb')
         return target?.app_binding
           ? t('registryUi.card.verifiedConnectionFinishSetupInChatgpt')
@@ -450,6 +454,9 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
               {{ t('registryUi.install.scope.selectionUnavailable') }}
             </p>
           </div>
+          <p v-if="guidedWebSelected && canInstall" class="plugin-card__author" role="status">
+            {{ t('registryUi.install.guidedChatgptSetup') }}
+          </p>
           <ChatGPTDesktopGuide v-if="showDesktopGuide" />
         </div>
       </Transition>
