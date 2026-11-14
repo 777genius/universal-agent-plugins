@@ -29,6 +29,12 @@ type readonlyObjectFacts struct {
 	Mtime, Ctime         syscall.Timespec
 }
 
+// Linux stat.Nlink is uint32 on some architectures and uint64 on others.
+// A shared conversion retains the exact full-width link count on every host.
+func readonlyLinkCount[T ~uint32 | ~uint64](links T) uint64 {
+	return uint64(links)
+}
+
 type readonlyOriginalObject struct {
 	path      string
 	file      *os.File
@@ -49,7 +55,7 @@ func readonlyFacts(info os.FileInfo) (readonlyObjectFacts, error) {
 	if !ok || stat == nil || stat.Ino == 0 || stat.Nlink == 0 || stat.Size < 0 {
 		return readonlyObjectFacts{}, errors.New("readonly original metadata is unavailable")
 	}
-	return readonlyObjectFacts{Device: stat.Dev, Inode: stat.Ino, Links: uint64(stat.Nlink),
+	return readonlyObjectFacts{Device: stat.Dev, Inode: stat.Ino, Links: readonlyLinkCount(stat.Nlink),
 		Mode: stat.Mode, UID: stat.Uid, GID: stat.Gid, Size: stat.Size, Mtime: stat.Mtim, Ctime: stat.Ctim}, nil
 }
 
