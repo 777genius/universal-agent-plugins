@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import tarfile
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest import mock
 import zipfile
@@ -214,6 +215,59 @@ class SavedScopeTests(unittest.TestCase):
             observed, identity = audit.read_saved_record(path)
             self.assertEqual(observed, body)
             self.assertEqual(identity.st_size, len(body))
+
+    @staticmethod
+    def stat_with(value, **changes):
+        fields = {name: getattr(value, name) for name in dir(value) if name.startswith("st_")}
+        fields.update(changes)
+        return SimpleNamespace(**fields)
+
+    def test_saved_record_allows_distinct_path_and_descriptor_ctime(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "uap.toml"
+            body = b"schema_version = 1\r\n[dependencies]\r\n[targets]\r\n"
+            path.write_bytes(body)
+            path_ctime = path.lstat().st_ctime_ns
+            original_fstat = os.fstat
+
+            def stat_descriptor(fd):
+                return self.stat_with(original_fstat(fd), st_ctime_ns=path_ctime + 1)
+
+            with mock.patch.object(audit.os, "fstat", side_effect=stat_descriptor) as observed:
+                actual, identity = audit.read_saved_record(path)
+            self.assertEqual(actual, body)
+            self.assertEqual(identity.st_ctime_ns, path_ctime)
+            self.assertEqual(observed.call_count, 2)
+
+    def test_saved_record_refuses_descriptor_ctime_change_during_read(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "uap.toml"
+            path.write_bytes(b"unchanged bytes")
+            original_fstat = os.fstat
+            changes = iter((0, 1))
+
+            def stat_descriptor(fd):
+                value = original_fstat(fd)
+                return self.stat_with(value, st_ctime_ns=value.st_ctime_ns + next(changes))
+
+            with mock.patch.object(audit.os, "fstat", side_effect=stat_descriptor):
+                with self.assertRaisesRegex(ValueError, "changed during read"):
+                    audit.read_saved_record(path)
+
+    def test_saved_record_refuses_path_ctime_change_during_read(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "uap.toml"
+            path.write_bytes(b"unchanged bytes")
+            original_lstat = type(path).lstat
+            changes = iter((0, 1))
+
+            def stat_path(selected):
+                value = original_lstat(selected)
+                return self.stat_with(value, st_ctime_ns=value.st_ctime_ns + next(changes))
+
+            with mock.patch.object(type(path), "lstat", stat_path):
+                with self.assertRaisesRegex(ValueError, "changed during read"):
+                    audit.read_saved_record(path)
 
     def test_first_command_cannot_modify_the_other_scope_then_hide_it_at_remove(self):
         for path in ("home/.pi/agent/unwanted.json", "uap-data/uap.toml", "uap-data/state-v2.json"):
