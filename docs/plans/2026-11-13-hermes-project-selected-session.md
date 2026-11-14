@@ -407,3 +407,34 @@ SDK migration/Hermes/lifecycle cases, counting subtests. They establish the
 filesystem boundary and existing receipt compatibility, not native qualification.
 The combined single-Adapter source still requires its own shared gates and
 genuine native runs.
+
+## CLI session registration contract (2026-11-14)
+
+The full CLI leg on `68e39a34` found an outdated registry assertion:
+`TestSessionCapabilityIsOptIn` expected only Cline, although the single Hermes
+adapter now implements the existing `SessionPlanner` capability. This is a
+test expectation change, not an executable or scope admission. The explicit
+registry set is Cline and Hermes; every other client remains excluded. The
+existing public-command refusal table covers both clients' separate consent,
+User-scope refusal and arbitrary child arguments.
+
+Hermes runtime eligibility remains in `QualifyPlan`, repeated preflight,
+`PlanSession` and `VerifySession`: the selected bundle, Project root and parent
+receipts, exact owned source, native-source signals and bounded native readouts
+are still required. Existing source-installed refusal and zero-child source
+regressions remain mandatory. No production or qualification code changes.
+
+The original CLI leg remains failed: 114 top-level failures include this registry
+expectation, the actual Cold pre-spawn `/proc` prerequisite refusal, Codex
+environment refusals and Git/process errors. The log does not identify every
+low-level cause; these failures are not waived by this correction. Focused
+validation of the corrected test and existing Hermes gates is recorded below.
+
+On the isolated `12edfc938` base, focused uncached tests passed: two CLI tests
+with twelve refusal subcases (0.034 seconds), and three existing Hermes gates
+with twenty-one subcases (0.079 seconds), for five top-level / 38 total passes
+and no skips. The table checks the actual `unknown flag: --yes` refusal; that
+flag does not grant session consent. The Hermes gates cover source-installed
+Unsupported eligibility, changed or alternate source refusal before any child,
+and foreign/incomplete native observations. This is inert contract validation,
+not a genuine native session or Cold lifecycle qualification.
