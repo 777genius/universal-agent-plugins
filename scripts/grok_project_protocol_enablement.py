@@ -165,10 +165,13 @@ def preview_enablement(journey, installation):
         "mcp_witness_execution_observed": False,
         "internal_acp_zero_proved_by_this_capture": False,
     }
-    journey.cli("repair-enable-dry-run", "repair", installation["installation_id"],
-                extra=("--confirm-plugin-enable", "--dry-run", "--yes"))
-    unchanged_native_and_files()
-    require(read_owned(state_path, journey.root) == after, "repair preview changed saved ownership")
+    try:
+        journey.cli("repair-enable-dry-run", "repair", installation["installation_id"],
+                    extra=("--confirm-plugin-enable", "--dry-run", "--yes"))
+    finally:
+        # A native security refusal still needs full negative no-effect proof.
+        unchanged_native_and_files()
+        require(read_owned(state_path, journey.root) == after, "repair preview changed saved ownership")
     journey.evidence["enablement_previews"] = {
         "no_consent_config_unchanged": True,
         "no_consent_exact_directory_repair": proof,

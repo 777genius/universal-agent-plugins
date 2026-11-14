@@ -238,7 +238,7 @@ class ContractTests(unittest.TestCase):
         def check():
             for path in (config, foreign):
                 if path.read_bytes() != preserved[path]: raise ValueError("protected fixture changed")
-        for fault in (None, "no-commit", "package", "data", "source", "project-b", "config", "foreign-home", "witness", "dry-command", "dry-state", "dry-config"):
+        for fault in (None, "no-commit", "package", "data", "source", "project-b", "config", "foreign-home", "witness", "dry-command", "dry-command-package", "dry-command-state", "dry-command-witness", "dry-state", "dry-config"):
             for path, body in preserved.items(): path.write_bytes(body)
             for path in (event, self.data / "foreign"):
                 if path.exists(): path.unlink()
@@ -255,7 +255,10 @@ class ContractTests(unittest.TestCase):
                     if fault in changed: changed[fault].write_bytes(b"unreviewed effect")
                     return copy.deepcopy(response)
                 self.assertEqual((label, extra), ("repair-enable-dry-run", ("--confirm-plugin-enable", "--dry-run", "--yes")))
-                if fault == "dry-command": raise ValueError("command failed: repair-enable-dry-run")
+                if fault == "dry-command-package": (self.active / "probe").write_bytes(b"unreviewed effect")
+                if fault == "dry-command-state": self.state_path.write_bytes(before_bytes)
+                if fault == "dry-command-witness": event.write_bytes(b"unreviewed effect")
+                if fault.startswith("dry-command"): raise ValueError("command failed: repair-enable-dry-run")
                 if fault == "dry-state": self.state_path.write_text(json.dumps(before))
                 if fault == "dry-config": config.write_bytes(b"unreviewed dry-run effect")
                 return {"result": "success"}
@@ -270,7 +273,12 @@ class ContractTests(unittest.TestCase):
                     self.assertNotEqual(proof["before_state_sha256"], proof["after_state_sha256"])
                     self.assertNotIn("no_consent_config_and_state_unchanged", proof)
                 else:
-                    expected_error = "command failed: repair-enable-dry-run" if fault == "dry-command" else "."
+                    expected_error = {
+                        "dry-command": "command failed: repair-enable-dry-run",
+                        "dry-command-package": "repair changed native config, package, data, source or Project B",
+                        "dry-command-state": "repair preview changed saved ownership",
+                        "dry-command-witness": "repair preview executed the MCP witness",
+                    }.get(fault, ".")
                     with self.assertRaisesRegex(ValueError, expected_error): preview_enablement(journey, before["installations"][0])
                     self.assertEqual(journey.cli.call_count, 2 if fault.startswith("dry-") else 1)
                     self.assertNotIn("enablement_previews", evidence)
