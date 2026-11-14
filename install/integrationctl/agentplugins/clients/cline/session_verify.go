@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
@@ -20,7 +21,7 @@ import (
 // VerifySession checks the actual capability used, not an exact version pin.
 // This native command lists configuration only; it starts no MCP/model and
 // cannot turn the persisted Prepared receipt into Active.
-func (*Adapter) VerifySession(ctx context.Context, env clients.Env, plan clients.SessionPlan) error {
+func (*Adapter) VerifySession(ctx context.Context, env clients.Env, plan clients.SessionPlan) (resultErr error) {
 	// A context canceled before admission must never reach the native runner.
 	// Some runners may observe cancellation only after spawning a child.
 	if err := ctx.Err(); err != nil {
@@ -29,8 +30,18 @@ func (*Adapter) VerifySession(ctx context.Context, env clients.Env, plan clients
 	if env.Runner == nil {
 		return fmt.Errorf("cline native configuration observer unavailable")
 	}
+	// Retain the original file and parent directory while the native client
+	// inspects configuration. Matching bytes alone cannot detect replacement.
+	pin, err := pinSessionSource(plan.Environment["CLINE_MCP_SETTINGS_PATH"])
+	if err != nil {
+		return err
+	}
+	defer func() { resultErr = errors.Join(resultErr, pin.Close()) }()
 	before, err := sessionSourceSnapshot(env.NativeConfig, plan)
 	if err != nil {
+		return err
+	}
+	if err := pin.Revalidate(); err != nil {
 		return err
 	}
 	bounded, cancel := context.WithTimeout(ctx, 30*time.Second)
@@ -39,6 +50,9 @@ func (*Adapter) VerifySession(ctx context.Context, env clients.Env, plan clients
 	// never reach even a runner that launches before checking cancellation.
 	if err := bounded.Err(); err != nil {
 		return fmt.Errorf("cline selected-source observation canceled before native start: %w", err)
+	}
+	if err := pin.Revalidate(); err != nil {
+		return err
 	}
 	result, err := env.Runner.Run(bounded, legacyports.Command{
 		Argv: []string{plan.Executable, "--auto-approve", "false", "--cwd", plan.Directory, "config", "mcp", "--json"},
@@ -56,6 +70,9 @@ func (*Adapter) VerifySession(ctx context.Context, env clients.Env, plan clients
 	after, err := sessionSourceSnapshot(env.NativeConfig, plan)
 	if err != nil || after.Mode != before.Mode || !bytes.Equal(after.Body, before.Body) {
 		return fmt.Errorf("cline Project MCP source changed during native inspection: %w", errors.Join(err, nativeconfig.ErrConcurrentChange))
+	}
+	if err := pin.Revalidate(); err != nil {
+		return err
 	}
 	if err := verifySessionInventory(result.Stdout, plan.Environment["CLINE_MCP_SETTINGS_PATH"], plan.Servers); err != nil {
 		return err
@@ -85,6 +102,100 @@ func sessionSourceSnapshot(kernel nativeconfig.Kernel, plan clients.SessionPlan)
 		return nativeconfig.FileSnapshot{}, err
 	}
 	return file, nil
+}
+
+// sessionSourcePin is a read-only physical lease for the selected MCP source.
+// Both handles stay open until observation finishes. The native client still
+// reads the documented pathname; we cannot atomically fence noncooperating
+// writers between the final revalidation and their own open syscall.
+type sessionSourcePin struct {
+	parentPath string
+	filePath   string
+	resolvedParent string
+	parent, file *os.File
+	parentInfo, fileInfo os.FileInfo
+}
+
+func pinSessionSource(path string) (selected *sessionSourcePin, resultErr error) {
+	if path == "" || !filepath.IsAbs(path) || filepath.Clean(path) != path {
+		return nil, fmt.Errorf("cline selected MCP source path must be absolute and clean")
+	}
+	parentPath := filepath.Dir(path)
+	originalParent, err := os.Lstat(parentPath)
+	if err != nil || !originalParent.IsDir() || originalParent.Mode()&os.ModeSymlink != 0 {
+		return nil, fmt.Errorf("cline selected MCP parent is not an ordinary directory: %w", errors.Join(err, nativeconfig.ErrConcurrentChange))
+	}
+	resolved, err := filepath.EvalSymlinks(parentPath)
+	if err != nil {
+		return nil, err
+	}
+	parent, err := os.Open(parentPath)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if resultErr != nil {
+			resultErr = errors.Join(resultErr, parent.Close())
+		}
+	}()
+	parentInfo, err := parent.Stat()
+	if err != nil || !os.SameFile(originalParent, parentInfo) {
+		return nil, errors.Join(err, nativeconfig.ErrConcurrentChange)
+	}
+	originalFile, err := os.Lstat(path)
+	if err != nil || !originalFile.Mode().IsRegular() || originalFile.Size() > 1<<20 {
+		return nil, fmt.Errorf("cline selected MCP file is missing, aliased or oversized: %w", errors.Join(err, nativeconfig.ErrConcurrentChange))
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if resultErr != nil {
+			resultErr = errors.Join(resultErr, file.Close())
+		}
+	}()
+	fileInfo, err := file.Stat()
+	if err != nil || !os.SameFile(originalFile, fileInfo) || originalFile.Mode() != fileInfo.Mode() {
+		return nil, errors.Join(err, nativeconfig.ErrConcurrentChange)
+	}
+	selected = &sessionSourcePin{parentPath: parentPath, filePath: path, resolvedParent: resolved,
+		parent: parent, file: file, parentInfo: parentInfo, fileInfo: fileInfo}
+	if err := selected.Revalidate(); err != nil {
+		return nil, err
+	}
+	return selected, nil
+}
+
+func (pin *sessionSourcePin) Revalidate() error {
+	parent, err := os.Lstat(pin.parentPath)
+	if err != nil || !parent.IsDir() || !os.SameFile(parent, pin.parentInfo) || parent.Mode() != pin.parentInfo.Mode() {
+		return fmt.Errorf("cline selected MCP parent identity changed: %w", errors.Join(err, nativeconfig.ErrConcurrentChange))
+	}
+	parentHeld, err := pin.parent.Stat()
+	if err != nil || !os.SameFile(parentHeld, pin.parentInfo) || parentHeld.Mode() != pin.parentInfo.Mode() {
+		return fmt.Errorf("cline held MCP parent identity changed: %w", errors.Join(err, nativeconfig.ErrConcurrentChange))
+	}
+	resolved, err := filepath.EvalSymlinks(pin.parentPath)
+	if err != nil || resolved != pin.resolvedParent {
+		return fmt.Errorf("cline selected MCP ancestry changed: %w", errors.Join(err, nativeconfig.ErrConcurrentChange))
+	}
+	named, err := os.Lstat(pin.filePath)
+	if err != nil || !named.Mode().IsRegular() || !os.SameFile(named, pin.fileInfo) ||
+		named.Mode() != pin.fileInfo.Mode() || named.Size() != pin.fileInfo.Size() ||
+		!named.ModTime().Equal(pin.fileInfo.ModTime()) {
+		return fmt.Errorf("cline selected MCP file identity changed: %w", errors.Join(err, nativeconfig.ErrConcurrentChange))
+	}
+	held, err := pin.file.Stat()
+	if err != nil || !os.SameFile(held, pin.fileInfo) || held.Mode() != pin.fileInfo.Mode() ||
+		held.Size() != pin.fileInfo.Size() || !held.ModTime().Equal(pin.fileInfo.ModTime()) {
+		return fmt.Errorf("cline held MCP file identity changed: %w", errors.Join(err, nativeconfig.ErrConcurrentChange))
+	}
+	return nil
+}
+
+func (pin *sessionSourcePin) Close() error {
+	return errors.Join(pin.file.Close(), pin.parent.Close())
 }
 
 func verifySessionInventory(body []byte, path string, names []string) error {

@@ -137,8 +137,13 @@ func (file cancelNativeSourceOnRead) ReadNoFollow(string) ([]byte, os.FileMode, 
 func TestSessionNativeInventoryCancellationDuringSourceRead(t *testing.T) {
 	project := t.TempDir()
 	path := filepath.Join(project, "mcp.json")
+	// The physical source must exist even when a test-only file IO cancels
+	// during its later read. Synthetic in-memory bytes are not a file lease.
 	owned := []byte(fmt.Sprintf(`{"mcpServers":{"owned":{"transport":{"type":"stdio","command":%q,"cwd":%q},"autoApprove":[]}}}`,
 		filepath.Join(project, "owned-probe.exe"), project))
+	if err := os.WriteFile(path, owned, 0o600); err != nil {
+		t.Fatal(err)
+	}
 	plan := clients.SessionPlan{Executable: "/native/cline", Directory: project, Servers: []string{"owned"},
 		ConfigDigest: fmt.Sprintf("%x", sha256.Sum256(owned)),
 		Environment: map[string]string{"CLINE_MCP_SETTINGS_PATH": path, "CLINE_NO_AUTO_UPDATE": "1"}}
@@ -206,6 +211,58 @@ func TestSessionNativeInventoryRefusesSelectedSourceChanges(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A byte-for-byte replacement with unchanged permissions is still a foreign
+// file incarnation. This test never authorizes or modifies that replacement.
+func TestSessionNativeInventoryRefusesSameBytesFileReplacement(t *testing.T) {
+	req, path := ownedSessionFixture(t)
+	kernel := nativeconfig.New()
+	plan, err := New().PlanSession(t.Context(), clients.Env{NativeConfig: kernel}, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	original, err := os.Lstat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows := []byte(fmt.Sprintf(`[{"name":"owned","path":%q,"transportType":"stdio","disabled":false}]`, path))
+	var replacementErr error
+	runner := &sessionObservationRunner{result: legacyports.CommandResult{Stdout: rows, CleanupComplete: true}}
+	runner.onRun = func() {
+		replacement := path + ".foreign"
+		if err := os.WriteFile(replacement, body, original.Mode().Perm()); err != nil {
+			t.Fatal(err)
+		}
+		replacementErr = os.Rename(replacement, path)
+	}
+	err = New().VerifySession(t.Context(), clients.Env{Runner: runner, NativeConfig: kernel}, plan)
+	if replacementErr != nil {
+		// Some Windows filesystems deny replacing an open file by design. A
+		// refused rename supplies no replacement-path regression evidence.
+		t.Skipf("filesystem refused replacement of the held native file: %v", replacementErr)
+	}
+	replaced, err := os.Lstat(path)
+	if err != nil || os.SameFile(original, replaced) || original.Mode() != replaced.Mode() ||
+		!bytes.Equal(body, mustSessionBytes(t, path)) {
+		t.Fatal("same-byte replacement was not independently established", err)
+	}
+	if !errors.Is(err, nativeconfig.ErrConcurrentChange) {
+		t.Fatalf("same-byte foreign file was accepted by native inventory: %v", err)
+	}
+}
+
+func mustSessionBytes(t *testing.T, path string) []byte {
+	t.Helper()
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return body
 }
 
 func TestSessionNativeInventoryCancellationDuringFinalSourceRead(t *testing.T) {
