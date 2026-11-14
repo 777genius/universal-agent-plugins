@@ -56,6 +56,21 @@ func TestProjectSessionWindowsOwnerDecoderStaysWithinReturnedBuffer(t *testing.T
 			if valid && !owner.IsValid() {
 				t.Fatal("decoder returned an invalid owner")
 			}
+			if valid {
+				var authority [6]byte
+				copy(authority[:], sid[2:8])
+				assertExact := func() {
+					t.Helper()
+					if !owner.IsValid() || owner.Len() != 16 || owner.IdentifierAuthority().Value != authority ||
+						owner.SubAuthorityCount() != 2 || owner.SubAuthority(0) != 32 || owner.SubAuthority(1) != 544 {
+						t.Fatal("decoder changed the exact binary owner")
+					}
+				}
+				assertExact()
+				sid[0], sid[7] = 2, 0
+				binary.LittleEndian.PutUint32(sid[8:], 99)
+				assertExact()
+			}
 		})
 	}
 }

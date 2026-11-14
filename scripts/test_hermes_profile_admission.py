@@ -2194,6 +2194,116 @@ class SourceRuntimeContracts(unittest.TestCase):
         import time
         return CASE["payload_snapshot"](outer, CASE["directory_identity"](outer), time.monotonic() + 10, source=policy)
 
+    def uv_cache_fixture(self, temporary):
+        runner, outer, _, original, _, policy = self.fixture(temporary)
+        baseline = self.capture(outer, policy)
+        selected = outer / policy["projects"][0]
+        cache = selected / "cache/uv"
+        member = cache / "archive-v0/owned/watchfiles/_rust_notify.abi3.so"
+        member.parent.mkdir(parents=True)
+        member.write_bytes(b"x" * 1160728)
+        alias = selected / "installs/generation/venv/watchfiles/_rust_notify.abi3.so"
+        alias.parent.mkdir(parents=True)
+        os.link(member, alias)
+        self.assertEqual(member.stat().st_nlink, 2)
+        self.assertEqual(member.stat().st_ino, alias.stat().st_ino)
+        return runner, outer, original, policy, cache, member, alias, baseline
+
+    def test_source_uv_cache_role_keeps_complete_capture_and_content_digest(self):
+        import hashlib
+        import time
+        with tempfile.TemporaryDirectory() as temporary:
+            _, outer, _, policy, cache, member, alias, baseline = self.uv_cache_fixture(temporary)
+            first = self.capture(outer, policy)
+            prefix = cache.relative_to(outer).as_posix()
+            records, rows = first["_records"], first["ledger"]
+            self.assertEqual(rows[prefix]["type"], "runtime-tree")
+            self.assertEqual(rows[prefix]["entries"], 5)
+            self.assertEqual(rows[prefix]["logical_regular_bytes"], 1160728)
+            self.assertEqual(rows[prefix]["links"], 0)
+            self.assertEqual(rows[cache.parent.relative_to(outer).as_posix()], records[cache.parent.relative_to(outer).as_posix()])
+            for path in (member, alias):
+                row = records[path.relative_to(outer).as_posix()]
+                self.assertEqual(row["identity"][3:5], (2, 1160728))
+                self.assertEqual(row["sha256"], hashlib.sha256(b"x" * 1160728).hexdigest())
+            self.assertEqual(sum(row["entries"] if row["type"] == "runtime-tree" else 1 for row in rows.values()), first["entries"])
+            self.assertEqual(first["logical_regular_bytes"], sum(row["identity"][4] for row in records.values() if row["type"] == "file"))
+            CASE["profile_effect_boundary"]("config-path-a", "a", baseline["ledger"], baseline["ledger"], rows,
+                                             "user", policy["projects"][0], source_capture=True)
+            sibling = policy["projects"][1]
+            self.assertEqual({name: row for name, row in rows.items() if CASE["below"](name, sibling)},
+                             {name: row for name, row in baseline["ledger"].items() if CASE["below"](name, sibling)})
+            for name in policy["protected"]: self.assertEqual(rows[name], records[name])
+            with mock.patch.object(os, "read", side_effect=AssertionError("ledger reread")), \
+                    mock.patch.object(os, "open", side_effect=AssertionError("ledger reopen")), \
+                    mock.patch.object(os, "scandir", side_effect=AssertionError("ledger rewalk")), \
+                    mock.patch.object(Path, "lstat", side_effect=AssertionError("ledger restat")):
+                self.assertEqual(CASE["source_ledger"](records, policy, time.monotonic() + 5), rows)
+            member.write_bytes(b"y" * 1160728)
+            second = self.capture(outer, policy)
+            self.assertNotEqual(second["ledger"][prefix]["sha256"], rows[prefix]["sha256"])
+            self.assertNotEqual(second["ledger"][policy["projects"][0] + "/installs"]["sha256"], rows[policy["projects"][0] + "/installs"]["sha256"])
+            self.assertEqual(second["ledger"]["user"], rows["user"])
+            for path in (member, alias):
+                self.assertEqual(second["_records"][path.relative_to(outer).as_posix()]["sha256"], hashlib.sha256(b"y" * 1160728).hexdigest())
+
+    def test_source_uv_cache_role_keeps_ordinary_siblings_and_protected_rows(self):
+        for relative in ("cache/other/large", "cache/uv-other/large", "ordinary/large", "cache/uv/protected"):
+            with self.subTest(relative=relative), tempfile.TemporaryDirectory() as temporary:
+                _, outer, _, _, _, policy = self.fixture(temporary)
+                member = outer / policy["projects"][0] / relative
+                member.parent.mkdir(parents=True)
+                member.write_bytes(b"x" * 1160728)
+                name = member.relative_to(outer).as_posix()
+                if relative == "cache/uv/protected": policy["protected"] = (*policy["protected"], name)
+                with self.assertRaisesRegex(RuntimeError, "^source ordinary profile bound$") as refused:
+                    self.capture(outer, policy)
+                observed = refused.exception.source_payload_refusal
+                self.assertEqual(observed["member"], name)
+                self.assertEqual(observed["profile_bound"]["predicate"], "file-bytes")
+                self.assertEqual(observed["metadata"]["bytes"], 1160728)
+                member.write_bytes(b"ordinary retained bytes")
+                captured = self.capture(outer, policy)
+                self.assertEqual(captured["ledger"][name], captured["_records"][name])
+
+    def test_source_uv_cache_links_keep_all_aliases_and_profile_boundaries(self):
+        for other in ("outside", "user-auth", "project-b"):
+            with self.subTest(other=other), tempfile.TemporaryDirectory() as temporary:
+                runner, outer, original, policy, _, member, _, _ = self.uv_cache_fixture(temporary)
+                if other == "user-auth":
+                    member.unlink()
+                    os.link(original / "auth.json", member)
+                else:
+                    target = runner / "outside" if other == "outside" else outer / policy["projects"][1] / "linked"
+                    os.link(member, target)
+                with mock.patch.object(os, "read", side_effect=AssertionError("bytes before cache alias authority")), \
+                        self.assertRaisesRegex(RuntimeError, "hardlink crosses|hardlink escapes"):
+                    self.capture(outer, policy)
+
+    def test_source_uv_cache_capture_keeps_original_roots_and_membership(self):
+        import time
+        for change in ("root", "cache-parent", "added", "removed"):
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as temporary:
+                runner, outer, _, policy, cache, member, _, _ = self.uv_cache_fixture(temporary)
+                expected = CASE["directory_identity"](outer)
+                original = CASE["payload_hash_files"]
+                changed = []
+                def move_directory(path):
+                    moved = runner / "moved"
+                    path.rename(moved); path.mkdir()
+                    for child in moved.iterdir(): child.rename(path / child.name)
+                def mutate(*args, **kwargs):
+                    changed.append(change)
+                    if change == "cache-parent": move_directory(cache)
+                    elif change == "added": (cache / "unobserved").write_bytes(b"new member")
+                    elif change == "removed": member.unlink()
+                    return original(*args, **kwargs)
+                if change == "root": move_directory(outer)
+                with mock.patch.dict(CASE["payload_snapshot"].__globals__, {"payload_hash_files": mutate}), \
+                        self.assertRaisesRegex(RuntimeError, "payload|inventory|directory"):
+                    CASE["payload_snapshot"](outer, expected, time.monotonic() + 10, source=policy)
+                self.assertEqual(changed, [] if change == "root" else [change])
+
     def test_source_empty_file_keeps_readable_handle_and_both_stat_fences(self):
         import hashlib
         with tempfile.TemporaryDirectory() as temporary:

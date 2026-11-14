@@ -791,3 +791,40 @@ catalog and removed only its exact private tree with no Go or native execution.
 The final source must still pass the genuine Global workflow and original
 artifact review; none of these dependency checks attests authentication, model
 or MCP execution.
+
+### Original 440 build completion and authored MCP schema correction
+
+The original run `43574321325`, job `132402034668`, artifact `14108261058`
+now reaches the public Global lifecycle. Its 50,168-byte outer archive has
+SHA-256 `b9205358e7c26593aae7515f9b362687ee12167822c239d3bf2922dfd429648c`.
+Independent replay joins the physical outer and 41-member inner ZIPs, CRCs,
+40 main streams, four embedded build streams, source
+`440f0666dad9255c1667c86f95654f7d960ffeb6` and the 234-entry native runtime catalog.
+The private Go 1.26.11 acquisition and both build commands succeed. The 20
+retained main commands comprise six source/Git checks, thirteen ordinary native
+metadata commands and one actual public `uap-add`; all return exit zero.
+
+The first retained preservation refusal is `Global unknown UAP state member`
+after that add. No post-add state or complete filesystem image is retained, so
+this record does not name an offending state member or infer that the schema
+defect below explains this separate refusal. Full lifecycle completion and
+native runtime qualification remain false.
+
+The original add response also contains `mcp_schema_missing` and only the Skill
+component. The authored source omitted the required versioned `$schema` from
+its `mcp.json`. The fixture now declares the same supported 1.0.0 MCP schema
+already required by its installed-package oracle. Both original server
+declarations and the Skill remain unchanged; no membership, ownership,
+receipt, cleanup, source or qualification check is relaxed.
+
+A local check loads the actual before/after `author_source` output through the
+real Go `loader.Loader` and embedded `specregistry`. The original reproduces
+`mcp_schema_missing`, disabled MCP and zero MCP servers. The correction loads
+both exact `uap_global_http` and `uap_global_stdio` servers, the same
+`uap-global-marker` Skill and no diagnostics. No native client, provider or
+model is executed by that check. Its output SHA-256 is
+`a7c59668c683eb332ec81aa0ffe6e32a3353d7485482e0de03315a4c6c047f09`.
+All 98 existing Devin Python contracts pass in 1.699 seconds, with log SHA-256
+`8cca6979df2b0ae1789f3e4e5b4dcda38afdf93f590c4716e7046946ef3f9e03`.
+The next genuine current-source Global capture must still establish every
+state, effect and native inventory join in the unchanged completion predicate.

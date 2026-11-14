@@ -25,6 +25,14 @@ SESSION_CONFIG, SESSION_CONFIG_LIMIT = 'home/.grok/config.toml', 16 << 10
 SETUP_PHASES = frozenset(('auth', 'resolve_workspace', 'folder_trust', 'plugin_registry', 'mcp_merge',
     'local_workspace', 'persistence_init', 'spawn_session_actor', 'agent_build', 'workspace_handshake', 'model_switch',
     'model_not_allowed', 'git_discovery', 'finalize_response', 'tool_overrides', 'response_ready'))
+# Literal catalogs from original session artifact 14100597648, frame 13. Metadata only.
+SESSION_COMMAND_NAMES = ('compact', 'always-approve', 'context', 'plugins', 'reload-plugins',
+    'session-info', 'feedback', 'deep-research', 'workflow', 'goal', 'loop')
+SESSION_TOOL_NAMES = ('run_terminal_command', 'read_file', 'search_replace', 'list_dir', 'grep',
+    'kill_command_or_subagent', 'todo_write', 'get_command_or_subagent_output', 'spawn_subagent',
+    'scheduler_create', 'scheduler_delete', 'scheduler_list', 'monitor', 'search_tool', 'use_tool',
+    'workflow', 'enter_plan_mode', 'exit_plan_mode', 'ask_user_question', 'send_feedback', 'web_search',
+    'image_gen', 'image_edit', 'image_to_video', 'reference_to_video', 'write')
 
 
 def session_port(nonce):
@@ -118,6 +126,48 @@ class SessionProvider:
         self.facts['settled'] = True
 
 
+def session_metadata_text(value, maximum):
+    return type(value) is str and 0 < len(value) <= maximum and value.isascii() and all(32 <= ord(x) <= 126 for x in value)
+
+
+def session_available_command(value, name):
+    row = closed(value, 'name description input _meta' if name == 'deep-research' else 'name description input')
+    require(row['name'] == name and session_metadata_text(row['description'], 256), 'available-command')
+    if row['input'] is not None:
+        require(session_metadata_text(closed(row['input'], 'hint')['hint'], 128), 'available-command-input')
+    if name == 'deep-research':
+        meta = closed(row['_meta'], 'workflowPath workflowSource')
+        require(meta['workflowSource'] == 'builtin' and session_metadata_text(meta['workflowPath'], 1024),
+                'available-command-meta')  # Retained text; never a path to open or a command to execute.
+
+
+def session_available_commands(value, state, req):
+    require(req.get('mode') == SESSION_MODE and state['initialize'] is not None and state['plugins'] is None
+            and not any(x['method'] == 'session/update' for x in state['notifications']), 'available-command-order')
+    params = closed(value, 'sessionId update _meta')
+    sid = params['sessionId']
+    require(session_metadata_text(sid, 256), 'session-id')
+    update = closed(params['update'], 'sessionUpdate availableCommands _meta')
+    require(update['sessionUpdate'] == 'available_commands_update', 'available-command-kind')
+    tools = closed(update['_meta'], 'tools')['tools']
+    require(type(tools) is list and tools == list(SESSION_TOOL_NAMES), 'available-command-tools')
+    commands = update['availableCommands']
+    require(type(commands) is list and len(commands) == len(SESSION_COMMAND_NAMES), 'available-command-count')
+    for row, name in zip(commands, SESSION_COMMAND_NAMES):
+        session_available_command(row, name)
+    meta = closed(params['_meta'], 'agentTimestampMs eventId requestTrimmedTokens totalTokens updateParams updateType')
+    require(type(meta['agentTimestampMs']) is int and 0 < meta['agentTimestampMs'] < 1 << 63
+            and type(meta['totalTokens']) is int and 0 <= meta['totalTokens'] <= 1 << 20
+            and type(meta['requestTrimmedTokens']) is int and meta['requestTrimmedTokens'] == 0
+            and meta['eventId'] == sid + '-0' and meta['updateType'] == 'AvailableCommandsUpdate',
+            'available-command-meta')
+    count = closed(meta['updateParams'], 'commandsCount')['commandsCount']
+    require(type(count) is int and count == len(SESSION_COMMAND_NAMES), 'available-command-count')
+    for item in state['notifications']:
+        if item['method'] in ('_x.ai/session/setup', '_x.ai/mcp_initialized'):
+            require(item['params']['sessionId'] in (None, sid), 'session-notification-identity')
+
+
 def session_rpc_frame(value, state, req, send):
     require(type(value) is dict and value.get('jsonrpc') == '2.0', 'rpc-envelope')
     if 'method' in value:
@@ -139,6 +189,8 @@ def session_rpc_frame(value, state, req, send):
             for item in state['notifications']:
                 if item['method'] == '_x.ai/session/setup':
                     require(item['params']['sessionId'] in (None, sid), 'session-notification-identity')
+        elif value['method'] == 'session/update':
+            session_available_commands(value['params'], state, req)
         else:
             require(value['method'] == '_x.ai/session/setup', 'notification-refused')
             params = closed(value['params'], 'method phase sessionId')
@@ -148,11 +200,11 @@ def session_rpc_frame(value, state, req, send):
             require(params['sessionId'] is None or type(params['sessionId']) is str
                     and 0 < len(params['sessionId']) <= 256 and params['sessionId'].isascii()
                     and all(32 <= ord(x) <= 126 for x in params['sessionId']), 'session-id')
-        if value['method'] in ('_x.ai/session/setup', '_x.ai/mcp_initialized'):
+        if value['method'] in ('_x.ai/session/setup', '_x.ai/mcp_initialized', 'session/update'):
             if state['session'] is not None:
                 require(value['params']['sessionId'] in (None, state['session']['result']['sessionId']), 'session-notification-identity')
             for item in state['notifications']:
-                if item['method'] == '_x.ai/mcp_initialized':
+                if item['method'] in ('_x.ai/mcp_initialized', 'session/update'):
                     require(value['params']['sessionId'] in (None, item['params']['sessionId']), 'session-notification-identity')
         state['notifications'].append(value)
         return False
@@ -171,7 +223,7 @@ def session_rpc_frame(value, state, req, send):
         require(type(sid) is str and 0 < len(sid) <= 256 and sid.isascii()
                 and all(32 <= ord(x) <= 126 for x in sid), 'session-id')
         for item in state['notifications']:
-            if item['method'] in ('_x.ai/session/setup', '_x.ai/mcp_initialized'):
+            if item['method'] in ('_x.ai/session/setup', '_x.ai/mcp_initialized', 'session/update'):
                 require(item['params']['sessionId'] in (None, sid), 'session-notification-identity')
         if '_meta' in result:
             require(type(result['_meta']) is dict, 'session-meta')

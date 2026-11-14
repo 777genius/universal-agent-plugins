@@ -853,7 +853,7 @@ def source_ledger(records, source, deadline):
     never independently reread or silently excluded from the authority ledger.
     """
     partitions = [source[key] for key in ("user", "source", "tools", "installs")]
-    partitions += [root + suffix for root in source["projects"] for suffix in ("/tools", "/installs")]
+    partitions += [root + suffix for root in source["projects"] for suffix in ("/tools", "/installs", "/cache/uv")]
     groups, ledger, ordinary = {}, {}, 0
     for name, record in sorted(records.items()):
         require(time.monotonic() < deadline, "payload scan deadline")

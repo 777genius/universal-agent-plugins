@@ -207,6 +207,26 @@ class ContractTests(unittest.TestCase):
 
     def test_preview_preserves_files_and_uses_only_verified_post_repair_state(self):
         before, after, response, window = self.ordinary_repair_fixture()
+        before_bytes = json.dumps(before).encode()
+        after_bytes = (json.dumps(after, indent=2) + "\n").encode()
+        selected = after["installations"][0]
+        expected_observation = {
+            "partial": True,
+            "no_consent_config_unchanged": True,
+            "no_consent_exact_directory_repair": {
+                "operation_id": selected["operation_group_id"],
+                "receipt": selected["clients"]["binding"]["receipts"][-1],
+                "updated_at": selected["updated_at"],
+                "started_at_unix_ns": window[0], "finished_at_unix_ns": window[1]},
+            "post_repair_state_base64": base64.b64encode(after_bytes).decode(),
+            "post_repair_state_bytes": len(after_bytes),
+            "before_state_sha256": hashlib.sha256(before_bytes).hexdigest(),
+            "after_state_sha256": hashlib.sha256(after_bytes).hexdigest(),
+            "mcp_witness_execution_observed": False,
+            "internal_acp_zero_proved_by_this_capture": False,
+        }
+        qualification = {key: False for key in ("passed", "model_invoked", "vendor_authentication_used",
+            "grok_tools_call_qualified", "unmanaged_project_owned_enablement_qualified")}
         home, source, other = (self.root / name for name in ("preview-home", "preview-source", "preview-other"))
         for path in (home / ".grok", source, other): path.mkdir(parents=True)
         config, foreign, event = home / ".grok/config.toml", home / "foreign", self.root / "preview-events"
@@ -218,23 +238,24 @@ class ContractTests(unittest.TestCase):
         def check():
             for path in (config, foreign):
                 if path.read_bytes() != preserved[path]: raise ValueError("protected fixture changed")
-        for fault in (None, "no-commit", "package", "data", "source", "project-b", "config", "foreign-home", "witness", "dry-state", "dry-config"):
+        for fault in (None, "no-commit", "package", "data", "source", "project-b", "config", "foreign-home", "witness", "dry-command", "dry-state", "dry-config"):
             for path, body in preserved.items(): path.write_bytes(body)
             for path in (event, self.data / "foreign"):
                 if path.exists(): path.unlink()
-            self.state_path.write_text(json.dumps(before))
-            evidence = {}
+            self.state_path.write_bytes(before_bytes)
+            evidence = dict(qualification)
             journey = SimpleNamespace(root=self.root, a=self.root, b=other, home=home, source=source, log=event, evidence=evidence, check=check)
             def command(label, verb, selector, *, extra=()):
                 self.assertEqual((verb, selector), ("repair", "install"))
                 if label == "repair-no-enable-consent":
                     self.assertEqual(extra, ("--yes",))
-                    self.state_path.write_text(json.dumps(before if fault == "no-commit" else after))
+                    self.state_path.write_bytes(before_bytes if fault == "no-commit" else after_bytes)
                     changed = {"package": self.active / "probe", "data": self.data / "foreign", "source": source / "source",
                                "project-b": other / "foreign", "config": config, "foreign-home": foreign, "witness": event}
                     if fault in changed: changed[fault].write_bytes(b"unreviewed effect")
                     return copy.deepcopy(response)
                 self.assertEqual((label, extra), ("repair-enable-dry-run", ("--confirm-plugin-enable", "--dry-run", "--yes")))
+                if fault == "dry-command": raise ValueError("command failed: repair-enable-dry-run")
                 if fault == "dry-state": self.state_path.write_text(json.dumps(before))
                 if fault == "dry-config": config.write_bytes(b"unreviewed dry-run effect")
                 return {"result": "success"}
@@ -249,9 +270,21 @@ class ContractTests(unittest.TestCase):
                     self.assertNotEqual(proof["before_state_sha256"], proof["after_state_sha256"])
                     self.assertNotIn("no_consent_config_and_state_unchanged", proof)
                 else:
-                    with self.assertRaises(ValueError): preview_enablement(journey, before["installations"][0])
+                    expected_error = "command failed: repair-enable-dry-run" if fault == "dry-command" else "."
+                    with self.assertRaisesRegex(ValueError, expected_error): preview_enablement(journey, before["installations"][0])
                     self.assertEqual(journey.cli.call_count, 2 if fault.startswith("dry-") else 1)
                     self.assertNotIn("enablement_previews", evidence)
+                for key in qualification:
+                    self.assertIs(evidence[key], False)
+                if fault is None or fault.startswith("dry-"):
+                    self.assertIn("ordinary_repair_observation", evidence)
+                    partial = evidence["ordinary_repair_observation"]
+                    self.assertEqual(partial, expected_observation)
+                    self.assertIs(partial["partial"], True)
+                    self.assertEqual(base64.b64decode(partial["post_repair_state_base64"], validate=True), after_bytes)
+                    self.assertNotIn("dry_run_config_and_state_unchanged", partial)
+                else:
+                    self.assertNotIn("ordinary_repair_observation", evidence)
 
     def test_native_config_transition_accepts_only_exact_expected_foreign_bytes(self):
         for extra in (b"", b"foreign drift"):
@@ -860,6 +893,93 @@ class DelegatedPublicationTests(unittest.TestCase):
                 self.admit({**value, "commands": [{**row, field: changed}]})
         with self.assertRaises(ValueError):
             self.admit({**value, "commands": [row, row]})
+
+    def ordinary_prefix_fixture(self, case="grok-noauth"):
+        fixture = ContractTests()
+        fixture.setUp()
+        self.addCleanup(fixture.doCleanups)
+        before, after, response, window = fixture.ordinary_repair_fixture()
+        home, source, other = (fixture.root / name for name in ("home", "source", "other"))
+        for path in (home / ".grok", source, other):
+            path.mkdir(parents=True)
+        (home / ".grok/config.toml").write_bytes(b'[plugins]\nenabled = ["foreign"]\n')
+        fixture.state_path.write_bytes(json.dumps(before).encode())
+        value = dict(self.evidence(case), prepared_owned_state=before)
+        def command(label, verb, selector, *, extra=()):
+            success = label == "repair-no-enable-consent"
+            row = dict(probe=label, argv=["/inert/agentplugins", verb, selector, "--scope", "project",
+                "--project-root", str(fixture.root), "--target", "grok", "--format", "json", *extra],
+                cwd=str(fixture.root), error=None, exit=0 if success else 1, elapsed_seconds=0.01)
+            for name, raw in (("stdout", json.dumps(response).encode() if success else b""),
+                              ("stderr", b"" if success else b"inert unsupported enablement\n")):
+                row.update({name: raw.decode(), name + "_base64": base64.b64encode(raw).decode(),
+                    name + "_bytes": len(raw), name + "_sha256": hashlib.sha256(raw).hexdigest(),
+                    name + "_file": label + "." + name + ".log"})
+            value["commands"].append(row)
+            if success:
+                fixture.state_path.write_bytes(json.dumps(after, indent=2).encode() + b"\n")
+                return response
+            raise ValueError("inert dry-run refusal")
+        journey = SimpleNamespace(root=fixture.root, a=fixture.root, b=other, home=home, source=source,
+            log=fixture.root / "events", evidence=value, check=lambda: None, cli=command)
+        with mock.patch("grok_project_protocol_enablement.time.time_ns", side_effect=window):
+            with self.assertRaisesRegex(ValueError, "inert dry-run refusal"):
+                preview_enablement(journey, before["installations"][0])
+        self.assertNotIn("enablement_previews", value)
+        return value
+
+    def test_service_retains_actual_partial_prefix_without_promoting_the_failed_journey(self):
+        for case in self.service.CASE_FIELDS:
+            value = self.ordinary_prefix_fixture(case)
+            original = json.dumps(value, sort_keys=True)
+            self.assertFalse(self.admit(value, case))
+            self.assertEqual(json.dumps(value, sort_keys=True), original)
+            self.assertEqual(value["stages"], [])
+            self.assertFalse(value["passed"] or value["unmanaged_project_owned_enablement_qualified"])
+            self.assertEqual(value["commands"][-1]["exit"], 1)
+            with self.assertRaises(ValueError):
+                self.admit(value, case, exit_code=0)
+            value.pop("ordinary_repair_observation")
+            self.assertFalse(self.admit(value, case))
+
+    def test_partial_prefix_rejects_unjoined_original_bytes_state_identity_and_command(self):
+        original = self.ordinary_prefix_fixture()
+        changes = (("unknown", False), ("partial", 1), ("no_consent_config_unchanged", 1),
+            ("mcp_witness_execution_observed", 0), ("internal_acp_zero_proved_by_this_capture", 0),
+            ("before_state_sha256", "not-original"), ("after_state_sha256", "0" * 64),
+            ("post_repair_state_bytes", True), ("post_repair_state_bytes", (1 << 20) + 1),
+            ("post_repair_state_base64", "!"), ("post_repair_state_base64", "A" * 1398105))
+        for key, changed in changes:
+            value = copy.deepcopy(original)
+            value["ordinary_repair_observation"][key] = changed
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                self.admit(value)
+        for fault in ("source", "receipt", "identity", "data", "pending", "unknown-state", "duplicate-json",
+                      "prior-identity", "prior-source", "proof", "window", "command", "failed-repair", "unknown-prefix"):
+            value = copy.deepcopy(original)
+            observation = value["ordinary_repair_observation"]
+            state = document(base64.b64decode(observation["post_repair_state_base64"]))
+            installation = state["installations"][0]
+            binding = installation["clients"]["binding"]
+            if fault == "source": installation["source"]["tree_digest"] = "sha256:" + "f" * 64
+            if fault == "receipt": binding["receipts"][-1]["after_digest"] = "sha256:" + "f" * 64
+            if fault == "identity": installation["installation_id"] = "foreign"
+            if fault == "data": installation["data_receipts"] = {}
+            if fault == "pending": binding["native_activation_attempt"] = "foreign"
+            if fault == "unknown-state": state["unrecorded"] = True
+            raw = json.dumps(state).encode()
+            if fault == "duplicate-json": raw = b'{"schema_version":5,"schema_version":5}'
+            observation.update(post_repair_state_base64=base64.b64encode(raw).decode(),
+                post_repair_state_bytes=len(raw), after_state_sha256=hashlib.sha256(raw).hexdigest())
+            if fault == "prior-identity": value["prepared_owned_state"]["installations"][0]["installation_id"] = "foreign"
+            if fault == "prior-source": value["prepared_owned_state"]["installations"][0]["source"]["tree_digest"] = "sha256:" + "f" * 64
+            if fault == "proof": observation["no_consent_exact_directory_repair"]["receipt"]["sequence"] = 3
+            if fault == "window": observation["no_consent_exact_directory_repair"]["finished_at_unix_ns"] = 1
+            if fault == "command": value["commands"][0]["argv"].append("--confirm-plugin-enable")
+            if fault == "failed-repair": value["commands"][0]["exit"] = 1
+            if fault == "unknown-prefix": observation["no_consent_exact_directory_repair"]["unknown"] = True
+            with self.subTest(fault=fault), self.assertRaises(ValueError):
+                self.admit(value)
 
     def test_held_file_replacement_and_moved_outer_ancestor_refuse_before_read(self):
         parent = self.root / "outer" / "inner"

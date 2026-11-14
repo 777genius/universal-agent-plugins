@@ -438,3 +438,28 @@ flag does not grant session consent. The Hermes gates cover source-installed
 Unsupported eligibility, changed or alternate source refusal before any child,
 and foreign/incomplete native observations. This is inert contract validation,
 not a genuine native session or Cold lifecycle qualification.
+
+## Initial fixture paths and bounded Windows owner decoding
+
+The original `5ff83587` Core jobs `132341213184` (macOS) and `132341212957`
+(Windows) checked out merge `6ebf655d` with the identical source tree. Eight
+macOS session fixtures refused an aliased User path: their Project root was
+canonical, but their original temporary User root was not. The fixture now
+resolves that initial owned directory before constructing the request. Runtime
+User/Project overlap and alias refusals are unchanged.
+
+The Windows owner decoder's valid 48-bit-authority vector failed its text
+round-trip. The original log did not retain the returned SID or its text, so no
+specific formatting difference is inferred. After the unchanged returned-buffer,
+offset, revision, count and span checks, the decoder retains the Windows SID
+constructor and compares its actual length, all six authority bytes, subauthority
+count and every subauthority to the validated response. Display spelling carries
+no owner authority. It never casts the ABI-supplied integer pointer or reads
+foreign memory; the existing exact TokenOwner comparison remains. Tests
+require every authority/subauthority field and an independent copy after the
+original response is changed. Local symlink-fixture replay and cross-compilation
+do not replace the required genuine macOS/Windows CI executions.
+
+Fresh native-root publication uses the separately reviewed original-object seal
+described in [the publication correction](2026-11-14-native-root-publication.md).
+The earlier local callback candidate is not combined with that implementation.

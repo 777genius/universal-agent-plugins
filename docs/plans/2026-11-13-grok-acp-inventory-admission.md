@@ -777,6 +777,42 @@ All 139 existing Python tests remain present, with 13 added contracts; the
 combined 152 tests pass in 3.038 seconds. This is source and inert validation;
 no Go, vendor-native execution or hosted acceptance is claimed for this union.
 
+### Measured session command advertisement remains diagnostic only
+
+Original session artifact `14100597648`, from source `5ff83587db83f613ebd8c784d2032f24e46b6bdb`
+and tree `e667fdd088aae50259332f772c7eb23098889083`, has an 11,865-byte outer archive
+with SHA256 `8c1d6a6a7dba38cc58882ffc8019c35fea4bdaf41808c644aff704dee409ff15`.
+Its physical ZIP, nine inner members, CRCs and five original stream hashes join.
+The first twelve ACP frames reproduce the retained initialize response and eleven
+notifications. Frame thirteen is a 2,493-byte `session/update` notification, SHA256
+`f9457d63ac0bb5d432a98790a84c119a3354b2ef53c181fd50600a6da5bfe533`, whose update kind is
+`available_commands_update`. The old parser refuses that frame. No actual
+`session/new` or plugin inventory reply is present in this original.
+
+The prospective session parser captures only this closed notification shape,
+once after initialize and before terminal inventory. It pins the observed eleven
+command names and twenty-six tool names, closes every nested object, bounds and
+types the metadata, and joins the original session ID and `SID-0` event ID to
+earlier setup/MCP notices and any later actual session response. Descriptions,
+input hints and the built-in workflow path are inert text: they authorize no
+request, filesystem access, command, tool, permission or trust action. The
+existing notification/frame/stream caps, three-request protocol, original
+publication checks and all false qualification fields remain unchanged.
+
+This parser correction cannot repair or promote the historical archive: its
+stored RPC prefix omits frame thirteen, so strict wire-to-record replay still
+refuses it. Offline replay of the original wire may retain one more notification
+without manufacturing either missing response. Its negative effect ledger also
+remains negative: fifty entries were added and the original selected config was
+atomically replaced from 405 to 458 bytes, adding only
+`marketplace.default_skills_installs_purged=true`. Retained metadata is not a
+body or recovery proof for those auxiliary files. The two local provider GETs
+and settled process family do not establish model, tool, enablement, native
+recovery or product acceptance. No new native call is added by this change.
+
+Exact-original offline replay now retains that notification without a send;
+the unchanged historical archive still refuses. All 93 ACP Python contracts
+pass, including four new bounded parser tests. These are inert/offline results.
 
 ## 2026-11-14: bounded readonly inventory research candidate
 
@@ -873,3 +909,12 @@ new mode's budget helpers, keeping the existing main file below its prior
 effective line count. Local gofmt, Python/Go execution, lint and actual hosted
 bubblewrap/Grok results remain pending while the executor is unavailable.
 No source review or synthetic receipt is a native qualification.
+
+### Final integration after original diagnosis
+
+The temporary PR-specific historical readout is removed after its fixed original
+archives have been independently retained and diagnosed. Its exact six-case source
+remains in commit `fe6f7d31e08b560395a19d33422ddd45f17a02cb`; the readonly
+inventory research step and its ordinary evidence publication remain present.
+This supersedes the temporary preservation instruction above without turning a
+historical archive replay into current-source native acceptance.

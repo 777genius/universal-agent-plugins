@@ -70,10 +70,10 @@ func newAntigravityPublicFixture(t *testing.T) antigravityPublicFixture {
 
 func newAntigravityPublicFixtureWithMCP(t *testing.T, includeMCP bool) antigravityPublicFixture {
 	t.Helper()
-	return newAntigravityPublicFixtureWithAuthority(t, includeMCP, nil)
+	return newAntigravityPublicFixtureWithSaved(t, includeMCP, false, nil)
 }
 
-func newAntigravityPublicFixtureWithAuthority(t *testing.T, includeMCP bool, authority *domain.EnvironmentAuthority) antigravityPublicFixture {
+func newAntigravityPublicFixtureWithSaved(t *testing.T, includeMCP, saved bool, agreement map[string][]byte) antigravityPublicFixture {
 	t.Helper()
 	client := fixtureClient(t, domain.ClientAntigravity)
 	home := filepath.Dir(client.ConfigRoot)
@@ -86,18 +86,22 @@ func newAntigravityPublicFixtureWithAuthority(t *testing.T, includeMCP bool, aut
 	if err := os.WriteFile(client.ExecutablePath, []byte("inert fixture; never executed"), 0700); err != nil {
 		t.Fatal(err)
 	}
-	f := newCLIFixture(t, []domain.DetectedClient{client})
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := newCLIFixtureAt(t, []domain.DetectedClient{client}, root)
 	runner := &antigravityPublicRunner{t: t, home: home, config: client.ConfigRoot, executable: client.ExecutablePath, mcpServers: []string{}}
 	f.app.Lifecycle.Activator = providerstest.NewActivator(providers.Activator{Runner: runner})
 	f.app.Lifecycle.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{Runner: runner, Stager: f.app.Lifecycle.Stager})
-	if authority != nil {
+	if saved {
 		configureAntigravityOwnedSDK(t, &f, runner)
 	}
 	source := writeCLIPlugin(t)
 	if includeMCP {
 		writeCLIMCP(t, source)
 		runner.mcpServers = []string{"demo"}
-		if authority != nil {
+		if saved {
 			dependencyWrite(t, filepath.Join(source, "mcp.json"), "{\"$schema\":\"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json\",\"mcpServers\":{\"demo\":{\"type\":\"stdio\",\"command\":\"go\",\"args\":[\"version\"],\"env\":{\"DATA\":\"${PLUGIN_DATA}\"}}}}")
 		}
 	}
@@ -108,7 +112,7 @@ func newAntigravityPublicFixtureWithAuthority(t *testing.T, includeMCP bool, aut
 		t.Fatal(err)
 	}
 	sourceArtifact := source
-	if authority != nil {
+	if saved {
 		sourceArtifact = filepath.Join(t.TempDir(), "owned-source.zip")
 		payload := directArchiveBytes(t, source, "zip", "")
 		if err := os.WriteFile(sourceArtifact, payload, 0600); err != nil {
@@ -121,27 +125,14 @@ func newAntigravityPublicFixtureWithAuthority(t *testing.T, includeMCP bool, aut
 			}
 			return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": {"application/zip"}}, Body: io.NopCloser(bytes.NewReader(payload)), ContentLength: int64(len(payload)), Request: request}, nil
 		})}}
-		loaded, err := f.app.loadPackage(t.Context(), source)
+		args := []string{"add", source, "--target", "antigravity", "--scope", "user", "--yes", "--format", "json"}
+		if agreement != nil {
+			antigravityCopyColdAgreement(t, f, agreement)
+			args = []string{"install", "--locked", "--scope", "user", "--yes", "--format", "json"}
+		}
+		stdout, stderr, err := f.execute(false, args...)
 		if err != nil {
-			t.Fatal(err)
-		}
-		if loaded.cleanup != nil {
-			t.Cleanup(func() {
-				if err := loaded.cleanup(); err != nil {
-					t.Error(err)
-				}
-			})
-		}
-		if loaded.envelope.Source.SourceKind != "archive" || loaded.envelope.Source.CanonicalSource == "" {
-			t.Fatal("archive acquisition did not derive a portable source identity")
-		}
-		authority.SourceKey = loaded.envelope.Source.CanonicalSource
-		service := lifecycleService(f.app, map[domain.ClientID]domain.DetectedClient{client.ClientID: client})
-		result, err := service.Add(t.Context(), usecase.AddInput{Envelope: loaded.envelope, Client: client,
-			Scope: domain.ScopeUser, Hints: loaded.hints, BackendExecutable: client.ExecutablePath,
-			Confirmed: true, EnvironmentAuthority: authority})
-		if err != nil || !result.Mutated || result.InstallationID == "" {
-			t.Fatalf("genuine saved-owner fixture: result=%+v error=%v", result, err)
+			t.Fatalf("public saved-owner installation: %v\n%s\n%s", err, stdout, stderr)
 		}
 	} else if stdout, stderr, err := f.execute(false, "add", source, "--target", "antigravity", "--no-save", "--format", "json"); err != nil {
 		t.Fatalf("initial public add: %v\n%s\n%s", err, stdout, stderr)
@@ -165,6 +156,26 @@ func newAntigravityPublicFixtureWithAuthority(t *testing.T, includeMCP bool, aut
 		}
 	}
 	return antigravityPublicFixture{cliFixture: f, client: client, source: source, sourceArtifact: sourceArtifact, runner: runner}
+}
+
+func antigravityCopyColdAgreement(t *testing.T, f cliFixture, agreement map[string][]byte) {
+	t.Helper()
+	if len(agreement) != 2 || len(agreement["uap.toml"]) == 0 || len(agreement["uap.lock"]) == 0 {
+		t.Fatal("cold fixture requires exactly the two original public agreement files")
+	}
+	for _, path := range []string{f.store.Path, f.app.EnvironmentStoreRoot, f.app.ManagedRoot, filepath.Join(f.app.DependenciesRoot, "plugin-data")} {
+		if _, err := os.Lstat(path); !os.IsNotExist(err) {
+			t.Fatal("cold fixture already has state, store, delivery or DATA", path, err)
+		}
+	}
+	if err := os.MkdirAll(f.app.DependenciesRoot, 0700); err != nil {
+		t.Fatal(err)
+	}
+	for name, body := range agreement {
+		if err := os.WriteFile(filepath.Join(f.app.DependenciesRoot, name), body, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
 }
 
 func (f antigravityPublicFixture) historical(t *testing.T) domain.StateFileV2 {
@@ -396,18 +407,22 @@ func configureAntigravityOwnedSDK(t *testing.T, f *cliFixture, runner *antigravi
 
 func antigravityOwnedFixture(t *testing.T) (antigravityPublicFixture, domain.Installation, domain.ClientBinding, domain.DataReceipt) {
 	t.Helper()
-	authority := &domain.EnvironmentAuthority{EnvironmentID: environment.EnvironmentUserDefault,
-		Alias: "demo", ClientID: "antigravity", ExpectedAction: "install"}
-	f := newAntigravityPublicFixtureWithAuthority(t, true, authority)
+	f := newAntigravityPublicFixtureWithSaved(t, true, true, nil)
+	installed, binding, data := antigravityOwnedFacts(t, f)
+	return f, installed, binding, data
+}
+
+func antigravityOwnedFacts(t *testing.T, f antigravityPublicFixture) (domain.Installation, domain.ClientBinding, domain.DataReceipt) {
+	t.Helper()
 	state, err := f.store.Load()
 	if err != nil || len(state.Installations) != 1 || len(state.EnvironmentReceipts) != 1 {
 		t.Fatal("fixture lacks one genuine saved installation", err)
 	}
 	installed, receipt := state.Installations[0], state.EnvironmentReceipts[0]
 	binding := onlyCLIClient(installed)
-	if receipt.EnvironmentID != authority.EnvironmentID || receipt.Alias != authority.Alias || receipt.ClientID != authority.ClientID ||
+	if receipt.EnvironmentID != environment.EnvironmentUserDefault || receipt.Alias != "demo" || receipt.ClientID != "antigravity" ||
 		receipt.InstallationID != installed.InstallationID || receipt.ClientBindingID != binding.ClientBindingID ||
-		receipt.Phase != "committed" || receipt.SourceKey != authority.SourceKey || receipt.PackageDigest != binding.PackageRevision.TreeDigest {
+		receipt.Phase != "committed" || receipt.SourceKey != installed.Source.CanonicalSource || receipt.PackageDigest != binding.PackageRevision.TreeDigest {
 		t.Fatal("kernel-authored saved-owner identity differs")
 	}
 	data, ok := installed.DataReceipts[binding.DataReceiptID]
@@ -419,43 +434,21 @@ func antigravityOwnedFixture(t *testing.T) (antigravityPublicFixture, domain.Ins
 		t.Fatal(err)
 	}
 	dependencyWrite(t, filepath.Join(data.Locator, "retained-marker.txt"), "original owned DATA\n")
-	return f, installed, binding, data
+	return installed, binding, data
 }
 
 func antigravityOwnedPreservation(t *testing.T, f antigravityPublicFixture, data domain.DataReceipt, extra ...string) func() {
 	t.Helper()
-	roots := append([]string{f.store.Path, f.sourceArtifact, f.client.ConfigRoot, data.Locator}, extra...)
-	trees := map[string]map[string]savedJourneyFile{}
-	identities := map[string]os.FileInfo{}
+	manifest, lock := f.app.dependencyPaths()
+	roots := append([]string{f.store.Path, f.sourceArtifact, f.client.ConfigRoot, data.Locator, f.app.EnvironmentStoreRoot, manifest, lock}, extra...)
+	originals := map[string]map[string]dependencyCheckFileObservation{}
 	for _, root := range roots {
-		trees[root] = savedJourneyTree(t, root)
-		err := filepath.WalkDir(root, func(path string, _ os.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			info, err := os.Lstat(path)
-			if err == nil {
-				identities[path] = info
-			}
-			return err
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
+		originals[root] = observeDependencyCheckFiles(t, root)
 	}
 	return func() {
 		t.Helper()
-		for root, tree := range trees {
-			if !reflect.DeepEqual(tree, savedJourneyTree(t, root)) {
-				t.Fatal("saved repair changed protected state, source, User or DATA bytes")
-			}
-		}
-		for path, original := range identities {
-			current, err := os.Lstat(path)
-			if err != nil || !os.SameFile(original, current) || original.Mode() != current.Mode() ||
-				original.Size() != current.Size() || !original.ModTime().Equal(current.ModTime()) {
-				t.Fatal("saved repair changed protected original identity or metadata", err)
-			}
+		for root, before := range originals {
+			assertDependencyCheckFilesUnchanged(t, root, before)
 		}
 	}
 }
@@ -567,8 +560,49 @@ func TestAntigravityOwnedIntactRepairReachesReadOnlyInventory(t *testing.T) {
 	}
 }
 
+func TestAntigravityPublicColdLockedRestoreRetainsOriginalSavedRepairAuthority(t *testing.T) {
+	original, installed, _, data := antigravityOwnedFixture(t)
+	originalUnchanged := antigravityOwnedPreservation(t, original, data)
+	agreement := map[string][]byte{}
+	for _, name := range []string{"uap.toml", "uap.lock"} {
+		body, err := os.ReadFile(filepath.Join(original.app.DependenciesRoot, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		agreement[name] = body
+	}
+	cold := newAntigravityPublicFixtureWithSaved(t, true, true, agreement)
+	restored, binding, retained := antigravityOwnedFacts(t, cold)
+	if cold.client.ConfigRoot == original.client.ConfigRoot || cold.store.Path == original.store.Path || retained.Locator == data.Locator ||
+		!reflect.DeepEqual(restored.Source, installed.Source) || !reflect.DeepEqual(restored.Package, installed.Package) {
+		t.Fatal("cold public install copied authority or changed the locked source/package")
+	}
+	for name, body := range agreement {
+		got, err := os.ReadFile(filepath.Join(cold.app.DependenciesRoot, name))
+		if err != nil || !bytes.Equal(body, got) {
+			t.Fatal("cold install changed the only transferred agreement", name, err)
+		}
+	}
+	unchanged := antigravityOwnedPreservation(t, cold, retained)
+	stdout, stderr, err := cold.execute(false, "install", "--locked", "--scope", "user", "--yes", "--format", "json")
+	if err != nil || cold.runner.calls != 0 {
+		t.Fatal("locked no-op was mistaken for native observation", err, cold.runner.calls, stdout, stderr)
+	}
+	unchanged()
+	originalUnchanged()
+	for repetition := 1; repetition <= 2; repetition++ {
+		stdout, stderr, err = cold.execute(false, "repair", restored.InstallationID, "--target", "antigravity", "--scope", "user", "--yes", "--format", "json")
+		if err != nil || stderr != "" || cold.runner.calls != 2*repetition {
+			t.Fatal("cold saved repair did not observe the original selected profile", err, cold.runner.calls, stdout, stderr)
+		}
+		assertAntigravityOwnedRepairDTO(t, stdout, restored, binding, "The selected User plugin is enabled in CLI inventory; open or reload Antigravity to verify IDE loading")
+		unchanged()
+		originalUnchanged()
+	}
+}
+
 func TestAntigravityOwnedRepairKeepsNegativeObservationAndConsentBoundaries(t *testing.T) {
-	for _, condition := range []string{"disabled", "native-absent", "config-absent", "cleanup-unproved", "dry-run", "missing-provenance", "foreign-provenance"} {
+	for _, condition := range []string{"disabled", "native-absent", "config-absent", "cleanup-unproved", "dry-run", "unconfirmed", "missing-provenance", "foreign-provenance"} {
 		t.Run(condition, func(t *testing.T) {
 			f, installed, binding, data := antigravityOwnedFixture(t)
 			var extra []string
@@ -603,10 +637,17 @@ func TestAntigravityOwnedRepairKeepsNegativeObservationAndConsentBoundaries(t *t
 			f.app.Detector = staticDetector{clients: []domain.DetectedClient{f.client}}
 			unchanged := antigravityOwnedPreservation(t, f, data, extra...)
 			args := []string{"repair", installed.InstallationID, "--target", "antigravity", "--scope", "user", "--yes", "--format", "json"}
-			if condition == "dry-run" {
+			terminal, input := false, ""
+			switch condition {
+			case "dry-run":
 				args = append(args, "--dry-run")
+			case "unconfirmed":
+				// JSON automation and an explicit target already imply consent.
+				// Exercise the existing human confirmation path and decline it.
+				args = []string{"repair", installed.InstallationID, "--scope", "user", "--format", "human"}
+				terminal, input = true, "n\n"
 			}
-			stdout, stderr, err := f.execute(false, args...)
+			stdout, stderr, err := f.executeInput(terminal, input, args...)
 			if (err != nil) != wantError || f.runner.calls != wantCalls {
 				t.Fatalf("negative saved repair crossed consent/profile/cleanup boundary: calls=%d error=%v\n%s\n%s", f.runner.calls, err, stdout, stderr)
 			}

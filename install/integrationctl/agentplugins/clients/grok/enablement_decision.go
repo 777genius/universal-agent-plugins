@@ -90,8 +90,19 @@ func (recovery EnablementRecovery) PrepareNativeRemovalDecision(ctx context.Cont
 	if binding.NativeActivationAttempt == "" {
 		return false, nil
 	}
+	ordinary := false
+	if !hasEnabledOwnership(binding) {
+		if _, err := recovery.recordRoot(binding.NativeActivationAttempt); err != nil {
+			return true, err
+		}
+		names, err := recovery.pendingNames()
+		if err != nil {
+			return true, err
+		}
+		ordinary = len(names) == 0
+	}
 	record, err := recovery.readRecord(binding.NativeActivationAttempt)
-	if errors.Is(err, os.ErrNotExist) && !hasEnabledOwnership(binding) {
+	if ordinary && errors.Is(err, os.ErrNotExist) {
 		return false, nil
 	}
 	if err != nil {

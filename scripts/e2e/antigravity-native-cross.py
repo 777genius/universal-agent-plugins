@@ -1333,6 +1333,25 @@ def admission_contracts():
                 with self.subTest(kind=kind), self.assertRaises(AssertionError):
                     public_user_result(json.dumps(changed), observed=True)
 
+        def test_public_cold_doctor_refuses_mutation_or_false_health(self):
+            data = {"read_only": True, "installation_count": 1, "open_operation_count": 0,
+                    "clients": [{"client_id": "antigravity", "status": "detected"}],
+                    "findings": [{"status": "degraded", "code": "activation_pending"}]}
+            packet = {"schema_version": 1, "command": "doctor", "result": "success", "data": data}
+            self.assertEqual(public_user_doctor_result(json.dumps(packet).encode()), data)
+            for name in ("command", "result", "read_only", "count", "open", "client", "drift"):
+                changed = json.loads(json.dumps(packet))
+                if name == "command": changed["command"] = "add"
+                elif name == "result": changed["result"] = "failure"
+                elif name == "read_only": changed["data"]["read_only"] = False
+                elif name == "count": changed["data"]["installation_count"] = 0
+                elif name == "open": changed["data"]["open_operation_count"] = 1
+                elif name == "client": changed["data"]["clients"] = []
+                else: changed["data"]["findings"] = [{"status": "degraded", "code": "managed_directory_changed"}]
+                with self.subTest(name=name), self.assertRaises(AssertionError):
+                    public_user_doctor_result(json.dumps(changed).encode())
+
+
         def test_public_cold_repair_joins_exact_saved_identity_and_native_observation(self):
             installed = {"installation_id": "owned-installation"}
             revision = {"version": "1.0.0", "tree_digest": "sha256:" + "a" * 64, "resolved_revision": "b" * 40}
@@ -1361,7 +1380,8 @@ def admission_contracts():
                          "disabled", "absent", "unknown-finding", "empty-finding", "reason", "next-action",
                          "component-kind", "component-name", "component-support", "component-extra",
                          "component-missing-skill", "component-missing-mcp", "component-order",
-                         "component-duplicate", "component-second-kind", "component-second-name", "component-second-support"):
+                         "component-duplicate", "component-second-kind", "component-second-name", "component-second-support",
+                         "missing-skill", "wrong-skill", "duplicate-skill", "component-second-extra"):
                 changed = json.loads(json.dumps(packet))
                 row, result = changed["actions"][0], changed["results"][0]
                 if name == "command": changed["command"] = "doctor"
@@ -1406,7 +1426,11 @@ def admission_contracts():
                 elif name == "component-duplicate": row["component_support"].append(dict(row["component_support"][0]))
                 elif name == "component-second-kind": row["component_support"][1]["kind"] = "skill"
                 elif name == "component-second-name": row["component_support"][1]["name"] = "foreign"
-                else: row["component_support"][1]["support"] = "projected"
+                elif name == "component-second-support": row["component_support"][1]["support"] = "projected"
+                elif name == "missing-skill": row["component_support"].pop(0)
+                elif name == "wrong-skill": row["component_support"][0]["name"] = "foreign"
+                elif name == "duplicate-skill": row["component_support"].append(dict(row["component_support"][0]))
+                else: row["component_support"][1]["unknown"] = True
                 with self.subTest(name=name), self.assertRaises(AssertionError):
                     public_user_cold_repair_result(json.dumps(changed).encode(), installed, binding, pin)
             for findings in ([], [{}], [{"code": "native_projection_not_checked"}], [{"code": "activation_pending"}]):
@@ -1528,6 +1552,60 @@ def admission_contracts():
                             domains[domain] = tuple(metadata); changed["uap-state"] = (row[0], row[1], tuple(domains))
                             with self.assertRaisesRegex(AssertionError, "Disabled repeat changed"):
                                 public_disabled_repeat_preserved(before, changed)
+
+        def test_refused_repeat_admits_only_original_state_root_scratch_metadata(self):
+            import copy
+            with tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve() / "uap-state"; root.mkdir(mode=0o700)
+                (root / "state-v2.json").write_bytes(b"original state")
+                os.utime(root, ns=(1_000_000_000, 1_000_000_000))
+                before = public_state_snapshot(root, root); retained = copy.deepcopy(before)
+                with tempfile.TemporaryDirectory(prefix="agentplugins-package-", dir=root) as selected:
+                    (Path(selected) / "sealed-source").write_bytes(b"temporary acquired package")
+                after = public_state_snapshot(root, root)
+                self.assertNotEqual(before, after)
+                self.assertTrue(public_state_scratch_equal(before, after, root_key="."))
+                self.assertEqual(before, retained)
+                for domain in (0, 1):
+                    for field in range(12):
+                        changed = copy.deepcopy(after); row = changed["."]
+                        metadata = [list(value) for value in row[2]]
+                        value = metadata[domain][field]; metadata[domain][field] = value + 1 if value is not None else 1
+                        changed["."] = row[:2] + (tuple(tuple(value) for value in metadata),)
+                        with self.subTest(api_domain=domain, field=field):
+                            self.assertEqual(public_state_scratch_equal(before, changed, root_key="."), field in (6, 7, 8))
+                for field in range(5):
+                    changed = copy.deepcopy(after); row = changed["."]; identity = list(row[1]); identity[field] += 1
+                    changed["."] = (row[0], tuple(identity), row[2])
+                    with self.subTest(identity_field=field):
+                        self.assertFalse(public_state_scratch_equal(before, changed, root_key="."))
+                for row in (None, (), ("file",), ("directory", (), ()), ("directory", after["."][1], after["."][2][:1])):
+                    self.assertFalse(public_state_scratch_equal(before, dict(after, **{".": row}), root_key="."))
+                for key in ("tmp", "store", "operations-v2", "plugin-data"):
+                    self.assertFalse(public_state_scratch_equal(before, after, root_key=key))
+
+        def test_refused_repeat_retains_original_members_descendants_and_state_inode(self):
+            for effect in ("extra", "state", "receipt", "data", "store", "nested-scratch", "state-inode", "root-inode"):
+                with self.subTest(effect=effect), tempfile.TemporaryDirectory() as temporary:
+                    outer = Path(temporary).resolve(); root = outer / "uap-state"; root.mkdir(mode=0o700)
+                    paths = {"state": root / "state-v2.json", "receipt": root / "operations-v2/original.json",
+                             "data": root / "plugin-data/owned/marker", "store": root / "store/original/plugin.json"}
+                    for path in paths.values():
+                        path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(b"original retained bytes")
+                    os.utime(paths["receipt"].parent, ns=(1_000_000_000, 1_000_000_000))
+                    before = public_state_snapshot(root, root)
+                    if effect == "extra": (root / "unknown").write_bytes(b"unknown effect")
+                    elif effect in paths: paths[effect].write_bytes(b"changed original bytes")
+                    elif effect == "nested-scratch":
+                        child = paths["receipt"].parent / "temporary"; child.mkdir(); child.rmdir()
+                    elif effect == "state-inode":
+                        path = paths["state"]; original = path.stat(); path.rename(outer / "retained-state")
+                        path.write_bytes((outer / "retained-state").read_bytes()); path.chmod(stat.S_IMODE(original.st_mode))
+                        os.utime(path, ns=(original.st_atime_ns, original.st_mtime_ns))
+                    else:
+                        retained = outer / "retained-root"; root.rename(retained); root.mkdir(mode=0o700)
+                        for child in retained.iterdir(): child.rename(root / child.name)
+                    self.assertFalse(public_state_scratch_equal(before, public_state_snapshot(root, root), root_key="."))
 
         def test_cold_repeat_admits_only_original_temp_parent_metadata(self):
             with tempfile.TemporaryDirectory() as temporary:
@@ -1905,7 +1983,10 @@ def admission_contracts():
                                    package_revision=dict(tree_digest="tree", resolved_revision="revision", **package))
                     installed = dict(installation_id="installation", declared_name=NAME, source=source, package=package,
                                      clients={"binding": binding}, data_receipts={"data": receipt})
-                    packet = dict(schema_version=5, installations=[installed])
+                    packet = dict(schema_version=5, installations=[installed], environment_receipts=[dict(
+                        receipt_id="saved-owner", environment_id="user-default", alias=NAME, client_id="antigravity",
+                        installation_id="installation", client_binding_id="binding", source_key="fixture-source",
+                        package_digest="tree", desired_action="install", phase="committed")])
                     manifest = selected / "plugin.json"
                     manifest_body = json.dumps(dict(name=NAME, version="1.0.0")).encode()
                     manifest.write_bytes(manifest_body); manifest.chmod(0o600)
@@ -1924,6 +2005,28 @@ def admission_contracts():
                     sentinel = foreign / "sentinel"; sentinel.write_bytes(b"foreign User bytes\n")
                     before = public_binding_proof(env, NAME, runtime_pins)
                     public_preserved(before, public_binding_proof(env, NAME, runtime_pins))
+                    public_cold_observation_preserved(before, public_binding_proof(env, NAME, runtime_pins))
+                    for effect in ("state-inode", "environment-owner", "binding-policy", "data-inode"):
+                        path.write_bytes(json.dumps(packet).encode())
+                        original = public_binding_proof(env, NAME, runtime_pins)
+                        if effect in ("state-inode", "data-inode"):
+                            victim = path if effect == "state-inode" else data / ".agentplugins-data-owner.json"
+                            metadata, body = victim.stat(), victim.read_bytes()
+                            replacement = root / "replacement"
+                            replacement.write_bytes(body); replacement.chmod(stat.S_IMODE(metadata.st_mode))
+                            os.utime(replacement, ns=(metadata.st_atime_ns, metadata.st_mtime_ns))
+                            os.replace(replacement, victim)
+                            self.assertNotEqual(victim.stat().st_ino, metadata.st_ino)
+                        else:
+                            changed = json.loads(json.dumps(packet))
+                            if effect == "environment-owner": changed["environment_receipts"][0]["alias"] = "foreign"
+                            else: changed["installations"][0]["clients"]["binding"]["policy"] = "blocked"
+                            path.write_bytes(json.dumps(changed).encode())
+                        current = public_binding_proof(env, NAME, runtime_pins)
+                        if effect != "data-inode": public_preserved(original, current)
+                        with self.subTest(cold_effect=effect), self.assertRaises(AssertionError):
+                            public_cold_observation_preserved(original, current)
+                    path.write_bytes(json.dumps(packet).encode())
                     for effect in ("extra-object", "wrong-path", "wrong-kind", "wrong-digest", "pending", "attempt", "latest-receipt", "source-revision"):
                         changed = json.loads(json.dumps(packet))
                         candidate = changed["installations"][0]["clients"]["binding"]
@@ -1984,6 +2087,69 @@ def admission_contracts():
                     package["version"] = "2.0.0"; path.write_bytes(json.dumps(packet).encode())
                     with self.assertRaisesRegex(AssertionError, "revision joins"):
                         public_binding_proof(env, NAME, runtime_pins)
+
+        def test_refused_repeat_reports_only_first_failed_domain_without_later_reads(self):
+            labels = ("state", "bundle", "native-membership", "native-parent")
+            for failing, label in enumerate(labels):
+                with self.subTest(domain=label), tempfile.TemporaryDirectory() as temporary:
+                    parent = Path(temporary).resolve(); root = parent / "fixture"; root.mkdir()
+                    source = parent / "source"; source.mkdir()
+                    selected = root / "home/.gemini/config/plugins/owned"; selected.mkdir(parents=True)
+                    env = {"HOME": str(root / "home"), "AGENTPLUGINS_HOME": str(root / "uap-state")}
+                    after, visits = [False], []
+                    def compare(index):
+                        if after[0]:
+                            visits.append(index)
+                            if index > failing: raise AssertionError("unexpected later comparison read")
+                        return "changed" if after[0] and index == failing else "original"
+                    @contextlib.contextmanager
+                    def fixture(*_): yield root, env, None
+                    def command(*_, **kwargs):
+                        if kwargs.get("refused"): after[0] = True
+                        return b"{}"
+                    replacements = dict(public_fixture=fixture, public_uap=command, public_user_result=lambda *_: None,
+                        public_binding_proof=lambda *_: {"binding": {"target_locator": str(selected)}},
+                        public_state_snapshot=lambda *_: compare(0), public_snapshot=lambda *_: compare(1),
+                        public_state_scratch_equal=lambda before, after, **_: before == after,
+                        object_identity=lambda *_: compare(3))
+                    with patch.dict(globals(), replacements), patch.object(Path, "iterdir", lambda _: iter([Path(compare(2))])):
+                        with self.assertRaisesRegex(AssertionError, "^Refused public repeat changed original membership/bytes; ") as refused:
+                            public_user_refusals((None,) * 5, source, parent, parent)
+                    self.assertEqual(visits, list(range(failing + 1)))
+                    self.assertEqual(json.loads(str(refused.exception).split("; ", 1)[1])["group"], label)
+                    self.assertLessEqual(len(str(refused.exception).encode("ascii")), 1024)
+                    self.assertNotIn(str(parent), str(refused.exception))
+
+        def test_refused_repeat_diagnostic_keeps_original_scratch_rule_and_actual_mismatch(self):
+            import copy
+            with tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve(); state = root / "state-v2.json"
+                state.write_bytes(b"original state bytes")
+                os.utime(root, ns=(1_000_000_000, 1_000_000_000))
+                before = public_state_snapshot(root, root)
+                with tempfile.TemporaryDirectory(prefix="agentplugins-package-", dir=root):
+                    pass
+                after = public_state_snapshot(root, root)
+                self.assertNotEqual(before, after)
+                checks = ((before, lambda: after), ({}, lambda: {}), (set(), lambda: set()), ((1,), lambda: (1,)))
+                with patch.dict(globals(), public_preservation_diagnostic=Mock(side_effect=AssertionError("Permitted scratch reached diagnostics"))):
+                    self.assertIsNone(public_refusal_preservation(checks))
+                changed = copy.deepcopy(after)
+                row = changed["."]; held = list(row[2][1]); held[1] += 1
+                changed["."] = row[:2] + ((row[2][0], tuple(held)),)
+                with self.assertRaises(AssertionError) as caught:
+                    public_refusal_preservation(((before, lambda: changed), *checks[1:]))
+                detail = json.loads(str(caught.exception).split("; ", 1)[1])
+                self.assertEqual((detail["group"], detail["view"], detail["field"]), ("state", "held", "inode"))
+                self.assertEqual(detail["member_sha256"], hashlib.sha256(b"relative-member-v1\0.").hexdigest())
+                state.write_bytes(b"changed original state bytes")
+                changed = public_state_snapshot(root, root)
+                with self.assertRaises(AssertionError) as caught:
+                    public_refusal_preservation(((before, lambda: changed), *checks[1:]))
+                detail = json.loads(str(caught.exception).split("; ", 1)[1])
+                self.assertEqual(detail["group"], "state")
+                self.assertEqual(detail["member_sha256"], hashlib.sha256(b"relative-member-v1\0state-v2.json").hexdigest())
+                self.assertNotIn(str(root), str(caught.exception))
 
         def test_public_authored_alias_is_measured_without_target_body_read(self):
             with tempfile.TemporaryDirectory() as temporary:
@@ -2075,23 +2241,31 @@ def public_state_snapshot(root, state, runtime_pins=None):
     return result
 
 
-def public_disabled_repeat_preserved(before, after):
-    # The ordinary local acquirer creates/removes sealed snapshots directly
-    # beneath this owned state parent. Its final members stay exact.
-    if set(before) != set(after) or "uap-state" not in before:
-        raise AssertionError("Disabled repeat changed original fixture bytes")
+def public_state_scratch_equal(before, after, *, root_key):
+    # The same selected state root is captured either directly ('.') or inside
+    # the complete fixture ('uap-state'). No other directory is scratch authority.
+    if (root_key not in (".", "uap-state") or type(before) is not dict or type(after) is not dict
+            or set(before) != set(after) or root_key not in before):
+        return False
     normalized = []
     for image in (before, after):
         view = dict(image)
-        row = image["uap-state"]
-        if (len(row) != 3 or row[0] != "directory" or len(row[2]) != 2
-                or any(len(metadata) != 12 for metadata in row[2])):
-            raise AssertionError("Disabled repeat changed original fixture bytes")
+        row = image[root_key]
+        if (type(row) is not tuple or len(row) != 3 or row[0] != "directory"
+                or type(row[1]) is not tuple or len(row[1]) != 5 or type(row[2]) is not tuple or len(row[2]) != 2
+                or any(type(metadata) is not tuple or len(metadata) != 12 for metadata in row[2])):
+            return False
         # Preserve each API's dev/inode/mode/uid/gid/nlink and birth/attributes/
         # reparse facts; only directory size/mtime/ctime may reflect scratch work.
-        view["uap-state"] = (row[0], row[1], tuple(metadata[:6] + metadata[9:] for metadata in row[2]))
+        view[root_key] = (row[0], row[1], tuple(metadata[:6] + metadata[9:] for metadata in row[2]))
         normalized.append(view)
-    if normalized[0] != normalized[1]:
+    return normalized[0] == normalized[1]
+
+
+def public_disabled_repeat_preserved(before, after):
+    # The ordinary local acquirer creates/removes sealed snapshots directly
+    # beneath this owned state parent. Its final members stay exact.
+    if not public_state_scratch_equal(before, after, root_key="uap-state"):
         raise AssertionError("Disabled repeat changed original fixture bytes")
 
 
@@ -2248,6 +2422,12 @@ def public_preserved(before, after, *, replaced=False):
         raise AssertionError("Read-only public operation changed owned bundle/receipts")
 
 
+def public_cold_observation_preserved(before, after):
+    public_preserved(before, after)
+    if before["state_row"] != after["state_row"] or before["state"] != after["state"]:
+        raise AssertionError("Cold observation changed original full state or authority")
+
+
 def public_seed_active(root, authority, before):
     """One declared fixture effect; preserve every recorded authentication/receipt field."""
     path = root / "uap-state/state-v2.json"
@@ -2311,6 +2491,28 @@ def public_user_result(body, *, observed=False, enabled=True):
             raise AssertionError("Public CLI did not reach selected native inventory")
     return result
 
+
+
+def public_user_doctor_result(body):
+    """Admit read-only cold inspection, never imperative mutation of an environment-owned binding."""
+    envelope = closed_config(body, limit=1 << 20)
+    if (type(envelope.get("schema_version")) is not int or envelope["schema_version"] != 1
+            or envelope.get("command") != "doctor" or envelope.get("result") != "success"
+            or type(envelope.get("data")) is not dict):
+        raise AssertionError("Cold observation is not a successful read-only doctor response")
+    data = envelope["data"]
+    clients, findings = data.get("clients"), data.get("findings")
+    if (data.get("read_only") is not True
+            or type(data.get("installation_count")) is not int or data["installation_count"] != 1
+            or type(data.get("open_operation_count")) is not int or data["open_operation_count"] != 0
+            or type(clients) is not list or not any(type(row) is dict and row.get("client_id") == "antigravity" for row in clients)
+            or type(findings) is not list):
+        raise AssertionError("Cold doctor did not inspect exactly one owned User installation")
+    unsafe = {"open_recovery_operations", "managed_directory_changed", "managed_target_mismatch",
+              "managed_integrity_check_failed", "native_projection_changed"}
+    if any(type(row) is not dict or row.get("code") in unsafe for row in findings):
+        raise AssertionError("Cold doctor reported managed-state drift or unreadable findings")
+    return data
 
 
 def public_user_cold_repair_result(body, installed, binding, pin):
@@ -2611,7 +2813,7 @@ def public_user_cold_restore(runtime, executable_dir, parent):
             if restored["data"][1]["public-retained-marker.txt"][7] != PUBLIC_MARKER: raise AssertionError("Cold marker differs")
             home_before = public_snapshot(Path(env["HOME"]))
             public_user_cold_repair_result(public_uap(runtime, root, authority, "uap-cold-observe"), installed, binding, pin)
-            public_preserved(restored, public_binding_proof(env, "uap-cline-public-probe", runtime[4]))
+            public_cold_observation_preserved(restored, public_binding_proof(env, "uap-cline-public-probe", runtime[4]))
             if public_snapshot(Path(env["HOME"])) != home_before: raise AssertionError("Cold observation changed User profile")
             before = public_state_snapshot(root, state_root, runtime[4])
             public_uap(runtime, root, authority, "uap-cold-repeat")  # Genuine locked no-op; not an inventory observation.
@@ -2747,6 +2949,17 @@ def public_refusal_preservation(checks):
     for group, (before, observe) in zip(PUBLIC_PRESERVATION_GROUPS, checks, strict=True):
         after = observe()
         if after != before:
+            if group == "state":
+                if public_state_scratch_equal(before, after, root_key="."):
+                    continue
+                # Report the first refused field, after the already admitted
+                # original root size/timestamps. All other fields stay exact.
+                if type(before) is dict and type(after) is dict and "." in before and "." in after:
+                    left, right = before["."], after["."]
+                    if all(public_preservation_fields(row) is not None and row[0] == "directory" for row in (left, right)):
+                        metadata = tuple(current[:6] + original[6:9] + current[9:]
+                                         for original, current in zip(left[2], right[2], strict=True))
+                        after = dict(after, **{".": right[:2] + (metadata,)})
             detail = public_preservation_diagnostic(group, before, after)
             message = "Refused public repeat changed original membership/bytes; " + json.dumps(
                 detail, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False)

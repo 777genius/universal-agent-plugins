@@ -132,6 +132,9 @@ func (recovery EnablementRecovery) removeMembership(ctx context.Context, env cli
 	if err != nil || plugin.enabled || plugin.trusted != before.trusted {
 		return errors.Join(err, fmt.Errorf("grok native readback did not confirm removal of the exact enabled membership"))
 	}
+	if err := record.revalidateParent(); err != nil {
+		return err
+	}
 	if err := recovery.verifyRecordConfig(record.Edit.AfterDigest, record.Edit.Mode); err != nil {
 		return err
 	}

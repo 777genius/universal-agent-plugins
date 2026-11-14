@@ -109,6 +109,9 @@ func (recovery EnablementRecovery) recordBinding(state domain.StateFileV2, recor
 }
 
 func (recovery EnablementRecovery) finishPredecessor(state domain.StateFileV2, record enablementRecord) error {
+	if err := record.revalidateParent(); err != nil {
+		return err
+	}
 	current, err := recovery.Kernel.ReadExactFile(filepath.Join(record.UserRoot, "config.toml"))
 	if err != nil || !current.Exists || current.Mode != os.FileMode(record.Edit.Mode) || enablementDigest(current.Body) != record.Edit.BeforeDigest {
 		return errors.Join(err, fmt.Errorf("grok enablement without an attempt has an unexpected config"))

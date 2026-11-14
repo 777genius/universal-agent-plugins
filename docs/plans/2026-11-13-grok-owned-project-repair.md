@@ -240,3 +240,59 @@ of existing file/directory records, dangling leaf and missing-leaf ancestor
 aliases, and invalid operation IDs. The original cross-platform CLI journeys
 remain required; Linux compilation or source review does not qualify their
 macOS or Windows execution.
+
+## Ordinary prepared removal on platforms without a native journal
+
+The original macOS Terminal run `43559930375`, job `132341201150`, tested
+merge `6ebf655d` with the exact `5ff83587` tree. Its retained artifact
+`14100755315` passed the outer SHA256 and all 2017 member CRC checks. All 29
+resilience cases passed, including the corrected corrupt-journal fixture. Four
+ordinary saved Project removal cases instead reached the unsupported native
+journal reader after the generic core recorded its ordinary removal attempt.
+
+Without an enabled-member receipt, the recorder now validates that attempt's
+existing leaf/containment contract and uses the existing pending-name reader.
+Only an empty native inventory plus the anchored record reader's actual absence
+returns to ordinary state persistence. A native
+stage or inventory error refuses; existing native records require the exact
+current-attempt record, so another operation cannot take a missing-record
+fallback. Enabled ownership and native journal mutations are unchanged; no native operation, state schema or consent rule
+is added. The cross-platform regression preserves original state and journal
+bytes, identity, mode, size and mtime. Its real Linux stage case fails before the
+change and passes afterward; the ordinary macOS failure is original hosted
+evidence, and the corrected macOS/Windows execution still requires normal CI.
+
+The composed path retains the non-Linux absence reader described above. An
+empty directory listing alone cannot authorize ordinary removal: the exact
+reader must also verify the complete path ancestry. Regression cases preserve
+an aliased parent above both existing and absent operation namespaces and
+require refusal before any ordinary-removal acknowledgement.
+
+## Original parent checks before config reads and repeat acknowledgement
+
+The unchanged source through `f6adab5a` could lose its original config parent
+after package verification or native readback, then read the preserved config
+leaf through the replacement parent. The correction reuses the held record's
+existing parent revalidation before predecessor config inspection, enable
+readback verification, remove readback verification and repeated enablement
+acknowledgement. It adds no new authority, journal or public admission.
+
+Repeated enablement can return a state-validation error after recognizing its
+previous owned record. That error must retain the original Prepared guidance;
+the enabled guidance is now selected only when the repeat has no error.
+
+Actual Linux causal replay used the exact five-file packet with SHA256
+`707eb40a298351082d92bca6e874c23a94ff1e3c4a0f8964ecde7a5c8dc7709a`.
+The old runtime failed all four top-level tests: three late-parent boundaries
+performed one forbidden config read each, the repeated-parent boundary returned
+enabled guidance, and the repeated-state boundary returned enabled guidance
+alongside its error. With the correction, the same tests passed in 0.098 seconds.
+The filesystem cases preserve the original config and lock objects inside a
+replacement parent and require zero subsequent config reads, writes or removals.
+The state case changes the actual saved attempt after a genuine first commit.
+
+The existing focused Grok and installer security/SDK matrix also passed, with
+51 top-level tests and 163 pass records including subtests. These results belong
+to that isolated packet; the final composed commit still requires its ordinary
+lint/core and native gates. Public native enablement remains closed until the
+separate auxiliary-write and exact recovery admission is established.

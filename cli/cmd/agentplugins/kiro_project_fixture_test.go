@@ -204,6 +204,17 @@ func (f kiroProjectJourney) assertPreparedState(t *testing.T, project string) {
 	}
 }
 
+func TestKiroUserArchivePreservesAuthoredBytesWithAutocrlf(t *testing.T) {
+	transport := newProjectJourneyTransport(t, "zip")
+	// Exercise the real archive consumer with a task-owned repository setting.
+	// The authoring and archive commands must preserve the same literal bytes.
+	projectJourneyGit(t, transport.repo, "config", "core.autocrlf", "true")
+	skill := kiroUserCommitSource(t, transport, "literal User archive pin")
+	f := newKiroJourney(t, transport, true)
+	f.run(t, "", "add", transport.endpoint, "--alias", "user-docs", "--target", "kiro", "--scope", "user", "--yes")
+	f.assertKiroUserOwned(t, skill)
+}
+
 func (f kiroProjectJourney) assertKiroUserOwned(t *testing.T, skill string) (domain.Installation, domain.ClientBinding) {
 	t.Helper()
 	installation, binding := f.owned(t, "")

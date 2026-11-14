@@ -952,7 +952,7 @@ def author_source(ctx, probes):
                                                   "name": NAME, "version": "1.0.0"}))
     skill.write_text("---\nname: " + SKILL + "\ndescription: Owned Global source.\n---\nInert marker.\n")
     (source / "inert.py").write_text("from pathlib import Path\nPath(" + repr(str(ctx.root / "stdio-started")) + ").write_text('unexpected')\n")
-    (source / "mcp.json").write_text(json.dumps({"mcpServers": {
+    (source / "mcp.json").write_text(json.dumps({"$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json", "mcpServers": {
         SERVERS[0]: {"type": "stdio", "command": "python3", "args": ["${PLUGIN_ROOT}/inert.py"]},
         SERVERS[1]: {"type": "streamable-http", "url": probes["user"].url}}}))
     (ctx.home / "uap-state").mkdir(mode=0o700)

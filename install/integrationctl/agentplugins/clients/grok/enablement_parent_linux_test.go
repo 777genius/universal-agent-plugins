@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/directoryidentity"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statev2"
@@ -211,4 +212,57 @@ func TestEnablementColdParentRejoinsBeforeConfigAndStateWrites(t *testing.T) {
 			assertPrototypeFilesUnchanged(t, originals)
 		})
 	}
+}
+
+type parentRefusalFileIO struct {
+	allow                  bool
+	reads, writes, removes int
+}
+
+func (files *parentRefusalFileIO) ReadNoFollow(path string) ([]byte, os.FileMode, bool, error) {
+	if files.allow {
+		snapshot, err := nativeconfig.New().ReadExactFile(path)
+		return snapshot.Body, snapshot.Mode, snapshot.Exists, err
+	}
+	files.reads++
+	return nil, 0, false, errors.New("unexpected config read after parent replacement")
+}
+
+func (files *parentRefusalFileIO) WriteAtomic(path string, body []byte, mode os.FileMode) error {
+	if files.allow {
+		return atomicfile.Write(path, body, mode)
+	}
+	files.writes++
+	return errors.New("unexpected config write after parent replacement")
+}
+
+func (files *parentRefusalFileIO) RemoveNoFollow(string) error {
+	files.removes++
+	return errors.New("unexpected config removal after parent replacement")
+}
+
+func TestEnablementColdParentRefusesPredecessorBeforeConfigRead(t *testing.T) {
+	fixture := coldParentFixture(t, "journal")
+	journal, err := fixture.recovery.recordRoot(fixture.record.OperationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	originals := capturePrototypeFiles(t, fixture.config, fixture.state.Path, journal,
+		filepath.Join(fixture.record.UserRoot, ".config-init.lock"))
+	cold := coldEnablementRecovery(fixture)
+	files := &parentRefusalFileIO{}
+	cold.Kernel = nativeconfig.NewWithFileIO(files)
+	replaced := false
+	cold.PackageVerifier = replacingParentVerifier{
+		enablementTestPackage: enablementTestPackage{path: fixture.record.ArtifactPath, digest: fixture.record.PackageDigest},
+		replace: func() {
+			replaceEnablementParent(t, fixture)
+			replaced = true
+		},
+	}
+	if err := cold.recoverRecord(t.Context(), fixture.record.OperationID); !errors.Is(err, directoryidentity.ErrChanged) ||
+		!replaced || files.reads != 0 || files.writes != 0 || files.removes != 0 {
+		t.Fatalf("lost parent reached config IO: error=%v replaced=%t calls=%+v", err, replaced, files)
+	}
+	assertPrototypeFilesUnchanged(t, originals)
 }

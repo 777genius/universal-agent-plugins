@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -44,6 +45,7 @@ type readonlyGrant struct {
 	InputSHA    string                    `json:"input_sha256"`
 	InputCount  int                       `json:"input_count"`
 }
+
 // Existing deadlines retain their original semantics for all earlier modes.
 func remaining(start, now int64, limit time.Duration) (time.Duration, error) {
 	if start <= 0 || now < start || now-start >= int64(limit) {
@@ -163,7 +165,7 @@ func readonlyOverflow(path string) (int, error) {
 		return 0, errors.New("overflow-id-refused")
 	}
 	value, e := strconv.ParseUint(strings.TrimSpace(string(body)), 10, 32)
-	if e != nil || value == 0 || strconv.FormatUint(value, 10)+"\n" != string(body) {
+	if e != nil || value == 0 || value > math.MaxInt32 || strconv.FormatUint(value, 10)+"\n" != string(body) {
 		return 0, errors.New("overflow-id-refused")
 	}
 	return int(value), nil
@@ -326,22 +328,23 @@ func (s *scopeState) readonlyFiles(ctx context.Context, root string, r request, 
 		}
 	}
 	for _, h := range s.held {
-		if h.path == filepath.Join(s.sealed, "grok") || h.path == filepath.Join(s.sealed, "collector.py") ||
-			h.path == filepath.Join(root, readonlyFiles[0]) || h.path == filepath.Join(root, readonlyFiles[1]) ||
-			h.path == s.systems["bwrap"].Path || h.path == s.systems["python3"].Path {
-			info, e := h.file.Stat()
-			if e != nil {
-				return e
-			}
-			id, e := readonlyIdentity(info, false)
-			if e != nil || h.digest == "" {
-				return errors.New("readonly-file-proof")
-			}
-			if _, capErr := unix.Fgetxattr(int(h.file.Fd()), "security.capability", nil); !errors.Is(capErr, unix.ENODATA) || h.id.Mode&(unix.S_ISUID|unix.S_ISGID) != 0 {
-				return errors.New("readonly-file-capability-refused")
-			}
-			grant.Files[h.path] = readonlyObject{h.path, id, h.digest}
+		if h.path != filepath.Join(s.sealed, "grok") && h.path != filepath.Join(s.sealed, "collector.py") &&
+			h.path != filepath.Join(root, readonlyFiles[0]) && h.path != filepath.Join(root, readonlyFiles[1]) &&
+			h.path != s.systems["bwrap"].Path && h.path != s.systems["python3"].Path {
+			continue
 		}
+		info, e := h.file.Stat()
+		if e != nil {
+			return e
+		}
+		id, e := readonlyIdentity(info, false)
+		if e != nil || h.digest == "" {
+			return errors.New("readonly-file-proof")
+		}
+		if _, capErr := unix.Fgetxattr(int(h.file.Fd()), "security.capability", nil); !errors.Is(capErr, unix.ENODATA) || h.id.Mode&(unix.S_ISUID|unix.S_ISGID) != 0 {
+			return errors.New("readonly-file-capability-refused")
+		}
+		grant.Files[h.path] = readonlyObject{h.path, id, h.digest}
 	}
 	return nil
 }

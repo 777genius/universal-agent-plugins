@@ -1240,7 +1240,7 @@ The exact fixed-argv test is updated with that same repair selector.
 The cold collector admits the existing top-level dependency repair DTO from
 `deps_render.go`: exact command/scope, complete action and result sets, original
 installation and binding IDs, alias, before/after source revision and digest,
-the fixture's sole native MCP component, unchanged result and the single
+the fixture's native Skill `check` and MCP `uap_public_probe`, unchanged result and the single
 enabled-inventory guidance produced by the Antigravity verifier. Prepared,
 installation-verified and authentication-not-checked recorded state is joined
 to the held cold identity. A doctor envelope, missing or extra field, wrong
@@ -1290,6 +1290,112 @@ contracts and genuine native runs must validate the eventual reviewed head.
 No new native, IDE-loading, MCP execution, trust, model or authentication
 qualification is claimed by this source correction.
 
+## 2026-11-14: independent saved-repair oracle and fixture corrections
+
+The follow-up started at `440f0666dad9255c1667c86f95654f7d960ffeb6` and is composed
+onto `9326475ff499be6f836727d268dbaec87baf7835`. It preserves the two reviewed
+production changes from `ff5ed890`. The incoming doctor JSON
+decoder correction is retained: the original `86a` hosted output was compact
+JSON (`"read_only":true`), so the former space-sensitive substring assertion
+refused a valid doctor result. Doctor remains a zero-native-call control.
+
+Independent source review found that the fixed remote package also includes
+`skills/check/SKILL.md`. The standard loader includes it, the planner emits
+Skill decisions before MCP decisions, and the public dependency renderer keeps
+both. The cold repair oracle now requires exactly those two ordered native
+components. It still refuses missing, duplicate, foreign and extra components,
+unknown fields, changed identities, missing inventory evidence and doctor output.
+The original doctor parser and its complete independent control test remain
+available; a doctor result does not satisfy the repair observation slot.
+
+A real temporary-file counterexample also showed that replacing `state-v2.json`
+with the same bytes, mode and mtime on another inode passed the former selected
+field comparison. The cold observation now joins the complete original state row
+and decoded state before any new baseline. This includes all environment receipts
+and immutable binding fields. Existing package, DATA receipts, original DATA
+directory/file identities and full User-profile comparisons remain in force.
+The inert contracts exercise same-byte state and DATA replacements and changes
+to an environment owner and an otherwise unselected binding field.
+
+The public test fixture now obtains saved ownership through the real Cobra
+`add` path, without constructing an `EnvironmentAuthority`. A separate cold
+fixture starts without state, store, delivery or DATA, receives only the two
+original `uap.toml` and `uap.lock` files, and performs public `install --locked`.
+Repeated confirmed repair must invoke the existing exact version/inventory pair
+while retaining the original source, state, complete receipts, portable agreement,
+environment store, selected profile and DATA. The pre-command file observer is
+the existing handle-based dependency-check observer; it captures Windows file
+identity before a later replacement can occur. No native executable is launched
+by these Go fixtures: the existing runner and scanner remain explicit inert ports.
+
+The initial local public fixture failed before acquisition because its original
+temporary path traversed the restored execution cache's `tmp` symlink. A
+diagnostic overlay identified that exact component in the shared recovery
+preflight. The fixture now resolves its fresh directory before constructing any
+state or authority. A small extraction of the existing CLI fixture accepts that
+original root; its default wrapper and all existing dependencies are unchanged.
+No production path or environment guard is weakened.
+
+The earlier three-platform `f6` missing-config refusal retained a compound
+preservation error, without the changed field. A new Linux replay exercised the
+actual public local `add --no-save` refusal with the ordinary User acquirer's
+scratch root set to `AGENTPLUGINS_HOME`. It refused missing native config with
+zero native calls. Original named and held state-root identity, mode, owner,
+link count, size and final membership remained equal; root mtime/ctime advanced
+after the sealed snapshot was created and removed. Every descendant, source
+and profile remained unchanged except the already admitted advisory lock refresh.
+The strict root predicate consequently failed. This is new causal evidence;
+the historical `f6` logs do not themselves establish their metadata delta.
+
+The refusal comparator now uses the same closed state-parent scratch rule as
+the disabled-repeat control. Its only two spellings are `uap-state` inside the
+full fixture and `.` when the selected state root itself is captured. Only that
+directory's size/mtime/ctime may differ. Both named and held device, inode, mode,
+owner, link count, birth, attribute and reparse facts, final membership, and every
+descendant remain exact. State, receipts, DATA, store entries and nested scratch
+directories receive no exception. Real temporary-directory and same-byte inode
+replacement cases, every retained metadata field in both API domains, unknown
+members and changed descendant content are covered by the contracts.
+
+The four comparisons retain their short-circuit order. The first failing domain
+(`state`, `bundle`, `config-members`, or `config-parent`) is appended to the
+existing bounded error. The first predicate now uses the specifically reviewed
+root rule; the other three comparisons and all snapshot helpers are unchanged.
+There are no additional reads, paths, bytes, JSON fields or commands. A four-case
+inert contract trips if any later comparison runs after the first failure.
+
+Actual local validation on the preserved incoming production gate:
+
+- Seven public AGY CLI tests and eleven subcases passed, including saved add,
+  agreement-only cold restore, repeated observation, both doctor controls,
+  original state/receipt/DATA preservation, disabled and absent inventory,
+  missing config, cleanup failure, dry run, and a declined interactive repair.
+  Existing JSON and explicit-target confirmation semantics are unchanged.
+- Replaying only the original `f6` lifecycle-observation source made both real
+  public saved/cold repair cases fail with zero inventory calls. The current
+  source passed both without an overlay. The RED log SHA256 is
+  `58c7cebd55efafa540960a996dd712dce55a2a26ce29d0fa15ebf0b3d6f153cf`;
+  the GREEN log SHA256 is
+  `425f009a9d3b4c8482ee99c92f282ee1558afa15fa41d5ec826ad79a12577b3f`.
+- The five AGY use-case tests, complete AGY adapter suite and research helper
+  suite passed. The original frozen Python run passed 43 contracts in 5.513 seconds;
+  its log SHA256 is
+  `88afe846b500d4c822222718b70ff0c5529f468b2ef1456137ad12b3ee469010`.
+- The final composition retains all seven incoming `9326475` component negatives,
+  their exact mutation bodies, and the incoming two-component repair DTO. The
+  additional second-component unknown-field control also remains explicit. All
+  43 Python contracts passed again in 5.323 seconds; the final log SHA256 is
+  `fbccba43eeabfb4c3e852ea983ae6067b6a28ab3ba46e76384a18c40bb3fbca3`.
+  The Go source files and production gate are byte-identical to the tested freeze;
+  no new Go or native execution is claimed by this composition.
+
+The local root-metadata diagnostic source, overlay and exact failing log are
+retained; the log SHA256 is
+`a31c7dbc0fe9734deb88b78c466c622d7407b1d16ea6bc6d5707ad870597b033`.
+These are inert Linux contracts, not macOS/Windows native runtime evidence.
+Native admission, enablement, IDE loading, model and authentication qualifications
+remain unchanged; genuine current-source captures and the final combined gates
+remain necessary.
 
 ## Prospective first-preservation-refusal diagnostic (2026-11-14)
 
@@ -1356,3 +1462,42 @@ reconstructs the entire incoming collector byte-for-byte. Root R1 permits
 this diagnostic after the new actual refusal; independent source R2 and
 genuine hosted execution remain required. No failing field is normalized,
 ignored, or assumed repaired.
+
+## 2026-11-14: original fe6 field evidence and combined refusal oracle
+
+The independent replay of the exact `fe6f7d31e08b560395a19d33422ddd45f17a02cb`
+Windows and Linux originals joins both official ZIP digests, physical headers,
+catalogs and CRCs, 59 inner members, 58 member hashes, 29 request/receipt pairs
+and 44 stream hashes per platform. The completed cold saved repair carries the
+native inventory witness and both authored components; the later missing-config
+public repeat correctly refuses with `mutated=false` and completed child cleanup.
+
+The new parent diagnostic identifies the same first changed field in both runs:
+`state`, `metadata`, `named`, `mtime_ns`. Its member hash is exactly SHA-256 of
+`relative-member-v1\0.`, identifying the original state-root directory. The
+Windows original artifact is `14108680071` (16,382 bytes, SHA-256
+`a66dc19abd26794c0f95b5c6e53525096527410342604869924801d72e9ede97`);
+Linux is `14108151835` (16,475 bytes, SHA-256
+`533bb54f1781a6440144db707422904d784561d852d024f0fdfd2dbaeebf1e4a`).
+These records establish the first delta only. They do not retain the complete
+filesystem postimages or prove that no subsequent difference exists.
+
+The combined collector preserves the reviewed original-root scratch comparator
+and the complete incoming bounded JSON diagnostic. It accepts only the original
+state root's size/mtime/ctime differences under the existing identity and final
+membership checks. A refused state comparison describes the first remaining
+field after those already permitted values; it cannot mistake the root timestamp
+for a changed descendant or hide an original root identity mismatch. Diagnostic
+projection operates only on copies of the captured rows, adds no reads and does
+not change the admission comparison or any stored snapshot. The four getters
+retain their original order and stop at the first refused domain. The complete
+ASCII message remains at most 1,024 bytes and retains the closed, path-free JSON.
+
+All four incoming diagnostic test methods and their negative bodies remain
+unchanged. The earlier end-to-end four-domain test keeps its original effects
+and later-getter tripwire; only its expected group labels, JSON format and bound
+are updated. A real temporary-directory composition contract checks accepted
+root scratch, a held root inode mismatch and a changed descendant in the same
+snapshot. Full state, saved/cold fixture, DATA, doctor and all prior component
+negatives remain in place. This composition does not claim a completed native
+lifecycle, IDE loading, MCP execution, authentication or model qualification.

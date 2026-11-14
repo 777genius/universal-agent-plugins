@@ -56,7 +56,7 @@ func enableProject(ctx context.Context, env clients.Env, request domain.Activati
 	}
 	repeated, err := session.prepare(ctx, file.Original(), plugin)
 	if err != nil || repeated {
-		if repeated {
+		if repeated && err == nil {
 			result.UserActions = []string{"The selected Grok project plugin is enabled; review trust and verify its components in Grok"}
 		}
 		return result, err
@@ -106,6 +106,9 @@ func (session *enablementActivation) prepare(ctx context.Context, original nativ
 			return false, err
 		}
 		if err := recovery.PackageVerifier.Verify(ctx, plugin.root, request.Delivery.ArtifactDigest); err != nil {
+			return false, err
+		}
+		if err := session.record.revalidateParent(); err != nil {
 			return false, err
 		}
 		return true, recovery.requireState(session.state)
@@ -174,6 +177,9 @@ func (session *enablementActivation) commit(ctx context.Context, env clients.Env
 	plugin, err := selectEnablementPlugin(plugins, before.root, before.name, before.version)
 	if err != nil || !plugin.enabled || plugin.trusted != before.trusted {
 		return false, errors.Join(err, fmt.Errorf("grok native readback did not confirm the exact enablement without a trust change"))
+	}
+	if err := record.revalidateParent(); err != nil {
+		return false, err
 	}
 	if err := recovery.verifyRecordConfig(record.Edit.AfterDigest, record.Edit.Mode); err != nil {
 		return false, err

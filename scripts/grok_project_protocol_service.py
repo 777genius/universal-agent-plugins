@@ -17,13 +17,15 @@ import sys
 import time
 
 import project_native_runtime as runtime
+from grok_project_protocol_client import document, STATE_SCHEMA
+from grok_project_protocol_enablement import ordinary_repair_state
 
 shared = runtime.shared
 LIMIT = runtime.MAX_ZIP
 COMMON_FIELDS = frozenset("schema_version source_commit source_tree passed commands stages vendor_authentication_used "
     "unmanaged_project_owned_enablement_qualified installer_sha256 probe_sha256".split())
 OPTIONAL_FIELDS = frozenset("acquisition all_original_events events_sha256 events_base64 error failed_command "
-    "native_profile_preparation installed_config_receipts enablement_previews owned_enablement owned_enablement_removal repair prepared_owned_state "
+    "native_profile_preparation installed_config_receipts enablement_previews ordinary_repair_observation owned_enablement owned_enablement_removal repair prepared_owned_state "
     "pre_removal_data_receipts post_removal_installation project_b_unchanged protected_fixture_files_match_expected "
     "untrusted_refusal_verified removed_absent persistent_data_retained".split())
 CASE_FIELDS = {
@@ -217,10 +219,71 @@ def admit_evidence(body, case, record, expected, env, budget):
                 and value["github_run_attempt"] == env["GITHUB_RUN_ATTEMPT"]
                 and value["github_event"] == env["GITHUB_EVENT_NAME"], "local-provider boundary differs")
     command_streams(value["commands"], budget)
+    if "ordinary_repair_observation" in value:
+        admit_ordinary_repair(value)
     if passed:
         require(all(row["error"] is None for row in value["commands"]), "successful evidence has an incomplete capture")
     budget.check()
     return passed
+
+
+def ordinary_repair_selection(value):
+    before = value.get("prepared_owned_state")
+    require(type(before) is dict and type(before.get("schema_version")) is int
+            and before["schema_version"] == STATE_SCHEMA and type(before.get("installations")) is list
+            and all(type(item) is dict for item in before["installations"]), "original prepared state required")
+    rows = [row for row in value["commands"] if row["probe"] == "repair-no-enable-consent"]
+    require(len(rows) == 1 and rows[0]["exit"] == 0 and rows[0]["error"] is None, "original ordinary repair command required")
+    row = rows[0]
+    argv, project = row["argv"], Path(row["cwd"])
+    require(len(argv) == 12 and argv[1] == "repair" and str(project) == row["cwd"]
+            and argv[3:] == ["--scope", "project", "--project-root", str(project), "--target", "grok", "--format", "json", "--yes"],
+            "ordinary repair command selection differs")
+    matches = [item for item in before["installations"] if item.get("installation_id") == argv[2]]
+    require(len(matches) == 1 and type(matches[0].get("clients")) is dict and len(matches[0]["clients"]) == 1,
+            "original ordinary repair installation differs")
+    installation = matches[0]
+    binding = next(iter(installation["clients"].values()))
+    require(type(binding) is dict and binding.get("client_id") == "grok" and binding.get("scope") == "project"
+            and binding.get("activation") == "prepared" and binding.get("verification") == "package_validated",
+            "original ordinary repair binding differs")
+    artifact = binding.get("physical_artifact_id")
+    require(type(artifact) is str and artifact not in ("", ".", "..") and Path(artifact).name == artifact
+            and "\\" not in artifact, "original ordinary repair artifact differs")
+    active = project / ".grok/plugins" / artifact
+    require(binding.get("target_locator") == str(active) and binding.get("native_profile_root") == str(project / ".grok"),
+            "original ordinary repair path differs")
+    return before, installation, binding, active, row
+
+
+def admit_ordinary_repair(value):
+    observation = value["ordinary_repair_observation"]
+    fields = {"partial", "no_consent_config_unchanged", "no_consent_exact_directory_repair", "post_repair_state_base64",
+              "post_repair_state_bytes", "before_state_sha256", "after_state_sha256", "mcp_witness_execution_observed",
+              "internal_acp_zero_proved_by_this_capture"}
+    require(type(observation) is dict and set(observation) == fields and observation["partial"] is True
+            and observation["no_consent_config_unchanged"] is True and observation["mcp_witness_execution_observed"] is False
+            and observation["internal_acp_zero_proved_by_this_capture"] is False, "closed partial repair observation required")
+    encoded, length = observation["post_repair_state_base64"], observation["post_repair_state_bytes"]
+    require(type(encoded) is str and len(encoded) <= 4 * (((1 << 20) + 2) // 3)
+            and type(length) is int and 0 < length <= 1 << 20, "partial repair original byte bound")
+    raw = base64.b64decode(encoded, validate=True)
+    require(len(raw) == length and base64.b64encode(raw).decode() == encoded
+            and hashlib.sha256(raw).hexdigest() == observation["after_state_sha256"], "partial repair original bytes differ")
+    # The original before bytes are not retained; this digest remains only a
+    # closed original claim. The parsed prepared state supplies delta authority.
+    require(type(observation["before_state_sha256"]) is str
+            and re.fullmatch(r"[0-9a-f]{64}", observation["before_state_sha256"]), "partial repair prior digest differs")
+    proof = observation["no_consent_exact_directory_repair"]
+    require(type(proof) is dict and set(proof) == {"operation_id", "receipt", "updated_at", "started_at_unix_ns", "finished_at_unix_ns"},
+            "closed ordinary repair proof required")
+    before, installation, binding, active, row = ordinary_repair_selection(value)
+    window = proof["started_at_unix_ns"], proof["finished_at_unix_ns"]
+    require(all(type(item) is int for item in window) and 0 <= window[1] - window[0] <= 900_000_000_000,
+            "ordinary repair original window differs")
+    expected = ordinary_repair_state(before, document(raw), installation, binding, active,
+                                    document(base64.b64decode(row["stdout_base64"], validate=True)), window)
+    require(json.dumps(proof, sort_keys=True) == json.dumps(expected, sort_keys=True), "ordinary repair proof differs")
 
 
 def revoke_output(descriptor, original, initial, payload, inputs):

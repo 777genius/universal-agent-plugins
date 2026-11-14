@@ -118,6 +118,40 @@ func readonlyTestRoot(t *testing.T) (string, *os.Root) {
 	return resolved, root
 }
 
+func TestReadonlyOverflowFitsSignedIdentityWithoutCoercion(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body string
+		want int
+	}{
+		{"ordinary", "65534\n", 65534},
+		{"signed-maximum", "2147483647\n", 2147483647},
+		{"signed-overflow", "2147483648\n", 0},
+		{"unsigned-maximum", "4294967295\n", 0},
+		{"zero", "0\n", 0},
+		{"negative", "-1\n", 0},
+		{"leading-zero", "065534\n", 0},
+		{"missing-newline", "65534", 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "overflow-id")
+			if err := os.WriteFile(path, []byte(tc.body), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			got, err := readonlyOverflow(path)
+			if tc.want == 0 {
+				if err == nil || got != 0 {
+					t.Fatalf("unrepresentable or noncanonical identity admitted: got=%d err=%v", got, err)
+				}
+				return
+			}
+			if err != nil || got != tc.want {
+				t.Fatalf("canonical bounded identity refused: got=%d want=%d err=%v", got, tc.want, err)
+			}
+		})
+	}
+}
+
 func TestReadonlyInputRefusesAliasSpecialAndUnownedPermissions(t *testing.T) {
 	path, root := readonlyTestRoot(t)
 	leaf := filepath.Join(path, "leaf")
@@ -205,7 +239,7 @@ func TestReadonlyInputBoundsAndCancellationRefuseBeforeTraversal(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	if _, _, err := readonlyInput(ctx, nil, 1000, 1000); err == nil {
-		t.Fatal("cancelled census began traversal")
+		t.Fatal("canceled census began traversal")
 	}
 }
 

@@ -47,8 +47,42 @@ jobs:
           go-version: '1.26.11'
           cache: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        id: host-node
         with:
           node-version: '24'
+      - name: Retain the selected Node runtime for Kiro
+        if: matrix.target == 'kiro'
+        id: kiro-node
+        env:
+          KIRO_NODE_VERSION: ${{ steps.host-node.outputs.node-version }}
+        shell: bash
+        run: |
+          python3 - <<'KIRO_NODE'
+          import json, os, re, shutil, stat
+          from pathlib import Path
+          version = os.environ['KIRO_NODE_VERSION']
+          arch = {'ARM64': 'arm64', 'X64': 'x64'}.get(os.environ['RUNNER_ARCH'])
+          if not re.fullmatch(r'v24\.\d+\.\d+', version) or arch is None:
+              raise SystemExit('unexpected setup-node version or architecture')
+          cache = Path(os.environ['RUNNER_TOOL_CACHE']).resolve(strict=True)
+          binary = cache / 'node' / version[1:] / arch / 'bin/node'
+          selected = shutil.which('node')
+          if (selected is None or Path(selected).resolve(strict=True) != binary
+                  or not stat.S_ISREG(binary.lstat().st_mode) or not os.access(binary, os.X_OK)
+                  or any(char in str(binary.parent) for char in '\r\n' + os.pathsep)):
+              raise SystemExit('unverified setup-node PATH executable')
+          proof = dict(schema_version=1, setup_action='820762786026740c76f36085b0efc47a31fe5020',
+                       version=version, architecture=arch, executable=str(binary), bin=str(binary.parent))
+          body = json.dumps(proof, sort_keys=True) + '\n'
+          if len(body.encode()) > 4096:
+              raise SystemExit('setup-node proof exceeds bound')
+          destination = Path(os.environ['RUNNER_TEMP']) / 'vendor-proof'
+          destination.mkdir(exist_ok=True)
+          with (destination / 'node-runtime.json').open('x') as stream:
+              stream.write(body)
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as stream:
+              stream.write('bin=' + str(binary.parent) + '\n')
+          KIRO_NODE
       - name: Refuse inherited real client profile overrides before live cases
         run: python3 -m unittest discover -s scripts -p 'test_live_install_audit_env.py'
       - name: Acquire actual public vendor client where a headless Linux build exists
@@ -235,9 +269,15 @@ jobs:
           AUDIT_KIND: ${{ matrix.kind }}
           AUDIT_TARGET: ${{ matrix.target }}
           AUDIT_VENDOR_OUTCOME: ${{ steps.vendor-install.outcome }}
+          KIRO_NODE_BIN: ${{ steps.kiro-node.outputs.bin }}
         shell: bash
         run: |
-          export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$RUNNER_TEMP/vendor-root/usr/bin:$HOME/.local/bin"
+          if [[ "$AUDIT_TARGET" == kiro ]]; then
+            test -n "$KIRO_NODE_BIN"
+            export PATH="$KIRO_NODE_BIN:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$RUNNER_TEMP/vendor-root/usr/bin:$HOME/.local/bin"
+          else
+            export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$RUNNER_TEMP/vendor-root/usr/bin:$HOME/.local/bin"
+          fi
           python3 scripts/live-install-audit.py \
             --cli "$RUNNER_TEMP/agentplugins-audit" \
             --target "$AUDIT_TARGET" --kind "$AUDIT_KIND" --limit 30 \

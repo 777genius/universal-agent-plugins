@@ -94,13 +94,18 @@ class FrontendPublicationContracts(unittest.TestCase):
         workflow = (Path(__file__).parents[1] / '.github/workflows/client-automation-native.yml').read_text()
         blocks = re.findall(r"(?ms)^          python3 - <<'PYTHON'\n(.*?)^          PYTHON$", workflow)
         blocks = [block for block in blocks if 'capture.frontend_packet' in block]
-        self.assertEqual(len(blocks), 3)
+        self.assertEqual(len(blocks), 4)
+        capture_prefixes = dict(CLI_MODE='GROK_FRONTEND_CAPTURE=',
+            SESSION_MODE='GROK_FRONTEND_CAPTURE=', LOCK_MODE='GROK_FRONTEND_CAPTURE=',
+            READONLY_MODE='GROK_READONLY_FRONTEND_CAPTURE=')
+        modes = [re.search(r'mode=capture\.([A-Z_]+)', block)[1] for block in blocks]
+        self.assertCountEqual(modes, capture_prefixes)
         body = self.preflight_refusal()
         with tempfile.TemporaryDirectory() as temporary:
             github_output = Path(temporary) / 'github-output'
             retained = Path(temporary) / 'frontend-failure.zip'
             facts = dict(bytes=123, sha256='c' * 64)
-            for block in blocks:
+            for block, mode in zip(blocks, modes):
                 for error, exit_code in ((None, 1), ('PRIVATE bounded capture refusal', 1), (None, 2), (None, 0)):
                     github_output.write_bytes(b'original output\n')
                     expected = ValueError if error is None and exit_code in (0, 1) else SystemExit
@@ -124,7 +129,7 @@ class FrontendPublicationContracts(unittest.TestCase):
                         (('frontend_failure=' + str(retained) + '\n').encode() if complete else b''))
                     self.assertNotIn('PRIVATE', stream.getvalue())
                     self.assertEqual(stream.getvalue(),
-                        ('GROK_FRONTEND_CAPTURE=' + json.dumps(facts, separators=(',', ':')) + '\n' if complete else '') +
+                        (capture_prefixes[mode] + json.dumps(facts, separators=(',', ':')) + '\n' if complete else '') +
                         ('GROK_FRONTEND_REFUSAL=' + body.decode() if error is None and exit_code == 1 else ''))
 
 
@@ -1234,6 +1239,119 @@ class SessionOnlyContracts(unittest.TestCase):
             else:state['notifications']*=4
             with self.subTest(change=change),self.assertRaises(ValueError):
                 case.session_rpc_frame(notice,state,req,sent.append)
+
+    def available_commands_fixture(self):
+        # Exact frame13 from artifact14100597648; prior inert fixture uses the same native SID.
+        raw = (
+            b'{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"01a1d896-e6c5-7e73-b878-fe73299939f2","update"'
+            b':{"sessionUpdate":"available_commands_update","availableCommands":[{"name":"compact","description":"Compress con'
+            b'versation history to save context window","input":null},{"name":"always-approve","description":"Toggle always-ap'
+            b'prove mode (skip all permission prompts)","input":{"hint":"on|off"}},{"name":"context","description":"Show conte'
+            b'xt window usage and session stats","input":null},{"name":"plugins","description":"Manage plugins (list, reload, '
+            b'trust, add, remove)","input":{"hint":"list | reload | trust <path> | add <path> | remove <path>"}},{"name":"relo'
+            b'ad-plugins","description":"Reload plugins from disk (alias for /plugins reload)","input":null},{"name":"session-'
+            b'info","description":"Show session details (model, turns, context usage)","input":null},{"name":"feedback","descr'
+            b'iption":"Send feedback about the current session","input":{"hint":"feedback text"}},{"name":"deep-research","des'
+            b'cription":"Research with bounded parallel agents, cross-check evidence, and write a cited report","input":{"hint'
+            b'":"<query>"},"_meta":{"workflowSource":"builtin","workflowPath":"/buildkite/builds/buildkite-agent-ci-cpu-cuda-x'
+            b'large-84697955c7-wfl22-1/xai/spacexai-checks/crates/codegen/xai-grok-shell/src/session/workflows/deep_research.r'
+            b'hai"}},{"name":"workflow","description":"Launch a saved workflow, list runs, or manage a run (pause, resume, sto'
+            b'p, save)","input":{"hint":"<name> [--agent-budget N] [--effort LEVEL] [args] | runs | pause|resume|stop|save [na'
+            b'me]"}},{"name":"goal","description":"Set, manage, or check an autonomous goal","input":{"hint":"<objective> [--b'
+            b'udget <tokens>] | status | pause | resume | clear"}},{"name":"loop","description":"Run a prompt on a recurring i'
+            b'nterval","input":{"hint":"[interval] <prompt>"}}],"_meta":{"tools":["run_terminal_command","read_file","search_r'
+            b'eplace","list_dir","grep","kill_command_or_subagent","todo_write","get_command_or_subagent_output","spawn_subage'
+            b'nt","scheduler_create","scheduler_delete","scheduler_list","monitor","search_tool","use_tool","workflow","enter_'
+            b'plan_mode","exit_plan_mode","ask_user_question","send_feedback","web_search","image_gen","image_edit","image_to_'
+            b'video","reference_to_video","write"]}},"_meta":{"totalTokens":1337,"requestTrimmedTokens":0,"eventId":"01a1d896-'
+            b'e6c5-7e73-b878-fe73299939f2-0","agentTimestampMs":1794635130595,"updateType":"AvailableCommandsUpdate","updatePa'
+            b'rams":{"commandsCount":11}}}}')
+        self.assertEqual(case.digest(raw),'f9457d63ac0bb5d432a98790a84c119a3354b2ef53c181fd50600a6da5bfe533')
+        frame=case.document(raw);sid=frame['params']['sessionId']
+        state,req,sent,notice=self.mcp_initialized_fixture()
+        for prior in state['notifications']:
+            if prior['params'].get('sessionId') is not None:prior['params']['sessionId']=sid
+        notice['params']['sessionId']=sid
+        case.session_rpc_frame(notice,state,req,sent.append)
+        return state,req,sent,frame
+
+    def test_measured_available_commands_is_only_a_captured_notification(self):
+        state,req,sent,frame=self.available_commands_fixture();before=copy.deepcopy(state);outbound=copy.deepcopy(sent)
+        with mock.patch.object(case.os,'open',side_effect=AssertionError('metadata path was opened')):
+            self.assertFalse(case.session_rpc_frame(frame,state,req,sent.append))
+        self.assertEqual(state,dict(before,notifications=before['notifications']+[frame]))
+        self.assertIsNone(state['session']);self.assertIsNone(state['plugins']);self.assertEqual(sent,outbound)
+        self.assertEqual([x['method'] for x in sent],['session/new'])
+        with self.assertRaises(ValueError):case.rpc_frame(frame,case.rpc_state(),req,sent.append)
+        self.assertEqual(sent,outbound)
+
+    def test_available_commands_closed_shape_and_bounds_refuse_without_capture_or_send(self):
+        changes=[(('params','_meta','agentTimestampMs'),v) for v in (True,0,-1,1<<63,1.0)]
+        changes += [(('params','_meta','totalTokens'),v) for v in (True,-1,(1<<20)+1,1.0)]
+        changes += [(('params','_meta','requestTrimmedTokens'),v) for v in (True,1,-1,0.0)]
+        changes += [(('params','_meta','updateParams','commandsCount'),v) for v in (True,10,12)]
+        changes += [(('params','sessionId'),v) for v in (None,True,'','x'*257,'bad\n','nonascii-é')]
+        changes += [(('params','_meta','eventId'),'foreign-0'),(('params','_meta','updateType'),'ToolCall'),
+            (('params','update','sessionUpdate'),'tool_call'),(('params','extra'),{}),
+            (('params','update','_meta','extra'),{}),(('params','_meta','extra'),{}),
+            (('params','_meta','updateParams','extra'),{}),
+            (('params','update','availableCommands',0,'name'),'unknown'),
+            (('params','update','availableCommands',0,'description'),'x'*257),
+            (('params','update','availableCommands',0,'description'),'bad\n'),
+            (('params','update','availableCommands',0,'_meta'),{}),
+            (('params','update','availableCommands',1,'input','hint'),'x'*129),
+            (('params','update','availableCommands',1,'input','extra'),True),
+            (('params','update','availableCommands',7,'_meta','workflowSource'),'project'),
+            (('params','update','availableCommands',7,'_meta','workflowPath'),'x'*1025),
+            (('params','update','availableCommands',7,'_meta','workflowPath'),True),
+            (('params','update','_meta','tools',0),'unknown'),
+            (('params','update','_meta','tools',1),'run_terminal_command')]
+        for path,value in changes:
+            state,req,sent,frame=self.available_commands_fixture();before=copy.deepcopy(state);outbound=copy.deepcopy(sent)
+            parent=frame
+            for key in path[:-1]:parent=parent[key]
+            parent[path[-1]]=value
+            with self.subTest(path=path,value=value),self.assertRaises(ValueError):
+                case.session_rpc_frame(frame,state,req,sent.append)
+            self.assertEqual(state,before);self.assertEqual(sent,outbound)
+
+    def test_available_commands_order_duplicate_catalog_and_mode_are_finite(self):
+        for change in ('before-init','after-result','duplicate','callback','method','mode','total-bound',
+                       'missing-key','missing-command','reordered-command','extra-tool','reordered-tool'):
+            state,req,sent,frame=self.available_commands_fixture()
+            if change=='before-init':state=self.state()
+            elif change=='after-result':state['plugins']={'result':{'plugins':[]}}
+            elif change=='duplicate':case.session_rpc_frame(frame,state,req,sent.append)
+            elif change=='callback':frame['id']=99
+            elif change=='method':frame['method']='session/update_unknown'
+            elif change=='mode':req['mode']=case.CLI_MODE
+            elif change=='total-bound':state['notifications']*=3
+            elif change=='missing-key':del frame['params']['update']['_meta']
+            elif change=='missing-command':frame['params']['update']['availableCommands'].pop()
+            elif change=='reordered-command':frame['params']['update']['availableCommands'].reverse()
+            elif change=='extra-tool':frame['params']['update']['_meta']['tools'].append('unknown')
+            else:frame['params']['update']['_meta']['tools'].reverse()
+            before,outbound=copy.deepcopy(state),copy.deepcopy(sent)
+            with self.subTest(change=change),self.assertRaises(ValueError):case.session_rpc_frame(frame,state,req,sent.append)
+            self.assertEqual(state,before);self.assertEqual(sent,outbound)
+
+    def test_available_commands_session_identity_joins_prior_and_future_notifications_and_response(self):
+        for change in ('prior-setup','prior-mcp','prior-response','future-setup','future-mcp','future-response'):
+            state,req,sent,frame=self.available_commands_fixture()
+            if change=='prior-setup':state['notifications'][-2]['params']['sessionId']='foreign'
+            elif change=='prior-mcp':state['notifications'][-1]['params']['sessionId']='foreign'
+            elif change=='prior-response':state['session']={'result':{'sessionId':'foreign'}}
+            else:
+                case.session_rpc_frame(frame,state,req,sent.append)
+                if change=='future-response':frame={'jsonrpc':'2.0','id':2,'result':{'sessionId':'foreign'}}
+                elif change=='future-mcp':
+                    state['notifications']=[x for x in state['notifications'] if x['method']!='_x.ai/mcp_initialized']
+                    frame={'jsonrpc':'2.0','method':'_x.ai/mcp_initialized','params':{'sessionId':'foreign','mcpToolCount':0,'elapsedMs':0}}
+                else:frame={'jsonrpc':'2.0','method':'_x.ai/session/setup','params':{'method':'session/new','phase':'response_ready','sessionId':'foreign'}}
+            before,outbound=copy.deepcopy(state),copy.deepcopy(sent)
+            with self.subTest(change=change),self.assertRaisesRegex(ValueError,'session-notification-identity'):
+                case.session_rpc_frame(frame,state,req,sent.append)
+            self.assertEqual(state,before);self.assertEqual(sent,outbound)
 
     def test_selected_config_capture_refuses_before_read_and_never_accepts_effects(self):
         for change in ('none','cleanup','sealed','symlink','hardlink','oversize','mode','owner','parent','foreign','snapshot'):

@@ -1759,3 +1759,51 @@ preserve the first record and original exception across a second failure or
 replacement of the evidence directory. Successful decoding is diagnostic only;
 genuine source bootstrap, repeat/restart and recovery still require the complete
 native result under the original guards.
+
+## 2026-11-14 — classify the observed official source PM cache
+
+The original Linux source-profile artifact `14106517402` from run
+`43574321311`, job `132389771695`, source `440f0666dad9255c1667c86f95654f7d960ffeb6`
+is 14,506 bytes, SHA-256
+`f6347c58b44213a87220bcd2664be21e8c34120886a798a100a75e693c2ea6db`.
+Its retained first `config-path-a` command exits zero. The native family settles
+after 64.429 seconds, and the source snapshot refuses ordinary file bytes at
+`project-a/.uap/hermes-runtime/cache/uv/archive-v0/1VwFzUGycm98fsvq/watchfiles/_rust_notify.abi3.so`:
+1,160,728 bytes, two hard links, ordinary member 210. The diagnostic is attached
+after the complete metadata, symbolic-link, hard-link and file-hash capture,
+when `source_ledger` classifies captured records. Its null `bytes_read` field
+does not assert that the producer never read the file. The original archive
+does not embed this file or name its second alias, and retains no complete
+accepted post-command User/profile image. All qualification flags stay false.
+
+At the pinned official Hermes commit `2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19`,
+[`pm/packages.py::uv_cache_path`](https://github.com/NousResearch/hermes-agent/blob/2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19/pm/packages.py)
+selects `get_default_hermes_root()/cache/uv`. The active custom Project root is
+that root. `Venv.apply` uses this cache, while
+[`pm/environment.py`](https://github.com/NousResearch/hermes-agent/blob/2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19/pm/environment.py)
+removes ambient UV cache settings and assigns the selected cache itself.
+Borrowing the real owner's tool store does not relocate this dependency cache.
+No cache environment override, copied cache, early native warm-up or changed
+User HOME supplies authority for this correction.
+
+The source measurement ledger now groups only each already-selected runtime's
+exact `cache/uv` subtree alongside its existing `tools` and `installs` runtime
+trees. Every member, original identity, link target and content hash remains in
+the digest and coverage accounting from the same complete capture. The `cache`
+parent, unknown cache siblings and protected members remain individual ordinary
+rows. The full 262,144-member, depth-64, 8-GiB payload ceiling, 120-second capture
+deadline, complete link closure, User/sibling preservation, ordinary 2,048-member
+and 1-MiB-file bounds, process settlement, native command catalog and evidence
+schemas are unchanged. This classifies measured runtime bytes; it does not grant
+recovery or production authority over those bytes.
+
+The causal inert filesystem contract creates the observed 1,160,728-byte shape
+with a real second hard link in the same Project's dependency generation. The
+original classifier refuses it; the corrected classifier preserves complete
+member/byte accounting, content-sensitive digests, the pre-effect User/sibling
+baseline and protected rows. Separate cases retain refusal for large ordinary
+cache siblings and protected files, unknown or cross-User/cross-Project aliases
+before hashing, and original root/cache-parent or membership replacement. The
+ledger grouping itself performs no additional read, stat or traversal. Genuine
+current-source bootstrap, repeat/restart and recovery remain unqualified until
+their complete native original is accepted under these unchanged guards.

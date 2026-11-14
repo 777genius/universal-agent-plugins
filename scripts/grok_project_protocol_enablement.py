@@ -3,6 +3,7 @@
 These helpers author only the existing disposable trust/foreign fixtures. The
 ordinary installer owns every enabled-member insertion and removal.
 """
+import base64
 import calendar
 import copy
 from datetime import datetime
@@ -153,6 +154,17 @@ def preview_enablement(journey, installation):
     after = read_owned(state_path, journey.root)
     proof = ordinary_repair_state(document(before), document(after), installation, binding, active, response, (started, finished))
     unchanged_native_and_files()
+    journey.evidence["ordinary_repair_observation"] = {
+        "partial": True,
+        "no_consent_config_unchanged": True,
+        "no_consent_exact_directory_repair": proof,
+        "post_repair_state_base64": base64.b64encode(after).decode(),
+        "post_repair_state_bytes": len(after),
+        "before_state_sha256": hashlib.sha256(before).hexdigest(),
+        "after_state_sha256": hashlib.sha256(after).hexdigest(),
+        "mcp_witness_execution_observed": False,
+        "internal_acp_zero_proved_by_this_capture": False,
+    }
     journey.cli("repair-enable-dry-run", "repair", installation["installation_id"],
                 extra=("--confirm-plugin-enable", "--dry-run", "--yes"))
     unchanged_native_and_files()

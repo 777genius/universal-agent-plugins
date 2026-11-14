@@ -5290,6 +5290,95 @@ module.exports = {
                 if not allowed:
                     self.assertIn("unverified native PATH executable", result.stderr)
 
+    def test_kiro_node_capture_rejects_unselected_runtime_without_executing_it(self):
+        workflow = (Path(__file__).resolve().parents[1] /
+                    ".github/workflows/live-install-remaining-clients.yml").read_text()
+        marker = "python3 - <<'KIRO_NODE'\n"
+        source = textwrap.dedent(workflow.split(marker, 1)[1].split("\n          KIRO_NODE", 1)[0])
+        variants = ("selected", "shadow", "version", "major", "architecture", "directory")
+        if os.name != "nt":
+            variants += ("not-executable", "symlink")
+        for variant in variants:
+            with self.subTest(variant=variant), TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                cache, runtime = root / "cache", root / "run"
+                runtime.mkdir()
+                binary = cache / "node/24.22.2/arm64/bin/node"
+                binary.parent.mkdir(parents=True)
+                ran = root / "native-was-executed"
+                body = f"#!{sys.executable}\nfrom pathlib import Path\nPath({str(ran)!r}).touch()\n"
+                binary.write_text(body)
+                binary.chmod(0o755)
+                other = root / "unrelated/node"
+                other.parent.mkdir()
+                other.write_text(body)
+                other.chmod(0o755)
+                output = root / "output"
+                output.touch()
+                env = dict(os.environ, PATH=str(binary.parent), RUNNER_TEMP=str(runtime),
+                           RUNNER_TOOL_CACHE=str(cache), RUNNER_ARCH="ARM64",
+                           KIRO_NODE_VERSION="v24.22.2", GITHUB_OUTPUT=str(output))
+                if variant == "shadow":
+                    env["PATH"] = str(other.parent) + os.pathsep + env["PATH"]
+                elif variant == "version":
+                    env["KIRO_NODE_VERSION"] = "v24.22.3"
+                elif variant == "major":
+                    env["KIRO_NODE_VERSION"] = "v25.0.0"
+                elif variant == "architecture":
+                    env["RUNNER_ARCH"] = "unselected"
+                elif variant == "directory":
+                    binary.unlink()
+                    binary.mkdir()
+                elif variant == "not-executable":
+                    binary.chmod(0o600)
+                elif variant == "symlink":
+                    binary.unlink()
+                    binary.symlink_to(other)
+                result = subprocess.run([sys.executable, "-c", source], env=env,
+                                        capture_output=True, text=True, check=False)
+                proof = runtime / "vendor-proof/node-runtime.json"
+                self.assertFalse(ran.exists(), result.stderr)
+                self.assertEqual(other.read_text(), body)
+                self.assertEqual(result.returncode == 0, variant == "selected", result.stderr)
+                if variant == "selected":
+                    self.assertEqual(json.loads(proof.read_text()), {
+                        "schema_version": 1, "setup_action": "820762786026740c76f36085b0efc47a31fe5020",
+                        "version": "v24.22.2", "architecture": "arm64",
+                        "executable": str(binary), "bin": str(binary.parent)})
+                    self.assertEqual(output.read_text(), "bin=" + str(binary.parent) + "\n")
+                else:
+                    self.assertFalse(proof.exists())
+                    self.assertEqual(output.read_bytes(), b"")
+
+    def test_remaining_matrix_keeps_non_kiro_path_and_kiro_empty_refusal(self):
+        workflow = (Path(__file__).resolve().parents[1] /
+                    ".github/workflows/live-install-remaining-clients.yml").read_text()
+        step = workflow.split("      - name: Retain the selected Node runtime for Kiro\n", 1)[1]
+        step = step.split("      - name:", 1)[0]
+        self.assertIn("        if: matrix.target == 'kiro'\n", step)
+        self.assertLess(workflow.index("id: host-node"), workflow.index("id: kiro-node"))
+        self.assertLess(workflow.index("id: kiro-node"), workflow.index("id: vendor-install"))
+        run = workflow.split("      - name: Run real acquisitions and report every source and outcome\n", 1)[1]
+        prefix = textwrap.dedent(run.split("        run: |\n", 1)[1].split("          python3 scripts/live-install-audit.py", 1)[0])
+        fixed = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$RUNNER_TEMP/vendor-root/usr/bin:$HOME/.local/bin"
+        self.assertEqual(prefix, 'if [[ "$AUDIT_TARGET" == kiro ]]; then\n'
+                         '  test -n "$KIRO_NODE_BIN"\n'
+                         '  export PATH="$KIRO_NODE_BIN:' + fixed + '"\n'
+                         'else\n  export PATH="' + fixed + '"\nfi\n')
+        self.assertNotIn("$PATH", prefix)
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            case = Path(temporary).resolve()
+            home, data = case / "home", case / "data"
+            home.mkdir()
+            data.mkdir()
+            for target in ("cursor", "windsurf", "grok", "vscode", "chatgpt"):
+                with self.subTest(target=target), patch.dict(os.environ, {
+                        "PATH": fixed, "AUDIT_TARGET": target, "KIRO_NODE_BIN": "/foreign/not-selected"}):
+                    child = audit.isolated_client_env(home, case, data)
+                    self.assertEqual(child["PATH"], fixed)
+                    self.assertNotIn("KIRO_NODE_BIN", child)
+
     def test_vendor_bootstrap_requires_reviewed_bytes_and_preserves_runner_toolchain(self):
         workflow = (Path(__file__).resolve().parents[1] /
                     ".github/workflows/live-install-remaining-clients.yml").read_text()
