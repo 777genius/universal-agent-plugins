@@ -10,10 +10,10 @@ export function getCliInvocation(invocation?: string | null): string {
 }
 
 // Only rewrite this product's own npx invocation, never other packages or flags.
-const NPX_UAP_INVOCATION = /^npx(?: (?:-y|--yes))? universal-agent-plugins(?:@[A-Za-z0-9._-]+)?(?=\\s|$)/gm;
+const NPX_UAP_INVOCATION = /^npx(?: (?:-y|--yes))? universal-agent-plugins(?:@[A-Za-z0-9._-]+)?(?=\s|$)/gm;
 
 export function hasNpxUapInvocation(command: string): boolean {
-  return /^npx(?: (?:-y|--yes))? universal-agent-plugins(?:@[A-Za-z0-9._-]+)?(?=\\s|$)/m.test(command);
+  return /^npx(?: (?:-y|--yes))? universal-agent-plugins(?:@[A-Za-z0-9._-]+)?(?=\s|$)/m.test(command);
 }
 
 export function withNativeCliInvocation(command: string, nativeCli: boolean): string {
