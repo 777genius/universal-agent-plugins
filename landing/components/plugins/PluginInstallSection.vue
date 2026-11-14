@@ -5,7 +5,7 @@ import CommandSnippetCard from '~/components/shared/CommandSnippetCard.vue';
 import { resolveAgentBadge } from '~/data/agentBadges';
 import { buildInstallCommandForSelection, buildManageCommandsForSelection } from '~/data/pluginInstall';
 import type { PluginInstallTargetId, InstallChannel, PluginCard, PluginResolvedInstallSpec } from '~/types/content';
-import { applyCliInvocation, getCliInvocation } from '~/utils/cliInvocation';
+import { applyCliInvocation, getCliInvocation, hasNpxUapInvocation } from '~/utils/cliInvocation';
 
 const props = withDefaults(
   defineProps<{
@@ -381,6 +381,7 @@ function toggleExpanded() {
                 :copied-label="t('plugins.install.copied')"
                 :accent="accent"
               />
+              <NativeCliCheckbox v-if="hasNpxUapInvocation(renderedInstallCommand)" />
 
               <div class="plugin-install__facts">
                 <div class="plugin-install__fact">

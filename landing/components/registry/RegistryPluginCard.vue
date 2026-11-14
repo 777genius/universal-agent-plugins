@@ -426,6 +426,7 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
               :command="command"
               compact
             />
+            <NativeCliCheckbox v-if="canInstall" />
             <p v-else class="plugin-card__unavailable" role="status">
               {{ t('registryUi.install.scope.selectionUnavailable') }}
             </p>
