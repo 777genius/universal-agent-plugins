@@ -12,6 +12,7 @@ import io
 import json
 import os
 from pathlib import Path
+import stat
 import re
 import subprocess
 import tarfile
@@ -134,11 +135,42 @@ def protected_scope_snapshot(root, scope, native_root):
     # They are deliberately absent from these scope-owned paths.
     observed = {"directories": live.scoped_snapshot(directories), "files": {}}
     for path in files:
-        require(not path.exists() or path.is_file(), "protected saved record is not a regular file")
-        observed["files"][path.relative_to(root).as_posix()] = (
-            {"digest": digest(path.read_bytes()), "mtime_ns": path.stat().st_mtime_ns,
-             "inode": path.stat().st_ino, "mode": path.stat().st_mode} if path.exists() else None)
+        observed["files"][path.relative_to(root).as_posix()] = protected_saved_record(path)
     return observed
+
+
+def protected_saved_record(path):
+    """Read one saved record through a held, bounded, no-follow descriptor."""
+    try:
+        before = path.lstat()
+    except FileNotFoundError:
+        return None
+    require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1
+            and 0 <= before.st_size <= 1 << 20,
+            "protected saved record must be a bounded single-link regular file")
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    fd = os.open(path, flags)
+    try:
+        held = os.fstat(fd)
+        def same(left, right):
+            return (stat.S_ISREG(right.st_mode) and right.st_nlink == 1
+                    and os.path.samestat(left, right) and right.st_mode == left.st_mode
+                    and right.st_size == left.st_size and right.st_mtime_ns == left.st_mtime_ns
+                    and right.st_ctime_ns == left.st_ctime_ns)
+        require(same(before, held), "protected saved record changed before read")
+        body = bytearray()
+        while len(body) <= before.st_size:
+            chunk = os.read(fd, min(65536, before.st_size + 1 - len(body)))
+            if not chunk:
+                break
+            body.extend(chunk)
+        require(len(body) == before.st_size
+                and same(before, os.fstat(fd)) and same(before, path.lstat()),
+                "protected saved record changed during read")
+        return {"digest": digest(body), "mtime_ns": before.st_mtime_ns,
+                "inode": before.st_ino, "mode": before.st_mode}
+    finally:
+        os.close(fd)
 
 
 def checked_saved_removal(documents, alias, case, root):

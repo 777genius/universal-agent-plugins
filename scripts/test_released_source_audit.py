@@ -167,6 +167,29 @@ class SavedScopeTests(unittest.TestCase):
                 (cache / "plugin.json").write_text("shared immutable cache", encoding="utf-8")
                 self.assertEqual(before, audit.protected_scope_snapshot(root, scope, native))
 
+    def test_saved_records_refuse_symlinks_hardlinks_and_unbounded_bytes(self):
+        for variant in ("symlink", "hardlink", "oversized"):
+            with self.subTest(variant=variant), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                native = root / "other-native"
+                native.mkdir()
+                documents = root / "project"
+                documents.mkdir()
+                original = root / "control.txt"
+                original.write_text("original fixture", encoding="utf-8")
+                selected = documents / "uap.toml"
+                if variant == "symlink":
+                    try:
+                        selected.symlink_to(original)
+                    except (OSError, NotImplementedError) as error:
+                        self.skipTest("native symlink creation unavailable: " + str(error))
+                elif variant == "hardlink":
+                    os.link(original, selected)
+                else:
+                    selected.write_bytes(b"x" * ((1 << 20) + 1))
+                with self.assertRaisesRegex(ValueError, "bounded single-link regular file"):
+                    audit.protected_scope_snapshot(root, "user", native)
+
     def test_first_command_cannot_modify_the_other_scope_then_hide_it_at_remove(self):
         for path in ("home/.pi/agent/unwanted.json", "uap-data/uap.toml", "uap-data/state-v2.json"):
             with self.subTest(path=path), tempfile.TemporaryDirectory() as temp:
