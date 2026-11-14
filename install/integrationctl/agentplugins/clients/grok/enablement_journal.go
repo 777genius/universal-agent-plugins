@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
-	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
@@ -194,20 +193,15 @@ func (recovery EnablementRecovery) Recover(ctx context.Context) error {
 	if recovery.State == nil || recovery.PackageVerifier == nil {
 		return fmt.Errorf("grok enablement recovery services are unavailable")
 	}
-	entries, err := recovery.recordNames()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	pending, err := recovery.Pending()
 	if err != nil {
 		return err
 	}
-	for _, entry := range entries {
-		if !strings.HasPrefix(entry, enablementRecordPrefix) {
-			continue
-		}
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if err := recovery.recoverRecord(ctx, strings.TrimPrefix(entry, enablementRecordPrefix)); err != nil {
-			return err
-		}
+	if len(pending) != 0 {
+		return errEnablementUnqualified
 	}
 	return nil
 }

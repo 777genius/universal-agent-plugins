@@ -9,6 +9,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/environmentstore"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
@@ -239,8 +240,9 @@ func (adapter *dependencyInstaller) Prepare(ctx context.Context, action environm
 	}
 	adapter.currentAction = action
 	request := installer.Request{Scope: adapter.app.scope(), ProjectRoot: adapter.app.ProjectRoot, OperationID: operationID, Operation: installer.Operation(action.Action), ClientID: action.ClientID, ClientConfigRoot: client.ConfigRoot,
-		ConfirmPluginEnable: adapter.opts.confirmPluginEnable && action.Action == "repair",
-		ClientExecutable:    backendExecutable(client, adapter.detected, adapter.app.scope()), ClientVersion: client.Version, InstallationID: action.InstallationID,
+		ConfirmPluginEnable:    adapter.opts.confirmPluginEnable && action.Action == "repair",
+		ClientNativeConfigRoot: dependencyNativeConfigRoot(adapter.app, client),
+		ClientExecutable:       backendExecutable(client, adapter.detected, adapter.app.scope()), ClientVersion: client.Version, InstallationID: action.InstallationID,
 		Selector: action.InstallationID, EnvironmentAuthority: action.Authority, ExternalUninstalled: action.Action == environment.ActionRemove && adapter.opts.externalUninstalled, ActivationComplete: action.ActivationComplete, AuthComplete: action.AuthComplete}
 	if err := adapter.populateDependencyTargets(view, action.InstallationID, &request); err != nil {
 		return nil, err
@@ -253,6 +255,13 @@ func (adapter *dependencyInstaller) Prepare(ctx context.Context, action environm
 		return nil, err
 	}
 	return adapter.prepareDependencyPackage(ctx, action, request, recorded)
+}
+
+func dependencyNativeConfigRoot(app App, client domain.DetectedClient) string {
+	if _, opted := clients.As[clients.UserNativeRegistryLayout](app.ClientRegistry, client.ClientID); app.scope() == domain.ScopeUser && opted {
+		return client.NativeConfigRoot
+	}
+	return ""
 }
 
 func (adapter *dependencyInstaller) Apply(ctx context.Context, prepared *installer.PreparedOperation) (installer.Result, error) {

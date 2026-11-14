@@ -159,7 +159,7 @@ jobs:
           retention-days: 14
 
   grok-acp-inventory:
-    name: Grok 1.0.70 isolated ACP metadata research
+    name: Grok 1.0.70 isolated ACP and fixed CLI research
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
@@ -192,12 +192,12 @@ jobs:
           output = temporary / 'grok-acp-inventory'
           diagnostic_deadline = __import__('time').monotonic() + 180
           capture_tree = subprocess.check_output(['/usr/bin/git', 'rev-parse', 'HEAD^{tree}'], text=True, timeout=5).strip()
-          record, stdout, stderr = run_probe([sys.executable, 'scripts/grok_acp_inventory_admission.py', '--output', str(output)],
+          record, stdout, stderr = run_probe([sys.executable, 'scripts/grok_acp_inventory_admission.py', '--output', str(output), '--plugin-cli-observation'],
               pathlib.Path.cwd(), dict(os.environ), temporary, 'grok-acp-frontend', timeout=180, limit=1 << 20, memory_only=True)
           if record['error'] is not None or record['exit'] not in (0, 1):
               raise SystemExit('Frontend did not prove bounded completion; no upload admitted')
           failure_path, failure_facts = capture.retain_frontend_failure(temporary, record, stdout, stderr,
-              os.environ['EXPECTED_COMMIT'], capture_tree, diagnostic_deadline, mode=None)
+              os.environ['EXPECTED_COMMIT'], capture_tree, diagnostic_deadline, mode=capture.CLI_MODE)
           with open(os.environ['GITHUB_OUTPUT'], 'a') as stream:
               stream.write('frontend_failure=' + str(failure_path) + '\n')
           print('GROK_FRONTEND_CAPTURE=' + __import__('json').dumps(failure_facts, separators=(',', ':')))
@@ -207,12 +207,12 @@ jobs:
           expected_tree = subprocess.check_output(['/usr/bin/git', 'rev-parse', 'HEAD^{tree}'], text=True).strip()
           diagnostics = []
           admitted = capture.admit_publication(output, packet, os.environ['EXPECTED_COMMIT'], expected_tree, destination,
-              diagnostics=diagnostics, diagnostic_deadline=diagnostic_deadline)
+              diagnostics=diagnostics, diagnostic_deadline=diagnostic_deadline, mode=capture.CLI_MODE)
           print('GROK_READOUT=' + __import__('json').dumps(diagnostics[0], separators=(',', ':')))
           with open(os.environ['GITHUB_OUTPUT'], 'a') as stream:
               stream.write('admitted=' + str(admitted) + '\n' + 'observation_exit=' + str(record['exit']) + '\n')
           PYTHON
-      - name: Require complete native metadata observation
+      - name: Require complete metadata and fixed CLI observation
         if: ${{ steps.grok_capture.conclusion == 'success' }}
         env:
           OBSERVATION_EXIT: ${{ steps.grok_capture.outputs.observation_exit }}

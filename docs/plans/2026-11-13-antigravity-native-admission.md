@@ -1151,3 +1151,38 @@ replaced child directory identity and each protected named/held state-parent
 metadata field. The controlled Cobra probe passed with an inert native runner;
 it is not native qualification. Fresh genuine acceptance of the corrected source
 is still required.
+### Cold locked repeat has a separate scratch parent (2026-11-14)
+
+The disabled-repeat correction above remains unchanged, including its exact
+installation ID, `mutated=false` and complete binding-preservation joins. The
+earlier held `e1438bd0` draft's proposal to allow only UAP-root ctime for both
+repeat paths is superseded: the ordinary source add and the locked no-op use
+different snapshot parents. This reconciliation preserves the draft's public
+disabled-repeat Go regression without retaining its proposed cold UAP-root exception.
+
+For the exact locked path, `resolveDependencySyncCandidate` verifies declarations
+through `inspectPinnedDependency` and `environmentstore.Store.Snapshot`.
+`dependencySyncUnchanged` also calls `Store.Get`, which creates and removes a
+verified snapshot. `App.dependencyStore` supplies no `TempRoot`, so the existing
+package builder uses the process temporary directory. The sealed public helper
+sets `TMP`, `TEMP` and `TMPDIR` to the original fixture's `root/tmp`. Antigravity's
+unchanged preflight does not call `Prepare`, and the intact sync returns before
+the mutation/lock path. There is no basis to exempt UAP-root ctime in this case.
+
+Only this cold comparison permits size/mtime/ctime changes on the exact original
+`root/tmp` directory. Both pathname and held-handle metadata retain device,
+inode, mode, owner, links, birthtime, attributes and reparse facts. Final membership
+and every other row remain exact, including `uap-state`, `installer-tmp`, all
+scratch descendants and all state, source, native, package and data bytes.
+Directory size can retain allocation changes after creating and removing a
+child; it is not a file-content allowance. Refusals emit bounded field names,
+counts and one relative-name digest, with no paths or contents.
+
+A real Linux create/write/remove replay under that original temporary parent
+failed the prior exact cold comparison: only its pathname/held mtime and ctime
+changed. The same replay passes the narrow comparison. All 38 Python contracts
+pass, including isolated protected-field/identity refusals, exact UAP-root ctime
+refusal, descendant scratch refusal, byte mutation and same-byte inode replacement.
+The existing disabled-repeat public Go test is preserved byte-for-byte from the
+reviewed draft; it was not rerun for this Python-only reconciliation. No native
+command was executed, and none of the failed hosted runs becomes qualified.

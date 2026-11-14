@@ -36,6 +36,7 @@ type hermesColdInputs struct {
 	osHome, temporary, root              string
 	ctx                                  context.Context
 	protected                            map[string]map[string]string
+	dataIdentities                       map[string]os.FileInfo
 	commands                             []map[string]any
 }
 
@@ -304,7 +305,48 @@ func (input *hermesColdInputs) unchanged(t *testing.T) {
 			t.Fatal("native cold lifecycle changed an unselected User/Project B or temporary authority", root)
 		}
 	}
+	for path, original := range input.dataIdentities {
+		current, err := os.Lstat(path)
+		if err != nil || !os.SameFile(original, current) || original.Mode() != current.Mode() {
+			t.Fatal("native cold lifecycle replaced original retained data authority", err)
+		}
+	}
 	input.verifyInstaller(t)
+}
+
+func (input *hermesColdInputs) rememberData(t *testing.T, installed domain.Installation) {
+	t.Helper()
+	if len(installed.DataReceipts) != 1 {
+		t.Fatal("cold data authority must be captured once from the accepted receipt")
+	}
+	if input.dataIdentities == nil {
+		input.dataIdentities = map[string]os.FileInfo{}
+	}
+	for _, receipt := range installed.DataReceipts {
+		if _, found := input.protected[receipt.Locator]; found {
+			t.Fatal("cannot renew original cold data authority")
+		}
+		original := securityFixtureTree(t, receipt.Locator)
+		input.protected[receipt.Locator] = original
+		for relative := range original {
+			path := filepath.Join(receipt.Locator, relative)
+			file, err := os.Open(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() {
+				if err := file.Close(); err != nil {
+					t.Error(err)
+				}
+			})
+			held, err := file.Stat()
+			named, statErr := os.Lstat(path)
+			if err != nil || statErr != nil || named.Mode()&os.ModeSymlink != 0 || !os.SameFile(held, named) {
+				t.Fatal("cold original data changed during held capture", err, statErr)
+			}
+			input.dataIdentities[path] = held
+		}
+	}
 }
 
 // Keep public Cobra's complete session verification in this process. Only the

@@ -29,19 +29,14 @@ func (*Adapter) PreflightActivation(env clients.Env, request domain.ActivationRe
 	if request.Plan.Scope != domain.ScopeProject && request.Plan.TargetContext.Scope != domain.ScopeProject && request.Plan.TargetContext.ProjectRoot == "" {
 		return nil
 	}
+	if request.ConfirmPluginEnable {
+		return errEnablementUnqualified
+	}
 	if _, err := grokPlanRoot(request.Client, request.Plan); err != nil {
 		return err
 	}
 	if err := preflightRetainedEnablement(env, request); err != nil {
 		return err
-	}
-	if request.ConfirmPluginEnable {
-		if !New().SupportsPluginEnablement(request.Plan.Scope) || request.BackendExecutable == "" || request.BackendExecutable != request.Client.ExecutablePath || request.BackendExecutable != request.Plan.NativeRegistryExecutable {
-			return fmt.Errorf("grok explicit Project enablement requires its qualified native executable")
-		}
-		if _, err := enablementAuthority(env, request.Plan.TargetContext.ProjectRoot, request.Client.ConfigRoot); err != nil {
-			return err
-		}
 	}
 	return preflightProjectDelivery(request)
 }
@@ -92,7 +87,7 @@ func activateProject(ctx context.Context, env clients.Env, request domain.Activa
 	}
 	return outcome, nil
 }
-func deactivateProject(ctx context.Context, env clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
+func deactivateProject(_ context.Context, _ clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
 	outcome := shared.StartedDeactivation()
 	outcome.NativeEffect = domain.NativeEffectUnchanged
 	root, err := grokProjectRoot(request.Client, request.TargetContext, request.NativeRegistryRoot)
@@ -106,15 +101,12 @@ func deactivateProject(ctx context.Context, env clients.Env, request domain.Deac
 	if filepath.Dir(request.ManagedArtifactPath) != filepath.Join(root, "plugins") {
 		return outcome, fmt.Errorf("grok project removal path differs from owned directory")
 	}
+	if hasEnabledOwnership(binding) {
+		return outcome, errEnablementUnqualified
+	}
 	if !request.Confirmed {
 		outcome.UserActions = []string{"agentplugins will remove only its exact prepared Grok project plugin directory"}
-		if hasEnabledOwnership(binding) {
-			outcome.UserActions = []string{"agentplugins will remove its exact Grok enabled-plugin membership and prepared project plugin directory"}
-		}
 		return outcome, nil
-	}
-	if hasEnabledOwnership(binding) {
-		return removeEnabledProject(ctx, env, request, outcome)
 	}
 	outcome.ExternalRemovalComplete = true
 	return outcome, nil

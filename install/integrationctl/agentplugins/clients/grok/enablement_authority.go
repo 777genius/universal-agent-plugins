@@ -1,10 +1,10 @@
 package grok
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
@@ -15,8 +15,12 @@ import (
 
 var _ clients.PluginEnablement = (*Adapter)(nil)
 
-func (*Adapter) SupportsPluginEnablement(scope domain.InstallScope) bool {
-	return scope == domain.ScopeProject && runtime.GOOS == "linux"
+var errEnablementUnqualified = errors.New("grok Project enablement requires verified recovery of native startup effects and original parent identity")
+
+// The prototype member journal does not recover ACP startup writes or preserve
+// original User parent authority. Prepared delivery remains available.
+func (*Adapter) SupportsPluginEnablement(domain.InstallScope) bool {
+	return false
 }
 
 func enablementAuthority(env clients.Env, project, userRoot string) (*EnablementRecovery, error) {

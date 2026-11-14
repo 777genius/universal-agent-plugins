@@ -19,7 +19,7 @@ func (kernel Kernel) Recover(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := kernel.validatePublicationParents(ctx, state); err != nil {
+	if err := kernel.validatePublicationRecovery(ctx, state); err != nil {
 		return err
 	}
 	kernel.Directory.Namespace = kernel.Namespace

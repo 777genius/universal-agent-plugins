@@ -1,6 +1,55 @@
 # Grok exact Project enablement through repair
 
-## Scope and publication boundary
+## Current safety boundary
+
+The `2b557b30e57206485aa35b79986da2ecff75f691` prototype is not admitted
+for native Project enablement. The adapter advertises no explicit enablement
+support and refuses confirmed enablement before recording an attempt or starting
+ACP. Direct adapter calls have the same refusal. Removal of a prototype enabled
+member refuses before ACP; ordinary Prepared add, repair and directory removal
+remain available. Legacy User behavior is unchanged.
+
+Original warmed-profile evidence already shows ACP log and SQLite writes outside
+the owned config member. The private membership journal cannot restore those
+writes and carries no original physical User-parent authority. Three causal
+inert regressions on unchanged `2b557b30` reproduced the consequences:
+
+- First ACP failure after an auxiliary write reported `NativeEffectUnchanged`
+  before any recovery record existed.
+- A failed second ACP left an auxiliary postimage after recovery reported
+  success and cleared both the attempt and member journal.
+- Cold recovery accepted a substituted User parent with the original config
+  and lock leaves moved back, then rewrote config/state and deleted the journal.
+
+Public recovery now observes and retains/refuses prototype work. It does not
+reconstruct authority from the current path, clean unpublished stages or claim
+that undoing a config span recovered native startup effects. The regressions
+check original bytes, inode, mode and mtime, including the observed-reconciliation
+entrypoint. For new enablement, public SDK and Cobra tests check zero native
+calls, no new attempt and unchanged files, alongside the plain Prepared lifecycle.
+Historical owned removal invokes no native client and preserves exact predecessor
+state bytes and native/package files. The existing generic core may persist and
+acknowledge its own unchanged removal attempt, changing state inode and mtime.
+Historical owned-state fixtures are explicitly authored test data, not native
+enablement proof.
+
+The design below records the superseded prototype and its intended future
+consumer. Its private codec, protocol and finite journal component tests remain;
+public enablement and recovery acceptance are deliberately unavailable. No
+native workflow or lifecycle predicate was weakened to turn this refusal into
+acceptance. Genuine native lifecycle gates therefore remain incomplete.
+
+Reopening requires a source-qualified native route with bounded startup effects
+and exact recovery **before the first ACP call**, including original physical
+parent authority retained through interruption and cold retry. Config membership
+undo alone is insufficient. A documented auxiliary-state redirect would also
+need native proof that original selected config, registry, auth and trust remain
+unchanged; the pinned route examined so far supplies no such admitted contract.
+Final-source metadata/foreign-MCP, held-lock and actual full-ID native lifecycle
+proof remain separate prerequisites. No generic flag, copied profile, whole-file
+foreign-state restoration or broader version admission supplies that proof.
+
+## Superseded prototype scope and publication boundary
 
 This candidate replaces the unpublished standalone enable-command proposal.
 The sole public consent surface is `repair <installation-or-alias>
@@ -107,10 +156,10 @@ alias; its persisted records and native reconciliation are unchanged. No second
 controller, public state schema, separate recovery store or client-ID branch is
 added to generic dispatch.
 
-## Local evidence and remaining native gates
+## Historical prototype contracts and remaining native gates
 
-Focused local contracts use real statev2, package projection, directory/kernel
-transactions and inert native protocol pipes. The public SDK cases cover frozen
+The original `2b557b30` contracts used real statev2, package projection, directory/kernel
+transactions and inert native protocol pipes. Its public SDK cases covered frozen
 consent, preview/cancel with zero ACP, exact enable/readback/repeat/removal, foreign
 config preservation, explicit-home refusals, prior disablement, saved dependency
 ownership, cold rollback, full removal-decision recovery after marker clearing,
@@ -118,10 +167,11 @@ partial-publication read-only inspection, and changed original removal authority
 The existing OpenCode public facade durable/crash/foreign-fact tests also pass.
 The original single/group removal decision/no-effect/attempt tests remain gates.
 
-The real public Cobra saved lifecycle uses the supported local TLS ZIP source:
+The original public Cobra saved lifecycle used the supported local TLS ZIP source:
 add, ordinary `--yes` repair, consented dry-run, invalid scope/target refusals,
 explicit installation repair, alias repeat and remove. Only the vendor transport
-is inert. A separate attempted local TLS Git journey failed before Grok at
+was inert. Current public tests instead require the safety refusal described
+above, while retaining the ordinary Prepared lifecycle. A separate attempted local TLS Git journey failed before Grok at
 production process containment (`ordinary_unsupported`); that failure is retained
 and is not a native success or a reason to relax process containment.
 

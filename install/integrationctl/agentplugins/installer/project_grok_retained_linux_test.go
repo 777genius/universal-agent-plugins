@@ -4,24 +4,42 @@ package installer
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/grok"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
-func enableGrokSDKFixture(t *testing.T) *grokEnableSDKFixture {
+// This explicitly authored historical prototype is not product enablement
+// evidence. Its reader and all subsequent operations use the real facade.
+func newGrokPrototypeSDKFixture(t *testing.T) *grokEnableSDKFixture {
 	t.Helper()
 	f := newGrokEnableSDKFixture(t, true)
 	f.install(t)
-	if result, err := f.execute(t, f.selected(t, OpRepair, true), Decision{Confirmed: true}); err != nil || result.Outcome != OutcomeCompleted {
-		t.Fatalf("owned enablement setup: %+v %v", result, err)
+	state, err := f.engine.store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	binding := f.binding(t)
+	pathHash := fmt.Sprintf("%x", sha256.Sum256([]byte(binding.TargetLocator)))
+	profileHash := fmt.Sprintf("%x", sha256.Sum256([]byte(filepath.Dir(f.config))))
+	id := "project/" + pathHash[:8] + "/grok-sdk-owned"
+	before := deathRead(t, f.config)
+	after := strings.Replace(before, "enabled=[", "enabled=['"+id+"',", 1)
+	deathWrite(t, f.config, after)
+	binding.NativeObjects = append(binding.NativeObjects, domain.NativeObjectOwnership{
+		ObjectID: "grok-enabled:" + profileHash + ":" + id, Kind: "grok_enabled_plugin", LogicalName: "grok-sdk-owned", Path: binding.TargetLocator,
+		BeforeDigest: fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(before))), ManagedDigest: fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(after))), ProtectionClass: "native_config_member",
+	})
+	state.Installations[0].Clients[binding.ClientBindingID] = binding
+	if err := f.engine.store.Save(state); err != nil {
+		t.Fatal(err)
 	}
 	return f
 }
@@ -29,7 +47,7 @@ func enableGrokSDKFixture(t *testing.T) *grokEnableSDKFixture {
 func TestProjectGrokSDKUpdateRepairRetainsOwnedMemberAtDurablePackageBoundary(t *testing.T) {
 	for _, op := range []Operation{OpUpdate, OpRepair} {
 		t.Run(string(op), func(t *testing.T) {
-			f := enableGrokSDKFixture(t)
+			f := newGrokPrototypeSDKFixture(t)
 			binding := f.binding(t)
 			owned, config := binding.NativeObjects[len(binding.NativeObjects)-1], deathRead(t, f.config)
 			skill := filepath.Join(binding.TargetLocator, "skills", "docs", "SKILL.md")
@@ -66,7 +84,7 @@ func TestProjectGrokSDKUpdateRepairRetainsOwnedMemberAtDurablePackageBoundary(t 
 			if result, err := f.execute(t, req, Decision{Confirmed: true}); err == nil {
 				t.Fatalf("commit-boundary interruption accepted: %+v", result)
 			}
-			if !seen || deathRead(t, f.config) != config || f.native.duplex != 2 {
+			if !seen || deathRead(t, f.config) != config || f.native.duplex != 0 {
 				t.Fatal("ordinary package replacement changed native enablement")
 			}
 			f.engine = f.reopen(t, f.home)
@@ -81,7 +99,7 @@ func TestProjectGrokSDKUpdateRepairRetainsOwnedMemberAtDurablePackageBoundary(t 
 func TestProjectGrokSDKRetainedMembershipDriftRefusesBeforePackageOrState(t *testing.T) {
 	for _, mode := range []string{"missing", "disabled", "changed-id", "blank-home", "foreign-home"} {
 		t.Run(mode, func(t *testing.T) {
-			f := enableGrokSDKFixture(t)
+			f := newGrokPrototypeSDKFixture(t)
 			request := f.selected(t, OpUpdate, false)
 			binding := f.binding(t)
 			skill := filepath.Join(binding.TargetLocator, "skills", "docs", "SKILL.md")
@@ -116,90 +134,30 @@ func TestProjectGrokSDKRetainedMembershipDriftRefusesBeforePackageOrState(t *tes
 	}
 }
 
-type grokRemovalInterception struct {
-	*grok.Adapter
-	before func(*domain.DeactivationRequest)
-}
-
-func (adapter grokRemovalInterception) Deactivate(ctx context.Context, env clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
-	if request.Confirmed {
-		adapter.before(&request)
+func TestProjectGrokSDKPrototypeOwnedRemovalRefusesBeforeEffects(t *testing.T) {
+	f := newGrokPrototypeSDKFixture(t)
+	request := f.selected(t, OpRemove, false)
+	binding := f.binding(t)
+	statePath := filepath.Join(f.project, ".uap", "state-v2.json")
+	state := deathRead(t, statePath)
+	unchanged := snapshotGrokSDKFiles(t, f, f.config, filepath.Join(binding.TargetLocator, "skills", "docs", "SKILL.md"))
+	for _, decision := range []Decision{{}, {Confirmed: true}} {
+		if result, err := f.execute(t, request, decision); err == nil {
+			t.Fatalf("unqualified prototype removal accepted: %+v", result)
+		}
+		unchanged()
+		// Confirmed Remove may persist and acknowledge its own unchanged
+		// attempt. Its exact predecessor bytes survive; state inode/mtime
+		// are not promised by that existing generic durability protocol.
+		if deathRead(t, statePath) != state {
+			t.Fatal("refused removal did not restore exact predecessor state")
+		}
+		current := f.binding(t)
+		if current.NativeActivationAttempt != "" || !reflect.DeepEqual(binding.NativeObjects, current.NativeObjects) {
+			t.Fatal("refused removal changed prototype ownership or created an attempt")
+		}
 	}
-	return adapter.Adapter.Deactivate(ctx, env, request)
-}
-
-func TestProjectGrokSDKRemovalRefusesChangedFrozenAttemptBeforeNativeEffect(t *testing.T) {
-	for _, mode := range []string{"replaced-attempt", "same-id-foreign-state", "blank-proof", "wrong-binding"} {
-		t.Run(mode, func(t *testing.T) {
-			f := enableGrokSDKFixture(t)
-			request := f.selected(t, OpRemove, false)
-			binding := f.binding(t)
-			skill := filepath.Join(binding.TargetLocator, "skills", "docs", "SKILL.md")
-			beforeSkill, beforeConfig := deathRead(t, skill), deathRead(t, f.config)
-			var changed domain.StateFileV2
-			called := false
-			adapter := grokRemovalInterception{Adapter: grok.New(), before: func(req *domain.DeactivationRequest) {
-				called = true
-				if req.NativeAttempt.OperationID == "" || req.NativeAttempt.StateDigest == "" {
-					t.Fatal("core omitted original removal proof")
-				}
-				switch mode {
-				case "blank-proof":
-					req.NativeAttempt.StateDigest = ""
-				case "wrong-binding":
-					req.NativeAttempt.BindingID = "foreign-binding"
-				default:
-					state, err := f.engine.store.Load()
-					if err != nil {
-						t.Fatal(err)
-					}
-					if mode == "replaced-attempt" {
-						current := state.Installations[0].Clients[binding.ClientBindingID]
-						current.NativeActivationAttempt = "foreign-replaced-attempt"
-						state.Installations[0].Clients[binding.ClientBindingID] = current
-					} else {
-						state.Installations[0].Source.Publisher = "foreign late authority"
-					}
-					if err := f.engine.store.Save(state); err != nil {
-						t.Fatal(err)
-					}
-					changed, err = f.engine.store.Load()
-					if err != nil {
-						t.Fatal(err)
-					}
-				}
-			}}
-			registry, err := clients.NewRegistry(adapter)
-			if err != nil {
-				t.Fatal(err)
-			}
-			cfg := f.engine.cfg
-			cfg.Registry = registry
-			f.engine, err = New(cfg)
-			if err != nil {
-				t.Fatal(err)
-			}
-			before, err := f.engine.store.Load()
-			if err != nil {
-				t.Fatal(err)
-			}
-			if result, err := f.execute(t, request, Decision{Confirmed: true}); err == nil {
-				t.Fatalf("foreign removal authority accepted: %+v", result)
-			}
-			if !called || f.native.duplex != 2 || deathRead(t, f.config) != beforeConfig || deathRead(t, skill) != beforeSkill {
-				t.Fatal("refused removal changed native or managed package")
-			}
-			want := before
-			if len(changed.Installations) != 0 {
-				want = changed
-			}
-			after, err := f.engine.store.Load()
-			if err != nil || !reflect.DeepEqual(after, want) {
-				t.Fatal("refused removal overwrote changed state or failed exact no-effect acknowledgement", err)
-			}
-			if _, err := os.Stat(binding.TargetLocator); err != nil {
-				t.Fatal(err)
-			}
-		})
+	if _, err := os.Stat(binding.TargetLocator); err != nil {
+		t.Fatal(err)
 	}
 }

@@ -1,6 +1,12 @@
 <script setup lang="ts">
+import { agentInstallExample } from '~/utils/agentInstallExample';
+import { pluginCommands } from '~/utils/commands';
 import { productRootUrl } from '~/utils/seo';
 import { localizedPath } from '~/utils/localizedRoutes';
+import {
+  hasPluginInstallTarget,
+  pluginInstallAvailability,
+} from '~/utils/pluginInstallAvailability';
 import { catalogVisiblePlugins } from '~/utils/filter';
 import type { KnownLocale } from '~/data/i18n';
 import { mdiArrowLeft, mdiOpenInNew } from '@mdi/js';
@@ -22,7 +28,9 @@ const registry = await useRegistryPage({ projection: { kind: 'client', value: cl
 const reviewedPlugins = catalogVisiblePlugins(registry.plugins).filter(
   (plugin) =>
     plugin.trust_state !== 'conformant_unreviewed' &&
-    plugin.client_support.clients.includes(client.id),
+    (client.id === 'chatgpt'
+      ? hasPluginInstallTarget(plugin, 'chatgpt') || hasPluginInstallTarget(plugin, 'chatgptweb')
+      : hasPluginInstallTarget(plugin, client.id)),
 );
 const siteUrl = productRootUrl(String(config.public.siteUrl), String(config.app.baseURL)).replace(
   /\/+$/,
@@ -34,9 +42,18 @@ const pageUrl = computed(() => localizedUrl(`/agents/${client.slug}/`));
 const breadcrumbId = computed(() => `${pageUrl.value}#breadcrumb`);
 const listId = computed(() => `${pageUrl.value}#plugin-list`);
 const title = computed(() => t('registryUi.agentPage.title', { name: client.name }));
-// Catalog examples require a signed target grant; these clients use a local package example.
-const needsLocalExample = ['grok', 'kimi', 'pi', 'hermes', 'antigravity'].includes(client.id);
-const installCommand = `npx -y universal-agent-plugins add ${needsLocalExample ? './my-plugin' : 'context7'} --target ${client.id}`;
+// Match the aggregate ChatGPT page to an eligible Desktop or Web surface.
+const example = agentInstallExample(reviewedPlugins, client.id);
+const needsLocalExample = !example;
+const exampleSource = example?.plugin.install_source ?? './my-plugin';
+const installCommand = example
+  ? pluginCommands(example.plugin, [example.target]).add
+  : `npx -y universal-agent-plugins add ./my-plugin --target ${client.id}`;
+const hasPinnedProject =
+  client.id === 'pi' &&
+  reviewedPlugins.some(
+    (plugin) => pluginInstallAvailability(plugin, ['pi'], 'project')?.kind === 'pinned_git',
+  );
 
 usePageSeo(title, () => t(`${client.presentationKey}.intro`), {
   translate: false,
@@ -127,9 +144,15 @@ usePageSeo(title, () => t(`${client.presentationKey}.intro`), {
                 keypath="registryUi.agentPage.tryPlugin"
                 tag="p"
                 scope="global"
-                ><template #source><code>context7</code></template></i18n-t
+                ><template #source
+                  ><code>{{ exampleSource }}</code></template
+                ></i18n-t
               >
-              <p v-else>{{ t('registryUi.agentPage.localPackageHint') }}</p>
+              <p v-else>{{ t('registryUi.agentPage.packageExampleSourceHint') }}</p>
+              <p v-if="hasPinnedProject">{{ t('registryUi.agentPage.pinnedProjectHint') }}</p>
+              <NuxtLink :to="localePath('/agent-skills/')">{{
+                t('registryUi.agentPage.skillsGuide')
+              }}</NuxtLink>
             </aside>
           </div>
         </v-container>

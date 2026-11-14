@@ -17,7 +17,7 @@ func removalEnablementFixture(t *testing.T) (enablementFixture, domain.StateFile
 	t.Helper()
 	fixture := newEnablementFixture(t)
 	fixture.attempt(t, true, true)
-	if err := fixture.recovery.Recover(t.Context()); err != nil {
+	if err := recoverPrototypeRecords(t.Context(), fixture.recovery); err != nil {
 		t.Fatal(err)
 	}
 	original := append(bytes.Clone(fixture.next), []byte("[foreign]\nlate='retained'\n")...)
@@ -81,7 +81,7 @@ func TestEnablementRemovalDecisionReopensExactCoreBoundaries(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			if err := fixture.recovery.Recover(t.Context()); err != nil {
+			if err := recoverPrototypeRecords(t.Context(), fixture.recovery); err != nil {
 				t.Fatal(err)
 			}
 			want, stateDigest := fixture.original, fixture.record.BeforeStateDigest
@@ -95,7 +95,7 @@ func TestEnablementRemovalDecisionReopensExactCoreBoundaries(t *testing.T) {
 			if _, err := os.Stat(fixture.record.ArtifactPath); err != nil {
 				t.Fatal("package removed before core directory transaction", err)
 			}
-			if err := fixture.recovery.Recover(t.Context()); err != nil {
+			if err := recoverPrototypeRecords(t.Context(), fixture.recovery); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -131,7 +131,7 @@ func TestEnablementPartialRemovalDecisionOnlyRollsBackExactPendingState(t *testi
 						t.Fatal(err)
 					}
 				}
-				err = fixture.recovery.Recover(t.Context())
+				err = recoverPrototypeRecords(t.Context(), fixture.recovery)
 				if commit && err == nil || !commit && err != nil {
 					t.Fatal("partial footer invented a state decision", err)
 				}
@@ -177,7 +177,7 @@ func TestEnablementRemovalDecisionRetryRequiresIdenticalDigestPrefix(t *testing.
 	if err := fixture.state.Save(desired); err != nil {
 		t.Fatal(err)
 	}
-	if err := fixture.recovery.Recover(t.Context()); err != nil {
+	if err := recoverPrototypeRecords(t.Context(), fixture.recovery); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -198,7 +198,7 @@ func TestEnablementRemovalDecisionWriteFailuresAndSubstitutionsRetainAttempt(t *
 				t.Fatal("failed footer changed state", handled, err)
 			}
 			fixture.recovery.journalPoint = nil
-			if err := fixture.recovery.Recover(t.Context()); err != nil {
+			if err := recoverPrototypeRecords(t.Context(), fixture.recovery); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -227,7 +227,7 @@ func TestEnablementRemovalProcessDeathAndRealPartialAppend(t *testing.T) {
 					t.Fatal("actual limited append did not leave a bounded non-authoritative prefix", err)
 				}
 			}
-			if err := fixture.recovery.Recover(t.Context()); err != nil {
+			if err := recoverPrototypeRecords(t.Context(), fixture.recovery); err != nil {
 				t.Fatal("cannot reopen removal crash", err)
 			}
 			want, digest := fixture.original, fixture.record.BeforeStateDigest

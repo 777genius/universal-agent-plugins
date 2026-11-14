@@ -220,3 +220,38 @@ Local Go 1.26.11 validation compiled and started the focused E2E, but its first
 pass. `gofmt` and `git diff --check` completed; fresh hosted Core and Coverage
 must execute the complete corrected recovery scenario. The separate generator
 assertions and generated landing mapping remain outside this fixture correction.
+
+### Composed refusal and cross-platform fixture checks
+
+The reviewed integration keeps the corrected foreign standalone removal above.
+Both public recover and repair now require the exact environment-authority
+refusal and preserve the complete captured manifest, lock, state, managed/store
+files, native registration map and native call count. The original owned receipt
+is then recovered after only the injected foreign receipt is removed. This
+supersedes the alternative draft that appended a foreign receipt to the binding;
+it does not change production recovery authority.
+
+Original transaction jobs on the same 539 source exposed two fixture boundaries:
+raw temporary-directory aliases disagreed with the canonical captured authority,
+and a production-held Windows base directory refused rename with sharing error
+32. The common fixture now canonicalizes its original root before creating any
+paths or authority. Only that exact Windows rename denial is an accepted
+protection outcome, with original held/named identities, metadata, contents,
+staging/marker bytes and an absent move destination checked. Actual POSIX and
+child-substitution refusal paths remain intact; no handle is closed or rebound.
+The identical real-symlink temporary-parent replay changed from two causal
+failures to 18 affected tests passing in 0.490 seconds. Independent source review
+accepted the three existing test-file changes. Genuine final-source Windows and
+macOS execution remains required; neither local source review nor this Linux
+replay replaces the hosted matrix or the native client evidence.
+
+The completed e5 Required job 132297760690 also exposed a stale Cline cycle
+configuration oracle. The real Project stager emits its owned managed-stdio
+launcher and private protocol prefix; the cycle proof still expected the raw
+authored child executable. Its installed-file proof already required the owned
+launcher and metadata. The configuration proof now independently pins that exact
+launcher, root/data/cwd/plugin fields and original child command/arguments, while
+keeping the closed environment and source/ownership checks. Six controls reject
+an unwrapped transport, a foreign launcher, wrong root/data, an altered child
+command and an extra argument. This corrects test expectations for the current
+transport; it adds no production command or native qualification.

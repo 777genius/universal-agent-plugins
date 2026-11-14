@@ -218,3 +218,48 @@ login, MCP initialization or model-use evidence. The original eighteen no-auth
 native probes and their budgets are unchanged. Local composed ZIP execution
 passes; final-source three-OS Git/ZIP CI and the separately retained native
 negative originals remain required for acceptance.
+
+## Complete retained authority across the composed lifecycle (2026-11-14)
+
+The existing public Git/ZIP User and Project A/B fixture now compares the full
+installation and source binding, the full client binding except its updated
+timestamp and appended committed receipts, and the original receipt prefix.
+An authored source update permits only its actual revision, tree and package
+digest changes. Project managed digests also join the actual native objects
+through the existing Kiro verifier; the source transport and package revision
+remain independently joined. Exact repeats cannot adopt a changed source,
+installation, binding namespace, data owner or earlier receipt history.
+
+Both scopes now hold the original data directory, owner receipt and retained
+marker through every warm command. The Project fixture includes one never-run
+stdio component with PLUGIN_DATA so that it exercises real data allocation in
+addition to its existing HTTP component. The complete owner JSON must equal
+the recorded data receipt. User remains Prepare/package-valid; Project remains
+Prepared/installation-verified. The rejecting runner requires zero process
+attempts after each command.
+
+Alongside the existing missing-Skill case, each warm journey quarantines the
+exact owned managed package and repairs it through the public command. The
+fixture first verifies the original receipt and managed digest, then holds the
+stationary parent, original leaf and destination parent across the rename.
+Opening the leaf through its retained parent uses the existing Windows sharing
+semantics; a top-level os.Open or os.OpenRoot on the movable leaf would prevent
+the rename on Windows. Both parent identities and the original moved leaf stay
+checked, and no foreign directory or authority is adopted.
+
+Cold locked install keeps the complete source/package identity, creates a new
+installation and disjoint data receipt, then repeats and removes while retaining
+the new original data directory. Remove preserves full source/package/data
+records and the existing exact User Prepare reinstall preference while clearing
+the removed binding and environment receipts. Seven continuity controls cover
+unchanged authority, an appended receipt, and five detached-authority cases.
+
+Independent source review accepted the final two-file fixture. On Linux with
+Go 1.26.11, its final public ZIP User/Project journey and all seven continuity
+controls passed in 13.551 seconds. The complete log SHA-256 is
+70eb3eab42e7d75153132be601f5d296057769ad889bf980d854fb66de9c1a6e.
+An earlier draft correctly exposed a missing expected User reinstall preference;
+the oracle now checks that exact existing production value. These local results
+do not establish Windows/macOS execution or native discovery. Final-source
+three-OS Git/ZIP runs and the separate eighteen no-auth native originals remain
+required; their commands, pins, budgets and qualification flags are unchanged.

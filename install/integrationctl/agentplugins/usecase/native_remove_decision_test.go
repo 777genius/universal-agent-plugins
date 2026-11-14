@@ -19,6 +19,7 @@ type removalDecisionControl struct {
 	settled         int
 	packagePath     string
 	before, desired domain.StateFileV2
+	foreign         domain.StateFileV2
 }
 
 func (control *removalDecisionControl) PrepareNativeRemovalDecision(_ context.Context, installationID, bindingID string, before, desired domain.StateFileV2) (bool, error) {
@@ -57,6 +58,10 @@ func (control *removalDecisionControl) PrepareNativeRemovalDecision(_ context.Co
 		}
 		current.Installations[0].UpdatedAt = "foreign after callback"
 		if err := control.store.Save(current); err != nil {
+			return true, err
+		}
+		control.foreign, err = control.store.Load()
+		if err != nil {
 			return true, err
 		}
 	}
@@ -113,9 +118,12 @@ func TestNativeRemovalDecisionFreezesStateAndOrdersPackageDeletion(t *testing.T)
 				if mode == "unrelated" && control.settled != 0 || mode == "success" && control.settled != 1 {
 					t.Fatal("recovery was not restricted to the handled decision", control.settled)
 				}
-				if !success && mode != "foreign-state" {
+				if !success {
 					state, loadErr := service.StateStore.Load()
 					want := control.before
+					if mode == "foreign-state" {
+						want = control.foreign
+					}
 					if mode == "recovery-error" {
 						want = control.desired
 					}

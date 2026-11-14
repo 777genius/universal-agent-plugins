@@ -1,5 +1,61 @@
 # Grok 1.0.70 isolated ACP inventory admission
 
+## Prospective same-run CLI observation after ACP admission
+
+The existing metadata job now opts into `--plugin-cli-observation`. Its one
+150-second run first admits the original User/A/B ACP captures and their exact
+2/3/3 rows, source, eligible-MCP witness and unchanged original profiles. Only
+then may the same helper, nonce, HOME, User config and A cwd perform these five
+fixed commands, each in its own strictly settled family:
+
+1. `grok plugin details --help`
+2. `grok plugin list --json`
+3. `grok plugin details <the same-run A collision full ID>`
+4. `grok plugin details uap-acp-collision`
+5. `grok inspect --json`
+
+The actual ACP row must supply the A collision ID and match its exact root and
+derived full spelling before the first CLI request. The bare name is an
+independent read-only control, never an enablement fallback. Successful
+`details --help` must advertise the literal `<NAME>` grammar before the later
+queries. A normal nonzero details lookup is retained as an observation; it is
+not selection or enablement success. Inspect joins the original A path, typed
+independent Project trust and plugin fields, and the still-eligible MCP witness;
+its `enabled` field is not treated as selector enablement.
+
+The closed research mode `plugin-cli-observation-v1` permits only those five
+phases, A scope, one fixed command per complete result, and an empty RPC object
+(`initialize: null`, `plugins: null`, `notifications: []`). It adds no request
+argv, caller-selected selector, provider or lock proof. Each command has at
+most five seconds from the original helper request and **16 KiB combined
+stdout/stderr**, using the existing single `command()` pipe. The original
+150-second budget includes all three ACP families, five CLI families, hashing
+and source checks; it is neither restarted nor enlarged.
+
+Before each CLI request, the complete metadata must still equal the preceding
+accepted postimage. Only the original no-follow `request.json` descriptor may
+then be rewritten; a full metadata comparison admits that exact control change
+before the next helper. Every post-ledger still uses Baseline0, the original
+User/A/B snapshots and the same `NativeBootstrap` creation identities. Existing
+mutable log/SQLite bounds remain observation limits, not recovery authority.
+Unknown effects, replacement, loss of family cleanup, or source change refuse.
+
+One fixed `plugin-cli-observation.json`, at most 1 MiB, retains ordered original
+receipts, combined streams and per-command ledgers with the source/nonce/ID
+join. Only this mode allows 27 closed ZIP members; default metadata remains 26,
+helper command caps remain 6/5/4, and aggregate/raw ZIP bounds remain 16/17 MiB.
+Both publication and readout enforce that distinction. Three-scope metadata
+completion and five-query measurement completion remain separate, and every
+product, trust, MCP, provider and activation qualification remains false.
+
+Original 0dd artifact 14084069531 contains native 1.0.70 help, list and inspect
+observations but no details or enable call. Its 31 cumulative additions are not
+per-command recovery proof. Public 2bdd source is not mapped to the shipping
+f50904eaee6c revision. This experiment measures those open questions without
+changing that evidence boundary: no mutator, session/new, auth, prompt, trust,
+profile copy or redirect is added. Inert tests do not qualify this route;
+a fresh hosted original and independent review remain required.
+
 ## Prospective sessionless startup negative
 
 The next metadata capture adds one task-authored enabled User MCP server whose
@@ -709,3 +765,14 @@ fixture itself authored the lock; it does not prove creation when absent.
 The new creation path is prospective until a genuine hosted original passes.
 Local inert filesystem/capture tests are not native qualification, and the
 earlier failed Project and generic/User captures remain negative evidence.
+
+### Reconciliation with the reviewed CLI observation and refusal diagnostics
+
+The eight-path `66e2327` to `6b523784` delta is composed over `744a9bb1`.
+The five fixed CLI queries, original complete baseline, closed publication,
+strict refusal cases and captured-stat lock diagnostic remain intact. The
+existing inert CLI fixture now omits the init lock for the independently
+authored-config cohort, matching the newly enforced measured membership.
+All 139 existing Python tests remain present, with 13 added contracts; the
+combined 152 tests pass in 3.038 seconds. This is source and inert validation;
+no Go, vendor-native execution or hosted acceptance is claimed for this union.

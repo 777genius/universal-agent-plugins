@@ -592,9 +592,10 @@
       "selected": "{count} seleccionado",
       "auto": "Detección automática",
       "choose": "O elegir agentes específicos",
-      "automaticHelp": "La CLI comprueba este plugin con los agentes instalados, omite los incompatibles y te permite confirmar los destinos. ChatGPT solo se incluye si el plugin ofrece una conexión verificada.",
-      "manualHelp": "Selecciona los agentes que deben recibir este plugin. Debe quedar al menos uno seleccionado.",
-      "summary": "{label}: {summary}"
+      "automaticHelp": "La CLI comprueba los agentes locales instalados y permite confirmar destinos compatibles. ChatGPT Desktop es local; la configuración de ChatGPT Web se completa dentro de ChatGPT.",
+      "manualHelp": "Selecciona los agentes donde instalar. Debe quedar al menos uno seleccionado.",
+      "summary": "{label}: {summary}",
+      "manualHelpWithAuto": "Selecciona los agentes donde instalar. Borra la última selección para elegir en la terminal."
     },
     "command": {
       "terminal": "En la terminal",
@@ -705,7 +706,8 @@
       "noMatches": "No hay coincidencias · {total} total",
       "shown": "{shown} mostrados · {total} plugin | {shown} mostrados · {total} plugins",
       "shownMatching": "{shown} mostrados · {matching} coincidencias · {total} en total",
-      "matching": "{matching} coincidencias · {total} en total"
+      "matching": "{matching} coincidencias · {total} en total",
+      "agentScopeHint": "Los resultados pueden ofrecer instalación en este equipo o en un proyecto. Elige el ámbito en las opciones de instalación del plugin."
     },
     "card": {
       "foundOnGithub": "Encontrado en GitHub",
@@ -829,7 +831,8 @@
         }
       },
       "noCompatibleSignedRelease": "UAP admite {agent}, pero este plugin no tiene una versión firmada compatible con el ámbito seleccionado.",
-      "piPinnedProjectSource": "Proyecto: instala en Pi desde la fuente Git fijada a un SHA exacto (no es un destino Pi firmado); la CLI comprueba la compatibilidad."
+      "piPinnedProjectSource": "Proyecto: instala en Pi desde la fuente Git fijada a un SHA exacto (no es un destino Pi firmado); la CLI comprueba la compatibilidad.",
+      "guidedChatgptSetup": "Configuración guiada de ChatGPT Web; termina la conexión dentro de ChatGPT."
     },
     "authentication": {
       "not_required": "No se requiere cuenta",
@@ -1015,7 +1018,9 @@
       "schemaName": "Paquete Agent Plugin {name}",
       "directory": "Directorio de complementos",
       "version": "Versión {version}",
-      "reviewedListingTooltip": "Se revisaron la ficha y los metadatos. Esto no certifica el código, el comportamiento ni la seguridad del complemento."
+      "reviewedListingTooltip": "Se revisaron la ficha y los metadatos. Esto no certifica el código, el comportamiento ni la seguridad del complemento.",
+      "exactGitProjectSource": "Fuente Git exacta para un proyecto",
+      "signedProjectRelease": "Versión firmada para un proyecto"
     },
     "community": {
       "breadcrumb": "Ruta de navegación",
@@ -1063,10 +1068,13 @@
       "vendorDocs": "Leer la documentación de {name}",
       "availableFor": "Complementos disponibles para {name}",
       "count": "{count} paquete revisado es compatible con este cliente. | {count} paquetes revisados ​​son compatibles con este cliente.",
-      "tryPlugin": "Prueba Context7 o sustituye {source} por el nombre corto revisado de otro plugin compatible o por la fuente de un paquete completo.",
+      "tryPlugin": "Prueba {source} o usa el nombre corto revisado o la fuente completa de otro plugin compatible.",
       "localPackageHint": "Sustituye ./my-plugin por la ruta de un paquete Agent Plugins 1.0 válido.",
-      "piSignedCount": "Paquetes firmados del catálogo para Pi: {count}",
-      "piDirectSourceNote": "Aquí solo aparecen paquetes cuyo lanzamiento firmado admite Pi. También puedes instalar Skills, MCP y extensiones compatibles desde un paquete local o un commit Git fijado; la CLI valida esas fuentes por separado."
+      "piSignedCount": "Paquetes con opciones de instalación o configuración para Pi: {count}",
+      "piDirectSourceNote": "Las opciones disponibles pueden incluir versiones firmadas o fuentes Git exactas para el usuario o el proyecto. La CLI comprueba compatibilidad y configuración; una fuente Git no es una autorización firmada para Pi.",
+      "packageExampleSourceHint": "Primero crea un paquete Agent Plugins compatible en ./my-plugin. Aquí no hay un ejemplo del catálogo firmado apto para este agente; la CLI comprueba los componentes, el ámbito y los requisitos de configuración del paquete.",
+      "pinnedProjectHint": "Algunos plugins ofrecen una fuente Git exacta para instalar en un proyecto. Esto no concede soporte firmado para Pi en el catálogo.",
+      "skillsGuide": "Instalar Skills individuales"
     },
     "components": {
       "extensions": "extensiones",

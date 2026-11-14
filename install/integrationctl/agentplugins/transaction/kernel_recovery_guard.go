@@ -5,6 +5,8 @@ package transaction
 import (
 	"context"
 	"fmt"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 // PrevalidateRecovery is inert and covers the entire pending durability decision.
@@ -16,7 +18,7 @@ func (kernel Kernel) PrevalidateRecovery(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := kernel.validatePublicationParents(ctx, state); err != nil {
+	if err := kernel.validatePublicationRecovery(ctx, state); err != nil {
 		return err
 	}
 	if kernel.Directory.JournalDir == "" {
@@ -43,4 +45,19 @@ func (kernel Kernel) PrevalidateRecovery(ctx context.Context) error {
 	}
 	_, err = kernel.pendingOwners(ctx, state, open)
 	return err
+}
+
+// State-only decisions need original ancestry, while replay also needs its manager.
+func (kernel Kernel) validatePublicationRecovery(ctx context.Context, state domain.StateFileV2) error {
+	if kernel.Directory.JournalDir == "" {
+		for _, receipt := range state.TransactionReceipts {
+			if receipt.PublicationParentAuthority != nil {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
+				return fmt.Errorf("publication recovery journal dir is required")
+			}
+		}
+	}
+	return kernel.validatePublicationParents(ctx, state)
 }

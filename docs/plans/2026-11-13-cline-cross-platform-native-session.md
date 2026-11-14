@@ -267,3 +267,41 @@ insufficient. Cold agreement-only restoration, native actions and budgets are
 unchanged. Local consumer contracts exercise coherent identity/data replacement,
 same-byte marker replacement, legal update/repair and retained-state refusals;
 new three-platform native acceptance remains pending on the published source.
+
+## Full binding continuity and the original cold marker
+
+The same collector now keeps the entire first accepted binding. Later operations
+must retain every field except `updated_at`, append-only committed receipts and,
+only for the authored changed update, the exact package revision and native
+objects' managed digests. The source may advance only its local tree digest;
+package version/manifest and matching binding revision advance together. Native
+object membership, paths and ownership fields stay fixed. Each accepted session
+extends the retained receipt prefix, so a later repair cannot rewrite an earlier
+update receipt. Canonical JSON comparison also keeps booleans distinct from
+integers, including the retained installation after remove.
+
+After the existing cold write session, the collector retains the marker's
+original physical identity and bounded bytes through the existing cold repeat
+and read session. A replacement containing identical bytes refuses. This adds
+no native command: the thirty fixed command receipts, five direct-installed MCP
+sessions and 900-second family budget remain unchanged. The complementary Linux
+public lifecycle already exercises separate User and both Project bindings.
+
+Both original DATA directories are captured after their respective public add,
+before the first native inspection or marker creation. Every existing command
+rechecks the original canonical path, device/inode, mode and owner/group; Windows
+also retains birth time, attributes and reparse facts. Content timestamps, size
+and directory link count are not frozen because creating the first marker may
+change directory contents. Captures are append-only for the two distinct roots;
+another capture of either root refuses. A real replacement before the first
+warm inspection previously reached the native boundary. The later same-leaf
+move already refused on POSIX because the original leaf ctime changed; that
+existing leaf guard remains intact alongside the new directory check.
+
+Actual inert counterexamples first failed on the unchanged collector: rewritten
+or shortened receipt history, changed binding membership/ownership, a typed
+package change and a same-byte cold-marker replacement reached or passed the
+bridge boundary. The corrected contracts retain legal update, appended repair
+receipts and unchanged cold-marker controls. These are consumer checks, not new
+native acceptance; the Cline tools/call, authentication and model boundaries are
+unchanged.

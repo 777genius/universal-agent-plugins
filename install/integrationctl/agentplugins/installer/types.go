@@ -59,6 +59,10 @@ type Request struct {
 	ClientID             string
 	ClientConfigRoot     string
 	ClientExecutable     string
+	// ClientNativeConfigRoot preserves an independently observed User profile
+	// for a single target opting into UserNativeRegistryLayout. It never replaces
+	// ClientConfigRoot or supplies a profile from persisted state.
+	ClientNativeConfigRoot string `json:"-"`
 	// ClientVersion is host-observed evidence for the selected executable.
 	// It is operational input, never portable package or diagnostic metadata.
 	ClientVersion      string `json:"-"`

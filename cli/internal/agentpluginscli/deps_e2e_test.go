@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -374,19 +375,15 @@ func TestDependencyEnvironmentCLIEndToEnd(t *testing.T) {
 	if e := f.store.Save(state); e != nil {
 		t.Fatal(e)
 	}
-	beforeRecovery, e := os.ReadFile(f.store.Path)
-	if e != nil {
-		t.Fatal(e)
-	}
-	if _, _, e := f.execute(false, "deps", "recover", "--yes", "--format", "json"); !errors.Is(e, transaction.ErrEnvironmentAuthority) {
-		t.Fatalf("mixed recovery did not reach the environment authority guard: %v", e)
-	}
-	if _, _, e := f.execute(false, "repair", id, "--target", "codex", "--format", "json"); e == nil {
-		t.Fatal("repair bypassed foreign pending recovery")
-	}
-	afterRecovery, _ := os.ReadFile(f.store.Path)
-	if string(beforeRecovery) != string(afterRecovery) {
-		t.Fatal("refused recovery changed state")
+	beforeRecovery := snapshotBytes()
+	nativeBefore, callsBefore := maps.Clone(runners[0].codexIDs), runners[0].calls
+	for _, args := range [][]string{{"deps", "recover", "--yes", "--format", "json"}, {"repair", id, "--target", "codex", "--format", "json"}} {
+		if _, _, e := f.execute(false, args...); !errors.Is(e, transaction.ErrEnvironmentAuthority) {
+			t.Fatalf("mixed recovery lost its exact environment refusal: %v", e)
+		}
+		if !maps.Equal(beforeRecovery, snapshotBytes()) || !maps.Equal(nativeBefore, runners[0].codexIDs) || runners[0].calls != callsBefore {
+			t.Fatal("refused recovery changed state, native registration or original files")
+		}
 	}
 	state.TransactionReceipts = nil
 	if e := f.store.Save(state); e != nil {
@@ -620,9 +617,11 @@ type dependencyClaudeListing struct {
 	root             string
 	codexIDs         map[string]bool
 	failNextCodexAdd bool
+	calls            int
 }
 
 func (r *dependencyClaudeListing) Run(_ context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
+	r.calls++
 	for _, value := range command.Env {
 		if strings.HasPrefix(value, "CODEX_HOME=") {
 			args := command.Argv[1:]

@@ -135,8 +135,8 @@ test('all owned presentation keys exist and technical client content remains the
     'GitLab Agent Plugin | Universal Agent Plugins',
   );
   assert.equal(
-    t('registryUi.agentPage.tryPlugin', { source: 'context7' }),
-    'Try Context7, or replace context7 with another compatible plugin’s reviewed short name or complete package source.',
+    t('registryUi.agentPage.tryPlugin', { source: 'gitlab' }),
+    'Try gitlab, or use another compatible plugin’s reviewed short name or complete package source.',
   );
   for (const count of [0, 1, 2, 5, 11, 21, 22, 25, 101]) {
     assert.equal(t('registryUi.multi.agents', count), `${count} agent${count === 1 ? '' : 's'}`);

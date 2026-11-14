@@ -112,3 +112,21 @@ test('Skills overview links to the browser and remains usable on a small screen'
   await expect(page.locator('.skills-catalog')).toBeVisible();
   await expect(page.locator('[data-initial-catalog]')).toHaveCount(0);
 });
+
+test('modern agent examples explain own-package prerequisites and link existing Skills support', async ({
+  page,
+}) => {
+  for (const agent of ['hermes', 'antigravity']) {
+    await page.goto(`agents/${agent}/`);
+    const example = page.locator('.agent-page__install');
+    await expect(example.locator('code')).toContainText(`add ./my-plugin --target ${agent}`);
+    await expect(example).toContainText(
+      'First create a compatible Agent Plugins package at ./my-plugin.',
+    );
+    await expect(example).toContainText('There is no eligible signed catalog example for this agent here');
+    await expect(example.getByRole('link', { name: 'Install individual Skills' })).toHaveAttribute(
+      'href',
+      /\/agent-skills\//,
+    );
+  }
+});

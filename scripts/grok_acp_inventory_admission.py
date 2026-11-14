@@ -17,6 +17,9 @@ import sys
 import time
 
 SESSION_MODE = 'session-only-v1'
+CLI_MODE = 'plugin-cli-observation-v1'
+CLI_PHASES = ('details-help', 'list-json', 'details-full-id', 'details-name', 'inspect-project')
+CLI_MEMBER = 'plugin-cli-observation.json'
 SESSION_CONFIG, SESSION_CONFIG_LIMIT = 'home/.grok/config.toml', 16 << 10
 # agent_build is measured in original 14058338742, not the supplementary public enum.
 SETUP_PHASES = frozenset(('auth', 'resolve_workspace', 'folder_trust', 'plugin_registry', 'mcp_merge',
@@ -270,11 +273,11 @@ def frontend_error(state, error):
                             else 'process' if isinstance(error, subprocess.SubprocessError) else 'other')
 
 
-def frontend(output, *, session_only=False, lock_qualification=False):
+def frontend(output, *, session_only=False, lock_qualification=False, plugin_cli=False):
     """Report a missing receipt only after run's existing cleanup/finally path."""
     state = frontend_state()
     try:
-        status = run(output, session_only=session_only, lock_qualification=lock_qualification, _frontend=state)
+        status = run(output, session_only=session_only, lock_qualification=lock_qualification, plugin_cli=plugin_cli, _frontend=state)
     except Exception as error:
         frontend_error(state, error)
         status = 1
@@ -506,13 +509,50 @@ def collector_result(req):
     return result
 
 
+def cli_arguments(root, phase):
+    selected = root / 'a/.grok/plugins/uap-acp-collision'
+    full_id = 'project/' + digest(str(selected).encode())[:8] + '/uap-acp-collision'
+    require(phase in CLI_PHASES, 'cli-phase')
+    return dict(zip(CLI_PHASES, (['plugin', 'details', '--help'], ['plugin', 'list', '--json'],
+        ['plugin', 'details', full_id], ['plugin', 'details', 'uap-acp-collision'], ['inspect', '--json'])))[phase]
+
+
+def cli_collector_result(req):
+    root = Path(req['input_root'])
+    result = {key:req[key] for key in ('schema_version', 'source_commit', 'source_tree', 'scope', 'nonce')}
+    result.update(mode=CLI_MODE, phase=req['phase'], semantic_complete=False, reason='isolation-refused',
+                  isolation={}, commands=[], rpc=rpc_state())
+    in_flight = False
+    try:
+        require(req['scope'] == 'a', 'cli-scope')
+        args = cli_arguments(root, req['phase'])
+        result['isolation'] = isolation(req)
+        env = {'PATH':'/usr/bin:/bin', 'LANG':'C.UTF-8', 'LC_ALL':'C.UTF-8', 'HOME':str(root/'home'),
+               'TMPDIR':str(root/'tmp'), 'TERM':'dumb', 'NO_COLOR':'1', 'GROK_DISABLE_AUTOUPDATER':'1',
+               'GIT_CONFIG_NOSYSTEM':'1', 'GIT_CONFIG_GLOBAL':'/dev/null', 'GIT_TERMINAL_PROMPT':'0'}
+        env.update({'XDG_'+name.upper()+'_HOME':str(root/('xdg-'+name)) for name in ('config','data','cache','state')})
+        result['reason'] = 'protocol-refused'
+        require(time.monotonic() < req['start_monotonic_ns']/1e9 + 5, 'cli-deadline')
+        in_flight = True
+        row = command([str(Path(__file__).resolve().parent/'grok'), *args], req['phase'], root/'a', env,
+                      req['start_monotonic_ns']/1e9 + 5, 16 << 10, result['rpc'], req)
+        in_flight = False
+        result['commands'].append(row)
+        require(row['error'] is None and type(row['exit']) is int, 'cli-capture')
+        result.update(semantic_complete=True, reason='complete')  # A lookup's nonzero exit is still an observation.
+    except (ValueError, OSError, subprocess.SubprocessError):
+        if in_flight: raise  # No partial stream or family authority.
+    return result
+
+
 def collect(request):
     req = document(ordinary(request, 16384), 16384)
     session = req.get('mode') == SESSION_MODE
     lock = req.get('mode') == LOCK_MODE
-    require('mode' not in req or session or lock, 'mode')
-    closed(req, 'schema_version source_commit source_tree uid gid nonce scope input_root parent_network_namespace start_monotonic_ns' + (' mode' if session else ' mode phase' if lock else ''))
-    body = json.dumps(lock_collector_result(req) if lock else collector_result(req), separators=(',', ':')).encode() + b'\n'
+    cli = req.get('mode') == CLI_MODE
+    require('mode' not in req or session or lock or cli, 'mode')
+    closed(req, 'schema_version source_commit source_tree uid gid nonce scope input_root parent_network_namespace start_monotonic_ns' + (' mode' if session else ' mode phase' if lock or cli else ''))
+    body = json.dumps(cli_collector_result(req) if cli else lock_collector_result(req) if lock else collector_result(req), separators=(',', ':')).encode() + b'\n'
     require(len(body) <= 2 << 20, 'result-bound')
     sys.stdout.buffer.write(body)
     sys.stdout.buffer.flush()
@@ -572,7 +612,8 @@ def validate_receipt(receipt, request):
                 and type(record['sha256']) is str and re.fullmatch('[0-9a-f]{64}', record['sha256']), 'system-executable')
     session = request.get('mode') == SESSION_MODE
     lock = request.get('mode') == LOCK_MODE
-    result = closed(receipt['result'], 'schema_version source_commit source_tree scope nonce semantic_complete reason isolation commands rpc' + (' mode provider' if session else ' mode phase lock_held' if lock else ''))
+    cli = request.get('mode') == CLI_MODE
+    result = closed(receipt['result'], 'schema_version source_commit source_tree scope nonce semantic_complete reason isolation commands rpc' + (' mode provider' if session else ' mode phase lock_held' if lock else ' mode phase' if cli else ''))
     if session:
         require(result['mode'] == SESSION_MODE, 'session-mode')
         provider = closed(result['provider'], 'requests models_get root_get forbidden settled')
@@ -586,7 +627,10 @@ def validate_receipt(receipt, request):
         require(type(result[key]) is type(request[key]) and result[key] == request[key], 'collector-identity')
     require(type(result['semantic_complete']) is bool and result['reason'] in ('complete', 'protocol-refused', 'help-refused', 'isolation-refused', 'collector-refused'), 'semantic-state')
     require(result['semantic_complete'] == (result['reason'] == 'complete'), 'semantic-state')
-    labels = LOCK_LABELS if lock else LABELS if session else METADATA_LABELS
+    if cli:
+        require(request['scope'] == 'a' and result['mode'] == CLI_MODE and result['phase'] == request['phase'] in CLI_PHASES
+                and result['rpc'] == rpc_state() and (not result['semantic_complete'] or len(result['commands']) == 1), 'cli-result')
+    labels = (request['phase'],) if cli else LOCK_LABELS if lock else LABELS if session else METADATA_LABELS
     require(type(result['commands']) is list and len(result['commands']) <= len(labels), 'command-count')
     total = 0
     for index, row in enumerate(result['commands']):
@@ -594,8 +638,17 @@ def validate_receipt(receipt, request):
         require(row['label'] == labels[index] and type(row['argv']) is list and all(type(x) is str for x in row['argv'])
                 and (row['exit'] is None or type(row['exit']) is int)
                 and row['error'] in (None, 'deadline', 'stream-bound', 'process-refused', 'protocol-refused'), 'command-record')
+        if cli:
+            require(type(row['merged_bytes']) is int and 0 <= row['merged_bytes'] <= 16 << 10
+                    and type(row['merged_base64']) is str and len(row['merged_base64']) == 4*((row['merged_bytes']+2)//3), 'cli-stream-bound')
         raw = base64.b64decode(row['merged_base64'], validate=True)
         require(type(row['merged_bytes']) is int and len(raw) == row['merged_bytes'] and digest(raw) == row['merged_sha256'], 'stream-identity')
+        if cli:
+            root = Path('/tmp/uap-grok-acp-input-' + request['nonce'])
+            require(type(row['exit']) is int and -255 <= row['exit'] <= 255 and (not result['semantic_complete'] or row['error'] is None) and len(row['argv']) >= 1
+                    and row['argv'][1:] == cli_arguments(root, request['phase'])
+                    and re.fullmatch(r'/tmp/uap-grok-acp-sealed-[^/]+/grok', row['argv'][0])
+                    and str(Path(row['argv'][0])) == row['argv'][0], 'cli-command')
         total += len(raw)
     require(total <= LIMIT and len(json.dumps(result['rpc']).encode()) <= 128 << 10, 'aggregate-bound')
     closed(result['rpc'], 'initialize plugins notifications' + (' session' if session else ''))
@@ -1205,6 +1258,87 @@ def inventory_rows(result, root, scope):
     return {row['root']: row['id'] for row in rows}
 
 
+def cli_selected_id(root, native_ids):
+    selected = str(root / 'a/.grok/plugins/uap-acp-collision')
+    require(native_ids.get(selected) == cli_arguments(root, 'details-full-id')[-1], 'cli-unobserved-id')
+    return selected, native_ids[selected]
+
+
+def cli_request(root, previous, request, budget):
+    """Only the original control leaf may change between accepted native families."""
+    from devin_structured_inventory_admission import metadata_inventory
+    require(metadata_inventory(root, budget) == previous, 'cli-inter-command-change')
+    body = json.dumps(request).encode()
+    require(len(body) <= 4096, 'cli-request-bound')
+    directory = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    descriptor = None
+    try:
+        info = os.fstat(directory)
+        require((info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_gid) == tuple(previous['.']), 'cli-original-root')
+        descriptor = os.open('request.json', os.O_WRONLY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=directory)
+        require(stable(os.fstat(descriptor)) == tuple(previous['request.json']), 'cli-original-request')
+        os.ftruncate(descriptor, 0)
+        require(os.write(descriptor, body) == len(body), 'cli-request-write')
+        after = dict(previous, **{'request.json':stable(os.fstat(descriptor))})
+        require(metadata_inventory(root, budget) == after, 'cli-request-only-change')
+    finally:
+        if descriptor is not None: os.close(descriptor)
+        os.close(directory)
+
+
+def cli_phase_admitted(phase, row, root):
+    body = base64.b64decode(row['merged_base64'], validate=True)
+    require(row['error'] is None and type(row['exit']) is int, 'cli-command-incomplete')
+    if phase == 'details-help':
+        usage = re.findall(rb'^Usage: ([^\r\n]+)$', body, re.MULTILINE)
+        require(row['exit'] == 0 and len(usage) == 1 and re.fullmatch(
+            rb'grok plugin details[ \t]+(?:\[OPTIONS\][ \t]+)?<NAME>', usage[0]), 'cli-details-help')
+    if phase == 'list-json':
+        require(row['exit'] == 0 and type(document(body, 16 << 10)) is list, 'cli-list-json')
+    if phase == 'inspect-project':
+        startup_inventory(row, root, 'a')
+        value = document(body, 16 << 10)
+        rows = value.get('plugins')
+        require(value.get('projectRoot') in (str(root/'a'), str(root/'a')+'/')
+                and value.get('projectTrusted') is False and type(rows) is list and all(type(r) is dict for r in rows), 'cli-inspect-project')
+        selected = [r for r in rows if r.get('name') == 'uap-acp-collision']
+        require(len(selected) == 1 and selected[0].get('scope') == 'project'
+                and selected[0].get('path') == str(root/'a/.grok/plugins/uap-acp-collision')
+                and type(selected[0].get('enabled')) is bool, 'cli-inspect-source')  # Not selector enablement.
+
+
+def cli_readout(members, summary, packet, facts, deadline):
+    require(summary.get('mode') == CLI_MODE and type(summary.get('measurement_complete')) is bool, 'cli-summary')
+    if CLI_MEMBER not in members:
+        require(not summary['measurement_complete'], 'cli-missing-capture')
+        return dict(schema_version=1, mode=CLI_MODE, reason='measurement-only', collection_complete=summary['collection_complete'],
+                    measurement_complete=False, cleanup_complete=True, scopes=facts, commands=0)
+    record = closed(document(members[CLI_MEMBER]), 'schema_version mode source_commit source_tree nonce selected_root selected_id observations')
+    require(type(record['schema_version']) is int and record['schema_version'] == 1 and record['mode'] == CLI_MODE
+            and all(record[key] == packet[key] for key in ('source_commit','source_tree','nonce'))
+            and len(facts) == 3 and all(r['ledger_accepted'] and r['semantic_complete'] for r in facts), 'cli-prerequisites')
+    root = Path('/tmp/uap-grok-acp-input-' + packet['nonce'])
+    ids = inventory_rows(dict(rpc=document(members['a.rpc.json'])), root, 'a')
+    require((record['selected_root'], record['selected_id']) == cli_selected_id(root, ids), 'cli-observed-source')
+    entries = record['observations']
+    require(type(entries) is list and 0 < len(entries) <= 5
+            and (not summary['measurement_complete'] or len(entries) == 5 and summary['collection_complete'] and summary.get('error') is None), 'cli-observation-count')
+    baseline = document(members['b.ledger.json'])
+    for index, entry in enumerate(entries):
+        require(time.monotonic() < deadline, 'cli-readout-deadline')
+        closed(entry, 'receipt ledger')
+        result = validate_receipt(entry['receipt'], dict(packet, schema_version=1, scope='a', mode=CLI_MODE, phase=CLI_PHASES[index]))
+        ledger = closed(entry['ledger'], 'accepted before after profiles_before profiles_after native_bootstrap')
+        require(type(ledger['accepted']) is bool and ledger['before'] == baseline['before']
+                and ledger['profiles_before'] == baseline['profiles_before']
+                and type(ledger['after']) is dict and len(ledger['after']) <= 4096, 'cli-original-ledger')
+        if index + 1 < len(entries) or summary['measurement_complete']:
+            require(ledger['accepted'] and result['semantic_complete'], 'cli-unaccepted-prefix')
+            cli_phase_admitted(CLI_PHASES[index], result['commands'][0], root)
+    return dict(schema_version=1, mode=CLI_MODE, reason='measurement-only', collection_complete=summary['collection_complete'],
+                measurement_complete=summary['measurement_complete'], cleanup_complete=True, scopes=facts, commands=len(entries))
+
+
 def directory_id(info):
     return dict(device=info.st_dev, inode=info.st_ino, mode=info.st_mode, uid=info.st_uid, gid=info.st_gid)
 
@@ -1251,9 +1385,11 @@ def publish(output, bodies, held=None, expected=None, *, mode=None):
     allowed = {'admission.json', 'acquisition.json'} | {scope + '.rpc.json' for scope in SCOPES} | {scope + '.ledger.json' for scope in SCOPES} | {scope + '-' + label + '.merged.log' for scope in SCOPES for label in METADATA_LABELS}
     if mode == LOCK_MODE:
         allowed = {'admission.json','acquisition.json'} | {phase+suffix for phase in LOCK_PHASES for suffix in ('.rpc.json','.ledger.json')} | {phase+'-'+label+'.merged.log' for phase in LOCK_PHASES for label in LOCK_LABELS}
+    elif mode == CLI_MODE:
+        allowed.add(CLI_MEMBER)
     else:
         require(mode is None, 'publication-mode')
-    require(set(bodies) <= allowed and all(len(body) <= LIMIT for body in bodies.values())
+    require(len(bodies) <= (27 if mode == CLI_MODE else 26) and set(bodies) <= allowed and all(len(body) <= LIMIT for body in bodies.values())
             and sum(map(len, bodies.values())) <= 16 << 20, 'artifact-bound')
     owned = held is None
     descriptor = os.open(output, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC) if owned else held
@@ -1286,6 +1422,8 @@ def publication_readout(raw, packet, deadline, *, mode=None):
     import struct
     import zipfile
     refused = dict(schema_version=1, mode=LOCK_MODE, reason='readout-refused') if mode == LOCK_MODE else dict(schema_version=1, reason='readout-refused', scopes=[])
+    if mode == CLI_MODE:
+        refused = dict(schema_version=1, mode=CLI_MODE, reason='readout-refused')
     try:
         def budget():
             require(type(deadline) is float and time.monotonic() < deadline, 'readout-deadline')
@@ -1294,15 +1432,18 @@ def publication_readout(raw, packet, deadline, *, mode=None):
         allowed = {'admission.json', 'acquisition.json'} | {s + suffix for s in SCOPES for suffix in ('.rpc.json', '.ledger.json')} | {s + '-' + label + '.merged.log' for s in SCOPES for label in METADATA_LABELS}
         if mode == LOCK_MODE:
             allowed = {'admission.json','acquisition.json'} | {phase+suffix for phase in LOCK_PHASES for suffix in ('.rpc.json','.ledger.json')} | {phase+'-'+label+'.merged.log' for phase in LOCK_PHASES for label in LOCK_LABELS}
+        if mode == CLI_MODE:
+            allowed.add(CLI_MEMBER)
+        maximum = 27 if mode == CLI_MODE else 26
         require(len(raw) >= 22, 'readout-eocd')
         end = struct.unpack('<4s4H2LH', raw[-22:])
         require(end[0] == b'PK\x05\x06' and end[1] == end[2] == 0
-                and end[3] == end[4] and 0 < end[4] <= 26 and end[5] <= 16 << 10
+                and end[3] == end[4] and 0 < end[4] <= maximum and end[5] <= 16 << 10
                 and end[6] + end[5] == len(raw) - 22 and end[7] == 0, 'readout-central-bound')
         with zipfile.ZipFile(io.BytesIO(raw)) as archive:
             infos = archive.infolist()
             require(len(infos) == end[4], 'readout-central-count')
-            require(0 < len(infos) <= 26 and len({i.filename for i in infos}) == len(infos)
+            require(0 < len(infos) <= maximum and len({i.filename for i in infos}) == len(infos)
                     and all(i.filename in allowed and not i.is_dir() and not i.flag_bits & 1
                             and i.compress_type in (zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED)
                             and 0 <= i.file_size <= LIMIT for i in infos)
@@ -1318,9 +1459,9 @@ def publication_readout(raw, packet, deadline, *, mode=None):
             return lock_readout(members, packet, deadline)
         if mode == SESSION_MODE:
             return session_readout(members, packet, deadline)
-        require(mode is None, 'readout-mode')
+        require(mode in (None, CLI_MODE), 'readout-mode')
         summary = document(members['admission.json'])
-        require(type(summary) is dict and set(summary) <= set('schema_version collection_complete cleanup_complete qualification scopes source_commit source_tree nonce run attempt error'.split())
+        require(type(summary) is dict and set(summary) <= set(('schema_version collection_complete cleanup_complete qualification scopes source_commit source_tree nonce run attempt error' + (' mode measurement_complete' if mode == CLI_MODE else '')).split())
                 and type(summary.get('schema_version')) is int and summary['schema_version'] == 1
                 and type(summary.get('collection_complete')) is bool and summary.get('cleanup_complete') is True
                 and summary.get('error') in (None, 'admission-refused'), 'readout-summary')
@@ -1371,6 +1512,8 @@ def publication_readout(raw, packet, deadline, *, mode=None):
                               added_entries=len(after.keys() - before.keys()), removed_entries=len(before.keys() - after.keys()),
                               changed_entries=sum(before[k] != after[k] for k in before.keys() & after.keys())))
         budget()
+        if mode == CLI_MODE:
+            return cli_readout(members, summary, packet, facts, deadline)
         return dict(schema_version=1, reason='collection-complete' if summary['collection_complete'] else 'admission-refused',
                     collection_complete=summary['collection_complete'], cleanup_complete=True, scopes=facts)
     except Exception:
@@ -1423,6 +1566,9 @@ def admit_publication(output, packet, expected_commit, expected_tree, destinatio
 
 
 def observation_exit(summary, *, lock_qualification=False):
+    if summary.get('mode') == CLI_MODE:
+        return 0 if (summary.get('collection_complete') is True and summary.get('measurement_complete') is True
+                     and summary.get('cleanup_complete') is True and summary.get('error') is None) else 1
     lock_complete = (lock_qualification is True and summary.get('mode') == LOCK_MODE
                      and summary.get('measurement_complete') is True
                      and summary.get('cleanup_complete') is True
@@ -1435,7 +1581,7 @@ def retain_frontend_failure(parent, record, stdout, stderr, commit, tree, deadli
     import tempfile
     from native_client_project_artifacts import write_zip
     require(type(deadline) is float and time.monotonic() < deadline, 'frontend-deadline')
-    labels = {None:'grok-acp-frontend', SESSION_MODE:'grok-session-frontend', LOCK_MODE:'grok-lock-frontend'}
+    labels = {None:'grok-acp-frontend', SESSION_MODE:'grok-session-frontend', LOCK_MODE:'grok-lock-frontend', CLI_MODE:'grok-acp-frontend'}
     require((mode is None or type(mode) is str and mode in labels)
             and all(type(value) is str and re.fullmatch('[0-9a-f]{40}', value)
                                   for value in (commit, tree)), 'frontend-source')
@@ -1479,7 +1625,7 @@ def retain_frontend_failure(parent, record, stdout, stderr, commit, tree, deadli
             if descriptor is not None: os.close(descriptor)
 
 
-def run(output, *, session_only=False, lock_qualification=False, _frontend=None):
+def run(output, *, session_only=False, lock_qualification=False, plugin_cli=False, _frontend=None):
     progress = frontend_state() if _frontend is None else _frontend
     import project_native_research as shared
     from grok_acp_bootstrap import NativeBootstrap
@@ -1487,7 +1633,8 @@ def run(output, *, session_only=False, lock_qualification=False, _frontend=None)
     from devin_structured_inventory_admission import metadata_inventory
     from client_automation_native_probe import snapshot
     shared.native.require_hosted('linux-amd64')
-    require(not (session_only and lock_qualification), 'mode')
+    require(type(plugin_cli) is bool and not (session_only and lock_qualification)
+            and (not plugin_cli or session_only is False and lock_qualification is False), 'mode')
     output = output.absolute()
     require(output.resolve() == output and not output.exists() and os.getuid() != 0, 'output-authority')
     output.mkdir(mode=0o700, parents=True)
@@ -1498,6 +1645,8 @@ def run(output, *, session_only=False, lock_qualification=False, _frontend=None)
     root.mkdir(mode=0o700)
     held = stable(root.lstat())[:2]
     summary = dict(schema_version=1, collection_complete=False, cleanup_complete=False, qualification=dict(FALSE), scopes=[])
+    if plugin_cli:
+        summary.update(mode=CLI_MODE, measurement_complete=False)
     bodies, cleanup_proved = {}, True
     try:
         with shared.Budget(150) as budget:
@@ -1540,18 +1689,31 @@ def run(output, *, session_only=False, lock_qualification=False, _frontend=None)
             bootstrap = NativeBootstrap(original_config=startup_config)
             bodies['acquisition.json'] = json.dumps(receipt, sort_keys=True).encode()
             native_ids, lock_created = {}, None
-            phases = LOCK_PHASES if lock_qualification else (('a',) if session_only else SCOPES)
+            observations = None
+            phases = LOCK_PHASES if lock_qualification else (('a',) if session_only else SCOPES + (CLI_PHASES if plugin_cli else ()))
             for stage in phases:
-                scope = 'a' if lock_qualification else stage
+                cli = plugin_cli and stage in CLI_PHASES
+                scope = 'a' if lock_qualification or cli else stage
                 prefix = stage if lock_qualification else scope
                 require(time.monotonic() < origin + 150, 'outer-deadline')
+                if cli:
+                    require(len(summary['scopes']) == 3 and all(r['result']['semantic_complete'] for r in summary['scopes']), 'cli-acp-prerequisite')
+                    selected_root, selected_id = cli_selected_id(root, native_ids)
+                    require(ledger['accepted'] and metadata_inventory(root, budget) == ledger['after'], 'cli-inter-command-change')
+                    if observations is None:
+                        observations = dict(schema_version=1, mode=CLI_MODE, source_commit=commit, source_tree=tree, nonce=nonce,
+                                            selected_root=selected_root, selected_id=selected_id, observations=[])
                 request = dict(schema_version=1, source_commit=commit, source_tree=tree, uid=os.getuid(), gid=os.getgid(), nonce=nonce,
-                               scope=scope, start_monotonic_ns=time.monotonic_ns(), helper_sha256=digest(ordinary(helper, 64 << 20)))
+                               scope=scope, start_monotonic_ns=time.monotonic_ns(), helper_sha256=digest(ordinary(helper, 64 << 20, expected=ledger['after']['helper'] if cli else None)))
                 if session_only:
                     request['mode'] = SESSION_MODE
                 if lock_qualification:
                     request.update(mode=LOCK_MODE,phase=stage)
-                (root / 'request.json').write_text(json.dumps(request))
+                if cli:
+                    request.update(mode=CLI_MODE, phase=stage)
+                    cli_request(root, ledger['after'], request, budget)
+                else:
+                    (root / 'request.json').write_text(json.dumps(request))
                 if session_only or lock_qualification and baseline is None:
                     # The one authored control request is fixed before Baseline0.
                     require(baseline is None, 'session-baseline-renewal')
@@ -1564,6 +1726,18 @@ def run(output, *, session_only=False, lock_qualification=False, _frontend=None)
                 cleanup_proved = True
                 progress['stage'] = 'ledger'
                 ledger = lock_ledger(root,baseline,stage,authored,budget,created=lock_created) if lock_qualification else session_metadata_ledger(root, baseline, budget) if session_only else post_ledger(root, baseline, roots, profiles, budget, bootstrap)
+                if cli:
+                    observations['observations'].append(dict(receipt=receipt, ledger=ledger))
+                    encoded = json.dumps(observations, sort_keys=True).encode()
+                    require(len(encoded) <= LIMIT, 'cli-observation-bound')
+                    bodies[CLI_MEMBER] = encoded
+                    try:
+                        require(ledger['accepted'] and result['semantic_complete'], 'cli-native-refused')
+                        cli_phase_admitted(stage, result['commands'][0], root)
+                    except ValueError:
+                        summary['error'] = 'admission-refused'
+                        break
+                    continue
                 if session_only:
                     ledger['selected_config_capture'] = capture_session_config(root, ledger, profiles['user_profile']['config.toml'], nonce, budget, receipt)
                 bodies[prefix + '.ledger.json'] = json.dumps(ledger, sort_keys=True).encode()
@@ -1596,7 +1770,11 @@ def run(output, *, session_only=False, lock_qualification=False, _frontend=None)
                 result.pop('rpc')
             progress['stage'] = 'source-final'
             require(not source(['status', '--porcelain', '--untracked-files=normal']), 'source-changed')
+            if plugin_cli:
+                require(metadata_inventory(root, budget) == ledger['after'], 'cli-final-change')
             summary['collection_complete'] = not session_only and not lock_qualification
+            if plugin_cli:
+                summary['measurement_complete'] = bool(observations and len(observations['observations']) == 5 and not summary.get('error'))
             if lock_qualification:
                 summary['measurement_complete'] = True
     except Exception as error:
@@ -1617,7 +1795,7 @@ def run(output, *, session_only=False, lock_qualification=False, _frontend=None)
         try:
             progress['stage'] = 'archive'
             progress['publication_attempted'] = True
-            publication = publish(output, bodies, output_fd, output_identity, mode=LOCK_MODE) if lock_qualification else publish(output, bodies, output_fd, output_identity)
+            publication = publish(output, bodies, output_fd, output_identity, mode=LOCK_MODE if lock_qualification else CLI_MODE) if lock_qualification or plugin_cli else publish(output, bodies, output_fd, output_identity)
         finally:
             os.close(output_fd)
         progress['stage'] = 'receipt-output'
@@ -1634,9 +1812,10 @@ if __name__ == '__main__':
     parser.add_argument('--collect', type=Path)
     parser.add_argument('--session-only', action='store_true')
     parser.add_argument('--lock-qualification', action='store_true')
+    parser.add_argument('--plugin-cli-observation', action='store_true')
     args = parser.parse_args()
-    if args.collect is not None and args.output is None and not args.session_only and not args.lock_qualification:
+    if args.collect is not None and args.output is None and not args.session_only and not args.lock_qualification and not args.plugin_cli_observation:
         collect(args.collect)
     else:
         require(args.output is not None and args.collect is None, 'mode')
-        raise SystemExit(frontend(args.output, session_only=args.session_only, lock_qualification=args.lock_qualification))
+        raise SystemExit(frontend(args.output, session_only=args.session_only, lock_qualification=args.lock_qualification, plugin_cli=args.plugin_cli_observation))

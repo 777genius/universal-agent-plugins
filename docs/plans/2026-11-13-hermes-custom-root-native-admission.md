@@ -1461,6 +1461,89 @@ After-settlement maps cannot reconstruct a vanished live lease file. The old
 native failure remains failed, and this diagnostic grants no new source or
 Project acceptance, baseline, cleanup permission or qualification.
 
+### Original public installation and retained data continuity
+
+The warm observer now compares each accepted installation with the preceding
+accepted state. The complete source, installation identity, binding authority,
+data receipts and physical data directory must continue. Only the authored local
+update may advance its tree and package revision; timestamps and operation-group
+metadata may advance during a committed operation. The original committed
+receipt prefix cannot be replaced or truncated. Normalized records are compared
+as typed JSON, including removal, so numeric values cannot substitute for
+booleans. Independent snapshot validity alone does not prove this continuity.
+
+Cold restoration additionally compares the complete accepted package and source,
+requires a new installation and disjoint data authority, and preserves the
+restored identity across locked replay and missing repair. Both original and
+cold data trees are captured once with held file identities before each world's
+first native inspection. The captures remain live through removal; existing
+test cleanup closes the handles before the parent can dispose of its completed
+fixture. Removal must retain the complete original source/package/data record.
+
+The new inert contracts use real state files and directories to demonstrate that
+two individually admissible snapshots can still have detached source, binding,
+data ownership, receipt history or a byte-identical replacement directory.
+These comparisons add no native commands, extend no timeout, change no recovery
+permission and do not qualify a native run.
+
+### Source snapshot of an already-proven empty readable file
+
+Original Windows source run43542221829/job132285537607/artifact14093934143
+retains a zero-byte ordinary member beneath the original selected generation's
+`.leases` directory. The exact 10576-byte outer SHA256 is
+`e505ec63a838fee28933e5137c5528bca02a0611221960a937ce76ba814a45d6`.
+All 15 members passed physical ZIP/CRC admission; 14 original member hashes,
+four command-stream hashes, source/vendor trees, nonce and preparation join.
+Its original no-follow readable handle and first metadata check succeeded; the
+first `os.read(fd, 1)` failed with errno13 before any Project native command.
+Pinned `lease_generation` calls `lease_directory(environment.parent)`, matching
+the retained selected `venv` and lease path. The vendor creates an empty UUID
+file and Windows `lock_fd` locks offset0/length1, which may extend beyond EOF.
+
+Only source capture now hashes an initially empty file without a positive-size
+read, after the original successful open and held identity/owner checks. The
+deadline and final named/held metadata and ancestor checks remain unchanged.
+No lease path is exempted; open failures and all nonempty read failures still
+refuse. The immutable User/install ledger is neither renewed nor relaxed, so
+the separately observed after-settlement install change remains a refusal.
+
+The inert contracts preserve the original 99 methods and cover a real empty
+file, unchanged non-source EOF refusal, growth, replacement, parent replacement
+or exact Windows sharing protection, and initial-open refusal. A Windows-only
+control takes a real CRT byte-range lock, first demonstrates the failing
+one-byte read, then captures the empty file; a locked nonempty control refuses.
+Local Linux execution cannot qualify that Windows branch or a native source
+journey. Existing hosted jobs supply those remaining observations; no command,
+catalog, native budget, production capability or qualification is added.
+
+### Public stdio fixture uses the original pinned executable through authored PATH
+
+The public package's absolute stdio command was invalid at the standard loader
+boundary. A local causal check evaluates the actual `observe_public` authoring
+expression and passes its document to the real loader and embedded schema
+registry: the HTTP server remains, but stdio is excluded with
+`mcp_server_invalid`. The same original selector also fails the real encoded
+managedstdio dispatch with exit126 before any probe event. This establishes an
+invalid fixture; the opaque failed bundled539 envelopes do not establish that
+it was their first internal failure.
+
+The public recipe now uses the original emitted probe basename and an authored
+server `PATH` containing only that probe's original pinned build directory.
+Arguments and the three existing `UAP_TEST_*` values are unchanged. Existing
+readiness honors this authored PATH, so the outer process PATH is unchanged.
+The pinned vendor later prepends its owned managed-launcher directory; this is
+not a claim that the final child PATH literally contains only the build root.
+No executable is copied into the package and no runtime pin is renewed.
+
+The positive local check uses the same normally built, source-verified inert
+probe through the real loader and managedstdio encoded dispatch. Initialize
+and tools/list responses and nonce/session events join; the original probe's
+inode, metadata and hash remain unchanged. This is a Linux fixture contract,
+not a vendor launch or native qualification. The Python contract covers both
+platform basenames, both Project recipes and same-name executable replacement
+refusal. All prior contracts, native commands, limits, source/profile guards
+and the HTTP-only cold fixture remain unchanged.
+
 ### Closed observer diagnosis when public cleanup remains unproved (2026-11-14)
 
 Original run [43542221829](https://github.com/777genius/universal-agent-plugins/actions/runs/43542221829)
@@ -1585,3 +1668,16 @@ not a native Hermes result. The genuine source A/B first/repeat/restart commands
 final User control, native bootstrap recovery and public Project admission must
 still satisfy their original guards. In particular, no exception is introduced
 for a later genuine User command's lease-directory changes.
+
+### Composition with the retained lifecycle contracts (2026-11-14)
+
+The source-observer and closed-failure changes above are composed with checkpoint
+`744a9bb1287cb72a36c4e17d648ea90c03a260fa`. All 104 existing profile test
+methods retain their original AST, including full lifecycle continuity, the
+known-empty source-file read boundary and the portable pinned stdio recipe.
+The new stdlib-venv child writes its fixed output through `sys.stdout.buffer`
+so the exact LF assertion does not depend on Windows text newline translation.
+The combined 115-method Python suite passed on Linux (114 executed, one existing
+Windows-only lease contract skipped). This verifies the composed collector and
+inert fixtures; Windows execution and genuine source/bundled native outcomes
+remain separate required evidence, with no new qualification from these tests.

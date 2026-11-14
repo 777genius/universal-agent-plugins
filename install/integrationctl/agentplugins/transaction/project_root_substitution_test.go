@@ -1,8 +1,11 @@
 package transaction
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
+	"syscall"
 	"testing"
 )
 
@@ -20,8 +23,12 @@ func TestProjectRootSubstitutedBaseCannotCreateStaging(t *testing.T) {
 			t.Error(err)
 		}
 	}()
-	if err := os.Rename(base, base+"-owned"); err != nil {
-		t.Fatal(err)
+	if !moveNativeRootFixture(t, held, base+"-owned") {
+		entries, err := os.ReadDir(base)
+		if err != nil || len(entries) != 0 {
+			t.Fatalf("denied replacement changed original contents: %v %v", entries, err)
+		}
+		return
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(base + "-owned") })
 	if err := os.Mkdir(base, 0o700); err != nil {
@@ -37,6 +44,35 @@ func TestProjectRootSubstitutedBaseCannotCreateStaging(t *testing.T) {
 			t.Fatalf("refused staging created files: %v %v", entries, err)
 		}
 	}
+}
+
+// A production os.OpenRoot handle prevents its own replacement on Windows.
+// That precise protection is a successful outcome; other rename errors are not.
+func moveNativeRootFixture(t *testing.T, held *heldNativeRoot, destination string) bool {
+	t.Helper()
+	if err := held.verifyNamed(); err != nil {
+		t.Fatal(err)
+	}
+	before, err := held.root.Stat(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(held.path, destination); err == nil {
+		return true
+	} else if runtime.GOOS != "windows" || !errors.Is(err, syscall.Errno(32)) {
+		t.Fatal(err)
+	}
+	if err := held.verifyNamed(); err != nil {
+		t.Fatal(err)
+	}
+	after, err := held.root.Stat(".")
+	if err != nil || !sameNativeRoot(before, after) || before.Size() != after.Size() || !before.ModTime().Equal(after.ModTime()) {
+		t.Fatalf("denied replacement changed original directory: %v", err)
+	}
+	if _, err := os.Lstat(destination); !os.IsNotExist(err) {
+		t.Fatalf("denied replacement created a destination: %v", err)
+	}
+	return false
 }
 
 func TestProjectRootSubstitutedChildCannotWriteOrReadMarker(t *testing.T) {
@@ -79,7 +115,7 @@ func TestProjectRootSubstitutedChildCannotWriteOrReadMarker(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(child.path, prepared.markerName), []byte("foreign bytes"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if body, err := child.readMarker(prepared.markerName, 4096); err == nil || len(body) != 0 {
+	if body, err := child.readMarker(prepared.markerName); err == nil || len(body) != 0 {
 		t.Fatalf("read marker from substituted directory: %q %v", body, err)
 	}
 	if err := prepared.cleanup(); err == nil {

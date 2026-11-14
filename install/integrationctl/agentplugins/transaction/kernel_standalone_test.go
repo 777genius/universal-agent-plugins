@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
@@ -108,6 +109,45 @@ func TestStandalonePublicationRefusesBindingChangesAndGroupsBeforeEffects(t *tes
 			}
 			if journals, err := kernel.Directory.ListOpen(); err != nil || len(journals) != 0 {
 				t.Fatalf("invalid publication left journals: %+v, %v", journals, err)
+			}
+		})
+	}
+}
+
+func TestPublicationParentCannotBeDiscardedByOrdinaryGroup(t *testing.T) {
+	for _, misplaced := range []bool{false, true} {
+		t.Run(fmt.Sprint(misplaced), func(t *testing.T) {
+			kernel, mutation, store := transactionFixture(t, "ordinary-group-parent")
+			before, err := store.Load()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if misplaced {
+				parent, err := profileauthority.Capture(t.Context(), mutation.OwnedBase)
+				if err != nil {
+					t.Fatal(err)
+				}
+				mutation.PublicationParentAuthority = &parent
+			}
+			_, err = kernel.ApplyDirectoryGroup(t.Context(), DirectoryGroup{OperationGroupID: "TEST-parent-group", Mutations: []DirectoryMutation{mutation}, DesiredState: mutation.DesiredState})
+			if !misplaced {
+				if err != nil {
+					t.Fatal(err)
+				}
+				assertTransactionBody(t, mutation.ActivePath, "new")
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), "standalone publication cannot join a package group") {
+				t.Fatalf("ordinary group discarded original parent: %v", err)
+			}
+			after, err := store.Load()
+			if err != nil || !reflect.DeepEqual(before, after) {
+				t.Fatalf("misplaced parent changed state: %v", err)
+			}
+			assertTransactionBody(t, mutation.ActivePath, "old")
+			assertTransactionBody(t, mutation.StagingPath, "new")
+			if journals, err := kernel.Directory.ListOpen(); err != nil || len(journals) != 0 {
+				t.Fatalf("misplaced parent left journals: %+v, %v", journals, err)
 			}
 		})
 	}

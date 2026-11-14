@@ -640,6 +640,59 @@ removing those additions gives the original build/pin AST exactly. No Go or
 native process was run. Actual delta: 13 added/2 removed runtime lines and
 56 added test lines; the observation does not identify the original failed field.
 
+### Saved User authority and composed file lifecycle
+
+The ordinary saved User route exposed a separate facade defect: the original
+detector reported both the legacy `.codeium/windsurf` root and the independent
+Devin `NativeConfigRoot`, but the dependency request retained only the former.
+The actual saved public add refused before effects with "devin global native
+root must come from original host authority"; the paired no-save control used
+the original detected client and succeeded with zero native processes. The
+37-command native Global consumer uses no-save and cannot establish this saved
+request handoff.
+
+The correction carries the independently observed root through the existing
+single-target request, using the existing `UserNativeRegistryLayout` capability.
+The optional Go `ClientNativeConfigRoot` field is excluded from Request JSON.
+It is not inferred from HOME, legacy ConfigRoot, a prior binding or a state file.
+Project, non-opted adapters and grouped requests reject a supplied value before
+effects. Empty input preserves the existing missing-authority refusal. Prepare
+freezes the original value; later caller-string changes cannot retarget Apply.
+Engine-owned physical identity and OpenCode host capture remain unchanged.
+Facade regressions cover invalid/missing roots and versions, recorded-root
+mismatch, scope/group refusal, JSON exclusion and unchanged foreign profiles.
+
+The existing real NewRoot/TLS Git and ZIP fixture now exercises a separate
+saved User world and Project A with independent original User/Project B controls
+in the unchanged three-OS project-contract lane. Accepted-version discovery is
+inert; its selected executable does not exist. A counted rejecting runner is
+installed at the facade, activator and observer boundaries. Every public action
+requires zero Devin/MCP calls, Prepared/installed state and no attestation or
+pending native attempt. This is a file-lifecycle contract, not native proof.
+
+Both scopes cover saved add/repeat, locked no-op and read commands, changed
+update, missing managed-package repair, own cold agreement import/install and
+locked repeat, then removal with retained data. The existing Project missing
+native Skill repair remains. First ownership joins the authored source,
+manifest, staged digest/committed receipt, selected native objects and genuine
+production data owner marker. Later checks retain the full SourceBinding except
+the actual revision/tree/archive-digest update, original installation/binding
+IDs and whole data receipts. The first data locator and marker retain held
+physical identities and exact bytes; they are never reset from later state.
+Cold restore matches the complete final source and portable agreement while
+using its own first verified data receipt and a distinct locator.
+
+Declared repair faults move only the receipt-verified original directory into
+a held private quarantine outside every discovery root. Both parent and leaf
+identities are checked immediately around the move; the quarantine is preserved.
+A same-manifest sibling would correctly remain a registry collision and is not
+treated as an absent package. Legacy Cascade, same-name peer scopes and foreign
+native members keep their original bytes, membership and physical identities.
+Counterexamples demonstrate that matching source ID/tree alone misses a changed
+canonical source and that byte-only snapshots miss a replaced retained marker.
+Neither the native 37-command/30-effect catalog nor its admission flags change;
+current-source native originals and normal cross-platform CI remain required.
+
 ### Joined build-authority refusal readout
 
 The follow-up preserves the complete `68e39a343` observation: original Go

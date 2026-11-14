@@ -22,6 +22,7 @@ type antigravityPublicRunner struct {
 	active                   string
 	mcpServers               []string
 	calls                    int
+	disabled                 bool
 }
 
 func (r *antigravityPublicRunner) Run(_ context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
@@ -37,7 +38,7 @@ func (r *antigravityPublicRunner) Run(_ context.Context, command legacyports.Com
 		r.t.Fatalf("unregistered inert command: %+v", command)
 	}
 	body, err := json.Marshal([]any{map[string]any{"name": filepath.Base(r.active), "path": r.active,
-		"version": readCLIObject(r.t, filepath.Join(r.active, "plugin.json"))["version"], "enabled": true, "skills": []string{"guide"}, "mcpServers": r.mcpServers}})
+		"version": readCLIObject(r.t, filepath.Join(r.active, "plugin.json"))["version"], "enabled": !r.disabled, "skills": []string{"guide"}, "mcpServers": r.mcpServers}})
 	return legacyports.CommandResult{Stdout: body, CleanupComplete: true}, err
 }
 
@@ -206,6 +207,52 @@ func TestAntigravityPublicPreviewDoesNotExecuteOrPersist(t *testing.T) {
 	after, err := f.store.Load()
 	if err != nil || !reflect.DeepEqual(before, after) {
 		t.Fatal("preview persisted lifecycle state", after, err)
+	}
+}
+
+func TestAntigravityPublicDisabledRepeatPreservesOriginalState(t *testing.T) {
+	f := newAntigravityPublicFixtureWithMCP(t, true)
+	f.runner.disabled = true
+	body, err := json.Marshal(map[string]any{"plugins": map[string]any{filepath.Base(f.runner.active): map[string]any{"enabled": false}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(f.client.ConfigRoot, "config.json"), body, 0600); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(f.store.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	original, err := os.Stat(f.store.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := antigravityPublicBytes(t, f)
+	stdout, stderr, err := f.execute(false, "add", f.source, "--target", "antigravity", "--no-save", "--format", "json")
+	if err != nil || f.runner.calls != 2 || !strings.Contains(stdout, "remains disabled") {
+		t.Fatalf("disabled public observation: calls=%d err=%v\n%s\n%s", f.runner.calls, err, stdout, stderr)
+	}
+	var output struct {
+		Data struct {
+			Result usecase.AddResult `json:"result"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &output); err != nil || output.Data.Result.Mutated ||
+		output.Data.Result.Activation.Activation != domain.ActivationPrepared {
+		t.Fatal("disabled observation changed state or promoted activation", stdout, err)
+	}
+	after, err := os.ReadFile(f.store.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	current, err := os.Stat(f.store.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(before) != string(after) || !os.SameFile(original, current) || original.Mode() != current.Mode() ||
+		original.ModTime() != current.ModTime() || !reflect.DeepEqual(files, antigravityPublicBytes(t, f)) {
+		t.Fatal("disabled observation changed original state or owned/foreign native bytes")
 	}
 }
 

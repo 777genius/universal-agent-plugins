@@ -84,6 +84,28 @@ test('released generator explicitly opts unsupported and mixed remote selections
   }
 });
 
+test('guided mixed setup keeps add unsaved and maintenance limited to installed peers', () => {
+  for (const peer of ['codex', 'chatgpt']) {
+    const commands = pluginCommands(
+      { ...plugin, name: 'context7', install_source: 'context7' },
+      [peer, 'chatgptweb'], true, 'user', [` ${peer} `, peer],
+    );
+    assert.equal(commands.saveMode, 'noSave');
+    assert.equal(commands.add,
+      `npx -y universal-agent-plugins add context7 --target ${peer},chatgptweb --no-save`);
+    for (const action of ['update', 'repair', 'remove'] as const)
+      assert.equal(commands[action], `npx -y universal-agent-plugins ${action} context7 --target ${peer}`);
+  }
+});
+
+test('maintenance cannot expand a selection or silently fall back to every installation', () => {
+  for (const targets of [[], [' '], ['cursor'], ['codex', 'cursor']])
+    assert.throws(() => pluginCommands(plugin, ['codex', 'chatgptweb'], true, 'user', targets),
+      /Lifecycle targets must be a nonempty subset/);
+  assert.throws(() => pluginCommands(plugin, undefined, true, 'user', ['codex']),
+    /Lifecycle targets must be a nonempty subset/);
+});
+
 test('generated capabilities describe every landing install target', () => {
   // Exhaustiveness is checked by TypeScript when a new install lane is added.
   const targets: Record<PluginInstallTargetId, true> = {

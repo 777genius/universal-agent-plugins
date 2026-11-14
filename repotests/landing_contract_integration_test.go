@@ -331,8 +331,8 @@ func TestLandingSurface_LocalesLinksAndBrandingStayAligned(t *testing.T) {
 	mustContain(t, agentPage, `projection: { kind: 'client', value: client.id }`)
 	mustContain(t, agentPage, `'@type': 'ItemList'`)
 	mustContain(t, agentPage, `'@type': 'BreadcrumbList'`)
-	mustContain(t, agentPage, `const needsLocalExample = ['grok', 'kimi', 'pi', 'hermes', 'antigravity'].includes(client.id);`)
-	mustContain(t, agentPage, `npx -y universal-agent-plugins add ${needsLocalExample ? './my-plugin' : 'context7'} --target`)
+	// Eligible agent examples and own-package fallbacks are covered by the
+	// landing catalog-surface-projection, page and browser behavior tests.
 
 	enContentBody, err := os.ReadFile(filepath.Join(landingRoot, "content", "en.json"))
 	if err != nil {

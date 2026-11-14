@@ -107,15 +107,16 @@ func (held *heldNativeRoot) child(name string) (*heldNativeRoot, error) {
 	return finishHeldNativeRoot(filepath.Join(held.path, name), child, before)
 }
 
-func (held *heldNativeRoot) readMarker(name string, limit int64) (body []byte, resultErr error) {
+func (held *heldNativeRoot) readMarker(name string) (body []byte, resultErr error) {
 	if err := held.verifyNamed(); err != nil {
 		return nil, err
 	}
-	body, err := held.readHeldMarker(name, limit)
+	body, err := held.readHeldMarker(name)
 	return body, errors.Join(err, held.verifyNamed())
 }
 
-func (held *heldNativeRoot) readHeldMarker(name string, limit int64) (body []byte, resultErr error) {
+func (held *heldNativeRoot) readHeldMarker(name string) (body []byte, resultErr error) {
+	const limit int64 = 4096
 	if err := held.verifyHeld(); err != nil {
 		return nil, err
 	}
@@ -303,7 +304,7 @@ func (prepared *preparedNativeRoot) cleanupMarker() error {
 	if err != nil || prepared.markerInfo == nil || !info.Mode().IsRegular() || !os.SameFile(prepared.markerInfo, info) {
 		return fmt.Errorf("unpublished marker ownership changed; retained")
 	}
-	body, err := root.readMarker(prepared.markerName, 4096)
+	body, err := root.readMarker(prepared.markerName)
 	if err != nil || string(body) != string(prepared.writtenMarker) {
 		return errors.Join(err, fmt.Errorf("unpublished marker changed; retained"))
 	}

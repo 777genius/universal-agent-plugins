@@ -106,7 +106,7 @@ func validateStandalonePublication(mutation DirectoryMutation, before []byte) er
 }
 
 // Injected state stores receive the same early ancestry check as concrete stores.
-func (kernel Kernel) validatePublicationParents(ctx context.Context, state domain.StateFileV2) error {
+func (Kernel) validatePublicationParents(ctx context.Context, state domain.StateFileV2) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -125,9 +125,6 @@ func (kernel Kernel) validatePublicationParents(ctx context.Context, state domai
 		}
 		if receipt.PublicationParentAuthority == nil {
 			continue
-		}
-		if kernel.Directory.JournalDir == "" {
-			return fmt.Errorf("publication recovery journal dir is required")
 		}
 		if err := profileauthority.Revalidate(ctx, *receipt.PublicationParentAuthority); err != nil {
 			return err

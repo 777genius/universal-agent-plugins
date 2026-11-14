@@ -151,7 +151,7 @@ for (const { client, locale, theme, width } of nativeClientCases) {
     const install = page.locator('.agent-page__install');
     await expect(install.locator('code')).toHaveText(command);
     await expect(install.locator('pre')).toHaveCSS('direction', 'ltr');
-    await expect(install).toContainText(t('registryUi.agentPage.localPackageHint'));
+    await expect(install).toContainText(t('registryUi.agentPage.packageExampleSourceHint'));
     await install.getByRole('button', { name: t('registryUi.command.copyLabel'), exact: true }).click();
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(command);
     const icon = page.locator('.agent-page__icon img');

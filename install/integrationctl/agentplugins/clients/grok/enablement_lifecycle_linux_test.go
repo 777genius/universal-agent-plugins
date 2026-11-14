@@ -146,7 +146,7 @@ func TestEnablementReadbackFailureRecoversExactConfigAndState(t *testing.T) {
 	if strings.Contains(string(record), "PRIVATE_TOKEN") || strings.Contains(string(record), "foreign") {
 		t.Fatal("journal persisted native config content")
 	}
-	if err := fixture.recovery.Recover(t.Context()); err != nil {
+	if err := recoverPrototypeRecords(t.Context(), fixture.recovery); err != nil {
 		t.Fatal(err)
 	}
 	body, _ := os.ReadFile(fixture.config)
@@ -167,7 +167,7 @@ func TestEnablementForeignEditsRetainAttemptAndUserConfig(t *testing.T) {
 	if _, err := enableProject(t.Context(), env, request, domain.ActivationOutcome{NativeEffect: domain.NativeEffectUnchanged}); err == nil {
 		t.Fatal("concurrent native version accepted")
 	}
-	if err := fixture.recovery.Recover(t.Context()); err == nil {
+	if err := recoverPrototypeRecords(t.Context(), fixture.recovery); err == nil {
 		t.Fatal("third native version overwritten")
 	}
 	body, _ := os.ReadFile(fixture.config)
@@ -203,5 +203,44 @@ func TestEnablementExplicitHomeAndDisabledPreferenceRefuseBeforeACP(t *testing.T
 				t.Fatalf("refusal changed native state: %+v %v", outcome, err)
 			}
 		})
+	}
+}
+
+func TestPrototypeRemovalComponentIsNotPublicAdmission(t *testing.T) {
+	fixture := newLifecycleEnablementFixture(t)
+	env, request, _ := lifecycleEnablementInput(t, fixture)
+	if _, err := enableProject(t.Context(), env, request, domain.ActivationOutcome{NativeEffect: domain.NativeEffectUnchanged}); err != nil {
+		t.Fatal("private prototype setup", err)
+	}
+	env, request, native := lifecycleEnablementInput(t, fixture)
+	state := fixture.loaded(t)
+	binding := state.Installations[0].Clients[fixture.record.BindingID]
+	identity := request.NativeAttempt
+	identity.StateDigest = enablementStateDigest(state)
+	removal := domain.DeactivationRequest{Client: request.Client, TargetContext: request.Plan.TargetContext,
+		NativeRegistryRoot: binding.NativeProfileRoot, PhysicalArtifactID: binding.PhysicalArtifact, ManagedArtifactPath: binding.TargetLocator,
+		DeclaredName: request.DeclaredName, NativeObjects: binding.NativeObjects, NativeAttempt: identity,
+		BackendExecutable: request.BackendExecutable, Confirmed: true}
+	originals := capturePrototypeFiles(t, fixture.config, fixture.state.Path)
+	for _, confirmed := range []bool{false, true} {
+		removal.Confirmed = confirmed
+		outcome, err := New().Deactivate(t.Context(), env, removal)
+		if !errors.Is(err, errEnablementUnqualified) || native.calls != 0 || outcome.ExternalRemovalComplete || outcome.NativeEffect != domain.NativeEffectUnchanged {
+			t.Fatalf("direct removal admitted unqualified ACP: %+v %v", outcome, err)
+		}
+		assertPrototypeFilesUnchanged(t, originals)
+	}
+	// The private component remains testable with inert pipes. This does not
+	// bypass either public Adapter method or establish native recovery safety.
+	removal.Confirmed = true
+	outcome, err := removeEnabledProject(t.Context(), env, removal, domain.DeactivationOutcome{NativeEffect: domain.NativeEffectUnchanged})
+	if err != nil || outcome.NativeEffect != domain.NativeEffectCommitted || native.calls != 2 {
+		t.Fatalf("private removal component: %+v %v", outcome, err)
+	}
+	if got, err := os.ReadFile(fixture.config); err != nil || !bytes.Equal(got, fixture.original) {
+		t.Fatal("private member removal changed foreign bytes", err)
+	}
+	if err := fixture.recovery.Recover(t.Context()); !errors.Is(err, errEnablementUnqualified) {
+		t.Fatal("prototype removal unexpectedly became public recovery", err)
 	}
 }
