@@ -49,7 +49,7 @@ test('native CLI checkbox changes Skills, plugin install and copy commands acros
   await page.locator('.catalog-modes').getByRole('link', { name: 'Plugins', exact: true }).click();
   const plugin = page.locator('[data-install-source="i18n-state-00"]').first();
   await plugin.locator('.plugin-card__install-toggle').click();
-  await expect(plugin.locator('.command-snippet--add code')).toHaveText(/^agentplugins add i18n-state-00/);
+  await expect(plugin.locator('.command-snippet--add code')).toHaveText(/^agentplugins add\s+i18n-state-00/);
   await plugin.getByRole('button', { name: 'Copy command' }).click();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText()))
     .toMatch(/^agentplugins add i18n-state-00/);
