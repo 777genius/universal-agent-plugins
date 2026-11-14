@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { pinnedCatalogCommands, pinnedCatalogSelection, scopedComponentSupported, projectCatalogAutomaticSelection, projectCatalogCommands, projectCatalogSelection } from '../utils/projectCatalogSource.ts';
+import { PINNED_CATALOG_CLI_VERSION, pinnedCatalogCommands, pinnedCatalogRepairLimitation, pinnedCatalogSelection, scopedComponentSupported, projectCatalogAutomaticSelection, projectCatalogCommands, projectCatalogSelection } from '../utils/projectCatalogSource.ts';
 import type { RegistryPlugin } from '../types/registry.ts';
 
 function reviewed(): RegistryPlugin {
@@ -254,6 +254,26 @@ test('all source commands pin the released npm facade and preserve explicit save
       assert.ok(!Object.values(commands).some(value => value?.includes('--no-save')));
     }
   }
+});
+
+test('the current release repair notice is limited to explicit Antigravity MCP sources', () => {
+  const plugin = reviewed();
+  for (const scope of ['user', 'project'] as const) {
+    const selection = pinnedCatalogSelection(plugin, 'antigravity', scope);
+    assert.ok(selection, 'The known repair issue does not block installation');
+    assert.deepEqual(pinnedCatalogRepairLimitation(selection), {
+      key: 'registryUi.install.antigravityRepairUnavailable',
+      params: { version: PINNED_CATALOG_CLI_VERSION },
+    });
+    assert.ok(pinnedCatalogCommands(plugin, 'antigravity', scope).add.includes(selection.selector));
+    assert.equal(pinnedCatalogRepairLimitation(pinnedCatalogSelection(plugin, 'pi', scope)), undefined);
+  }
+  assert.equal(pinnedCatalogRepairLimitation(pinnedCatalogSelection(plugin, 'hermes', 'user')), undefined);
+  plugin.distributions[0]!.releases[0]!.components = ['skills'];
+  const skillsSelection = pinnedCatalogSelection(plugin, 'antigravity', 'user');
+  assert.ok(skillsSelection, 'Skills-only installation remains available without the MCP notice');
+  assert.equal(pinnedCatalogRepairLimitation(skillsSelection), undefined);
+  assert.equal(pinnedCatalogRepairLimitation(undefined), undefined);
 });
 
 test('saved maintenance uses the selected source manifest identity, not the catalog product name', () => {

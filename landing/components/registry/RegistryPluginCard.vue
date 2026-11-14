@@ -37,6 +37,7 @@ const {
   targetAvailability,
   guidedWebSelected,
   pinnedSourceCommands,
+  pinnedRepairLimitation,
   pinnedSourceSelected,
   pinnedReleaseSource,
   pinnedReleaseComponents,
@@ -414,6 +415,9 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
             />
             <p v-if="pinnedSourceSelected && canInstall" class="plugin-card__author" role="status">
               {{ t('registryUi.install.pinnedCatalogSource') }}
+              <template v-if="pinnedRepairLimitation">
+                {{ t(pinnedRepairLimitation.key, pinnedRepairLimitation.params) }}
+              </template>
               <a :href="provenanceURL" target="_blank" rel="noreferrer">
                 {{ t('registryUi.card.viewSource') }}
               </a>

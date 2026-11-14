@@ -11,6 +11,7 @@ import type { ClientID, ComponentID, DistributionResolution, InstallScope, Plugi
 // delivery, NOT exact MCP-transport approval or runtime/activation evidence.
 // The released CLI checks actual package bytes, dependencies and native policy.
 const clientCapabilities = new Map(capabilities.map((client) => [client.id, client] as const));
+export const PINNED_CATALOG_CLI_VERSION: string = '0.1.108';
 
 // Broad capability preview only: the signed release does not expose which MCP
 // transports a package needs (including SSE-only). The CLI decides exact fit.
@@ -165,5 +166,15 @@ export function pinnedCatalogCommands(plugin: RegistryPlugin, client: ClientID, 
   const selection = pinnedCatalogSelection(plugin, client, scope);
   if (!selection) throw new Error('No eligible explicit exact-source installation');
   return installCommands(selection.selector, selection.manifestName, [client], undefined, scope,
-    'npx -y universal-agent-plugins@0.1.108', [client]);
+    `npx -y universal-agent-plugins@${PINNED_CATALOG_CLI_VERSION}`, [client]);
+}
+
+/** Current release presentation only; source eligibility and CLI diagnostics stay unchanged. */
+export function pinnedCatalogRepairLimitation(selection: ReturnType<typeof pinnedCatalogSelection>) {
+  if (PINNED_CATALOG_CLI_VERSION !== '0.1.108' || selection?.client !== 'antigravity' ||
+      !selection.components.includes('mcp')) return undefined;
+  return {
+    key: 'registryUi.install.antigravityRepairUnavailable' as const,
+    params: { version: PINNED_CATALOG_CLI_VERSION },
+  };
 }

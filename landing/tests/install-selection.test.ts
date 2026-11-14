@@ -329,8 +329,10 @@ test('explicit source selection is exclusive, persists across navigation and nev
   assert.equal(unref(state.pinnedSourceCommands), undefined);
   assert.ok(state.resolution.value.distribution);
   state.updateTargets(['codex', 'antigravity']);
+  assert.equal(state.pinnedRepairLimitation.value?.key, 'registryUi.install.antigravityRepairUnavailable');
   state.updateAutoDetect(true);
   assert.equal(unref(state.pinnedSourceCommands), undefined);
+  assert.equal(unref(state.pinnedRepairLimitation), undefined);
   assert.equal(pluginCommands(plugin).add, 'npx -y universal-agent-plugins add gitlab');
   state.stop();
 });

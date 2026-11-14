@@ -9,7 +9,7 @@ import { installTargets, canonicalInstallTarget } from '../data/installTargets.t
 import { hasPluginInstallTarget, pluginInstallAvailability } from '../utils/pluginInstallAvailability.ts';
 import { agentInstallExample } from '../utils/agentInstallExample.ts';
 import { pluginCommands } from '../utils/commands.ts';
-import { pinnedCatalogCommands } from '../utils/projectCatalogSource.ts';
+import { pinnedCatalogCommands, pinnedCatalogRepairLimitation } from '../utils/projectCatalogSource.ts';
 import { localizedPath } from '../utils/localizedRoutes.ts';
 import { productRootUrl, seoDescription, spdxLicenseUrl } from '../utils/seo.ts';
 import { catalogVisiblePlugins, isFullyRetired } from '../utils/filter.ts';
@@ -33,11 +33,12 @@ async function page(
     .match(/<script setup lang="ts">([\s\S]*?)<\/script>/)![1]
     .replace(/^import[\s\S]*?from '[^']+';\n/gm, '');
   const exposed = await runInNewContext(`(async () => { ${discoverySource}\n${stripTypeScriptTypes(source)}
-    return { installCommand: typeof installCommand === 'undefined' ? undefined : installCommand };
+    return { installCommand: typeof installCommand === 'undefined' ? undefined : installCommand,
+      pinnedRepairLimitation: typeof pinnedRepairLimitation === 'undefined' ? undefined : pinnedRepairLimitation };
   })()`, {
     computed, ref, watch, clients, clientLandingBySlug, clientLandingById, localizedPath, productRootUrl, seoDescription, spdxLicenseUrl, catalogVisiblePlugins,
     resolveDistribution, vendorInstallSource, isFullyRetired, pluginBenefit,
-    installTargets, canonicalInstallTarget, hasPluginInstallTarget, pluginInstallAvailability, agentInstallExample, pluginCommands, pinnedCatalogCommands,
+    installTargets, canonicalInstallTarget, hasPluginInstallTarget, pluginInstallAvailability, agentInstallExample, pluginCommands, pinnedCatalogCommands, pinnedCatalogRepairLimitation,
     useDirectoryStatus: () => {
       assert.ok(registryInitialized, 'Directory status requires an awaited page projection on a cold render');
       return { current: directoryCurrent, expired: ref(false), published: ref(true) };
@@ -57,7 +58,8 @@ async function page(
     usePageSeo: (title: unknown, description: unknown, options: unknown) => { seo = { title, description, options }; },
     createError: (options: object) => Object.assign(new Error(), options),
   });
-  return { locale, seo, directoryCurrent, installCommand: exposed.installCommand };
+  return { locale, seo, directoryCurrent, installCommand: exposed.installCommand,
+    pinnedRepairLimitation: exposed.pinnedRepairLimitation };
 }
 
 test('registry index/detail/client structured data follows locale and uses benefit copy without rewriting source metadata', async () => {
@@ -136,12 +138,15 @@ test('agent pages use the exact source command and stop offering it when the Dir
   const registry = structuredClone(fixture);
   registry.plugins[0].trust_state = 'reviewed';
   for (const client of ['hermes', 'antigravity', 'pi'] as const) {
-    const { installCommand, directoryCurrent } = await page(
+    const { installCommand, directoryCurrent, pinnedRepairLimitation } = await page(
       'agents/[client].vue', { slug: 'gitlab', client }, registry,
     );
     assert.equal(toValue(installCommand), pinnedCatalogCommands(registry.plugins[0], client, 'user').add);
     assert.ok(toValue(installCommand).includes('@0.1.108 add github:'));
+    assert.equal(toValue(pinnedRepairLimitation)?.key,
+      client === 'antigravity' ? 'registryUi.install.antigravityRepairUnavailable' : undefined);
     directoryCurrent.value = false;
     assert.equal(toValue(installCommand), '', 'Expired source must never become a short-name command');
+    assert.equal(toValue(pinnedRepairLimitation), undefined);
   }
 });

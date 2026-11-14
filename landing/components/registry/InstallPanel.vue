@@ -28,6 +28,7 @@ const {
   targetAvailability,
   guidedWebSelected,
   pinnedSourceCommands,
+  pinnedRepairLimitation,
   pinnedSourceSelected,
   pinnedReleaseSource,
   projectAvailable,
@@ -214,6 +215,9 @@ const vendorInstall = computed(() =>
         </div>
         <p v-if="pinnedSourceSelected && commands" class="install-panel__notice" role="status">
           {{ t('registryUi.install.pinnedCatalogSource') }}
+          <template v-if="pinnedRepairLimitation">
+            {{ t(pinnedRepairLimitation.key, pinnedRepairLimitation.params) }}
+          </template>
           <a :href="pinnedProvenanceURL" target="_blank" rel="noreferrer">
             {{ t('registryUi.install.viewPackageSource') }}
           </a>
@@ -249,7 +253,7 @@ const vendorInstall = computed(() =>
         :command="commands.update"
       />
       <CommandSnippet
-        v-if="commands && !guidedWebOnly"
+        v-if="commands && !guidedWebOnly && !pinnedRepairLimitation"
         :label="t('registryUi.install.repair')"
         kind="repair"
         :command="commands.repair"

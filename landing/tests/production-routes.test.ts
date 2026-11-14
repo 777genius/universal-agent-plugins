@@ -2,11 +2,13 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { builtHtmlPath, checkHtml, checkLiveBytes, getBytes, routePaths, validateContract, prepare, live } from '../scripts/check-production-routes.mjs';
+import { builtHtmlPath, checkHtml, checkLiveBytes, expectedAgentCommand, getBytes, routePaths, validateContract, prepare, live } from '../scripts/check-production-routes.mjs';
+import { parseDirectoryData } from '../utils/registry.ts';
+import { projectRegistry } from '../utils/registryProjection.ts';
 
 test('CLI invocation through a symlink does not silently skip validation', async t => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'uap-route-cli-'));
@@ -47,10 +49,42 @@ const oldClients = [
 const nativeClients = [...oldClients, { id: 'hermes', slug: 'hermes' }, { id: 'antigravity', slug: 'antigravity' }];
 const identity = { source_commit: 'a'.repeat(40), source_tree: 'b'.repeat(40), workflow_commit: 'c'.repeat(40), run_id: '123', run_attempt: '2' };
 const html = (route: string, text = '') => Buffer.from(`<html><head><link rel="canonical" href="https://universal-agent-plugins.com${route}"></head><body>${text}</body></html>`);
+const agentHtml = (route: string, command: string, boundary = '') => html(route, `<code>${command}</code> ${boundary}`);
 const contract = () => ({ schema_version: 1, ...identity, routes: routePaths(nativeClients, locales).map(({ route }) => {
   const bytes = html(route);
   return { route, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') };
 }) });
+
+async function catalogFixture(root: string, empty = false) {
+  // Real snapshot bytes are parser fixtures here, not a fabricated signature.
+  // Production prepare runs only after the existing authenticated mirror build.
+  const snapshot = JSON.parse(await readFile(new URL('../../cli/cmd/agentplugins/directory_bootstrap_inputs/snapshot.json', import.meta.url), 'utf8'));
+  if (empty) for (const key of ['products', 'distributions', 'evidence', 'revocations']) snapshot[key] = [];
+  for (const directory of ['utils', 'data'])
+    await cp(fileURLToPath(new URL(`../${directory}`, import.meta.url)), path.join(root, 'landing', directory), { recursive: true });
+  const feed = path.join(root, '.pages-dist/registry/schemas/1');
+  await mkdir(path.join(feed, 'snapshots'), { recursive: true });
+  const snapshotPath = `snapshots/${String(snapshot.sequence).padStart(20, '0')}.json`;
+  await writeFile(path.join(feed, 'latest.json'), JSON.stringify({ snapshot_path: snapshotPath }));
+  await writeFile(path.join(feed, snapshotPath), JSON.stringify(snapshot));
+  await mkdir(path.join(root, '.pages-dist/api/registry/client'), { recursive: true });
+  const registry = parseDirectoryData(snapshot, 'published_snapshot');
+  for (const value of ['hermes', 'antigravity', 'pi'] as const)
+    await writeFile(path.join(root, '.pages-dist/api/registry/client', value), JSON.stringify(projectRegistry(registry, { kind: 'client', value })));
+  if (empty) return (id: string) => `npx -y universal-agent-plugins add ./my-plugin --target ${id}`;
+  // Independently select the same reviewed Context7 fixture as browser E2E.
+  const plugin = registry.plugins.find(item => item.name === 'context7')!;
+  const distribution = plugin.distributions.find(item => item.id === plugin.default_distribution)!;
+  const release = distribution.releases.find(item => item.release_sequence === distribution.release_sequence)!;
+  assert.equal(plugin.trust_state, 'reviewed');
+  assert.equal(release.selectable, true);
+  assert.equal(release.release_status, 'active');
+  assert.equal(release.source.repository, 'upstash/context7');
+  assert.equal(release.source.path, 'plugins/agent-plugins/context7');
+  assert.match(release.source.revision!, /^[a-f0-9]{40}$/);
+  const selector = `github:${release.source.repository}@${release.source.revision}//${release.source.path}`;
+  return (id: string) => `npx -y universal-agent-plugins@0.1.108 add ${selector} --target ${id}`;
+}
 
 test('selected public source binds homepage and download with 16-client or 14-client routes', () => {
   const selected = routePaths(nativeClients, locales);
@@ -70,16 +104,56 @@ test('prepared source independently enforces Hermes Project/User MCP boundary an
   const route = '/agents/hermes/';
   const command = 'npx -y universal-agent-plugins add ./my-plugin --target hermes';
   const boundary = 'Project installation never modifies User MCP configuration';
-  checkHtml(html(route, command + ' ' + boundary), route, 'hermes');
-  assert.throws(() => checkHtml(html(route, command), route, 'hermes'), /MCP boundary/);
-  assert.throws(() => checkHtml(html(route, command.replace('hermes', 'antigravity') + boundary), route, 'hermes'), /target command/);
+  checkHtml(agentHtml(route, command, boundary), route, 'hermes', command);
+  assert.throws(() => checkHtml(agentHtml(route, command), route, 'hermes', command), /MCP boundary/);
+  assert.throws(() => checkHtml(agentHtml(route, command.replace('hermes', 'antigravity'), boundary), route, 'hermes', command), /target command/);
 });
 
 test('prepared source independently enforces Antigravity Prepared status', () => {
   const route = '/agents/antigravity/';
   const command = 'npx -y universal-agent-plugins add ./my-plugin --target antigravity';
-  checkHtml(html(route, command + ' Prepared by CLI'), route, 'antigravity');
-  assert.throws(() => checkHtml(html(route, command + ' Supported'), route, 'antigravity'), /Prepared boundary/);
+  checkHtml(agentHtml(route, command, 'Prepared by CLI'), route, 'antigravity', command);
+  assert.throws(() => checkHtml(agentHtml(route, command, 'Supported'), route, 'antigravity', command), /Prepared boundary/);
+});
+
+test('immutable agent commands bind the actual catalog projection and cannot become stale local examples', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'uap-source-routes-'));
+  try {
+    const expected = await catalogFixture(root);
+    for (const id of ['hermes', 'antigravity', 'pi']) {
+      const command = await expectedAgentCommand(root, id);
+      assert.equal(command, expected(id));
+      const route = `/agents/${id}/`;
+      const boundary = 'Project installation never modifies User MCP configuration Prepared by CLI';
+      checkHtml(agentHtml(route, command, boundary), route, id, command);
+      for (const wrong of [command.replace(/@[a-f0-9]{40}\/\//, `@${'a'.repeat(40)}//`),
+        command.replace('upstash/context7', 'foreign/package'), command.replace(`--target ${id}`, '--target codex'),
+        `npx -y universal-agent-plugins add ./my-plugin --target ${id}`, command + ' --no-save'])
+        assert.throws(() => checkHtml(agentHtml(route, wrong, boundary), route, id, command), /target command/);
+      assert.throws(() => checkHtml(html(route, command + ' ' + boundary), route, id, command), /target command/);
+      assert.throws(() => checkHtml(html(route, `<code>${command}</code><code>${command}</code> ${boundary}`), route, id, command), /target command/);
+    }
+    const projection = path.join(root, '.pages-dist/api/registry/client/hermes');
+    const value = JSON.parse(await readFile(projection, 'utf8'));
+    value.plugins = [];
+    await writeFile(projection, JSON.stringify(value));
+    await assert.rejects(expectedAgentCommand(root, 'hermes'), /projection differs/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('only an actually empty eligible catalog selects the local-package fallback', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'uap-empty-routes-'));
+  try {
+    const expected = await catalogFixture(root, true);
+    for (const id of ['hermes', 'antigravity', 'pi'])
+      assert.equal(await expectedAgentCommand(root, id), expected(id));
+    await rm(path.join(root, '.pages-dist/api/registry/client/hermes'));
+    await assert.rejects(expectedAgentCommand(root, 'hermes'), /ENOENT/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test('contract rejects identity, cardinality, digest and path changes', () => {
@@ -191,15 +265,17 @@ test('prepare and live bind selected modules, built HTML, provenance and environ
     process.env.GITHUB_RUN_ATTEMPT = identity.run_attempt;
     for (const directory of ['landing/data', 'website/tools/config', '.pages-dist', 'website'])
       await mkdir(path.join(root, directory), { recursive: true });
-    await writeFile(path.join(root, 'landing/data/clients.ts'), 'export const clientLandingPages = ' + JSON.stringify(nativeClients));
+    const expectedCommand = await catalogFixture(root);
+    await writeFile(path.join(root, 'landing/data/clients.ts'), 'export const clientLandingPages = ' + JSON.stringify(nativeClients) + '; export const clients = clientLandingPages;');
     await writeFile(path.join(root, 'website/tools/config/locales.mjs'), 'export const docsLocales = ' + JSON.stringify(locales));
     await writeFile(path.join(root, 'website/production-source.json'), JSON.stringify({ schema_version: 1, source_commit: identity.source_commit, source_tree: identity.source_tree }));
     await writeFile(path.join(root, '.pages-dist/BUILD_PROVENANCE.json'), JSON.stringify(provenance));
     published.set('/BUILD_PROVENANCE.json', JSON.stringify(provenance));
     for (const entry of routePaths(nativeClients, locales)) {
       let text = 'Hermes Antigravity compatibility';
-      if (entry.id === 'hermes') text = 'npx -y universal-agent-plugins add ./my-plugin --target hermes Project installation never modifies User MCP configuration';
-      if (entry.id === 'antigravity') text = 'npx -y universal-agent-plugins add ./my-plugin --target antigravity Prepared by CLI';
+      if (entry.id === 'hermes') text = `<code>${expectedCommand(entry.id)}</code> Project installation never modifies User MCP configuration`;
+      if (entry.id === 'antigravity') text = `<code>${expectedCommand(entry.id)}</code> Prepared by CLI`;
+      if (entry.id === 'pi') text = `<code>${expectedCommand(entry.id)}</code>`;
       const bytes = html(entry.route, text);
       const relative = builtHtmlPath(entry.route);
       const filename = path.join(root, '.pages-dist', relative);

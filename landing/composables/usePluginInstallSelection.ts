@@ -8,7 +8,7 @@ import {
 import { pluginInstallAvailability, hasPluginInstallTarget, reconcilePluginSourceTargets } from '../utils/pluginInstallAvailability.ts';
 import { useInstallPreferencesStore } from '../stores/installPreferences.ts';
 import { resolveDistribution } from '../utils/registry.ts';
-import { pinnedCatalogCommands, projectCatalogAutomaticSelection, projectCatalogSelection } from '../utils/projectCatalogSource.ts';
+import { pinnedCatalogCommands, pinnedCatalogRepairLimitation, projectCatalogAutomaticSelection, projectCatalogSelection } from '../utils/projectCatalogSource.ts';
 import type { DistributionResolution, InstallScope, RegistryPlugin } from '../types/registry';
 
 /** Card and detail share one selection/persistence policy; no machine detection occurs here. */
@@ -65,6 +65,7 @@ export function usePluginInstallSelection(
   const pinnedReleaseComponents = computed(() => pinnedSelection.value?.components);
   const pinnedSourceCommands = computed(() => pinnedSelection.value
     ? pinnedCatalogCommands(plugin(), pinnedSelection.value.client, scope.value) : undefined);
+  const pinnedRepairLimitation = computed(() => pinnedCatalogRepairLimitation(pinnedSelection.value));
   // One authorized project source is enough to offer CLI-side target discovery.
   // This must not broaden any signed release scope or assume local client state.
   const projectAutomatic = computed(() => projectCatalogAutomaticSelection(plugin()));
@@ -194,6 +195,7 @@ export function usePluginInstallSelection(
     pinnedReleaseSource,
     pinnedReleaseComponents,
     pinnedSourceCommands,
+    pinnedRepairLimitation,
     projectAvailable,
     projectAutomatic,
     resolution,

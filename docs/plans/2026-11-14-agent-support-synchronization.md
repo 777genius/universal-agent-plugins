@@ -462,3 +462,32 @@ collection, strict native TypeScript 7 and Vue scoped-CSS compilation pass;
 Chromium still fails to start under the local host socket policy, so actual
 rendering and interaction require the final hosted browser gate. Public release
 pins and the Antigravity repair blocker remain unchanged.
+
+### Owner priority clarification: ship the synchronized website
+
+The owner clarified that the clear, current and synchronized website is the
+primary outcome, and noncritical CLI fixes must not delay it or cause redundant
+qualification matrices. The actual public 0.1.108 Antigravity source installation
+and update operations have succeeded. Its known repair defect is still real.
+Make that limitation visible for affected explicit-source selections and omit
+the broken repair action, while preserving the usable install command, generated
+capabilities, source verification and dependency refusals. Keep the release
+version and this temporary presentation limitation together; do not invent a new
+agent permission table or claim that the published binary contains the fix.
+
+The unmerged CLI qualification workflow and harness belong to the separate CLI
+work. Keep their complete npm variant in immutable ancestor
+`85022b28c14017ec5929b742b50cffbee4de702f` and the binary qualification in PR #909;
+they are excluded from the website PR's net change. Their failed or cancelled
+results remain recorded, not converted into successful qualification. A future
+fixed release can continue that work independently. This does not remove an
+existing main-branch capability or weaken a required website check.
+
+Complete the website with the existing final-source unit, TypeScript, locale,
+build and genuine browser gates. Correct the production route validator's stale
+local-package expectation to check the actual authenticated projection and exact
+immutable source command, retaining the empty-catalog fallback. After review and
+applicable acceptance, advance the immutable production source/tree pin through
+the existing Pages publisher. Verify the deployed build provenance and route
+bytes; a source merge alone does not publish the new site. Reuse proven checks
+when inputs are unchanged instead of starting additional qualification matrices.

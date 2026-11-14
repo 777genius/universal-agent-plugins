@@ -5,7 +5,7 @@ import { installTargets, canonicalInstallTargets, cliInstallTargets, reconcileLo
 import { pluginInstallAvailability, reconcilePluginSourceTargets } from '~/utils/pluginInstallAvailability';
 import { pluginTargetDescription } from '~/utils/pluginTargetDescription';
 import { pluginCommands } from '~/utils/commands';
-import { pinnedCatalogCommands } from '~/utils/projectCatalogSource';
+import { pinnedCatalogCommands, pinnedCatalogRepairLimitation } from '~/utils/projectCatalogSource';
 import { countAtElapsed, PLUGIN_COUNT_ANIMATION_MS } from '~/utils/countAnimation';
 import { catalogVisiblePlugins, groupCatalogPlugins } from '~/utils/filter';
 import { expectedDistribution, resolveDistribution } from '~/utils/registry';
@@ -187,6 +187,7 @@ const pinnedSelection = computed(() => {
   return !autoDetect.value && current.value && available?.kind === 'pinned_git'
     ? available.selection : undefined;
 });
+const pinnedRepairLimitation = computed(() => pinnedCatalogRepairLimitation(pinnedSelection.value));
 const command = computed(() => {
   const available = pluginInstallAvailability(demoPlugin.value, selectedTargets.value);
   if (!current.value || (!autoDetect.value && !available))
@@ -298,6 +299,9 @@ function updateTargets(values: string[]) {
                   <div class="hero-quick-start__command">
                     <p v-if="pinnedSelection" class="install-panel__notice" role="status">
                       {{ t('registryUi.install.pinnedCatalogSource') }}
+                      <template v-if="pinnedRepairLimitation">
+                        {{ t(pinnedRepairLimitation.key, pinnedRepairLimitation.params) }}
+                      </template>
                     </p>
                     <CommandSnippet v-if="command" :command="command" kind="add" inline />
                     <p v-else class="install-panel__notice" role="status">

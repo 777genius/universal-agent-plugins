@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { agentInstallExample } from '~/utils/agentInstallExample';
 import { pluginCommands } from '~/utils/commands';
-import { pinnedCatalogCommands } from '~/utils/projectCatalogSource';
+import { pinnedCatalogCommands, pinnedCatalogRepairLimitation } from '~/utils/projectCatalogSource';
 import { productRootUrl } from '~/utils/seo';
 import { localizedPath } from '~/utils/localizedRoutes';
 import {
@@ -49,6 +49,7 @@ const example = agentInstallExample(reviewedPlugins, client.id);
 const needsLocalExample = !example;
 const exampleAvailability = example && pluginInstallAvailability(example.plugin, [example.target]);
 const pinnedExample = exampleAvailability?.kind === 'pinned_git' ? exampleAvailability.selection : undefined;
+const pinnedRepairLimitation = computed(() => current.value ? pinnedCatalogRepairLimitation(pinnedExample) : undefined);
 const exampleSource = pinnedExample?.selector ?? example?.plugin.install_source ?? './my-plugin';
 const installCommand = computed(() => pinnedExample
   ? current.value ? pinnedCatalogCommands(example!.plugin, pinnedExample.client, 'user').add : ''
@@ -153,7 +154,12 @@ usePageSeo(title, () => t(`${client.presentationKey}.intro`), {
                 ></i18n-t
               >
               <p v-else>{{ t('registryUi.agentPage.packageExampleSourceHint') }}</p>
-              <p v-if="hasPinnedSource">{{ t('registryUi.install.pinnedCatalogSource') }}</p>
+              <p v-if="hasPinnedSource">
+                {{ t('registryUi.install.pinnedCatalogSource') }}
+                <template v-if="pinnedRepairLimitation">
+                  {{ t(pinnedRepairLimitation.key, pinnedRepairLimitation.params) }}
+                </template>
+              </p>
               <NuxtLink :to="localePath('/agent-skills/')">{{
                 t('registryUi.agentPage.skillsGuide')
               }}</NuxtLink>
@@ -187,7 +193,9 @@ usePageSeo(title, () => t(`${client.presentationKey}.intro`), {
               <p>
                 {{
                   t(
-                    'registryUi.agentPage.useTheSameCliToInspectUpdateRepairSwitchSourceOrRemoveThePlugin',
+                    pinnedRepairLimitation
+                      ? 'registryUi.agentPage.inspectUpdateRemove'
+                      : 'registryUi.agentPage.useTheSameCliToInspectUpdateRepairSwitchSourceOrRemoveThePlugin',
                   )
                 }}
               </p>
