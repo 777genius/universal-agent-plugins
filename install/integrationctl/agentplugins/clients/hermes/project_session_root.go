@@ -15,8 +15,8 @@ import (
 
 const projectSessionRootKind = "hermes_project_session_root"
 
-// This candidate is deliberately not registered as a product capability. Its
-// marker is source ownership, not physical-directory CAS or profile rollback.
+// The marker records source ownership. The existing standalone publication
+// receipt separately binds physical root and parent identities; neither owns runtime history.
 func projectSessionRoot(project string) string {
 	return filepath.Join(project, ".hermes", "uap-session")
 }

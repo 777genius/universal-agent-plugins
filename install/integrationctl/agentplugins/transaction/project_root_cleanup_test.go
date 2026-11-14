@@ -8,7 +8,7 @@ import (
 
 func TestProjectRootMovedPreparedStageRetainsOwnedMarker(t *testing.T) {
 	_, _, spec, _ := projectRootFixture(t)
-	prepared, err := prepareNativeRoot(spec)
+	prepared, err := prepareNativeRoot(t.Context(), spec)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +41,7 @@ func TestProjectRootMovedBaseRetainsStageBeforeMarkerRemoval(t *testing.T) {
 	for _, boundary := range []string{"cleanup-entry", "marker-delete", "directory-delete"} {
 		t.Run(boundary, func(t *testing.T) {
 			_, _, spec, _ := projectRootFixture(t)
-			prepared, err := prepareNativeRoot(spec)
+			prepared, err := prepareNativeRoot(t.Context(), spec)
 			if err != nil {
 				t.Fatal(err)
 			}

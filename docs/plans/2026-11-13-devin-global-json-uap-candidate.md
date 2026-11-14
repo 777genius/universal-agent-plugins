@@ -594,3 +594,48 @@ the Git exclude remains unchanged; private config does not qualify ordinary
 startup. Both captures report complete cleanup and zero probe effects. Neither
 contains Global public lifecycle commands or receipts, and all five runtime
 qualification flags remain false.
+
+### Original Global build refusal and metadata-only diagnostic
+
+The Global job [132235032037](https://github.com/777genius/universal-agent-plugins/actions/runs/43512381883/job/132235032037)
+on source `0dd77f85ca682989dadbde430fc371b6574f61c3` failed before any build or
+native command. Original artifact `14089460966` is 24,042 bytes with SHA256
+`14c66b5c64b53fdc42aad754880ad788938c3d99cbdf0a7cff7c3600e44acef5`.
+Independent review joined its outer and inner ZIP catalogs/CRCs, the source
+commit/tree, and all twelve original command streams to their lengths and
+digests. The six successful commands only establish source identity/cleanliness
+and the three fixture Git roots. The report records `ValueError: prebuilt
+installer authority`, complete cleanup, no build receipt, and no qualification.
+
+The unchanged source fails at the initial metadata gate for the resolved host
+Go executable, before `go version`, `go build`, Devin or public UAP invocation.
+The original lacks the numerical stat values, so the failing predicate is not
+known. No mode, link count, owner, size or runner cause is inferred from the
+generic error. The same build and pin functions remain present at `ea7af4b1`.
+
+Root R1 approves only this script, its existing contract test and this plan
+(estimate 20–30 runtime and 60–80 test lines). A separate
+`global_build_authority` diagnostic records `selected_lstat`, its
+`expected_owner`, and `initial_pin_lstat`. Each stat record contains exactly
+device, inode, full mode, link count, uid, gid, size, mtime_ns and ctime_ns from
+its original observation. The pin stage exports the same `before` object used
+by the existing strict gate; it does not reread the path for diagnostic facts.
+No file contents, path or environment values are added.
+
+The ordinary-file, single-link, owner, exact 0755 and 1–128 MiB requirements,
+opened-file identity, streaming digest and final stability checks are unchanged.
+The diagnostic is not a success receipt or an admission grant. The existing
+research publisher includes it in `research.json` only after proved cleanup;
+the fixed safe report still withholds raw evidence when cleanup is unknown.
+The closed build receipt and console readout schemas are unchanged. Actual
+temporary-file contracts cover mode, hardlink, zero/oversize, directory and
+owner refusals before any open/read/process; a between-stage chmod preserves
+both original observations and the original expected owner. Genuine final-head
+Global execution and original-artifact review remain required.
+
+Local validation: all 79 Global, ordinary and structured Python contracts passed
+in 2.270 seconds; `git diff --check` passed. AST comparison confirms that every
+previous function is unchanged except the two explicit diagnostic additions;
+removing those additions gives the original build/pin AST exactly. No Go or
+native process was run. Actual delta: 13 added/2 removed runtime lines and
+56 added test lines; the observation does not identify the original failed field.

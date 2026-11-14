@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/profileauthority"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statev2"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
@@ -25,6 +26,11 @@ func standaloneFixture(t *testing.T) (Kernel, DirectoryMutation, statev2.Store) 
 		ActivePath: filepath.Join(packageMutation.OwnedBase, "session"), StagingPath: packageMutation.StagingPath,
 		AfterDigest: "auxiliary-content", DesiredState: packageMutation.DesiredState, Verify: verifyTransactionBody("new"),
 	}
+	parent, err := profileauthority.Capture(t.Context(), mutation.OwnedBase)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mutation.PublicationParentAuthority = &parent
 	return kernel, mutation, store
 }
 
@@ -41,7 +47,7 @@ func TestStandalonePublicationRetainsPackageAndSurvivesBindingRemoval(t *testing
 	if err != nil || !reflect.DeepEqual(before.Installations, after.Installations) {
 		t.Fatalf("auxiliary publication changed package binding: %v", err)
 	}
-	if len(after.TransactionReceipts) != 1 || after.TransactionReceipts[0].Phase != ReceiptPhaseCommitted {
+	if len(after.TransactionReceipts) != 1 || after.TransactionReceipts[0].Phase != ReceiptPhaseCommitted || !domain.SameProfileAuthority(after.TransactionReceipts[0].PublicationParentAuthority, mutation.PublicationParentAuthority) {
 		t.Fatalf("no standalone receipt: %+v", after.TransactionReceipts)
 	}
 	assertTransactionBody(t, filepath.Join(mutation.OwnedBase, "plugin"), "old")
@@ -60,7 +66,7 @@ func TestStandalonePublicationRetainsPackageAndSurvivesBindingRemoval(t *testing
 }
 
 func TestStandalonePublicationRefusesBindingChangesAndGroupsBeforeEffects(t *testing.T) {
-	for _, change := range []string{"replace", "metadata", "state", "group"} {
+	for _, change := range []string{"replace", "metadata", "state", "group", "missing-parent", "zero-parent", "wrong-parent"} {
 		t.Run(change, func(t *testing.T) {
 			kernel, mutation, store := standaloneFixture(t)
 			before, err := store.Load()
@@ -68,6 +74,16 @@ func TestStandalonePublicationRefusesBindingChangesAndGroupsBeforeEffects(t *tes
 				t.Fatal(err)
 			}
 			switch change {
+			case "missing-parent":
+				mutation.PublicationParentAuthority = nil
+			case "zero-parent":
+				mutation.PublicationParentAuthority = &domain.ProfileAuthority{}
+			case "wrong-parent":
+				other, err := profileauthority.Capture(t.Context(), filepath.Dir(mutation.OwnedBase))
+				if err != nil {
+					t.Fatal(err)
+				}
+				mutation.PublicationParentAuthority = &other
 			case "replace":
 				mutation.RequireAbsent = false
 			case "metadata":
@@ -119,8 +135,14 @@ func runStandaloneCrash(root, phase string) {
 			return nil
 		},
 	}}
+	parent, captureErr := profileauthority.Capture(context.Background(), base)
+	if captureErr != nil {
+		fmt.Fprintln(os.Stderr, captureErr)
+		os.Exit(76)
+	}
 	_, err = kernel.ApplyDirectory(context.Background(), DirectoryMutation{
-		Standalone: true, RequireAbsent: true, OperationID: "auxiliary-root", Sequence: 1,
+		PublicationParentAuthority: &parent,
+		Standalone:                 true, RequireAbsent: true, OperationID: "auxiliary-root", Sequence: 1,
 		InstallationID: installation.InstallationID, ClientBindingID: binding.ClientBindingID,
 		OwnedBase: base, ActivePath: filepath.Join(base, "session"), StagingPath: filepath.Join(base, "plugin.staging"),
 		AfterDigest: "auxiliary-content", DesiredState: state, Verify: verifyTransactionBody("new"),

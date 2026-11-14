@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/profileauthority"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 )
@@ -34,19 +35,24 @@ func (publisher ProjectRootPublisher) PublishProjectRoot(ctx context.Context, re
 	if _, found, err := rootReceipt(state, spec.Path); err != nil || found {
 		return errors.Join(err, fmt.Errorf("recorded native runtime root is missing; refusing recreation"))
 	}
-	prepared, err := prepareNativeRoot(spec)
+	prepared, err := prepareNativeRoot(ctx, spec)
 	if err != nil {
 		return err
 	}
 	defer func() { resultErr = errors.Join(resultErr, prepared.close()) }()
+	parentAuthority, err := recordedPublicationParent(prepared.baseRoot.ancestry)
+	if err != nil {
+		return errors.Join(err, prepared.cleanup())
+	}
 	mutation := DirectoryMutation{
-		Standalone: true, RequireAbsent: true,
+		PublicationParentAuthority: parentAuthority,
+		Standalone:                 true, RequireAbsent: true,
 		OperationID: request.NativeAttempt.OperationID + "-root", Sequence: 1,
 		InstallationID: request.NativeAttempt.InstallationID, ClientBindingID: binding.ClientBindingID,
 		OwnedBase: prepared.base, ActivePath: prepared.active, StagingPath: prepared.staging,
 		AfterDigest: prepared.digest, DesiredState: state,
 		Verify: func(ctx context.Context, _ string) error {
-			return verifyNativeRoot(ctx, spec.Path, spec.Marker, prepared.digest)
+			return verifyNativeRoot(ctx, spec.Path, spec.Marker, prepared.digest, parentAuthority)
 		},
 	}
 	_, err = publisher.Kernel.ApplyDirectory(ctx, mutation)
@@ -142,7 +148,7 @@ func (publisher ProjectRootPublisher) VerifyProjectRoot(ctx context.Context, roo
 	if err != nil || !found {
 		return errors.Join(err, fmt.Errorf("native root has no committed publication receipt"))
 	}
-	return verifyNativeRoot(ctx, root, marker, receipt.AfterDigest)
+	return verifyNativeRoot(ctx, root, marker, receipt.AfterDigest, receipt.PublicationParentAuthority)
 }
 
 func rootReceipt(state domain.StateFileV2, root string) (domain.MutationReceipt, bool, error) {
@@ -157,13 +163,22 @@ func rootReceipt(state domain.StateFileV2, root string) (domain.MutationReceipt,
 		if selected.OperationID != "" || receipt.MutationType != "directory_swap" || receipt.Phase != ReceiptPhaseCommitted {
 			return selected, false, fmt.Errorf("native root publication receipt is ambiguous or pending")
 		}
+		if err := receipt.ValidatePublicationParent(true); err != nil {
+			return selected, false, err
+		}
 		selected = receipt
 	}
 	return selected, selected.OperationID != "", nil
 }
 
-func verifyNativeRoot(ctx context.Context, root string, marker domain.NativeObjectOwnership, expected string) (resultErr error) {
+func verifyNativeRoot(ctx context.Context, root string, marker domain.NativeObjectOwnership, expected string, authority *domain.ProfileAuthority) (resultErr error) {
 	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if authority == nil {
+		return fmt.Errorf("native root original parent is required")
+	}
+	if err := profileauthority.Revalidate(ctx, *authority); err != nil {
 		return err
 	}
 	if filepath.Dir(marker.Path) != root || marker.ManagedDigest == "" || marker.UserModified {
@@ -186,5 +201,5 @@ func verifyNativeRoot(ctx context.Context, root string, marker domain.NativeObje
 	if err != nil || fmt.Sprintf("%x", sha256.Sum256(body)) != marker.ManagedDigest {
 		return errors.Join(err, fmt.Errorf("native root marker changed"))
 	}
-	return errors.Join(ctx.Err(), parent.verifyNamed(), child.verifyNamed())
+	return errors.Join(ctx.Err(), parent.verifyNamed(), child.verifyNamed(), profileauthority.Revalidate(ctx, *authority))
 }

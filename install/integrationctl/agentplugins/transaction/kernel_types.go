@@ -54,6 +54,7 @@ type StateStore interface {
 }
 
 type DirectoryMutation struct {
+	PublicationParentAuthority *domain.ProfileAuthority
 	// Standalone retains an auxiliary directory receipt independently of the
 	// package binding. Only fresh publication is allowed; it never replaces a
 	// package or changes its materialization/native ownership.

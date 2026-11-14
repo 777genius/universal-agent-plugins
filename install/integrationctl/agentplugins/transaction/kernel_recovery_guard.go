@@ -16,6 +16,9 @@ func (kernel Kernel) PrevalidateRecovery(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	if err := kernel.validatePublicationParents(ctx, state); err != nil {
+		return err
+	}
 	if kernel.Directory.JournalDir == "" {
 		owners, err := kernel.pendingOwners(ctx, state, nil)
 		if err != nil {

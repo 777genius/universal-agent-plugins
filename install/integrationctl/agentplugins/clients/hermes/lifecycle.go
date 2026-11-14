@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
@@ -38,6 +39,14 @@ func (adapter *Adapter) PreflightActivation(env clients.Env, req domain.Activati
 	}
 	if req.ActivationComplete {
 		return fmt.Errorf("hermes runtime activation cannot be attested by installer")
+	}
+	if adapter.hasProjectSession(req.Plan) {
+		if _, err := qualifyHermesBundle(req.Client.ExecutablePath); err != nil {
+			return err
+		}
+		if err := hermesProjectAuthority(req.Plan.TargetContext.ProjectRoot, req.Client.ConfigRoot, os.Environ()); err != nil {
+			return err
+		}
 	}
 	layout, err := adapter.componentLayout(req.Plan, req.Delivery.ActivePath)
 	if err != nil {
@@ -87,7 +96,7 @@ func (adapter *Adapter) InspectNativeRegistry(ctx context.Context, env clients.E
 		if component.Kind == domain.ComponentSkill {
 			continue
 		}
-		if component.Kind == domain.ComponentMCPServer && (plan.Scope == domain.ScopeUser || adapter.selectedProject) && component.Support != domain.SupportUnsupported {
+		if component.Kind == domain.ComponentMCPServer && component.Support != domain.SupportUnsupported {
 			continue
 		}
 		return clients.RegistryIndeterminate, fmt.Errorf("hermes native observation cannot inspect an unsupported component")

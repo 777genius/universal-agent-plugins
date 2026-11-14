@@ -1,6 +1,7 @@
 package transaction
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"errors"
@@ -16,6 +17,7 @@ import (
 )
 
 type heldNativeRoot struct {
+	ancestry       *directoryidentity.Authority
 	path, identity string
 	root           *os.Root
 	info           os.FileInfo
@@ -61,6 +63,11 @@ func finishHeldNativeRoot(path string, root *os.Root, before os.FileInfo) (held 
 }
 
 func (held *heldNativeRoot) verifyNamed() error {
+	if held.ancestry != nil {
+		if err := directoryidentity.Revalidate(context.Background(), *held.ancestry); err != nil {
+			return err
+		}
+	}
 	canonical, err := filepath.EvalSymlinks(held.path)
 	if err != nil || canonical != held.path {
 		return fmt.Errorf("native root named directory became aliased")
@@ -155,7 +162,7 @@ type preparedNativeRoot struct {
 	writtenMarker                 []byte
 }
 
-func prepareNativeRoot(spec ports.NativeProjectRoot) (prepared *preparedNativeRoot, resultErr error) {
+func prepareNativeRoot(ctx context.Context, spec ports.NativeProjectRoot) (prepared *preparedNativeRoot, resultErr error) {
 	parent := filepath.Dir(spec.Path)
 	base, active := parent, spec.Path
 	if _, err := os.Lstat(parent); os.IsNotExist(err) {
@@ -174,6 +181,9 @@ func prepareNativeRoot(spec ports.NativeProjectRoot) (prepared *preparedNativeRo
 			resultErr = errors.Join(resultErr, prepared.cleanup(), prepared.close())
 		}
 	}()
+	if err := baseRoot.captureParent(ctx); err != nil {
+		return prepared, err
+	}
 	if err := prepared.create(spec.Path); err != nil {
 		return prepared, err
 	}
@@ -183,6 +193,19 @@ func prepareNativeRoot(spec ports.NativeProjectRoot) (prepared *preparedNativeRo
 	}
 	prepared.digest = digestNativeRoot(prepared.selected, parentRoot, spec.Path, spec.Marker.ManagedDigest)
 	return prepared, nil
+}
+
+func (held *heldNativeRoot) captureParent(ctx context.Context) error {
+	original, err := held.root.Open(".")
+	if err != nil {
+		return err
+	}
+	authority, captureErr := directoryidentity.CaptureHeld(ctx, held.path, original)
+	if err := errors.Join(captureErr, original.Close()); err != nil {
+		return err
+	}
+	held.ancestry = &authority
+	return errors.Join(ctx.Err(), held.verifyNamed())
 }
 
 func (prepared *preparedNativeRoot) create(selectedPath string) error {

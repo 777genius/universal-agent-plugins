@@ -92,7 +92,7 @@ func TestProjectRootSubstitutedChildCannotWriteOrReadMarker(t *testing.T) {
 
 func TestProjectRootPreJournalCleanupRemovesOnlyFreshStaging(t *testing.T) {
 	_, _, spec, _ := projectRootFixture(t)
-	prepared, err := prepareNativeRoot(spec)
+	prepared, err := prepareNativeRoot(t.Context(), spec)
 	if err != nil {
 		t.Fatal(err)
 	}

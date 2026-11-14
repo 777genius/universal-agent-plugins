@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
@@ -13,33 +16,15 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 )
 
-// ProjectAdapter is the selected-root candidate. The public registry continues
-// to use New until genuine native admission qualifies this complete route.
-type ProjectAdapter struct{ *Adapter }
-
-func NewProject() *ProjectAdapter { return &ProjectAdapter{&Adapter{selectedProject: true}} }
-
-var _ clients.SessionPlanner = (*ProjectAdapter)(nil)
-
-func (adapter *ProjectAdapter) QualifyPlan(in clients.PlanInput, plan *domain.DeliveryPlan) error {
-	if plan.Scope == domain.ScopeProject {
-		for index, component := range plan.Components {
-			server := in.Envelope.MCP.Servers[component.Name]
-			if component.Kind == domain.ComponentMCPServer && (server.Type == "stdio" || server.Type == "streamable-http") {
-				plan.Components[index].Support, plan.Components[index].Reason = domain.SupportNative, ""
-			}
-		}
-	}
-	return adapter.Adapter.QualifyPlan(in, plan)
-}
+var _ clients.SessionPlanner = (*Adapter)(nil)
 
 func (adapter *Adapter) hasProjectSession(plan domain.DeliveryPlan) bool {
-	return adapter.selectedProject && plan.Scope == domain.ScopeProject && shared.HasSupportedMCP(plan.Components)
+	return plan.Scope == domain.ScopeProject && shared.HasSupportedMCP(plan.Components)
 }
 
 func (adapter *Adapter) componentLayout(plan domain.DeliveryPlan, staged string) (shared.ProjectComponents, error) {
 	layout, err := components(plan, staged)
-	if err == nil && adapter.selectedProject && plan.Scope == domain.ScopeProject {
+	if err == nil && plan.Scope == domain.ScopeProject {
 		layout.MCPKind, layout.Codec = projectSessionMCPKind, nativeconfig.CodecHermes
 		layout.ConfigPaths.JSON = filepath.Join(projectSessionRoot(plan.TargetContext.ProjectRoot), "config.yaml")
 	}
@@ -47,7 +32,7 @@ func (adapter *Adapter) componentLayout(plan domain.DeliveryPlan, staged string)
 }
 
 func (adapter *Adapter) componentObjects(plan domain.DeliveryPlan, objects []domain.NativeObjectOwnership) ([]domain.NativeObjectOwnership, error) {
-	if !adapter.selectedProject || plan.Scope != domain.ScopeProject {
+	if plan.Scope != domain.ScopeProject {
 		return ownedObjects(plan.Scope, objects)
 	}
 	var result []domain.NativeObjectOwnership
@@ -85,7 +70,7 @@ func validateProjectSessionBinding(root string, binding domain.ClientBinding) er
 	}
 	plan := domain.DeliveryPlan{Scope: domain.ScopeProject, NativeRegistryRoot: root,
 		TargetContext: domain.TargetContext{ProjectRoot: filepath.Dir(root)}}
-	adapter := NewProject()
+	adapter := New()
 	objects, err := adapter.componentObjects(plan, binding.NativeObjects)
 	if err != nil {
 		return err
@@ -133,7 +118,7 @@ func (adapter *Adapter) publishProjectRoot(ctx context.Context, env clients.Env,
 }
 
 func (adapter *Adapter) verifyProjectRoot(ctx context.Context, env clients.Env, plan domain.DeliveryPlan, objects []domain.NativeObjectOwnership) error {
-	if !adapter.selectedProject || plan.Scope != domain.ScopeProject {
+	if plan.Scope != domain.ScopeProject {
 		return nil
 	}
 	for _, object := range objects {
@@ -154,7 +139,7 @@ func (adapter *Adapter) verifyProjectRoot(ctx context.Context, env clients.Env, 
 	return nil
 }
 
-func (*ProjectAdapter) PlanSession(ctx context.Context, env clients.Env, req clients.SessionRequest) (clients.SessionPlan, error) {
+func (*Adapter) PlanSession(ctx context.Context, env clients.Env, req clients.SessionRequest) (clients.SessionPlan, error) {
 	if req.Client.Status != domain.DetectionDetected || !hermesCLISurface(req.Client.Surfaces) {
 		return clients.SessionPlan{}, fmt.Errorf("hermes CLI surface is required for an explicit Project session")
 	}
@@ -175,7 +160,7 @@ func (*ProjectAdapter) PlanSession(ctx context.Context, env clients.Env, req cli
 	return plan, nil
 }
 
-func (*ProjectAdapter) VerifySession(ctx context.Context, env clients.Env, plan clients.SessionPlan) error {
+func (*Adapter) VerifySession(ctx context.Context, env clients.Env, plan clients.SessionPlan) error {
 	return verifySessionNativeSource(ctx, env, plan)
 }
 
@@ -186,4 +171,77 @@ func hermesCLISurface(surfaces []domain.ClientSurface) bool {
 		}
 	}
 	return false
+}
+
+func hermesProjectAuthority(project, user string, environment []string) error {
+	home := projectSessionRoot(project)
+	canonical, err := New().ResolveProfileRoot(user)
+	if err != nil || canonical != user || home == user ||
+		pathpolicy.RequireContainedChild(user, home) == nil || pathpolicy.RequireContainedChild(home, user) == nil {
+		return fmt.Errorf("hermes Project MCP home overlaps or aliases selected User authority")
+	}
+	return hermesSessionSignals(home, environment)
+}
+
+// The pinned CLI reads active_profile before its normal configuration imports.
+// Presence of any node is a refusal; its foreign contents are never consumed.
+func hermesSessionSignals(home string, environment []string) error {
+	if !cleanRoot(home) || strings.Contains(home, "$") || runtime.GOOS == "windows" && strings.Contains(home, "%") {
+		return fmt.Errorf("hermes Project home contains native environment expansion")
+	}
+	canonical, err := New().ResolveProfileRoot(home)
+	if err != nil || canonical != home {
+		return fmt.Errorf("hermes Project home aliases another directory")
+	}
+	values := make(map[string]string)
+	for _, entry := range environment {
+		key, value, _ := strings.Cut(entry, "=")
+		if runtime.GOOS == "windows" {
+			key = strings.ToUpper(key)
+		}
+		values[key] = value
+	}
+	if err := hermesNativeSourceSignals(home, values); err != nil {
+		return err
+	}
+	userHome := values["HOME"]
+	if runtime.GOOS == "windows" {
+		userHome = values["USERPROFILE"]
+	}
+	if !cleanRoot(userHome) {
+		return fmt.Errorf("hermes inherited native home cannot be determined exactly")
+	}
+	// The platform default ignores HERMES_HOME; it is a separate auth fallback.
+	delete(values, "HERMES_HOME")
+	native, err := selectedProfileRoot(clients.NewHost(clients.HostProbes{
+		HomeDir: userHome, GOOS: runtime.GOOS, Environment: values,
+	}))
+	if err != nil {
+		return err
+	}
+	native, err = New().ResolveProfileRoot(native)
+	if err != nil || home == native || pathpolicy.RequireContainedChild(native, home) == nil ||
+		pathpolicy.RequireContainedChild(home, native) == nil {
+		return fmt.Errorf("hermes Project home overlaps native default authority")
+	}
+	if _, err := os.Lstat(filepath.Join(home, "active_profile")); !os.IsNotExist(err) {
+		return fmt.Errorf("hermes Project session has an active-profile redirect or unavailable marker authority")
+	}
+	return nil
+}
+
+// The pinned backend and managed-overlay selectors can replace the primary
+// file source. Refuse them without loading or changing administrator policy.
+func hermesNativeSourceSignals(home string, values map[string]string) error {
+	backend := strings.ToLower(strings.TrimSpace(values["HERMES_CONFIG_BACKEND"]))
+	if backend != "" && backend != "file" || strings.TrimSpace(values["HERMES_MANAGED_DIR"]) != "" {
+		return fmt.Errorf("hermes Project session has a different native configuration source")
+	}
+	// Python Path('/etc/hermes') uses the command directory's volume on Windows,
+	// including a UNC share. The private pytest waiver grants no authority here.
+	managed := filepath.Join(filepath.VolumeName(home)+string(os.PathSeparator), "etc", "hermes")
+	if _, err := os.Lstat(managed); !os.IsNotExist(err) {
+		return fmt.Errorf("hermes Project session has a managed source or unavailable managed authority")
+	}
+	return nil
 }

@@ -191,7 +191,10 @@ def build_installer(ctx, installer):
     go = Path(shutil.which("go") or "").resolve(strict=True)
     go_info = go.lstat()
     go_owner = (go_info.st_uid, go_info.st_gid)  # setup-go may expose a root-owned toolchain.
-    go_pin = installer_pin(go, ctx.budget, owner=go_owner)
+    authority = {"schema_version": 1, "role": "resolved-host-go", "selected_lstat": installer_metadata(go_info),
+                 "expected_owner": {"uid": go_owner[0], "gid": go_owner[1]}, "initial_pin_lstat": {}}
+    ctx.summary["global_build_authority"] = authority
+    go_pin = installer_pin(go, ctx.budget, owner=go_owner, metadata=authority["initial_pin_lstat"])
     receipt = {"schema_version": 1, "source_commit": ctx.summary["source_commit"],
                "source_tree": ctx.summary["source_tree"], "environment": "original-hosted-build; GOTOOLCHAIN=local",
                "go": {"path": str(go), "bytes": go_pin[0], "sha256": go_pin[1], "uid": go_owner[0], "gid": go_owner[1], "mode": 0o755},
@@ -295,10 +298,18 @@ def security_role(value):
     return "security/assessments/" + key + ".json"
 
 
-def installer_pin(path, budget, *, owner=None):
+def installer_metadata(info):
+    """Numeric facts from an existing observation; no path or content capture."""
+    return {name: getattr(info, name) for name in (
+        "st_dev", "st_ino", "st_mode", "st_nlink", "st_uid", "st_gid", "st_size", "st_mtime_ns", "st_ctime_ns")}
+
+
+def installer_pin(path, budget, *, owner=None, metadata=None):
     base.require(path.is_absolute() and path.resolve(strict=True) == path, "prebuilt installer alias")
     before = path.lstat()
     owner = (os.getuid(), os.getgid()) if owner is None else owner
+    if metadata is not None:
+        metadata.update(installer_metadata(before))
     base.require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1
                  and (before.st_uid, before.st_gid) == owner and stat.S_IMODE(before.st_mode) == 0o755
                  and 0 < before.st_size <= 128 << 20, "prebuilt installer authority")

@@ -177,13 +177,13 @@ var clientDefinitions = []ClientDefinition{
 		HonorsOpenAIMCPAuthHints:            true,
 		LegacyPreparedProjectPackageReceipt: true,
 	}), LifecycleNativeConfig), SupportNative, SupportNative),
-	withProjectComponents(withProjectScope(clientDefinition(ClientHermes, "Hermes Agent", "hermes", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
+	withProjectManagedStdio(withProjectComponents(withProjectScope(clientDefinition(ClientHermes, "Hermes Agent", "hermes", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
 		InstallIntents:           []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:            LifecycleNativeConfig,
 		BindsNativeProfileRoot:   true,
 		TracksNativeEffects:      true,
 		SupportsPreparedRecovery: true,
-	}), LifecycleNativeConfig), SupportNative, SupportUnsupported),
+	}), LifecycleNativeConfig), SupportNative, SupportPrepared)),
 	withProjectScope(clientDefinition(ClientAntigravity, "Google Antigravity", "antigravity", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
 		InstallIntents: []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:  LifecyclePrepared,

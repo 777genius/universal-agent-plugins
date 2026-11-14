@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
@@ -16,7 +17,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Explicit run consent admits these two bounded config observations. They do
+// Explicit run consent admits these three bounded native observations. They do
 // not connect MCP or call a model; any native bootstrap remains in its selected
 // runtime root and must pass the same qualified source boundary afterwards.
 func verifySessionNativeSource(ctx context.Context, env clients.Env, plan clients.SessionPlan) error {
@@ -35,6 +36,17 @@ func verifySessionNativeSource(ctx context.Context, env clients.Env, plan client
 	}
 	bounded, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
+	bundle, err := qualifyHermesBundle(plan.Executable)
+	if err != nil {
+		return err
+	}
+	version, err := observeSessionConfig(bounded, env, plan, "--version")
+	if err != nil {
+		return err
+	}
+	if err := hermesInstallDirectory(version, filepath.Join(bundle.root, "hermes-agent")); err != nil {
+		return err
+	}
 	path, err := observeSessionConfig(bounded, env, plan, "config", "path")
 	if err != nil {
 		return err
@@ -50,7 +62,7 @@ func verifySessionNativeSource(ctx context.Context, env clients.Env, plan client
 	if err := compareSessionNativeSource(body, servers); err != nil {
 		return err
 	}
-	return verifySessionAuthority(ctx, env, plan)
+	return verifySessionAuthority(bounded, env, plan)
 }
 
 func observeSessionConfig(ctx context.Context, env clients.Env, plan clients.SessionPlan, arguments ...string) ([]byte, error) {
@@ -60,10 +72,14 @@ func observeSessionConfig(ctx context.Context, env clients.Env, plan clients.Ses
 	if err := verifySessionAuthority(ctx, env, plan); err != nil {
 		return nil, err
 	}
+	environment := plan.ChildEnvironment(os.Environ())
+	if err := hermesSessionSignals(projectSessionRoot(plan.Directory), environment); err != nil {
+		return nil, err
+	}
 	const limit = 1 << 20
 	result, err := env.Runner.Run(ctx, legacyports.Command{
 		Argv: append([]string{plan.Executable}, arguments...), Dir: plan.Directory,
-		Env: plan.ChildEnvironment(os.Environ()), StdoutLimitBytes: limit,
+		Env: environment, StdoutLimitBytes: limit,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("hermes native configuration observation failed: %w", err)
@@ -71,13 +87,36 @@ func observeSessionConfig(ctx context.Context, env clients.Env, plan clients.Ses
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if result.ExitCode != 0 || len(result.Stdout) >= limit || !result.CleanupComplete || result.NoChildStarted {
+	if result.ExitCode != 0 || len(result.Stdout) >= limit || len(result.Stderr) > 32768 || !result.CleanupComplete || result.NoChildStarted {
 		return nil, fmt.Errorf("hermes configuration observation failed, exceeded its bound or lacked process cleanup")
 	}
 	if err := verifySessionAuthority(ctx, env, plan); err != nil {
 		return nil, err
 	}
 	return result.Stdout, nil
+}
+
+func hermesInstallDirectory(body []byte, expected string) error {
+	lines := strings.Split(strings.ReplaceAll(string(body), "\r\n", "\n"), "\n")
+	if lines[0] != "Hermes Agent vunknown (2026.9.24)" {
+		return fmt.Errorf("hermes native version differs from qualified bundle")
+	}
+	found := 0
+	for _, line := range lines[1:] {
+		if strings.HasPrefix(line, "Hermes Agent v") {
+			return fmt.Errorf("hermes native version observation is ambiguous")
+		}
+		if value, ok := strings.CutPrefix(line, "Install directory: "); ok {
+			found++
+			if value != expected {
+				return fmt.Errorf("hermes native install directory differs from selected bundle")
+			}
+		}
+	}
+	if found != 1 {
+		return fmt.Errorf("hermes native version/install-directory observation is missing")
+	}
+	return nil
 }
 
 func verifySessionAuthority(ctx context.Context, env clients.Env, plan clients.SessionPlan) error {

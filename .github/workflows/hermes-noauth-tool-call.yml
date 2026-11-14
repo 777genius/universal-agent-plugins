@@ -289,6 +289,42 @@ jobs:
       with:
         ref: ${{ github.event.pull_request.head.sha || github.sha }}
         persist-credentials: false
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+      with:
+        go-version: 1.26.11
+        cache: false
+    - name: Compile exact source public UAP and cold restore scenario
+      shell: bash
+      env:
+        HERMES_NATIVE_UAP_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      run: |
+        ${{ matrix.python }} - <<'PYTHON'
+        import hashlib, os, pathlib, subprocess, tempfile
+        runner = pathlib.Path(os.environ['RUNNER_TEMP']).resolve()
+        directory = pathlib.Path(tempfile.mkdtemp(prefix='hermes-uap-build-', dir=runner))
+        suffix = '.exe' if os.name == 'nt' else ''
+        binary, cold = directory / ('agentplugins' + suffix), directory / ('hermes-cold' + suffix)
+        probe = directory / ('hermes-mcp-probe' + suffix)
+        head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True, timeout=15).strip()
+        assert head == os.environ['HERMES_NATIVE_UAP_HEAD']
+        assert not subprocess.check_output(['git', 'status', '--porcelain', '--untracked-files=normal'], timeout=15)
+        subprocess.run(['go', 'build', '-o', str(binary), './cli/cmd/agentplugins'], check=True, timeout=300)
+        subprocess.run(['go', 'test', '-c', '-o', str(cold), './cli/cmd/agentplugins'], check=True, timeout=300)
+        subprocess.run(['go', 'build', '-o', str(probe), './repotests/testdata/agentplugins_native_probe'], check=True, timeout=300)
+        assert subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True, timeout=15).strip() == head
+        assert not subprocess.check_output(['git', 'status', '--porcelain', '--untracked-files=normal'], timeout=15)
+        values = {'UAP_BIN': str(binary), 'UAP_HERMES_COLD_TEST_BIN': str(cold),
+                  'UAP_HERMES_MCP_PROBE_BIN': str(probe), 'EXPECTED_HEAD': head}
+        for path, key in ((binary, 'UAP_HERMES_COLD_UAP_SHA256'), (cold, 'UAP_HERMES_COLD_TEST_SHA256'),
+                          (probe, 'UAP_HERMES_MCP_PROBE_SHA256')):
+            with path.open('rb') as stream:
+                body = stream.read((128 << 20) + 1)
+            assert 0 < len(body) <= 128 << 20
+            values[key] = hashlib.sha256(body).hexdigest()
+        with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as stream:
+            for key, value in values.items():
+                stream.write(key + '=' + value + '\n')
+        PYTHON
     - name: Inert owned build alias cleanup contracts
       shell: bash
       run: ${{ matrix.python }} -m unittest discover -s scripts -p test_hermes_owned_build_cleanup.py

@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Observe pinned Hermes explicit custom-runtime-root MCP; UAP remains refused."""
+"""Observe pinned bundled Hermes and its explicit UAP Project MCP composition."""
+import base64
 import hashlib
 from contextlib import ExitStack, contextmanager
 import json
 import os
 from pathlib import Path
+import platform
 import re
 import runpy
 import secrets
@@ -63,13 +65,18 @@ def same_opened_capture(before, held):
     return from_path[:2] == from_handle[:2] and from_path[3:] == from_handle[3:]
 
 
-def ordinary_bytes(path, expected=None, *, parent=None):
+def ordinary_bytes(path, expected=None, *, parent=None, pin=None, package_digest=None):
     path = Path(path)
     require(parent is not None or (path.is_absolute() and path.resolve() == path), "ordinary file alias")
     def linked():
         return path.lstat() if parent is None else os.stat(path.name, dir_fd=parent, follow_symlinks=False)
     before = linked()
-    require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1 and 0 <= before.st_size <= LIMIT,
+    require(pin is None or (expected is not None and type(pin) is tuple and len(pin) == 2
+            and type(pin[0]) is int and 0 < pin[0] <= 128 << 20
+            and type(pin[1]) is str and re.fullmatch(r"[a-f0-9]{64}", pin[1])), "fixed runtime pin required")
+    maximum = LIMIT if pin is None else pin[0]
+    require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1 and 0 <= before.st_size <= maximum
+            and (pin is None or before.st_size == maximum),
             "bounded ordinary single-link file required")
     require(expected is None or stable_file(before) == stable_file(expected), "file changed before open")
     # Reuse native artifact admission's Windows OPEN_REPARSE_POINT handle and
@@ -84,9 +91,23 @@ def ordinary_bytes(path, expected=None, *, parent=None):
                     field for field in STABLE_FIELDS
                     if not (artifacts.WINDOWS and field == "st_ctime_ns")
                     and getattr(held, field) != getattr(before, field)))
-        with os.fdopen(os.dup(descriptor), "rb") as stream:
-            body = stream.read(LIMIT + 1)
-        require(len(body) == before.st_size <= LIMIT and stable_file(os.fstat(descriptor)) == stable_file(held)
+        if pin is None:
+            with os.fdopen(os.dup(descriptor), "rb") as stream:
+                body = stream.read(LIMIT + 1)
+            count = len(body)
+            if package_digest is not None: package_digest.update(body)
+        else:
+            digest, count = hashlib.sha256(), 0
+            while count <= maximum:
+                chunk = os.read(descriptor, min(65536, maximum + 1 - count))
+                if not chunk: break
+                count += len(chunk)
+                require(count <= maximum, "pinned runtime grew")
+                digest.update(chunk)
+                if package_digest is not None: package_digest.update(chunk)
+            body = digest.hexdigest()
+            require(body == pin[1], "pinned runtime bytes differ")
+        require(count == before.st_size <= maximum and stable_file(os.fstat(descriptor)) == stable_file(held)
                 and stable_file(linked()) == stable_file(before), "file changed during bounded capture")
         return body
     finally:
@@ -214,7 +235,24 @@ def verify_inventory_directory(path, before, descriptor, held, parent=None, *, d
     raise RuntimeError("inventory directory changed (" + ";".join(details) + ")")
 
 
-def inventory(root, sentinels=()):
+# Same official archive members already admitted by the Antigravity/Devin
+# public fixtures. This is one fixed immutable leaf, never a cache subtree.
+PUBLIC_SCANNERS = {
+    "linux/amd64": (9989584, "b6723451f155eb49e84acb34d1f06de929bddfcff6238cd4e38cdc6519396fba"),
+    "darwin/arm64": (7949216, "37342414aa7feadc09b8473d1bfafe95fd79ab99f284d37518c930fcb7986c57"),
+    "windows/amd64": (7620608, "9d486e5b66875384c12a147b8a19007beebe2691bc6d23a7867bf019b70be453"),
+}
+
+
+def public_scanner_pin():
+    system = {"linux": "linux", "darwin": "darwin", "win32": "windows"}.get(sys.platform)
+    arch = {"x86_64": "amd64", "amd64": "amd64", "arm64": "arm64", "aarch64": "arm64"}.get(platform.machine().lower())
+    require(f"{system}/{arch}" in PUBLIC_SCANNERS, "unqualified public scanner platform")
+    leaf = "lintai.exe" if system == "windows" else "lintai"
+    return (f"public-uap-state/security/lintai/0.1.3/{system}-{arch}/{leaf}", *PUBLIC_SCANNERS[f"{system}/{arch}"])
+
+
+def inventory(root, sentinels=(), *, launchers=None, public=False, launcher_mode=None):
     """Capture an ordinary tree, refusing after the bounded number of visits.
 
     os.walk materializes the whole child-name list *before* the membership
@@ -223,26 +261,49 @@ def inventory(root, sentinels=()):
     """
     root = Path(root)
     identity = directory_identity(root)
-    result, total = {}, 0
+    result, total, copies, binary_total = {}, 0, 0, 0
+    launchers = launchers or {}
+    require(len(launchers) <= 4 and all(re.fullmatch(
+        r"public-[ab]/\.uap/managed/clients/hermes/hermes-public-[ab]-[a-f0-9]{12}/"
+        r"io\.github\.777genius\.agentplugins/managed-stdio-v1/agentplugins(?:\.exe)?", name)
+        for name in launchers), "finite receipt-owned launcher paths required")
+    require(not artifacts.WINDOWS or not launchers or type(launcher_mode) is int and 0 <= launcher_mode <= 0o777,
+            "original named Windows launcher mode required")
+    scanner = public_scanner_pin() if public else None
 
     def visit(path, depth, parent=None):
-        nonlocal total
+        nonlocal total, copies, binary_total
         require(len(result) < 2048 and depth <= 24, "inventory membership bound")
         relative = path.relative_to(root).as_posix()
         info = path.lstat() if parent is None else os.stat(path.name, dir_fd=parent, follow_symlinks=False)
         if depth == 0:
             require((info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_gid) == identity,
                     "inventory original root changed before open")
-        inventory_member(relative, info)
+        pin = launchers.get(relative)
+        if scanner is not None and relative == scanner[0]: pin = scanner[1:]
+        if pin is None:
+            inventory_member(relative, info)
+        else:
+            require(stat.S_ISREG(info.st_mode) and info.st_nlink == 1 and info.st_size == pin[0]
+                    and info.st_dev == identity[0] and (info.st_uid, info.st_gid) == identity[3:]
+                    and (artifacts.WINDOWS or stat.S_IMODE(info.st_mode) == 0o700)
+                    and (not artifacts.WINDOWS or relative not in launchers or stat.S_IMODE(info.st_mode) == launcher_mode),
+                    "pinned runtime metadata differs")
         record = {"type": "directory" if stat.S_ISDIR(info.st_mode) else "file",
                   "mode": stat.S_IMODE(info.st_mode), "device": info.st_dev, "inode": info.st_ino}
         if record["type"] == "file":
-            body = ordinary_bytes(path, info, **({} if parent is None else {"parent": parent}))
-            total += len(body)
-            require(total <= 16 << 20, "inventory byte bound")
-            require(not any(marker.encode() in body for marker in sentinels),
-                    "original User settings/data copied into custom root")
-            record.update(bytes=len(body), sha256=hashlib.sha256(body).hexdigest())
+            body = ordinary_bytes(path, info, parent=parent, pin=pin)
+            if pin is None:
+                total += len(body)
+                require(total <= 16 << 20, "inventory byte bound")
+                require(public and not relative.startswith("public-") or not any(marker.encode() in body for marker in sentinels),
+                        "original User settings/data copied into custom root")
+                record.update(bytes=len(body), sha256=hashlib.sha256(body).hexdigest())
+            else:
+                copies += int(relative in launchers)
+                binary_total += pin[0] if relative in launchers else 0
+                require(copies <= 4 and binary_total <= 4 * (128 << 20), "managed launcher count/byte bound")
+                record.update(bytes=pin[0], sha256=body, identity=list(stable_file(info)))
         result[relative] = record
         if record["type"] == "directory":
             descriptor = open_inventory_directory(path, parent)
@@ -1529,12 +1590,561 @@ def observe_profiles(probes):
                    "methods": {name: list(probe.methods()) for name, probe in probes.items()}})
 
 
+def public_json(body):
+    require(type(body) is bytes and 0 < len(body) <= LIMIT, "public JSON bound")
+    def unique(pairs):
+        value = {}
+        for key, item in pairs:
+            require(key not in value, "public JSON duplicate key")
+            value[key] = item
+        return value
+    return json.loads(body, object_pairs_hook=unique, parse_constant=lambda _: require(False, "public JSON nonfinite"))
+
+
+def public_mcp_digest(name, server):
+    require(type(name) is str and bool(name) and type(server) is dict, "public MCP object shape differs")
+    canonical = json.dumps(server, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode()
+    return "sha256:" + hashlib.sha256(b"agentplugins-native-mcp-v1\0hermes-mcp-servers-yaml\0" + name.encode() + b"\0" + canonical).hexdigest()
+
+
+def public_parent_receipt(receipt, selected):
+    """Join recorded publication facts; product Load/Kernel revalidate the OS IDs."""
+    parent, authority = Path(selected).parent, receipt.get("publication_parent_authority")
+    require(type(authority) is dict and set(authority) == {"version", "canonical_root", "ancestry"}
+            and type(authority["version"]) is int and authority["version"] == 1
+            and authority["canonical_root"] == str(parent) and receipt.get("before_digest", "") == "",
+            "public publication parent role differs")
+    ancestry = authority["ancestry"]
+    require(type(ancestry) is list and 1 <= len(ancestry) <= 256, "public publication ancestry bound")
+    for entry in ancestry:
+        require(type(entry) is dict and set(entry) == {"canonical_path", "scheme", "volume_id", "object_id"}
+                and all(type(entry[key]) is str and 0 < len(entry[key]) <= (4096 if key == "canonical_path" else 128)
+                        for key in entry), "public publication ancestry shape differs")
+    require(ancestry[-1]["canonical_path"] == str(parent), "public publication ancestry root differs")
+    for key in ("active_path", "staging_path", "backup_path"):
+        path = receipt.get(key)
+        require(type(path) is str and 0 < len(path) <= 4096 and Path(path).is_absolute()
+                and os.path.normpath(path) == path and Path(path).parent == parent,
+                "public publication path differs from original parent")
+
+
+def public_runtime_pins(expected=None, *, rehash=True):
+    pins = {}
+    for role, path_key, hash_key in (("uap", "UAP_BIN", "UAP_HERMES_COLD_UAP_SHA256"),
+            ("cold", "UAP_HERMES_COLD_TEST_BIN", "UAP_HERMES_COLD_TEST_SHA256"),
+            ("probe", "UAP_HERMES_MCP_PROBE_BIN", "UAP_HERMES_MCP_PROBE_SHA256")):
+        path, digest = Path(os.environ[path_key]), os.environ[hash_key]
+        require(path.is_absolute() and path.resolve() == path and re.fullmatch(r"[a-f0-9]{64}", digest), "exact public runtime required")
+        info = path.lstat()
+        if expected is not None:
+            require(expected[role] == {"path": str(path), "bytes": info.st_size, "sha256": digest,
+                    "identity": list(stable_file(info))}, "original public runtime changed")
+        if rehash:
+            ordinary_bytes(path, info, pin=(info.st_size, digest))
+        pins[role] = {"path": str(path), "bytes": info.st_size, "sha256": digest, "identity": list(stable_file(info))}
+    require(len({Path(pin["path"]).parent for pin in pins.values()}) == 1, "public runtimes lack one authored build root")
+    return pins
+
+
+def public_binding(project, name):
+    """Derive only this authored Project's prospective package read authority."""
+    state_path = project / ".uap/state-v2.json"
+    if not state_path.exists():
+        return None
+    body = ordinary_bytes(state_path)
+    state = public_json(body)
+    require(type(state.get("schema_version")) is int and state["schema_version"] == 5
+            and type(state.get("installations")) is list and len(state["installations"]) == 1, "public state shape")
+    installed = state["installations"][0]
+    require(installed.get("declared_name") == name and type(installed.get("clients")) is dict, "public installation differs")
+    if not installed["clients"]:
+        return None
+    require(len(installed["clients"]) == 1, "ambiguous public binding")
+    binding = next(iter(installed["clients"].values()))
+    physical = name + "-" + hashlib.sha256(installed["installation_id"].encode()).hexdigest()[:12]
+    target, selected = project / ".uap/managed/clients/hermes" / physical, project / ".hermes/uap-session"
+    require(binding.get("client_id") == "hermes" and binding.get("scope") == "project"
+            and binding.get("target_locator") == str(target) and binding.get("physical_artifact_id") == physical
+            and binding.get("native_profile_root") == str(project / ".hermes")
+            and binding.get("activation") == "prepared" and binding.get("verification") == "installation_verified"
+            and (binding.get("native_activation_attempt") is None or type(binding["native_activation_attempt"]) is str and binding["native_activation_attempt"] == "")
+            and binding.get("pending_native_intent") is None,
+            "public binding authority/status differs")
+    objects = binding.get("native_objects", [])
+    require(len(objects) == 5 and {item.get("kind") for item in objects} ==
+            {"managed_package_directory", "hermes_project_session_root", "hermes_project_session_mcp", "hermes_project_skill"},
+            "public native ownership differs")
+    mcp = [item for item in objects if item["kind"] == "hermes_project_session_mcp"]
+    require(len(mcp) == 2 and {item.get("logical_name") for item in mcp} == {name + "-http", name + "-stdio"}
+            and all(item == dict(object_id="hermes_project_session_mcp:" + item["logical_name"],
+                    kind="hermes_project_session_mcp", logical_name=item["logical_name"], path=str(selected / "config.yaml"),
+                    managed_digest=item.get("managed_digest"), protection_class="managed")
+                    and re.fullmatch(r"sha256:[a-f0-9]{64}", item["managed_digest"]) for item in mcp), "public MCP object selection differs")
+    skills = [item for item in objects if item["kind"] == "hermes_project_skill"]
+    require(len(skills) == 1 and skills[0] == dict(object_id="hermes_project_skill:" + name,
+            kind="hermes_project_skill", logical_name=name, path=str(project / ".hermes/skills" / name),
+            source_relative="skills/" + name, managed_digest=skills[0].get("managed_digest"), protection_class="managed")
+            and re.fullmatch(r"sha256:[a-f0-9]{64}", skills[0]["managed_digest"]), "public Skill object selection differs")
+    package = [item for item in objects if item["kind"] == "managed_package_directory"]
+    require(len(package) == 1 and package[0] == dict(object_id="package:hermes:" + physical,
+            kind="managed_package_directory", logical_name=name, path=str(target),
+            managed_digest=package[0].get("managed_digest"), protection_class="managed")
+            and re.fullmatch(r"sha256:[a-f0-9]{64}", package[0]["managed_digest"]), "public package receipt differs")
+    receipts = binding.get("receipts", [])
+    require(1 <= len(receipts) <= 8 and all(item.get("phase") == "committed" and item.get("mutation_type") == "directory_swap"
+            and item.get("client_binding_id") == binding["client_binding_id"] and item.get("active_path") == str(target)
+            and type(item.get("sequence")) is int and item["sequence"] == index + 1 for index, item in enumerate(receipts))
+            and receipts[-1].get("after_digest") == package[0]["managed_digest"], "public committed package receipt differs")
+    root_receipts = [item for item in state.get("transaction_receipts", []) if str(item.get("after_digest", "")).startswith("native-root-v1:")]
+    require(len(root_receipts) == 1 and root_receipts[0].get("phase") == "committed"
+            and root_receipts[0].get("mutation_type") == "directory_swap" and root_receipts[0].get("active_path") == str(selected)
+            and root_receipts[0].get("client_binding_id") == binding["client_binding_id"]
+            and re.fullmatch(r"native-root-v1:[a-f0-9]{64}", root_receipts[0]["after_digest"]), "public durable root receipt differs")
+    public_parent_receipt(root_receipts[0], selected)
+    marker = ("uap-hermes-project-session-v1\n" + str(project) + "\n").encode()
+    roots = [item for item in objects if item["kind"] == "hermes_project_session_root"]
+    require(roots == [dict(object_id="hermes_project_session_root", kind="hermes_project_session_root", path=str(selected / ".uap-owner"),
+            managed_digest=hashlib.sha256(marker).hexdigest(), protection_class="owned")]
+            and ordinary_bytes(selected / ".uap-owner") == marker, "public root marker differs")
+    data = installed["data_receipts"][binding["data_receipt_id"]]
+    data_path = project / ".uap/data" / physical
+    require(len(installed["data_receipts"]) == 1 and data.get("data_receipt_id") == binding["data_receipt_id"]
+            and data.get("physical_backend_id") == physical and data.get("scope") == "project" and data.get("state") == "owned"
+            and data.get("locator") == str(data_path)
+            and public_json(ordinary_bytes(data_path / ".agentplugins-data-owner.json")) == data, "public retained data receipt differs")
+    revision, source = binding["package_revision"], installed["source"]
+    require(revision["tree_digest"] == source["tree_digest"] and revision.get("resolved_revision", "") == source.get("resolved_revision", "")
+            and revision["manifest_digest"] == installed["package"]["manifest_digest"]
+            and revision["version"] == installed["package"]["version"], "public source/package revision differs")
+    return dict(state=state, state_sha256=hashlib.sha256(body).hexdigest(), installed=installed, binding=binding,
+                target=target, selected=selected, data=data_path, digest=package[0]["managed_digest"],
+                root_receipt=root_receipts[0], root_identity=directory_identity(selected), parent_identity=directory_identity(selected.parent))
+
+
+def public_package_digest(outer, proof, image, pin):
+    target, digest = proof["target"], hashlib.sha256()
+    prefix = target.relative_to(outer).as_posix()
+    rows = profile_tree(image, prefix)
+    require(prefix in rows and len(rows) <= 128, "public package membership differs")
+    for path in sorted(rows):
+        if path == prefix:
+            continue
+        name, row = path[len(prefix) + 1:], rows[path]
+        require(name.isascii() and ".git" not in name.split("/") and Path(name).name not in
+                {".uap-integrations.lock", ".plugin-kit-ai.lock"}, "public snapshot-excluded member")
+        file = outer / path
+        kind = "dir" if row["type"] == "directory" else "file"
+        executable = kind == "file" and os.name != "nt" and bool(row["mode"] & 0o111)
+        digest.update(("\0".join((kind, name, "true" if executable else "false", str(row.get("bytes", 0)))) + "\0").encode())
+        info = file.lstat()
+        require((info.st_dev, info.st_ino, stat.S_IMODE(info.st_mode)) == (row["device"], row["inode"], row["mode"]), "public package member replaced")
+        if kind == "file":
+            held = open_inventory_directory(file.parent)
+            try:
+                parent = image[file.parent.relative_to(outer).as_posix()]
+                opened = os.fstat(held)
+                require((opened.st_dev, opened.st_ino) == (parent["device"], parent["inode"]), "public package parent replaced")
+                body = ordinary_bytes(file, info, parent=None if artifacts.WINDOWS else held,
+                        pin=pin if name == "io.github.777genius.agentplugins/managed-stdio-v1/agentplugins" + (".exe" if os.name == "nt" else "") else None,
+                        package_digest=digest)
+                actual = body if type(body) is str else hashlib.sha256(body).hexdigest()
+                require(actual == row["sha256"] and info.st_size == row["bytes"], "public package bytes changed")
+                require(directory_identity(file.parent)[:2] == (parent["device"], parent["inode"]), "public package parent changed")
+            finally:
+                os.close(held)
+    require("sha256:" + digest.hexdigest() == proof["digest"], "public package digest differs from committed receipt")
+
+
+def public_snapshot(outer, projects, pins):
+    proofs = {scope: public_binding(project, "hermes-public-" + scope) for scope, project in projects.items()}
+    pin = (pins["uap"]["bytes"], pins["uap"]["sha256"])
+    suffix = ".exe" if os.name == "nt" else ""
+    launchers = {(proof["target"] / ("io.github.777genius.agentplugins/managed-stdio-v1/agentplugins" + suffix)).relative_to(outer).as_posix(): pin
+                 for proof in proofs.values() if proof is not None}
+    sentinels = ["USER_" + kind + "_" + os.environ.get("HERMES_CALL_NONCE", "") for kind in ("MODEL", "PROVIDER", "AUTH", "HISTORY", "FOREIGN")]
+    image = inventory(outer, sentinels, launchers=launchers, public=True, launcher_mode=stat.S_IMODE(pins["uap"]["identity"][2]))
+    for scope, proof in proofs.items():
+        if proof is None:
+            continue
+        require(image[(projects[scope] / ".uap/state-v2.json").relative_to(outer).as_posix()]["sha256"] == proof["state_sha256"], "public state changed during capture")
+        public_package_digest(outer, proof, image, pin)
+        skill = next(item for item in proof["binding"]["native_objects"] if item["kind"] == "hermes_project_skill")
+        source = proof["target"] / skill["source_relative"]
+        prefix = source.relative_to(outer).as_posix()
+        require(set(profile_tree(image, prefix)) == {prefix, prefix + "/SKILL.md"}, "public Skill source membership differs")
+        body = ordinary_bytes(source / "SKILL.md")
+        row = image[prefix + "/SKILL.md"]
+        executable = os.name != "nt" and bool(row["mode"] & 0o111)
+        skill_digest = hashlib.sha256(b"f\0SKILL.md\0" + (b"x\0" if executable else b"-\0") + body + b"\0").hexdigest()
+        require(hashlib.sha256(body).hexdigest() == row["sha256"] and skill["managed_digest"] == "sha256:" + skill_digest,
+                "public Skill digest differs from staged source")
+        data = proof["data"].relative_to(outer).as_posix()
+        require(set(profile_tree(image, data)) <= {data, data + "/.agentplugins-data-owner.json", data + "/hermes-events.jsonl"}, "public data has unmeasured members")
+        require((directory_identity(proof["selected"]), directory_identity(proof["selected"].parent)) ==
+                (proof["root_identity"], proof["parent_identity"]), "public root authority changed during capture")
+    return image, proofs
+
+
+def public_profile(root, image, outer, config_hashes):
+    prefix = root.relative_to(outer).as_posix()
+    rows = {name[len(prefix) + 1:]: row for name, row in profile_tree(image, prefix).items() if name != prefix}
+    marker = ("uap-hermes-project-session-v1\n" + str(root.parent.parent) + "\n").encode()
+    owner = rows.get(".uap-owner", {})
+    require(owner.get("type") == "file" and owner.get("bytes") == len(marker)
+            and owner.get("sha256") == hashlib.sha256(marker).hexdigest(), "public retained root marker differs")
+    directories = {"cron", "sessions", "logs", "logs/curator", "memories", "pairing", "hooks", "image_cache", "audio_cache", "skills", "backups", "backups/config"}
+    files = {".uap-owner", "config.yaml", "config.yaml.agentplugins.lock", "SOUL.md", "logs/agent.log", "logs/errors.log"}
+    backups = {name for name in rows if re.fullmatch(r"backups/config/config\.yaml\.good\.[0-9]{8}-[0-9]{6}", name)}
+    require(len(backups) <= 5 and set(rows) <= directories | files | backups, "public native bootstrap member is unmeasured")
+    for name, row in rows.items():
+        directory = name in directories
+        mode = 0o755 if name in {"backups", "backups/config"} else 0o700 if directory else 0o644 if name.startswith("logs/") else 0o600
+        require(row["type"] == ("directory" if directory else "file") and
+                row["mode"] == ((0o777 if directory else 0o666) if os.name == "nt" else mode), "public native bootstrap metadata differs")
+        if name == "config.yaml.agentplugins.lock": require(row["bytes"] == 0, "public config lock is not empty")
+        if name == "SOUL.md": require((row["bytes"], row["sha256"]) == (667, "36c1f5a2e92cd1d018311eaf4c8f1e8886672eae78212e033c681d0e3d5d506f"), "public native SOUL differs")
+        if name in backups: require(row["sha256"] in config_hashes, "public native backup has unowned bytes")
+
+
+def public_stdio_events(path, nonce):
+    if not path.exists():
+        return []
+    body = ordinary_bytes(path)
+    require(body.endswith(b"\n") and len(body.splitlines()) <= 32, "public stdio event bound")
+    rows = [public_json(line) for line in body.splitlines()]
+    require(len(rows) % 2 == 0, "public stdio exchange incomplete")
+    sessions = set()
+    for first, second in zip(rows[::2], rows[1::2]):
+        require([first.get("method"), second.get("method")] == ["initialize", "tools/list"]
+                and first.get("session") not in sessions, "public stdio exchange order/restart differs")
+        sessions.add(first["session"])
+        for row in (first, second):
+            require(set(row) == {"method", "pid", "session", "nonce", "timestamp", "facts"}
+                    and row["nonce"] == nonce and row["facts"] is None and type(row["pid"]) is int and row["pid"] > 0
+                    and row["session"] == first["session"] and row["pid"] == first["pid"]
+                    and type(row["timestamp"]) is str and len(row["timestamp"]) <= 40, "public stdio event identity differs")
+    return rows
+
+
+def cold_report(value, pins, bundle, head, temporary):
+    require(type(value) is dict and set(value) == set("kind entrypoint installer_executed source_head installer_sha256 bundle_executable runner_os architecture original_source restored_source restored_binding commands root_publications removed_state activation native_tools_call vendor_authentication model_invoked".split()), "cold report schema")
+    require(value["kind"] == "hermes-bundle-cold-restore" and value["source_head"] == head
+            and value["entrypoint"] == "public-cobra-in-process" and value["installer_executed"] is False
+            and value["installer_sha256"] == pins["uap"]["sha256"] and value["bundle_executable"] == str(bundle)
+            and value["activation"] == "prepared" and all(value[key] is False for key in ("native_tools_call", "vendor_authentication", "model_invoked"))
+            and value["original_source"] == value["restored_source"], "cold report source/qualification differs")
+    require(value["runner_os"] == {"linux": "linux", "darwin": "darwin", "win32": "windows"}.get(sys.platform)
+            and value["architecture"] == {"x86_64": "amd64", "amd64": "amd64", "arm64": "arm64", "aarch64": "arm64"}.get(platform.machine().lower()), "cold actual platform differs")
+    binding, source = value["restored_binding"], value["restored_source"]
+    require(re.fullmatch(r"[a-f0-9]{40}", source.get("resolved_revision", ""))
+            and source.get("tree_digest") == binding["package_revision"]["tree_digest"]
+            and source["resolved_revision"] == binding["package_revision"]["resolved_revision"]
+            and binding["client_id"] == "hermes" and binding["scope"] == "project"
+            and binding["activation"] == "prepared" and binding["verification"] == "installation_verified"
+            and binding.get("pending_native_intent") is None
+            and (binding.get("native_activation_attempt") is None or type(binding["native_activation_attempt"]) is str and binding["native_activation_attempt"] == ""), "cold exact restored binding differs")
+    selected = str(Path(binding["native_profile_root"]) / "uap-session")
+    objects = [item for item in binding["native_objects"] if item.get("kind") == "hermes_project_session_mcp"]
+    require(len(objects) == 1 and objects[0].get("logical_name") == "docs"
+            and objects[0].get("object_id") == "hermes_project_session_mcp:docs"
+            and objects[0].get("path") == str(Path(selected) / "config.yaml")
+            and objects[0].get("protection_class") == "managed", "cold owned MCP selector differs")
+    rows = value["commands"]
+    require(type(rows) is list and [row.get("step") for row in rows] == ["original-inspect", "cold-inspect", "repaired-inspect"], "cold actual command sequence differs")
+    inventories = []
+    for row in rows:
+        require(set(row) == set("step argv public_argv directory selected_root exit_code stdout_base64 stderr_base64 stdout_bytes stderr_bytes stdout_sha256 stderr_sha256 cleanup_complete no_child_started".split()), "cold command schema")
+        project = Path(row["directory"])
+        require(project.is_absolute() and project.resolve() == project and project.is_relative_to(temporary)
+                and row["argv"] == [str(bundle), "config", "get", "mcp_servers", "--json"]
+                and row["public_argv"] == ["run", "--target", "hermes", "--scope", "project", "--project-root", str(project), "--inspect", "--confirm-client-start"]
+                and row["selected_root"] == str(project / ".hermes/uap-session")
+                and type(row["exit_code"]) is int and row["exit_code"] == 0 and row["cleanup_complete"] is True
+                and row["no_child_started"] is False, "cold actual native command/cleanup differs")
+        for stream in ("stdout", "stderr"):
+            encoded = row[stream + "_base64"]
+            # The existing Go producer marshals a nil []byte as null. Only
+            # an empty stderr can use that spelling; count and hash still join.
+            require(type(encoded) is str or (stream == "stderr" and encoded is None), "cold stream encoding differs")
+            body = b"" if encoded is None else base64.b64decode(encoded, validate=True)
+            require(type(row[stream + "_bytes"]) is int and len(body) == row[stream + "_bytes"] <= (32768 if stream == "stderr" else LIMIT)
+                    and hashlib.sha256(body).hexdigest() == row[stream + "_sha256"], "cold original stream join differs")
+            require(stream != "stdout" or bool(body), "cold native inventory is empty")
+            if stream == "stdout":
+                inventory = public_json(body)
+                require(type(inventory) is dict and set(inventory) == {"docs"}
+                        and public_mcp_digest("docs", inventory["docs"]) == objects[0].get("managed_digest"),
+                        "cold native inventory differs from owned receipt")
+                inventories.append(inventory)
+    require(inventories[0] == inventories[1] == inventories[2], "cold selected inventories differ")
+    require(rows[0]["directory"] != rows[1]["directory"], "cold restored environment was not fresh")
+    roots = [row for row in value["root_publications"] if str(row.get("after_digest", "")).startswith("native-root-v1:")]
+    require(len(value["root_publications"]) == len(roots) == 1 and roots[0].get("active_path") == selected and roots[0].get("phase") == "committed"
+            and roots[0].get("mutation_type") == "directory_swap" and type(roots[0].get("sequence")) is int and roots[0]["sequence"] > 0
+            and re.fullmatch(r"native-root-v1:[a-f0-9]{64}", roots[0]["after_digest"])
+            and roots[0].get("client_binding_id") == binding["client_binding_id"]
+            and roots[0] in value["removed_state"].get("transaction_receipts", [])
+            and all(not item.get("clients") for item in value["removed_state"]["installations"])
+            and all(str(Path(row["directory"]) / ".hermes/uap-session") == selected for row in rows[1:]), "cold retained root receipt differs")
+    public_parent_receipt(roots[0], Path(selected))
+    return value
+
+
+def public_cleanup_complete(home, proof):
+    # A killed Go owner may leave a separate native process group. Once this
+    # family starts, only the fully validated Cold report permits home cleanup.
+    if all(not (home / name).exists() and not (home / name).is_symlink()
+           for name in ("public-a", "public-b", "public-cold-tmp")):
+        return True
+    cold = proof.get("cold_restore")
+    return (proof.get("public_project_lifecycle_complete") is True and type(cold) is dict
+            and set(cold) == {"source", "commands", "sha256"}
+            and cold["source"] == proof["source"]["commit"]
+            and type(cold["commands"]) is int and cold["commands"] == 3
+            and type(cold["sha256"]) is str and re.fullmatch(r"[a-f0-9]{64}", cold["sha256"]) is not None)
+
+
+def public_cold(evidence, temporary, env, pins, deadline, head, bundle):
+    public_runtime_pins(pins)
+    report = evidence / "cold-restore.json"
+    require(not report.exists() and not report.is_symlink() and temporary.resolve() == temporary,
+            "cold report/temporary root is not fresh")
+    require(env.get("GITHUB_ACTIONS") == "true" and env.get("RUNNER_ENVIRONMENT") == "github-hosted",
+            "cold invocation lacks genuine hosted environment")
+    owned, descriptors, named, held = temporary / "hermes-cold", {}, {}, {}
+    def members():
+        with os.scandir(temporary) as entries:
+            return [entry.name for _, entry in zip(range(2), entries)]
+    def opened_identity(descriptor):
+        info = os.fstat(descriptor)
+        return (info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_gid)
+    try:
+        for path in (temporary, owned):
+            if path == owned:
+                require(not members(), "cold parent contains an unowned member")
+                path.mkdir(mode=0o700)
+            named[path] = directory_identity(path)
+            before = path.lstat()
+            descriptors[path] = open_inventory_directory(path)
+            check_inventory_directory(before, os.fstat(descriptors[path]), "cold directory changed at open")
+            held[path] = opened_identity(descriptors[path])
+        # Choose once from the original monotonic budget. Go soft-cancels 30s
+        # before this same absolute deadline; Python keeps its outer hard fence.
+        budget = min(360, deadline - time.monotonic() - 10)
+        require(budget > 40, "cold original budget lacks cancellation reserve")
+        cold_env = dict(env, UAP_HERMES_PROJECT_BUNDLE_E2E="1", UAP_HERMES_PROJECT_BUNDLE_EXE=str(bundle),
+                        UAP_HERMES_COLD_REPORT=str(report), TMPDIR=str(owned), TEMP=str(owned), TMP=str(owned),
+                        UAP_HERMES_COLD_DEADLINE_UNIX_MS=str(int((time.time() + budget) * 1000)))
+        output = bounded([pins["cold"]["path"], "-test.run=^TestProjectHermesBundleColdRestoreAndRepair$", "-test.count=1", "-test.v", "-test.timeout=6m"],
+                         HERE.parents[1], cold_env, evidence / "public-cold", timeout=budget)
+        require(re.search(rb"(?m)^--- PASS: TestProjectHermesBundleColdRestoreAndRepair \([0-9]+(?:\.[0-9]+)?s\)$", output)
+                and b"--- SKIP:" not in output
+                and ("HERMES_COLD_SOURCE " + head + " " + pins["uap"]["sha256"] + " (3 native selected commands)").encode() in output,
+                "cold native test did not execute completely")
+        value = cold_report(public_json(ordinary_bytes(report)), pins, bundle, head, owned)
+        public_runtime_pins(pins)
+        require(time.monotonic() < deadline and members() == [owned.name], "cold cleanup budget/membership differs")
+        for path in (temporary, owned):
+            require(directory_identity(path) == named[path] and opened_identity(descriptors[path]) == held[path], "cold original directory changed")
+        # Windows cannot remove an open directory; its unchanged parent stays
+        # held. Reuse the existing owned-root cleanup after native closure only.
+        os.close(descriptors.pop(owned))
+        shutil.rmtree(owned)
+        require(directory_identity(temporary) == named[temporary] and not members(), "cold parent closure differs")
+        return value
+    finally:
+        for descriptor in descriptors.values(): os.close(descriptor)
+
+
+def observe_public(probes):
+    import hermes_yaml as yaml
+    evidence, user = Path(os.environ["HERMES_NATIVE_EVIDENCE"]), Path(os.environ["HOME"])
+    outer, nonce = user.parent, os.environ["HERMES_CALL_NONCE"]
+    deadline = float(os.environ["HERMES_PROFILE_DEADLINE"])
+    pins = public_json(os.environ["HERMES_PUBLIC_PINS"].encode())
+    public_runtime_pins(pins)
+    original = Path(public_json(ordinary_bytes(evidence / "profile-endpoints.json"))["original_native_root"])
+    raw_final = public_json(ordinary_bytes(evidence / "original-user-final.json"))
+    require(inventory(outer) == raw_final, "raw profile boundary changed before public lifecycle")
+    projects = {scope: outer / ("public-" + scope) for scope in ("a", "b")}
+    sources = {scope: outer / ("public-source-" + scope) for scope in projects}
+    state_root, cold_tmp = outer / "public-uap-state", outer / "public-cold-tmp"
+    for directory in (*projects.values(), *sources.values(), state_root, cold_tmp): directory.mkdir(mode=0o700)
+    env = dict(os.environ, HERMES_HOME=str(original), AGENTPLUGINS_HOME=str(state_root),
+               PATH=str(Path(os.environ["HERMES_BIN"]).parent) + os.pathsep + os.environ["PATH"])
+    for scope, project in projects.items():
+        bounded(["git", "init", "-q", str(project)], outer, env, evidence / ("public-git-" + scope), timeout=min(30, deadline-time.monotonic()))
+        foreign = project / ".hermes/skills/foreign/SKILL.md"
+        foreign.parent.mkdir(parents=True)
+        foreign.write_bytes(("---\nname: foreign\ndescription: Retained Project Skill.\n---\nFOREIGN_" + nonce + scope + "\n").encode())
+        (project / "foreign.txt").write_bytes((nonce + scope).encode())
+        source = sources[scope]
+        name = "hermes-public-" + scope
+        (source / "skills" / name).mkdir(parents=True)
+        (source / "skills" / name / "SKILL.md").write_bytes(("---\nname: " + name + "\ndescription: Inert public lifecycle Skill.\n---\nREVISION_1\n").encode())
+        (source / "plugin.json").write_bytes(json.dumps({"$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+            "name": name, "version": "1.0.0", "description": "Disposable Hermes public lifecycle"}).encode())
+        (source / "mcp.json").write_bytes(json.dumps({"$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json", "mcpServers": {
+            name + "-http": {"type": "streamable-http", "url": probes[scope].url},
+            name + "-stdio": {"type": "stdio", "command": pins["probe"]["path"], "args": [], "env": {
+                "UAP_TEST_ROOT": str(project), "UAP_TEST_EVENTS": "${PLUGIN_DATA}/hermes-events.jsonl", "UAP_TEST_NONCE": nonce}}}}).encode())
+    authorities = {scope: directory_identity(project) for scope, project in projects.items()}
+    write_json(evidence / "public-endpoints.json", {scope: {"project": str(project), "identity": authorities[scope],
+                "selected": str(project / ".hermes/uap-session"), "url": probes[scope].url} for scope, project in projects.items()})
+    current, proofs = public_snapshot(outer, projects, pins)
+    require(all(current.get(key) == value for key, value in raw_final.items()), "public authoring changed raw original")
+    protected = {key: value for key, value in current.items() if key.startswith("user/") or key.startswith("project-")
+                 or key.endswith("foreign.txt") or "/skills/foreign" in key}
+    configs, records, born, complete = {scope: set() for scope in projects}, [], {}, False
+
+    def snapshot():
+        image, bindings = public_snapshot(outer, projects, pins)
+        verify_root_identities(projects, authorities)
+        protected_unchanged(protected, image, protected)
+        for scope, proof in bindings.items():
+            if proof is not None:
+                identity = (proof["root_identity"], proof["parent_identity"], proof["root_receipt"])
+                require(scope not in born or born[scope] == identity, "public durable root was replaced or renewed")
+                born.setdefault(scope, identity)
+        for scope, identity in born.items():
+            selected = projects[scope] / ".hermes/uap-session"
+            require((directory_identity(selected), directory_identity(selected.parent)) == identity[:2], "public retained root/parent changed")
+        return image, bindings
+
+    def authored(paths, change):
+        nonlocal current, proofs
+        before, _ = snapshot()
+        require(before == current, "unmeasured public inter-command effect")
+        change()
+        after, proofs = snapshot()
+        require(set(changes(before, after)) == {path.relative_to(outer).as_posix() for path in paths}, "authored public effect differs")
+        records.append({"label": "authored", "paths": [str(path.relative_to(outer)) for path in paths], "delta": changes(before, after)})
+        current = after
+
+    def command(label, scope, args, *, native=False, inspect=False, expected_failure=False, test=None):
+        nonlocal current, proofs
+        public_runtime_pins(pins, rehash=False)
+        before, previous = snapshot()
+        require(before == current and deadline-time.monotonic() > 10, "public command original budget/baseline differs")
+        project, name = projects[scope], "hermes-public-" + scope
+        selected = project / ".hermes/uap-session"
+        http_before = {key: list(probe.methods()) for key, probe in probes.items()}
+        events_before = {key: public_stdio_events(proof["data"] / "hermes-events.jsonl", nonce) if proof else [] for key, proof in previous.items()}
+        argv = [os.environ["HERMES_BIN"], *args] if native else [pins["uap"]["path"], *args, "--target", "hermes", "--scope", "project", "--project-root", str(project)]
+        if not native and not inspect: argv += ["--yes", "--format", "json"]
+        output = bounded(argv, project, dict(env, HERMES_HOME=str(selected)) if native else env,
+                         evidence / label, timeout=min(90, deadline-time.monotonic()-5), expected_failure=expected_failure)
+        after, proofs = snapshot()
+        delta = changes(before, after)
+        selected_prefix = selected.relative_to(outer).as_posix()
+        permitted = [selected_prefix]
+        if native or inspect:
+            require(previous[scope] is not None or scope in born and label in
+                    {"public-removed-list-" + scope, "public-removed-test-" + scope}, "native public action lacks owned source")
+            if previous[scope]: permitted.append((previous[scope]["data"] / "hermes-events.jsonl").relative_to(outer).as_posix())
+        else:
+            permitted += [(project / ".uap").relative_to(outer).as_posix(), (project / ".hermes/skills" / name).relative_to(outer).as_posix(), "public-uap-state"]
+        require(all(any(path == prefix or path.startswith(prefix + "/") for prefix in permitted) for path in delta), "public action changed an unselected or unmeasured path")
+        other = "b" if scope == "a" else "a"
+        require(profile_tree(before, projects[other].name) == profile_tree(after, projects[other].name), "public sibling changed")
+        if not native and not inspect:
+            require(public_json(output).get("result") == "success", "public command did not return success")
+        config = selected / "config.yaml"
+        servers = {}
+        if config.exists():
+            body = ordinary_bytes(config); value = yaml.safe_load(body)
+            require(type(value) is dict and set(value) <= {"mcp_servers"}, "public selected config has unowned settings")
+            servers = value.get("mcp_servers", {})
+            require(type(servers) is dict, "public selected config collection differs")
+            configs[scope].add(hashlib.sha256(body).hexdigest())
+        if proofs[scope] is not None:
+            require(set(servers) == {name + "-http", name + "-stdio"} and servers[name + "-http"] == {"url": probes[scope].url}, "public selected config source differs")
+            for obj in proofs[scope]["binding"]["native_objects"]:
+                if obj["kind"] == "hermes_project_session_mcp":
+                    require(obj["path"] == str(config) and obj["managed_digest"] == public_mcp_digest(obj["logical_name"], servers[obj["logical_name"]]),
+                            "public owned MCP digest differs")
+            skill_prefix = (project / ".hermes/skills" / name).relative_to(outer).as_posix()
+            skill_source = (proofs[scope]["target"] / "skills" / name / "SKILL.md").relative_to(outer).as_posix()
+            require(set(profile_tree(after, skill_prefix)) == {skill_prefix, skill_prefix + "/SKILL.md"}
+                    and after[skill_prefix + "/SKILL.md"]["sha256"] == after[skill_source]["sha256"], "public delivered Skill differs")
+            if inspect: require(public_json(output) == servers, "actual public selected inventory differs")
+        else:
+            require(not servers and not (project / ".hermes/skills" / name).exists(), "public removal retained owned sources")
+        if selected.exists(): public_profile(selected, after, outer, configs[scope])
+        http_after = {key: list(probe.methods()) for key, probe in probes.items()}
+        protocol_join(http_before, http_after, scope if test == "http" else None, 1 if test == "http" else 0)
+        for key, proof in previous.items():
+            retained = proofs[key] or proof
+            events = public_stdio_events(retained["data"] / "hermes-events.jsonl", nonce) if retained else []
+            require(events[:len(events_before[key])] == events_before[key]
+                    and len(events)-len(events_before[key]) == (2 if key == scope and test == "stdio" else 0), "public stdio dispatch differs")
+            if proof is not None and not (key == scope and test == "stdio"):
+                prefix = proof["data"].relative_to(outer).as_posix()
+                require(profile_tree(before, prefix) == profile_tree(after, prefix), "public operation changed retained data")
+        records.append({"label": label, "scope": scope, "delta": delta,
+                        "http_methods": http_after, "stdio_counts": {key: len(events_before[key]) for key in projects}})
+        current = after
+        return output
+
+    try:
+        for scope in projects:
+            command("public-add-" + scope, scope, ["add", str(sources[scope]), "--no-save"])
+        before_repeat = proofs["a"]["state_sha256"]
+        command("public-repeat-a", "a", ["add", str(sources["a"]), "--no-save"])
+        require(proofs["a"]["state_sha256"] == before_repeat, "public repeat rewrote receipts")
+        for scope in projects:
+            command("public-run-" + scope, scope, ["run", "--inspect", "--confirm-client-start"], inspect=True)
+            for transport in ("http", "stdio"):
+                command("public-" + transport + "-" + scope, scope, ["mcp", "test", "hermes-public-" + scope + "-" + transport], native=True, test=transport)
+        for transport in ("http", "stdio"):
+            command("public-" + transport + "-restart-a", "a", ["mcp", "test", "hermes-public-a-" + transport], native=True, test=transport)
+        manifest, skill = sources["a"] / "plugin.json", sources["a"] / "skills/hermes-public-a/SKILL.md"
+        def advance():
+            value = public_json(ordinary_bytes(manifest)); value["version"] = "1.1.0"
+            manifest.write_bytes(json.dumps(value).encode()); skill.write_bytes(ordinary_bytes(skill).replace(b"REVISION_1", b"REVISION_2"))
+        prior = proofs["a"]
+        authored([manifest, skill], advance)
+        command("public-update-a", "a", ["update", "hermes-public-a"])
+        require(proofs["a"]["installed"]["source"]["tree_digest"] != prior["installed"]["source"]["tree_digest"]
+                and proofs["a"]["installed"]["package"]["version"] == "1.1.0"
+                and proofs["a"]["installed"]["installation_id"] == prior["installed"]["installation_id"]
+                and proofs["a"]["data"] == prior["data"], "public changed update lost revision or retained data")
+        selected_skill = projects["a"] / ".hermes/skills/hermes-public-a/SKILL.md"
+        selected_config = proofs["a"]["selected"] / "config.yaml"
+        authored([selected_skill, selected_config], lambda: (selected_skill.unlink(), selected_config.unlink()))
+        command("public-repair-a", "a", ["repair", "hermes-public-a"])
+        require(ordinary_bytes(selected_skill) == ordinary_bytes(skill), "public missing repair did not restore recorded Skill")
+        command("public-repaired-run-a", "a", ["run", "--inspect", "--confirm-client-start"], inspect=True)
+        for transport in ("http", "stdio"):
+            command("public-" + transport + "-repaired-a", "a", ["mcp", "test", "hermes-public-a-" + transport], native=True, test=transport)
+        for scope in projects:
+            prior = proofs[scope]
+            command("public-remove-" + scope, scope, ["remove", "hermes-public-" + scope])
+            state = public_json(ordinary_bytes(projects[scope] / ".uap/state-v2.json"))
+            require(prior["root_receipt"] in state.get("transaction_receipts", []) and not prior["target"].exists()
+                    and directory_identity(prior["selected"]) == prior["root_identity"]
+                    and directory_identity(prior["selected"].parent) == prior["parent_identity"]
+                    and public_json(ordinary_bytes(prior["data"] / ".agentplugins-data-owner.json")) == prior["installed"]["data_receipts"][prior["binding"]["data_receipt_id"]], "public removal lost retained root/data")
+            command("public-removed-list-" + scope, scope, ["mcp", "list"], native=True, expected_failure=False)
+            command("public-removed-test-" + scope, scope, ["mcp", "test", "hermes-public-" + scope + "-http"], native=True, expected_failure=True)
+        public_cold(evidence, cold_tmp, env, pins, deadline, os.environ["EXPECTED_HEAD"], Path(os.environ["HERMES_BIN"]))
+        after, _ = snapshot(); require(after == current and not list(cold_tmp.iterdir()), "cold fixture changed retained public/User tree")
+        complete = True
+    finally:
+        write_json(evidence / "public-command-deltas.json", {"complete": complete, "commands": records, "root_authorities": born,
+                   "production_project_mcp": False, "admission_qualified": False,
+                   "http_methods": {name: list(probe.methods()) for name, probe in probes.items()}})
+
+
 COMMANDS = ({prefix + x for prefix in ("git-", "guard-", "config-path-", "config-mcp-", "list-", "test-", "remove-mcp-", "removed-list-", "removed-test-") for x in ("a", "b")}
             | {"test-a-restart", "list-user", "version-a"})
+COMMANDS |= ({"public-" + prefix + scope for prefix in ("git-", "add-", "run-", "http-", "stdio-", "remove-", "removed-list-", "removed-test-") for scope in ("a", "b")}
+             | {"public-" + name for name in ("repeat-a", "http-restart-a", "stdio-restart-a", "update-a", "repair-a", "repaired-run-a", "http-repaired-a", "stdio-repaired-a", "cold")})
 MEMBERS = ({name + suffix for name in COMMANDS for suffix in (".stdout", ".stderr", ".status.json")}
            | {"original-user-baseline.json", "original-user-final.json", "source-guards.json", "profile-endpoints.json",
               "profile-command-deltas.json", "bootstrap-census-request.json", "bootstrap-census.json", "source-user-preparation.json",
-              "profile-admission.json", "lifecycle.stdout", "lifecycle.stderr", "owned-start-gate"})
+              "profile-admission.json", "lifecycle.stdout", "lifecycle.stderr", "owned-start-gate",
+              "public-endpoints.json", "public-command-deltas.json", "cold-restore.json"})
 
 
 def admit_evidence(directory):
@@ -1624,6 +2234,9 @@ def child_case():
         probes = {name: stack.enter_context(PiHTTPMCPProbe(nonce=os.environ["HERMES_CALL_NONCE"]))
                   for name in ("a", "b")}
         observe_profiles(probes)
+        if not source_capture_mode():
+            public = {name: stack.enter_context(PiHTTPMCPProbe(nonce=os.environ["HERMES_CALL_NONCE"])) for name in ("a", "b")}
+            observe_public(public)
 
 
 def run():
@@ -1655,7 +2268,7 @@ def run():
     payload = runner / "hermes-profile-payload"
     target = {"Linux": "linux", "Windows": "win32", "macOS": "darwin"}[os.environ["RUNNER_OS"]] + "-" + os.environ["RUNNER_ARCH"].lower()
     payload_descriptor, runtime_before, native_started, source_installation = None, None, None, None
-    source_prepared, preparation = None, None
+    source_prepared, preparation, public_pins = None, None, None
     helpers = runpy.run_path(str(HERE / "hermes-native.py"), run_name="hermes_profile_process_helpers")
     lifecycle_deadline = time.monotonic() + 720
     try:
@@ -1690,7 +2303,18 @@ def run():
                 "HERMES_BIN": runtime_before["provenance"]["native_command"][0], "RUNNER_TEMP": str(runner),
                 "HERMES_PROFILE_RUNTIME_ROOT": str(runtime_root), "HERMES_PROFILE_PYTHON": str(python)})
         proof["runtime_before"] = runtime_before
+        if not source_capture:
+            require(os.environ.get("EXPECTED_HEAD") == before["commit"], "compiled public source differs")
+            public_pins = public_runtime_pins()
+            require(all(not Path(pin["path"]).is_relative_to(root) for pin in public_pins.values()
+                        for root in (home, evidence, payload, checkout, official_source)), "public executable roots overlap native/config source")
+            proof["public_runtimes_before"] = public_pins
         env["HERMES_CENSUS_EVIDENCE_ID"] = json.dumps(evidence_authority)
+        if not source_capture:
+            for key in ("UAP_BIN", "UAP_HERMES_COLD_UAP_SHA256", "UAP_HERMES_COLD_TEST_BIN", "UAP_HERMES_COLD_TEST_SHA256",
+                        "UAP_HERMES_MCP_PROBE_BIN", "UAP_HERMES_MCP_PROBE_SHA256", "EXPECTED_HEAD", "GITHUB_ACTIONS", "RUNNER_ENVIRONMENT"):
+                env[key] = os.environ[key]
+            env["HERMES_PUBLIC_PINS"] = json.dumps(public_pins)
         env.pop("HERMES_NATIVE_MCP_URL", None)  # This case has no User/legacy-call endpoint.
         gate = evidence / "owned-start-gate"
         env["HERMES_CALL_START_GATE"] = str(gate)
@@ -1706,6 +2330,7 @@ def run():
             verify_inventory_directory(payload, payload_before, payload_descriptor, payload_held)
         native_started = time.monotonic()
         lifecycle_deadline = native_started + 720
+        env["HERMES_PROFILE_DEADLINE"] = str(lifecycle_deadline)
         flags = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt" else {"start_new_session": True}
         with (evidence / "lifecycle.stdout").open("wb") as out, (evidence / "lifecycle.stderr").open("wb") as err:
             child = subprocess.Popen(argv, env=env, stdin=subprocess.DEVNULL, stdout=out, stderr=err, **flags)
@@ -1723,8 +2348,15 @@ def run():
                 and methods["b"].count("initialize") == 1 and methods["b"].count("tools/list") == 1
                 and all("tools/call" not in value for value in methods.values()), "native profile MCP ledger differs")
         endpoints = json.loads(ordinary_bytes(evidence / "profile-endpoints.json"))
-        proof.update(capture_complete=True, methods=methods, runtime_roots=endpoints, deltas=deltas)
+        proof.update(methods=methods, runtime_roots=endpoints, deltas=deltas)
         require(not deltas["unadmitted_shared_effects"], "shared metadata effects require independent admission")
+        if not source_capture:
+            public = public_json(ordinary_bytes(evidence / "public-command-deltas.json"))
+            require(public["complete"] is True, "public Hermes lifecycle incomplete")
+            cold = cold_report(public_json(ordinary_bytes(evidence / "cold-restore.json")), public_pins,
+                               Path(env["HERMES_BIN"]), before["commit"], home / "public-cold-tmp/hermes-cold")
+            proof.update(public_project_lifecycle_complete=True, public_deltas=public,
+                         cold_restore={"source": cold["source_head"], "commands": len(cold["commands"]), "sha256": sha(evidence / "cold-restore.json")})
     except BaseException as error:
         failure = error
         if type(error) is PayloadHardlinkRefusal and native_started is None and error.diagnostic is not None:
@@ -1749,6 +2381,9 @@ def run():
                         require(time.monotonic() < deadline, "owned process group still present")
                         time.sleep(.05)
                 process_settled = True
+            if not source_capture and not public_cleanup_complete(home, proof):
+                process_settled = False
+                raise RuntimeError("public native cleanup unproved; disposable home retained")
             endpoint_file = evidence / "profile-endpoints.json"
             root_paths = {name: home / ("project-" + name) / ".uap" / "hermes-runtime" for name in ("a", "b")}
             if endpoint_file.exists():
@@ -1757,6 +2392,18 @@ def run():
                 verify_root_identities(root_paths, {name: selected[name]["directory_identity"] for name in root_paths})
             else:
                 require(all(not root.exists() and not root.is_symlink() for root in root_paths.values()), "cleanup lacks original custom-root receipt")
+            public_endpoints = evidence / "public-endpoints.json"
+            if not source_capture and public_endpoints.exists():
+                endpoints = public_json(ordinary_bytes(public_endpoints))
+                public_roots = {name: home / ("public-" + name) for name in ("a", "b")}
+                require(set(endpoints) == set(public_roots) and all(endpoints[name]["project"] == str(root) for name, root in public_roots.items()), "public cleanup root receipt differs")
+                verify_root_identities(public_roots, {name: endpoints[name]["identity"] for name in public_roots})
+                public = public_json(ordinary_bytes(evidence / "public-command-deltas.json"))
+                for name, root in public_roots.items():
+                    selected = root / ".hermes/uap-session"
+                    if selected.exists():
+                        selected_identity = public["root_authorities"][name]
+                        require(directory_identity(selected) == tuple(selected_identity[0]) and directory_identity(selected.parent) == tuple(selected_identity[1]), "public cleanup selected root changed")
             require(home.resolve() == home and not home.is_symlink()
                     and (home.stat().st_dev, home.stat().st_ino, home.stat().st_mode) == identity, "owned outer root changed")
             maybe_census(evidence, home, home_authority, nonce, process_settled, lifecycle_deadline, evidence_authority)
@@ -1779,6 +2426,8 @@ def run():
             failure = failure or error
             proof.update(status="failed", preparation_error=type(error).__name__ + ": " + str(error)[:300])
         try:
+            if public_pins is not None and process_settled:
+                proof["public_runtimes_after"] = public_runtime_pins(public_pins)
             if runtime_before is not None and process_settled:
                 if source_capture:
                     runtime_after = source_runtime_snapshot(source_inputs(runner, official_source), home_authority)
@@ -1811,6 +2460,7 @@ def run():
         if proof["source_after"] != before or proof["hermes_source_after"] != official:
             failure = failure or RuntimeError("source/runtime identity changed")
             proof.update(status="failed", source_error="source/runtime identity changed")
+        proof["capture_complete"] = failure is None
         proof.update(lifecycle_exit=child.returncode if child else None,
                      run_id=os.environ["GITHUB_RUN_ID"], run_attempt=os.environ["GITHUB_RUN_ATTEMPT"], runner_os=os.environ["RUNNER_OS"])
         write_json(evidence / "profile-admission.json", proof)

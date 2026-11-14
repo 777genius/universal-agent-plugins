@@ -1013,6 +1013,116 @@ duplicate carriage return and trailing content. Native effects, process bounds,
 cleanup, publication and qualification gates are unchanged. A corrected-source
 original Windows run is still required; no historical archive is reclassified.
 
+
+## Public bundled Project lifecycle and native cold recovery
+
+This prospective collector extension composes the reviewed durable Project
+adapter with the existing pinned bundled observer. It does not qualify an
+ordinary source installation, vendor authentication, model inference or
+tools/call. The original raw A/B metadata/MCP family remains intact, with its
+separate exact A=2/B=1 initialize/tools-list oracle. New public A/B probes and
+ledgers cannot contribute to that historical count.
+
+Before the immutable runtime interval, the workflow builds the actual current
+UAP, the compiled existing Cold2 test and the existing fixed MCP probe. The
+collector receives their exact paths and SHA-256 values, verifies them against
+the same clean source head, and holds their original identities. All three
+remain outside the disposable home, evidence, vendor source and payload.
+Compilation and its caches run before the native/profile baseline.
+
+The public fixtures are independent real Git projects. Ordinary public add
+creates Prepared, installation_verified bindings at the exact selected root
+PROJECT/.hermes/uap-session. The collector derives launcher read authority from
+the exact state, package ownership, committed package receipt, standalone
+native-root receipt, original marker, source revision and retained data receipt.
+It recomputes the complete package digest, including streamed launcher bytes.
+No path pattern alone admits a copied executable.
+
+Ordinary members retain the original 1 MiB per-file and 16 MiB aggregate caps.
+At most four receipt-backed launcher roles can stream at most 128 MiB each,
+under a separate 512 MiB total. Each must match the original compiled UAP
+size/SHA. Windows launcher mode joins the original named UAP file's mode,
+rather than assuming a synthetic numeric mode. The sole additional large
+scanner leaf is the existing pinned lintai 0.1.3 platform asset at the exact
+public-uap-state security path. Its existing POSIX mode contract and Windows
+within-domain identity checks remain intact. Unknown large members refuse.
+
+The public sequence covers add A/B, byte-stable repeat A, explicitly consented
+public run --inspect, actual native HTTP and stdio initialize/tools-list on A/B,
+a fresh A restart, changed-source update A, restoration of missing owned Skill
+and selected YAML from intact staged source, another explicit inspect and both
+MCP transports, then scoped removal A/B. Removal retains the original selected
+root and parent, its standalone publication receipt and owned persistent data.
+Subsequent native selected lists and refused removed-server tests cannot launch
+the removed server. Original User, foreign Skills/files, the other Project,
+each Git tree and unrelated settings remain unchanged. Unknown bootstrap
+members or unmeasured effects fail the collection.
+
+The stdio peer is the repository's real fixed MCP test server, compiled before
+the interval. Its bounded retained-data events join exact nonce, PID, fresh
+session and initialize/tools-list order; no tools/call or substitute Hermes is
+inferred. Public HTTP counts remain separate from the raw family.
+
+Cold2 executes the precompiled TestProjectHermesBundleColdRestoreAndRepair
+inside that same original 720-second interval, with the selected actual bundle,
+genuine hosted flags and a fresh report, from the current checkout. Its public
+Cobra entrypoint runs in the Go test process with the production composition,
+detector and session planner. Only the existing StartNativeSession callback
+executes the real selected native plan through the existing OS runner. This
+keeps native children under the same live Go owner for context cancellation.
+The report explicitly records entrypoint=public-cobra-in-process and
+installer_executed=false. It does not claim to execute the compiled UAP binary
+during Cold2; that binary is exercised separately by the warm public family.
+
+Each of the three Cold records separately contains the public request arguments,
+actual native executable/arguments, actual working directory and selected_root
+from the HERMES_HOME passed to the native process. They must join the selected
+Project, restored binding and retained root publication. Closed original stream
+hashes, cleanup receipts, exit zero, the exact PASS/source marker and absence of
+SKIP remain required. Empty nil Go stderr is accepted only with strict zero
+length and the exact empty digest; stdout must contain native inventory.
+
+The collector chooses the smaller of 360 seconds and original remaining time
+minus ten seconds once, and refuses a budget of 40 seconds or less. It passes
+that same deadline as UAP_HERMES_COLD_DEADLINE_UNIX_MS. The Go cancellation
+context retains a 30-second reserve before both that deadline and the testing
+timeout. This does not renew the original monotonic 720-second outer fence.
+
+The parent precreates exactly public-cold-tmp/hermes-cold and holds the original
+parent and child directory identities/descriptors before any Go child starts.
+TMPDIR/TEMP/TMP all name that existing empty child. Go creates its private
+journey directories there without automatic test cleanup. Only after the real
+test exits successfully, both server families close, the closed report joins
+and compiled inputs remain unchanged may the parent remove that original
+owned child. It checks held identities and exact parent membership, reuses the
+existing owned-root cleanup and requires the parent empty afterward. A newly
+observed directory name is never adopted as cleanup authority.
+
+Capture completion is set only after public and Cold completion, native
+process settlement, owned-home cleanup, both source identities and full
+before/after payload and compiled-executable closure. Failure is not promoted
+to admission. If the public family has started without a fully validated Cold completion
+report, the parent retains the disposable home and withholds raw evidence
+before census, deletion or runtime-after claims. Empty observer process-group
+membership alone cannot prove cleanup after a Go supervisor is killed.
+Cancellation, a missing/partial report or an unjoined directory never
+authorizes cleanup. No native result is inferred from these contract tests.
+
+Before the execution-environment interruption, 64 profile contracts passed
+locally. After recovery, the source review corrected nil Go stderr handling,
+kept outer-root identity separate from selected-root identity and deferred
+capture_complete until full closure. Further contracts reject forged Skill
+ownership/digests, wrong native/public command roots, missing or incorrect
+entrypoint flags, partial cleanup, skipped tests, renewed deadlines, an extra
+temporary sibling and replacement of the originally held temporary directory.
+The Cold command callback in those tests is inert; it proves collector behavior
+and makes no claim of local native execution. Fresh original native artifacts
+on the final integrated source remain necessary on all three OSes.
+
+The earlier pre-integration Python checkpoint passed all 66 profile contracts and
+all 16 owned-build cleanup contracts on Linux; the whitespace diff
+check passed. These are contract results, not a bundled native acceptance.
+
 ## Ordinary installed-source capture with the original owner preserved
 
 This six-path research change starts from
@@ -1145,3 +1255,58 @@ Command count, existing output/time budgets, source ownership, configuration
 guards, public registration and all source/bootstrap qualification flags remain
 unchanged. Original User and bundled evidence does not qualify the new ordinary
 source Project route or interrupted native bootstrap recovery.
+
+### Combined source-v3 and bundled public collector review
+
+The public/Cold collector is reconciled against exact
+`2b557b30e57206485aa35b79986da2ecff75f691`. The installed-source branch keeps its
+original `.uap/hermes-runtime` roots, preparation envelope, retained original
+User preimage, captured source payload documents, alias closure, source runtime
+before/after comparison and retained-home policy. It does not require compiled
+public UAP, probe or Cold inputs. Only the bundled branch captures those three
+inputs and invokes the separate public A/B and Cold families. An inert behavioral
+contract runs both child routes and confirms that source capture opens only its
+two original probes and never calls the public observer.
+
+Independent R2 replay found two concrete weaknesses in the first public report
+reader. Python truthiness accepted false, zero and an empty list as an absent
+native activation attempt. It also accepted malformed or foreign Cold stdout
+after its base64/count/SHA fields were consistently recomputed. Both readers now
+accept only an omitted/null attempt or an actual empty string. Every Cold stdout
+passes the existing duplicate-key/nonfinite-refusing JSON reader, contains the
+exact owned `docs` MCP map and joins its restored native-object digest using the
+same canonical digest helper as the warm family. The three original, restored
+and repaired maps must be equal. Rehashed malformed, foreign and changed-last
+inventories remain negative contracts, not native evidence.
+
+The standalone root receipt additionally joins its recorded
+`publication_parent_authority` facts: exact version, selected parent path,
+bounded ancestry and active/staging/backup sibling paths. The collector keeps
+opaque recorded volume/object IDs and the complete receipt through removal; it
+does not issue a new authority token or claim to repeat the product's physical
+revalidation. Existing Store/Kernel authority validation remains responsible
+for that check. Missing authority, extra fields, a wrong parent, an invalid
+version, a changed final ancestry path or an escaping sibling are refused.
+
+The first combined local run passed all 84 profile contracts and all 16 owned-build
+cleanup contracts on Linux. AST comparison confirms that all 73 test methods
+from exact `2b557b30` are preserved unchanged and that all existing source-v3
+helper bodies, evidence admission and staging are unchanged. Of the original
+functions, only the shared bounded file/inventory readers and the child/parent
+dispatch gain the reviewed bundled extension. `git diff --check` passed.
+These are inert contract results. Genuine final-source bundled/native originals
+on Linux, macOS and Windows, with complete source/runtime/process joins, are
+still required before any product or admission qualification.
+
+The second independent review found a retained-marker gap after warm removal.
+Once the recorded installation had `clients={}`, the binding reader correctly
+returned no active binding, but the finite native profile check no longer joined
+the marker bytes. A real inert filesystem regression preserved the original
+root/parent identities and standalone receipt while altering, shortening or
+deleting `.uap-owner`; all three cases were wrongly accepted by the old helper.
+The existing profile check now always requires the exact fixed marker length
+and digest for that original Project, including after removal. It adds no root
+adoption or cleanup authority and leaves the existing receipt/identity guards
+intact. The new regression was red in all three negative cases before the four
+runtime lines, then the complete 85-contract suite passed; the unchanged marker
+remains a positive control. This is collector verification, not native evidence.

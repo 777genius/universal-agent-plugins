@@ -1348,6 +1348,355 @@ class BundledRuntimeContracts(unittest.TestCase):
                         CASE["BASE"]["closed_environment"](root, root, "nonce", "url", installation=invalid)
 
 
+class PublicLifecycleContracts(unittest.TestCase):
+    def test_source_capture_keeps_its_original_probe_family_without_public_runtime(self):
+        import sys
+        for source in (True, False):
+            with self.subTest(source=source):
+                events, created = [], []
+                class Probe:
+                    def __init__(self, *, nonce):
+                        self.nonce = nonce
+                        created.append(self)
+                    def __enter__(self):
+                        return self
+                    def __exit__(self, *args):
+                        events.append(("closed", self))
+                def raw(probes):
+                    self.assertEqual(list(probes.values()), created[:2])
+                    events.append(("raw", tuple(probes)))
+                def public(probes):
+                    self.assertFalse(source)
+                    self.assertEqual(list(probes.values()), created[2:])
+                    self.assertEqual(events, [("raw", ("a", "b"))])
+                    events.append(("public", tuple(probes)))
+                with mock.patch.dict(sys.modules, {"pi_project_components_native_e2e": SimpleNamespace(PiHTTPMCPProbe=Probe)}), \
+                        mock.patch.dict(os.environ, {"HERMES_CALL_NONCE": "inert-separation-contract"}, clear=True), \
+                        mock.patch.dict(CASE["child_case"].__globals__, source_capture_mode=lambda: source,
+                                        observe_profiles=raw, observe_public=public):
+                    CASE["child_case"]()
+                self.assertEqual(len(created), 2 if source else 4)
+                self.assertEqual(sum(event[0] == "closed" for event in events), len(created))
+
+    def parent_authority(self, root):
+        return dict(version=1,canonical_root=str(root),ancestry=[dict(canonical_path=str(path),scheme='linux-fsuuid-inode-v1',volume_id='12',object_id=str(index+1))
+                    for index,path in enumerate(reversed((root,*root.parents)))])
+
+    def fixture(self, root):
+        import hashlib
+        project, name = root / 'public-a', 'hermes-public-a'
+        installation = '00000000-0000-4000-8000-000000000001'
+        physical = name + '-' + hashlib.sha256(installation.encode()).hexdigest()[:12]
+        target, selected, data = project / '.uap/managed/clients/hermes' / physical, project / '.hermes/uap-session', project / '.uap/data' / physical
+        for path in (target, selected, data): path.mkdir(parents=True)
+        selected.chmod(0o700)
+        def write(path, body, mode=0o600):
+            path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(body); path.chmod(mode)
+        write(target / 'plugin.json', json.dumps({'name': name, 'version': '1.0.0'}).encode())
+        write(target / 'skills' / name / 'SKILL.md', b'authored Skill\n')
+        launcher = target / ('io.github.777genius.agentplugins/managed-stdio-v1/agentplugins' + ('.exe' if os.name == 'nt' else ''))
+        runtime = b'fixed inert UAP bytes; never executed\n' * 32000
+        write(launcher, runtime, 0o700)
+        digest = hashlib.sha256()
+        for path in sorted(target.rglob('*')):
+            name_in_package = path.relative_to(target).as_posix()
+            kind = 'dir' if path.is_dir() else 'file'; body = b'' if path.is_dir() else path.read_bytes()
+            executable = kind == 'file' and os.name != 'nt' and bool(path.stat().st_mode & 0o111)
+            digest.update((f'{kind}\0{name_in_package}\0{str(executable).lower()}\0{len(body)}\0').encode()); digest.update(body)
+        package_digest = 'sha256:' + digest.hexdigest()
+        marker = ('uap-hermes-project-session-v1\n' + str(project) + '\n').encode()
+        write(selected / '.uap-owner', marker); write(selected / 'config.yaml', b'mcp_servers: {}\n')
+        owner = dict(data_receipt_id='data', physical_backend_id=physical, scope='project', state='owned', locator=str(data), ownership_digest='sha256:'+'e'*64)
+        write(data / '.agentplugins-data-owner.json', json.dumps(owner).encode())
+        objects = [dict(object_id='package:hermes:' + physical, kind='managed_package_directory', logical_name=name, path=str(target), managed_digest=package_digest, protection_class='managed'),
+                   dict(object_id='hermes_project_session_root', kind='hermes_project_session_root', path=str(selected / '.uap-owner'), managed_digest=hashlib.sha256(marker).hexdigest(), protection_class='owned'),
+                   dict(kind='hermes_project_skill', object_id='hermes_project_skill:'+name, logical_name=name,
+                        source_relative='skills/'+name, path=str(project/'.hermes/skills'/name), protection_class='managed',
+                        managed_digest='sha256:'+hashlib.sha256(b'f\0SKILL.md\0-\0authored Skill\n\0').hexdigest())]
+        objects += [dict(kind='hermes_project_session_mcp', logical_name=name+'-'+transport, object_id='hermes_project_session_mcp:'+name+'-'+transport,
+                        path=str(selected/'config.yaml'), protection_class='managed', managed_digest='sha256:'+'a'*64) for transport in ('http','stdio')]
+        source = dict(source_binding_id='source', tree_digest='sha256:'+'d'*64, resolved_revision='')
+        package = dict(version='1.0.0', manifest_digest='sha256:'+'f'*64)
+        receipt = dict(sequence=1, mutation_type='directory_swap', phase='committed', client_binding_id='binding', active_path=str(target), after_digest=package_digest)
+        binding = dict(client_id='hermes', client_binding_id='binding', scope='project', target_locator=str(target), physical_artifact_id=physical,
+                       native_profile_root=str(project/'.hermes'), activation='prepared', verification='installation_verified',
+                       native_objects=objects, receipts=[receipt], package_revision={**package, **{k:source[k] for k in ('tree_digest','resolved_revision')}}, data_receipt_id='data')
+        state = dict(schema_version=5, installations=[dict(installation_id=installation, declared_name=name, clients={'binding':binding}, source=source, package=package, data_receipts={'data':owner})],
+                     transaction_receipts=[dict(phase='committed', mutation_type='directory_swap', active_path=str(selected), staging_path=str(selected.parent/'.stage'),backup_path=str(selected.parent/'.backup'),
+                                                publication_parent_authority=self.parent_authority(selected.parent),client_binding_id='binding', after_digest='native-root-v1:'+'a'*64)])
+        state_path=project/'.uap/state-v2.json';write(state_path,json.dumps(state).encode())
+        return project, state_path, state, launcher, {'uap':dict(bytes=len(runtime),sha256=hashlib.sha256(runtime).hexdigest(),identity=list(CASE['stable_file'](launcher.stat())))}
+
+    def test_receipt_owned_large_role_and_whole_package_join_are_both_required(self):
+        import copy
+        with tempfile.TemporaryDirectory() as temporary:
+            outer=Path(temporary).resolve();project,state_path,state,launcher,pins=self.fixture(outer)
+            with self.assertRaises(RuntimeError): CASE['inventory'](outer)
+            image, proofs=CASE['public_snapshot'](outer,{'a':project},pins)
+            self.assertEqual(image[launcher.relative_to(outer).as_posix()]['sha256'],pins['uap']['sha256'])
+            self.assertEqual(proofs['a']['digest'],state['installations'][0]['clients']['binding']['receipts'][0]['after_digest'])
+            for effect in ('target','package-digest','root','parent','data','pending','attempt-false','attempt-zero','attempt-list','duplicate-mcp','skill-path','skill-digest','source','unknown-large'):
+                changed=copy.deepcopy(state);binding=changed['installations'][0]['clients']['binding'];extra=project/'unowned'
+                if effect=='target':binding['target_locator']=str(outer/'foreign')
+                elif effect=='package-digest':binding['native_objects'][0]['managed_digest']='sha256:'+'0'*64;binding['receipts'][0]['after_digest']='sha256:'+'0'*64
+                elif effect=='root':changed['transaction_receipts'][0]['active_path']=str(outer/'foreign')
+                elif effect=='parent':changed['transaction_receipts'][0].pop('publication_parent_authority')
+                elif effect=='data':changed['installations'][0]['data_receipts']['data']['locator']=str(outer/'foreign')
+                elif effect=='pending':binding['pending_native_intent']={}
+                elif effect.startswith('attempt-'):binding['native_activation_attempt']={'attempt-false':False,'attempt-zero':0,'attempt-list':[]}[effect]
+                elif effect=='duplicate-mcp':binding['native_objects'][-1]=binding['native_objects'][-2]
+                elif effect=='skill-path':binding['native_objects'][2]['path']=str(outer/'foreign')
+                elif effect=='skill-digest':binding['native_objects'][2]['managed_digest']='sha256:'+'0'*64
+                elif effect=='source':binding['package_revision']['tree_digest']='sha256:'+'0'*64
+                else:extra.write_bytes(b'x'*(CASE['LIMIT']+1))
+                state_path.write_bytes(json.dumps(changed).encode())
+                with self.subTest(effect=effect),self.assertRaises(RuntimeError):CASE['public_snapshot'](outer,{'a':project},pins)
+                if extra.exists():extra.unlink()
+            state_path.write_bytes(json.dumps(state).encode())
+            runtime=launcher.read_bytes();launcher.write_bytes(b'X'+runtime[1:])
+            with self.assertRaisesRegex(RuntimeError,'pinned runtime bytes differ'):CASE['public_snapshot'](outer,{'a':project},pins)
+
+    def test_runtime_pins_stream_and_refuse_replacement_before_body_read(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary).resolve();env={}
+            for role,path_key,hash_key in (('uap','UAP_BIN','UAP_HERMES_COLD_UAP_SHA256'),('cold','UAP_HERMES_COLD_TEST_BIN','UAP_HERMES_COLD_TEST_SHA256'),('probe','UAP_HERMES_MCP_PROBE_BIN','UAP_HERMES_MCP_PROBE_SHA256')):
+                path=root/role;body=(role.encode()+b'x')*(1<<19);path.write_bytes(body)
+                env[path_key]=str(path);env[hash_key]=hashlib.sha256(body).hexdigest()
+            with mock.patch.dict(os.environ,env):
+                pins=CASE['public_runtime_pins']();self.assertEqual(CASE['public_runtime_pins'](pins),pins)
+                path=root/'uap';body=path.read_bytes();path.rename(root/'held');path.write_bytes(body)
+                reader=CASE['public_runtime_pins'].__globals__
+                with mock.patch.dict(reader,ordinary_bytes=mock.Mock(side_effect=AssertionError('replacement body read'))),self.assertRaisesRegex(RuntimeError,'original public runtime changed'):
+                    CASE['public_runtime_pins'](pins)
+
+    def test_named_large_pins_keep_alias_length_and_original_ordinary_bounds(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary).resolve();path=root/'binary';body=b'a'*(CASE['LIMIT']+1);path.write_bytes(body)
+            pin=(len(body),hashlib.sha256(body).hexdigest())
+            with self.assertRaises(RuntimeError):CASE['ordinary_bytes'](path)
+            self.assertEqual(CASE['ordinary_bytes'](path,path.lstat(),pin=pin),pin[1])
+            for changed in ((len(body)-1,pin[1]),(len(body),'0'*64),(True,pin[1])):
+                with self.subTest(pin=changed),self.assertRaises(RuntimeError):CASE['ordinary_bytes'](path,path.lstat(),pin=changed)
+            os.link(path,root/'alias')
+            with self.assertRaises(RuntimeError):CASE['ordinary_bytes'](path,path.lstat(),pin=pin)
+
+    def test_public_native_catalog_refuses_unknown_effects_and_unowned_backups(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            outer=Path(temporary).resolve();root=outer/'public-a/.hermes/uap-session';root.mkdir(parents=True);root.chmod(0o700)
+            (root/'.uap-owner').write_bytes(('uap-hermes-project-session-v1\n'+str(root.parent.parent)+'\n').encode());(root/'.uap-owner').chmod(0o600)
+            image=CASE['inventory'](outer);CASE['public_profile'](root,image,outer,set())
+            foreign=root/'unexpected';foreign.write_bytes(b'not an admitted bootstrap');foreign.chmod(0o600)
+            with self.assertRaisesRegex(RuntimeError,'unmeasured'):CASE['public_profile'](root,CASE['inventory'](outer),outer,set())
+            foreign.unlink();backup=root/'backups/config/config.yaml.good.20261113-235000';backup.parent.mkdir(parents=True);backup.write_bytes(b'foreign');backup.chmod(0o600)
+            with self.assertRaisesRegex(RuntimeError,'unowned bytes'):CASE['public_profile'](root,CASE['inventory'](outer),outer,set())
+
+    def test_removed_binding_keeps_exact_marker_under_the_original_retained_root(self):
+        import shutil
+        for effect in ('unchanged', 'altered', 'short', 'missing'):
+            with self.subTest(effect=effect), tempfile.TemporaryDirectory() as temporary:
+                outer=Path(temporary).resolve();project,state_path,state,launcher,pins=self.fixture(outer)
+                _,before=CASE['public_snapshot'](outer,{'a':project},pins);proof=before['a'];selected=proof['selected']
+                identities=(CASE['directory_identity'](selected),CASE['directory_identity'](selected.parent))
+                state['installations'][0]['clients']={};state_path.write_bytes(json.dumps(state).encode())
+                shutil.rmtree(proof['target'])
+                marker=selected/'.uap-owner';original=marker.read_bytes()
+                if effect=='altered':marker.write_bytes(b'X'+original[1:])
+                elif effect=='short':marker.write_bytes(original[:-1])
+                elif effect=='missing':marker.unlink()
+                image,after=CASE['public_snapshot'](outer,{'a':project},pins)
+                self.assertEqual(after,{'a':None})
+                self.assertEqual(identities,(CASE['directory_identity'](selected),CASE['directory_identity'](selected.parent)))
+                self.assertIn(proof['root_receipt'],CASE['public_json'](state_path.read_bytes())['transaction_receipts'])
+                if effect=='unchanged':CASE['public_profile'](selected,image,outer,set())
+                else:
+                    with self.assertRaisesRegex(RuntimeError,'public retained root marker differs'):
+                        CASE['public_profile'](selected,image,outer,set())
+
+    def test_stdio_events_require_actual_pair_nonce_fresh_session_and_no_tool_claim(self):
+        import copy
+        with tempfile.TemporaryDirectory() as temporary:
+            path=Path(temporary)/'events';nonce='c'*64
+            rows=[dict(method=method,pid=42,session='42-123',nonce=nonce,timestamp='2026-11-13T23:50:00Z',facts=None) for method in ('initialize','tools/list')]
+            def write(value):path.write_bytes(b''.join(json.dumps(row).encode()+b'\n' for row in value))
+            write(rows);self.assertEqual(CASE['public_stdio_events'](path,nonce),rows)
+            for effect in ('nonce','pid','bool-pid','method','duplicate','incomplete','extra'):
+                value=copy.deepcopy(rows)
+                if effect=='nonce':value[1]['nonce']='d'*64
+                elif effect=='pid':value[1]['pid']=43
+                elif effect=='bool-pid':value[0]['pid']=True
+                elif effect=='method':value[1]['method']='tools/call'
+                elif effect=='duplicate':value+=copy.deepcopy(rows)
+                elif effect=='incomplete':value.pop()
+                else:value[0]['unknown']=1
+                write(value)
+                with self.subTest(effect=effect),self.assertRaises(RuntimeError):CASE['public_stdio_events'](path,nonce)
+
+    def cold(self, temporary):
+        import base64
+        import hashlib
+        source=dict(resolved_revision='a'*40,tree_digest='sha256:'+'b'*64)
+        first,last=temporary/'original/project',temporary/'cold/project'
+        executable=str(temporary/'build/uap'); bundle=str(temporary/'payload/bin/hermes')
+        server={'url':'http://127.0.0.1:9/mcp'}
+        mcp_digest='sha256:'+hashlib.sha256(b'agentplugins-native-mcp-v1\0hermes-mcp-servers-yaml\0docs\0'+json.dumps(server,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+        binding=dict(client_id='hermes',client_binding_id='binding',scope='project',activation='prepared',verification='installation_verified',native_profile_root=str(last/'.hermes'),package_revision=source,
+                     native_objects=[dict(kind='hermes_project_session_mcp',object_id='hermes_project_session_mcp:docs',logical_name='docs',path=str(last/'.hermes/uap-session/config.yaml'),protection_class='managed',managed_digest=mcp_digest)])
+        receipt=dict(after_digest='native-root-v1:'+'c'*64,active_path=str(last/'.hermes/uap-session'),staging_path=str(last/'.hermes/.stage'),backup_path=str(last/'.hermes/.backup'),
+                     publication_parent_authority=self.parent_authority(last/'.hermes'),phase='committed',client_binding_id='binding',mutation_type='directory_swap',sequence=1)
+        commands=[]
+        for step,project in zip(('original-inspect','cold-inspect','repaired-inspect'),(first,last,last)):
+            row=dict(step=step,directory=str(project),argv=[bundle,'config','get','mcp_servers','--json'],
+                     public_argv=['run','--target','hermes','--scope','project','--project-root',str(project),'--inspect','--confirm-client-start'],
+                     selected_root=str(project/'.hermes/uap-session'),exit_code=0,cleanup_complete=True,no_child_started=False)
+            for name,body in (('stdout',json.dumps({'docs':server},separators=(',',':')).encode()+b'\n'),('stderr',b'')):
+                row.update({name+'_base64':base64.b64encode(body).decode(),name+'_bytes':len(body),name+'_sha256':hashlib.sha256(body).hexdigest()})
+            commands.append(row)
+        pins={'uap':dict(path=executable,sha256='d'*64)}
+        report=dict(kind='hermes-bundle-cold-restore',entrypoint='public-cobra-in-process',installer_executed=False,source_head='e'*40,installer_sha256='d'*64,bundle_executable=bundle,runner_os={'linux':'linux','darwin':'darwin','win32':'windows'}.get(CASE['sys'].platform),architecture={'x86_64':'amd64','amd64':'amd64','arm64':'arm64','aarch64':'arm64'}.get(CASE['platform'].machine().lower()),original_source=dict(source),restored_source=dict(source),restored_binding=binding,commands=commands,root_publications=[receipt],removed_state=dict(transaction_receipts=[receipt],installations=[dict(clients={})]),activation='prepared',native_tools_call=False,vendor_authentication=False,model_invoked=False)
+        return report,pins
+
+    def test_cold_report_requires_three_genuine_cleanup_stream_and_retained_root_joins(self):
+        import copy
+        temporary=Path(tempfile.gettempdir()).resolve()/'cold-test'
+        report,pins=self.cold(temporary)
+        def read(value):return CASE['cold_report'](value,pins,Path(report['bundle_executable']),'e'*40,temporary)
+        self.assertEqual(read(report),report)
+        for row in report['commands']:row['stderr_base64']=None
+        self.assertEqual(read(report),report)  # Go's original nil []byte spelling.
+        for effect in ('source','pin','entrypoint','executed','cleanup','no-child','stream','nil-nonempty','nil-hash','nil-stdout','count','argv','public-argv','selected-root','missing-root','root','root-type','root-sequence','extra-root','root-removed','active','pending','attempt-false','attempt-zero','attempt-list','flag','unknown','same-environment'):
+            value=copy.deepcopy(report)
+            if effect=='source':value['restored_source']['resolved_revision']='f'*40
+            elif effect=='pin':value['installer_sha256']='f'*64
+            elif effect=='entrypoint':value['entrypoint']='compiled-uap-subprocess'
+            elif effect=='executed':value['installer_executed']=True
+            elif effect=='cleanup':value['commands'][1]['cleanup_complete']=False
+            elif effect=='no-child':value['commands'][1]['no_child_started']=True
+            elif effect=='stream':value['commands'][1]['stdout_sha256']='f'*64
+            elif effect=='nil-nonempty':value['commands'][1]['stderr_bytes']=1
+            elif effect=='nil-hash':value['commands'][1]['stderr_sha256']='f'*64
+            elif effect=='nil-stdout':value['commands'][1]['stdout_base64']=None
+            elif effect=='count':value['commands'].pop()
+            elif effect=='argv':value['commands'][1]['argv'][-1]='--yes'
+            elif effect=='public-argv':value['commands'][1]['public_argv'][-1]='--yes'
+            elif effect=='selected-root':value['commands'][1]['selected_root']=str(temporary/'other')
+            elif effect=='missing-root':value['commands'][1].pop('selected_root')
+            elif effect=='root':value['root_publications'][0]['active_path']='/foreign'
+            elif effect=='root-type':value['root_publications'][0]['mutation_type']='file_write'
+            elif effect=='root-sequence':value['root_publications'][0]['sequence']=True
+            elif effect=='extra-root':value['root_publications'].append({})
+            elif effect=='root-removed':value['removed_state']['transaction_receipts']=[]
+            elif effect=='active':value['restored_binding']['activation']='active'
+            elif effect=='pending':value['restored_binding']['pending_native_intent']={}
+            elif effect.startswith('attempt-'):value['restored_binding']['native_activation_attempt']={'attempt-false':False,'attempt-zero':0,'attempt-list':[]}[effect]
+            elif effect=='flag':value['native_tools_call']=True
+            elif effect=='same-environment':value['commands'][0]=copy.deepcopy(value['commands'][1]);value['commands'][0]['step']='original-inspect'
+            else:value['unknown']=True
+            with self.subTest(effect=effect),self.assertRaises(RuntimeError):read(value)
+
+    def test_rehashed_cold_stdout_still_must_match_the_selected_native_mcp_receipt(self):
+        import base64
+        import copy
+        import hashlib
+        temporary=Path(tempfile.gettempdir()).resolve()/'cold-test'
+        report,pins=self.cold(temporary)
+        for effect in ('all-malformed','all-foreign','last-changed','owned-digest','owned-path','duplicate-owned'):
+            value=copy.deepcopy(report)
+            if effect in ('all-malformed','all-foreign','last-changed'):
+                body={'all-malformed':b'not json','all-foreign':b'{"foreign":{}}','last-changed':b'{"docs":{"url":"http://127.0.0.1:10/wrong"}}'}[effect]
+                rows=value['commands'] if effect!='last-changed' else value['commands'][-1:]
+                for row in rows:row.update(stdout_base64=base64.b64encode(body).decode(),stdout_bytes=len(body),stdout_sha256=hashlib.sha256(body).hexdigest())
+            elif effect=='owned-digest':value['restored_binding']['native_objects'][0]['managed_digest']='sha256:'+'0'*64
+            elif effect=='owned-path':value['restored_binding']['native_objects'][0]['path']=str(temporary/'foreign/config.yaml')
+            else:value['restored_binding']['native_objects']*=2
+            with self.subTest(effect=effect),self.assertRaises((RuntimeError,ValueError)):
+                CASE['cold_report'](value,pins,Path(report['bundle_executable']),'e'*40,temporary)
+
+    def test_publication_parent_is_a_recorded_closed_role_not_new_cleanup_authority(self):
+        import copy
+        temporary=Path(tempfile.gettempdir()).resolve()/'cold-test'
+        report,pins=self.cold(temporary)
+        for effect in ('missing','opaque','bool-version','foreign-root','empty-ancestry','long-ancestry','last-root','bad-id','unknown','before','stage','backup'):
+            value=copy.deepcopy(report);receipt=value['root_publications'][0];authority=receipt['publication_parent_authority']
+            if effect=='missing':receipt.pop('publication_parent_authority')
+            elif effect=='opaque':receipt['publication_parent_authority']='never-an-issued-token'
+            elif effect=='bool-version':authority['version']=True
+            elif effect=='foreign-root':authority['canonical_root']=str(temporary/'foreign')
+            elif effect=='empty-ancestry':authority['ancestry']=[]
+            elif effect=='long-ancestry':authority['ancestry']*=257
+            elif effect=='last-root':authority['ancestry'][-1]['canonical_path']=str(temporary/'foreign')
+            elif effect=='bad-id':authority['ancestry'][0]['object_id']=False
+            elif effect=='unknown':authority['unknown']=True
+            elif effect=='before':receipt['before_digest']='native-root-v1:'+'f'*64
+            elif effect=='stage':receipt['staging_path']=str(temporary/'foreign-stage')
+            else:receipt['backup_path']=str(temporary/'foreign-backup')
+            with self.subTest(effect=effect),self.assertRaises(RuntimeError):
+                CASE['cold_report'](value,pins,Path(report['bundle_executable']),'e'*40,temporary)
+
+    def test_failed_public_family_cannot_authorize_home_cleanup_without_complete_cold_report(self):
+        import copy
+        with tempfile.TemporaryDirectory() as temporary:
+            home=Path(temporary).resolve();proof={'source':{'commit':'a'*40}}
+            self.assertTrue(CASE['public_cleanup_complete'](home,proof))
+            (home/'public-a').mkdir();marker=home/'public-a/retained';marker.write_bytes(b'never remove unproved native home')
+            self.assertFalse(CASE['public_cleanup_complete'](home,proof))
+            proof.update(public_project_lifecycle_complete=True,cold_restore={'source':'a'*40,'commands':3,'sha256':'b'*64})
+            self.assertTrue(CASE['public_cleanup_complete'](home,proof))
+            for effect in ('missing','incomplete','count','bool-count','source','digest','extra'):
+                changed=copy.deepcopy(proof)
+                if effect=='missing':changed.pop('cold_restore')
+                elif effect=='incomplete':changed['public_project_lifecycle_complete']=False
+                elif effect=='count':changed['cold_restore']['commands']=2
+                elif effect=='bool-count':changed['cold_restore']['commands']=True
+                elif effect=='source':changed['cold_restore']['source']='c'*40
+                elif effect=='digest':changed['cold_restore']['sha256']='unjoined'
+                else:changed['cold_restore']['unknown']=True
+                with self.subTest(effect=effect):self.assertFalse(CASE['public_cleanup_complete'](home,changed))
+                self.assertEqual(marker.read_bytes(),b'never remove unproved native home')
+
+    def test_compiled_cold_handoff_keeps_one_budget_private_paths_and_requires_executed_report(self):
+        # The command callback is inert. This tests the collector boundary;
+        # it never qualifies a hosted run, vendor executable or native cleanup.
+        effects=['pass','skip','marker','missing-report','cleanup','budget','hosted','sibling','preexisting']
+        if os.name!='nt':effects.append('replacement')  # Windows held directories prohibit this rename.
+        for effect in effects:
+            with self.subTest(effect=effect),tempfile.TemporaryDirectory() as temporary:
+                outer=Path(temporary).resolve();private=outer/'private';private.mkdir();evidence=outer/'evidence';evidence.mkdir()
+                owned=private/'hermes-cold';report,pins=self.cold(owned);pins['cold']={'path':str(outer/'build/cold')}
+                env={'GITHUB_ACTIONS':'true','RUNNER_ENVIRONMENT':'github-hosted','UAP_BIN':pins['uap']['path']}
+                if effect=='hosted':env['RUNNER_ENVIRONMENT']='self-hosted'
+                if effect=='cleanup':report['commands'][1]['cleanup_complete']=False
+                if effect=='preexisting':(private/'unknown').write_bytes(b'foreign')
+                marker='HERMES_COLD_SOURCE '+('f' if effect=='marker' else 'e')*40+' '+'d'*64+' (3 native selected commands)\n'
+                output=(marker+'--- '+('SKIP' if effect=='skip' else 'PASS')+': TestProjectHermesBundleColdRestoreAndRepair (1.00s)\nPASS\n').encode()
+                def command(argv,cwd,child_env,prefix,*,timeout):
+                    self.assertEqual(argv,[pins['cold']['path'],'-test.run=^TestProjectHermesBundleColdRestoreAndRepair$','-test.count=1','-test.v','-test.timeout=6m'])
+                    self.assertEqual(cwd,CASE['HERE'].parents[1]);self.assertEqual(prefix,evidence/'public-cold')
+                    self.assertEqual(timeout,70);self.assertEqual(child_env['UAP_HERMES_COLD_DEADLINE_UNIX_MS'],'2070000')
+                    self.assertEqual([child_env[key] for key in ('TMPDIR','TEMP','TMP')],[str(owned)]*3)
+                    self.assertTrue(owned.is_dir());self.assertFalse(list(owned.iterdir()))
+                    (owned/'retained').write_bytes(b'owned Cold bytes')
+                    self.assertEqual(child_env['UAP_HERMES_PROJECT_BUNDLE_E2E'],'1')
+                    self.assertEqual(child_env['UAP_HERMES_PROJECT_BUNDLE_EXE'],report['bundle_executable'])
+                    self.assertEqual(child_env['GITHUB_ACTIONS'],env['GITHUB_ACTIONS'])
+                    if effect!='missing-report':Path(child_env['UAP_HERMES_COLD_REPORT']).write_bytes(json.dumps(report).encode())
+                    if effect=='sibling':(private/'unexpected').write_bytes(b'never adopted')
+                    if effect=='replacement':owned.rename(outer/'original');owned.mkdir();(owned/'replacement').write_bytes(b'never delete')
+                    return output
+                callback=mock.Mock(side_effect=command);namespace=CASE['public_cold'].__globals__
+                with mock.patch.dict(namespace,public_runtime_pins=mock.Mock(return_value=pins),bounded=callback),mock.patch.object(CASE['time'],'monotonic',return_value=1000),mock.patch.object(CASE['time'],'time',return_value=2000):
+                    invoke=lambda:CASE['public_cold'](evidence,private,env,pins,1050 if effect=='budget' else 1080,'e'*40,Path(report['bundle_executable']))
+                    if effect=='pass':self.assertEqual(invoke(),report)
+                    else:
+                        with self.assertRaises((RuntimeError,FileNotFoundError)):invoke()
+                if effect in ('budget','hosted','preexisting'):callback.assert_not_called()
+                else:callback.assert_called_once()
+                if effect=='pass':self.assertFalse(list(private.iterdir()))
+                elif effect=='replacement':self.assertEqual((outer/'original/retained').read_bytes(),b'owned Cold bytes');self.assertTrue((owned/'replacement').exists())
+                elif effect not in ('budget','hosted','preexisting'):self.assertEqual((owned/'retained').read_bytes(),b'owned Cold bytes')
+
+
 class SourceRuntimeContracts(unittest.TestCase):
     """Real inert trees only; these receipts never qualify a native source run."""
 

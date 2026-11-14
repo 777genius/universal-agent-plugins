@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -47,44 +46,46 @@ type ProfileOwner struct {
 	Authority       *directoryidentity.Authority `json:"authority"`
 }
 type Receipt struct {
-	EnvironmentID          string                       `json:"environment_id,omitempty"`
-	ProfileOwners          []ProfileOwner               `json:"profile_owners,omitempty"`
-	DataReceiptID          string                       `json:"data_receipt_id,omitempty"`
-	OwnedBaseAuthority     *directoryidentity.Authority `json:"owned_base_authority,omitempty"`
-	StagingParentAuthority *directoryidentity.Authority `json:"staging_parent_authority,omitempty"`
-	OldObject              *directoryidentity.Entry     `json:"old_object,omitempty"`
-	PublishedObject        *directoryidentity.Entry     `json:"published_object,omitempty"`
-	SchemaVersion          int                          `json:"schema_version"`
-	Operation              string                       `json:"operation"`
-	OperationID            string                       `json:"operation_id"`
-	ClientBindingID        string                       `json:"client_binding_id"`
-	Sequence               int                          `json:"sequence"`
-	OwnedBaseIdentity      string                       `json:"owned_base_identity"`
-	StagingParentIdentity  string                       `json:"staging_parent_identity,omitempty"`
-	OwnedBase              string                       `json:"owned_base"`
-	ActivePath             string                       `json:"active_path"`
-	StagingPath            string                       `json:"staging_path,omitempty"`
-	BackupPath             string                       `json:"backup_path"`
-	HadActive              bool                         `json:"had_active"`
-	Phase                  string                       `json:"phase"`
-	BackupIdentity         string                       `json:"backup_identity,omitempty"`
-	BackupDigest           string                       `json:"backup_digest,omitempty"`
-	QuarantinePath         string                       `json:"quarantine_path"`
-	PublishedIdentity      string                       `json:"published_identity,omitempty"`
-	PublishedDigest        string                       `json:"published_digest,omitempty"`
+	PublicationParentAuthority *directoryidentity.Authority `json:"publication_parent_authority,omitempty"`
+	EnvironmentID              string                       `json:"environment_id,omitempty"`
+	ProfileOwners              []ProfileOwner               `json:"profile_owners,omitempty"`
+	DataReceiptID              string                       `json:"data_receipt_id,omitempty"`
+	OwnedBaseAuthority         *directoryidentity.Authority `json:"owned_base_authority,omitempty"`
+	StagingParentAuthority     *directoryidentity.Authority `json:"staging_parent_authority,omitempty"`
+	OldObject                  *directoryidentity.Entry     `json:"old_object,omitempty"`
+	PublishedObject            *directoryidentity.Entry     `json:"published_object,omitempty"`
+	SchemaVersion              int                          `json:"schema_version"`
+	Operation                  string                       `json:"operation"`
+	OperationID                string                       `json:"operation_id"`
+	ClientBindingID            string                       `json:"client_binding_id"`
+	Sequence                   int                          `json:"sequence"`
+	OwnedBaseIdentity          string                       `json:"owned_base_identity"`
+	StagingParentIdentity      string                       `json:"staging_parent_identity,omitempty"`
+	OwnedBase                  string                       `json:"owned_base"`
+	ActivePath                 string                       `json:"active_path"`
+	StagingPath                string                       `json:"staging_path,omitempty"`
+	BackupPath                 string                       `json:"backup_path"`
+	HadActive                  bool                         `json:"had_active"`
+	Phase                      string                       `json:"phase"`
+	BackupIdentity             string                       `json:"backup_identity,omitempty"`
+	BackupDigest               string                       `json:"backup_digest,omitempty"`
+	QuarantinePath             string                       `json:"quarantine_path"`
+	PublishedIdentity          string                       `json:"published_identity,omitempty"`
+	PublishedDigest            string                       `json:"published_digest,omitempty"`
 }
 
 type Input struct {
-	EnvironmentID   string
-	ProfileOwners   []ProfileOwner
-	DataReceiptID   string
-	OperationID     string
-	ClientBindingID string
-	Sequence        int
-	OwnedBase       string
-	ActivePath      string
-	StagingPath     string
-	Remove          bool
+	PublicationParentAuthority *directoryidentity.Authority
+	EnvironmentID              string
+	ProfileOwners              []ProfileOwner
+	DataReceiptID              string
+	OperationID                string
+	ClientBindingID            string
+	Sequence                   int
+	OwnedBase                  string
+	ActivePath                 string
+	StagingPath                string
+	Remove                     bool
 	// RequireAbsent rejects the whole operation, before any journal write or
 	// filesystem mutation, if ActivePath already exists. It exists for a caller
 	// reconstructing a target it has independently confirmed absent: an earlier
@@ -110,6 +111,7 @@ type Manager struct {
 }
 
 func (manager Manager) Apply(ctx context.Context, input Input) (result Receipt, resultErr error) {
+	input.PublicationParentAuthority = clonePublicationParent(input.PublicationParentAuthority)
 	defer func() { resultErr = manager.recoveryError(result, resultErr) }()
 	if err := ctx.Err(); err != nil {
 		return Receipt{}, err
@@ -241,7 +243,7 @@ func (manager Manager) Commit(ctx context.Context, receipt Receipt) (resultErr e
 	if err := manager.save(receipt); err != nil {
 		return err
 	}
-	return manager.removeJournal(receipt.OperationID)
+	return manager.removeJournal(receipt)
 }
 
 func (manager Manager) Rollback(ctx context.Context, receipt Receipt) (resultErr error) {
@@ -276,7 +278,7 @@ func (manager Manager) Rollback(ctx context.Context, receipt Receipt) (resultErr
 	if err := manager.save(receipt); err != nil {
 		return err
 	}
-	return manager.removeJournal(receipt.OperationID)
+	return manager.removeJournal(receipt)
 }
 
 func (manager Manager) Recover(ctx context.Context, operationID string, stateCommitted bool) error {
@@ -294,7 +296,7 @@ func (manager Manager) Recover(ctx context.Context, operationID string, stateCom
 		if stateCommitted {
 			return fmt.Errorf("state committed but directory swap is rolled back")
 		}
-		return manager.removeJournal(receipt.OperationID)
+		return manager.removeJournal(receipt)
 	}
 	if (receipt.Phase == PhaseCommitPending || receipt.Phase == PhaseCommitted) && !stateCommitted {
 		return fmt.Errorf("directory swap committed without a durable state receipt")
@@ -306,49 +308,6 @@ func (manager Manager) Recover(ctx context.Context, operationID string, stateCom
 		return manager.Commit(ctx, receipt)
 	}
 	return manager.Rollback(ctx, receipt)
-}
-
-func (manager Manager) Load(operationID string) (Receipt, error) {
-	if err := pathpolicy.ValidateLeafID(operationID); err != nil {
-		return Receipt{}, fmt.Errorf("unsafe directory swap operation id: %w", err)
-	}
-	// Keep symlink resolution beneath the captured journal directory, and
-	// validate the file that will actually be read rather than a path probe.
-	file, err := os.OpenInRoot(manager.JournalDir, operationID+".json")
-	if err != nil {
-		return Receipt{}, err
-	}
-	defer func() { _ = file.Close() }()
-	info, err := file.Stat()
-	if err != nil {
-		return Receipt{}, err
-	}
-	if !info.Mode().IsRegular() {
-		return Receipt{}, fmt.Errorf("directory swap journal %q must be a regular file", manager.journalPath(operationID))
-	}
-	body, err := io.ReadAll(file)
-	if err != nil {
-		return Receipt{}, err
-	}
-	var receipt Receipt
-	decoder := json.NewDecoder(strings.NewReader(string(body)))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&receipt); err != nil {
-		return Receipt{}, fmt.Errorf("decode directory swap receipt %q: %w", manager.journalPath(operationID), err)
-	}
-	if receipt.OperationID != operationID {
-		return Receipt{}, fmt.Errorf("directory swap journal %q contains a different operation id", manager.journalPath(operationID))
-	}
-	var validationErr error
-	if receipt.SchemaVersion == 3 {
-		validationErr = validateLegacyReceipt(receipt)
-	} else {
-		validationErr = manager.validateReceipt(receipt)
-	}
-	if err := validationErr; err != nil {
-		return Receipt{}, manager.recoveryError(receipt, err)
-	}
-	return receipt, nil
 }
 
 // Schema 3 is observable for recovery inventory, but lacks the identity and
@@ -465,6 +424,13 @@ func (manager Manager) newReceipt(ctx context.Context, input Input) (Receipt, er
 			return Receipt{}, fmt.Errorf("active and staging paths must be distinct")
 		}
 	}
+	parent := clonePublicationParent(input.PublicationParentAuthority)
+	if parent != nil && (!input.RequireAbsent || input.Remove) {
+		return Receipt{}, fmt.Errorf("publication parent requires a fresh swap")
+	}
+	if err := validatePublicationParent(ctx, parent, ownedBase, activePath, stagingPath); err != nil {
+		return Receipt{}, err
+	}
 	if filepath.Dir(activePath) != ownedBase {
 		return Receipt{}, fmt.Errorf("active path must be a direct child of owned base")
 	}
@@ -571,7 +537,8 @@ func (manager Manager) newReceipt(ctx context.Context, input Input) (Receipt, er
 		}
 	}
 	receipt := Receipt{
-		OwnedBaseIdentity: ownedBaseIdentity, StagingParentIdentity: stagingParentIdentity,
+		PublicationParentAuthority: parent,
+		OwnedBaseIdentity:          ownedBaseIdentity, StagingParentIdentity: stagingParentIdentity,
 		PublishedIdentity: publishedIdentity, PublishedDigest: publishedDigest,
 		BackupIdentity: backupIdentity, BackupDigest: backupDigest, QuarantinePath: quarantinePath,
 		SchemaVersion:   receiptSchemaVersion,
@@ -612,6 +579,9 @@ func (manager Manager) newReceipt(ctx context.Context, input Input) (Receipt, er
 func (r Receipt) isPhysical() bool { return r.SchemaVersion == 5 || r.SchemaVersion == 7 }
 
 func (manager Manager) validateReceipt(receipt Receipt) error {
+	if err := receipt.validatePublicationParent(); err != nil {
+		return err
+	}
 	if (receipt.SchemaVersion >= 6) != (receipt.EnvironmentID != "") {
 		return fmt.Errorf("directory swap receipt environment authority is inconsistent with schema")
 	}
@@ -721,6 +691,9 @@ func syncReceiptParents(receipt Receipt, includeStaging bool) error {
 }
 
 func (manager Manager) save(receipt Receipt) error {
+	if err := receipt.validatePublicationParent(); err != nil {
+		return err
+	}
 	if err := manager.validatePhysical(receipt); err != nil {
 		return err
 	}
@@ -735,8 +708,11 @@ func (manager Manager) save(receipt Receipt) error {
 	return atomicfile.Write(manager.journalPath(receipt.OperationID), body, 0o600)
 }
 
-func (manager Manager) removeJournal(operationID string) error {
-	path := manager.journalPath(operationID)
+func (manager Manager) removeJournal(receipt Receipt) error {
+	if err := receipt.validatePublicationParent(); err != nil {
+		return err
+	}
+	path := manager.journalPath(receipt.OperationID)
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		return err
 	}

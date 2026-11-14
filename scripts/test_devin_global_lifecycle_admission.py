@@ -805,8 +805,64 @@ class GlobalLifecycleContracts(unittest.TestCase):
                     self.assertEqual(execute.call_count, 2)
                     self.assertEqual(ctx.summary["commands"], [])
                     self.assertTrue(ctx.process_cleanup_proved)
+                    self.assertEqual(ctx.summary["global_build_authority"]["selected_lstat"],
+                                     ctx.summary["global_build_authority"]["initial_pin_lstat"])
                     with self.assertRaisesRegex(ValueError, "fresh installer output"): case.build_installer(ctx, installer)
                     self.assertEqual(execute.call_count, 2)
+
+    def test_build_metadata_refusal_records_real_facts_before_content_or_process(self):
+        fields = ("st_dev", "st_ino", "st_mode", "st_nlink", "st_uid", "st_gid", "st_size", "st_mtime_ns", "st_ctime_ns")
+        for effect in ("mode", "links", "empty", "oversize", "directory", "owner"):
+            with self.subTest(effect=effect), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve(); go = root / "go"
+                if effect == "directory": go.mkdir(mode=0o755)
+                else: go.write_bytes(b"inert Go; never opened"); go.chmod(0o755)
+                if effect == "mode": go.chmod(0o700)
+                elif effect == "links": os.link(go, root / "alias")
+                elif effect == "empty": go.write_bytes(b"")
+                elif effect == "oversize":
+                    with go.open("r+b") as stream: stream.truncate((128 << 20) + 1)
+                before = go.lstat(); expected = {name: getattr(before, name) for name in fields}
+                ctx = SimpleNamespace(summary={}, budget=SimpleNamespace(check=lambda: 20))
+                metadata = {}
+                with mock.patch.object(case.shutil, "which", return_value=str(go)), \
+                        mock.patch.object(case.base.shared.artifacts, "open_member", side_effect=AssertionError("refused file opened")) as opened, \
+                        mock.patch.object(case.os, "read", side_effect=AssertionError("refused bytes read")) as read, \
+                        mock.patch.object(case.base.shared, "run_probe", side_effect=AssertionError("refused process started")) as probe:
+                    with self.assertRaisesRegex(ValueError, "prebuilt installer authority"):
+                        if effect == "owner":
+                            case.installer_pin(go, ctx.budget, owner=(before.st_uid + 1, before.st_gid), metadata=metadata)
+                        else: case.build_installer(ctx, root / "installer")
+                opened.assert_not_called(); read.assert_not_called(); probe.assert_not_called()
+                if effect == "owner": self.assertEqual(metadata, expected)
+                else:
+                    self.assertEqual(ctx.summary, {"global_build_authority": {
+                        "schema_version": 1, "role": "resolved-host-go", "selected_lstat": expected,
+                        "expected_owner": {"uid": before.st_uid, "gid": before.st_gid}, "initial_pin_lstat": expected}})
+                    self.assertLess(len(json.dumps(ctx.summary)), 2048)
+                self.assertFalse((root / "installer").exists())
+
+    def test_build_diagnostic_keeps_selection_and_gate_observations_distinct(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve(); go = root / "go"
+            go.write_bytes(b"inert Go; never opened"); go.chmod(0o755)
+            selected, pin = go.lstat(), case.installer_pin
+            ctx = SimpleNamespace(summary={}, budget=SimpleNamespace(check=lambda: 20))
+            def changed(path, budget, **kwargs):
+                path.chmod(0o700)
+                return pin(path, budget, **kwargs)
+            with mock.patch.object(case.shutil, "which", return_value=str(go)), \
+                    mock.patch.object(case, "installer_pin", side_effect=changed), \
+                    mock.patch.object(case.base.shared.artifacts, "open_member", side_effect=AssertionError("refused file opened")) as opened:
+                with self.assertRaisesRegex(ValueError, "prebuilt installer authority"):
+                    case.build_installer(ctx, root / "installer")
+            opened.assert_not_called()
+            value = ctx.summary["global_build_authority"]; gate = go.lstat()
+            self.assertEqual(value["expected_owner"], {"uid": selected.st_uid, "gid": selected.st_gid})
+            self.assertNotEqual(value["selected_lstat"]["st_mode"], value["initial_pin_lstat"]["st_mode"])
+            for field in value["selected_lstat"]:
+                self.assertEqual(value["selected_lstat"][field], getattr(selected, field))
+                self.assertEqual(value["initial_pin_lstat"][field], getattr(gate, field))
 
 
 

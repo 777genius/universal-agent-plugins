@@ -25,6 +25,14 @@ func validateSessionHandle(file *os.File, _ os.FileInfo) error {
 	return validateSessionWindowsOwner(file)
 }
 
+func validateSessionOwnedHandle(file *os.File, info os.FileInfo) error {
+	return validateSessionHandle(file, info)
+}
+
+func validateSessionOwnedDirectory(file *os.File, info os.FileInfo) error {
+	return validateSessionDirectoryHandle(file, info)
+}
+
 func validateSessionDirectory(info os.FileInfo) error {
 	metadata, ok := info.Sys().(*syscall.Win32FileAttributeData)
 	if !ok || !info.IsDir() || metadata.FileAttributes&syscall.FILE_ATTRIBUTE_REPARSE_POINT != 0 {

@@ -1,9 +1,11 @@
 package installer_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -27,7 +29,7 @@ func newHermesSDKFixture(t *testing.T, project, user, pkg string) *hermesSDKFixt
 	if err := os.MkdirAll(filepath.Join(project, ".git"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	registry, err := clients.NewRegistry(hermes.NewProject())
+	registry, err := clients.NewRegistry(hermes.New())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +45,7 @@ func newHermesSDKFixture(t *testing.T, project, user, pkg string) *hermesSDKFixt
 	}
 	return &hermesSDKFixture{project: project, user: user, engine: engine, runner: runner, request: installer.Request{
 		Scope: domain.ScopeProject, ProjectRoot: project, PackageRoot: pkg, ClientID: "hermes", ClientConfigRoot: user,
-		ClientExecutable: filepath.Join(filepath.Dir(project), "inert-hermes"), ClientVersion: "0.23.0",
+		ClientExecutable: hermesSDKBundle(t, filepath.Dir(project)), ClientVersion: "0.23.0",
 		InstallationID: "00000000-0000-4000-8000-000000000023", RequiredComponents: []string{"skills", "mcp"},
 	}}
 }
@@ -153,9 +155,9 @@ func hermesSDKSession(t *testing.T, fixture *hermesSDKFixture, binding domain.Cl
 			Surfaces: []domain.ClientSurface{{ID: "hermes_cli", Detected: true}}}}
 	env := clients.Env{ProjectRoots: transaction.ProjectRootPublisher{Kernel: transaction.Kernel{StateStore: store}}, Runner: fixture.runner}
 	before := fixture.state(t)
-	plan, err := hermes.NewProject().PlanSession(t.Context(), env, request)
+	plan, err := hermes.New().PlanSession(t.Context(), env, request)
 	if err != nil || plan.Environment["HERMES_HOME"] != filepath.Join(fixture.project, ".hermes", "uap-session") ||
-		!reflect.DeepEqual(plan.Servers, []string{"docs"}) || !reflect.DeepEqual(plan.Arguments, []string{"mcp", "list"}) {
+		!reflect.DeepEqual(plan.Servers, []string{"docs"}) || !reflect.DeepEqual(plan.Arguments, []string{"config", "get", "mcp_servers", "--json"}) {
 		t.Fatalf("session did not consume actual committed root/entry receipts: %+v %v", plan, err)
 	}
 	if !reflect.DeepEqual(before, fixture.state(t)) || fixture.runner.calls != 0 {
@@ -206,5 +208,62 @@ func hermesSDKUpdateRepairRemove(t *testing.T, fixture *hermesSDKFixture, pkg, o
 	}
 	if rootReceipts != 1 {
 		t.Fatal("removal lost or duplicated auxiliary authority")
+	}
+}
+
+func hermesSDKBundle(t *testing.T, base string) string {
+	t.Helper()
+	payload := filepath.Join(base, "inert-bundle")
+	launcher := "hermes"
+	if runtime.GOOS == "windows" {
+		launcher += ".exe"
+	}
+	target := map[string]string{"linux/amd64": "linux-x64", "darwin/arm64": "darwin-arm64", "windows/amd64": "win32-x64"}[runtime.GOOS+"/"+runtime.GOARCH]
+	for _, name := range []string{"hermes-agent", "venv/site", "tools/python", "bin"} {
+		if err := os.MkdirAll(filepath.Join(payload, filepath.FromSlash(name)), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, name := range []string{"bin/" + launcher, "tools/python/python"} {
+		if err := os.WriteFile(filepath.Join(payload, filepath.FromSlash(name)), []byte("inert fixture; never execute"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	manifest := fmt.Sprintf(`{"schema":1,"ref":"2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19","target":%q,"repo":"hermes-agent","venv":"venv","store":"tools","launchers":["hermes"],"runtime":{"repoDir":"hermes-agent","toolsDir":"tools","storePython":"tools/python/python","sitePackages":"venv/site","commands":{"hermes":%q}}}`, target, "bin/"+launcher)
+	if err := os.WriteFile(filepath.Join(payload, "manifest.json"), []byte(manifest), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return filepath.Join(payload, "bin", launcher)
+}
+
+func TestProjectHermesSDKSourceInstallRefusesBeforeMutation(t *testing.T) {
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	user, pkg := filepath.Join(base, "user"), filepath.Join(base, "package")
+	claudeSDKWrite(t, filepath.Join(user, "config.yaml"), "model: foreign\n")
+	claudeSDKWrite(t, filepath.Join(pkg, "plugin.json"), `{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"sdk-hermes","version":"1.0.0"}`)
+	claudeSDKWrite(t, filepath.Join(pkg, "mcp.json"), `{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"docs":{"type":"streamable-http","url":"https://example.test/mcp"}}}`)
+	fixture := newHermesSDKFixture(t, filepath.Join(base, "A"), user, pkg)
+	fixture.request.RequiredComponents = []string{"mcp"}
+	fixture.request.ClientExecutable = filepath.Join(base, "source", "hermes")
+	claudeSDKWrite(t, fixture.request.ClientExecutable, "inert source install; never execute")
+	fixture.request.Operation, fixture.request.OperationID = installer.OpInstall, "source-refusal"
+	handle, err := fixture.engine.Prepare(t.Context(), fixture.request)
+	if handle != nil {
+		if closeErr := handle.Close(); closeErr != nil {
+			t.Error(closeErr)
+		}
+		t.Fatal("source-installed request produced an applicable handle")
+	}
+	if err == nil || !strings.Contains(err.Error(), "delivery plan for hermes is unsupported") || fixture.runner.calls != 0 {
+		t.Fatal("source-installed request reached beyond unsupported planning", err)
+	}
+	if claudeSDKBytes(t, filepath.Join(user, "config.yaml")) != "model: foreign\n" {
+		t.Fatal("unsupported source install changed User")
+	}
+	if _, err := os.Lstat(filepath.Join(fixture.project, ".hermes", "uap-session")); !os.IsNotExist(err) {
+		t.Fatal("unsupported source install created a selected runtime", err)
 	}
 }

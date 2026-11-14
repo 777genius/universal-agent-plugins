@@ -2,9 +2,11 @@ package installer
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -32,7 +34,7 @@ func (s hermesRootDeathStore) Save(state domain.StateFileV2) error {
 
 func hermesRootDeathEngine(t *testing.T, base string) (*Engine, Request) {
 	t.Helper()
-	registry, err := clients.NewRegistry(hermes.NewProject())
+	registry, err := clients.NewRegistry(hermes.New())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +50,7 @@ func hermesRootDeathEngine(t *testing.T, base string) (*Engine, Request) {
 	}
 	request := Request{Scope: domain.ScopeProject, ProjectRoot: project, Operation: OpInstall,
 		PackageRoot: filepath.Join(base, "package"), ClientID: "hermes", ClientConfigRoot: filepath.Join(base, "user"),
-		ClientExecutable: filepath.Join(base, "inert-hermes"), ClientVersion: "0.23.0",
+		ClientExecutable: hermesDeathBundle(t, base), ClientVersion: "0.23.0",
 		InstallationID: "00000000-0000-4000-8000-000000000024", OperationID: "hermes-root-death",
 		RequiredComponents: []string{"mcp"}}
 	return engine, request
@@ -137,4 +139,29 @@ func TestProjectHermesRootDeathPreservesUnacknowledgedNativeAttempt(t *testing.T
 	if deathRead(t, filepath.Join(base, "user", "config.yaml")) != "model: unchanged\n" {
 		t.Fatal("root death changed original User state")
 	}
+}
+
+func hermesDeathBundle(t *testing.T, base string) string {
+	t.Helper()
+	payload := filepath.Join(base, "inert-bundle")
+	launcher := "hermes"
+	if runtime.GOOS == "windows" {
+		launcher += ".exe"
+	}
+	target := map[string]string{"linux/amd64": "linux-x64", "darwin/arm64": "darwin-arm64", "windows/amd64": "win32-x64"}[runtime.GOOS+"/"+runtime.GOARCH]
+	for _, name := range []string{"hermes-agent", "venv/site", "tools/python", "bin"} {
+		if err := os.MkdirAll(filepath.Join(payload, filepath.FromSlash(name)), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, name := range []string{"bin/" + launcher, "tools/python/python"} {
+		if err := os.WriteFile(filepath.Join(payload, filepath.FromSlash(name)), []byte("inert fixture; never execute"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	manifest := fmt.Sprintf(`{"schema":1,"ref":"2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19","target":%q,"repo":"hermes-agent","venv":"venv","store":"tools","launchers":["hermes"],"runtime":{"repoDir":"hermes-agent","toolsDir":"tools","storePython":"tools/python/python","sitePackages":"venv/site","commands":{"hermes":%q}}}`, target, "bin/"+launcher)
+	if err := os.WriteFile(filepath.Join(payload, "manifest.json"), []byte(manifest), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return filepath.Join(payload, "bin", launcher)
 }

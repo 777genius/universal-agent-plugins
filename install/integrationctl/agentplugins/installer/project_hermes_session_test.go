@@ -32,8 +32,10 @@ func (runner *hermesSessionSwapRunner) Run(_ context.Context, command legacyport
 	var expected []string
 	switch runner.calls {
 	case 1:
-		expected = []string{"config", "path"}
+		expected = []string{"--version"}
 	case 2:
+		expected = []string{"config", "path"}
+	case 3:
 		expected = []string{"config", "get", "mcp_servers", "--json"}
 	default:
 		runner.t.Fatal("native observation exceeded its command budget")
@@ -49,7 +51,10 @@ func (runner *hermesSessionSwapRunner) Run(_ context.Context, command legacyport
 		runner.replaceRoot()
 	}
 	output := []byte(filepath.Join(runner.root, "config.yaml") + "\n")
-	if runner.calls == 2 {
+	if runner.calls == 1 {
+		output = []byte("Hermes Agent vunknown (2026.9.24)\nInstall directory: " + filepath.Join(filepath.Dir(filepath.Dir(command.Argv[0])), "hermes-agent") + "\n")
+	}
+	if runner.calls == 3 {
 		var source struct {
 			Servers map[string]any `yaml:"mcp_servers"`
 		}
@@ -104,7 +109,7 @@ func (runner *hermesSessionSwapRunner) replaceRoot() {
 // cannot become new physical authority after either native callback returns.
 func TestProjectHermesSDKSessionRejoinsRootAndParentAfterEachNativeObservation(t *testing.T) {
 	for _, parent := range []bool{false, true} {
-		for _, boundary := range []int{1, 2} {
+		for _, boundary := range []int{1, 2, 3} {
 			t.Run(fmt.Sprintf("parent=%t/call=%d", parent, boundary), func(t *testing.T) {
 				base, err := filepath.EvalSymlinks(t.TempDir())
 				if err != nil {
@@ -119,7 +124,7 @@ func TestProjectHermesSDKSessionRejoinsRootAndParentAfterEachNativeObservation(t
 				request := clients.SessionRequest{ProjectRoot: fixture.project, Inspect: true, Bindings: []domain.ClientBinding{binding},
 					Client: domain.DetectedClient{ClientID: domain.ClientHermes, ConfigRoot: fixture.user, ExecutablePath: fixture.request.ClientExecutable,
 						Status: domain.DetectionDetected, Surfaces: []domain.ClientSurface{{ID: "hermes_cli", Detected: true}}}}
-				adapter, env := hermes.NewProject(), clients.Env{ProjectRoots: publisher}
+				adapter, env := hermes.New(), clients.Env{ProjectRoots: publisher}
 				plan, err := adapter.PlanSession(t.Context(), env, request)
 				if err != nil {
 					t.Fatal(err)
