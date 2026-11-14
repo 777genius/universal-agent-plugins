@@ -25,11 +25,19 @@ for (const width of [1440, 390]) {
     const errors = await offline(page);
     await projections(page, context7Fixture());
     await navigate(page, '/');
+    const heroSetup = page.locator('.hero__demo .install-panel__notice');
+    await expect(heroSetup).toHaveCount(0);
     await page.locator('.hero__demo .app-multiselect__trigger').click();
     await page.getByRole('checkbox', { name: /^ChatGPT Web/ }).click();
     await page.keyboard.press('Escape');
     await expect(page.locator('.hero__demo .command-snippet code')).toContainText('add context7 --target chatgptweb');
+    await expect(heroSetup).toHaveText('Finish setup in ChatGPT');
+    await expect(heroSetup).toBeVisible();
     await testInfo.attach(`guided-web-hero-${width}.png`, { body: await page.locator('.hero__demo').screenshot({ animations: 'disabled' }), contentType: 'image/png' });
+    await page.locator('.hero__demo .app-multiselect__trigger').click();
+    await page.locator('.app-multiselect__auto').click();
+    await page.keyboard.press('Escape');
+    await expect(heroSetup).toHaveCount(0);
 
     const card = page.locator('[data-install-source="context7"]').first();
     await card.locator('.plugin-card__install-toggle').click();

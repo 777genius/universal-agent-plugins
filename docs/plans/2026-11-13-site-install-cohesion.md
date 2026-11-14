@@ -79,3 +79,24 @@ Complexity 4/10; expected reliability 9/10; estimate confidence 8/10.
   published immutable release, superseded old release and unchanged upstream default.
 - Report remaining external protected review requirements only if an actual gate
   requires an owner action; queueing or runner delays are not a blocker.
+
+## Development workspace containment
+
+During final qualification, Dependabot reported that locked `@nuxt/schema` 3.21.11
+is affected by [GHSA-mjrq-cffv-q4qc](https://github.com/nuxt/nuxt/security/advisories/GHSA-mjrq-cffv-q4qc).
+Nuxt's automatic workspace detection can make a development server's file access
+too broad when a parent directory contains a stray workspace or lock file. The
+advisory explicitly excludes production builds.
+
+Apply the vendor's workaround, `workspaceDir: '.'`, in the landing configuration.
+Nuxt resolves this relative to the project root, independent of the shell's current
+directory. Regress the actual locked resolver against an unrelated parent workspace.
+This mitigates the configuration exposure; it does not replace the affected package
+with a patched version or imply that the dependency alert is closed. A Nuxt major
+version migration remains a separate change with its own toolchain qualification.
+
+Final mobile artifact inspection also found that the Hero's Web setup explanation
+was visible only while its agent menu was open. Keep the existing translated
+"Finish setup in ChatGPT" notice visible beside a valid explicit Web command,
+including mixed signed selections; omit it for automatic and Desktop-only choices.
+Cover these states at desktop and mobile widths in the existing browser journeys.
