@@ -168,6 +168,7 @@ function updateScope(value: InstallScope) {
             />
           </div>
           <p v-if="needsManualSelection" class="plugin-card__unavailable">{{ t('registryUi.skills.manualSkillSelection') }}</p>
+          <NativeCliCheckbox />
         </div>
       </Transition>
     </div>
