@@ -408,21 +408,82 @@ func validateReadonlyResult(body []byte, got result, r request) error {
 	var proof struct {
 		Authority json.RawMessage `json:"authority"`
 		Stage     string          `json:"stage"`
-		Control   bool            `json:"control_complete"`
+		Control   *bool           `json:"control_complete"`
 		Original  json.RawMessage `json:"original"`
 		Marker    json.RawMessage `json:"control_marker"`
 	}
 	if e := closed(envelope.Proof, &proof, "authority stage control_complete original control_marker"); e != nil {
 		return e
 	}
-	if proof.Stage != "isolation" && proof.Stage != "runtime" && proof.Stage != "control" && proof.Stage != "native" && proof.Stage != "complete" {
+	if readonlyRuntimeFailureStage(proof.Stage) {
+		return validateReadonlyRuntimeFailure(got, *envelope.Complete, proof.Control, proof.Original, proof.Marker)
+	}
+	if !validReadonlyResultStage(proof.Stage) {
 		return errors.New("readonly-stage-refused")
 	}
-	if got.Complete && (!proof.Control || proof.Stage != "complete") {
+	if got.Complete && (proof.Control == nil || !*proof.Control || proof.Stage != "complete") {
 		return errors.New("readonly-completion-refused")
 	}
 	return nil
 }
+
+func validReadonlyResultStage(stage string) bool {
+	switch stage {
+	case "isolation", "runtime", "control", "native", "complete":
+		return true
+	}
+	return false
+}
+
+func validateReadonlyRuntimeFailure(got result, semantic bool, control *bool, original, marker json.RawMessage) error {
+	if semantic || got.Complete || got.Reason != "isolation-refused" ||
+		len(got.Commands) != 0 || got.Commands == nil || control == nil || *control ||
+		strings.TrimSpace(string(original)) != "null" || strings.TrimSpace(string(marker)) != "null" {
+		return errors.New("readonly-runtime-failure-refused")
+	}
+	var rpc struct {
+		Initialize    json.RawMessage   `json:"initialize"`
+		Plugins       json.RawMessage   `json:"plugins"`
+		Notifications []json.RawMessage `json:"notifications"`
+	}
+	if e := closed(got.RPC, &rpc, "initialize plugins notifications"); e != nil {
+		return e
+	}
+	if strings.TrimSpace(string(rpc.Initialize)) != "null" || strings.TrimSpace(string(rpc.Plugins)) != "null" ||
+		rpc.Notifications == nil || len(rpc.Notifications) != 0 {
+		return errors.New("readonly-runtime-rpc-refused")
+	}
+	return nil
+}
+
+// readonlyRuntimeFailureStage admits only fixed pre-control diagnostics. It
+// never converts a failed census into a successful native observation.
+func readonlyRuntimeFailureStage(stage string) bool {
+	if !strings.HasPrefix(stage, "runtime:") {
+		return false
+	}
+	switch strings.TrimPrefix(stage, "runtime:") {
+	case "readonly-outer-namespaces", "readonly-clock",
+		"readonly-deadline", "readonly-directory-original",
+		"readonly-directory-open", "readonly-runtime-top-alias",
+		"readonly-census-depth", "readonly-census-directory",
+		"readonly-census-count", "readonly-census-path",
+		"readonly-census-writable", "readonly-runtime-owner",
+		"readonly-census-open", "readonly-census-rejoin",
+		"readonly-census-alias", "readonly-census-file-rejoin",
+		"readonly-runtime-link-alias", "readonly-runtime-link-bound",
+		"readonly-runtime-link-rejoin", "readonly-special-member",
+		"readonly-census-directory-rejoin", "readonly-external-hardlink",
+		"readonly-link-target", "readonly-link-cross-domain",
+		"readonly-link-domain", "readonly-link-parent",
+		"readonly-link-depth", "readonly-runtime-final",
+		"permission-refused", "member-absent",
+		"not-directory", "os-error":
+		return true
+	}
+	return false
+}
+
 func (s *scopeState) verifyReadonlyResult(raw []byte, r request) error {
 	if r.Mode != readonlyMode {
 		return nil

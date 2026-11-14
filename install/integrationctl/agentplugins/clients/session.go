@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 )
 
 // SessionRequest describes an explicit, single-process start, not installation
@@ -36,6 +37,24 @@ type SessionPlan struct {
 type SessionPlanner interface {
 	PlanSession(context.Context, Env, SessionRequest) (SessionPlan, error)
 	VerifySession(context.Context, Env, SessionPlan) error
+}
+
+// SessionExecutionPlanner optionally retains client-specific read authority for
+// a confirmed execution, including verification, replanning and the final child.
+// A nil execution preserves the ordinary session path.
+type SessionExecutionPlanner interface {
+	BeginSessionExecution(context.Context, Env, SessionPlan) (SessionExecution, error)
+}
+
+// SessionExecution is transient, fully initialized authority, never plan data.
+// Its context carries one original deadline. Runner wraps the original observer;
+// the caller still invokes SessionPlanner.VerifySession. Revalidate and Close
+// run on every exit; Close releases only this execution's retained resources.
+type SessionExecution interface {
+	Context() context.Context
+	Runner() ports.CommandRunner
+	Revalidate() error
+	Close() error
 }
 
 // ChildEnvironment returns a copy, replacing only this plan's explicit keys.

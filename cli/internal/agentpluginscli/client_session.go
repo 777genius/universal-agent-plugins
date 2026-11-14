@@ -58,29 +58,58 @@ func runClientSession(ctx context.Context, cmd *cobra.Command, app App, opts *op
 		return err
 	}
 	plan, planErr := prepareClientSession(ctx, app, targets[0], planner, inspect)
-	if planErr == nil && !opts.dryRun {
-		planErr = planner.VerifySession(ctx, app.SessionEnv, plan)
+	if planErr != nil {
+		return errors.Join(planErr, unlock())
 	}
-	releaseErr := unlock()
-	if err := errors.Join(planErr, releaseErr); err != nil {
+	if !opts.dryRun {
+		return executeClientSession(ctx, app, targets[0], planner, inspect, plan, unlock)
+	}
+	if err := unlock(); err != nil {
 		return err
 	}
-	if opts.dryRun {
-		if opts.format == "json" {
-			return writeJSONOutput(cmd.OutOrStdout(), "run", map[string]any{"client": plan.ClientID, "scope": "project", "servers": plan.Servers, "starts_process": false, "requires_client_start_consent": true})
+	if opts.format == "json" {
+		return writeJSONOutput(cmd.OutOrStdout(), "run", map[string]any{"client": plan.ClientID, "scope": "project", "servers": plan.Servers, "starts_process": false, "requires_client_start_consent": true})
+	}
+	_, err = fmt.Fprintf(cmd.OutOrStdout(), "Client: %s\nProject: %s\nOwned MCP servers: %s\nConfirmed startup first verifies the native inventory, then runs the selected client command.\nThese commands select the whole Project MCP source; User MCP entries are not merged. No trust, activation or login state is changed by UAP.\n",
+		prompt.SafeText(string(plan.ClientID)), prompt.SafeText(plan.Directory), prompt.SafeText(strings.Join(plan.Servers, ", ")))
+	return err
+}
+
+func executeClientSession(ctx context.Context, app App, target domain.ClientID, planner clients.SessionPlanner, inspect bool, plan clients.SessionPlan, unlock func() error) (resultErr error) {
+	env := app.SessionEnv
+	var execution clients.SessionExecution
+	var planErr error
+	if owner, ok := planner.(clients.SessionExecutionPlanner); ok {
+		execution, planErr = owner.BeginSessionExecution(ctx, env, plan)
+	}
+	if execution != nil {
+		if execution.Context() == nil || execution.Runner() == nil {
+			planErr = errors.Join(planErr, fmt.Errorf("client execution authority is incomplete"), execution.Close())
+			execution = nil
+		} else {
+			defer func() { resultErr = errors.Join(resultErr, execution.Revalidate(), execution.Close()) }()
+			ctx, env.Runner = execution.Context(), execution.Runner()
 		}
-		_, err = fmt.Fprintf(cmd.OutOrStdout(), "Client: %s\nProject: %s\nOwned MCP servers: %s\nConfirmed startup first verifies the native inventory, then runs the selected client command.\nThese commands select the whole Project MCP source; User MCP entries are not merged. No trust, activation or login state is changed by UAP.\n",
-			prompt.SafeText(string(plan.ClientID)), prompt.SafeText(plan.Directory), prompt.SafeText(strings.Join(plan.Servers, ", ")))
+	}
+	if planErr == nil {
+		planErr = planner.VerifySession(ctx, env, plan)
+	}
+	if err := errors.Join(planErr, unlock()); err != nil {
 		return err
 	}
-	// Recheck files after releasing the installer lock; the interactive client
-	// must not hold that lock for its session lifetime. No receipt is promoted.
-	check, err := prepareClientSession(ctx, app, targets[0], planner, inspect)
+	// The interactive child never holds the installer lock. A retained optional
+	// execution still spans this original replan and the final process boundary.
+	check, err := prepareClientSession(ctx, app, target, planner, inspect)
 	if err != nil {
 		return err
 	}
 	if !reflect.DeepEqual(plan, check) {
 		return fmt.Errorf("client startup plan changed; review the new plan")
+	}
+	if execution != nil {
+		if err := execution.Revalidate(); err != nil {
+			return err
+		}
 	}
 	return app.StartNativeSession(ctx, plan)
 }

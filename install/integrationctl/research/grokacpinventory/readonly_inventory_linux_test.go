@@ -306,3 +306,67 @@ func TestReadonlyClosedProofDoesNotAddFieldsToOldResultSchema(t *testing.T) {
 		t.Fatal("null semantic flag became false")
 	}
 }
+
+func readonlyRuntimeFailureFixture(t *testing.T, r request, stage string) map[string]any {
+	t.Helper()
+	var body map[string]any
+	if err := json.Unmarshal(inertResult(t, r), &body); err != nil {
+		t.Fatal(err)
+	}
+	body["mode"], body["reason"], body["semantic_complete"] = readonlyMode, "isolation-refused", false
+	body["commands"] = []any{}
+	body["rpc"] = map[string]any{"initialize": nil, "plugins": nil, "notifications": []any{}}
+	body["readonly"] = map[string]any{"authority": map[string]any{}, "stage": stage,
+		"control_complete": false, "original": nil, "control_marker": nil}
+	return body
+}
+
+func TestReadonlyRuntimeFailureStagesRemainClosedNegativeObservations(t *testing.T) {
+	r := inertRequest()
+	r.Mode = readonlyMode
+	for _, stage := range []string{"runtime:readonly-runtime-owner", "runtime:readonly-outer-namespaces",
+		"runtime:readonly-deadline", "runtime:permission-refused", "runtime:os-error"} {
+		t.Run(stage, func(t *testing.T) {
+			body := readonlyRuntimeFailureFixture(t, r, stage)
+			encoded, err := json.Marshal(body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := validateResult(encoded, r, 1); err != nil {
+				t.Fatal("closed runtime refusal was discarded", err)
+			}
+		})
+	}
+}
+
+func TestReadonlyRuntimeFailureCannotCarryProgressOrUnknownText(t *testing.T) {
+	r := inertRequest()
+	r.Mode = readonlyMode
+	for _, test := range []struct {
+		name string
+		edit func(map[string]any)
+	}{
+		{"complete", func(body map[string]any) { body["semantic_complete"] = true }},
+		{"protocol-reason", func(body map[string]any) { body["reason"] = "protocol-refused" }},
+		{"command", func(body map[string]any) { body["commands"] = []any{map[string]any{}} }},
+		{"null-commands", func(body map[string]any) { body["commands"] = nil }},
+		{"rpc-progress", func(body map[string]any) { body["rpc"].(map[string]any)["plugins"] = map[string]any{} }},
+		{"control", func(body map[string]any) { body["readonly"].(map[string]any)["control_complete"] = true }},
+		{"null-control", func(body map[string]any) { body["readonly"].(map[string]any)["control_complete"] = nil }},
+		{"original", func(body map[string]any) { body["readonly"].(map[string]any)["original"] = map[string]any{} }},
+		{"marker", func(body map[string]any) { body["readonly"].(map[string]any)["control_marker"] = map[string]any{} }},
+		{"unknown", func(body map[string]any) { body["readonly"].(map[string]any)["stage"] = "runtime:PRIVATE /original/path" }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			body := readonlyRuntimeFailureFixture(t, r, "runtime:readonly-runtime-owner")
+			test.edit(body)
+			encoded, err := json.Marshal(body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := validateResult(encoded, r, 1); err == nil {
+				t.Fatal("runtime diagnostic accepted another state")
+			}
+		})
+	}
+}

@@ -49,7 +49,7 @@ func prepareProjectSession(ctx context.Context, req clients.SessionRequest, owne
 	if err != nil {
 		return clients.SessionPlan{}, err
 	}
-	body, err := projectSessionConfig(ctx, req.ProjectRoot, owner, names)
+	body, err := projectSessionConfig(ctx, req.ProjectRoot, owner, names, req.Inspect)
 	if err != nil {
 		return clients.SessionPlan{}, err
 	}
@@ -130,7 +130,7 @@ func validateSessionBindingAuthority(project string, binding domain.ClientBindin
 	return New().ValidateBindingProfile(filepath.Join(project, ".hermes"), binding)
 }
 
-func projectSessionConfig(ctx context.Context, project string, owner domain.NativeObjectOwnership, names []string) (result []byte, resultErr error) {
+func projectSessionConfig(ctx context.Context, project string, owner domain.NativeObjectOwnership, names []string, inspect bool) (result []byte, resultErr error) {
 	if err := verifyProjectSessionRoot(ctx, project, owner); err != nil {
 		return nil, err
 	}
@@ -148,7 +148,7 @@ func projectSessionConfig(ctx context.Context, project string, owner domain.Nati
 	if err != nil || !os.SameFile(before, held) {
 		return nil, fmt.Errorf("hermes session root changed before open")
 	}
-	if err := verifySessionBootstrap(ctx, root, held); err != nil {
+	if err := verifySessionBootstrap(ctx, root, held, inspect); err != nil {
 		return nil, err
 	}
 	body, err := readSessionMember(root, "config.yaml", 1<<20)
@@ -238,7 +238,7 @@ func verifyProjectSessionSource(ctx context.Context, plan clients.SessionPlan, o
 	if err != nil || bundle.executable != plan.Executable {
 		return fmt.Errorf("hermes selected bundle changed")
 	}
-	body, err := projectSessionConfig(ctx, plan.Directory, owner, plan.Servers)
+	body, err := projectSessionConfig(ctx, plan.Directory, owner, plan.Servers, len(plan.Arguments) != 0)
 	if err != nil {
 		return err
 	}
@@ -307,15 +307,18 @@ func validSessionMCPObject(object domain.NativeObjectOwnership, project string) 
 // The pinned bootstrap creates only this finite catalog. Backups remain
 // historical bytes: a valid receipt-owned primary is required before every
 // child, and native effective-source readback cannot adopt a fallback.
-func verifySessionBootstrap(ctx context.Context, root *os.Root, held os.FileInfo) (resultErr error) {
+func verifySessionBootstrap(ctx context.Context, root *os.Root, held os.FileInfo, inspect bool) (resultErr error) {
 	members := map[string]os.FileInfo{".": held}
 	for _, name := range []string{".", "cron", "sessions", "logs", "logs/curator", "memories", "pairing", "hooks", "image_cache", "audio_cache", "skills", "backups", "backups/config"} {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if err := inspectBootstrapDirectory(root, name, members); err != nil {
+		if err := inspectBootstrapDirectory(root, name, members, inspect); err != nil {
 			return err
 		}
+	}
+	if inspect && (members["spawn-ledger.json"] == nil) != (members["spawn-ledger.json.lock"] == nil) {
+		return fmt.Errorf("hermes inspect history requires the original ledger pair")
 	}
 	var soul *os.File
 	defer func() {
@@ -353,7 +356,7 @@ func verifySessionBootstrap(ctx context.Context, root *os.Root, held os.FileInfo
 	return ctx.Err()
 }
 
-func inspectBootstrapDirectory(root *os.Root, name string, members map[string]os.FileInfo) (resultErr error) {
+func inspectBootstrapDirectory(root *os.Root, name string, members map[string]os.FileInfo, inspect bool) (resultErr error) {
 	before, present := members[name]
 	if !present {
 		return nil
@@ -380,7 +383,7 @@ func inspectBootstrapDirectory(root *os.Root, name string, members map[string]os
 			return err
 		}
 	}
-	limit := map[string]int{".": 14, "logs": 3, "backups": 1, "backups/config": 5}[name]
+	limit := bootstrapDirectoryLimit(name, inspect)
 	names, err := file.Readdirnames(limit + 1)
 	if err != nil && !errors.Is(err, io.EOF) || len(names) > limit {
 		return fmt.Errorf("hermes bootstrap membership exceeds the fixed catalog")
@@ -388,7 +391,7 @@ func inspectBootstrapDirectory(root *os.Root, name string, members map[string]os
 	for _, child := range names {
 		relative := filepath.ToSlash(filepath.Join(name, child))
 		info, err := directory.Lstat(child)
-		if err != nil || !bootstrapMemberMetadata(relative, info) {
+		if err != nil || !bootstrapMemberMetadata(relative, info, inspect) {
 			return fmt.Errorf("hermes bootstrap contains an unknown or unsafe member")
 		}
 		members[relative] = info
@@ -400,7 +403,19 @@ func inspectBootstrapDirectory(root *os.Root, name string, members map[string]os
 	return nil
 }
 
-func bootstrapMemberMetadata(name string, info os.FileInfo) bool {
+func bootstrapDirectoryLimit(name string, inspect bool) int {
+	limits := map[string]int{".": 14, "logs": 3, "backups": 1, "backups/config": 5}
+	if inspect {
+		limits["."] += 2
+		limits["logs"]++
+		if runtime.GOOS == "windows" {
+			limits["logs"]++
+		}
+	}
+	return limits[name]
+}
+
+func bootstrapMemberMetadata(name string, info os.FileInfo, inspect bool) bool {
 	mode, limit, directory := os.FileMode(0o600), int64(1<<20), false
 	switch name {
 	case "cron", "sessions", "logs", "logs/curator", "memories", "pairing", "hooks", "image_cache", "audio_cache", "skills":
@@ -416,12 +431,29 @@ func bootstrapMemberMetadata(name string, info os.FileInfo) bool {
 		limit = 667
 	case "logs/agent.log", "logs/errors.log":
 		mode = 0o644
+	case "spawn-ledger.json":
+		if !inspect {
+			return false
+		}
+		limit = 4096
+	case "spawn-ledger.json.lock", "logs/mcp-stderr.log", "logs/.__agent.lock":
+		if !inspect || name == "logs/.__agent.lock" && runtime.GOOS != "windows" {
+			return false
+		}
+		mode = 0o644
+		if name != "logs/mcp-stderr.log" {
+			limit = 0
+		}
 	default:
 		stamp, ok := strings.CutPrefix(name, "backups/config/config.yaml.good.")
 		if _, err := time.Parse("20060102-150405", stamp); !ok || len(stamp) != 15 || err != nil {
 			return false
 		}
 	}
+	return bootstrapKindMetadata(info, mode, limit, directory)
+}
+
+func bootstrapKindMetadata(info os.FileInfo, mode os.FileMode, limit int64, directory bool) bool {
 	if runtime.GOOS != "windows" {
 		expected := mode
 		if directory {

@@ -646,13 +646,13 @@ def closed_readout(summary, state):
     membership_phases = frozenset()
     native_skill_phases = frozenset()
     if summary.get("metadata_recipe") == "ordinary-global":
-        from devin_global_lifecycle_admission import NATIVE, PUBLIC, closed_build_authority_refusal
-        labels = labels | frozenset(NATIVE + PUBLIC)
+        from devin_global_lifecycle_admission import ALL_NATIVE, PUBLIC, closed_build_authority_refusal
+        labels = labels | frozenset(ALL_NATIVE + PUBLIC)
         phases = phases | labels | {"build-go-version", "build-uap", "build-go-authority", "build-installer-authority", "global-skill-quarantine"}
-        maximum_commands, maximum_effects = 37, 30
+        maximum_commands, maximum_effects = 39, 32
         build_refusal = closed_build_authority_refusal(summary, state)
-        membership_phases = frozenset(NATIVE + PUBLIC) | {"global-skill-quarantine"}
-        native_skill_phases = frozenset(label for label in NATIVE if label.startswith("skills-"))
+        membership_phases = frozenset(ALL_NATIVE + PUBLIC) | {"global-skill-quarantine"}
+        native_skill_phases = frozenset(label for label in ALL_NATIVE if label.startswith("skills-"))
     else:
         require("global_build_authority_refusal" not in summary, 'readout build diagnostic recipe')
     require(type(state['phase']) is str and state['phase'] in phases

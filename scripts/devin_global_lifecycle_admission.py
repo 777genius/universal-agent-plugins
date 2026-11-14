@@ -27,6 +27,8 @@ POLICY = {"id": "agent-plugin-install", "version": 2,
 PUBLIC = ("uap-add", "uap-doctor-installed", "uap-repair", "uap-doctor-repaired", "uap-remove")
 NATIVE = tuple(kind + "-" + phase + "-" + scope for phase in ("installed", "repaired", "removed")
                for scope in ("a", "b") for kind in ("mcp", "skills"))
+ORIGINAL_CONFIG_NATIVE = ("mcp-original-config-installed-a", "skills-original-config-installed-a")
+ALL_NATIVE = NATIVE[:4] + ORIGINAL_CONFIG_NATIVE + NATIVE[4:]
 
 
 def sha(body):
@@ -487,7 +489,7 @@ class Journey:
         self.verified_inventory = base.metadata_inventory(ctx.root, ctx.budget)
         self.state_history, self.native_labels, self.public_labels = [], [], []
         self.log_births = {}
-        self.effects.max_logs, self.effects.max_members = 20, 36
+        self.effects.max_logs, self.effects.max_members = 22, 36
         for proof in effects.proofs:
             for name, value in proof.items():
                 if base.BOOTSTRAP_LOG.fullmatch(name):
@@ -843,13 +845,34 @@ class Journey:
             base.require(native == {"mcpServers": self.expected["user"]["mcp"]}
                          and not (self.profile / "skills" / SKILL).exists(), "Global exact removal differs")
 
-    def native(self, phase):
-        for scope in ("a", "b"):
+    def original_config_path(self):
+        effects = self.effects
+        path = self.profile / "config.json"
+        base.require(type(effects) is ordinary.OrdinaryEffects and effects is self.ctx.ordinary_effects
+                     and effects.config_path == ordinary.OrdinaryEffects.config_path
+                     and path == self.ctx.root / effects.config_path
+                     and self.ctx.summary.get("ordinary_metadata_capture_complete") is True
+                     and type(effects.after) is dict and effects.migrating is False
+                     and type(effects.step) is int and effects.step == len(base.METADATA_PROBES),
+                     "Global original config gate incomplete")
+        return path
+
+    def native(self, phase, *, original_config=False):
+        base.require(type(original_config) is bool and (not original_config or phase == "installed"),
+                     "Global original config phase")
+        for scope in (("a",) if original_config else ("a", "b")):
             for kind in ("mcp", "skills"):
-                label = kind + "-" + phase + "-" + scope
+                label = kind + ("-original-config" if original_config else "") + "-" + phase + "-" + scope
                 self.phase(label)
+                config = self.original_config_path() if original_config else None
+                # The ordinary effects verifier inside frame() rejoins the
+                # already migrated original file before either explicit call.
                 before, old = self.frame()
-                record, out, _ = self.ctx.probe(label, [kind, "list", "--json"], project=scope)
+                arguments = [kind, "list", "--json"]
+                if original_config: arguments = ["--config", str(config), *arguments]
+                record, out, err = self.ctx.probe(label, arguments, project=scope)
+                if original_config:
+                    public_command_join(record, label, [*self.ctx.argv, *arguments], self.ctx.projects[scope], out, err)
                 base.require(type(record.get("exit")) is int and record["exit"] == 0 and record.get("error") is None,
                              "Global native inventory refused")
                 after = base.metadata_inventory(self.ctx.root, self.ctx.budget)
@@ -917,6 +940,7 @@ class Journey:
     def execute(self):
         self.public("uap-add", ["add", str(self.source), "--no-save"])
         self.native("installed")
+        self.native("installed", original_config=True)
         self.public("uap-doctor-installed", ["doctor", self.identifier])
         self.quarantine()
         self.public("uap-repair", ["repair", self.identifier])
@@ -924,7 +948,7 @@ class Journey:
         self.public("uap-doctor-repaired", ["doctor", self.identifier])
         self.public("uap-remove", ["remove", self.identifier], removed=True)
         self.native("removed")
-        base.require(self.public_labels == list(PUBLIC) and self.native_labels == list(NATIVE), "Global lifecycle sequence")
+        base.require(self.public_labels == list(PUBLIC) and self.native_labels == list(ALL_NATIVE), "Global lifecycle sequence")
         self.ctx.summary.update(global_lifecycle_capture_complete=True, public_global_steps=self.public_labels,
                                 native_global_steps=self.native_labels, task_born_logs=self.log_births,
                                 global_state_history=self.state_history)
@@ -982,15 +1006,15 @@ def author_source(ctx, probes):
 
 def completion(summary):
     expected = ("source-commit", "source-tree", "source-clean", "git-init-a", "git-init-b", "git-init-c") + base.METADATA_PROBES
-    tail = ("uap-add", *NATIVE[:4], "uap-doctor-installed", "uap-repair", *NATIVE[4:8],
+    tail = ("uap-add", *NATIVE[:4], *ORIGINAL_CONFIG_NATIVE, "uap-doctor-installed", "uap-repair", *NATIVE[4:8],
             "uap-doctor-repaired", "uap-remove", *NATIVE[8:], "source-final-clean")
     commands, effects = summary.get("commands"), summary.get("command_effects")
-    base.require(type(commands) is list and len(commands) == 37
+    base.require(type(commands) is list and len(commands) == 39
                  and all(type(row) is dict and row.get("probe") == label and type(row.get("exit")) is int
                          and row["exit"] == 0 and "error" in row and row["error"] is None
                          for row, label in zip(commands, expected + tail)), "Global command completion refused")
     labels = base.METADATA_PROBES + tail[:-1]
-    base.require(type(effects) is list and len(effects) == 30
+    base.require(type(effects) is list and len(effects) == 32
                  and all(type(row) is dict and set(row) == {"label", "changes", "outer_changes"}
                          and row["label"] == label and type(row["changes"]) is dict and type(row["outer_changes"]) is dict
                          for row, label in zip(effects, labels)), "Global effect completion refused")
@@ -1004,7 +1028,7 @@ def completion(summary):
                  and type(summary.get("qualification")) is dict
                  and set(summary["qualification"]) == set(base.shared.QUALIFICATION_CASES)
                  and all(value is False for value in summary["qualification"].values())
-                 and summary.get("native_global_steps") == list(NATIVE)
+                 and summary.get("native_global_steps") == list(ALL_NATIVE)
                  and summary.get("public_global_steps") == list(PUBLIC), "Global completion refused")
     for field, empty in (("probe_methods", []), ("accepted_connections", 0)):
         values = summary.get(field)

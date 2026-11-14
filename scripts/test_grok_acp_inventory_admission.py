@@ -2766,6 +2766,104 @@ class ReadonlyInventoryContracts(unittest.TestCase):
             case.readonly_readout(dict(members, **{'admission.json':json.dumps(changed).encode()}), packet, time.monotonic()+5)
 
 
+    @contextmanager
+    def runtime_collector(self):
+        req, _ = self.request()
+        original = self.original(req)
+        receipt, _, _ = self.receipt()
+        with (mock.patch.object(case, 'isolation', return_value=receipt['result']['isolation']),
+              mock.patch.object(case, 'readonly_root_checks'),
+              mock.patch.object(case, 'readonly_verify_files'),
+              mock.patch.object(case, 'readonly_input'),
+              mock.patch.object(case, 'readonly_parent_proof', return_value=original) as parent,
+              mock.patch.object(case, 'readonly_command') as command,
+              mock.patch.object(case.os, 'stat', side_effect=lambda path:
+                  SimpleNamespace(st_ino=original['namespaces'][str(path).rsplit('/', 1)[-1]]))):
+            yield req, parent, command
+
+    def test_runtime_failure_retains_only_closed_original_token_without_launch(self):
+        class Unprintable:
+            def __str__(self): raise AssertionError('formatted private exception argument')
+            def __repr__(self): raise AssertionError('represented private exception argument')
+        class ForeignValueError(ValueError):
+            def __str__(self): raise AssertionError('formatted foreign exception')
+        failures = [
+            (ValueError('readonly-runtime-owner'), 'runtime:readonly-runtime-owner'),
+            (ValueError('readonly-outer-namespaces'), 'runtime:readonly-outer-namespaces'),
+            (ValueError('readonly-deadline'), 'runtime:readonly-deadline'),
+            (PermissionError('PRIVATE /original/path'), 'runtime:permission-refused'),
+            (FileNotFoundError('PRIVATE /original/path'), 'runtime:member-absent'),
+            (NotADirectoryError('PRIVATE /original/path'), 'runtime:not-directory'),
+            (OSError('PRIVATE original errno text'), 'runtime:os-error'),
+            (ValueError('PRIVATE unknown guard'), 'runtime'),
+            (ValueError(Unprintable()), 'runtime'),
+            (ForeignValueError('readonly-runtime-owner'), 'runtime'),
+        ]
+        for error, stage in failures:
+            with self.subTest(stage=stage), self.runtime_collector() as (req, parent, command):
+                parent.side_effect = error
+                result = case.readonly_collector_result(req)
+                command.assert_not_called()
+                self.assertEqual(result['readonly']['stage'], stage)
+                self.assertEqual(result['reason'], 'isolation-refused')
+                self.assertFalse(result['semantic_complete'])
+                self.assertFalse(result['readonly']['control_complete'])
+                self.assertIsNone(result['readonly']['original'])
+                self.assertIsNone(result['readonly']['control_marker'])
+                self.assertEqual((result['commands'], result['rpc']), ([], case.rpc_state()))
+                self.assertNotIn('PRIVATE', json.dumps(result))
+
+    def test_inflight_failure_remains_an_exception_without_runtime_projection(self):
+        error = ValueError('readonly-runtime-owner')
+        with self.runtime_collector() as (req, _parent, command):
+            command.side_effect = error
+            with self.assertRaises(ValueError) as caught:
+                case.readonly_collector_result(req)
+            self.assertIs(caught.exception, error)
+            command.assert_called_once()
+
+    def test_closed_runtime_stage_readout_cannot_claim_native_progress(self):
+        receipt, request, before = self.receipt()
+        result = receipt['result']
+        result.update(semantic_complete=False, reason='isolation-refused', commands=[], rpc=case.rpc_state())
+        result['readonly'].update(stage='runtime:readonly-runtime-owner', control_complete=False,
+                                  original=None, control_marker=None)
+        case.validate_readonly_receipt(copy.deepcopy(receipt), request)
+        changes = [
+            lambda r:r.update(semantic_complete=True),
+            lambda r:r.update(reason='protocol-refused'),
+            lambda r:r.update(commands=[{}]),
+            lambda r:r['readonly'].update(original=self.original(self.request()[0])),
+            lambda r:r['readonly'].update(control_complete=True),
+            lambda r:r['readonly'].update(control_marker={}),
+            lambda r:r.update(rpc=dict(initialize={}, plugins=None, notifications=[])),
+            lambda r:r['readonly'].update(stage='runtime:PRIVATE /original/path'),
+        ]
+        for index, change in enumerate(changes):
+            changed = copy.deepcopy(receipt)
+            change(changed['result'])
+            with self.subTest(change=index), self.assertRaises((ValueError, TypeError)):
+                case.validate_readonly_receipt(changed, request)
+        ledger = dict(before=before, after=copy.deepcopy(before), profiles_before={'fixture':['digest', 0]},
+                      profiles_after={'fixture':['digest', 0]}, protected_originals_unchanged=True, witness_absent=True)
+        members = {'acquisition.json': b'{}', 'readonly.ledger.json': json.dumps(ledger).encode(),
+                   'readonly.rpc.json': json.dumps(result.pop('rpc')).encode()}
+        summary = {name:request[name] for name in ('schema_version', 'source_commit', 'source_tree', 'nonce', 'start_monotonic_ns')}
+        summary.update(mode=case.READONLY_MODE, collection_complete=False, measurement_complete=True,
+                       cleanup_complete=True, qualification=dict(case.FALSE), scopes=[receipt],
+                       run='1', attempt='1', elapsed_ns=1, error='admission-refused')
+        members['admission.json'] = json.dumps(summary).encode()
+        packet = {name:request[name] for name in ('source_commit', 'source_tree', 'nonce')}
+        readout = case.readonly_readout(members, packet, time.monotonic() + 5)
+        self.assertEqual((readout['stage'], readout['reason']),
+                         ('runtime:readonly-runtime-owner', 'admission-refused'))
+        self.assertEqual(readout['commands'], 0)
+        self.assertFalse(readout['semantic_complete'])
+        self.assertFalse(readout['control_complete'])
+        self.assertTrue(all(value is False for value in readout['qualification'].values()))
+
+
+
 
 if __name__ == '__main__':
     unittest.main()

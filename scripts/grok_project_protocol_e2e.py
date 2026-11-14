@@ -311,7 +311,7 @@ class Journey:
                 "actual production readonly test did not pass")
         require([snapshot(root) for root in roots] == before
                 and (read_owned(self.log, self.root) if self.log.exists() else None) == original_events,
-                "readonly inventory changed original inputs or invoked the MCP witness")
+                "readonly inventory changed original inputs or the retained external event-file bytes")
         self.evidence["readonly_inventory"] = {"calls": 2,
             "input_snapshot_sha256": hashlib.sha256(json.dumps(before, sort_keys=True).encode()).hexdigest()}
 

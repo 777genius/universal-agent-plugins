@@ -996,3 +996,70 @@ with no retained second-Skill effect row, complete raw post-add state, final
 source-clean observation or native B/repair/remove result. Its historical
 completion refusal remains intact. The next genuine complete lifecycle is
 still required, and all authentication/model/runtime qualification stays false.
+
+
+### Prospective explicit read of the original migrated User config
+
+This five-file candidate starts from
+67989a2f5ce219cedace716211346a7971f512af. It measures a prerequisite for
+later automatic native inventory; it does not wire the product adapter to a
+native command or change its Prepared/manual-inspection behavior.
+
+The retained 096 structured and ordinary job logs show successful metadata
+capture with all product qualifications false. The structured route creates
+a separate private config and permits its version migration. The ordinary
+route uses the original User config without --config, permits only the first
+mcp-a migration to version 1/cloud false and 0600, then pins the complete
+resulting identity and bytes. Neither proves that an explicit operand naming
+that original file is nonmutating. Both retained closed readouts also report
+auxiliary additions on later commands; --config is not established as an
+auxiliary-write redirect.
+
+After the existing installed A/B inventories and before the first public
+doctor, Journey makes two additional observations from original Project A.
+Their fixed labels are mcp-original-config-installed-a and
+skills-original-config-installed-a. Argv is the already pinned Devin prefix,
+--config, the exact original User config.json path, and respectively
+mcp list --json or skills list --json. No new profile, copied config, config
+rewrite, cwd substitution, environment override or second acquisition is used.
+
+The same OrdinaryEffects instance must have completed all 13 original
+observations, retain a migrated fingerprint and match the original User path.
+Before each extra process the existing complete frame rejoins that fingerprint
+and original parents. After settlement, the existing metadata-first fence,
+full capture and effects checks still govern original config, owned components,
+UAP state/receipts/DATA, Project/legacy/foreign inputs and auxiliary files.
+The new command records additionally join exact argv, cwd and both original
+stream descriptors/hashes through the existing command join. Strict native
+MCP/Skill source/name/transport/row decoders, zero endpoint/startup checks and
+process cleanup apply unchanged.
+
+All 37 prior commands keep their order and ordinary no--config argv. Completion
+now requires exactly 39 commands and 32 effect rows, with both new labels in
+their declared position. Missing, duplicated or reordered observations refuse.
+The existing 16 KiB closed readout adds only these fixed phases and corresponding
+counts, preserving schema/fields and the bounds of other recipes.
+
+Only the prospective log count changes from 20 to 22, one possible new log per
+new observation. The 36-member bound, 16 KiB ordinary auxiliary member bound,
+256 KiB mutable auxiliary aggregate, fixed definition-cache exception,
+900-second original case budget and 20-minute workflow remain unchanged.
+Unknown files, prior-log mutation, two log births in one command, oversized
+logs and aggregate overruns remain refusals. Baselines are never renewed.
+
+The inert contracts use the real original-file effects owner and actual
+source decoders with a nonexecuting command port. They cover same-path
+selection; replacement/content/mode/parent/private-path/incomplete-gate
+refusals before dispatch; post-command config/foreign/log effects before a
+second process; argv/cwd/stream and owned-source substitution; old/new command
+order; and closed projection bounds. Existing test bodies are retained except
+necessary complete-sequence fixtures and 39/32 expected counts. No test
+launches Devin, a model, a native MCP server or an installer.
+
+Python execution and the prospective native original are pending. This
+candidate is source-only and unreferenced until independent review. A future
+positive result can establish only this already-migrated, authored local-policy
+same-path observation. Arbitrary cloud/auth/trust settings and exact auxiliary
+write recovery/prevention remain unproved prerequisites for product readback.
+ReadOnlyVerifier/VerifyOnly and offline receipt-bound removal remain unchanged;
+all product, authentication, model and live-MCP qualifications stay false.

@@ -63,7 +63,7 @@ class GlobalLifecycleContracts(unittest.TestCase):
 
     def completed_summary(self):
         first = ("source-commit", "source-tree", "source-clean", "git-init-a", "git-init-b", "git-init-c") + case.base.METADATA_PROBES
-        tail = ("uap-add", *case.NATIVE[:4], "uap-doctor-installed", "uap-repair", *case.NATIVE[4:8],
+        tail = ("uap-add", *case.NATIVE[:4], *case.ORIGINAL_CONFIG_NATIVE, "uap-doctor-installed", "uap-repair", *case.NATIVE[4:8],
                 "uap-doctor-repaired", "uap-remove", *case.NATIVE[8:], "source-final-clean")
         value = {"commands": [{"probe": name, "exit": 0, "error": None} for name in first + tail],
                 "command_effects": [dict(label=name, changes={}, outer_changes={}) for name in case.base.METADATA_PROBES + tail[:-1]],
@@ -71,7 +71,7 @@ class GlobalLifecycleContracts(unittest.TestCase):
                 "metadata_recipe": "ordinary-global", "metadata_route": case.ordinary.OrdinaryEffects.metadata_route,
                 "native_json_schema": case.base.METADATA_SCHEMA, "exact_source_admission": case.base.METADATA_SCHEMA,
                 "admission_qualified": False, "qualification": dict.fromkeys(case.base.shared.QUALIFICATION_CASES, False),
-                "native_global_steps": list(case.NATIVE), "public_global_steps": list(case.PUBLIC),
+                "native_global_steps": list(case.ALL_NATIVE), "public_global_steps": list(case.PUBLIC),
                 "probe_methods": dict.fromkeys(("a", "b", "user", "local", "legacy"), []),
                 "accepted_connections": dict.fromkeys(("a", "b", "user", "local", "legacy"), 0),
                 "source_commit": "a" * 40, "source_tree": "b" * 40, "global_build_receipt": self.build_receipt()}
@@ -495,7 +495,10 @@ class GlobalLifecycleContracts(unittest.TestCase):
         calls = []
         def public(label, argv, **kwargs):
             calls.append((label, kwargs)); journey.public_labels.append(label)
-        def native(phase):
+        def native(phase, *, original_config=False):
+            if original_config:
+                journey.native_labels.extend(case.ORIGINAL_CONFIG_NATIVE)
+                return
             journey.native_labels.extend(kind + '-' + phase + '-' + scope
                                          for scope in ('a', 'b') for kind in ('mcp', 'skills'))
         journey.public, journey.native = public, native
@@ -810,7 +813,7 @@ class GlobalLifecycleContracts(unittest.TestCase):
         value.update(collection_complete=True, cleanup_complete=True)
         state = dict(phase="source-final-clean", reason="metadata-complete", deadline=float(case.base.time.monotonic() + 10))
         readout = case.base.closed_readout(value, state)
-        self.assertEqual((readout["commands"], len(readout["effects"])), (37, 30))
+        self.assertEqual((readout["commands"], len(readout["effects"])), (39, 32))
         value.update(collection_complete=False, metadata_recipe="ordinary")
         state.update(phase="mcp-a", reason="capture-incomplete")
         with self.assertRaisesRegex(ValueError, "readout counts"): case.base.closed_readout(value, state)
@@ -1333,7 +1336,7 @@ class GlobalLifecycleContracts(unittest.TestCase):
         value = case.base.closed_readout(summary, state)
         self.assertNotIn("membership_refusal", value)
         self.assertEqual(set(value), set(expected))
-        self.assertEqual((value["commands"], len(value["effects"])), (37, 30))
+        self.assertEqual((value["commands"], len(value["effects"])), (39, 32))
 
     def test_membership_projection_uses_one_existing_frame_after_unchanged_publication(self):
         valid = "Global unknown UAP state member; " + case.membership_diagnostic("unexpected-file", {"PRIVATE"})
@@ -1592,6 +1595,248 @@ class GlobalLifecycleContracts(unittest.TestCase):
                         self.assertEqual(journey.native_labels, labels if fault == "valid" else labels[:accepted])
                         self.assertEqual(ctx.probe.call_count, 4 if fault == "valid" else accepted + 1)
                         self.assertEqual(outputs, original)
+
+
+
+class OriginalConfigObservationContracts(unittest.TestCase):
+    @contextmanager
+    def fixture(self):
+        from test_devin_ordinary_metadata_admission import MIGRATED_57_BYTES
+        from test_devin_structured_inventory_admission import KnownFileDiagnosticContracts, SkillsMetadataContracts
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            ctx = case.base.shared.Context(root, {}, SimpleNamespace(check=lambda: 10))
+            ctx.original_output_identity = case.base.root_identity(root)
+            ctx.argv = [str(root / "never-run-vendor")]
+            probes = {key: SimpleNamespace(url="http://127.0.0.1:1234/mcp", accepted_connections=[],
+                      methods=lambda: [], call_records=lambda: ([], 0)) for key in ("a", "b", "user", "local", "legacy")}
+            expected, _, _ = case.base.fixture(ctx, {key: probe.url for key, probe in probes.items()}, "f" * 64)
+            profile = Path(expected["user"]["root"])
+            entries = dict(expected["user"]["mcp"])
+            entries.update({case.SERVERS[0]: {"command": "python3", "args": []},
+                            case.SERVERS[1]: {"url": probes["user"].url}})
+            (profile / "mcp_config.json").write_text(json.dumps({"mcpServers": entries}))
+            skill = profile / "skills" / case.SKILL / "SKILL.md"
+            skill.parent.mkdir()
+            skill.write_text("---\nname: uap-global-marker\ndescription: Owned Global source.\n---\nInert.\n")
+            for relative in sorted(case.base.BOOTSTRAP_DIRS, key=lambda value: len(Path(value).parts)):
+                (root / relative).mkdir(mode=0o755, parents=True, exist_ok=True)
+            helper = KnownFileDiagnosticContracts()
+            user, _ = helper.fixture(root)
+            user.chmod(0o644)
+            held = helper.hold(root)
+            ctx.known_file_diagnostics = held
+            try:
+                effects = case.ordinary.OrdinaryEffects(ctx, case.base.metadata_inventory(root, ctx.budget))
+                before = case.base.metadata_inventory(root, ctx.budget)
+                for _ in case.base.HELP:
+                    effects.verify_command(before, before)
+                # Inert reproduction of the existing separately admitted first
+                # migration; the explicit observations never rewrite this file.
+                user.write_bytes(MIGRATED_57_BYTES)
+                user.chmod(0o600)
+                current = case.base.metadata_inventory(root, ctx.budget)
+                effects.verify_command(before, current)
+                for _ in case.base.METADATA_PROBES[effects.step:]:
+                    effects.verify_command(current, current)
+                ctx.summary.update(ordinary_metadata_capture_complete=True, metadata_capture_complete=True)
+                effects.max_logs, effects.max_members = 22, 36
+                journey = object.__new__(case.Journey)
+                journey.ctx, journey.effects, journey.profile = ctx, effects, profile
+                journey.probes, journey.expected, journey.nonce = probes, expected, "f" * 64
+                journey.log_births, journey.native_labels = {}, []
+                journey.cli_pin, journey.helper = (1, "0" * 64), None
+                original_profile = case.base.root_identity(profile)
+
+                def frame(inventory=None):
+                    inventory = inventory if inventory is not None else case.base.metadata_inventory(root, ctx.budget)
+                    effects.verify(inventory)
+                    return case.capture(ctx, journey.cli_pin, inventory=inventory,
+                                        authorities={profile.relative_to(root).as_posix(): original_profile})
+                journey.frame = frame
+                wanted = {name: (entry, profile / "mcp_config.json") for name, entry in entries.items()}
+                wanted.update({name: (entry, Path(expected["a"]["root"]) / "mcp_config.json")
+                               for name, entry in expected["a"]["mcp"].items()})
+                wanted["same-name"] = ({"url": expected["local"]["url"], "disabled": True}, Path(expected["local"]["path"]))
+                wanted["legacy-foreign"] = ({"url": expected["legacy_url"], "disabled": True},
+                                           ctx.home / ".codeium/windsurf/mcp_config.json")
+                mcp = [dict(name=name, enabled=not entry.get("disabled", False),
+                            disabled_reason="disabled" if entry.get("disabled") else None,
+                            transport="stdio" if "command" in entry else "http", command=entry.get("command"),
+                            args=entry.get("args", []), url=entry.get("url"),
+                            disabled_tools=entry.get("disabledTools", []), source=str(source))
+                       for name, (entry, source) in wanted.items()]
+                _, _, skills = SkillsMetadataContracts().fixture()
+                for row in skills:
+                    if row["base_dir"].startswith("/owned/"):
+                        row["base_dir"] = str(root / row["base_dir"][len("/owned/"):])
+                    if row["name"].startswith("/owned/project-a:"):
+                        row["name"] = str(ctx.projects["a"]) + ":same-skill"
+                skills.append(dict(name="uap-global-marker", description="Owned Global source.",
+                                   triggers=["user", "model"], provider="Devin", base_dir=str(skill.parent),
+                                   display_name="uap-global-marker", warnings=[], errors=[]))
+                output = {"mcp": json.dumps(mcp).encode(), "skills": json.dumps(skills).encode()}
+
+                def probe(label, arguments, *, project):
+                    self.assertEqual(project, "a")
+                    kind = "mcp" if label == case.ORIGINAL_CONFIG_NATIVE[0] else "skills"
+                    self.assertEqual(label, case.ORIGINAL_CONFIG_NATIVE[0 if kind == "mcp" else 1])
+                    self.assertEqual(arguments, ["--config", str(user), kind, "list", "--json"])
+                    out = output[kind]
+                    record = GlobalLifecycleContracts().command_record(
+                        label, [*ctx.argv, *arguments], ctx.projects[project], out)
+                    ctx.summary.setdefault("commands", []).append(record)
+                    return record, out, b""
+                ctx.probe = mock.Mock(side_effect=probe)
+                yield journey, user, output
+            finally:
+                held.close()
+
+    def test_original_config_pair_uses_same_file_and_strict_source_decoders(self):
+        with self.fixture() as (journey, user, _):
+            before = case.base.metadata_inventory(journey.ctx.root, journey.ctx.budget)
+            fingerprint, environment = copy.deepcopy(journey.effects.after), dict(journey.ctx.env)
+            with mock.patch.object(case.base.shared, "run_probe", side_effect=AssertionError("native process")):
+                journey.native("installed", original_config=True)
+            self.assertEqual(journey.ctx.probe.call_count, 2)
+            self.assertEqual(journey.native_labels, list(case.ORIGINAL_CONFIG_NATIVE))
+            self.assertEqual([row["label"] for row in journey.ctx.summary["command_effects"]],
+                             list(case.ORIGINAL_CONFIG_NATIVE))
+            self.assertEqual(case.base.metadata_inventory(journey.ctx.root, journey.ctx.budget), before)
+            self.assertEqual((journey.effects.after, journey.ctx.env), (fingerprint, environment))
+            self.assertEqual(user, journey.ctx.root / case.ordinary.OrdinaryEffects.config_path)
+            self.assertFalse((journey.ctx.root / case.base.METADATA_CONFIG).exists())
+            self.assertNotIn("global_lifecycle_capture_complete", journey.ctx.summary)
+
+    def test_original_config_substitution_refuses_before_dispatch_without_rebaselining(self):
+        for change in ("same-bytes-replacement", "body", "mode", "parent", "private-path", "incomplete-gate"):
+            with self.subTest(change=change), self.fixture() as (journey, user, _):
+                fingerprint = copy.deepcopy(journey.effects.after)
+                if change == "same-bytes-replacement":
+                    replacement = user.with_suffix(".replacement")
+                    replacement.write_bytes(user.read_bytes()); replacement.chmod(0o600)
+                    replacement.replace(user)
+                elif change == "body":
+                    user.write_bytes(b'{"read_config_from":{"cloud":false},"version":2}\n')
+                elif change == "mode":
+                    user.chmod(0o644)
+                elif change == "parent":
+                    old = user.parent.with_name("prior-devin")
+                    user.parent.rename(old)
+                    user.parent.mkdir()
+                    user.write_bytes((old / user.name).read_bytes()); user.chmod(0o600)
+                elif change == "private-path":
+                    journey.effects.config_path = case.base.METADATA_CONFIG
+                else:
+                    journey.ctx.summary["ordinary_metadata_capture_complete"] = False
+                with self.assertRaises(ValueError):
+                    journey.native("installed", original_config=True)
+                journey.ctx.probe.assert_not_called()
+                self.assertEqual(journey.native_labels, [])
+                self.assertEqual(journey.effects.after, fingerprint)
+
+    def test_original_config_post_effect_overruns_stop_before_second_command(self):
+        for change in ("two-log-births", "twenty-three-logs", "oversized-log", "aggregate-bytes", "config", "foreign"):
+            with self.subTest(change=change), self.fixture() as (journey, user, _):
+                original_probe = journey.ctx.probe.side_effect
+                fingerprint = copy.deepcopy(journey.effects.after)
+
+                def probe(*args, **kwargs):
+                    result = original_probe(*args, **kwargs)
+                    if change == "config":
+                        user.write_bytes(b'{"read_config_from":{"cloud":true},"version":1}\n')
+                    elif change == "foreign":
+                        (journey.ctx.home / "unknown-native-file").write_bytes(b"unexpected")
+                    else:
+                        count = {"two-log-births": 2, "twenty-three-logs": 23,
+                                 "oversized-log": 1, "aggregate-bytes": 18}[change]
+                        size = (16 << 10) + 1 if change == "oversized-log" else 16 << 10 if change == "aggregate-bytes" else 1
+                        for index in range(count):
+                            log = journey.ctx.root / ("home/data/devin/cli/logs/devin_20261114-200000_" + str(index + 1) + ".log")
+                            log.write_bytes(b"x" * size); log.chmod(0o644)
+                    return result
+                journey.ctx.probe.side_effect = probe
+                with self.assertRaises(ValueError):
+                    journey.native("installed", original_config=True)
+                self.assertEqual(journey.ctx.probe.call_count, 1)
+                self.assertEqual(journey.native_labels, [])
+                self.assertEqual(journey.effects.after, fingerprint)
+                self.assertFalse(journey.ctx.summary.get("global_lifecycle_capture_complete", False))
+
+    def test_original_config_result_keeps_exact_argv_cwd_stream_and_owned_source(self):
+        for change in ("config-path", "cwd", "stdout-hash", "owned-source", "owned-name", "skill-source"):
+            with self.subTest(change=change), self.fixture() as (journey, _user, output):
+                original_probe = journey.ctx.probe.side_effect
+                if change in ("owned-source", "owned-name"):
+                    rows = json.loads(output["mcp"])
+                    row = next(row for row in rows if row["name"] == case.SERVERS[0])
+                    row["source" if change == "owned-source" else "name"] = (
+                        str(journey.ctx.projects["b"] / ".devin/mcp_config.json") if change == "owned-source" else "foreign")
+                    output["mcp"] = json.dumps(rows).encode()
+                elif change == "skill-source":
+                    rows = json.loads(output["skills"])
+                    next(row for row in rows if row["name"] == case.SKILL)["base_dir"] = str(journey.profile / "skills/foreign")
+                    output["skills"] = json.dumps(rows).encode()
+
+                def probe(*args, **kwargs):
+                    record, stdout, stderr = original_probe(*args, **kwargs)
+                    if change == "config-path": record["argv"][2] = str(journey.ctx.root / case.base.METADATA_CONFIG)
+                    elif change == "cwd": record["cwd"] = str(journey.ctx.projects["b"])
+                    elif change == "stdout-hash": record["stdout_sha256"] = "0" * 64
+                    return record, stdout, stderr
+                journey.ctx.probe.side_effect = probe
+                with self.assertRaises(ValueError):
+                    journey.native("installed", original_config=True)
+                self.assertEqual(journey.ctx.probe.call_count, 2 if change == "skill-source" else 1)
+                self.assertEqual(journey.native_labels, list(case.ORIGINAL_CONFIG_NATIVE[:1]) if change == "skill-source" else [])
+
+    def test_journey_adds_only_the_fixed_pair_after_all_installed_observations(self):
+        journey = object.__new__(case.Journey)
+        journey.source, journey.identifier = Path("/source"), "installation"
+        journey.source_bodies = {"skills/" + case.SKILL + "/SKILL.md": b"inert"}
+        journey.profile = Path("/profile")
+        journey.ctx = SimpleNamespace(summary={})
+        journey.native_labels, journey.public_labels, journey.state_history, journey.log_births = [], [], [], {}
+        calls = []
+        def public(label, _argv, **_kwargs):
+            calls.append(label); journey.public_labels.append(label)
+        def native(phase, *, original_config=False):
+            labels = case.ORIGINAL_CONFIG_NATIVE if original_config else tuple(
+                kind + "-" + phase + "-" + scope for scope in ("a", "b") for kind in ("mcp", "skills"))
+            calls.extend(labels); journey.native_labels.extend(labels)
+        journey.public, journey.native, journey.quarantine = public, native, lambda: calls.append("quarantine")
+        journey.execute()
+        original = ["uap-add", *case.NATIVE[:4], "uap-doctor-installed", "quarantine",
+                    "uap-repair", *case.NATIVE[4:8], "uap-doctor-repaired", "uap-remove", *case.NATIVE[8:]]
+        self.assertEqual([label for label in calls if label not in case.ORIGINAL_CONFIG_NATIVE], original)
+        self.assertEqual(calls[5:7], list(case.ORIGINAL_CONFIG_NATIVE))
+        self.assertEqual(journey.ctx.summary["native_global_steps"], list(case.ALL_NATIVE))
+        self.assertEqual((case.base.BootstrapEffects.max_logs, case.base.BootstrapEffects.max_members), (8, 24))
+
+    def test_completion_requires_both_new_observations_in_the_declared_order(self):
+        fixture = GlobalLifecycleContracts()
+        value = fixture.completed_summary()
+        case.completion(value)
+        for change in ("missing-pair", "swapped", "duplicate", "extra", "missing-effect", "native-step"):
+            wrong = copy.deepcopy(value)
+            commands = wrong["commands"]
+            positions = [index for index, row in enumerate(commands) if row["probe"] in case.ORIGINAL_CONFIG_NATIVE]
+            if change == "missing-pair":
+                wrong["commands"] = [row for row in commands if row["probe"] not in case.ORIGINAL_CONFIG_NATIVE]
+                wrong["command_effects"] = [row for row in wrong["command_effects"] if row["label"] not in case.ORIGINAL_CONFIG_NATIVE]
+            elif change == "swapped":
+                commands[positions[0]], commands[positions[1]] = commands[positions[1]], commands[positions[0]]
+            elif change == "duplicate":
+                commands[positions[1]] = copy.deepcopy(commands[positions[0]])
+            elif change == "extra":
+                commands.insert(positions[-1] + 1, copy.deepcopy(commands[positions[-1]]))
+            elif change == "missing-effect":
+                wrong["command_effects"] = [row for row in wrong["command_effects"] if row["label"] != case.ORIGINAL_CONFIG_NATIVE[0]]
+            else:
+                wrong["native_global_steps"] = list(case.NATIVE)
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                case.completion(wrong)
 
 
 if __name__ == "__main__":

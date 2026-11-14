@@ -3149,3 +3149,76 @@ Audit SHA-256 is
 f14a2d087cb36dc49adb34124aeeeef5968b751370f71635c5fb34d9d3f49228.
 Thus all three 679 Skills native originals are closed, with tools_call and
 model_turn false; the profile and final acceptance boundaries above still hold.
+
+
+### 2026-11-14: inspect-only retained auxiliary history
+
+The three completed bundled jobs from head
+`67989a2f5ce219cedace716211346a7971f512af` all reached
+`public-repaired-run-a` and refused at the existing bounded native command:
+Linux job `132564940203`, Windows `132564940261`, and macOS
+`132564940337`, run `43632655958`. Their closed frames do not reveal the
+inner stderr, exit status or timeout cause. The preceding source catalogue
+experiment recorded above independently demonstrates a production barrier:
+the exact selected root becomes inadmissible after the already measured
+native ledger/lock and MCP stderr history is present. This correction
+addresses that catalogue barrier; it does not relabel the hidden failure.
+
+Only the exact inspect vector, `config get mcp_servers --json`, admits:
+
+| Relative member | Existing measured limit | POSIX mode |
+| --- | ---: | ---: |
+| spawn-ledger.json | 4096 bytes | 0600 |
+| spawn-ledger.json.lock | empty | 0644 |
+| logs/mcp-stderr.log | 1 MiB | 0644 |
+| logs/.__agent.lock | empty; Windows only | platform handle checks |
+
+The ledger and its sidecar must both exist or both be absent. The 4096-byte
+limit is the existing measured admission bound in `public_spawn_read`, not
+a universal maximum promised by Hermes. Every old bundled journey above
+passed that bound before reaching the repaired inspection. The pinned
+`process_identity.py` writer uses 0600; its `_FileLock` sidecar is the
+ordinary empty 0666 create under the measured 022 umask. The MCP log uses
+the existing bounded log policy. Windows uses the existing ordinary,
+single-link, token-owner handle checks and captures the actual mode.
+
+The retained history remains opaque. No record is interpreted as a PID,
+parent, birth, ownership, deletion or cleanup claim. The exact pinned
+metadata routes remain distinct from the agent/server startup and ledger
+reaper routes. The ordinary no-arguments SessionPlan still refuses these
+additional members; cache, active-profile, update-pause, unknown locks and
+all other unmeasured sources remain outside the existing catalogue.
+
+A transient optional execution contract keeps the selected-root handle,
+any original logs-directory handle and each present auxiliary file open.
+Original absence remains absence. Every metadata command preserves the
+same physical file, Mode, Size, ModTime, existing owner/single-link
+checks and exact bounded bytes. These are the existing portable metadata
+predicates; no raw-stat, ctime or GID equality is claimed. Directories keep
+their original physical identity, mode and owner, with full existing
+metadata joins around each bounded read. Existing ordinary bootstrap
+directory creation is still checked by the complete catalogue.
+
+The CLI invokes this optional contract only after explicit consent and
+non-dry planning. The original planner's VerifySession still runs through
+its original observer wrapped by the retained history. The same original
+60-second child context then spans installer-lock release, the existing
+replan/DeepEqual check and the fourth StartNativeSession command. Every
+return joins final revalidation and handle-close errors, including native
+error, cancellation, unlock failure and replan refusal. SessionPlan remains
+pure data; other clients and a nil execution keep their ordinary path.
+
+Four new Hermes tests cover the measured opaque-history positive, ordinary
+launch refusal, same-size/same-mtime byte mutation at each of the four
+commands, pair/mode/size/unknown-name refusals, captured absence and context
+continuity. Three new CLI orchestration tests exercise the real dispatcher
+with an inert planner, actual watched-file mutation in the fourth callback,
+all early cleanup boundaries and consent/dry-run/nil behavior. The six
+preexisting Hermes verifier test methods remain unchanged. The new CLI
+fixture is not a native package ownership receipt.
+
+This candidate was prepared from `462ae1f017fb1c4586ce4370b3e3499520f8fe3c`,
+preserving the peer fixture and catalogue experiment above. Go formatting,
+compilation, tests and genuine native qualification of this new source
+remain pending while the executor is unavailable. Existing original
+failures and false qualification/cleanup conclusions are unchanged.

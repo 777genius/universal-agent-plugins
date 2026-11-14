@@ -642,4 +642,55 @@ class FixedDefinitionCacheContracts(unittest.TestCase):
                 case.BootstrapEffects(ctx, case.metadata_inventory(ctx.root, ctx.budget))
 
 
+
+class OriginalConfigReadoutContracts(unittest.TestCase):
+    def test_only_two_original_config_phases_extend_the_global_readout(self):
+        import devin_global_lifecycle_admission as global_case
+
+        expected = ("mcp-original-config-installed-a", "skills-original-config-installed-a")
+        self.assertEqual(global_case.ORIGINAL_CONFIG_NATIVE, expected)
+        for phase in expected:
+            summary, state = ClosedDevinReadoutContracts().fixture()
+            summary.update(metadata_recipe="ordinary-global", ordinary_metadata_capture_complete=True,
+                           metadata_capture_complete=True)
+            summary["command_effects"][0]["label"] = phase
+            state.update(phase=phase, reason="unclassified-refusal")
+            before = copy.deepcopy(summary)
+            value = case.closed_readout(summary, state)
+            self.assertEqual((value["phase"], value["effects"][0]["phase"]), (phase, phase))
+            self.assertFalse(value["collection_complete"])
+            self.assertEqual(summary, before)
+            self.assertNotIn("PRIVATE", json.dumps(value))
+            for recipe in ("ordinary", None):
+                changed = copy.deepcopy(summary)
+                changed["metadata_recipe"] = recipe
+                with self.subTest(phase=phase, recipe=recipe), self.assertRaises(ValueError):
+                    case.closed_readout(changed, state)
+            state["phase"] = phase[:-1] + "b"
+            with self.assertRaisesRegex(ValueError, "readout state"):
+                case.closed_readout(summary, state)
+
+    def test_global_two_extra_observations_do_not_expand_other_recipe_or_effect_bounds(self):
+        from test_devin_global_lifecycle_admission import GlobalLifecycleContracts
+
+        summary = GlobalLifecycleContracts().completed_summary()
+        summary.update(collection_complete=True, cleanup_complete=True)
+        state = dict(phase="source-final-clean", reason="metadata-complete", deadline=case.time.monotonic() + 10)
+        value = case.closed_readout(summary, state)
+        self.assertEqual((value["commands"], len(value["effects"])), (39, 32))
+        self.assertEqual(summary["qualification"], dict.fromkeys(case.shared.QUALIFICATION_CASES, False))
+        for field in ("commands", "command_effects"):
+            changed = copy.deepcopy(summary)
+            changed["collection_complete"] = False
+            changed[field].append(copy.deepcopy(changed[field][-1]))
+            with self.subTest(field=field), self.assertRaisesRegex(ValueError, "readout counts"):
+                case.closed_readout(changed, state)
+        ordinary, original_state = ClosedDevinReadoutContracts().complete_fixture()
+        original = case.closed_readout(ordinary, original_state)
+        self.assertEqual((original["commands"], len(original["effects"])), (20, 13))
+        ordinary["command_effects"].append(copy.deepcopy(ordinary["command_effects"][-1]))
+        with self.assertRaises(ValueError):
+            case.closed_readout(ordinary, original_state)
+
+
 if __name__ == "__main__": unittest.main()

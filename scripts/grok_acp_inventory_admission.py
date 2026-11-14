@@ -1905,6 +1905,26 @@ READONLY_FILES = ('home/.grok/config.toml', 'startup-witness.py')
 READONLY_RUNTIME_ROOTS = ('/usr', '/bin', '/lib', '/lib64')
 READONLY_HEADER = b'GROK_READONLY_AUTHORITY='
 READONLY_RUNTIME_COUNT = 262144
+# Fixed source tokens only: an exception's message, path and representation never
+# enter the readout. These stages can describe only a failed pre-control census.
+READONLY_RUNTIME_REFUSALS = frozenset((
+    'readonly-outer-namespaces', 'readonly-clock', 'readonly-deadline',
+    'readonly-directory-original', 'readonly-directory-open', 'readonly-runtime-top-alias',
+    'readonly-census-depth', 'readonly-census-directory', 'readonly-census-count', 'readonly-census-path',
+    'readonly-census-writable', 'readonly-runtime-owner', 'readonly-census-open', 'readonly-census-rejoin',
+    'readonly-census-alias', 'readonly-census-file-rejoin', 'readonly-runtime-link-alias',
+    'readonly-runtime-link-bound', 'readonly-runtime-link-rejoin', 'readonly-special-member',
+    'readonly-census-directory-rejoin', 'readonly-external-hardlink', 'readonly-link-target',
+    'readonly-link-cross-domain', 'readonly-link-domain', 'readonly-link-parent', 'readonly-link-depth',
+    'readonly-runtime-final'))
+READONLY_RUNTIME_OS_STAGES = {
+    PermissionError: 'runtime:permission-refused',
+    FileNotFoundError: 'runtime:member-absent',
+    NotADirectoryError: 'runtime:not-directory',
+    OSError: 'runtime:os-error',
+}
+READONLY_RUNTIME_FAILURE_STAGES = frozenset('runtime:' + code for code in READONLY_RUNTIME_REFUSALS) | frozenset(
+    READONLY_RUNTIME_OS_STAGES.values())
 
 
 def readonly_deadline(req, *, final=False):
@@ -2632,6 +2652,13 @@ def readonly_control_marker(req):
         os.close(descriptor)
 
 
+def readonly_runtime_failure_stage(error):
+    if (type(error) is ValueError and len(error.args) == 1 and type(error.args[0]) is str
+            and error.args[0] in READONLY_RUNTIME_REFUSALS):
+        return 'runtime:' + error.args[0]
+    return READONLY_RUNTIME_OS_STAGES.get(type(error), 'runtime')
+
+
 def readonly_collector_result(req):
     readonly_request(req)
     result = {key:req[key] for key in ('schema_version', 'source_commit', 'source_tree', 'scope', 'nonce')}
@@ -2681,9 +2708,11 @@ def readonly_collector_result(req):
         inventory_rows(result, Path(req['input_root']), 'a')
         result['readonly']['stage'] = 'complete'
         result.update(semantic_complete=True, reason='complete')
-    except (ValueError, OSError, subprocess.SubprocessError):
+    except (ValueError, OSError, subprocess.SubprocessError) as error:
         if in_flight:
             raise
+        if result['readonly']['stage'] == 'runtime':
+            result['readonly']['stage'] = readonly_runtime_failure_stage(error)
     return result
 
 
@@ -2769,8 +2798,14 @@ def validate_readonly_receipt(receipt, request):
             ('complete', 'protocol-refused', 'help-refused', 'isolation-refused', 'collector-refused')
             and result['semantic_complete'] == (result['reason'] == 'complete'), 'readonly-result-state')
     selected = closed(result['readonly'], 'authority stage control_complete original control_marker')
-    require(type(selected['control_complete']) is bool and selected['stage'] in
-            ('isolation', 'runtime', 'control', 'native', 'complete'), 'readonly-stage')
+    require(type(selected['control_complete']) is bool and type(selected['stage']) is str
+            and (selected['stage'] in ('isolation', 'runtime', 'control', 'native', 'complete')
+                 or selected['stage'] in READONLY_RUNTIME_FAILURE_STAGES), 'readonly-stage')
+    if selected['stage'] in READONLY_RUNTIME_FAILURE_STAGES:
+        require(result['semantic_complete'] is False and result['reason'] == 'isolation-refused'
+                and result['commands'] == [] and selected['original'] is None
+                and selected['control_complete'] is False and selected['control_marker'] is None
+                and result['rpc'] == rpc_state(), 'readonly-runtime-failure-state')
     proof = closed(result['isolation'], 'uid gid euid egid groups network_namespace parent_network_namespace interfaces capabilities_zero no_new_privileges')
     require(proof['uid'] == proof['euid'] == request['uid'] and proof['gid'] == proof['egid'] == request['gid']
             and proof['groups'] == [] and proof['interfaces'] == ['lo'] and proof['capabilities_zero'] is True
@@ -2798,7 +2833,8 @@ def validate_readonly_receipt(receipt, request):
         readonly_original_proof(original, req)
         require(original['namespaces']['net'] == proof['network_namespace'], 'readonly-outer-net-join')
     else:
-        require(not result['commands'] and selected['stage'] in ('isolation', 'runtime')
+        require(not result['commands']
+                and (selected['stage'] in ('isolation', 'runtime') or selected['stage'] in READONLY_RUNTIME_FAILURE_STAGES)
                 and not selected['control_complete'], 'readonly-missing-original')
     total, headers = 0, []
     for index, row in enumerate(result['commands']):

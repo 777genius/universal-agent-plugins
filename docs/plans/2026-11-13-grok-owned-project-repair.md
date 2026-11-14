@@ -357,10 +357,17 @@ This is a bounded runtime view, not a claim that every host input is available.
 Both inventory reads share one client input lease and native config lock. The
 protocol workflow compiles a tagged test that runs the actual production port
 twice against the pinned Grok executable and selected installed package, then
-requires unchanged original input snapshots and no MCP witness invocation.
-The parent joins that exact held test binary, original output and source to the
-result. A successful inventory result alone does not qualify the public
-lifecycle: its existing refusal remains until native qualification is complete.
+requires unchanged original input snapshots and retained external event-file
+bytes. Those unchanged bytes do not observe MCP startup. The parent joins that
+exact held test binary, original output and source to the result. A successful
+inventory result alone does not qualify the public lifecycle: its existing
+refusal remains until native qualification is complete.
+
+The accepted metadata/foreign-MCP gate above pairs the original pinned eligible
+MCP research witness with the production readonly original-input and cleanup
+proof. These remain separate, explicitly scoped requirements; neither establishes
+startup absence in the production readonly view. Genuine enabled C1 readback and
+the final public lifecycle remain required.
 
 ## Readonly observation limit identified in source review (2026-11-14)
 
