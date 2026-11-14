@@ -1535,5 +1535,64 @@ class GlobalLifecycleContracts(unittest.TestCase):
                 self.assertEqual(summary, original)
 
 
+    def test_captured_unique_skill_literal_in_actual_native_consumer(self):
+        from test_devin_structured_inventory_admission import SkillsMetadataContracts
+
+        # Artifact 14110674396 reports this unprefixed unique owned Skill.
+        # Reuse the independent collision fixtures; never derive the native row
+        # from owned_skill_row, which previously hid the wrong name expectation.
+        for phase in ("installed", "repaired"):
+            for changed_scope in ("a", "b"):
+                for fault in ("valid", "prefixed", "path", "provider", "duplicate", "collision", "foreign-duplicate"):
+                    with self.subTest(phase=phase, scope=changed_scope, fault=fault):
+                        ctx, expected, original_foreign = SkillsMetadataContracts().fixture()
+                        ctx.summary, ctx.budget = {}, object()
+                        profile = ctx.home / "config/devin"
+                        expected["user"]["mcp"] = {}
+                        journey = object.__new__(case.Journey)
+                        journey.ctx, journey.profile, journey.expected, journey.nonce = ctx, profile, expected, "f" * 64
+                        journey.probes, journey.log_births, journey.native_labels = {}, {}, []
+                        journey.frame = mock.Mock(return_value=({}, {}))
+                        journey.read = lambda *_args: json.dumps({"mcpServers": {name: {} for name in case.SERVERS}}).encode()
+                        outputs = []
+                        for scope in ("a", "b"):
+                            foreign = copy.deepcopy(original_foreign)
+                            if scope == "b":
+                                for row in foreign[1:3]:
+                                    row["name"] = "/owned/project-b:same-skill"
+                                foreign[2].update(base_dir=str(Path(expected["b"]["skill"]).parent),
+                                                  description="Inert b " + "f" * 64)
+                            owned = dict(name="uap-global-marker", description="Owned Global source.",
+                                         triggers=["user", "model"], provider="Devin",
+                                         base_dir=str(profile / "skills/uap-global-marker"),
+                                         display_name="uap-global-marker", warnings=[], errors=[])
+                            rows = [*foreign, owned]
+                            if scope == changed_scope:
+                                if fault == "prefixed": owned["name"] = str(ctx.projects[scope]) + ":uap-global-marker"
+                                elif fault == "path": owned["base_dir"] = str(profile / "skills/foreign")
+                                elif fault == "provider": owned["provider"] = "Windsurf"
+                                elif fault == "duplicate": rows.append(copy.deepcopy(owned))
+                                elif fault == "collision": foreign[1]["name"] = "same-skill"
+                                elif fault == "foreign-duplicate": rows.append(copy.deepcopy(foreign[0]))
+                            outputs.extend((({"exit": 0}, json.dumps([{"name": name} for name in case.SERVERS]).encode(), b""),
+                                            ({"exit": 0}, json.dumps(rows).encode(), b"")))
+                        original = copy.deepcopy(outputs)
+                        ctx.probe = mock.Mock(side_effect=outputs)
+                        with (mock.patch.object(case.base, "metadata_inventory", return_value={}),
+                              mock.patch.object(case.base, "verify_metadata_sources"),
+                              mock.patch.object(case.base, "zero_effects"),
+                              mock.patch.object(case.base.shared, "run_probe", side_effect=AssertionError("native child")) as native):
+                            if fault == "valid":
+                                journey.native(phase)
+                            else:
+                                with self.assertRaises(ValueError): journey.native(phase)
+                            native.assert_not_called()
+                        labels = [kind + "-" + phase + "-" + scope for scope in ("a", "b") for kind in ("mcp", "skills")]
+                        accepted = 1 if changed_scope == "a" else 3
+                        self.assertEqual(journey.native_labels, labels if fault == "valid" else labels[:accepted])
+                        self.assertEqual(ctx.probe.call_count, 4 if fault == "valid" else accepted + 1)
+                        self.assertEqual(outputs, original)
+
+
 if __name__ == "__main__":
     unittest.main()

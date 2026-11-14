@@ -954,3 +954,45 @@ that non-Skills eligibility precede literal matching. Whole-file inverses
 and source-held literal references are checked before independent R2.
 Python tests, original ZIP replay, and the next genuine current-source
 Global result remain unexecuted or pending; no runtime pass is claimed.
+
+### Unique owned Skill identity from the original Global capture
+
+The original 40c6bb2d27a9282755ec3a739c236eb9dc2875f2 job 132410228597
+retained artifact 14110674396. Its outer SHA256 is
+`ac78850348513692ac06b9979ba867f455e79af0a24f347016ed53fc0dfd23fc`;
+the physical ZIP/CRC, 45 members, 44 command streams and four embedded build
+streams were independently checked. Actual UAP add now includes the authored
+Skill and both MCP components, and the next native MCP row check succeeds.
+The first refusal is `Global native Skill identity` in `skills-installed-a`.
+
+The original 2,693-byte Skill stdout has SHA256
+`f4a310bc9cca07917c48df1cf29438e10dc7b1c376835c63b0cf66951a777753`.
+Its unique owned row is named `uap-global-marker`. Only the previous expected
+name, which prepended the Project path, differs; description, triggers,
+provider, exact owned base directory, display name, warnings and errors match.
+The two separate `same-skill` collision rows still carry their scoped names.
+
+Commit 6d1f01deb47b05854a3a3ab7657889b44ba1cef0 already applies the same
+fixed `name=SKILL` correction independently prepared and tested locally.
+This follow-up preserves that correction and the intervening bounded failure
+readout. Exact path-selected membership, complete row equality, the unchanged
+foreign decoder, metadata/effect fences, receipts, phase catalogs and budgets
+remain required. No further runtime or product adapter change is introduced.
+
+One appended inert consumer regression authors the observed owned row without
+using the expected-row helper, and reuses the independent foreign-row fixtures
+with the real foreign decoder. Installed/repaired A/B cases retain wrong-prefix,
+path, provider, duplicate-owned, unscoped-collision and duplicate-foreign refusals
+and assert the exact accepted prefix with no native child. On the retained
+1412-based source, the old expectation produces four identity errors and
+fourteen prefix assertions; the same one-line correction passes all 28 subcases.
+All 106 contracts in that local candidate passed before the executor became
+unavailable. The incoming six diagnostic tests and extra prefix case in 18409/6d1
+are preserved; their execution and the combined final-head suite await normal
+CI. Prior passing executions are not presented as a rerun of this composition.
+
+The original remains incomplete: 22 of 37 commands and 15 of 30 effect rows,
+with no retained second-Skill effect row, complete raw post-add state, final
+source-clean observation or native B/repair/remove result. Its historical
+completion refusal remains intact. The next genuine complete lifecycle is
+still required, and all authentication/model/runtime qualification stays false.

@@ -3383,7 +3383,9 @@ class PublicInspectLockContracts(unittest.TestCase):
                             self.assertEqual(set(delta), {lock.relative_to(outer).as_posix()})
                             self.assertTrue(os.path.samestat(original, lock.stat()))
                         else:
-                            with self.assertRaisesRegex(RuntimeError, "control role|control lock metadata|unselected or unmeasured"):
+                            message = "control role|control lock metadata|unselected or unmeasured"
+                            message += "|public control original parent changed" if action == "extra-lock-prefix" else ""
+                            with self.assertRaisesRegex(RuntimeError, message):
                                 invoke()
                     self.assertEqual(len(calls), 0 if action in {"wrong-label", "wrong-args"} else 1)
 
