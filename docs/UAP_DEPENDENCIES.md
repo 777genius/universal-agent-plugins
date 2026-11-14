@@ -190,8 +190,9 @@ behaves as `agentplugins add` for that one package.
 
 The default user-scope saved dependency workflow reports current target support
 through `agentplugins deps status`. It reads the registered client capabilities
-and prints `supported_targets` and `excluded_targets`, the scope and exact
-manifest/lock paths, including before `deps init`. ChatGPT is listed
+and prints `supported_targets`, the scope and exact manifest/lock paths,
+including before `deps init`. Use `agentplugins deps status --format json`
+to inspect `excluded_targets`, which is present only in structured output. ChatGPT is listed
 as `manual_preparation_only`. VS Code is frozen by owner decision; its new
 dependency qualification is excluded from this release
 and is reported as `dependency_management_deferred`; its existing imperative

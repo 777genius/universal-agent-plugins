@@ -147,6 +147,8 @@ test('agent pages use the exact source command and stop offering it when the Dir
       client === 'antigravity' ? 'registryUi.install.antigravityRepairUnavailable' : undefined);
     directoryCurrent.value = false;
     assert.equal(toValue(installCommand), '', 'Expired source must never become a short-name command');
-    assert.equal(toValue(pinnedRepairLimitation), undefined);
+    assert.equal(toValue(pinnedRepairLimitation)?.key,
+      client === 'antigravity' ? 'registryUi.install.antigravityRepairUnavailable' : undefined,
+      'Expired Directory must not resurrect a broken public repair claim');
   }
 });

@@ -49,7 +49,9 @@ const example = agentInstallExample(reviewedPlugins, client.id);
 const needsLocalExample = !example;
 const exampleAvailability = example && pluginInstallAvailability(example.plugin, [example.target]);
 const pinnedExample = exampleAvailability?.kind === 'pinned_git' ? exampleAvailability.selection : undefined;
-const pinnedRepairLimitation = computed(() => current.value ? pinnedCatalogRepairLimitation(pinnedExample) : undefined);
+// The public CLI limitation is not a Directory grant and must stay visible
+// after a snapshot expires, even though new source commands are withheld.
+const pinnedRepairLimitation = computed(() => pinnedCatalogRepairLimitation(pinnedExample));
 const exampleSource = pinnedExample?.selector ?? example?.plugin.install_source ?? './my-plugin';
 const installCommand = computed(() => pinnedExample
   ? current.value ? pinnedCatalogCommands(example!.plugin, pinnedExample.client, 'user').add : ''
