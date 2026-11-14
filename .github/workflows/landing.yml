@@ -108,7 +108,7 @@ jobs:
         run: |
           node ./scripts/prepare-webp-assets.mjs
           pnpm exec nuxt prepare
-          pnpm exec vue-tsc --noEmit
+          pnpm run check:types
 
       - name: Check registry, lint, and generate
         env:

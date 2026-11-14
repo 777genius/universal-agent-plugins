@@ -830,9 +830,12 @@
           "extensions": "Extensiones"
         }
       },
-      "noCompatibleSignedRelease": "UAP admite {agent}, pero este plugin no tiene una versión firmada compatible con el ámbito seleccionado.",
+      "noCompatibleSignedRelease": "No hay una versión del catálogo para {agent} en este ámbito.",
       "piPinnedProjectSource": "Proyecto: instala en Pi desde la fuente Git fijada a un SHA exacto (no es un destino Pi firmado); la CLI comprueba la compatibilidad.",
-      "guidedChatgptSetup": "Configuración guiada de ChatGPT Web; termina la conexión dentro de ChatGPT."
+      "guidedChatgptSetup": "Configuración guiada de ChatGPT Web; termina la conexión dentro de ChatGPT.",
+      "catalogReleasePending": "Este plugin aún no se ha publicado para {agent}.",
+      "useComputerScope": "Para este plugin, elige Este ordenador.",
+      "unsupportedPluginComponents": "{agent} no admite todos los componentes de este plugin."
     },
     "authentication": {
       "not_required": "No se requiere cuenta",

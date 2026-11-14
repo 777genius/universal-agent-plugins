@@ -13,7 +13,7 @@ func validatePolicy(p domain.DirectoryReleasePolicy, reader snapshotReader) erro
 	if _, err := parseSemver(p.MinimumInstallerVersion); err != nil {
 		return fmt.Errorf("invalid minimum installer version")
 	}
-	if p.Targets == nil || len(p.Targets) < 1 || p.CurrentEvidence == nil {
+	if len(p.Targets) < 1 || p.CurrentEvidence == nil {
 		return fmt.Errorf("targets/evidence arrays required")
 	}
 	clients := map[domain.ClientID]bool{}

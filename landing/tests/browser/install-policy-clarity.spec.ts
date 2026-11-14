@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { navigate, offline, projections, registryFixture } from './i18n-state.helpers';
+import { navigate, offline, projections, registryFixture, targets } from './i18n-state.helpers';
 
 function pluginWithOnlyCodex() {
   const index = registryFixture();
@@ -36,7 +36,7 @@ for (const width of [1440, 390]) {
     for (const agent of ['Pi', 'Hermes Agent', 'Google Antigravity']) {
       const option = page.getByRole('checkbox', { name: new RegExp(`^${agent}(?:\\s|$)`) });
       await expect(option).toBeDisabled();
-      await expect(option).toContainText(`${agent} is supported by UAP, but this plugin has no compatible signed release for the selected scope.`);
+      await expect(option).toContainText(`This plugin has not been published for ${agent} yet.`);
     }
     await expect(web).toBeDisabled();
     await expect(web).toContainText('No verified ChatGPT Web app binding for this plugin.');
@@ -47,7 +47,7 @@ for (const width of [1440, 390]) {
     for (const agent of ['Pi', 'Hermes Agent', 'Google Antigravity']) {
       const option = page.getByRole('checkbox', { name: new RegExp(`^${agent}(?:\\s|$)`) });
       await expect(option).toBeDisabled();
-      await expect(option).toContainText(`${agent} is supported by UAP, but this plugin has no compatible signed release for the selected scope.`);
+      await expect(option).toContainText(`This plugin has not been published for ${agent} yet.`);
     }
     await page.keyboard.press('Escape');
     await card.locator('.plugin-card__title-link').click();
@@ -56,8 +56,50 @@ for (const width of [1440, 390]) {
     for (const agent of ['Pi', 'Hermes Agent', 'Google Antigravity']) {
       const option = page.getByRole('checkbox', { name: new RegExp(`^${agent}(?:\\s|$)`) });
       await expect(option).toBeDisabled();
-      await expect(option).toContainText(`${agent} is supported by UAP, but this plugin has no compatible signed release for the selected scope.`);
+      await expect(option).toContainText(`This plugin has not been published for ${agent} yet.`);
     }
+    expect(errors).toEqual([]);
+  });
+
+  test('published agent policies enable the same explicit install on every picker at ' + width + 'px', async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const errors = await offline(page);
+    const index = pluginWithOnlyCodex();
+    const plugin = index.plugins[0]!;
+    const distribution = plugin.distributions[0]!;
+    const release = distribution.releases[0]!;
+    // These are UI projection fixtures, not production signed authorizations.
+    release.targets.push(
+      { client: 'hermes', authentication: 'not_required', delivery: 'managed', scopes: ['user'] },
+      { client: 'antigravity', authentication: 'not_required', delivery: 'prepared', scopes: ['user'] },
+      { client: 'pi', authentication: 'not_required', delivery: 'managed', scopes: ['user'] },
+    );
+    distribution.targets = release.targets;
+    distribution.compatible_clients = release.targets.map(target => target.client);
+    await projections(page, index);
+    await navigate(page, '/', 'en', '?q=i18n-state-00');
+    const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]').first();
+    await card.locator('.plugin-card__install-toggle').click();
+    const hero = page.locator('.hero-shell');
+    for (const picker of [card, hero]) {
+      await picker.locator('.app-multiselect__trigger').click();
+      for (const agent of ['Pi', 'Hermes Agent', 'Google Antigravity']) {
+        const option = page.getByRole('checkbox', { name: new RegExp(`^${agent}(?:\\s|$)`) });
+        await expect(option).toBeEnabled();
+        await expect(option).not.toContainText('has not been published');
+      }
+      await page.keyboard.press('Escape');
+    }
+    await targets(page, card, ['Hermes Agent']);
+    await expect(card.locator('.command-snippet--add code')).toContainText('--target hermes');
+    await expect(card.locator('.command-snippet--add code')).not.toContainText('--scope project');
+    await card.locator('.plugin-card__title-link').click();
+    const detail = page.locator('.plugin-detail[data-install-source="i18n-state-00"]');
+    await expect(detail.locator('.command-snippet--add code')).toContainText('--target hermes');
+    await detail.locator('.app-multiselect__trigger').click();
+    await expect(page.getByRole('checkbox', { name: /^Hermes Agent(?:\s|$)/ })).toBeChecked();
+    await expect(page.getByRole('checkbox', { name: /^Google Antigravity(?:\s|$)/ })).toBeEnabled();
+    await expect(page.getByRole('checkbox', { name: /^Pi(?:\s|$)/ })).toBeEnabled();
     expect(errors).toEqual([]);
   });
 }

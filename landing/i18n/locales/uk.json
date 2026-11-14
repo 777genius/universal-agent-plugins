@@ -830,9 +830,12 @@
           "extensions": "Розширення"
         }
       },
-      "noCompatibleSignedRelease": "UAP підтримує {agent}, але цей плагін не має сумісного підписаного релізу для вибраної області встановлення.",
+      "noCompatibleSignedRelease": "Для {agent} немає доступної версії плагіна в цій області встановлення.",
       "piPinnedProjectSource": "Проєкт: встановіть у Pi з Git-джерела з точним SHA (не підписана ціль Pi); CLI перевірить сумісність.",
-      "guidedChatgptSetup": "Покрокове налаштування ChatGPT Web; завершіть підключення всередині ChatGPT."
+      "guidedChatgptSetup": "Покрокове налаштування ChatGPT Web; завершіть підключення всередині ChatGPT.",
+      "catalogReleasePending": "Версію цього плагіна для {agent} ще не опубліковано.",
+      "useComputerScope": "Для цього плагіна виберіть «Цей комп’ютер».",
+      "unsupportedPluginComponents": "{agent} підтримує не всі компоненти цього плагіна."
     },
     "authentication": {
       "not_required": "Обліковий запис не потрібен",

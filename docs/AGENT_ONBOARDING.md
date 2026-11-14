@@ -86,12 +86,16 @@ In `777genius/universal-agent-plugins-registry`, the contract snapshot is
 source path and SHA-256. To select a locally available released tag:
 
 ```sh
-python3 scripts/sync_client_contract.py --from-uap ../universal-agent-plugins --release agentplugins-v<VERSION>
+python3 scripts/sync_client_contract.py --from-uap ../universal-agent-plugins --release 'agentplugins-v<VERSION>' --revision '<FULL_RELEASE_COMMIT>'
 python3 scripts/sync_client_contract.py --check
 ```
 
-Replace `<VERSION>` with the actual qualified release. Review the snapshot,
-lock and generated schema changes together. `--write` regenerates schemas
+Replace both placeholders with the actual qualified release and its
+independently reviewed full source commit. The updater refuses a local tag
+that points to a different commit. Review the snapshot, lock and generated
+schema changes together. The offline digest check proves byte integrity;
+release authenticity still comes from the reviewed publication provenance.
+`--write` regenerates schemas
 from the existing pin; `--check` validates them offline without updating the
 pin. The Registry validation workflow runs that check before publication.
 The first synchronization pin uses the unchanged 0.1.108 capability JSON.
@@ -137,6 +141,12 @@ plugin into a Skills-only installation to make a target appear available.
 Run the repository's applicable gates from CONTRIBUTING, including `make lint`,
 `make test-core`, the generated-contract check and affected native lifecycle
 tests. Use the pinned TypeScript 7.0.2 or newer toolchain for the frontend.
+`pnpm run check:types` verifies the native 7.0.2 executable and runs its project
+check, followed by the Vue template check. Vue, ESLint and AST utilities still
+need the classic compiler API, provided by the official
+`@typescript/typescript6` compatibility package. The `@typescript/native` alias
+owns the actual `tsc` executable; the compatibility package does not replace
+the native compiler gate. See the [TypeScript 7 migration guidance](https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/#running-side-by-side-with-typescript-6.0).
 Verify hero, cards, detail pages and standalone Skills at desktop and mobile
 sizes, in the affected locales, including unavailable and Prepared states.
 

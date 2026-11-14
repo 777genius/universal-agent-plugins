@@ -47,10 +47,10 @@ func ParseSnapshot(body []byte) (domain.DirectorySnapshot, error) {
 func parseSnapshot(body []byte, reader snapshotReader) (domain.DirectorySnapshot, error) {
 	var value domain.DirectorySnapshot
 	if err := strictDecode(body, &value, MaxSnapshotBytes); err != nil {
-		return value, fmt.Errorf("%w: snapshot: %v", ErrStrictJSON, err)
+		return value, fmt.Errorf("%w: snapshot: %w", ErrStrictJSON, err)
 	}
 	if err := requireSnapshotFields(body, reader); err != nil {
-		return value, fmt.Errorf("%w: snapshot: %v", ErrStrictJSON, err)
+		return value, fmt.Errorf("%w: snapshot: %w", ErrStrictJSON, err)
 	}
 	if err := validateSnapshot(value, reader); err != nil {
 		return value, err

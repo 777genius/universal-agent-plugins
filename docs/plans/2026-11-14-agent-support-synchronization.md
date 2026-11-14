@@ -194,3 +194,51 @@ implementation and source-bound acceptance separately.
 
 Plan review outcomes, exact implementation heads, test evidence and production
 acceptance will be appended as the work proceeds.
+
+## Implementation review and verification checkpoint
+
+The generated identity and presentation slice is published at `2ee05ac`, and
+the authenticated modern reader at `e89e6b7`, in UAP #908. Registry #480 pins
+the released contract at `5854c13`. Independent implementation reviews approved
+the generator/SDK slice, Registry pin and historical boundary, and modern
+reader. Review caught two defects before integration: modern sequence 1 must
+require current evidence provenance, and a scope-switch suggestion must have
+an actually available User installation route. Both are fixed with negative
+regressions. No historical feed bytes or VS Code adapter behavior changed.
+
+Local verification: 536 frontend tests pass without skips; native TypeScript
+7.0.2 and Vue template checks pass; lint has zero errors; all nine locale and
+locked-advisory checks pass. Registry has 127 builder tests and 56 publication,
+contract and historical-boundary tests passing. Full Directory/domain and
+focused modern CLI tests pass. Hosted full lifecycle/browser gates are still
+required: this local environment refuses the Unix sockets needed by Chromium
+and the process containment interface required by ordinary CLI subprocesses.
+Those refusals are not counted as passing E2E.
+
+TypeScript uses the official side-by-side arrangement: the native 7.0.2 compiler
+checks the project, while Vue/ESLint retain the separate classic API bridge.
+The bridge is not the native compiler gate and no TypeScript 5.9 is introduced.
+
+### Exact-source installation qualification
+
+The existing CLI already accepts immutable Git plugin sources independently of
+Directory target grants. The current website exposes that route only for Pi
+Project. Generalizing its presentation needs real per-source, agent and scope
+qualification, not a capability-only fallback: Marketing Kit's mandatory
+catalog dependencies still require their own signed eligibility.
+
+Reuse the existing live-install lifecycle harness and public release verifier
+for a bounded source qualification lane. Bind receipts to the actual released
+CLI, exact signed snapshot and immutable source, then exercise add, info,
+update, repair and remove with scope/foreign-state checks. Preserve real
+dependency refusals. Publish diagnostic evidence first; enable an explicit
+source route only for reviewed passing tuples. Do not put this alternative in
+automatic discovery or mix it with signed-target selections. This lane does
+not claim native activation, produce a signed target grant, or complete the
+independent modern publisher rollout.
+
+Estimated additional reusable qualification code: 300–450 Python LOC,
+150–250 test LOC and about 100 workflow LOC, complexity 7/10, reliability 8/10,
+confidence 7/10. Source qualification can proceed through ordinary no-secret
+PR CI; modern production signing still needs the protected issuer controls
+listed above. The connected tools cannot currently provision those controls.

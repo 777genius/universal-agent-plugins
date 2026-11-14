@@ -830,9 +830,12 @@
           "extensions": "एक्सटेंशन"
         }
       },
-      "noCompatibleSignedRelease": "UAP में {agent} समर्थित है, लेकिन इस प्लगइन का चुने गए दायरे के लिए कोई संगत हस्ताक्षरित रिलीज़ नहीं है।",
+      "noCompatibleSignedRelease": "इस दायरे में {agent} के लिए कोई कैटलॉग संस्करण उपलब्ध नहीं है।",
       "piPinnedProjectSource": "प्रोजेक्ट: सटीक SHA पर पिन किए Git स्रोत से Pi में इंस्टॉल करें (यह हस्ताक्षरित Pi लक्ष्य नहीं है); CLI संगतता जाँचेगा।",
-      "guidedChatgptSetup": "ChatGPT Web का निर्देशित सेटअप; कनेक्शन ChatGPT के अंदर पूरा करें।"
+      "guidedChatgptSetup": "ChatGPT Web का निर्देशित सेटअप; कनेक्शन ChatGPT के अंदर पूरा करें।",
+      "catalogReleasePending": "यह प्लगइन अभी {agent} के लिए प्रकाशित नहीं हुआ है।",
+      "useComputerScope": "इस प्लगइन के लिए यह कंप्यूटर चुनें।",
+      "unsupportedPluginComponents": "{agent} इस प्लगइन के सभी घटकों का समर्थन नहीं करता।"
     },
     "authentication": {
       "not_required": "किसी खाते की आवश्यकता नहीं",
