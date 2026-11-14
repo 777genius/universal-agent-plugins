@@ -56,6 +56,11 @@ test('native CLI checkbox changes Skills, plugin install and copy commands acros
 
   await page.locator('.catalog-modes').getByRole('link', { name: 'Skills', exact: true }).click();
   const restoredCard = page.locator('.skills-catalog .skill-card').first();
+  // Per-package install choices intentionally belong to the last opened card.
+  // Only the CLI invocation preference is global across catalog types.
+  await restoredCard.getByRole('button', { name: 'Install frontend-design' }).click();
+  await restoredCard.getByRole('button', { name: 'This project' }).click();
+  await expect(restoredCard.getByRole('checkbox', { name: checkboxName })).toBeChecked();
   await expect(restoredCard.locator('.command-snippet--add code')).toHaveText(nativeSkillCommand);
   await restoredCard.getByRole('link', { name: 'frontend-design' }).click();
   const detail = page.locator('#skill-install');
