@@ -11,25 +11,41 @@ on:
       - 'scripts/test_project_native_missing_call_proof.py'
       - 'scripts/test_project_native_missing_call_runner.py'
       - '.github/workflows/cursor-qoder-mcp-native-auth.yml'
+  # Only a reviewed change reaching the protected default branch can launch
+  # post-merge native verification. No PR/source branch can satisfy this guard.
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/project_native_missing_call_runner.py'
+      - 'scripts/project_native_missing_call_proof.py'
+      - 'scripts/test_project_native_missing_call_proof.py'
+      - 'scripts/test_project_native_missing_call_runner.py'
+      - '.github/workflows/cursor-qoder-mcp-native-auth.yml'
+  # Owners may repeat the genuine post-merge acceptance on main if needed.
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: cursor-qoder-call-native-${{ github.event.pull_request.number }}
+  group: cursor-qoder-call-native-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
 
 jobs:
   genuine-native:
     # Never expose real vendor credentials to arbitrary forks or other PRs.
-    # The opt-in label is applied only after a human has reviewed the exact
-    # branch code. This job is not selected by ordinary docs/contract CI.
+    # Pull requests need fresh reviewed opt-in. Post-merge runs may only
+    # originate from the protected main ref, never from a PR head or fork.
     if: >-
-      ${{ github.event.action == 'labeled' &&
-          github.event.label.name == 'ci:github-hosted' &&
-          github.event.pull_request.number == 793 &&
-          github.event.pull_request.head.repo.full_name == github.repository &&
-          contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') }}
+      ${{ (github.event_name == 'pull_request' &&
+           github.event.action == 'labeled' &&
+           github.event.label.name == 'ci:github-hosted' &&
+           github.event.pull_request.number == 793 &&
+           github.event.pull_request.head.repo.full_name == github.repository &&
+           contains(github.event.pull_request.labels.*.name, 'ci:github-hosted')) ||
+          ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+           github.ref == 'refs/heads/main' &&
+           github.repository == '777genius/universal-agent-plugins') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
@@ -39,11 +55,11 @@ jobs:
     env:
       GITHUB_ACTIONS: 'true'
       AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED: '1'
-      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - name: Verify fail-closed provenance and receipt contracts before vendor model access
         run: python3 -m unittest discover -s scripts -p 'test_project_native_missing_call_*.py' -v
@@ -59,13 +75,13 @@ jobs:
         run: |
           python3 scripts/project_native_missing_call_runner.py \
             --client '${{ matrix.client }}' \
-            --expected-head '${{ github.event.pull_request.head.sha }}' \
+            --expected-head '${{ github.event.pull_request.head.sha || github.sha }}' \
             --output '${{ runner.temp }}/mcp-call-${{ matrix.client }}-proof'
       - name: Publish only server-side original proof and redacted provenance
         if: ${{ success() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
-          name: mcp-native-${{ matrix.client }}-${{ github.event.pull_request.head.sha }}
+          name: mcp-native-${{ matrix.client }}-${{ github.event.pull_request.head.sha || github.sha }}
           path: ${{ runner.temp }}/mcp-call-${{ matrix.client }}-proof/
           if-no-files-found: error
           retention-days: 14
