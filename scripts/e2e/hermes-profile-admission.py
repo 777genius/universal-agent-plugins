@@ -66,7 +66,7 @@ def same_opened_capture(before, held):
     return from_path[:2] == from_handle[:2] and from_path[3:] == from_handle[3:]
 
 
-def ordinary_bytes(path, expected=None, *, parent=None, pin=None, package_digest=None, deadline=None):
+def ordinary_bytes(path, expected=None, *, parent=None, pin=None, package_digest=None, deadline=None, maximum=None):
     path = Path(path)
     require(parent is not None or (path.is_absolute() and path.resolve() == path), "ordinary file alias")
     def linked():
@@ -75,7 +75,9 @@ def ordinary_bytes(path, expected=None, *, parent=None, pin=None, package_digest
     require(pin is None or (expected is not None and type(pin) is tuple and len(pin) == 2
             and type(pin[0]) is int and 0 < pin[0] <= 128 << 20
             and type(pin[1]) is str and re.fullmatch(r"[a-f0-9]{64}", pin[1])), "fixed runtime pin required")
-    maximum = LIMIT if pin is None else pin[0]
+    require(maximum is None or pin is None and type(maximum) is int and 0 <= maximum <= LIMIT,
+            "ordinary capture bound must only narrow an unpinned read")
+    maximum = (LIMIT if maximum is None else maximum) if pin is None else pin[0]
     require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1 and 0 <= before.st_size <= maximum
             and (pin is None or before.st_size == maximum),
             "bounded ordinary single-link file required")
@@ -94,7 +96,7 @@ def ordinary_bytes(path, expected=None, *, parent=None, pin=None, package_digest
                     and getattr(held, field) != getattr(before, field)))
         if pin is None:
             with os.fdopen(os.dup(descriptor), "rb") as stream:
-                body = stream.read(LIMIT + 1)
+                body = stream.read(maximum + 1)
             count = len(body)
             if package_digest is not None: package_digest.update(body)
         else:
@@ -2308,7 +2310,7 @@ PUBLIC_SPAWN_NAMES = ("spawn-ledger.json", "spawn-ledger.json.lock")
 PUBLIC_NATIVE_LOG_LOCK = "logs/.__agent.lock"
 
 
-def public_native_log_lock(root, row, info):
+def public_native_log_lock(root, row, info, *, deadline):
     path = root / PUBLIC_NATIVE_LOG_LOCK
     require(os.name == "nt" and type(row) is dict
             and set(row) == {"type", "mode", "device", "inode", "bytes", "sha256"}
@@ -2317,10 +2319,11 @@ def public_native_log_lock(root, row, info):
             and type(row["bytes"]) is int and row["bytes"] == 0
             and row["sha256"] == hashlib.sha256(b"").hexdigest(),
             "public native log lock has unadmitted metadata")
+    require(time.monotonic() < deadline, "public native log lock capture deadline")
     require(stat.S_ISREG(info.st_mode) and info.st_nlink == 1
             and (info.st_dev, info.st_ino, stat.S_IMODE(info.st_mode), info.st_size)
             == (row["device"], row["inode"], row["mode"], 0)
-            and ordinary_bytes(path, info) == b"",
+            and ordinary_bytes(path, info, maximum=0, deadline=deadline) == b"",
             "public native log lock is not the captured empty regular file")
     return stable_file(info)
 
@@ -2348,24 +2351,64 @@ def public_parent_facts(value):
     return value["parent_pid"]
 
 
-def public_spawn_status(evidence, label, argv, stdout):
+def public_spawn_status(evidence, authority, label, argv, stdout, deadline):
+    """Capture this completed command once, before any following observation."""
     require(label in {"public-stdio-a", "public-stdio-b", "public-stdio-restart-a", "public-stdio-repaired-a"}
-            and type(argv) is list and len(argv) == 4 and argv[1:3] == ["mcp", "test"],
+            and type(argv) is list and len(argv) == 4 and all(type(arg) is str for arg in argv)
+            and argv[1:] == ["mcp", "test", "hermes-public-" + label[-1] + "-stdio"]
+            and type(stdout) is bytes and time.monotonic() < deadline,
             "public spawn command role differs")
     prefix = evidence / label
-    value = public_json(ordinary_bytes(prefix.with_suffix(".status.json")))
-    require(type(value) is dict and set(value) == {"argv", "pid", "exit", "error", "streams"}
-            and value["argv"] == argv and type(value["pid"]) is int and 0 < value["pid"] < 2**32
-            and type(value["exit"]) is int and value["exit"] == 0 and value["error"] is None
-            and type(value["streams"]) is dict and set(value["streams"]) == {"stdout", "stderr"},
-            "public spawn command status differs")
-    for suffix in ("stdout", "stderr"):
-        body, stream = ordinary_bytes(prefix.with_suffix("." + suffix)), value["streams"][suffix]
-        require(type(stream) is dict and set(stream) == {"bytes", "sha256"}
-                and type(stream["bytes"]) is int and stream["bytes"] == len(body)
-                and stream["sha256"] == hashlib.sha256(body).hexdigest()
-                and (suffix != "stdout" or body == stdout), "public spawn command stream differs")
-    return value["pid"]
+    files = []
+    with held_census_evidence(evidence, authority) as (descriptor, verify):
+        parent = None if artifacts.WINDOWS else descriptor
+        path = prefix.with_suffix(".status.json")
+        info = path.lstat() if parent is None else os.stat(path.name, dir_fd=parent, follow_symlinks=False)
+        require(time.monotonic() < deadline, "public spawn status capture deadline")
+        body = ordinary_bytes(path, info, parent=parent, maximum=16 << 10, deadline=deadline)
+        files.append((path, info, body)); verify()
+        value = public_json(body)
+        require(type(value) is dict and set(value) == {"argv", "pid", "exit", "error", "streams"}
+                and value["argv"] == argv and type(value["pid"]) is int and 0 < value["pid"] < 2**32
+                and type(value["exit"]) is int and value["exit"] == 0 and value["error"] is None
+                and type(value["streams"]) is dict and set(value["streams"]) == {"stdout", "stderr"},
+                "public spawn command status differs")
+        for suffix in ("stdout", "stderr"):
+            stream = value["streams"][suffix]
+            require(type(stream) is dict and set(stream) == {"bytes", "sha256"}
+                    and type(stream["bytes"]) is int and 0 <= stream["bytes"] <= LIMIT
+                    and type(stream["sha256"]) is str and re.fullmatch(r"[a-f0-9]{64}", stream["sha256"]),
+                    "public spawn command stream shape differs")
+            require(time.monotonic() < deadline, "public spawn stream capture deadline")
+            verify(); path = prefix.with_suffix("." + suffix)
+            info = path.lstat() if parent is None else os.stat(path.name, dir_fd=parent, follow_symlinks=False)
+            body = ordinary_bytes(path, info, parent=parent, maximum=stream["bytes"], deadline=deadline)
+            require(len(body) == stream["bytes"] and hashlib.sha256(body).hexdigest() == stream["sha256"]
+                    and (suffix != "stdout" or body == stdout), "public spawn command stream differs")
+            files.append((path, info, body)); verify()
+    captured = dict(directory=evidence, authority=tuple(authority), files=tuple(files), pid=value["pid"])
+    public_spawn_status_pid(captured, deadline)
+    return captured
+
+
+def public_spawn_status_pid(captured, deadline):
+    """Rejoin original status/streams; only the first captured PID can be used."""
+    require(captured is not None and time.monotonic() < deadline, "public spawn original command unavailable/expired")
+    with held_census_evidence(captured["directory"], captured["authority"]) as (descriptor, verify):
+        parent = None if artifacts.WINDOWS else descriptor
+        for path, info, body in captured["files"]:
+            require(time.monotonic() < deadline, "public spawn command rejoin deadline")
+            verify()
+            require(ordinary_bytes(path, info, parent=parent, maximum=len(body), deadline=deadline) == body,
+                    "public spawn original command bytes changed")
+            verify()
+        for path, info, _ in captured["files"]:
+            current = path.lstat() if parent is None else os.stat(path.name, dir_fd=parent, follow_symlinks=False)
+            require(stable_file(current) == stable_file(info) and time.monotonic() < deadline,
+                    "public spawn original command changed during rejoin")
+        verify()
+    require(time.monotonic() < deadline, "public spawn command rejoin deadline")
+    return captured["pid"]
 
 
 def public_spawn_launcher(proof, recipe, probe):
@@ -2439,12 +2482,12 @@ def public_spawn_entry(body, before, after, nonce, native_pid, install_id, launc
     return entry
 
 
-def public_spawn_read(root, outer, image, authorities):
+def public_spawn_read(root, outer, image, authorities, deadline):
     require(root.relative_to(outer).as_posix() in {"public-a/.hermes/uap-session", "public-b/.hermes/uap-session"}
-            and len(authorities) == 4, "public spawn root authority differs")
+            and len(authorities) == 4 and time.monotonic() < deadline, "public spawn root authority/budget differs")
     rows = public_spawn_rows(image, outer, root)
     require(set(rows) == set(PUBLIC_SPAWN_NAMES), "public spawn ledger pair is missing")
-    bodies, identities, held = {}, {}, []
+    bodies, identities, originals, held = {}, {}, {}, []
     with ExitStack() as handles:
         parent = None
         for path, authority in zip((outer, root.parent.parent, root.parent, root), authorities):
@@ -2464,6 +2507,7 @@ def public_spawn_read(root, outer, image, authorities):
                 verify_inventory_directory(*item)
         try:
             for name, maximum, mode in ((PUBLIC_SPAWN_NAMES[0], 4096, 0o600), (PUBLIC_SPAWN_NAMES[1], 0, 0o644)):
+                require(time.monotonic() < deadline, "public spawn member capture deadline")
                 verify()
                 path, row = root / name, rows[name]
                 info = path.lstat() if artifacts.WINDOWS else os.stat(name, dir_fd=parent, follow_symlinks=False)
@@ -2474,12 +2518,25 @@ def public_spawn_read(root, outer, image, authorities):
                             (row["device"], row["inode"], row["mode"], row["bytes"])
                         and (info.st_uid, info.st_gid) == tuple(authorities[-1])[-2:],
                         "public spawn captured member differs")
-                body = ordinary_bytes(path, info, parent=None if artifacts.WINDOWS else parent)
+                body = ordinary_bytes(path, info, parent=None if artifacts.WINDOWS else parent,
+                                      maximum=maximum, deadline=deadline)
                 require(len(body) == row["bytes"] and hashlib.sha256(body).hexdigest() == row["sha256"],
                         "public spawn captured bytes differ")
-                bodies[name], identities[name] = body, stable_file(info)
+                bodies[name], identities[name], originals[name] = body, stable_file(info), info
+            for name in PUBLIC_SPAWN_NAMES:
+                require(time.monotonic() < deadline, "public spawn member rejoin deadline")
+                verify()
+                require(ordinary_bytes(root / name, originals[name], parent=None if artifacts.WINDOWS else parent,
+                        maximum=len(bodies[name]), deadline=deadline) == bodies[name],
+                        "public spawn original pair bytes changed")
+                verify()
+            for name in PUBLIC_SPAWN_NAMES:
+                current = (root / name).lstat() if artifacts.WINDOWS else os.stat(name, dir_fd=parent, follow_symlinks=False)
+                require(stable_file(current) == stable_file(originals[name]) and time.monotonic() < deadline,
+                        "public spawn original pair changed during rejoin")
         finally:
             verify()
+    require(time.monotonic() < deadline, "public spawn pair capture deadline")
     require(bodies[PUBLIC_SPAWN_NAMES[1]] == b"", "public spawn lock is not empty")
     return {"rows": rows, "identities": identities}, bodies
 
@@ -2502,7 +2559,8 @@ def public_windows_log_role(label, scope, args, *, native, inspect, expected_fai
             "public Windows log lock creation is outside an owned native test")
 
 
-def public_windows_log_read(root, outer, image, authorities, *, original_logs):
+def public_windows_log_read(root, outer, image, authorities, *, original_logs, deadline):
+    require(time.monotonic() < deadline, "public Windows log capture deadline")
     require(artifacts.WINDOWS and root.is_absolute() and outer.is_absolute()
             and root.relative_to(outer).as_posix() in {"public-a/.hermes/uap-session", "public-b/.hermes/uap-session"}
             and type(authorities) in (tuple, list) and len(authorities) == 4,
@@ -2555,11 +2613,12 @@ def public_windows_log_read(root, outer, image, authorities, *, original_logs):
                         (row["device"], row["inode"], row["mode"], 0)
                     and (leaf.st_uid, leaf.st_gid) == tuple(authorities[-1])[-2:],
                     "public Windows log lock named member differs")
-            identity = public_native_log_lock(root, row, leaf)
+            identity = public_native_log_lock(root, row, leaf, deadline=deadline)
             receipt = {"row": row, "identity": identity,
                        "logs_row": dict(logs_row), "logs_identity": logs_identity}
         finally:
             verify()
+    require(time.monotonic() < deadline, "public Windows log capture deadline")
     return receipt
 
 
@@ -2893,6 +2952,7 @@ def observe_public(probes):
     deadline = float(os.environ["HERMES_PROFILE_DEADLINE"])
     pins = public_json(os.environ["HERMES_PUBLIC_PINS"].encode())
     public_runtime_pins(pins)
+    evidence_authority = tuple(public_json(os.environ["HERMES_CENSUS_EVIDENCE_ID"].encode()))
     code_root = Path(os.environ["HERMES_PROFILE_RUNTIME_ROOT"])
     code_authority, install_id = public_spawn_install(code_root, Path(os.environ["HERMES_BIN"]))
     outer_authority = directory_identity(outer)
@@ -2950,7 +3010,7 @@ def observe_public(probes):
         require(scope in born, "public spawn root has no original receipt")
         root = projects[scope] / ".hermes/uap-session"
         identities = (outer_authority, authorities[scope], born[scope][1], born[scope][0])
-        return public_spawn_read(root, outer, image, identities)
+        return public_spawn_read(root, outer, image, identities, deadline)
 
     def spawn_preserved(scope, image):
         if spawn_states[scope] is None:
@@ -2963,7 +3023,7 @@ def observe_public(probes):
         require(scope in born, "public Windows log root has no original receipt")
         root = projects[scope] / ".hermes/uap-session"
         identities = (outer_authority, authorities[scope], born[scope][1], born[scope][0])
-        return public_windows_log_read(root, outer, image, identities, original_logs=original_logs)
+        return public_windows_log_read(root, outer, image, identities, original_logs=original_logs, deadline=deadline)
 
     def windows_log_preserved(scope, image):
         if native_log_locks[scope] is None:
@@ -3006,6 +3066,7 @@ def observe_public(probes):
         events_before = {key: captured_events(proof, before) for key, proof in previous.items()}
         argv = [os.environ["HERMES_BIN"], *args] if native else [pins["uap"]["path"], *args, "--target", "hermes", "--scope", "project", "--project-root", str(project)]
         if not native and not inspect: argv += ["--yes", "--format", "json"]
+        spawn_status = None
         with ExitStack() as handles:
             finish = snapshot
             if inspect:
@@ -3016,6 +3077,8 @@ def observe_public(probes):
                 finish = handles.enter_context(public_inspect_lock(outer, project, before, snapshot))
             output = bounded(argv, project, dict(env, HERMES_HOME=str(selected)) if native else env,
                              evidence / label, timeout=min(90, deadline-time.monotonic()-5), expected_failure=expected_failure)
+            if native and test == "stdio":
+                spawn_status = public_spawn_status(evidence, evidence_authority, label, argv, output, deadline)
             after, proofs = finish()
         for key, proof in previous.items():
             if proof is not None and proofs[key] is not None:
@@ -3078,12 +3141,19 @@ def observe_public(probes):
                 continue
             require(native and not inspect and not expected_failure and previous[scope] is not None
                     and args == ["mcp", "test", name + "-stdio"]
-                    and directory_identity(code_root) == code_authority,
+                    and directory_identity(code_root) == code_authority and time.monotonic() < deadline,
                     "public spawn current command/bundled code authority differs")
+            native_pid = public_spawn_status_pid(spawn_status, deadline)
             receipt, bodies = spawn_capture(scope, after)
             launcher = public_spawn_launcher(previous[scope], servers[name + "-stdio"], pins["probe"]["path"])
+            public_spawn_status_pid(spawn_status, deadline)
             public_spawn_entry(bodies[PUBLIC_SPAWN_NAMES[0]], events_before[scope], events_after[scope], nonce,
-                public_spawn_status(evidence, label, argv, output), install_id, launcher, pins["probe"]["path"], sys.platform)
+                native_pid, install_id, launcher, pins["probe"]["path"], sys.platform)
+            require(time.monotonic() < deadline, "public spawn entry parsing deadline")
+            require(spawn_capture(scope, after) == (receipt, bodies), "public spawn pair changed after parsing")
+            public_spawn_status_pid(spawn_status, deadline)
+            require(directory_identity(code_root) == code_authority and time.monotonic() < deadline,
+                    "public spawn original bundled code/budget changed")
             public_spawn_continuity(spawn_states[scope], receipt, stdio=True)
             prospective[scope] = receipt
         prospective_logs = dict(native_log_locks)

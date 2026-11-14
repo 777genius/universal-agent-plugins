@@ -2483,3 +2483,129 @@ Only this test method and this note change. The runtime, native argv,
 readout capture, source/User guards, cleanup and qualification remain
 unchanged. There are still 171 authored methods. This is a source-reviewed
 candidate; Python and genuine Windows/native execution remain pending.
+
+### 2026-11-14 — retain the original command and pair through admission
+
+The exact incoming `9278aed97af3278cc50f6423bea9bb738e5354c3` was executed
+locally: 163 Hermes methods ran in 6.764 seconds, with 162 passes and the existing
+actual-Windows CRT-lock test skipped on Linux. Its unchanged compiled Go probe
+package passed, including all six parent-fact opt-in cases. This supersedes the
+preceding source-only execution status; it is not native Hermes acceptance.
+
+Independent review then reproduced three remaining boundaries on those exact
+incoming bytes. A real inert bounded child's same-byte status or evidence-parent
+replacement was accepted by the late status reader; changing only its status PID
+returned a value different from that original child. This was a status-helper
+reselection, not a demonstrated bypass of the separate event/ledger chain.
+A ledger growing after open consumed 33,260 bytes under a 1,048,577-byte read
+request before refusal, despite the advertised 4 KiB member bound. Finally, an
+in-place ledger mutation after its read and before the lock read left directory
+metadata unchanged and passed that pair/entry boundary with stale bytes. Later
+whole-tree checks could detect persistent drift, but did not close this local
+admission boundary. The original counterexample report has SHA256
+`f2413616beb4bf4b9d1940f87667ca3cc0373e175c155d6bb3764d016b7981a1`.
+
+Root and independent R1 accepted the exact correction plan, SHA256
+`124c738ac286eff1dd28bbc128e2f97a9dd4cbc71cde0ef78335d9322c0dd9e4`.
+The existing status helper now freezes status and both stream files immediately
+after the completed bounded stdio call, before the following snapshot. It uses
+the original prepared evidence-directory authority, exact actual argv/server,
+first integer PID, zero exit, absent error, complete stream receipts and returned
+stdout. Every later admission check rejoins those original file identities,
+metadata and bytes under the retained parent. No later JSON decode selects a PID.
+Missing original authority remains a refusal.
+
+The existing ordinary reader gains only an optional narrowing bound for unpinned
+reads. Explicit zero handles the empty sidecar; defaults and pinned runtime
+reads retain their old behavior. The status read requests at most 16 KiB plus
+one overflow byte, the ledger 4 KiB plus one, and the empty sidecar one byte.
+Original stream counts bound their reads. All new reads and parsing retain the
+same original lifecycle deadline, checked before and after use.
+
+Both fixed members are rejoined after their initial reads, including a final
+full metadata comparison so an earlier member cannot change during the later
+read. After validating the current nonce/session/platform parent chain, the
+command rejoins that exact pair, original status/streams and original bundled
+code authority before advancing the prospective baseline. It cannot adopt a
+later receipt, PID, file incarnation or deadline as new authority.
+
+The incoming entry, continuity, parent-facts, launcher, install, rows, profile,
+events and recipe predicates remain byte-identical. So do the workflow and both
+Go probe files. The exact fixed names, one-entry schema, sidecar incarnation,
+non-stdio/sibling/update/repair/removal/cold boundaries, full source/User closure
+and process settlement remain mandatory. The earlier optional second-member/
+nine-count diagnostic packet is preserved as a separate reviewed checkpoint;
+it is not overlaid on this admission path or used to weaken the new parent facts.
+Published first-member and source User failure projections remain unchanged.
+
+The composition also retains the stronger reviewed test oracles: exactly the
+protected Windows parent rename can report sharing violation 32 only while its
+original directory/file identities and bytes remain and the destination is
+absent; the impossible-date ValueError must originate in the real stdio parser
+frame with the exact captured date match. Every other invalid header still
+requires the incoming RuntimeError predicate. Neither change relaxes runtime
+validation or treats a blocked substitution as native success.
+
+Four new methods exercise a real inert child's original status/streams/PID,
+same-byte replacements and missing authority, actual growth read caps including
+an empty lock, between-read file drift and original deadlines, and the real
+command tail's after-parse gates before baseline publication. All 163 incoming
+methods remain. The complete corrected suite ran 167 methods in 7.386 seconds:
+166 passed and the same actual-Windows case skipped on Linux. The unchanged Go
+probe package passed again in 0.458 seconds. Three actual in-memory
+counterfactuals failed their regressions: restoring the old read request caused
+three assertions; omitting pair rejoin caused three; omitting after-parse gates
+advanced the baseline and failed its assertion. Repository source stayed intact
+during those counterfactuals.
+
+The original Windows bundled job `132449811109` in the old `880d` run completed
+separately and still failed at `public-http-a`: 19 members, one backup and one
+unknown empty 0666 file, relative-name digest
+`d6503b34655ee420b82058507655f28a09177f18851cd32ea54eb4fbe234d256`.
+Original artifact `14117700734` is 917 bytes, SHA256
+`15d825ee3ba2456613a3a1ad7147b94c9b48d5324e718e25581b9fd59c009234`;
+ZIP CRC and its sole 1,612-byte report were independently verified. The report
+SHA256 is `7f9277e08757ef0ec1b18311170485420dc1386030f0a51a0f683eb454813d49`.
+This is a distinct non-stdio refusal, outside the two-file admission correction.
+Its producer audit and fresh final-source native execution remain separate;
+all original qualification flags remain false. No native pass, Windows source
+shared-bin allowance, cleanup permission or production capability is added.
+
+### 2026-11-14: bounded Windows agent-lock read on the original lifecycle deadline
+
+This source correction composes with `8d18cfff1e62ae8eeaf896b5b36dd14a8e98e14a`
+and the independently preserved stdio authority correction. The full reviewed
+composition bases are runtime blob `6e774555430b97ae66876f74e8076448493c5ce4`,
+test blob `b982b26dc309564f62eae405d5303245bdbac27f`, and this leaf's prior blob
+`bf8447cd53a6de5b632c989f9f51674c07620937`. Source R1 plan SHA-256:
+`2f5debc012c2ebe2bf2afdbf00f8c48b4c3c6c29cd218ca0295638c80f649871`.
+
+The exact empty Windows `logs/.__agent.lock` read now uses the existing
+`ordinary_bytes(..., maximum=0, deadline=deadline)` boundary. The metadata
+bound is zero; the existing oversize probe requests at most one byte and must
+observe EOF. The required deadline is the one already captured by
+`observe_public`, passed through the two private helpers without renewal.
+Entry, leaf-body and final rejoin fences use that same value. The existing
+held-directory `finally` verification still runs when the budget expires.
+
+All incoming original outer/Project/parent/selected/logs identities, full lock
+stat continuity, exact six-field captured row, original absence, owned
+HTTP/stdio role checks, prospective publication after `public_profile`, and
+pre/post-command plus final cold continuity are retained. No other filename,
+foreign member, source effect, writer behavior, platform or qualification is
+admitted by this change.
+
+Three focused contracts are authored: expiration before any filesystem
+acquisition on every platform; a real Windows empty-file read with an explicit
+one-byte request and growth refusal; and real Windows pre-body/final-rejoin
+expiration while all five original held directories are still rejoined.
+The existing command-block test asserts propagation of the exact supplied
+deadline. The 175 previous methods remain, with only the necessary direct
+caller/fixture argument updates. These inert fixtures do not constitute a
+vendor/native observation.
+
+The executor is unavailable. These new methods and the composed 178-method
+source have **not been executed locally**. Independent source R2, ordinary CI
+execution (including actual Windows cases), fresh native originals and final
+source acceptance remain required. Historical Windows HTTP evidence explains
+the fixed member's role; it does not qualify this new source.

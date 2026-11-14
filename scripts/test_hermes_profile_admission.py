@@ -1936,7 +1936,8 @@ class PublicLifecycleContracts(unittest.TestCase):
                 if receipt is not None:
                     captured = dict(current); captured[lock.relative_to(outer).as_posix()] = receipt
                     held = CASE["public_windows_log_read"](root, outer, captured, authorities,
-                        original_logs=original[lock.parent.relative_to(outer).as_posix()])
+                        original_logs=original[lock.parent.relative_to(outer).as_posix()],
+                        deadline=CASE["time"].monotonic() + 30)
                 return CASE["public_profile"](root, current, outer, set(), log_lock=held)
             with self.assertRaisesRegex(RuntimeError, "unmeasured"):
                 profile()
@@ -1994,8 +1995,14 @@ class PublicLifecycleContracts(unittest.TestCase):
                 invoke = lambda: CASE["public_profile"](root, image, outer, set(), stdio=("hermes-public-a-stdio", sessions))
                 if effect in {"valid", "repeat"}: invoke()
                 elif effect == "bad-date":
-                    with self.assertRaises(ValueError):
-                        invoke()
+                    try: invoke()
+                    except ValueError as error:
+                        trace = error.__traceback__
+                        while trace is not None and trace.tb_frame.f_code is not CASE["public_stdio_log"].__code__:
+                            trace = trace.tb_next
+                        self.assertIsNotNone(trace)
+                        self.assertEqual(trace.tb_frame.f_locals["match"].group(1), b"2026-02-30 14:05:11,913")
+                    else: self.fail("public stdio log accepted an impossible date")
                 else:
                     with self.assertRaisesRegex(RuntimeError, "stdio|unmeasured"):
                         invoke()
@@ -2048,6 +2055,7 @@ class PublicLifecycleContracts(unittest.TestCase):
                              spawn_states={"a": None, "b": None}, native_log_locks={"a": None, "b": None}, native=True, inspect=False, expected_failure=False,
                              args=["mcp", "test", "hermes-public-a-stdio"], label="public-stdio-a", evidence=evidence,
                              argv=["inert-hermes", "mcp", "test", "hermes-public-a-stdio"], output=b"inert stdio success",
+                             deadline=CASE["time"].monotonic() + 10,
                              code_root=code_root, code_authority=CASE["directory_identity"](code_root), install_id="a" * 12,
                              servers={"hermes-public-a-stdio": recipe}, pins={"probe": {"path": str(probe)}})
             rows = [dict(method=method, pid=42, session="42-123", nonce=nonce, timestamp="2026-11-13T23:50:00Z",
@@ -2062,6 +2070,8 @@ class PublicLifecycleContracts(unittest.TestCase):
                 argv=namespace["argv"], pid=101, exit=0, error=None,
                 streams={suffix: {"bytes": len(body), "sha256": CASE["hashlib"].sha256(body).hexdigest()}
                          for suffix, body in streams.items()})).encode())
+            namespace["spawn_status"] = CASE["public_spawn_status"](evidence, CASE["directory_identity"](evidence),
+                namespace["label"], namespace["argv"], namespace["output"], namespace["deadline"])
             events.write_bytes(b"".join(json.dumps(row).encode() + b"\n" for row in rows))
             body = b"\n2026-11-14 14:05:11,913 ===== starting MCP server 'hermes-public-a-stdio' =====\n"
             log.write_bytes(body.replace(b"\n", b"\r\n" if os.name == "nt" else b"\n")); log.chmod(0o644)
@@ -3594,6 +3604,13 @@ class SourceNativeCommandContracts(unittest.TestCase):
                                 "store-facts": inputs["original"] / "tools/facts.json", "api": inputs["source"] / "hermes_cli/_launchers.py",
                                 "bootstrap": inputs["source"] / "hermes_bootstrap.py", "main": inputs["source"] / "hermes_cli/main.py",
                                 "readout": inputs["command_file"]}
+                    windows_held_parent = os.name == "nt" and phase == "during" and effect == "readout-parent"
+                    denied_parent = []
+                    if windows_held_parent:
+                        readout = inputs["command_file"]
+                        parent_before = (CASE["directory_identity"](readout.parent), CASE["stable_named_entry"](readout.parent.lstat()))
+                        readout_before = (CASE["stable_file"](readout.lstat()), readout.read_bytes())
+                        self.assertFalse(os.path.lexists(readout.parent.with_name("held-readout")))
                     def replace(argv=None):
                         if effect == "ancestor":
                             directory = inputs["python"].parent
@@ -3601,7 +3618,13 @@ class SourceNativeCommandContracts(unittest.TestCase):
                             (moved / inputs["python"].name).rename(inputs["python"])
                         elif effect == "readout-parent":
                             directory = inputs["command_file"].parent
-                            moved = directory.with_name("held-readout"); directory.rename(moved); directory.mkdir()
+                            moved = directory.with_name("held-readout")
+                            try: directory.rename(moved)
+                            except PermissionError as error:
+                                if not windows_held_parent or getattr(error, "winerror", None) != 32: raise
+                                denied_parent.append(error)
+                                raise
+                            directory.mkdir()
                             (moved / inputs["command_file"].name).rename(inputs["command_file"])
                         else:
                             path = selected[effect]; body = path.read_bytes()
@@ -3609,23 +3632,25 @@ class SourceNativeCommandContracts(unittest.TestCase):
                         return argv
                     if phase == "before": replace()
                     else: scope["rewrite"] = replace
-                    if os.name == "nt" and phase == "during" and effect == "readout-parent":
-                        # The held Windows directory rejects this move before
-                        # substitution. Require that exact kernel refusal and
-                        # the original objects, rather than skipping the case.
-                        readout = inputs["command_file"]
-                        directory, moved = readout.parent, readout.parent.with_name("held-readout")
-                        with self.assertRaises(PermissionError) as refusal:
+                    if windows_held_parent:
+                        # The existing Windows directory handle denies DELETE sharing,
+                        # so the attempted replacement itself must fail unchanged.
+                        with self.assertRaises(PermissionError) as refused:
                             CASE["source_native_runtime_command"](**args)
-                        self.assertEqual(refusal.exception.winerror, 32)
-                        self.assertEqual(refusal.exception.filename, str(directory))
-                        self.assertEqual(refusal.exception.filename2, str(moved))
-                        self.assertFalse(moved.exists())
-                        self.assertEqual(CASE["directory_identity"](directory), tuple(inputs["command_parent"]))
+                        self.assertEqual(len(denied_parent), 1)
+                        self.assertIs(refused.exception, denied_parent[0])
+                        self.assertEqual(refused.exception.winerror, 32)
+                        self.assertEqual(refused.exception.filename, str(readout.parent))
+                        self.assertEqual(refused.exception.filename2, str(readout.parent.with_name("held-readout")))
+                        self.assertEqual(CASE["directory_identity"](readout.parent), tuple(inputs["command_parent"]))
                         self.assertEqual(CASE["stable_file"](readout.lstat()), CASE["stable_file"](inputs["command_info"]))
                         self.assertEqual(hashlib.sha256(readout.read_bytes()).hexdigest(), inputs["command_sha256"])
-                        # The same move succeeds after the finally block has
-                        # released its directory handle; no lock is leaked.
+                        self.assertEqual((CASE["directory_identity"](readout.parent), CASE["stable_named_entry"](readout.parent.lstat())), parent_before)
+                        self.assertEqual((CASE["stable_file"](readout.lstat()), readout.read_bytes()), readout_before)
+                        self.assertFalse(os.path.lexists(readout.parent.with_name("held-readout")))
+                        # The same move succeeds once the original held directory
+                        # is released by the source command's finally block.
+                        directory, moved = readout.parent, readout.parent.with_name("held-readout")
                         directory.rename(moved)
                         moved.rename(directory)
                     else:
@@ -4716,11 +4741,12 @@ class PublicSpawnLedgerContracts(unittest.TestCase):
         return ledger, lock
 
     @staticmethod
-    def capture(root, outer, image=None, authorities=None):
+    def capture(root, outer, image=None, authorities=None, deadline=None):
         image = CASE["inventory"](outer) if image is None else image
         authorities = tuple(CASE["directory_identity"](path)
                             for path in (outer, root.parent.parent, root.parent, root)) if authorities is None else authorities
-        return CASE["public_spawn_read"](root, outer, image, authorities)
+        deadline = CASE["time"].monotonic() + 10 if deadline is None else deadline
+        return CASE["public_spawn_read"](root, outer, image, authorities, deadline)
 
     def verify(self, entry, before, after, system="linux", *, body=None, **changes):
         args = dict(body=json.dumps([entry]).encode() if body is None else body, before=before, after=after,
@@ -4826,7 +4852,9 @@ class PublicSpawnLedgerContracts(unittest.TestCase):
             path = prefix.with_suffix(".status.json")
             def write(value): path.write_bytes(json.dumps(value).encode())
             write(status)
-            self.assertEqual(CASE["public_spawn_status"](evidence, label, argv, stdout), 101)
+            authority, deadline = CASE["directory_identity"](evidence), CASE["time"].monotonic() + 10
+            captured = CASE["public_spawn_status"](evidence, authority, label, argv, stdout, deadline)
+            self.assertEqual(CASE["public_spawn_status_pid"](captured, deadline), 101)
             for effect in ("argv", "pid", "exit", "bool-exit", "error", "extra", "stream", "bytes", "hash"):
                 value = copy.deepcopy(status)
                 if effect == "argv": value["argv"][-1] = "foreign"
@@ -4840,12 +4868,12 @@ class PublicSpawnLedgerContracts(unittest.TestCase):
                 else: value["streams"]["stderr"]["sha256"] = "0" * 64
                 write(value)
                 with self.subTest(effect=effect), self.assertRaises(RuntimeError):
-                    CASE["public_spawn_status"](evidence, label, argv, stdout)
+                    CASE["public_spawn_status"](evidence, authority, label, argv, stdout, deadline)
             write(status)
             with self.assertRaises(RuntimeError):
-                CASE["public_spawn_status"](evidence, label, argv, stdout + b"x")
+                CASE["public_spawn_status"](evidence, authority, label, argv, stdout + b"x", deadline)
             with self.assertRaisesRegex(RuntimeError, "role"):
-                CASE["public_spawn_status"](evidence, "public-http-a", argv, stdout)
+                CASE["public_spawn_status"](evidence, authority, "public-http-a", argv, stdout, deadline)
 
     def test_spawn_capture_rejoins_original_parent_before_any_body_read(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -4997,7 +5025,8 @@ class PublicWindowsLogLockContracts(unittest.TestCase):
     def capture(outer, root, before, authorities, image=None):
         image = CASE["inventory"](outer) if image is None else image
         return CASE["public_windows_log_read"](root, outer, image, authorities,
-            original_logs=before[(root / "logs").relative_to(outer).as_posix()])
+            original_logs=before[(root / "logs").relative_to(outer).as_posix()],
+            deadline=CASE["time"].monotonic() + 30)
 
     def test_fixed_eight_roles_require_the_matching_successful_native_command(self):
         import hashlib
@@ -5067,7 +5096,8 @@ class PublicWindowsLogLockContracts(unittest.TestCase):
                 original_logs = before[logs.relative_to(outer).as_posix()]
                 if effect == "missing-logs-preimage": original_logs = None
                 invoke = lambda: CASE["public_windows_log_read"](root, outer, image, authorities,
-                                                               original_logs=original_logs)
+                                                               original_logs=original_logs,
+                                                               deadline=CASE["time"].monotonic() + 30)
                 if effect == "valid":
                     receipt = invoke()
                     self.assertEqual(receipt["identity"], CASE["stable_file"](lock.lstat()))
@@ -5178,10 +5208,12 @@ class PublicWindowsLogLockContracts(unittest.TestCase):
                     [] if effect == "no-protocol" else ["initialize", "notifications/initialized", "tools/list"])
                 proof = {"data": data, "target": outer / "target"}
                 previous = {"a": proof if effect != "no-owner" else None, "b": None}
+                original_deadline = CASE["time"].monotonic() + 30
                 marker = object()
-                def read(_root, _outer, _image, _authorities, *, original_logs):
+                def read(_root, _outer, _image, _authorities, *, original_logs, deadline):
                     self.assertEqual((_root, _outer), (root, outer))
                     self.assertEqual(tuple(_authorities), authorities)
+                    self.assertEqual(deadline, original_deadline)
                     CASE["require"](type(original_logs) is dict, "public Windows log directory was replaced")
                     return marker
                 reader = mock.Mock(side_effect=read)
@@ -5195,7 +5227,8 @@ class PublicWindowsLogLockContracts(unittest.TestCase):
                     born={"a": (authorities[3], authorities[2], {})}, nonce="c" * 64,
                     native=True, inspect=False, expected_failure=effect == "expected-failure",
                     label="public-removed-list-a" if effect == "wrong-role" else "public-http-a",
-                    args=["mcp", "test", "hermes-public-a-http"], public_windows_log_read=reader)
+                    args=["mcp", "test", "hermes-public-a-http"], deadline=original_deadline,
+                    public_windows_log_read=reader)
                 with mock.patch.object(CASE["artifacts"], "WINDOWS", True):
                     if effect == "valid":
                         exec(check, namespace)
@@ -5209,6 +5242,268 @@ class PublicWindowsLogLockContracts(unittest.TestCase):
                     reader.assert_not_called()
                 self.assertEqual(namespace["native_log_locks"], {"a": None, "b": None})
                 self.assertEqual(lock.read_bytes(), b"")
+
+    def test_expired_windows_lock_capture_refuses_before_any_filesystem_access(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            outer, root, logs, before, authorities = self.fixture(temporary)
+            image = CASE["inventory"](outer)
+            deadline = CASE["time"].monotonic() - 1
+            opener = mock.Mock(side_effect=AssertionError("expired directory acquisition"))
+            reader = mock.Mock(side_effect=AssertionError("expired body read"))
+            named = mock.Mock(side_effect=AssertionError("expired named-file acquisition"))
+            with mock.patch.dict(CASE["public_windows_log_read"].__globals__,
+                                 open_inventory_directory=opener, ordinary_bytes=reader), \
+                 mock.patch.object(Path, "lstat", named):
+                with self.assertRaisesRegex(RuntimeError, "log capture deadline"):
+                    CASE["public_windows_log_read"](root, outer, image, authorities,
+                        original_logs=before[logs.relative_to(outer).as_posix()], deadline=deadline)
+            opener.assert_not_called()
+            reader.assert_not_called()
+            named.assert_not_called()
+
+    @unittest.skipUnless(os.name == "nt", "actual Windows bounded original lock read")
+    def test_windows_lock_capture_keeps_zero_cap_and_original_deadline(self):
+        from contextlib import contextmanager
+        for effect in ("empty", "growth"):
+            with self.subTest(effect=effect), tempfile.TemporaryDirectory() as temporary:
+                outer, root, logs, before, authorities = self.fixture(temporary)
+                lock = logs / ".__agent.lock"; lock.write_bytes(b""); lock.chmod(0o666)
+                image = CASE["inventory"](outer)
+                deadline = CASE["time"].monotonic() + 30
+                ordinary, fdopen, requests = CASE["ordinary_bytes"], os.fdopen, []
+
+                @contextmanager
+                def bounded_stream(*args, **kwargs):
+                    with fdopen(*args, **kwargs) as stream:
+                        def read(count):
+                            self.assertEqual(count, 1)
+                            requests.append(count)
+                            if effect == "growth":
+                                with lock.open("ab") as writer:
+                                    writer.write(b"x")
+                            return stream.read(count)
+                        yield SimpleNamespace(read=read)
+
+                def read_original(path, expected=None, **kwargs):
+                    self.assertEqual(path, lock)
+                    self.assertEqual(kwargs.get("maximum"), 0)
+                    self.assertEqual(kwargs.get("deadline"), deadline)
+                    self.assertEqual(CASE["stable_file"](expected), CASE["stable_file"](lock.lstat()))
+                    with mock.patch.object(os, "fdopen", side_effect=bounded_stream):
+                        return ordinary(path, expected, **kwargs)
+
+                reader = mock.Mock(side_effect=read_original)
+                with mock.patch.dict(CASE["public_windows_log_read"].__globals__, ordinary_bytes=reader):
+                    invoke = lambda: CASE["public_windows_log_read"](root, outer, image, authorities,
+                        original_logs=before[logs.relative_to(outer).as_posix()], deadline=deadline)
+                    if effect == "empty":
+                        receipt = invoke()
+                        self.assertEqual(receipt["identity"], CASE["stable_file"](lock.lstat()))
+                        self.assertEqual(receipt["row"], image[lock.relative_to(outer).as_posix()])
+                    else:
+                        with self.assertRaisesRegex(RuntimeError, "file changed during bounded capture"):
+                            invoke()
+                reader.assert_called_once()
+                self.assertEqual(requests, [1])
+                self.assertEqual(lock.read_bytes(), b"x" if effect == "growth" else b"")
+
+    @unittest.skipUnless(os.name == "nt", "actual Windows deadline and held-directory final rejoin")
+    def test_windows_lock_capture_does_not_renew_budget_during_read_or_final_rejoin(self):
+        for effect in ("before-body", "after-body"):
+            with self.subTest(effect=effect), tempfile.TemporaryDirectory() as temporary:
+                outer, root, logs, before, authorities = self.fixture(temporary)
+                lock = logs / ".__agent.lock"; lock.write_bytes(b""); lock.chmod(0o666)
+                image = CASE["inventory"](outer)
+                deadline, clock = 20.0, [10.0]
+                ordinary, read_leaf = CASE["ordinary_bytes"], CASE["public_native_log_lock"]
+                open_directory, verify_directory = CASE["open_inventory_directory"], CASE["verify_inventory_directory"]
+                opened, final_joins, body_done, leaf_entered = [], [], [False], [False]
+
+                def open_original(path, *args, **kwargs):
+                    descriptor = open_directory(path, *args, **kwargs)
+                    opened.append(path)
+                    if effect == "before-body" and path == logs:
+                        clock[0] = deadline
+                    return descriptor
+
+                def enter_leaf(*args, **kwargs):
+                    leaf_entered[0] = True
+                    return read_leaf(*args, **kwargs)
+
+                def read_original(path, expected=None, **kwargs):
+                    self.assertEqual(kwargs.get("maximum"), 0)
+                    self.assertEqual(kwargs.get("deadline"), deadline)
+                    body = ordinary(path, expected, **kwargs)
+                    body_done[0] = True
+                    return body
+
+                def verify_original(path, *args, **kwargs):
+                    verify_directory(path, *args, **kwargs)
+                    if leaf_entered[0]:
+                        final_joins.append(path)
+                    if body_done[0]:
+                        clock[0] = deadline
+
+                reader = mock.Mock(side_effect=read_original)
+                with mock.patch.dict(CASE["public_windows_log_read"].__globals__,
+                        time=SimpleNamespace(monotonic=lambda: clock[0]), ordinary_bytes=reader,
+                        open_inventory_directory=open_original, verify_inventory_directory=verify_original,
+                        public_native_log_lock=enter_leaf):
+                    with self.assertRaisesRegex(RuntimeError, "log (lock )?capture deadline"):
+                        CASE["public_windows_log_read"](root, outer, image, authorities,
+                            original_logs=before[logs.relative_to(outer).as_posix()], deadline=deadline)
+                expected = [outer, root.parent.parent, root.parent, root, logs]
+                self.assertEqual(opened, expected)
+                self.assertEqual(reader.call_count, int(effect == "after-body"))
+                self.assertEqual(final_joins, expected)
+                self.assertEqual(lock.read_bytes(), b"")
+
+
+class PublicSpawnOriginalAuthorityContracts(unittest.TestCase):
+    def test_real_child_status_and_streams_keep_first_identity_and_pid(self):
+        import shutil
+        import sys
+        import time
+        for effect in ("unchanged", "status", "stdout", "stderr", "parent", "pid", "during-status", "expired"):
+            with self.subTest(effect=effect), tempfile.TemporaryDirectory() as temporary:
+                outer = Path(temporary).resolve(); evidence = outer / "evidence"; evidence.mkdir()
+                (outer / "mcp").write_text("import os,sys\nprint(os.getpid())\nprint('original stderr',file=sys.stderr)\n")
+                argv = [sys.executable, "mcp", "test", "hermes-public-a-stdio"]
+                stdout = CASE["bounded"](argv, outer, dict(os.environ), evidence / "public-stdio-a", timeout=5)
+                authority, deadline = CASE["directory_identity"](evidence), time.monotonic() + 10
+                captured = CASE["public_spawn_status"](evidence, authority, "public-stdio-a", argv, stdout, deadline)
+                self.assertEqual(captured["pid"], int(stdout.strip()))
+                path = evidence / "public-stdio-a.status.json"
+                if effect in {"status", "stdout", "stderr"}:
+                    selected = path if effect == "status" else evidence / ("public-stdio-a." + effect)
+                    body = selected.read_bytes(); selected.rename(evidence / "held-original"); selected.write_bytes(body)
+                elif effect == "parent":
+                    evidence.rename(outer / "held-evidence"); shutil.copytree(outer / "held-evidence", evidence)
+                elif effect == "pid":
+                    value = json.loads(path.read_bytes()); value["pid"] += 1; path.write_text(json.dumps(value))
+                reader, reads = CASE["ordinary_bytes"], []
+                def read(selected, *args, **kwargs):
+                    self.assertEqual(kwargs["deadline"], deadline)
+                    value = reader(selected, *args, **kwargs); reads.append(selected)
+                    if effect == "during-status" and len(reads) == 1:
+                        selected.write_bytes(value + b" ")
+                    return value
+                monotonic = time.monotonic
+                with mock.patch.dict(CASE["public_spawn_status_pid"].__globals__, ordinary_bytes=read,
+                        public_json=mock.Mock(side_effect=AssertionError("PID must never be redecoded"))), \
+                        mock.patch.object(time, "monotonic", side_effect=lambda: deadline + 1 if effect == "expired" else monotonic()):
+                    if effect == "unchanged":
+                        self.assertEqual(CASE["public_spawn_status_pid"](captured, deadline), int(stdout.strip()))
+                    else:
+                        with self.assertRaises(RuntimeError): CASE["public_spawn_status_pid"](captured, deadline)
+                if effect == "expired": self.assertEqual(reads, [])
+        with self.assertRaises(RuntimeError): CASE["public_spawn_status_pid"](None, time.monotonic() + 1)
+
+    def test_status_ledger_and_empty_lock_growth_keep_actual_read_caps(self):
+        import hashlib
+        import time
+        for member, maximum in (("status", 16 << 10), ("ledger", 4096), ("lock", 0)):
+            with self.subTest(member=member), tempfile.TemporaryDirectory() as temporary:
+                outer = Path(temporary).resolve(); root = outer / "public-a/.hermes/uap-session"; root.mkdir(parents=True)
+                ledger, lock = PublicSpawnLedgerContracts.write_pair(root, PublicSpawnLedgerContracts.entry())
+                status = outer / "public-stdio-a.status.json"; status.write_bytes(b"{}")
+                target = {"status": status, "ledger": ledger, "lock": lock}[member]
+                before = target.stat(); image = CASE["inventory"](outer)
+                authority = tuple(CASE["directory_identity"](p) for p in (outer, root.parent.parent, root.parent, root))
+                requested, consumed, fdopen = [], [], os.fdopen
+                class GrowingRead:
+                    def __init__(self, stream): self.stream = stream
+                    def __enter__(self): return self
+                    def __exit__(self, *unused): self.stream.close()
+                    def read(self, count):
+                        if os.path.samestat(before, os.fstat(self.stream.fileno())):
+                            requested.append(count)
+                            with target.open("ab") as stream: stream.write(b"x" * (32 << 10))
+                            result = self.stream.read(count); consumed.append(len(result)); return result
+                        return self.stream.read(count)
+                deadline = time.monotonic() + 10
+                with mock.patch.object(os, "fdopen", side_effect=lambda *args, **kwargs: GrowingRead(fdopen(*args, **kwargs))), \
+                        self.assertRaises(RuntimeError):
+                    if member == "status":
+                        CASE["public_spawn_status"](outer, authority[0], "public-stdio-a",
+                            ["inert-hermes", "mcp", "test", "hermes-public-a-stdio"], b"", deadline)
+                    else:
+                        CASE["public_spawn_read"](root, outer, image, authority, deadline)
+                self.assertEqual(requested, [maximum + 1])
+                self.assertEqual(consumed, [maximum + 1])
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary).resolve() / "empty"; path.write_bytes(b"")
+            self.assertEqual(CASE["ordinary_bytes"](path, maximum=0), b"")
+            path.write_bytes(b"x"); info = path.stat(); pin = (1, hashlib.sha256(b"x").hexdigest())
+            for maximum, pinned in ((-1, None), (True, None), (CASE["LIMIT"] + 1, None), (0, pin)):
+                with self.subTest(maximum=maximum, pinned=pinned is not None), \
+                        mock.patch.object(os, "fdopen", side_effect=AssertionError("invalid bound body read")), \
+                        self.assertRaisesRegex(RuntimeError, "only narrow"):
+                    CASE["ordinary_bytes"](path, info, maximum=maximum, pin=pinned)
+
+    def test_pair_rejoins_prior_member_bytes_and_original_deadline(self):
+        import time
+        for effect in ("unchanged", "ledger", "lock", "late-ledger", "expired-before", "expired-during"):
+            with self.subTest(effect=effect), tempfile.TemporaryDirectory() as temporary:
+                outer = Path(temporary).resolve(); root = outer / "public-a/.hermes/uap-session"; root.mkdir(parents=True)
+                ledger, lock = PublicSpawnLedgerContracts.write_pair(root, PublicSpawnLedgerContracts.entry())
+                image = CASE["inventory"](outer)
+                authority = tuple(CASE["directory_identity"](p) for p in (outer, root.parent.parent, root.parent, root))
+                deadline = time.monotonic() + 10
+                reader, counts, expired = CASE["ordinary_bytes"], {ledger: 0, lock: 0}, []
+                def read(selected, *args, **kwargs):
+                    self.assertEqual(kwargs["deadline"], deadline)
+                    value = reader(selected, *args, **kwargs); counts[selected] += 1
+                    if selected == ledger and counts[selected] == (2 if effect == "late-ledger" else 1):
+                        if effect in {"ledger", "late-ledger"}:
+                            changed = value.replace(b'"registered_at": 101.75', b'"registered_at": 102.75')
+                            self.assertNotEqual(value, changed); selected.write_bytes(changed)
+                        if effect == "expired-during": expired.append(True)
+                    if selected == lock and counts[selected] == 1 and effect == "lock": selected.write_bytes(b"x")
+                    return value
+                monotonic = time.monotonic
+                with mock.patch.dict(CASE["public_spawn_read"].__globals__, ordinary_bytes=read), \
+                        mock.patch.object(time, "monotonic", side_effect=lambda: deadline + 1 if expired or effect == "expired-before" else monotonic()):
+                    if effect == "unchanged":
+                        receipt, bodies = CASE["public_spawn_read"](root, outer, image, authority, deadline)
+                        self.assertEqual(receipt["rows"]["spawn-ledger.json"]["sha256"], CASE["hashlib"].sha256(bodies["spawn-ledger.json"]).hexdigest())
+                    else:
+                        with self.assertRaises(RuntimeError): CASE["public_spawn_read"](root, outer, image, authority, deadline)
+                if effect == "expired-before": self.assertEqual(sum(counts.values()), 0)
+                if effect == "expired-during": self.assertEqual(counts, {ledger: 1, lock: 0})
+
+    def test_real_command_tail_rejoins_after_entry_before_baseline_advance(self):
+        import builtins
+        import time
+        method = PublicLifecycleContracts.test_completed_stdio_log_survives_removal_without_accepting_later_writes
+        for effect in ("ledger", "lock", "status", "runtime", "expired"):
+            observed, expired = [], []
+            def execute(code, namespace):
+                entry = namespace["public_spawn_entry"]
+                def parse(*args):
+                    result = entry(*args)
+                    selected = namespace["selected"]
+                    if effect == "ledger":
+                        path = selected / "spawn-ledger.json"; body = path.read_bytes()
+                        changed = body.replace(b'"registered_at": 101.75', b'"registered_at": 102.75')
+                        self.assertNotEqual(body, changed); path.write_bytes(changed)
+                    elif effect == "lock": (selected / "spawn-ledger.json.lock").write_bytes(b"x")
+                    elif effect == "status":
+                        path = namespace["evidence"] / "public-stdio-a.status.json"
+                        body = path.read_bytes(); path.rename(path.with_name("held-status")); path.write_bytes(body)
+                    elif effect == "runtime":
+                        path = namespace["code_root"]; path.rename(path.with_name("held-code")); path.mkdir()
+                    else: expired.append(namespace["deadline"] + 1)
+                    return result
+                namespace["public_spawn_entry"] = parse
+                try: builtins.exec(code, namespace)
+                finally: observed.append(namespace["spawn_states"].copy())
+            monotonic = time.monotonic
+            with self.subTest(effect=effect), mock.patch.dict(method.__globals__, exec=execute), \
+                    mock.patch.object(time, "monotonic", side_effect=lambda: expired[0] if expired else monotonic()), \
+                    self.assertRaises(RuntimeError):
+                method(PublicLifecycleContracts())
+            self.assertEqual(observed, [{"a": None, "b": None}])
 
 
 if __name__ == "__main__":
