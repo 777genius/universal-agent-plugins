@@ -294,12 +294,14 @@ def read_saved_record(path):
     fd = os.open(path, flags)
     try:
         held = os.fstat(fd)
-        def same(left, right):
+        def same(left, right, *, compare_ctime=True):
             return (stat.S_ISREG(right.st_mode) and right.st_nlink == 1
                     and os.path.samestat(left, right) and right.st_mode == left.st_mode
                     and right.st_size == left.st_size and right.st_mtime_ns == left.st_mtime_ns
-                    and right.st_ctime_ns == left.st_ctime_ns)
-        require(same(before, held), "protected saved record changed before read")
+                    and (not compare_ctime or right.st_ctime_ns == left.st_ctime_ns))
+        # CPython on Windows can expose birth time through lstat and change time
+        # through fstat (python/cpython#157671). Compare ctime within each API.
+        require(same(before, held, compare_ctime=False), "protected saved record changed before read")
         body = bytearray()
         while len(body) <= before.st_size:
             chunk = os.read(fd, min(65536, before.st_size + 1 - len(body)))
@@ -307,7 +309,7 @@ def read_saved_record(path):
                 break
             body.extend(chunk)
         require(len(body) == before.st_size
-                and same(before, os.fstat(fd)) and same(before, path.lstat()),
+                and same(held, os.fstat(fd)) and same(before, path.lstat()),
                 "protected saved record changed during read")
         return bytes(body), before
     finally:
