@@ -4,7 +4,7 @@
 -->
 <script setup lang="ts">
 import { useInstallPreferencesStore } from '~/stores/installPreferences';
-import { hasNpxUapInvocation, withNativeCliInvocation } from '~/utils/cliInvocation';
+import { withNativeCliInvocation } from '~/utils/cliInvocation';
 
 const { t } = useI18n();
 const preferences = useInstallPreferencesStore();
@@ -26,7 +26,6 @@ const props = withDefaults(
   },
 );
 const copied = ref(false);
-const canChooseNativeCli = computed(() => props.kind === 'add' && hasNpxUapInvocation(props.command));
 const renderedCommand = computed(() =>
   withNativeCliInvocation(props.command, preferences.useNativeCli),
 );
