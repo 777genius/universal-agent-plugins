@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -204,5 +205,42 @@ func TestSessionNativeInventoryRefusesSelectedSourceChanges(t *testing.T) {
 				t.Fatal("refused inspector restored or changed concurrent bytes", err)
 			}
 		})
+	}
+}
+
+func TestSessionNativeInventoryCancellationDuringFinalSourceRead(t *testing.T) {
+	req, path := ownedSessionFixture(t)
+	kernel := nativeconfig.New()
+	plan, err := New().PlanSession(t.Context(), clients.Env{NativeConfig: kernel}, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	original, err := kernel.ReadExactFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	files := &sessionReadIO{beforeRead: func(read int) {
+		if read == 2 {
+			cancel()
+		}
+	}}
+	body, err := json.Marshal([]map[string]any{{"name": "owned", "path": path, "transportType": "stdio", "disabled": false}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	runner := &sessionObservationRunner{
+		result: legacyports.CommandResult{Stdout: body, CleanupComplete: true},
+		onRun:  func() { calls++ },
+	}
+	err = New().VerifySession(ctx, clients.Env{Runner: runner, NativeConfig: nativeconfig.NewWithFileIO(files)}, plan)
+	if !errors.Is(err, context.Canceled) || calls != 1 || files.reads != 2 {
+		t.Fatalf("final source-read cancellation admitted observation: calls=%d, reads=%d, err=%v", calls, files.reads, err)
+	}
+	after, err := kernel.ReadExactFile(path)
+	if err != nil || after.Exists != original.Exists || after.Mode != original.Mode || !bytes.Equal(after.Body, original.Body) {
+		t.Fatal("final source-read cancellation changed original source bytes or mode", err)
 	}
 }

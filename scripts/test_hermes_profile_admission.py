@@ -1942,8 +1942,11 @@ class PublicLifecycleContracts(unittest.TestCase):
                 if effect == "changed-after-snapshot": log.write_bytes(original.replace(b",913", b",914"))
                 invoke = lambda: CASE["public_profile"](root, image, outer, set(), stdio=("hermes-public-a-stdio", sessions))
                 if effect in {"valid", "repeat"}: invoke()
+                elif effect == "bad-date":
+                    with self.assertRaises(ValueError):
+                        invoke()
                 else:
-                    with self.assertRaisesRegex((RuntimeError, ValueError), "stdio|unmeasured|day is out of range"):
+                    with self.assertRaisesRegex(RuntimeError, "stdio|unmeasured"):
                         invoke()
 
     def test_completed_stdio_log_survives_removal_without_accepting_later_writes(self):

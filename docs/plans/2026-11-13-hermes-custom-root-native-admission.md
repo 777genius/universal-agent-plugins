@@ -2201,3 +2201,32 @@ User-summary joins alongside the new provenance field. Root verified unchanged
 added/removed source-runtime lines after composition and ran 154 methods:
 153 passed, with the same Windows-only skip. The closed diagnostic remains
 optional; unknown effects still refuse and no native acceptance is inferred.
+
+## 2026-11-14: require the calendar error type in the stdio-header contract
+
+The original macOS User/source job `132449810970` in run `43595758794`
+checked out `880d4c885191de21a8c64c0aeaead006fab06f6f`. Its original
+113,620-byte job log has SHA256
+`3ffc0605e1114b09d554bff7c339edcf50a58b8492babc841cd957fc8c37358f`.
+The 143-method prerequisite failed only the `bad-date` subcase of
+`test_public_stdio_log_joins_only_completed_owned_sessions` (one existing
+Windows-only case skipped). The guard correctly rejected the authored date
+`2026-02-30` with `ValueError`; its message was
+`day 30 must be in range 1..28 for month 2 in year 2026`, whereas the test
+required the older substring `day is out of range`. The enclosing runner
+traceback identifies CPython 3.15.2, while the native version output and the
+actual child argv identify the selected CPython 3.14.9; those observations do
+not identify the enclosing interpreter as the source of the child message.
+
+The same test method remained byte-identical through the current Hermes source
+on `087b8fed2c76dd2e2c22715451f5ca4ea9b8e44d`. The correction requires
+`ValueError` for exactly the existing `bad-date` mutation without matching its
+wording. Every other negative retains the `stdio|unmeasured` message check and
+now requires `RuntimeError`; the two positive cases, all authored mutations,
+and the production calendar/header checks remain unchanged. No new bootstrap
+member, stdout content, or failed native observation is admitted.
+
+This two-path candidate has source and exact preimage/inverse checks only.
+Execution of the corrected method and current native workflows is still
+pending. The older 880d failure does not exercise the later source User
+readout or the official source bootstrap `-B` correction.

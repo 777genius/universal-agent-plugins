@@ -57,7 +57,13 @@ func (*Adapter) VerifySession(ctx context.Context, env clients.Env, plan clients
 	if err != nil || after.Mode != before.Mode || !bytes.Equal(after.Body, before.Body) {
 		return fmt.Errorf("cline Project MCP source changed during native inspection: %w", errors.Join(err, nativeconfig.ErrConcurrentChange))
 	}
-	return verifySessionInventory(result.Stdout, plan.Environment["CLINE_MCP_SETTINGS_PATH"], plan.Servers)
+	if err := verifySessionInventory(result.Stdout, plan.Environment["CLINE_MCP_SETTINGS_PATH"], plan.Servers); err != nil {
+		return err
+	}
+	if err := bounded.Err(); err != nil {
+		return fmt.Errorf("cline selected-source observation expired: %w", err)
+	}
+	return nil
 }
 
 // A native inventory can show the same path/server names after a foreign
