@@ -407,3 +407,40 @@ verify live build provenance. Independently provision and qualify the modern
 issuer and its protected publication controls before enabling its feed. No
 source merge, prepared mechanics or historical failure is presented as that
 public release, live deployment or modern signed-target activation.
+
+### Semantic acceptance correction: saved intent and native MCP contents
+
+Independent review found two gaps in both released-source audit harnesses:
+changed native files did not establish the expected owned MCP entry, and saved
+manifest/lock existence did not establish an immutable requested source. Parse
+the saved TOML and lock through the existing confined, bounded, held-file reader
+after add, update and repair. Require the release manifest alias, exact Git
+repository/path/requested commit, resolved commit, selected target, source key,
+manifest intent digest and package digests. A moving ref that happens to resolve
+to the current commit must fail this check.
+
+Read the selected native configuration independently of the command's reported
+state: Hermes `config.yaml`, Pi `mcp.json`, and Antigravity's owned `plugin.json`
+and `mcp_config.json`. Bind the oracle to the existing immutable Notion fixture
+and require its exact native URL and transport shape at the owned logical name.
+A matching foreign entry or a copied portable source cannot satisfy this proof.
+Review against the actual 0.1.108 writer corrected the ownership fixture: Hermes
+and Pi record both a managed package directory and one scoped MCP entry;
+Antigravity records the managed plugin directory. Validate these identities and
+reject additional foreign ownership instead of filtering it away. Keep Python
+and the YAML parser explicitly provisioned in both hosted workflows.
+
+The shared helpers and 12 new regression methods are identical in the binary
+and npm harnesses. All 48 binary and 60 npm offline tests pass, including the
+existing confinement, Windows file-identity, scope and refusal checks. These
+are harness regressions, not released lifecycle qualification. Earlier hosted
+successes did not execute the new semantic assertions and cannot qualify this
+revision. Both real seven-lane audits must execute again; public 0.1.108 retains
+the already established Antigravity repair blocker until a fixed release is
+actually published and all coordinated immutable pins are updated.
+
+Remove the stale hand-maintained count and client list from the current saved
+dependency documentation. Point to the existing `deps status` fields derived
+from registered capabilities, preserving the ChatGPT and frozen VS Code
+exclusions. This avoids introducing another support list alongside the shared
+contract.
