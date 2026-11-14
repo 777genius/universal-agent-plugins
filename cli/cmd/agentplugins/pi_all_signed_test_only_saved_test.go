@@ -187,9 +187,9 @@ func TestPiAllSignedTestOnlySavedMarketplace(t *testing.T) {
 			NativePiRuntimeOAuth  bool     `json:"native_pi_runtime_or_oauth"`
 		}{
 			Kind: "pi-all-72-synthetic-test-only-saved", TestCommit: head,
-			SourceCommit: piFullRegistrySourceCommit,
+			SourceCommit:   piFullRegistrySourceCommit,
 			SnapshotSHA256: "sha256:" + hex.EncodeToString(digest[:]),
-			RunnerOS: runtime.GOOS, Shard: shard, SavedCases: completed,
+			RunnerOS:       runtime.GOOS, Shard: shard, SavedCases: completed,
 			ProductionPublished: false, ProductionEligibility: false,
 			SyntheticEvidence: true, NativePiRuntimeOAuth: false,
 		}, "", "  ")
