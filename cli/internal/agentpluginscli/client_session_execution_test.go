@@ -26,12 +26,12 @@ var (
 // This is a dispatcher fixture, not a native ownership receipt. The real empty
 // state store exercises sessionBindings; only planning/native execution is inert.
 type sessionExecutionFixture struct {
-	plan                              clients.SessionPlan
-	path, mode                        string
-	ctx                               context.Context
-	cancel                            context.CancelFunc
-	file, original                    *os.File
-	info                              os.FileInfo
+	plan                               clients.SessionPlan
+	path, mode                         string
+	ctx                                context.Context
+	cancel                             context.CancelFunc
+	file, original                     *os.File
+	info                               os.FileInfo
 	plans, begins, verifies, calls     int
 	starts, releases, closes, rechecks int
 }

@@ -43,8 +43,8 @@ type readonlyRuntimeCensus struct {
 	mount    uint64
 }
 
-// Only known runtime-root ownership is translated after the child has verified
-// the exact namespace maps. Overflow IDs never establish new ownership.
+// This parent-only census retains original host IDs. The child checks the
+// translated owners of the separately captured runtime roots, not these rows.
 func readonlyRuntimeFacts(facts readonlyObjectFacts, uid, gid uint32) (readonlyObjectFacts, error) {
 	kind := facts.Mode & unix.S_IFMT
 	if err := readonlyRuntimeMetadataRefusal(facts, uid, gid); err != nil {
@@ -56,8 +56,18 @@ func readonlyRuntimeFacts(facts readonlyObjectFacts, uid, gid uint32) (readonlyO
 	}
 	// Runtime set-id bits are metadata, not authority. The child separately
 	// requires NOSUID on every runtime mount and drops all capabilities.
-	facts.UID, facts.GID = 0, 0
 	return facts, nil
+}
+
+func (census *readonlyRuntimeCensus) memberFacts(path string, facts readonlyObjectFacts) (readonlyObjectFacts, error) {
+	// Root-owned, non-writable descendants may have an original package group.
+	// Preserve it in the digest; never infer a host group from a child overflow ID.
+	// The census root and requireRoots retain their original strict group checks.
+	gid := facts.GID
+	if path == "/usr" {
+		gid = census.gid
+	}
+	return readonlyRuntimeFacts(facts, census.uid, gid)
 }
 
 func readonlyRuntimeMetadataRefusal(facts readonlyObjectFacts, uid, gid uint32) error {
@@ -139,7 +149,7 @@ func (census *readonlyRuntimeCensus) record(path string, before readonlyObjectFa
 	if _, exists := census.rows[path]; exists {
 		return errors.New("readonly runtime census repeats an original path")
 	}
-	facts, err := readonlyRuntimeFacts(before, census.uid, census.gid)
+	facts, err := census.memberFacts(path, before)
 	if err != nil {
 		return readonlyRuntimeMemberError(path, err)
 	}
@@ -224,7 +234,7 @@ func (census *readonlyRuntimeCensus) entry(ctx context.Context, parent *os.File,
 }
 
 func (census *readonlyRuntimeCensus) child(ctx context.Context, parent *os.File, name, path string, before readonlyObjectFacts, depth int) (resultErr error) {
-	if _, err := readonlyRuntimeFacts(before, census.uid, census.gid); err != nil {
+	if _, err := census.memberFacts(path, before); err != nil {
 		return readonlyRuntimeMemberError(path, err)
 	}
 	file, err := openReadonlyDirectory(parent, name)

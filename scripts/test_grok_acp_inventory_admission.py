@@ -2862,6 +2862,126 @@ class ReadonlyInventoryContracts(unittest.TestCase):
         self.assertFalse(readout['control_complete'])
         self.assertTrue(all(value is False for value in readout['qualification'].values()))
 
+    def test_runtime_census_keeps_original_groups_and_refuses_unmapped_child_groups(self):
+        import stat
+        req, _ = self.request()
+        maps = {name:dict(inside=req[name], overflow=65534) for name in ('uid', 'gid')}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            root.chmod(0o755)
+            leaf = root / 'chage'
+            leaf.write_bytes(b'fixed inert executable')
+            leaf.chmod(0o2755)
+            nested = root / 'selected-group'
+            nested.mkdir(mode=0o755)
+            alias = root / 'alias'
+            alias.symlink_to('chage')
+            groups = {root.stat().st_ino:0, leaf.stat().st_ino:42,
+                      nested.stat().st_ino:req['gid'], alias.lstat().st_ino:65534}
+            original_fstat, original_stat = os.fstat, os.stat
+            fields = ('st_dev', 'st_ino', 'st_mode', 'st_nlink', 'st_uid', 'st_gid',
+                      'st_size', 'st_mtime_ns', 'st_ctime_ns')
+            namespace, changed = [False], {}
+            leaf_inode = leaf.stat().st_ino
+            # The identity lookup itself stays outside the patched stat seam.
+            def selected(info):
+                value = {name:getattr(info, name) for name in fields}
+                group = groups[info.st_ino]
+                value.update(st_uid=65534 if namespace[0] else 0,
+                             st_gid=(group if group == req['gid'] else 65534) if namespace[0] else group)
+                if info.st_ino == leaf_inode:
+                    value.update(changed)
+                return SimpleNamespace(**value)
+            descriptor = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                with (mock.patch.object(case.os, 'fstat', side_effect=lambda fd:selected(original_fstat(fd))),
+                      mock.patch.object(case.os, 'stat', side_effect=lambda *args, **kwargs:selected(original_stat(*args, **kwargs)))):
+                    host = case.readonly_walk(descriptor, req, 4096, runtime=True)
+                    self.assertEqual({name:row[5] for name, row in host.items()},
+                                     {'.':0, 'chage':42, 'selected-group':1000, 'alias':65534})
+                    namespace[0] = True
+                    child = case.readonly_walk(descriptor, req, 4096, runtime=True, maps=maps)
+                    self.assertEqual({name:row[5] for name, row in child.items()},
+                                     {'.':65534, 'chage':65534, 'selected-group':1000, 'alias':65534})
+                    changed['st_gid'] = 42
+                    with self.assertRaisesRegex(ValueError, 'readonly-runtime-owner'):
+                        case.readonly_walk(descriptor, req, 4096, runtime=True, maps=maps)
+                    namespace[0] = False
+                    for mutation, reason in (({'st_uid':1}, 'readonly-runtime-owner'),
+                            ({'st_gid':True}, 'readonly-runtime-owner'),
+                            ({'st_gid':2**32}, 'readonly-runtime-owner'),
+                            ({'st_mode':stat.S_IFREG | 0o2775}, 'readonly-census-writable'),
+                            ({'st_nlink':2}, 'readonly-external-hardlink'),
+                            ({'st_mode':stat.S_IFIFO | 0o600}, 'readonly-special-member')):
+                        changed.clear()
+                        changed.update(mutation)
+                        with self.subTest(mutation=mutation), self.assertRaisesRegex(ValueError, reason):
+                            case.readonly_walk(descriptor, req, 4096, runtime=True)
+            finally:
+                os.close(descriptor)
+
+    def test_runtime_child_projection_does_not_erase_private_host_group_changes(self):
+        import stat
+        req, _ = self.request()
+        maps = {name:dict(inside=req[name], overflow=65534) for name in ('uid', 'gid')}
+        host_rows = {'.':(2, 20, stat.S_IFDIR | 0o755, 2, 0, 0, 4096, 7, 8),
+                     'chage':(2, 21, stat.S_IFREG | 0o2755, 1, 0, 42, 72184, 7, 8),
+                     'selected':(2, 22, stat.S_IFREG | 0o755, 1, 0, 1000, 1, 7, 8)}
+        child_rows = {'.':(2, 20, stat.S_IFDIR | 0o755, 2, 65534, 65534, 4096, 7, 8),
+                      'chage':(2, 21, stat.S_IFREG | 0o2755, 1, 65534, 65534, 72184, 7, 8),
+                      'selected':(2, 22, stat.S_IFREG | 0o755, 1, 65534, 1000, 1, 7, 8)}
+        info = SimpleNamespace(st_dev=2, st_ino=20, st_mode=stat.S_IFDIR | 0o755, st_uid=0, st_gid=0)
+        req['readonly']['runtime'] = {'/usr':req['readonly']['runtime']['/usr']}
+        with (mock.patch.object(case, 'readonly_directory', return_value=123),
+              mock.patch.object(case, 'readonly_walk', return_value=host_rows) as walk,
+              mock.patch.object(case.os, 'close'), mock.patch.object(case.os, 'fstat', return_value=info),
+              mock.patch.object(case.Path, 'lstat', return_value=info)):
+            host_original = {}
+            projected = case.readonly_runtime(req, host_original=host_original)
+            self.assertEqual(set(projected), {'sha256', 'count'})
+            self.assertEqual(set(host_original), {'sha256', 'count'})
+            self.assertNotEqual(projected, host_original)
+            walk.return_value = child_rows
+            self.assertEqual(case.readonly_runtime(req, maps), projected)
+            walk.return_value = dict(host_rows, chage=host_rows['chage'][:5] + (43,) + host_rows['chage'][6:])
+            host_changed = {}
+            self.assertEqual(case.readonly_runtime(req, host_original=host_changed), projected)
+            self.assertNotEqual(host_changed, host_original)
+            walk.return_value = dict(child_rows, selected=child_rows['selected'][:5] + (65534,) + child_rows['selected'][6:])
+            self.assertNotEqual(case.readonly_runtime(req, maps), projected)
+
+    def test_parent_runtime_group_rejoin_stops_before_further_dispatch_or_success(self):
+        receipt, _, _ = self.receipt()
+        expected = receipt['result']
+        for drift_after in (None, 1, 2):
+            with self.subTest(drift_after=drift_after), self.runtime_collector() as (req, parent, command):
+                original = self.original(req)
+                def capture(_req, *, host_original):
+                    host_original.update(sha256='1' * 64, count=5)
+                    return original
+                parent.side_effect = capture
+                reads = []
+                def runtime(_req, *, host_original):
+                    reads.append(len(reads) + 1)
+                    host_original.update(sha256=('2' if len(reads) == drift_after else '1') * 64, count=5)
+                    return original['runtime']
+                def launch(_req, phase, _original, _remaining, state):
+                    index = 0 if phase == 'control' else 1
+                    if index:
+                        state.update(copy.deepcopy(expected['rpc']))
+                    return copy.deepcopy(expected['commands'][index])
+                command.side_effect = launch
+                with (mock.patch.object(case, 'readonly_runtime', side_effect=runtime),
+                      mock.patch.object(case, 'readonly_control_marker', return_value=expected['readonly']['control_marker']),
+                      mock.patch.object(case, 'inventory_rows'),
+                      mock.patch.object(case.Path, 'iterdir', side_effect=lambda:iter(()))):
+                    result = case.readonly_collector_result(req)
+                self.assertEqual(command.call_count, 1 if drift_after == 1 else 2)
+                self.assertEqual(len(reads), command.call_count)
+                self.assertEqual(result['semantic_complete'], drift_after is None)
+                self.assertEqual(result['reason'], 'complete' if drift_after is None else 'protocol-refused')
+                self.assertEqual(set(result['readonly']['original']), {'namespaces', 'runtime'})
+
 
 
 

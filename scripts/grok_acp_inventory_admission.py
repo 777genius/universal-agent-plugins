@@ -2091,9 +2091,11 @@ def readonly_walk(descriptor, req, limit, *, runtime=False, maps=None):
         before = os.fstat(parent)
         require(stat.S_ISDIR(before.st_mode), 'readonly-census-directory')
         row = readonly_metadata(before, directory=not runtime)
-        if maps is not None and runtime:
-            require(row[4] == maps['uid']['overflow'] and row[5] == maps['gid']['overflow'], 'readonly-runtime-owner')
-            row = row[:4] + (0, 0) + row[6:]
+        if runtime:
+            uid = maps['uid']['overflow'] if maps else 0
+            require(row[4] == uid and type(row[5]) is int and 0 <= row[5] < 2**32
+                    and (maps is None or row[5] in (maps['gid']['inside'], maps['gid']['overflow'])),
+                    'readonly-runtime-owner')
         rows[prefix] = row
         require(len(rows) <= limit, 'readonly-census-count')
         names = []
@@ -2112,8 +2114,9 @@ def readonly_walk(descriptor, req, limit, *, runtime=False, maps=None):
             require(info.st_mode & 0o022 == 0 or stat.S_ISLNK(info.st_mode), 'readonly-census-writable')
             if runtime:
                 uid = maps['uid']['overflow'] if maps else 0
-                gid = maps['gid']['overflow'] if maps else 0
-                require(info.st_uid == uid and info.st_gid == gid, 'readonly-runtime-owner')
+                require(info.st_uid == uid and type(info.st_gid) is int and 0 <= info.st_gid < 2**32
+                        and (maps is None or info.st_gid in (maps['gid']['inside'], maps['gid']['overflow'])),
+                        'readonly-runtime-owner')
             else:
                 require(info.st_uid == req['uid'] and info.st_gid == req['gid'], 'readonly-input-owner')
             if stat.S_ISDIR(info.st_mode):
@@ -2129,8 +2132,6 @@ def readonly_walk(descriptor, req, limit, *, runtime=False, maps=None):
                 require(info.st_nlink > 0 and (runtime or info.st_nlink == 1 and 0 <= info.st_size <= 512 << 20),
                         'readonly-census-alias')
                 value = stable(info)
-                if maps is not None and runtime:
-                    value = value[:4] + (0, 0) + value[6:]
                 rows[relative] = value
                 aliases.setdefault((info.st_dev, info.st_ino), []).append(info.st_nlink)
                 require(stable(info) == stable(os.stat(name, dir_fd=parent, follow_symlinks=False)),
@@ -2142,8 +2143,6 @@ def readonly_walk(descriptor, req, limit, *, runtime=False, maps=None):
                 require(stable(info) == stable(os.stat(name, dir_fd=parent, follow_symlinks=False)),
                         'readonly-runtime-link-rejoin')
                 value = stable(info)
-                if maps is not None:
-                    value = value[:4] + (0, 0) + value[6:]
                 rows[relative] = (*value, target)
             else:
                 raise ValueError('readonly-special-member')
@@ -2228,7 +2227,9 @@ def readonly_link_target(root, relative, target, rows, req):
     raise ValueError('readonly-link-depth')
 
 
-def readonly_runtime(req, maps=None):
+def readonly_runtime(req, maps=None, *, host_original=None):
+    require(host_original is None or maps is None and type(host_original) is dict and not host_original,
+            'readonly-runtime-final')
     grant, roots = req['readonly'], {}
     for name, fact in grant['runtime'].items():
         readonly_deadline(req)
@@ -2246,14 +2247,23 @@ def readonly_runtime(req, maps=None):
     descriptor = readonly_directory(Path('/usr'), grant['runtime']['/usr']['identity'], maps)
     try:
         rows = readonly_walk(descriptor, req, READONLY_RUNTIME_COUNT, runtime=True, maps=maps)
-        hasher = hashlib.sha256()
+        hasher, host_hasher = hashlib.sha256(), hashlib.sha256()
         for name in sorted(rows):
             readonly_deadline(req)
             values = rows[name]
             classification = readonly_link_target(descriptor, name, values[-1], rows, req) if stat.S_ISLNK(values[2]) else None
+            if maps is None:
+                # Keep the original host GID privately. Only the forward namespace
+                # projection is comparable inside the child; overflow is not an owner.
+                host_hasher.update(json.dumps([name, values, classification], ensure_ascii=True,
+                                              separators=(',', ':')).encode() + b'\n')
+                group = values[5] if values[5] == req['gid'] else grant['overflow_gid']
+                values = values[:4] + (grant['overflow_uid'], group) + values[6:]
             hasher.update(json.dumps([name, values, classification], ensure_ascii=True, separators=(',', ':')).encode() + b'\n')
         require(readonly_metadata(os.fstat(descriptor), directory=True)
                 == readonly_metadata(Path('/usr').lstat(), directory=True), 'readonly-runtime-final')
+        if host_original is not None:
+            host_original.update(sha256=host_hasher.hexdigest(), count=len(rows))
         return dict(sha256=hasher.hexdigest(), count=len(rows))
     finally:
         os.close(descriptor)
@@ -2436,11 +2446,11 @@ def readonly_root_checks(req, maps=None):
         require(not os.path.lexists('/dev/console'), 'readonly-unexpected-console')
 
 
-def readonly_parent_proof(req):
+def readonly_parent_proof(req, *, host_original=None):
     names = {name:os.stat('/proc/self/ns/' + name).st_ino for name in READONLY_NAMESPACES}
     require(all(names[name] == req['readonly']['namespaces'][name] for name in READONLY_NAMESPACES if name != 'net')
             and names['net'] != req['parent_network_namespace'], 'readonly-outer-namespaces')
-    return dict(namespaces=names, runtime=readonly_runtime(req))
+    return dict(namespaces=names, runtime=readonly_runtime(req, host_original=host_original))
 
 
 def readonly_original_proof(value, req):
@@ -2671,7 +2681,8 @@ def readonly_collector_result(req):
         readonly_verify_files(req)
         readonly_input(req)
         result['readonly']['stage'] = 'runtime'
-        original = readonly_parent_proof(req)
+        host_original = {}
+        original = readonly_parent_proof(req, host_original=host_original)
         result['readonly']['original'] = original
         result['reason'] = 'protocol-refused'
         headers = []
@@ -2689,6 +2700,9 @@ def readonly_collector_result(req):
                                    result['rpc'])
             in_flight = False
             result['commands'].append(row)
+            host_after = {}
+            require(readonly_runtime(req, host_original=host_after) == original['runtime']
+                    and host_after == host_original, 'readonly-runtime-final')
             header, trailing = readonly_header(base64.b64decode(row['stderr_base64'], validate=True), req, phase, original)
             headers.append(header)
             require(row['error'] is None, 'readonly-child-refused')

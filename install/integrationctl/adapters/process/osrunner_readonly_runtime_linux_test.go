@@ -174,16 +174,17 @@ func TestReadonlyRuntimeAliasesAreCapturedDataAndChangesRemainVisible(t *testing
 	}
 }
 
-func TestReadonlyRuntimeOwnerTranslationAndCancellationAreExplicit(t *testing.T) {
+func TestReadonlyRuntimeOwnerRetentionAndCancellationAreExplicit(t *testing.T) {
 	before := readonlyObjectFacts{Device: 1, Inode: 2, Links: 1, Mode: unix.S_IFREG | 04755, UID: 65534, GID: 65534, Size: 4}
-	normalized, err := readonlyRuntimeFacts(before, 65534, 65534)
-	if err != nil || normalized.UID != 0 || normalized.GID != 0 || normalized.Mode != before.Mode {
-		t.Fatal("known original runtime mapping differs", normalized, err)
+	retained, err := readonlyRuntimeFacts(before, 65534, 65534)
+	if err != nil || retained != before {
+		t.Fatal("original host runtime metadata differs", retained, err)
 	}
 	if _, err := readonlyRuntimeFacts(before, 1000, 1000); err == nil {
 		t.Fatal("overflow was treated as an arbitrary owner")
 	}
-	if err := admitReadonlyFacts(normalized, false, 0, 0); err == nil {
+	retained.UID, retained.GID = 0, 0
+	if err := admitReadonlyFacts(retained, false, 0, 0); err == nil {
 		t.Fatal("runtime metadata rules relaxed selected executable admission")
 	}
 	ctx, cancel := context.WithCancel(t.Context())
@@ -193,8 +194,74 @@ func TestReadonlyRuntimeOwnerTranslationAndCancellationAreExplicit(t *testing.T)
 	}
 }
 
+func TestReadonlyRuntimeOriginalPackageGroupSurvivesCensus(t *testing.T) {
+	// The original hosted refusal was root-owned /usr/bin/chage, group 42.
+	original := readonlyObjectFacts{Device: 66305, Inode: 2047, Links: 1,
+		Mode: unix.S_IFREG | 02755, GID: 42, Size: 72184}
+	original.Ctime.Nsec = 273560716
+	census := readonlyRuntimeCensus{rows: make(map[string]readonlyRuntimeRow), aliases: make(map[[2]uint64]readonlyRuntimeAlias)}
+	if err := census.record("/usr/bin/chage", original, ""); err != nil {
+		t.Fatal("original root-owned package group was refused", err)
+	}
+	if census.rows["/usr/bin/chage"].facts != original {
+		t.Fatal("original package group was normalized or omitted")
+	}
+	before, err := digestReadonlyRuntime(t.Context(), census.rows)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changed := original
+	changed.GID++
+	census.rows = make(map[string]readonlyRuntimeRow)
+	census.aliases = make(map[[2]uint64]readonlyRuntimeAlias)
+	if err := census.record("/usr/bin/chage", changed, ""); err != nil {
+		t.Fatal(err)
+	}
+	after, err := digestReadonlyRuntime(t.Context(), census.rows)
+	if err != nil || before == after {
+		t.Fatal("different original host groups collapsed into one proof", before, after, err)
+	}
+}
+
+func TestReadonlyRuntimePackageGroupsKeepOwnerAndWriteGuards(t *testing.T) {
+	for _, fault := range []string{"owner", "group-write", "other-write"} {
+		t.Run(fault, func(t *testing.T) {
+			facts := readonlyObjectFacts{Device: 1, Inode: 2, Links: 1, Mode: unix.S_IFREG | 02755, GID: 42}
+			switch fault {
+			case "owner":
+				facts.UID = 1
+			case "group-write":
+				facts.Mode |= 0020
+			case "other-write":
+				facts.Mode |= 0002
+			}
+			census := readonlyRuntimeCensus{rows: make(map[string]readonlyRuntimeRow), aliases: make(map[[2]uint64]readonlyRuntimeAlias)}
+			if err := census.record("/usr/bin/chage", facts, ""); err == nil || len(census.rows) != 0 || len(census.aliases) != 0 {
+				t.Fatal("package group admitted unsafe runtime metadata", err)
+			}
+		})
+	}
+}
+
+func TestReadonlyRuntimeFourRootsKeepCapturedGroups(t *testing.T) {
+	_, _, census, roots := readonlyRuntimeFixture(t)
+	if err := observeReadonlyRuntimeFixture(t, &census, &roots); err != nil {
+		t.Fatal(err)
+	}
+	if err := census.requireRoots(t.Context(), roots); err != nil {
+		t.Fatal(err)
+	}
+	for index, root := range roots {
+		changed := roots
+		changed[index].object.facts.GID ^= 1
+		if err := census.requireRoots(t.Context(), changed); !errors.Is(err, errReadonlyRuntimeMetadata) {
+			t.Fatal("fixed runtime root lost its captured group", root.visible, err)
+		}
+	}
+}
+
 func TestReadonlyRuntimeMetadataDiagnosticRetainsFirstCapturedRow(t *testing.T) {
-	for _, kind := range []string{"root", "file", "directory"} {
+	for _, kind := range []string{"root", "root-group", "file", "directory"} {
 		t.Run(kind, func(t *testing.T) {
 			base, original, census, roots := readonlyRuntimeFixture(t)
 			name, path, relative := "", base, "."
@@ -202,20 +269,20 @@ func TestReadonlyRuntimeMetadataDiagnosticRetainsFirstCapturedRow(t *testing.T) 
 			switch kind {
 			case "root":
 				census.uid ^= 1
+			case "root-group":
+				census.gid ^= 1
+				predicates = 16
 			case "file":
 				name, relative = "native", "native"
 				path = filepath.Join(base, name)
 				if err := os.WriteFile(path, []byte("original native body"), 0600); err != nil {
 					t.Fatal(err)
 				}
-				census.gid ^= 1
-				predicates = 16
+				census.uid ^= 1
 			case "directory":
 				name, relative = "bin", "bin"
 				path = filepath.Join(base, name)
 				census.uid ^= 1
-				census.gid ^= 1
-				predicates = 24
 			}
 			info, err := os.Lstat(path)
 			if err != nil {
@@ -236,7 +303,7 @@ func TestReadonlyRuntimeMetadataDiagnosticRetainsFirstCapturedRow(t *testing.T) 
 			if err != nil {
 				t.Fatal(err)
 			}
-			if kind == "root" {
+			if kind == "root" || kind == "root-group" {
 				err = observeReadonlyRuntimeFixture(t, &census, &roots)
 			} else {
 				err = census.entry(t.Context(), original, "/usr", name, 0)
@@ -330,9 +397,8 @@ func TestReadonlyRuntimeMetadataDiagnosticKeepsEveryOriginalPredicate(t *testing
 	upper.Mtime.Nsec, upper.Ctime.Nsec = 999999999, 999999999
 	for _, facts := range []readonlyObjectFacts{original, upper} {
 		result, err := readonlyRuntimeFacts(facts, original.UID, original.GID)
-		facts.UID, facts.GID = 0, 0
 		if err != nil || result != facts {
-			t.Fatal("valid original metadata or normalization changed", result, err)
+			t.Fatal("valid original host metadata changed", result, err)
 		}
 	}
 	facts := original

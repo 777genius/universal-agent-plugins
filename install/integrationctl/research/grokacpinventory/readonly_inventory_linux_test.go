@@ -355,7 +355,9 @@ func TestReadonlyRuntimeFailureCannotCarryProgressOrUnknownText(t *testing.T) {
 		{"null-control", func(body map[string]any) { body["readonly"].(map[string]any)["control_complete"] = nil }},
 		{"original", func(body map[string]any) { body["readonly"].(map[string]any)["original"] = map[string]any{} }},
 		{"marker", func(body map[string]any) { body["readonly"].(map[string]any)["control_marker"] = map[string]any{} }},
-		{"unknown", func(body map[string]any) { body["readonly"].(map[string]any)["stage"] = "runtime:PRIVATE /original/path" }},
+		{"unknown", func(body map[string]any) {
+			body["readonly"].(map[string]any)["stage"] = "runtime:PRIVATE /original/path"
+		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			body := readonlyRuntimeFailureFixture(t, r, "runtime:readonly-runtime-owner")

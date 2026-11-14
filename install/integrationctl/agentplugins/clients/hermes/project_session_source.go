@@ -345,15 +345,22 @@ func verifySessionBootstrap(ctx context.Context, root *os.Root, held os.FileInfo
 		}
 	}
 	if soul != nil {
-		body, err := io.ReadAll(io.LimitReader(soul, 668))
-		after, statErr := soul.Stat()
-		named, nameErr := root.Lstat("SOUL.md")
-		if err != nil || statErr != nil || nameErr != nil || !sameSessionMember(members["SOUL.md"], after) ||
-			!sameSessionMember(after, named) || len(body) != 667 || fmt.Sprintf("%x", sha256.Sum256(body)) != "36c1f5a2e92cd1d018311eaf4c8f1e8886672eae78212e033c681d0e3d5d506f" {
-			return fmt.Errorf("hermes bootstrap SOUL differs from pinned default")
+		if err := verifyBootstrapSoul(root, soul, members["SOUL.md"]); err != nil {
+			return err
 		}
 	}
 	return ctx.Err()
+}
+
+func verifyBootstrapSoul(root *os.Root, soul *os.File, before os.FileInfo) error {
+	body, err := io.ReadAll(io.LimitReader(soul, 668))
+	after, statErr := soul.Stat()
+	named, nameErr := root.Lstat("SOUL.md")
+	if err != nil || statErr != nil || nameErr != nil || !sameSessionMember(before, after) ||
+		!sameSessionMember(after, named) || len(body) != 667 || fmt.Sprintf("%x", sha256.Sum256(body)) != "36c1f5a2e92cd1d018311eaf4c8f1e8886672eae78212e033c681d0e3d5d506f" {
+		return fmt.Errorf("hermes bootstrap SOUL differs from pinned default")
+	}
+	return nil
 }
 
 func inspectBootstrapDirectory(root *os.Root, name string, members map[string]os.FileInfo, inspect bool) (resultErr error) {
