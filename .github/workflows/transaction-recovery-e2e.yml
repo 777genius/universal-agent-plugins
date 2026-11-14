@@ -1,0 +1,54 @@
+name: Transaction recovery E2E
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'install/integrationctl/agentplugins/transaction/**'
+      - '.github/workflows/transaction-recovery-e2e.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'install/integrationctl/agentplugins/transaction/**'
+      - '.github/workflows/transaction-recovery-e2e.yml'
+
+permissions:
+  contents: read
+
+# A focused Go-only regression gate, not a replacement for installer/native E2E.
+concurrency:
+  group: transaction-recovery-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  transaction-recovery:
+    name: recovery + race (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2025]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.11'
+          cache: false
+      - name: Assert exact commit under test
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - name: Run real crash/restart transaction suite with race detector
+        shell: bash
+        working-directory: install/integrationctl/agentplugins
+        env:
+          GOTOOLCHAIN: local
+          CGO_ENABLED: '1'
+        run: |
+          go env GOOS GOARCH CGO_ENABLED
+          go test -race -count=1 -timeout=18m -v ./transaction

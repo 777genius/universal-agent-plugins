@@ -1,0 +1,1057 @@
+{
+  "$schema": "https://github.com/777genius/universal-agent-plugins/schemas/catalog-v2.schema.json",
+  "schema_version": 2,
+  "catalog_version": "0.2.0",
+  "repository": "777genius/universal-agent-plugins",
+  "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+  "published_at": "2026-08-09T22:28:33Z",
+  "plugins": [
+    {
+      "name": "agent-code-navigator",
+      "version": "0.1.0",
+      "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+      "minimum_cli_version": "0.1.6",
+      "source_path": "plugins/agent-code-navigator",
+      "tree_digest": "sha256:2da970986164b2ba56aee452205bb2312927814f66596653b248c127e4e767e0",
+      "manifest_digest": "sha256:675fb48dff9431f75e2986211039b3bfb04860a84d6a5bd157b9658514a2394e",
+      "components": [
+        "skills"
+      ],
+      "compatibility": {
+        "codex": {
+          "package": "projected",
+          "verification": "tested",
+          "authentication": "not_required"
+        },
+        "cursor": {
+          "package": "native",
+          "verification": "tested",
+          "authentication": "not_required"
+        },
+        "copilot": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "not_required"
+        },
+        "vscode": {
+          "package": "prepared",
+          "verification": "schema_only",
+          "authentication": "not_required"
+        },
+        "kiro": {
+          "package": "native",
+          "verification": "tested",
+          "authentication": "not_required"
+        }
+      }
+    },
+    {
+      "name": "atlassian",
+      "version": "0.1.0",
+      "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+      "minimum_cli_version": "0.1.6",
+      "source_path": "plugins/atlassian",
+      "tree_digest": "sha256:a5988dbe73fa2efa8892a3918aabc6273a8398d56f3d247e7e921fdb1ee8a167",
+      "manifest_digest": "sha256:e83ade754f1251554622e4b48d596ebf72510bd7292b19a7793df4de8e546d04",
+      "components": [
+        "mcp"
+      ],
+      "compatibility": {
+        "codex": {
+          "package": "projected",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "cursor": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "copilot": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "vscode": {
+          "package": "prepared",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "kiro": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        }
+      }
+    },
+    {
+      "name": "chrome-devtools",
+      "version": "0.1.0",
+      "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+      "minimum_cli_version": "0.1.6",
+      "source_path": "plugins/chrome-devtools",
+      "tree_digest": "sha256:07cae09debbcd3f4ab7c18ef00db5fba58b0185b2c502d759732155e47a65f7b",
+      "manifest_digest": "sha256:e7d43a8e39b0e83f2c05777e297f6a3884002dc2601d70528b55a44132db8091",
+      "components": [
+        "mcp"
+      ],
+      "compatibility": {
+        "codex": {
+          "package": "projected",
+          "verification": "tested",
+          "authentication": "not_required"
+        },
+        "cursor": {
+          "package": "native",
+          "verification": "tested",
+          "authentication": "not_required"
+        },
+        "copilot": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "not_required"
+        },
+        "vscode": {
+          "package": "prepared",
+          "verification": "schema_only",
+          "authentication": "not_required"
+        },
+        "kiro": {
+          "package": "native",
+          "verification": "tested",
+          "authentication": "not_required"
+        }
+      }
+    },
+    {
+      "name": "cloudflare",
+      "version": "0.1.0",
+      "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+      "minimum_cli_version": "0.1.6",
+      "source_path": "plugins/cloudflare",
+      "tree_digest": "sha256:788761d3f9da6d95d7ab8c6253942f057ecef5e0fb8e2815fbca8dcbb5fcee40",
+      "manifest_digest": "sha256:9bec7cfed2ecb217145c2a02658296670a328416566433518b4da0246e91d382",
+      "components": [
+        "mcp"
+      ],
+      "compatibility": {
+        "codex": {
+          "package": "projected",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "cursor": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "copilot": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "vscode": {
+          "package": "prepared",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "kiro": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        }
+      }
+    },
+    {
+      "name": "cloudflare-bindings",
+      "version": "0.1.0",
+      "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+      "minimum_cli_version": "0.1.6",
+      "source_path": "plugins/cloudflare-bindings",
+      "tree_digest": "sha256:98573830f703a479dece5bb964353117151e533abff0fa77597c5a654dc56729",
+      "manifest_digest": "sha256:6b945cf035f784216e71425cf7b6ca477b27a2069d2580e9713a65f5ec2ca0bf",
+      "components": [
+        "mcp"
+      ],
+      "compatibility": {
+        "codex": {
+          "package": "projected",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "cursor": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "copilot": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "vscode": {
+          "package": "prepared",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "kiro": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        }
+      }
+    },
+    {
+      "name": "cloudflare-docs",
+      "version": "0.1.0",
+      "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+      "minimum_cli_version": "0.1.6",
+      "source_path": "plugins/cloudflare-docs",
+      "tree_digest": "sha256:ebfc3239ab774dea35897919362f4ca0b2b3bfc6d33863d977940ab493907b74",
+      "manifest_digest": "sha256:6b575562e527194ccd31238fde8c5f764409ecc98e211e92dfb81455eef88bdd",
+      "components": [
+        "mcp"
+      ],
+      "compatibility": {
+        "codex": {
+          "package": "projected",
+          "verification": "tested",
+          "authentication": "not_required"
+        },
+        "cursor": {
+          "package": "native",
+          "verification": "tested",
+          "authentication": "not_required"
+        },
+        "copilot": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "not_required"
+        },
+        "vscode": {
+          "package": "prepared",
+          "verification": "schema_only",
+          "authentication": "not_required"
+        },
+        "kiro": {
+          "package": "native",
+          "verification": "tested",
+          "authentication": "not_required"
+        },
+        "chatgpt": {
+          "package": "projected",
+          "verification": "tested",
+          "authentication": "not_required",
+          "app_binding": {
+            "app_key": "cloudflare-docs",
+            "id": "plugin_asdk_app_6a78e90cf73481918ef10cdb87cd4bb4",
+            "mcp_server": "cloudflare-docs",
+            "mcp_url": "https://docs.mcp.cloudflare.com/mcp",
+            "runtime_evidence": "tests/e2e/results/chatgpt-cloudflare-docs-personal-app-2026-08-10.json",
+            "runtime_evidence_revision": "2ddbb99dd190c1792b79904f9875e6322bccd243"
+          }
+        }
+      }
+    },
+    {
+      "name": "cloudflare-observability",
+      "version": "0.1.0",
+      "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+      "minimum_cli_version": "0.1.6",
+      "source_path": "plugins/cloudflare-observability",
+      "tree_digest": "sha256:dbabe94312d1d780f6f96c6f9c595cb46dbdef49ce31182906c3cc4077e4b295",
+      "manifest_digest": "sha256:41573bb020202619d72fe2cbbf35c56cb5ed4b885b17867ffd2e4a74ebcb5064",
+      "components": [
+        "mcp"
+      ],
+      "compatibility": {
+        "codex": {
+          "package": "projected",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "cursor": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "copilot": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "vscode": {
+          "package": "prepared",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "kiro": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        }
+      }
+    },
+    {
+      "name": "cloudflare-radar",
+      "version": "0.1.0",
+      "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+      "minimum_cli_version": "0.1.6",
+      "source_path": "plugins/cloudflare-radar",
+      "tree_digest": "sha256:bad20c22343458ad40d08b48d621db32955b07ab66d61ad02cc0546a4e5e94c6",
+      "manifest_digest": "sha256:cf94d10bad7d902f4ed171d2363854fb93409ac79a1c5e02d152be6448d66fc2",
+      "components": [
+        "mcp"
+      ],
+      "compatibility": {
+        "codex": {
+          "package": "projected",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "cursor": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "copilot": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "vscode": {
+          "package": "prepared",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "kiro": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        }
+      }
+    },
+    {
+      "name": "context7",
+      "version": "0.1.0",
+      "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+      "minimum_cli_version": "0.1.6",
+      "source_path": "plugins/context7",
+      "tree_digest": "sha256:51eee528879504843a31b2ea57abb77167e33cd5b81856e0640ce3a52f3281a4",
+      "manifest_digest": "sha256:341c54728c2f50d3876b12a6e94ba06751c94d2be215037846d06f93a018434e",
+      "components": [
+        "mcp"
+      ],
+      "compatibility": {
+        "codex": {
+          "package": "projected",
+          "verification": "tested",
+          "authentication": "not_required"
+        },
+        "cursor": {
+          "package": "native",
+          "verification": "tested",
+          "authentication": "not_required"
+        },
+        "copilot": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "not_required"
+        },
+        "vscode": {
+          "package": "prepared",
+          "verification": "schema_only",
+          "authentication": "not_required"
+        },
+        "kiro": {
+          "package": "native",
+          "verification": "tested",
+          "authentication": "not_required"
+        }
+      }
+    },
+    {
+      "name": "docker-hub",
+      "version": "0.1.0",
+      "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+      "minimum_cli_version": "0.1.6",
+      "source_path": "plugins/docker-hub",
+      "tree_digest": "sha256:7976d176756b199da384cc898ccfe24aa7c0ebd9894e703132fec6d1bac699a4",
+      "manifest_digest": "sha256:413347fe45d0dbcbd5b4d5cf88eb7e0ec5c0cd080486ea4cb8c3f61f0bd7a95d",
+      "components": [
+        "mcp"
+      ],
+      "compatibility": {
+        "codex": {
+          "package": "projected",
+          "verification": "schema_only",
+          "authentication": "not_required"
+        },
+        "cursor": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "not_required"
+        },
+        "copilot": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "not_required"
+        },
+        "vscode": {
+          "package": "prepared",
+          "verification": "schema_only",
+          "authentication": "not_required"
+        },
+        "kiro": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "not_required"
+        }
+      }
+    },
+    {
+      "name": "figma",
+      "version": "0.1.0",
+      "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+      "minimum_cli_version": "0.1.6",
+      "source_path": "plugins/figma",
+      "tree_digest": "sha256:aefbb22c2052bb401168b4ceea895f5d4eeb9073185c4d33a91f4b38ebad24b4",
+      "manifest_digest": "sha256:67fbfd8062a7f3d965ee63cc68f392a6afb1e8861e3bcc5fe1f70e7e9fadabba",
+      "components": [
+        "mcp"
+      ],
+      "compatibility": {
+        "codex": {
+          "package": "projected",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "cursor": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "copilot": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "vscode": {
+          "package": "prepared",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "kiro": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        }
+      },
+      "openai_mcp_auth": {
+        "figma": {
+          "oauth_resource": "https://mcp.figma.com/mcp"
+        }
+      }
+    },
+    {
+      "name": "firebase",
+      "version": "0.1.0",
+      "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+      "minimum_cli_version": "0.1.6",
+      "source_path": "plugins/firebase",
+      "tree_digest": "sha256:9ed143367d27e63b55acd864135680ac71137247d4cb17599bf94370c9cc32fc",
+      "manifest_digest": "sha256:9883d7c5b0472304f799df862f52d3cdae3120b3324633d6a58fceceb78da7b7",
+      "components": [
+        "mcp"
+      ],
+      "compatibility": {
+        "codex": {
+          "package": "projected",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "cursor": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "copilot": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "vscode": {
+          "package": "prepared",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "kiro": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        }
+      }
+    },
+    {
+      "name": "github",
+      "version": "0.1.0",
+      "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+      "minimum_cli_version": "0.1.6",
+      "source_path": "plugins/github",
+      "tree_digest": "sha256:8977d2273c14e2cfcd0d502d490c8420e3edb2822608af2aeb7493fca7703d27",
+      "manifest_digest": "sha256:091e37c5f33c0a92f77070cfcb1b03759b2637927281c04d989e6c8fef888cae",
+      "components": [
+        "mcp"
+      ],
+      "compatibility": {
+        "codex": {
+          "package": "projected",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "cursor": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "copilot": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "vscode": {
+          "package": "prepared",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "kiro": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        }
+      },
+      "openai_mcp_auth": {
+        "github": {
+          "bearer_token_env_var": "GITHUB_PAT_TOKEN"
+        }
+      }
+    },
+    {
+      "name": "gitlab",
+      "version": "0.1.0",
+      "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+      "minimum_cli_version": "0.1.6",
+      "source_path": "plugins/gitlab",
+      "tree_digest": "sha256:e7ef8870fe6678ab84731a0b389b57b41a439e4903ea37b4fe60b59240c08bc3",
+      "manifest_digest": "sha256:1a181fab20d9520f5f006f4237e88d67cf58d29b9994dbc45ee4c80d2474e080",
+      "components": [
+        "mcp"
+      ],
+      "compatibility": {
+        "codex": {
+          "package": "projected",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "cursor": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "copilot": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "vscode": {
+          "package": "prepared",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "kiro": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        }
+      }
+    },
+    {
+      "name": "greptile",
+      "version": "0.1.0",
+      "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+      "minimum_cli_version": "0.1.6",
+      "source_path": "plugins/greptile",
+      "tree_digest": "sha256:b6c701696326d50ca19664f2e6350451a75e37298f2ae47e107ccaf6f865d93d",
+      "manifest_digest": "sha256:05b29500564aede5274a6d21c0cf5bb4727e995045b04de170913b7ef2ae07bb",
+      "components": [
+        "mcp"
+      ],
+      "compatibility": {
+        "codex": {
+          "package": "projected",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "cursor": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "copilot": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "vscode": {
+          "package": "prepared",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "kiro": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        }
+      }
+    },
+    {
+      "name": "heroku",
+      "version": "0.1.0",
+      "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+      "minimum_cli_version": "0.1.6",
+      "source_path": "plugins/heroku",
+      "tree_digest": "sha256:9988a94c56676b54f5e819d4c72eefe7164a6e207503c32308122983a9662d64",
+      "manifest_digest": "sha256:5b7c088e290ed04b0eafe0275dc806e7c2153dd7cbe6b74d1c5f1d2961e9355a",
+      "components": [
+        "mcp"
+      ],
+      "compatibility": {
+        "codex": {
+          "package": "projected",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "cursor": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "copilot": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "vscode": {
+          "package": "prepared",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "kiro": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        }
+      }
+    },
+    {
+      "name": "hubspot-crm",
+      "version": "0.1.0",
+      "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+      "minimum_cli_version": "0.1.6",
+      "source_path": "plugins/hubspot-crm",
+      "tree_digest": "sha256:93db3068e880bc135100853804f195434673fc5dd6bcc9a7fd82197e930dda4e",
+      "manifest_digest": "sha256:20334e86a1b599d2759e04bfaef37dc2ddb7f6b0f3994b5d66d4eca12fbec941",
+      "components": [
+        "mcp"
+      ],
+      "compatibility": {
+        "codex": {
+          "package": "projected",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "cursor": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "copilot": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "vscode": {
+          "package": "prepared",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "kiro": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        }
+      }
+    },
+    {
+      "name": "hubspot-developer",
+      "version": "0.1.0",
+      "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+      "minimum_cli_version": "0.1.6",
+      "source_path": "plugins/hubspot-developer",
+      "tree_digest": "sha256:706abd93939ee72ea62fd2da90ee27f6d55cfa5c5d57fa695d5b0bcbc4f99a75",
+      "manifest_digest": "sha256:257a75ed2e473945a26afa102152f866bd8269bb41c998f6d87fbdf43ed1a6b9",
+      "components": [
+        "mcp"
+      ],
+      "compatibility": {
+        "codex": {
+          "package": "projected",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "cursor": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "copilot": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "vscode": {
+          "package": "prepared",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "kiro": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        }
+      }
+    },
+    {
+      "name": "linear",
+      "version": "0.1.0",
+      "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+      "minimum_cli_version": "0.1.6",
+      "source_path": "plugins/linear",
+      "tree_digest": "sha256:ae5a6bee33aff8bc2a045cc8f7ac4f7cf0ae453c0bb8031a587bb2a9b081a2a2",
+      "manifest_digest": "sha256:0b8ed223c21d206d802130ace7219b5c78af1903675640cc77f5195e4f86ef70",
+      "components": [
+        "mcp"
+      ],
+      "compatibility": {
+        "codex": {
+          "package": "projected",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "cursor": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "copilot": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "vscode": {
+          "package": "prepared",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "kiro": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        }
+      },
+      "openai_mcp_auth": {
+        "linear": {
+          "oauth_resource": "https://mcp.linear.app/mcp"
+        }
+      }
+    },
+    {
+      "name": "neon",
+      "version": "0.1.0",
+      "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+      "minimum_cli_version": "0.1.6",
+      "source_path": "plugins/neon",
+      "tree_digest": "sha256:d4a807220a40563e968f8efeb37a424b95ab82c6566877f1f6d688c63900ad10",
+      "manifest_digest": "sha256:6787894c7d3e033db05deee5e36358caf387493a98a78716d6db4b343e9c0698",
+      "components": [
+        "mcp"
+      ],
+      "compatibility": {
+        "codex": {
+          "package": "projected",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "cursor": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "copilot": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "vscode": {
+          "package": "prepared",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "kiro": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        }
+      }
+    },
+    {
+      "name": "notion",
+      "version": "0.1.0",
+      "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+      "minimum_cli_version": "0.1.6",
+      "source_path": "plugins/notion",
+      "tree_digest": "sha256:67b355127dc3e618196b0f8a9f1af1914f6b9b8f1e31299dc75d567c010e8da9",
+      "manifest_digest": "sha256:bbab30a4f062218d7a5fce2f6c818680d3c7adfaebdbaa3e523e15942a2f57e5",
+      "components": [
+        "mcp"
+      ],
+      "compatibility": {
+        "codex": {
+          "package": "projected",
+          "verification": "tested",
+          "authentication": "required"
+        },
+        "cursor": {
+          "package": "native",
+          "verification": "tested",
+          "authentication": "required"
+        },
+        "copilot": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "vscode": {
+          "package": "prepared",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "kiro": {
+          "package": "native",
+          "verification": "tested",
+          "authentication": "required"
+        }
+      },
+      "openai_mcp_auth": {
+        "notion": {
+          "oauth_resource": "https://mcp.notion.com"
+        }
+      }
+    },
+    {
+      "name": "sentry",
+      "version": "0.1.0",
+      "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+      "minimum_cli_version": "0.1.6",
+      "source_path": "plugins/sentry",
+      "tree_digest": "sha256:d67605b84b3b3d9a1791307a40b5df663e2bb719b1321a3ee2899977fb849762",
+      "manifest_digest": "sha256:7606b1f8af700ea76590f0ae586ff8586f4dc370f536ceedbeab8d934494e42e",
+      "components": [
+        "mcp"
+      ],
+      "compatibility": {
+        "codex": {
+          "package": "projected",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "cursor": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "copilot": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "vscode": {
+          "package": "prepared",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "kiro": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        }
+      }
+    },
+    {
+      "name": "statsig",
+      "version": "0.1.0",
+      "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+      "minimum_cli_version": "0.1.6",
+      "source_path": "plugins/statsig",
+      "tree_digest": "sha256:28fd20bf16a96e87f311ecac07ab89f75e23c42b303c931fa2bbc9840005db73",
+      "manifest_digest": "sha256:5100526dca8f8e53e42d1d53f8acc1879ea8a2d8b0982df3f00be5e95bf3e465",
+      "components": [
+        "mcp"
+      ],
+      "compatibility": {
+        "codex": {
+          "package": "projected",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "cursor": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "copilot": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "vscode": {
+          "package": "prepared",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "kiro": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        }
+      }
+    },
+    {
+      "name": "stripe",
+      "version": "0.1.0",
+      "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+      "minimum_cli_version": "0.1.6",
+      "source_path": "plugins/stripe",
+      "tree_digest": "sha256:63cba08ab98fc8c0d91db9f580390f39551fddd3ffdff56443f928687dd920fd",
+      "manifest_digest": "sha256:e70885fda5a4ce50c302891229e204bbf22904ec3f227670e5916d69f9b8b80d",
+      "components": [
+        "mcp"
+      ],
+      "compatibility": {
+        "codex": {
+          "package": "projected",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "cursor": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "copilot": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "vscode": {
+          "package": "prepared",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "kiro": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        }
+      }
+    },
+    {
+      "name": "supabase",
+      "version": "0.1.0",
+      "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+      "minimum_cli_version": "0.1.6",
+      "source_path": "plugins/supabase",
+      "tree_digest": "sha256:2ae36c14a87016fad5ea9a45bd0a16b6f56acf15e64604cb0de942198ef35277",
+      "manifest_digest": "sha256:bb0672e8cd411b1c8e0872a5f7f0abc95f9c68f008802d42a2cd16a689deeb11",
+      "components": [
+        "mcp"
+      ],
+      "compatibility": {
+        "codex": {
+          "package": "projected",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "cursor": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "copilot": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "vscode": {
+          "package": "prepared",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "kiro": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        }
+      }
+    },
+    {
+      "name": "vercel",
+      "version": "0.1.0",
+      "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+      "minimum_cli_version": "0.1.6",
+      "source_path": "plugins/vercel",
+      "tree_digest": "sha256:4ed31025a6c8323a330a163190c6264f0a6cebde8f643b87d599d8b5c6745304",
+      "manifest_digest": "sha256:23f7cd28573c4ab10943178db05a47f2af3639518a334449c23d89b19562ef74",
+      "components": [
+        "mcp"
+      ],
+      "compatibility": {
+        "codex": {
+          "package": "projected",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "cursor": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "copilot": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "vscode": {
+          "package": "prepared",
+          "verification": "schema_only",
+          "authentication": "required"
+        },
+        "kiro": {
+          "package": "native",
+          "verification": "schema_only",
+          "authentication": "required"
+        }
+      }
+    }
+  ]
+}

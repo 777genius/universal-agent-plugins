@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+hook_name="${1:-}"
+if [[ -z "$hook_name" ]]; then
+  echo "usage: main.sh <hook-name>" >&2
+  exit 1
+fi
+
+if [[ "$hook_name" == "notify" ]]; then
+  if [[ $# -lt 2 ]]; then
+    echo "missing notify payload" >&2
+    exit 1
+  fi
+  exit 0
+fi
+
+cat >/dev/null
+printf '{}'

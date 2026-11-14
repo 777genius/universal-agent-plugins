@@ -1,0 +1,8 @@
+{
+  "release-checks": {
+    "args": [
+      "./bin/release-checks.mjs"
+    ],
+    "command": "node"
+  }
+}

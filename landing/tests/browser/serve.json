@@ -1,0 +1,17 @@
+{
+  "directoryListing": false,
+  "cleanUrls": [
+    "!**/*.html"
+  ],
+  "headers": [
+    {
+      "source": "**/api/**",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/octet-stream"
+        }
+      ]
+    }
+  ]
+}

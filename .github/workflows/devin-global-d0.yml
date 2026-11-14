@@ -1,0 +1,468 @@
+name: Devin Global UAP install and native discovery E2E
+on:
+  push:
+    branches:
+      - feat/devin-global-components-20261104
+permissions:
+  contents: read
+concurrency:
+  group: devin-global-d0-only
+  cancel-in-progress: true
+jobs:
+  native-d0:
+    name: Verify genuine Devin Skills and MCP discovery after UAP install
+    runs-on: ubuntu-24.04
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.26.11"
+          cache: false
+      - name: Download hash-verified Devin and observe real native profile, Skills and MCP
+        shell: bash
+        run: |
+          python3 - <<'PYTHON'
+          import hashlib
+          import io
+          import json
+          import os
+          import pathlib
+          import shutil
+          import signal
+          import subprocess
+          import sys
+          import tarfile
+          import tempfile
+          import time
+          import urllib.request
+          
+          # Genuine pinned Devin and source-built UAP on a disposable hosted VM.
+          # Native listing qualifies installation/discovery, not model MCP RPC.
+          ROOT = pathlib.Path(os.environ["RUNNER_TEMP"]) / "devin-global-d0"
+          ROOT.mkdir(mode=0o700, parents=True, exist_ok=True)
+          report = {"status": "BLOCKED", "commit": os.environ.get("GITHUB_SHA"),
+                    "platform": "linux-amd64", "qualified_product_e2e": False,
+                    "installation_discovery_e2e": False,
+                    "commands": [], "native_rpc_events": []}
+          archive_url = "https://static.devin.ai/cli/3000.11.205/devin-3000.11.205-x86_64-unknown-linux.tar.gz"
+          archive_sha = "2e65c8b93682258fc91f5e4cead92e3698338cebf1b31dbc32a3201cb63705c4"
+          binary_sha = "642c82e32cb3dec90cf5ab01975520b425307872c7a650c9fb5b0653f37681f4"
+          trace = ROOT / "mcp-events.jsonl"
+          http_process = None
+          
+          # The same inert, isolated MCP implementation serves stdio and Streamable HTTP.
+          # Every event is observed at the actual transport, NEVER injected by the harness.
+          service = r"""
+          import json, os, pathlib, sys
+          from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+          
+          def emit(origin, message):
+              method = message.get("method")
+              event = {"transport": origin, "method": method}
+              if method == "tools/call":
+                  event["name"] = (message.get("params") or {}).get("name")
+                  event["nonce"] = ((message.get("params") or {}).get("arguments") or {}).get("nonce")
+              with open(os.environ["UAP_D0_TRACE"], "a", encoding="utf-8") as stream:
+                  stream.write(json.dumps(event, sort_keys=True) + "\n")
+              if "id" not in message:
+                  return None
+              result = None
+              if method == "initialize":
+                  requested = ((message.get("params") or {}).get("protocolVersion") or "2025-03-26")
+                  result = {"protocolVersion": requested, "capabilities": {"tools": {}},
+                            "serverInfo": {"name": "uap-d0-inert", "version": "1.0.0"}}
+              elif method == "tools/list":
+                  result = {"tools": [{"name": "nonce_echo", "description": "Echo inert test nonce",
+                                       "inputSchema": {"type": "object", "properties": {"nonce": {"type": "string"}},
+                                                       "required": ["nonce"]}}]}
+              elif method == "tools/call":
+                  args = ((message.get("params") or {}).get("arguments") or {})
+                  result = {"content": [{"type": "text", "text": "UAP_D0_ECHO:" + str(args.get("nonce", ""))}]}
+              elif method == "ping":
+                  result = {}
+              if result is None:
+                  return {"jsonrpc": "2.0", "id": message["id"],
+                          "error": {"code": -32601, "message": "Method not found"}}
+              return {"jsonrpc": "2.0", "id": message["id"], "result": result}
+          
+          if sys.argv[1] == "stdio":
+              for line in sys.stdin:
+                  try:
+                      message = json.loads(line)
+                      reply = emit("stdio", message)
+                      if reply is not None:
+                          sys.stdout.write(json.dumps(reply, separators=(",", ":")) + "\n")
+                          sys.stdout.flush()
+                  except (ValueError, TypeError):
+                      continue
+          elif sys.argv[1] == "http":
+              class Handler(BaseHTTPRequestHandler):
+                  def log_message(self, *args):
+                      pass
+                  def do_POST(self):
+                      if self.path != "/mcp":
+                          self.send_error(404)
+                          return
+                      length = int(self.headers.get("Content-Length", "0"))
+                      if not 0 < length <= 65536:
+                          self.send_error(413)
+                          return
+                      try:
+                          message = json.loads(self.rfile.read(length))
+                          reply = emit("http", message)
+                      except (ValueError, TypeError):
+                          self.send_error(400)
+                          return
+                      raw = json.dumps(reply, separators=(",", ":")).encode() if reply else b""
+                      self.send_response(200 if reply else 202)
+                      self.send_header("Content-Type", "application/json")
+                      self.send_header("Content-Length", str(len(raw)))
+                      self.end_headers()
+                      if raw:
+                          self.wfile.write(raw)
+                  def do_GET(self):
+                      self.send_response(405)
+                      self.send_header("Allow", "POST")
+                      self.send_header("Content-Length", "0")
+                      self.end_headers()
+              server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+              server.daemon_threads = True
+              pathlib.Path(os.environ["UAP_D0_PORT_FILE"]).write_text(str(server.server_address[1]))
+              server.serve_forever()
+          """
+          
+          def sha256_file(path):
+              digest = hashlib.sha256()
+              with open(path, "rb") as source:
+                  for part in iter(lambda: source.read(1 << 20), b""):
+                      digest.update(part)
+              return digest.hexdigest()
+          
+          def run_native(binary, argv, cwd, env, seconds=16):
+              with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
+                  proc = subprocess.Popen([str(binary), *argv], cwd=cwd, env=env,
+                                          stdin=subprocess.DEVNULL, stdout=out, stderr=err,
+                                          start_new_session=True)
+                  expired = False
+                  try:
+                      proc.wait(timeout=seconds)
+                  except subprocess.TimeoutExpired:
+                      expired = True
+                      os.killpg(proc.pid, signal.SIGKILL)
+                      proc.wait(timeout=5)
+                  out.seek(0)
+                  err.seek(0)
+                  stdout, stderr = out.read(65537), err.read(65537)
+              record = {"argv": argv, "project": pathlib.Path(cwd).name, "exit": proc.returncode,
+                        "timeout": expired, "stdout_sha256": hashlib.sha256(stdout).hexdigest(),
+                        "stderr_sha256": hashlib.sha256(stderr).hexdigest(),
+                        "output_bounded": len(stdout) <= 65536 and len(stderr) <= 65536,
+                        "global_skill_in_stdout": b"uap-d0-global" in stdout,
+                        "project_skill_in_stdout": b"uap-d0-project" in stdout,
+                        "stdio_name_in_stdout": b"uap_d0_stdio" in stdout,
+                        "http_name_in_stdout": b"uap_d0_http" in stdout,
+                        "project_stdio_in_stdout": b"uap_d0_project_stdio" in stdout,
+                        "project_http_in_stdout": b"uap_d0_project_http" in stdout,
+                        "uap_cli_skill_in_stdout": b"uap-e2e-global" in stdout,
+                        "uap_cli_stdio_in_stdout": b"uap_e2e_stdio" in stdout,
+                        "uap_cli_http_in_stdout": b"uap_e2e_http" in stdout,
+                        "auth_diagnostic": any(word in (stdout + stderr).lower()
+                                               for word in (b"login", b"sign in", b"authentication", b"not authenticated"))}
+              if argv == ["skills", "list", "--json"]:
+                  try:
+                      record["parseable_json"] = isinstance(json.loads(stdout), (dict, list))
+                  except (ValueError, UnicodeDecodeError):
+                      record["parseable_json"] = False
+              report["commands"].append(record)
+              return record
+          
+          try:
+              if os.environ.get("GITHUB_ACTIONS") != "true" or os.environ.get("RUNNER_ENVIRONMENT") != "github-hosted":
+                  raise RuntimeError("requires a disposable GitHub-hosted runner")
+              report["archive_source"] = archive_url
+              with urllib.request.urlopen(archive_url, timeout=100) as response:
+                  payload = response.read(73679376)
+              if len(payload) != 73679375 or hashlib.sha256(payload).hexdigest() != archive_sha:
+                  raise RuntimeError("official Devin archive hash or length mismatch")
+              executable = ROOT / "devin"
+              with tarfile.open(fileobj=io.BytesIO(payload), mode="r:gz") as archive:
+                  item = archive.getmember("bin/devin")
+                  if not item.isfile() or item.size != 217494824:
+                      raise RuntimeError("official Devin executable member mismatch")
+                  with archive.extractfile(item) as source, executable.open("xb") as target:
+                      shutil.copyfileobj(source, target, 1 << 20)
+              if sha256_file(executable) != binary_sha:
+                  raise RuntimeError("official Devin executable SHA256 mismatch")
+              executable.chmod(0o700)
+              del payload
+              report["native_executable_sha256"] = binary_sha
+              report["archive_sha256"] = archive_sha
+          
+              home = ROOT / "home"
+              config = home / ".config"
+              global_root = config / "devin"
+              (global_root / "skills" / "uap-d0-global").mkdir(mode=0o700, parents=True)
+              (global_root / "skills" / "uap-d0-global" / "SKILL.md").write_text(
+                  "---\nname: uap-d0-global\ndescription: Disposable genuine Global Skill source observation\n---\n"
+                  "When explicitly requested, call both inert nonce_echo MCP tools.\n")
+              projects = [ROOT / "a", ROOT / "b"]
+              for project in projects:
+                  project.mkdir()
+                  (project / ".devin").mkdir()
+              (projects[0] / ".devin" / "skills" / "uap-d0-project").mkdir(parents=True)
+              (projects[0] / ".devin" / "skills" / "uap-d0-project" / "SKILL.md").write_text(
+                  "---\nname: uap-d0-project\ndescription: Project A-only scope control\n---\n"
+                  "Project A only.\n")
+              for name in ("data", "state", "cache"):
+                  (home / name).mkdir(parents=True)
+              service_path = ROOT / "mcp-service.py"
+              service_path.write_text(service)
+              service_path.chmod(0o600)
+              env = {"HOME": str(home), "XDG_CONFIG_HOME": str(config),
+                     "XDG_DATA_HOME": str(home / "data"), "XDG_STATE_HOME": str(home / "state"),
+                     "XDG_CACHE_HOME": str(home / "cache"), "PATH": "/usr/bin:/bin",
+                     "LANG": "C.UTF-8", "TERM": "dumb", "CI": "true",
+                     "UAP_D0_TRACE": str(trace), "UAP_D0_PORT_FILE": str(ROOT / "port.txt")}
+              http_process = subprocess.Popen([sys.executable, str(service_path), "http"],
+                                              cwd=ROOT, env=env, stdin=subprocess.DEVNULL,
+                                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                              start_new_session=True)
+              for _ in range(60):
+                  if (ROOT / "port.txt").exists():
+                      break
+                  if http_process.poll() is not None:
+                      raise RuntimeError("inert HTTP MCP server terminated")
+                  time.sleep(0.1)
+              if not (ROOT / "port.txt").exists():
+                  raise RuntimeError("inert HTTP MCP server did not bind loopback")
+              port = int((ROOT / "port.txt").read_text())
+              entries = {"mcpServers": {
+                  "uap_d0_stdio": {"command": sys.executable,
+                                   "args": [str(service_path), "stdio"],
+                                   "env": {"UAP_D0_TRACE": str(trace)}},
+                  "uap_d0_http": {"url": "http://127.0.0.1:" + str(port) + "/mcp", "transport": "http"}}}
+              (global_root / "mcp_config.json").write_text(json.dumps(entries))
+              # One original global authority, plus independent A-only project servers.
+              project_entries = {"mcpServers": {
+                  "uap_d0_project_stdio": entries["mcpServers"]["uap_d0_stdio"],
+                  "uap_d0_project_http": entries["mcpServers"]["uap_d0_http"]}}
+              (projects[0] / ".devin" / "mcp_config.json").write_text(json.dumps(project_entries))
+              report["original_profile"] = {"home": str(home), "xdg_config_home": str(config),
+                                            "native_global_root": str(global_root),
+                                            "selected_executable": str(executable),
+                                            "project_a": str(projects[0]), "project_b": str(projects[1])}
+              version = run_native(executable, ["--version"], projects[0], env)
+              if version["exit"] != 0 or version["timeout"] or not version["output_bounded"]:
+                  raise RuntimeError("genuine Devin version probe failed")
+              for project in projects:
+                  run_native(executable, ["skills", "list", "--json"], project, env)
+                  run_native(executable, ["mcp", "list"], project, env)
+              # Owner-approved install-only gate: native list/readback does
+              # not require or attempt a cloud-authenticated model session.
+              # RPC events remain empty and runtime qualification stays false.
+              if trace.exists():
+                  for line in trace.read_text().splitlines()[:512]:
+                      event = json.loads(line)
+                      if event.get("transport") in ("stdio", "http") and event.get("method") in (
+                              "initialize", "tools/list", "tools/call", "notifications/initialized", "ping"):
+                          report["native_rpc_events"].append(event)
+              observed = report["native_rpc_events"]
+              source = [c for c in report["commands"] if c["argv"] == ["skills", "list", "--json"]]
+              mcp_sources = [c for c in report["commands"] if c["argv"] == ["mcp", "list"]]
+              checks = {"global_source_A_B": len(source) == 2 and all(
+                            c["exit"] == 0 and c.get("parseable_json") and c["global_skill_in_stdout"] for c in source),
+                        "project_skill_A_only": len(source) == 2 and source[0]["project"] == "a" and source[1]["project"] == "b"
+                            and source[0]["exit"] == 0 and source[0].get("parseable_json") and source[0]["project_skill_in_stdout"]
+                            and source[1]["exit"] == 0 and source[1].get("parseable_json") and not source[1]["project_skill_in_stdout"],
+                        "global_mcp_A_B": len(mcp_sources) == 2 and all(
+                            c["exit"] == 0 and c["stdio_name_in_stdout"] and c["http_name_in_stdout"] for c in mcp_sources),
+                        "project_mcp_A_only": len(mcp_sources) == 2 and mcp_sources[0]["project"] == "a" and mcp_sources[1]["project"] == "b"
+                            and mcp_sources[0]["exit"] == 0 and mcp_sources[0]["project_stdio_in_stdout"] and mcp_sources[0]["project_http_in_stdout"]
+                            and mcp_sources[1]["exit"] == 0 and not mcp_sources[1]["project_stdio_in_stdout"] and not mcp_sources[1]["project_http_in_stdout"]}
+              for transport, nonce in (("stdio", "STDIO_D0_20261104"), ("http", "HTTP_D0_20261104")):
+                  methods = {e["method"] for e in observed if e["transport"] == transport}
+                  calls = [e for e in observed if e["transport"] == transport and e["method"] == "tools/call"]
+                  checks[transport + "_initialize_list_call"] = {"initialize", "tools/list", "tools/call"} <= methods and any(
+                      c.get("name") == "nonce_echo" and c.get("nonce") == nonce for c in calls)
+              report["gates"] = checks
+              # This phase connects the real UAP binary and its receipts to
+              # genuine Devin discovery in the SAME original XDG authority.
+              # No model RPC, scanner bypass or substituted Devin client.
+              bridge = {"status": "BLOCKED", "steps": [], "inventory": []}
+              report["uap_cli_bridge"] = bridge
+              checks["uap_cli_add_repair_remove_A_B"] = False
+              try:
+                  workspace = pathlib.Path(os.environ["GITHUB_WORKSPACE"])
+                  cli = ROOT / "agentplugins"
+                  build = subprocess.run(
+                      ["go", "build", "-trimpath", "-o", str(cli), "./cli/cmd/agentplugins"],
+                      cwd=workspace, env=os.environ.copy(), capture_output=True, timeout=150)
+                  bridge["build"] = {"exit": build.returncode,
+                                     "stderr_sha256": hashlib.sha256(build.stderr).hexdigest()}
+                  if build.returncode:
+                      raise RuntimeError("production agentplugins Go build failed")
+                  bridge["uap_binary_sha256"] = sha256_file(cli)
+                  state = ROOT / "separate-uap-state"
+                  scratch = ROOT / "uap-scratch"
+                  state.mkdir(mode=0o700)
+                  scratch.mkdir(mode=0o700)
+                  cli_env = dict(env, PATH=str(ROOT) + os.pathsep + "/usr/local/go/bin:/usr/bin:/bin",
+                                 AGENTPLUGINS_HOME=str(state), TMPDIR=str(scratch))
+                  source_dir = ROOT / "uap-global-package"
+                  skill_file = source_dir / "skills" / "uap-e2e-global" / "SKILL.md"
+                  skill_file.parent.mkdir(parents=True)
+                  skill_file.write_text("---\nname: uap-e2e-global\ndescription: Inert UAP-installed Global Skill\n---\nNo model action required.\n")
+                  (source_dir / "plugin.json").write_text(json.dumps({
+                      "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+                      "name": "uap-e2e-global", "version": "1.0.0"}))
+                  # The portable MCP loader accepts bare commands or ./plugin-relative
+                  # commands, never sys.executable's absolute host path.
+                  if shutil.which("python3", path=cli_env["PATH"]) is None:
+                      raise RuntimeError("D0 python3 is unavailable on the CLI-selected PATH")
+                  (source_dir / "mcp.json").write_text(json.dumps({
+                      "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+                      "mcpServers": {
+                          "uap_e2e_stdio": {"type": "stdio", "command": "python3",
+                                            "args": [str(service_path), "stdio"],
+                                            "env": {"UAP_D0_TRACE": str(trace)}},
+                          "uap_e2e_http": {"type": "streamable-http",
+                                           "url": "http://127.0.0.1:" + str(port) + "/mcp"}}}))
+                  cascade = home / ".codeium" / "windsurf" / "mcp_config.json"
+                  cascade.parent.mkdir(parents=True)
+                  cascade.write_text('{"mcpServers":{"cascade_foreign":{"serverUrl":"https://foreign.example/mcp"}},"preserve":true}\n')
+                  cascade_original = cascade.read_bytes()
+                  project_original = (projects[0] / ".devin" / "mcp_config.json").read_bytes()
+                  global_original = json.loads((global_root / "mcp_config.json").read_text())
+
+                  def cli_command(stage, *args):
+                      result = subprocess.run([str(cli), *args, "--scope", "user",
+                                               "--format", "json"],
+                                              cwd=projects[0], env=cli_env,
+                                              capture_output=True, timeout=90)
+                      item = {"stage": stage, "exit": result.returncode,
+                              "stdout_sha256": hashlib.sha256(result.stdout).hexdigest(),
+                              "stderr_sha256": hashlib.sha256(result.stderr).hexdigest()}
+                      bridge["steps"].append(item)
+                      if result.returncode:
+                          raise RuntimeError(stage + " failed with exit " + str(result.returncode))
+                      if len(result.stdout) > 1048576:
+                          raise RuntimeError(stage + " returned oversized JSON")
+                      try:
+                          response = json.loads(result.stdout)
+                      except (ValueError, UnicodeDecodeError):
+                          raise RuntimeError(stage + " returned invalid JSON")
+                      if response.get("command") != stage or response.get("result") != "success":
+                          raise RuntimeError(stage + " returned non-success result")
+                      item["success"] = True
+                      return response["data"]
+
+                  def cli_inventory(stage, want_present):
+                      for project in projects:
+                          skills = run_native(executable, ["skills", "list", "--json"], project, env)
+                          mcp = run_native(executable, ["mcp", "list"], project, env)
+                          expected_project = project == projects[0]
+                          ok = (skills["exit"] == 0 and skills.get("parseable_json") and
+                                mcp["exit"] == 0 and
+                                skills["uap_cli_skill_in_stdout"] == want_present and
+                                mcp["uap_cli_stdio_in_stdout"] == want_present and
+                                mcp["uap_cli_http_in_stdout"] == want_present and
+                                skills["global_skill_in_stdout"] and
+                                mcp["stdio_name_in_stdout"] and mcp["http_name_in_stdout"] and
+                                skills["project_skill_in_stdout"] == expected_project and
+                                mcp["project_stdio_in_stdout"] == expected_project and
+                                mcp["project_http_in_stdout"] == expected_project)
+                          # Only fixture-name booleans are recorded; neither account data nor
+                          # native config contents leave the disposable runner.
+                          native_file = global_root / "mcp_config.json"
+                          try:
+                              native_entries = json.loads(native_file.read_text()).get("mcpServers", {})
+                          except (OSError, ValueError, AttributeError):
+                              native_entries = {}
+                          observed = {
+                              "devin_skill": skills["uap_cli_skill_in_stdout"],
+                              "devin_stdio": mcp["uap_cli_stdio_in_stdout"],
+                              "devin_http": mcp["uap_cli_http_in_stdout"],
+                              "file_skill": (global_root / "skills" / "uap-e2e-global" / "SKILL.md").is_file(),
+                              "file_stdio": "uap_e2e_stdio" in native_entries,
+                              "file_http": "uap_e2e_http" in native_entries,
+                              "original_global_skill": skills["global_skill_in_stdout"],
+                              "original_global_stdio": mcp["stdio_name_in_stdout"],
+                              "original_global_http": mcp["http_name_in_stdout"],
+                          }
+                          bridge["inventory"].append({"stage": stage, "project": project.name,
+                                                       "expected_installed": want_present, "pass": ok,
+                                                       "observed_fixture_names": observed})
+                          if not ok:
+                              raise RuntimeError(stage + " genuine Devin A/B source inventory mismatch")
+
+                  cli_inventory("before_add", False)
+                  added = cli_command("add", "add", str(source_dir), "--no-save", "--target", "windsurf")
+                  targets = added.get("targets")
+                  if (not isinstance(targets, list) or len(targets) != 1
+                          or not isinstance(targets[0], dict)
+                          or targets[0].get("target") != "windsurf"
+                          or targets[0].get("status") != "external_completed"):
+                      raise RuntimeError("production UAP add returned ambiguous target receipt")
+                  output = targets[0].get("output")
+                  result = output.get("result") if isinstance(output, dict) else None
+                  iid = result.get("installation_id") if isinstance(result, dict) else None
+                  if not isinstance(iid, str) or len(iid) != 36:
+                      raise RuntimeError("production UAP add returned no canonical installation ID")
+                  cli_inventory("after_add", True)
+                  shutil.rmtree(global_root / "skills" / "uap-e2e-global")
+                  cli_command("repair", "repair", iid, "--target", "windsurf")
+                  cli_inventory("after_repair", True)
+                  cli_command("remove", "remove", iid, "--target", "windsurf")
+                  cli_inventory("after_remove", False)
+                  after = json.loads((global_root / "mcp_config.json").read_text())
+                  for key, value in global_original["mcpServers"].items():
+                      if after["mcpServers"].get(key) != value:
+                          raise RuntimeError("UAP changed original foreign/global MCP")
+                  if (cascade.read_bytes() != cascade_original or
+                      (projects[0] / ".devin" / "mcp_config.json").read_bytes() != project_original or
+                      not (global_root / "skills" / "uap-d0-global" / "SKILL.md").is_file()):
+                      raise RuntimeError("UAP changed original Cascade or Project A authority")
+                  checks["uap_cli_add_repair_remove_A_B"] = True
+                  bridge["status"] = "GENUINE_UAP_WRITTEN_SOURCE_DISCOVERED"
+              except Exception as exc:
+                  bridge["failure"] = type(exc).__name__ + ": " + str(exc)[:200]
+              # User-approved install-only E2E: genuine Devin must discover
+              # UAP-written Global Skills plus BOTH MCP transports before and
+              # after repair, and see their absence after removal in A and B.
+              # Model tool calls remain distinct optional evidence, never PASS
+              # merely because a config is visible.
+              required_source = ("global_source_A_B", "project_skill_A_only",
+                                 "global_mcp_A_B", "project_mcp_A_only",
+                                 "uap_cli_add_repair_remove_A_B")
+              report["installation_discovery_e2e"] = all(checks.get(k) is True for k in required_source)
+              report["runtime_mcp_calls_qualified"] = (checks.get("stdio_initialize_list_call") is True and
+                                                       checks.get("http_initialize_list_call") is True)
+              if report["installation_discovery_e2e"]:
+                  report["status"] = "UAP_NATIVE_INSTALL_DISCOVERY_PASS"
+              else:
+                  report["blocked_reason"] = "genuine UAP-written Devin Skills/MCP discovery or removal was not verified"
+          except Exception as exc:
+              report["blocked_reason"] = type(exc).__name__ + ": " + str(exc)[:240]
+          finally:
+              if http_process is not None and http_process.poll() is None:
+                  os.killpg(http_process.pid, signal.SIGKILL)
+                  http_process.wait(timeout=5)
+              (ROOT / "report.json").write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
+              print(json.dumps({"status": report["status"], "gates": report.get("gates"),
+                                "blocked_reason": report.get("blocked_reason"),
+                                "commit": report["commit"]}, sort_keys=True))
+          sys.exit(0 if report["installation_discovery_e2e"] else 1)
+          PYTHON
+
+      - name: Retain exact-head negative or positive proof
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: devin-global-d0-native-transport
+          path: ${{ runner.temp }}/devin-global-d0/report.json
+          if-no-files-found: warn
+          retention-days: 14

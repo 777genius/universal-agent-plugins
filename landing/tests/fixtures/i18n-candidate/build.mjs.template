@@ -1,0 +1,16 @@
+// Hosted runner only: preparation itself never starts a build or server.
+import { spawnSync } from 'node:child_process';
+import { rm, writeFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+
+const cwd = fileURLToPath(new URL('.', import.meta.url));
+const base = process.env.UAP_CANDIDATE_BASE || '/';
+if (!['/', '/universal-agent-plugins/'].includes(base)) throw new Error('Unsupported fixture base');
+await rm(new URL('./.output/candidate-base.txt', import.meta.url), { force: true });
+const result = spawnSync(process.execPath, ['node_modules/nuxt/bin/nuxt.mjs', 'build'], {
+  cwd, stdio: 'inherit',
+  env: { ...process.env, UAP_CANDIDATE_BASE: base, NUXT_APP_BASE_URL: base, NITRO_PRESET: 'node-server' },
+});
+if (result.error) throw result.error;
+if (result.status !== 0) process.exit(result.status || 1);
+await writeFile(new URL('./.output/candidate-base.txt', import.meta.url), base);

@@ -1,0 +1,179 @@
+package agentpluginscli
+
+import (
+	"bytes"
+	"errors"
+	"fmt"
+	"io"
+	"strings"
+	"testing"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
+)
+
+func TestAddMissingSourceGuidance(t *testing.T) {
+	for _, terminal := range []bool{false, true} {
+		for _, format := range []string{"human", "json"} {
+			var output bytes.Buffer
+			cmd := NewRoot(App{Terminal: terminal, Input: strings.NewReader(""), Output: &output, ErrorOutput: &output})
+			cmd.SetArgs([]string{"add", "--format", format})
+			err := cmd.Execute()
+			if err == nil {
+				t.Fatal("missing source accepted")
+			}
+			if format == "json" {
+				if err.Error() != "accepts 1 arg(s), received 0" {
+					t.Fatalf("JSON error changed: %v", err)
+				}
+			} else {
+				for _, want := range []string{"Provide a plugin name or source", "agentplugins add ./my-plugin", "agentplugins add --help"} {
+					if !strings.Contains(err.Error(), want) {
+						t.Fatalf("missing %q: %v", want, err)
+					}
+				}
+			}
+			if output.Len() != 0 {
+				t.Fatalf("argument validation wrote output: %q", output.String())
+			}
+		}
+	}
+	// Bare install is the environment converge verb, not the add alias. It must
+	// never fall into add's missing-source guidance and must write no output
+	// before the environment inputs are validated.
+	for _, terminal := range []bool{false, true} {
+		for _, format := range []string{"human", "json"} {
+			var output bytes.Buffer
+			cmd := NewRoot(App{Terminal: terminal, Input: strings.NewReader(""), Output: &output, ErrorOutput: &output})
+			cmd.SetArgs([]string{"install", "--format", format})
+			err := cmd.Execute()
+			if err == nil {
+				t.Fatal("bare install on an unconfigured app accepted")
+			}
+			for _, stale := range []string{"Provide a plugin name or source", "accepts 1 arg(s)"} {
+				if strings.Contains(err.Error(), stale) {
+					t.Fatalf("install still resolves to the add alias: %v", err)
+				}
+			}
+			if output.Len() != 0 {
+				t.Fatalf("converge validation wrote output: %q", output.String())
+			}
+		}
+	}
+}
+
+func TestAddFailedLifecycleRecoveryGuidance(t *testing.T) {
+	for _, phase := range []string{"activation_failed", "authentication_failed", "verification_failed"} {
+		for _, mutated := range []bool{false, true} {
+			result := usecase.AddResult{Mutated: mutated}
+			result.Activation.LocalActions = []string{"Recover using /private/client/settings, then rerun add."}
+			result.Activation.UserActions = []string{"Recover in the selected client, then rerun add."}
+			switch phase {
+			case "activation_failed":
+				result.Activation.Activation = domain.ActivationFailed
+			case "authentication_failed":
+				result.Activation.Authentication = domain.AuthenticationFailed
+			case "verification_failed":
+				result.Activation.Verification = domain.VerificationFailed
+			}
+			var human, public bytes.Buffer
+			if err := renderAddResult(&human, "human", domain.PackageEnvelope{}, result, false); err != nil {
+				t.Fatal(err)
+			}
+			if human.String() != "Add: "+phase+"\nNext: "+result.Activation.LocalActions[0]+"\n" {
+				t.Fatalf("human result: %q", human.String())
+			}
+			if err := renderAddResult(&public, "json", domain.PackageEnvelope{}, result, false); err != nil {
+				t.Fatal(err)
+			}
+			assertOutputEnvelopeResult(t, public.Bytes(), "add", outputResultFailure)
+			if strings.Contains(public.String(), "/private/") || !strings.Contains(public.String(), result.Activation.UserActions[0]) {
+				t.Fatalf("public recovery contract: %s", public.String())
+			}
+		}
+	}
+}
+
+func TestAddRecoveryDoesNotOverrideTransactionFailures(t *testing.T) {
+	for _, phase := range []usecase.GroupTargetPhase{usecase.GroupTargetManagedRolledBack, usecase.GroupTargetManagedUnknown, usecase.GroupTargetExternalFailed, usecase.GroupTargetExternalPartial} {
+		result := usecase.AddResult{Mutated: true, GroupPhase: phase, Activation: domain.ActivationOutcome{Activation: domain.ActivationFailed, LocalActions: []string{"Enable the prepared plugin."}}}
+		var output bytes.Buffer
+		if err := renderAddResult(&output, "human", domain.PackageEnvelope{}, result, false); err != nil {
+			t.Fatal(err)
+		}
+		if output.String() != "Add: "+string(phase)+"\n" {
+			t.Fatalf("transaction recovery implied usable install: %q", output.String())
+		}
+	}
+}
+
+type recoveryFailWriter struct{ writes int }
+
+func (w *recoveryFailWriter) Write(p []byte) (int, error) {
+	w.writes++
+	if w.writes > 1 {
+		return 0, io.ErrClosedPipe
+	}
+	return len(p), nil
+}
+func TestAddRecoveryPropagatesWriterFailure(t *testing.T) {
+	result := usecase.AddResult{Activation: domain.ActivationOutcome{Activation: domain.ActivationFailed}}
+	err := renderAddResult(&recoveryFailWriter{}, "human", domain.PackageEnvelope{}, result, false)
+	if !errors.Is(err, io.ErrClosedPipe) {
+		t.Fatalf("writer error lost: %v", err)
+	}
+}
+
+// TestVerifiedOtherClientsDoNotExposePrivateLocalActions keeps unrelated client local actions private.
+func TestVerifiedOtherClientsDoNotExposePrivateLocalActions(t *testing.T) {
+	result := usecase.AddResult{
+		Mutated: true,
+		Plan:    domain.DeliveryPlan{ClientID: domain.ClientCursor},
+		Activation: domain.ActivationOutcome{
+			Activation:     domain.ActivationActive,
+			Verification:   domain.VerificationInstalled,
+			Authentication: domain.AuthenticationNotRequired,
+			LocalActions:   []string{"private unrelated profile: /private/foreign-config"},
+		},
+	}
+	var out bytes.Buffer
+	if err := renderAddResult(&out, "human", domain.PackageEnvelope{}, result, false); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "/private/foreign-config") || strings.Contains(out.String(), "Next (optional)") {
+		t.Fatalf("unrelated native client output changed: %q", out.String())
+	}
+}
+
+// TestSuccessfulNativeAddPrintsOptionalLocalHandoffWithoutPublicPathLeak keeps Desktop paths out of JSON.
+func TestSuccessfulNativeAddPrintsOptionalLocalHandoffWithoutPublicPathLeak(t *testing.T) {
+	for _, mutated := range []bool{false, true} {
+		t.Run(fmt.Sprint("mutated=", mutated), func(t *testing.T) {
+			result := usecase.AddResult{
+				NoChange: !mutated,
+				Mutated:  mutated,
+				Plan:     domain.DeliveryPlan{ClientID: domain.ClientCodex},
+				Activation: domain.ActivationOutcome{
+					Activation:     domain.ActivationActive,
+					Verification:   domain.VerificationInstalled,
+					Authentication: domain.AuthenticationNotRequired,
+					LocalActions:   []string{"start a new Codex session; optional ChatGPT Desktop: codex://plugins/demo?marketplacePath=%2Fprivate%2Fprofile%2Fmarketplace.json"},
+				},
+			}
+			var human, public bytes.Buffer
+			if err := renderAddResult(&human, "human", domain.PackageEnvelope{}, result, false); err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(human.String(), "Next (optional): start a new Codex session") ||
+				!strings.Contains(human.String(), "codex://plugins/demo?marketplacePath=") {
+				t.Fatalf("local Desktop next step disappeared: %q", human.String())
+			}
+			if err := renderAddResult(&public, "json", domain.PackageEnvelope{}, result, false); err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(public.String(), "codex://plugins/") || strings.Contains(public.String(), "%2Fprivate") {
+				t.Fatalf("private local Desktop path leaked in public JSON: %s", public.String())
+			}
+		})
+	}
+}

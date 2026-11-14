@@ -1,0 +1,18 @@
+{
+  "targets": [
+    {
+      "id": "codex",
+      "label": "Codex",
+      "scope": "user",
+      "displayPath": "/sandbox/codex",
+      "available": true
+    },
+    {
+      "id": "claude",
+      "label": "Claude",
+      "scope": "user",
+      "displayPath": "/sandbox/claude",
+      "available": true
+    }
+  ]
+}

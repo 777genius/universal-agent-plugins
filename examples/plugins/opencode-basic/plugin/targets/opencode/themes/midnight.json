@@ -1,0 +1,8 @@
+{
+  "$schema": "https://opencode.ai/theme.json",
+  "theme": {
+    "primary": "#111827",
+    "text": "#f9fafb",
+    "background": "#020617"
+  }
+}

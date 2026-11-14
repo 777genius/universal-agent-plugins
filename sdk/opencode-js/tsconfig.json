@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2024",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": [
+    "index.d.ts",
+    "v1.d.ts",
+    "v2.d.ts",
+    "common.d.ts",
+    "typecheck.ts",
+    "typecheck-v2.ts"
+  ]
+}

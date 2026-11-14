@@ -1,0 +1,3 @@
+[mcp_servers.release-checks]
+command = "/bin/echo"
+args = ["codex-basic-prod"]

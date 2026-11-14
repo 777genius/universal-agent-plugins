@@ -1,0 +1,10 @@
+// This isolated SSR fixture registers only en/ru/uk in nuxt.config.ts.
+// Keep its switcher choices aligned with those actual routes; the production
+// nine-locale menu and static output are validated by Landing E2E separately.
+import { localeMetadata } from './production-i18n';
+export * from './production-i18n';
+export const publishedLocales = ['en', 'ru', 'uk'] as const;
+export type PublishedLocale = typeof publishedLocales[number];
+export const supportedLocales = publishedLocales.map(code => localeMetadata[code]);
+export const isPublishedLocale = (value: unknown): value is PublishedLocale =>
+  typeof value === 'string' && (publishedLocales as readonly string[]).includes(value);

@@ -1,0 +1,9 @@
+.PHONY: build test vet
+build:
+	go build -o bin/{{.ProjectName}} ./cmd/{{.ProjectName}}
+
+test:
+	go test ./...
+
+vet:
+	go vet ./...

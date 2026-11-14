@@ -1,0 +1,7 @@
+{
+  "hooks": {
+    "Stop": [{ "hooks": [{ "type": "command", "command": "./bin/claude-node-typescript-starter Stop" }] }],
+    "PreToolUse": [{ "hooks": [{ "type": "command", "command": "./bin/claude-node-typescript-starter PreToolUse" }] }],
+    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "./bin/claude-node-typescript-starter UserPromptSubmit" }] }]
+  }
+}

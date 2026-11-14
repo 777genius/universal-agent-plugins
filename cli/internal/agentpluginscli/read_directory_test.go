@@ -1,0 +1,505 @@
+package agentpluginscli
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"strings"
+	"testing"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/directoryv1"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+)
+
+type localOnlyDirectoryClient struct {
+	bundle       directoryv1.VerifiedBundle
+	networkCalls int
+	localCalls   int
+}
+
+type conflictingDirectoryClient struct {
+	bundle       directoryv1.VerifiedBundle
+	networkCalls int
+	localCalls   int
+}
+
+func TestPublicClientRevisionOnlyExposesImmutableFullSHA(t *testing.T) {
+	sha := strings.Repeat("a", 40)
+	if publicImmutableRevision(sha) != sha || publicImmutableRevision("/private/source/revision") != "" || publicImmutableRevision("client-commit") != "" {
+		t.Fatal("public revision sanitization exposed a non-immutable source value")
+	}
+}
+
+func (client *localOnlyDirectoryClient) Load(context.Context, uint64) (directoryv1.VerifiedBundle, error) {
+	client.networkCalls++
+	return directoryv1.VerifiedBundle{}, context.DeadlineExceeded
+}
+
+func (client *localOnlyDirectoryClient) LoadLocal(uint64) (directoryv1.VerifiedBundle, error) {
+	client.localCalls++
+	return client.bundle, nil
+}
+
+func (client *conflictingDirectoryClient) Load(context.Context, uint64) (directoryv1.VerifiedBundle, error) {
+	client.networkCalls++
+	return directoryv1.VerifiedBundle{}, directoryv1.ErrSequenceConflict
+}
+
+func (client *conflictingDirectoryClient) LoadLocal(uint64) (directoryv1.VerifiedBundle, error) {
+	client.localCalls++
+	return client.bundle, nil
+}
+
+func TestDirectoryReadDoesNotHideEquivocationBehindTrustedLocalFallback(t *testing.T) {
+	client := &conflictingDirectoryClient{bundle: readModelBundle()}
+	app := App{DirectoryClient: client}
+	_, ok, err := directoryBundleForRead(context.Background(), app, domain.StateFileV2{}, true)
+	if ok || !errors.Is(err, directoryv1.ErrSequenceConflict) {
+		t.Fatalf("Directory read result ok=%t err=%v, want propagated sequence conflict", ok, err)
+	}
+	if client.networkCalls != 1 || client.localCalls != 0 {
+		t.Fatalf("Directory read calls network/local=%d/%d, want 1/0", client.networkCalls, client.localCalls)
+	}
+
+	_, ok, err = directoryBundleForRead(context.Background(), app, domain.StateFileV2{}, false)
+	if err != nil || !ok || client.networkCalls != 1 || client.localCalls != 1 {
+		t.Fatalf("direct read result ok=%t err=%v calls=%d/%d, want local-only best effort", ok, err, client.networkCalls, client.localCalls)
+	}
+}
+
+func TestInfoShortNameShowsOneDirectoryProductDefaultAlternativesCompatibilityAndEvidence(t *testing.T) {
+	fixture := newCLIFixture(t, nil)
+	bundle := readModelBundle()
+	fixture.app.DirectoryClient = &fixedDirectoryClient{bundle: bundle}
+	stdout, _, err := fixture.execute(false, "info", "demo", "--target", "cursor", "--format", "json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`"product_id":"demo"`, `"reviewed_default":"owner/demo"`,
+		`"selected_distribution":"owner/demo"`, `"selection_reason":"reviewed default is eligible`,
+		`"selected_release":{"id":"owner/demo"`, `"release_sequence":2`, `"resolved_revision":"` + strings.Repeat("2", 40),
+		`"repository":"owner/demo"`, `"package_path":"plugin"`,
+		`"tree_digest":"sha256:` + strings.Repeat("2", 64), `"manifest_digest":"sha256:` + strings.Repeat("4", 64),
+		`"target_compatibility"`, `"client":"cursor"`, `"immutable_evidence"`, `"id":"cursor-runtime-current"`,
+		`"artifact":{"repository":"owner/evidence"`, `"trust":{"kind":"reviewed_external"}`, `"trusted_for_eligibility":true`,
+		`"alternatives":[{"id":"community/demo"`} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("Directory info omitted %q:\n%s", want, stdout)
+		}
+	}
+	if strings.Count(stdout, `"product_id":"demo"`) != 1 {
+		t.Fatalf("Directory info returned duplicate product cards:\n%s", stdout)
+	}
+}
+
+func TestInfoProjectSourceWithoutTargetPreservesCatalogRead(t *testing.T) {
+	app := App{Scope: domain.ScopeProject, Version: "1.0.0",
+		DirectoryClient: &fixedDirectoryClient{bundle: readModelBundle()}}
+	inspection, err := inspectDirectoryProduct(t.Context(), app, domain.StateFileV2{}, "demo", "")
+	if err != nil || inspection.SelectedDistribution != "owner/demo" || inspection.SelectedRelease.ReleaseSequence != 2 {
+		t.Fatalf("Project info without --target lost source inspection: %+v %v", inspection, err)
+	}
+}
+
+func TestPublicDirectoryEvidenceDistinguishesMissingTrust(t *testing.T) {
+	bundle := readModelBundle()
+	bundle.Snapshot.Evidence[0].Trust = nil
+	public := evidenceForRelease(bundle.Snapshot, "owner/demo", 1)
+	if len(public) != 1 || public[0].Trust != nil || public[0].TrustedForEligibility {
+		t.Fatalf("untrusted evidence provenance was misrepresented: %+v", public)
+	}
+	var output bytes.Buffer
+	if err := writeJSONOutput(&output, "test", public); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(output.String(), `"trusted_for_eligibility":false`) || strings.Contains(output.String(), `"trust":`) {
+		t.Fatalf("public evidence did not distinguish missing trust: %s", output.String())
+	}
+}
+
+func TestHumanDirectoryEvidenceLabelsTrustedAndInformationalProvenance(t *testing.T) {
+	trusted := publicEvidence{ID: "trusted-runtime", Level: "runtime", Outcome: "passed",
+		Artifact: domain.DirectoryEvidenceArtifact{Repository: "owner/evidence", Revision: strings.Repeat("e", 40), Path: "trusted.json", Digest: "sha256:" + strings.Repeat("f", 64)},
+		Trust:    &domain.DirectoryEvidenceTrust{Kind: "reviewed_external"}}
+	informational := trusted
+	informational.ID, informational.Artifact.Path, informational.Trust = "self-reported-runtime", "self-reported.json", nil
+	var output bytes.Buffer
+	if err := renderProductInspection(&output, publicProductInspection{ImmutableEvidence: []publicEvidence{trusted, informational}}); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"Evidence: trusted-runtime runtime=passed trust=trusted ",
+		"Evidence: self-reported-runtime runtime=passed trust=self-reported/informational ",
+	} {
+		if !strings.Contains(output.String(), want) {
+			t.Fatalf("human evidence omitted %q:\n%s", want, output.String())
+		}
+	}
+}
+
+func TestInstalledInfoAndDoctorExposeRevisionConvergenceSurfacesAndRevocation(t *testing.T) {
+	fixture := newCLIFixture(t, []domain.DetectedClient{fixtureClient(t, domain.ClientCursor)})
+	plugin := writeCLIPlugin(t)
+	if _, _, err := fixture.execute(false, "add", plugin, "--target", "cursor"); err != nil {
+		t.Fatal(err)
+	}
+	state, err := fixture.store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	installation := &state.Installations[0]
+	installation.OriginMode = domain.OriginModeDirectory
+	installation.Directory = &domain.DirectoryOrigin{ProductID: "demo", DistributionID: "owner/demo", DistributionKind: domain.DistributionUpstream,
+		DesiredReleaseSequence: 2, SnapshotSchema: 1, SnapshotSequence: 20, SnapshotDigest: "sha256:" + strings.Repeat("9", 64)}
+	installation.Source.Repository = "owner/demo"
+	installation.Source.ResolvedRevision = strings.Repeat("2", 40)
+	installation.Source.PackageSubpath = "plugin"
+	for key, binding := range installation.Clients {
+		binding.PackageRevision = &domain.ClientPackageRevision{Version: "1.0.0", ResolvedRevision: strings.Repeat("1", 40),
+			TreeDigest: installation.Source.TreeDigest, ManifestDigest: installation.Package.ManifestDigest,
+			DistributionID: "owner/demo", ReleaseSequence: 1}
+		binding.AffectedSurfaces = []string{"cursor.mcp", "cursor.skills"}
+		installation.Clients[key] = binding
+	}
+	if err := fixture.store.Save(state); err != nil {
+		t.Fatal(err)
+	}
+	bundle := readModelBundle()
+	// Bind the fixture's real installed bytes so the signed-policy read model
+	// identifies the exact revoked package rather than merely matching a name.
+	bundle.Snapshot.Distributions[0].Releases[0].TreeDigest = installation.Source.TreeDigest
+	bundle.Snapshot.Distributions[0].Releases[0].ManifestDigest = installation.Package.ManifestDigest
+	bundle.Snapshot.Evidence[0].PackageTreeDigest = installation.Source.TreeDigest
+	bundle.Snapshot.Distributions[0].Status = domain.DistributionSuspended
+	fixture.app.DirectoryClient = &fixedDirectoryClient{bundle: bundle}
+	list, _, err := fixture.execute(false, "list", "--format", "json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(list, `"installation_id"`) != 1 || strings.Count(list, `"product_id":"demo"`) != 1 {
+		t.Fatalf("list duplicated or replaced the installed product card:\n%s", list)
+	}
+	stdout, _, err := fixture.execute(false, "info", "demo", "--format", "json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`"recorded_distribution":"owner/demo"`, `"current_distribution":"owner/demo"`,
+		`"recorded_revision":"` + strings.Repeat("2", 40), `"current_revision":"` + strings.Repeat("2", 40),
+		`"recorded_release_sequence":2`, `"current_release_sequence":2`, `"release_sequence":1`,
+		`"package_revision":{"version":"1.0.0","resolved_revision":"` + strings.Repeat("1", 40),
+		`"evidence":[{"id":"cursor-runtime"`, `"artifact":{"repository":"owner/evidence"`, `"affected_surfaces":["cursor.mcp","cursor.skills"]`,
+		`"mixed_version":true`, `"convergence_action":"run ` + "`" + `agentplugins update`, `"code":"directory_release_revoked"`,
+		`"code":"directory_distribution_suspended"`} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("installed Directory info omitted %q:\n%s", want, stdout)
+		}
+	}
+	doctor, _, err := fixture.execute(false, "doctor", "demo", "--format", "json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(doctor, `"code":"directory_release_revoked"`) || !strings.Contains(doctor, `"code":"directory_distribution_suspended"`) || strings.Contains(doctor, `"code":"no_degradation_detected"`) {
+		t.Fatalf("doctor did not surface signed revocation cleanly:\n%s", doctor)
+	}
+}
+
+func TestDirectInfoUsesOnlyTrustedLocalPolicyForExactDigestWarning(t *testing.T) {
+	fixture := newCLIFixture(t, []domain.DetectedClient{fixtureClient(t, domain.ClientCursor)})
+	plugin := writeCLIPlugin(t)
+	if _, _, err := fixture.execute(false, "add", plugin, "--target", "cursor"); err != nil {
+		t.Fatal(err)
+	}
+	state, err := fixture.store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	bundle := readModelBundle()
+	bundle.Snapshot.Distributions[0].Releases[0].TreeDigest = state.Installations[0].Source.TreeDigest
+	bundle.Snapshot.Distributions[0].Releases[0].ManifestDigest = state.Installations[0].Package.ManifestDigest
+	bundle.Snapshot.Evidence[0].PackageTreeDigest = state.Installations[0].Source.TreeDigest
+	client := &localOnlyDirectoryClient{bundle: bundle}
+	fixture.app.DirectoryClient = client
+	stdout, _, err := fixture.execute(false, "info", "demo", "--format", "json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if client.networkCalls != 0 || client.localCalls != 1 || !strings.Contains(stdout, `"code":"directory_release_revoked"`) {
+		t.Fatalf("direct warning network/local calls=%d/%d output=%s", client.networkCalls, client.localCalls, stdout)
+	}
+	doctor, _, err := fixture.execute(false, "doctor", "demo", "--format", "json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if client.networkCalls != 0 || client.localCalls != 2 || !strings.Contains(doctor, `"code":"directory_release_revoked"`) {
+		t.Fatalf("direct doctor warning network/local calls=%d/%d output=%s", client.networkCalls, client.localCalls, doctor)
+	}
+}
+
+func TestDirectAcquisitionWarnsFromLocalPolicyWithoutNetworkDependency(t *testing.T) {
+	fixture := newCLIFixture(t, nil)
+	plugin := writeCLIPlugin(t)
+	first, err := fixture.app.acquireLocal(context.Background(), plugin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tree, manifest := first.envelope.TreeDigest, first.envelope.ManifestDigest
+	_ = first.cleanup()
+	bundle := readModelBundle()
+	bundle.Snapshot.Distributions[0].Releases[0].TreeDigest = tree
+	bundle.Snapshot.Distributions[0].Releases[0].ManifestDigest = manifest
+	bundle.Snapshot.Evidence[0].PackageTreeDigest = tree
+	client := &localOnlyDirectoryClient{bundle: bundle}
+	var warnings bytes.Buffer
+	fixture.app.DirectoryClient, fixture.app.ErrorOutput = client, &warnings
+	loaded, err := fixture.app.acquireLocal(context.Background(), plugin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = loaded.cleanup()
+	if client.networkCalls != 0 || client.localCalls != 1 || !strings.Contains(warnings.String(), "directory_release_revoked") {
+		t.Fatalf("direct acquisition warning network/local=%d/%d warning=%q", client.networkCalls, client.localCalls, warnings.String())
+	}
+	client.localCalls = 0
+	warnings.Reset()
+	revision := strings.Repeat("d", 40)
+	fixture.app.SourceAcquirer = &localBackedSourceAcquirer{delegate: fixture.app.SourceAcquirer, root: plugin}
+	loaded, err = fixture.app.acquireGitHub(context.Background(), "owner/repo@"+revision+"//plugin", "owner/repo", revision, "plugin", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = loaded.cleanup()
+	if client.networkCalls != 0 || client.localCalls != 1 || !strings.Contains(warnings.String(), "directory_release_revoked") {
+		t.Fatalf("full-SHA acquisition warning network/local=%d/%d warning=%q", client.networkCalls, client.localCalls, warnings.String())
+	}
+}
+
+func readModelBundle() directoryv1.VerifiedBundle {
+	tree1, tree2 := "sha256:"+strings.Repeat("1", 64), "sha256:"+strings.Repeat("2", 64)
+	manifest1, manifest2 := "sha256:"+strings.Repeat("3", 64), "sha256:"+strings.Repeat("4", 64)
+	release := func(sequence uint64, revision, tree, manifest, version string) domain.DirectoryRelease {
+		return domain.DirectoryRelease{Sequence: sequence, PackageVersion: version, ManifestName: "demo",
+			AgentPluginsSchema:  "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+			PackageSource:       domain.DirectorySource{Repository: "owner/demo", Revision: revision, Path: "plugin"},
+			TreeDigestAlgorithm: domain.TreeDigestAlgorithm, TreeDigest: tree, ManifestDigest: manifest, Components: []string{"mcp"}}
+	}
+	target := domain.DirectoryTarget{Client: domain.ClientCursor, Scopes: []domain.InstallScope{domain.ScopeUser}, Delivery: "managed", Authentication: domain.AuthenticationRequirementUnknown}
+	policy := func(sequence uint64, status domain.ReleaseStatus, evidence []string) domain.DirectoryReleasePolicy {
+		return domain.DirectoryReleasePolicy{ReleaseSequence: sequence, Status: status, MinimumInstallerVersion: "0.1.0", Targets: []domain.DirectoryTarget{target}, CurrentEvidence: evidence}
+	}
+	owner := domain.DirectoryDistribution{SchemaVersion: 1, ID: "owner/demo", ProductID: "demo", Kind: domain.DistributionUpstream,
+		Status: domain.DistributionActive, Packager: "owner",
+		Releases:        []domain.DirectoryRelease{release(1, strings.Repeat("1", 40), tree1, manifest1, "1.0.0"), release(2, strings.Repeat("2", 40), tree2, manifest2, "2.0.0")},
+		ReleasePolicies: []domain.DirectoryReleasePolicy{policy(1, domain.ReleaseRevoked, []string{"cursor-runtime"}), policy(2, domain.ReleaseActive, []string{"cursor-runtime-current", "cursor-materialization-current"})}}
+	community := owner
+	community.ID, community.Kind, community.Packager = "community/demo", domain.DistributionCommunity, "community"
+	community.Releases = []domain.DirectoryRelease{release(1, strings.Repeat("5", 40), tree2, manifest2, "community")}
+	community.Releases[0].PackageSource.Repository = "community/demo"
+	community.ReleasePolicies = []domain.DirectoryReleasePolicy{policy(1, domain.ReleaseActive, nil)}
+	product := domain.DirectoryProduct{SchemaVersion: 1, ID: "demo", DisplayName: "Demo", Description: "Reviewed demo product", ManifestName: "demo",
+		Aliases: []string{"demo"}, ReservedAliases: []string{"demo"}, Categories: []string{"tools"},
+		MinimumCapabilities: domain.DirectoryMinimumCapabilities{Skills: "optional", MCP: "optional"},
+		DefaultDistribution: "owner/demo", Distributions: []string{"owner/demo", "community/demo"}}
+	evidence := intendedTrustedDirectoryEvidence(domain.DirectoryEvidence{SchemaVersion: 1, ID: "cursor-runtime", DistributionID: "owner/demo", ReleaseSequence: 1,
+		PackageTreeDigest: tree1, Level: "runtime", Outcome: "passed", Client: domain.ClientCursor,
+		Artifact: domain.DirectoryEvidenceArtifact{Repository: "owner/evidence", Revision: strings.Repeat("e", 40), Path: "runtime/cursor.json", Digest: "sha256:" + strings.Repeat("f", 64)}})
+	currentEvidence := evidence
+	currentEvidence.ID, currentEvidence.ReleaseSequence, currentEvidence.PackageTreeDigest = "cursor-runtime-current", 2, tree2
+	currentEvidence.Artifact.Path = "runtime/cursor-current.json"
+	materializationEvidence := intendedTrustedDirectoryEvidence(domain.DirectoryEvidence{SchemaVersion: 1, ID: "cursor-materialization-current", DistributionID: "owner/demo", ReleaseSequence: 2,
+		PackageTreeDigest: tree2, Level: "materialization", Outcome: "passed", Client: domain.ClientCursor})
+	return directoryv1.VerifiedBundle{Snapshot: domain.DirectorySnapshot{SnapshotSchemaVersion: 1, Sequence: 21, Products: []domain.DirectoryProduct{product},
+		Distributions: []domain.DirectoryDistribution{owner, community}, Evidence: []domain.DirectoryEvidence{evidence, currentEvidence, materializationEvidence},
+		Revocations: []domain.DirectoryRevocation{{DistributionID: "owner/demo", ReleaseSequence: 1}}}, Digest: "sha256:" + strings.Repeat("a", 64)}
+}
+
+func TestPublicDirectoryV2ScopesDoNotBorrowAnotherGrantEvidence(t *testing.T) {
+	const id = "owner/tool"
+	snapshot := domain.DirectorySnapshot{
+		SnapshotSchemaVersion: 2,
+		Distributions: []domain.DirectoryDistribution{{
+			ID:       id,
+			Releases: []domain.DirectoryRelease{{Sequence: 7}},
+			ReleasePolicies: []domain.DirectoryReleasePolicy{{
+				ReleaseSequence: 7,
+				CurrentEvidence: []string{"schema-pass", "cursor-policy-runtime", "project-policy-materialization"},
+				Targets: []domain.DirectoryTarget{
+					{Client: domain.ClientCodex, Scope: domain.ScopeUser, CurrentEvidence: []string{"user-runtime"}},
+					{Client: domain.ClientCodex, Scope: domain.ScopeProject, CurrentEvidence: []string{"project-runtime"},
+						CanonicalClosure: &domain.DirectoryCanonicalClosure{Eligible: false}},
+				},
+			}},
+		}},
+		Evidence: []domain.DirectoryEvidence{
+			{ID: "schema-pass", DistributionID: id, ReleaseSequence: 7, Level: "schema"},
+			{ID: "cursor-policy-runtime", DistributionID: id, ReleaseSequence: 7, Level: "runtime", Client: domain.ClientCursor, Scope: domain.ScopeUser},
+			{ID: "project-policy-materialization", DistributionID: id, ReleaseSequence: 7, Level: "materialization", Client: domain.ClientCodex, Scope: domain.ScopeProject},
+			{ID: "user-runtime", DistributionID: id, ReleaseSequence: 7, Level: "runtime", Client: domain.ClientCodex, Scope: domain.ScopeUser},
+			{ID: "project-runtime", DistributionID: id, ReleaseSequence: 7, Level: "runtime", Client: domain.ClientCodex, Scope: domain.ScopeProject},
+		},
+	}
+	result := inspectDistribution(snapshot, domain.DirectoryProduct{DefaultDistribution: id}, id, 7)
+	if len(result.Targets) != 2 {
+		t.Fatalf("expected independent v2 grant rows, got %+v", result.Targets)
+	}
+	for i, check := range []struct {
+		scope        domain.InstallScope
+		wantEvidence string
+	}{{domain.ScopeUser, "schema-pass,user-runtime"}, {domain.ScopeProject, "schema-pass,project-policy-materialization,project-runtime"}} {
+		row := result.Targets[i]
+		if row.Client != domain.ClientCodex || len(row.Scopes) != 1 || row.Scopes[0] != check.scope ||
+			strings.Join(row.Evidence, ",") != check.wantEvidence {
+			t.Fatalf("v2 %s grant leaked another scope's evidence: %+v", check.scope, row)
+		}
+	}
+	for _, proof := range result.Evidence {
+		if proof.ID == "project-runtime" && proof.Scope != domain.ScopeProject {
+			t.Fatalf("public evidence omitted its verified scope: %+v", proof)
+		}
+	}
+	if result.Targets[0].CanonicalClosure != nil ||
+		result.Targets[1].CanonicalClosure == nil || result.Targets[1].CanonicalClosure.Eligible {
+		t.Fatalf("v2 signed ineligible project closure was hidden or borrowed: %+v", result.Targets)
+	}
+	var output bytes.Buffer
+	if err := writeJSONOutput(&output, "directory-v2-test", result); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(output.String(), `"canonical_closure":{"eligible":false}`) != 1 {
+		t.Fatalf("v2 public output lost exact ineligible project closure: %s", output.String())
+	}
+	legacy := snapshot
+	legacy.SnapshotSchemaVersion = 1
+	legacyResult := inspectDistribution(legacy, domain.DirectoryProduct{DefaultDistribution: id}, id, 7)
+	if legacyResult.Targets[0].CanonicalClosure != nil || legacyResult.Targets[1].CanonicalClosure != nil {
+		t.Fatal("v1 output unexpectedly adopted v2 closure authority")
+	}
+	output.Reset()
+	if err := writeJSONOutput(&output, "directory-v1-test", legacyResult); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(output.String(), "canonical_closure") {
+		t.Fatalf("v1 public contract leaked v2 closure: %s", output.String())
+	}
+}
+
+func TestInstalledV2RevisionEvidenceIsScoped(t *testing.T) {
+	const distribution = "owner/tool"
+	snapshot := domain.DirectorySnapshot{SnapshotSchemaVersion: 2, Evidence: []domain.DirectoryEvidence{
+		{ID: "schema", DistributionID: distribution, ReleaseSequence: 7, Level: "schema"},
+		{ID: "codex-user", DistributionID: distribution, ReleaseSequence: 7, Level: "runtime", Client: domain.ClientCodex, Scope: domain.ScopeUser},
+		{ID: "codex-legacy-user", DistributionID: distribution, ReleaseSequence: 7, Level: "runtime", Client: domain.ClientCodex},
+		{ID: "codex-project", DistributionID: distribution, ReleaseSequence: 7, Level: "runtime", Client: domain.ClientCodex, Scope: domain.ScopeProject},
+		{ID: "cursor-project", DistributionID: distribution, ReleaseSequence: 7, Level: "runtime", Client: domain.ClientCursor, Scope: domain.ScopeProject},
+	}}
+	for _, tc := range []struct {
+		name   string
+		client domain.ClientID
+		scope  domain.InstallScope
+		want   string
+	}{
+		{"codex user", domain.ClientCodex, domain.ScopeUser, "codex-legacy-user,codex-user,schema"},
+		{"codex project", domain.ClientCodex, domain.ScopeProject, "codex-project,schema"},
+		{"cursor project", domain.ClientCursor, domain.ScopeProject, "cursor-project,schema"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var ids []string
+			for _, proof := range evidenceForClientRevision(snapshot, distribution, 7, tc.client, tc.scope) {
+				ids = append(ids, proof.ID)
+			}
+			if got := strings.Join(ids, ","); got != tc.want {
+				t.Fatalf("revision borrowed another scope's evidence: got %q want %q", got, tc.want)
+			}
+		})
+	}
+	// Retain the legacy unscoped v1 display contract.
+	snapshot.SnapshotSchemaVersion = 1
+	if got := len(evidenceForClientRevision(snapshot, distribution, 7, domain.ClientCodex, domain.ScopeUser)); got != 4 {
+		t.Fatalf("v1 revision evidence changed: got %d entries, want 4", got)
+	}
+}
+
+func TestDirectoryV2RuntimeProofRequiresCurrentCanonicalClosure(t *testing.T) {
+	digest := "sha256:" + strings.Repeat("a", 64)
+	other := "sha256:" + strings.Repeat("b", 64)
+	eligible := &domain.DirectoryCanonicalClosure{Eligible: true, ClosureDigest: digest}
+	ineligible := &domain.DirectoryCanonicalClosure{Eligible: false}
+	for _, tc := range []struct {
+		name        string
+		schema      int
+		level       string
+		closure     *domain.DirectoryCanonicalClosure
+		proofDigest string
+		want        bool
+	}{
+		{name: "legacy v1 runtime without summary", schema: 1, level: "runtime", proofDigest: digest, want: true},
+		{name: "v2 runtime without summary", schema: 2, level: "runtime", proofDigest: digest},
+		{name: "v2 runtime with ineligible summary", schema: 2, level: "runtime", closure: ineligible, proofDigest: digest},
+		{name: "v2 runtime with matching summary", schema: 2, level: "runtime", closure: eligible, proofDigest: digest, want: true},
+		{name: "v2 runtime with different summary", schema: 2, level: "runtime", closure: eligible, proofDigest: other},
+		{name: "v2 runtime without digest", schema: 2, level: "runtime", closure: eligible},
+		{name: "v2 schema proof without summary", schema: 2, level: "schema", want: true},
+		{name: "v2 schema proof with ineligible summary", schema: 2, level: "schema", closure: ineligible, want: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := directoryEvidenceMatchesCanonicalClosure(tc.schema,
+				domain.DirectoryTarget{CanonicalClosure: tc.closure},
+				domain.DirectoryEvidence{Level: tc.level, ClosureDigest: tc.proofDigest})
+			if got != tc.want {
+				t.Fatalf("schema=%d level=%q proof=%q closure=%+v: got %t, want %t",
+					tc.schema, tc.level, tc.proofDigest, tc.closure, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestDirectoryV1ProjectInspectionOmitsUserEvidence(t *testing.T) {
+	bundle := readModelBundle()
+	snapshot := bundle.Snapshot
+	product := snapshot.Products[0]
+	const distribution = "owner/demo"
+	user := inspectDistribution(snapshot, product, distribution, 2, domain.ScopeUser)
+	project := inspectDistribution(snapshot, product, distribution, 2, domain.ScopeProject)
+	if len(user.Evidence) != 2 || len(user.Targets) != 1 || len(user.Targets[0].Evidence) != 2 {
+		t.Fatalf("user proof unexpectedly changed: %+v", user)
+	}
+	if len(project.Evidence) != 0 || len(project.Targets) != 1 || len(project.Targets[0].Evidence) != 0 {
+		t.Fatalf("v1 Project inspection inherited User runtime or materialization evidence: %+v", project)
+	}
+	if observed := evidenceForClientRevision(snapshot, distribution, 2, domain.ClientCursor, domain.ScopeProject); len(observed) != 0 {
+		t.Fatalf("Project revision borrowed User evidence: %+v", observed)
+	}
+	if observed := evidenceForClientRevision(snapshot, distribution, 2, domain.ClientCursor, domain.ScopeUser); len(observed) != 2 {
+		t.Fatalf("User revision lost existing evidence: %+v", observed)
+	}
+	schema := snapshot.Evidence[1]
+	schema.ID, schema.Level, schema.Client = "current-schema-only", "schema", ""
+	snapshot.Evidence = append(snapshot.Evidence, schema)
+	snapshot.Distributions[0].ReleasePolicies[1].CurrentEvidence = append(
+		snapshot.Distributions[0].ReleasePolicies[1].CurrentEvidence, schema.ID)
+	project = inspectDistribution(snapshot, product, distribution, 2, domain.ScopeProject)
+	if len(project.Evidence) != 1 || project.Evidence[0].ID != schema.ID ||
+		len(project.Targets[0].Evidence) != 1 || project.Targets[0].Evidence[0] != schema.ID {
+		t.Fatalf("Project inspection hid package-wide schema evidence: %+v", project)
+	}
+}
+
+// Project scope must not suppress v2 grant-specific evidence or its explicit scope.
+func TestDirectoryV2ProjectInspectionPreservesScopedEvidence(t *testing.T) {
+	const id = "owner/tool"
+	snapshot := domain.DirectorySnapshot{SnapshotSchemaVersion: 2,
+		Distributions: []domain.DirectoryDistribution{{
+			ID:       id,
+			Releases: []domain.DirectoryRelease{{Sequence: 1}},
+			ReleasePolicies: []domain.DirectoryReleasePolicy{{ReleaseSequence: 1, Targets: []domain.DirectoryTarget{
+				{Client: domain.ClientCodex, Scope: domain.ScopeProject, CurrentEvidence: []string{"project-runtime"}},
+			}}},
+		}},
+		Evidence: []domain.DirectoryEvidence{{ID: "project-runtime", DistributionID: id,
+			ReleaseSequence: 1, Client: domain.ClientCodex, Scope: domain.ScopeProject, Level: "runtime"}},
+	}
+	got := inspectDistribution(snapshot, domain.DirectoryProduct{DefaultDistribution: id}, id, 1, domain.ScopeProject)
+	if len(got.Evidence) != 1 || len(got.Targets) != 1 ||
+		len(got.Targets[0].Evidence) != 1 || got.Targets[0].Evidence[0] != "project-runtime" {
+		t.Fatalf("v2 project grant evidence changed: %+v", got)
+	}
+}

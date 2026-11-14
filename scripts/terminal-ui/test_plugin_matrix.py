@@ -1,0 +1,186 @@
+"""Fixture validation plus opt-in actual PTY integration (never mocked CLI)."""
+import hashlib
+import json
+import http.client
+from urllib.parse import urlsplit
+import os
+from pathlib import Path
+import tempfile
+import subprocess
+import unittest
+from unittest.mock import patch
+
+import plugin_matrix as lane
+
+
+class FixtureValidation(unittest.TestCase):
+    def test_uploaded_evidence_manifest_does_not_claim_hidden_fixture_bytes(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / 'visible.txt').write_bytes(b'public evidence')
+            hidden = root / 'foreign' / '.cursor-plugin'
+            hidden.mkdir(parents=True)
+            (hidden / 'plugin.json').write_bytes(b'{"synthetic": true}')
+            uploaded, omitted = lane.uploadable_evidence_hashes(root)
+            self.assertEqual(uploaded['visible.txt'], hashlib.sha256(b'public evidence').hexdigest())
+            self.assertNotIn('foreign/.cursor-plugin/plugin.json', uploaded)
+            self.assertEqual(omitted['foreign/.cursor-plugin'], 'directory')
+            self.assertEqual(omitted['foreign/.cursor-plugin/plugin.json'],
+                             hashlib.sha256(b'{"synthetic": true}').hexdigest())
+
+    @unittest.skipUnless(os.name == 'posix', 'plugin matrix is POSIX-only')
+    def test_generated_plugin_report_omits_hidden_fixture(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            binary = root / 'binary'
+            binary.write_bytes(b'synthetic executable')
+            artifacts = root / 'artifacts'
+
+            def record_case(_case, _binary, evidence, _timeout):
+                evidence.mkdir(parents=True)
+                (evidence / 'visible.txt').write_bytes(b'public evidence')
+                hidden = evidence / 'foreign' / '.cursor-plugin'
+                hidden.mkdir(parents=True)
+                (hidden / 'plugin.json').write_bytes(b'{"synthetic": true}')
+
+            argv = ['plugin_matrix.py', '--binary', str(binary),
+                    '--artifacts', str(artifacts), '--case', 'collision:cancel']
+            with patch('sys.argv', argv), \
+                 patch.object(lane, 'run_case', side_effect=record_case), \
+                 patch.object(lane.subprocess, 'check_output', return_value='test-sha\n'):
+                self.assertEqual(lane.main(), 0)
+
+            report = json.loads((artifacts / 'report.json').read_text())
+            visible = 'collision-cancel/visible.txt'
+            hidden = 'collision-cancel/foreign/.cursor-plugin/plugin.json'
+            self.assertEqual(report['evidence_hashes'][visible],
+                             hashlib.sha256(b'public evidence').hexdigest())
+            self.assertNotIn(hidden, report['evidence_hashes'])
+            self.assertEqual(report['omitted_hidden_evidence'][hidden],
+                             hashlib.sha256(b'{"synthetic": true}').hexdigest())
+
+    def test_platform_discovery_paths(self):
+        for system, editor in (('Linux', 'config'), ('Darwin', 'Library/Application Support')):
+            with self.subTest(system=system), tempfile.TemporaryDirectory() as tmp:
+                fixture = lane.Fixture(tmp)
+                before = fixture.mutations()
+                paths = lane.ten_client_paths(fixture, system)
+                self.assertEqual({str(p.relative_to(fixture.home)) for p in paths}, {
+                    '.copilot', '.kiro', '.claude', '.gemini/.gemini',
+                    editor + '/Code/User/globalStorage/saoudrizwan.claude-dev',
+                    'config/opencode', '.codeium/windsurf'})
+                self.assertEqual(fixture.mutations(), before)
+                self.assertTrue(all(p.resolve().is_relative_to(fixture.home.resolve()) for p in paths))
+
+    def test_native_seed_preserves_isolation_and_version_only_stubs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fixture = lane.Fixture(tmp)
+            env = dict(fixture.env)
+            with patch.object(lane, 'ten_client_paths', wraps=lane.ten_client_paths) as paths:
+                lane.seed_ten_clients(fixture)
+                paths.assert_called_once_with(fixture, lane.platform.system())
+            self.assertEqual(fixture.env, env)
+            self.assertTrue(all(p.is_dir() for p in lane.ten_client_paths(fixture, lane.platform.system())))
+            self.assertEqual({p.name for p in fixture.bin.iterdir()}, {
+                'codex', 'cursor', 'copilot', 'code', 'kiro-cli', 'claude', 'gemini', 'opencode', 'windsurf'})
+            for stub in fixture.bin.iterdir():
+                if stub.name == 'opencode':
+                    self.assertFalse(stub.read_bytes().startswith(b'#!'))
+                    result = subprocess.run([str(stub), '--version'], env=fixture.env, capture_output=True, text=True, check=True)
+                    self.assertEqual(result.stdout.strip(), '1.18.34')
+                    refused = subprocess.run([str(stub), 'plugin', 'install'], env=fixture.env, capture_output=True)
+                    self.assertEqual(refused.returncode, 97)
+                else:
+                    self.assertEqual(stub.read_bytes(), (fixture.bin / 'cursor').read_bytes())
+                self.assertTrue(os.access(stub, os.X_OK))
+            fixture.unchanged()
+
+    def test_discovery_rejects_unsupported_platform_and_external_roots(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fixture = lane.Fixture(tmp)
+            with self.assertRaisesRegex(AssertionError, 'Linux and Darwin'):
+                lane.ten_client_paths(fixture, 'Windows')
+            fixture.env['XDG_CONFIG_HOME'] = str(fixture.root / 'outside-home')
+            for system in ('Linux', 'Darwin'):
+                with self.subTest(system=system), self.assertRaisesRegex(AssertionError, 'escapes'):
+                    lane.ten_client_paths(fixture, system)
+
+    def test_standard_fixture_contracts(self):
+        for kind in lane.KINDS:
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as tmp:
+                fixture = lane.Fixture(tmp)
+                lane.package(fixture, kind, 'http://127.0.0.1:12345/mcp')
+                if kind == 'malformed':
+                    with self.assertRaises(json.JSONDecodeError):
+                        json.loads((fixture.package / 'plugin.json').read_text())
+                    continue
+                manifest = json.loads((fixture.package / 'plugin.json').read_text())
+                self.assertEqual(manifest['$schema'], lane.SCHEMA + 'plugin.schema.json')
+                self.assertEqual(manifest['name'], 'pty-synthetic')
+                if kind in ('skill', 'mixed', 'collision'):
+                    body = (fixture.package / 'skills/guide/SKILL.md').read_text()
+                    self.assertTrue(body.startswith('---\nname: guide\ndescription: '))
+                    self.assertIn('reference.txt', body)
+                    self.assertTrue((fixture.package / 'skills/guide/reference.txt').is_file())
+                if kind in ('stdio-missing', 'mixed', 'http-auth'):
+                    mcp = json.loads((fixture.package / 'mcp.json').read_text())
+                    server = mcp['mcpServers']['fixture']
+                    if kind == 'http-auth':
+                        self.assertEqual(set(server), {'type', 'url'})
+                    else:
+                        self.assertEqual(server['command'], 'uap-fixture-missing-runtime')
+                        self.assertFalse((fixture.bin / server['command']).exists())
+                fixture.unchanged()
+
+    def test_controlled_endpoint_requires_auth_without_credentials(self):
+        with lane.local_endpoint(True) as (url, requests):
+            parsed = urlsplit(url)
+            connection = http.client.HTTPConnection(parsed.hostname, parsed.port, timeout=2)
+            try:
+                connection.request('POST', parsed.path, body=b'{}')
+                response = connection.getresponse()
+                self.assertEqual(response.status, 401)
+                self.assertIn('Bearer', response.getheader('WWW-Authenticate'))
+                response.read()
+            finally:
+                connection.close()
+            self.assertEqual(requests, [{'method': 'POST', 'path': '/mcp'}])
+
+    def test_case_contract(self):
+        self.assertEqual(len(lane.CASES), 19)
+        self.assertEqual(len(lane.CASES), len(set(lane.CASES)))
+        self.assertIn('empty:all-ten', lane.CASES)
+        self.assertIn('skill:install', lane.CASES)
+        for kind in ('stdio-missing', 'collision', 'malformed'):
+            self.assertIn(kind + ':reject', lane.CASES)
+        self.assertIn('mixed:partial-plan', lane.CASES)
+        self.assertIn('http-auth:auth-unknown', lane.CASES)
+        self.assertNotIn('mixed:reject', lane.CASES)
+        self.assertNotIn('http-auth:reject', lane.CASES)
+
+    def test_auth_uncertainty_does_not_imply_runtime_verification(self):
+        lane.check_auth_unknown({'authentication': 'not_checked', 'verification': 'package_validated'})
+        for auth, verification in (('not_required', 'package_validated'), ('verified', 'package_validated'),
+                                   ('not_checked', 'installed')):
+            with self.subTest(auth=auth, verification=verification), self.assertRaises(AssertionError):
+                lane.check_auth_unknown({'authentication': auth, 'verification': verification})
+
+    def test_choice_parser_rejects_diagnostic_only_client(self):
+        self.assertEqual(lane.choices(b'Warning: cursor (cursor)\n'), [])
+        self.assertEqual(lane.choices('┃ > [•] OpenAI Codex (codex)\r\n┃ [•] Cursor (cursor)'.encode()), ['codex', 'cursor'])
+
+    def test_external_endpoint_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaisesRegex(AssertionError, 'loopback'):
+                lane.package(lane.Fixture(tmp), 'http-auth', 'https://external.example/mcp')
+
+
+@unittest.skipUnless(os.environ.get('PLUGIN_MATRIX_BINARY'), 'set PLUGIN_MATRIX_BINARY for actual PTY')
+class RealPTY(unittest.TestCase):
+    def test_skill_keyboard_lifecycle(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            lane.run_case('skill:install', Path(os.environ['PLUGIN_MATRIX_BINARY']).resolve(), Path(tmp) / 'evidence')
+
+
+if __name__ == '__main__':
+    unittest.main()

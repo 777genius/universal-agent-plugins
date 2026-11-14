@@ -1,0 +1,523 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { createObserver } from '../v1.js';
+const native = (type, properties) => ({ type, properties });
+const user = { id: 'user', sessionID: 'session', role: 'user' };
+const assistant = { id: 'assistant', sessionID: 'session', parentID: 'user', role: 'assistant',
+  path: { cwd: 'TEST-location' }, time: { created: 1790867856742 } };
+const final = { ...assistant, finish: 'stop', time: { ...assistant.time, completed: 1790867857073 } };
+function setup(extra = {}) {
+  const out = [], diagnostics = [];
+  let messages = [user, assistant];
+  const observer = createObserver({ runtimeEligibility: () => 'supported', callbackAuthority: 'qualified_native_sync', location: 'TEST-location',
+    client: { session: { get: async () => ({ data: { id: 'session', directory: 'TEST-location' } }),
+      messages: async () => ({ data: messages }) } },
+    emit: (fact) => out.push(fact), onDiagnostic: (reason) => diagnostics.push(reason), ...extra });
+  return { observer, out, diagnostics, setMessages: (rows) => { messages = rows; } };
+}
+const ask = { sessionID: 'session', id: 'question', questions: [{}], tool: { messageID: 'assistant', callID: 'call' } };
+async function heldAttention(extra = {}) {
+  let enter, release, captured;
+  const entered = new Promise((r) => { enter = r; }), pause = new Promise((r) => { release = r; });
+  const spawned = [], h = setup({ ...extra, emit: async (fact, handoff) => {
+    captured = handoff; enter(); await pause; if (handoff.isCurrent()) spawned.push(fact);
+  } });
+  await h.observer.observe(native('message.updated', { info: user }));
+  await h.observer.observe(native('message.updated', { info: assistant }));
+  const work = h.observer.observe(native('question.asked', ask)); await entered;
+  return { ...h, spawned, work, release, get handoff() { return captured; } };
+}
+
+test('V1 requests carry native assistant lower bound, never fictional request birth or receive time', async () => {
+  const a = setup(), b = setup();
+  for (const h of [a, b]) {
+    await h.observer.observe(native('message.updated', { info: user }));
+  await h.observer.observe(native('message.updated', { info: assistant }));
+    await h.observer.observe(native('question.asked', ask));
+  }
+  assert.equal(a.out.length, 1);
+  assert.equal(a.out[0].provenance.nativeTime, assistant.time.created);
+  assert.equal(a.out[0].provenance.timeBasis, 'assistant_created_lower_bound');
+  assert.equal(a.out[0].provenance.observationID, b.out[0].provenance.observationID);
+  assert.equal(a.out[0].provenance.nativeEventID, undefined);
+  a.observer.dispose(); b.observer.dispose();
+});
+
+test('missing callback authority, native lower bound, scope or runtime cannot authorize strict IPC', async () => {
+  for (const change of ['authority', 'time', 'scope', 'runtime']) {
+    const h = setup(change === 'runtime' ? { runtimeEligibility: () => 'unverified' } : change === 'authority' ? { callbackAuthority: undefined } : {});
+    h.setMessages([user, { ...assistant, ...(change === 'time' ? { time: {} } : {}),
+      ...(change === 'scope' ? { path: { cwd: 'other-project' } } : {}) }]);
+    await h.observer.observe(native('message.updated', { info: user }));
+  await h.observer.observe(native('message.updated', { info: assistant }));
+    await h.observer.observe(native('question.asked', ask));
+    assert.deepEqual(h.out, [], change); h.observer.dispose();
+  }
+});
+
+test('source error and idle alone cannot select a later assistant as terminal evidence', async () => {
+  const h = setup(); await h.observer.observe(native('message.updated', { info: user }));
+  await h.observer.observe(native('session.error', { sessionID: 'session', error: { name: 'APIError' } }));
+  await h.observer.observe(native('session.idle', { sessionID: 'session' }));
+  assert.deepEqual(h.out, []); h.observer.dispose();
+});
+
+test('native error-before-idle-before-final preserves final matching error, with no early handoff', async () => {
+  const h = setup(), failed = { ...final, error: { name: 'APIError' } };
+  await h.observer.observe(native('message.updated', { info: user }));
+  await h.observer.observe(native('message.updated', { info: assistant }));
+  await h.observer.observe(native('message.updated', { info: assistant }));
+  await h.observer.observe(native('session.error', { sessionID: 'session', error: { name: 'APIError' } }));
+  await h.observer.observe(native('session.idle', { sessionID: 'session' })); assert.deepEqual(h.out, []);
+  h.setMessages([user, failed]); await h.observer.observe(native('message.updated', { info: failed }));
+  assert.deepEqual(h.out.map((f) => f.kind), ['terminal_error']);
+  assert.equal(h.out[0].provenance.nativeTime, assistant.time.created);
+  assert.equal(h.out[0].provenance.nativeMessageID, failed.id); h.observer.dispose();
+});
+
+test('ambiguous active assistants and compaction suppress source error correlation', async () => {
+  for (const compaction of [false, true]) {
+    const h = setup(), failed = { ...final, error: { name: 'APIError' } };
+    await h.observer.observe(native('message.updated', { info: user }));
+  await h.observer.observe(native('message.updated', { info: assistant }));
+    await h.observer.observe(native('message.updated', { info: assistant }));
+    if (compaction) await h.observer.observe(native('session.compacted', { sessionID: 'session' }));
+    else await h.observer.observe(native('message.updated', { info: { ...assistant, id: 'competing' } }));
+    await h.observer.observe(native('session.error', { sessionID: 'session', error: { name: 'APIError' } }));
+    h.setMessages([user, failed]); await h.observer.observe(native('message.updated', { info: failed }));
+    await h.observer.observe(native('session.idle', { sessionID: 'session' }));
+    assert.deepEqual(h.out, []); h.observer.dispose();
+  }
+});
+
+test('V1 settlement synchronously aborts an already paused IPC adapter', async () => {
+  const h = await heldAttention();
+  const settled = h.observer.observe(native('question.replied', { sessionID: 'session', requestID: 'question' }));
+  assert.equal(h.handoff.signal.aborted, true); assert.equal(h.handoff.isCurrent(), false);
+  h.release(); await h.work; await settled; assert.deepEqual(h.spawned, []); h.observer.dispose();
+});
+
+test('strict V1 session saturation protects a paused live fence instead of evicting it', async () => {
+  const h = await heldAttention({ dedupLimit: 1 });
+  await h.observer.observe(native('message.updated', { info: { ...user, id: 'new-user', sessionID: 'other' } }));
+  assert.ok(h.diagnostics.includes('session_capacity'));
+  h.release(); await h.work; assert.equal(h.spawned.length, 1); h.observer.dispose();
+});
+
+test('V1 cannot use an older assistant as provenance for attention from a replaced step', async () => {
+  const h = setup();
+  h.setMessages([user, assistant, { ...assistant, id: 'new-step' }]);
+  await h.observer.observe(native('message.updated', { info: user }));
+  await h.observer.observe(native('message.updated', { info: assistant }));
+  await h.observer.observe(native('question.asked', ask)); assert.deepEqual(h.out, []); h.observer.dispose();
+});
+
+test('30s V1 ingress budget includes paused metadata and callback waits without restamping', async (t) => {
+  let elapsed = 0; t.mock.method(performance, 'now', () => elapsed);
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let enter, release;
+  const entered = new Promise((r) => { enter = r; }), pause = new Promise((r) => { release = r; });
+  const pending = heldAttention({ client: { session: {
+    get: async () => ({ data: { id: 'session', directory: 'TEST-location' } }),
+    messages: async () => { enter(); await pause; return { data: [user, assistant] }; },
+  } } });
+  await entered; elapsed = 1500; t.mock.timers.tick(1500); release();
+  const h = await pending;
+  elapsed = 30001; t.mock.timers.tick(28501);
+  assert.equal(h.handoff.signal.aborted, true); assert.equal(h.handoff.isCurrent(), false);
+  h.release(); await h.work; assert.deepEqual(h.spawned, []); h.observer.dispose();
+});
+
+test('native compaction summary is never ordinary V1 assistant completion', async () => {
+  const summary = true, h = setup(); h.setMessages([user, { ...final, summary }]);
+  await h.observer.observe(native('message.updated', { info: user }));
+  await h.observer.observe(native('message.updated', { info: assistant }));
+  await h.observer.observe(native('message.updated', { info: { ...final, summary } }));
+  await h.observer.observe(native('session.idle', { sessionID: 'session' }));
+  assert.deepEqual(h.out, []); h.observer.dispose();
+});
+
+test('uncorrelated native error and compaction summary synchronously invalidate paused V1 attention', async () => {
+  for (const closing of [native('session.error', { sessionID: 'session', error: { name: 'APIError' } }),
+    native('message.updated', { info: { ...assistant, id: 'summary', summary: true } })]) {
+    const h = await heldAttention();
+    const closed = h.observer.observe(closing);
+    assert.equal(h.handoff.signal.aborted, true); assert.equal(h.handoff.isCurrent(), false);
+    h.release(); await h.work; await closed; assert.deepEqual(h.spawned, []); h.observer.dispose();
+  }
+});
+
+// Regression: the compacted callback arrives after the native continuation user and leaves a sticky silence flag.
+test('auto summary then continuation user then compacted accepts only a fresh current ordinary assistant', async () => {
+  const h = setup();
+  await h.observer.observe(native('message.updated', { info: user }));
+  const summary = { ...final, id: 'summary', summary: true };
+  await h.observer.observe(native('message.updated', { info: summary }));
+  const continuation = { ...user, id: 'continuation' };
+  await h.observer.observe(native('message.updated', { info: continuation }));
+  await h.observer.observe(native('session.compacted', { sessionID: 'session' }));
+  // Old summary republication must not qualify resumed work or poison a later ordinary assistant.
+  await h.observer.observe(native('message.updated', { info: summary }));
+  const resumed = { ...final, id: 'resumed', parentID: 'continuation',
+    time: { created: final.time.completed + 1, completed: final.time.completed + 2 } };
+  h.setMessages([continuation, resumed]);
+  await h.observer.observe(native('message.updated', { info: resumed }));
+  await h.observer.observe(native('session.idle', { sessionID: 'session' }));
+  assert.deepEqual(h.out.map((e) => [e.kind, e.turnID]), [['turn_idle_verified', 'continuation']]); h.observer.dispose();
+});
+
+// Regression: independently renewing 2s for session metadata accepts a 3s attention job.
+test('V1 messages and ancestry share the entire 2s metadata deadline', async (t) => {
+  let elapsed = 0, releaseMessages, enteredGet, captured;
+  t.mock.method(performance, 'now', () => elapsed); t.mock.timers.enable({ apis: ['setTimeout'] });
+  const messages = new Promise((r) => { releaseMessages = r; });
+  const getStarted = new Promise((r) => { enteredGet = r; });
+  const h = setup({ client: { session: {
+    messages: () => messages,
+    get: async ({ signal }) => { captured = signal; enteredGet(); return new Promise(() => {}); },
+  } } });
+  await h.observer.observe(native('message.updated', { info: user }));
+  await h.observer.observe(native('message.updated', { info: assistant }));
+  const job = h.observer.observe(native('question.asked', ask));
+  elapsed = 1500; t.mock.timers.tick(1500); releaseMessages({ data: [user, assistant] }); await getStarted;
+  elapsed = 2000; t.mock.timers.tick(500); await job;
+  assert.equal(captured.aborted, true); assert.deepEqual(h.out, []); h.observer.dispose();
+});
+
+// Regression: hydration of an old assistant after Asked manufactures a lower bound never seen at ingress.
+test('strict V1 attention requires its native assistant before Asked and preserves ingress stamp', async () => {
+  const h = setup(); await h.observer.observe(native('message.updated', { info: user }));
+  await h.observer.observe(native('question.asked', ask)); assert.deepEqual(h.out, []); h.observer.dispose();
+  let localTime = 10, handoff;
+  const current = setup({ clock: { id: 'TEST-V1-coordinate', now: () => localTime },
+    emit: (fact, token) => { handoff = token; current.out.push(fact); }, client: { session: {
+      get: async () => ({ id: 'session', directory: 'TEST-location' }),
+      messages: async () => { localTime = 100; return [user, assistant]; },
+    } } });
+  await current.observer.observe(native('message.updated', { info: user }));
+  await current.observer.observe(native('message.updated', { info: assistant }));
+  await current.observer.observe(native('question.asked', ask));
+  assert.equal(handoff.ingressMonotonicMs, 10); assert.equal(handoff.clockID, 'TEST-V1-coordinate'); current.observer.dispose();
+});
+
+// Regression: a later callback during paused hydration backfills source provenance for an earlier Asked.
+test('assistant first observed during paused request metadata cannot retroactively authorize that request', async () => {
+  let entered, release;
+  const started = new Promise((r) => { entered = r; }), pause = new Promise((r) => { release = r; });
+  const h = setup({ client: { session: {
+    messages: async () => { entered(); await pause; return [user, assistant]; },
+    get: async () => ({ id: 'session', directory: 'TEST-location' }),
+  } } });
+  await h.observer.observe(native('message.updated', { info: user }));
+  const job = h.observer.observe(native('question.asked', ask)); await started;
+  await h.observer.observe(native('message.updated', { info: assistant })); release(); await job;
+  assert.deepEqual(h.out, []); h.observer.dispose();
+});
+
+test('V1 preparation carries the original native-read deadline and close aborts it before business delivery', async () => {
+  let elapsed = 0, enter, release, prep;
+  const entered = new Promise((r) => { enter = r; }), pause = new Promise((r) => { release = r; });
+  const h = setup({ clock: { id: 'TEST-clock', now: () => elapsed },
+    client: { session: { get: async () => ({ id: 'session', directory: 'TEST-location' }),
+      messages: async () => { elapsed = 1200; return [user, assistant]; } } },
+    beforeEmit: async (_fact, handoff) => { prep = handoff; enter(); await pause; return true; } });
+  await h.observer.observe(native('message.updated', { info: user }));
+  await h.observer.observe(native('message.updated', { info: assistant }));
+  const job = h.observer.observe(native('question.asked', ask)); await entered;
+  assert.equal(prep.metadataDeadline, 2000); assert.equal(prep.ingressMonotonicMs, 0); assert.equal(prep.revalidate, undefined);
+  await h.observer.observe(native('question.replied', { sessionID: 'session', requestID: 'question' }));
+  assert.equal(prep.signal.aborted, true); release(); await job; assert.deepEqual(h.out, []); h.observer.dispose();
+});
+
+test('V1 native metadata and an abort-ignoring preparation jointly retain the sixteen actual-settlement slots', async () => {
+  let enter, releasePrep, releaseReads, reads = 0, prep;
+  const entered = new Promise((r) => { enter = r; }), preparation = new Promise((r) => { releasePrep = r; }),
+    metadata = new Promise((r) => { releaseReads = r; });
+  const h = setup({ beforeEmit: async (_fact, handoff) => { prep = handoff; enter(); await preparation; return true; },
+    client: { session: { get: async ({ path }) => ({ id: path.id, directory: 'TEST-location' }),
+      messages: async ({ path }) => {
+        if (path.id === 'session') return [user, assistant];
+        reads++; await metadata; return [];
+      } } } });
+  await h.observer.observe(native('message.updated', { info: user }));
+  await h.observer.observe(native('message.updated', { info: assistant }));
+  const first = h.observer.observe(native('question.asked', ask)); await entered;
+  await h.observer.observe(native('question.replied', { sessionID: 'session', requestID: 'question' }));
+  assert.equal(prep.signal.aborted, true);
+  const jobs = [];
+  for (let i = 0; i < 16; i++) {
+    const sessionID = `other-${i}`;
+    await h.observer.observe(native('message.updated', { info: { ...user, sessionID } }));
+    await h.observer.observe(native('message.updated', { info: { ...assistant, sessionID } }));
+    jobs.push(h.observer.observe(native('question.asked', { ...ask, sessionID })));
+  }
+  await new Promise(setImmediate); assert.equal(reads, 15);
+  assert.ok(h.diagnostics.includes('messages lookup capacity exceeded'));
+  releasePrep(); releaseReads(); await Promise.all([first, ...jobs]); assert.deepEqual(h.out, []); h.observer.dispose();
+});
+
+test('strict V1 overflow takes typed identity from the verified final native answer even without its final callback', async () => {
+  const observations = [];
+  for (const messageID of ['overflow-a', 'overflow-b']) {
+    const h = setup(), active = { ...assistant, id: messageID },
+      failed = { ...final, id: messageID, error: { name: 'ContextOverflowError' } };
+    await h.observer.observe(native('message.updated', { info: user }));
+    await h.observer.observe(native('message.updated', { info: active }));
+    h.setMessages([user, failed]);
+    await h.observer.observe(native('session.error', { sessionID: 'session', error: { name: 'ContextOverflowError' } }));
+    await h.observer.observe(native('session.idle', { sessionID: 'session' }));
+    assert.equal(h.out.length, 1); assert.equal(h.out[0].kind, 'terminal_error');
+    assert.equal(h.out[0].provenance.nativeMessageID, messageID);
+    observations.push(h.out[0].provenance.observationID); h.observer.dispose();
+  }
+  assert.notEqual(observations[0], observations[1]);
+});
+
+// Regression: exhausted business-job capacity drops native scope/delete controls
+// whose session identity is properties.info.id, leaving preparation authorized.
+for (const type of ['session.deleted', 'session.updated', 'session.error']) {
+  test(`strict V1 ${type} aborts preparation synchronously with all 256 ingress jobs held`, async () => {
+    let enter, release, preparation;
+    const entered = new Promise((r) => { enter = r; }), pause = new Promise((r) => { release = r; });
+    const h = setup({ beforeEmit: async (_fact, handoff) => {
+      preparation = handoff; enter(); await pause; return true;
+    } });
+    let job; const fillers = [];
+    try {
+      await h.observer.observe(native('message.updated', { info: user }));
+      await h.observer.observe(native('message.updated', { info: assistant }));
+      job = h.observer.observe(native('question.asked', ask)); await entered;
+      // These admitted calls remain counted until their promises settle. No await
+      // lets their finally callbacks release capacity before the native control.
+      for (let i = 0; i < 255; i++) fillers.push(h.observer.observe(native('session.idle', { sessionID: `capacity-${i}` })));
+      assert.equal(h.diagnostics.includes('job_capacity'), false);
+      const closed = h.observer.observe(native(type, type === 'session.error'
+        ? { sessionID: 'session', error: { name: 'APIError' } }
+        : { info: { id: 'session', directory: 'other-location' } }));
+      assert.equal(preparation.signal.aborted, true);
+      assert.equal(preparation.isCurrent(), false);
+      release(); await Promise.all([job, closed, ...fillers]);
+      assert.deepEqual(h.out, []); // Final emit represents the business spawn/delivery boundary.
+      assert.equal(h.diagnostics.includes('job_capacity'), type === 'session.error');
+    } finally { release(); await Promise.all([job, ...fillers]); h.observer.dispose(); }
+  });
+}
+
+test('strict V1 saturated scope ingress preserves unrelated roots and unknown/global isolation', async () => {
+  let enter, release, preparation;
+  const entered = new Promise((r) => { enter = r; }), pause = new Promise((r) => { release = r; });
+  const h = setup({ beforeEmit: async (_fact, handoff) => {
+    preparation = handoff; enter(); await pause; return true;
+  } });
+  let job; const work = [];
+  try {
+    await h.observer.observe(native('message.updated', { info: user }));
+    await h.observer.observe(native('message.updated', { info: assistant }));
+    job = h.observer.observe(native('question.asked', ask)); await entered;
+    for (let i = 0; i < 255; i++) work.push(h.observer.observe(native('session.idle', { sessionID: `capacity-${i}` })));
+    for (const event of [native('session.deleted', { info: { id: 'other-root' } }),
+      native('session.updated', { info: { id: 42 } }),
+      native('global.updated', { info: { id: 'session' } }), native('global.updated', {})]) {
+      work.push(h.observer.observe(event));
+      assert.equal(preparation.signal.aborted, false);
+      assert.equal(preparation.isCurrent(), true);
+    }
+    release(); await Promise.all([job, ...work]);
+    assert.equal(h.out.length, 1); assert.equal(h.out[0].sessionID, 'session');
+  } finally { release(); await Promise.all([job, ...work]); h.observer.dispose(); }
+});
+
+// Independently transcribed from the frozen native Session.patch/touch source:
+// Updated carries the complete next Info, not the partial time.updated patch.
+// IDs/content below are inert; positions/order come from floor-cause.md.
+const touchedRoot = { id: 'session', slug: 'TEST-root', projectID: 'TEST-project',
+  directory: 'TEST-location', title: 'TEST ordinary turn', version: '1.18.33',
+  time: { created: 1790867856000, updated: 1790867856743 } };
+const touch = (updated, extra = {}) => native('session.updated', { sessionID: 'session',
+  info: { ...touchedRoot, ...extra, time: { ...touchedRoot.time, updated, ...extra.time } } });
+const sameUser = { ...user, time: { created: 1790867856700 }, summary: { title: 'TEST turn', diffs: [] } };
+const completion = { version: 1, kind: 'turn_idle_verified', sessionID: 'session', turnID: 'user',
+  messageID: 'assistant', rootSession: true, provenance: { generation: 'v1',
+    observationID: '["v1","session","user","turn_idle_verified","assistant"]',
+    nativeTime: final.time.completed, timeBasis: 'assistant_completed' } };
+
+for (const initialTouches of [true, false]) {
+  for (const heldRead of ['messages', 'get']) {
+    test(`native Session.touch ${initialTouches ? 'sequence' : 'during final lookup alone'} preserves ordinary completion while ${heldRead} is pending`, async () => {
+      let release;
+      const pause = new Promise((r) => { release = r; }), reads = { messages: 0, get: 0 };
+      const h = setup({ client: { session: {
+        messages: async ({ path }) => {
+          assert.equal(path.id, 'session'); reads.messages++;
+          if (heldRead === 'messages') await pause;
+          return { data: [{ info: sameUser }, { info: final }] };
+        },
+        get: async ({ path }) => {
+          assert.equal(path.id, 'session'); reads.get++;
+          if (heldRead === 'get') await pause;
+          return { data: touchedRoot };
+        },
+      } } });
+      const jobs = [];
+      try {
+        await h.observer.observe(native('message.updated', { info: sameUser })); // 4
+        if (initialTouches) await h.observer.observe(touch(1790867856743)); // 7
+        await h.observer.observe(native('session.status', { sessionID: 'session', status: { type: 'busy' } })); // 8
+        await h.observer.observe(native('message.updated', { info: assistant })); // 9
+        if (initialTouches) await h.observer.observe(touch(1790867856750)); // 10
+        await h.observer.observe(native('message.updated', { info: sameUser })); // 13
+        await h.observer.observe(native('message.updated', { info: final })); // 120
+        await h.observer.observe(native('session.status', { sessionID: 'session', status: { type: 'busy' } })); // 121
+        jobs.push(h.observer.observe(native('session.status', { sessionID: 'session', status: { type: 'idle' } }))); // 122
+        jobs.push(h.observer.observe(native('session.idle', { sessionID: 'session' }))); // 123
+        await new Promise(setImmediate); // Leave both final native checkpoints pending.
+        await h.observer.observe(touch(1790867857074, { title: 'TEST renamed ordinary turn' })); // 124
+        await h.observer.observe(native('message.updated', { info: sameUser })); // 127
+        assert.deepEqual(h.out, []);
+        release(); await Promise.all(jobs);
+        assert.deepEqual(h.out, [completion]);
+        assert.equal(reads.messages, 2); assert.equal(reads.get, 2);
+        await h.observer.observe(touch(1790867857075));
+        await h.observer.observe(native('session.idle', { sessionID: 'session' }));
+        assert.deepEqual(h.out, [completion]);
+        h.observer.dispose();
+        await h.observer.observe(native('session.idle', { sessionID: 'session' }));
+        assert.deepEqual(h.out, [completion]);
+      } finally { release(); await Promise.all(jobs); h.observer.dispose(); }
+    });
+  }
+}
+
+test('same-root Updated never substitutes cached scope for the final public get/messages authority', async () => {
+  for (const changed of ['directory', 'ancestry', 'identity', 'failed-get', 'current-user', 'answer-scope']) {
+    let getCalls = 0, completing = false;
+    const newUser = { ...sameUser, id: 'next-user', time: { created: final.time.completed + 1 } },
+      newAnswer = { ...final, parentID: newUser.id };
+    const h = setup({ client: { session: {
+      messages: async () => completing ? [changed === 'current-user' ? sameUser : newUser,
+        changed === 'answer-scope' ? { ...newAnswer, path: { cwd: 'other-location' } } : newAnswer] : [sameUser, assistant],
+      get: async () => {
+        getCalls++;
+        if (!completing) return touchedRoot;
+        if (changed === 'failed-get') throw new Error('TEST native read unavailable');
+        return { ...touchedRoot, ...(changed === 'directory' ? { directory: 'other-location' } : {}),
+          ...(changed === 'ancestry' ? { parentID: 'native-parent' } : {}),
+          ...(changed === 'identity' ? { id: 'different-native-session' } : {}) };
+      },
+    } } });
+    try {
+      await h.observer.observe(native('message.updated', { info: sameUser }));
+      await h.observer.observe(native('message.updated', { info: assistant }));
+      await h.observer.observe(native('question.asked', ask));
+      assert.equal(h.out.length, 1); assert.equal(getCalls, 1); // Warm an actually read root/scope cache.
+      completing = true;
+      await h.observer.observe(native('message.updated', { info: newUser }));
+      await h.observer.observe(touch(final.time.completed + 2));
+      await h.observer.observe(native('message.updated', { info: newAnswer }));
+      await h.observer.observe(native('session.idle', { sessionID: 'session' }));
+      assert.equal(h.out.length, 1, changed);
+      assert.equal(getCalls, ['current-user', 'answer-scope'].includes(changed) ? 1 : 2, changed);
+    } finally { h.observer.dispose(); }
+  }
+});
+
+const unsafeUpdates = [
+  ['changed directory', { info: { ...touchedRoot, directory: 'other-location' } }],
+  ['changed ancestry', { info: { ...touchedRoot, parentID: 'native-parent' } }],
+  ['malformed ancestry', { info: { ...touchedRoot, parentID: null } }],
+  ['missing directory', { info: { ...touchedRoot, directory: undefined } }],
+  ['malformed time', { info: { ...touchedRoot, time: null } }],
+  ['archive transition', { info: { ...touchedRoot, time: { ...touchedRoot.time, archived: 0 } } }],
+  ['compaction transition', { info: { ...touchedRoot, time: { ...touchedRoot.time, compacting: final.time.completed } } }],
+  ['revert transition', { info: { ...touchedRoot, revert: { messageID: 'user' } } }],
+  ['conflicting native identity', { sessionID: 'other-session', info: touchedRoot }],
+];
+
+for (const heldRead of ['messages', 'get']) {
+  test(`deletion and unsafe Updated suppress completion during pending final ${heldRead}`, async () => {
+    for (const [reason, event] of [['deleted', native('session.deleted', { info: touchedRoot })],
+      ...unsafeUpdates.map(([reason, properties]) => [reason, native('session.updated', properties)])]) {
+      let release;
+      const pause = new Promise((r) => { release = r; }), reads = { messages: 0, get: 0 };
+      const h = setup({ client: { session: {
+        messages: async () => { reads.messages++; if (heldRead === 'messages') await pause; return [sameUser, final]; },
+        get: async () => { reads.get++; if (heldRead === 'get') await pause; return touchedRoot; },
+      } } });
+      let job;
+      try {
+        await h.observer.observe(native('message.updated', { info: sameUser }));
+        await h.observer.observe(native('message.updated', { info: final }));
+        job = h.observer.observe(native('session.idle', { sessionID: 'session' }));
+        await new Promise(setImmediate); assert.equal(reads[heldRead], 1, reason);
+        await h.observer.observe(event);
+        // Neither a busy callback nor the same user nor a later safe touch may reopen it.
+        await h.observer.observe(native('session.status', { sessionID: 'session', status: { type: 'busy' } }));
+        await h.observer.observe(native('message.updated', { info: sameUser }));
+        await h.observer.observe(touch(final.time.completed + 1));
+        release(); await job;
+        await h.observer.observe(native('session.idle', { sessionID: 'session' }));
+        assert.deepEqual(h.out, [], reason);
+      } finally { release(); await job; h.observer.dispose(); }
+    }
+  });
+}
+
+test('routine Updated preserves preparation at full ingress capacity; unsafe lifecycle still aborts synchronously', async () => {
+  for (const [reason, properties] of unsafeUpdates) {
+    let enter, release, preparation;
+    const entered = new Promise((r) => { enter = r; }), pause = new Promise((r) => { release = r; });
+    const h = setup({ beforeEmit: async (_fact, handoff) => {
+      preparation = handoff; enter(); await pause; return true;
+    } });
+    let job; const fillers = [];
+    try {
+      await h.observer.observe(native('message.updated', { info: user }));
+      await h.observer.observe(native('message.updated', { info: assistant }));
+      job = h.observer.observe(native('question.asked', ask)); await entered;
+      for (let i = 0; i < 255; i++) fillers.push(h.observer.observe(native('session.idle', { sessionID: `capacity-${i}` })));
+      const routine = h.observer.observe(touch(final.time.completed + 1));
+      assert.equal(preparation.signal.aborted, false, reason);
+      assert.equal(preparation.isCurrent(), true, reason);
+      const closed = h.observer.observe(native('session.updated', properties));
+      assert.equal(preparation.signal.aborted, true, reason);
+      assert.equal(preparation.isCurrent(), false, reason);
+      release(); await Promise.all([job, routine, closed, ...fillers]);
+      assert.deepEqual(h.out, [], reason); assert.equal(h.diagnostics.includes('job_capacity'), false, reason);
+    } finally { release(); await Promise.all([job, ...fillers]); h.observer.dispose(); }
+  }
+});
+
+// A prior read rejection/unsafe turn is not authority for a later genuine user.
+// The new turn must still obtain its own public native scope/ancestry proof.
+test('a fresh genuine user after an unsafe turn can complete only with fresh public native authority', async () => {
+  for (const prior of ['cached-child', 'cached-foreign-directory', 'scope-control', 'delete-control']) {
+    let fresh = false, getCalls = 0;
+    const nextUser = { ...sameUser, id: 'fresh-user', time: { created: final.time.completed + 1 } },
+      nextFinal = { ...final, parentID: nextUser.id };
+    const h = setup({ client: { session: {
+      messages: async () => fresh ? [nextUser, nextFinal] : [sameUser, assistant],
+      get: async () => {
+        getCalls++;
+        return { ...touchedRoot, ...(!fresh && prior === 'cached-child' ? { parentID: 'native-parent' } : {}),
+          ...(!fresh && prior === 'cached-foreign-directory' ? { directory: 'other-location' } : {}) };
+      },
+    } } });
+    try {
+      await h.observer.observe(native('message.updated', { info: sameUser }));
+      await h.observer.observe(native('message.updated', { info: assistant }));
+      await h.observer.observe(native('question.asked', ask));
+      if (prior.endsWith('control')) await h.observer.observe(native(prior === 'delete-control' ? 'session.deleted' : 'session.updated',
+        { info: { ...touchedRoot, directory: 'other-location' } }));
+      const earlierFacts = h.out.length;
+      fresh = true;
+      await h.observer.observe(native('message.updated', { info: nextUser }));
+      await h.observer.observe(touch(final.time.completed + 2));
+      await h.observer.observe(native('message.updated', { info: nextFinal }));
+      await h.observer.observe(native('session.idle', { sessionID: 'session' }));
+      assert.equal(getCalls, 2, prior);
+      assert.equal(h.out.length, earlierFacts + 1, prior);
+      assert.equal(h.out.at(-1).kind, 'turn_idle_verified', prior);
+      assert.equal(h.out.at(-1).turnID, nextUser.id, prior);
+    } finally { h.observer.dispose(); }
+  }
+});

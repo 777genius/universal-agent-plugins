@@ -1,0 +1,12 @@
+{
+  "session_id": "e2e-session",
+  "transcript_path": "/tmp/t.jsonl",
+  "cwd": "/tmp",
+  "permission_mode": "default",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_use_id": "toolu_e2e",
+  "tool_input": {
+    "command": "rm -rf /"
+  }
+}

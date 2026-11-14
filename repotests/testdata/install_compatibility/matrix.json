@@ -1,0 +1,180 @@
+{
+  "cases": [
+    {
+      "name": "goreleaser_tarball_tag",
+      "release_source": "tag",
+      "release_tag": "v1.0.0",
+      "checksums_mode": "auto",
+      "assets": [
+        {
+          "name": "plug_1.0.0_{{goos}}_{{goarch}}.tar.gz",
+          "kind": "tar.gz",
+          "binary_name": "plug",
+          "body": "fixture-tarball"
+        }
+      ],
+      "expect": {
+        "exit_code": 0,
+        "installed_name": "plug",
+        "installed_body": "fixture-tarball",
+        "asset_name": "plug_1.0.0_{{goos}}_{{goarch}}.tar.gz",
+        "release_source": "tag"
+      }
+    },
+    {
+      "name": "raw_binary_latest_with_extras",
+      "release_source": "latest",
+      "release_tag": "v1.34.0",
+      "checksums_mode": "auto",
+      "assets": [
+        {
+          "name": "notify-{{goos}}-{{goarch}}{{exe_suffix}}",
+          "kind": "raw",
+          "body": "fixture-raw"
+        },
+        {
+          "name": "README.md",
+          "kind": "text",
+          "body": "ignore me"
+        },
+        {
+          "name": "sound-preview-{{goos}}-{{goarch}}{{exe_suffix}}",
+          "kind": "raw",
+          "body": "utility"
+        }
+      ],
+      "expect": {
+        "exit_code": 0,
+        "installed_name": "notify-{{goos}}-{{goarch}}{{exe_suffix}}",
+        "installed_body": "fixture-raw",
+        "asset_name": "notify-{{goos}}-{{goarch}}{{exe_suffix}}",
+        "release_source": "latest"
+      }
+    },
+    {
+      "name": "tarball_preferred_over_raw",
+      "release_source": "tag",
+      "release_tag": "v2.0.0",
+      "checksums_mode": "auto",
+      "assets": [
+        {
+          "name": "plug_2.0.0_{{goos}}_{{goarch}}.tar.gz",
+          "kind": "tar.gz",
+          "binary_name": "plug",
+          "body": "from-tarball"
+        },
+        {
+          "name": "plug-{{goos}}-{{goarch}}{{exe_suffix}}",
+          "kind": "raw",
+          "body": "from-raw"
+        }
+      ],
+      "expect": {
+        "exit_code": 0,
+        "installed_name": "plug",
+        "installed_body": "from-tarball",
+        "asset_name": "plug_2.0.0_{{goos}}_{{goarch}}.tar.gz",
+        "release_source": "tag"
+      }
+    },
+    {
+      "name": "ambiguous_matching_archives",
+      "release_source": "tag",
+      "release_tag": "v1.0.0",
+      "checksums_mode": "auto",
+      "assets": [
+        {
+          "name": "plug_1.0.0_{{goos}}_{{goarch}}.tar.gz",
+          "kind": "tar.gz",
+          "binary_name": "plug",
+          "body": "a"
+        },
+        {
+          "name": "plug-enterprise_1.0.0_{{goos}}_{{goarch}}.tar.gz",
+          "kind": "tar.gz",
+          "binary_name": "plug-enterprise",
+          "body": "b"
+        }
+      ],
+      "expect": {
+        "exit_code": 6,
+        "diagnostic_substring": "multiple matching archives"
+      }
+    },
+    {
+      "name": "ambiguous_matching_raw_binaries",
+      "release_source": "tag",
+      "release_tag": "v1.0.0",
+      "checksums_mode": "auto",
+      "assets": [
+        {
+          "name": "plug-{{goos}}-{{goarch}}{{exe_suffix}}",
+          "kind": "raw",
+          "body": "a"
+        },
+        {
+          "name": "plug-pro-{{goos}}-{{goarch}}{{exe_suffix}}",
+          "kind": "raw",
+          "body": "b"
+        }
+      ],
+      "expect": {
+        "exit_code": 6,
+        "diagnostic_substring": "multiple matching raw binaries"
+      }
+    },
+    {
+      "name": "zip_only_release",
+      "release_source": "tag",
+      "release_tag": "v1.0.0",
+      "checksums_mode": "auto",
+      "assets": [
+        {
+          "name": "plug_1.0.0_{{goos}}_{{goarch}}.zip",
+          "kind": "zip",
+          "body": "zip payload"
+        }
+      ],
+      "expect": {
+        "exit_code": 2,
+        "diagnostic_substring": "no installable asset"
+      }
+    },
+    {
+      "name": "missing_checksums",
+      "release_source": "tag",
+      "release_tag": "v1.0.0",
+      "checksums_mode": "missing",
+      "assets": [
+        {
+          "name": "plug_1.0.0_{{goos}}_{{goarch}}.tar.gz",
+          "kind": "tar.gz",
+          "binary_name": "plug",
+          "body": "fixture-tarball"
+        }
+      ],
+      "expect": {
+        "exit_code": 4,
+        "diagnostic_substring": "no checksums.txt"
+      }
+    },
+    {
+      "name": "checksum_mismatch",
+      "release_source": "tag",
+      "release_tag": "v1.0.0",
+      "checksums_mode": "corrupt",
+      "assets": [
+        {
+          "name": "plug_1.0.0_{{goos}}_{{goarch}}.tar.gz",
+          "kind": "tar.gz",
+          "binary_name": "plug",
+          "body": "fixture-tarball"
+        }
+      ],
+      "expect": {
+        "exit_code": 4,
+        "diagnostic_substring": "sha256 mismatch"
+      }
+    }
+  ]
+}

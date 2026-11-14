@@ -1,0 +1,44 @@
+name: setup-plugin-kit-ai
+description: Install the plugin-kit-ai CLI from GitHub Releases with checksums.txt verification.
+
+inputs:
+  version:
+    description: Version tag to install. Defaults to the latest published stable release.
+    required: false
+  github-token:
+    description: Optional GitHub token for rate limits or private mirrors.
+    required: false
+  github-api-base:
+    description: Advanced GitHub API base override for GitHub Enterprise or tests.
+    required: false
+
+outputs:
+  version:
+    description: Installed plugin-kit-ai version tag.
+    value: ${{ steps.install.outputs.version }}
+  path:
+    description: Installed plugin-kit-ai binary path.
+    value: ${{ steps.install.outputs.path }}
+  bin-dir:
+    description: Directory added to PATH.
+    value: ${{ steps.install.outputs.bin_dir }}
+
+runs:
+  using: composite
+  steps:
+    - id: install
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        GITHUB_API_BASE: ${{ inputs.github-api-base }}
+        BIN_DIR: ${{ runner.temp }}/plugin-kit-ai-bin
+        PLUGIN_KIT_AI_OUTPUT_FILE: ${{ runner.temp }}/plugin-kit-ai-install.outputs
+      run: |
+        rm -f "$PLUGIN_KIT_AI_OUTPUT_FILE"
+        "$GITHUB_ACTION_PATH/../scripts/install.sh"
+        cat "$PLUGIN_KIT_AI_OUTPUT_FILE" >> "$GITHUB_OUTPUT"
+        bin_dir="$(awk -F= '/^bin_dir=/{print substr($0,9)}' "$PLUGIN_KIT_AI_OUTPUT_FILE" | tail -n 1)"
+        if [ -n "$bin_dir" ]; then
+          echo "$bin_dir" >> "$GITHUB_PATH"
+        fi

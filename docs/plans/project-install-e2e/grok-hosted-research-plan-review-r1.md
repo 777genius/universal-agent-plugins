@@ -1,0 +1,13 @@
+# Grok hosted project-source research plan — independent R1
+
+Reviewed frozen `9314feef8056812465552f3f76ebd4e6a19b4617` in `work/uap-project-grok` on 2026-10-23. **GO for this bounded research implementation.** The original Grok adapter plan remains in force; no Grok runner or adapter implementation was present for this review.
+
+The plan obtains the missing genuine project-source observation through the unchanged real disposable GitHub-hosted Linux guard, called before directories, acquisition and native execution. Exact official versioned acquisition is bounded and checked against separately labelled measured compressed/binary hashes; it does not imply a vendor-published digest. Checkout, workflow permissions and fresh child environment preserve the reviewed credential boundary.
+
+The finite allowlist uses only version/help/list/inspect, explicit A/B cwd, closed stdin, bounded output/deadlines and process-group cleanup. A hard eight-minute collector budget, loop/scheduling checks and at most five-second child cleanup leave time under the ten-minute workflow limit for truthful failure summary and artifact upload. Exhausting the budget fails collection rather than promoting partial observations.
+
+Only inert text skill/plugin fixtures are created in separate fresh user/A/B roots, with local system Git init marking project discovery boundaries. No payload, hook, MCP, trust, auth/model, enable/disable or native registry mutation command is authorized. The proposed complete inventories are bounded by count, depth, individual/aggregate read sizes and metadata/link text, use no-follow/lstat and handle identity/volatility checks, reject multiply linked regular content, and record special/symlink metadata without opening/following it. Overflow or unavailable/volatile baselines cannot become complete proof.
+
+The mechanical reuse of already reviewed bounded read/process helpers keeps Qoder pins, allowlist, environment, guard and validators unchanged and requires both inert suites to pass. Guard refusal remains tested without spoofed hosted flags. The exact populated JSON/source spelling will be captured, not guessed from the old parser, and the summary remains `project_source_qualified:false` until independent human evidence interpretation. Missing attribution keeps the adapter gated; configuration/discovery/ownership/runtime/restart remain separate claims.
+
+No blocking plan correction remains after the explicit total deadline and complete bounded inventory clarifications. Commit both plan GO reports before source; then implementation review and genuine hosted evidence interpretation remain required. This review did not execute Grok or any native client.

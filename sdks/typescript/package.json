@@ -1,0 +1,64 @@
+{
+  "name": "universal-agent-plugins-management-sdk",
+  "version": "0.1.1",
+  "description": "Typed client and optional Node host for the Universal Agent Plugins (UAP) Go management engine",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/777genius/universal-agent-plugins.git",
+    "directory": "sdks/typescript"
+  },
+  "homepage": "https://github.com/777genius/universal-agent-plugins/tree/main/sdks/typescript#readme",
+  "bugs": {
+    "url": "https://github.com/777genius/universal-agent-plugins/issues"
+  },
+  "keywords": [
+    "universal-agent-plugins",
+    "agent-plugins",
+    "ai-agents",
+    "plugin-manager",
+    "management-api",
+    "sdk",
+    "typescript",
+    "openapi",
+    "claude-code",
+    "codex",
+    "opencode"
+  ],
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./node": {
+      "types": "./dist/node.d.ts",
+      "import": "./dist/node.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node scripts/copy-schema.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json",
+    "test": "npm run build && node --experimental-strip-types --test test/*.test.ts",
+    "test:consumer": "node scripts/check-packed.ts"
+  },
+  "dependencies": {
+    "openapi-fetch": "0.17.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.12.4",
+    "typescript": "7.0.2"
+  }
+}

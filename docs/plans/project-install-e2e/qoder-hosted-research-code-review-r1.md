@@ -1,0 +1,13 @@
+# Qoder hosted research runner — independent implementation R1
+
+Reviewed frozen `dfb262a80b37952a7156e37f5e53b787a90a3fd1` in `work/uap-project-qoder` on 2026-10-23, after the separately approved pre-code plan and both committed plan GO reports. **GO for publication of the bounded hosted research runner.** No Qoder process was acquired or executed during this review.
+
+The runner dynamically imports the adjacent existing native matrix and invokes its real, unchanged `require_hosted('linux-amd64')` before output/temp directories, acquisition or native launch. Guard rejection returns 2 with a bounded diagnostic and no requested output parent. The workflow uses pinned checkout/upload actions, exact PR head source, contents read, disabled checkout credential persistence, Ubuntu 24.04, explicit disposable-host opt-in and a ten-minute job deadline. It does not provide repository/model/account tokens to the native child environment.
+
+The exact HTTPS URL, archive digest and binary SHA256 are hard-coded. Actual download reads, expanded gzip data, tar member count, member types/names, and binary bytes are bounded before writing a single fixed executable. No extraction API, installer script or vendor install command is invoked. The fresh HOME/XDG/npm/Git environment is an explicit mapping with literal system PATH; ambient credentials, proxies and product settings do not reach the binary.
+
+The only native invocations are the six approved version/help/empty-list probes. Each uses DEVNULL input, no shell, separate bounded output files, a live inherited file-size limit, a deadline, and process-group cleanup, including after normal parent completion. Output/deadline/launch/nonzero/version/JSON failures remain non-passing evidence. The list validator requires exactly an empty JSON array and clean stderr. Summary metadata explicitly labels pre-code research and unobserved schema/project installation/ownership, skill execution, MCP, model/account/trust and restart. It claims no runtime network isolation.
+
+Independent verification: `python3 -m unittest discover -s scripts -p 'test_qoder_native_research.py'` passed all 7 tests in 0.934s. These use inert bytes/processes and the actual unmodified guard refusal, covering archive/pin ordering, explicit environment, closed stdin, live output limit, descendant timeout cleanup, exact validation/allowlist and zero-effects guard rejection. Existing native runner guard source is unchanged. The reported prior 54 safety contracts are additional author evidence, not independently rerun here.
+
+No blocking issue found. Genuine hosted outputs must still be inspected before any Qoder mutation adapter proceeds; an empty list is not evidence of a nonempty native record schema or project E2E qualification.

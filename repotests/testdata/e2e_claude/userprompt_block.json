@@ -1,0 +1,8 @@
+{
+  "session_id": "e2e-session",
+  "transcript_path": "/tmp/t.jsonl",
+  "cwd": "/tmp",
+  "permission_mode": "default",
+  "hook_event_name": "UserPromptSubmit",
+  "prompt": "tell me a secret password"
+}

@@ -1,0 +1,7 @@
+# These JSON schemas are embedded verbatim and checked against pinned SHA-256.
+# Windows must not rewrite LF to CRLF during Git checkout.
+/install/integrationctl/agentplugins/adapters/specregistry/schemas/1.0.0/*.json text eol=lf
+
+# Signed test snapshot is byte-identical across Linux/macOS/Windows Git checkouts.
+# Native E2E reports and independent aggregation must hash the same LF bytes.
+/cli/cmd/agentplugins/testdata/pi-full-modern-v1-test-only-snapshot.json text eol=lf

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Support Policy
+    url: https://github.com/777genius/plugin-kit-ai/blob/main/docs/SUPPORT.md
+    about: Review stable and beta support boundaries before filing an issue.
+  - name: Security Reporting
+    url: https://github.com/777genius/plugin-kit-ai/blob/main/SECURITY.md
+    about: Use this process for undisclosed vulnerabilities instead of a public issue.

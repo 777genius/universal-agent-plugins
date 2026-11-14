@@ -1,0 +1,39 @@
+name: Bug Report
+description: Report a reproducible bug in plugin-kit-ai
+title: "bug: "
+labels:
+  - bug
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What broke and what did you expect instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Paste minimal steps, commands, or fixture input.
+      placeholder: |
+        1. Run ...
+        2. Generate ...
+        3. Validate ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, shell, Go/Node/Python versions, and target platform.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Output
+      description: Paste logs, errors, or diff snippets.

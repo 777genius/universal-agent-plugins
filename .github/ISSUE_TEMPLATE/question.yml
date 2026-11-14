@@ -1,0 +1,24 @@
+name: Question
+description: Ask a usage or contract question
+title: "question: "
+labels:
+  - question
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing a question, check `README.md`, `docs/SUPPORT.md`, and `docs/generated/*`.
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: What are you trying to do and where is the contract unclear?
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Include target platform, runtime, and the docs or commands you already tried.

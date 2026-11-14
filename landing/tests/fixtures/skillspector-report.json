@@ -1,0 +1,331 @@
+{
+  "generated_at": "2026-10-27T09:51:10Z",
+  "profile": {
+    "digest": "sha256:ddd91212d95a717ab6c067d99e9f32a64b8dd55589bdf47a36695a85320187d5",
+    "id": "static-only-v1"
+  },
+  "records": [
+    {
+      "errors": [],
+      "finding_count": 0,
+      "findings": [],
+      "findings_truncated": false,
+      "id": "registry/campaign-planning",
+      "kind": "plugin_skill",
+      "plugin_path": "plugins/marketing-kit",
+      "report_digest": "sha256:9f76b267e29d392bb159d7810b2217f927a5112bc58d6fe04908b616296bab64",
+      "scanned_at": "2026-10-27T09:50:59Z",
+      "skill_name": "campaign-planning",
+      "source": {
+        "content_digest": "sha256:e21a5d0b96d2b558066ac2fe8a6dcb398ca6ca1ed8da22a91f794785608abd61",
+        "path": "plugins/marketing-kit/skills/campaign-planning",
+        "repository": "777genius/universal-agent-plugins-registry",
+        "revision": "bfd599a2b9d002080d5f7b48f91e923581b1c338"
+      },
+      "status": "complete"
+    },
+    {
+      "errors": [
+        { "code": "limitations", "message": "Analysis coverage is incomplete." },
+        {
+          "code": "static_parse_limit",
+          "message": "A security-relevant expression exceeded a bounded static parser's span limit."
+        },
+        {
+          "code": "reference_missing",
+          "message": "A local path-like reference does not match any bundled artifact, such as a file the skill writes at runtime."
+        },
+        {
+          "code": "reference_missing",
+          "message": "A local path-like reference does not match any bundled artifact, such as a file the skill writes at runtime."
+        },
+        {
+          "code": "reference_missing",
+          "message": "A local path-like reference does not match any bundled artifact, such as a file the skill writes at runtime."
+        },
+        {
+          "code": "reference_missing",
+          "message": "A local path-like reference does not match any bundled artifact, such as a file the skill writes at runtime."
+        },
+        {
+          "code": "reference_missing",
+          "message": "A local path-like reference does not match any bundled artifact, such as a file the skill writes at runtime."
+        },
+        {
+          "code": "reference_missing",
+          "message": "A local path-like reference does not match any bundled artifact, such as a file the skill writes at runtime."
+        },
+        {
+          "code": "reference_missing",
+          "message": "A local path-like reference does not match any bundled artifact, such as a file the skill writes at runtime."
+        },
+        {
+          "code": "reference_missing",
+          "message": "A local path-like reference does not match any bundled artifact, such as a file the skill writes at runtime."
+        },
+        {
+          "code": "static_parse_limit",
+          "message": "A security-relevant expression exceeded a bounded static parser's span limit."
+        },
+        {
+          "code": "static_parse_limit",
+          "message": "A security-relevant expression exceeded a bounded static parser's span limit."
+        },
+        {
+          "code": "analyzer_incomplete",
+          "message": "A static analyzer did not complete its planned analysis."
+        }
+      ],
+      "finding_count": 50,
+      "findings": [
+        {
+          "line": 50,
+          "message": "Referenced artifact was not completely inspected",
+          "path": "SKILL.md",
+          "rule": "AE1",
+          "severity": "HIGH"
+        },
+        {
+          "line": 55,
+          "message": "Referenced artifact was not completely inspected",
+          "path": "SKILL.md",
+          "rule": "AE1",
+          "severity": "HIGH"
+        },
+        {
+          "line": 56,
+          "message": "Referenced artifact was not completely inspected",
+          "path": "SKILL.md",
+          "rule": "AE1",
+          "severity": "HIGH"
+        },
+        {
+          "line": 57,
+          "message": "Referenced artifact was not completely inspected",
+          "path": "SKILL.md",
+          "rule": "AE1",
+          "severity": "HIGH"
+        },
+        {
+          "line": 58,
+          "message": "Referenced artifact was not completely inspected",
+          "path": "SKILL.md",
+          "rule": "AE1",
+          "severity": "HIGH"
+        },
+        {
+          "line": 61,
+          "message": "Referenced artifact was not completely inspected",
+          "path": "SKILL.md",
+          "rule": "AE1",
+          "severity": "HIGH"
+        },
+        {
+          "line": 80,
+          "message": "Referenced artifact was not completely inspected",
+          "path": "SKILL.md",
+          "rule": "AE1",
+          "severity": "HIGH"
+        },
+        {
+          "line": 330,
+          "message": "Referenced artifact was not completely inspected",
+          "path": "SKILL.md",
+          "rule": "AE1",
+          "severity": "HIGH"
+        },
+        {
+          "line": 334,
+          "message": "Referenced artifact was not completely inspected",
+          "path": "SKILL.md",
+          "rule": "AE1",
+          "severity": "HIGH"
+        },
+        {
+          "line": 259,
+          "message": "Remote code is downloaded and executed. This bypasses code review and could introduce malicious code.",
+          "path": "SKILL.md",
+          "rule": "SC2",
+          "severity": "HIGH"
+        },
+        {
+          "line": 179,
+          "message": "Remote code is downloaded and executed. This bypasses code review and could introduce malicious code.",
+          "path": "scripts/auth-probe.sh",
+          "rule": "SC2",
+          "severity": "HIGH"
+        },
+        {
+          "line": 66,
+          "message": "Remote code is downloaded and executed. This bypasses code review and could introduce malicious code.",
+          "path": "scripts/widget-create.sh",
+          "rule": "SC2",
+          "severity": "HIGH"
+        },
+        {
+          "line": 29,
+          "message": "Skill enumerates or reads other installed skills. Access to other skills' SKILL.md files or the skills directory reveals prompt instructions, capabilities, and secrets that should be invisible to peer skills.",
+          "path": "README.md",
+          "rule": "AS3",
+          "severity": "MEDIUM"
+        },
+        {
+          "line": 36,
+          "message": "Skill enumerates or reads other installed skills. Access to other skills' SKILL.md files or the skills directory reveals prompt instructions, capabilities, and secrets that should be invisible to peer skills.",
+          "path": "README.md",
+          "rule": "AS3",
+          "severity": "MEDIUM"
+        },
+        {
+          "line": 38,
+          "message": "Skill enumerates or reads other installed skills. Access to other skills' SKILL.md files or the skills directory reveals prompt instructions, capabilities, and secrets that should be invisible to peer skills.",
+          "path": "README.md",
+          "rule": "AS3",
+          "severity": "MEDIUM"
+        },
+        {
+          "line": 131,
+          "message": "Skill enumerates or reads other installed skills. Access to other skills' SKILL.md files or the skills directory reveals prompt instructions, capabilities, and secrets that should be invisible to peer skills.",
+          "path": "SKILL.md",
+          "rule": "AS3",
+          "severity": "MEDIUM"
+        },
+        {
+          "line": 51,
+          "message": "Skill enumerates or reads other installed skills. Access to other skills' SKILL.md files or the skills directory reveals prompt instructions, capabilities, and secrets that should be invisible to peer skills.",
+          "path": "tests/validation.md",
+          "rule": "AS3",
+          "severity": "MEDIUM"
+        },
+        {
+          "line": 52,
+          "message": "Skill enumerates or reads other installed skills. Access to other skills' SKILL.md files or the skills directory reveals prompt instructions, capabilities, and secrets that should be invisible to peer skills.",
+          "path": "tests/validation.md",
+          "rule": "AS3",
+          "severity": "MEDIUM"
+        },
+        {
+          "line": 53,
+          "message": "Skill enumerates or reads other installed skills. Access to other skills' SKILL.md files or the skills directory reveals prompt instructions, capabilities, and secrets that should be invisible to peer skills.",
+          "path": "tests/validation.md",
+          "rule": "AS3",
+          "severity": "MEDIUM"
+        },
+        {
+          "line": 101,
+          "message": "Data is being sent to an external URL. This could be legitimate telemetry or data exfiltration. Manual review is recommended.",
+          "path": "SKILL.md",
+          "rule": "E1",
+          "severity": "MEDIUM"
+        },
+        {
+          "line": 259,
+          "message": "Data is being sent to an external URL. This could be legitimate telemetry or data exfiltration. Manual review is recommended.",
+          "path": "SKILL.md",
+          "rule": "E1",
+          "severity": "MEDIUM"
+        },
+        {
+          "line": 333,
+          "message": "Data is being sent to an external URL. This could be legitimate telemetry or data exfiltration. Manual review is recommended.",
+          "path": "SKILL.md",
+          "rule": "E1",
+          "severity": "MEDIUM"
+        },
+        {
+          "line": 60,
+          "message": "Data is being sent to an external URL. This could be legitimate telemetry or data exfiltration. Manual review is recommended.",
+          "path": "references/astro.md",
+          "rule": "E1",
+          "severity": "MEDIUM"
+        },
+        {
+          "line": 108,
+          "message": "Data is being sent to an external URL. This could be legitimate telemetry or data exfiltration. Manual review is recommended.",
+          "path": "references/astro.md",
+          "rule": "E1",
+          "severity": "MEDIUM"
+        },
+        {
+          "line": 58,
+          "message": "Data is being sent to an external URL. This could be legitimate telemetry or data exfiltration. Manual review is recommended.",
+          "path": "references/hugo.md",
+          "rule": "E1",
+          "severity": "MEDIUM"
+        },
+        {
+          "line": 103,
+          "message": "Data is being sent to an external URL. This could be legitimate telemetry or data exfiltration. Manual review is recommended.",
+          "path": "references/nextjs-app.md",
+          "rule": "E1",
+          "severity": "MEDIUM"
+        },
+        {
+          "line": 155,
+          "message": "Data is being sent to an external URL. This could be legitimate telemetry or data exfiltration. Manual review is recommended.",
+          "path": "references/nextjs-app.md",
+          "rule": "E1",
+          "severity": "MEDIUM"
+        },
+        {
+          "line": 52,
+          "message": "Data is being sent to an external URL. This could be legitimate telemetry or data exfiltration. Manual review is recommended.",
+          "path": "references/nextjs-pages.md",
+          "rule": "E1",
+          "severity": "MEDIUM"
+        },
+        {
+          "line": 82,
+          "message": "Data is being sent to an external URL. This could be legitimate telemetry or data exfiltration. Manual review is recommended.",
+          "path": "references/sveltekit.md",
+          "rule": "E1",
+          "severity": "MEDIUM"
+        },
+        {
+          "line": 137,
+          "message": "Data is being sent to an external URL. This could be legitimate telemetry or data exfiltration. Manual review is recommended.",
+          "path": "references/sveltekit.md",
+          "rule": "E1",
+          "severity": "MEDIUM"
+        },
+        {
+          "line": 46,
+          "message": "Data is being sent to an external URL. This could be legitimate telemetry or data exfiltration. Manual review is recommended.",
+          "path": "references/vanilla-html.md",
+          "rule": "E1",
+          "severity": "MEDIUM"
+        },
+        {
+          "line": 85,
+          "message": "Data is being sent to an external URL. This could be legitimate telemetry or data exfiltration. Manual review is recommended.",
+          "path": "references/vanilla-html.md",
+          "rule": "E1",
+          "severity": "MEDIUM"
+        }
+      ],
+      "findings_truncated": true,
+      "id": "registry/turnstile-spin",
+      "kind": "plugin_skill",
+      "plugin_path": "plugins/cloudflare",
+      "report_digest": "sha256:0262730cf48ba2ee01da5eaabe6b143052fde821abfbd5046e22926e7253d43b",
+      "scanned_at": "2026-10-27T09:51:02Z",
+      "skill_name": "turnstile-spin",
+      "source": {
+        "content_digest": "sha256:989704c37d7721dfa5a8ed0af7bd0727c26edd1eb7256e17a4af0ba108fc3a89",
+        "path": "plugins/cloudflare/skills/turnstile-spin",
+        "repository": "777genius/universal-agent-plugins-registry",
+        "revision": "bfd599a2b9d002080d5f7b48f91e923581b1c338"
+      },
+      "status": "partial"
+    }
+  ],
+  "scanner": {
+    "id": "skillspector",
+    "revision": "f3b25697d76256998ca9d42c198d256258d4c035",
+    "version": "2.13.1"
+  },
+  "schema_version": 1,
+  "scope": "selected_sources",
+  "selection_digest": "sha256:19aac467b6ced195b2aac2daf6a381cd99f6909bd9b114173d0fd0bee2925c25",
+  "source_commit": "bfd599a2b9d002080d5f7b48f91e923581b1c338"
+}

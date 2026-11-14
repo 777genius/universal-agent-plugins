@@ -1,0 +1,219 @@
+import { docsLocaleEntries, localePathField } from "../../tools/config/locales.mjs";
+import { docsBasePath, docsHostname } from "../../tools/config/site.mjs";
+import { searchLocales } from "./search";
+import { requirePublicationBoundary } from "../../tools/lib/journeys.mjs";
+import { isRetiredArchive } from "../../tools/lib/public-routes.mjs";
+
+import fs from "node:fs";
+import path from "node:path";
+import { defineConfig } from "vitepress";
+
+const websiteRoot = path.resolve(__dirname, "..", "..");
+const generatedRoot = path.join(websiteRoot, "generated", "registries");
+type RegistryEntity = {
+  canonicalId?: string;
+  [key: string]: unknown;
+};
+
+function readJson<T>(fileName: string, fallback: T): T {
+  const full = path.join(generatedRoot, fileName);
+  if (!fs.existsSync(full)) {
+    return fallback;
+  }
+  return JSON.parse(fs.readFileSync(full, "utf8")) as T;
+}
+
+export { docsBasePath, docsHostname };
+const docsBaseUrl = new URL(docsBasePath, docsHostname).toString();
+// Share the crawler-compatible social PNG from the product root at either Pages base.
+const socialImageUrl = new URL("../og-image.png?v=20261106", docsBaseUrl).toString();
+const entities = readJson<RegistryEntity[]>("entities.json", []);
+requirePublicationBoundary(entities);
+const entityByCanonicalId = new Map(
+  entities
+    .filter((entity) => typeof entity.canonicalId === "string" && entity.canonicalId.length > 0)
+    .map((entity) => [entity.canonicalId as string, entity])
+);
+
+function escapeForRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function toDocsAbsoluteUrl(value: string): string {
+  return new URL(value.replace(/^\/+/, ""), docsBaseUrl).toString();
+}
+
+function toDocsPageUrl(relativePath: string): string {
+  const normalized = relativePath.replace(/\\/g, "/");
+  if (normalized === "index.md" || normalized === "gateway/index.md") {
+    return docsBaseUrl;
+  }
+
+  const withoutExtension = normalized.replace(/\.md$/, "");
+  const publicPath = withoutExtension.endsWith("/index")
+    ? `${withoutExtension.slice(0, -"/index".length)}/`
+    : withoutExtension;
+
+  return toDocsAbsoluteUrl(publicPath);
+}
+
+export const sharedConfig = defineConfig({
+  srcDir: ".site",
+  publicDir: path.join(websiteRoot, "public"),
+  outDir: "dist",
+  cleanUrls: true,
+  lastUpdated: true,
+  base: docsBasePath,
+  title: "Universal Agent Plugins Docs",
+  description: "Official Universal Agent Plugins documentation: install and manage Skills and MCP plugins, check client compatibility, and build portable packages.",
+  head: [
+    ["link", { rel: "describedby", type: "text/plain", href: new URL("../llms.txt", docsBaseUrl).href }],
+    ["link", { rel: "ard", type: "application/json", href: new URL("../.well-known/ard.json", docsBaseUrl).href }],
+    ["link", { rel: "ai-catalog", type: "application/ai-catalog+json", href: new URL("../.well-known/ai-catalog.json", docsBaseUrl).href }],
+    ["link", { rel: "icon", href: `${docsBasePath}icon.svg`, type: "image/svg+xml" }],
+    ["link", { rel: "manifest", href: `${docsBasePath}site.webmanifest` }],
+    ["meta", { name: "theme-color", content: "#f7f7f8" }],
+    ["meta", { name: "color-scheme", content: "light dark" }]
+  ],
+  transformPageData(pageData) {
+    if (isRetiredArchive(pageData.relativePath)) {
+      pageData.frontmatter.search = false;
+      pageData.frontmatter.retiredArchive = true;
+    }
+  },
+  transformHead({ pageData, title, description }) {
+    const relativePath = pageData.relativePath.replace(/\\/g, "/");
+    const isGateway = relativePath === "index.md" || relativePath.startsWith("gateway/");
+    const isNotFound = pageData.isNotFound || relativePath === "gateway/404.md";
+    const pageTitle = title || pageData.title || "Agent Plugins Docs";
+    const pageDescription =
+      description || pageData.description || "Public documentation for Agent Plugins.";
+    const pageUrl = isNotFound ? null : toDocsPageUrl(relativePath);
+    const head = [
+      ["meta", { property: "og:type", content: "website" }],
+      ["meta", { property: "og:site_name", content: "Universal Agent Plugins Docs" }],
+      ["meta", { property: "og:title", content: pageTitle }],
+      ["meta", { property: "og:description", content: pageDescription }],
+      ["meta", { property: "og:image", content: socialImageUrl }],
+      ["meta", { property: "og:image:secure_url", content: socialImageUrl }],
+      ["meta", { property: "og:image:type", content: "image/png" }],
+      ["meta", { property: "og:image:width", content: "1200" }],
+      ["meta", { property: "og:image:height", content: "630" }],
+      ["meta", { property: "og:image:alt", content: "Universal Agent Plugins for AI agents, Skills, and MCP tools" }],
+      ["meta", { name: "twitter:card", content: "summary_large_image" }],
+      ["meta", { name: "twitter:title", content: pageTitle }],
+      ["meta", { name: "twitter:description", content: pageDescription }],
+      ["meta", { name: "twitter:image", content: socialImageUrl }],
+      ["meta", { name: "twitter:image:alt", content: "Universal Agent Plugins for AI agents, Skills, and MCP tools" }]
+    ] as [string, Record<string, string>][];
+
+    if (isRetiredArchive(relativePath)) {
+      head.push(["meta", { name: "robots", content: "noindex,follow" }]);
+    }
+
+    if (pageUrl) {
+      head.push(["meta", { property: "og:url", content: pageUrl }]);
+    }
+
+    if (!isGateway && !isNotFound && pageUrl) {
+      head.push(["link", { rel: "canonical", href: pageUrl }]);
+    }
+
+    const canonicalId =
+      typeof pageData.frontmatter?.canonicalId === "string"
+        ? pageData.frontmatter.canonicalId
+        : null;
+    const entity = canonicalId ? entityByCanonicalId.get(canonicalId) : null;
+
+    if (!isGateway && !isNotFound && entity) {
+
+      for (const { code, lang } of docsLocaleEntries) {
+        const localePath = entity[localePathField(code)];
+        if (typeof localePath !== "string" || !localePath) {
+          continue;
+        }
+
+        head.push([
+          "link",
+          {
+            rel: "alternate",
+            hreflang: lang,
+            href: toDocsAbsoluteUrl(localePath)
+          }
+        ]);
+      }
+
+      const defaultPath =
+        entity.pathEn || docsLocaleEntries.map(({ code }) => entity[localePathField(code)]).find(Boolean);
+      if (typeof defaultPath === "string" && defaultPath) {
+        head.push([
+          "link",
+          {
+            rel: "alternate",
+            hreflang: "x-default",
+            href: toDocsAbsoluteUrl(defaultPath)
+          }
+        ]);
+      }
+    }
+
+    return head;
+  },
+  sitemap: {
+    hostname: docsBaseUrl,
+    transformItems(items) {
+      const gatewayUrl = docsBaseUrl;
+      const normalize = (value: string) => (value.endsWith("/") ? value : `${value}/`);
+      return items.filter((item) => {
+        const url = normalize(item.url);
+        const pathname = new URL(item.url, docsBaseUrl).pathname.replace(/\/+$/, "");
+        return (
+          url !== "/" &&
+          !pathname.endsWith("/404") &&
+          url !== normalize(docsBasePath) &&
+          url !== normalize(gatewayUrl)
+        );
+      });
+    }
+  },
+  async buildEnd() {
+    const distRoot = path.join(websiteRoot, "dist");
+    const sitemapPath = path.join(distRoot, "sitemap.xml");
+    if (!fs.existsSync(sitemapPath)) {
+      return;
+    }
+    const excludedUrls = [docsBaseUrl, new URL("404", docsBaseUrl).toString()];
+    const current = fs.readFileSync(sitemapPath, "utf8");
+    const next = excludedUrls.reduce((body, url) => {
+      const entryPattern = new RegExp(
+        `<url><loc>${escapeForRegExp(url)}\\/?<\\/loc>[\\s\\S]*?<\\/url>`,
+        "g"
+      );
+      return body.replace(entryPattern, "");
+    }, current);
+    if (next !== current) {
+      fs.writeFileSync(sitemapPath, next);
+    }
+
+    const robotsPath = path.join(distRoot, "robots.txt");
+    const robotsBody = [`User-agent: *`, `Allow: /`, `Sitemap: ${new URL("sitemap.xml", docsBaseUrl).toString()}`, ``].join(
+      "\n"
+    );
+    fs.writeFileSync(robotsPath, robotsBody);
+  },
+  locales: {
+    root: { label: "Language Gateway", lang: "en-US", link: "/" },
+    ...Object.fromEntries(docsLocaleEntries.map(({ code, label, lang, dir }) => [code, { label, lang, dir, link: `/${code}/` }]))
+  },
+  // Static aliases are emitted by postbuild; VitePress rewrites move pages.
+  rewrites: {},
+  themeConfig: {
+    logo: "/icon.svg",
+    siteTitle: "Agent Plugins",
+    search: {
+      provider: "local",
+      options: { locales: searchLocales }
+    },
+    socialLinks: [{ icon: "github", link: "https://github.com/777genius/universal-agent-plugins" }]
+  }
+});

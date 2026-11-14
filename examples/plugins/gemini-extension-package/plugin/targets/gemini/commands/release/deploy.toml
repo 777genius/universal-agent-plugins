@@ -1,0 +1,4 @@
+description = "Review release readiness before deployment"
+prompt = """
+Summarize deployment blockers from the current workspace, focusing on release notes, version drift, and missing validation steps.
+"""

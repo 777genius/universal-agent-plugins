@@ -1,0 +1,232 @@
+{
+  "schema_version": 1,
+  "evidence_kind": "agentplugins_client_lifecycle",
+  "recorded_at": "2026-08-30",
+  "installer": {
+    "repository": "777genius/plugin-kit-ai",
+    "commit": "5630ccd92aa91c8ac8cafb37eea8752fd82edce0",
+    "tree": "cf13cbe2f64ae09d93ad34bfc6047fe99d5ca845",
+    "version": "0.1.22",
+    "binary_sha256": "8f417cea031d42b07badbe1b2a37dcd53deb2e5804f99d668f733309ecb4022b"
+  },
+  "package": {
+    "selector": "ChromeDevTools/chrome-devtools-mcp@cb39d1d835c3baa3eff87501cd8c1de020604789",
+    "repository": "ChromeDevTools/chrome-devtools-mcp",
+    "revision": "cb39d1d835c3baa3eff87501cd8c1de020604789",
+    "name": "chrome-devtools",
+    "version": "1.8.0",
+    "tree_digest": "sha256:3bd47ccd3f990a6fdd8d3e2fa3dac48ac460a9043e0ccf0c5e14522fb4c472ea",
+    "manifest_digest": "sha256:b34a4dcd71cd536a7f5a3a51d76d53ae5af3d0ce0f18783e71c7f01da865b867",
+    "acquisition_closure_digest": "sha256:d06d41ea4cca87f5731aac72cd9c1bc46e280fd9d84107ed1dcbbbc6e05e02e9"
+  },
+  "environment": {
+    "os": "macOS 15.6.1",
+    "arch": "arm64",
+    "node": "24.18.0",
+    "clients": {
+      "claude": { "version": "2.1.205", "host_surface_detected": true },
+      "gemini": { "version": "0.36.0", "host_surface_detected": true },
+      "opencode": { "version": "1.18.4", "host_surface_detected": true },
+      "cline": { "version": null, "host_surface_detected": true },
+      "windsurf": { "version": null, "host_surface_detected": true }
+    },
+    "isolation": {
+      "fresh_home": true,
+      "fresh_xdg_roots": true,
+      "fresh_claude_config": true,
+      "fresh_gemini_home": true,
+      "fresh_cline_data": true,
+      "fresh_agentplugins_state": true,
+      "user_project_accessed": false,
+      "user_client_config_mutated": false
+    }
+  },
+  "transcript": [
+    {
+      "step": "add",
+      "argv": [
+        "agentplugins",
+        "add",
+        "ChromeDevTools/chrome-devtools-mcp@cb39d1d835c3baa3eff87501cd8c1de020604789",
+        "--target",
+        "claude,gemini,opencode,cline,windsurf",
+        "--format",
+        "json"
+      ],
+      "exit_code": 0,
+      "result": "success",
+      "status": "completed",
+      "acquisition_count": 1,
+      "source_kind": "github",
+      "fetched": true,
+      "validated": true,
+      "targets": {
+        "claude": { "outcome": "passed", "activation": "active", "verification": "installation_verified" },
+        "gemini": { "outcome": "passed", "activation": "active", "verification": "installation_verified" },
+        "opencode": { "outcome": "passed", "activation": "active", "verification": "installation_verified" },
+        "cline": { "outcome": "passed", "activation": "active", "verification": "installation_verified" },
+        "windsurf": { "outcome": "passed", "activation": "active", "verification": "installation_verified" }
+      },
+      "shared_identity": {
+        "installation_count": 1,
+        "physical_artifact_id": "chrome-devtools-f7f684ed8c79",
+        "same_tree_digest_for_all_targets": true,
+        "same_manifest_digest_for_all_targets": true,
+        "same_closure_digest_for_all_targets": true
+      }
+    },
+    {
+      "step": "client_discovery",
+      "checks": {
+        "claude": {
+          "argv": ["claude", "plugin", "list", "--json"],
+          "exit_code": 0,
+          "plugin_id": "chrome-devtools@skills-dir",
+          "plugin_version": "1.8.0",
+          "enabled": true,
+          "skill_count": 6,
+          "mcp_command": ["npx", "chrome-devtools-mcp@1.8.0"]
+        },
+        "gemini_mcp": {
+          "argv": ["gemini", "mcp", "list"],
+          "exit_code": 0,
+          "server": "chrome-devtools",
+          "transport": "stdio",
+          "command": ["npx", "chrome-devtools-mcp@1.8.0"],
+          "connection": "disconnected"
+        },
+        "gemini_skills": {
+          "argv": ["gemini", "skills", "list"],
+          "exit_code": 0,
+          "enabled_skill_count": 6
+        },
+        "opencode": {
+          "argv": ["opencode", "debug", "config"],
+          "exit_code": 0,
+          "server": "chrome-devtools",
+          "type": "local",
+          "command": ["npx", "chrome-devtools-mcp@1.8.0"],
+          "cwd_bound_to_managed_package": true,
+          "plugin_root_bound": true,
+          "plugin_data_bound": true
+        },
+        "cline": {
+          "config": "mcpServers.chrome-devtools",
+          "transport": "stdio",
+          "command": ["npx", "chrome-devtools-mcp@1.8.0"],
+          "plugin_root_bound": true,
+          "plugin_data_bound": true,
+          "projected_skill_count": 6
+        },
+        "windsurf": {
+          "config": "mcpServers.chrome-devtools",
+          "command": ["npx", "chrome-devtools-mcp@1.8.0"],
+          "plugin_root_bound": true,
+          "plugin_data_bound": true,
+          "skills": "prepared_only"
+        }
+      }
+    },
+    {
+      "step": "doctor",
+      "argv": ["agentplugins", "doctor", "--format", "json"],
+      "exit_code": 0,
+      "result": "success",
+      "read_only": true,
+      "installation_count": 1,
+      "projection_drift_findings": 0,
+      "authentication_not_checked_clients": ["claude", "gemini", "opencode", "cline", "windsurf"]
+    },
+    {
+      "step": "immutable_update_preflight",
+      "argv": [
+        "agentplugins",
+        "update",
+        "chrome-devtools",
+        "--target",
+        "claude,gemini,opencode,cline,windsurf",
+        "--format",
+        "json"
+      ],
+      "exit_code": 1,
+      "result": "failure",
+      "status": "preflight_failed",
+      "reason": "direct full-SHA installations require explicit switch",
+      "succeeded": 0,
+      "failed": 5,
+      "mutated_targets": 0,
+      "postcondition": "the exact installation and all five client projections remained installed and unchanged"
+    },
+    {
+      "step": "repair",
+      "argv": [
+        "agentplugins",
+        "repair",
+        "chrome-devtools",
+        "--target",
+        "claude,gemini,opencode,cline,windsurf",
+        "--format",
+        "json"
+      ],
+      "exit_code": 0,
+      "result": "success",
+      "status": "completed",
+      "succeeded": 5,
+      "failed": 0,
+      "targets": {
+        "claude": "passed",
+        "gemini": "passed",
+        "opencode": "passed",
+        "cline": "passed",
+        "windsurf": "passed"
+      }
+    },
+    {
+      "step": "remove",
+      "argv": [
+        "agentplugins",
+        "remove",
+        "chrome-devtools",
+        "--target",
+        "claude,gemini,opencode,cline,windsurf",
+        "--format",
+        "json"
+      ],
+      "exit_code": 0,
+      "result": "success",
+      "status": "data_retained",
+      "succeeded": 5,
+      "failed": 0,
+      "plugin_data_preserved": true,
+      "targets": {
+        "claude": "external_completed",
+        "gemini": "external_completed",
+        "opencode": "external_completed",
+        "cline": "external_completed",
+        "windsurf": "external_completed"
+      }
+    },
+    {
+      "step": "post_remove",
+      "checks": {
+        "agentplugins_installation_count": 0,
+        "claude_plugin_count": 0,
+        "gemini_mcp_count": 0,
+        "gemini_skill_count": 0,
+        "opencode_mcp_count": 0,
+        "cline_mcp_count": 0,
+        "cline_skill_count": 0,
+        "windsurf_mcp_count": 0
+      }
+    }
+  ],
+  "claim_boundary": {
+    "lifecycle_e2e": true,
+    "client_discovery_e2e": true,
+    "browser_tool_runtime_e2e": false,
+    "model_turn_e2e": false,
+    "login_e2e": false,
+    "oauth_e2e": false,
+    "windsurf_skill_activation_claimed": false
+  }
+}

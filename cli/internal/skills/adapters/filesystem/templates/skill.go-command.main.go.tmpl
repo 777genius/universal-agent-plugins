@@ -1,0 +1,15 @@
+package main
+
+import (
+	"fmt"
+	"os"
+)
+
+func main() {
+	if len(os.Args) > 1 && (os.Args[1] == "--help" || os.Args[1] == "-h") {
+		fmt.Println("{{.SkillName}}: replace this stub with your executable skill logic")
+		return
+	}
+	fmt.Println("{{.SkillName}}: implement your skill command")
+}
+

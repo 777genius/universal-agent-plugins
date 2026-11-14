@@ -1,0 +1,34 @@
+name: External installer protocol checkpoint
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  protocol:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Verify protocol safety contracts
+        run: python scripts/test_external_installer_protocol.py
+      - name: Execute exact documented skills-only sequence in a fresh profile
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_COMMIT: ${{ github.sha }}
+          AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED: '1'
+        run: python scripts/run-external-installer-protocol.py --output '${{ runner.temp }}/external-protocol-proof'
+      - name: Preserve command evidence including failed steps
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: external-installer-protocol-linux-arm64
+          path: ${{ runner.temp }}/external-protocol-proof/
+          if-no-files-found: error
+          retention-days: 14

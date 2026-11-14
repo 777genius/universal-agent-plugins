@@ -1,0 +1,2 @@
+runtime: go
+entrypoint: ./bin/codex-basic-prod

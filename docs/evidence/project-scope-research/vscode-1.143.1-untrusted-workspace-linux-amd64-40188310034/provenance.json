@@ -1,0 +1,129 @@
+{
+  "run_url": "https://github.com/777genius/universal-agent-plugins/actions/runs/40188310034",
+  "job_id": 121153707553,
+  "artifact_id": 12597047500,
+  "artifact_name": "vscode-1.143.1-untrusted-workspace-linux-amd64",
+  "outer_bytes": 22575,
+  "outer_sha256": "4621b804126db48b64930d66a308f2906c047acaeb0cf3fffb58bfd442407b07",
+  "inner_bytes": 190409,
+  "inner_sha256": "71bfef813d28b3106f498756d0a09d9ad7953471bd627434cd660bb68c84ed14",
+  "source_commit": "f48d685133105e3ec7922acf811ee30a95830ef8",
+  "source_tree": "11593c9f96d45f17fc671b53f90299927160fa33",
+  "runner_image": {
+    "os": "Ubuntu 22.04.5",
+    "label": "ubuntu-22.04",
+    "image_version": "20261012.322.1",
+    "source": "official setup log for exact job121153707553"
+  },
+  "members": {
+    "A-after-removal.merged.log": {
+      "bytes": 40046,
+      "sha256": "f0caa906539e3bf8bcdb3617bea17f66a8a0a5e7a29857c8578ad9f395e49de6"
+    },
+    "A-after-removal.observation.json": {
+      "bytes": 1545,
+      "sha256": "701e5b96c0103c73c6ec5958bce763ffcaea267659b313d6168f85891ebb40e2"
+    },
+    "A-restart.merged.log": {
+      "bytes": 40083,
+      "sha256": "a6cbdaf98ef60dfe02d0785eb8054b4c869760ecfa3dc79fff02fd8ea3118184"
+    },
+    "A-restart.observation.json": {
+      "bytes": 2094,
+      "sha256": "0f9ce1980b2ccc1ca4441ae573c3783c34d59e1ed96aaedaa3226fcaed48e486"
+    },
+    "A.merged.log": {
+      "bytes": 40157,
+      "sha256": "cc332ca5291b81798e8268b7e7b0d27163f4fb861964941706c9b1447d680874"
+    },
+    "A.observation.json": {
+      "bytes": 2094,
+      "sha256": "0f9ce1980b2ccc1ca4441ae573c3783c34d59e1ed96aaedaa3226fcaed48e486"
+    },
+    "B.merged.log": {
+      "bytes": 39276,
+      "sha256": "cad5061dad944b7c7131d79cdaa5c74b968d19db95591dd36ea5b989f5b3a252"
+    },
+    "B.observation.json": {
+      "bytes": 2094,
+      "sha256": "f7f8e6a57896dde5827e82e9ddb9042caf2e1a7fa0e64401a1a83536943462dd"
+    },
+    "Xvfb.merged.log": {
+      "bytes": 234,
+      "sha256": "4b57b7e0057675bc004f922ca23c5c382e6dbdf3be9595f410bb754862ab53a3"
+    },
+    "cleanup.stderr.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "cleanup.stdout.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "controller.stderr.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "controller.stdout.log": {
+      "bytes": 77,
+      "sha256": "9aaefc2134a5aaccd766fdbb75f8690691999e93460cad68a1bb20cf5011a9ad"
+    },
+    "go-version.stderr.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "go-version.stdout.log": {
+      "bytes": 33,
+      "sha256": "4e0b213cba780f63b02f3ab9001ee61e4101d254e0af1a8205574c19dad0f93b"
+    },
+    "helper-build.stderr.log": {
+      "bytes": 41,
+      "sha256": "b683257fca25cabaa9ba8f1ca2a8006ae11a5853fa2424b28a8f8f38d274d569"
+    },
+    "helper-build.stdout.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "root-cleanup.stderr.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "root-cleanup.stdout.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "source-checkout.stderr.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "source-checkout.stdout.log": {
+      "bytes": 41,
+      "sha256": "2b6adf439ffe5900a952eae6fd446826ab16c07bbf1f534cb5bbb9451f1671d8"
+    },
+    "system-executables.json": {
+      "bytes": 364,
+      "sha256": "3899f3683c1fa4be587584f6c6afaaad428967c88af2d4422eb58cd6ddf553b4"
+    },
+    "vscode-workspace-controller.json": {
+      "bytes": 10500,
+      "sha256": "edf0204b1a3ad33998a07523859190cf2ea45a4748345fd0479c431e8f957a23"
+    },
+    "vscode-workspace-research.json": {
+      "bytes": 8048,
+      "sha256": "f882c62132e442d43d5adf381e9cadea8701d73d5af49e13891d70693a683813"
+    },
+    "xauth.json": {
+      "bytes": 382,
+      "sha256": "71a204f50eedd472f0fa5ec5f939e0d4d139909d5573782bd44721eabe4100c1"
+    },
+    "xauth.stderr.log": {
+      "bytes": 86,
+      "sha256": "a67c95fb878a3b6b67e8bb4314214581f92fcb7ba526a728229486e32a7ed9d3"
+    },
+    "xauth.stdout.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "qualification": "untrusted workbench metadata paths and safe collection only; product adapter implementation gate, no runtime qualification"
+}

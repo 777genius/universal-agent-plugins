@@ -1,0 +1,6 @@
+{
+  "plan": {
+    "retentionDays": 7
+  },
+  "x_galleryTopic": "gemini-cli-extension"
+}

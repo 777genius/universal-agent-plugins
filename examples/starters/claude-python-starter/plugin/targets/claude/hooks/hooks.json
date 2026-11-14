@@ -1,0 +1,7 @@
+{
+  "hooks": {
+    "Stop": [{ "hooks": [{ "type": "command", "command": "./bin/claude-python-starter Stop" }] }],
+    "PreToolUse": [{ "hooks": [{ "type": "command", "command": "./bin/claude-python-starter PreToolUse" }] }],
+    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "./bin/claude-python-starter UserPromptSubmit" }] }]
+  }
+}

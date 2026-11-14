@@ -1,0 +1,178 @@
+---
+title: "Documentación de Agent Plugins"
+description: "Guías públicas para instalar y crear paquetes Agent Plugins."
+canonicalId: "page:home"
+section: "home"
+locale: "es"
+generated: false
+translationRequired: true
+localeDisposition: "current-translation"
+---
+
+<div class="docs-hero docs-hero--feature">
+  <p class="docs-kicker">DOCUMENTACIÓN PÚBLICA</p>
+  <h1>Agent Plugins</h1>
+  <p class="docs-lead">Instala Skills y herramientas MCP en tus agentes o crea tu propio paquete portable.</p>
+</div>
+
+## Elige por dónde empezar
+
+<div class="docs-grid">
+  <a class="docs-card" href="./use/">
+    <h2>Usar plugins</h2>
+    <p>Examina un paquete, revisa los cambios previstos e instálalo para tu cuenta o para un proyecto.</p>
+  </a>
+  <a class="docs-card" href="./build/">
+    <h2>Crear plugins</h2>
+    <p>Prepara un paquete estándar con plugin.json, Skills y configuración MCP. Conoce las herramientas de creación disponibles en el código fuente.</p>
+  </a>
+  <a class="docs-card" href="./sdk/">
+    <h2>Integrar UAP</h2>
+    <p>Hooks, detección del agente, instalador Go y gestión TypeScript.</p>
+  </a>
+</div>
+
+## Más capacidades de UAP
+
+- Instala en varios agentes, agrega Skills individuales, usa el catálogo firmado, Git/SSH y archivos. [Instalar](./use/install).
+- Separa proyecto y usuario con `uap.toml` / `uap.lock`; actualiza, repara y diagnostica. [Gestionar](./use/manage).
+- Crea paquetes Skills/MCP portables e integra los SDK de Go y TypeScript. [SDK](./sdk/) · [Crear](./build/).
+
+## Instala tu primer plugin
+
+Con Node.js 22 o posterior:
+
+```bash
+npx universal-agent-plugins add context7
+```
+
+El CLI pregunta qué agentes compatibles quieres usar. Revisa el plan y completa los pasos de activación o inicio de sesión que indique. Para usar un ejecutable nativo, consulta la [guía de instalación nativa](https://github.com/777genius/universal-agent-plugins/blob/main/docs/NATIVE_INSTALL.md) para macOS, Linux o Windows. El gestor nativo no necesita Node.js.
+
+## Qué está disponible
+
+[CLI nativo](https://github.com/777genius/universal-agent-plugins/releases/latest) es la versión actual del instalador nativo. Añade una API local de gestión, extensiones Pi, Skills y MCP stdio/Streamable HTTP para usuario y proyecto elegible. El catálogo firmado todavía exige una política específica que autorice Pi. Consulta [la gestión local](./use/manage#local-management-api) y [la compatibilidad con Pi](./reference/client-compatibility#pi-native-extensions).
+
+El instalador ofrece selección explícita del ámbito de proyecto y restauración con archivo de bloqueo. La mayoría de los comandos usa por defecto el entorno de usuario. `agentplugins install` sin argumento de origen selecciona el proyecto si existe un `uap.toml` regular en el directorio actual exacto; un ámbito explícito tiene prioridad. Para las operaciones de mantenimiento, selecciona el ámbito de proyecto explícitamente. Comprueba `agentplugins version`: la selección automática requiere 0.1.94. Los canales de los gestores de paquetes pueden actualizarse más tarde; el instalador nativo ofrece la versión actual verificada. Los parámetros explícitos de proyecto están disponibles desde 0.1.93. Consulta [instalación](./use/install) y [mantenimiento](./use/manage).
+
+El instalador actual no incluye `agentplugins author`. La [guía de creación](./build/) explica cómo preparar paquetes a mano y usar los comandos de creación implementados en el código fuente actual. Las pruebas de versiones anteriores de las herramientas de creación conservan su alcance original; no describen el instalador que se descarga hoy.
+
+## Interpreta el resultado
+
+La validación del paquete, la instalación, la detección por el cliente, la ejecución de herramientas MCP y la autenticación del servicio se comprueban por separado. Una instalación de archivos correcta puede requerir todavía que el cliente confíe en el proyecto, se recargue o abra una sesión nueva. Las pruebas nativas cubren versiones y plataformas concretas; no certifican todos los plugins ni todos los agentes.
+
+- [Inicio rápido](./guide/quickstart)
+- [Estructura del paquete](./build/layout)
+- [Comprobaciones y pruebas](./build/checks)
+- [Compatibilidad de clientes y límites de las pruebas](./reference/client-compatibility)
+- [Especificación Agent Plugins 1.0](https://agent-plugins.org/specification)
+
+
+<!-- locale-historical-source:start
+locale-historical-frontmatter:start
+---
+title: "Documentación de plugin-kit-ai"
+description: "Documentación pública para plugin-kit-ai."
+canonicalId: "page:home"
+section: "home"
+locale: "es"
+generated: false
+translationRequired: true
+---
+locale-historical-frontmatter:end
+<div class="docs-hero docs-hero--feature">
+  <p class="docs-kicker">DOCUMENTACIÓN PÚBLICA</p>
+  <h1>plugin-kit-ai</h1>
+  <p class="docs-lead">
+    Desarrolla en un solo repositorio, empieza con Go por defecto y añade más tarde packages,
+    hooks de Claude, Gemini o configuración de integración gestionada por el repositorio sin dividir el proyecto.
+  </p>
+</div>
+
+## Inicio predeterminado
+
+- `Codex runtime Go` es el inicio predeterminado cuando desea el tiempo de ejecución y la historia de lanzamiento más sólidos.
+
+## Qué saber de inmediato
+
+- un repositorio sigue siendo la fuente de la verdad a medida que agregas más carriles
+- elige el camino inicial que coincida con lo que necesitas hoy
+- expandir más tarde desde el mismo repositorio cuando el producto necesite más resultados
+- utilice `generate` y `validate --strict` como flujo de trabajo de preparación compartido
+
+## Rutas Node y Python admitidas
+
+- `codex-runtime --runtime node --typescript` es la principal ruta admitida que no es Go.
+- `codex-runtime --runtime python` es la primera ruta admitida Python.
+- Ambas son rutas de ejecución interpretadas localmente, por lo que la máquina de destino aún necesita Node.js `20+` o Python `3.10+`.
+- Son opciones tempranas claras para los equipos que ya trabajan en esas pilas, pero no son el inicio predeterminado.
+
+<div class="docs-grid">
+  <a class="docs-card" href="./guide/quickstart">
+    <h2>Inicio rápido</h2>
+    <p>Utilice primero la ruta predeterminada más segura y luego amplíela solo cuando el producto necesite más resultados.</p>
+  </a>
+  <a class="docs-card" href="./guide/what-you-can-build">
+    <h2>Ver la forma del producto</h2>
+    <p>Vea cómo un repositorio crece hasta convertirse en tiempo de ejecución, paquete, extensión y configuración de integración propiedad del repositorio.</p>
+  </a>
+  <a class="docs-card" href="./guide/choose-a-target">
+    <h2>Elija un objetivo</h2>
+    <p>Haga coincidir el objetivo con la forma en que desea enviar el complemento en lugar de tratar cada salida como si fuera la misma cosa.</p>
+  </a>
+  <a class="docs-card" href="./reference/support-boundary">
+    <h2>Verifique el contrato exacto</h2>
+    <p>Utilice las páginas de referencia cuando necesite los límites de soporte precisos y los términos de compatibilidad.</p>
+  </a>
+</div>
+
+## Si más adelante necesitas más
+
+- Agregue `Claude default lane` cuando los ganchos Claude sean el requisito del producto.
+- Agregue `Codex package` o `Gemini packaging` cuando el producto sea un paquete o una extensión de salida.
+- Agregue `OpenCode` o `Cursor` cuando el repositorio deba poseer la configuración de integración.
+- Utilice `validate --strict` como puerta de preparación antes de la transferencia o CI.
+
+## Rutas de expansión comunes
+
+- Comience con un repositorio de tiempo de ejecución Codex, luego agregue el paquete Codex o Gemini cuando el paquete pase a formar parte del producto.
+- Comience con Claude cuando los ganchos Claude sean el producto, luego mantenga el repositorio abierto para rutas de entrega más amplias más adelante.
+- Comience en Node o Python localmente y luego agregue la transferencia del paquete cuando la entrega posterior sea importante.
+- Agregue OpenCode o Cursor cuando el repositorio deba administrar la configuración de integración, no solo el comportamiento ejecutable.
+
+## Leer en este orden
+
+<div class="docs-grid">
+  <a class="docs-card" href="./guide/quickstart">
+    <h2>1. Inicio rápido</h2>
+    <p>Comience con una ruta recomendada antes de pensar en la expansión.</p>
+  </a>
+  <a class="docs-card" href="./guide/what-you-can-build">
+    <h2>2. Lo que puedes construir</h2>
+    <p>Vea la forma del producto en las líneas de tiempo de ejecución, paquete, extensión e integración.</p>
+  </a>
+  <a class="docs-card" href="./guide/choose-a-target">
+    <h2>3. Elija un objetivo</h2>
+    <p>Elija el destino que coincida con la forma en que realmente desea enviar el complemento.</p>
+  </a>
+  <a class="docs-card" href="./reference/support-boundary">
+    <h2>4. Límite de soporte</h2>
+    <p>Utilice el clúster de referencia cuando necesite un idioma de compatibilidad exacto y detalles de soporte.</p>
+  </a>
+</div>
+
+Si es nuevo, puede detenerse después de las páginas iniciales. Todo lo demás es una referencia más profunda o detalles de implementación.
+
+## Línea base del repositorio actual
+
+- La línea de base pública actual en este conjunto de documentos es [`v1.1.2`](/es/releases/v1-1-2).
+- Esta línea de parches restauró la compatibilidad de instalación de first-party aliases entre el layout heredado y el actual, y luego corrigió las instalaciones Gemini de varios targets desde fuentes GitHub repo-path.
+- Comience allí cuando desee obtener la línea base recomendada actual.
+
+## Qué le ayuda a hacer este sitio
+
+- iniciar un repositorio de complementos en lugar de dividir la fuente de verdad por ecosistema
+- Elija una ruta de inicio recomendada sin conocer todos los detalles del objetivo por adelantado
+- expandir el mismo repositorio más adelante a más rutas de envío
+- mantenga una historia de revisión y validación a medida que crece el repositorio
+- encuentre el contrato exacto sólo cuando lo necesite
+locale-historical-source:end -->

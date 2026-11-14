@@ -1,0 +1,12 @@
+{
+  "session_id": "golden-session",
+  "transcript_path": "/tmp/transcript.jsonl",
+  "cwd": "C:\\workspace\\project",
+  "permission_mode": "default",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_use_id": "toolu_01",
+  "tool_input": {
+    "command": "echo ok"
+  }
+}

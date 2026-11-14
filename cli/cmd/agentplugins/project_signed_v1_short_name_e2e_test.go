@@ -1,0 +1,532 @@
+package main
+
+import (
+	"bytes"
+	"context"
+	"crypto/ed25519"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/tailscale/hujson"
+
+	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/directoryv1"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/environmentstore"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+)
+
+// signedV1ProjectGitRunner trusts only the disposable fixture CA for the
+// disposable Git repository. The production runner deliberately removes Git
+// environment overrides; keep its TLS verification and transport hardening.
+type signedV1ProjectGitRunner struct {
+	delegate sourceacquisition.Runner
+	caFile   string
+}
+
+func (runner signedV1ProjectGitRunner) Run(ctx context.Context, command sourceacquisition.Command) ([]byte, error) {
+	if len(command.Args) > 2 && command.Args[0] == "-C" && command.Args[2] == "fetch" {
+		_, err := (sourceacquisition.OSRunner{}).Run(ctx, sourceacquisition.Command{
+			Dir: command.Dir, Args: []string{"-C", command.Args[1], "config", "http.sslCAInfo", runner.caFile},
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	return runner.delegate.Run(ctx, command)
+}
+
+// Validate the exact native MCP keyset rather than merely finding server names
+// in URLs, comments or unrelated settings. Gemini allows JSONC comments.
+func assertSignedV1NativeMCPServers(t *testing.T, settings, foreignSentinel string, expected ...string) {
+	t.Helper()
+	standard, err := hujson.Standardize([]byte(settings))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var native struct {
+		MCPServers map[string]struct {
+			URL     string            `json:"url"`
+			HTTPURL string            `json:"httpUrl"`
+			Command string            `json:"command"`
+			Args    []string          `json:"args"`
+			Headers map[string]string `json:"headers"`
+		} `json:"mcpServers"`
+	}
+	if err := json.Unmarshal(standard, &native); err != nil {
+		t.Fatal(err)
+	}
+	if len(native.MCPServers) != len(expected) {
+		t.Fatalf("native MCP server keys do not match %v: %s", expected, settings)
+	}
+	for _, name := range expected {
+		server, ok := native.MCPServers[name]
+		if !ok {
+			t.Fatalf("native MCP server %q missing: %s", name, settings)
+		}
+		switch name {
+		case "foreign":
+			// Retain the foreign-owned legacy URL field, not UAP's httpUrl field.
+			if server.URL != "https://foreign.test/mcp" || server.HTTPURL != "" || server.Command != "" || len(server.Args) != 0 ||
+				len(server.Headers) != 1 || server.Headers["X-Foreign-Sentinel"] != foreignSentinel {
+				t.Fatalf("foreign native MCP server changed: %s", settings)
+			}
+		case "notion", "hubspot":
+			url := "https://" + name + ".example.test/mcp"
+			if server.HTTPURL != url || server.URL != "" || server.Command != "" || len(server.Args) != 0 {
+				t.Fatalf("native Streamable HTTP server %q has wrong transport: %s", name, settings)
+			}
+		case "playwright":
+			if server.URL != "" || server.HTTPURL != "" || server.Command != "go" || len(server.Args) != 1 || server.Args[0] != "version" {
+				t.Fatalf("native stdio server %q has wrong transport: %s", name, settings)
+			}
+		default:
+			t.Fatalf("unexpected signed v1 fixture server %q", name)
+		}
+	}
+}
+
+// Real v1 Ed25519 reader, signed short names, Git acquisition, Cobra, receipts,
+// native Gemini fixture and project isolation. No model-driven MCP tools/call
+// or production Marketing Kit qualification is implied by this test.
+func TestProjectSignedV1ShortNameMarketingClosureAndColdRestore(t *testing.T) {
+	transport := newProjectJourneyTransport(t, "git")
+	caFile := os.Getenv("GIT_SSL_CAINFO")
+	if caFile == "" {
+		t.Fatal("disposable signed-v1 Git fixture CA is missing")
+	}
+	const repository = "fixture/marketplace"
+	const campaignSkill = "---\nname: campaign-planning\ndescription: Test-only campaign plan\n---\nLocal test fixture\n"
+	paths := []struct {
+		name, distribution, path, server string
+	}{
+		{"marketing-kit", "fixture/marketing-kit", "kit", ""},
+		{"notion", "fixture/notion", "notion", "notion"},
+		{"hubspot-crm", "fixture/hubspot-crm", "hubspot-crm", "hubspot"},
+		{"playwright-bridge", "fixture/playwright-bridge", "playwright-bridge", "playwright"},
+	}
+	for _, item := range paths {
+		root := filepath.Join(transport.repo, item.path)
+		projectJourneyWrite(t, filepath.Join(root, "plugin.json"), fmt.Sprintf(
+			"{\"$schema\":\"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\",\"name\":%q,\"version\":\"0.1.0\"}", item.name))
+		if item.server == "" {
+			projectJourneyWrite(t, filepath.Join(root, "skills", "campaign-planning", "SKILL.md"), campaignSkill)
+			projectJourneyWrite(t, filepath.Join(root, "uap.toml"), "schema_version = 1\n[dependencies]\n"+
+				"\"fixture/notion\" = \"0.1.0\"\n"+
+				"\"fixture/hubspot-crm\" = \"0.1.0\"\n"+
+				"\"fixture/playwright-bridge\" = \"0.1.0\"\n")
+		} else {
+			var mcp string
+			if item.server == "playwright" {
+				mcp = fmt.Sprintf("{\"$schema\":\"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json\",\"mcpServers\":{%q:{\"type\":\"stdio\",\"command\":\"go\",\"args\":[\"version\"]}}}", item.server)
+			} else {
+				mcp = fmt.Sprintf("{\"$schema\":\"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json\",\"mcpServers\":{%q:{\"type\":\"streamable-http\",\"url\":%q}}}", item.server, "https://"+item.server+".example.test/mcp")
+			}
+			projectJourneyWrite(t, filepath.Join(root, "mcp.json"), mcp)
+		}
+	}
+	projectJourneyGit(t, transport.repo, "add", ".")
+	projectJourneyGit(t, transport.repo, "commit", "-m", "signed v1 scoped closure fixture")
+	projectJourneyGit(t, transport.repo, "push", "--quiet", transport.remote, "main")
+	// The signed Directory pins a raw commit SHA rather than a branch name.
+	// Match the published Git transport: permit fetching an advertised tip by SHA
+	// from this disposable smart-HTTP bare repository (Git defaults to denying it).
+	projectJourneyGit(t, transport.remote, "config", "uploadpack.allowTipSHA1InWant", "true")
+	gitSHA := exec.CommandContext(t.Context(), "git", "-C", transport.repo, "rev-parse", "HEAD")
+	commitBytes, err := gitSHA.Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	commit := strings.TrimSpace(string(commitBytes))
+	if len(commit) != 40 {
+		t.Fatalf("fixture is not pinned to a Git SHA: %q", commit)
+	}
+
+	journey := newProjectJourney(t, transport)
+	now := time.Date(2026, time.November, 5, 20, 0, 0, 0, time.UTC)
+	delivery, ok := domain.ExpectedDirectoryDelivery(domain.ClientGemini)
+	if !ok {
+		t.Fatal("Gemini has no existing Directory delivery")
+	}
+	snapshot := domain.DirectorySnapshot{
+		SnapshotSchemaVersion: 1, Sequence: 44, PublicationID: "project-v1-44",
+		SourceCommit: strings.Repeat("a", 40),
+		GeneratedAt:  now.Add(-time.Hour).Format(time.RFC3339),
+		ExpiresAt:    now.Add(24 * time.Hour).Format(time.RFC3339),
+		Products:     []domain.DirectoryProduct{}, Distributions: []domain.DirectoryDistribution{},
+		Evidence: []domain.DirectoryEvidence{}, Revocations: []domain.DirectoryRevocation{},
+	}
+	for _, item := range paths {
+		captured, err := (packagedigest.Builder{TempRoot: t.TempDir()}).Snapshot(t.Context(),
+			filepath.Join(transport.repo, item.path), domain.SourceIdentity{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		envelope, loadErr := journey.app.PackageLoader.Load(t.Context(), domain.LoadInput{
+			SnapshotRoot: captured.Root, TreeDigest: captured.TreeDigest,
+			ExecutableFiles: captured.ExecutableFiles, Source: captured.Source,
+		})
+		removeErr := packagedigest.Remove(captured)
+		if loadErr != nil || removeErr != nil {
+			t.Fatalf("load or remove signed fixture source %s: %v %v", item.name, loadErr, removeErr)
+		}
+		skills, mcp := "optional", "required"
+		components := []string{"mcp"}
+		if item.server == "" {
+			skills, mcp, components = "required", "optional", []string{"skills"}
+		}
+		snapshot.Products = append(snapshot.Products, domain.DirectoryProduct{
+			SchemaVersion: 1, ID: item.name, DisplayName: item.name,
+			Description: "Disposable signed fixture " + item.name, ManifestName: item.name,
+			Aliases: []string{item.name}, ReservedAliases: []string{item.name},
+			Categories:          []string{"agent-plugins"},
+			MinimumCapabilities: domain.DirectoryMinimumCapabilities{Skills: skills, MCP: mcp},
+			DefaultDistribution: item.distribution, Distributions: []string{item.distribution},
+		})
+		snapshot.Distributions = append(snapshot.Distributions, domain.DirectoryDistribution{
+			SchemaVersion: 1, ID: item.distribution, ProductID: item.name,
+			Kind: domain.DistributionCommunity, Status: domain.DistributionActive, Packager: "fixture",
+			Releases: []domain.DirectoryRelease{{
+				Sequence: 1, PackageVersion: "0.1.0", ManifestName: item.name,
+				AgentPluginsSchema:  "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+				PackageSource:       domain.DirectorySource{Repository: repository, Revision: commit, Path: item.path},
+				TreeDigestAlgorithm: domain.TreeDigestAlgorithm,
+				TreeDigest:          envelope.TreeDigest, ManifestDigest: envelope.ManifestDigest,
+				Components: components, PublishedAt: now.Add(-2 * time.Hour).Format(time.RFC3339),
+			}},
+			ReleasePolicies: []domain.DirectoryReleasePolicy{{
+				ReleaseSequence: 1, Status: domain.ReleaseActive, MinimumInstallerVersion: "0.1.0",
+				Targets: []domain.DirectoryTarget{{
+					Client: domain.ClientGemini, Scopes: []domain.InstallScope{domain.ScopeUser},
+					Delivery: delivery, Authentication: domain.AuthenticationRequirementUnknown,
+				}},
+				CurrentEvidence: []string{},
+			}},
+		})
+	}
+	snapshotBytes, err := json.Marshal(snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshotBytes = append(snapshotBytes, '\n')
+	key := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{23}, ed25519.SeedSize))
+	trust := directoryv1.TrustStore{Keys: []directoryv1.TrustedKey{{
+		ID: "fixture-project-v1", PublicKey: key.Public().(ed25519.PublicKey), State: directoryv1.KeyCurrent,
+	}}}
+	digest := sha256.Sum256(snapshotBytes)
+	signed := ed25519.Sign(key, directoryv1.SnapshotSignatureMessage(snapshotBytes))
+	signedEnvelope := directoryv1.Envelope{
+		EnvelopeSchemaVersion: 1, SnapshotSchemaVersion: 1, Sequence: snapshot.Sequence,
+		KeyID: trust.Keys[0].ID, Algorithm: "Ed25519", SignatureDomain: directoryv1.SignatureDomain,
+		SnapshotDigest: "sha256:" + hex.EncodeToString(digest[:]),
+		Signature:      base64.StdEncoding.EncodeToString(signed),
+	}
+	envelopeBytes, err := json.Marshal(signedEnvelope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := directoryv1.VerifyBundle(snapshotBytes, envelopeBytes, trust); err != nil {
+		t.Fatalf("signed fixture was not authenticated by production verifier: %v", err)
+	}
+	tampered := append([]byte(nil), snapshotBytes...)
+	tampered[0] ^= 1
+	if _, err := directoryv1.VerifyBundle(tampered, envelopeBytes, trust); err == nil {
+		t.Fatal("tampered signed Directory was accepted")
+	}
+
+	configure := func(j projectJourney) projectJourney {
+		client := &directoryv1.Client{
+			Origin: "https://fixture.invalid/registry/schemas/1/",
+			HTTPClient: &http.Client{Transport: conformanceFixtureTransport{
+				sequence: snapshot.Sequence, snapshot: snapshotBytes, envelope: envelopeBytes,
+			}},
+			Trust: trust, Embedded: directoryv1.EmbeddedBundle{Snapshot: snapshotBytes, Envelope: envelopeBytes},
+			RequireEmbeddedBootstrap: true, Cache: directoryv1.Cache{Path: filepath.Join(j.cache, "directory-v1-cache.json")},
+			Now: func() time.Time { return now },
+		}
+		source := func(temp string) agentpluginscli.SourceAcquirer {
+			return sourceacquisition.Acquirer{TempRoot: temp, HTTPClient: transport.server.Client(),
+				Runner: signedV1ProjectGitRunner{delegate: projectGitDiagnosticRunner{recorder: transport.diagnostic, root: temp}, caFile: caFile},
+				URLForRepo: func(repo string) string {
+					if repo == repository {
+						return transport.endpoint
+					}
+					return "https://invalid.example.test/refuse-unknown-repository"
+				},
+			}
+		}
+		wire := func(app agentpluginscli.App) agentpluginscli.App {
+			app.Version = "1.18.34"
+			app.DirectoryClient = client
+			app.SourceAcquirer = source(j.home)
+			app.SourceAcquirerForDryRun = source
+			app.DirectoryClientForDryRun = func(string) (agentpluginscli.DirectoryClient, error) { return client, nil }
+			return app
+		}
+		j.app = wire(j.app)
+		parent := j.app.ForScope
+		j.app.ForScope = func(scope domain.InstallScope, root string) (agentpluginscli.App, error) {
+			selected, err := parent(scope, root)
+			if err != nil {
+				return selected, err
+			}
+			return wire(selected), nil
+		}
+		return j
+	}
+	journey = configure(journey)
+	// Verify that UAP never drops unrelated foreign MCP headers while merging.
+	const foreignBefore = `"foreign":{"url":"https://foreign.test/mcp"}`
+	foreignSentinel := func(j projectJourney, root string) string {
+		switch root {
+		case "":
+			return "scope-user"
+		case j.a:
+			return "scope-project-a"
+		case j.b:
+			return "scope-project-b"
+		default:
+			t.Fatalf("unexpected native root %q", root)
+			return ""
+		}
+	}
+	seedForeign := func(j projectJourney) {
+		for _, root := range []string{"", j.a, j.b} {
+			path := filepath.Join(j.nativeRoot(root), "settings.json")
+			before := projectJourneyRead(t, path)
+			after := strings.Replace(before, foreignBefore,
+				fmt.Sprintf(`"foreign":{"url":"https://foreign.test/mcp","headers":{"X-Foreign-Sentinel":%q}}`,
+					foreignSentinel(j, root)), 1)
+			if after == before {
+				t.Fatalf("foreign MCP sentinel missing in %q", root)
+			}
+			projectJourneyWrite(t, path, after)
+		}
+	}
+	seedForeign(journey)
+	// An install or replay must not modify any other scope's native settings.
+	runIsolatedInstall := func(root string) {
+		siblings := make(map[string]string)
+		for _, sibling := range []string{"", journey.a, journey.b} {
+			if sibling == root {
+				continue
+			}
+			path := filepath.Join(journey.nativeRoot(sibling), "settings.json")
+			siblings[path] = projectJourneyRead(t, path)
+		}
+		journey.run(t, root, "install", "marketing-kit", "--target", "gemini")
+		for path, before := range siblings {
+			if got := projectJourneyRead(t, path); got != before {
+				t.Fatalf("install/replay in %q changed sibling native settings %q", root, path)
+			}
+		}
+	}
+	for _, root := range []string{"", journey.a, journey.b} {
+		runIsolatedInstall(root)
+		state := journey.state(t, root)
+		if len(state.Installations) != 4 || len(state.EnvironmentReceipts) != 4 {
+			t.Fatalf("signed short-name install in %q omitted mandatory MCP children: %+v", root, state)
+		}
+		for _, installation := range state.Installations {
+			if installation.Directory == nil || installation.Directory.SnapshotSchema != 1 || installation.Directory.SnapshotSequence != 44 {
+				t.Fatalf("installation lost actual signed v1 authority: %+v", installation.Directory)
+			}
+		}
+		native := projectJourneyRead(t, filepath.Join(journey.nativeRoot(root), "settings.json"))
+		assertSignedV1NativeMCPServers(t, native, foreignSentinel(journey, root), "foreign", "notion", "hubspot", "playwright")
+		if got := projectJourneyRead(t, filepath.Join(journey.nativeRoot(root), "skills", "campaign-planning", "SKILL.md")); got != campaignSkill {
+			t.Fatalf("%q native Marketing Kit Skill differs from the signed source: %q", root, got)
+		}
+		runIsolatedInstall(root)
+		if len(journey.state(t, root).EnvironmentReceipts) != 4 {
+			t.Fatal("replay duplicated signed Directory installation")
+		}
+		replayedNative := projectJourneyRead(t, filepath.Join(journey.nativeRoot(root), "settings.json"))
+		assertSignedV1NativeMCPServers(t, replayedNative, foreignSentinel(journey, root), "foreign", "notion", "hubspot", "playwright")
+	}
+	// Advance the mutable Git branch after signed installs. Repair and cold
+	// locked restore must still use the original signed revision, not its tip.
+	projectJourneyWrite(t, filepath.Join(transport.repo, "kit", "skills", "campaign-planning", "SKILL.md"),
+		strings.Replace(campaignSkill, "Local test fixture", "Unsigned branch mutation", 1))
+	projectJourneyGit(t, transport.repo, "add", "kit/skills/campaign-planning/SKILL.md")
+	projectJourneyGit(t, transport.repo, "commit", "-m", "advance branch after signed installs")
+	projectJourneyGit(t, transport.repo, "push", "--quiet", transport.remote, "main")
+	// The original signed revision is now reachable but no longer the tip.
+	projectJourneyGit(t, transport.remote, "config", "uploadpack.allowReachableSHA1InWant", "true")
+	// Repair a missing owned Skill through the public CLI using the original
+	// signed root pin. It must leave the required MCP children, exact lock and
+	// both unrelated scopes intact, not re-resolve a moving unsigned source.
+	rootID, rootDigest := "", ""
+	projectBefore := journey.state(t, journey.a)
+	for _, installation := range projectBefore.Installations {
+		if installation.Directory != nil && installation.Directory.ProductID == "marketing-kit" {
+			if rootID != "" {
+				t.Fatal("multiple signed Marketing Kit roots in Project A")
+			}
+			rootID, rootDigest = installation.InstallationID, installation.Source.TreeDigest
+		}
+	}
+	if rootID == "" || rootDigest == "" {
+		t.Fatal("signed Marketing Kit root or tree pin missing from Project A")
+	}
+	receiptsBefore := make(map[string]domain.EnvironmentReceipt, len(projectBefore.EnvironmentReceipts))
+	for _, receipt := range projectBefore.EnvironmentReceipts {
+		if _, duplicate := receiptsBefore[receipt.Alias]; duplicate {
+			t.Fatalf("duplicate Project A receipt alias %q", receipt.Alias)
+		}
+		receiptsBefore[receipt.Alias] = receipt
+	}
+	if len(receiptsBefore) != 4 {
+		t.Fatalf("Project A lacks its signed root/children receipts: %d", len(receiptsBefore))
+	}
+	protected := make(map[string]string)
+	for _, path := range []string{
+		filepath.Join(journey.nativeRoot(""), "settings.json"),
+		filepath.Join(journey.nativeRoot(journey.b), "settings.json"),
+		filepath.Join(journey.cache, "state-v2.json"),
+		filepath.Join(journey.namespace(journey.b), "state-v2.json"),
+		filepath.Join(journey.a, "uap.lock"),
+	} {
+		protected[path] = projectJourneyRead(t, path)
+	}
+	skillPath := filepath.Join(journey.nativeRoot(journey.a), "skills", "campaign-planning", "SKILL.md")
+	if err := os.Remove(skillPath); err != nil {
+		t.Fatal(err)
+	}
+	// Repair permits an absent owned Skill directory, not a partially edited one.
+	// Refuse to remove any unexpected sibling file or foreign content.
+	if err := os.Remove(filepath.Dir(skillPath)); err != nil {
+		t.Fatal(err)
+	}
+	// Evict only the signed root's verified snapshot from the disposable shared
+	// store. Otherwise repair can pass from warm cache without reacquiring the
+	// immutable Git SHA after the remote main branch moves.
+	cached, err := (environmentstore.Store{Root: filepath.Join(journey.cache, "store")}).Get(
+		t.Context(), domain.TreeDigestAlgorithm, rootDigest)
+	if err != nil {
+		t.Fatalf("signed root snapshot was not cached before repair: %v", err)
+	}
+	if err := os.Rename(filepath.Dir(cached.Root), filepath.Dir(cached.Root)+"-evicted-for-repair"); err != nil {
+		t.Fatalf("evict exact signed root snapshot: %v", err)
+	}
+	journey.run(t, journey.a, "repair", rootID, "--target", "gemini")
+	if got := projectJourneyRead(t, skillPath); got != campaignSkill {
+		t.Fatalf("signed root repair did not restore its exact Skill: %q", got)
+	}
+	for path, before := range protected {
+		if got := projectJourneyRead(t, path); got != before {
+			t.Fatalf("signed root repair changed unrelated state or lock at %q", path)
+		}
+	}
+	// A repair may legitimately update operation phase, but must not rewrite
+	// which signed packages and bindings the existing receipts authorize.
+	receiptsAfter := journey.state(t, journey.a).EnvironmentReceipts
+	if len(receiptsAfter) != len(receiptsBefore) {
+		t.Fatalf("signed root repair changed dependency receipt count: %d", len(receiptsAfter))
+	}
+	for _, receipt := range receiptsAfter {
+		before, ok := receiptsBefore[receipt.Alias]
+		if !ok || receipt.EnvironmentID != before.EnvironmentID ||
+			receipt.ClientID != before.ClientID || receipt.InstallationID != before.InstallationID ||
+			receipt.ClientBindingID != before.ClientBindingID || receipt.SourceKey != before.SourceKey ||
+			receipt.PackageDigest != before.PackageDigest ||
+			!domain.SameProfileAuthority(receipt.ProfileAuthority, before.ProfileAuthority) {
+			t.Fatalf("signed root repair changed a receipt's immutable identity: %+v", receipt)
+		}
+		delete(receiptsBefore, receipt.Alias)
+	}
+	assertSignedV1NativeMCPServers(t,
+		projectJourneyRead(t, filepath.Join(journey.nativeRoot(journey.a), "settings.json")),
+		foreignSentinel(journey, journey.a), "foreign", "notion", "hubspot", "playwright")
+
+	fresh := configure(newProjectJourney(t, transport))
+	seedForeign(fresh)
+	for _, name := range []string{"uap.toml", "uap.lock"} {
+		projectJourneyWrite(t, filepath.Join(fresh.a, name),
+			projectJourneyRead(t, filepath.Join(journey.a, name)))
+	}
+	lockBefore := projectJourneyRead(t, filepath.Join(fresh.a, "uap.lock"))
+	coldUserBefore := projectJourneyRead(t, filepath.Join(fresh.nativeRoot(""), "settings.json"))
+	coldBBefore := projectJourneyRead(t, filepath.Join(fresh.nativeRoot(fresh.b), "settings.json"))
+	fresh.run(t, fresh.a, "deps", "sync", "--locked", "--yes")
+	if got := projectJourneyRead(t, filepath.Join(fresh.nativeRoot(""), "settings.json")); got != coldUserBefore {
+		t.Fatal("cold locked Project A restore changed user native settings")
+	}
+	if got := projectJourneyRead(t, filepath.Join(fresh.nativeRoot(fresh.b), "settings.json")); got != coldBBefore {
+		t.Fatal("cold locked Project A restore changed Project B native settings")
+	}
+	if got := len(fresh.state(t, fresh.a).EnvironmentReceipts); got != 4 {
+		t.Fatalf("cold signed v1 Project lock restore omitted children: %d", got)
+	}
+	if got := projectJourneyRead(t, filepath.Join(fresh.a, "uap.lock")); got != lockBefore {
+		t.Fatal("cold locked restore rewrote the exact signed dependency lock")
+	}
+	coldNative := projectJourneyRead(t, filepath.Join(fresh.nativeRoot(fresh.a), "settings.json"))
+	assertSignedV1NativeMCPServers(t, coldNative, foreignSentinel(fresh, fresh.a), "foreign", "notion", "hubspot", "playwright")
+	if got := projectJourneyRead(t, filepath.Join(fresh.nativeRoot(fresh.a), "skills", "campaign-planning", "SKILL.md")); got != campaignSkill {
+		t.Fatalf("cold signed v1 restore omitted or changed native Marketing Kit Skill: %q", got)
+	}
+	userStateBefore := projectJourneyRead(t, filepath.Join(journey.cache, "state-v2.json"))
+	bStateBefore := projectJourneyRead(t, filepath.Join(journey.namespace(journey.b), "state-v2.json"))
+	userNativeBefore := projectJourneyRead(t, filepath.Join(journey.nativeRoot(""), "settings.json"))
+	bNativeBefore := projectJourneyRead(t, filepath.Join(journey.nativeRoot(journey.b), "settings.json"))
+	journey.run(t, journey.a, "remove", "marketing-kit", "--target", "gemini")
+	if got := len(journey.state(t, journey.a).EnvironmentReceipts); got != 0 {
+		t.Fatalf("Project A still owns signed root/children after removal: %d", got)
+	}
+	if got := projectJourneyRead(t, filepath.Join(journey.cache, "state-v2.json")); got != userStateBefore {
+		t.Fatal("Project A removal changed user state bytes")
+	}
+	if got := projectJourneyRead(t, filepath.Join(journey.namespace(journey.b), "state-v2.json")); got != bStateBefore {
+		t.Fatal("Project A removal changed Project B state bytes")
+	}
+	if got := projectJourneyRead(t, filepath.Join(journey.nativeRoot(""), "settings.json")); got != userNativeBefore {
+		t.Fatal("Project A removal changed user native settings")
+	}
+	if got := projectJourneyRead(t, filepath.Join(journey.nativeRoot(journey.b), "settings.json")); got != bNativeBefore {
+		t.Fatal("Project A removal changed Project B native settings")
+	}
+	// Native settings and receipts are not a proxy for Skill-file isolation.
+	// Removing Project A must leave both sibling scopes' owned and foreign Skills.
+	for _, sibling := range []string{"", journey.b} {
+		if got := projectJourneyRead(t, filepath.Join(journey.nativeRoot(sibling), "skills", "campaign-planning", "SKILL.md")); got != campaignSkill {
+			t.Fatalf("Project A removal changed %q Marketing Kit Skill: %q", sibling, got)
+		}
+		if got := projectJourneyRead(t, filepath.Join(journey.nativeRoot(sibling), "skills", "foreign", "SKILL.md")); got != "foreign skill\n" {
+			t.Fatalf("Project A removal changed %q foreign Skill: %q", sibling, got)
+		}
+	}
+	removedNative := projectJourneyRead(t, filepath.Join(journey.nativeRoot(journey.a), "settings.json"))
+	if !strings.Contains(removedNative, "retained foreign settings") {
+		t.Fatalf("signed Project removal damaged foreign native settings: %s", removedNative)
+	}
+	assertSignedV1NativeMCPServers(t, removedNative, foreignSentinel(journey, journey.a), "foreign")
+	removedStandard, err := hujson.Standardize([]byte(removedNative))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var removedSettings struct {
+		Theme string `json:"theme"`
+	}
+	if err := json.Unmarshal(removedStandard, &removedSettings); err != nil {
+		t.Fatal(err)
+	}
+	if removedSettings.Theme != "foreign" {
+		t.Fatalf("signed Project removal changed foreign theme: %s", removedNative)
+	}
+	projectJourneyAbsent(t, filepath.Join(journey.nativeRoot(journey.a), "skills", "campaign-planning"))
+	if got := projectJourneyRead(t, filepath.Join(journey.nativeRoot(journey.a), "skills", "foreign", "SKILL.md")); got != "foreign skill\n" {
+		t.Fatal("signed Project removal changed a foreign native Skill")
+	}
+}

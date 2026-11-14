@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-labelledby="opencodeBadgeTitle">
+  <title id="opencodeBadgeTitle">OpenCode</title>
+  <defs>
+    <linearGradient id="opencodeBadgeGlow" x1="6" y1="6" x2="26" y2="26" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6affda" />
+      <stop offset="1" stop-color="#1fd4c9" />
+    </linearGradient>
+  </defs>
+  <rect x="3" y="3" width="26" height="26" rx="9" fill="#08151a" />
+  <path fill="url(#opencodeBadgeGlow)" d="M11.3 10.2 6.9 16l4.4 5.8h2.9L9.7 16l4.5-5.8zm9.4 0h-3l4.5 5.8-4.5 5.8h3l4.4-5.8zM14.7 23h2.6l2-14h-2.6z" />
+</svg>

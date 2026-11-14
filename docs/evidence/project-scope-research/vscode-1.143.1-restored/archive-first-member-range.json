@@ -1,0 +1,26 @@
+{
+  "status": 206,
+  "headers": {
+    "content-type": "application/octet-stream",
+    "server": "envoy",
+    "accept-ranges": "bytes",
+    "cache-control": "public, max-age=259200",
+    "x-ms-apiversion": "Distribute 1.2",
+    "x-ms-region": "prod-eus2-z1",
+    "content-disposition": "attachment; filename=code-stable-x64-1792691793.tar.gz; filename*=UTF-8''code-stable-x64-1792691793.tar.gz",
+    "last-modified": "Thu, 22 Oct 2026 18:32:15 GMT",
+    "etag": "\"0x89DDA818DCC766545E841388A568EF4D04643809A395350E04B857B617F06C41\"",
+    "date": "Sat, 24 Oct 2026 08:22:51 GMT",
+    "content-range": "bytes 0-65535/350844741",
+    "content-length": "65536",
+    "x-osid": "2",
+    "x-cid": "2",
+    "x-ccc": "US",
+    "x-envoy-upstream-service-time": "225",
+    "connection": "close"
+  },
+  "read_bytes": 65536,
+  "first_tar_name": "VSCode-linux-x64/",
+  "first_tar_type": "5",
+  "partial_only": true
+}

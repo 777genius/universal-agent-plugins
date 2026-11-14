@@ -1,0 +1,88 @@
+package qoder
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+)
+
+var (
+	_ clients.Projector       = (*Adapter)(nil)
+	_ clients.SelectionReader = (*Adapter)(nil)
+)
+
+// ManagedMCPSelection reports Qoder's OpenAI-shaped `.mcp.json`.
+func (*Adapter) ManagedMCPSelection() clients.SelectionLayout {
+	return clients.SelectionLayout{File: ".mcp.json", Nested: true}
+}
+
+func (*Adapter) Project(ctx context.Context, in clients.ProjectionInput) ([]domain.NativeObjectOwnership, error) {
+	if projectRequested(in.Plan) {
+		return projectNative(ctx, in)
+	}
+	manifest := shared.ManifestFromEnvelope(in.Envelope, shared.WithAuthorNameEmail())
+	if shared.ComponentKindPresent(in.Plan.Components, domain.ComponentSkill) {
+		manifest["skills"] = "./skills/"
+	}
+	names := shared.SupportedMCPNames(in.Plan)
+	if len(names) > 0 {
+		manifest["mcpServers"] = "./.mcp.json"
+	}
+	if err := shared.WriteJSON(filepath.Join(in.StagingPath, ".qoder-plugin", "plugin.json"), manifest); err != nil {
+		return nil, fmt.Errorf("write Qoder plugin manifest: %w", err)
+	}
+	// Qoder's OpenAI-shaped .mcp.json carries the catalog OpenAI auth hints,
+	// but a declared generic compatibility entry for qoder makes those hints
+	// non-authoritative (the usecase openAIOAuthApplies gate): they are
+	// suppressed instead of projected.
+	hints := in.Hints
+	if _, declared := hints.Compatibility[string(domain.ClientQoder)]; declared {
+		hints.OpenAIMCPAuth = nil
+	}
+	if err := shared.ProjectMCPServers(shared.MCPProjection{
+		Root: in.StagingPath, Envelope: in.Envelope, Names: names,
+		Dialect: shared.MCPDialectOpenAI, PluginRoot: in.Plan.ActivePath, DataPath: in.PluginDataPath,
+		Hints: hints,
+	}); err != nil {
+		return nil, err
+	}
+	return nil, nil
+}
+
+func projectNative(ctx context.Context, in clients.ProjectionInput) ([]domain.NativeObjectOwnership, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if err := validateProjectPlan(domain.DetectedClient{ClientID: domain.ClientQoder, ConfigRoot: in.Plan.TargetContext.UserConfigRoot}, in.Plan); err != nil {
+		return nil, err
+	}
+	names := shared.SupportedMCPNames(in.Plan)
+	if shared.ComponentKindPresent(in.Plan.Components, domain.ComponentSkill) {
+		// Preserve the prepared-import view, including for preexisting package-only
+		// receipts whose portable components now also qualify for native MCP.
+		if _, err := projectBundle(ctx, in); err != nil {
+			return nil, err
+		}
+	} else {
+		if _, err := os.Lstat(filepath.Join(in.StagingPath, projectNativeView)); err == nil {
+			return nil, fmt.Errorf("unselected qoder native-import view in mixed package")
+		} else if !os.IsNotExist(err) {
+			return nil, err
+		}
+	}
+	// Stdio has already been resolved by the existing projection contract.
+	// No OpenAI-only OAuth hints may become Qoder project authority.
+	if err := shared.ProjectMCPServers(shared.MCPProjection{
+		Root: in.StagingPath, Envelope: in.Envelope, Names: names,
+		Dialect: shared.MCPDialectOpenAI, PluginRoot: in.Plan.ActivePath,
+		DataPath: in.PluginDataPath,
+	}); err != nil {
+		return nil, err
+	}
+	return qoderProjectObjects(in.StagingPath, in.Plan)
+}

@@ -1,0 +1,2 @@
+plugins:
+  - "@acme/opencode-demo-plugin"

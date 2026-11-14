@@ -1,0 +1,914 @@
+{
+  "product": {
+    "base_commit": "1c831fa8b2016fda68c73fc60fe6f691581d0b13",
+    "tree": "dcd9090458b036515c9aed77ee5d3e66f0dcb4f5",
+    "patch_sha256": "d768da15903e0db5138dab72d2dbf8c94fbb5ca2e3b46f06492cbd3ac2bcaa42"
+  },
+  "runs": [
+    {
+      "run": "codex-03",
+      "exit_code": 0,
+      "invocation_sha256": "3cc0b991facea0e91a5c360cff274bda0a44d51be8486efa0c5bbf38b0541b2a",
+      "run_log_sha256": "90c9a7a514901f4278a00675f41195b4a9a0f3e44a17df8350cdb76d1bbe79f5",
+      "image": "sha256:df6ab45e95c4425fcdccfc9a143bec29e2bf08293b63482c7843f398e06baabb",
+      "binaries": {
+        "installer": "3e5d4b8ee25a16d274b0f3bbdaf35f6963416650fed972995e65817f274cf8d8",
+        "test": "fbf1ced980215f7e60e7944056cebd429daf702a28fe6387455fea99e7fa879e",
+        "probe": "b6b693fa9ad76c5c949b53e8d7ceac2f66a9d32f782e2caf8d473a5fde516658",
+        "codex": "4d76e542c222ea8c75861d8c4ade60a1a332a63255ce1c60bdaebf7c2a2869e6",
+        "claude": "7d25d7c8ae6c6e009cc7dae4e817f674179fd31fb7761bcd56fee4c2902b4c03",
+        "opencode": "e94d9ebec16ce2611eae94026afe8ec87f2e2dcc66db40bc4f889955b026eb75",
+        "lintai": "7eb11068063a95160c2adb38e1e4e118dbde98b35ecdfb2c627f2d5624b70b0c"
+      },
+      "client": "Codex",
+      "client_version": "0.153.4",
+      "raw_artifacts": "Not bundled; hashes identify retained run artifacts, not a public downloadable transcript"
+    },
+    {
+      "run": "claude-03",
+      "exit_code": 0,
+      "invocation_sha256": "842d421806bf513f838f539ea4016cb399bc9df3b95ad3bbbb2611c98a363e6a",
+      "run_log_sha256": "0a85fa85705a0a03f652c2d0d98c7a53839c9fd1795c4484fcc5902afa630b2a",
+      "image": "sha256:df6ab45e95c4425fcdccfc9a143bec29e2bf08293b63482c7843f398e06baabb",
+      "binaries": {
+        "installer": "3e5d4b8ee25a16d274b0f3bbdaf35f6963416650fed972995e65817f274cf8d8",
+        "test": "a787bf21804cfa85923d7dd6726dc17fad660fdec8c6c14ae46bdabdd1de2b43",
+        "probe": "b6b693fa9ad76c5c949b53e8d7ceac2f66a9d32f782e2caf8d473a5fde516658",
+        "codex": "4d76e542c222ea8c75861d8c4ade60a1a332a63255ce1c60bdaebf7c2a2869e6",
+        "claude": "7d25d7c8ae6c6e009cc7dae4e817f674179fd31fb7761bcd56fee4c2902b4c03",
+        "opencode": "e94d9ebec16ce2611eae94026afe8ec87f2e2dcc66db40bc4f889955b026eb75",
+        "lintai": "7eb11068063a95160c2adb38e1e4e118dbde98b35ecdfb2c627f2d5624b70b0c"
+      },
+      "client": "Claude Code",
+      "client_version": "2.1.263",
+      "raw_artifacts": "Not bundled; hashes identify retained run artifacts, not a public downloadable transcript"
+    },
+    {
+      "run": "opencode-03",
+      "exit_code": 0,
+      "invocation_sha256": "1259a9ea2cd1a7b40e6b4df0a1ce1f2d531d2bd253228922ab058bf2fd9a833f",
+      "run_log_sha256": "d81e3530682e006c5680a5964e87b725d729599f635abccf06a1717678a5244d",
+      "image": "sha256:df6ab45e95c4425fcdccfc9a143bec29e2bf08293b63482c7843f398e06baabb",
+      "binaries": {
+        "installer": "3e5d4b8ee25a16d274b0f3bbdaf35f6963416650fed972995e65817f274cf8d8",
+        "test": "537b229a12f6421de06323ef1bcd041034e88c7101211b30cee4e59e1ff0f801",
+        "probe": "b6b693fa9ad76c5c949b53e8d7ceac2f66a9d32f782e2caf8d473a5fde516658",
+        "codex": "4d76e542c222ea8c75861d8c4ade60a1a332a63255ce1c60bdaebf7c2a2869e6",
+        "claude": "7d25d7c8ae6c6e009cc7dae4e817f674179fd31fb7761bcd56fee4c2902b4c03",
+        "opencode": "e94d9ebec16ce2611eae94026afe8ec87f2e2dcc66db40bc4f889955b026eb75",
+        "lintai": "7eb11068063a95160c2adb38e1e4e118dbde98b35ecdfb2c627f2d5624b70b0c"
+      },
+      "client": "OpenCode",
+      "client_version": "1.18.29",
+      "raw_artifacts": "Not bundled; hashes identify retained run artifacts, not a public downloadable transcript"
+    },
+    {
+      "run": "git-01",
+      "exit_code": 0,
+      "invocation_sha256": "14be3dd723c74333de0bdd57ea56ec86a02abb7a0a6149eb7127b31927e9ea3a",
+      "run_log_sha256": "fa62fb742c1c96ccb8aae3a57dbb2248bcc3a16e77914d620ca7643c84f578af",
+      "image": "sha256:df6ab45e95c4425fcdccfc9a143bec29e2bf08293b63482c7843f398e06baabb",
+      "binaries": {
+        "installer": "3e5d4b8ee25a16d274b0f3bbdaf35f6963416650fed972995e65817f274cf8d8",
+        "test": "7c91f589a0b01d7b383ba2a01ddc634496d6d951abd31ee8ec0500f0fa1a2aaf",
+        "probe": "b6b693fa9ad76c5c949b53e8d7ceac2f66a9d32f782e2caf8d473a5fde516658",
+        "codex": "4d76e542c222ea8c75861d8c4ade60a1a332a63255ce1c60bdaebf7c2a2869e6",
+        "claude": "7d25d7c8ae6c6e009cc7dae4e817f674179fd31fb7761bcd56fee4c2902b4c03",
+        "opencode": "e94d9ebec16ce2611eae94026afe8ec87f2e2dcc66db40bc4f889955b026eb75",
+        "lintai": "7eb11068063a95160c2adb38e1e4e118dbde98b35ecdfb2c627f2d5624b70b0c"
+      },
+      "network_phases": {
+        "acquisition_and_install_activation": "bridge; public pinned fixture; no model or credentials",
+        "native_discovery_and_remove": {
+          "networks_after_disconnect": {},
+          "nonce_sha256": "9bb5eb39f7ab15699c4d46061d4df9e6115d7b255756e3381a560ebd918fa40b",
+          "phase": "before_native_skill_discovery"
+        }
+      },
+      "client": "Codex",
+      "client_version": "0.153.4",
+      "raw_artifacts": "Not bundled; hashes identify retained run artifacts, not a public downloadable transcript"
+    },
+    {
+      "run": "opencode-extended-11",
+      "exit_code": 0,
+      "client": "OpenCode",
+      "client_version": "1.18.29",
+      "platform": {
+        "os": "Linux",
+        "architecture": "arm64"
+      },
+      "image": "sha256:cf4b5019fbb6d887a96ff066402594b367b7df75c90a86813d9ab9ef5fa491cb",
+      "test_source_sha256": "55314bbed0587390965914a2d685a3b16d0ea926950625cc4dd91ab95ea2b0d4",
+      "binaries": {
+        "installer": "3e5d4b8ee25a16d274b0f3bbdaf35f6963416650fed972995e65817f274cf8d8",
+        "test": "4f1715fdb77ad2be34f23fadfc56bf9ce101cc0a93dd9ef0af082da1f7cfe5a1",
+        "probe": "b6b693fa9ad76c5c949b53e8d7ceac2f66a9d32f782e2caf8d473a5fde516658",
+        "opencode": "e94d9ebec16ce2611eae94026afe8ec87f2e2dcc66db40bc4f889955b026eb75"
+      },
+      "scope": "Global opencode.json; two native stdio tools and native skill body in outgoing scripted-provider context through add, version update, same-version refresh, deleted-root repair, and remove",
+      "review": {
+        "transcript_hashes_verified": 21,
+        "source_manifest_hashes_verified": 81,
+        "compilation_independently_reproduced": false
+      },
+      "not_evaluated": [
+        "JSONC in extended suite",
+        "HTTP in extended suite",
+        "macOS",
+        "Windows",
+        "OAuth",
+        "real model behavior"
+      ],
+      "raw_artifacts": "Not bundled; hashes identify retained run artifacts, not a public downloadable transcript",
+      "invocation_sha256": "4b4dab3667da3faf72f7d71f2f5ea7d9f8c0a0a3a8cf8b6bf417318be5f4e4d0",
+      "run_log_sha256": "0eca56993335ae2afac3934a7c474b90184ef19cde0e3f3257ae3b366ef59c36",
+      "test_source_manifest_sha256": "257adc3394c8f64902414397a344d975bc383dfbfa7b3fa6d5744b47c2d969bb"
+    }
+  ],
+  "record_date": "2026-09-07",
+  "evidence_kind": "Source-built native client evidence; each run group has its own exact source identity; not published-release proof",
+  "integration_commit": "7d17c77599306d662e0bec0e0fd77d35a4f8941c",
+  "integration_pr": "https://github.com/777genius/universal-agent-plugins/pull/184",
+  "release_boundary": {
+    "verified_release": "0.1.51",
+    "release_date": "2026-09-06",
+    "contains_pr_184": false
+  },
+  "platform": {
+    "os": "Linux",
+    "architecture": "arm64",
+    "distribution_version": "not recorded in this compact summary; image digest pins environment"
+  },
+  "scope": {
+    "standard_validity": "separate loader/conformance gate; not inferred from native runs",
+    "real_model": "not_evaluated",
+    "oauth": "not_evaluated",
+    "desktop": "not_evaluated",
+    "windows": "ef20b9314b69d4094f4922946b8ad39024371202; all required suites passed; Claude HTTP/skills only, managed stdio explicitly unsupported",
+    "macos_current_candidate": "ef20b9314b69d4094f4922946b8ad39024371202; all required native suites passed"
+  },
+  "macos_runs": [
+    {
+      "client": "codex",
+      "target": "darwin-arm64",
+      "commit": "3e63ae207868e0a12dab5aace5dba57134b3bab7",
+      "tree": "98fa8a91ff4119891fbca50ad04276edfd02fdfc",
+      "status": "passed",
+      "exit_code": 0,
+      "client_asset": {
+        "source": "https://github.com/openai/codex/releases/tag/rust-v0.153.4",
+        "version": "rust-v0.153.4",
+        "archive": "codex-aarch64-apple-darwin.tar.gz",
+        "archive_integrity": "sha256:8cf911ea676523bfb2121ec561848d2aba564890ad536db4d8a3353f2b9850b1",
+        "binary_sha256": "b973d440acac501fd2594a43e7ca9ce41e0a65b9dfb28d0d7a7837c99e1261e3"
+      },
+      "build_sha256": {
+        "agentplugins": "a6b4f6358219ca280dfeeda89e560bf308529fd00ee6c3c7b1e24f497d14756a",
+        "native-probe": "d7de7758774022972a0980d518cc5f399091d68c778ec61ae7ce636d01102b0f",
+        "repotests": "eaa71965ab8de677b0f9588a1bf1c3a83b05f254dcff01b101b12697ffef2fda"
+      },
+      "passed_tests": [
+        "TestAgentpluginsCodexNativeLifecycle"
+      ],
+      "skipped_tests": [],
+      "network": "not blocked; scripted loopback model endpoints; no real-model or OAuth proof",
+      "runner_evidence_sha256": "d95be1d1c03422428430852f67f4321ade5abd4efc23a2cf2d5047a7bf357be5",
+      "verified_artifact_hashes": 52,
+      "workflow_run": "https://github.com/777genius/universal-agent-plugins/actions/runs/34155801343",
+      "os_version": "not captured in compact runner evidence",
+      "not_evaluated": [
+        "OpenCode extended stdio/skill-body suite on this platform",
+        "real model",
+        "OAuth"
+      ]
+    },
+    {
+      "client": "claude",
+      "target": "darwin-arm64",
+      "commit": "3e63ae207868e0a12dab5aace5dba57134b3bab7",
+      "tree": "98fa8a91ff4119891fbca50ad04276edfd02fdfc",
+      "status": "passed",
+      "exit_code": 0,
+      "client_asset": {
+        "source": "https://registry.npmjs.org/@anthropic-ai/claude-code-darwin-arm64/-/claude-code-darwin-arm64-2.1.263.tgz",
+        "version": "2.1.263",
+        "archive": "claude-code-darwin-arm64-2.1.263.tgz",
+        "archive_integrity": "sha512-yLv8MtgulGMGCWTwDUSmlEL0+94sxKP3vJm0SAXZX+0qVQ09PrjVSRC0ibtVeW7xymyhvP1JaUimOyp+t2wO5g==",
+        "binary_sha256": "ef5d2909c8af49f31ab6d5487e90316777bc2fac170adfe8160716caa8aaf4f9"
+      },
+      "build_sha256": {
+        "agentplugins": "a6b4f6358219ca280dfeeda89e560bf308529fd00ee6c3c7b1e24f497d14756a",
+        "native-probe": "d7de7758774022972a0980d518cc5f399091d68c778ec61ae7ce636d01102b0f",
+        "repotests": "eaa71965ab8de677b0f9588a1bf1c3a83b05f254dcff01b101b12697ffef2fda"
+      },
+      "passed_tests": [
+        "TestAgentpluginsClaudeNativeLifecycle",
+        "TestAgentpluginsClaudeNativeRuntimeLifecycle"
+      ],
+      "skipped_tests": [],
+      "network": "not blocked; scripted loopback model endpoints; no real-model or OAuth proof",
+      "runner_evidence_sha256": "749738f7b1271103b05cdf88f0eacfa4866a861f4040163ef25d57776d5f85bc",
+      "verified_artifact_hashes": 37,
+      "workflow_run": "https://github.com/777genius/universal-agent-plugins/actions/runs/34155801343",
+      "os_version": "not captured in compact runner evidence",
+      "not_evaluated": [
+        "OpenCode extended stdio/skill-body suite on this platform",
+        "real model",
+        "OAuth"
+      ]
+    },
+    {
+      "client": "opencode",
+      "target": "darwin-arm64",
+      "commit": "3e63ae207868e0a12dab5aace5dba57134b3bab7",
+      "tree": "98fa8a91ff4119891fbca50ad04276edfd02fdfc",
+      "status": "passed",
+      "exit_code": 0,
+      "client_asset": {
+        "source": "https://registry.npmjs.org/opencode-darwin-arm64/-/opencode-darwin-arm64-1.18.29.tgz",
+        "version": "1.18.29",
+        "archive": "opencode-darwin-arm64-1.18.29.tgz",
+        "archive_integrity": "sha512-EU0qma5GPJXcDp5rENvedSfqJjqxatQW/Qzjs71pR2YdbrSh7YmBwtvnIb2/KIvfQr0DErX4ST14sbBQI2mQdg==",
+        "binary_sha256": "2f24593f1b8e578d0b7ed7ca399440d4b6c125330eece20a69ad8d380190d669"
+      },
+      "build_sha256": {
+        "agentplugins": "a6b4f6358219ca280dfeeda89e560bf308529fd00ee6c3c7b1e24f497d14756a",
+        "native-probe": "d7de7758774022972a0980d518cc5f399091d68c778ec61ae7ce636d01102b0f",
+        "repotests": "eaa71965ab8de677b0f9588a1bf1c3a83b05f254dcff01b101b12697ffef2fda"
+      },
+      "passed_tests": [
+        "TestAgentpluginsOpenCodeNativeLifecycle",
+        "TestAgentpluginsOpenCodeNativeToolCollision"
+      ],
+      "skipped_tests": [],
+      "network": "not blocked; scripted loopback model endpoints; no real-model or OAuth proof",
+      "runner_evidence_sha256": "1fcf36851e0a3536deaed4e0a031ae5745002080fb92019111d6435cf6d02ced",
+      "verified_artifact_hashes": 55,
+      "workflow_run": "https://github.com/777genius/universal-agent-plugins/actions/runs/34155801343",
+      "os_version": "not captured in compact runner evidence",
+      "not_evaluated": [
+        "OpenCode extended stdio/skill-body suite on this platform",
+        "real model",
+        "OAuth"
+      ]
+    }
+  ],
+  "cli_namespace_warning": {
+    "source_commit": "c154185e8c076c418a0b2a8c7bade309e760a60a",
+    "diagnostic": "opencode_tool_namespace_not_evaluated",
+    "scope": "advisory output; does not disambiguate callable tool IDs or reject valid standard packages"
+  },
+  "historical_hosted_runs": [
+    {
+      "client": "claude",
+      "target": "darwin-arm64",
+      "commit": "c154185e8c076c418a0b2a8c7bade309e760a60a",
+      "tree": "24f56b8490eb570964adbc3094c7ecf06ced7270",
+      "status": "passed",
+      "exit_code": 0,
+      "client_asset": {
+        "source": "https://registry.npmjs.org/@anthropic-ai/claude-code-darwin-arm64/-/claude-code-darwin-arm64-2.1.263.tgz",
+        "version": "2.1.263",
+        "archive": "claude-code-darwin-arm64-2.1.263.tgz",
+        "archive_integrity": "sha512-yLv8MtgulGMGCWTwDUSmlEL0+94sxKP3vJm0SAXZX+0qVQ09PrjVSRC0ibtVeW7xymyhvP1JaUimOyp+t2wO5g==",
+        "binary_sha256": "ef5d2909c8af49f31ab6d5487e90316777bc2fac170adfe8160716caa8aaf4f9"
+      },
+      "build_sha256": {
+        "agentplugins": "7f6721e9e5a3595e88f95022107edddca8ee826181cdbc4f34c4a32f33b443f8",
+        "native-probe": "867c579710913b071c60da5cf908856a39076a4b5ff6b2102533ddf214090709",
+        "repotests": "56cfec86aab33f217f4d0a6e09654f7dbe0883ad59cc0bd68052ca2f31656272"
+      },
+      "passed_tests": [
+        "TestAgentpluginsClaudeNativeLifecycle",
+        "TestAgentpluginsClaudeNativeRuntimeLifecycle"
+      ],
+      "skipped_tests": [],
+      "network": "not blocked; scripted loopback model endpoints; no real-model or OAuth proof",
+      "runner_evidence_sha256": "f499fd4541b87ac9f1b8ffd4821a663dc39b641453edc3b47fd251b5ff41ebee",
+      "verified_artifact_hashes": 37,
+      "workflow_run": "https://github.com/777genius/universal-agent-plugins/actions/runs/34156199237",
+      "os_version": "not captured in compact runner evidence",
+      "not_evaluated": [
+        "real model",
+        "OAuth",
+        "Desktop applications"
+      ]
+    },
+    {
+      "client": "claude",
+      "target": "windows-amd64",
+      "commit": "c154185e8c076c418a0b2a8c7bade309e760a60a",
+      "tree": "24f56b8490eb570964adbc3094c7ecf06ced7270",
+      "status": "failed",
+      "exit_code": 1,
+      "client_asset": {
+        "source": "https://registry.npmjs.org/@anthropic-ai/claude-code-win32-x64/-/claude-code-win32-x64-2.1.263.tgz",
+        "version": "2.1.263",
+        "archive": "claude-code-win32-x64-2.1.263.tgz",
+        "archive_integrity": "sha512-P1LnudAWj2ptyE0IZzCZKAe7nU7LxqlkcLdBfp8FsHlH5dp75Og4JJ6TClvfjanHn3shYW4CYN6oI1vSqZlkHw==",
+        "binary_sha256": "0b35df94c1307004f07b738390bfef8dfca5e9af29aaf6517f305bf086b95b03"
+      },
+      "build_sha256": {
+        "agentplugins.exe": "5c1f37b79421f8e3e78651f351b14cc3caa838a28e8c1d56033e48c02017b7a4",
+        "native-probe.exe": "01f48d8edba69a2a9ce902f4cf62da9ba354592c155e501fffb4aee41754d513",
+        "repotests.exe": "6578cf9a0afba620df360c29faad6e5109e5057ea9a532cd4a28331bb002bbd2"
+      },
+      "passed_tests": [],
+      "skipped_tests": [],
+      "network": "not blocked; scripted loopback model endpoints; no real-model or OAuth proof",
+      "runner_evidence_sha256": "4b7a4730c9eeb982e9fe7d5bb6fafee4eb0c9fc65a4f50ce517325fc18cac553",
+      "verified_artifact_hashes": 14,
+      "workflow_run": "https://github.com/777genius/universal-agent-plugins/actions/runs/34156199237",
+      "os_version": "not captured in compact runner evidence",
+      "not_evaluated": [
+        "real model",
+        "OAuth",
+        "Desktop applications"
+      ]
+    },
+    {
+      "client": "codex",
+      "target": "darwin-arm64",
+      "commit": "c154185e8c076c418a0b2a8c7bade309e760a60a",
+      "tree": "24f56b8490eb570964adbc3094c7ecf06ced7270",
+      "status": "passed",
+      "exit_code": 0,
+      "client_asset": {
+        "source": "https://github.com/openai/codex/releases/tag/rust-v0.153.4",
+        "version": "rust-v0.153.4",
+        "archive": "codex-aarch64-apple-darwin.tar.gz",
+        "archive_integrity": "sha256:8cf911ea676523bfb2121ec561848d2aba564890ad536db4d8a3353f2b9850b1",
+        "binary_sha256": "b973d440acac501fd2594a43e7ca9ce41e0a65b9dfb28d0d7a7837c99e1261e3"
+      },
+      "build_sha256": {
+        "agentplugins": "7f6721e9e5a3595e88f95022107edddca8ee826181cdbc4f34c4a32f33b443f8",
+        "native-probe": "867c579710913b071c60da5cf908856a39076a4b5ff6b2102533ddf214090709",
+        "repotests": "56cfec86aab33f217f4d0a6e09654f7dbe0883ad59cc0bd68052ca2f31656272"
+      },
+      "passed_tests": [
+        "TestAgentpluginsCodexNativeLifecycle"
+      ],
+      "skipped_tests": [],
+      "network": "not blocked; scripted loopback model endpoints; no real-model or OAuth proof",
+      "runner_evidence_sha256": "7bcdb69497234b2e2880f353938c1dc2951b206269ccad17978659c3cdd76aaf",
+      "verified_artifact_hashes": 52,
+      "workflow_run": "https://github.com/777genius/universal-agent-plugins/actions/runs/34156199237",
+      "os_version": "not captured in compact runner evidence",
+      "not_evaluated": [
+        "real model",
+        "OAuth",
+        "Desktop applications"
+      ]
+    },
+    {
+      "client": "codex",
+      "target": "windows-amd64",
+      "commit": "c154185e8c076c418a0b2a8c7bade309e760a60a",
+      "tree": "24f56b8490eb570964adbc3094c7ecf06ced7270",
+      "status": "failed",
+      "exit_code": 1,
+      "client_asset": {
+        "source": "https://github.com/openai/codex/releases/tag/rust-v0.153.4",
+        "version": "rust-v0.153.4",
+        "archive": "codex-x86_64-pc-windows-msvc.exe.zip",
+        "archive_integrity": "sha256:c016b0e6968b78586919c720d2685a03712f6d5f11bcd9d6f92c91eb8c41ba16",
+        "binary_sha256": "444a3f0008050605cae73cd9b7a2dcac61294062dfaab56dd20430fd6498518b"
+      },
+      "build_sha256": {
+        "agentplugins.exe": "5c1f37b79421f8e3e78651f351b14cc3caa838a28e8c1d56033e48c02017b7a4",
+        "native-probe.exe": "01f48d8edba69a2a9ce902f4cf62da9ba354592c155e501fffb4aee41754d513",
+        "repotests.exe": "6578cf9a0afba620df360c29faad6e5109e5057ea9a532cd4a28331bb002bbd2"
+      },
+      "passed_tests": [],
+      "skipped_tests": [],
+      "network": "not blocked; scripted loopback model endpoints; no real-model or OAuth proof",
+      "runner_evidence_sha256": "5b962f78ee0bb73a530c8eb9a38bd398eefae044fbdbd5cafb857b68dc749a83",
+      "verified_artifact_hashes": 43,
+      "workflow_run": "https://github.com/777genius/universal-agent-plugins/actions/runs/34156199237",
+      "os_version": "not captured in compact runner evidence",
+      "not_evaluated": [
+        "real model",
+        "OAuth",
+        "Desktop applications"
+      ]
+    },
+    {
+      "client": "opencode",
+      "target": "darwin-arm64",
+      "commit": "c154185e8c076c418a0b2a8c7bade309e760a60a",
+      "tree": "24f56b8490eb570964adbc3094c7ecf06ced7270",
+      "status": "passed",
+      "exit_code": 0,
+      "client_asset": {
+        "source": "https://registry.npmjs.org/opencode-darwin-arm64/-/opencode-darwin-arm64-1.18.29.tgz",
+        "version": "1.18.29",
+        "archive": "opencode-darwin-arm64-1.18.29.tgz",
+        "archive_integrity": "sha512-EU0qma5GPJXcDp5rENvedSfqJjqxatQW/Qzjs71pR2YdbrSh7YmBwtvnIb2/KIvfQr0DErX4ST14sbBQI2mQdg==",
+        "binary_sha256": "2f24593f1b8e578d0b7ed7ca399440d4b6c125330eece20a69ad8d380190d669"
+      },
+      "build_sha256": {
+        "agentplugins": "7f6721e9e5a3595e88f95022107edddca8ee826181cdbc4f34c4a32f33b443f8",
+        "native-probe": "867c579710913b071c60da5cf908856a39076a4b5ff6b2102533ddf214090709",
+        "repotests": "56cfec86aab33f217f4d0a6e09654f7dbe0883ad59cc0bd68052ca2f31656272"
+      },
+      "passed_tests": [
+        "TestAgentpluginsOpenCodeNativeLifecycle",
+        "TestAgentpluginsOpenCodeNativeRuntimeExtended",
+        "TestAgentpluginsOpenCodeNativeToolCollision"
+      ],
+      "skipped_tests": [],
+      "network": "not blocked; scripted loopback model endpoints; no real-model or OAuth proof",
+      "runner_evidence_sha256": "210babe9f0f8eeeb5baa90f7ba1e5f8f1334059b42a931da23772cad63ae3517",
+      "verified_artifact_hashes": 83,
+      "workflow_run": "https://github.com/777genius/universal-agent-plugins/actions/runs/34156199237",
+      "os_version": "not captured in compact runner evidence",
+      "not_evaluated": [
+        "real model",
+        "OAuth",
+        "Desktop applications"
+      ]
+    },
+    {
+      "client": "opencode",
+      "target": "windows-amd64",
+      "commit": "c154185e8c076c418a0b2a8c7bade309e760a60a",
+      "tree": "24f56b8490eb570964adbc3094c7ecf06ced7270",
+      "status": "failed",
+      "exit_code": 1,
+      "client_asset": {
+        "source": "https://registry.npmjs.org/opencode-windows-x64/-/opencode-windows-x64-1.18.29.tgz",
+        "version": "1.18.29",
+        "archive": "opencode-windows-x64-1.18.29.tgz",
+        "archive_integrity": "sha512-xtWiZNMiwFtBl7q9yMG+XK/BTYGfgFoHLDx4ruWVYCoxjV0NYwjJi6rB9B3xIVbTclzu81YLKNFcT3kNBEG9Yw==",
+        "binary_sha256": "88d2fa691b2d9e32fde6d1039382a850ddf96fe49cd41683c6375fe1dc8ec2a5"
+      },
+      "build_sha256": {
+        "agentplugins.exe": "5c1f37b79421f8e3e78651f351b14cc3caa838a28e8c1d56033e48c02017b7a4",
+        "native-probe.exe": "01f48d8edba69a2a9ce902f4cf62da9ba354592c155e501fffb4aee41754d513",
+        "repotests.exe": "6578cf9a0afba620df360c29faad6e5109e5057ea9a532cd4a28331bb002bbd2"
+      },
+      "passed_tests": [
+        "TestAgentpluginsOpenCodeNativeRuntimeExtended",
+        "TestAgentpluginsOpenCodeNativeToolCollision"
+      ],
+      "skipped_tests": [],
+      "network": "not blocked; scripted loopback model endpoints; no real-model or OAuth proof",
+      "runner_evidence_sha256": "117785cf857af46259a600e8d185781c85a28b0f482dcd2c1aae018bcef5f333",
+      "verified_artifact_hashes": 60,
+      "workflow_run": "https://github.com/777genius/universal-agent-plugins/actions/runs/34156199237",
+      "os_version": "not captured in compact runner evidence",
+      "not_evaluated": [
+        "real model",
+        "OAuth",
+        "Desktop applications"
+      ]
+    },
+    {
+      "client": "claude",
+      "target": "darwin-arm64",
+      "commit": "a6462a705586037f0f702ad4a5e6ac682d844188",
+      "tree": "3eb8fcb62394f221c96a1155587a46cfef629ae2",
+      "status": "passed",
+      "exit_code": 0,
+      "client_asset": {
+        "source": "https://registry.npmjs.org/@anthropic-ai/claude-code-darwin-arm64/-/claude-code-darwin-arm64-2.1.263.tgz",
+        "version": "2.1.263",
+        "archive": "claude-code-darwin-arm64-2.1.263.tgz",
+        "archive_integrity": "sha512-yLv8MtgulGMGCWTwDUSmlEL0+94sxKP3vJm0SAXZX+0qVQ09PrjVSRC0ibtVeW7xymyhvP1JaUimOyp+t2wO5g==",
+        "binary_sha256": "ef5d2909c8af49f31ab6d5487e90316777bc2fac170adfe8160716caa8aaf4f9"
+      },
+      "build_sha256": {
+        "agentplugins": "4fa7adfd0ee7dfb2d1d738866c52df088c799832534b2af93bffcf1a7e799472",
+        "native-probe": "f228fb119b300a1e601784ce8f39bcae513fc51686c25be77d7dbc80a9574864",
+        "repotests": "d915eedc4130b6528afd22b7f102b2823046afe88d52394d6f4a905bfd5ef042"
+      },
+      "passed_tests": [
+        "TestAgentpluginsClaudeNativeLifecycle",
+        "TestAgentpluginsClaudeNativeRuntimeLifecycle"
+      ],
+      "skipped_tests": [],
+      "network": "not blocked; scripted loopback model endpoints; no real-model or OAuth proof",
+      "runner_evidence_sha256": "8f9784a32f74ed93e4b106dd529ab4106104996bd9b7384642661caeb0d253c7",
+      "verified_artifact_hashes": 37,
+      "workflow_run": "https://github.com/777genius/universal-agent-plugins/actions/runs/34157356882",
+      "os_version": "not captured in compact runner evidence",
+      "not_evaluated": [
+        "real model",
+        "OAuth",
+        "Desktop applications"
+      ]
+    },
+    {
+      "client": "claude",
+      "target": "windows-amd64",
+      "commit": "a6462a705586037f0f702ad4a5e6ac682d844188",
+      "tree": "3eb8fcb62394f221c96a1155587a46cfef629ae2",
+      "status": "passed",
+      "exit_code": 0,
+      "client_asset": {
+        "source": "https://registry.npmjs.org/@anthropic-ai/claude-code-win32-x64/-/claude-code-win32-x64-2.1.263.tgz",
+        "version": "2.1.263",
+        "archive": "claude-code-win32-x64-2.1.263.tgz",
+        "archive_integrity": "sha512-P1LnudAWj2ptyE0IZzCZKAe7nU7LxqlkcLdBfp8FsHlH5dp75Og4JJ6TClvfjanHn3shYW4CYN6oI1vSqZlkHw==",
+        "binary_sha256": "0b35df94c1307004f07b738390bfef8dfca5e9af29aaf6517f305bf086b95b03"
+      },
+      "build_sha256": {
+        "agentplugins.exe": "649cbc566122a8ce8f63eb727aa4d8ab04403170941cb6630cb5a383a3a26d18",
+        "native-probe.exe": "f3b81405baa015782afcae7136619c44bec4b69bd4b6e3d4c675fe9100405c63",
+        "repotests.exe": "35379af5ad6286cdf86aa03a75c24a5c3985ccbaf584b1a7eb3903cbcdfa4471"
+      },
+      "passed_tests": [
+        "TestAgentpluginsClaudeNativeLifecycle",
+        "TestAgentpluginsClaudeNativeRuntimeLifecycle"
+      ],
+      "skipped_tests": [],
+      "network": "not blocked; scripted loopback model endpoints; no real-model or OAuth proof",
+      "runner_evidence_sha256": "c927f6af4b8e6141477b86d8ed8d6af1e9c918fa6e7ac5dae1cb003b62ba3abe",
+      "verified_artifact_hashes": 41,
+      "workflow_run": "https://github.com/777genius/universal-agent-plugins/actions/runs/34157356882",
+      "os_version": "not captured in compact runner evidence",
+      "not_evaluated": [
+        "real model",
+        "OAuth",
+        "Desktop applications"
+      ],
+      "runtime_scope": {
+        "http_and_installed_skill_lifecycle": "passed A/B/C/repair/remove",
+        "installer_data_retention": "passed",
+        "stdio_runtime": "observed_unsupported",
+        "reason": "managed_stdio_platform_unsupported",
+        "stdio_cwd_argv_env_data": "not_evaluated"
+      }
+    },
+    {
+      "client": "codex",
+      "target": "darwin-arm64",
+      "commit": "a6462a705586037f0f702ad4a5e6ac682d844188",
+      "tree": "3eb8fcb62394f221c96a1155587a46cfef629ae2",
+      "status": "passed",
+      "exit_code": 0,
+      "client_asset": {
+        "source": "https://github.com/openai/codex/releases/tag/rust-v0.153.4",
+        "version": "rust-v0.153.4",
+        "archive": "codex-aarch64-apple-darwin.tar.gz",
+        "archive_integrity": "sha256:8cf911ea676523bfb2121ec561848d2aba564890ad536db4d8a3353f2b9850b1",
+        "binary_sha256": "b973d440acac501fd2594a43e7ca9ce41e0a65b9dfb28d0d7a7837c99e1261e3"
+      },
+      "build_sha256": {
+        "agentplugins": "4fa7adfd0ee7dfb2d1d738866c52df088c799832534b2af93bffcf1a7e799472",
+        "native-probe": "f228fb119b300a1e601784ce8f39bcae513fc51686c25be77d7dbc80a9574864",
+        "repotests": "d915eedc4130b6528afd22b7f102b2823046afe88d52394d6f4a905bfd5ef042"
+      },
+      "passed_tests": [
+        "TestAgentpluginsCodexNativeLifecycle"
+      ],
+      "skipped_tests": [],
+      "network": "not blocked; scripted loopback model endpoints; no real-model or OAuth proof",
+      "runner_evidence_sha256": "806a2908810dce83f0408d692029e8d2edab8fe9f39e70b2baf523005b9c1073",
+      "verified_artifact_hashes": 52,
+      "workflow_run": "https://github.com/777genius/universal-agent-plugins/actions/runs/34157356882",
+      "os_version": "not captured in compact runner evidence",
+      "not_evaluated": [
+        "real model",
+        "OAuth",
+        "Desktop applications"
+      ]
+    },
+    {
+      "client": "codex",
+      "target": "windows-amd64",
+      "commit": "a6462a705586037f0f702ad4a5e6ac682d844188",
+      "tree": "3eb8fcb62394f221c96a1155587a46cfef629ae2",
+      "status": "passed",
+      "exit_code": 0,
+      "client_asset": {
+        "source": "https://github.com/openai/codex/releases/tag/rust-v0.153.4",
+        "version": "rust-v0.153.4",
+        "archive": "codex-x86_64-pc-windows-msvc.exe.zip",
+        "archive_integrity": "sha256:c016b0e6968b78586919c720d2685a03712f6d5f11bcd9d6f92c91eb8c41ba16",
+        "binary_sha256": "444a3f0008050605cae73cd9b7a2dcac61294062dfaab56dd20430fd6498518b"
+      },
+      "build_sha256": {
+        "agentplugins.exe": "649cbc566122a8ce8f63eb727aa4d8ab04403170941cb6630cb5a383a3a26d18",
+        "native-probe.exe": "f3b81405baa015782afcae7136619c44bec4b69bd4b6e3d4c675fe9100405c63",
+        "repotests.exe": "35379af5ad6286cdf86aa03a75c24a5c3985ccbaf584b1a7eb3903cbcdfa4471"
+      },
+      "passed_tests": [
+        "TestAgentpluginsCodexNativeLifecycle"
+      ],
+      "skipped_tests": [],
+      "network": "not blocked; scripted loopback model endpoints; no real-model or OAuth proof",
+      "runner_evidence_sha256": "9b245d2775382cdac78e6e68532496e115ec3fed05aab85ed6a6677286aeb22e",
+      "verified_artifact_hashes": 52,
+      "workflow_run": "https://github.com/777genius/universal-agent-plugins/actions/runs/34157356882",
+      "os_version": "not captured in compact runner evidence",
+      "not_evaluated": [
+        "real model",
+        "OAuth",
+        "Desktop applications"
+      ]
+    },
+    {
+      "client": "opencode",
+      "target": "darwin-arm64",
+      "commit": "a6462a705586037f0f702ad4a5e6ac682d844188",
+      "tree": "3eb8fcb62394f221c96a1155587a46cfef629ae2",
+      "status": "passed",
+      "exit_code": 0,
+      "client_asset": {
+        "source": "https://registry.npmjs.org/opencode-darwin-arm64/-/opencode-darwin-arm64-1.18.29.tgz",
+        "version": "1.18.29",
+        "archive": "opencode-darwin-arm64-1.18.29.tgz",
+        "archive_integrity": "sha512-EU0qma5GPJXcDp5rENvedSfqJjqxatQW/Qzjs71pR2YdbrSh7YmBwtvnIb2/KIvfQr0DErX4ST14sbBQI2mQdg==",
+        "binary_sha256": "2f24593f1b8e578d0b7ed7ca399440d4b6c125330eece20a69ad8d380190d669"
+      },
+      "build_sha256": {
+        "agentplugins": "4fa7adfd0ee7dfb2d1d738866c52df088c799832534b2af93bffcf1a7e799472",
+        "native-probe": "f228fb119b300a1e601784ce8f39bcae513fc51686c25be77d7dbc80a9574864",
+        "repotests": "d915eedc4130b6528afd22b7f102b2823046afe88d52394d6f4a905bfd5ef042"
+      },
+      "passed_tests": [
+        "TestAgentpluginsOpenCodeNativeLifecycle",
+        "TestAgentpluginsOpenCodeNativeRuntimeExtended",
+        "TestAgentpluginsOpenCodeNativeToolCollision"
+      ],
+      "skipped_tests": [],
+      "network": "not blocked; scripted loopback model endpoints; no real-model or OAuth proof",
+      "runner_evidence_sha256": "34faf254ea096d42f0f84ab2cbb41d8c7835f83bca41d8b4861e3414f30d90df",
+      "verified_artifact_hashes": 83,
+      "workflow_run": "https://github.com/777genius/universal-agent-plugins/actions/runs/34157356882",
+      "os_version": "not captured in compact runner evidence",
+      "not_evaluated": [
+        "real model",
+        "OAuth",
+        "Desktop applications"
+      ]
+    },
+    {
+      "client": "opencode",
+      "target": "windows-amd64",
+      "commit": "a6462a705586037f0f702ad4a5e6ac682d844188",
+      "tree": "3eb8fcb62394f221c96a1155587a46cfef629ae2",
+      "status": "passed",
+      "exit_code": 0,
+      "client_asset": {
+        "source": "https://registry.npmjs.org/opencode-windows-x64/-/opencode-windows-x64-1.18.29.tgz",
+        "version": "1.18.29",
+        "archive": "opencode-windows-x64-1.18.29.tgz",
+        "archive_integrity": "sha512-xtWiZNMiwFtBl7q9yMG+XK/BTYGfgFoHLDx4ruWVYCoxjV0NYwjJi6rB9B3xIVbTclzu81YLKNFcT3kNBEG9Yw==",
+        "binary_sha256": "88d2fa691b2d9e32fde6d1039382a850ddf96fe49cd41683c6375fe1dc8ec2a5"
+      },
+      "build_sha256": {
+        "agentplugins.exe": "649cbc566122a8ce8f63eb727aa4d8ab04403170941cb6630cb5a383a3a26d18",
+        "native-probe.exe": "f3b81405baa015782afcae7136619c44bec4b69bd4b6e3d4c675fe9100405c63",
+        "repotests.exe": "35379af5ad6286cdf86aa03a75c24a5c3985ccbaf584b1a7eb3903cbcdfa4471"
+      },
+      "passed_tests": [
+        "TestAgentpluginsOpenCodeNativeLifecycle",
+        "TestAgentpluginsOpenCodeNativeRuntimeExtended",
+        "TestAgentpluginsOpenCodeNativeToolCollision"
+      ],
+      "skipped_tests": [],
+      "network": "not blocked; scripted loopback model endpoints; no real-model or OAuth proof",
+      "runner_evidence_sha256": "e12bf622fbc9d72744c57bed62c60339124670221e016b851cb4dcae1ddcec03",
+      "verified_artifact_hashes": 83,
+      "workflow_run": "https://github.com/777genius/universal-agent-plugins/actions/runs/34157356882",
+      "os_version": "not captured in compact runner evidence",
+      "not_evaluated": [
+        "real model",
+        "OAuth",
+        "Desktop applications"
+      ]
+    }
+  ],
+  "hosted_runs": [
+    {
+      "client": "claude",
+      "target": "darwin-arm64",
+      "commit": "ef20b9314b69d4094f4922946b8ad39024371202",
+      "tree": "4ba999db51304b056ec559c5429ed9aab9aace60",
+      "status": "passed",
+      "exit_code": 0,
+      "client_asset": {
+        "source": "https://registry.npmjs.org/@anthropic-ai/claude-code-darwin-arm64/-/claude-code-darwin-arm64-2.1.263.tgz",
+        "version": "2.1.263",
+        "archive": "claude-code-darwin-arm64-2.1.263.tgz",
+        "archive_integrity": "sha512-yLv8MtgulGMGCWTwDUSmlEL0+94sxKP3vJm0SAXZX+0qVQ09PrjVSRC0ibtVeW7xymyhvP1JaUimOyp+t2wO5g==",
+        "binary_sha256": "ef5d2909c8af49f31ab6d5487e90316777bc2fac170adfe8160716caa8aaf4f9"
+      },
+      "build_sha256": {
+        "agentplugins": "41d9f29e79c05e135bd857c561013e41a1c50e20476a2296fcb9c504f41ce847",
+        "native-probe": "44397883883415b4aa925a3e11fc37228ec69f1d1f7a2c256b7d9843b83a5c4f",
+        "repotests": "d915eedc4130b6528afd22b7f102b2823046afe88d52394d6f4a905bfd5ef042"
+      },
+      "passed_tests": [
+        "TestAgentpluginsClaudeNativeLifecycle",
+        "TestAgentpluginsClaudeNativeRuntimeLifecycle"
+      ],
+      "skipped_tests": [],
+      "network": "not blocked; scripted loopback model endpoints; no real-model or OAuth proof",
+      "runner_evidence_sha256": "36a7a388495794b63ac30bf582b894ca8d487b4490986b05227ef1fa5c86d1d9",
+      "verified_artifact_hashes": 37,
+      "workflow_run": "https://github.com/777genius/universal-agent-plugins/actions/runs/34158664586",
+      "os_version": "not captured in compact runner evidence",
+      "not_evaluated": [
+        "real model",
+        "OAuth",
+        "Desktop applications"
+      ]
+    },
+    {
+      "client": "claude",
+      "target": "windows-amd64",
+      "commit": "ef20b9314b69d4094f4922946b8ad39024371202",
+      "tree": "4ba999db51304b056ec559c5429ed9aab9aace60",
+      "status": "passed",
+      "exit_code": 0,
+      "client_asset": {
+        "source": "https://registry.npmjs.org/@anthropic-ai/claude-code-win32-x64/-/claude-code-win32-x64-2.1.263.tgz",
+        "version": "2.1.263",
+        "archive": "claude-code-win32-x64-2.1.263.tgz",
+        "archive_integrity": "sha512-P1LnudAWj2ptyE0IZzCZKAe7nU7LxqlkcLdBfp8FsHlH5dp75Og4JJ6TClvfjanHn3shYW4CYN6oI1vSqZlkHw==",
+        "binary_sha256": "0b35df94c1307004f07b738390bfef8dfca5e9af29aaf6517f305bf086b95b03"
+      },
+      "build_sha256": {
+        "agentplugins.exe": "1d434ad0c4ab855edf9134349288a331577f9d85344150f8b656e27d9a603bac",
+        "native-probe.exe": "0f30c14666f43a43e7266648aa21f3d23e9e1143f88b6e187f0aca5a863e6074",
+        "repotests.exe": "35379af5ad6286cdf86aa03a75c24a5c3985ccbaf584b1a7eb3903cbcdfa4471"
+      },
+      "passed_tests": [
+        "TestAgentpluginsClaudeNativeLifecycle",
+        "TestAgentpluginsClaudeNativeRuntimeLifecycle"
+      ],
+      "skipped_tests": [],
+      "network": "not blocked; scripted loopback model endpoints; no real-model or OAuth proof",
+      "runner_evidence_sha256": "159e3248cb7b5b5e68351a2f70b2ecfaa69180b71fd10bac24f51047e5502214",
+      "verified_artifact_hashes": 41,
+      "workflow_run": "https://github.com/777genius/universal-agent-plugins/actions/runs/34158664586",
+      "os_version": "not captured in compact runner evidence",
+      "not_evaluated": [
+        "real model",
+        "OAuth",
+        "Desktop applications"
+      ],
+      "runtime_scope": {
+        "http_and_installed_skill_lifecycle": "passed A/B/C/repair/remove",
+        "installer_data_retention": "passed",
+        "stdio_runtime": "observed_unsupported",
+        "reason": "managed_stdio_platform_unsupported",
+        "stdio_cwd_argv_env_data": "not_evaluated"
+      }
+    },
+    {
+      "client": "codex",
+      "target": "darwin-arm64",
+      "commit": "ef20b9314b69d4094f4922946b8ad39024371202",
+      "tree": "4ba999db51304b056ec559c5429ed9aab9aace60",
+      "status": "passed",
+      "exit_code": 0,
+      "client_asset": {
+        "source": "https://github.com/openai/codex/releases/tag/rust-v0.153.4",
+        "version": "rust-v0.153.4",
+        "archive": "codex-aarch64-apple-darwin.tar.gz",
+        "archive_integrity": "sha256:8cf911ea676523bfb2121ec561848d2aba564890ad536db4d8a3353f2b9850b1",
+        "binary_sha256": "b973d440acac501fd2594a43e7ca9ce41e0a65b9dfb28d0d7a7837c99e1261e3"
+      },
+      "build_sha256": {
+        "agentplugins": "41d9f29e79c05e135bd857c561013e41a1c50e20476a2296fcb9c504f41ce847",
+        "native-probe": "44397883883415b4aa925a3e11fc37228ec69f1d1f7a2c256b7d9843b83a5c4f",
+        "repotests": "d915eedc4130b6528afd22b7f102b2823046afe88d52394d6f4a905bfd5ef042"
+      },
+      "passed_tests": [
+        "TestAgentpluginsCodexNativeLifecycle"
+      ],
+      "skipped_tests": [],
+      "network": "not blocked; scripted loopback model endpoints; no real-model or OAuth proof",
+      "runner_evidence_sha256": "c09e4ec9c5e46ab4a99fe8be862f3c585940babcd0b687e39c27f72867c777dd",
+      "verified_artifact_hashes": 52,
+      "workflow_run": "https://github.com/777genius/universal-agent-plugins/actions/runs/34158664586",
+      "os_version": "not captured in compact runner evidence",
+      "not_evaluated": [
+        "real model",
+        "OAuth",
+        "Desktop applications"
+      ]
+    },
+    {
+      "client": "codex",
+      "target": "windows-amd64",
+      "commit": "ef20b9314b69d4094f4922946b8ad39024371202",
+      "tree": "4ba999db51304b056ec559c5429ed9aab9aace60",
+      "status": "passed",
+      "exit_code": 0,
+      "client_asset": {
+        "source": "https://github.com/openai/codex/releases/tag/rust-v0.153.4",
+        "version": "rust-v0.153.4",
+        "archive": "codex-x86_64-pc-windows-msvc.exe.zip",
+        "archive_integrity": "sha256:c016b0e6968b78586919c720d2685a03712f6d5f11bcd9d6f92c91eb8c41ba16",
+        "binary_sha256": "444a3f0008050605cae73cd9b7a2dcac61294062dfaab56dd20430fd6498518b"
+      },
+      "build_sha256": {
+        "agentplugins.exe": "1d434ad0c4ab855edf9134349288a331577f9d85344150f8b656e27d9a603bac",
+        "native-probe.exe": "0f30c14666f43a43e7266648aa21f3d23e9e1143f88b6e187f0aca5a863e6074",
+        "repotests.exe": "35379af5ad6286cdf86aa03a75c24a5c3985ccbaf584b1a7eb3903cbcdfa4471"
+      },
+      "passed_tests": [
+        "TestAgentpluginsCodexNativeLifecycle"
+      ],
+      "skipped_tests": [],
+      "network": "not blocked; scripted loopback model endpoints; no real-model or OAuth proof",
+      "runner_evidence_sha256": "a72557d16844cbfe75a7747441aba366eb875d3e392731da5e98e6962f4b6d45",
+      "verified_artifact_hashes": 52,
+      "workflow_run": "https://github.com/777genius/universal-agent-plugins/actions/runs/34158664586",
+      "os_version": "not captured in compact runner evidence",
+      "not_evaluated": [
+        "real model",
+        "OAuth",
+        "Desktop applications"
+      ]
+    },
+    {
+      "client": "opencode",
+      "target": "darwin-arm64",
+      "commit": "ef20b9314b69d4094f4922946b8ad39024371202",
+      "tree": "4ba999db51304b056ec559c5429ed9aab9aace60",
+      "status": "passed",
+      "exit_code": 0,
+      "client_asset": {
+        "source": "https://registry.npmjs.org/opencode-darwin-arm64/-/opencode-darwin-arm64-1.18.29.tgz",
+        "version": "1.18.29",
+        "archive": "opencode-darwin-arm64-1.18.29.tgz",
+        "archive_integrity": "sha512-EU0qma5GPJXcDp5rENvedSfqJjqxatQW/Qzjs71pR2YdbrSh7YmBwtvnIb2/KIvfQr0DErX4ST14sbBQI2mQdg==",
+        "binary_sha256": "2f24593f1b8e578d0b7ed7ca399440d4b6c125330eece20a69ad8d380190d669"
+      },
+      "build_sha256": {
+        "agentplugins": "41d9f29e79c05e135bd857c561013e41a1c50e20476a2296fcb9c504f41ce847",
+        "native-probe": "44397883883415b4aa925a3e11fc37228ec69f1d1f7a2c256b7d9843b83a5c4f",
+        "repotests": "d915eedc4130b6528afd22b7f102b2823046afe88d52394d6f4a905bfd5ef042"
+      },
+      "passed_tests": [
+        "TestAgentpluginsOpenCodeNativeLifecycle",
+        "TestAgentpluginsOpenCodeNativeRuntimeExtended",
+        "TestAgentpluginsOpenCodeNativeToolCollision"
+      ],
+      "skipped_tests": [],
+      "network": "not blocked; scripted loopback model endpoints; no real-model or OAuth proof",
+      "runner_evidence_sha256": "f7fd087362b403fb316d0d2195016db012d7b2256d1ab184a246ddbada275347",
+      "verified_artifact_hashes": 83,
+      "workflow_run": "https://github.com/777genius/universal-agent-plugins/actions/runs/34158664586",
+      "os_version": "not captured in compact runner evidence",
+      "not_evaluated": [
+        "real model",
+        "OAuth",
+        "Desktop applications"
+      ]
+    },
+    {
+      "client": "opencode",
+      "target": "windows-amd64",
+      "commit": "ef20b9314b69d4094f4922946b8ad39024371202",
+      "tree": "4ba999db51304b056ec559c5429ed9aab9aace60",
+      "status": "passed",
+      "exit_code": 0,
+      "client_asset": {
+        "source": "https://registry.npmjs.org/opencode-windows-x64/-/opencode-windows-x64-1.18.29.tgz",
+        "version": "1.18.29",
+        "archive": "opencode-windows-x64-1.18.29.tgz",
+        "archive_integrity": "sha512-xtWiZNMiwFtBl7q9yMG+XK/BTYGfgFoHLDx4ruWVYCoxjV0NYwjJi6rB9B3xIVbTclzu81YLKNFcT3kNBEG9Yw==",
+        "binary_sha256": "88d2fa691b2d9e32fde6d1039382a850ddf96fe49cd41683c6375fe1dc8ec2a5"
+      },
+      "build_sha256": {
+        "agentplugins.exe": "1d434ad0c4ab855edf9134349288a331577f9d85344150f8b656e27d9a603bac",
+        "native-probe.exe": "0f30c14666f43a43e7266648aa21f3d23e9e1143f88b6e187f0aca5a863e6074",
+        "repotests.exe": "35379af5ad6286cdf86aa03a75c24a5c3985ccbaf584b1a7eb3903cbcdfa4471"
+      },
+      "passed_tests": [
+        "TestAgentpluginsOpenCodeNativeLifecycle",
+        "TestAgentpluginsOpenCodeNativeRuntimeExtended",
+        "TestAgentpluginsOpenCodeNativeToolCollision"
+      ],
+      "skipped_tests": [],
+      "network": "not blocked; scripted loopback model endpoints; no real-model or OAuth proof",
+      "runner_evidence_sha256": "73ac26a16df16d025afdfb92b8511f3b0a0f08405a32fe9c337b806f7c0373b8",
+      "verified_artifact_hashes": 83,
+      "workflow_run": "https://github.com/777genius/universal-agent-plugins/actions/runs/34158664586",
+      "os_version": "not captured in compact runner evidence",
+      "not_evaluated": [
+        "real model",
+        "OAuth",
+        "Desktop applications"
+      ]
+    }
+  ],
+  "current_hosted_checkpoint": {
+    "commit": "ef20b9314b69d4094f4922946b8ad39024371202",
+    "tree": "4ba999db51304b056ec559c5429ed9aab9aace60",
+    "verified_artifact_hashes": 348,
+    "passing_lanes": 6,
+    "release_proof": false,
+    "all_quality_gates_claimed": false,
+    "semantic_review_reused_from": "a6462a705586037f0f702ad4a5e6ac682d844188",
+    "semantic_review_reuse_reason": "Native fixtures, wrapper, wrapper tests, and native workflow are byte-identical between these exact commits; new run artifacts independently hash-verified"
+  }
+}

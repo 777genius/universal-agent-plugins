@@ -1,0 +1,288 @@
+package installer
+
+import (
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/opencodehost"
+)
+
+// Operation is the process-local lifecycle verb. Install, update, repair, and
+// remove are published. Two registered mutation targets use Request.Targets.
+type Operation string
+
+const (
+	OpInstall Operation = "install"
+	OpRemove  Operation = "remove"
+	OpUpdate  Operation = "update"
+	OpRepair  Operation = "repair"
+	// OpRefreshProjection re-renders an intact installed package with current
+	// host projection inputs while retaining its exact package revision.
+	OpRefreshProjection Operation = "refresh_projection"
+)
+
+// Outcome is the coarse public result. Mapping is not a bool.
+type Outcome string
+
+const (
+	OutcomeUnchanged  Outcome = "unchanged"
+	OutcomeCompleted  Outcome = "completed"
+	OutcomeIncomplete Outcome = "incomplete"
+	OutcomeRecovery   Outcome = "recovery_required"
+	OutcomeConflict   Outcome = "conflict"
+	OutcomeCancelled  Outcome = "cancelled" //nolint:misspell // Preserve the public outcome wire value.
+)
+
+// Request is copied by Prepare. Subsequent caller edits do not change the handle.
+type Request struct {
+	// ConfirmPluginEnable applies only to one explicit Project repair. It is
+	// captured by Prepare and cannot be granted by diagnostic JSON or Apply.
+	ConfirmPluginEnable bool `json:"-"`
+	Scope               domain.InstallScope
+	ProjectRoot         string `json:"-"`
+	// Completion flags attest explicit host-observed lifecycle completion.
+	ActivationComplete, AuthComplete bool
+	physical                         map[domain.ClientID]domain.DetectedClient
+	Operation                        Operation
+	PackageRoot                      string
+	// SourceRoot is the stable absolute local source identity when PackageRoot
+	// points at a host-owned sealed snapshot. Empty means PackageRoot itself.
+	SourceRoot string
+	// ExecutableFiles preserves a host-acquired snapshot's logical file modes.
+	// Nil infers local package executables; a non-nil empty slice means none.
+	// Supported for single-target requests only. Assessment still has to match
+	// the resulting complete tree digest.
+	ExecutableFiles []string
+	// AcquiredSnapshot preserves verified acquisition provenance for one
+	// single-target request. Prepare reseals PackageRoot and refuses any digest,
+	// executable inventory or source-provenance rewrite.
+	AcquiredSnapshot     *domain.AcquiredSnapshot
+	EnvironmentAuthority *domain.EnvironmentAuthority
+	ClientID             string
+	ClientConfigRoot     string
+	ClientExecutable     string
+	// ClientNativeConfigRoot preserves an independently observed User profile
+	// for a single target opting into UserNativeRegistryLayout. It never replaces
+	// ClientConfigRoot or supplies a profile from persisted state.
+	ClientNativeConfigRoot string `json:"-"`
+	// ClientVersion is host-observed evidence for the selected executable.
+	// It is operational input, never portable package or diagnostic metadata.
+	ClientVersion      string `json:"-"`
+	InstallationID     string
+	OperationID        string
+	Selector           string
+	RequiredComponents []string
+	// Assessment is a host decision for these exact local bytes. It is copied
+	// and digest-checked by Prepare. Confirmation of the filesystem plan does
+	// not create or alter this security decision.
+	Assessment *Assessment
+	// ExternalUninstalled is host attestation that the selected client's
+	// native plugin was already removed, or was never activated. Confirmed
+	// Apply does not invent this fact.
+	ExternalUninstalled bool
+	// Targets selects one explicit client or two Claude/Codex clients in a group.
+	// Empty means the single ClientID fields. Groups keep the same Operation verb.
+	Targets []ClientTarget
+	// KnownTargets carries host-observed facts for installed sibling bindings
+	// that are not selected by this operation. The installer verifies BindingID
+	// against owned state before using ConfigRoot or Executable; it never reads a
+	// host sidecar or guesses a profile from HOME.
+	KnownTargets []TargetFacts
+}
+
+func (req Request) acquiredCompatibility() domain.CompatibilityHints {
+	if req.AcquiredSnapshot == nil {
+		return domain.CompatibilityHints{}
+	}
+	return req.AcquiredSnapshot.Compatibility
+}
+
+// ClientTarget is one registered selection in a mutating group request.
+// Group removal retains the published Claude/Codex boundary.
+type ClientTarget struct {
+	ClientID, ClientConfigRoot, ClientExecutable string
+	PackageRoot                                  string
+	ExternalUninstalled                          bool
+}
+
+// TargetFacts is the request-scoped host view of one existing client binding.
+// BindingID ties host-owned profile and executable paths to UAP-owned state.
+type TargetFacts struct {
+	TargetContext domain.TargetContext `json:"-"`
+	ClientID      string
+	BindingID     string
+	ConfigRoot    string
+	Executable    string
+}
+
+// Decision is host UI confirmation, outside mutation locks.
+type Decision struct {
+	Confirmed bool
+}
+
+// BindingFacts is the typed committed-binding view for host seams.
+type BindingFacts struct {
+	TargetContext    domain.TargetContext     `json:"-"`
+	ProfileAuthority *domain.ProfileAuthority `json:"-"`
+	// SelectedDelivery is immutable operational authority, excluded from diagnostic JSON.
+	SelectedDelivery                           domain.SelectedDelivery `json:"-"`
+	InstallationID, ClientID, BindingID, Scope string
+	TargetPath, DataRoot, DataReceiptID        string
+	OperationID, TreeDigest                    string
+}
+
+// Plan is an immutable copy for presentation. Operational paths are included
+// because the embedding host already chose explicit roots.
+type Plan struct {
+	Scope              domain.InstallScope
+	TargetContext      domain.TargetContext     `json:"-"`
+	ProfileAuthority   *domain.ProfileAuthority `json:"-"`
+	OpenCodeProfile    *opencodehost.Profile    `json:",omitempty"`
+	OpenCodeSelections []opencodehost.Selection `json:",omitempty"`
+	// SelectedDelivery is immutable operational authority, excluded from diagnostic JSON.
+	SelectedDelivery     domain.SelectedDelivery `json:"-"`
+	Operation            Operation
+	SourceRoot           string
+	TreeDigest           string
+	DigestAlgorithm      string
+	ClientID             string
+	ConfigRoot           string
+	TargetPath           string
+	InstallationID       string
+	BindingID            string
+	HelperVersion        string
+	HelperDigest         string
+	RequiredMissing      []string
+	NoChange             bool
+	Targets              []PlanTarget
+	Delivery             DeliveryPlan
+	Client               ClientResult
+	RequiresConfirmation bool
+	// RequiresExternalUninstalled is adapter-owned removal policy for a live
+	// binding. It remains true after the host supplies the explicit attestation.
+	RequiresExternalUninstalled bool
+}
+
+// DeliveryPlan is the provider's presentation snapshot, without mutation APIs.
+// LocalActions may contain host paths and are for private human output only.
+type DeliveryPlan struct {
+	ProfileAuthority *domain.ProfileAuthority `json:"-"`
+	// SelectedDelivery is immutable operational authority, excluded from diagnostic JSON.
+	SelectedDelivery                                       domain.SelectedDelivery `json:"-"`
+	ActivePath                                             string
+	Status, PackageMode, InstallIntent, PhysicalArtifactID string
+	Activation, Authentication, Policy, Verification       string
+	Components                                             []ComponentDecision
+	UserActions, LocalActions, Warnings                    []string
+	Diagnostics                                            []PlanDiagnostic
+}
+
+// ComponentDecision is one planned component. Source and SourceName are set
+// only for a component the installer renders, such as a command's skill.
+type ComponentDecision struct{ Kind, Name, Support, Reason, Source, SourceName string }
+type PlanDiagnostic struct{ Severity, Boundary, Code, Path, Item, Message string }
+
+// PlanTarget is one client's prepared identity in a group handle.
+type PlanTarget struct {
+	ProfileAuthority *domain.ProfileAuthority `json:"-"`
+	// SelectedDelivery is immutable operational authority, excluded from diagnostic JSON.
+	SelectedDelivery                                        domain.SelectedDelivery `json:"-"`
+	ClientID, ConfigRoot, TargetPath, BindingID, TreeDigest string
+	NoChange                                                bool
+	RequiresExternalUninstalled                             bool
+}
+
+// Result is returned together with an error when part of the work already happened.
+type Result struct {
+	// Delivery is the actual lifecycle plan, absent when Apply stopped before planning.
+	Delivery             *DeliveryPlan
+	Operation            Operation
+	InstallationID       string
+	Outcome              Outcome
+	Binding              BindingFacts
+	ManualActions        []string
+	Reason               string
+	NoChange             bool
+	Mutated              bool
+	RequiresConfirmation bool
+	DataRetained         bool
+	Client               ClientResult
+	Targets              []ClientResult
+	NextActions          []NextAction
+	// Recovery classifies observed receipts after Recover. Apply leaves it empty.
+	Recovery RecoveryReport
+	// LocalActions are transient host-specific guidance, never public installer JSON.
+	LocalActions []string `json:"-"`
+}
+
+// RecoveryReport is the §5.8 resolved/remaining/unknown receipt view.
+// It is populated even when Recover returns an error.
+type RecoveryReport struct {
+	Resolved  []PendingReceipt
+	Remaining []PendingReceipt
+	Unknown   []PendingReceipt
+}
+
+// NextAction is a structured follow-up. It is not a bool and not a retry token.
+type NextAction struct {
+	Kind   string
+	Reason string
+}
+
+// ClientResult is the public per-client lifecycle view. Mapping is not a bool.
+type ClientResult struct {
+	ProfileAuthority *domain.ProfileAuthority `json:"-"`
+	// SelectedDelivery is immutable operational authority, excluded from diagnostic JSON.
+	SelectedDelivery                                                  domain.SelectedDelivery `json:"-"`
+	ClientID, BindingID, TreeDigest                                   string
+	Materialization, Activation, Authentication, Policy, Verification string
+	RequiredComponents                                                []string
+	// GroupPhase and Failure describe this operation's attempt, independently of
+	// the saved lifecycle. Empty GroupPhase means no group attempt was observed.
+	GroupPhase string         `json:",omitempty"`
+	Failure    *ClientFailure `json:",omitempty"`
+}
+
+// ClientFailure projects the group usecase's failure or safe-stop reason.
+// Stage is activation, verification, authentication, persist, timeout,
+// canceled, or deadline. Message is diagnostic text, not a machine classifier.
+type ClientFailure struct {
+	Stage   string
+	Message string
+}
+
+// Assessment is a digest-bound content verdict. It is not a filesystem plan.
+type Assessment struct {
+	TreeDigest string
+	Outcome    AssessmentOutcome
+	Reason     string
+}
+
+// AssessmentOutcome is the host-visible scanner verdict.
+type AssessmentOutcome string
+
+const (
+	AssessmentAllow       AssessmentOutcome = "allow"
+	AssessmentBlock       AssessmentOutcome = "block"
+	AssessmentUnavailable AssessmentOutcome = "unavailable"
+)
+
+// ProgressPhase is a coarse installer phase. Percent complete is not invented.
+type ProgressPhase string
+
+const (
+	ProgressPrepare   ProgressPhase = "prepare"
+	ProgressPreflight ProgressPhase = "preflight"
+	ProgressStage     ProgressPhase = "stage"
+	ProgressCommit    ProgressPhase = "commit"
+	ProgressActivate  ProgressPhase = "activate"
+	ProgressVerify    ProgressPhase = "verify"
+	ProgressComplete  ProgressPhase = "complete"
+)
+
+// ProgressEvent is an observational checkpoint. The observer does not decide.
+type ProgressEvent struct {
+	Phase ProgressPhase
+	// Client carries a group activation checkpoint. external_started records
+	// dispatch; terminal group phases follow serial state publication. Nil marks
+	// an operation-wide phase. Observers must not mutate installation state.
+	Client *ClientResult
+}

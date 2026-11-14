@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "plugin-kit-ai launcher: node not found" >&2
+  exit 1
+fi
+
+NODE="$(command -v node)"
+exec "$NODE" "$ROOT/dist/main.js" "$@"

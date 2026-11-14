@@ -1,0 +1,6 @@
+api_version: v1
+name: kimi-basic
+version: 0.1.0
+description: Kimi packaged plugin example
+targets:
+    - kimi

@@ -1,0 +1,86 @@
+---
+title: "Add extra Skills"
+description: "Add another Skill in a direct child directory of skills/ to an existing standard package."
+canonicalId: "page:build:skills"
+section: "build"
+locale: "en"
+generated: false
+translationRequired: true
+---
+
+# Add extra Skills
+
+**Source-build authoring:** commands on this page require the
+[authoring-enabled source build](./#build-from-source). The current installer
+release does not include `agentplugins author`.
+
+Use the `skills init` job to add one Skill to an existing standard package.
+It works for Skill, MCP, or hybrid packages. Select the package root containing
+`plugin.json`, not the `skills/` directory or an individual `SKILL.md` file.
+
+## Name the new Skill and package
+
+Assume `./review-helper` is the package from the [standalone Skill journey](./skill)
+and `skills/release-notes/` does not exist.
+
+With the authoring-enabled source build:
+
+```bash
+agentplugins author skills init release-notes ./review-helper \
+  --description 'Use when drafting release notes from reviewed changes'
+```
+
+The positional Skill name is required, as is an explicit description of 1–1024
+characters. Names are not normalized. Use an exact lowercase portable name with
+hyphens, and choose a new destination instead of expecting an overwrite.
+
+## Review the additional component
+
+```text
+review-helper/
+  plugin.json
+  skills/
+    review-docs/
+      SKILL.md
+    release-notes/
+      SKILL.md
+```
+
+Edit `skills/release-notes/SKILL.md` to explain its trigger, method, and expected
+output. Keep its name and description accurate. For example, instruct it to
+separate user-visible changes from maintenance changes and to cite the reviewed
+source for each release claim.
+
+Scripts, references, and assets can support instructions, but their presence is
+not proof of execution or permission to run them. The `allowed-tools` field is
+not independent authorization evidence. Review supporting material with the
+same care as the instruction text.
+
+## Validate the package and its Skills {#validate-the-package-and-immediate-skills}
+
+```bash
+agentplugins author skills validate ./review-helper
+```
+
+The command reports package-wide readiness and individual results for Skills
+in direct child directories of `skills/`. An error elsewhere in the
+package can therefore affect the overall result even when the new Skill's own
+findings are clean.
+
+Omitting the package path uses only the current directory, with no ancestor
+search. Explicit roots make scripts and troubleshooting clearer. Running from
+inside `skills/release-notes/` is not a substitute for selecting the package root.
+
+## Handle a failure without overwriting work
+
+Read `committed` and the accompanying error guidance if creation fails. A Skill
+can be committed before resulting package checks fail or remain incomplete.
+Inspect the actual files and the report before retrying; a second init against
+an existing destination will not overwrite it.
+
+Correct the reported input or package issue and repeat validation. If the name
+is wrong, review the intended source change explicitly rather than adding a
+force flag. Installation and maintenance of external Skills belong to the separate installer
+journey; `author skills` edits and validates components in your source package.
+
+Continue with [static package checks](./checks) and the [handoff](./handoff).

@@ -1,0 +1,34 @@
+{
+  "generated_at": "2026-10-28T15:44:11Z",
+  "scanner": {
+    "id": "skillspector",
+    "revision": "f3b25697d76256998ca9d42c198d256258d4c035",
+    "version": "2.13.1"
+  },
+  "profile": {
+    "digest": "sha256:b056d791aec06105f7e29df50ed52835868a9cd17179add2a283690711ff44fa",
+    "id": "static-policy-v3"
+  },
+  "profiles": [
+    {
+      "digest": "sha256:a73e7c4a9fa0ac563a885c541d207e90dde2e248ca426f7824cf429d725db921",
+      "id": "static-standard-v3"
+    },
+    {
+      "digest": "sha256:6dff52b5c0f60a670827c3fdaf08a7d8c14778a84900e4a1c961913c0d480407",
+      "id": "static-extended-v3"
+    }
+  ],
+  "descriptor": {
+    "bytes": 8600,
+    "digest": "sha256:f5498a5c21ac735d6cb690d67c2eec946ed272af9e0889e0fd61f53d7d14a7d2",
+    "path": "shards/f5498a5c21ac735d6cb690d67c2eec946ed272af9e0889e0fd61f53d7d14a7d2.json",
+    "record_count": 1,
+    "repository": "vercel-labs/ai"
+  },
+  "alias": {
+    "canonical_repository": "vercel/ai",
+    "repository": "vercel-labs/ai",
+    "revision": "3216f06d0d892b03ad607b4716bbf04056cbfe3d"
+  }
+}

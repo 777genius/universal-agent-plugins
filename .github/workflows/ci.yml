@@ -1,0 +1,142 @@
+name: Required
+
+on:
+  # The refactor base branch is listed by name, not as refactor/**: the part
+  # branches stacked on it are gated by core-fast.yml, and a glob would run this
+  # 12-17 minute lane again on every push to every part, which is the double
+  # spend the plan set out to avoid. The full lane belongs after a part merges
+  # into the base branch.
+  push:
+    branches: [main, master, refactor/installer-core-clean-architecture]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [main, master]
+
+# Replace ordinary PR/push CI; isolate manual and scheduled invocations.
+# Release validation also accepts checks from the associated merged PR head.
+concurrency:
+  group: ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.event_name == 'push' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+
+jobs:
+  # Pull requests only: the shared classifier lets lint and the Management SDK
+  # qualification skip when none of their inputs changed. `test` never waits
+  # for it and runs on every ready pull request, because repotests also read
+  # README.md, docs/, website/, landing/ and workflow files. Pushes and an
+  # unavailable or oversized classification run every job.
+  changes:
+    if: ${{ github.event_name == 'pull_request' }}
+    permissions:
+      pull-requests: read
+    uses: ./.github/workflows/pr-changes.yml
+
+  # Separate job rather than a step in `test`: `test` is the 9-27 min critical
+  # path, while the three lint matrix legs finish in a few minutes in parallel.
+  lint:
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.lint != 'false') }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/lint.yml
+    with:
+      # pull_request → origin/<base>; push → origin/main so architecture
+      # pushes are scored the same way as the WIP PR into main.
+      lint-base: origin/${{ github.base_ref || 'main' }}
+
+  # One qualification definition shared with the Management SDK release.
+  management-sdk:
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || (github.event.pull_request.draft == false && (needs.changes.result != 'success' || needs.changes.outputs.management_sdk != 'false'))) }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/management-sdk.yml
+
+  # Same hermetic staged-package test the release prepare step runs, in parallel with `test`.
+  staged-hermetic:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    runs-on: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && 'ubuntu-latest' || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22.21.1"
+          package-manager-cache: false
+
+      - name: Run hermetic staged-package test
+        working-directory: npm/agentplugins
+        run: node --test --test-name-pattern="staged package tests are hermetic" test/stage-release.test.js
+
+  test:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    runs-on: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && 'ubuntu-latest' || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Frozen exporter tests need the audited factory fixture independently
+      # of the current CLI source. Fetch exact snapshots, not full history.
+      - name: Fetch audited documentation test fixtures
+        run: |
+          git fetch --no-tags --depth=1 origin 0506dd888029ad69d07dd5263669fb53766dbdf9
+          git fetch --no-tags --depth=1 origin c77c9975eb41d81bcca178b2974ecc6cd1eb1d22
+          git fetch --no-tags --depth=1 origin 66710680c22cc0cf7cc926e1438bb9d647eff1a2
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.26.11"
+          cache: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22.21.1"
+          package-manager-cache: false
+
+      # The hermetic staged-package test reruns the whole npm suite, so it runs in the
+      # staged-hermetic job below and not on this critical path.
+      - name: Run required lane
+        env:
+          AGENTPLUGINS_SKIP_STAGED_HERMETIC: "1"
+        run: make test-required
+
+      - name: Plugin Manifest Workflow
+        run: make test-plugin-manifest-workflow
+
+      - name: Check generated artifacts
+        run: make generated-check
+
+      - name: Run vet (all workspace modules)
+        run: make vet
+
+      # The proposal discussed in agentplugins/agent-plugins-spec#81 is not a
+      # normative part of the specification. Pinning the exact revision keeps
+      # this interoperability contract reproducible until a new revision is
+      # reviewed deliberately.
+      - name: Check out pinned Agent Plugins conformance corpus
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: Booyaka101/agent-plugins-conformance-kit
+          ref: 4d163c6281a9b4929f482f387efe340b4dc175a1
+          path: .ci/agent-plugins-conformance-kit
+          persist-credentials: false
+
+      - name: Build pinned conformance corpus
+        working-directory: .ci/agent-plugins-conformance-kit
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run build
+
+      - name: Run Agent Plugins loader conformance
+        run: |
+          go build -o "$RUNNER_TEMP/agentplugins-conformance-adapter" ./cli/cmd/agentplugins-conformance-adapter
+          node .ci/agent-plugins-conformance-kit/dist/cli.js verify
+          node .ci/agent-plugins-conformance-kit/dist/cli.js run \
+            --adapter "$RUNNER_TEMP/agentplugins-conformance-adapter" \
+            --strict-reporting \
+            --quiet \
+            --json "$RUNNER_TEMP/agentplugins-conformance.json"

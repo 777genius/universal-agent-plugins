@@ -1,0 +1,4 @@
+name: "release-profile"
+description: "Deployment profile used by local extension lifecycle checks."
+env_var: "RELEASE_PROFILE"
+sensitive: false

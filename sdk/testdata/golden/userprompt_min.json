@@ -1,0 +1,8 @@
+{
+  "session_id": "golden-session",
+  "transcript_path": "/tmp/transcript.jsonl",
+  "cwd": "/workspace",
+  "permission_mode": "default",
+  "hook_event_name": "UserPromptSubmit",
+  "prompt": "hello"
+}

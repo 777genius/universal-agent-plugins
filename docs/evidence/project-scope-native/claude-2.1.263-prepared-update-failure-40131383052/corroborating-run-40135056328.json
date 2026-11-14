@@ -1,0 +1,205 @@
+{
+  "run_id": 40135056328,
+  "commit": "4a1634f4906453eac0b87eddbcc54246226dcfdd",
+  "tree": "48eabec24a3b0122cf0ca8fc0c1be91fd4f40449",
+  "status_source": "Purpose-built job metadata; generic run metadata was stale queued",
+  "artifact_metadata_only": true,
+  "artifact_zip_downloaded_or_verified": false,
+  "artifacts": [
+    {
+      "id": 12577706269,
+      "name": "native-client-claude-darwin-arm64",
+      "size_in_bytes": 382151,
+      "url": "https://api.github.com/repos/777genius/universal-agent-plugins/actions/artifacts/12577706269",
+      "archive_download_url": "https://api.github.com/repos/777genius/universal-agent-plugins/actions/artifacts/12577706269/zip",
+      "expired": false,
+      "created_at": "2026-10-24T22:07:39Z",
+      "expires_at": "2026-11-07T22:07:37Z",
+      "updated_at": "2026-10-24T22:07:39Z",
+      "digest": "sha256:437617ca07d58004642aecb7118f53085e846d5646bf6ed0a318611e58b91a28",
+      "workflow_run": {
+        "id": 40135056328,
+        "repository_id": 1193031149,
+        "head_repository_id": 1193031149,
+        "head_branch": "feat/project-claude-completion",
+        "head_sha": "4a1634f4906453eac0b87eddbcc54246226dcfdd"
+      }
+    },
+    {
+      "id": 12577305767,
+      "name": "native-client-claude-windows-amd64",
+      "size_in_bytes": 396363,
+      "url": "https://api.github.com/repos/777genius/universal-agent-plugins/actions/artifacts/12577305767",
+      "archive_download_url": "https://api.github.com/repos/777genius/universal-agent-plugins/actions/artifacts/12577305767/zip",
+      "expired": false,
+      "created_at": "2026-10-24T22:04:35Z",
+      "expires_at": "2026-11-07T22:04:34Z",
+      "updated_at": "2026-10-24T22:04:35Z",
+      "digest": "sha256:df268258e3b4aef5292799f826fbe3f87d91fc9d2d01f5e0129bab9401654f74",
+      "workflow_run": {
+        "id": 40135056328,
+        "repository_id": 1193031149,
+        "head_repository_id": 1193031149,
+        "head_branch": "feat/project-claude-completion",
+        "head_sha": "4a1634f4906453eac0b87eddbcc54246226dcfdd"
+      }
+    }
+  ],
+  "jobs": [
+    {
+      "id": 120994877989,
+      "name": "claude runtime (darwin-arm64)",
+      "status": "completed",
+      "conclusion": "failure",
+      "run_id": 40135056328,
+      "logs_url": null,
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Verify native matrix safety and evidence gates",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "Build exact source and execute pinned native client in disposable fixture",
+          "status": "completed",
+          "conclusion": "failure",
+          "number": 5
+        },
+        {
+          "name": "Upload native evidence including failed stages",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6
+        },
+        {
+          "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 11
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 12
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13
+        }
+      ]
+    },
+    {
+      "id": 120994878222,
+      "name": "claude runtime (windows-amd64)",
+      "status": "completed",
+      "conclusion": "failure",
+      "run_id": 40135056328,
+      "logs_url": null,
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Verify native matrix safety and evidence gates",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "Build exact source and execute pinned native client in disposable fixture",
+          "status": "completed",
+          "conclusion": "failure",
+          "number": 5
+        },
+        {
+          "name": "Upload native evidence including failed stages",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6
+        },
+        {
+          "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 11
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 12
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13
+        }
+      ]
+    }
+  ],
+  "log_excerpts": [
+    {
+      "job_id": 120994877989,
+      "source": "GitHub connector decoded job logs",
+      "lines": [
+        "2026-10-24T22:06:02.7811610Z   ref: 4a1634f4906453eac0b87eddbcc54246226dcfdd",
+        "2026-10-24T22:07:37.2982440Z --- PASS: TestAgentpluginsClaudeNativeCommandsLifecycle (7.96s)",
+        "2026-10-24T22:07:37.2984930Z --- PASS: TestAgentpluginsClaudeNativeLifecycle (9.97s)",
+        "2026-10-24T22:07:37.2996550Z     agentplugins_claude_project_native_e2e_test.go:52: unchanged prepared update: mutated = true, want false",
+        "2026-10-24T22:07:37.2999280Z --- FAIL: TestAgentpluginsClaudeNativeProjectPreparedLifecycle (3.76s)",
+        "2026-10-24T22:07:37.3001530Z --- PASS: TestAgentpluginsClaudeNativeRuntimeLifecycle (10.01s)"
+      ]
+    },
+    {
+      "job_id": 120994878222,
+      "source": "GitHub connector decoded job logs",
+      "lines": [
+        "2026-10-24T22:01:52.6612372Z   ref: 4a1634f4906453eac0b87eddbcc54246226dcfdd",
+        "2026-10-24T22:04:34.6024289Z --- PASS: TestAgentpluginsClaudeNativeCommandsLifecycle (12.54s)",
+        "2026-10-24T22:04:34.6026711Z --- PASS: TestAgentpluginsClaudeNativeLifecycle (15.22s)",
+        "2026-10-24T22:04:34.6029859Z     agentplugins_claude_project_native_e2e_test.go:52: unchanged prepared update: mutated = true, want false",
+        "2026-10-24T22:04:34.6032374Z --- FAIL: TestAgentpluginsClaudeNativeProjectPreparedLifecycle (6.02s)",
+        "2026-10-24T22:04:34.6034391Z --- PASS: TestAgentpluginsClaudeNativeRuntimeLifecycle (18.16s)"
+      ]
+    }
+  ],
+  "qualification": "Both Claude jobs failed same unchanged_update mutation assertion; existing three user lifecycle tests passed; no run dispatched or retried"
+}

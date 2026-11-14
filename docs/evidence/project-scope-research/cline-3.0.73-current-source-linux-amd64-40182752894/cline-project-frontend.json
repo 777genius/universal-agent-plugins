@@ -1,0 +1,170 @@
+{
+  "schema_version": 1,
+  "client": "cline",
+  "version": "3.0.73",
+  "commands": [
+    {
+      "probe": "frontend-commit",
+      "argv": [
+        "/usr/bin/git",
+        "rev-parse",
+        "HEAD"
+      ],
+      "cwd": "/home/runner/work/universal-agent-plugins/universal-agent-plugins",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.003,
+      "stdout_file": "frontend-commit.stdout.log",
+      "stderr_file": "frontend-commit.stderr.log",
+      "stdout_bytes": 41,
+      "stderr_bytes": 0,
+      "stdout_sha256": "2d81485c35c9e316e0c4188ac08f5aea59afd93c277e54f6e1a9b72c828a587f",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "label": "frontend-commit",
+      "class": "frontend"
+    },
+    {
+      "probe": "frontend-tree",
+      "argv": [
+        "/usr/bin/git",
+        "rev-parse",
+        "HEAD^{tree}"
+      ],
+      "cwd": "/home/runner/work/universal-agent-plugins/universal-agent-plugins",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.003,
+      "stdout_file": "frontend-tree.stdout.log",
+      "stderr_file": "frontend-tree.stderr.log",
+      "stdout_bytes": 41,
+      "stderr_bytes": 0,
+      "stdout_sha256": "8f8ef0b6db96c890c9f6875f02077295ef45e0f5b64e8acfb7f9b79dfed77a76",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "label": "frontend-tree",
+      "class": "frontend"
+    },
+    {
+      "probe": "frontend-clean",
+      "argv": [
+        "/usr/bin/git",
+        "status",
+        "--porcelain",
+        "--untracked-files=normal"
+      ],
+      "cwd": "/home/runner/work/universal-agent-plugins/universal-agent-plugins",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.146,
+      "stdout_file": "frontend-clean.stdout.log",
+      "stderr_file": "frontend-clean.stderr.log",
+      "stdout_bytes": 0,
+      "stderr_bytes": 0,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "label": "frontend-clean",
+      "class": "frontend"
+    },
+    {
+      "probe": "frontend-go-version",
+      "argv": [
+        "/opt/hostedtoolcache/go/1.26.10/x64/bin/go",
+        "version"
+      ],
+      "cwd": "/home/runner/work/universal-agent-plugins/universal-agent-plugins",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.006,
+      "stdout_file": "frontend-go-version.stdout.log",
+      "stderr_file": "frontend-go-version.stderr.log",
+      "stdout_bytes": 33,
+      "stderr_bytes": 0,
+      "stdout_sha256": "4e0b213cba780f63b02f3ab9001ee61e4101d254e0af1a8205574c19dad0f93b",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "label": "frontend-go-version",
+      "class": "frontend"
+    },
+    {
+      "probe": "frontend-build",
+      "argv": [
+        "/opt/hostedtoolcache/go/1.26.10/x64/bin/go",
+        "test",
+        "-p=1",
+        "-c",
+        "-trimpath",
+        "-o",
+        "/home/runner/work/_temp/uap-cline-project-gate-soqc_vrr/bin/cline-project.test",
+        "./cmd/agentplugins"
+      ],
+      "cwd": "/home/runner/work/universal-agent-plugins/universal-agent-plugins/cli",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 52.757,
+      "stdout_file": "frontend-build.stdout.log",
+      "stderr_file": "frontend-build.stderr.log",
+      "stdout_bytes": 0,
+      "stderr_bytes": 1969,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "9eaeddd556e26dd46e884925eb95a5d3080b31f083dfccdaa1d5279c30898d30",
+      "label": "frontend-build",
+      "class": "frontend"
+    },
+    {
+      "probe": "frontend-gate",
+      "argv": [
+        "/home/runner/work/_temp/uap-cline-project-gate-soqc_vrr/bin/cline-project.test",
+        "-test.run=^TestClineCurrentSourceNativeProjectConfigLifecycle$",
+        "-test.count=1",
+        "-test.v",
+        "-test.timeout=370s"
+      ],
+      "cwd": "/home/runner/work/_temp/uap-cline-project-gate-soqc_vrr",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 25.771,
+      "stdout_file": "frontend-gate.stdout.log",
+      "stderr_file": "frontend-gate.stderr.log",
+      "stdout_bytes": 136,
+      "stderr_bytes": 0,
+      "stdout_sha256": "773c799d435b0a283299c80a8b536d9a08f07920b25c812b6eab063ebb27b89e",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "label": "frontend-gate",
+      "class": "frontend"
+    }
+  ],
+  "collection_complete": true,
+  "read_only_unique_marker_discovery_qualified": true,
+  "python_runtime": {
+    "version": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
+    "implementation": "cpython",
+    "executable": "/usr/bin/python3"
+  },
+  "isolation": "fresh task authority and bounded direct children; no OS sandbox or unrelated network claim",
+  "native_project_activation_qualified": false,
+  "native_mcp_initialization_qualified": false,
+  "native_runtime_qualified": false,
+  "native_model_use_qualified": false,
+  "native_ide_qualified": false,
+  "native_trust_qualified": false,
+  "same_name_active_isolation_qualified": false,
+  "native_skill_execution_qualified": false,
+  "native_authentication_qualified": false,
+  "native_session_policy_qualified": false,
+  "source_commit": "3e175de8cfa433f2e9427a47c4e1d7a8e0da5a77",
+  "source_tree": "72bc516716ae105baffb2dc5a7ec7b8d259f7b95",
+  "acquisition": {
+    "url": "https://registry.npmjs.org/@cline/cli-linux-x64/-/cli-linux-x64-3.0.73.tgz",
+    "version": "3.0.73",
+    "archive_integrity": "sha512-K+T94s0kPHLoMSANOJJ7KHb/etzYXZGQUbarKDKUPoZsvy4+oD1MAqYnZlfbKFM8tpnRQWouFngD9TB3mFqqeA==",
+    "archive_bytes": 50817241,
+    "binary_sha256": "1ff8841d17d4d83763134c193d414e4f7fcf2ef56af759e5ebbe96727fc2c8f7",
+    "binary_bytes": 132511200,
+    "installer_executed": false,
+    "archived_assets_materialized": false
+  },
+  "fixture_executable": {
+    "path": "/home/runner/work/_temp/uap-cline-project-gate-soqc_vrr/bin/cline-project.test",
+    "bytes": 34566945,
+    "sha256": "bb6348504817c187d15d5153d59ae440814ec664ec9241bf14d366ecbe425831"
+  },
+  "cleanup_complete": true
+}

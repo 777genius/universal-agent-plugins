@@ -1,0 +1,388 @@
+<script setup lang="ts">
+import { usePluginInstallSelection } from '~/composables/usePluginInstallSelection';
+import {
+  installTargets,
+  canonicalInstallTarget,
+  canonicalInstallTargets,
+  cliInstallTargets,
+  type InstallTargetID,
+} from '~/data/installTargets';
+import type { RegistryDiagnostic, RegistryPlugin } from '~/types/registry';
+import { pluginCommands } from '~/utils/commands';
+import { projectCatalogCommands, pinnedPiProjectCommands } from '~/utils/projectCatalogSource';
+import { isFullyRetired } from '~/utils/filter';
+import { vendorInstallSource } from '~/utils/registry';
+const { t } = useI18n();
+
+const props = defineProps<{ plugin: RegistryPlugin }>();
+const targets = defineModel<InstallTargetID[]>('targets', { required: true });
+const autoDetect = defineModel<boolean>('autoDetect', { required: true });
+const { asset, sourceUrl } = useSite();
+const { current, expired, published } = useDirectoryStatus();
+const isDiscovered = computed(() => props.plugin.trust_state === 'conformant_unreviewed');
+const canUseSource = computed(() => isDiscovered.value || current.value);
+const selection = usePluginInstallSelection(() => props.plugin, { targets, autoDetect });
+const {
+  scope,
+  targetDistributions,
+  targetAvailability,
+  guidedWebSelected,
+  pinnedPiSource,
+  pinnedPiSelected,
+  pinnedPiReleaseSource,
+  projectAvailable,
+  projectAutomatic,
+  updateTargets,
+  updateAutoDetect,
+  updateScope,
+} = selection;
+// A guided Web-only add prints setup instructions without creating an installation.
+const guidedWebOnly = computed(() => guidedWebSelected.value && targets.value.length === 1 && targets.value[0] === 'chatgptweb');
+const lifecycleTargets = computed(() => guidedWebSelected.value && !guidedWebOnly.value
+  ? cliInstallTargets(targets.value.filter(target => target !== 'chatgptweb'))
+  : undefined);
+const autoOption = computed(() => ({
+  label: t('registryUi.install.allInstalledAgentsRecommended'),
+  summary: t('registryUi.install.allInstalledAgents'),
+  description: t('registryUi.install.detectedWhenYouRunTheCommand'),
+}));
+const targetOptions = computed(() =>
+  installTargets.map((client) => ({
+    value: client.id,
+    label: client.name,
+    icon: asset(`client-icons/${client.icon}`),
+    // Keep invalid explicitly saved selections visible for recovery, but an
+    // auto-detected project must never make a stale Cursor placeholder selectable.
+    disabled: !targetAvailability.value.get(client.id) &&
+      !(client.id === 'pi' && pinnedPiSource.value && current.value) &&
+      (autoDetect.value || !targets.value.includes(client.id)),
+    description: (() => {
+      if (isDiscovered.value)
+        return props.plugin.discovery?.availability === 'available'
+          ? t('registryUi.card.checkedAgainBeforeInstallation')
+          : t('registryUi.card.unavailableAtItsIndexedSource');
+      if (!published.value)
+        return t('registryUi.install.unavailableReviewDataIsNotInstallationAuthority');
+      if (expired.value) return t('registryUi.install.unavailableSignedDirectorySnapshotExpired');
+      const source = targetDistributions.value.get(client.id);
+      const target = source?.targets.find(
+        (item) => item.client === canonicalInstallTarget(client.id),
+      );
+      if (client.id === 'chatgpt')
+        return target
+          ? t('registryUi.desktopGuide.description')
+          : t('registryUi.install.noActiveReleaseSupportsThisClient');
+      if (client.id === 'chatgptweb' && targetAvailability.value.get(client.id)?.kind === 'guided_web')
+        return t('registryUi.install.guidedChatgptSetup');
+      if (client.id === 'chatgptweb')
+        return target?.app_binding
+          ? t('registryUi.install.verifiedConnectionFinishSetupInChatgpt')
+          : t('registryUi.install.notAvailableForChatgpt');
+      if (client.id === 'pi' && !target)
+        return pinnedPiSource.value && current.value
+          ? t('registryUi.install.piPinnedProjectSource')
+          : t('registryUi.install.noCompatibleSignedRelease', { agent: client.name });
+      if (target) return t(`registryUi.delivery.${target.delivery}`);
+      return t('registryUi.install.noCompatibleSignedRelease', { agent: client.name });
+    })(),
+  })),
+);
+const showDesktopGuide = computed(() =>
+  scope.value === 'user' &&
+  !autoDetect.value &&
+  targets.value.includes('chatgpt') &&
+  canUseSource.value &&
+  props.plugin.installable &&
+  !isFullyRetired(props.plugin) &&
+  Boolean(targetDistributions.value.get('chatgpt')),
+);
+const commands = computed(() =>
+  (scope.value !== 'project' || !autoDetect.value || Boolean(projectAutomatic.value?.resolution.distribution)) &&
+  props.plugin.installable &&
+  props.plugin.discovery?.availability !== 'unavailable' &&
+  canUseSource.value &&
+  (autoDetect.value || (targets.value.length > 0 && hasCompleteSource.value))
+    ? (pinnedPiSelected.value
+        ? pinnedPiProjectCommands(props.plugin)
+        : scope.value === 'project'
+          ? projectCatalogCommands(props.plugin, autoDetect.value ? undefined : canonicalInstallTargets(targets.value))
+          : pluginCommands(props.plugin, autoDetect.value ? undefined : cliInstallTargets(targets.value),
+              undefined, 'user', lifecycleTargets.value)
+      )
+    : undefined,
+);
+function diagnosticText(
+  diagnostic: RegistryDiagnostic | undefined,
+  original: string | undefined,
+): string {
+  if (!diagnostic) return original ? t('registryUi.reason.external', { reason: original }) : '';
+  const reasons =
+    diagnostic.reasons
+      ?.map((reason) => diagnosticText(reason, undefined))
+      .join(t('registryUi.reason.separator')) ?? '';
+  if (diagnostic.code === 'reasons') return reasons;
+  const params: Record<string, string | number> = { ...diagnostic.params, reasons };
+  if (diagnostic.params?.status) params.status = t(`registryUi.status.${diagnostic.params.status}`);
+  return t(`registryUi.reason.${diagnostic.code}`, params);
+}
+const resolution = selection.resolution;
+const expectedSource = computed(() =>
+  canUseSource.value ? resolution.value.distribution : undefined,
+);
+const expectedSourceLabel = computed(() =>
+  expectedSource.value ? t(`registryUi.distribution.${expectedSource.value.kind}`) : '',
+);
+const hasCompleteSource = computed(() => Boolean(expectedSource.value || pinnedPiSelected.value || guidedWebSelected.value));
+const pinnedPiProvenanceURL = computed(() => {
+  const source = pinnedPiReleaseSource.value;
+  if (!source?.revision) return '';
+  const path = source.path ? `/${source.path.split('/').map(encodeURIComponent).join('/')}` : '';
+  return `https://github.com/${source.repository}/tree/${source.revision}${path}`;
+});
+const selectedTargets = computed(
+  () =>
+    expectedSource.value?.targets.filter((target) =>
+      canonicalInstallTargets(targets.value).includes(target.client)) ?? [],
+);
+const chatgptSelected = computed(
+  () =>
+    !autoDetect.value &&
+    (guidedWebSelected.value || selectedTargets.value.some((target) => target.client === 'chatgpt' && target.app_binding)),
+);
+const unavailableDiscoveryReason = computed(() => {
+  if (props.plugin.discovery?.availability === 'unavailable')
+    return t('registryUi.install.thisPackageIsNoLongerAvailableFromItsSource');
+  if (isFullyRetired(props.plugin))
+    return t(
+      'registryUi.install.thisProductIsRetiredNewInstallsAreUnavailableAndExistingInstallsCanOnlyBeRemoved',
+    );
+  if (props.plugin.installable) return '';
+  if (!props.plugin.components.length)
+    return t(
+      'registryUi.install.weFoundThisProjectButItDoesnTIncludeAnyToolsTheInstallerCanAddYet',
+    );
+  return t('registryUi.install.thisPackageDoesNotSupportAnyOfTheAgentsAvailableInTheInstallerYet');
+});
+const vendorInstall = computed(() =>
+  unavailableDiscoveryReason.value ? vendorInstallSource(props.plugin) : undefined,
+);
+</script>
+
+<template>
+  <aside class="install-panel" aria-labelledby="install-title">
+    <div class="install-panel__heading">
+      <div>
+        <p class="eyebrow">{{ t('registryUi.install.installer') }}</p>
+        <h2 id="install-title">
+          {{
+            vendorInstall
+              ? t('registryUi.install.vendorInstallerHeading')
+              : unavailableDiscoveryReason
+                ? t('registryUi.install.notReadyToInstall')
+                : t('registryUi.install.useWithYourAgent')
+          }}
+        </h2>
+      </div>
+      <a
+        v-if="!unavailableDiscoveryReason"
+        class="install-panel__cli-link"
+        href="https://github.com/777genius/universal-agent-plugins#quick-start"
+        target="_blank"
+        rel="noreferrer"
+        >{{ t('registryUi.install.runWithNpx') }}</a
+      >
+    </div>
+    <div v-if="vendorInstall" class="install-panel__empty" role="status">
+      <span class="install-panel__empty-icon" aria-hidden="true">i</span>
+      <div>
+        <p>{{ t('registryUi.install.vendorInstallerBody') }}</p>
+        <CommandSnippet
+          :label="t('registryUi.install.vendorCommandLabel')"
+          kind="add"
+          :command="vendorInstall.command"
+        />
+        <a :href="vendorInstall.url" target="_blank" rel="noreferrer"
+          >{{ t('registryUi.install.vendorInstallerCta') }} ↗</a
+        >
+      </div>
+    </div>
+    <div v-else-if="unavailableDiscoveryReason" class="install-panel__empty" role="status">
+      <span class="install-panel__empty-icon" aria-hidden="true">i</span>
+      <div>
+        <h3>{{ t('registryUi.install.thisPluginIsNotInstallableYet') }}</h3>
+        <p>{{ unavailableDiscoveryReason }}</p>
+        <a :href="sourceUrl(plugin)" target="_blank" rel="noreferrer">{{
+          t('registryUi.install.viewPackageSource')
+        }}</a>
+      </div>
+    </div>
+    <div v-else-if="canUseSource" class="command-stack">
+      <InstallScopeSelect
+        :model-value="scope"
+        :project-available="projectAvailable"
+        @update:model-value="updateScope"
+      />
+      <div class="install-command-row">
+        <div class="target-select">
+          <span>{{ t('registryUi.install.agents') }}</span
+          ><AppMultiSelect
+            :model-value="targets"
+            :auto-selected="autoDetect"
+            :auto-option="autoOption"
+            :label="t('registryUi.install.chooseTargetAgents')"
+            :options="targetOptions"
+            full-width
+            @update:auto-selected="updateAutoDetect"
+            @update:model-value="updateTargets"
+          />
+        </div>
+        <p v-if="pinnedPiSelected && commands" class="install-panel__notice" role="status">
+          {{ t('registryUi.install.piPinnedProjectSource') }}
+          <a :href="pinnedPiProvenanceURL" target="_blank" rel="noreferrer">
+            {{ t('registryUi.install.viewPackageSource') }}
+          </a>
+        </p>
+        <CommandSnippet
+          v-if="commands"
+          :label="t('registryUi.install.add')"
+          kind="add"
+          :command="commands.add"
+        />
+      </div>
+      <p v-if="guidedWebSelected && commands" class="install-panel__notice" role="status">
+        {{ t('registryUi.install.guidedChatgptSetup') }}
+      </p>
+      <ChatGPTDesktopGuide v-if="showDesktopGuide" />
+      <InstallOutcome
+        v-if="commands && !autoDetect && expectedSource"
+        :distribution="expectedSource"
+        :targets="targets"
+        :scope="scope"
+      />
+      <p v-if="commands?.saveMode && !guidedWebOnly" class="install-panel__notice">
+        {{
+          t(
+            `registryUi.install.dependencySaving.${scope === 'project' && commands.saveMode === 'saved' ? 'projectSaved' : commands.saveMode}`,
+          )
+        }}
+      </p>
+      <CommandSnippet
+        v-if="commands && !guidedWebOnly"
+        :label="t('registryUi.install.update')"
+        kind="update"
+        :command="commands.update"
+      />
+      <CommandSnippet
+        v-if="commands && !guidedWebOnly"
+        :label="t('registryUi.install.repair')"
+        kind="repair"
+        :command="commands.repair"
+      />
+      <CommandSnippet
+        v-if="commands && !guidedWebOnly"
+        :label="t('registryUi.install.remove')"
+        kind="remove"
+        :command="commands.remove"
+      />
+    </div>
+    <p
+      v-if="!isDiscovered && !unavailableDiscoveryReason && expired"
+      class="install-panel__notice"
+      role="status"
+    >
+      <strong>{{ t('registryUi.install.commandsUnavailableStaleDirectory') }}</strong>
+      {{
+        t(
+          'registryUi.install.thisSignedSnapshotHasExpiredBrowseItsHistoryThenReturnAfterAFreshSnapshotIsPublished',
+        )
+      }}
+    </p>
+    <p
+      v-else-if="!isDiscovered && !unavailableDiscoveryReason && !published"
+      class="install-panel__notice"
+      role="status"
+    >
+      <strong>{{ t('registryUi.install.commandsUnavailableInReviewPreview') }}</strong>
+      {{
+        t(
+          'registryUi.install.unresolvedDataIsForReviewOnlyProductionCommandsRequireAPublishedSignedDirectorySnapshot',
+        )
+      }}
+    </p>
+    <p
+      v-else-if="!unavailableDiscoveryReason && !autoDetect && !hasCompleteSource"
+      class="install-panel__notice"
+      role="status"
+    >
+      <strong>{{ t('registryUi.install.commandsUnavailable') }}</strong>
+      {{
+        scope === 'project'
+          ? t('registryUi.install.scope.selectionUnavailable')
+          : diagnosticText(resolution.unavailable_diagnostic, resolution.unavailable_reason)
+      }}
+    </p>
+    <p v-if="autoDetect && commands" class="install-panel__notice">
+      <strong>{{ t('registryUi.install.automaticDetection') }}</strong>
+      {{
+        t(
+          'registryUi.install.theCliChecksThisPluginAgainstInstalledAgentsSkipsIncompatibleOnesAndLetsYouConfirmTheTargetsChatgptIsIncludedOnlyWhenThisPluginProvidesAVerifiedConnection',
+        )
+      }}
+    </p>
+    <p v-if="chatgptSelected" class="install-panel__notice">
+      <strong>{{ t('registryUi.install.oneStepRemainsInChatgpt') }}</strong>
+      {{ t('registryUi.install.chatgptFinish', { name: plugin.display_name }) }}
+    </p>
+    <p
+      v-if="
+        !unavailableDiscoveryReason && !autoDetect && resolution.fallback_reason && canUseSource
+      "
+      class="install-panel__notice"
+    >
+      <strong>{{
+        t('registryUi.install.expectedFallback', {
+          source: expectedSourceLabel,
+        })
+      }}</strong>
+      {{ diagnosticText(resolution.fallback_diagnostic, resolution.fallback_reason) }}
+    </p>
+    <p
+      v-else-if="!unavailableDiscoveryReason && !autoDetect && !hasCompleteSource && canUseSource"
+      class="install-panel__notice"
+    >
+      <strong>{{ t('registryUi.install.noSingleSourceServesThisTargetSet') }}</strong>
+      {{
+        t(
+          'registryUi.install.theCliWillFailBeforeMutationAndSuggestCompatibleTargetSourceCombinationsItNeverMixesDistributionsAcrossClients',
+        )
+      }}
+    </p>
+    <p v-if="commands" class="install-panel__footnote">
+      {{
+        t(
+          'registryUi.install.theCliChecksEverySelectedAgentBeforeChangingFilesAndShowsAnySignInOrActivationStepOauthCredentialsStayWithTheAgent',
+        )
+      }}
+    </p>
+  </aside>
+</template>
+
+<style scoped>
+.install-panel {
+  min-width: 0;
+  width: 100%;
+}
+
+.target-select :deep(.app-multiselect__trigger) {
+  padding-block: 10px;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.target-select :deep(.app-multiselect__value > span:last-child) {
+  overflow: visible;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+</style>

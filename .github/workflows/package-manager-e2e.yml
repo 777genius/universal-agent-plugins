@@ -1,0 +1,360 @@
+name: Package manager E2E
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'cli/**'
+      - 'install/integrationctl/**'
+      - 'repotests/agentplugins_codex_claude_directory_plugin_native_e2e_test.go'
+      - 'repotests/agentplugins_codex_directory_inventory_native_test.go'
+      - 'sdk/**'
+      - 'go.work*'
+      - '**/go.mod'
+      - '**/go.sum'
+      - 'scripts/package-manager-e2e.py'
+      - 'scripts/package_manager_binary.py'
+      - 'scripts/test_package_manager_e2e.py'
+      - 'scripts/test_package_manager_ci_policy.py'
+      - '.github/workflows/agentplugins-native-clients.yml'
+      - '.github/workflows/package-manager-resilience.yml'
+      - '.github/workflows/package-manager-e2e.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'cli/**'
+      - 'install/integrationctl/**'
+      - 'repotests/agentplugins_codex_claude_directory_plugin_native_e2e_test.go'
+      - 'repotests/agentplugins_codex_directory_inventory_native_test.go'
+      - 'sdk/**'
+      - 'go.work*'
+      - '**/go.mod'
+      - '**/go.sum'
+      - 'scripts/package-manager-e2e.py'
+      - 'scripts/package_manager_binary.py'
+      - 'scripts/test_package_manager_e2e.py'
+      - 'scripts/test_package_manager_ci_policy.py'
+      - '.github/workflows/agentplugins-native-clients.yml'
+      - '.github/workflows/package-manager-resilience.yml'
+      - '.github/workflows/package-manager-e2e.yml'
+  # Full real package-manager Project/User, update, repair and cold-restore
+  # qualification on six OSs, without adding ARM runners to every ordinary PR.
+  schedule:
+    - cron: '41 5 * * 4'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: package-manager-e2e-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+
+jobs:
+  # Drafts get cheap evidence validation; ready PRs and main get real E2E.
+  draft-preflight:
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft }}
+    name: draft evidence preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.0.0
+        with:
+          python-version: '3.12'
+      - name: Check evidence rejection cases
+        run: python -B -m unittest discover -s scripts -p test_package_manager_e2e.py
+      - name: Check CI policy rejection cases
+        run: python -B -m unittest discover -s scripts -p test_package_manager_ci_policy.py
+
+  package-manager:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    name: package-manager (${{ matrix.os }})
+    # Real Git containment requires a conventional procfs on Linux. This focused
+    # qualification uses disposable hosted runners, including both Mac architectures.
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        # The full source-built graph/repair catalog already covers 4 OSs
+        # on relevant PRs. Weekly/manual add both ARM64 hosted runners.
+        os: ${{ fromJSON((github.event_name != 'pull_request') && '["ubuntu-24.04","ubuntu-24.04-arm","windows-2025","windows-11-arm","macos-15","macos-15-intel"]' || '["ubuntu-24.04","windows-2025","macos-15","macos-15-intel"]') }}
+    env:
+      GOMAXPROCS: '3'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        env:
+          GIT_CONFIG_COUNT: '1'
+          GIT_CONFIG_KEY_0: core.autocrlf
+          GIT_CONFIG_VALUE_0: 'false'
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.11'
+          cache: true
+          cache-dependency-path: '**/go.sum'
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.0.0
+        with:
+          python-version: '3.12'
+      - name: Check evidence rejection cases
+        run: python -B -m unittest discover -s scripts -p test_package_manager_e2e.py
+      - name: Check CI policy rejection cases
+        run: python -B -m unittest discover -s scripts -p test_package_manager_ci_policy.py
+      - name: Verify native failure boundaries, agreement files and ownership refusals
+        shell: bash
+        run: |
+          set -euo pipefail
+          events="$RUNNER_TEMP/uap-agreement-boundary.json"
+          errors="$RUNNER_TEMP/uap-agreement-boundary.stderr"
+          : > "$events"
+          : > "$errors"
+          (
+            cd install/integrationctl
+            go test -count=1 -timeout=5m -json ./adapters/pathpolicy -run '^TestValidateLeafID$'
+          ) >> "$events" 2>> "$errors"
+          go test -count=1 -timeout=8m -json ./cli/internal/agentpluginscli \
+            -run '^(TestDependencyAgreementOversizedBytesFailClosed|TestDependencyAgreementDiskBoundaryRejectsNonRegularAndOversized|TestDependencyAgreementReaderRejectsSymlinkAndKeepsTarget|TestDependencyIntentFilesRejectOversizedWriteWithoutMutation|TestSkillsReviewForeignDestinationSafeGuidance|TestSkillsReviewManagedSkillChanged|TestDependencyCandidateSizePreflightProtectsManifestAndLock|TestDependencyManagementRecoveryReaderIsBounded|TestGeneratedOversizedLockRefusesBeforeStorePublication)$' >> "$events" 2>> "$errors"
+          (
+            cd install/integrationctl/agentplugins
+            go test -count=1 -timeout=8m -json ./providers ./clients/kiro ./clients/shared ./transaction \
+              -run '^(TestDigestSkillDirectoryRequiresRealDirectoryRoot|TestGeminiStagingFailureCleansPrivateTransactionAndAllowsRetry|TestGeminiLateNativeSkillDriftRefusesBeforeRename|TestClineLateNativeSkillDriftRefusesBeforeRename|TestKiroNativeBackupRejectsEditDuringRenameWithoutDeletingUserBytes|TestDirectoryVerificationFailurePreservesForeignBytesAndOriginalError|TestRemovalApplyFailureReportsRollbackFailureAndPreservesBackup)$'
+          ) 2>> "$errors" | tee -a "$events"
+          python - "$events" <<'PY'
+          import json
+          import sys
+          with open(sys.argv[1], encoding="utf-8") as stream:
+              events = [json.loads(line) for line in stream if line.strip()]
+          tests = {
+              "TestDigestSkillDirectoryRequiresRealDirectoryRoot",
+              "TestGeminiStagingFailureCleansPrivateTransactionAndAllowsRetry",
+              "TestGeminiLateNativeSkillDriftRefusesBeforeRename",
+              "TestClineLateNativeSkillDriftRefusesBeforeRename",
+              "TestKiroNativeBackupRejectsEditDuringRenameWithoutDeletingUserBytes",
+              "TestDirectoryVerificationFailurePreservesForeignBytesAndOriginalError",
+              "TestRemovalApplyFailureReportsRollbackFailureAndPreservesBackup",
+              "TestValidateLeafID",
+              "TestDependencyAgreementOversizedBytesFailClosed",
+              "TestDependencyAgreementDiskBoundaryRejectsNonRegularAndOversized",
+              "TestDependencyAgreementReaderRejectsSymlinkAndKeepsTarget",
+              "TestDependencyIntentFilesRejectOversizedWriteWithoutMutation",
+              "TestSkillsReviewForeignDestinationSafeGuidance",
+              "TestSkillsReviewManagedSkillChanged",
+              "TestDependencyCandidateSizePreflightProtectsManifestAndLock",
+              "TestDependencyManagementRecoveryReaderIsBounded",
+              "TestGeneratedOversizedLockRefusesBeforeStorePublication",
+          }
+          for name in sorted(tests):
+              actions = {item.get("Action") for item in events if item.get("Test") == name}
+              if not {"run", "pass"}.issubset(actions) or actions.intersection({"fail", "skip"}):
+                  raise SystemExit(f"{name} did not run and pass: {sorted(actions)}")
+              package = next(item["Package"] for item in events
+                             if item.get("Test") == name and item.get("Action") == "pass")
+              if not any(item.get("Package") == package and item.get("Test") is None
+                         and item.get("Action") == "pass" for item in events):
+                  raise SystemExit(f"Go package {package} failed")
+          if any(item.get("Action") in {"fail", "skip"} for item in events):
+              raise SystemExit("agreement boundary suite failed or skipped")
+          print("Seventeen critical policy and native ownership tests ran and passed; no false-green or skips")
+          PY
+      - name: Execute the full portable catalog
+        run: python -B scripts/package-manager-e2e.py --output "${{ runner.temp }}/package-manager-e2e"
+      - name: Verify Win32 Unicode aliases across ZIP, TAR, source and snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          events="$RUNNER_TEMP/uap-unicode-tests.json"
+          : > "$events"
+          (
+            cd install/integrationctl
+            go test -count=1 -timeout=5m -json ./adapters/pathpolicy -run '^TestPortableSegmentsRejectSuperscriptDeviceAliases$'
+          ) >> "$events"
+          (
+            cd install/integrationctl/agentplugins
+            go test -count=1 -timeout=5m -json \
+              ./adapters/packagedigest ./adapters/sourceacquisition ./sourcespec \
+              -run '^(TestArchiveRefusesUnicodeDeviceAliasesAcrossFormats|TestArchiveRetainsValidUnicodeOutsideDeviceNamespace|TestSnapshotPathValidationRejectsSuperscriptDevices|TestGitAndArchiveSubpathRejectWindowsUnicodeDeviceNames)$'
+          ) >> "$events"
+          python - "$events" <<'PY'
+          import json
+          import sys
+          with open(sys.argv[1], encoding="utf-8") as fh:
+              events = [json.loads(line) for line in fh if line.strip()]
+          tests = {
+              "TestPortableSegmentsRejectSuperscriptDeviceAliases",
+              "TestArchiveRefusesUnicodeDeviceAliasesAcrossFormats",
+              "TestArchiveRetainsValidUnicodeOutsideDeviceNamespace",
+              "TestSnapshotPathValidationRejectsSuperscriptDevices",
+              "TestGitAndArchiveSubpathRejectWindowsUnicodeDeviceNames",
+          }
+          for name in sorted(tests):
+              matched = [e for e in events if e.get("Test") == name]
+              actions = {e.get("Action") for e in matched}
+              if not {"run", "pass"}.issubset(actions) or actions.intersection({"fail", "skip"}):
+                  raise SystemExit(f"{name} lacks real run/pass: {sorted(actions)}")
+              package = next(e["Package"] for e in matched if e.get("Action") == "pass")
+              if not any(e.get("Package") == package and e.get("Test") is None and e.get("Action") == "pass" for e in events):
+                  raise SystemExit(f"Go package {package} did not pass")
+          if any(e.get("Action") in ("fail", "skip") for e in events):
+              raise SystemExit("A Unicode admission test failed or skipped")
+          print("All five tests truly ran and passed in passing Go packages with no skips")
+          PY
+      - name: Verify Windows held readers and bounded metadata admission
+        if: matrix.os == 'windows-2025'
+        shell: bash
+        run: |
+          set -euo pipefail
+          events="$RUNNER_TEMP/package-manager-e2e/windows-readers.stdout"
+          go test -count=1 -timeout=5m -json ./cli/internal/agentpluginscli \
+            -run '^TestDependencyAgreementWindowsHeldReaderAllowsAtomicPublication$' > "$events"
+          go test -count=1 -timeout=5m -json ./install/integrationctl/adapters/atomicfile \
+            -run '^(TestAdmittedWindowsReader(PreservesDeleteSharing|UnicodeLongPath)|TestWindowsRegularRead(PathPreservesNamespaces|DedupAndUnsafeAttributes|AvailabilityBeforeTypeAdmission))$' >> "$events"
+          python - "$events" <<'PY'
+          import json, sys
+          with open(sys.argv[1], encoding="utf-8") as stream:
+              events = [json.loads(line) for line in stream if line.strip()]
+          tests = (
+              "TestDependencyAgreementWindowsHeldReaderAllowsAtomicPublication",
+              "TestAdmittedWindowsReaderPreservesDeleteSharing",
+              "TestAdmittedWindowsReaderUnicodeLongPath",
+              "TestWindowsRegularReadPathPreservesNamespaces",
+              "TestWindowsRegularReadDedupAndUnsafeAttributes",
+              "TestWindowsRegularReadAvailabilityBeforeTypeAdmission",
+          )
+          for name in tests:
+              actions = {e.get("Action") for e in events if e.get("Test") == name}
+              if not {"run", "pass"}.issubset(actions) or actions.intersection({"fail", "skip"}):
+                  raise SystemExit(f"Windows reader test not qualified: {name}: {actions}")
+              package = next(e["Package"] for e in events if e.get("Test") == name and e.get("Action") == "pass")
+              if not any(e.get("Package") == package and e.get("Test") is None and e.get("Action") == "pass" for e in events):
+                  raise SystemExit(f"Windows reader package did not pass: {package}")
+          if any(e.get("Action") in {"fail", "skip"} for e in events):
+              raise SystemExit("Windows reader suite failed or skipped")
+          print("All six Windows reader and atomic-publication tests ran and passed")
+          PY
+      - name: Verify native Git policy with real Git on each OS
+        working-directory: install/integrationctl/agentplugins
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -count=1 -timeout=3m -json ./adapters/sourceacquisition \
+            -run '^TestNativeGit(OptionsRetainMandatoryHardening|HardeningWinsOverInheritedGitSettings)$' | python -c '
+          import json, sys
+          events = [json.loads(line) for line in sys.stdin if line.strip()]
+          tests = ("TestNativeGitOptionsRetainMandatoryHardening", "TestNativeGitHardeningWinsOverInheritedGitSettings")
+          for name in tests:
+              actions = [e.get("Action") for e in events if e.get("Test") == name]
+              if "run" not in actions or "pass" not in actions or "skip" in actions or "fail" in actions:
+                  raise SystemExit(f"Git hardening test did not run/pass: {name}: {actions}")
+          if not any(e.get("Action") == "pass" and not e.get("Test") for e in events):
+              raise SystemExit("Native Git package did not pass")
+          print("Native Git bare-repository and noninteractive-credential policies verified")
+          '
+      - name: Verify project lock isolation and typed foreign Skill refusal through public CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -count=1 -timeout=8m -json ./cli/cmd/agentplugins \
+            -run '^Test(ProjectDependencyLockNeverCrossesUserProjectScopeE2E|ProjectCodexForeignSkillCollisionReportsTypedCLIRefusal|PublicCLICrashAfterDurablePhaseRecovery)$' | python -c '
+          import json, sys
+          events = [json.loads(line) for line in sys.stdin if line.strip()]
+          names = ("TestProjectDependencyLockNeverCrossesUserProjectScopeE2E", "TestProjectCodexForeignSkillCollisionReportsTypedCLIRefusal", "TestPublicCLICrashAfterDurablePhaseRecovery")
+          pkg_pass = any(e.get("Action") == "pass" and not e.get("Test") for e in events)
+          for name in names:
+              actions = [e.get("Action") for e in events if e.get("Test") == name]
+              if "run" not in actions or "pass" not in actions or "skip" in actions or "fail" in actions or not pkg_pass:
+                  for e in events:
+                      if e.get("Action") == "output":
+                          sys.stderr.write(e.get("Output", ""))
+                  raise SystemExit(f"public CLI E2E did not run/pass: {name}: {actions}, package_pass={pkg_pass}")
+          print("Scope isolation, foreign Codex refusal and cold CLI crash recovery ran and passed")
+          '
+      - name: Verify actual process crash and durable transaction recovery
+        working-directory: install/integrationctl/agentplugins
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -json -count=1 -timeout=5m ./transaction -run '^TestDirectoryProcessCrashAfter(Activation|StateCommit)Recovers$' | python -c '
+          import json, sys
+          events = [json.loads(line) for line in sys.stdin if line.strip()]
+          pkg = "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
+          names = ("TestDirectoryProcessCrashAfterActivationRecovers", "TestDirectoryProcessCrashAfterStateCommitRecovers")
+          def matches(name, action):
+              return any(e.get("Package") == pkg and e.get("Test") == name and e.get("Action") == action for e in events)
+          package_pass = any(e.get("Package") == pkg and e.get("Action") == "pass" and not e.get("Test") for e in events)
+          for name in names:
+              if not package_pass or not matches(name, "run") or not matches(name, "pass") or matches(name, "fail") or matches(name, "skip"):
+                  for e in events:
+                      if e.get("Action") == "output" and e.get("Package") == pkg:
+                          sys.stderr.write(e.get("Output", ""))
+                  raise SystemExit("Exact OS process crash/recovery did not run and pass: " + name)
+          print("Both real OS crash/recovery tests ran and passed; no skips or failures")
+          '
+      - name: Verify immutable Git EOL bytes across platforms
+        working-directory: install/integrationctl/agentplugins
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -json -count=1 -timeout=5m ./adapters/sourceacquisition -run TestImmutableGitCheckoutStableWithTextAutoAndExplicitEOL | python -c '
+          import json, sys
+          events = [json.loads(line) for line in sys.stdin if line.strip()]
+          pkg = "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
+          name = "TestImmutableGitCheckoutStableWithTextAutoAndExplicitEOL"
+          matches = lambda action, test: any(
+              e.get("Package") == pkg and e.get("Test") == test and e.get("Action") == action
+              for e in events
+          )
+          package_pass = any(
+              e.get("Package") == pkg and e.get("Action") == "pass" and "Test" not in e
+              for e in events
+          )
+          ok = matches("run", name) and matches("pass", name) and package_pass and not any(
+              matches(action, name) for action in ("fail", "skip")
+          )
+          if not ok:
+              for e in events:
+                  if e.get("Action") == "output" and e.get("Package") == pkg:
+                      sys.stderr.write(e.get("Output", ""))
+              print("Exact Git EOL oracle did not run and pass.", file=sys.stderr)
+              sys.exit(1)
+          print("Confirmed exact Go run+pass events, package pass, no skip: " + name)
+          '
+      - name: Preserve original agreement boundary streams
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          import sys
+          temporary = Path(os.environ["RUNNER_TEMP"])
+          destination = temporary / "package-manager-e2e"
+          for original, retained in (("uap-agreement-boundary.json", "agreement-boundary.stdout"),
+                                     ("uap-agreement-boundary.stderr", "agreement-boundary.stderr")):
+              source = temporary / original
+              if not source.exists():
+                  continue
+              with source.open("rb") as stream:
+                  body = stream.read(8 * 1024 * 1024 + 1)
+              if len(body) > 8 * 1024 * 1024:
+                  raise SystemExit("Agreement boundary stream exceeds the 8 MiB evidence limit: " + original)
+              destination.mkdir(parents=True, exist_ok=True)
+              with (destination / retained).open("xb") as stream:
+                  stream.write(body)
+              if original.endswith(".stderr"):
+                  sys.stderr.buffer.write(body)
+          PY
+      - name: Retain execution evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: package-manager-e2e-${{ matrix.os }}-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/package-manager-e2e/report.json
+            ${{ runner.temp }}/package-manager-e2e/*.stdout
+            ${{ runner.temp }}/package-manager-e2e/*.stderr
+          if-no-files-found: error
+          retention-days: 14

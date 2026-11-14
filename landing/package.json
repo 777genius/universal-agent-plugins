@@ -1,0 +1,58 @@
+{
+  "name": "plugin-kit-ai-landing",
+  "private": true,
+  "type": "module",
+  "imports": {
+    "#internal/nuxt/paths": "./utils/nuxtInternalPaths.js"
+  },
+  "packageManager": "pnpm@12.3.4",
+  "scripts": {
+    "dev": "node ./scripts/prepare-webp-assets.mjs && nuxt dev",
+    "build": "node ./scripts/prepare-webp-assets.mjs && node ./scripts/render-social-image.mjs && nuxt build",
+    "generate": "node ./scripts/prepare-webp-assets.mjs && node ./scripts/render-social-image.mjs && nuxt generate",
+    "build:pages": "node ./scripts/build-pages-artifact.mjs",
+    "check:i18n": "node --experimental-strip-types ./scripts/check-i18n.mjs",
+    "test:artifact": "node --experimental-strip-types --test ./tests/browser/artifact-*.mjs",
+    "check:pages": "node --experimental-strip-types ./scripts/check-pages-artifact.mjs",
+    "preview": "nuxt preview",
+    "test:registry": "node --test --experimental-strip-types tests/*.test.ts tests/locked-advisories.test.mjs",
+    "check:advisories": "node ./scripts/check-locked-advisories.mjs",
+    "test:browser": "playwright test",
+    "lint": "eslint \"app.vue\" \"error.vue\" \"components/**/*.{vue,ts}\" \"composables/**/*.{ts,js}\" \"data/**/*.{ts,js}\" \"layouts/**/*.vue\" \"pages/**/*.vue\" \"plugins/**/*.{ts,js}\" \"server/**/*.{ts,js}\" \"stores/**/*.{ts,js}\" \"types/**/*.ts\" \"utils/**/*.{ts,js}\" \"nuxt.config.ts\" --no-error-on-unmatched-pattern",
+    "lint:fix": "pnpm run lint -- --fix",
+    "format": "prettier --check app.vue error.vue assets/styles/main.scss components composables content data features layouts i18n pages plugins server stores types utils nuxt.config.ts package.json",
+    "format:fix": "prettier --write app.vue error.vue assets/styles/main.scss components composables content data features layouts i18n pages plugins server stores types utils nuxt.config.ts package.json"
+  },
+  "dependencies": {
+    "@mdi/js": "^7.4.47",
+    "@nuxtjs/i18n": "10.6.0",
+    "@pinia/nuxt": "^0.11.3",
+    "@vueuse/nuxt": "^10.11.1",
+    "bowser": "2.14.1",
+    "nuxt": "^3.21.10",
+    "nuxt-icon": "^0.6.10",
+    "pinia": "^3.0.4",
+    "reka-ui": "2.10.4",
+    "swiper": "^12.2.0",
+    "vue": "^3.5.40",
+    "vue-i18n": "11.4.14",
+    "vue-router": "^4.6.4",
+    "vuetify": "^3.12.11",
+    "markdown-it": "14.3.3"
+  },
+  "devDependencies": {
+    "@mdi/font": "^7.4.47",
+    "@nuxt/eslint": "^1.16.0",
+    "@playwright/test": "1.62.1",
+    "@types/node": "22.20.1",
+    "@typescript-eslint/parser": "^8.65.0",
+    "eslint": "^9.39.5",
+    "prettier": "^3.9.6",
+    "sass": "^1.102.0",
+    "serve": "14.2.6",
+    "typescript": "^6.0.3",
+    "vite-plugin-vuetify": "^2.1.3",
+    "vue-tsc": "3.3.9",
+    "@types/markdown-it": "14.1.2"
+  }
+}

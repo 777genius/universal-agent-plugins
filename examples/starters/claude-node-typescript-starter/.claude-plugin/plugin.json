@@ -1,0 +1,7 @@
+{
+  "description": "plugin-kit-ai plugin",
+  "name": "claude-node-typescript-starter",
+  "skills": "./skills/",
+  "userConfig": {},
+  "version": "0.1.0"
+}

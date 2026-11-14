@@ -1,0 +1,254 @@
+name: Remaining client live installation audit
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - '.github/workflows/live-install-remaining-clients.yml'
+      - 'scripts/live-install-audit.py'
+      - 'scripts/test_live_install_audit_env.py'
+      - 'tests/live-install/fixtures.json'
+      - 'install/integrationctl/agentplugins/**'
+      - 'cli/cmd/agentplugins/**'
+      - 'cli/internal/agentpluginscli/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # pull_request runs check out a synthetic merge commit; retain the source branch HEAD too.
+  AUDIT_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
+
+concurrency:
+  group: remaining-client-audit-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  remaining-client-install:
+    name: Full 30 ${{ matrix.kind }} / ${{ matrix.target }} (report even if blocked)
+    # Linux hosted runners do not delegate cgroup v2 for Kiro's required
+    # duplex MCP containment. Test the real native client on macOS instead
+    # of weakening that security guard or labelling a blocked Linux run green.
+    runs-on: ${{ matrix.target == 'kiro' && 'macos-15' || 'ubuntu-24.04' }}
+    timeout-minutes: 80
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        target: [cursor, kiro, windsurf, grok, vscode, chatgpt]
+        kind: [plugin, skill]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.11'
+          cache: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+      - name: Refuse inherited real client profile overrides before live cases
+        run: python3 -m unittest discover -s scripts -p 'test_live_install_audit_env.py'
+      - name: Acquire actual public vendor client where a headless Linux build exists
+        id: vendor-install
+        # Preserve a complete explicit client-unavailable record even when a
+        # genuine vendor installer needs login (e.g. Devin). The audit itself
+        # still exits nonzero: a vendor failure cannot be a successful install.
+        continue-on-error: true
+        env:
+          TARGET: ${{ matrix.target }}
+          KIND: ${{ matrix.kind }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/vendor-proof" "$HOME/.local/bin"
+          # Runner toolchain must precede any vendor-controlled executable.
+          export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$HOME/.local/bin"
+          case "$TARGET" in
+            cursor)
+              if [[ "$KIND" == skill ]]; then
+                # Homebrew/homebrew-cask Casks/c/cursor-cli.rb @ 5815fd3716b83066412887902c6dd4bf92e4d7ad
+                URL="https://downloads.cursor.com/lab/2026.10.22-27dcf5f/linux/x64/agent-cli-package.tar.gz"
+                BIN="cursor-agent"
+              else
+                # User-scope Plugins require the editor; its .deb has no reviewed digest.
+                URL="https://downloads.cursor.com/production/25b52e7d03ebf2d5608914158e119f7992432a34/linux/x64/deb/amd64/deb/cursor_3.28.7_amd64.deb"
+                BIN="cursor"
+              fi
+              ;;
+            kiro) URL="https://desktop-release.q.us-east-1.amazonaws.com/3.0.0/kirocli-universal-darwin.zip"; BIN="kiro-cli" ;;
+            windsurf)
+              if [[ "$KIND" == skill ]]; then
+                # Project Skills require exactly 3000.11.205 in requireCurrentDevin.
+                # Homebrew/homebrew-cask Casks/d/devin-cli.rb @ b0b0899868cd5816cfc754d2461a50920af612e0
+                URL="https://static.devin.ai/cli/3000.11.205/devin-3000.11.205-x86_64-unknown-linux.tar.gz"
+              else
+                # Preserve the independently reviewed user/plugin version.
+                # Homebrew/homebrew-cask Casks/d/devin-cli.rb @ c9adad21951a075e35556930e7396a87818f8980
+                URL="https://static.devin.ai/cli/3000.11.234/devin-3000.11.234-x86_64-unknown-linux.tar.gz"
+              fi
+              BIN="devin"
+              ;;
+            grok)
+              # Homebrew/homebrew-cask Casks/g/grok-build.rb @ b75a8e94456970fa349c75b59ca5e4183dde8e28
+              URL="https://x.ai/cli/grok-1.0.70-linux-x86_64"
+              BIN="grok"
+              ;;
+            vscode)
+              # Official VS Code 1.144.0 Linux x64 .deb, never a mutable "latest".
+              URL="https://update.code.visualstudio.com/1.144.0/linux-deb-x64/stable"
+              BIN="code"
+              ;;
+            chatgpt)
+              echo "ChatGPT is a remote/manual app target; no Linux agent executable" \
+                | tee "$RUNNER_TEMP/vendor-proof/manual-client.txt"
+              exit 0
+              ;;
+          esac
+          printf '%s\n' "$URL" > "$RUNNER_TEMP/vendor-proof/source.txt"
+          # BUG-012: download, fingerprint, and preserve proposed vendor bytes;
+          # never execute without a separately reviewed immutable digest pin.
+          case "$TARGET" in
+            cursor)
+              if [[ "$KIND" == skill ]]; then
+                SHA256="85296944e4600a83c4b764f578d1502bf9c416db200d33a593e8f3ecabfdc294"
+              else
+                SHA256="" # No independent digest for the editor .deb; fail closed.
+              fi
+              ;;
+            vscode) SHA256="b8fbff92d8d95908990eed0acf004c980f29003725469e794ddbd017ea511a20" ;; # Microsoft official SHA-256 for Linux .deb x64 1.144.0
+            kiro) SHA256="0a8f067c4fe6a23a231aa3a18e3e4332120ef9ed3d2d7b6eea907beb8b4cdd8b" ;; # Homebrew/homebrew-cask Casks/k/kiro-cli.rb @ 7191fc89
+            windsurf)
+              if [[ "$KIND" == skill ]]; then
+                SHA256="2e65c8b93682258fc91f5e4cead92e3698338cebf1b31dbc32a3201cb63705c4" # Cask b0b08998, project 3000.11.205
+              else
+                SHA256="201370cddd2924294e3ca6b46fd8ece49b5763953b644a1dd823fce5490cb41a" # Cask c9adad21, user 3000.11.234
+              fi
+              ;;
+            grok) SHA256="22d281c5964c5444147328096ba2a221f3f0874c6858e27c825656a80f6e58e9" ;; # Homebrew Cask grok-build 1.0.70, Linux x86_64
+          esac
+          sha256_file() {
+            if command -v sha256sum >/dev/null 2>&1; then
+              sha256sum "$@"
+            else
+              shasum -a 256 "$@" # macOS runner
+            fi
+          }
+          if [[ "$TARGET" == cursor && "$KIND" == skill ]]; then
+            artifact="$RUNNER_TEMP/cursor-agent.tar.gz"
+          elif [[ "$TARGET" == windsurf ]]; then
+            artifact="$RUNNER_TEMP/devin-cli.tar.gz"
+          elif [[ "$TARGET" == vscode || "$TARGET" == cursor ]]; then
+            artifact="$RUNNER_TEMP/$TARGET.deb"
+          elif [[ "$TARGET" == kiro ]]; then
+            artifact="$RUNNER_TEMP/kirocli-universal-darwin.zip"
+          elif [[ "$TARGET" == grok ]]; then
+            artifact="$RUNNER_TEMP/grok-1.0.70-linux-x86_64"
+          else
+            echo "Unsupported vendor artifact format: $TARGET" >&2
+            exit 4
+          fi
+          curl -fsSL --retry 2 "$URL" -o "$artifact"
+          sha256_file "$artifact" > "$RUNNER_TEMP/vendor-proof/observed-untrusted.sha256"
+          if [[ ! "${SHA256:-}" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "Missing reviewed SHA-256 for $TARGET: downloaded bytes are NOT approved to execute" \
+              | tee "$RUNNER_TEMP/vendor-proof/verification-blocked.txt"
+            exit 3
+          fi
+          printf '%s  %s\n' "$SHA256" "$artifact" | sha256_file -c -
+          if [[ ( "$TARGET" == cursor && "$KIND" == skill ) || "$TARGET" == windsurf ]]; then
+            mkdir -p "$RUNNER_TEMP/vendor-root"
+            # Both official archives are independently digest-pinned above.
+            # Python 3.12's data filter rejects archive entries escaping this root.
+            python3 - "$artifact" "$RUNNER_TEMP/vendor-root" <<'PY'
+          import sys
+          import tarfile
+          with tarfile.open(sys.argv[1], "r:gz") as archive:
+              archive.extractall(path=sys.argv[2], filter="data")
+          PY
+            if [[ "$TARGET" == windsurf ]]; then
+              executable="$RUNNER_TEMP/vendor-root/bin/devin"
+              target_binary="devin"
+            else
+              executable="$RUNNER_TEMP/vendor-root/dist-package/cursor-agent"
+              target_binary="cursor-agent"
+            fi
+            test -f "$executable" && test -x "$executable" && test ! -L "$executable"
+            ln -s "$executable" "$HOME/.local/bin/$target_binary"
+          elif [[ "$TARGET" == vscode || "$TARGET" == cursor ]]; then
+            mkdir -p "$RUNNER_TEMP/vendor-root"
+            dpkg-deb --extract "$artifact" "$RUNNER_TEMP/vendor-root"
+            export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$RUNNER_TEMP/vendor-root/usr/bin:$HOME/.local/bin"
+            if [[ "$TARGET" == vscode ]]; then
+              # A staged .deb may carry /usr/bin/code as an absolute symlink:
+              # bind its verified editor launcher explicitly, not the host CLI.
+              executable="$RUNNER_TEMP/vendor-root/usr/share/code/bin/code"
+              test -f "$executable" && test -x "$executable" && test ! -L "$executable"
+              test "$(readlink -f "$executable")" = "$executable"
+              ln -s "$executable" "$HOME/.local/bin/code"
+            fi
+          elif [[ "$TARGET" == kiro ]]; then
+            # This archive is verified above against the independently pinned
+            # Homebrew Cask release, not a mutable vendor installer script.
+            mkdir -p "$RUNNER_TEMP/vendor-root"
+            ditto -x -k "$artifact" "$RUNNER_TEMP/vendor-root"
+            executable="$RUNNER_TEMP/vendor-root/kirocli/bin/kiro-cli"
+            test -f "$executable" && test -x "$executable" && test ! -L "$executable"
+            ln -s "$executable" "$HOME/.local/bin/kiro-cli"
+          elif [[ "$TARGET" == grok ]]; then
+            # Independent Homebrew SHA is checked above before any native run.
+            mkdir -p "$RUNNER_TEMP/vendor-root"
+            executable="$RUNNER_TEMP/vendor-root/grok"
+            install -m 0755 "$artifact" "$executable"
+            test -f "$executable" && test -x "$executable" && test ! -L "$executable"
+            ln -s "$executable" "$HOME/.local/bin/grok"
+          else
+            echo "Unsupported verified vendor format: $TARGET" >&2
+            exit 4
+          fi
+          hash -r
+          command -v "$BIN" | tee "$RUNNER_TEMP/vendor-proof/executable.txt"
+          # The reviewed bytes must be the native CLI actually selected by PATH,
+          # not an unrelated binary preinstalled on a runner.
+          python3 - "$BIN" "$executable" <<'PY'
+          from pathlib import Path
+          import shutil
+          import sys
+          selected = shutil.which(sys.argv[1])
+          if not selected or Path(selected).resolve(strict=True) != Path(sys.argv[2]).resolve(strict=True):
+              raise SystemExit(f"unverified native PATH executable: {sys.argv[1]}")
+          PY
+          # No ambient CI credentials or native profile overrides reach vendor --version.
+          probe_home="$(mktemp -d "$RUNNER_TEMP/vendor-probe.XXXXXX")"
+          env -i PATH="$PATH" HOME="$probe_home" USERPROFILE="$probe_home" \
+            XDG_CONFIG_HOME="$probe_home/config" XDG_CACHE_HOME="$probe_home/cache" \
+            XDG_DATA_HOME="$probe_home/data" TMPDIR="$probe_home" \
+            LANG="${LANG:-C.UTF-8}" CI=true DO_NOT_TRACK=1 \
+            python3 -c 'import subprocess,sys;sys.exit(subprocess.run([sys.argv[1],"--version"], timeout=30).returncode)' "$BIN" \
+            | tee "$RUNNER_TEMP/vendor-proof/version.txt"
+      - name: Build CLI under test (not the already-published binary)
+        run: go build -trimpath -ldflags='-X main.version=0.1.95' -o "$RUNNER_TEMP/agentplugins-audit" ./cli/cmd/agentplugins
+      - name: Run real acquisitions and report every source and outcome
+        env:
+          AUDIT_KIND: ${{ matrix.kind }}
+          AUDIT_TARGET: ${{ matrix.target }}
+          AUDIT_VENDOR_OUTCOME: ${{ steps.vendor-install.outcome }}
+        shell: bash
+        run: |
+          export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$RUNNER_TEMP/vendor-root/usr/bin:$HOME/.local/bin"
+          python3 scripts/live-install-audit.py \
+            --cli "$RUNNER_TEMP/agentplugins-audit" \
+            --target "$AUDIT_TARGET" --kind "$AUDIT_KIND" --limit 30 \
+            --report-dir "$RUNNER_TEMP/live-audit-report"
+      - name: Preserve exact per-case evidence, even if vendor install or CLI fails
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: remaining-client-${{ matrix.target }}-${{ matrix.kind }}
+          path: |
+            ${{ runner.temp }}/live-audit-report/
+            ${{ runner.temp }}/vendor-proof/
+          if-no-files-found: warn
+          retention-days: 14

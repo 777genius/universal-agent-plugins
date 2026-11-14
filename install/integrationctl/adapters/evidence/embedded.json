@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "entries": [
+    {
+      "key": "target.claude.native_surface",
+      "claim": "Claude exposes plugin marketplaces, plugin install flows, and startup auto-update semantics for supported marketplace classes.",
+      "evidence_class": "confirmed_vendor_fact",
+      "urls": [
+        "https://code.claude.com/docs/en/discover-plugins",
+        "https://code.claude.com/docs/en/plugin-marketplaces"
+      ]
+    },
+    {
+      "key": "target.codex.native_surface",
+      "claim": "Codex exposes plugin marketplaces, cache-backed installed bundles, and documented restart plus new-thread expectations for local plugin changes.",
+      "evidence_class": "confirmed_vendor_fact",
+      "urls": [
+        "https://developers.openai.com/codex/plugins",
+        "https://developers.openai.com/codex/plugins/build"
+      ]
+    },
+    {
+      "key": "target.gemini.native_surface",
+      "claim": "Gemini exposes extension install, link, update, and trust-aware management flows with documented restart expectations after management operations.",
+      "evidence_class": "confirmed_vendor_fact",
+      "urls": [
+        "https://geminicli.com/docs/extensions/",
+        "https://geminicli.com/docs/extensions/reference/",
+        "https://geminicli.com/docs/cli/trusted-folders/"
+      ]
+    },
+    {
+      "key": "target.cursor.native_surface",
+      "claim": "Cursor exposes MCP installation through project or global config, deeplinks, collection install, extension API registration, and CLI inspection flows.",
+      "evidence_class": "confirmed_vendor_fact",
+      "urls": [
+        "https://docs.cursor.com/context/mcp",
+        "https://docs.cursor.com/cli/mcp",
+        "https://docs.cursor.com/deeplinks"
+      ]
+    },
+    {
+      "key": "target.opencode.native_surface",
+      "claim": "OpenCode exposes local and npm plugin loading through config and startup-driven installation with documented config precedence and troubleshooting guidance.",
+      "evidence_class": "confirmed_vendor_fact",
+      "urls": [
+        "https://opencode.ai/docs/plugins/",
+        "https://opencode.ai/docs/config/",
+        "https://opencode.ai/docs/troubleshooting/"
+      ]
+    }
+  ]
+}

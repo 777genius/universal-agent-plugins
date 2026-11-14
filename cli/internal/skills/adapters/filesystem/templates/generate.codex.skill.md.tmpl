@@ -1,0 +1,34 @@
+# {{.SkillName}}
+
+> Codex generate for `skills/{{.SkillName}}/SKILL.md`. Keep the authored skill canonical and regenerate this file when it changes.
+
+## Summary
+
+{{.Description}}
+
+{{- if .CommandLine }}
+## Command
+
+- Runtime: `{{.Runtime}}`
+- Invocation: `{{.CommandLine}}`
+{{- end }}
+
+{{- if .CompatibilitySummary }}
+## Compatibility
+
+{{- range .CompatibilitySummary }}
+- {{.}}
+{{- end }}
+{{- end }}
+
+{{- if .AllowedTools }}
+## Allowed tools
+
+{{- range .AllowedTools }}
+- `{{.}}`
+{{- end }}
+{{- end }}
+
+## Canonical instructions
+
+{{.Body}}

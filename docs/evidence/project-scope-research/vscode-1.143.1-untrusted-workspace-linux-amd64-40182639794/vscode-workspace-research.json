@@ -1,0 +1,158 @@
+{
+  "evidence_kind": "vscode-untrusted-workspace-metadata-research",
+  "source_commit": "37fc30df2cb0b8499c6d32520e8b32d82d7fa9da",
+  "version": "1.143.1",
+  "publisher_commit": "e646868227c3e3a9e3f24277c8c7220be42c0be7",
+  "collection_complete": false,
+  "native_project_qualified": false,
+  "native_mcp_initialization_qualified": false,
+  "native_runtime_qualified": false,
+  "checkout": {
+    "probe": "source-checkout",
+    "argv": [
+      "/usr/bin/git",
+      "rev-parse",
+      "HEAD"
+    ],
+    "cwd": "/home/runner/work/universal-agent-plugins/universal-agent-plugins",
+    "error": null,
+    "exit": 0,
+    "elapsed_seconds": 0.003,
+    "stdout_file": "source-checkout.stdout.log",
+    "stderr_file": "source-checkout.stderr.log",
+    "stdout_bytes": 41,
+    "stderr_bytes": 0,
+    "stdout_sha256": "eab43b276d82cd631bbd75b1b88caa82f13221b472bae7373181cf63d81c71e4",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "archive": {
+    "url": "https://vscode.download.prss.microsoft.com/dbazure/download/stable/e646868227c3e3a9e3f24277c8c7220be42c0be7/code-stable-x64-1792691793.tar.gz",
+    "bytes": 350844741,
+    "sha256": "48f658052e54e020a1c1be7b37ac0f9ae39f07e8ccda805c63f053cfda72b2be"
+  },
+  "materialization": {
+    "members": 4262,
+    "expanded_bytes": 1034475520,
+    "regular_bytes": 1031068984,
+    "omitted_symlinks": 0,
+    "omitted_symlink_metadata_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "publisher_files": {
+    "code": {
+      "sha256": "cf8508cc7ddde30cfccc70caeda877a9a99119953c4476dcb30a3eb1a2c415e9",
+      "bytes": 223685880,
+      "identity": [
+        2049,
+        9216988
+      ]
+    },
+    "resources/app/out/cli.js": {
+      "sha256": "bd393ad6f0d28ba0aa7cd79cc685617f5187096f092009e315a4f098349f7976",
+      "bytes": 275169,
+      "identity": [
+        2049,
+        9219812
+      ]
+    },
+    "resources/app/product.json": {
+      "sha256": "a141a1de8ed44415c0c527b1882362e6abc25e674be052d67c09da71a27fbd7e",
+      "bytes": 68251,
+      "identity": [
+        2049,
+        9217007
+      ]
+    }
+  },
+  "helper": {
+    "version_probe": {
+      "probe": "go-version",
+      "argv": [
+        "/opt/hostedtoolcache/go/1.26.10/x64/bin/go",
+        "version"
+      ],
+      "cwd": "/home/runner/work/universal-agent-plugins/universal-agent-plugins",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.005,
+      "stdout_file": "go-version.stdout.log",
+      "stderr_file": "go-version.stderr.log",
+      "stdout_bytes": 33,
+      "stderr_bytes": 0,
+      "stdout_sha256": "4e0b213cba780f63b02f3ab9001ee61e4101d254e0af1a8205574c19dad0f93b",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "build": {
+      "probe": "helper-build",
+      "argv": [
+        "/opt/hostedtoolcache/go/1.26.10/x64/bin/go",
+        "build",
+        "-trimpath",
+        "-p=1",
+        "-ldflags",
+        "-X main.buildCommit=37fc30df2cb0b8499c6d32520e8b32d82d7fa9da",
+        "-o",
+        "/tmp/vscode-workspace-input-9ql8h61e/controller",
+        "./install/integrationctl/research/vscodeworkspace"
+      ],
+      "cwd": "/home/runner/work/universal-agent-plugins/universal-agent-plugins",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 11.967,
+      "stdout_file": "helper-build.stdout.log",
+      "stderr_file": "helper-build.stderr.log",
+      "stdout_bytes": 0,
+      "stderr_bytes": 41,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "b683257fca25cabaa9ba8f1ca2a8006ae11a5853fa2424b28a8f8f38d274d569"
+    },
+    "bytes": 4980186,
+    "sha256": "cdfa7504de0afbb28857d4506ea1cb3eb760877e9be6c677f4cc274f746296e6"
+  },
+  "controller": {
+    "argv": [
+      "/usr/bin/sudo",
+      "-n",
+      "--preserve-env=GITHUB_ACTIONS,RUNNER_ENVIRONMENT,AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED,EXPECTED_COMMIT",
+      "/tmp/vscode-workspace-input-9ql8h61e/controller",
+      "--input-root",
+      "/tmp/vscode-workspace-input-9ql8h61e"
+    ],
+    "cwd": "/home/runner/work/universal-agent-plugins/universal-agent-plugins",
+    "error": "fixed controller returned failure",
+    "controller_reaped": true,
+    "exit": 1,
+    "stdout_file": "controller.stdout.log",
+    "stdout_bytes": 463,
+    "stdout_sha256": "f0fb78e2076656f499b64dfb3f617444145d0da221a6463af44488af972bb2da",
+    "stderr_file": "controller.stderr.log",
+    "stderr_bytes": 378,
+    "stderr_sha256": "8b91960103eb79ff1b9f3d4f6778da29f5bf462dfa76b7ca811d2b47d9cba2fc"
+  },
+  "error": "ValueError: fixed root controller failed; retain bounded evidence",
+  "frontend_cleanup": {
+    "complete": false,
+    "probe": {
+      "probe": "cleanup",
+      "argv": [
+        "/usr/bin/python3",
+        "-I",
+        "-c",
+        "\nimport os,stat,sys\npath,device,inode=sys.argv[1:]\nparent,name=os.path.split(path)\npfd=os.open(parent,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)\nroot=os.open(name,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=pfd)\nidentity=os.fstat(root)\nif (identity.st_dev,identity.st_ino)!=(int(device),int(inode)):raise SystemExit(\"cleanup root identity changed\")\ndef clear(fd):\n    for name in os.listdir(fd):\n        item=os.stat(name,dir_fd=fd,follow_symlinks=False)\n        if stat.S_ISDIR(item.st_mode):\n            child=os.open(name,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=fd)\n            try:\n                if not os.path.samestat(item,os.fstat(child)):raise RuntimeError(\"cleanup directory changed\")\n                clear(child)\n            finally:os.close(child)\n            os.rmdir(name,dir_fd=fd)\n        else:os.unlink(name,dir_fd=fd)\nclear(root)\nif not os.path.samestat(identity,os.stat(name,dir_fd=pfd,follow_symlinks=False)):raise SystemExit(\"cleanup root replaced\")\nos.close(root)\nos.rmdir(name,dir_fd=pfd)\nos.close(pfd)\n",
+        "/tmp/vscode-workspace-input-9ql8h61e",
+        "2049",
+        "9216975"
+      ],
+      "cwd": "/",
+      "error": null,
+      "exit": 1,
+      "elapsed_seconds": 0.425,
+      "stdout_file": "cleanup.stdout.log",
+      "stderr_file": "cleanup.stderr.log",
+      "stdout_bytes": 0,
+      "stderr_bytes": 321,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "2e35fe8e97094b539670868e17bd25952a18f237b05480eb9a6183224b7fcae9"
+    }
+  },
+  "elapsed_seconds": 66.255588783
+}

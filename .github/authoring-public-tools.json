@@ -1,0 +1,266 @@
+{
+  "schema": "authoring-public-tools/v1",
+  "controllers": {
+    "linux-amd64": {
+      "node": null,
+      "python": null,
+      "git": null,
+      "gh": null,
+      "tar": null
+    },
+    "linux-arm64": {
+      "node": null,
+      "python": null,
+      "git": null,
+      "gh": null,
+      "tar": null
+    },
+    "darwin-amd64": {
+      "node": null,
+      "python": null,
+      "git": null,
+      "gh": null,
+      "tar": null
+    },
+    "darwin-arm64": {
+      "node": null,
+      "python": null,
+      "git": null,
+      "gh": null,
+      "tar": null
+    },
+    "windows-amd64": {
+      "node": null,
+      "python": null,
+      "git": null,
+      "gh": null,
+      "tar": null
+    },
+    "windows-arm64": {
+      "node": null,
+      "python": null,
+      "git": null,
+      "gh": null,
+      "tar": null
+    }
+  },
+  "cells": {
+    "linux-amd64/kit-node18": {
+      "runner": null,
+      "image": null,
+      "controller": "linux-amd64",
+      "npm_node": null,
+      "shim_node": null,
+      "npm": null,
+      "go": null,
+      "mod_cache": null,
+      "observer": null,
+      "installer_policy": null
+    },
+    "linux-amd64/pair-node22": {
+      "runner": null,
+      "image": null,
+      "controller": "linux-amd64",
+      "npm_node": null,
+      "shim_node": null,
+      "npm": null,
+      "go": null,
+      "mod_cache": null,
+      "observer": null,
+      "installer_policy": null
+    },
+    "linux-amd64/pair-node24": {
+      "runner": null,
+      "image": null,
+      "controller": "linux-amd64",
+      "npm_node": null,
+      "shim_node": null,
+      "npm": null,
+      "go": null,
+      "mod_cache": null,
+      "observer": null,
+      "installer_policy": null
+    },
+    "linux-arm64/kit-node18": {
+      "runner": null,
+      "image": null,
+      "controller": "linux-arm64",
+      "npm_node": null,
+      "shim_node": null,
+      "npm": null,
+      "go": null,
+      "mod_cache": null,
+      "observer": null,
+      "installer_policy": null
+    },
+    "linux-arm64/pair-node22": {
+      "runner": null,
+      "image": null,
+      "controller": "linux-arm64",
+      "npm_node": null,
+      "shim_node": null,
+      "npm": null,
+      "go": null,
+      "mod_cache": null,
+      "observer": null,
+      "installer_policy": null
+    },
+    "linux-arm64/pair-node24": {
+      "runner": null,
+      "image": null,
+      "controller": "linux-arm64",
+      "npm_node": null,
+      "shim_node": null,
+      "npm": null,
+      "go": null,
+      "mod_cache": null,
+      "observer": null,
+      "installer_policy": null
+    },
+    "darwin-amd64/kit-node18": {
+      "runner": null,
+      "image": null,
+      "controller": "darwin-amd64",
+      "npm_node": null,
+      "shim_node": null,
+      "npm": null,
+      "go": null,
+      "mod_cache": null,
+      "observer": null,
+      "installer_policy": null
+    },
+    "darwin-amd64/pair-node22": {
+      "runner": null,
+      "image": null,
+      "controller": "darwin-amd64",
+      "npm_node": null,
+      "shim_node": null,
+      "npm": null,
+      "go": null,
+      "mod_cache": null,
+      "observer": null,
+      "installer_policy": null
+    },
+    "darwin-amd64/pair-node24": {
+      "runner": null,
+      "image": null,
+      "controller": "darwin-amd64",
+      "npm_node": null,
+      "shim_node": null,
+      "npm": null,
+      "go": null,
+      "mod_cache": null,
+      "observer": null,
+      "installer_policy": null
+    },
+    "darwin-arm64/kit-node18": {
+      "runner": null,
+      "image": null,
+      "controller": "darwin-arm64",
+      "npm_node": null,
+      "shim_node": null,
+      "npm": null,
+      "go": null,
+      "mod_cache": null,
+      "observer": null,
+      "installer_policy": null
+    },
+    "darwin-arm64/pair-node22": {
+      "runner": null,
+      "image": null,
+      "controller": "darwin-arm64",
+      "npm_node": null,
+      "shim_node": null,
+      "npm": null,
+      "go": null,
+      "mod_cache": null,
+      "observer": null,
+      "installer_policy": null
+    },
+    "darwin-arm64/pair-node24": {
+      "runner": null,
+      "image": null,
+      "controller": "darwin-arm64",
+      "npm_node": null,
+      "shim_node": null,
+      "npm": null,
+      "go": null,
+      "mod_cache": null,
+      "observer": null,
+      "installer_policy": null
+    },
+    "windows-amd64/kit-node18": {
+      "runner": null,
+      "image": null,
+      "controller": "windows-amd64",
+      "npm_node": null,
+      "shim_node": null,
+      "npm": null,
+      "go": null,
+      "mod_cache": null,
+      "observer": null,
+      "installer_policy": null
+    },
+    "windows-amd64/pair-node22": {
+      "runner": null,
+      "image": null,
+      "controller": "windows-amd64",
+      "npm_node": null,
+      "shim_node": null,
+      "npm": null,
+      "go": null,
+      "mod_cache": null,
+      "observer": null,
+      "installer_policy": null
+    },
+    "windows-amd64/pair-node24": {
+      "runner": null,
+      "image": null,
+      "controller": "windows-amd64",
+      "npm_node": null,
+      "shim_node": null,
+      "npm": null,
+      "go": null,
+      "mod_cache": null,
+      "observer": null,
+      "installer_policy": null
+    },
+    "windows-arm64/kit-node18": {
+      "runner": null,
+      "image": null,
+      "controller": "windows-arm64",
+      "npm_node": null,
+      "shim_node": null,
+      "npm": null,
+      "go": null,
+      "mod_cache": null,
+      "observer": null,
+      "installer_policy": null
+    },
+    "windows-arm64/pair-node22": {
+      "runner": null,
+      "image": null,
+      "controller": "windows-arm64",
+      "npm_node": null,
+      "shim_node": null,
+      "npm": null,
+      "go": null,
+      "mod_cache": null,
+      "observer": null,
+      "installer_policy": null
+    },
+    "windows-arm64/pair-node24": {
+      "runner": null,
+      "image": null,
+      "controller": "windows-arm64",
+      "npm_node": null,
+      "shim_node": null,
+      "npm": null,
+      "go": null,
+      "mod_cache": null,
+      "observer": null,
+      "installer_policy": null
+    }
+  },
+  "reader": "linux-amd64"
+}

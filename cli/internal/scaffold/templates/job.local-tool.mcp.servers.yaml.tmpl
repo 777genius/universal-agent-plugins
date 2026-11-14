@@ -1,0 +1,15 @@
+api_version: v1
+
+servers:
+  tool:
+    description: "Replace this local tool example with your real MCP command"
+    type: stdio
+    stdio:
+      command: "npx"
+      args:
+        - "-y"
+        - "@example/local-tool-mcp"
+    targets:
+{{- range .EffectiveTargets }}
+      - "{{ . }}"
+{{- end }}
