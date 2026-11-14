@@ -30,3 +30,32 @@ test('static SEO logo is a valid WebP asset', async ({ page }) => {
   expect(image.toString('ascii', 0, 4)).toBe('RIFF');
   expect(image.toString('ascii', 8, 12)).toBe('WEBP');
 });
+
+test('optimized monitor WebP decodes with original dimensions and transparent corners', async ({ page }) => {
+  await page.goto('./');
+  const monitor = page.locator('.registry-restore__monitor');
+  await monitor.scrollIntoViewIfNeeded();
+  const result = await monitor.evaluate(async (node) => {
+    const image = node as HTMLImageElement;
+    await image.decode();
+    const response = await fetch(image.currentSrc);
+    const blob = await response.blob();
+    const bitmap = await createImageBitmap(blob);
+    const canvas = document.createElement('canvas');
+    canvas.width = 1;
+    canvas.height = 1;
+    const context = canvas.getContext('2d', { willReadFrequently: true })!;
+    context.drawImage(bitmap, 0, 0);
+    const alpha = context.getImageData(0, 0, 1, 1).data[3];
+    const result = {
+      status: response.status,
+      mime: blob.type,
+      width: bitmap.width,
+      height: bitmap.height,
+      alpha,
+    };
+    bitmap.close();
+    return result;
+  });
+  expect(result).toEqual({ status: 200, mime: 'image/webp', width: 1577, height: 997, alpha: 0 });
+});

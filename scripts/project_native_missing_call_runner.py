@@ -1,7 +1,8 @@
-"""Opt-in real Cursor/Qoder Project MCP tools/call E2E on disposable GitHub Linux.
+"""Cursor/Qoder native MCP lifecycle E2E plus optional vendor model-call proof.
 
-Requires an authorized disposable vendor account. No synthetic JSON-RPC caller
-is used: only the pinned native CLI may start/call the UAP-installed stdio probe.
+The combined credential-free lane builds UAP once, then runs both real pinned
+native clients in separate disposable workspaces. Model-driven tools/call stays
+an explicitly separate, authorized single-client path; no synthetic JSON-RPC.
 All vendor output is private and never uploaded. No blanket MCP permissions.
 """
 import argparse
@@ -28,6 +29,7 @@ NAMES = {"cursor": "uap_cursor_call", "qoder": "uap_qoder_call"}
 CONFIG = {"cursor": ".cursor/mcp.json", "qoder": ".mcp.json"}
 EXPECTED_VERSIONS = {"cursor": "2026.10.22-27dcf5f", "qoder": "1.1.78"}
 HEX = re.compile(r"[0-9a-f]{40}\Z")
+SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 
 
 def utc():
@@ -108,6 +110,29 @@ def source_build(work, env, private):
     invoke("build-probe", [compiler, "build", "-p=1", "-trimpath", "-o", probe, "./repotests/testdata/agentplugins_native_probe"], ROOT, env, private, 120)
     if not installer.is_file() or not probe.is_file():
         raise ValueError("exact source-built fixture binaries absent")
+    return installer, probe
+
+
+def stage_shared_source(work, prepared):
+    """Copy only this process's source-built binaries into a fresh client root.
+
+    The compiled bytes are shared; the client project, HOME, Git, XDG, native
+    distribution, MCP state and receipt remain fully independent.
+    """
+    source_installer, source_probe, installer_sha, probe_sha = prepared
+    installer, probe = work / "bin" / "agentplugins", work / "source" / "bin" / "probe"
+    for source, target, expected_sha in (
+            (source_installer, installer, installer_sha),
+            (source_probe, probe, probe_sha)):
+        if (not SHA256.fullmatch(expected_sha) or source.is_symlink()
+                or not source.is_file() or target.exists() or target.is_symlink()):
+            raise ValueError("invalid shared source-build input")
+        target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        with source.open("rb") as reader, target.open("xb") as writer:
+            shutil.copyfileobj(reader, writer, length=1 << 20)
+        target.chmod(0o700)
+        if digest(target.read_bytes()) != expected_sha or digest(source.read_bytes()) != expected_sha:
+            raise ValueError("shared source-build bytes changed")
     return installer, probe
 
 
@@ -263,9 +288,17 @@ def preflight_checkpoint(enabled, label):
         print("credential-free-preflight-stage: " + label, flush=True)
 
 
-def run(client, output, expected, *, preflight_only=False):
+def validate_evidence_destination(output):
+    if (not output.is_absolute() or output.resolve() != output
+            or ROOT in output.parents or output.exists() or output.is_symlink()):
+        raise ValueError("fresh canonical evidence destination outside checkout required")
+
+
+def run(client, output, expected, *, preflight_only=False, prepared_source=None):
     # No CI-host bypass, no local user profile, no unapproved vendor account.
     native.native.require_hosted("linux-amd64")
+    if prepared_source is not None and not preflight_only:
+        raise ValueError("shared source build may only be reused for no-auth preflight")
     if preflight_only:
         # This lane must be independently runnable with zero vendor credentials.
         if any(os.environ.get(name) for name in AUTH.values()):
@@ -275,9 +308,7 @@ def run(client, output, expected, *, preflight_only=False):
         key = os.environ.get(AUTH[client], "")
         if not 16 <= len(key) <= 4096 or any(char in key for char in "\x00\r\n"):
             raise ValueError("authorized disposable " + client + " CI credential absent/invalid")
-    if (not output.is_absolute() or output.resolve() != output or ROOT in output.parents
-            or output.exists() or output.is_symlink()):
-        raise ValueError("fresh canonical evidence destination outside checkout required")
+    validate_evidence_destination(output)
     scratch = Path(os.environ.get("RUNNER_TEMP", "/tmp")).resolve(strict=True)
     with tempfile.TemporaryDirectory(prefix="uap-mcp-call-", dir=scratch) as temporary:
         work = Path(temporary)
@@ -286,7 +317,10 @@ def run(client, output, expected, *, preflight_only=False):
         private = work / "private"
         build_env = isolated_env(work, go=True)
         verify_clean_head(expected, build_env, private)
-        installer, probe = source_build(work, build_env, private)
+        if prepared_source is None:
+            installer, probe = source_build(work, build_env, private)
+        else:
+            installer, probe = stage_shared_source(work, prepared_source)
         preflight_checkpoint(preflight_only, "source-built")
         env = isolated_env(work)
         for project in ("a", "b", "outside"):
@@ -480,17 +514,75 @@ def run(client, output, expected, *, preflight_only=False):
     print(client + ": genuine selected-client Project tools/call; one server-side receipt; A/B/remove checked")
 
 
+def require_both_preflight_receipts(output, expected):
+    """A partial, skipped, or renamed client must never become a green batch."""
+    if not output.is_dir() or sorted(child.name for child in output.iterdir()) != ["cursor", "qoder"]:
+        raise ValueError("two distinct client evidence directories required")
+    for client in ("cursor", "qoder"):
+        folder = output / client
+        if (folder.is_symlink() or not folder.is_dir()
+                or sorted(child.name for child in folder.iterdir()) != ["source-only-preflight.json"]):
+            raise ValueError("unexpected or missing native client evidence")
+        proof = folder / "source-only-preflight.json"
+        if proof.is_symlink():
+            raise ValueError("linked native receipt is not original")
+        data = json.loads(proof.read_bytes())
+        if (not isinstance(data, dict) or data.get("schema_version") != 1
+                or data.get("client") != client or data.get("source_commit") != expected
+                or data.get("native_version") != EXPECTED_VERSIONS[client]):
+            raise ValueError("wrong client or source in native receipt")
+        if any(data.get(key) is not True for key in (
+                "source_built_uap_and_fixture", "genuine_native_server_listed",
+                "uap_owned_project_a_installed_and_removed",
+                "other_project_and_foreign_state_preserved")):
+            raise ValueError("incomplete native lifecycle")
+        if any(data.get(key) is not False for key in (
+                "vendor_authentication_qualified", "native_tools_call_qualified",
+                "real_model_qualified")):
+            raise ValueError("native preflight cannot claim model tools/call")
+        if any(not isinstance(data.get(key), str) or not SHA256.fullmatch(data[key]) for key in (
+                "vendor_archive_sha256", "native_executable_sha256")):
+            raise ValueError("missing original pinned native binary provenance")
+
+
+def run_both_preflight(output, expected):
+    """Compile one source package, qualify each genuine native client in isolation."""
+    native.native.require_hosted("linux-amd64")
+    if any(os.environ.get(name) for name in AUTH.values()):
+        raise ValueError("credential-free batch cannot inherit vendor authentication")
+    validate_evidence_destination(output)
+    scratch = Path(os.environ.get("RUNNER_TEMP", "/tmp")).resolve(strict=True)
+    with tempfile.TemporaryDirectory(prefix="uap-mcp-shared-build-", dir=scratch) as temporary:
+        build_root = Path(temporary)
+        private = build_root / "private"
+        env = isolated_env(build_root, go=True)
+        verify_clean_head(expected, env, private)
+        source_installer, source_probe = source_build(build_root, env, private)
+        prepared = (source_installer, source_probe,
+                    digest(source_installer.read_bytes()), digest(source_probe.read_bytes()))
+        for client in ("cursor", "qoder"):
+            run(client, output / client, expected, preflight_only=True,
+                prepared_source=prepared)
+        require_both_preflight_receipts(output, expected)
+    print("cursor+qoder: both native source-only lifecycles verified; model tools/call NOT qualified")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--client", choices=("cursor", "qoder"), required=True)
+    parser.add_argument("--client", choices=("cursor", "qoder", "both"), required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--expected-head", required=True)
     parser.add_argument("--preflight-only", action="store_true",
                         help="qualify only UAP install/native listing/remove, never MCP call")
     args = parser.parse_args()
     try:
-        run(args.client, args.output, args.expected_head,
-            preflight_only=args.preflight_only)
+        if args.client == "both":
+            if not args.preflight_only:
+                raise ValueError("combined native clients require credential-free preflight")
+            run_both_preflight(args.output, args.expected_head)
+        else:
+            run(args.client, args.output, args.expected_head,
+                preflight_only=args.preflight_only)
     except Exception as error:
         # Fail closed with a stable stage-free diagnostic. Never print a
         # vendor traceback, raw model output or credentials.

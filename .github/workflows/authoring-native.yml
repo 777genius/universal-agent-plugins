@@ -2,6 +2,15 @@ name: Authoring native offline
 
 on:
   pull_request:
+    # Dedicated no-auth Cursor/Qoder fixture changes cannot alter authoring
+    # runtime/package semantics. Mixed source changes still run the full matrix.
+    paths-ignore:
+      - 'scripts/project_native_missing_call_runner.py'
+      - 'scripts/project_native_missing_call_proof.py'
+      - 'scripts/test_project_native_missing_call_runner.py'
+      - 'scripts/test_project_native_missing_call_proof.py'
+      - '.github/workflows/cursor-qoder-mcp-preflight.yml'
+      - '.github/workflows/cursor-qoder-mcp-proof.yml'
   workflow_dispatch:
     inputs:
       windows_diagnostics:
