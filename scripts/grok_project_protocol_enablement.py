@@ -149,7 +149,15 @@ def preview_enablement(journey, installation):
         current_events = read_owned(journey.log, journey.root) if journey.log.exists() else None
         require(current_events == original_events, "repair preview executed the MCP witness")
     started = time.time_ns()
-    response = journey.cli("repair-no-enable-consent", "repair", installation["installation_id"], extra=("--yes",))
+    try:
+        response = journey.cli("repair-no-enable-consent", "repair", installation["installation_id"], extra=("--yes",))
+    except Exception:
+        # An unsuccessful public repair has no accepted commit receipt. Refuse
+        # if it nevertheless touched native files, the witness, or saved state.
+        unchanged_native_and_files()
+        require(read_owned(state_path, journey.root) == before,
+                "failed ordinary repair changed saved ownership")
+        raise
     finished = time.time_ns()
     after = read_owned(state_path, journey.root)
     proof = ordinary_repair_state(document(before), document(after), installation, binding, active, response, (started, finished))

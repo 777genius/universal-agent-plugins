@@ -238,7 +238,9 @@ class ContractTests(unittest.TestCase):
         def check():
             for path in (config, foreign):
                 if path.read_bytes() != preserved[path]: raise ValueError("protected fixture changed")
-        for fault in (None, "no-commit", "package", "data", "source", "project-b", "config", "foreign-home", "witness", "dry-command", "dry-command-package", "dry-command-state", "dry-command-witness", "dry-state", "dry-config"):
+        for fault in (None, "no-commit", "package", "data", "source", "project-b", "config", "foreign-home", "witness", "ordinary-command", "ordinary-command-package", "ordinary-command-state",
+                      "ordinary-command-witness", "dry-command", "dry-command-package", "dry-command-state",
+                      "dry-command-witness", "dry-state", "dry-config"):
             for path, body in preserved.items(): path.write_bytes(body)
             for path in (event, self.data / "foreign"):
                 if path.exists(): path.unlink()
@@ -249,10 +251,18 @@ class ContractTests(unittest.TestCase):
                 self.assertEqual((verb, selector), ("repair", "install"))
                 if label == "repair-no-enable-consent":
                     self.assertEqual(extra, ("--yes",))
-                    self.state_path.write_bytes(before_bytes if fault == "no-commit" else after_bytes)
+                    self.state_path.write_bytes(before_bytes if fault in (
+                        "no-commit", "ordinary-command", "ordinary-command-package",
+                        "ordinary-command-witness") else after_bytes)
                     changed = {"package": self.active / "probe", "data": self.data / "foreign", "source": source / "source",
                                "project-b": other / "foreign", "config": config, "foreign-home": foreign, "witness": event}
                     if fault in changed: changed[fault].write_bytes(b"unreviewed effect")
+                    if fault == "ordinary-command-package":
+                        (self.active / "probe").write_bytes(b"unreviewed effect")
+                    if fault == "ordinary-command-witness":
+                        event.write_bytes(b"unreviewed effect")
+                    if fault.startswith("ordinary-command"):
+                        raise ValueError("command failed: repair-no-enable-consent")
                     return copy.deepcopy(response)
                 self.assertEqual((label, extra), ("repair-enable-dry-run", ("--confirm-plugin-enable", "--dry-run", "--yes")))
                 if fault == "dry-command-package": (self.active / "probe").write_bytes(b"unreviewed effect")
@@ -274,6 +284,10 @@ class ContractTests(unittest.TestCase):
                     self.assertNotIn("no_consent_config_and_state_unchanged", proof)
                 else:
                     expected_error = {
+                        "ordinary-command": "command failed: repair-no-enable-consent",
+                        "ordinary-command-package": "repair changed native config, package, data, source or Project B",
+                        "ordinary-command-state": "failed ordinary repair changed saved ownership",
+                        "ordinary-command-witness": "repair preview executed the MCP witness",
                         "dry-command": "command failed: repair-enable-dry-run",
                         "dry-command-package": "repair changed native config, package, data, source or Project B",
                         "dry-command-state": "repair preview changed saved ownership",
