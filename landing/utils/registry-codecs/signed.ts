@@ -4,7 +4,7 @@ import {
   PLUGIN_NAME, COMPONENTS, KINDS, record, requiredString, optionalString, stringArray,
   digestValue, safeSequence, parseRFC3339Instant, compareInstants, author, source, icon,
 } from './common.ts';
-import { releaseTargets, evidenceFromSnapshot, eligibleTargetPolicies } from './evidence.ts';
+import { releaseTargets, modernReleaseTargets, evidenceFromSnapshot, eligibleTargetPolicies } from './evidence.ts';
 import type {
   ComponentID,
   DistributionReleaseView,
@@ -17,6 +17,22 @@ import type {
 export function parseSnapshot(
   input: Record<string, unknown>,
   mode: 'published_snapshot' | 'review_preview',
+): RegistryIndex {
+  return projectSnapshot(input, mode, releaseTargets);
+}
+
+// This prepared build entrypoint is never selected by snapshot fields or a
+// public mode. The mirror must authenticate modern schema-1 bytes beforehand.
+export function parseModernSnapshot(input: Record<string, unknown>): RegistryIndex {
+  if (input.snapshot_schema_version !== 1)
+    throw new Error('modern published snapshot requires signed schema 1');
+  return projectSnapshot(input, 'published_snapshot', modernReleaseTargets);
+}
+
+function projectSnapshot(
+  input: Record<string, unknown>,
+  mode: 'published_snapshot' | 'review_preview',
+  decodeTargets: typeof releaseTargets,
 ): RegistryIndex {
   const isSigned = input.snapshot_schema_version === 1;
   // V2 is readable only as an untrusted review preview until paired signed
@@ -145,7 +161,7 @@ export function parseSnapshot(
           throw new Error(
             `distribution ${id}: release ${String(releaseSequence)} has no signed policy`,
           );
-        const targets = releaseTargets(
+        const targets = decodeTargets(
           policy.targets,
           `distribution ${id} release ${String(releaseSequence)}`,
           v2Preview ? 2 : 1,

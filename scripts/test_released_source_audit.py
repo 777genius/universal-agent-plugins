@@ -144,6 +144,206 @@ class ReceiptTests(unittest.TestCase):
             self.assertEqual(audit.state_file(root, "user"), {"installations": []})
 
 
+class SemanticProofTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        pin = audit.live.MARKETING_KIT_SIGNED_CLOSURE["777genius/notion"]
+        self.selected = {"distribution": "777genius/notion", "release_sequence": 1, "name": "notion",
+                         "source": {"repository": pin["repository"], "revision": pin["resolved_revision"], "path": pin["package_path"]},
+                         "tree_digest": pin["tree_digest"], "manifest_digest": pin["manifest_digest"],
+                         "components": ["mcp"], "client": "pi", "scope": "project"}
+        self.documents = [self.root / "uap.toml", self.root / "uap.lock"]
+        self.manifest = ('schema_version = 1\n[dependencies.notion]\n'
+                         'git = "https://github.com/777genius/universal-agent-plugins.git"\n'
+                         'path = "plugins/notion"\ncommit = "2ddbb99dd190c1792b79904f9875e6322bccd243"\n'
+                         '[targets]\npi = ["notion"]\n')
+        self.lock = {"lock_version": 1,
+                     "manifest_digest": "sha256:babf3e66cc3f91ba5339d085a688ec287d700ba2c14dafb97e2203ff40269a67",
+                     "packages": [{"alias": "notion", "targets": ["pi"], "version": "0.1.0",
+                         "source": {"git": {"repository": pin["repository"], "path": pin["package_path"],
+                             "requested": {"kind": "commit", "value": pin["resolved_revision"]}, "commit": pin["resolved_revision"]}},
+                         "source_key": "github:777genius/universal-agent-plugins:plugins/notion",
+                         "digest_algorithm": "agentplugins-tree-sha256-v1", "tree_digest": pin["tree_digest"],
+                         "manifest_digest": pin["manifest_digest"]}]}
+        self.write_saved()
+
+    def write_saved(self, manifest=None, locked=None):
+        self.documents[0].write_text(self.manifest if manifest is None else manifest, encoding="utf-8")
+        self.documents[1].write_text(json.dumps(self.lock if locked is None else locked), encoding="utf-8")
+
+    def saved(self, alias="notion"):
+        return audit.checked_saved_intent(self.documents, alias, self.selected, self.root)
+
+    def native(self, client, scope="user"):
+        selected = {**self.selected, "client": client, "scope": scope}
+        native_root = self.root / (client + "-" + scope)
+        locator = native_root / "plugins/notion" if client == "antigravity" else self.root / (client + "-managed-" + scope)
+        locator.mkdir(parents=True, exist_ok=True)
+        native_root.mkdir(exist_ok=True)
+        binding = {"client_id": client, "scope": scope, "target_locator": str(locator), "physical_artifact_id": "notion-physical",
+                   "native_objects": [{"object_id": "package:" + client + ":notion-physical", "kind": "managed_package_directory",
+                        "logical_name": "notion", "path": str(locator), "protection_class": "managed", "managed_digest": "sha256:" + "d" * 64}]}
+        collection = "mcp_servers" if client == "hermes" else "mcpServers"
+        entry = {"serverUrl" if client == "antigravity" else "url": "https://mcp.notion.com/mcp"}
+        path = locator / "mcp_config.json" if client == "antigravity" else native_root / ("config.yaml" if client == "hermes" else "mcp.json")
+        if client == "antigravity":
+            (locator / "plugin.json").write_text(json.dumps({"$schema": "https://antigravity.google/schemas/v1/plugin.json",
+                "name": "notion", "displayName": "notion", "version": "0.1.0"}), encoding="utf-8")
+        else:
+            kind = "hermes_user_mcp" if client == "hermes" else f"pi_{scope}_mcp_server"
+            binding["native_objects"].append({"object_id": kind + ":notion", "kind": kind, "logical_name": "notion",
+                                              "path": str(path), "protection_class": "managed"})
+        value = {collection: {"notion": entry, "foreign": {"url": "https://mcp.notion.com/mcp"}}}
+        self.write_native(path, client, value)
+        args = native_root, locator, selected, binding, self.root
+        return args, path, value, collection
+
+    @staticmethod
+    def write_native(path, client, value):
+        body = audit.yaml.safe_dump(value) if client == "hermes" else json.dumps(value)
+        path.write_text(body, encoding="utf-8")
+
+    def test_exact_saved_pin_and_native_formats_are_observed(self):
+        self.assertEqual(self.saved()["alias"], "notion")
+        for client, scope in (("hermes", "user"), ("pi", "user"), ("pi", "project"),
+                              ("antigravity", "user"), ("antigravity", "project")):
+            with self.subTest(client=client, scope=scope):
+                args, path, _, _ = self.native(client, scope)
+                proof = audit.checked_native_materialization(*args)
+                self.assertEqual(proof["path"], path.relative_to(self.root).as_posix())
+                self.assertEqual(proof["logical_name"], "notion")
+
+    def test_saved_alias_and_manifest_mutations_after_first_observation_refuse(self):
+        self.saved()
+        with self.assertRaisesRegex(ValueError, "alias"):
+            self.saved("display-name")
+        for changed in (self.manifest.replace("commit =", "ref ="),
+                        self.manifest.replace('commit = "2ddbb99dd190c1792b79904f9875e6322bccd243"\n', ""),
+                        self.manifest.replace('pi = ["notion"]', 'hermes = ["notion"]'),
+                        self.manifest.replace('plugins/notion', 'plugins/foreign'),
+                        self.manifest.replace('2ddbb99dd190c1792b79904f9875e6322bccd243', 'a' * 40),
+                        self.manifest + 'cursor = ["notion"]\n',
+                        self.manifest + '[dependencies.foreign]\nregistry = "uap"\n',
+                        self.manifest.replace('git =', 'archive =')):
+            with self.subTest(manifest=changed), self.assertRaisesRegex(ValueError, "saved manifest"):
+                self.write_saved(manifest=changed)
+                self.saved()
+
+    def test_moving_requested_intent_cannot_pass_with_same_resolved_commit(self):
+        for replacement in ({"kind": "ref", "value": "main"}, {"kind": "default"}):
+            locked = copy.deepcopy(self.lock)
+            locked["packages"][0]["source"]["git"]["requested"] = replacement
+            with self.subTest(requested=replacement), self.assertRaisesRegex(ValueError, "requested Git source"):
+                self.write_saved(locked=locked)
+                self.saved()
+
+    def test_lock_source_and_digests_mutated_after_first_observation_refuse(self):
+        self.saved()
+        for field in ("alias", "targets", "source_key", "digest_algorithm", "tree_digest", "manifest_digest"):
+            locked = copy.deepcopy(self.lock)
+            locked["packages"][0][field] = "different"
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                self.write_saved(locked=locked)
+                self.saved()
+        for field in ("repository", "path", "requested", "commit"):
+            locked = copy.deepcopy(self.lock)
+            locked["packages"][0]["source"]["git"][field] = "different"
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                self.write_saved(locked=locked)
+                self.saved()
+
+    def test_lock_extra_root_alternative_source_and_stale_intent_refuse(self):
+        for change in (lambda value: value["packages"].append(copy.deepcopy(value["packages"][0])),
+                       lambda value: value["packages"][0]["source"].update({"registry": {}}),
+                       lambda value: value.update({"manifest_digest": "sha256:" + "0" * 64})):
+            locked = copy.deepcopy(self.lock)
+            change(locked)
+            with self.subTest(lock=locked), self.assertRaises(ValueError):
+                self.write_saved(locked=locked)
+                self.saved()
+
+    def test_foreign_matching_url_does_not_prove_missing_or_wrong_owned_entry(self):
+        for client in audit.CLIENTS:
+            args, path, value, collection = self.native(client)
+            audit.checked_native_materialization(*args)
+            for replacement in (None, {}, {"url": "https://foreign.example/mcp"},
+                                {"url": "https://mcp.notion.com/mcp", "command": "foreign"}):
+                changed = copy.deepcopy(value)
+                if replacement is None:
+                    del changed[collection]["notion"]
+                else:
+                    changed[collection]["notion"] = replacement
+                with self.subTest(client=client, entry=replacement), self.assertRaises(ValueError):
+                    self.write_native(path, client, changed)
+                    audit.checked_native_materialization(*args)
+
+    def test_portable_source_copy_cannot_replace_selected_native_config(self):
+        for client in audit.CLIENTS:
+            args, path, _, _ = self.native(client)
+            path.unlink()
+            (args[1] / "mcp.json").write_text('{"mcpServers":{"notion":{"type":"streamable-http","url":"https://mcp.notion.com/mcp"}}}', encoding="utf-8")
+            with self.subTest(client=client), self.assertRaisesRegex(ValueError, "native MCP config is absent"):
+                audit.checked_native_materialization(*args)
+
+    def test_owned_native_path_identity_scope_and_transport_are_required(self):
+        for client in ("hermes", "pi"):
+            args, path, _, _ = self.native(client)
+            for field in ("path", "logical_name", "kind", "object_id", "protection_class"):
+                binding = copy.deepcopy(args[3])
+                binding["native_objects"][1][field] = "different"
+                with self.subTest(client=client, field=field), self.assertRaises(ValueError):
+                    audit.checked_native_materialization(*args[:3], binding, self.root)
+            binding = {**args[3], "scope": "project"}
+            with self.assertRaises(ValueError):
+                audit.checked_native_materialization(*args[:3], binding, self.root)
+
+    def test_antigravity_manifest_default_load_contract_is_required(self):
+        args, _, _, _ = self.native("antigravity")
+        manifest = args[1] / "plugin.json"
+        original = json.loads(manifest.read_text(encoding="utf-8"))
+        for field, replacement in (("name", "foreign"), ("$schema", "unknown"), ("version", "2.0.0"), ("mcp", "foreign.json")):
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                manifest.write_text(json.dumps({**original, field: replacement}), encoding="utf-8")
+                audit.checked_native_materialization(*args)
+
+    def test_generic_directory_ownership_and_extra_native_members_cannot_be_ignored(self):
+        for client in audit.CLIENTS:
+            args, _, _, _ = self.native(client)
+            for field in ("object_id", "logical_name", "path", "kind", "protection_class", "managed_digest"):
+                binding = copy.deepcopy(args[3])
+                binding["native_objects"][0][field] = "foreign"
+                with self.subTest(client=client, field=field), self.assertRaises(ValueError):
+                    audit.checked_native_materialization(*args[:3], binding, self.root)
+            for change in (lambda value: value["native_objects"].pop(0),
+                           lambda value: value["native_objects"].append({"kind": "foreign", "path": str(args[1])}),
+                           lambda value: value["native_objects"].append(copy.deepcopy(value["native_objects"][0])),
+                           lambda value: value.update({"physical_artifact_id": "another-artifact"})):
+                binding = copy.deepcopy(args[3])
+                change(binding)
+                with self.subTest(client=client, binding=binding), self.assertRaises(ValueError):
+                    audit.checked_native_materialization(*args[:3], binding, self.root)
+
+    def test_unreviewed_source_cannot_borrow_the_notion_native_oracle(self):
+        args, _, _, _ = self.native("pi")
+        for field in ("distribution", "source", "tree_digest", "manifest_digest", "components"):
+            selected = {**args[2], field: "different"}
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                audit.checked_native_materialization(*args[:2], selected, *args[3:])
+
+    def test_semantic_reads_preserve_hardlink_refusal(self):
+        args, path, _, _ = self.native("pi")
+        for owned in (self.documents[0], self.documents[1], path):
+            link = owned.with_name(owned.name + ".other")
+            os.link(owned, link)
+            try:
+                with self.subTest(file=owned.name), self.assertRaisesRegex(ValueError, "single-link"):
+                    self.saved() if owned in self.documents else audit.checked_native_materialization(*args)
+            finally:
+                link.unlink()
+
+
 class SavedScopeTests(unittest.TestCase):
     def test_other_scope_documents_and_state_are_observed_but_shared_store_is_not(self):
         for scope in ("user", "project"):

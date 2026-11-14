@@ -1,4 +1,6 @@
 import type { ClientTarget } from '../types/registry';
+import { assertClientCoverage } from '../utils/clientContract.ts';
+import { clientIds } from './clientIds.generated.ts';
 import { clients } from './clients.ts';
 
 export type AgentSetup = 'Automatic' | 'Guided' | 'Prepared' | 'Manual';
@@ -167,6 +169,8 @@ const publishedClientSupportRows: ClientSupport[] = [
     nextStep: 'Desktop: local install via Codex CLI; Web: connect or install in ChatGPT.',
   },
 ];
+
+assertClientCoverage(clientIds, publishedClientSupportRows, 'Agent support table');
 
 export const clientSupportRows: ClientSupport[] = publishedClientSupportRows.filter((row) =>
   clients.some((client) => client.id === row.id),

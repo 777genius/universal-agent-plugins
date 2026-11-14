@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { clientSupportRows, clientSupportCapabilityKeys } from '../data/clientSupport.ts';
-import { clientLandingById } from '../data/clients.ts';
+import { clientLandingById, hiddenPublicClientIds } from '../data/clients.ts';
+import { clientIds } from '../data/clientIds.generated.ts';
 
 // SYNC: README.md "Supported clients" and landing/data/clientSupport.ts.
 // Component: landing/components/registry/RegistryClientSupport.vue (before FAQ).
@@ -19,8 +20,9 @@ test('README and landing support rows, setup actions and logos are in sync', () 
   const last = '<!-- AGENT_SUPPORT_MATRIX_END -->';
   assert.equal(readme.split(first).length, 2);
   assert.equal(readme.split(last).length, 2);
-  assert.equal(clientSupportRows.length, 16);
-  assert.equal(new Set(clientSupportRows.map((r) => r.id)).size, 16);
+  const publicIds = clientIds.filter((id) => !hiddenPublicClientIds.has(id));
+  assert.equal(clientSupportRows.length, publicIds.length);
+  assert.deepEqual(new Set(clientSupportRows.map((r) => r.id)), new Set(publicIds));
   assert.ok(!clientSupportRows.some((r) => r.id === 'vscode'));
   assert.ok(!clientLandingById.has('vscode'));
 

@@ -237,14 +237,24 @@ def main():
             raise AssertionError("UAP update produced no structured result")
         if hashlib.sha256(vendor_manifest.read_bytes()).hexdigest() != projected_hash:
             raise AssertionError("Idempotent Project update changed the native manifest")
-        skill_path = plugin / "skills" / "native-smoke" / "SKILL.md"
-        original_skill = (source / "skills" / "native-smoke" / "SKILL.md").read_bytes()
-        skill_path.unlink()
-        damaged_snapshot = tree_snapshot(plugin)
         repair_args = (
             "repair", NAME, "--target", "antigravity", "--scope", "project",
             "--project-root", project, "--yes", "--format", "json",
         )
+        protected_user = tree_snapshot(Path(user_env["HOME"]).parent)
+        protected_project_b = tree_snapshot(project_b)
+        intact = run(uap, *repair_args, env=user_env, cwd=project)
+        if not json.loads(intact) or tree_snapshot(plugin) != projected_snapshot:
+            raise AssertionError("Intact Project repair changed the selected native package")
+        assert_native_mcp(plugin, root)
+        if (tree_snapshot(source) != source_snapshot
+                or tree_snapshot(Path(user_env["HOME"]).parent) != protected_user
+                or tree_snapshot(project_b) != protected_project_b):
+            raise AssertionError("Intact Project repair changed source or an unselected scope")
+        skill_path = plugin / "skills" / "native-smoke" / "SKILL.md"
+        original_skill = (source / "skills" / "native-smoke" / "SKILL.md").read_bytes()
+        skill_path.unlink()
+        damaged_snapshot = tree_snapshot(plugin)
         # Grouped repair deliberately refuses partially changed packages.
         # Preserve this ownership gate and prove refusal does not touch bytes.
         try:
@@ -346,6 +356,19 @@ def main():
         if not (user_plugin / "skills" / "native-smoke" / "SKILL.md").is_file():
             raise AssertionError("UAP User scope omitted the selected Skill")
         assert_native_mcp(user_plugin, root)
+        before_user_repair = tree_snapshot(user_plugin)
+        before_project_a, before_project_b = tree_snapshot(project), tree_snapshot(project_b)
+        user_repaired = run(
+            uap, "repair", NAME, "--target", "antigravity", "--scope", "user",
+            "--yes", "--format", "json", env=user_native_env, cwd=project_b,
+        )
+        if not json.loads(user_repaired) or tree_snapshot(user_plugin) != before_user_repair:
+            raise AssertionError("Intact User repair changed the selected native package")
+        assert_native_mcp(user_plugin, root)
+        if (tree_snapshot(project) != before_project_a
+                or tree_snapshot(project_b) != before_project_b
+                or tree_snapshot(source) != source_snapshot):
+            raise AssertionError("Intact User repair changed source or an unselected project")
         run(agy, "plugin", "validate", "--strict", user_plugin, env=user_native_env, cwd=project_b)
         # Pinned agy discovers direct User bundles by physical directory name,
         # which differs from UAP's declared package name. No import is needed.

@@ -1,4 +1,6 @@
 import type { SecurityFinding } from './security';
+import type { ClientID } from '../data/clientIds.generated';
+export type { ClientID } from '../data/clientIds.generated';
 
 export interface PluginAuthor {
   name: string;
@@ -15,24 +17,6 @@ export interface PluginSource {
   icon_sha256?: string;
 }
 
-export type ClientID =
-  | 'codex'
-  | 'chatgpt'
-  | 'cursor'
-  | 'copilot'
-  | 'vscode'
-  | 'kiro'
-  | 'claude'
-  | 'gemini'
-  | 'opencode'
-  | 'cline'
-  | 'windsurf'
-  | 'grok'
-  | 'kimi'
-  | 'qoder'
-  | 'hermes'
-  | 'antigravity'
-  | 'pi';
 export type ComponentID = 'extensions' | 'mcp' | 'skills';
 export type DistributionKind = 'upstream' | 'community_bridge' | 'community' | 'direct';
 export type EvidenceLevel = 'schema' | 'materialization' | 'discovery' | 'runtime' | 'oauth';

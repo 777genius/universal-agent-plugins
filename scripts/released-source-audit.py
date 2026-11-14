@@ -22,6 +22,8 @@ import urllib.request
 import zipfile
 from datetime import datetime, timezone
 
+import yaml
+
 ROOT = Path(__file__).resolve().parents[1]
 RELEASE_TAG = "agentplugins-v0.1.108"
 RELEASE_COMMIT = "8c3cfa28e332c533b0cc0845739c0275730a4285"
@@ -207,6 +209,107 @@ def checked_saved_removal(documents, alias, case, root):
             "remove retained a locked package")
 
 
+def checked_saved_intent(documents, alias, case, root):
+    """Observe saved immutable intent, independently of reported managed state."""
+    require(alias == case["name"], "saved alias differs from release manifest name")
+    bodies = []
+    for path in documents:
+        body, _ = read_saved_record(in_case(path, root))
+        require(body is not None, "saved manifest or lock is absent")
+        bodies.append(body)
+    manifest = tomllib.loads(bodies[0].decode("utf-8"))
+    locked = json.loads(bodies[1], object_pairs_hook=live._unique_json_object)
+    source = case["source"]
+    key = f'github:{source["repository"].lower()}:{source["path"]}'
+    selector = {"kind": "commit", "value": source["revision"]}
+    # environment_session.go writes the canonical GitHub HTTPS endpoint.
+    expected = {"schema_version": 1, "dependencies": {alias: {
+        "git": f'https://github.com/{source["repository"]}.git',
+        "path": source["path"], "commit": source["revision"]}},
+        "targets": {case["client"]: [alias]}}
+    require(type(manifest.get("schema_version")) is int and manifest == expected,
+            "saved manifest differs from exact source, commit or target intent")
+    # This is the existing environment.ManifestDigest wire, for this one root.
+    intent = {"schema_version": 1, "dependencies": [{"alias": alias, "source_key": key,
+              "path": source["path"], "selector": selector}],
+              "targets": [{"id": case["client"], "aliases": [alias]}]}
+    intent_digest = digest(json.dumps(intent, separators=(",", ":")).encode())
+    require(isinstance(locked, dict) and type(locked.get("lock_version")) is int
+            and locked["lock_version"] == 1 and locked.get("manifest_digest") == intent_digest,
+            "saved lock does not bind the exact manifest intent")
+    packages = locked.get("packages")
+    require(isinstance(packages, list) and len(packages) == 1 and isinstance(packages[0], dict),
+            "saved lock must contain exactly the requested root package")
+    package = packages[0]
+    expected_source = {"git": {"repository": source["repository"], "path": source["path"],
+                              "requested": selector, "commit": source["revision"]}}
+    require(package.get("source") == expected_source, "saved lock lost the immutable requested Git source")
+    for field, value in {"alias": alias, "targets": [case["client"]], "source_key": key,
+                         "digest_algorithm": "agentplugins-tree-sha256-v1",
+                         "tree_digest": case["tree_digest"], "manifest_digest": case["manifest_digest"]}.items():
+        require(package.get(field) == value, "saved lock has incorrect " + field)
+    require(not package.get("required_by"), "saved root unexpectedly became a dependency")
+    return {"manifest_sha256": digest(bodies[0]), "lock_sha256": digest(bodies[1]),
+            "intent_digest": intent_digest, "alias": alias, "source_key": key}
+
+
+def checked_native_materialization(selected_root, locator, case, binding, root):
+    """Read the owned native Notion MCP entry; file changes alone are no proof."""
+    pin = live.MARKETING_KIT_SIGNED_CLOSURE["777genius/notion"]
+    require(case["distribution"] == "777genius/notion" and case["name"] == "notion"
+            and case["release_sequence"] == pin["release_sequence"] and case["components"] == ["mcp"]
+            and case["source"] == {"repository": pin["repository"], "revision": pin["resolved_revision"],
+                                   "path": pin["package_path"]}
+            and all(case[field] == pin[field] for field in ("tree_digest", "manifest_digest")),
+            "native content oracle requires the reviewed immutable Notion source")
+    client, scope = case["client"], case["scope"]
+    require(client in CLIENTS and scope in ("user", "project")
+            and (client != "hermes" or scope == "user"), "native MCP scope has no reviewed oracle")
+    require(binding.get("client_id") == client and binding.get("scope") == scope
+            and Path(binding["target_locator"]) == locator, "native proof differs from the selected binding")
+    in_case(selected_root, root)
+    in_case(locator, root)
+    objects = binding.get("native_objects", [])
+    require(isinstance(objects, list) and all(isinstance(item, dict) for item in objects),
+            "native ownership is malformed")
+    packages = [item for item in objects if item.get("kind") == "managed_package_directory"]
+    members = [item for item in objects if item.get("kind") != "managed_package_directory"]
+    physical = binding.get("physical_artifact_id")
+    require(isinstance(physical, str) and physical and len(packages) == 1
+            and packages[0].get("object_id") == f"package:{client}:{physical}"
+            and packages[0].get("logical_name") == "notion" and Path(packages[0].get("path", "")) == locator
+            and packages[0].get("protection_class") == "managed" and not packages[0].get("user_modified")
+            and re.fullmatch(r"sha256:[0-9a-f]{64}", packages[0].get("managed_digest", "")),
+            "managed package directory ownership differs from the selected binding")
+    if client == "antigravity":
+        # AGY owns the entire managed plugin, not a separate global MCP entry.
+        require(not members and locator.parent == selected_root / "plugins", "native plugin is in another scope or has foreign ownership")
+        manifest_body, _ = read_saved_record(in_case(locator / "plugin.json", root))
+        require(manifest_body is not None, "native plugin manifest is absent")
+        manifest = json.loads(manifest_body, object_pairs_hook=live._unique_json_object)
+        require(isinstance(manifest, dict) and manifest.get("name") == "notion"
+                and manifest.get("$schema") == "https://antigravity.google/schemas/v1/plugin.json"
+                and manifest.get("version") == pin["package_version"]
+                and set(manifest) <= {"$schema", "name", "displayName", "version", "description"},
+                "native plugin manifest does not load the reviewed default MCP config")
+        path, collection, entry = locator / "mcp_config.json", "mcpServers", {"serverUrl": "https://mcp.notion.com/mcp"}
+    else:
+        path = selected_root / ("config.yaml" if client == "hermes" else "mcp.json")
+        collection, entry = ("mcp_servers" if client == "hermes" else "mcpServers"), {"url": "https://mcp.notion.com/mcp"}
+        kind = "hermes_user_mcp" if client == "hermes" else f"pi_{scope}_mcp_server"
+        require(len(members) == 1 and members[0].get("kind") == kind
+                and members[0].get("logical_name") == "notion" and members[0].get("object_id") == kind + ":notion"
+                and Path(members[0].get("path", "")) == path and members[0].get("protection_class") == "managed",
+                "native MCP entry is not owned at the selected scope and path")
+    body, _ = read_saved_record(in_case(path, root))
+    require(body is not None, "selected native MCP config is absent")
+    value = yaml.safe_load(body) if client == "hermes" else json.loads(body, object_pairs_hook=live._unique_json_object)
+    require(isinstance(value, dict) and isinstance(value.get(collection), dict)
+            and value[collection].get("notion") == entry, "owned native MCP entry differs from the reviewed transport and URL")
+    return {"path": path.relative_to(root).as_posix(), "logical_name": "notion",
+            "entry": entry, "config_sha256": digest(body)}
+
+
 def checked_binding(state, case):
     installations = state.get("installations", [])
     require(len(installations) == 1, "expected one saved installation")
@@ -389,21 +492,28 @@ def run_case(binary, case, root, executable):
             outcome = {"status": "expected-dependency-refusal", "refusal": refusal}
         else:
             installation, binding, receipt = checked_binding(state_file(root, case["scope"]), case)
+            saved_intent = {"add": checked_saved_intent(documents, receipt["alias"], case, root)}
             locator = in_case(Path(binding["target_locator"]), root)
             require(locator.is_dir() and bool(live.snapshot([locator])), "materialized artifact is missing")
+            native_content = checked_native_materialization(selected_root, locator, case, binding, root)
             native_after = live.snapshot([selected_root])
             require(native_after != before, "native materialization was not independently observed")
-            require(all(path.is_file() for path in documents), "saved manifest/lock are absent")
             run("info", installation["installation_id"])
             run("list")
             # Exercise the actual updater; repeating add is not update evidence.
             run("update", receipt["alias"])
-            updated, updated_binding, _ = checked_binding(state_file(root, case["scope"]), case)
+            updated, updated_binding, updated_receipt = checked_binding(state_file(root, case["scope"]), case)
+            saved_intent["update"] = checked_saved_intent(documents, updated_receipt["alias"], case, root)
             require(updated["installation_id"] == installation["installation_id"], "update changed saved identity")
+            require(checked_native_materialization(selected_root, locator, case, updated_binding, root) == native_content,
+                    "update changed owned native MCP content")
             require(live.snapshot([selected_root]) == native_after, "immutable no-change update changed native files")
             run("repair", receipt["alias"])
-            repaired, repaired_binding, _ = checked_binding(state_file(root, case["scope"]), case)
+            repaired, repaired_binding, repaired_receipt = checked_binding(state_file(root, case["scope"]), case)
+            saved_intent["repair"] = checked_saved_intent(documents, repaired_receipt["alias"], case, root)
             require(repaired["installation_id"] == installation["installation_id"], "repair changed saved identity")
+            require(checked_native_materialization(selected_root, locator, case, repaired_binding, root) == native_content,
+                    "repair changed owned native MCP content")
             require(live.snapshot([selected_root]) == native_after, "healthy repair changed native files")
             run("remove", receipt["alias"])
             listed, _ = run("list")
@@ -415,6 +525,7 @@ def run_case(binary, case, root, executable):
             outcome = {"status": "materialized-lifecycle-passed", "installation_id": installation["installation_id"],
                        "activation_observed": [binding["activation"], updated_binding["activation"], repaired_binding["activation"]],
                        "native_files_after_add": len(native_after), "native_cleanup": cleanup,
+                       "saved_intent": saved_intent, "native_content": native_content,
                        "update": "immutable-no-change", "repair": "healthy-repair"}
         require(protected_scope_snapshot(root, case["scope"], protected_root) == protected, "other scope changed")
         return {**case, **outcome, "trace": trace, "activation_qualified": False, "runtime_qualified": False}

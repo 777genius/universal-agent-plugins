@@ -224,6 +224,11 @@ vet:
 	cd plugininstall && go vet ./...
 	cd sdk && go vet ./...
 
+.PHONY: client-contract-check
+client-contract-check:
+	go test -count=1 ./cli/cmd/genclientcapabilities
+	node --experimental-strip-types --test landing/tests/client-contract.test.ts landing/tests/client-support-readme.test.ts
+
 generated-check:
 	bash ./scripts/check-generated-sync.sh
 	$(MAKE) version-sync-check

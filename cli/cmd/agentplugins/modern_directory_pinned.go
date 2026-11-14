@@ -52,9 +52,9 @@ func newPinnedModernDirectoryClient(dataRoot string, approved pinnedModernDirect
 	if err != nil || len(legacy) != ed25519.PublicKeySize || bytes.Equal(raw, legacy) {
 		return nil, fmt.Errorf("modern Directory cannot reuse the historical signing key")
 	}
-	trust := directoryv1.TrustStore{Keys: []directoryv1.TrustedKey{{
+	trust := directoryv1.NewModernTrustStore([]directoryv1.TrustedKey{{
 		ID: approved.KeyID, PublicKey: ed25519.PublicKey(raw), State: directoryv1.KeyCurrent,
-	}}}
+	}})
 	verified, err := approved.Bootstrap.Verify(trust)
 	if err != nil {
 		return nil, fmt.Errorf("modern Directory pinned bootstrap failed signature verification: %w", err)

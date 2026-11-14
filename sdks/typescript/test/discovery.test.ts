@@ -105,6 +105,7 @@ for (const [mode, code] of [
 test('discovery preserves native profile locators while filtering credentials and launch options', async () => {
   const input = await options('environment');
   const profiles = {
+    hermes: join(directory, 'selected-hermes-profile'),
     pi: join(directory, 'selected-pi-profile'),
     qoder: join(directory, 'selected-qoder-profile'),
   };
@@ -112,9 +113,12 @@ test('discovery preserves native profile locators while filtering credentials an
     ...input,
     env: {
       ...input.env,
+      HERMES_HOME: profiles.hermes,
+      HERMES_DATA_DIR_SUFFIX: '-fixture',
       PI_CODING_AGENT_DIR: profiles.pi,
       QODER_CONFIG_DIR: profiles.qoder,
       OPENAI_API_KEY: 'fixture-secret',
+      HERMES_API_KEY: 'fixture-secret',
       ANTHROPIC_AUTH_TOKEN: 'fixture-secret',
       NODE_OPTIONS: '--unexpected',
       HTTP_PROXY: 'http://fixture-secret@invalid',
@@ -124,6 +128,7 @@ test('discovery preserves native profile locators while filtering credentials an
   });
   assert.equal(result.targets[0]?.label, 'Gemini CLI');
   assert.equal(result.targets[0]?.profile?.configRoot, input.env.GEMINI_CLI_HOME);
+  assert.equal(result.targets.find((target) => target.client === 'hermes')?.label, 'hermes-fixture');
   for (const [client, configRoot] of Object.entries(profiles)) {
     assert.deepEqual(result.targets.find((target) => target.client === client)?.profile, {
       id: client,

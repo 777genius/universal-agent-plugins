@@ -88,6 +88,12 @@ jobs:
         with:
           node-version: '22.21.1'
           package-manager-cache: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - name: Install pinned native config parser
+        shell: bash
+        run: ${{ runner.os == 'Windows' && 'python' || 'python3' }} -m pip install PyYAML==6.0.3
       - name: Require exact harness and exercise receipt refusals
         shell: bash
         run: |
