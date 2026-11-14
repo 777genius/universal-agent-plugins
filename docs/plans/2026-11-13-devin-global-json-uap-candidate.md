@@ -901,3 +901,56 @@ Python execution, original ZIP replay, and the next genuine Global lifecycle
 remain unexecuted or pending in this workspace; no native success is inferred
 from these source-only checks. The old 440 and fe6 originals do not establish
 which extra member or required member caused their membership refusals.
+
+### Existing post-native Skill refusals in the closed CI readout
+
+The genuine `40c6bb2d27a9282755ec3a739c236eb9dc2875f2` Global job
+`132410228597` in run `43582150859` ended at `skills-installed-a`.
+Its original 49,587-byte job log has SHA-256
+`5b60f2bdea08c4d7a64fe6843e187b10114471e29c1a96262ba7a13ba208b76b`.
+The existing readout reports 22 recorded commands, zero failed commands, and
+effects through `mcp-installed-a`; it does not contain an accepted Skills
+effect. Metadata capture and cleanup are true, while collection is false.
+This narrows the refusal to the checks following that command; it does not
+establish which predicate failed. The original archive remains unread here.
+
+At base `751f87114212bee56324ef4f58a991328da7b43f`, the unchanged Global
+producer contains seven fixed post-native messages: native row container,
+owned Skill membership, owned Skill identity, nonauxiliary authority change,
+existing task-born log change, multiple new logs, and reused task-born log
+name. The nonauxiliary-authority and existing-log-change messages each have
+two source sites; their classification does not identify a traceback line or
+causal branch.
+
+Only the existing 16 KiB `DEVIN_CLOSED_READOUT` frame gains an optional
+`native_skill_refusal` scalar. Selection uses exact complete
+`ValueError: ...` string equality against those seven literals in the
+already-held summary. No raw error, row value, path, private hash, new
+summary/artifact member, filesystem read, or native command is introduced.
+
+Eligibility is checked first: the recipe must be ordinary-global and the
+phase one of the six existing Skills phases from the producer's NATIVE
+catalog. The same messages in MCP or other recipes retain the previous
+readout unchanged. Unknown, near-match and non-string errors are ignored
+without coercion. A known eligible message requires collection false,
+metadata and ordinary metadata complete, no completed Global lifecycle,
+the unchanged unclassified-refusal reason, one uniquely matching last
+command with exact integer exit zero and no error, and no accepted effect
+for that phase. Contradictory claims refuse only the existing projection.
+The artifact publication decision and its order remain unchanged; source,
+cleanup, qualification, deadline, and output bounds are preserved.
+
+The candidate changes only the structured collector, this plan, and the
+existing Global test file. All 50 incoming test methods and the existing
+membership projection remain byte-identical. Six appended inert methods
+cover actual Journey row-refusal branches, actual metadata/log refusals,
+all six phases, MCP/other-recipe and poisoned/unknown error preservation,
+command/effect/authority contradictions, and the unchanged publication
+followed by exactly one bounded console frame. Fixture command ports are
+inert; these contracts do not execute Devin or qualify a native lifecycle.
+
+Root reviewed and approved the three-path design, including the requirement
+that non-Skills eligibility precede literal matching. Whole-file inverses
+and source-held literal references are checked before independent R2.
+Python tests, original ZIP replay, and the next genuine current-source
+Global result remain unexecuted or pending; no runtime pass is claimed.

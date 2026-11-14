@@ -1359,5 +1359,180 @@ class GlobalLifecycleContracts(unittest.TestCase):
                 self.assertEqual(value, dict(schema_version=1, reason="readout-refused"))
 
 
+    def native_skill_readout_summary(self, message, phase="skills-installed-a"):
+        summary, state = self.membership_readout_summary(message, phase)
+        summary["commands"].append(dict(probe=phase, exit=0, error=None))
+        return summary, state
+
+    def test_native_skill_readout_joins_actual_inert_row_refusals(self):
+        # Inert caller ports exercise the unchanged Journey.native refusal branches.
+        for variant, wanted in (("container", "row-container"), ("membership", "owned-membership"),
+                                ("identity", "owned-identity")):
+            with self.subTest(variant=variant):
+                summary, state = self.membership_readout_summary("unused", "skills-installed-a")
+                ctx = SimpleNamespace(root=Path("/owned"), projects={"a": Path("/owned/a"), "b": Path("/owned/b")},
+                                      summary=summary, budget=object(), global_readout_state=state)
+                journey = object.__new__(case.Journey)
+                journey.ctx, journey.profile = ctx, Path("/owned/home/config/devin")
+                journey.expected, journey.nonce = {"user": {"mcp": {}}}, "n" * 64
+                journey.probes, journey.log_births, journey.native_labels = {}, {}, []
+                journey.frame = mock.Mock(return_value=({}, {}))
+                journey.read = mock.Mock(return_value=json.dumps({"mcpServers": {name: {} for name in case.SERVERS}}).encode())
+                row = case.owned_skill_row(ctx, journey.profile, "a")
+                row["description"] = "PRIVATE changed description"
+                emitted = {"PRIVATE": "not a list"} if variant == "container" else [] if variant == "membership" else [row]
+                def probe(label, arguments, *, project):
+                    self.assertEqual(project, "a")
+                    kind = "mcp" if label == "mcp-installed-a" else "skills"
+                    self.assertEqual((label, arguments), (kind + "-installed-a", [kind, "list", "--json"]))
+                    record = dict(probe=label, exit=0, error=None)
+                    summary["commands"].append(record)
+                    rows = [{"name": name} for name in case.SERVERS] if kind == "mcp" else emitted
+                    return record, json.dumps(rows).encode(), b""
+                ctx.probe = mock.Mock(side_effect=probe)
+                with (mock.patch.object(case.base, "metadata_inventory", return_value={}),
+                      mock.patch.object(case.base, "verify_metadata_sources"),
+                      mock.patch.object(case.base, "verify_skill_metadata_sources", side_effect=AssertionError("foreign rows reached")),
+                      mock.patch.object(case.base, "zero_effects")):
+                    with self.assertRaises(ValueError) as caught:
+                        journey.native("installed")
+                summary["error"] = type(caught.exception).__name__ + ": " + str(caught.exception)
+                state["reason"] = case.base.readout_reason(caught.exception)
+                original = copy.deepcopy(summary)
+                with (mock.patch.object(case.base, "metadata_inventory", side_effect=AssertionError("second census")),
+                      mock.patch.object(os, "read", side_effect=AssertionError("body read")),
+                      mock.patch.object(case.base.shared, "run_probe", side_effect=AssertionError("native command"))):
+                    value = case.base.closed_readout(summary, state)
+                self.assertEqual(value["native_skill_refusal"], wanted)
+                self.assertEqual((state["phase"], value["reason"]), ("skills-installed-a", "unclassified-refusal"))
+                self.assertEqual((ctx.probe.call_count, journey.native_labels), (2, ["mcp-installed-a"]))
+                self.assertEqual([item["phase"] for item in value["effects"]], ["mcp-installed-a"])
+                self.assertEqual(summary, original)
+                self.assertNotIn("PRIVATE", json.dumps(value))
+
+    def test_native_skill_readout_joins_actual_metadata_and_log_refusals(self):
+        log = "home/data/devin/cli/logs/devin_20261113-180000_12.log"
+        second = "home/data/devin/cli/logs/devin_20261113-180000_13.log"
+        for variant, wanted in (("foreign", "nonauxiliary-authority"), ("changed", "existing-log-changed"),
+                                ("multiple", "multiple-new-logs"), ("reused", "log-name-reused")):
+            with self.subTest(variant=variant):
+                journey = object.__new__(case.Journey)
+                journey.log_births = {log: {}} if variant == "reused" else {}
+                names = (log, second) if variant == "multiple" else (("project-b/PRIVATE",) if variant == "foreign" else (log,))
+                after = dict.fromkeys(names, (2,))
+                before = dict.fromkeys(names, (1,)) if variant in ("foreign", "changed") else {}
+                old = {name: {"sha256": "before"} for name in before}
+                now = {name: {"sha256": "PRIVATE body hash"} for name in after}
+                with self.assertRaises(ValueError) as caught:
+                    journey.verify_native_delta(before, after, old, now, "skills-installed-a")
+                summary, state = self.native_skill_readout_summary(str(caught.exception))
+                original = copy.deepcopy(summary)
+                value = case.base.closed_readout(summary, state)
+                self.assertEqual(value["native_skill_refusal"], wanted)
+                self.assertEqual(summary, original)
+                self.assertNotIn("PRIVATE", json.dumps(value))
+                self.assertNotIn(log, json.dumps(value))
+
+    def test_native_skill_readout_retains_all_six_existing_skills_phases(self):
+        phases = tuple(label for label in case.NATIVE if label.startswith("skills-"))
+        self.assertEqual(len(phases), 6)
+        for phase in phases:
+            for completion in ("absent", False):
+                with self.subTest(phase=phase, completion=completion):
+                    summary, state = self.native_skill_readout_summary("Global native Skill identity", phase)
+                    if completion is False:
+                        summary["global_lifecycle_capture_complete"] = False
+                    value = case.base.closed_readout(summary, state)
+                    self.assertEqual(value["native_skill_refusal"], "owned-identity")
+                    self.assertIs(value["collection_complete"], False)
+                    self.assertEqual((value["phase"], value["commands"], value["failed_commands"]), (phase, 1, 0))
+
+    def test_native_skill_readout_leaves_mcp_other_recipes_and_unknown_errors_unchanged(self):
+        message = "Global native row container"
+        for recipe, phase in (("ordinary", "skills-a"), ("structured", "mcp-a"),
+                              *(("ordinary-global", label) for label in case.NATIVE if label.startswith("mcp-")),
+                              ("ordinary-global", "uap-add")):
+            with self.subTest(recipe=recipe, phase=phase):
+                summary, state = self.native_skill_readout_summary("unused", phase)
+                summary["metadata_recipe"] = recipe
+                expected = case.base.closed_readout(summary, state)
+                summary["error"] = "ValueError: " + message
+                self.assertEqual(case.base.closed_readout(summary, state), expected)
+                self.assertNotIn("native_skill_refusal", expected)
+        class Poison:
+            def __str__(self): raise AssertionError("stringified error")
+            def __repr__(self): raise AssertionError("represented error")
+        summary, state = self.native_skill_readout_summary("unused")
+        expected = case.base.closed_readout(summary, state)
+        errors = (None, Poison(), "", "PRIVATE" * 4096, "ValueError: Global native Skill identity ",
+                  "ValueError: Global native Skill identity\nPRIVATE", "RuntimeError: Global native Skill identity",
+                  "ValueError: Global native Skill identity: PRIVATE", "ValueError: Global native MCP membership")
+        for index, error in enumerate(errors):
+            with self.subTest(index=index):
+                summary["error"] = error
+                self.assertEqual(case.base.closed_readout(summary, state), expected)
+
+    def test_native_skill_readout_refuses_authority_and_command_contradictions(self):
+        faults = (("collection_complete", True), ("metadata_capture_complete", False),
+                  ("ordinary_metadata_capture_complete", False), ("ordinary_metadata_capture_complete", 1),
+                  ("ordinary_metadata_capture_complete", None), ("global_lifecycle_capture_complete", True),
+                  ("global_lifecycle_capture_complete", 0), ("global_lifecycle_capture_complete", None),
+                  ("cleanup_complete", False), ("admission_qualified", True), ("artifact_admission_failed", True),
+                  ("source_commit", "unknown"), ("source_tree", True))
+        for key, value in faults:
+            with self.subTest(key=key, value=value):
+                summary, state = self.native_skill_readout_summary("Global native Skill identity")
+                summary[key] = value
+                with self.assertRaises(ValueError): case.base.closed_readout(summary, state)
+        for fault in ("missing-ordinary", "qualification", "reason", "deadline", "empty", "wrong-probe",
+                      "duplicate", "later-command", "exit", "bool-exit", "error", "missing-error", "accepted-effect"):
+            with self.subTest(fault=fault):
+                summary, state = self.native_skill_readout_summary("Global native Skill identity")
+                if fault == "missing-ordinary": del summary["ordinary_metadata_capture_complete"]
+                elif fault == "qualification": summary["qualification"][next(iter(summary["qualification"]))] = True
+                elif fault == "reason": state["reason"] = "native-command-refused"
+                elif fault == "deadline": state["deadline"] = 0.0
+                elif fault == "empty": summary["commands"].clear()
+                elif fault == "wrong-probe": summary["commands"][-1]["probe"] = "mcp-installed-a"
+                elif fault == "duplicate": summary["commands"].append(dict(summary["commands"][-1]))
+                elif fault == "later-command": summary["commands"].append(dict(probe="mcp-installed-b", exit=0, error=None))
+                elif fault == "exit": summary["commands"][-1]["exit"] = 1
+                elif fault == "bool-exit": summary["commands"][-1]["exit"] = False
+                elif fault == "error": summary["commands"][-1]["error"] = "PRIVATE transport error"
+                elif fault == "missing-error": del summary["commands"][-1]["error"]
+                else: summary["command_effects"].append(dict(label=state["phase"], changes={}, outer_changes={}))
+                with self.assertRaises(ValueError): case.base.closed_readout(summary, state)
+
+    def test_native_skill_projection_keeps_the_original_publication_and_single_frame(self):
+        for refused in (False, True):
+            with self.subTest(refused=refused):
+                summary, state = self.native_skill_readout_summary("Global native Skill identity")
+                if refused:
+                    summary["commands"][-1]["exit"] = 1
+                original = copy.deepcopy(summary)
+                identity, output, ctx, order = object(), Path("/owned-output"), object(), []
+                with (mock.patch.object(case.base.shared, "publish", side_effect=lambda *_: order.append("publish")) as publish,
+                      mock.patch.object(case.base, "root_identity", return_value=identity),
+                      mock.patch.object(os, "write", side_effect=lambda *_: order.append("write")) as write):
+                    case.base.publish_with_readout(summary, ctx, output, identity, state)
+                publish.assert_called_once_with(summary, ctx, output)
+                write.assert_called_once()
+                self.assertEqual(order, ["publish", "write"])
+                descriptor, body = write.call_args.args
+                self.assertEqual(descriptor, 1)
+                self.assertTrue(body.startswith(b"DEVIN_CLOSED_READOUT=") and body.endswith(b"\n"))
+                self.assertEqual(body.count(b"\n"), 1)
+                self.assertLessEqual(len(body), (16 << 10) + 32)
+                self.assertNotIn(b"Global native Skill", body)
+                value = json.loads(body[len(b"DEVIN_CLOSED_READOUT="):-1])
+                if refused:
+                    self.assertEqual(value, dict(schema_version=1, reason="readout-refused"))
+                else:
+                    self.assertEqual(value["native_skill_refusal"], "owned-identity")
+                    self.assertEqual(value["reason"], "unclassified-refusal")
+                    self.assertIs(value["collection_complete"], False)
+                self.assertEqual(summary, original)
+
+
 if __name__ == "__main__":
     unittest.main()

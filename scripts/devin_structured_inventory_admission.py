@@ -599,6 +599,44 @@ def closed_membership_refusal(summary, state, phases):
     return None
 
 
+def closed_native_skill_refusal(summary, state, phases):
+    """Project exact existing post-native Skill refusals, without raw error text."""
+    if (summary.get("metadata_recipe") != "ordinary-global"
+            or type(state.get("phase")) is not str or state["phase"] not in phases):
+        return None
+    error = summary.get("error")
+    if type(error) is not str:
+        return None
+    reasons = {
+        "ValueError: Global native row container": "row-container",
+        "ValueError: Global native Skill membership": "owned-membership",
+        "ValueError: Global native Skill identity": "owned-identity",
+        "ValueError: native Global changed nonauxiliary authority": "nonauxiliary-authority",
+        "ValueError: existing task-born log changed": "existing-log-changed",
+        "ValueError: Global native multiple new logs": "multiple-new-logs",
+        "ValueError: task-born log name reused": "log-name-reused",
+    }
+    reason = reasons.get(error)
+    if reason is None:
+        return None
+    require(summary.get("collection_complete") is False
+            and summary.get("metadata_capture_complete") is True
+            and summary.get("ordinary_metadata_capture_complete") is True
+            and summary.get("global_lifecycle_capture_complete", False) is False
+            and state.get("reason") == "unclassified-refusal", "readout native Skill context")
+    commands = summary.get("commands")
+    require(type(commands) is list and len(commands) > 0, "readout native Skill command")
+    selected = [row for row in commands if type(row) is dict and row.get("probe") == state["phase"]]
+    require(len(selected) == 1 and commands[-1] is selected[0]
+            and type(selected[0].get("exit")) is int and selected[0]["exit"] == 0
+            and "error" in selected[0] and selected[0]["error"] is None,
+            "readout native Skill command")
+    effects = summary.get("command_effects", [])
+    require(type(effects) is list and all(type(row) is dict and row.get("label") != state["phase"]
+            for row in effects), "readout native Skill effect already accepted")
+    return reason
+
+
 def closed_readout(summary, state):
     def budget():
         require(type(state['deadline']) is float and time.monotonic() < state['deadline'], 'readout deadline')
@@ -606,6 +644,7 @@ def closed_readout(summary, state):
     labels, phases, maximum_commands, maximum_effects = READOUT_LABELS, READOUT_PHASES, 60, 13
     build_refusal = None
     membership_phases = frozenset()
+    native_skill_phases = frozenset()
     if summary.get("metadata_recipe") == "ordinary-global":
         from devin_global_lifecycle_admission import NATIVE, PUBLIC, closed_build_authority_refusal
         labels = labels | frozenset(NATIVE + PUBLIC)
@@ -613,6 +652,7 @@ def closed_readout(summary, state):
         maximum_commands, maximum_effects = 37, 30
         build_refusal = closed_build_authority_refusal(summary, state)
         membership_phases = frozenset(NATIVE + PUBLIC) | {"global-skill-quarantine"}
+        native_skill_phases = frozenset(label for label in NATIVE if label.startswith("skills-"))
     else:
         require("global_build_authority_refusal" not in summary, 'readout build diagnostic recipe')
     require(type(state['phase']) is str and state['phase'] in phases
@@ -665,6 +705,8 @@ def closed_readout(summary, state):
     if build_refusal is not None: value['build_authority_refusal'] = build_refusal
     membership_refusal = closed_membership_refusal(summary, state, membership_phases)
     if membership_refusal is not None: value['membership_refusal'] = membership_refusal
+    native_skill_refusal = closed_native_skill_refusal(summary, state, native_skill_phases)
+    if native_skill_refusal is not None: value['native_skill_refusal'] = native_skill_refusal
     budget()
     require(len(json.dumps(value).encode()) <= 16 << 10, 'readout output bound')
     return value
