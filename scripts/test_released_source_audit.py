@@ -516,7 +516,7 @@ class SavedScopeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             manifest, lock = root / "uap.toml", root / "uap.lock"
-            manifest.write_text("schema_version = 1\\n[dependencies]\\n[targets]\\n", encoding="utf-8")
+            manifest.write_text("schema_version = 1\n[dependencies]\n[targets]\n", encoding="utf-8")
             lock.write_text('{"lock_version":1,"packages":[{"alias":"portable"}],"packages":[]}',
                             encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "duplicate JSON field"):
