@@ -1,0 +1,49 @@
+name: One-off README WebP migration
+on:
+  push:
+    branches:
+      - docs/optimize-readme-inline-cli-webp-20261114
+    paths:
+      - .github/workflows/one-off-readme-webp-20261114.yml
+permissions:
+  contents: write
+jobs:
+  convert:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install image encoder
+        run: python3 -m pip install --user 'Pillow==11.3.0'
+      - name: Convert the one README-only raster asset
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          from PIL import Image
+          source = Path('landing/assets/images/showcase/agent-notifications.png')
+          target = Path('assets/agent-notifications.webp')
+          readme = Path('README.md')
+          original = Image.open(source).convert('RGBA')
+          reduced = original.copy()
+          reduced.thumbnail((160, 160), Image.Resampling.LANCZOS)
+          reduced.save(target, format='WEBP', lossless=True, method=6)
+          check = Image.open(target).convert('RGBA')
+          assert check.size == reduced.size, 'WebP dimensions changed'
+          assert check.getchannel('A').tobytes() == reduced.getchannel('A').tobytes(), 'Transparency changed'
+          assert target.stat().st_size < source.stat().st_size, 'WebP did not save bytes'
+          old = 'landing/assets/images/showcase/agent-notifications.png'
+          text = readme.read_text()
+          assert text.count(old) == 1, 'Unexpected README reference count'
+          readme.write_text(text.replace(old, 'assets/agent-notifications.webp'))
+          print(f'README WebP: {source.stat().st_size} -> {target.stat().st_size} bytes, {original.size} -> {reduced.size}')
+          PY
+      - name: Commit optimized README asset
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add README.md assets/agent-notifications.webp
+          git diff --cached --check
+          git commit -m 'docs: serve the README showcase icon as compact lossless WebP'
+          git push origin "HEAD:${GITHUB_REF_NAME}"
