@@ -455,7 +455,7 @@ class Matrix:
 
     def case_corrupt_journal(self, fixture, evidence):
         journal = fixture.data / "operations-v2"
-        journal.mkdir(parents=True, exist_ok=True)
+        journal.mkdir(mode=0o700, parents=True, exist_ok=True)
         (journal / "broken.json").write_text("{", encoding="utf-8")
         before = self.protected(fixture)
         result, _ = self.add(fixture, evidence, expect=False)

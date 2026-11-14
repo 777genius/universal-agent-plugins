@@ -31,8 +31,8 @@ func TestRepairCompletionNeverClaimsSuccessAfterNativeError(t *testing.T) {
 			}
 			var envelope struct {
 				Command string `json:"command"`
-				Result string `json:"result"`
-				Data struct {
+				Result  string `json:"result"`
+				Data    struct {
 					Result usecase.AddResult `json:"result"`
 				} `json:"data"`
 			}
@@ -40,10 +40,38 @@ func TestRepairCompletionNeverClaimsSuccessAfterNativeError(t *testing.T) {
 				t.Fatal(err)
 			}
 			if envelope.Command != "repair" || envelope.Result != "failure" || !envelope.Data.Result.Mutated ||
-				envelope.Data.Result.Activation.NativeEffect != domain.NativeEffectUncertain {
-				t.Fatalf("failed repair mislabeled or lost its partial native effect: %+v", envelope)
+				envelope.Data.Result.Activation.Activation != domain.ActivationPrepared {
+				t.Fatalf("failed repair mislabeled or lost its public partial outcome: %+v", envelope)
+			}
+			var public struct {
+				Data struct {
+					Result struct {
+						Activation map[string]json.RawMessage `json:"activation"`
+					} `json:"result"`
+				} `json:"data"`
+			}
+			if err := json.Unmarshal(out.Bytes(), &public); err != nil {
+				t.Fatal(err)
+			}
+			activation := public.Data.Result.Activation
+			if len(activation) != 4 {
+				t.Fatalf("repair exposed private activation evidence: %v", activation)
+			}
+			for _, key := range []string{"activation", "authentication", "policy", "verification"} {
+				if _, present := activation[key]; !present {
+					t.Fatalf("repair activation lost public field %q: %v", key, activation)
+				}
 			}
 		})
+	}
+}
+
+func TestRepairCompletionPreservesOperationAndWriterErrors(t *testing.T) {
+	nativeErr := errors.New("native transition was not verified")
+	writerErr := errors.New("repair output unavailable")
+	err := renderRepairCompletion(targetNoticeWriter{err: writerErr}, "json", domain.Installation{}, usecase.AddResult{Mutated: true}, nativeErr)
+	if !errors.Is(err, nativeErr) || !errors.Is(err, writerErr) {
+		t.Fatalf("repair lost the operation or output error: %v", err)
 	}
 }
 
@@ -54,7 +82,7 @@ func TestRepairCompletionKeepsSuccessfulJSONContract(t *testing.T) {
 	}
 	var envelope struct {
 		Command string `json:"command"`
-		Result string `json:"result"`
+		Result  string `json:"result"`
 	}
 	if err := json.Unmarshal(out.Bytes(), &envelope); err != nil || envelope.Command != "repair" || envelope.Result != "success" {
 		t.Fatalf("successful repair envelope changed: %+v, %v", envelope, err)
