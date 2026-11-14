@@ -2303,6 +2303,27 @@ def public_stdio_log(root, row, server, sessions):
 
 
 PUBLIC_SPAWN_NAMES = ("spawn-ledger.json", "spawn-ledger.json.lock")
+# Pinned concurrent-log-handler 0.9.30: only an exact empty Windows
+# lock born during this Project's successful native HTTP test is admissible.
+PUBLIC_NATIVE_LOG_LOCK = "logs/.__agent.lock"
+
+
+def public_native_log_lock(root, row):
+    path = root / PUBLIC_NATIVE_LOG_LOCK
+    require(os.name == "nt" and type(row) is dict
+            and set(row) == {"type", "mode", "device", "inode", "bytes", "sha256"}
+            and row["type"] == "file" and row["mode"] == 0o666
+            and type(row["bytes"]) is int and row["bytes"] == 0
+            and row["sha256"] == hashlib.sha256(b"").hexdigest(),
+            "public native log lock has unadmitted metadata")
+    info = path.lstat()
+    require(stat.S_ISREG(info.st_mode) and info.st_nlink == 1
+            and (info.st_dev, info.st_ino, stat.S_IMODE(info.st_mode), info.st_size)
+            == (row["device"], row["inode"], row["mode"], 0)
+            and ordinary_bytes(path, info) == b"",
+            "public native log lock is not the captured empty regular file")
+
+
 
 
 def public_spawn_install(root, native):
@@ -2462,7 +2483,7 @@ def public_spawn_read(root, outer, image, authorities):
     return {"rows": rows, "identities": identities}, bodies
 
 
-def public_profile(root, image, outer, config_hashes, *, stdio=None, spawn=None):
+def public_profile(root, image, outer, config_hashes, *, stdio=None, spawn=None, log_lock=None):
     prefix = root.relative_to(outer).as_posix()
     rows = {name[len(prefix) + 1:]: row for name, row in profile_tree(image, prefix).items() if name != prefix}
     marker = ("uap-hermes-project-session-v1\n" + str(root.parent.parent) + "\n").encode()
@@ -2471,6 +2492,11 @@ def public_profile(root, image, outer, config_hashes, *, stdio=None, spawn=None)
             and owner.get("sha256") == hashlib.sha256(marker).hexdigest(), "public retained root marker differs")
     directories = {"cron", "sessions", "logs", "logs/curator", "memories", "pairing", "hooks", "image_cache", "audio_cache", "skills", "backups", "backups/config"}
     files = {".uap-owner", "config.yaml", "config.yaml.agentplugins.lock", "SOUL.md", "logs/agent.log", "logs/errors.log"}
+    if log_lock is not None:
+        require(rows.get(PUBLIC_NATIVE_LOG_LOCK) == log_lock,
+                "public native log lock changed from its current-command receipt")
+        public_native_log_lock(root, log_lock)
+        files.add(PUBLIC_NATIVE_LOG_LOCK)
     if stdio is not None and stdio[1]:
         require("logs/mcp-stderr.log" in rows, "public stdio log is missing")
         public_stdio_log(root, rows["logs/mcp-stderr.log"], *stdio)
@@ -2815,6 +2841,7 @@ def observe_public(probes):
     configs, records, born, complete = {scope: set() for scope in projects}, [], {}, False
     stdio_completed = {scope: 0 for scope in projects}
     spawn_states = {scope: None for scope in projects}
+    native_log_locks = {scope: None for scope in projects}
 
     def snapshot():
         image, bindings = public_snapshot(outer, projects, pins)
@@ -2958,9 +2985,23 @@ def observe_public(probes):
         log_key = selected_prefix + "/logs/mcp-stderr.log"
         if test != "stdio":
             require(before.get(log_key) == after.get(log_key), "public non-stdio action changed the stdio log")
+        native_lock_key = selected_prefix + "/" + PUBLIC_NATIVE_LOG_LOCK
+        observed_lock = after.get(native_lock_key)
+        if native_log_locks[scope] is None:
+            if observed_lock is not None:
+                require(os.name == "nt" and native and not inspect and not expected_failure
+                        and test == "http" and previous[scope] is not None
+                        and before.get(native_lock_key) is None
+                        and args == ["mcp", "test", name + "-http"],
+                        "public native log lock appeared without this owned HTTP command")
+                public_native_log_lock(selected, observed_lock)
+                native_log_locks[scope] = dict(observed_lock)
+        else:
+            require(before.get(native_lock_key) == native_log_locks[scope] == observed_lock,
+                    "public native log lock changed after its admitted HTTP command")
         if selected.exists():
             public_profile(selected, after, outer, configs[scope], stdio=(name + "-stdio", stdio_completed[scope]),
-                           spawn=prospective[scope])
+                           spawn=prospective[scope], log_lock=native_log_locks[scope])
         records.append({"label": label, "scope": scope, "delta": delta,
                         "http_methods": http_after, "stdio_counts": {key: len(events_before[key]) for key in projects}})
         spawn_states.update(prospective)

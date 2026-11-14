@@ -463,3 +463,20 @@ do not replace the required genuine macOS/Windows CI executions.
 Fresh native-root publication uses the separately reviewed original-object seal
 described in [the publication correction](2026-11-14-native-root-publication.md).
 The earlier local callback candidate is not combined with that implementation.
+
+## 2026-11-14 — candidate Windows native HTTP log-lock qualification
+
+The pinned concurrent-log-handler 0.9.30 can leave an empty
+`logs/.__agent.lock` during a genuine Windows Project HTTP MCP test. The
+public observer now admits **only** an exactly captured zero-byte, one-link
+ordinary Windows file with the expected file mode, digest and object identity,
+born on the selected Project's successful native `mcp test <owned-http>`
+command after the original absence was observed. Its receipt must remain
+unchanged across every later command. The existing file/parent no-follow
+reader and full original profile delta remain mandatory; unknown sidecars,
+early locks, modified bytes and unrelated profiles still refuse.
+
+This is a source-level candidate and inert regression, **not** fresh native
+proof or a qualified Active status. The original Windows artifact must be
+rechecked for exact path, mode, source and command causality, and the final
+HEAD must pass Windows native/Required/security CI before guarded merge.

@@ -1910,6 +1910,47 @@ class PublicLifecycleContracts(unittest.TestCase):
             os.link(path,root/'alias')
             with self.assertRaises(RuntimeError):CASE['ordinary_bytes'](path,path.lstat(),pin=pin)
 
+    def test_public_windows_http_log_lock_requires_current_command_receipt(self):
+        # Inert filesystem fixture. The real native HTTP/handler cause remains
+        # an independently required original Windows workflow observation.
+        with tempfile.TemporaryDirectory() as temporary:
+            outer = Path(temporary).resolve()
+            root = outer / "public-a/.hermes/uap-session"
+            root.mkdir(parents=True)
+            marker = root / ".uap-owner"
+            marker.write_bytes(("uap-hermes-project-session-v1\n"
+                                + str(root.parent.parent) + "\n").encode())
+            marker.chmod(0o600)
+            lock = root / "logs/.__agent.lock"
+            lock.parent.mkdir()
+            lock.write_bytes(b"")
+            lock.chmod(0o666)
+            image = CASE["inventory"](outer)
+            row = image[lock.relative_to(outer).as_posix()]
+            profile = lambda receipt=None: CASE["public_profile"](
+                root, CASE["inventory"](outer), outer, set(), log_lock=receipt)
+            with self.assertRaisesRegex(RuntimeError, "unmeasured"):
+                profile()
+            if os.name == "nt":
+                profile(row)
+                lock.write_bytes(b"foreign")
+                with self.assertRaisesRegex(RuntimeError, "log lock"):
+                    profile(row)
+                lock.write_bytes(b"")
+                lock.chmod(0o666)
+                replaced = CASE["inventory"](outer)[lock.relative_to(outer).as_posix()]
+                # The file may have the same identity after a truncate; the
+                # current command must still preserve its original receipt.
+                with self.assertRaisesRegex(RuntimeError, "log lock"):
+                    CASE["public_profile"](root, CASE["inventory"](outer),
+                                            outer, set(), log_lock={**replaced, "bytes": 1})
+            else:
+                with self.assertRaisesRegex(RuntimeError, "log lock"):
+                    profile(row)
+            (root / "logs/unexpected.lock").write_bytes(b"")
+            with self.assertRaisesRegex(RuntimeError, "unmeasured"):
+                profile(row if os.name == "nt" else None)
+
     def test_public_native_catalog_refuses_unknown_effects_and_unowned_backups(self):
         with tempfile.TemporaryDirectory() as temporary:
             outer=Path(temporary).resolve();root=outer/'public-a/.hermes/uap-session';root.mkdir(parents=True);root.chmod(0o700)
