@@ -599,6 +599,7 @@
     },
     "command": {
       "terminal": "终端",
+      "useNativeCli": "使用已安装的 agentplugins CLI，而不是 npx",
       "copiedLabel": "命令已复制",
       "copyLabel": "复制命令",
       "copied": "已复制",
