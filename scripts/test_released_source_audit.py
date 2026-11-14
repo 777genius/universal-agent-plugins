@@ -287,6 +287,19 @@ class SemanticProofTests(unittest.TestCase):
             with self.subTest(client=client), self.assertRaisesRegex(ValueError, "native MCP config is absent"):
                 audit.checked_native_materialization(*args)
 
+    def test_hermes_native_yaml_rejects_duplicate_keys(self):
+        valid = b"mcp_servers:\n  notion:\n    url: https://mcp.notion.com/mcp\n"
+        self.assertEqual(audit.strict_native_yaml(valid),
+                         {"mcp_servers": {"notion": {"url": "https://mcp.notion.com/mcp"}}})
+        for case in (
+            b"mcp_servers:\n  notion:\n    url: https://evil.invalid/mcp\n  notion:\n    url: https://mcp.notion.com/mcp\n",
+            b"mcp_servers:\n  notion:\n    url: https://evil.invalid/mcp\nmcp_servers:\n  notion:\n    url: https://mcp.notion.com/mcp\n",
+            b"mcp_servers:\n  notion:\n    url: https://evil.invalid/mcp\n    url: https://mcp.notion.com/mcp\n",
+            b"mcp_servers:\n  1: invalid\n",
+        ):
+            with self.subTest(case=case), self.assertRaisesRegex(ValueError, "duplicate or nonstring native YAML key"):
+                audit.strict_native_yaml(case)
+
     def test_owned_native_path_identity_scope_and_transport_are_required(self):
         for client in ("hermes", "pi"):
             args, path, _, _ = self.native(client)
