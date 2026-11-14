@@ -53,7 +53,7 @@ func base64Strict(value string) ([]byte, error) {
 	return base64.StdEncoding.Strict().DecodeString(value)
 }
 
-func validateSnapshot(v domain.DirectorySnapshot) error {
+func validateSnapshot(v domain.DirectorySnapshot, reader snapshotReader) error {
 	if v.SnapshotSchemaVersion != 1 || v.Sequence < 1 {
 		return strictError("invalid snapshot schema or sequence")
 	}
@@ -199,7 +199,7 @@ func validateSnapshot(v domain.DirectorySnapshot) error {
 			if !seqs[p.ReleaseSequence] {
 				return strictError("%s policy without release", identity)
 			}
-			if err := validatePolicy(p); err != nil {
+			if err := validatePolicy(p, reader); err != nil {
 				return strictError("%s release_policies[%d]: %v", where, j, err)
 			}
 			policies[identity] = p
@@ -218,7 +218,7 @@ func validateSnapshot(v domain.DirectorySnapshot) error {
 	}
 
 	evidence := map[string]domain.DirectoryEvidence{}
-	legacyEvidence := v.Sequence < domain.DirectoryEvidenceTrustCutoverSequence
+	legacyEvidence := reader.legacyEvidence(v.Sequence)
 	for i, e := range v.Evidence {
 		where := fmt.Sprintf("evidence[%d]", i)
 		if e.SchemaVersion != 1 || !evidenceIDPattern.MatchString(e.ID) || !distributionPattern.MatchString(e.DistributionID) || e.ReleaseSequence < 1 || !digestPattern.MatchString(e.PackageTreeDigest) {
@@ -250,7 +250,7 @@ func validateSnapshot(v domain.DirectorySnapshot) error {
 			if e.Client != "" {
 				return strictError("%s schema evidence cannot name client", where)
 			}
-		} else if !validClient(e.Client) || e.ClientVersion == "" || e.InstallerVersion == "" || e.OS == "" || e.Architecture == "" || e.ObservedAt == "" {
+		} else if !reader.validClient(e.Client) || e.ClientVersion == "" || e.InstallerVersion == "" || e.OS == "" || e.Architecture == "" || e.ObservedAt == "" {
 			return strictError("%s missing applicability dimensions", where)
 		}
 		if e.ObservedAt != "" {
@@ -315,52 +315,7 @@ func validateSnapshot(v domain.DirectorySnapshot) error {
 	return nil
 }
 
-func validatePolicy(p domain.DirectoryReleasePolicy) error {
-	if p.Status != domain.ReleaseActive && p.Status != domain.ReleaseSuperseded && p.Status != domain.ReleaseRevoked {
-		return fmt.Errorf("invalid status")
-	}
-	if _, err := parseSemver(p.MinimumInstallerVersion); err != nil {
-		return fmt.Errorf("invalid minimum installer version")
-	}
-	if p.Targets == nil || len(p.Targets) < 1 || p.CurrentEvidence == nil {
-		return fmt.Errorf("targets/evidence arrays required")
-	}
-	clients := map[domain.ClientID]bool{}
-	for _, t := range p.Targets {
-		expectedDelivery, supportedDelivery := domain.ExpectedDirectoryDelivery(t.Client)
-		if t.Scope != "" || t.MinimumInstallerVersion != "" || t.CurrentEvidence != nil || t.CanonicalClosure != nil {
-			return fmt.Errorf("v1 target cannot carry scoped grant fields")
-		}
-		if !validClient(t.Client) || clients[t.Client] || len(t.Scopes) != 1 || t.Scopes[0] != domain.ScopeUser || !supportedDelivery || t.Delivery != expectedDelivery {
-			return fmt.Errorf("invalid target")
-		}
-		clients[t.Client] = true
-		if t.Authentication != domain.AuthenticationRequirementNotRequired && t.Authentication != domain.AuthenticationRequirementRequired && t.Authentication != domain.AuthenticationRequirementUnknown {
-			return fmt.Errorf("invalid target authentication")
-		}
-		definition, ok := domain.ClientDefinitionFor(t.Client)
-		if ok && definition.Capabilities.AppSupport != domain.SupportUnsupported {
-			if t.AppBinding == nil || t.AppBinding.AppKey == "" || t.AppBinding.ID == "" || t.AppBinding.MCPServer == "" {
-				return fmt.Errorf("chatgpt app binding required")
-			}
-			if err := domain.ValidateAppBindingIdentity(t.AppBinding.AppKey, t.AppBinding.ID, t.AppBinding.MCPServer); err != nil {
-				return fmt.Errorf("invalid chatgpt app binding: %w", err)
-			}
-		} else if t.AppBinding != nil {
-			return fmt.Errorf("app binding only allowed for chatgpt")
-		}
-	}
-	seen := map[string]bool{}
-	for _, id := range p.CurrentEvidence {
-		if !evidenceIDPattern.MatchString(id) || seen[id] {
-			return fmt.Errorf("invalid current evidence ID")
-		}
-		seen[id] = true
-	}
-	return nil
-}
-
-func requireSnapshotFields(body []byte) error {
+func requireSnapshotFields(body []byte, reader snapshotReader) error {
 	var root map[string]json.RawMessage
 	if err := json.Unmarshal(body, &root); err != nil {
 		return err
@@ -372,7 +327,7 @@ func requireSnapshotFields(body []byte) error {
 	if err := json.Unmarshal(root["sequence"], &sequence); err != nil {
 		return err
 	}
-	legacyEvidence := sequence < domain.DirectoryEvidenceTrustCutoverSequence
+	legacyEvidence := reader.legacyEvidence(sequence)
 	var products []map[string]json.RawMessage
 	if err := json.Unmarshal(root["products"], &products); err != nil {
 		return err
