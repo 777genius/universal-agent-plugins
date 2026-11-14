@@ -18,6 +18,20 @@ import (
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
+func TestSessionNativeInventoryRejectsMissingFileIOBeforePathAccess(t *testing.T) {
+	// No fixture file is created: the explicit missing-IO authority must
+	// refuse before trying to resolve even the selected directory.
+	path := filepath.Join(t.TempDir(), "absent", "mcp.json")
+	plan := clients.SessionPlan{Executable: "/native/cline", Directory: filepath.Dir(path),
+		Servers: []string{"owned"}, ConfigDigest: strings.Repeat("a", 64),
+		Environment: map[string]string{"CLINE_MCP_SETTINGS_PATH": path}}
+	runner := &sessionObservationRunner{}
+	err := New().VerifySession(t.Context(), clients.Env{Runner: runner}, plan)
+	if err == nil || !strings.Contains(err.Error(), "native config file IO is required") || runner.command.Argv != nil {
+		t.Fatalf("missing FileIO probed local selected source or native runner: %v, %+v", err, runner.command)
+	}
+}
+
 func TestSessionNativeInventoryRequiresExactSource(t *testing.T) {
 	good := `[{"name":"owned","path":"/project/mcp.json","transportType":"stdio","disabled":false}]`
 	if err := verifySessionInventory([]byte(good), "/project/mcp.json", []string{"owned"}); err != nil {

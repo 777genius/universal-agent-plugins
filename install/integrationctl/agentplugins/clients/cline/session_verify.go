@@ -32,7 +32,7 @@ func (*Adapter) VerifySession(ctx context.Context, env clients.Env, plan clients
 	}
 	// Retain the original file and parent directory while the native client
 	// inspects configuration. Matching bytes alone cannot detect replacement.
-	pin, err := pinSessionSource(plan.Environment["CLINE_MCP_SETTINGS_PATH"])
+	pin, err := authorizedSessionSourcePin(env.NativeConfig, plan.Environment["CLINE_MCP_SETTINGS_PATH"])
 	if err != nil {
 		return err
 	}
@@ -114,6 +114,15 @@ type sessionSourcePin struct {
 	resolvedParent       string
 	parent, file         *os.File
 	parentInfo, fileInfo os.FileInfo
+}
+
+// No physical pathname probe is permitted when the injected native-config
+// authority is absent. PlanSession already enforces this during its own read.
+func authorizedSessionSourcePin(kernel nativeconfig.Kernel, path string) (*sessionSourcePin, error) {
+	if err := kernel.RequireFileIO(); err != nil {
+		return nil, err
+	}
+	return pinSessionSource(path)
 }
 
 func pinSessionSource(path string) (selected *sessionSourcePin, resultErr error) {
