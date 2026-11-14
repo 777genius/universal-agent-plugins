@@ -1310,3 +1310,51 @@ adoption or cleanup authority and leaves the existing receipt/identity guards
 intact. The new regression was red in all three negative cases before the four
 runtime lines, then the complete 85-contract suite passed; the unchanged marker
 remains a positive control. This is collector verification, not native evidence.
+
+
+### Windows final User control: unopened lazy log files
+
+Original Windows bundled run `43526178468`, job `132234865220`, on source
+`999be5b1206df4d96a30c2aacc94913461560647` completed all eighteen Project
+commands. Both removals produced the exact 21-byte CRLF config stamp with
+SHA-256 `9d2f633e8e0a5553913286ecc1b88d2511a69e545da69760b24135d02db75f3e`.
+The previous newline correction is therefore now observed in the native run.
+
+Artifact `14089152690` is 34,325 bytes with SHA-256
+`d5ea24f4616fa8b55aecbae5402d9e89a9b1efecd05fd3baca714d89db826860`.
+Its closed 70-member inventory, 69 stream joins, 21 command status joins and
+nineteen chronological command deltas were checked. The final User `mcp list`
+returned zero but its filesystem guard refused: the observed addition set was
+exactly the ten declared directories, pinned `SOUL.md` and the independent
+byte-identical config backup. Both empty `logs/agent.log` and `logs/errors.log`
+were absent. All original User records were unchanged in that observation;
+Project commands had preserved User and the sibling Project throughout.
+
+The pinned vendor [logging implementation](https://github.com/NousResearch/hermes-agent/blob/2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19/hermes_logging.py)
+selects `ConcurrentRotatingFileHandler` only on Windows and explicitly describes
+its lazy file opening. POSIX retains eager stdlib handlers. `setup_logging`
+registers the two CLI handlers, and `_new_file_handler` does not eagerly open the
+Windows files. The dependency is pinned to `concurrent-log-handler==0.9.30`
+under the Windows/Python 3.14 marker in the same revision's `pyproject.toml`.
+
+Only the bundled final User-control oracle changes: Windows accepts the two
+closed variants of the same pair, either both existing exact empty logs or
+both absent. One log alone, nonempty or altered log metadata, an extra object,
+a missing declared directory/file, changed original User data, or an aliased
+backup still refuses. POSIX requires both logs. Ordinary-source capture keeps
+its strict original prepared User baseline, and Project commands still cannot
+adopt any User delta.
+
+The regression includes the exact original metadata-only User projection:
+18 original records and 12 additions, canonical SHA-256
+`a8a525f0ef4b05fcf6d37a7f475850a6bf367c4fb649cf32118579e96c088a89`.
+It reproduces the published refusal before the correction and passes after it,
+with separate negatives for partial/nonempty/foreign changes and Project,
+ordinary-source and POSIX scope. No native execution is simulated by this test.
+
+The failed original remains `capture_complete=false` and `lifecycle_exit=1`.
+Its separate final inventory and post-User native-method join were not produced
+because the filesystem guard refused first; the audit does not invent either.
+The complete bundled runtime was unchanged and cleanup completed. This narrow
+oracle correction changes no limits, production registration, native bootstrap
+policy or qualification flags. New native evidence remains required.

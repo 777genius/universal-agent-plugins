@@ -1230,6 +1230,11 @@ def user_control_boundary(before, after, prefix):
              "logs/agent.log": (log_mode, 0, hashlib.sha256(b"").hexdigest()),
              "logs/errors.log": (log_mode, 0, hashlib.sha256(b"").hexdigest()),
              backups[0]: (private_file, config["bytes"], config["sha256"])}
+    # The pinned Windows concurrent handler opens lazily. Admit only the
+    # observed absent pair; a partial pair or nonempty log still refuses.
+    if (os.name == "nt" and "logs/agent.log" not in added
+            and "logs/errors.log" not in added):
+        del files["logs/agent.log"], files["logs/errors.log"]
     require(set(added) == set(directories) | set(files), "User control unknown/missing bootstrap member")
     for name, record in added.items():
         expected = ({"type": "directory", "mode": directories[name]} if name in directories else

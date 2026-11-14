@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest import mock
 
@@ -14,7 +15,8 @@ from grok_project_protocol_client import (document, exercise, installed_server,
                                           read_owned, selected_installation, retained_data, STATE_SCHEMA,
                                           HELPER_DIRECTORY)
 from grok_project_protocol_e2e import observed_protocol, repair_refusal, Journey, snapshot
-from grok_project_protocol_enablement import enabled_receipt, expect_retained_receipt
+from grok_project_protocol_enablement import (enabled_receipt, expect_retained_receipt,
+    ordinary_repair_state, preview_enablement, timestamp_ns)
 
 
 class ContractTests(unittest.TestCase):
@@ -82,6 +84,171 @@ class ContractTests(unittest.TestCase):
         ):
             with self.subTest(binding=changed), self.assertRaises(ValueError):
                 expect_retained_receipt(journey, changed)
+
+    def ordinary_repair_fixture(self):
+        old_group, group = "op-" + "1" * 32, "op-" + "2" * 32
+        stamp, updated = "2026-11-14T00:00:01.1Z", "2026-11-14T00:00:02.123456789Z"
+        tree, manifest, managed = ("sha256:" + value * 64 for value in "abc")
+        self.installation.update(source={"tree_digest": tree}, package={"version": "1.0.0", "manifest_digest": manifest},
+            operation_group_id=old_group, created_at=stamp, updated_at=stamp, data_retained=False)
+        self.installation["clients"] = {"binding": self.binding}
+        lifecycle = dict(activation="prepared", authentication="not_checked", policy="allowed", verification="package_validated")
+        self.binding.update(**lifecycle, materialization="materialized", updated_at=stamp,
+            package_revision=dict(version="1.0.0", tree_digest=tree, manifest_digest=manifest),
+            native_objects=[dict(object_id="package:grok:owned", kind="managed_package_directory", logical_name="fixture",
+                                 path=str(self.active), managed_digest=managed, protection_class="managed")])
+        def receipt(identifier, sequence):
+            operation = identifier + "-001"
+            suffix = hashlib.sha256(operation.encode()).hexdigest()[:16]
+            return dict(operation_id=operation, operation_group_id=identifier, sequence=sequence, mutation_type="directory_swap",
+                        client_binding_id="binding", active_path=str(self.active), after_digest=managed, phase="committed",
+                        staging_path=str(self.active.parent.parent / (".agentplugins-staging-" + suffix)),
+                        backup_path=str(self.active.parent / (".agentplugins-backup-" + suffix)))
+        self.binding["receipts"] = [receipt(old_group, 1)]
+        self.state["transaction_receipts"] = []
+        before = copy.deepcopy(self.state)
+        after = copy.deepcopy(before)
+        selected = after["installations"][0]
+        selected.update(operation_group_id=group, updated_at=updated)
+        selected["clients"]["binding"]["updated_at"] = updated
+        selected["clients"]["binding"]["receipts"].append(dict(receipt(group, 2), before_digest=managed))
+        result = dict(installation_id="install", mutated=True, requires_confirmation=False, group_phase="external_completed",
+                      plan=dict(client_id="grok", scope="project", physical_artifact_id="owned", status="ready", package_mode="native", **lifecycle),
+                      activation=lifecycle)
+        output = dict(operation_id=group, plugin="fixture", version="1.0.0", source="local", tree_digest=tree,
+                      manifest_digest=manifest, dry_run=False, result=result)
+        response = dict(schema_version=1, command="repair", result="success", data=dict(operation_id=group,
+            plugin="fixture", batch=True, status="completed", succeeded=1, failed=0, dry_run=False,
+            targets=[dict(target="grok", status="external_completed", output=output)]))
+        return before, after, response, (1794614402000000000, 1794614403000000000)
+
+    def repair_proof(self, before, after, response, window):
+        selected = before["installations"][0]
+        return ordinary_repair_state(before, after, selected, selected["clients"]["binding"], self.active, response, window)
+
+    def test_no_consent_repair_accepts_only_the_exact_producer_delta(self):
+        before, after, response, window = self.ordinary_repair_fixture()
+        original = copy.deepcopy(before)
+        proof = self.repair_proof(before, after, response, window)
+        self.assertEqual(before, original)
+        self.assertEqual(proof["receipt"], after["installations"][0]["clients"]["binding"]["receipts"][-1])
+        self.assertEqual(proof["updated_at"], "2026-11-14T00:00:02.123456789Z")
+        for fault in ("no-commit", "history", "extra-commit", "phase", "sequence", "boolean-sequence", "group", "operation",
+                      "before-digest", "after-digest", "staging", "backup", "scope", "id", "revision", "source", "data", "package",
+                      "native-object", "native-attempt", "native-intent", "foreign-state", "extra-field", "typed-false", "timestamp-split",
+                      "timestamp-outside", "timestamp-regressed"):
+            changed = copy.deepcopy(after)
+            selected = changed["installations"][0]; binding = selected["clients"]["binding"]; commit = binding["receipts"][-1]
+            if fault == "no-commit": binding["receipts"].pop()
+            elif fault == "history": binding["receipts"][0]["operation_id"] = "foreign"
+            elif fault == "extra-commit": binding["receipts"].append(copy.deepcopy(commit))
+            elif fault == "phase": commit["phase"] = "state_committed"
+            elif fault == "sequence": commit["sequence"] = 3
+            elif fault == "boolean-sequence": commit["sequence"] = True
+            elif fault == "group": commit["operation_group_id"] = "op-" + "3" * 32
+            elif fault == "operation": commit["operation_id"] = commit["operation_group_id"] + "-002"
+            elif fault == "before-digest": commit["before_digest"] = "sha256:" + "0" * 64
+            elif fault == "after-digest": commit["after_digest"] = "sha256:" + "0" * 64
+            elif fault in ("staging", "backup"): commit[fault + "_path"] += "-foreign"
+            elif fault == "scope": binding["scope"] = "user"
+            elif fault == "id": selected["installation_id"] = "foreign"
+            elif fault == "revision": binding["package_revision"]["version"] = "2.0.0"
+            elif fault == "source": selected["source"]["tree_digest"] = "sha256:" + "0" * 64
+            elif fault == "data": selected["data_receipts"] = {}
+            elif fault == "package": selected["package"]["version"] = "2.0.0"
+            elif fault == "native-object": binding["native_objects"].append(dict(kind="grok_enabled_plugin", object_id="adopted"))
+            elif fault == "native-attempt": binding["native_activation_attempt"] = "pending"
+            elif fault == "native-intent": binding["pending_native_intent"] = {"operation_id": "pending"}
+            elif fault == "foreign-state": changed["transaction_receipts"].append({"operation_id": "foreign"})
+            elif fault == "extra-field": selected["unreviewed"] = True
+            elif fault == "typed-false": selected["data_retained"] = 0
+            elif fault == "timestamp-split": binding["updated_at"] = "2026-11-14T00:00:02.2Z"
+            else:
+                selected["updated_at"] = binding["updated_at"] = "2026-11-14T00:00:" + ("04Z" if fault == "timestamp-outside" else "01Z")
+            with self.subTest(fault=fault), self.assertRaises(ValueError): self.repair_proof(before, changed, response, window)
+
+    def test_no_consent_repair_joins_the_actual_public_response(self):
+        before, after, response, window = self.ordinary_repair_fixture()
+        for fault in ("envelope", "batch", "count", "target", "operation", "id", "source", "tree", "manifest", "version", "scope", "artifact", "mutated", "confirmation", "active", "reuse"):
+            body, changed = copy.deepcopy(response), copy.deepcopy(after)
+            batch = body["data"]; target = batch["targets"][0]; output = target["output"]; result = output["result"]
+            if fault == "envelope": body["schema_version"] = True
+            elif fault == "batch": batch["batch"] = 1
+            elif fault == "count": batch["succeeded"] = True
+            elif fault == "target": target["target"] = "foreign"
+            elif fault == "operation": output["operation_id"] = "op-" + "3" * 32
+            elif fault == "id": result["installation_id"] = "foreign"
+            elif fault == "source": output["source"] = "remote"
+            elif fault == "tree": output["tree_digest"] = "sha256:" + "0" * 64
+            elif fault == "manifest": output["manifest_digest"] = "sha256:" + "0" * 64
+            elif fault == "version": output["version"] = "2.0.0"
+            elif fault == "scope": result["plan"]["scope"] = "user"
+            elif fault == "artifact": result["plan"]["physical_artifact_id"] = "foreign"
+            elif fault == "mutated": result["mutated"] = False
+            elif fault == "confirmation": result["requires_confirmation"] = True
+            elif fault == "active": result["activation"]["activation"] = "active"
+            else:
+                old = before["installations"][0]["operation_group_id"]
+                batch["operation_id"] = output["operation_id"] = changed["installations"][0]["operation_group_id"] = old
+            with self.subTest(fault=fault), self.assertRaises(ValueError): self.repair_proof(before, changed, body, window)
+
+    def test_repair_timestamps_are_canonical_exact_and_bounded(self):
+        self.assertEqual(timestamp_ns("2026-11-14T00:00:02.123456789Z"), 1794614402123456789)
+        self.assertEqual(timestamp_ns("2026-11-14T00:00:02Z"), 1794614402000000000)
+        for value in (None, 1794614402, "2026-11-14T00:00:02+00:00", "2026-11-14T00:00:02.0Z",
+                      "2026-11-14T00:00:02.1234567890Z", "2026-02-30T00:00:02Z", "2026-11-14T00:00:60Z"):
+            with self.subTest(value=value), self.assertRaises(ValueError): timestamp_ns(value)
+        before, after, response, window = self.ordinary_repair_fixture()
+        for invalid in ((True, window[1]), (window[1], window[0]), (0, 1794614402123456788), list(window)):
+            with self.subTest(window=invalid), self.assertRaises(ValueError): self.repair_proof(before, after, response, invalid)
+
+    def test_preview_preserves_files_and_uses_only_verified_post_repair_state(self):
+        before, after, response, window = self.ordinary_repair_fixture()
+        home, source, other = (self.root / name for name in ("preview-home", "preview-source", "preview-other"))
+        for path in (home / ".grok", source, other): path.mkdir(parents=True)
+        config, foreign, event = home / ".grok/config.toml", home / "foreign", self.root / "preview-events"
+        config.write_bytes(b'[plugins]\nenabled = ["uap-foreign-enabled"]\n')
+        foreign.write_bytes(b"foreign home bytes")
+        (source / "source").write_bytes(b"original source")
+        (other / "foreign").write_bytes(b"other project")
+        preserved = {path: path.read_bytes() for path in (config, foreign, self.active / "probe", source / "source", other / "foreign")}
+        def check():
+            for path in (config, foreign):
+                if path.read_bytes() != preserved[path]: raise ValueError("protected fixture changed")
+        for fault in (None, "no-commit", "package", "data", "source", "project-b", "config", "foreign-home", "witness", "dry-state", "dry-config"):
+            for path, body in preserved.items(): path.write_bytes(body)
+            for path in (event, self.data / "foreign"):
+                if path.exists(): path.unlink()
+            self.state_path.write_text(json.dumps(before))
+            evidence = {}
+            journey = SimpleNamespace(root=self.root, a=self.root, b=other, home=home, source=source, log=event, evidence=evidence, check=check)
+            def command(label, verb, selector, *, extra=()):
+                self.assertEqual((verb, selector), ("repair", "install"))
+                if label == "repair-no-enable-consent":
+                    self.assertEqual(extra, ("--yes",))
+                    self.state_path.write_text(json.dumps(before if fault == "no-commit" else after))
+                    changed = {"package": self.active / "probe", "data": self.data / "foreign", "source": source / "source",
+                               "project-b": other / "foreign", "config": config, "foreign-home": foreign, "witness": event}
+                    if fault in changed: changed[fault].write_bytes(b"unreviewed effect")
+                    return copy.deepcopy(response)
+                self.assertEqual((label, extra), ("repair-enable-dry-run", ("--confirm-plugin-enable", "--dry-run", "--yes")))
+                if fault == "dry-state": self.state_path.write_text(json.dumps(before))
+                if fault == "dry-config": config.write_bytes(b"unreviewed dry-run effect")
+                return {"result": "success"}
+            journey.cli = mock.Mock(side_effect=command)
+            with self.subTest(fault=fault), mock.patch("grok_project_protocol_enablement.time.time_ns", side_effect=window):
+                if fault is None:
+                    preview_enablement(journey, before["installations"][0])
+                    self.assertEqual(journey.cli.call_count, 2)
+                    proof = evidence["enablement_previews"]
+                    self.assertTrue(proof["no_consent_config_unchanged"] and proof["dry_run_config_and_state_unchanged"])
+                    self.assertEqual(proof["post_repair_state"], after)
+                    self.assertNotEqual(proof["before_state_sha256"], proof["after_state_sha256"])
+                    self.assertNotIn("no_consent_config_and_state_unchanged", proof)
+                else:
+                    with self.assertRaises(ValueError): preview_enablement(journey, before["installations"][0])
+                    self.assertEqual(journey.cli.call_count, 2 if fault.startswith("dry-") else 1)
+                    self.assertNotIn("enablement_previews", evidence)
 
     def test_native_config_transition_accepts_only_exact_expected_foreign_bytes(self):
         for extra in (b"", b"foreign drift"):

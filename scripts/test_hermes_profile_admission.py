@@ -93,6 +93,126 @@ if effect == 'alias': backup.unlink(); os.link(home / 'config.yaml', backup)
                     with self.assertRaises(RuntimeError):
                         boundary("list-user", "user", *args)
 
+    def test_windows_user_control_lazy_log_pair_joins_original_delta_and_stays_scoped(self):
+        import copy
+        import hashlib
+        # Metadata-only projection of original artifact 14089152690, run
+        # 43526178468, Windows job 132234865220, UAP 999be5b1206d.
+        # ZIP SHA256 d5ea24f4616fa8b55aecbae5402d9e89a9b1efecd05fd3baca714d89db826860.
+        # No fixture paths, permission values, identities or hashes are substituted.
+        capture = json.loads(r'''
+        {
+          "before": {
+            "user": {"type":"directory","mode":511,"device":13423725783011504597,"inode":281474976902339},
+            "user/AppData": {"type":"directory","mode":511,"device":13423725783011504597,"inode":281474976902345},
+            "user/AppData/Local": {"type":"directory","mode":511,"device":13423725783011504597,"inode":281474976902347},
+            "user/AppData/Local/hermes": {"type":"directory","mode":511,"device":13423725783011504597,"inode":281474976902351},
+            "user/AppData/Local/hermes/.env": {"type":"file","mode":438,"device":13423725783011504597,"inode":281474976902354,"bytes":34,"sha256":"9ec3030a4afa2e0ec4a7abdc05545d3a9061e5f448f8d2391dd6269c2b2457dc"},
+            "user/AppData/Local/hermes/auth.json": {"type":"file","mode":438,"device":13423725783011504597,"inode":281474976902353,"bytes":129,"sha256":"6efd71b625c084746c17c16f86223d879bcb2ab337ff3107a3e0e010761260e6"},
+            "user/AppData/Local/hermes/config.yaml": {"type":"file","mode":438,"device":13423725783011504597,"inode":281474976902352,"bytes":279,"sha256":"6a9e3de24ef0cb976fbc009b5693d50f8c1e029efa53ddb1546c15148d449c3e"},
+            "user/AppData/Local/hermes/sessions": {"type":"directory","mode":511,"device":13423725783011504597,"inode":281474976902355},
+            "user/AppData/Local/hermes/sessions/retained-history.txt": {"type":"file","mode":438,"device":13423725783011504597,"inode":281474976902356,"bytes":77,"sha256":"01b8597f031ab252a72baee10e4d7425f0089c3bd817fa9c3112c0bae0ed2980"},
+            "user/AppData/Local/hermes/skills": {"type":"directory","mode":511,"device":13423725783011504597,"inode":281474976902357},
+            "user/AppData/Local/hermes/skills/foreign": {"type":"directory","mode":511,"device":13423725783011504597,"inode":281474976902358},
+            "user/AppData/Local/hermes/skills/foreign/SKILL.md": {"type":"file","mode":438,"device":13423725783011504597,"inode":281474976902359,"bytes":141,"sha256":"bc80d52f2dfcc941591de8f30dc0511735bb782e24ff67aae11d4a07ff810a64"},
+            "user/AppData/Roaming": {"type":"directory","mode":511,"device":13423725783011504597,"inode":281474976902346},
+            "user/cache": {"type":"directory","mode":511,"device":13423725783011504597,"inode":281474976902341},
+            "user/config": {"type":"directory","mode":511,"device":13423725783011504597,"inode":281474976902340},
+            "user/data": {"type":"directory","mode":511,"device":13423725783011504597,"inode":281474976902343},
+            "user/state": {"type":"directory","mode":511,"device":13423725783011504597,"inode":281474976902342},
+            "user/tmp": {"type":"directory","mode":511,"device":13423725783011504597,"inode":281474976902344}
+          },
+          "delta": {
+            "user/AppData/Local/hermes/SOUL.md": {"before":null,"after":{"type":"file","mode":438,"device":13423725783011504597,"inode":281474976902528,"bytes":667,"sha256":"36c1f5a2e92cd1d018311eaf4c8f1e8886672eae78212e033c681d0e3d5d506f"}},
+            "user/AppData/Local/hermes/audio_cache": {"before":null,"after":{"type":"directory","mode":511,"device":13423725783011504597,"inode":281474976902527}},
+            "user/AppData/Local/hermes/backups": {"before":null,"after":{"type":"directory","mode":511,"device":13423725783011504597,"inode":281474976902529}},
+            "user/AppData/Local/hermes/backups/config": {"before":null,"after":{"type":"directory","mode":511,"device":13423725783011504597,"inode":281474976902530}},
+            "user/AppData/Local/hermes/backups/config/config.yaml.good.20261114-003350": {"before":null,"after":{"type":"file","mode":438,"device":13423725783011504597,"inode":281474976902531,"bytes":279,"sha256":"6a9e3de24ef0cb976fbc009b5693d50f8c1e029efa53ddb1546c15148d449c3e"}},
+            "user/AppData/Local/hermes/cron": {"before":null,"after":{"type":"directory","mode":511,"device":13423725783011504597,"inode":281474976902520}},
+            "user/AppData/Local/hermes/hooks": {"before":null,"after":{"type":"directory","mode":511,"device":13423725783011504597,"inode":281474976902525}},
+            "user/AppData/Local/hermes/image_cache": {"before":null,"after":{"type":"directory","mode":511,"device":13423725783011504597,"inode":281474976902526}},
+            "user/AppData/Local/hermes/logs": {"before":null,"after":{"type":"directory","mode":511,"device":13423725783011504597,"inode":281474976902521}},
+            "user/AppData/Local/hermes/logs/curator": {"before":null,"after":{"type":"directory","mode":511,"device":13423725783011504597,"inode":281474976902522}},
+            "user/AppData/Local/hermes/memories": {"before":null,"after":{"type":"directory","mode":511,"device":13423725783011504597,"inode":281474976902523}},
+            "user/AppData/Local/hermes/pairing": {"before":null,"after":{"type":"directory","mode":511,"device":13423725783011504597,"inode":281474976902524}}
+          }
+        }
+        ''')
+        canonical = json.dumps(capture, sort_keys=True, separators=(",", ":")).encode()
+        self.assertEqual(hashlib.sha256(canonical).hexdigest(), "a8a525f0ef4b05fcf6d37a7f475850a6bf367c4fb649cf32118579e96c088a89")
+        before = capture["before"]
+        after = copy.deepcopy(before)
+        for name, change in capture["delta"].items():
+            self.assertIsNone(change["before"])
+            self.assertNotIn(name, before)
+            after[name] = change["after"]
+        self.assertEqual((len(before), len(after), len(capture["delta"])), (18, 30, 12))
+        prefix = "user/AppData/Local/hermes"
+        logs = [prefix + "/logs/agent.log", prefix + "/logs/errors.log"]
+        backup = next(name for name in after if "/config.yaml.good." in name)
+        boundary = CASE["profile_effect_boundary"]
+        authority = boundary.__globals__
+        with mock.patch.dict(authority, {"os": SimpleNamespace(name="nt")}):
+            # The published oracle rejects these exact original bytes before
+            # the Windows lazy-open correction. Both native logs are absent.
+            boundary("list-user", "user", before, before, after, prefix, prefix)
+            eager = copy.deepcopy(after)
+            for index, name in enumerate(logs):
+                eager[name] = {"type": "file", "mode": 0o666, "device": before[prefix]["device"],
+                               "inode": before[prefix]["inode"] + 1000 + index, "bytes": 0,
+                               "sha256": hashlib.sha256(b"").hexdigest()}
+            boundary("list-user", "user", before, before, eager, prefix, prefix)
+            refused = {}
+            for index, name in enumerate(logs):
+                partial = copy.deepcopy(eager); partial.pop(name)
+                refused["only-one-log-" + str(index)] = partial
+                nonempty = copy.deepcopy(eager)
+                nonempty[name].update(bytes=1, sha256=hashlib.sha256(b"x").hexdigest())
+                refused["nonempty-log-" + str(index)] = nonempty
+                wrong_mode = copy.deepcopy(eager); wrong_mode[name]["mode"] = 0o644
+                refused["wrong-log-mode-" + str(index)] = wrong_mode
+            foreign = copy.deepcopy(after); foreign[prefix + "/logs/foreign.log"] = eager[logs[0]]
+            refused["foreign-log"] = foreign
+            for name in (prefix + "/SOUL.md", prefix + "/logs/curator", backup):
+                missing = copy.deepcopy(after); missing.pop(name)
+                refused["missing-" + name] = missing
+            changed = copy.deepcopy(after); changed[prefix + "/auth.json"]["inode"] += 1000
+            refused["original-object-replaced"] = changed
+            changed = copy.deepcopy(after); changed[prefix + "/SOUL.md"]["sha256"] = "0" * 64
+            refused["soul-content"] = changed
+            changed = copy.deepcopy(after); changed[backup]["sha256"] = "0" * 64
+            refused["backup-content"] = changed
+            changed = copy.deepcopy(after); changed[backup].update(before[prefix + "/config.yaml"])
+            refused["backup-alias"] = changed
+            changed = copy.deepcopy(after); changed["user/foreign"] = eager[logs[0]]
+            refused["outside-native-user"] = changed
+            for label, snapshot in refused.items():
+                with self.subTest(refusal=label), self.assertRaises(RuntimeError):
+                    boundary("list-user", "user", before, before, snapshot, prefix, prefix)
+            with self.assertRaisesRegex(RuntimeError, "Project command changed original User"):
+                boundary("config-path-a", "a", before, before, after, prefix, "project-a/.uap/hermes-runtime")
+            with self.assertRaisesRegex(RuntimeError, "source User control changed"):
+                boundary("list-user", "user", before, before, after, "user", prefix, source_capture=True)
+            with self.assertRaisesRegex(RuntimeError, "outside original User"):
+                boundary("unknown-user-command", "user", before, before, after, prefix, prefix)
+        # Explicit mode-only projection for the existing POSIX contract. It is
+        # separate from the unmodified original Windows metadata above.
+        posix_before, posix_after = copy.deepcopy(before), copy.deepcopy(after)
+        secured = {prefix + suffix for suffix in ("", "/sessions", "/skills")}
+        for name, record in posix_before.items():
+            record["mode"] = 0o755 if record["type"] == "directory" else 0o600
+        for name, record in posix_after.items():
+            if record["type"] == "directory":
+                record["mode"] = 0o700 if name in secured or (name not in before and not name.startswith(prefix + "/backups")) else 0o755
+            else:
+                record["mode"] = 0o600
+        with mock.patch.dict(authority, {"os": SimpleNamespace(name="posix")}):
+            with self.assertRaisesRegex(RuntimeError, "unknown/missing bootstrap member"):
+                boundary("list-user", "user", posix_before, posix_before, posix_after, prefix, prefix)
+            for name in logs:
+                posix_after[name] = {**eager[name], "mode": 0o644}
+            boundary("list-user", "user", posix_before, posix_before, posix_after, prefix, prefix)
+
     def test_native_config_readouts_use_exact_retained_real_child_streams(self):
         import sys
         with tempfile.TemporaryDirectory() as temporary:
