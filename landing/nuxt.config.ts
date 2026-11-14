@@ -78,6 +78,7 @@ export default defineNuxtConfig({
         '/components/registry/SkillSpectorAssessment.vue',
         '/components/PageBackground.vue',
         '/components/registry/InstallPanel.vue',
+        '/components/registry/NativeCliCheckbox.vue',
         // Detail-page scoped CSS is also emitted as a cached page stylesheet.
         // Avoid repeating 400+ CSS source lines in every localized plugin HTML.
         '/pages/plugins/[slug].vue',
