@@ -126,7 +126,7 @@ func mustReadInert(t *testing.T, path string) []byte {
 	return body
 }
 func TestObserverPinsMatchEveryExactCopiedSource(t *testing.T) {
-	root := filepath.Join("..", "..", "..", "..", "scripts", "vscode-workspace-observer")
+	root := filepath.Join("..", "..", "..", "..", "..", "scripts", "vscode-workspace-observer")
 	if len(observerPins) != 4 {
 		t.Fatal("observer closure differs")
 	}
