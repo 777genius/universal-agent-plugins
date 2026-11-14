@@ -33,7 +33,8 @@ func (adapter *Adapter) PlanSession(ctx context.Context, env clients.Env, req cl
 	}
 	layout := clineProjectComponents(req.ProjectRoot)
 	path := layout.ConfigPaths.JSON
-	file, err := env.NativeConfig.ReadExactFile(path)
+	// Cap the file before reading, including the preview/dry-run path.
+	file, err := env.NativeConfig.ReadExactFileBounded(path, sessionSourceLimit)
 	if err != nil {
 		return clients.SessionPlan{}, err
 	}
@@ -47,7 +48,7 @@ func (adapter *Adapter) PlanSession(ctx context.Context, env clients.Env, req cl
 			return clients.SessionPlan{}, err
 		}
 	}
-	after, err := env.NativeConfig.ReadExactFile(path)
+	after, err := env.NativeConfig.ReadExactFileBounded(path, sessionSourceLimit)
 	if err != nil {
 		return clients.SessionPlan{}, err
 	}

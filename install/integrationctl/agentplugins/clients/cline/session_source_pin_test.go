@@ -260,3 +260,14 @@ func replaceSessionSourceFile(t *testing.T, replacement, path string, parentBefo
 	}
 	return nil
 }
+
+func TestPlanSessionRefusesUnboundedSourceBeforeAnyRead(t *testing.T) {
+	req, _ := ownedSessionFixture(t)
+	files := &unboundedSessionSourceIO{}
+	_, err := New().PlanSession(t.Context(), clients.Env{
+		NativeConfig: nativeconfig.NewWithFileIO(files),
+	}, req)
+	if !errors.Is(err, nativeconfig.ErrBoundedReadUnavailable) || files.calls != 0 {
+		t.Fatalf("unbounded session source reached custom file IO: calls=%d err=%v", files.calls, err)
+	}
+}
