@@ -91,8 +91,9 @@ func validatePinnedModernDirectoryOrigin(pinned string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("historical Directory origin is invalid: %w", err)
 	}
-	// The default HTTPS port or a trailing DNS dot must not disguise the
-	// historical feed as an independent modern origin.
+	// A different path on the historical host is NOT a separate HTTPS origin.
+	// Default ports, zero-padded ports and trailing DNS dots must not disguise
+	// reuse of the legacy hosting authority.
 	legacyHost := strings.TrimSuffix(legacyOrigin.Hostname(), ".")
 	modernHost := strings.TrimSuffix(parsed.Hostname(), ".")
 	// Compare numeric TCP ports: :00443 and :443 reach the same HTTPS
@@ -110,9 +111,8 @@ func validatePinnedModernDirectoryOrigin(pinned string) (string, error) {
 			return "", fmt.Errorf("modern Directory HTTPS port is invalid")
 		}
 	}
-	if strings.EqualFold(modernHost, legacyHost) && modernPort == legacyPort &&
-		parsed.EscapedPath() == legacyOrigin.EscapedPath() {
-		return "", fmt.Errorf("modern Directory cannot reuse the historical HTTPS feed")
+	if strings.EqualFold(modernHost, legacyHost) && modernPort == legacyPort {
+		return "", fmt.Errorf("modern Directory cannot reuse the historical HTTPS origin")
 	}
 	return origin, nil
 }
