@@ -90,16 +90,9 @@ func (recovery EnablementRecovery) PrepareNativeRemovalDecision(ctx context.Cont
 	if binding.NativeActivationAttempt == "" {
 		return false, nil
 	}
-	ordinary := false
-	if !hasEnabledOwnership(binding) {
-		if _, err := recovery.recordRoot(binding.NativeActivationAttempt); err != nil {
-			return true, err
-		}
-		names, err := recovery.pendingNames()
-		if err != nil {
-			return true, err
-		}
-		ordinary = len(names) == 0
+	ordinary, err := recovery.nativeRemovalMayBeOrdinary(binding)
+	if err != nil {
+		return true, err
 	}
 	record, err := recovery.readRecord(binding.NativeActivationAttempt)
 	if ordinary && errors.Is(err, os.ErrNotExist) {
@@ -126,6 +119,23 @@ func (recovery EnablementRecovery) PrepareNativeRemovalDecision(ctx context.Cont
 		return true, errors.Join(err, fmt.Errorf("grok removal config changed before state decision"))
 	}
 	return true, recovery.appendDecision(record, enablementStateDigest(desired))
+}
+
+// A missing record means ordinary removal only when no enablement member was
+// owned and the operation journal has no pending native transition. Keep these
+// checks together so the fail-closed absence rule is shared by every caller.
+func (recovery EnablementRecovery) nativeRemovalMayBeOrdinary(binding domain.ClientBinding) (bool, error) {
+	if hasEnabledOwnership(binding) {
+		return false, nil
+	}
+	if _, err := recovery.recordRoot(binding.NativeActivationAttempt); err != nil {
+		return false, err
+	}
+	names, err := recovery.pendingNames()
+	if err != nil {
+		return false, err
+	}
+	return len(names) == 0, nil
 }
 
 func hasProjectEnablementBinding(state domain.StateFileV2, installationID, bindingID string) bool {
