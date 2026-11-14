@@ -283,11 +283,12 @@ func publicArgv(req request) []string {
 	switch operation {
 	case "add", "repeat", "missing-backend":
 		args = append(args, "add", filepath.Join(req.Root, "source"), "--no-save")
-	case "saved-add", "cold-observe":
+	case "saved-add":
 		args = append(args, "add", "https://github.com/777genius/universal-agent-plugins/tree/"+sourceCommit+"/repotests/testdata/agentplugins_native_probe")
-		if operation == "cold-observe" {
-			args = append(args, "--no-save")
-		}
+	case "cold-observe":
+		// The cold installation is environment-owned. Imperative add --no-save
+		// has no typed owner and must refuse; use the genuine read-only command.
+		return append(args, "doctor", "--scope", "user", "--format", "json")
 	case "cold-install", "cold-repeat":
 		return append(args, "install", "--locked", "--scope", "user", "--yes", "--format", "json")
 	default:
