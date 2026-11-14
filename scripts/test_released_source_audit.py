@@ -4,6 +4,7 @@ import copy
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
 import tarfile
 import tempfile
@@ -200,7 +201,19 @@ class SavedScopeTests(unittest.TestCase):
             except (OSError, NotImplementedError) as error:
                 self.skipTest("native symlink creation unavailable: " + str(error))
             with self.assertRaisesRegex(ValueError, "bounded single-link regular file"):
+                audit.read_saved_record(selected)
+            with self.assertRaisesRegex(ValueError, "native path escaped disposable case"):
                 audit.protected_scope_snapshot(root, "user", native)
+
+    def test_saved_record_preserves_exact_crlf_bytes_and_absence(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "uap.toml"
+            self.assertEqual(audit.read_saved_record(path), (None, None))
+            body = b"schema_version = 1\r\n[dependencies]\r\n[targets]\r\n"
+            path.write_bytes(body)
+            observed, identity = audit.read_saved_record(path)
+            self.assertEqual(observed, body)
+            self.assertEqual(identity.st_size, len(body))
 
     def test_first_command_cannot_modify_the_other_scope_then_hide_it_at_remove(self):
         for path in ("home/.pi/agent/unwanted.json", "uap-data/uap.toml", "uap-data/state-v2.json"):
@@ -271,6 +284,8 @@ class SavedScopeTests(unittest.TestCase):
             except (OSError, NotImplementedError) as error:
                 self.skipTest("native symlink creation unavailable: " + str(error))
             with self.assertRaisesRegex(ValueError, "bounded single-link regular file"):
+                audit.read_saved_record(lock)
+            with self.assertRaisesRegex(ValueError, "native path escaped disposable case"):
                 audit.checked_saved_removal([manifest, lock], "portable", case(), root)
 
 
