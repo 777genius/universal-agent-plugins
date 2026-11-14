@@ -59,14 +59,15 @@ export function pluginTargetDescription(
       : target ? 'registryUi.desktopGuide.description'
         : 'registryUi.install.noActiveReleaseSupportsThisClient');
   if (target) return message(`registryUi.delivery.${target.delivery}`);
+  if (context.scope === 'project' && !available &&
+      pluginInstallAvailability(plugin, [client.id], 'user'))
+    return message('registryUi.install.useComputerScope');
 
   // This is a broad component explanation, never a claim that a transport,
   // dependency or native activation has been qualified for this exact source.
   if (plugin.components.length && context.scope === 'project' &&
       !plugin.components.every(component => projectComponentSupported(canonical, component)))
-    return message(pluginInstallAvailability(plugin, [client.id], 'user')
-      ? 'registryUi.install.useComputerScope'
-      : 'registryUi.install.unsupportedPluginComponents');
+    return message('registryUi.install.unsupportedPluginComponents');
   if (plugin.components.length && context.scope === 'user' &&
       !plugin.components.every(component => userComponentSupported(client, component)))
     return message('registryUi.install.unsupportedPluginComponents');

@@ -44,6 +44,19 @@ test('known negative evidence cannot be explained as merely an unpublished targe
   assert.equal(pluginInstallAvailability(plugin, ['pi'], 'project'), undefined);
 });
 
+test('an eligible User route is explained when explicit policy excludes Project', () => {
+  const plugin = fixture();
+  const target = plugin.distributions[0]!.releases[0]!.targets.find(item => item.client === 'codex')!;
+  target.canonical_closure = { eligible: true, closure_digest: 'sha256:' + 'a'.repeat(64) };
+  assert.equal(pluginInstallAvailability(plugin, ['codex'], 'user')?.kind, 'signed');
+  assert.equal(pluginInstallAvailability(plugin, ['codex'], 'project'), undefined);
+  assert.equal(hint(plugin, 'codex', { ...current, scope: 'project' }).key,
+    'registryUi.install.useComputerScope');
+  target.canonical_closure.eligible = false;
+  assert.equal(hint(plugin, 'codex', { ...current, scope: 'project' }).key,
+    'registryUi.install.noCompatibleSignedRelease');
+});
+
 test('exact Pi Project source remains explicit and expires with its reviewed source', () => {
   const plugin = fixture();
   const project = { ...current, scope: 'project' as const };
