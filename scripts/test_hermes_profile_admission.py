@@ -268,8 +268,9 @@ if effect == 'alias': backup.unlink(); os.link(home / 'config.yaml', backup)
         import sys
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
-            for protected in (False, True):
-                directory = root / str(protected)
+            for route in ("unprotected", "observer", "source-native"):
+                protected = route != "unprotected"
+                directory = root / route
                 directory.mkdir()
                 module = directory / "uap_inert_observer_module.py"
                 module.write_bytes(b"value = 17\n")
@@ -280,6 +281,9 @@ if effect == 'alias': backup.unlink(); os.link(home / 'config.yaml', backup)
                     return [str(python), "-I", "-c", code, *args]
                 command = (CASE["observer_runtime_command"](make, directory, sys.executable, code=code)
                            if protected else make(directory, python=sys.executable, code=code, args=()))
+                if route == "source-native":
+                    command = CASE["source_native_prefix"]({"python": Path(sys.executable),
+                        "runtime_argv": make(directory, python=sys.executable, code=code, args=())})
                 completed = subprocess.run(command, env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
                                            capture_output=True, check=True, timeout=10)
                 self.assertEqual(completed.stdout.strip(), f"{protected} 17".encode())
@@ -3038,6 +3042,10 @@ class SourceRuntimeContracts(unittest.TestCase):
                 CASE["source_runtime_snapshot"](inputs, authority, retain=records)
                 child, _, _ = CASE["prepare_source_user"](inputs, records, evidence, nonce, authority)
             child.update(HERMES_PROFILE_SOURCE_CAPTURE="1", HERMES_HOME=str(original),
+                         HERMES_SOURCE_NATIVE_PREFIX=json.dumps({"argv": list(CASE["source_native_prefix"](inputs)),
+                             "readout_sha256": inputs["command_sha256"],
+                             "readout_identity": list(CASE["stable_file"](inputs["command_info"])),
+                             "readout_parent": list(inputs["command_parent"])}),
                          HERMES_CENSUS_EVIDENCE_ID=json.dumps(CASE["directory_identity"](evidence)),
                          HERMES_SOURCE_PREPARATION_SHA256=hashlib.sha256((evidence / "source-user-preparation.json").read_bytes()).hexdigest())
             original_config = (original / "config.yaml").read_bytes()
@@ -3382,6 +3390,248 @@ class SourceObserverContracts(unittest.TestCase):
             path = args["inputs"]["facts"]; before = path.stat()
             with mock.patch.object(CASE["os"], "read", side_effect=AssertionError("expired pinned read")), self.assertRaisesRegex(RuntimeError, "deadline"):
                 original(path, before, pin=(before.st_size, CASE["hashlib"].sha256(path.read_bytes()).hexdigest()), deadline=time.monotonic() - 1)
+
+
+class SourceNativeCommandContracts(unittest.TestCase):
+    """Inert source-owned APIs exercise the real capture/launch guards."""
+
+    def fixture(self, temporary, *, link=False):
+        import time
+        runner, outer, original, source, _, env = SourceRuntimeContracts().installed_fixture(temporary)
+        readout = runner / "readout/runtime-command.json"; readout.parent.mkdir()
+        Path(env["HERMES_NATIVE_RUNTIME_COMMAND_FILE"]).rename(readout)
+        env["HERMES_NATIVE_RUNTIME_COMMAND_FILE"] = str(readout)
+        original_argv = json.loads(readout.read_bytes())
+        original_argv[3] = "import hermes_bootstrap; runpy.run_module('hermes_cli.main', run_name='__main__', alter_sys=True)"
+        readout.write_text(json.dumps(original_argv))
+        interpreter = Path(original_argv[0])
+        if link:
+            target = interpreter.with_name("python3.14")
+            interpreter.rename(target); interpreter.symlink_to(target.name)
+        api_source = source / "hermes_cli/_launchers.py"; api_source.parent.mkdir()
+        api_body = ("def runtime_command(project_root, args=(), *, python, code=None):\n"
+                    "    calls.append((project_root, python, args, code))\n"
+                    "    argv = [str(python), '-I', '-c', bootstrap if code is None else code, *args]\n"
+                    "    return rewrite(argv) if rewrite is not None else argv\n")
+        api_source.write_text(api_body)
+        (source / "hermes_cli/main.py").write_bytes(b"inert main; never imported")
+        (source / "hermes_bootstrap.py").write_bytes(b"inert bootstrap; never imported")
+        scope = {"__name__": "hermes_cli._launchers", "__file__": str(api_source),
+                 "rewrite": None, "bootstrap": original_argv[3], "calls": []}
+        exec(compile(api_body, str(api_source), "exec"), scope)
+        with mock.patch.dict(os.environ, env):
+            inputs, records = CASE["source_inputs"](runner, source), {}
+            authority = CASE["directory_identity"](outer)
+            CASE["source_runtime_snapshot"](inputs, authority, retain=records)
+        args = dict(api=scope["runtime_command"], inputs=inputs, records=records, authority=authority,
+                    prefix=CASE["source_native_prefix"](inputs), args=("config", "path"), deadline=time.monotonic() + 10)
+        return args, scope, env
+
+    def test_full_source_bootstrap_and_exact_tail_are_retained_and_guard_stays_distinct(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            args, scope, _ = self.fixture(temporary)
+            command = CASE["source_native_runtime_command"](**args)
+            self.assertEqual(command, [*args["prefix"], "config", "path"])
+            self.assertEqual(scope["calls"], [(args["inputs"]["source"], args["inputs"]["python"], ("config", "path"), None)])
+            snapshot = CASE["source_runtime_snapshot"](args["inputs"], args["authority"])
+            self.assertEqual(snapshot["provenance"]["native_command"], [str(args["inputs"]["native"])])
+            self.assertEqual(snapshot["provenance"]["native_launch"], {
+                "driver": "official-runtime-command", "bytecode_disabled": True, "argv_prefix": list(args["prefix"])})
+            evidence = Path(temporary).resolve() / "evidence"; evidence.mkdir()
+            proof = dict.fromkeys(("capture_complete", "admission_qualified", "production_project_mcp", "vendor_authentication",
+                                  "real_model_inference", "tools_call", "source_install_custom_root_qualified", "source_bootstrap_recovery_qualified"), False)
+            proof.update(status="failed", runtime_distribution="source", nonce="a" * 64, runtime_before=snapshot,
+                         source_prepared_runtime=snapshot, runtime_after=snapshot)
+            CASE["write_json"](evidence / "profile-admission.json", proof)
+            original_report = (evidence / "profile-admission.json").read_bytes()
+            with mock.patch.dict(CASE["stage_evidence"].__globals__, EVIDENCE_CLOSED=False):
+                CASE["stage_evidence"](evidence)
+            self.assertEqual((evidence / "upload/profile-admission.json").read_bytes(), original_report)
+            guard = CASE["source_native_runtime_command"](**{**args, "args": (), "guard": True})
+            self.assertEqual(guard, [str(args["inputs"]["python"]), "-I", "-B", "-c", CASE["GUARD_CODE"]])
+            self.assertEqual([call[-1] for call in scope["calls"]], [None, None, CASE["GUARD_CODE"]])
+            with self.assertRaisesRegex(RuntimeError, "frozen command differs"):
+                CASE["source_native_runtime_command"](**args, guard=True)
+            self.assertEqual(len(scope["calls"]), 3, "guard plus CLI args reached the API")
+
+    def test_wrong_bootstrap_tail_interpreter_and_api_owner_refuse(self):
+        import time
+        for effect in ("bootstrap", "tail", "interpreter", "wrapper", "tuple", "prefix", "api-file", "api-module", "expired"):
+            with self.subTest(effect=effect), tempfile.TemporaryDirectory() as temporary:
+                args, scope, _ = self.fixture(temporary)
+                def rewrite(argv):
+                    if effect == "bootstrap": return [*argv[:3], "different bootstrap", *argv[4:]]
+                    if effect == "tail": return [*argv, "--unselected"]
+                    if effect == "interpreter": return [str(Path(argv[0]).with_name("other-python")), *argv[1:]]
+                    if effect == "wrapper": return ["wrapper", *argv]
+                    if effect == "tuple": return tuple(argv)
+                    return argv
+                scope["rewrite"] = rewrite
+                if effect == "prefix": args["prefix"] = (*args["prefix"][:-1], "different original bootstrap")
+                if effect == "api-file": scope["__file__"] = str(args["inputs"]["source"] / "foreign.py")
+                if effect == "api-module": scope["__name__"] = "foreign.module"
+                if effect == "expired": args["deadline"] = time.monotonic() - 1
+                with self.assertRaises(RuntimeError):
+                    CASE["source_native_runtime_command"](**args)
+                if effect in {"prefix", "api-file", "api-module", "expired"}:
+                    self.assertEqual(scope["calls"], [])
+
+    def test_child_cannot_replace_the_parents_readout_before_its_initial_capture(self):
+        import sys
+        with tempfile.TemporaryDirectory() as temporary:
+            args, _, env = self.fixture(temporary)
+            inputs = args["inputs"]
+            frozen = {"argv": list(args["prefix"]), "readout_sha256": inputs["command_sha256"],
+                      "readout_identity": list(CASE["stable_file"](inputs["command_info"])),
+                      "readout_parent": list(inputs["command_parent"])}
+            readout = inputs["command_file"]; body = readout.read_bytes()
+            readout.rename(readout.with_name("held-original.json")); readout.write_bytes(body)
+            env.update(HERMES_PROFILE_SOURCE_CAPTURE="1", HERMES_SOURCE_NATIVE_PREFIX=json.dumps(frozen),
+                       RUNNER_TEMP=str(Path(temporary).resolve()), HERMES_NATIVE_SOURCE=str(inputs["source"]),
+                       HERMES_NATIVE_EVIDENCE=str(Path(temporary).resolve() / "evidence"), HERMES_CALL_NONCE="8" * 64)
+            modules = {"hermes_constants": SimpleNamespace(get_default_hermes_root=lambda **_: inputs["original"]),
+                       "hermes_yaml": SimpleNamespace(safe_load=json.loads, safe_dump=json.dumps)}
+            with mock.patch.dict(os.environ, env), mock.patch.dict(sys.modules, modules), \
+                    mock.patch.dict(CASE["observe_profiles"].__globals__, bounded=mock.Mock(side_effect=AssertionError("child before original readout join"))), \
+                    self.assertRaisesRegex(RuntimeError, "source native parent prefix differs"):
+                CASE["observe_profiles"]({})
+
+    def test_original_readout_runtime_files_and_ancestors_are_rejoined_before_and_after_api(self):
+        for phase in ("before", "during"):
+            for effect in ("launcher", "interpreter", "facts", "store-facts", "api", "bootstrap", "main", "readout", "readout-parent", "ancestor"):
+                with self.subTest(phase=phase, effect=effect), tempfile.TemporaryDirectory() as temporary:
+                    args, scope, _ = self.fixture(temporary)
+                    inputs = args["inputs"]
+                    selected = {"launcher": inputs["native"], "interpreter": inputs["python"], "facts": inputs["facts"],
+                                "store-facts": inputs["original"] / "tools/facts.json", "api": inputs["source"] / "hermes_cli/_launchers.py",
+                                "bootstrap": inputs["source"] / "hermes_bootstrap.py", "main": inputs["source"] / "hermes_cli/main.py",
+                                "readout": inputs["command_file"]}
+                    def replace(argv=None):
+                        if effect == "ancestor":
+                            directory = inputs["python"].parent
+                            moved = directory.with_name("held-bin"); directory.rename(moved); directory.mkdir()
+                            (moved / inputs["python"].name).rename(inputs["python"])
+                        elif effect == "readout-parent":
+                            directory = inputs["command_file"].parent
+                            moved = directory.with_name("held-readout"); directory.rename(moved); directory.mkdir()
+                            (moved / inputs["command_file"].name).rename(inputs["command_file"])
+                        else:
+                            path = selected[effect]; body = path.read_bytes()
+                            path.rename(path.with_name(path.name + ".held")); path.write_bytes(body)
+                        return argv
+                    if phase == "before": replace()
+                    else: scope["rewrite"] = replace
+                    with self.assertRaisesRegex(RuntimeError, "source input changed|source captured|file changed|original census evidence"):
+                        CASE["source_native_runtime_command"](**args)
+                    self.assertEqual(len(scope["calls"]), 0 if phase == "before" else 1)
+
+    @unittest.skipIf(os.name == "nt", "POSIX installed store Python symlink shape")
+    def test_original_source_interpreter_link_target_cannot_be_reselected(self):
+        for effect in ("valid", "replace"):
+            with self.subTest(effect=effect), tempfile.TemporaryDirectory() as temporary:
+                args, scope, _ = self.fixture(temporary, link=True)
+                if effect == "valid":
+                    self.assertEqual(CASE["source_native_runtime_command"](**args), [*args["prefix"], *args["args"]])
+                    continue
+                foreign = Path(temporary).resolve() / "foreign-python"; foreign.write_bytes(b"must not be read")
+                def replace(argv):
+                    path = args["inputs"]["python"]; path.unlink(); path.symlink_to(foreign)
+                    return argv
+                scope["rewrite"] = replace
+                with self.assertRaises(RuntimeError):
+                    CASE["source_native_runtime_command"](**args)
+
+    def command_fixture(self, temporary, *, source_capture=True, user_control=False):
+        import ast
+        import time
+        args, scope, env = self.fixture(temporary)
+        inputs, outer, user = args["inputs"], args["inputs"]["home"], args["inputs"]["user"]
+        original, spec, roots = inputs["original"], {}, {}
+        if not source_capture: inputs["python"].write_bytes(b"inert bundled fixture interpreter")
+        user_tmp = user / "tmp"; user_tmp.mkdir()
+        env.update({key: str(user_tmp) for key in ("TMPDIR", "TEMP", "TMP")})
+        env["HERMES_PROFILE_DEADLINE"] = str(time.monotonic() + 10)
+        for role in ("a", "b"):
+            root = outer / ("project-" + role) / ".uap/hermes-runtime"
+            temporary_root = root / "tmp"; temporary_root.mkdir(mode=0o700)
+            value = {} if user_control else {"mcp_servers": {"owned-" + role: {"url": "http://127.0.0.1:19/" + role}}}
+            (root / "config.yaml").write_text(json.dumps(value))
+            spec[role] = {"root": str(root), "project": str(root.parent.parent), "server": "owned-" + role,
+                          "url": "http://127.0.0.1:19/" + role, "config_sha256": CASE["sha"](root / "config.yaml"),
+                          "temporary": str(temporary_root), "temporary_identity": CASE["directory_identity"](temporary_root)}
+            roots[role] = root
+        spec["user"] = {"root": str(original), "project": str(user)}
+        capture = lambda: CASE["payload_snapshot"](outer, args["authority"], time.monotonic() + 10, source=inputs["layout"])["ledger"]
+        if not source_capture: capture = lambda: CASE["inventory"](outer)
+        records, snapshots = {}, capture()
+        CASE["source_runtime_snapshot"](inputs, args["authority"], retain=records)
+        owner = next(node for node in ast.parse(Path(CASE["__file__"]).read_bytes()).body
+                     if isinstance(node, ast.FunctionDef) and node.name == "observe_profiles")
+        command = next(node for node in owner.body if isinstance(node, ast.FunctionDef) and node.name == "command")
+        command.body[0] = ast.Global(names=command.body[0].names)
+        namespace = dict(CASE, current=snapshots, baseline=snapshots, capture=capture, user=user, outer=outer,
+                         original=original, source_capture=source_capture, inputs=inputs, source_records=records,
+                         outer_identity=args["authority"], native_prefix=args["prefix"], native=[str(inputs["native"])],
+                         spec=spec, root_paths=roots, roots=list(roots.values()), removed={"a", "b"} if user_control else set(),
+                         held_roots={role: CASE["directory_identity"](root) for role, root in roots.items()},
+                         probes={role: SimpleNamespace(methods=lambda: []) for role in ("a", "b")},
+                         protected=[(original / "config.yaml").relative_to(outer).as_posix()], sentinels=(), records=[], shared=[],
+                         evidence=Path(temporary).resolve() / "evidence")
+        exec(compile(ast.fix_missing_locations(ast.Module(body=[command], type_ignores=[])), CASE["__file__"], "exec"), namespace)
+        return namespace, scope, env
+
+    def test_actual_source_commands_use_selected_tmp_and_original_user_env_while_bundled_stays_literal(self):
+        import sys
+        for source_capture, selected in ((True, "a"), (True, "b"), (True, "user"), (False, "a")):
+            with self.subTest(source=source_capture, selected=selected), tempfile.TemporaryDirectory() as temporary:
+                namespace, scope, env = self.command_fixture(temporary, source_capture=source_capture, user_control=selected == "user")
+                calls = []
+                def bounded(argv, cwd, child_env, *_args, **_kwargs):
+                    calls.append((argv, cwd, child_env))
+                    if selected != "user": (Path(child_env["TMPDIR"]) / "owned-uv.lock").write_bytes(b"")
+                    return b"inert command result"
+                # Bundled route has no new TMP override, so make its inert port read-only.
+                if not source_capture:
+                    bounded = lambda argv, cwd, child_env, *_args, **_kwargs: calls.append((argv, cwd, child_env)) or b"inert"
+                namespace["bounded"] = bounded
+                modules = {"hermes_cli._launchers": SimpleNamespace(runtime_command=scope["runtime_command"]),
+                           "hermes_yaml": SimpleNamespace(safe_load=json.loads)}
+                with mock.patch.dict(os.environ, env), mock.patch.dict(sys.modules, modules):
+                    namespace["command"]("list-user" if selected == "user" else "list-" + selected, selected, ["mcp", "list"])
+                argv, _, child_env = calls[0]
+                self.assertEqual(argv, [*(namespace["native_prefix"] if source_capture else namespace["native"]), "mcp", "list"])
+                target = namespace["spec"][selected]
+                expected_tmp = target["temporary"] if source_capture and selected != "user" else env["TMPDIR"]
+                self.assertEqual({child_env[key] for key in ("TMPDIR", "TEMP", "TMP")}, {expected_tmp})
+                self.assertEqual(child_env["HOME"], env["HOME"]); self.assertEqual(child_env["USERPROFILE"], env["USERPROFILE"])
+                self.assertEqual(child_env["HERMES_HOME"], target["root"])
+                if source_capture:
+                    self.assertEqual(namespace["records"][0]["driver"], "official-runtime-command")
+
+    def test_actual_command_refuses_temp_replacement_and_sibling_or_user_effects(self):
+        import sys
+        for effect in ("tmp-before-launch", "tmp-after-launch", "sibling", "user"):
+            with self.subTest(effect=effect), tempfile.TemporaryDirectory() as temporary:
+                namespace, scope, env = self.command_fixture(temporary)
+                temporary_root = Path(namespace["spec"]["a"]["temporary"])
+                calls = []
+                def replace_tmp():
+                    temporary_root.rename(temporary_root.with_name("held-tmp")); temporary_root.mkdir(mode=0o700)
+                if effect == "tmp-before-launch":
+                    scope["rewrite"] = lambda argv: replace_tmp() or argv
+                def bounded(*_args, **_kwargs):
+                    calls.append(True)
+                    if effect == "tmp-after-launch": replace_tmp()
+                    if effect == "sibling": (Path(namespace["spec"]["b"]["temporary"]) / "unowned.lock").write_bytes(b"")
+                    if effect == "user": (Path(env["TMPDIR"]) / "unowned.lock").write_bytes(b"")
+                    return b"inert result"
+                namespace["bounded"] = bounded
+                modules = {"hermes_cli._launchers": SimpleNamespace(runtime_command=scope["runtime_command"]),
+                           "hermes_yaml": SimpleNamespace(safe_load=json.loads)}
+                with mock.patch.dict(os.environ, env), mock.patch.dict(sys.modules, modules), self.assertRaisesRegex(RuntimeError,
+                        "original temporary root changed|Project command changed"):
+                    namespace["command"]("list-a", "a", ["mcp", "list"])
+                self.assertEqual(len(calls), 0 if effect == "tmp-before-launch" else 1)
 
 
 class PublicInspectLockContracts(unittest.TestCase):

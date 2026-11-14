@@ -254,7 +254,7 @@ jobs:
         path: ${{ runner.temp }}/hermes-native-call-evidence-*/
         if-no-files-found: error
         retention-days: 14
-    - name: Observe the ordinary installed source launcher with preserved User authority
+    - name: Observe the official source runtime with bytecode disabled and preserved User authority
       shell: bash
       env:
         HERMES_NATIVE_UAP_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}

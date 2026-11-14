@@ -2078,3 +2078,126 @@ bytes, nonce mismatch and late-read refusal. All preceding 143 test bodies, incl
 correction and the incoming 880d stdio-header/repaired-inspection contracts,
 are preserved. These new tests and native execution are pending; this
 source-only correction supplies diagnosis and grants no new admission.
+
+## 2026-11-14: official source runtime candidate with explicit bytecode suppression
+
+This candidate retains the failed direct-launcher observations. It does not
+qualify the unchanged published shell/exe launcher, source recovery, or public
+Project capability. The implemented candidate uses the selected installation's
+official runtime export, with the single explicit interpreter option `-B`.
+
+At vendor `2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19`,
+`hermes_cli._launchers.print_runtime_command` is the machine boundary for an
+exact published launcher. Its readout branch sets `sys.dont_write_bytecode`
+before importing vendor modules, prints the command, and exits before ordinary
+`hermes_bootstrap`. Interrupted-update recovery is an explicit exception; no
+new runtime readout is performed inside the measured lifecycle. The workflow's
+existing pre-capture readout remains the original authority.
+
+The actual pinned API, called only as a generator with the original Linux
+artifact 14113135153's recorded source and store Python, reproduces the complete
+readout bytes with SHA256
+`bd17811b72e8568b3a9d3b098d35df99f14a088e93ade2cf547a5c7b560a9512`.
+That is the original report's `runtime_command_sha256`. This generator replay
+is not native execution. The output is exactly `[storePython, -I, -c, code]`;
+`code` retains the source path, home pin, `hermes_bootstrap`, dependency selection
+and real `hermes_cli.main`. Insert only `-B` after `-I`, then append the unchanged
+CLI arguments. The vendor's `venv_sync.relaunch_command` preserves that option
+through `sys.orig_argv`. Never substitute the observer's venv-only route.
+
+The parent freezes this original prefix once after the original source/API
+join, including the readout identity, bytes and original parent authority. The child joins its original source inputs to the frozen prefix; it cannot
+choose a new interpreter from a later receipt read. Retain the first child
+capture's already collected private records only after its User digest equals
+the parent's prepared digest. Before each source native launch, keep the full
+original User/source capture check and rejoin the original launcher, selected
+store-Python link chain, both PM facts, runtime API source and their ancestors
+with the existing `payload_links` and `verify_source_capture_paths` helpers.
+Hash the captured regular inputs through those original held authorities before
+and after API evaluation, with the original lifecycle deadline. Require the
+API's complete argv to equal the frozen original prefix plus exact CLI tail.
+A replaced interpreter, receipt, source/API, link, ancestor, fact or command
+shape refuses before launch. Even a same-bytes readout replacement between
+parent selection and the first child capture refuses. No new resolver, owner or baseline is created.
+
+Author one private `tmp` directory inside each original selected A/B runtime
+root before the baseline. Record and recheck its original directory authority.
+For source Project commands and resolution probes only, pass TMPDIR/TMP/TEMP
+pointing to that directory before bootstrap. Keep HOME, USERPROFILE and selected
+HERMES_HOME unchanged. PM preserves explicit temp variables; the vendor's later
+scratch hook respects them. Final source User control uses the same official
+`-B` runtime prefix with the original User environment and strict User equality;
+it receives no newly authored User temp root. Bundled native commands retain
+the existing literal launcher route, and the source observer retains its current
+selected-venv measurement route.
+
+The source runtime snapshot and final report distinguish the original
+published launcher/readout provenance from the actual official `-B` argv.
+Actual command status records retain full argv and original streams. No new
+artifact, cleanup permission or capability flag is needed. Meaningful contracts
+cover exact prefix/source/interpreter joins, substitution before launch, bytecode
+suppression through the real isolated Python mechanism, and A/B temp authority
+without User or sibling redirection. The native matrix remains required.
+
+The original Linux source refusal has seven complete User deltas: the PM
+pycache directory, two new pyc files, User tmp metadata and three empty UV locks.
+Windows has those plus mtime on the shared source `.hermes/bin` directory. The
+pinned source joins config-path bootstrap to `expose_cli`, then
+`_expose_windows_user_bin` and `ensure_install_launchers`: the same owner Python
+is deliberately not kept by `_kept_shared_launcher`, and mint stages a temporary
+candidate under the shared bin even when executable bytes match. The original
+Windows artifact also records new A/bin launchers. This is a source/effect join,
+not a new native call trace. `-B` and selected tmp routing do not authorize that metadata change.
+Any repeated shared-bin effect remains a genuine refusal; no warming, mtime
+normalization, disabled lazy bootstrap, or shared-User allowance is proposed.
+
+The fixed resolution probe shares the same original-input fences. It admits
+only the existing constant `GUARD_CODE` with no CLI arguments, and its command
+record names `fixed-resolution-probe`. Every actual source CLI command, including
+final User list, retains the complete exported main bootstrap. TMP directory
+authority is rechecked immediately before spawn after API evaluation and after
+child settlement; legitimate selected TMP children are captured and permitted.
+
+Local verification on this candidate ran 150 Hermes methods: 149 passed and one
+existing actual-Windows CRT lock test skipped on Linux. All 143 preceding methods
+remain present. Seven new methods cover the source command and original readout
+fences, API/tail/interpreter/ancestor substitutions before and during generation,
+original store links, parent-to-child same-bytes readout replacement, actual nested
+command TMP/User routing, and selected-temp/sibling/User refusals. The existing
+real isolated-Python test now also exercises the source prefix: an environment
+bytecode setting is ignored under `-I`, while explicit `-B` prevents pyc writes.
+
+The pinned vendor `relaunch_command` was also extracted without imports from
+`hermes_cli/venv_sync.py` (file SHA256
+`7688851ccadc994bc3b799a4a25577edaf465b7553b8887892c8b36e1811ffe0`,
+function SHA256 `7dae8448b8e0fceedd549770300f61e3cd63997934d82b280bdd56092b5def93`).
+Its actual generator preserved `[-I, -B, -I, -c]`; a real isolated Python child
+reported `True 17` and created zero pyc files. This verifies option propagation,
+not native Hermes acceptance.
+
+`native_launch` is added inside the existing source provenance document; the
+original `native_command` remains the published-launcher path. The existing
+`admit_evidence`/`stage_evidence` consumers retain the bounded closed member set
+and copy this report unchanged. A contract stages before/prepared/after source
+provenance with the added field and verifies byte-identical publication and all
+qualification flags still false. No diagnostic schema, artifact member, public
+capability, cleanup permission, or source User effect allowance was added.
+Native execution of the frozen candidate is still required; Windows shared-bin
+metadata remains an expected strict refusal unless independently resolved.
+
+Independent R2 accepted the exact four-path packet relative to
+`880d4c885191de21a8c64c0aeaead006fab06f6f`, patch SHA256
+`e4ab34496c2ee783cc97787ce9ad766eee030f3aa1c0872b8d303d8af8bce1c3`.
+The reviewer rejoined all base/current blobs, reran the seven new methods
+successfully, and checked the frozen hashes again. Root reviewed the same
+packet, applied it with exact content-hash verification and ran 150 methods:
+149 passed and the same existing Windows-only case was skipped. The workflow
+YAML parses and diff checks pass. These checks do not waive any native gate.
+
+The final composition preserves concurrent commit
+`9b9a94040d2b6ec84375e1aabaf593740abf5ac9` and all four new captured-delta
+contracts. Independent review accepted its source/nonce/settlement and complete
+User-summary joins alongside the new provenance field. Root verified unchanged
+added/removed source-runtime lines after composition and ran 154 methods:
+153 passed, with the same Windows-only skip. The closed diagnostic remains
+optional; unknown effects still refuse and no native acceptance is inferred.

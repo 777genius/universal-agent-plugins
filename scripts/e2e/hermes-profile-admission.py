@@ -903,7 +903,10 @@ def source_inputs(runner, source):
         directory_identity(path)
     command_file = Path(os.environ["HERMES_NATIVE_RUNTIME_COMMAND_FILE"])
     require(command_file.is_absolute() and command_file.is_relative_to(runner), "official runtime command receipt escapes fixture")
-    body = ordinary_bytes(command_file)
+    command_parent, command_info = directory_identity(command_file.parent), command_file.lstat()
+    with held_census_evidence(command_file.parent, command_parent) as (descriptor, verify):
+        body = ordinary_bytes(command_file, command_info, parent=None if artifacts.WINDOWS else descriptor)
+        verify()
     argv = json.loads(body.decode("utf-8-sig"))
     require(type(argv) is list and len(argv) == 4 and all(type(value) is str for value in argv)
             and argv[1:3] == ["-I", "-c"], "official source runtime command differs")
@@ -918,6 +921,7 @@ def source_inputs(runner, source):
     layout = source_layout(home, user, original, source)
     return {"home": home, "user": user, "original": original, "source": source, "native": native,
             "python": python, "facts": facts, "layout": layout, "runtime_argv": argv, "provenance_members": provenance_members,
+            "command_file": command_file, "command_parent": command_parent, "command_info": command_info,
             "command_sha256": hashlib.sha256(body).hexdigest()}
 
 
@@ -1007,6 +1011,8 @@ def source_runtime_snapshot(inputs, expected, *, retain=None, deadline=None):
             "provenance": {"source": str(inputs["source"]), "native_command": [str(inputs["native"])],
                            "python": str(inputs["python"]), "selected_environment": str(environment),
                            "runtime_command_sha256": inputs["command_sha256"],
+                           "native_launch": {"driver": "official-runtime-command", "bytecode_disabled": True,
+                                             "argv_prefix": list(source_native_prefix(inputs))},
                            "captured_members": {name: records[name] for name in provenance_members}}}
 
 
@@ -1576,8 +1582,9 @@ def observer_runtime_command(runtime_command, root, python, *, code, args=()):
     """Keep UAP observer imports from writing into the measured payload.
 
     The pinned runtime API uses -I, which ignores PYTHONDONTWRITEBYTECODE.
-    Preserve its complete bootstrap and arguments; -B applies only to our
-    observer and resolution probes. Native Hermes commands use their launcher.
+    Preserve its complete bootstrap and arguments for observer/resolution
+    probes. Source native CLI commands have their separate frozen-prefix join;
+    bundled native commands continue to use the literal published launcher.
     """
     argv = runtime_command(root, python=python, code=code, args=args)
     require(type(argv) is list and len(argv) == 4 + len(args)
@@ -1620,6 +1627,53 @@ def source_observer_runtime_command(api, inputs, snapshot, records, authority, *
     return argv, {"driver": "official pm.environments.venv_command", "selected_environment": str(environment),
                   "interpreter": str(interpreter), "argv_sha256": hashlib.sha256(json.dumps(argv).encode()).hexdigest(),
                   "captured_members": {name: records[name] for name in names}, "admission_qualified": False}
+
+
+def source_native_prefix(inputs):
+    """Keep the installation's complete exported CLI bootstrap; add only -B."""
+    original = inputs["runtime_argv"]
+    require(type(original) is list and len(original) == 4 and all(type(value) is str for value in original)
+            and original[:3] == [str(inputs["python"]), "-I", "-c"], "source native original runtime shape differs")
+    prefix = (original[0], "-I", "-B", *original[2:])
+    require(len(json.dumps(prefix).encode("ascii")) <= 16384, "source native runtime prefix bound")
+    return prefix
+
+
+def source_native_runtime_command(api, inputs, records, authority, prefix, *, args, deadline, guard=False):
+    """Rejoin the same installed CLI before each native or fixed resolution probe."""
+    require(type(prefix) is tuple and prefix == source_native_prefix(inputs)
+            and type(args) is tuple and all(type(value) is str for value in args)
+            and type(guard) is bool and (not guard or not args), "source native frozen command differs")
+    home, source = inputs["home"], inputs["source"]
+    api_source = source / "hermes_cli/_launchers.py"
+    require(Path(api.__code__.co_filename) == api_source and api.__code__.co_name == "runtime_command"
+            and api.__globals__.get("__name__") == "hermes_cli._launchers"
+            and api.__globals__.get("__file__") == str(api_source), "source native API is not pinned-source-owned")
+    selected = tuple(path.relative_to(home).as_posix() for path in (inputs["native"], inputs["python"]))
+    resolved = payload_links(home, records, deadline, source=inputs["layout"], resolve=selected)
+    fixed = tuple(path.relative_to(home).as_posix() for path in
+                  (inputs["facts"], inputs["original"] / "tools/facts.json", api_source,
+                   source / "hermes_bootstrap.py", source / "hermes_cli/main.py"))
+    targets = tuple(resolved[name][0] for name in selected)
+    require(all(records.get(name, {}).get("type") == "file" for name in (*fixed, *targets)),
+            "source native input is not a captured regular file")
+    names = tuple(dict.fromkeys((*fixed, *selected, *(link for name in selected for link in resolved[name][1]), *targets)))
+    hashed = tuple(dict.fromkeys((*fixed, *targets)))
+    readout = inputs["command_file"]
+    with held_census_evidence(readout.parent, inputs["command_parent"]) as (descriptor, verify):
+        for phase in ("before", "after"):
+            verify()
+            ordinary_bytes(readout, inputs["command_info"], parent=None if artifacts.WINDOWS else descriptor,
+                           pin=(inputs["command_info"].st_size, inputs["command_sha256"]), deadline=deadline)
+            verify_source_capture_paths(home, authority, records, names, deadline, hash_members=hashed)
+            verify()
+            if phase == "before":
+                argv = api(source, python=inputs["python"], args=args)
+                require(type(argv) is list and all(type(value) is str for value in argv)
+                        and argv == [prefix[0], prefix[1], *prefix[3:], *args], "source native exported bootstrap or tail differs")
+                command = (observer_runtime_command(api, source, inputs["python"], code=GUARD_CODE) if guard else
+                           [argv[0], "-I", "-B", *argv[2:]])
+    return command
 
 
 GUARD_CODE = r"""
@@ -1712,6 +1766,16 @@ def observe_profiles(probes):
     require(original.is_relative_to(user) and original != user and os.environ["USERPROFILE"] == str(user), "actual native User root differs")
     inputs = source_inputs(Path(os.environ["RUNNER_TEMP"]).resolve(), BASE["source_root"]()) if source_capture else None
     require(inputs is None or original == inputs["original"], "native source default User differs before fixture preparation")
+    native_prefix, source_records = None, {}
+    if source_capture:
+        encoded = os.environ["HERMES_SOURCE_NATIVE_PREFIX"]
+        require(len(encoded.encode("ascii")) <= 16384, "source native frozen prefix bound")
+        value = json.loads(encoded)
+        expected = {"argv": list(source_native_prefix(inputs)), "readout_sha256": inputs["command_sha256"],
+                    "readout_identity": list(stable_file(inputs["command_info"])), "readout_parent": list(inputs["command_parent"])}
+        require(type(value) is dict and json.dumps(value, sort_keys=True) == json.dumps(expected, sort_keys=True),
+                "source native parent prefix differs")
+        native_prefix = tuple(value["argv"])
     sentinels, authored = user_fixture_content(nonce)
     preparation, evidence_authority = None, None
     if source_capture:
@@ -1738,6 +1802,10 @@ def observe_profiles(probes):
         config.chmod(0o600)
         spec[scope] = {"root": str(root), "project": str(project), "server": "uap-root-" + scope,
                        "url": probes[scope].url, "config_sha256": sha(config), "entry": entry}
+        if source_capture:
+            temporary = root / "tmp"
+            temporary.mkdir(mode=0o700)
+            spec[scope].update(temporary=str(temporary), temporary_identity=directory_identity(temporary))
     roots = [Path(spec[scope]["root"]) for scope in ("a", "b")]
     validate_roots(user, original, roots)
     root_paths = {scope: Path(spec[scope]["root"]) for scope in ("a", "b")}
@@ -1772,6 +1840,8 @@ def observe_profiles(probes):
             raise
         if initial:
             require_source_user_baseline(source_user_digest(snapshot["_records"], layout["user"], deadline), preparation["prepared_user"])
+            require(not source_records, "source native original capture already retained")
+            source_records.update(snapshot["_records"])
         return snapshot["ledger"]
     try:
         baseline = capture(initial=True)
@@ -1795,7 +1865,18 @@ def observe_profiles(probes):
         selected = spec[scope]
         env = {**os.environ, "HERMES_HOME": selected["root"]}
         require(env["HOME"] == str(user) and env["USERPROFILE"] == str(user), "OS User home changed")
-        if guard:
+        if source_capture:
+            if scope != "user":
+                temporary = Path(selected["temporary"])
+                require(temporary == Path(selected["root"]) / "tmp"
+                        and directory_identity(temporary) == selected["temporary_identity"], "source native original temporary root differs")
+                env.update({key: str(temporary) for key in ("TMPDIR", "TEMP", "TMP")})
+            from hermes_cli._launchers import runtime_command
+            argv = source_native_runtime_command(runtime_command, inputs, source_records, outer_identity, native_prefix,
+                args=tuple(args or ()), guard=guard, deadline=float(os.environ["HERMES_PROFILE_DEADLINE"]))
+            require(all(directory_identity(Path(spec[name]["temporary"])) == spec[name]["temporary_identity"]
+                        for name in root_paths), "source native original temporary root changed before launch")
+        elif guard:
             from hermes_cli._launchers import runtime_command
             argv = observer_runtime_command(runtime_command, Path(os.environ["HERMES_PROFILE_RUNTIME_ROOT"]),
                                             os.environ["HERMES_PROFILE_PYTHON"], code=GUARD_CODE)
@@ -1808,10 +1889,16 @@ def observe_profiles(probes):
         except BaseException as error:
             failure = error
         verify_root_identities(root_paths, held_roots)
+        if source_capture:
+            require(all(directory_identity(Path(spec[name]["temporary"])) == spec[name]["temporary_identity"]
+                        for name in root_paths), "source native original temporary root changed")
         after = capture()
         delta = changes(before, after)
         records.append({"label": label, "scope": scope, "runtime_root": selected["root"],
                         "delta": delta, "error": type(failure).__name__ if failure else None})
+        if source_capture:
+            records[-1].update(driver="fixed-resolution-probe" if guard else "official-runtime-command",
+                               bytecode_disabled=True, temporary_root=env["TMPDIR"])
         current = after
         if label == "remove-mcp-" + scope and failure is None:
             removed.add(scope)
@@ -1860,7 +1947,7 @@ def observe_profiles(probes):
             require(b"hermes" in command("version-a", "a", ["--version"]).lower(), "bundled native version absent")
         for scope in ("a", "b"):
             if source_capture:
-                # A real cold source launcher must prepare its own environment.
+                # The full official source bootstrap prepares its own environment.
                 # --version skips that preparation at the pinned revision.
                 config_readout("path", command("config-path-" + scope, scope, ["config", "path"]), spec[scope])
                 if scope == "a":
@@ -3192,8 +3279,12 @@ def run():
         from hermes_cli._launchers import runtime_command
         require(Path(runtime_command.__code__.co_filename).resolve() == runtime_root / "hermes_cli/_launchers.py", "observer runtime API is not selected-source-owned")
         if source_capture:
-            require(runtime_command(runtime_root, python=python) == source_installation["runtime_argv"],
-                    "installed launcher runtime command does not match the pinned official API")
+            native_prefix = source_native_runtime_command(runtime_command, source_installation, prepared_records, home_authority,
+                source_native_prefix(source_installation), args=(), deadline=lifecycle_deadline)
+            env["HERMES_SOURCE_NATIVE_PREFIX"] = json.dumps({"argv": native_prefix,
+                "readout_sha256": source_installation["command_sha256"],
+                "readout_identity": list(stable_file(source_installation["command_info"])),
+                "readout_parent": list(source_installation["command_parent"])})
         observer_code = f"runpy.run_path({str(Path(__file__).resolve())!r}, run_name='__main__')"
         if source_capture:
             from pm.environments import venv_command
