@@ -37,7 +37,12 @@ func newProjectSessionFixture(t *testing.T, names ...string) (clients.SessionReq
 	if err != nil {
 		t.Fatal(err)
 	}
-	user := t.TempDir()
+	// macOS exposes /var as /private/var. The selected User authority must
+	// use the same physical spelling as the already-canonical Project root.
+	user, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	req := clients.SessionRequest{ProjectRoot: project, Inspect: true, Client: domain.DetectedClient{ClientID: domain.ClientHermes, ConfigRoot: user, ExecutablePath: sessionBundleFixture(t, t.TempDir()), Status: domain.DetectionDetected, Surfaces: []domain.ClientSurface{{ID: "hermes_cli", Detected: true}}}, Bindings: []domain.ClientBinding{{ClientID: string(domain.ClientHermes), Scope: string(domain.ScopeProject), NativeProfileRoot: filepath.Join(project, ".hermes"), NativeObjects: []domain.NativeObjectOwnership{owner, {Kind: projectSessionMCPKind, ObjectID: projectSessionMCPKind + ":owned", LogicalName: "owned", Path: config, ManagedDigest: receipt.Digest, ProtectionClass: "managed"}}}}}
 	return req, owner
 }
