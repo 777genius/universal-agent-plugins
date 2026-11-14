@@ -94,3 +94,9 @@ directory. Regress the actual locked resolver against an unrelated parent worksp
 This mitigates the configuration exposure; it does not replace the affected package
 with a patched version or imply that the dependency alert is closed. A Nuxt major
 version migration remains a separate change with its own toolchain qualification.
+
+Final mobile artifact inspection also found that the Hero's Web setup explanation
+was visible only while its agent menu was open. Keep the existing translated
+"Finish setup in ChatGPT" notice visible beside a valid explicit Web command,
+including mixed signed selections; omit it for automatic and Desktop-only choices.
+Cover these states at desktop and mobile widths in the existing browser journeys.

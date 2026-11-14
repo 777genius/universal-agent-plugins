@@ -297,6 +297,13 @@ function updateTargets(values: string[]) {
                     <p v-else class="install-panel__notice" role="status">
                       {{ t('shell.hero.refreshNotice') }}
                     </p>
+                    <p
+                      v-if="command && !autoDetect && selectedTargets.includes('chatgptweb')"
+                      class="install-panel__notice"
+                      role="status"
+                    >
+                      {{ t('shell.hero.chatgptSetup') }}
+                    </p>
                     <NuxtLink
                       class="hero-quick-start__more-install"
                       :to="localePath('/download/')"
