@@ -2408,10 +2408,29 @@ def public_windows_chain(value):
     return rows
 
 
+def public_windows_image_key(path):
+    """Compare only ordinary drive paths; never resolve an image or an alias."""
+    require(type(path) is str and 4 <= len(path) < 4096, "public Windows image path is unsupported")
+    value = path.replace("/", "\\")
+    require(re.match(r"^[A-Za-z]:\\", value) is not None
+            and all(32 <= ord(char) <= 126 and char not in '<>"|?*' for char in value),
+            "public Windows image namespace is unsupported")
+    parts = value[3:].split("\\")
+    devices = {"CON", "PRN", "AUX", "NUL", *(prefix + str(number)
+               for prefix in ("COM", "LPT") for number in range(1, 10))}
+    require(all(part not in ("", ".", "..") and ":" not in part and not part.endswith((".", " "))
+                and re.fullmatch(r"[^.]{1,6}~[0-9]+(?:\.[^.]{0,3})?", part) is None
+                and part.split(".", 1)[0].upper() not in devices for part in parts),
+            "public Windows image component is unsupported")
+    return value.lower()
+
+
 def public_windows_image_equal(actual, expected):
-    """Fail closed on Unicode casefold aliases that Windows may not identify."""
-    return actual == expected or (actual.isascii() and expected.isascii()
-                                  and actual.lower() == expected.lower())
+    """Invalid namespaces cannot compare equal, even when their strings match."""
+    try:
+        return public_windows_image_key(actual) == public_windows_image_key(expected)
+    except RuntimeError:
+        return False
 
 
 def public_windows_spawn_identity(entry, first, second, native_pid, native_process, images):
@@ -3053,8 +3072,9 @@ def observe_public(probes):
     pins = public_json(os.environ["HERMES_PUBLIC_PINS"].encode())
     public_runtime_pins(pins)
     evidence_authority = tuple(public_json(os.environ["HERMES_CENSUS_EVIDENCE_ID"].encode()))
+    native_image, native_python = os.environ["HERMES_BIN"], os.environ["HERMES_PROFILE_PYTHON"]
     code_root = Path(os.environ["HERMES_PROFILE_RUNTIME_ROOT"])
-    code_authority, install_id = public_spawn_install(code_root, Path(os.environ["HERMES_BIN"]))
+    code_authority, install_id = public_spawn_install(code_root, Path(native_image))
     outer_authority = directory_identity(outer)
     original = Path(public_json(ordinary_bytes(evidence / "profile-endpoints.json"))["original_native_root"])
     raw_final = public_json(ordinary_bytes(evidence / "original-user-final.json"))
@@ -3064,7 +3084,7 @@ def observe_public(probes):
     state_root, cold_tmp = outer / "public-uap-state", outer / "public-cold-tmp"
     for directory in (*projects.values(), *sources.values(), state_root, cold_tmp): directory.mkdir(mode=0o700)
     env = dict(os.environ, HERMES_HOME=str(original), AGENTPLUGINS_HOME=str(state_root),
-               PATH=str(Path(os.environ["HERMES_BIN"]).parent) + os.pathsep + os.environ["PATH"])
+               PATH=str(Path(native_image).parent) + os.pathsep + os.environ["PATH"])
     for scope, project in projects.items():
         bounded(["git", "init", "-q", str(project)], outer, env, evidence / ("public-git-" + scope), timeout=min(30, deadline-time.monotonic()))
         foreign = project / ".hermes/skills/foreign/SKILL.md"
@@ -3164,7 +3184,7 @@ def observe_public(probes):
             spawn_preserved(key, before)
             windows_log_preserved(key, before)
         events_before = {key: captured_events(proof, before) for key, proof in previous.items()}
-        argv = [os.environ["HERMES_BIN"], *args] if native else [pins["uap"]["path"], *args, "--target", "hermes", "--scope", "project", "--project-root", str(project)]
+        argv = [native_image, *args] if native else [pins["uap"]["path"], *args, "--target", "hermes", "--scope", "project", "--project-root", str(project)]
         if not native and not inspect: argv += ["--yes", "--format", "json"]
         spawn_status = None
         with ExitStack() as handles:
@@ -3251,7 +3271,7 @@ def observe_public(probes):
             public_spawn_entry(bodies[PUBLIC_SPAWN_NAMES[0]], events_before[scope], events_after[scope], nonce,
                 native_pid, install_id, launcher, pins["probe"]["path"], sys.platform,
                 **({"native_process": spawn_status["process_identity"],
-                    "native_python": os.environ["HERMES_PROFILE_PYTHON"], "native_image": argv[0]}
+                    "native_python": native_python, "native_image": native_image}
                    if artifacts.WINDOWS else {}))
             require(time.monotonic() < deadline, "public spawn entry parsing deadline")
             require(spawn_capture(scope, after) == (receipt, bodies), "public spawn pair changed after parsing")
@@ -3335,7 +3355,7 @@ def observe_public(probes):
                     and public_json(ordinary_bytes(prior["data"] / ".agentplugins-data-owner.json")) == prior["installed"]["data_receipts"][prior["binding"]["data_receipt_id"]], "public removal lost retained root/data")
             command("public-removed-list-" + scope, scope, ["mcp", "list"], native=True, expected_failure=False)
             command("public-removed-test-" + scope, scope, ["mcp", "test", "hermes-public-" + scope + "-http"], native=True, expected_failure=True)
-        public_cold(evidence, cold_tmp, env, pins, deadline, os.environ["EXPECTED_HEAD"], Path(os.environ["HERMES_BIN"]))
+        public_cold(evidence, cold_tmp, env, pins, deadline, os.environ["EXPECTED_HEAD"], Path(native_image))
         after, _ = snapshot(); require(after == current and not list(cold_tmp.iterdir()), "cold fixture changed retained public/User tree")
         for scope in projects:
             spawn_preserved(scope, after)

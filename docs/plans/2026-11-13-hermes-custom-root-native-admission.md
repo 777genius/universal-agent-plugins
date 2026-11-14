@@ -2916,3 +2916,83 @@ that intact operation into `applyMarkerOperation` preserves validation, owned
 path checks, write/read, error strings and event order; no rule is exempted.
 The explicit probe size/architecture and changed-lines passes both report zero
 issues for Linux and Windows with the pinned golangci-lint 2.13.2 configuration.
+
+
+### Follow-up: retain original Windows image selection and the optional capture budget
+
+The published 8e7d412bdec2b8d1e4689df2ffc610701904ed6f consumer already
+rejects distinct Unicode casefold aliases and discards an optional identity
+result returned after the original command deadline. This follow-up retains
+those changes, both new test methods, and its private callback-exception refusal.
+It corrects only the remaining image-namespace, selection and default-route
+boundaries. The full incoming Windows Go producer, original Popen handle/birth
+receipt, standalone main.go behavior and process/ledger guards remain unchanged.
+
+The old 55bf safe summary establishes a failed spawner-pid predicate. That
+predicate combines type and equality conditions; neither the numeric
+PIDs nor the specific failed subcondition were published. It is not evidence
+of a particular four-process layout. Actual ordinary Windows execution must
+still close that layout and the two matching nonce-bound events.
+
+Independent controls on exact 5b336f883e5063f8585831d5c72e928ad1362e0d
+reproduced distinct image-path collapse through the full spawn consumer and
+adoption of a changed ambient Python selection by the actual command expression.
+Their receipt SHA-256 is
+cdacd5c77a60e13f390ab14fb0c969ad31e6e298012cb917d1355e941d8b6813.
+A separate real inert-child callback entered within a 0.3-second command budget,
+waited 0.6 seconds, and returned success after 0.6515 seconds. The fast control
+returned after 0.0519 seconds. Its receipt SHA-256 is
+8e708681a2077dbb12a5e6e4ef1ea9bbbc72a147fc8c46aba4fb5f5a5c784ede.
+These are completed source/control observations on 5b, not a claim that the
+Windows kernel query stalled or that an outside writer changed a native run.
+
+Image equality now accepts only the explicitly disposable fixture's ordinary
+ASCII drive-absolute paths. It compares ASCII case and slash separators while
+preserving internal spaces and ordinary leading-dot components such as .hermes.
+Relative, device, extended, UNC, dot/dot-dot, empty, trailing-dot/space, reserved,
+short-name, stream, control-character, non-ASCII and oversized forms refuse.
+The comparison does not resolve aliases, open images or normalize a different
+Windows namespace into an accepted one. The existing boolean helper returns
+false for invalid inputs even when both strings are identical. This is a
+fixture comparison restriction, not a product-wide Unicode path policy.
+
+The public observer freezes its selected native launcher and Python strings
+before any command. The code-root join, PATH, native argv/status, image join
+and final cold readback use those same originals. A later ambient variable
+cannot become a new expected image. The managed launcher still comes from
+the original pre-command receipt and checked post-command config; no new
+source selection or descendant allowance is introduced.
+
+The pre-callback deadline fence now applies only when an identity callback
+was requested. The default None route retains its earlier capture behavior.
+The incoming post-callback deadline check, discarded late identity, original
+status/stream authority and private process-identity-unavailable refusal remain.
+There is no replacement deadline, wait extension, new output field or new
+qualification. Existing nonce, roots, User/sibling equality, settlement and
+cleanup checks continue to decide admission.
+
+All 193 incoming test method names and their order remain. Existing Windows
+fixture paths become drive-absolute so positive cases reach the original
+process predicates. The Unicode/foreign-image negatives remain causal.
+The existing successful callback child writes explicit binary LF bytes;
+its exact b'owned\n' assertion is retained. This avoids Windows text-mode
+newline translation without accepting an alternative output.
+
+Three authored methods bring the source count to 196. They exercise the full
+four-role image consumer, actual outer-selection and command/cold expressions,
+and real inert-child pre-expiry, post-expiry, default and expected-negative
+callback controls. The latter use a deterministic clock advance after actual
+stream joins or inside the callback. These new methods have not executed.
+
+Root and independent review approved R1 blob
+aee9d9436aa8b0a98a397510c9d021acb7bd0ed8 and the exact 8e7 composition
+addendum 7e87ab0dcadee177a993e4e48a9384e34a210a6f. Forward and reverse
+exact replacements restore each complete 8e7 base; no Go or workflow file is
+part of this correction. The last completed local Python baseline is exact
+5b: 191 methods, 184 passed and seven existing Windows-only skips, 10.283
+seconds, with unchanged source hashes. Its full log SHA-256 is
+58042b91b4e31cfa23002cb2b72a7613e53514ccd3c5afb64cc5c5f784c95454.
+The executor became unavailable before the 8e7 correction was authored.
+Accordingly, this packet has source/replay review only: it does not claim
+fresh Python execution, Windows execution or native acceptance. The existing
+ordinary CI lanes must execute the final published source.

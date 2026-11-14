@@ -361,3 +361,25 @@ requires unchanged original input snapshots and no MCP witness invocation.
 The parent joins that exact held test binary, original output and source to the
 result. A successful inventory result alone does not qualify the public
 lifecycle: its existing refusal remains until native qualification is complete.
+
+## Readonly observation limit identified in source review (2026-11-14)
+
+Review of `ce47d1895dac145028c8dbc9707290fcf477ccd1` corrects the
+preceding phrase "no MCP witness invocation": the current check establishes
+only an unchanged protocol-event file. That file is outside the mounted readonly
+HOME and Project view, so a probe in that view cannot append its event there.
+The exact probe also emits initialize/list/call events, with no unconditional
+startup event. An unchanged file therefore cannot prove absence of an MCP
+process, including one that starts silently or fails before its first request.
+
+The tagged test performs two reads of the same untrusted, disabled C0 state; it
+does not test enabled C1 readback. Its partial result contains only two calls and
+an input-snapshot digest. These observations must not be promoted to a complete
+public lifecycle or no-startup verdict. Public enablement and recovery remain
+closed, and production records remain v2.
+
+Any additional invocation observer needs its own source-bound positive control
+in the same readonly view and complete bounded process-family evidence before
+that verdict can be admitted. Keep the readonly mounts and existing process,
+source, lock, deadline and cleanup guards; neither a writable witness directory
+nor an assumed private-stderr forwarding path establishes the missing proof.

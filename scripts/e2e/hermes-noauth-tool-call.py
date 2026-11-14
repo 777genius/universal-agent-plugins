@@ -74,7 +74,7 @@ def bounded(command, cwd, env, output, timeout=90, expected_failure=False, *, pr
             failure = "output bound"
         if any(thread.is_alive() for thread in threads):
             failure = "native command left inherited capture pipe open"
-        if failure is None and time.monotonic() >= deadline:
+        if process_identity is not None and failure is None and time.monotonic() >= deadline:
             failure = "command timeout"
         if process_identity is not None and failure is None and child.returncode == 0 and not expected_failure:
             # Preserve the original Popen handle, but never admit late identity.
