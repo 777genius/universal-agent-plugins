@@ -1,8 +1,11 @@
 """Regression proof for released-CLI native component attribution and negative outcomes."""
+import copy
 import importlib.util
+import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 
 
 def load_audit():
@@ -219,6 +222,163 @@ class PublishedCatalogNativeProofTest(unittest.TestCase):
                 "grok", "docs/user-guide/custom-plugin.json"))
             self.assertFalse(audit.passive_native_path(
                 "grok", "plugins/documentation/plugin.json"))
+
+
+class KiroPreparedLifecycleTest(unittest.TestCase):
+    def fixture(self, audit):
+        pins = json.loads(audit.FIXTURES.read_text())["signed_release_pins"]
+        pin = pins["atlassian"]
+        client = {"client_id": "kiro", "scope": "user", "install_intent": "prepare",
+                  "materialization": "materialized", "activation": "prepared",
+                  "authentication": "not_checked", "policy": "allowed",
+                  "verification": "package_validated", "package_revision": {
+                      "resolved_revision": pin["revision"], "distribution_id": pin["distribution"],
+                      "release_sequence": pin["sequence"], "tree_digest": pin["tree_digest"],
+                      "manifest_digest": pin["manifest_digest"]}}
+        node = {"installation_id": "owned-original-id", "name": "atlassian",
+                "source": pin["repository"].strip("/") + "/" + pin["path"].strip("/"),
+                "clients": [client], "directory": {"product_id": "atlassian",
+                    "recorded_distribution": pin["distribution"], "recorded_revision": pin["revision"],
+                    "recorded_release_sequence": pin["sequence"]}}
+        return node, pins
+
+    def test_prepared_match_requires_exact_user_tuple_and_original_source(self):
+        audit = load_audit()
+        node, pins = self.fixture(audit)
+        original = copy.deepcopy(node)
+        def matches(value, target="kiro"):
+            return audit.matching_installations({"data": {"installations": [value]}},
+                                               "atlassian", target, "plugin", "atlassian", pins)
+        self.assertEqual(matches(node), [node])
+        self.assertEqual(node, original)
+        for field, value in (("scope", "project"), ("install_intent", "automatic"),
+                             ("materialization", "absent"), ("activation", "active"),
+                             ("authentication", "authenticated"), ("policy", "blocked"),
+                             ("verification", None), ("client_id", "grok")):
+            with self.subTest(field=field):
+                changed = copy.deepcopy(node)
+                changed["clients"][0][field] = value
+                self.assertEqual(matches(changed), [])
+        for fault in ("duplicate", "source", "revision", "tree", "sequence"):
+            changed = copy.deepcopy(node)
+            if fault == "duplicate":
+                changed["clients"].append(copy.deepcopy(changed["clients"][0]))
+            elif fault == "source":
+                changed["source"] = "unrelated/repository/entry"
+            else:
+                key = {"revision": "resolved_revision", "tree": "tree_digest", "sequence": "release_sequence"}[fault]
+                changed["clients"][0]["package_revision"][key] = "wrong"
+            self.assertEqual(matches(changed), [], fault)
+        changed = copy.deepcopy(node)
+        changed["clients"][0]["client_id"] = "grok"
+        self.assertEqual(matches(changed, "grok"), [])
+
+    def test_actual_case_continues_six_public_calls_without_native_credit(self):
+        for fault in (None, "source", "duplicate", "repeat-active", "repeat-revision",
+                      "repeat-native", "foreign", "remove"):
+            with self.subTest(fault=fault), TemporaryDirectory() as directory:
+                audit = load_audit()
+                node, pins = self.fixture(audit)
+                if fault == "source":
+                    node["source"] = "unrelated/repository/entry"
+                if fault == "duplicate":
+                    node["clients"].append(copy.deepcopy(node["clients"][0]))
+                calls, removed = [], False
+                def call(argv, env, cwd, timeout, **kwargs):
+                    nonlocal removed
+                    calls.append((argv, timeout))
+                    role = argv[1]
+                    owned = Path(env["HOME"]) / ".kiro/skills/fixture/SKILL.md"
+                    outcome = {"exit_code": 0, "stdout_tail": "", "stderr_tail": "", "timeout": False}
+                    if role == "add":
+                        outcome["_json"] = {"data": {"actions": [{"component_support": [
+                            {"kind": "skill", "name": "fixture", "support": "native"}]}]}}
+                        if len(calls) == 1:
+                            owned.parent.mkdir(parents=True)
+                            owned.write_text("---\nname: fixture\n---\nowned bytes\n")
+                            data = Path(env["AGENTPLUGINS_HOME"])
+                            (data / "uap.toml").write_text("original agreement\n")
+                            (data / "uap.lock").write_text("original pin\n")
+                        elif fault == "repeat-active":
+                            node["clients"][0].update(activation="active", verification="installation_verified")
+                        elif fault == "repeat-revision":
+                            node["clients"][0]["package_revision"]["tree_digest"] = "sha256:" + "0" * 64
+                        elif fault == "repeat-native":
+                            owned.write_text("changed during repeat\n")
+                        elif fault == "foreign":
+                            (Path(env["HOME"]) / "foreign-untouched.txt").write_text("changed foreign\n")
+                    elif role == "list":
+                        outcome["_json"] = {"schema_version": 1, "command": "list", "result": "success",
+                                            "data": {"installations": [] if removed else [copy.deepcopy(node)]}}
+                    elif role == "remove":
+                        self.assertEqual(argv[2], "owned-original-id")
+                        if fault == "remove":
+                            outcome.update(exit_code=1, stderr_tail="refused removal")
+                        else:
+                            owned.unlink()
+                            removed = True
+                    else:
+                        self.fail("unexpected public/native command: " + repr(argv))
+                    return outcome
+                with patch.object(audit, "call", side_effect=call):
+                    result = audit.do_case("inert-uap", "kiro", "plugin", "atlassian", 0,
+                                           Path(directory) / "run", {}, pins)
+                self.assertLessEqual(len(calls), 6)
+                self.assertIsNone(result["native_uninstall"])
+                self.assertFalse(audit.expected_negative_coverage(result))
+                self.assertNotEqual(result["status"], "passed")
+                self.assertFalse(result["prepared_components_only"])
+                if fault is None:
+                    self.assertEqual([argv[1] for argv, _ in calls], ["add", "list", "add", "list", "remove", "list"])
+                    self.assertEqual(result["status"], "incomplete-native-proof")
+                    for field in ("repeat_verified", "removal_verified", "sentinels_preserved", "kiro_prepared_lifecycle_verified"):
+                        self.assertIs(result[field], True)
+                        self.assertIs(audit.case_observation(result)[field], True)
+                else:
+                    self.assertIs(result["kiro_prepared_lifecycle_verified"], False)
+                    if fault in ("source", "duplicate"):
+                        self.assertEqual(len(calls), 2)
+                        self.assertIsNone(result["repeat_add"])
+                        self.assertIsNone(result["cleanup"])
+                    elif fault.startswith("repeat-"):
+                        self.assertEqual(result["status"], "repeat-add-unqualified")
+                    else:
+                        self.assertEqual(result["status"], "cleanup-failed")
+
+
+    def test_console_observation_keeps_types_and_has_no_native_authority(self):
+        audit = load_audit()
+        flags = ("kiro_prepared_lifecycle_verified", "repeat_verified", "removal_verified",
+                 "sentinels_preserved", "failed_install_registered", "failed_install_residue")
+        row = dict.fromkeys(flags, True)
+        row.update(status="incomplete-native-proof", install={"exit_code": 1, "timeout": False,
+                   "stderr_tail": "private command text"}, list={"exit_code": 0, "timeout": False})
+        original = copy.deepcopy(row)
+        observed = audit.case_observation(row)
+        self.assertEqual(row, original)
+        self.assertEqual(set(observed), set(flags) | {"install", "list"})
+        self.assertTrue(all(observed[name] is True for name in flags))
+        self.assertEqual(observed["install"], {"exit_code": 1, "timeout": False})
+        self.assertEqual(observed["list"], {"exit_code": 0, "timeout": False})
+        self.assertNotIn("private command text", json.dumps(observed))
+        self.assertFalse(audit.expected_negative_coverage(row))
+        for invalid in (None, True, 1, [], "private command text"):
+            with self.subTest(row=invalid):
+                observed = audit.case_observation(invalid)
+                self.assertTrue(all(observed[name] is None for name in flags))
+                self.assertEqual(observed["install"], {"exit_code": None, "timeout": None})
+                self.assertEqual(observed["list"], {"exit_code": None, "timeout": None})
+        for value in (False, 0, 1, "true", None):
+            row = dict.fromkeys(flags, value)
+            observed = audit.case_observation(row)
+            self.assertTrue(all(observed[name] is (value if type(value) is bool else None) for name in flags))
+        for code in (True, False, -(2**31) - 1, 2**32, "1", None):
+            observed = audit.case_observation({"install": {"exit_code": code, "timeout": "false"}})
+            self.assertEqual(observed["install"], {"exit_code": None, "timeout": None})
+        for code in (-(2**31), -1, 0, 2**32 - 1):
+            observed = audit.case_observation({"install": {"exit_code": code, "timeout": True}})
+            self.assertEqual(observed["install"], {"exit_code": code, "timeout": True})
+
 
 
 if __name__ == "__main__":

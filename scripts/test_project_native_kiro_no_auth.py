@@ -1,5 +1,6 @@
 """Inert no-auth route/effect/evidence contracts, never vendor observations."""
 import os
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -8,8 +9,61 @@ from unittest.mock import patch
 import project_native_kiro_no_auth as noauth
 import project_native_research as research
 
+STATUS_HELP = b"Get status\n\nUsage: kiro-cli mcp status [OPTIONS] --name <NAME>\n\nOptions:\n  --name <NAME>  Owned server name\n"
+
 
 class NoAuthContracts(unittest.TestCase):
+    def test_run_rejoins_final_source_before_completing_original_capture(self):
+        commit, tree = "a" * 40, "b" * 40
+        for failure in (None, "commit", "tree", "clean", "error", "typed-exit"):
+            with self.subTest(failure=failure):
+                output = self.root / ("final-" + str(failure))
+                calls, published = [], []
+                def source(ctx):
+                    ctx.summary.update(source_commit=commit, source_tree=tree)
+                def materialize(root, *_args):
+                    root.mkdir(mode=0o700)
+                    binary = root / "kiro-cli"
+                    binary.write_bytes(b"inert pinned runtime")
+                    binary.chmod(0o700)
+                    return binary, {binary: research.hashlib.sha256(binary.read_bytes()).hexdigest()}
+                def command(ctx, label, argv, cwd, env, timeout):
+                    self.assertEqual(cwd, research.SOURCE)
+                    self.assertIs(env, ctx.env)
+                    self.assertEqual(timeout, 10)
+                    self.assertEqual(argv[0], "/usr/bin/git")
+                    suffix = label.removeprefix("source-final-")
+                    expected = {"commit": ["rev-parse", "HEAD"], "tree": ["rev-parse", "HEAD^{tree}"],
+                                "clean": ["status", "--porcelain", "--untracked-files=normal"]}
+                    self.assertEqual(argv[1:], expected[suffix])
+                    calls.append(label)
+                    body = {"commit": (commit + "\n").encode(), "tree": (tree + "\n").encode(), "clean": b""}[suffix]
+                    if failure == suffix: body = b"changed\n"
+                    return {"exit": True if failure == "typed-exit" else 0,
+                            "error": "timeout" if failure == "error" else None}, body, b""
+                def publish(summary, _ctx, _output):
+                    published.append(json.loads(json.dumps(summary)))
+                with patch.object(research.native, "require_hosted"), \
+                     patch.object(research.Context, "source_and_projects", source), \
+                     patch.object(research.Context, "command", command), \
+                     patch.object(research, "acquire", return_value=({}, {})), \
+                     patch.object(research, "materialize", side_effect=materialize), \
+                     patch.object(noauth, "collect", side_effect=lambda ctx: ctx.summary.update(finite_capture_complete=True)), \
+                     patch.object(research, "publish", side_effect=publish), patch("builtins.print"):
+                    self.assertEqual(noauth.run(output), int(failure is not None))
+                result = published[0]
+                self.assertEqual(result["source_commit"], commit)
+                self.assertEqual(result["source_tree"], tree)
+                self.assertEqual(len(result["runtime_files"]), 1)
+                self.assertIs(result["collection_complete"], failure is None)
+                self.assertFalse(any(result["qualification"].values()))
+                if failure is None:
+                    self.assertEqual(calls, ["source-final-commit", "source-final-tree", "source-final-clean"])
+                    self.assertEqual(result["source_final"], {"source_commit": commit, "source_tree": tree, "clean": True})
+                else:
+                    self.assertNotIn("source_final", result)
+                    self.assertIn("final source identity changed", result["error"])
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
@@ -18,7 +72,7 @@ class NoAuthContracts(unittest.TestCase):
         self.ctx = research.Context(self.root, self.summary, None)
         self.ctx.env["PATH"] = str(self.root / "client/kirocli/bin") + ":/usr/bin:/bin"
         self.owned, self.fixtures = noauth.prepare(self.ctx)
-        self.table = noauth.routes(self.fixtures)
+        self.table = noauth.routes(self.fixtures, self.ctx)
         self.ids = {root: noauth.kiro._research_root_identity(root) for root in self.owned}
 
     def invoke(self, label="validate-valid", arguments=None, project="a"):
@@ -29,7 +83,7 @@ class NoAuthContracts(unittest.TestCase):
             return result, child.call_args
 
     def test_closed_routes_contain_only_finite_non_session_commands(self):
-        self.assertEqual(len(self.table), 14)
+        self.assertEqual(len(self.table), 18)
         self.assertFalse(any(set(args) & {"login", "chat", "acp", "create", "update", "restart"}
                              for _, args in self.table.values()))
         self.assertEqual(self.table["validate-missing"][1][-1], str(self.fixtures / "missing.json"))
@@ -145,7 +199,7 @@ class NoAuthContracts(unittest.TestCase):
                     return {"exit": 1, "error": None}, b"", noauth.AUTH_REFUSAL
                 with patch.object(noauth.kiro, "_runtime_bin"), patch.object(ctx, "command", side_effect=replace):
                     with self.assertRaisesRegex(ValueError, "identity/mode"):
-                        noauth.probe(ctx, noauth.routes(fixtures), owned, ids, "validate-valid", noauth.routes(fixtures)["validate-valid"][1], "a")
+                        noauth.probe(ctx, noauth.routes(fixtures, ctx), owned, ids, "validate-valid", noauth.routes(fixtures, ctx)["validate-valid"][1], "a")
 
     def test_private_database_initialization_allowed_original_home_preserved(self):
         def initialize(label, argv, cwd, env, timeout):
@@ -180,6 +234,29 @@ class NoAuthContracts(unittest.TestCase):
         self.assertIsNotNone(identity)
         self.assertEqual(len(digest), 64)
 
+    def test_inventory_stops_at_global_bound_before_reading_excess_member(self):
+        root = self.root / "bounded-inventory"
+        root.mkdir(mode=0o700)
+        for index in range(127):
+            (root / str(index)).write_bytes(b"owned fixture\n")
+        self.assertEqual(len(noauth.tree_identity(root)), 128)
+        original = list(root.iterdir())
+        yielded = []
+        def entries():
+            for path in original:
+                yielded.append(path.name)
+                yield type("Entry", (), {"name": path.name})()
+            yielded.append("unread-overflow")
+            yield type("Entry", (), {"name": "unread-overflow"})()
+            self.fail("enumerated beyond the fixed inventory limit")
+        with patch.object(noauth.os, "scandir") as scanner, patch.object(
+                noauth, "file_identity", wraps=noauth.file_identity) as read:
+            scanner.return_value.__enter__.return_value = entries()
+            with self.assertRaisesRegex(ValueError, "owned fixture inventory limit"):
+                noauth.tree_identity(root)
+            self.assertEqual(read.call_count, 127)
+        self.assertEqual(len(yielded), 128)
+
     def test_symlink_hardlink_and_special_inventory_refuse(self):
         for kind in ("symlink", "hardlink", "fifo"):
             with self.subTest(kind=kind):
@@ -212,6 +289,8 @@ class NoAuthContracts(unittest.TestCase):
                 return {"exit": 0, "error": None}, b"kiro-cli 2.34.0\n", b""
             if label == "validate-help":
                 return {"exit": 0, "error": None}, noauth.VALIDATE_HELP, b""
+            if label == "mcp-status-help":
+                return {"exit": 0, "error": None}, STATUS_HELP, b""
             return {"exit": 1, "error": None}, b"", noauth.AUTH_REFUSAL
         # collect authors its own fresh fixture; our setUp fixtures are separate.
         with tempfile.TemporaryDirectory() as other:
@@ -224,7 +303,10 @@ class NoAuthContracts(unittest.TestCase):
             self.assertTrue(all(not x["validation_qualified"] for x in ctx.summary["validation_observations"]))
             self.assertFalse(ctx.summary["validation_schema_observed"])
             self.assertFalse(ctx.summary["native_discovery_observed"])
-            self.assertEqual(ctx.summary["expected_auth_refusal_count"], 12)
+            self.assertEqual(ctx.summary["expected_auth_refusal_count"], 15)
+            self.assertEqual(len(ctx.summary["status_observations"]), 3)
+            self.assertFalse(ctx.summary["status_observation_qualified"])
+            self.assertTrue(all(row["native_status_qualified"] is False for row in ctx.summary["status_observations"]))
 
     def test_success_requires_exact_measured_help_and_typed_exit(self):
         self.assertEqual(len(noauth.VALIDATE_HELP), 206)
@@ -234,6 +316,70 @@ class NoAuthContracts(unittest.TestCase):
                                  ({"exit": 0, "error": None}, noauth.VALIDATE_HELP + b"warning", b""),
                                  ({"exit": 0, "error": None}, noauth.VALIDATE_HELP, b"warning")):
             self.assertFalse(noauth.exact_success(record, out, err, noauth.VALIDATE_HELP))
+
+    def test_status_routes_select_authored_sources_and_preserve_other_roots(self):
+        for project in ("a", "b", "user"):
+            selected = self.ctx.home if project == "user" else self.ctx.projects[project]
+            name = "uap-noauth-" + selected.name
+            self.assertEqual(self.table[project + "-mcp-status"], (project, ("mcp", "status", "--name", name)))
+            source = json.loads((selected / ".kiro/settings/mcp.json").read_text())
+            self.assertIs(source["mcpServers"][name]["disabled"], True)
+            _, call = self.invoke(label=project + "-mcp-status", project=project)
+            self.assertEqual(call.args[1], ["mcp", "status", "--name", name])
+            self.assertEqual(call.args[2], self.ctx.projects[project])
+            self.assertEqual(call.args[3]["HOME"], str(self.ctx.home))
+            for root, expected in self.owned.items():
+                self.assertEqual(noauth.tree_identity(root), expected)
+        with patch.object(self.ctx, "command") as child:
+            with self.assertRaisesRegex(ValueError, "exact argv/cwd"):
+                noauth.probe(self.ctx, self.table, self.owned, self.ids, "a-mcp-status",
+                             self.table["b-mcp-status"][1], "a")
+            child.assert_not_called()
+
+    def test_status_help_requires_pinned_child_syntax_and_typed_success(self):
+        self.assertTrue(noauth.status_help_supported({"exit": 0, "error": None}, STATUS_HELP, b""))
+        invalid = (({"exit": False, "error": None}, STATUS_HELP, b""),
+                   ({"exit": 0}, STATUS_HELP, b""),
+                   ({"exit": 1, "error": None}, b"", noauth.AUTH_REFUSAL),
+                   ({"exit": 0, "error": None}, STATUS_HELP, b"warning"))
+        bodies = (STATUS_HELP.replace(b"mcp status", b"mcp status-other"),
+                  STATUS_HELP.replace(b"--name", b"--names"), STATUS_HELP + STATUS_HELP,
+                  b"x" * 4097, b"\xff", STATUS_HELP + b"\x00")
+        for record, out, err in (*invalid, *(({"exit": 0, "error": None}, body, b"") for body in bodies)):
+            self.assertFalse(noauth.status_help_supported(record, out, err))
+
+    def test_status_help_or_unknown_status_stops_without_other_status_calls(self):
+        for mode in ("help", "success", "changed-denial", "timeout"):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as other:
+                ctx = research.Context(Path(other).resolve(), {"commands": []}, None)
+                calls = []
+                def child(label, *args, **kwargs):
+                    calls.append(label)
+                    if label == "version": return {"exit": 0, "error": None}, b"kiro-cli 2.34.0\n", b""
+                    if label == "validate-help": return {"exit": 0, "error": None}, noauth.VALIDATE_HELP, b""
+                    if label == "mcp-status-help":
+                        return {"exit": 0, "error": None}, b"wrong grammar" if mode == "help" else STATUS_HELP, b""
+                    if label == "a-mcp-status":
+                        if mode == "success": return {"exit": 0, "error": None}, b"disabled", b""
+                        if mode == "timeout": return {"exit": None, "error": "timeout"}, b"", b""
+                        return {"exit": 1, "error": None}, b"", noauth.AUTH_REFUSAL + b"warning"
+                    return {"exit": 1, "error": None}, b"", noauth.AUTH_REFUSAL
+                with patch.object(noauth.kiro, "_runtime_bin", return_value=Path(other) / "client/kirocli/bin"), patch.object(ctx, "command", side_effect=child):
+                    with self.assertRaisesRegex(ValueError, "unreviewed.*status"):
+                        noauth.collect(ctx)
+                self.assertEqual(len(ctx.summary["expected_auth_refusals"]), 9)
+                self.assertEqual(ctx.summary["status_observations"], [])
+                self.assertIs(ctx.summary["status_observation_qualified"], False)
+                self.assertFalse(any(label in calls for label in ("b-mcp-status", "user-mcp-status")))
+                if mode == "help": self.assertNotIn("a-mcp-status", calls)
+
+    def test_status_auth_denial_cannot_hide_foreign_mutation(self):
+        def mutate(*args, **kwargs):
+            (self.ctx.projects["b"] / ".kiro/sentinel.txt").write_text("unexpected effect")
+            return {"exit": 1, "error": None}, b"", noauth.AUTH_REFUSAL
+        with patch.object(noauth.kiro, "_runtime_bin"), patch.object(self.ctx, "command", side_effect=mutate):
+            with self.assertRaisesRegex(ValueError, "changed owned/foreign"):
+                noauth.probe(self.ctx, self.table, self.owned, self.ids, "a-mcp-status", self.table["a-mcp-status"][1], "a")
 
     def test_unexpected_validation_success_fails_before_any_inventory(self):
         calls = []

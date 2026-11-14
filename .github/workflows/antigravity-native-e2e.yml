@@ -8,6 +8,7 @@ on:
       - 'install/integrationctl/agentplugins/domain/clients_catalog.go'
       - 'scripts/e2e/antigravity-native.sh'
       - 'scripts/e2e/antigravity-native-cross.py'
+      - 'install/integrationctl/research/antigravityinventory/**'
       - 'docs/ANTIGRAVITY_NATIVE_PLUGINS.md'
       - 'scripts/e2e/released-native-proof.py'
       - 'scripts/test_released_native_proof.py'
@@ -21,6 +22,7 @@ on:
       - 'install/integrationctl/agentplugins/domain/clients_catalog.go'
       - 'scripts/e2e/antigravity-native.sh'
       - 'scripts/e2e/antigravity-native-cross.py'
+      - 'install/integrationctl/research/antigravityinventory/**'
       - 'docs/ANTIGRAVITY_NATIVE_PLUGINS.md'
       - 'scripts/e2e/released-native-proof.py'
       - 'scripts/test_released_native_proof.py'
@@ -54,7 +56,7 @@ permissions:
 
 concurrency:
   group: antigravity-native-e2e-${{ github.event.pull_request.number || github.ref }}-${{ inputs.release_tag || 'source' }}
-  cancel-in-progress: ${{ inputs.release_tag == '' }}
+  cancel-in-progress: false
 
 jobs:
   native-linux-x64:
@@ -125,7 +127,31 @@ jobs:
           set -euo pipefail
           go build -o "$RUNNER_TEMP/agentplugins" ./cmd/agentplugins
           echo "UAP_BIN=$RUNNER_TEMP/agentplugins" >> "$GITHUB_ENV"
+      - name: Build fixed disposable User admission bridge and run inert contracts
+        if: ${{ inputs.release_tag == '' }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $commit = (git rev-parse HEAD).Trim()
+          $tree = (git rev-parse 'HEAD^{tree}').Trim()
+          $nativeSHA = (Get-FileHash -LiteralPath $env:AGY_BIN -Algorithm SHA256).Hash.ToLowerInvariant()
+          $installerSHA = (Get-FileHash -LiteralPath $env:UAP_BIN -Algorithm SHA256).Hash.ToLowerInvariant()
+          $suffix = if ($IsWindows) { '.exe' } else { '' }
+          $helper = Join-Path $env:RUNNER_TEMP ('agy-user-admission' + $suffix)
+          go -C install/integrationctl/agentplugins test -count=1 -timeout=3m -v ./clients/antigravity
+          if ($LASTEXITCODE -ne 0) { throw 'Antigravity adapter contracts failed' }
+          go -C install/integrationctl test ./research/antigravityinventory -count=1
+          if ($LASTEXITCODE -ne 0) { throw 'Antigravity bridge contracts failed' }
+          go -C install/integrationctl build -ldflags "-X main.sourceCommit=$commit -X main.sourceTree=$tree -X main.nativeSHA=$nativeSHA -X main.installerSHA=$installerSHA" -o $helper ./research/antigravityinventory
+          if ($LASTEXITCODE -ne 0) { throw 'Antigravity bridge build failed' }
+          $python = if ($IsWindows) { 'python' } else { 'python3' }
+          & $python scripts/e2e/antigravity-native-cross.py --contracts
+          if ($LASTEXITCODE -ne 0) { throw 'Antigravity ledger contracts failed' }
+          "AGY_ADMISSION_HELPER=$helper" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "AGY_ADMISSION_COMMIT=$commit" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "AGY_ADMISSION_TREE=$tree" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Real native plugin strict validation, discovery and scoped removal
+        id: native_lifecycle
         shell: bash
         run: |
           set -euo pipefail
@@ -135,6 +161,14 @@ jobs:
             bash scripts/e2e/antigravity-native.sh
             python3 scripts/e2e/antigravity-native-cross.py
           fi
+      - name: Retain source-native supervised exchanges
+        if: ${{ always() && inputs.release_tag == '' && steps.native_lifecycle.outputs.receipt_archive != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: antigravity-source-native-linux-amd64-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.native_lifecycle.outputs.receipt_archive }}
+          if-no-files-found: error
+          retention-days: 14
       - name: Retain release-native receipt and transcript
         if: ${{ always() && inputs.release_tag != '' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
@@ -222,7 +256,31 @@ jobs:
           set -euo pipefail
           go build -o "$RUNNER_TEMP/agentplugins" ./cmd/agentplugins
           echo "UAP_BIN=$RUNNER_TEMP/agentplugins" >> "$GITHUB_ENV"
+      - name: Build fixed disposable User admission bridge and run inert contracts
+        if: ${{ inputs.release_tag == '' }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $commit = (git rev-parse HEAD).Trim()
+          $tree = (git rev-parse 'HEAD^{tree}').Trim()
+          $nativeSHA = (Get-FileHash -LiteralPath $env:AGY_BIN -Algorithm SHA256).Hash.ToLowerInvariant()
+          $installerSHA = (Get-FileHash -LiteralPath $env:UAP_BIN -Algorithm SHA256).Hash.ToLowerInvariant()
+          $suffix = if ($IsWindows) { '.exe' } else { '' }
+          $helper = Join-Path $env:RUNNER_TEMP ('agy-user-admission' + $suffix)
+          go -C install/integrationctl/agentplugins test -count=1 -timeout=3m -v ./clients/antigravity
+          if ($LASTEXITCODE -ne 0) { throw 'Antigravity adapter contracts failed' }
+          go -C install/integrationctl test ./research/antigravityinventory -count=1
+          if ($LASTEXITCODE -ne 0) { throw 'Antigravity bridge contracts failed' }
+          go -C install/integrationctl build -ldflags "-X main.sourceCommit=$commit -X main.sourceTree=$tree -X main.nativeSHA=$nativeSHA -X main.installerSHA=$installerSHA" -o $helper ./research/antigravityinventory
+          if ($LASTEXITCODE -ne 0) { throw 'Antigravity bridge build failed' }
+          $python = if ($IsWindows) { 'python' } else { 'python3' }
+          & $python scripts/e2e/antigravity-native-cross.py --contracts
+          if ($LASTEXITCODE -ne 0) { throw 'Antigravity ledger contracts failed' }
+          "AGY_ADMISSION_HELPER=$helper" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "AGY_ADMISSION_COMMIT=$commit" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "AGY_ADMISSION_TREE=$tree" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Cross-platform native macOS lifecycle
+        id: native_lifecycle
         shell: bash
         run: |
           set -euo pipefail
@@ -231,6 +289,14 @@ jobs:
           else
             python3 scripts/e2e/antigravity-native-cross.py
           fi
+      - name: Retain source-native supervised exchanges
+        if: ${{ always() && inputs.release_tag == '' && steps.native_lifecycle.outputs.receipt_archive != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: antigravity-source-native-darwin-arm64-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.native_lifecycle.outputs.receipt_archive }}
+          if-no-files-found: error
+          retention-days: 14
       - name: Retain release-native receipt and transcript
         if: ${{ always() && inputs.release_tag != '' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
@@ -316,7 +382,31 @@ jobs:
           go build -o "$env:RUNNER_TEMP/agentplugins.exe" ./cmd/agentplugins
           if ($LASTEXITCODE -ne 0) { throw "UAP Windows build failed" }
           "UAP_BIN=$env:RUNNER_TEMP/agentplugins.exe" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Build fixed disposable User admission bridge and run inert contracts
+        if: ${{ inputs.release_tag == '' }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $commit = (git rev-parse HEAD).Trim()
+          $tree = (git rev-parse 'HEAD^{tree}').Trim()
+          $nativeSHA = (Get-FileHash -LiteralPath $env:AGY_BIN -Algorithm SHA256).Hash.ToLowerInvariant()
+          $installerSHA = (Get-FileHash -LiteralPath $env:UAP_BIN -Algorithm SHA256).Hash.ToLowerInvariant()
+          $suffix = if ($IsWindows) { '.exe' } else { '' }
+          $helper = Join-Path $env:RUNNER_TEMP ('agy-user-admission' + $suffix)
+          go -C install/integrationctl/agentplugins test -count=1 -timeout=3m -v ./clients/antigravity
+          if ($LASTEXITCODE -ne 0) { throw 'Antigravity adapter contracts failed' }
+          go -C install/integrationctl test ./research/antigravityinventory -count=1
+          if ($LASTEXITCODE -ne 0) { throw 'Antigravity bridge contracts failed' }
+          go -C install/integrationctl build -ldflags "-X main.sourceCommit=$commit -X main.sourceTree=$tree -X main.nativeSHA=$nativeSHA -X main.installerSHA=$installerSHA" -o $helper ./research/antigravityinventory
+          if ($LASTEXITCODE -ne 0) { throw 'Antigravity bridge build failed' }
+          $python = if ($IsWindows) { 'python' } else { 'python3' }
+          & $python scripts/e2e/antigravity-native-cross.py --contracts
+          if ($LASTEXITCODE -ne 0) { throw 'Antigravity ledger contracts failed' }
+          "AGY_ADMISSION_HELPER=$helper" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "AGY_ADMISSION_COMMIT=$commit" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "AGY_ADMISSION_TREE=$tree" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Cross-platform native Windows lifecycle
+        id: native_lifecycle
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -326,6 +416,14 @@ jobs:
             python scripts/e2e/antigravity-native-cross.py
           }
           if ($LASTEXITCODE -ne 0) { throw 'Native lifecycle failed' }
+      - name: Retain source-native supervised exchanges
+        if: ${{ always() && inputs.release_tag == '' && steps.native_lifecycle.outputs.receipt_archive != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: antigravity-source-native-windows-amd64-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.native_lifecycle.outputs.receipt_archive }}
+          if-no-files-found: error
+          retention-days: 14
       - name: Retain release-native receipt and transcript
         if: ${{ always() && inputs.release_tag != '' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0

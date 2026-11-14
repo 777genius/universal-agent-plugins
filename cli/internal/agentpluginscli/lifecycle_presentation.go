@@ -1,12 +1,25 @@
 package agentpluginscli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 )
+
+// renderRepairCompletion preserves the partial repair receipt while refusing
+// to label an unsuccessful native transition as a successful CLI operation.
+func renderRepairCompletion(writer io.Writer, format string, installation domain.Installation, result usecase.AddResult, operationErr error) error {
+	if operationErr != nil {
+		if format == "json" {
+			return errors.Join(operationErr, writeJSONResult(writer, "repair", outputResultFailure, newRepairResultData(installation, result, false)))
+		}
+		return operationErr
+	}
+	return renderRepairResult(writer, format, installation, result, false)
+}
 
 func renderRepairResult(writer io.Writer, format string, installation domain.Installation, result usecase.AddResult, dryRun bool) error {
 	data := newRepairResultData(installation, result, dryRun)

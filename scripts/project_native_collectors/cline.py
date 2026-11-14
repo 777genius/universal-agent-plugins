@@ -75,3 +75,29 @@ def collect(ctx):
                        "cline.native-restart-removal", "cline.mcp-initialize",
                        "cline.mcp-tools-list", "cline.mcp-tools-call"],
     }
+
+PLATFORM_ACQUISITIONS = {
+    ("Linux", "x86_64"): ACQUISITION,
+    ("Darwin", "arm64"): {
+        "url": "https://registry.npmjs.org/@cline/cli-darwin-arm64/-/cli-darwin-arm64-3.0.73.tgz",
+        "integrity": "sha512-wFik5XgHL/JNJA599aI2tUDx/UTzFMVqqC5k2V+XD1IC7pDt0yFN0cK10h6rgyEFAxRzujBTrxhq+4buuwXtYg==",
+        "max_bytes": 64 << 20, "expected_bytes": 33810336, "format": "tar.gz",
+        "entrypoint": "package/bin/cline", "runtime": "native",
+        "binary_sha256": "1ddd1a076cb333b27f61b172ae07611dcfe743218dc2547bda22a7b1e2722358",
+    },
+    ("Windows", "x86_64"): {
+        "url": "https://registry.npmjs.org/@cline/cli-windows-x64/-/cli-windows-x64-3.0.73.tgz",
+        "integrity": "sha512-tV9aojQDpEXBRGHAhnBhXFuIpFZXx9eDPm/PADNAwJb8sUdqJX0YPPkaOKe1Sj1NmyyYTBeSYk91W44g6Yif6w==",
+        "max_bytes": 64 << 20, "expected_bytes": 47664377, "format": "tar.gz",
+        "entrypoint": "package/bin/cline.exe", "runtime": "native",
+        "binary_sha256": "ebf74e8bb04a99d0098ccc446f9b11cf50e6c6ff994c4d1e87aa57e22bd8e051",
+    },
+}
+
+
+def platform_acquisition(system, machine):
+    architecture = {"amd64": "x86_64", "x86_64": "x86_64", "arm64": "arm64", "aarch64": "arm64"}.get(machine.lower())
+    try:
+        return dict(PLATFORM_ACQUISITIONS[(system, architecture)])
+    except KeyError as error:
+        raise ValueError("unreviewed Cline native platform") from error

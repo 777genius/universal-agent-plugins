@@ -27,7 +27,11 @@ func (journey projectJourney) execute(project string, args ...string) (string, e
 		args = append(args, "--scope", "project", "--project-root", project)
 	}
 	root.SetArgs(args)
-	err := root.Execute()
+	ctx := context.Background()
+	if journey.transport != nil && journey.transport.ctx != nil {
+		ctx = journey.transport.ctx
+	}
+	err := root.ExecuteContext(ctx)
 	return output.String() + stderr.String(), err
 }
 
@@ -154,7 +158,11 @@ func (journey projectJourney) inspectNoRecovery(t *testing.T, project string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	view, err := app.Installer.Inspect(context.Background())
+	ctx := context.Background()
+	if journey.transport != nil && journey.transport.ctx != nil {
+		ctx = journey.transport.ctx
+	}
+	view, err := app.Installer.Inspect(ctx)
 	if err != nil || view.Recovery.Required {
 		t.Fatalf("project inspection requires recovery: %+v, %v", view.Recovery, err)
 	}

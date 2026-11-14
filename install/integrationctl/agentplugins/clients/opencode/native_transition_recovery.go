@@ -13,12 +13,15 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 )
 
-type PendingNativeTransition struct {
-	OperationID, InstallationID, BindingID, TargetPath, Phase, Digest, Root string
-	// AuthorityDigest remains stable through the recorder's phase advances.
-	AuthorityDigest string
+type PendingNativeTransition = ports.NativeTransitionObservation
+
+func (t NativeTransitions) ReconcileObserved(ctx context.Context, observed ports.NativeTransitionObservation, state ports.NativeTransitionState) error {
+	t.State = state
+	_, err := t.Reconcile(ctx, observed.Root)
+	return err
 }
 
 func (t NativeTransitions) Pending() ([]PendingNativeTransition, error) {

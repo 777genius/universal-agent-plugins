@@ -60,7 +60,15 @@ func globalOfflineFixture(t *testing.T) (domain.DetectedClient, domain.DeliveryP
 }
 
 func TestDevinGlobalOfflineNativeLifecycleRelocatedStateAndLegacyParity(t *testing.T) {
+	for _, version := range []string{"3000.11.205", "3000.12.57"} {
+		t.Run(version, func(t *testing.T) { testDevinGlobalOfflineLifecycle(t, version) })
+	}
+}
+
+func testDevinGlobalOfflineLifecycle(t *testing.T, version string) {
+	t.Helper()
 	client, plan, envelope := globalOfflineFixture(t)
+	client.Version = version
 	objects, err := devinGlobalObjects(plan.ActivePath, envelope, plan)
 	if err != nil || len(objects) != 3 {
 		t.Fatalf("global projection failed: %d objects, %v", len(objects), err)
@@ -187,6 +195,9 @@ func TestDevinGlobalSelectedUserProfileIsNotLegacyOrProject(t *testing.T) {
 	for _, mutate := range []func(*domain.DetectedClient, *domain.DeliveryPlan){
 		func(c *domain.DetectedClient, _ *domain.DeliveryPlan) { c.Version = "" },
 		func(c *domain.DetectedClient, _ *domain.DeliveryPlan) { c.Version = "3000.11.204" },
+		func(c *domain.DetectedClient, _ *domain.DeliveryPlan) { c.Version = "3000.12.56" },
+		func(c *domain.DetectedClient, _ *domain.DeliveryPlan) { c.Version = "3000.12.58" },
+		func(c *domain.DetectedClient, _ *domain.DeliveryPlan) { c.Version = "3000.12.57\n" },
 		func(c *domain.DetectedClient, _ *domain.DeliveryPlan) { c.NativeConfigRoot += "-other" },
 		func(_ *domain.DetectedClient, p *domain.DeliveryPlan) { p.NativeRegistryRoot = client.ConfigRoot },
 		func(_ *domain.DetectedClient, p *domain.DeliveryPlan) {
@@ -238,5 +249,36 @@ func TestDevinGlobalPreflightAllowsUnstagedButActivationRequiresExactDelivery(t 
 		Client: client, Plan: plan,
 	}); err == nil {
 		t.Fatal("Global activation accepted missing delivered identity after preflight")
+	}
+}
+
+func TestDevinGlobalNewVersionDoesNotAdmitProjectOrNonprimaryClient(t *testing.T) {
+	client, plan, _ := globalOfflineFixture(t)
+	client.Version = "3000.12.57"
+	if _, err := devinGlobalPlanRoot(client, plan); err != nil {
+		t.Fatal(err)
+	}
+	target := domain.TargetContext{Scope: domain.ScopeProject,
+		ProjectRoot: filepath.Dir(client.NativeConfigRoot), UserConfigRoot: client.ConfigRoot}
+	project := plan
+	project.Scope, project.TargetContext = domain.ScopeProject, target
+	project.NativeRegistryRoot = filepath.Join(target.ProjectRoot, ".devin")
+	globalOfflineWrite(t, filepath.Join(project.NativeRegistryRoot, "config.json"), "{}")
+	if err := New().CheckPlanPrecondition(clients.PlanInput{TargetContext: target, Client: client}, &project); err == nil || !strings.Contains(err.Error(), "observed exact version 3000.11.205") {
+		t.Fatalf("Global version qualification admitted an unobserved Project profile: %v", err)
+	}
+	client.Version = "3000.11.205"
+	if err := New().CheckPlanPrecondition(clients.PlanInput{TargetContext: target, Client: client}, &project); err != nil {
+		t.Fatalf("historical Project admission changed: %v", err)
+	}
+	for _, executable := range []string{"windsurf", "devin-wrapper", ""} {
+		client.Version, client.ExecutablePath = "3000.12.57", executable
+		if _, err := requireSelectedDevinGlobal(client); err == nil {
+			t.Fatalf("nonprimary Global executable accepted: %q", executable)
+		}
+	}
+	client.ClientID, client.ExecutablePath = domain.ClientGemini, filepath.Join(filepath.Dir(plan.NativeRegistryRoot), "devin")
+	if _, err := requireSelectedDevinGlobal(client); err == nil {
+		t.Fatal("Global version accepted another client identity")
 	}
 }

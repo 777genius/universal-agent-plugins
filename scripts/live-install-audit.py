@@ -1213,6 +1213,20 @@ def signed_release_public_observation(response, identity, target):
     return evidence[:3]
 
 
+def kiro_prepared_user_client(clients):
+    """Select one observed Prepared User binding, never native activation."""
+    if not isinstance(clients, list):
+        return None
+    selected = [client for client in clients if isinstance(client, dict)
+                and client.get("client_id") == "kiro"]
+    expected = {"scope": "user", "install_intent": "prepare", "materialization": "materialized",
+                "activation": "prepared", "authentication": "not_checked", "policy": "allowed",
+                "verification": "package_validated"}
+    if len(selected) != 1 or any(selected[0].get(key) != value for key, value in expected.items()):
+        return None
+    return selected[0]
+
+
 def matching_installations(response, identity, target, kind, item, signed_release_pins=None):
     """Verify the frozen Registry release, never only live self-consistency."""
     signed_release_pins = signed_release_pins or {}
@@ -1233,10 +1247,12 @@ def matching_installations(response, identity, target, kind, item, signed_releas
         clients = node.get("clients", [])
         if not isinstance(clients, list):
             continue
+        prepared_kiro = (kiro_prepared_user_client(clients)
+                         if target == "kiro" and kind == "plugin" else None)
         verified_clients = [
             client for client in clients
             if isinstance(client, dict) and client.get("client_id") == target and
-            (client.get("verification") == "installation_verified" or
+            (client is prepared_kiro or client.get("verification") == "installation_verified" or
              (kind == "plugin" and client.get("materialization") == "materialized" and
               client.get("verification") == "package_validated" and
               client.get("activation") == "manual_activation_required"))
@@ -1920,12 +1936,14 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         if kind == "plugin" and isinstance(item, str) and not item.startswith("github:")
         else [])
     listed_identity = len(matching) == 1
+    kiro_prepared = bool(target == "kiro" and kind == "plugin" and listed_identity
+                         and kiro_prepared_user_client(matching[0].get("clients")) is not None)
     failed_install_registered = has_target_registration(listed_json, identity, target) if (
         output["exit_code"] != 0) else False
     failed_install_residue = bool(output["exit_code"] != 0 and (
         failed_install_registered or native_attribution or skill_path))
     prepared_binding = bool(listed_identity and (
-        grok_prepared or (kind == "plugin" and any(
+        grok_prepared or kiro_prepared or (kind == "plugin" and any(
             client.get("client_id") == target and client.get("verification") == "package_validated"
             and client.get("activation") == "manual_activation_required"
             for client in matching[0].get("clients", []) if isinstance(client, dict)))))
@@ -1981,6 +1999,8 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             and repeat_identity_ids == sorted(entry["installation_id"] for entry in matching)
             and repeat_native_unchanged and repeat_lock_unchanged
             and (not grok_prepared or repeat_project_unchanged)
+            and (not kiro_prepared or kiro_prepared_user_client(repeat_matches[0].get("clients"))
+                 == kiro_prepared_user_client(matching[0].get("clients")))
         )
     # BUG-039: independent native ID+version proof before UAP removes it.
     qoder_native_before_remove = None
@@ -2015,7 +2035,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         attestation = (["--external-uninstalled"] if
                        native_uninstall and native_uninstall["completed"] else [])
         # Grok project Skills have generated bundle names; never select by raw alias.
-        selector = matching[0]["installation_id"] if grok_prepared else identity
+        selector = matching[0]["installation_id"] if grok_prepared or kiro_prepared else identity
         cleanup = audited_call([cli, "remove", selector, "--target", target, *scope,
                         *attestation, "--format", "json"], env, project, 60)
         cleanup.pop("_json", None)
@@ -2131,6 +2151,8 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     install_refused = is_cli_refusal(output)
     if installed and removal_verified and sentinels_preserved and not repeat_verified:
         status = "repeat-add-unqualified"
+    elif kiro_prepared and installed and removal_verified and sentinels_preserved and repeat_verified:
+        status = "incomplete-native-proof"
     elif target == "chatgpt" and kind == "plugin" and installed and removal_verified and sentinels_preserved and repeat_verified:
         status = "manual-setup-prepared"
     elif installed and removal_verified and sentinels_preserved and repeat_verified:
@@ -2204,6 +2226,8 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "lock_written": bool(locked), "lock_contains_identity": bool(lock_contains),
             "lock_exact_source_pinned": lock_pinned, "skill_bytes_match": bool(skill_bytes_match),
             "listed_identity": listed_identity, "prepared_binding": prepared_binding,
+            "kiro_prepared_lifecycle_verified": bool(kiro_prepared and installed and repeat_verified
+                                                     and removal_verified and sentinels_preserved),
             "signed_release_observation": signed_observation,
             "repeat_add": repeat_add, "repeat_list": repeat_list,
             "repeat_installation_ids": repeat_identity_ids,
@@ -2344,6 +2368,23 @@ def published_audit_temp_parent():
     return str(parent)
 
 
+def case_observation(result):
+    """Project already retained lifecycle facts without granting native authority."""
+    row = result if type(result) is dict else {}
+    fields = ("kiro_prepared_lifecycle_verified", "repeat_verified", "removal_verified",
+              "sentinels_preserved", "failed_install_registered", "failed_install_residue")
+    observation = {name: row.get(name) if type(row.get(name)) is bool else None for name in fields}
+    for label in ("install", "list"):
+        command = row.get(label)
+        command = command if type(command) is dict else {}
+        code, timeout = command.get("exit_code"), command.get("timeout")
+        observation[label] = {
+            "exit_code": code if type(code) is int and -(2**31) <= code < 2**32 else None,
+            "timeout": timeout if type(timeout) is bool else None,
+        }
+    return observation
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--cli", required=True)
@@ -2443,11 +2484,13 @@ def main():
             if result["status"] == "incomplete-native-proof" and args.kind == "plugin":
                 line["observed_signed_release"] = result.get("signed_release_observation", [])
                 line["expected_signed_release"] = doc["signed_release_pins"].get(item)
+            line["observation"] = case_observation(result)
             print(json.dumps(line), flush=True)
     passed = sum(r["status"] == "passed" for r in report["results"])
     report["passed"] = passed
     report["prepared_lifecycle_passed"] = sum(
-        r["status"] == "prepared-lifecycle-passed" for r in report["results"])
+        r["status"] == "prepared-lifecycle-passed" or r.get("kiro_prepared_lifecycle_verified") is True
+        for r in report["results"])
     accepted_negatives = [
         r for r in report["results"]
         if expected_negative_coverage(r, report["cli_version"].get("value"))

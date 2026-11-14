@@ -4,6 +4,8 @@ package transaction
 
 import (
 	"bytes"
+	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -12,6 +14,13 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
+func (kernel Kernel) saveState(state domain.StateFileV2) error {
+	if err := kernel.validatePublicationParents(context.Background(), state); err != nil {
+		return err
+	}
+	return kernel.StateStore.Save(state)
+}
+
 // persistCommitDecision handles the ambiguous failure window where an atomic
 // state rename is visible but syncing its parent directory reports an error.
 // The caller may roll back only when a reload proves the exact old state is
@@ -19,9 +28,12 @@ import (
 // the native directory transaction is allowed to commit. All other outcomes
 // leave the directory journal and backup intact for recovery.
 func (kernel Kernel) persistCommitDecision(desired domain.StateFileV2, beforeJSON []byte) (oldState bool, err error) {
-	initialErr := kernel.StateStore.Save(desired)
+	initialErr := kernel.saveState(desired)
 	if initialErr == nil {
 		return false, nil
+	}
+	if err := kernel.validatePublicationParents(context.Background(), desired); err != nil {
+		return false, fmt.Errorf("state save failed: %w; publication authority unavailable: %w", initialErr, err)
 	}
 	observed, loadErr := kernel.StateStore.Load()
 	if loadErr != nil {
@@ -36,7 +48,7 @@ func (kernel Kernel) persistCommitDecision(desired domain.StateFileV2, beforeJSO
 		return false, fmt.Errorf("state save failed (%v) and desired state cannot be compared: %w", fmt.Sprint(initialErr), marshalErr)
 	}
 	if bytes.Equal(observedJSON, desiredJSON) {
-		if retryErr := kernel.StateStore.Save(desired); retryErr != nil {
+		if retryErr := kernel.saveState(desired); retryErr != nil {
 			return false, fmt.Errorf("state became visible after save error (%v), but durability retry failed: %w", fmt.Sprint(initialErr), retryErr)
 		}
 		return false, nil
@@ -80,6 +92,16 @@ func marshalComparableState(state domain.StateFileV2) ([]byte, error) {
 		return state.Installations[i].InstallationID < state.Installations[j].InstallationID
 	})
 	return json.Marshal(state)
+}
+
+// ComparableStateDigest uses the exact persisted comparison used by durable
+// state decisions. It does not normalize lifecycle values or receipt content.
+func ComparableStateDigest(state domain.StateFileV2) (string, error) {
+	body, err := marshalComparableState(state)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("sha256:%x", sha256.Sum256(body)), nil
 }
 
 func loadClientFromState(state domain.StateFileV2, installationID, clientBindingID string) (int, domain.ClientBinding, error) {
@@ -129,7 +151,8 @@ func replaceReceipt(client domain.ClientBinding, receipt domain.MutationReceipt)
 }
 
 func matchesDirectoryReceipt(receipt domain.MutationReceipt, directory dirswap.Receipt, mutationType string) bool {
-	return sameDirectoryProof(receipt.DirectoryProof, directory) &&
+	return samePublicationParent(receipt.PublicationParentAuthority, directory.PublicationParentAuthority) &&
+		sameDirectoryProof(receipt.DirectoryProof, directory) &&
 		sameReceiptOwners(receipt.ProfileOwners, directory.ProfileOwners) &&
 		receipt.DataReceiptID == directory.DataReceiptID &&
 		receipt.OperationID == directory.OperationID &&

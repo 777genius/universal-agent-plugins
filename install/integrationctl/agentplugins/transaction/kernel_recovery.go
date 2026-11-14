@@ -19,6 +19,9 @@ func (kernel Kernel) Recover(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	if err := kernel.validatePublicationRecovery(ctx, state); err != nil {
+		return err
+	}
 	kernel.Directory.Namespace = kernel.Namespace
 	open, err := kernel.Directory.ListOpen()
 	if err != nil {
@@ -37,7 +40,7 @@ func (kernel Kernel) Recover(ctx context.Context) error {
 		changed = true
 	}
 	if changed {
-		if err := kernel.StateStore.Save(state); err != nil {
+		if err := kernel.saveState(state); err != nil {
 			return err
 		}
 	}
@@ -56,7 +59,7 @@ func (kernel Kernel) recoverDirectoryJournals(ctx context.Context, state *domain
 		if stateCommitted {
 			// A prior atomic rename may have become visible while its parent fsync
 			// returned an error. Re-saving makes the decision durable before backup deletion.
-			if err := kernel.StateStore.Save(*state); err != nil {
+			if err := kernel.saveState(*state); err != nil {
 				return false, nil, fmt.Errorf("make recovered state commit durable for %s: %w", directoryReceipt.OperationID, err)
 			}
 		}

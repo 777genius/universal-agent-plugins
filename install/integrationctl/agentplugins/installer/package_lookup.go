@@ -18,6 +18,12 @@ func (e *Engine) detectedClient(req Request) (domain.DetectedClient, error) {
 	if (req.ClientExecutable != "" && !validRoot(req.ClientExecutable)) || (req.Operation == OpInstall && requiresExecutable(e.cfg.Registry, id, e.scope()) && req.ClientExecutable == "") {
 		return domain.DetectedClient{}, fmt.Errorf("%w: ClientExecutable must be an explicit absolute clean path", ErrInvalidRequest)
 	}
+	if req.ClientNativeConfigRoot != "" {
+		_, opted := clients.As[clients.UserNativeRegistryLayout](e.cfg.Registry, id)
+		if e.scope() != domain.ScopeUser || !opted || !validRoot(req.ClientNativeConfigRoot) {
+			return domain.DetectedClient{}, fmt.Errorf("%w: ClientNativeConfigRoot requires an explicit absolute clean User root and an opted-in adapter", ErrInvalidRequest)
+		}
+	}
 	root := req.ClientConfigRoot
 	if resolver, ok := clients.As[clients.ProfileResolver](e.cfg.Registry, id); ok {
 		var err error
@@ -26,7 +32,7 @@ func (e *Engine) detectedClient(req Request) (domain.DetectedClient, error) {
 			return domain.DetectedClient{}, fmt.Errorf("%w: invalid client profile: %w", ErrInvalidRequest, err)
 		}
 	}
-	return domain.DetectedClient{ClientID: id, Status: domain.DetectionDetected, ConfigRoot: root, ExecutablePath: req.ClientExecutable, Version: req.ClientVersion}, nil
+	return domain.DetectedClient{ClientID: id, Status: domain.DetectionDetected, ConfigRoot: root, NativeConfigRoot: req.ClientNativeConfigRoot, ExecutablePath: req.ClientExecutable, Version: req.ClientVersion}, nil
 }
 
 func missingRequired(envelope domain.PackageEnvelope, required []string) []string {

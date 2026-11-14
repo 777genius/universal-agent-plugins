@@ -17,24 +17,27 @@ function hint(plugin: RegistryPlugin, id: InstallTargetID, context = current) {
   return pluginTargetDescription(plugin, installTargets.find(client => client.id === id)!, context);
 }
 
-test('unpublished target, native scope limitation and revoked policy have distinct explanations', () => {
+test('unpublished source, signed-v1 Project preparation and revoked policy have distinct explanations', () => {
   const plugin = fixture();
   for (const id of ['hermes', 'antigravity', 'pi'] as const) {
     assert.equal(hint(plugin, id).key, 'registryUi.install.catalogReleasePending');
     assert.equal(pluginInstallAvailability(plugin, [id]), undefined);
   }
   assert.equal(hint(plugin, 'hermes', { ...current, scope: 'project' }).key,
-    'registryUi.install.unsupportedPluginComponents');
+    'registryUi.install.catalogReleasePending');
+  assert.equal(pluginInstallAvailability(plugin, ['hermes'], 'project'), undefined);
   const release = plugin.distributions[0]!.releases[0]!;
   plugin.distributions[0]!.kind = 'community';
   release.targets.push({ client: 'hermes', scopes: ['user'], delivery: 'managed', authentication: 'required' });
   assert.equal(hint(plugin, 'hermes', { ...current, scope: 'project' }).key,
-    'registryUi.install.useComputerScope');
+    'registryUi.delivery.prepared');
+  assert.equal(pluginInstallAvailability(plugin, ['hermes'], 'project')?.kind, 'signed');
   release.release_status = 'revoked';
   assert.equal(hint(plugin, 'hermes').key, 'registryUi.install.noCompatibleSignedRelease');
   assert.equal(pluginInstallAvailability(plugin, ['hermes']), undefined);
+  assert.equal(pluginInstallAvailability(plugin, ['hermes'], 'project'), undefined);
   assert.equal(hint(plugin, 'hermes', { ...current, scope: 'project' }).key,
-    'registryUi.install.unsupportedPluginComponents');
+    'registryUi.install.noCompatibleSignedRelease');
 });
 
 test('known negative evidence cannot be explained as merely an unpublished target', () => {

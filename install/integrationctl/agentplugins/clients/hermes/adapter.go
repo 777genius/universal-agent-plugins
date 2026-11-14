@@ -1,6 +1,6 @@
-// Package hermes integrates native Hermes Skills and user-scoped MCP.
-// Ownership-checked YAML changes preserve foreign config; project MCP remains
-// unsupported, and project Skills require native project trust.
+// Package hermes integrates native Hermes Skills and scoped MCP preparation.
+// Project MCP uses an explicit managed session; project Skills retain native
+// project trust and their original receipt authority.
 package hermes
 
 import (
@@ -101,7 +101,10 @@ func (*Adapter) ResolveProfileRoot(root string) (string, error) {
 
 // ValidateBindingProfile refuses historical or replayed receipts that point
 // into a different selected native profile. No legacy Hermes migrations exist.
-func (*Adapter) ValidateBindingProfile(root string, binding domain.ClientBinding) error {
+func (adapter *Adapter) ValidateBindingProfile(root string, binding domain.ClientBinding) error {
+	if binding.Scope == string(domain.ScopeProject) {
+		return validateProjectSessionBinding(root, binding)
+	}
 	if binding.ClientID != string(domain.ClientHermes) || !cleanRoot(root) {
 		return fmt.Errorf("hermes recorded binding has different client or profile authority")
 	}
@@ -188,17 +191,32 @@ func (*Adapter) CheckPlanPrecondition(in clients.PlanInput, plan *domain.Deliver
 }
 
 // A package with required MCP/hooks/extensions must not silently become
-// Skills-only. Hermes' MCP configuration has User authority even in projects.
-func (*Adapter) QualifyPlan(_ clients.PlanInput, plan *domain.DeliveryPlan) error {
+// Skills-only. Project MCP requires the explicitly selected bundled client.
+func (*Adapter) QualifyPlan(in clients.PlanInput, plan *domain.DeliveryPlan) error {
 	if plan.Status == domain.PlanUnsupported {
 		return nil
 	}
+	projectMCP := plan.Scope == domain.ScopeProject && shared.HasSupportedMCP(plan.Components)
+	if projectMCP {
+		if _, err := qualifyHermesBundle(in.Client.ExecutablePath); err != nil {
+			projectMCP = false
+			for index := range plan.Components {
+				if plan.Components[index].Kind == domain.ComponentMCPServer {
+					plan.Components[index].Support = domain.SupportUnsupported
+					plan.Components[index].Reason = "Project MCP requires the qualified standalone Hermes distribution"
+				}
+			}
+		}
+	}
 	for _, component := range plan.Components {
-		allowed := component.Kind == domain.ComponentSkill ||
-			component.Kind == domain.ComponentMCPServer && plan.Scope == domain.ScopeUser
+		allowed := component.Kind == domain.ComponentSkill || component.Kind == domain.ComponentMCPServer
 		if !allowed || component.Support == domain.SupportUnsupported {
 			plan.Status = domain.PlanUnsupported
-			plan.Warnings = shared.AppendUnique(plan.Warnings, "Hermes supports User Skills/MCP and Project Skills; project MCP and unqualified package components cannot be redirected or discarded")
+			warning := "Hermes supports User Skills/MCP and Project Skills; project MCP and unqualified package components cannot be redirected or discarded"
+			if projectMCP {
+				warning = "Hermes supports scoped Skills/MCP preparation; unqualified package components cannot be redirected or discarded"
+			}
+			plan.Warnings = shared.AppendUnique(plan.Warnings, warning)
 			return nil
 		}
 	}
@@ -220,6 +238,9 @@ func (*Adapter) RefinePlan(ctx context.Context, _ clients.PlanInput, plan *domai
 	plan.Activation = domain.ActivationPrepared
 	if plan.Scope == domain.ScopeProject {
 		plan.UserActions = shared.AppendUnique(plan.UserActions, "Review Hermes project trust before Skills can be discovered; UAP does not automatically trust repositories")
+		if shared.HasSupportedMCP(plan.Components) {
+			plan.UserActions = shared.AppendUnique(plan.UserActions, "Use an explicitly confirmed UAP Hermes project session with the qualified bundled client; ordinary startup does not select this MCP home")
+		}
 	} else {
 		plan.UserActions = shared.AppendUnique(plan.UserActions, "Reload or restart Hermes and verify managed Skills are visible; copied files alone do not prove native activation")
 	}

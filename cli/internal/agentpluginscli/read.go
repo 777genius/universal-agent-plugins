@@ -307,54 +307,6 @@ func checkManagedIntegrity(ctx context.Context, app App, client domain.DetectedC
 	return checkNativeProjectionIntegrity(ctx, app, client, target, installation, binding, expected)
 }
 
-func checkNativeProjectionIntegrity(ctx context.Context, app App, client domain.DetectedClient, target domain.DeliveryTarget, installation domain.Installation, binding domain.ClientBinding, expectedDigest string) []doctorFinding {
-	if !nativeConfigLifecycle(domain.ClientID(binding.ClientID), domain.InstallScope(binding.Scope)) {
-		return nil
-	}
-	if !hasOwnedNativeProjection(binding.NativeObjects) {
-		return nil
-	}
-	if app.Lifecycle.Activator == nil || strings.TrimSpace(client.ConfigRoot) == "" {
-		return []doctorFinding{scopedFinding("unknown", "native_projection_not_checked", installation, binding.ClientID, "the exact owned native client projection could not be checked", "restore client configuration visibility and rerun doctor before relying on this installation")}
-	}
-	// The provider activator owns the exact config codecs and skill receipt
-	// verification. VerifyOnly routes through those same verifiers without
-	// starting the client or mutating its configuration.
-	outcome, err := app.Lifecycle.Activator.Activate(ctx, domain.ActivationRequest{
-		Client: client,
-		Plan: domain.DeliveryPlan{
-			ClientID: domain.ClientID(binding.ClientID), Scope: domain.InstallScope(binding.Scope), TargetContext: target.TargetContext, NativeRegistryRoot: target.NativeRegistryRoot,
-			PhysicalArtifactID: binding.PhysicalArtifact, DeclaredName: installation.DeclaredName,
-			TargetRoot: target.TargetRoot, ActivePath: target.ActivePath,
-			Components: []domain.ComponentDecision{{Kind: domain.ComponentSkill, Support: domain.SupportProjected}},
-		},
-		Delivery: domain.StagedDelivery{
-			ClientID: domain.ClientID(binding.ClientID), OwnedBase: target.TargetRoot,
-			ActivePath: target.ActivePath, ArtifactDigest: expectedDigest,
-			NativeObjects: append([]domain.NativeObjectOwnership(nil), binding.NativeObjects...),
-		},
-		DeclaredName: installation.DeclaredName, Replacing: true,
-		PreviousNativeObjects: append([]domain.NativeObjectOwnership(nil), binding.NativeObjects...),
-		VerifyOnly:            true,
-	})
-	if err != nil {
-		return []doctorFinding{scopedFinding("degraded", "native_projection_changed", installation, binding.ClientID, "an owned native client configuration entry or skill is missing or differs from its recorded projection", repairAction(installation, binding))}
-	}
-	if outcome.Activation != domain.ActivationActive || outcome.Verification != domain.VerificationInstalled {
-		return []doctorFinding{scopedFinding("unknown", "native_projection_not_checked", installation, binding.ClientID, "the exact owned native client projection could not be checked", "restore client configuration visibility and rerun doctor before relying on this installation")}
-	}
-	return nil
-}
-
-func hasOwnedNativeProjection(objects []domain.NativeObjectOwnership) bool {
-	for _, object := range objects {
-		if object.Kind != "managed_package_directory" {
-			return true
-		}
-	}
-	return false
-}
-
 func scopedFinding(status, code string, installation domain.Installation, clientID, message, action string) doctorFinding {
 	return doctorFinding{
 		Status: status, Code: code, InstallationName: installation.DeclaredName,

@@ -161,3 +161,17 @@ func TestPiNativeEffectTrackingIsProjectScoped(t *testing.T) {
 		t.Fatalf("Pi project lost its selected components: %+v", projectCaps)
 	}
 }
+
+func TestAntigravityPreparedScopesKeepFileOnlyVerificationRouting(t *testing.T) {
+	for _, scope := range []InstallScope{ScopeUser, ScopeProject} {
+		traits := (SelectedDelivery{}).EffectiveTraitsForScope(ClientAntigravity, scope)
+		if traits.LifecycleKind != LifecyclePrepared || traits.TracksNativeEffects || traits.VerifiesNativeDirectory {
+			t.Fatalf("Antigravity scope %s changed lifecycle effects: %+v", scope, traits)
+		}
+		for _, backend := range []string{"", "/selected/agy"} {
+			if ShouldReadOnlyVerifyForScope(ClientAntigravity, scope, backend, InstallIntentAutomatic) {
+				t.Fatal("Prepared ownership entered generic Active-only verification", scope, backend)
+			}
+		}
+	}
+}

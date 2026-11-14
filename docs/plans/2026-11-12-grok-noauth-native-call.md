@@ -124,3 +124,76 @@ required for discovery/call/result, or two for trusted absence; the existing
 bounded metadata/auxiliary requests remain separate. Inert regressions cover
 malformed-schema retries, late worker failure and trusted negative selection.
 Source HEAD/tree/clean state and compiled executable hashes must remain unchanged.
+## Delegated hosted process containment — 2026-11-14 follow-up
+
+The genuine `6b523784b4c56d42c39c733b3f77f0cf79de9615` no-auth run
+`43553250630`, job `132320243826`, artifact `14098460458` remains a failure.
+Its original 104,052-byte `evidence.json` has SHA256
+`04a44b04463365a4451c3c6e7780ee0338302a3106f121e77b04014e2e71fa3c`.
+The pinned native `mcp disable` writer created the initially absent lock; the
+first `repair-enable-owned-full-id` then exited 1 because the ordinary hosted
+service could not create its delegated child cgroup. This happened before ACP
+startup. The 14 original commands and 28 raw stream joins do not qualify a
+native tool call or the new service path.
+
+R1 approved a seven-path CI correction using the existing finite Cline systemd
+lifecycle. Its Cline host and complete launch-vector functions remain verbatim;
+the exact unit namespace, environment, compiled test selection and 180/165-second
+limits remain. Only two new literal cases select the existing Grok protocol or
+no-auth script. The same ordinary UID/GID, fixed root-owned system executables,
+`env -i`, held source/interpreter/installer/probe inputs and strict manager and
+cgroup receipts apply. No arbitrary native argv, caller unit name, host-cgroup
+ownership change, fallback, native action or production enablement guard is added.
+The existing disposable-host opt-in is explicit only in the two Ubuntu jobs.
+
+One original 900-second monotonic deadline includes preflight, service, bounded
+capture, closure and publication. The main capture leaves the existing 15-second
+cleanup reserve; the jobs keep their 20-minute limits. No stage resets the clock.
+The child writes only a private evidence directory. A complete parent capture,
+positive unit/cgroup closure, unchanged held inputs, original source/tree,
+strict exit/qualification joins and both original stream digests precede any
+publication. Forced stop/kill, residual descendants, transport error, unknown
+members, replacement or expiry refuse admission.
+
+Early independent R2 found a provisional-output race: an append-only
+`publication=admitted` could survive a later sink substitution or finalization
+failure. The correction rejoins the exact held/named sink and its complete bytes
+after writing. Refusal revokes only the parent's exact tail while its original
+authority remains; foreign replacement or append is preserved. The workflow's
+commit boundary is the launcher's successful process outcome, together with the
+literal publication output. A stale string after any late failure cannot authorize
+upload. Parent exit 0 means completed publication only. The separately emitted
+`native_passed` verdict is checked by a mandatory final workflow step, so a clean
+native exit 1 can retain its original negative bytes while the job still fails.
+The native scripts, acquisition, lifecycle assertions and public Grok refusals
+are unchanged. Future native acceptance requires genuine new-commit originals.
+
+The [GitHub runner source](https://github.com/actions/runner/blob/main/src/Runner.Worker/FileCommandManager.cs),
+`FileCommandManager.InitializeFiles` and `SetOutputFileCommand`, confirms the newly created, initially empty per-step
+output file; the parent holds and checks that original file before the service,
+and the child environment never receives `GITHUB_OUTPUT`. Standard workflow step
+outcome also covers failure after the last filesystem check or interpreter
+finalization; this is not a claim that a later external filesystem writer is
+prevented by a non-atomic path observation.
+
+Local evidence is inert: the actual finite manager body covers clean 0/1,
+transport failure, forced stop/kill, residual descendants, malformed/foreign
+manager state, collision and the original deadline. The complete Cline vector
+and 165-second main capture are compared literally. Actual parent control-flow
+counterexamples cover input/ancestor/sink replacement, foreign append, late budget
+exit and descriptor-close failure. Both extracted final workflow shell verdicts
+refuse native false, stale grants, malformed values and unsuccessful launcher
+outcomes. An unchanged original 6b negative-evidence replay preserves all 28 stream
+joins and `passed=false`; it does not manufacture a delegated service receipt.
+
+The implementation includes a roughly 400-line parent adapter, a focused shared
+lifecycle extraction and about 500 inert-test lines, concentrated in the reused
+finite kernel; complexity 5/10 and confidence 7/10 before genuine hosted execution.
+Earlier local runtime-suite attempts retained missing sparse-checkout fixture
+errors. Exact Git fixture bytes were restored without changing any pre-existing
+test body. Final local verification passed: 133 existing/shared runtime tests (32.321 s),
+47 protocol/publication tests (0.402 s), and 18 no-auth driver tests (0.843 s).
+All pre-existing test bodies remain AST-identical. YAML and four Python AST
+checks passed, preserving permissions, concurrency and job limits. Independent
+R2 of the frozen composition and genuine hosted execution remain required; the
+earlier incomplete-fixture attempts are retained as failures.

@@ -14,6 +14,9 @@ import tempfile
 
 from grok_project_protocol_client import (document, exercise, installed_server,
                                           read_owned, require, selected_installation, retained_data)
+from grok_project_protocol_enablement import (config_bytes, config_path, enable_owned,
+    expect_retained_receipt, preview_enablement, remove_owned)
+from grok_project_protocol_profile import check_native_lock, prepare_native_profile
 
 NAME = "uap-grok-no-model"
 SERVER = "uap_probe"
@@ -113,8 +116,10 @@ class Journey:
             self.env["XDG_" + suffix + "_HOME"] = str(path)
         self.grok = root / "bin/grok"
         self.protected = {}
+        self.native_profile = None
+        self.inventory_test = None
 
-    def run(self, label, argv, cwd=None, expected=(0,), timeout=60):
+    def run(self, label, argv, cwd=None, expected=(0,), timeout=60, *, config_after=None):
         from native_client_research import run_probe
         self.check()
         record, stdout, stderr = run_probe([str(arg) for arg in argv], cwd or self.a,
@@ -123,15 +128,27 @@ class Journey:
         self.evidence["commands"].append(dict(record, stdout=stdout.decode("utf-8", "replace"),
             stderr=stderr.decode("utf-8", "replace"), stdout_base64=base64.b64encode(stdout).decode(),
             stderr_base64=base64.b64encode(stderr).decode()))
+        if record["error"] is not None or record["exit"] not in expected:
+            originals_unchanged = True
+            try:
+                self.check()
+            except (ValueError, OSError):
+                originals_unchanged = False
+            self.evidence["failed_command"] = dict(label=label, exit=record["exit"],
+                capture_complete=record["error"] is None, protected_originals_unchanged=originals_unchanged)
+            raise ValueError("command failed: " + label)
+        if config_after is not None:
+            require(isinstance(config_after, bytes) and config_bytes(self) == config_after,
+                    "public operation changed more than its exact owned native member")
+            self.protected[config_path(self)] = hashlib.sha256(config_after).hexdigest()
         self.check()
-        require(record["error"] is None and record["exit"] in expected,
-                "command failed: " + label)
         return stdout
 
     def check(self):
         for path, expected in self.protected.items():
             require(path.resolve() == path and path.is_file() and digest(path) == expected,
                     "protected fixture changed: " + str(path))
+        check_native_lock(self)
 
     def author(self, revision, cwd=None):
         self.fixture_cwd = cwd
@@ -155,12 +172,13 @@ class Journey:
             "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
             "mcpServers": {SERVER: server}})
 
-    def cli(self, label, verb, selector):
+    def cli(self, label, verb, selector, *, extra=(), config_after=None):
         argv = [self.installer, verb, selector, "--scope", "project", "--project-root", self.a,
                 "--target", "grok", "--format", "json"]
         if verb == "add":
             argv.append("--no-save")
-        value = document(self.run(label, argv, timeout=120))
+        argv.extend(extra)
+        value = document(self.run(label, argv, timeout=120, config_after=config_after))
         require(value.get("result") == "success", "public UAP JSON is not success")
         return value
 
@@ -180,14 +198,11 @@ class Journey:
             require(value.get("mcpServers") == [], "untrusted project activated MCP")
         return value
 
-    def enable_fixture(self):
-        # Explicit test fixture only: this is NOT an installer side effect.
-        config = self.home / ".grok/config.toml"
-        write(config, '[marketplace]\ndefault_skills_installs_purged = true\n'
-              '[features]\nturn_summary = false\n[plugins]\nenabled = ["' + NAME + '"]\n')
+    def trust_fixture(self):
+        # Existing explicit test trust only; enablement belongs to public repair.
         trust = self.home / ".grok/trusted_folders.toml"
         write(trust, "[folders." + json.dumps(str(self.a)) + "]\ntrusted = true\n")
-        self.protected.update({config: digest(config), trust: digest(trust)})
+        self.protected[trust] = digest(trust)
 
     def expected_runtime_cwd(self, active, data):
         if self.fixture_cwd == "${PLUGIN_DATA}":
@@ -198,6 +213,7 @@ class Journey:
         return active
 
     def capture_installed_config(self, stage, installation, binding, active):
+        expect_retained_receipt(self, binding)
         original = read_owned(active / ".mcp.json", self.root)
         self.evidence.setdefault("installed_config_receipts", []).append({
             "stage": stage, "installation_id": installation["installation_id"], "binding": binding,
@@ -278,11 +294,35 @@ class Journey:
             "original_state_sha256": hashlib.sha256(state_before).hexdigest()}
         self.check()
 
+    def readonly_inventory(self, installation, active):
+        require(self.inventory_test is not None, "compiled native inventory test required")
+        roots = (self.home, self.a, self.b, self.source, self.grok)
+        before = [snapshot(root) for root in roots]
+        original_events = read_owned(self.log, self.root) if self.log.exists() else None
+        stdout = self.run("readonly-production-inventory", [self.inventory_test,
+            "-test.run=^TestEnablementReadonlyNativeInventory$", "-test.v", "-test.count=1", "-test.timeout=45s",
+            "-grok-readonly-home=" + str(self.home), "-grok-readonly-project=" + str(self.a),
+            "-grok-readonly-native=" + str(self.grok), "-grok-readonly-path=" + str(active),
+            "-grok-readonly-name=" + installation["declared_name"],
+            "-grok-readonly-version=" + installation["package"]["version"]], timeout=50)
+        require(stdout.count(b"GROK_READONLY_NATIVE_INVENTORY_PASS\n") == 1
+                and stdout.count(b"--- PASS: TestEnablementReadonlyNativeInventory ") == 1
+                and b"--- SKIP:" not in stdout and b"--- FAIL:" not in stdout,
+                "actual production readonly test did not pass")
+        require([snapshot(root) for root in roots] == before
+                and (read_owned(self.log, self.root) if self.log.exists() else None) == original_events,
+                "readonly inventory changed original inputs or invoked the MCP witness")
+        self.evidence["readonly_inventory"] = {"calls": 2,
+            "input_snapshot_sha256": hashlib.sha256(json.dumps(before, sort_keys=True).encode()).hexdigest()}
+
     def execute(self):
         self.run("git-a", ["/usr/bin/git", "-c", "core.hooksPath=/dev/null", "init", "--quiet"])
         self.run("git-b", ["/usr/bin/git", "-c", "core.hooksPath=/dev/null", "init", "--quiet"], self.b)
+        prepare_native_profile(self)
         write(self.home / ".grok/config.toml", '[marketplace]\ndefault_skills_installs_purged = true\n'
-              '[features]\nturn_summary = false\n')
+              '[features]\nturn_summary = false\n[plugins]\nenabled = ["uap-foreign-enabled"]\n'
+              'disabled = ["uap-foreign-disabled"]\n')
+        self.protected[config_path(self)] = digest(config_path(self))
         for path in (self.home / ".grok/foreign.txt", self.a / "foreign.txt", self.b / "foreign.txt"):
             write(path, "never modify " + self.nonce)
             self.protected[path] = digest(path)
@@ -301,7 +341,11 @@ class Journey:
         require(snapshot(active) == initial, "repeat installation changed package bytes")
         require(read_owned(self.a / ".uap/state-v2.json", self.root) == initial_receipt,
                 "repeat installation changed ownership state")
-        self.enable_fixture()
+        if self.inventory_test is not None:
+            self.readonly_inventory(first, active)
+        preview_enablement(self, first)
+        self.trust_fixture()
+        enable_owned(self, first, active, NAME)
         self.inspect("trusted-inspect", active, True, True)
         marker = "persisted-" + self.nonce
         self.protocol("installed", "0", marker, create=True)
@@ -332,7 +376,7 @@ class Journey:
             repaired = current
         self.protocol("restarted-data-cwd", "3", marker)
         self.evidence["pre_removal_data_receipts"] = repaired["data_receipts"]
-        self.cli("remove", "remove", NAME)
+        remove_owned(self, repaired, active, NAME)
         require(not os.path.lexists(active), "owned package survives removal")
         self.inspect("removed-inspect", active, False, True)
         before = events(self.log, self.root)
@@ -343,7 +387,7 @@ class Journey:
         require(read_owned(data / "native-marker.txt", self.root).decode() == marker,
                 "persistent user data lost on removal")
         self.check()
-        self.evidence.update({"project_b_unchanged": True, "protected_user_files_unchanged": True,
+        self.evidence.update({"project_b_unchanged": True, "protected_fixture_files_match_expected": True,
                               "untrusted_refusal_verified": True, "removed_absent": True,
                               "persistent_data_retained": True})
 
@@ -358,7 +402,8 @@ def main():
             and os.environ.get("RUNNER_ENVIRONMENT") == "github-hosted"
             and platform.system() == "Linux" and platform.machine() == "x86_64",
             "actual disposable GitHub-hosted Linux x64 required")
-    for path in (args.installer, args.probe):
+    inventory_test = args.installer.with_name("grok-inventory-test")
+    for path in (args.installer, args.probe, inventory_test):
         require(path.is_absolute() and path.resolve() == path and path.is_file()
                 and stat.S_ISREG(path.stat().st_mode) and path.stat().st_uid == os.getuid(),
                 "expected owned compiled binary")
@@ -374,14 +419,16 @@ def main():
                 "source_tree": git("rev-parse", "HEAD^{tree}"), "passed": False,
                 "commands": [], "stages": [], "model_invoked": False,
                 "vendor_authentication_used": False, "grok_tools_call_qualified": False,
+                "unmanaged_project_owned_enablement_qualified": False,
                 "transport": "stdio", "installer_sha256": digest(args.installer),
-                "probe_sha256": digest(args.probe)}
+                "probe_sha256": digest(args.probe), "inventory_test_sha256": digest(inventory_test)}
     try:
         from project_native_research import Budget, acquire, materialize, verify_files
         from project_native_collectors.grok import ACQUISITION
         with tempfile.TemporaryDirectory(prefix="grok-no-model-", dir=os.environ["RUNNER_TEMP"]) as temporary:
             root = Path(temporary).resolve()
             journey = Journey(root, args.installer, args.probe, evidence)
+            journey.inventory_test = inventory_test
             budget = Budget(900)
             receipt, contents = acquire(ACQUISITION, budget)
             binary, identities = materialize(root / "bin", ACQUISITION, receipt, contents)
@@ -403,6 +450,7 @@ def main():
                     evidence["events_base64"] = base64.b64encode(original).decode()
         require(not git("status", "--porcelain", "--untracked-files=normal"), "source changed")
         evidence["passed"] = True
+        evidence["unmanaged_project_owned_enablement_qualified"] = True
         evidence["native_doctor_initialize_and_list_qualified"] = True
         evidence["direct_installed_config_tools_call_qualified"] = True
     except Exception as error:

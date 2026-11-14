@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/opencode"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 )
@@ -240,16 +240,21 @@ func populateInspectedBinding(inspected *InspectedBinding, binding domain.Client
 	}
 }
 
-func (e *Engine) appendPendingTransitions(out *Inspection) error {
-	pending, err := (opencode.NativeTransitions{ProjectRoot: e.cfg.ProjectRoot, State: transaction.Kernel{StateStore: e.store}}).Pending()
-	if err != nil {
-		return err
-	}
+func (e *Engine) pendingTransitions() ([]ports.NativeTransitionObservation, error) {
+	return e.lifecycle(nil, BindingFacts{}, nil).Kernel.NativeRecovery.(ports.NativeTransitionObserver).Pending()
+}
+
+func appendPendingTransitions(out *Inspection, pending []ports.NativeTransitionObservation) error {
 	for _, p := range pending {
+		for _, journal := range out.Recovery.Journals {
+			if journal.OperationID == p.OperationID {
+				return fmt.Errorf("duplicate directory/native operation identity")
+			}
+		}
 		if p.Root == "" {
 			out.Recovery.Receipts = append(out.Recovery.Receipts, PendingReceipt{OperationID: p.OperationID, InstallationID: p.InstallationID, BindingID: p.BindingID, TargetPath: p.TargetPath, Phase: p.Phase})
 		} else {
-			out.Recovery.Journals = append(out.Recovery.Journals, PendingJournal{OperationID: p.OperationID, InstallationID: p.InstallationID, BindingID: p.BindingID, TargetPath: p.TargetPath, Phase: p.Phase, Digest: p.Digest})
+			out.Recovery.Journals = append(out.Recovery.Journals, PendingJournal{EnvironmentID: p.EnvironmentID, OperationID: p.OperationID, InstallationID: p.InstallationID, BindingID: p.BindingID, TargetPath: p.TargetPath, Phase: p.Phase, Digest: p.Digest})
 		}
 	}
 	return nil

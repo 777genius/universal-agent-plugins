@@ -127,8 +127,9 @@ func newScopedAgentpluginsCLIApp(home, cacheRoot, projectRoot string, directoryC
 	}
 	stager := newManagedStager(clientRegistry, paths, helperExecutable)
 	planner := clientplanner.Planner{ProjectRoot: projectRoot, ManagedRoot: filepath.Join(dataRoot, "managed"), Paths: paths, Registry: clientRegistry}
-	lifecycle := newAgentpluginsLifecycle(dataRoot, v2Store, paths, clientRegistry, stager, runner, planner, directoryManager, mutationLock, nativeKernel)
+	lifecycle := newAgentpluginsLifecycle(home, dataRoot, v2Store, paths, clientRegistry, stager, runner, planner, directoryManager, mutationLock, nativeKernel)
 	facade, err := installer.New(installer.Config{
+		UserHome:    home,
 		ProjectRoot: projectRoot, StateRoot: dataRoot, StateFile: v2Store.Path, LockFile: filepath.Join(dataRoot, "mutation.lock"),
 		OperationsDir: filepath.Join(dataRoot, "operations-v2"), PluginDataBase: filepath.Join(dataRoot, "plugin-data"),
 		ManagedRoot: filepath.Join(dataRoot, "managed"), TempRoot: filepath.Join(dataRoot, "installer-tmp"),
@@ -146,7 +147,7 @@ func newScopedAgentpluginsCLIApp(home, cacheRoot, projectRoot string, directoryC
 		lifecycle.Kernel.Directory.Namespace = dataRoot
 	}
 	app := assembleAgentpluginsApp(home, dataRoot, cacheRoot, v2Store, mutationLock, lifecycle, directoryClient, discoveryClient, securityClient, packageLoader, clientRegistry, planner)
-	app.Installer = facade
+	configureNativeSession(&app, facade, nativeKernel)
 	app.ManagementFactory = managementAppFactory(home, dataRoot)
 	setAgentpluginsProjectContext(&app, projectRoot)
 	app.ForScope = func(scope domain.InstallScope, root string) (agentpluginscli.App, error) {
@@ -166,14 +167,17 @@ func newManagedStager(clientRegistry *clients.Registry, paths pathpolicy.Policy,
 	return stager
 }
 
-func newAgentpluginsLifecycle(dataRoot string, v2Store statev2.Store, paths pathpolicy.Policy, clientRegistry *clients.Registry, stager providers.Stager, runner processadapter.OS, planner clientplanner.Planner, directoryManager dirswap.Manager, mutationLock processlock.Lock, nativeKernel nativeconfig.Kernel) usecase.Service {
-	transitions := opencode.NativeTransitions{ProjectRoot: v2Store.ProjectRoot, PackageVerifier: stager, State: transaction.Kernel{StateStore: v2Store}, Kernel: nativeKernel}
+func newAgentpluginsLifecycle(home, dataRoot string, v2Store statev2.Store, paths pathpolicy.Policy, clientRegistry *clients.Registry, stager providers.Stager, runner processadapter.OS, planner clientplanner.Planner, directoryManager dirswap.Manager, mutationLock processlock.Lock, nativeKernel nativeconfig.Kernel) usecase.Service {
+	legacyTransitions := opencode.NativeTransitions{ProjectRoot: v2Store.ProjectRoot, PackageVerifier: stager, State: transaction.Kernel{StateStore: v2Store}, Kernel: nativeKernel}
+	transitions := providers.NewNativeTransitions(clientRegistry, clients.NativeTransitionContext{ProjectRoot: v2Store.ProjectRoot, UserHome: home, OperationsDir: directoryManager.JournalDir, State: transaction.Kernel{StateStore: v2Store}, Kernel: nativeKernel, PackageVerifier: stager}, legacyTransitions)
+	directoryKernel := transaction.Kernel{NativeRecovery: transitions, StateStore: v2Store, Directory: directoryManager}
+	projectRoots := transaction.ProjectRootPublisher{Kernel: directoryKernel}
 	return usecase.Service{
 		ClientPreparation: providers.NewOpenCodeClientPreparation(clientRegistry),
 		StateStore:        v2Store, Paths: paths, Planner: planner, Targets: planner, Stager: stager,
-		Activator: providers.Activator{OpenCodeTransitions: transitions, Runner: runner, Registry: clientRegistry, NativeConfig: &nativeKernel},
-		Lock:      mutationLock, Kernel: transaction.Kernel{NativeRecovery: transitions, StateStore: v2Store, Directory: directoryManager},
-		NativeObserver:     providers.NativeIdentityObserver{Stager: stager, Runner: runner, Registry: clientRegistry, NativeConfig: &nativeKernel},
+		Activator: providers.Activator{ProjectRoots: projectRoots, UserHome: home, NativeTransitions: transitions, OpenCodeTransitions: legacyTransitions, Runner: runner, Registry: clientRegistry, NativeConfig: &nativeKernel},
+		Lock:      mutationLock, Kernel: directoryKernel,
+		NativeObserver:     providers.NativeIdentityObserver{ProjectRoots: projectRoots, Stager: stager, Runner: runner, Registry: clientRegistry, NativeConfig: &nativeKernel},
 		NamespacePreflight: providers.OpenCodeNamespacePreflight{Kernel: nativeKernel},
 		PluginData:         providers.PluginDataManager{Base: filepath.Join(dataRoot, "plugin-data")},
 	}

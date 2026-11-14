@@ -74,7 +74,7 @@ func applyPlannedAdd(ctx context.Context, cmd *cobra.Command, app App, opts *opt
 		}
 	}
 	freshInstall := planned.Activation.Activation == ""
-	if !freshInstall && opts.format == "human" && app.Terminal && !opts.yes && !activationComplete && !authComplete {
+	if shouldResumeInteractiveLifecycle(app, opts, planned, activationComplete, authComplete) {
 		if err := renderAddResultWithSecurity(cmd.OutOrStdout(), opts.format, loaded.envelope, loaded.security, planned, false); err != nil {
 			return err
 		}
@@ -101,6 +101,13 @@ func applyPlannedAdd(ctx context.Context, cmd *cobra.Command, app App, opts *opt
 		return resumeInteractiveLifecycle(ctx, cmd, service, input, loaded.envelope, result)
 	}
 	return err
+}
+
+func shouldResumeInteractiveLifecycle(app App, opts *options, planned usecase.AddResult, activationComplete, authComplete bool) bool {
+	pendingObservation := planned.RequiresConfirmation && fullyInstalled(planned.Activation) &&
+		planned.Plan.SelectedDelivery.EffectiveTraitsForScope(planned.Plan.ClientID, planned.Plan.Scope).LifecycleKind == domain.LifecyclePrepared
+	return planned.Activation.Activation != "" && !pendingObservation && opts.format == "human" &&
+		app.Terminal && !opts.yes && !activationComplete && !authComplete
 }
 
 // renderDeclinedPlannedAdd reports an unconfirmed plan without mutating anything.

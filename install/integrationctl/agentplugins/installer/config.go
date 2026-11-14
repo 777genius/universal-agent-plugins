@@ -15,6 +15,9 @@ import (
 type Config struct {
 	temporaryRoot bool
 	ProjectRoot   string `json:"-"`
+	// UserHome is explicit process construction authority for native effects
+	// outside a selected project. Empty never falls back to ambient HOME.
+	UserHome string `json:"-"`
 	// OpenCodeProbe defaults to the explicit-target facade. New captures and pins
 	// the allowlisted environment once; it never executes a probe.
 	OpenCodeProbe            OpenCodeProbe
@@ -64,13 +67,8 @@ type Config struct {
 
 func (c Config) resolved() (Config, error) {
 	out := c
-	if out.ProjectRoot != "" {
-		if _, err := domain.NewTargetContext(domain.ScopeProject, out.ProjectRoot, ""); err != nil {
-			return Config{}, fmt.Errorf("%w: %w", ErrInvalidConfig, err)
-		}
-	}
-	if !validRoot(out.StateRoot) {
-		return Config{}, fmt.Errorf("%w: StateRoot must be an explicit absolute clean path", ErrInvalidConfig)
+	if err := out.validateConstructionRoots(); err != nil {
+		return Config{}, err
 	}
 	if out.Registry == nil {
 		return Config{}, fmt.Errorf("%w: client Registry is required", ErrInvalidConfig)
@@ -115,6 +113,21 @@ func (c Config) resolved() (Config, error) {
 		out.ClientExecutables = cloned
 	}
 	return out.resolvedOpenCodeProbe()
+}
+
+func (c Config) validateConstructionRoots() error {
+	if c.UserHome != "" && !validRoot(c.UserHome) {
+		return fmt.Errorf("%w: UserHome must be an explicit absolute clean path", ErrInvalidConfig)
+	}
+	if c.ProjectRoot != "" {
+		if _, err := domain.NewTargetContext(domain.ScopeProject, c.ProjectRoot, ""); err != nil {
+			return fmt.Errorf("%w: %w", ErrInvalidConfig, err)
+		}
+	}
+	if !validRoot(c.StateRoot) {
+		return fmt.Errorf("%w: StateRoot must be an explicit absolute clean path", ErrInvalidConfig)
+	}
+	return nil
 }
 
 func (c Config) resolvedOpenCodeProbe() (Config, error) {

@@ -25,6 +25,23 @@ func LegacyIdentity(path string, info os.FileInfo) (string, error) {
 	return fmt.Sprintf("%d:%d:%d", stat.VolumeSerialNumber, stat.FileIndexHigh, stat.FileIndexLow), nil
 }
 
+// LegacyHandleIdentity reads the existing volume:file-index encoding from the
+// held handle itself; reopening its name would lose rooted authority.
+func LegacyHandleIdentity(file *os.File) (string, error) {
+	info, err := file.Stat()
+	if err != nil || !info.IsDir() {
+		return "", fmt.Errorf("held ordinary directory unavailable")
+	}
+	var stat syscall.ByHandleFileInformation
+	if err := syscall.GetFileInformationByHandle(syscall.Handle(file.Fd()), &stat); err != nil {
+		return "", err
+	}
+	if stat.FileAttributes&syscall.FILE_ATTRIBUTE_REPARSE_POINT != 0 || stat.FileAttributes&syscall.FILE_ATTRIBUTE_DIRECTORY == 0 {
+		return "", fmt.Errorf("held directory is a reparse point or non-directory")
+	}
+	return fmt.Sprintf("%d:%d:%d", stat.VolumeSerialNumber, stat.FileIndexHigh, stat.FileIndexLow), nil
+}
+
 func canonicalize(p string) (string, error) {
 	if err := validatePath(p, platformScheme()); err != nil {
 		return "", err

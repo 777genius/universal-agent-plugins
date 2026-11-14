@@ -113,6 +113,12 @@ func clonePrepareRequest(req Request) Request {
 }
 
 func validatePrepareInput(ctx context.Context, req Request) error {
+	if req.ConfirmPluginEnable && (req.Operation != OpRepair || req.Scope != domain.ScopeProject || req.InstallationID == "" || len(req.Targets) > 1 || req.ClientID == "" && len(req.Targets) == 0) {
+		return fmt.Errorf("%w: explicit plugin enablement requires one selected Project repair", ErrInvalidRequest)
+	}
+	if req.ClientNativeConfigRoot != "" && len(req.Targets) > 0 {
+		return fmt.Errorf("%w: independent native User root requires a single target", ErrInvalidRequest)
+	}
 	if (req.ActivationComplete || req.AuthComplete) && (req.Operation == OpRemove || len(req.Targets) > 0) {
 		return fmt.Errorf("%w: completion attestation requires a single mutating target", ErrInvalidRequest)
 	}

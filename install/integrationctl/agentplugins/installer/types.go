@@ -33,8 +33,11 @@ const (
 
 // Request is copied by Prepare. Subsequent caller edits do not change the handle.
 type Request struct {
-	Scope       domain.InstallScope
-	ProjectRoot string `json:"-"`
+	// ConfirmPluginEnable applies only to one explicit Project repair. It is
+	// captured by Prepare and cannot be granted by diagnostic JSON or Apply.
+	ConfirmPluginEnable bool `json:"-"`
+	Scope               domain.InstallScope
+	ProjectRoot         string `json:"-"`
 	// Completion flags attest explicit host-observed lifecycle completion.
 	ActivationComplete, AuthComplete bool
 	physical                         map[domain.ClientID]domain.DetectedClient
@@ -56,6 +59,10 @@ type Request struct {
 	ClientID             string
 	ClientConfigRoot     string
 	ClientExecutable     string
+	// ClientNativeConfigRoot preserves an independently observed User profile
+	// for a single target opting into UserNativeRegistryLayout. It never replaces
+	// ClientConfigRoot or supplies a profile from persisted state.
+	ClientNativeConfigRoot string `json:"-"`
 	// ClientVersion is host-observed evidence for the selected executable.
 	// It is operational input, never portable package or diagnostic metadata.
 	ClientVersion      string `json:"-"`

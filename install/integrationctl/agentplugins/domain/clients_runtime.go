@@ -139,6 +139,9 @@ type StagedDelivery struct {
 }
 
 type ActivationRequest struct {
+	// ConfirmPluginEnable is an explicit request for the adapter's separately
+	// admitted enablement effect. Ordinary confirmation never implies it.
+	ConfirmPluginEnable bool `json:"-"`
 	// PackageUnchanged means activation reuses the committed, verified managed
 	// package without a new package transaction. External CLI effects may still
 	// be required; VerifyOnly describes those effects independently.
@@ -180,6 +183,7 @@ type ActivationOutcome struct {
 }
 
 type DeactivationRequest struct {
+	NativeAttempt         NativeAttemptIdentity   `json:"-"`
 	TargetContext         TargetContext           `json:"-"`
 	NativeRegistryRoot    string                  `json:"-"`
 	LocalEntryObservation *LocalEntryObservation  `json:"-"`

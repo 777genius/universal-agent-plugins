@@ -20,6 +20,7 @@ func (session *removeGroupSession) removeGroupNative() error {
 			}
 		}
 		outcome, err := session.service.deactivateWithFrozenObservation(session.ctx, session.installation.InstallationID, item.clientKey, domain.DeactivationRequest{
+			NativeAttempt:         attempt.identity(session.installation.InstallationID, item.clientKey),
 			TargetContext:         session.service.targetContext(item.input.Client, item.input.Scope),
 			NativeRegistryRoot:    nativeRegistryForBinding(item.client, item.input.Client),
 			LocalEntryObservation: item.client.LocalEntryObservation.Clone(),
@@ -40,7 +41,7 @@ func (session *removeGroupSession) removeGroupNative() error {
 			return fmt.Errorf("external deactivation failed; managed materialization was retained for repair: %w", err)
 		}
 		if nativeAttempt {
-			if err := session.service.completeNativeRemoval(session.installation.InstallationID, item.clientKey, outcome.ExternalRemovalComplete); err != nil {
+			if err := session.service.completeNativeRemoval(session.ctx, session.installation.InstallationID, item.clientKey, outcome.ExternalRemovalComplete); err != nil {
 				session.markNativeDeactivationFailed(item, externalCompleted)
 				return fmt.Errorf("persist native deactivation: %w", err)
 			}

@@ -23,6 +23,8 @@ from hermes_local_provider_fixture import MODEL, ScriptedHermesProvider, result_
 
 PIN = "2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19"
 LIMIT = 1 << 20
+NATIVE = runpy.run_path(str(Path(__file__).with_name("hermes-native.py")), run_name="hermes_native_helpers")
+source_root = NATIVE["source_root"]
 
 
 def require(value, message):
@@ -34,7 +36,7 @@ def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def bounded(command, cwd, env, output, timeout=90, expected_failure=False):
+def bounded(command, cwd, env, output, timeout=90, expected_failure=False, *, process_identity=None):
     """Capture both streams without an unbounded file or inherited shell."""
     child = subprocess.Popen([str(arg) for arg in command], cwd=cwd, env=env,
                              stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -52,7 +54,7 @@ def bounded(command, cwd, env, output, timeout=90, expected_failure=False):
                for pipe, buffer in zip((child.stdout, child.stderr), buffers)]
     for thread in threads:
         thread.start()
-    failure = None
+    failure, captured_identity = None, None
     try:
         deadline = time.monotonic() + timeout
         while child.poll() is None:
@@ -72,13 +74,28 @@ def bounded(command, cwd, env, output, timeout=90, expected_failure=False):
             failure = "output bound"
         if any(thread.is_alive() for thread in threads):
             failure = "native command left inherited capture pipe open"
+        if process_identity is not None and failure is None and time.monotonic() >= deadline:
+            failure = "command timeout"
+        if process_identity is not None and failure is None and child.returncode == 0 and not expected_failure:
+            # Preserve the original Popen handle, but never admit late identity.
+            try:
+                captured_identity = process_identity(child)
+            except Exception:
+                failure = "process identity unavailable"
+            if time.monotonic() >= deadline:
+                failure = "command timeout"
+            if failure is not None:
+                captured_identity = None
     finally:
         for suffix, body in zip(("stdout", "stderr"), buffers):
             output.with_suffix("." + suffix).write_bytes(body)
-        output.with_suffix(".status.json").write_text(json.dumps({"argv": [str(x) for x in command],
+        status = {"argv": [str(x) for x in command],
             "pid": child.pid, "exit": child.poll(), "error": failure,
             "streams": {suffix: {"bytes": len(body), "sha256": hashlib.sha256(body).hexdigest()}
-                        for suffix, body in zip(("stdout", "stderr"), buffers)}}) + "\n")
+                        for suffix, body in zip(("stdout", "stderr"), buffers)}}
+        if captured_identity is not None:
+            status["process_identity"] = captured_identity
+        output.with_suffix(".status.json").write_text(json.dumps(status) + "\n")
     require(not failure and not overflow.is_set() and (child.returncode != 0) == expected_failure,
             output.name + ": native command failed or exceeded its capture bound")
     return bytes(buffers[0])
@@ -87,7 +104,7 @@ def bounded(command, cwd, env, output, timeout=90, expected_failure=False):
 def child_case():
     helpers = runpy.run_path(str(Path(__file__).with_name("hermes-native-lifecycle.py")), run_name="hermes_lifecycle_helpers")
     Parent = helpers["Lifecycle"]
-    source = Path(os.environ["RUNNER_TEMP"]) / "hermes-agent"
+    source = source_root()
     sys.path.insert(0, str(source))
     from hermes_cli._launchers import runtime_command
 
@@ -163,20 +180,30 @@ def child_case():
         suite.remove_user()
 
 
-def closed_environment(root, evidence, nonce, mcp_url):
+PROFILE_DIRECTORIES = (("XDG_CONFIG_HOME", "config"), ("XDG_CACHE_HOME", "cache"),
+                       ("XDG_STATE_HOME", "state"), ("XDG_DATA_HOME", "data"),
+                       ("TMPDIR", "tmp"), ("TEMP", "tmp"), ("TMP", "tmp"),
+                       ("APPDATA", "AppData/Roaming"), ("LOCALAPPDATA", "AppData/Local"))
+
+
+def closed_environment(root, evidence, nonce, mcp_url, *, installation=None):
     env = {key: os.environ[key] for key in ("PATH", "SystemRoot", "WINDIR", "COMSPEC", "PATHEXT") if key in os.environ}
     # Only explicit official installation outputs and task-owned locations survive.
-    for key in ("HERMES_BIN", "UAP_BIN", "RUNNER_TEMP", "HERMES_NATIVE_RUNTIME_COMMAND_FILE"):
-        env[key] = os.environ[key]
+    if installation is None:
+        for key in ("HERMES_BIN", "UAP_BIN", "RUNNER_TEMP", "HERMES_NATIVE_RUNTIME_COMMAND_FILE"):
+            env[key] = os.environ[key]
+        if "HERMES_NATIVE_SOURCE" in os.environ:
+            env["HERMES_NATIVE_SOURCE"] = str(source_root())
+    else:
+        require(set(installation) == {"HERMES_BIN", "RUNNER_TEMP", "HERMES_PROFILE_RUNTIME_ROOT", "HERMES_PROFILE_PYTHON"},
+                "explicit bundled runtime outputs required")
+        env.update(installation)
     env.update({"HOME": str(root), "USERPROFILE": str(root), "HERMES_HOME": str(root / "selected-profile"),
                 "HERMES_NATIVE_EVIDENCE": str(evidence), "HERMES_CALL_NONCE": nonce,
                 "HERMES_NATIVE_MCP_URL": mcp_url, "PYTHONUTF8": "1", "PYTHONDONTWRITEBYTECODE": "1",
                 "NO_COLOR": "1", "TERM": "dumb", "GIT_CONFIG_NOSYSTEM": "1", "GIT_TERMINAL_PROMPT": "0",
                 "NO_PROXY": "127.0.0.1,localhost", "no_proxy": "127.0.0.1,localhost"})
-    for key, folder in (("XDG_CONFIG_HOME", "config"), ("XDG_CACHE_HOME", "cache"),
-                        ("XDG_STATE_HOME", "state"), ("XDG_DATA_HOME", "data"),
-                        ("TMPDIR", "tmp"), ("TEMP", "tmp"), ("TMP", "tmp"),
-                        ("APPDATA", "AppData/Roaming"), ("LOCALAPPDATA", "AppData/Local")):
+    for key, folder in PROFILE_DIRECTORIES:
         path = root / folder
         path.mkdir(parents=True, exist_ok=True)
         env[key] = str(path)
@@ -185,7 +212,8 @@ def closed_environment(root, evidence, nonce, mcp_url):
 
 def source_identity(source):
     def git(*args):
-        return subprocess.check_output(["git", "-C", str(source), *args], text=True, timeout=10).strip()
+        return subprocess.check_output(["git", "-C", str(source), *args], text=True, timeout=10,
+                                       env={**os.environ, "GIT_OPTIONAL_LOCKS": "0"}).strip()
     return {"commit": git("rev-parse", "HEAD"), "tree": git("rev-parse", "HEAD^{tree}"),
             "dirty": git("status", "--porcelain", "--untracked-files=normal")}
 
@@ -251,7 +279,8 @@ def run():
     checkout = Path(__file__).resolve().parents[2]
     before = source_identity(checkout)
     require(before["commit"] == os.environ["HERMES_NATIVE_UAP_HEAD"] and not before["dirty"], "exact clean source required")
-    official = source_identity(runner / "hermes-agent")
+    source = source_root()
+    official = source_identity(source)
     require(official["commit"] == PIN and not official["dirty"], "unmodified pinned official Hermes source required")
     from pi_project_components_native_e2e import PiHTTPMCPProbe
     helpers = runpy.run_path(str(Path(__file__).with_name("hermes-native.py")), run_name="hermes_process_helpers")
@@ -275,9 +304,9 @@ def run():
             env = closed_environment(home, evidence, nonce, probe.url)
             env["HERMES_CALL_START_GATE"] = str(gate)
             flags = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt" else {"start_new_session": True}
-            sys.path.insert(0, str(runner / "hermes-agent"))
+            sys.path.insert(0, str(source))
             from hermes_cli._launchers import runtime_command
-            command = runtime_command(runner / "hermes-agent", python=native_argv[0], args=["--child"],
+            command = runtime_command(source, python=native_argv[0], args=["--child"],
                 code=f"runpy.run_path({str(Path(__file__).resolve())!r}, run_name='__main__')")
             with (evidence / "lifecycle.stdout").open("wb") as out, (evidence / "lifecycle.stderr").open("wb") as err:
                 child = subprocess.Popen(command, env=env,
@@ -331,7 +360,7 @@ def run():
             if proof["source_after"] != before:
                 failure = RuntimeError("source changed")
                 proof["status"] = "failed"
-            proof["hermes_source_after"] = source_identity(runner / "hermes-agent")
+            proof["hermes_source_after"] = source_identity(source)
             proof["native_runtime_sha256_after"] = sha(Path(native_argv[0]))
             proof["runtime_command_sha256_after"] = sha(Path(os.environ["HERMES_NATIVE_RUNTIME_COMMAND_FILE"]))
             proof["launcher_sha256_after"] = sha(Path(os.environ["HERMES_BIN"]))

@@ -4,11 +4,13 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
+      - 'install/integrationctl/adapters/dirswap/**'
       - 'install/integrationctl/agentplugins/transaction/**'
       - '.github/workflows/transaction-recovery-e2e.yml'
   push:
     branches: [main]
     paths:
+      - 'install/integrationctl/adapters/dirswap/**'
       - 'install/integrationctl/agentplugins/transaction/**'
       - '.github/workflows/transaction-recovery-e2e.yml'
 
@@ -43,6 +45,13 @@ jobs:
         env:
           EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - name: Run directory publication suite with race detector
+        shell: bash
+        working-directory: install/integrationctl
+        env:
+          GOTOOLCHAIN: local
+          CGO_ENABLED: '1'
+        run: go test -race -count=1 -timeout=5m -v ./adapters/dirswap
       - name: Run real crash/restart transaction suite with race detector
         shell: bash
         working-directory: install/integrationctl/agentplugins

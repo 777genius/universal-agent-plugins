@@ -11,12 +11,15 @@ import (
 var _ clients.Projector = (*Adapter)(nil)
 var _ clients.ActiveNativeProjector = (*Adapter)(nil)
 
-func (*Adapter) ProjectActiveNative(ctx context.Context, root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, _ string) ([]domain.NativeObjectOwnership, error) {
+func (*Adapter) ProjectActiveNative(ctx context.Context, root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, dataPath string) ([]domain.NativeObjectOwnership, error) {
 	if clineProjectSelected(plan) {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
 		if err := validateClineProjection(root, plan, true); err != nil {
+			return nil, err
+		}
+		if err := validateClineProjectStdio(root, envelope, plan, dataPath); err != nil {
 			return nil, err
 		}
 		return clineProjectObjects(root, envelope, plan)

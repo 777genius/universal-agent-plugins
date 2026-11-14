@@ -35,6 +35,12 @@ type Adapter interface {
 // by the dispatcher rather than owned by the adapter, so a client package never
 // reaches for a process, a clock or the filesystem policy on its own.
 type Env struct {
+	UserHome          string
+	NativeTransitions ports.NativeTransitionRecovery
+	// LookupExecutable is used only by an explicitly requested native session.
+	// File-only installation/detection never resolves this into execution authority.
+	LookupExecutable    func(string) (string, error)
+	ProjectRoots        ports.NativeProjectRootPublisher
 	OpenCodeTransitions ports.OpenCodeTransitionRecorder
 	Runner              ports.CommandRunner
 	NativeConfig        nativeconfig.Kernel
