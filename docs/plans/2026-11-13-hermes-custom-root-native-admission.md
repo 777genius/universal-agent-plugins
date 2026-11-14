@@ -2359,3 +2359,100 @@ artifact `14117135844` is 919 bytes, SHA-256
 Independent evidence receipt `2ac527483bf85c70000734d50c50414da0f80039`
 records this source/metadata join. The ZIP is unread, the second member
 is still unknown, and final cleanup/admission remain unproved.
+
+## 2026-11-14 — Windows fixed agent-log sidecar after an owned native MCP test
+
+The completed original Windows bundled job
+[132449811109](https://github.com/777genius/universal-agent-plugins/actions/runs/43595758794/job/132449811109)
+used UAP source `880d4c885191de21a8c64c0aeaead006fab06f6f` and vendor
+`2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19`. Its original raw log is
+280,300 bytes, SHA-256
+`c4581d254270fd61d2f14a6590c78604239bb0fe7c6847767a865b4b711bdbfb`.
+The actual closed failure frame, isolated from inert prerequisite output,
+reached `public-http-a` / `public_profile` with 19 selected members, one
+backup, and one unmeasured ordinary file: mode 0666, zero bytes, relative-name
+SHA-256 `d6503b34655ee420b82058507655f28a09177f18851cd32ea54eb4fbe234d256`.
+This is exactly the existing domain-separated hash of
+`logs/.__agent.lock`. Artifact `14117700734` is 917 bytes, SHA-256
+`15d825ee3ba2456613a3a1ad7147b94c9b48d5324e718e25581b9fd59c009234`;
+its ZIP remains unread here. The primary family had settled, but final
+public cleanup was unproved and raw evidence was withheld. This is a
+distinct first HTTP failure, before the later stdio spawn-ledger gate.
+
+The fixed name and empty-file behavior are joined to primary source:
+
+- Pinned Hermes [hermes_logging.py](https://github.com/NousResearch/hermes-agent/blob/2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19/hermes_logging.py),
+  Git blob `2651bda7fa524c8ad6c2aeb26a7c5b144751d212`, selects the Windows
+  concurrent handler, supplies selected-root `logs/agent.log`, and names
+  `logs/.__agent.lock` explicitly. `hermes_cli/main.py` initializes this
+  logging route before the actual `mcp test` dispatcher. The particular
+  log record that caused lazy creation is not present in the safe frame
+  and is not inferred.
+- The pinned pyproject and actual build output agree on
+  `concurrent-log-handler==0.9.30`. Its official tag resolves to commit
+  `63d1566acf898586580a70a947900b6822e9f5a2`;
+  [handler source](https://github.com/Preston-Landers/concurrent-log-handler/blob/63d1566acf898586580a70a947900b6822e9f5a2/src/concurrent_log_handler/__init__.py),
+  blob `29ce51b62cdf34253cbef7e889324561aca5c23a`, derives
+  `.__agent.lock`, opens it lazily with exclusive creation or existing
+  `r+`, and keeps it after normal unlock. The selected non-timed handler
+  does not write a rollover stamp into this sidecar.
+- Actual dependency `portalocker==3.2.0` resolves through its official tag
+  to commit `7415a5d20aa64ac347b0c734915ddbe49ce844f3`;
+  [Windows locking source](https://github.com/wolph/portalocker/blob/7415a5d20aa64ac347b0c734915ddbe49ce844f3/portalocker/portalocker.py),
+  blob `006cb57571e1f0e3d86cf7f1d8370c02200d961f`, locks/unlocks the
+  existing handle without writing file content.
+
+The collector admits only this one Windows member, only after prior
+absence and one of the eight successful owned HTTP/stdio test labels:
+the initial A/B tests and A restart/repaired tests. Existing native exit,
+selected configuration, exact HTTP initialize/list or fresh stdio event
+joins, source receipts, and sibling/data guards run first. Inspect,
+add/update/repair/remove, removed inventory/tests, sibling operations,
+POSIX, and all other labels cannot introduce it. In particular,
+`logs/.__errors.lock` is not admitted.
+
+Admission reuses the existing ordinary-file and held-directory helpers.
+The original outer, Project, selected-parent, and selected-root authorities
+are rejoined before body access. The logs directory must match its
+original captured row and retain its directory identity, mode, and the
+existing owner fields. Each read holds and rejoins all five directories
+with their full before/after metadata. The exact sidecar must be an
+ordinary single-link 0666 file with zero bytes and the empty digest.
+Its full stat identity and bytes remain unchanged across every later
+command and the final cold check. Logs-directory size/mtime may change
+between commands when already admitted members such as `mcp-stderr.log`
+are created; they remain exact within each held read. This adds no
+general lock registry, file deletion, process signalling, or cleanup
+authority. Existing spawn-ledger and final admission requirements remain.
+
+Seven focused inert methods cover the original name hash and all eight
+roles, rejected roles/flags and POSIX, the unchanged rejection of an
+unproved or errors sidecar, original ancestor substitution before bytes,
+ordinary-file metadata/body/alias failures, full sidecar continuity,
+a directory change during its held read, and the actual command's
+post-protocol admission block with missing protocol/owner/preimage and
+sibling attacks. Four of these methods explicitly require Windows for
+its actual named/held filesystem semantics. The prior 164 methods and
+all their assertions remain; two existing command-AST fixture contexts
+only gain the new helper definitions and initially empty sidecar state.
+The incoming peer's Windows row regression gains the original-directory
+context and a fixture wrapper that forms the held receipt; all its prior
+assertions and hostile rows remain. There are now 171 methods, without claiming they have executed.
+
+This is a source-only candidate based on `bcb5182f35a464e83e5c79abb020cd257a65bda9`.
+The runtime, Python tests, and genuine native replay still require CI.
+Original source/User invariance, payload identity, budgets, public-family
+cleanup, cold recovery, false qualification flags, and the existing
+raw-withheld failure path are unchanged. Original audit receipt
+`4a0f77c9f647c8152188eea0a21d2318345f078b`, R1
+`3be91ae8d8e14a7a627d6c8ecd94703ecc69fe94`, and independent R1
+`bb6d7299c9c4070edb8021898bef0fb2f5035d78` preserve the source/evidence
+boundary; none is a new native-pass receipt.
+
+The intervening peer correction in `bcb5182f` is preserved as one route:
+its `PUBLIC_NATIVE_LOG_LOCK`, `native_log_locks`, and `log_lock` parameter
+remain. Its leaf checker is called only from the original held-directory
+capture and returns the full stat receipt. The previous row-only early
+state update is replaced by the successful command's prospective receipt,
+committed after all profile guards. The peer's selected-session plan is
+unchanged; no parallel sidecar registry or second admission path is added.

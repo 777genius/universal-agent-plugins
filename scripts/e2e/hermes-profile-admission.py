@@ -2303,25 +2303,26 @@ def public_stdio_log(root, row, server, sessions):
 
 
 PUBLIC_SPAWN_NAMES = ("spawn-ledger.json", "spawn-ledger.json.lock")
-# Pinned concurrent-log-handler 0.9.30: only an exact empty Windows
-# lock born during this Project's successful native HTTP test is admissible.
+# Pinned concurrent-log-handler 0.9.30: the fixed Windows agent sidecar
+# is admitted only through the selected command's original held directories.
 PUBLIC_NATIVE_LOG_LOCK = "logs/.__agent.lock"
 
 
-def public_native_log_lock(root, row):
+def public_native_log_lock(root, row, info):
     path = root / PUBLIC_NATIVE_LOG_LOCK
     require(os.name == "nt" and type(row) is dict
             and set(row) == {"type", "mode", "device", "inode", "bytes", "sha256"}
-            and row["type"] == "file" and row["mode"] == 0o666
+            and row["type"] == "file" and type(row["mode"]) is int and row["mode"] == 0o666
+            and type(row["device"]) is int and type(row["inode"]) is int
             and type(row["bytes"]) is int and row["bytes"] == 0
             and row["sha256"] == hashlib.sha256(b"").hexdigest(),
             "public native log lock has unadmitted metadata")
-    info = path.lstat()
     require(stat.S_ISREG(info.st_mode) and info.st_nlink == 1
             and (info.st_dev, info.st_ino, stat.S_IMODE(info.st_mode), info.st_size)
             == (row["device"], row["inode"], row["mode"], 0)
             and ordinary_bytes(path, info) == b"",
             "public native log lock is not the captured empty regular file")
+    return stable_file(info)
 
 
 
@@ -2483,6 +2484,89 @@ def public_spawn_read(root, outer, image, authorities):
     return {"rows": rows, "identities": identities}, bodies
 
 
+def public_windows_log_row(root, outer, image):
+    key = (root.relative_to(outer) / PUBLIC_NATIVE_LOG_LOCK).as_posix()
+    if key not in image:
+        return None
+    require(type(image[key]) is dict, "public Windows log lock captured row differs")
+    return dict(image[key])
+
+
+def public_windows_log_role(label, scope, args, *, native, inspect, expected_failure, test):
+    labels = {("a", "http"): {"public-http-a", "public-http-restart-a", "public-http-repaired-a"},
+              ("a", "stdio"): {"public-stdio-a", "public-stdio-restart-a", "public-stdio-repaired-a"},
+              ("b", "http"): {"public-http-b"}, ("b", "stdio"): {"public-stdio-b"}}
+    require(artifacts.WINDOWS and native is True and inspect is False and expected_failure is False
+            and type(label) is str and type(scope) is str and type(test) is str and label in labels.get((scope, test), set())
+            and args == ["mcp", "test", "hermes-public-" + scope + "-" + test],
+            "public Windows log lock creation is outside an owned native test")
+
+
+def public_windows_log_read(root, outer, image, authorities, *, original_logs):
+    require(artifacts.WINDOWS and root.is_absolute() and outer.is_absolute()
+            and root.relative_to(outer).as_posix() in {"public-a/.hermes/uap-session", "public-b/.hermes/uap-session"}
+            and type(authorities) in (tuple, list) and len(authorities) == 4,
+            "public Windows log lock root authority differs")
+    row = public_windows_log_row(root, outer, image)
+    require(type(row) is dict and set(row) == {"type", "mode", "device", "inode", "bytes", "sha256"}
+            and row["type"] == "file" and type(row["mode"]) is int and row["mode"] == 0o666
+            and type(row["device"]) is int and type(row["inode"]) is int
+            and type(row["bytes"]) is int and row["bytes"] == 0
+            and row["sha256"] == hashlib.sha256(b"").hexdigest(),
+            "public Windows log lock captured member differs")
+    logs = root / "logs"
+    logs_row = image.get(logs.relative_to(outer).as_posix())
+    require(type(original_logs) is dict and type(logs_row) is dict and logs_row == original_logs,
+            "public Windows log directory was replaced")
+    held = []
+    with ExitStack() as handles:
+        for path, authority in zip((outer, root.parent.parent, root.parent, root), authorities):
+            info = path.lstat()
+            require((info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_gid) == tuple(authority)
+                    and image.get(path.relative_to(outer).as_posix()) == {
+                        "type": "directory", "mode": stat.S_IMODE(info.st_mode), "device": info.st_dev, "inode": info.st_ino},
+                    "public Windows log original directory differs")
+            descriptor = open_inventory_directory(path)
+            handles.callback(os.close, descriptor)
+            opened = os.fstat(descriptor)
+            check_inventory_directory(info, opened, "public Windows log held directory differs")
+            held.append((path, info, descriptor, opened, None))
+        def verify():
+            for item in held:
+                verify_inventory_directory(*item)
+        try:
+            verify()
+            info = logs.lstat()
+            require(logs_row == {"type": "directory", "mode": stat.S_IMODE(info.st_mode),
+                                 "device": info.st_dev, "inode": info.st_ino}
+                    and (info.st_uid, info.st_gid) == tuple(authorities[-1])[-2:],
+                    "public Windows log captured directory differs")
+            logs_identity = (info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_gid)
+            descriptor = open_inventory_directory(logs)
+            handles.callback(os.close, descriptor)
+            opened = os.fstat(descriptor)
+            check_inventory_directory(info, opened, "public Windows log held logs directory differs")
+            held.append((logs, info, descriptor, opened, None))
+            verify()
+            path = root / PUBLIC_NATIVE_LOG_LOCK
+            leaf = path.lstat()
+            require(stat.S_ISREG(leaf.st_mode) and leaf.st_nlink == 1
+                    and (leaf.st_dev, leaf.st_ino, stat.S_IMODE(leaf.st_mode), leaf.st_size) ==
+                        (row["device"], row["inode"], row["mode"], 0)
+                    and (leaf.st_uid, leaf.st_gid) == tuple(authorities[-1])[-2:],
+                    "public Windows log lock named member differs")
+            identity = public_native_log_lock(root, row, leaf)
+            receipt = {"row": row, "identity": identity,
+                       "logs_row": dict(logs_row), "logs_identity": logs_identity}
+        finally:
+            verify()
+    return receipt
+
+
+def public_windows_log_continuity(previous, current):
+    require(type(previous) is dict and previous == current, "public Windows log lock continuity differs")
+
+
 def public_profile(root, image, outer, config_hashes, *, stdio=None, spawn=None, log_lock=None):
     prefix = root.relative_to(outer).as_posix()
     rows = {name[len(prefix) + 1:]: row for name, row in profile_tree(image, prefix).items() if name != prefix}
@@ -2492,11 +2576,6 @@ def public_profile(root, image, outer, config_hashes, *, stdio=None, spawn=None,
             and owner.get("sha256") == hashlib.sha256(marker).hexdigest(), "public retained root marker differs")
     directories = {"cron", "sessions", "logs", "logs/curator", "memories", "pairing", "hooks", "image_cache", "audio_cache", "skills", "backups", "backups/config"}
     files = {".uap-owner", "config.yaml", "config.yaml.agentplugins.lock", "SOUL.md", "logs/agent.log", "logs/errors.log"}
-    if log_lock is not None:
-        require(rows.get(PUBLIC_NATIVE_LOG_LOCK) == log_lock,
-                "public native log lock changed from its current-command receipt")
-        public_native_log_lock(root, log_lock)
-        files.add(PUBLIC_NATIVE_LOG_LOCK)
     if stdio is not None and stdio[1]:
         require("logs/mcp-stderr.log" in rows, "public stdio log is missing")
         public_stdio_log(root, rows["logs/mcp-stderr.log"], *stdio)
@@ -2507,6 +2586,13 @@ def public_profile(root, image, outer, config_hashes, *, stdio=None, spawn=None,
                 and all(spawn["rows"][name] == rows.get(name) for name in PUBLIC_SPAWN_NAMES),
                 "public spawn admission differs from captured image")
         files.update(PUBLIC_SPAWN_NAMES)
+    if log_lock is not None:
+        require(artifacts.WINDOWS and type(log_lock) is dict
+                and set(log_lock) == {"row", "identity", "logs_row", "logs_identity"}
+                and log_lock["row"] == rows.get(PUBLIC_NATIVE_LOG_LOCK)
+                and log_lock["logs_row"] == rows.get("logs"),
+                "public Windows log lock admission differs from captured image")
+        files.add(PUBLIC_NATIVE_LOG_LOCK)
     backups = {name for name in rows if re.fullmatch(r"backups/config/config\.yaml\.good\.[0-9]{8}-[0-9]{6}", name)}
     try:
         require(len(backups) <= 5 and set(rows) <= directories | files | backups, "public native bootstrap member is unmeasured")
@@ -2521,6 +2607,9 @@ def public_profile(root, image, outer, config_hashes, *, stdio=None, spawn=None,
         require(row["type"] == ("directory" if directory else "file") and
                 row["mode"] == ((0o777 if directory else 0o666) if os.name == "nt" else mode), "public native bootstrap metadata differs")
         if name == "config.yaml.agentplugins.lock": require(row["bytes"] == 0, "public config lock is not empty")
+        if name == PUBLIC_NATIVE_LOG_LOCK:
+            require(row["bytes"] == 0 and row["sha256"] == hashlib.sha256(b"").hexdigest(),
+                    "public Windows log lock is not empty")
         if name == "SOUL.md": require((row["bytes"], row["sha256"]) == (667, "36c1f5a2e92cd1d018311eaf4c8f1e8886672eae78212e033c681d0e3d5d506f"), "public native SOUL differs")
         if name in backups: require(row["sha256"] in config_hashes, "public native backup has unowned bytes")
 
@@ -2870,6 +2959,20 @@ def observe_public(probes):
         else:
             public_spawn_continuity(spawn_states[scope], spawn_capture(scope, image)[0])
 
+    def windows_log_capture(scope, image, original_logs):
+        require(scope in born, "public Windows log root has no original receipt")
+        root = projects[scope] / ".hermes/uap-session"
+        identities = (outer_authority, authorities[scope], born[scope][1], born[scope][0])
+        return public_windows_log_read(root, outer, image, identities, original_logs=original_logs)
+
+    def windows_log_preserved(scope, image):
+        if native_log_locks[scope] is None:
+            require(public_windows_log_row(projects[scope] / ".hermes/uap-session", outer, image) is None,
+                    "public Windows log lock appeared outside an owned native test")
+        else:
+            current_log = windows_log_capture(scope, image, native_log_locks[scope]["logs_row"])
+            public_windows_log_continuity(native_log_locks[scope], current_log)
+
     def captured_events(proof, image):
         if proof is None:
             return []
@@ -2899,6 +3002,7 @@ def observe_public(probes):
         http_before = {key: list(probe.methods()) for key, probe in probes.items()}
         for key in projects:
             spawn_preserved(key, before)
+            windows_log_preserved(key, before)
         events_before = {key: captured_events(proof, before) for key, proof in previous.items()}
         argv = [os.environ["HERMES_BIN"], *args] if native else [pins["uap"]["path"], *args, "--target", "hermes", "--scope", "project", "--project-root", str(project)]
         if not native and not inspect: argv += ["--yes", "--format", "json"]
@@ -2982,29 +3086,29 @@ def observe_public(probes):
                 public_spawn_status(evidence, label, argv, output), install_id, launcher, pins["probe"]["path"], sys.platform)
             public_spawn_continuity(spawn_states[scope], receipt, stdio=True)
             prospective[scope] = receipt
+        prospective_logs = dict(native_log_locks)
+        for key in projects:
+            root = projects[key] / ".hermes/uap-session"
+            row = public_windows_log_row(root, outer, after)
+            if key != scope or native_log_locks[key] is not None or row is None:
+                windows_log_preserved(key, after)
+                continue
+            public_windows_log_role(label, scope, args, native=native, inspect=inspect,
+                                   expected_failure=expected_failure, test=test)
+            require(previous[scope] is not None and public_windows_log_row(root, outer, before) is None,
+                    "public Windows log lock lacks an absent owned preimage")
+            original_logs = before.get((root / "logs").relative_to(outer).as_posix())
+            prospective_logs[scope] = windows_log_capture(scope, after, original_logs)
         log_key = selected_prefix + "/logs/mcp-stderr.log"
         if test != "stdio":
             require(before.get(log_key) == after.get(log_key), "public non-stdio action changed the stdio log")
-        native_lock_key = selected_prefix + "/" + PUBLIC_NATIVE_LOG_LOCK
-        observed_lock = after.get(native_lock_key)
-        if native_log_locks[scope] is None:
-            if observed_lock is not None:
-                require(os.name == "nt" and native and not inspect and not expected_failure
-                        and test == "http" and previous[scope] is not None
-                        and before.get(native_lock_key) is None
-                        and args == ["mcp", "test", name + "-http"],
-                        "public native log lock appeared without this owned HTTP command")
-                public_native_log_lock(selected, observed_lock)
-                native_log_locks[scope] = dict(observed_lock)
-        else:
-            require(before.get(native_lock_key) == native_log_locks[scope] == observed_lock,
-                    "public native log lock changed after its admitted HTTP command")
         if selected.exists():
             public_profile(selected, after, outer, configs[scope], stdio=(name + "-stdio", stdio_completed[scope]),
-                           spawn=prospective[scope], log_lock=native_log_locks[scope])
+                           spawn=prospective[scope], log_lock=prospective_logs[scope])
         records.append({"label": label, "scope": scope, "delta": delta,
                         "http_methods": http_after, "stdio_counts": {key: len(events_before[key]) for key in projects}})
         spawn_states.update(prospective)
+        native_log_locks.update(prospective_logs)
         current = after
         return output
 
@@ -3060,6 +3164,7 @@ def observe_public(probes):
         after, _ = snapshot(); require(after == current and not list(cold_tmp.iterdir()), "cold fixture changed retained public/User tree")
         for scope in projects:
             spawn_preserved(scope, after)
+            windows_log_preserved(scope, after)
         complete = True
     finally:
         write_json(evidence / "public-command-deltas.json", {"complete": complete, "commands": records, "root_authorities": born,

@@ -1923,12 +1923,21 @@ class PublicLifecycleContracts(unittest.TestCase):
             marker.chmod(0o600)
             lock = root / "logs/.__agent.lock"
             lock.parent.mkdir()
+            original = CASE["inventory"](outer)
+            authorities = tuple(CASE["directory_identity"](path)
+                                for path in (outer, root.parent.parent, root.parent, root))
             lock.write_bytes(b"")
             lock.chmod(0o666)
             image = CASE["inventory"](outer)
             row = image[lock.relative_to(outer).as_posix()]
-            profile = lambda receipt=None: CASE["public_profile"](
-                root, CASE["inventory"](outer), outer, set(), log_lock=receipt)
+            def profile(receipt=None):
+                current = CASE["inventory"](outer)
+                held = None
+                if receipt is not None:
+                    captured = dict(current); captured[lock.relative_to(outer).as_posix()] = receipt
+                    held = CASE["public_windows_log_read"](root, outer, captured, authorities,
+                        original_logs=original[lock.parent.relative_to(outer).as_posix()])
+                return CASE["public_profile"](root, current, outer, set(), log_lock=held)
             with self.assertRaisesRegex(RuntimeError, "unmeasured"):
                 profile()
             if os.name == "nt":
@@ -2004,7 +2013,7 @@ class PublicLifecycleContracts(unittest.TestCase):
         # Execute the real command's protocol/profile join with original local
         # event bytes. Runtime execution is absent; this is not native evidence.
         helpers = [node for node in owner.body if isinstance(node, ast.FunctionDef)
-                   and node.name in {"spawn_capture", "spawn_preserved", "captured_events"}]
+                   and node.name in {"spawn_capture", "spawn_preserved", "windows_log_capture", "windows_log_preserved", "captured_events"}]
         publish = next(node for node in command.body if isinstance(node, ast.Expr)
                        and isinstance(node.value, ast.Call) and isinstance(node.value.func, ast.Attribute)
                        and isinstance(node.value.func.value, ast.Name) and node.value.func.value.id == "spawn_states")
@@ -2036,7 +2045,7 @@ class PublicLifecycleContracts(unittest.TestCase):
                              outer_authority=CASE["directory_identity"](outer),
                              authorities={"a": CASE["directory_identity"](selected.parent.parent)},
                              born={"a": (CASE["directory_identity"](selected), CASE["directory_identity"](selected.parent), {})},
-                             spawn_states={"a": None, "b": None}, native=True, inspect=False, expected_failure=False,
+                             spawn_states={"a": None, "b": None}, native_log_locks={"a": None, "b": None}, native=True, inspect=False, expected_failure=False,
                              args=["mcp", "test", "hermes-public-a-stdio"], label="public-stdio-a", evidence=evidence,
                              argv=["inert-hermes", "mcp", "test", "hermes-public-a-stdio"], output=b"inert stdio success",
                              code_root=code_root, code_authority=CASE["directory_identity"](code_root), install_id="a" * 12,
@@ -3758,9 +3767,10 @@ class PublicInspectLockContracts(unittest.TestCase):
                          evidence=outer.parent, env={}, born={}, nonce="inert", bounded=bounded,
                          public_runtime_pins=lambda *args, **kwargs: None, public_continuity=lambda *args, **kwargs: None,
                          public_stdio_events=lambda *args, **kwargs: [], spawn_states={key: None for key in projects},
+                         native_log_locks={key: None for key in projects},
                          probes={key: SimpleNamespace(methods=lambda: []) for key in projects})
         helpers = [node for node in owner.body if isinstance(node, ast.FunctionDef)
-                   and node.name in {"spawn_capture", "spawn_preserved", "captured_events"}]
+                   and node.name in {"spawn_capture", "spawn_preserved", "windows_log_capture", "windows_log_preserved", "captured_events"}]
         exec(compile(ast.fix_missing_locations(ast.Module(body=[*helpers, command], type_ignores=[])), CASE["__file__"], "exec"), namespace)
         return namespace["command"], calls
 
@@ -4946,6 +4956,238 @@ class PublicSpawnLedgerContracts(unittest.TestCase):
                 with self.subTest(name=name), self.assertRaisesRegex(RuntimeError, "unmeasured"):
                     CASE["public_profile"](root, CASE["inventory"](outer), outer, set(), spawn=receipt)
                 self.assertEqual(foreign.read_bytes(), b"unmeasured"); foreign.unlink()
+
+
+class PublicWindowsLogLockContracts(unittest.TestCase):
+    @staticmethod
+    def fixture(temporary):
+        outer = Path(temporary).resolve() / "outer"; outer.mkdir()
+        root = outer / "public-a/.hermes/uap-session"; root.mkdir(parents=True)
+        logs = root / "logs"; logs.mkdir(mode=0o700)
+        marker = root / ".uap-owner"
+        marker.write_bytes(("uap-hermes-project-session-v1\n" + str(root.parent.parent) + "\n").encode())
+        marker.chmod(0o600)
+        before = CASE["inventory"](outer)
+        authorities = tuple(CASE["directory_identity"](path)
+                            for path in (outer, root.parent.parent, root.parent, root))
+        return outer, root, logs, before, authorities
+
+    @staticmethod
+    def capture(outer, root, before, authorities, image=None):
+        image = CASE["inventory"](outer) if image is None else image
+        return CASE["public_windows_log_read"](root, outer, image, authorities,
+            original_logs=before[(root / "logs").relative_to(outer).as_posix()])
+
+    def test_fixed_eight_roles_require_the_matching_successful_native_command(self):
+        import hashlib
+        observed = hashlib.sha256(b"uap-hermes-public-bootstrap-member-v1\0logs/.__agent.lock").hexdigest()
+        self.assertEqual(observed, "d6503b34655ee420b82058507655f28a09177f18851cd32ea54eb4fbe234d256")
+        roles = [("public-http-a", "a", "http"), ("public-stdio-a", "a", "stdio"),
+                 ("public-http-b", "b", "http"), ("public-stdio-b", "b", "stdio"),
+                 ("public-http-restart-a", "a", "http"), ("public-stdio-restart-a", "a", "stdio"),
+                 ("public-http-repaired-a", "a", "http"), ("public-stdio-repaired-a", "a", "stdio")]
+        for label, scope, transport in roles:
+            args = ["mcp", "test", "hermes-public-" + scope + "-" + transport]
+            with self.subTest(label=label), mock.patch.object(CASE["artifacts"], "WINDOWS", True):
+                CASE["public_windows_log_role"](label, scope, args, native=True, inspect=False,
+                                                expected_failure=False, test=transport)
+                for changed in ({"label": "public-removed-test-" + scope}, {"scope": "b" if scope == "a" else "a"},
+                                {"native": False}, {"native": 1}, {"inspect": True}, {"expected_failure": True},
+                                {"test": "unknown"}, {"args": args + ["--extra"]}, {"label": []}):
+                    values = dict(label=label, scope=scope, args=args, native=True, inspect=False,
+                                  expected_failure=False, test=transport); values.update(changed)
+                    with self.subTest(changed=changed), self.assertRaisesRegex(RuntimeError, "outside an owned native test"):
+                        CASE["public_windows_log_role"](**values)
+            with mock.patch.object(CASE["artifacts"], "WINDOWS", False), self.assertRaises(RuntimeError):
+                CASE["public_windows_log_role"](label, scope, args, native=True, inspect=False,
+                                                expected_failure=False, test=transport)
+
+    def test_profile_never_adopts_an_unproved_sidecar_or_errors_lock(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            outer, root, logs, before, authorities = self.fixture(temporary)
+            lock = logs / ".__agent.lock"; lock.write_bytes(b""); lock.chmod(0o666)
+            image = CASE["inventory"](outer)
+            with self.assertRaisesRegex(RuntimeError, "unmeasured"):
+                CASE["public_profile"](root, image, outer, set())
+            if os.name == "nt":
+                receipt = self.capture(outer, root, before, authorities, image)
+                CASE["public_profile"](root, image, outer, set(), log_lock=receipt)
+            else:
+                with self.assertRaisesRegex(RuntimeError, "root authority"):
+                    self.capture(outer, root, before, authorities, image)
+                receipt = {"row": image[lock.relative_to(outer).as_posix()], "identity": (),
+                           "logs_row": image[logs.relative_to(outer).as_posix()], "logs_identity": ()}
+                with self.assertRaisesRegex(RuntimeError, "admission"):
+                    CASE["public_profile"](root, image, outer, set(), log_lock=receipt)
+                receipt = None
+            errors = logs / ".__errors.lock"; errors.write_bytes(b""); errors.chmod(0o666)
+            with self.assertRaisesRegex(RuntimeError, "unmeasured"):
+                CASE["public_profile"](root, CASE["inventory"](outer), outer, set(), log_lock=receipt)
+            self.assertEqual(lock.read_bytes(), b"")
+            self.assertEqual(errors.read_bytes(), b"")
+
+    @unittest.skipUnless(os.name == "nt", "actual Windows named/held lock admission")
+    def test_windows_read_requires_the_original_empty_ordinary_captured_member(self):
+        import copy
+        for effect in ("valid", "nonempty", "readonly", "hardlink", "wrong-hash", "wrong-id", "bool-size",
+                       "wrong-mode", "missing-logs-preimage"):
+            with self.subTest(effect=effect), tempfile.TemporaryDirectory() as temporary:
+                outer, root, logs, before, authorities = self.fixture(temporary)
+                lock = logs / ".__agent.lock"; lock.write_bytes(b""); lock.chmod(0o666)
+                image = CASE["inventory"](outer); key = lock.relative_to(outer).as_posix()
+                image = copy.deepcopy(image)
+                if effect == "nonempty": lock.write_bytes(b"x")
+                if effect == "readonly": lock.chmod(0o444)
+                if effect == "hardlink": os.link(lock, Path(temporary) / "retained-alias")
+                if effect == "wrong-hash": image[key]["sha256"] = "0" * 64
+                if effect == "wrong-id": image[key]["inode"] += 1
+                if effect == "bool-size": image[key]["bytes"] = False
+                if effect == "wrong-mode": image[key]["mode"] = 0o644
+                original_logs = before[logs.relative_to(outer).as_posix()]
+                if effect == "missing-logs-preimage": original_logs = None
+                invoke = lambda: CASE["public_windows_log_read"](root, outer, image, authorities,
+                                                               original_logs=original_logs)
+                if effect == "valid":
+                    receipt = invoke()
+                    self.assertEqual(receipt["identity"], CASE["stable_file"](lock.lstat()))
+                    self.assertEqual(receipt["row"], image[key])
+                else:
+                    with self.assertRaises(RuntimeError):
+                        invoke()
+                self.assertEqual(lock.read_bytes(), b"x" if effect == "nonempty" else b"")
+                if effect == "readonly": lock.chmod(0o666)
+
+    @unittest.skipUnless(os.name == "nt", "actual Windows ancestor admission before bytes")
+    def test_windows_original_ancestors_are_rejoined_before_lock_read(self):
+        for role in ("outer", "project", "parent", "selected", "logs"):
+            with self.subTest(role=role), tempfile.TemporaryDirectory() as temporary:
+                outer, root, logs, before, authorities = self.fixture(temporary)
+                lock = logs / ".__agent.lock"; lock.write_bytes(b""); lock.chmod(0o666)
+                image = CASE["inventory"](outer); original_leaf = lock.stat()
+                victim = {"outer": outer, "project": root.parent.parent, "parent": root.parent,
+                          "selected": root, "logs": logs}[role]
+                retained = Path(temporary).resolve() / "original-" / role
+                retained.parent.mkdir(); victim.rename(retained); victim.mkdir()
+                children = {"outer": ["public-a"], "project": [".hermes"], "parent": ["uap-session"],
+                            "selected": ["logs", ".uap-owner"], "logs": [".__agent.lock"]}[role]
+                for name in children: (retained / name).rename(victim / name)
+                self.assertTrue(os.path.samestat(original_leaf, lock.stat()))
+                reader = mock.Mock(side_effect=AssertionError("must refuse before body read"))
+                with mock.patch.dict(CASE["public_windows_log_read"].__globals__, ordinary_bytes=reader):
+                    with self.assertRaises(RuntimeError):
+                        self.capture(outer, root, before, authorities, image)
+                reader.assert_not_called()
+                self.assertTrue(retained.is_dir())
+                self.assertEqual(lock.read_bytes(), b"")
+
+    @unittest.skipUnless(os.name == "nt", "actual Windows cross-command full-stat continuity")
+    def test_windows_lock_continuity_allows_log_creation_but_not_lock_drift(self):
+        for effect in ("later-log", "mtime", "replacement", "missing"):
+            with self.subTest(effect=effect), tempfile.TemporaryDirectory() as temporary:
+                outer, root, logs, before, authorities = self.fixture(temporary)
+                lock = logs / ".__agent.lock"; lock.write_bytes(b""); lock.chmod(0o666)
+                receipt = self.capture(outer, root, before, authorities)
+                if effect == "later-log":
+                    (logs / "mcp-stderr.log").write_bytes(b"owned later stderr header")
+                if effect == "mtime":
+                    info = lock.stat(); os.utime(lock, ns=(info.st_atime_ns, info.st_mtime_ns + 2_000_000_000))
+                if effect == "replacement":
+                    lock.rename(Path(temporary) / "original-lock"); lock.write_bytes(b""); lock.chmod(0o666)
+                if effect == "missing": lock.rename(Path(temporary) / "original-lock")
+                invoke = lambda: CASE["public_windows_log_continuity"](receipt,
+                    self.capture(outer, root, before, authorities))
+                if effect == "later-log":
+                    invoke()
+                    self.assertEqual(receipt["logs_identity"], CASE["directory_identity"](logs))
+                else:
+                    with self.assertRaises(RuntimeError):
+                        invoke()
+                if effect in {"replacement", "missing"}:
+                    self.assertEqual((Path(temporary) / "original-lock").read_bytes(), b"")
+
+
+    @unittest.skipUnless(os.name == "nt", "actual Windows before/after held directory fence")
+    def test_windows_logs_directory_changes_during_read_are_not_admitted(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            outer, root, logs, before, authorities = self.fixture(temporary)
+            lock = logs / ".__agent.lock"; lock.write_bytes(b""); lock.chmod(0o666)
+            image = CASE["inventory"](outer)
+            original = CASE["ordinary_bytes"]
+            def changed(*args, **kwargs):
+                body = original(*args, **kwargs)
+                info = logs.stat()
+                os.utime(logs, ns=(info.st_atime_ns, info.st_mtime_ns + 2_000_000_000))
+                return body
+            reader = mock.Mock(side_effect=changed)
+            with mock.patch.dict(CASE["public_windows_log_read"].__globals__, ordinary_bytes=reader):
+                with self.assertRaisesRegex(RuntimeError, "inventory directory changed"):
+                    self.capture(outer, root, before, authorities, image)
+            reader.assert_called_once()
+            self.assertEqual(lock.read_bytes(), b"")
+
+    def test_actual_command_transition_requires_protocol_role_and_absent_preimage(self):
+        import ast
+        import copy
+        source = Path(CASE["__file__"]).read_bytes()
+        owner = next(node for node in ast.parse(source).body if isinstance(node, ast.FunctionDef) and node.name == "observe_public")
+        command = next(node for node in owner.body if isinstance(node, ast.FunctionDef) and node.name == "command")
+        start = next(index for index, node in enumerate(command.body) if isinstance(node, ast.Assign)
+                     and any(isinstance(target, ast.Name) and target.id == "http_after" for target in node.targets))
+        stop = next(index for index, node in enumerate(command.body) if isinstance(node, ast.Assign)
+                    and any(isinstance(target, ast.Name) and target.id == "log_key" for target in node.targets))
+        helpers = [node for node in owner.body if isinstance(node, ast.FunctionDef)
+                   and node.name in {"spawn_capture", "spawn_preserved", "windows_log_capture",
+                                     "windows_log_preserved", "captured_events"}]
+        check = compile(ast.Module(body=[*helpers, *command.body[start:stop]], type_ignores=[]), CASE["__file__"], "exec")
+        for effect in ("valid", "wrong-role", "expected-failure", "no-protocol", "sibling-protocol",
+                       "preexisting", "no-owner", "missing-logs-preimage", "sibling-lock"):
+            with self.subTest(effect=effect), tempfile.TemporaryDirectory() as temporary:
+                outer, root, logs, before, authorities = self.fixture(temporary)
+                data = outer / "public-a/.uap/plugin-data/owned"; data.mkdir(parents=True)
+                other = outer / "public-b/.hermes/uap-session"; other.mkdir(parents=True)
+                (other / "logs").mkdir(mode=0o700)
+                before = CASE["inventory"](outer)
+                lock = (other if effect == "sibling-lock" else root) / "logs/.__agent.lock"
+                lock.write_bytes(b""); lock.chmod(0o666)
+                after = CASE["inventory"](outer)
+                if effect == "preexisting": before = copy.deepcopy(after)
+                if effect == "missing-logs-preimage": before.pop(logs.relative_to(outer).as_posix())
+                methods = {key: [] for key in ("a", "b")}
+                methods["b" if effect == "sibling-protocol" else "a"] = (
+                    [] if effect == "no-protocol" else ["initialize", "notifications/initialized", "tools/list"])
+                proof = {"data": data, "target": outer / "target"}
+                previous = {"a": proof if effect != "no-owner" else None, "b": None}
+                marker = object()
+                def read(_root, _outer, _image, _authorities, *, original_logs):
+                    self.assertEqual((_root, _outer), (root, outer))
+                    self.assertEqual(tuple(_authorities), authorities)
+                    CASE["require"](type(original_logs) is dict, "public Windows log directory was replaced")
+                    return marker
+                reader = mock.Mock(side_effect=read)
+                namespace = dict(CASE, outer=outer, projects={"a": root.parent.parent, "b": other.parent.parent},
+                    scope="a", selected=root, name="hermes-public-a", before=before, after=after,
+                    previous=previous, proofs=previous, stdio_completed={"a": 0, "b": 0}, test="http",
+                    http_before={"a": [], "b": []}, events_before={"a": [], "b": []},
+                    probes={key: SimpleNamespace(methods=lambda key=key: methods[key]) for key in ("a", "b")},
+                    spawn_states={"a": None, "b": None}, native_log_locks={"a": None, "b": None},
+                    outer_authority=authorities[0], authorities={"a": authorities[1]},
+                    born={"a": (authorities[3], authorities[2], {})}, nonce="c" * 64,
+                    native=True, inspect=False, expected_failure=effect == "expected-failure",
+                    label="public-removed-list-a" if effect == "wrong-role" else "public-http-a",
+                    args=["mcp", "test", "hermes-public-a-http"], public_windows_log_read=reader)
+                with mock.patch.object(CASE["artifacts"], "WINDOWS", True):
+                    if effect == "valid":
+                        exec(check, namespace)
+                        self.assertIs(namespace["prospective_logs"]["a"], marker)
+                    else:
+                        with self.assertRaises(RuntimeError):
+                            exec(check, namespace)
+                if effect in {"valid", "missing-logs-preimage"}:
+                    reader.assert_called_once()
+                else:
+                    reader.assert_not_called()
+                self.assertEqual(namespace["native_log_locks"], {"a": None, "b": None})
+                self.assertEqual(lock.read_bytes(), b"")
 
 
 if __name__ == "__main__":
