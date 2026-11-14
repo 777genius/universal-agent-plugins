@@ -26,7 +26,7 @@ const props = withDefaults(
   },
 );
 const copied = ref(false);
-const canChooseNativeCli = computed(() => hasNpxUapInvocation(props.command));
+const canChooseNativeCli = computed(() => props.kind === 'add' && hasNpxUapInvocation(props.command));
 const renderedCommand = computed(() =>
   withNativeCliInvocation(props.command, preferences.useNativeCli),
 );
