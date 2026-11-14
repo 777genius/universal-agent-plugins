@@ -102,11 +102,52 @@ jobs:
             --probe "$RUNNER_TEMP/grok-protocol-tools/probe" \
             --output "$RUNNER_TEMP/grok-project-no-model-evidence"
       - name: Preserve original bounded protocol evidence
+        id: grok_native_upload
         if: ${{ always() && steps.grok_native.outcome == 'success' && steps.grok_native.outputs.publication == 'admitted' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
           name: grok-project-no-model-${{ github.sha }}
           path: ${{ runner.temp }}/grok-project-no-model-evidence/upload/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Provision the inert tracer after original native evidence
+        id: grok_tracer_setup
+        if: ${{ always() && !cancelled() && steps.grok_native_upload.outcome == 'success' }}
+        timeout-minutes: 3
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends strace
+          dpkg-query --show --showformat='${Package} ${Version}\n' strace
+          /usr/bin/strace --version
+      - name: Measure bounded inert tracer mechanics without native qualification
+        id: grok_tracer
+        if: ${{ always() && !cancelled() && steps.grok_native_upload.outcome == 'success' && steps.grok_tracer_setup.outcome == 'success' }}
+        timeout-minutes: 1
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT"
+          test -z "$(git status --porcelain --untracked-files=normal)"
+          set +e
+          /usr/bin/python3 -I -B scripts/grok_project_protocol_trace_probe.py \
+            --output "$RUNNER_TEMP/grok-inert-tracer-step0" \
+            --source-commit "$EXPECTED_COMMIT" --source-tree "$(git rev-parse HEAD^{tree})"
+          grok_tracer_status=$?
+          set -e
+          test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT"
+          test -z "$(git status --porcelain --untracked-files=normal)"
+          exit "$grok_tracer_status"
+      - name: Preserve bounded inert tracer evidence separately
+        if: ${{ always() && !cancelled() && (steps.grok_tracer.outcome == 'success' || steps.grok_tracer.outcome == 'failure') }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: grok-inert-tracer-step0-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            ${{ runner.temp }}/grok-inert-tracer-step0/receipt.json
+            ${{ runner.temp }}/grok-inert-tracer-step0/direct.stdout
+            ${{ runner.temp }}/grok-inert-tracer-step0/direct.stderr
+            ${{ runner.temp }}/grok-inert-tracer-step0/direct.trace
+            ${{ runner.temp }}/grok-inert-tracer-step0/readonly.stdout
+            ${{ runner.temp }}/grok-inert-tracer-step0/readonly.stderr
+            ${{ runner.temp }}/grok-inert-tracer-step0/readonly.trace
           if-no-files-found: error
           retention-days: 14
       - name: Require the original native result to pass

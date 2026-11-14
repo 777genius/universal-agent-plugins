@@ -1,9 +1,12 @@
 package agentpluginscli
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"reflect"
 	"sort"
 	"strings"
@@ -13,6 +16,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
 func newRunClientCommand(app App, opts *options) *cobra.Command {
@@ -57,12 +61,13 @@ func runClientSession(ctx context.Context, cmd *cobra.Command, app App, opts *op
 	if err != nil {
 		return err
 	}
+	app.SessionEnv.SessionEnvironment = append([]string{}, os.Environ()...)
 	plan, planErr := prepareClientSession(ctx, app, targets[0], planner, inspect)
 	if planErr != nil {
 		return errors.Join(planErr, unlock())
 	}
 	if !opts.dryRun {
-		return executeClientSession(ctx, app, targets[0], planner, inspect, plan, unlock)
+		return executeClientSession(ctx, cmd, app, targets[0], planner, inspect, plan, unlock)
 	}
 	if err := unlock(); err != nil {
 		return err
@@ -75,7 +80,7 @@ func runClientSession(ctx context.Context, cmd *cobra.Command, app App, opts *op
 	return err
 }
 
-func executeClientSession(ctx context.Context, app App, target domain.ClientID, planner clients.SessionPlanner, inspect bool, plan clients.SessionPlan, unlock func() error) (resultErr error) {
+func executeClientSession(ctx context.Context, cmd *cobra.Command, app App, target domain.ClientID, planner clients.SessionPlanner, inspect bool, plan clients.SessionPlan, unlock func() error) (resultErr error) {
 	env := app.SessionEnv
 	var execution clients.SessionExecution
 	var planErr error
@@ -83,11 +88,15 @@ func executeClientSession(ctx context.Context, app App, target domain.ClientID, 
 		execution, planErr = owner.BeginSessionExecution(ctx, env, plan)
 	}
 	if execution != nil {
-		if execution.Context() == nil || execution.Runner() == nil {
-			planErr = errors.Join(planErr, fmt.Errorf("client execution authority is incomplete"), execution.Close())
+		if execution.Context() == nil || execution.Runner() == nil || !inspect {
+			planErr = errors.Join(planErr, fmt.Errorf("client execution authority is incomplete or not an inspection"), execution.Close())
 			execution = nil
 		} else {
-			defer func() { resultErr = errors.Join(resultErr, execution.Revalidate(), execution.Close()) }()
+			defer func() {
+				if execution != nil {
+					resultErr = errors.Join(resultErr, execution.Revalidate(), execution.Close())
+				}
+			}()
 			ctx, env.Runner = execution.Context(), execution.Runner()
 		}
 	}
@@ -99,6 +108,8 @@ func executeClientSession(ctx context.Context, app App, target domain.ClientID, 
 	}
 	// The interactive child never holds the installer lock. A retained optional
 	// execution still spans this original replan and the final process boundary.
+	base := append([]string{}, os.Environ()...)
+	app.SessionEnv.SessionEnvironment = append([]string{}, base...)
 	check, err := prepareClientSession(ctx, app, target, planner, inspect)
 	if err != nil {
 		return err
@@ -110,8 +121,32 @@ func executeClientSession(ctx context.Context, app App, target domain.ClientID, 
 		if err := execution.Revalidate(); err != nil {
 			return err
 		}
+		retained := execution
+		execution = nil
+		return runRetainedClientInspection(ctx, cmd, retained, plan, base)
 	}
-	return app.StartNativeSession(ctx, plan)
+	return app.StartNativeSession(ctx, plan, base)
+}
+
+func runRetainedClientInspection(ctx context.Context, cmd *cobra.Command, execution clients.SessionExecution, plan clients.SessionPlan, base []string) error {
+	// A retained inspection must return to its original authority. Unix exec
+	// would discard these handles and bypass post-child validation and cleanup.
+	const limit = 1 << 20
+	result, err := execution.Runner().Run(ctx, legacyports.Command{
+		Argv: append([]string{plan.Executable}, plan.Arguments...), Dir: plan.Directory,
+		Env: plan.ChildEnvironment(base), StdoutLimitBytes: limit,
+	})
+	if result.ExitCode != 0 || len(result.Stdout) >= limit || len(result.Stderr) > 32768 || !result.CleanupComplete || result.NoChildStarted {
+		err = errors.Join(err, fmt.Errorf("native inspection failed, exceeded its bound or lacked process cleanup"))
+	}
+	// Close can intentionally cancel the execution context. Check that original
+	// context first; settle all retained resources before publishing any output.
+	if err = errors.Join(err, ctx.Err(), execution.Revalidate(), execution.Close()); err != nil {
+		return err
+	}
+	_, outErr := io.Copy(cmd.OutOrStdout(), bytes.NewReader(result.Stdout))
+	_, errErr := io.Copy(cmd.ErrOrStderr(), bytes.NewReader(result.Stderr))
+	return errors.Join(outErr, errErr)
 }
 
 func prepareClientSession(ctx context.Context, app App, target domain.ClientID, planner clients.SessionPlanner, inspect bool) (clients.SessionPlan, error) {

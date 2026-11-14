@@ -268,8 +268,12 @@ def inventory(root, sentinels=(), *, launchers=None, public=False, launcher_mode
     identity = directory_identity(root)
     result, total, copies, binary_total = {}, 0, 0, 0
     launchers = launchers or {}
-    require(len(launchers) <= 4 and all(re.fullmatch(
+    require(len(launchers) <= 4 and sum(name.startswith("public-history/") for name in launchers) <= 1
+        and all(re.fullmatch(
         r"public-[ab]/\.uap/managed/clients/hermes/hermes-public-[ab]-[a-f0-9]{12}/"
+        r"io\.github\.777genius\.agentplugins/managed-stdio-v1/agentplugins(?:\.exe)?", name)
+        or public is True and re.fullmatch(
+        r"public-history/public-a/\.uap/managed/clients/hermes/hermes-public-a-[a-f0-9]{12}/"
         r"io\.github\.777genius\.agentplugins/managed-stdio-v1/agentplugins(?:\.exe)?", name)
         for name in launchers), "finite receipt-owned launcher paths required")
     require(not artifacts.WINDOWS or not launchers or type(launcher_mode) is int and 0 <= launcher_mode <= 0o777,
@@ -285,7 +289,7 @@ def inventory(root, sentinels=(), *, launchers=None, public=False, launcher_mode
             require((info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_gid) == identity,
                     "inventory original root changed before open")
         pin = launchers.get(relative)
-        if scanner is not None and relative == scanner[0]: pin = scanner[1:]
+        if scanner is not None and (relative == scanner[0] or public is True and relative == "public-history/" + scanner[0]): pin = scanner[1:]
         if pin is None:
             inventory_member(relative, info)
         else:
@@ -2885,12 +2889,151 @@ def cold_report(value, pins, bundle, head, temporary):
     return value
 
 
+def history_control_commands(value):
+    from hermes_passive_history_processes import REGISTER, SELECT, decoded
+    from hermes_cli._launchers import runtime_command
+    runtime, fixture = value["runtime"], value["fixture"]
+    root, project = Path(runtime["code"]), Path(fixture["project"])
+    require(Path(runtime_command.__code__.co_filename).resolve() == root / "hermes_cli/_launchers.py",
+            "history original bootstrap source differs")
+    tail = ["--target", "hermes", "--scope", "project", "--project-root", str(project)]
+    uap = runtime["pins"]["uap"]["path"]
+    expected = {"git": ["git", "init", "-q", str(project)],
+        "add": [uap, "add", str(project.parent / "public-source-a"), "--no-save", "--yes", "--format", "json", *tail],
+        "bootstrap": [uap, "run", "--inspect", "--confirm-client-start", *tail],
+        "public-stdio-a": [runtime["native"], "mcp", "test", "hermes-public-a-stdio"],
+        "inspect": [uap, "run", "--inspect", "--confirm-client-start", *tail],
+        "noninspect": [uap, "run", "--dry-run", "--yes", "--format", "json", *tail],
+        "active": [uap, "run", "--inspect", "--dry-run", "--yes", "--format", "json", *tail]}
+    expected["selection"] = observer_runtime_command(runtime_command, root, Path(runtime["python"]),
+        code=SELECT, args=[str(root), value["nonce"]])
+    registration = value["registration"]
+    argv = observer_runtime_command(runtime_command, root, Path(runtime["python"]), code=REGISTER,
+        args=[str(root), str(registration["child_pid"]), str(registration["parent"]), value["nonce"]])
+    require(value["processes"]["registrar"]["argv"] == argv, "history original registrar recipe differs")
+    for command in value["commands"]:
+        require(command["status"]["argv"] == expected[command["label"]], "history original command recipe differs")
+        if command["label"] in {"bootstrap", "inspect"}:
+            require(public_json(decoded(command["stdout"])) == value["servers"], "history actual inventory output differs")
+    servers = value["servers"]
+    require(type(servers) is dict and set(servers) == {"hermes-public-a-http", "hermes-public-a-stdio"}
+            and type(servers["hermes-public-a-http"]) is dict and set(servers["hermes-public-a-http"]) == {"url"}
+            and type(servers["hermes-public-a-http"]["url"]) is str
+            and re.fullmatch(r"http://127\.0\.0\.1:[0-9]+/[^\s]*", servers["hermes-public-a-http"]["url"]),
+            "history selected server roles differ")
+    launcher = value["producer"]["argv"]
+    target = project / ".uap/managed/clients/hermes" / Path(fixture["data"]).name
+    expected_launcher = public_spawn_launcher({"target": target, "data": Path(fixture["data"])},
+        servers["hermes-public-a-stdio"], runtime["pins"]["probe"]["path"])
+    require(launcher == expected_launcher, "history original managed launcher argv differs")
+    recipe = public_stdio_recipe(project, runtime["pins"]["probe"], value["nonce"])
+    environment = {key: item.replace("${PLUGIN_ROOT}", str(target)).replace("${PLUGIN_DATA}", fixture["data"])
+                   for key, item in recipe["env"].items()}
+    environment.update(PLUGIN_ROOT=str(target), PLUGIN_DATA=fixture["data"])
+    require(servers["hermes-public-a-stdio"] == dict(command=expected_launcher[0], args=expected_launcher[1:],
+                env=environment, cwd=str(target)), "history owned stdio source/environment differs")
+
+
+def history_control_producer(value):
+    from hermes_passive_history_processes import decoded
+    producer, runtime = value["producer"], value["runtime"]
+    require(type(producer) is dict and set(producer) == {"entry", "argv", "events", "receipt", "body", "log_lock"},
+            "history original native producer schema differs")
+    status = value["commands"][3]["status"]
+    entry = public_spawn_entry(decoded(producer["body"]), [], producer["events"], value["nonce"], status["pid"],
+        runtime["install"], producer["argv"], runtime["pins"]["probe"]["path"], value["platform"],
+        **({"native_process": status["process_identity"], "native_python": runtime["python"],
+            "native_image": runtime["native"]} if artifacts.WINDOWS else {}))
+    require(entry == producer["entry"], "history original native row differs")
+    selected = str(Path(value["fixture"]["project"]) / ".hermes/uap-session")
+    owner = next(item["identity"][3:5] for item in value["fixture"]["roots"] if item["path"] == selected)
+    history_control_pair(producer["receipt"], decoded(producer["body"]), owner)
+    forged = value["forged"]
+    history_control_pair(forged["receipt"], decoded(forged["body"]), owner)
+    public_spawn_continuity(producer["receipt"], forged["receipt"], stdio=True)
+    public_spawn_continuity(forged["receipt"], forged["retained_receipt"])
+    if producer["log_lock"] is not None:
+        history_control_log_lock(producer["log_lock"], value["fixture"])
+
+
+def history_control_pair(receipt, ledger, owner):
+    require(type(receipt) is dict and set(receipt) == {"rows", "identities"}
+            and type(receipt["rows"]) is dict and type(receipt["identities"]) is dict
+            and set(receipt["rows"]) == set(receipt["identities"]) == set(PUBLIC_SPAWN_NAMES),
+            "history original pair schema differs")
+    for name in PUBLIC_SPAWN_NAMES:
+        row, identity = receipt["rows"][name], receipt["identities"][name]
+        body = ledger if name == PUBLIC_SPAWN_NAMES[0] else b""
+        mode = 0o666 if artifacts.WINDOWS else 0o600 if name == PUBLIC_SPAWN_NAMES[0] else 0o644
+        require(type(row) is dict and set(row) == {"type", "mode", "device", "inode", "bytes", "sha256"}
+                and row["type"] == "file" and type(row["mode"]) is int and row["mode"] == mode
+                and all(type(row[field]) is int for field in ("device", "inode", "bytes"))
+                and row["bytes"] == len(body) and row["sha256"] == hashlib.sha256(body).hexdigest()
+                and type(identity) is list and len(identity) == (12 if artifacts.WINDOWS else 9)
+                and all(type(number) is int for number in identity) and identity[3] == 1
+                and identity[:2] == [row["device"], row["inode"]] and stat.S_IMODE(identity[2]) == mode
+                and stat.S_ISREG(identity[2]) and identity[4] == len(body)
+                and identity[-2:] == owner
+                and (not artifacts.WINDOWS or identity[9] == 0 and not identity[8] & 0x400),
+                "history native pair original row/identity differs")
+
+
+def history_control_log_lock(lock, fixture):
+    require(artifacts.WINDOWS and type(lock) is dict and set(lock) == {"row", "identity", "logs_row", "logs_identity"},
+            "history native agent lock schema differs")
+    row, identity, logs, parent = lock["row"], lock["identity"], lock["logs_row"], lock["logs_identity"]
+    require(type(row) is dict and set(row) == {"type", "mode", "device", "inode", "bytes", "sha256"}
+            and row["type"] == "file" and all(type(row[field]) is int for field in ("device", "inode", "mode", "bytes"))
+            and row["mode"] == 0o666 and row["bytes"] == 0 and row["sha256"] == hashlib.sha256(b"").hexdigest()
+            and type(identity) is list and len(identity) == 12 and all(type(number) is int for number in identity)
+            and identity[:2] == [row["device"], row["inode"]] and identity[3:5] == [1, 0]
+            and stat.S_ISREG(identity[2]) and stat.S_IMODE(identity[2]) == 0o666
+            and identity[9] == 0 and not identity[8] & 0x400, "history native agent lock metadata differs")
+    require(type(logs) is dict and set(logs) == {"type", "mode", "device", "inode"} and logs["type"] == "directory"
+            and all(type(logs[field]) is int for field in ("mode", "device", "inode"))
+            and type(parent) is list and len(parent) == 5 and all(type(number) is int for number in parent)
+            and parent[:2] == [logs["device"], logs["inode"]] and stat.S_ISDIR(parent[2])
+            and stat.S_IMODE(parent[2]) == logs["mode"] == 0o777 and identity[-2:] == parent[-2:],
+            "history original logs parent differs")
+    path = str(Path(fixture["project"]) / ".hermes/uap-session/logs")
+    require([item["identity"][:5] for item in fixture["roots"] if item["path"] == path] == [parent],
+            "history original held logs join differs")
+
+
+def history_control_report(value, *, source, nonce, pins, native, python, outer, original_sha256, authorities):
+    from hermes_passive_history_control import validate_report
+    value = validate_report(value, source=source, nonce=nonce, pins=pins, native=native, python=python, outer=outer)
+    require(type(original_sha256) is str and re.fullmatch(r"[a-f0-9]{64}", original_sha256)
+            and value["protected"]["original_sha256"] == original_sha256,
+            "history original warm capture commitment differs")
+    require(value["runtime"]["code_identity"] == list(authorities[0])
+            and [item["identity"][:5] for item in value["fixture"]["roots"] if item["path"] == str(outer)] == [list(authorities[1])],
+            "history original parent/runtime authority differs")
+    require(all(item["identity"][3:5] == list(authorities[1][3:5]) for item in value["fixture"]["roots"]),
+            "history held fixture owner differs from original outer")
+    require(value["runtime"]["install"] == hashlib.sha256(value["runtime"]["code"].lower().encode("utf-8")).hexdigest()[:12],
+            "history original install identity differs")
+    history_control_producer(value)
+    history_control_commands(value)
+    return value
+
+
 def public_cleanup_complete(home, proof):
+    history = home / "public-history"
+    if history.exists() or history.is_symlink():
+        return False
     # A killed Go owner may leave a separate native process group. Once this
     # family starts, only the fully validated Cold report permits home cleanup.
     if all(not (home / name).exists() and not (home / name).is_symlink()
            for name in ("public-a", "public-b", "public-cold-tmp")):
         return True
+    if proof.get("passive_history_required") is True:
+        control = proof.get("passive_history_control")
+        if not (type(control) is dict and set(control) == {"source", "commands", "sha256"}
+                and control["source"] == proof.get("source", {}).get("commit")
+                and type(control["commands"]) is int and control["commands"] == 8
+                and type(control["sha256"]) is str and re.fullmatch(r"[a-f0-9]{64}", control["sha256"])):
+            return False
     cold = proof.get("cold_restore")
     return (proof.get("public_project_lifecycle_complete") is True and type(cold) is dict
             and set(cold) == {"source", "commands", "sha256"}
@@ -3108,6 +3251,7 @@ def observe_public(probes):
     protected = {key: value for key, value in current.items() if key.startswith("user/") or key.startswith("project-")
                  or key.endswith("foreign.txt") or "/skills/foreign" in key}
     configs, records, born, complete = {scope: set() for scope in projects}, [], {}, False
+    history_original = None
     stdio_completed = {scope: 0 for scope in projects}
     spawn_states = {scope: None for scope in projects}
     native_log_locks = {scope: None for scope in projects}
@@ -3355,6 +3499,11 @@ def observe_public(probes):
                     and public_json(ordinary_bytes(prior["data"] / ".agentplugins-data-owner.json")) == prior["installed"]["data_receipts"][prior["binding"]["data_receipt_id"]], "public removal lost retained root/data")
             command("public-removed-list-" + scope, scope, ["mcp", "list"], native=True, expected_failure=False)
             command("public-removed-test-" + scope, scope, ["mcp", "test", "hermes-public-" + scope + "-http"], native=True, expected_failure=True)
+        from hermes_passive_history_control import run_control
+        history_original = hashlib.sha256(json.dumps(current, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        history = run_control(globals(), outer=outer, baseline=current, probes=probes, env=env, pins=pins, deadline=deadline)
+        require(history["protected"]["original_sha256"] == history_original, "history original warm capture differs")
+        write_json(evidence / "passive-history-control.json", history)
         public_cold(evidence, cold_tmp, env, pins, deadline, os.environ["EXPECTED_HEAD"], Path(native_image))
         after, _ = snapshot(); require(after == current and not list(cold_tmp.iterdir()), "cold fixture changed retained public/User tree")
         for scope in projects:
@@ -3364,6 +3513,7 @@ def observe_public(probes):
     finally:
         write_json(evidence / "public-command-deltas.json", {"complete": complete, "commands": records, "root_authorities": born,
                    "production_project_mcp": False, "admission_qualified": False,
+                   "history_original_sha256": history_original,
                    "http_methods": {name: list(probe.methods()) for name, probe in probes.items()}})
 
 
@@ -3376,7 +3526,7 @@ MEMBERS = ({name + suffix for name in COMMANDS for suffix in (".stdout", ".stder
               "profile-command-deltas.json", "bootstrap-census-request.json", "bootstrap-census.json", "source-user-preparation.json",
               "source-payload-refusal.json", "source-user-delta.json",
               "profile-admission.json", "lifecycle.stdout", "lifecycle.stderr", "owned-start-gate",
-              "public-endpoints.json", "public-command-deltas.json", "cold-restore.json"})
+              "public-endpoints.json", "public-command-deltas.json", "cold-restore.json", "passive-history-control.json"})
 
 
 def admit_evidence(directory, *, failure=None):
@@ -3399,6 +3549,11 @@ def admit_evidence(directory, *, failure=None):
             elif path.name == "source-user-delta.json":
                 require(info.st_size <= 16 << 10, "source delta evidence bound")
                 source_delta_document(ordinary_bytes(path, info))
+            elif path.name == "passive-history-control.json":
+                from hermes_passive_history_control import validate_report
+                value = public_json(ordinary_bytes(path, info))
+                validate_report(value, source=value["source"], nonce=value["nonce"], pins=value["runtime"]["pins"],
+                    native=value["runtime"]["native"], python=value["runtime"]["python"], outer=Path(value["fixture"]["outer"]))
     except BaseException:
         if failure is not None:
             raise RuntimeError("original Hermes refusal retained; evidence publication refused") from failure
@@ -3995,6 +4150,7 @@ def run():
     target = {"Linux": "linux", "Windows": "win32", "macOS": "darwin"}[os.environ["RUNNER_OS"]] + "-" + os.environ["RUNNER_ARCH"].lower()
     payload_descriptor, runtime_before, native_started, source_installation = None, None, None, None
     source_prepared, preparation, public_pins = None, None, None
+    history_authority = None
     prepared_records, after_records, source_after_capture, source_after_deadline = {}, {}, None, None
     observer_descriptor, observer_original = None, None
     helpers = runpy.run_path(str(HERE / "hermes-native.py"), run_name="hermes_profile_process_helpers")
@@ -4037,9 +4193,12 @@ def run():
             require(all(not Path(pin["path"]).is_relative_to(root) for pin in public_pins.values()
                         for root in (home, evidence, payload, checkout, official_source)), "public executable roots overlap native/config source")
             proof["public_runtimes_before"] = public_pins
+            history_authority = (directory_identity(runtime_root), home_authority)
         env["HERMES_CENSUS_EVIDENCE_ID"] = json.dumps(evidence_authority)
         env["HERMES_PROFILE_SOURCE_HEAD"] = before["commit"]
+        env["HERMES_PROFILE_SOURCE_TREE"] = before["tree"]
         if not source_capture:
+            proof["passive_history_required"] = True
             for key in ("UAP_BIN", "UAP_HERMES_COLD_UAP_SHA256", "UAP_HERMES_COLD_TEST_BIN", "UAP_HERMES_COLD_TEST_SHA256",
                         "UAP_HERMES_MCP_PROBE_BIN", "UAP_HERMES_MCP_PROBE_SHA256", "EXPECTED_HEAD", "GITHUB_ACTIONS", "RUNNER_ENVIRONMENT"):
                 env[key] = os.environ[key]
@@ -4096,8 +4255,21 @@ def run():
             require(public["complete"] is True, "public Hermes lifecycle incomplete")
             cold = cold_report(public_json(ordinary_bytes(evidence / "cold-restore.json")), public_pins,
                                Path(env["HERMES_BIN"]), before["commit"], home / "public-cold-tmp/hermes-cold")
+            history = history_control_report(public_json(ordinary_bytes(evidence / "passive-history-control.json")),
+                source={"commit": before["commit"], "tree": before["tree"]}, nonce=nonce, pins=public_pins,
+                native=env["HERMES_BIN"], python=str(python), outer=home,
+                original_sha256=public.get("history_original_sha256"), authorities=history_authority)
+            public_endpoints = public_json(ordinary_bytes(evidence / "public-endpoints.json"))
+            require(history["servers"]["hermes-public-a-http"] == {"url": public_endpoints["a"]["url"]},
+                    "history borrowed original HTTP probe differs")
+            require(type(public.get("history_original_sha256")) is str
+                    and re.fullmatch(r"[a-f0-9]{64}", public["history_original_sha256"])
+                    and history["protected"]["original_sha256"] == public["history_original_sha256"],
+                    "history report differs from original warm boundary capture")
             proof.update(public_project_lifecycle_complete=True, public_deltas=public,
-                         cold_restore={"source": cold["source_head"], "commands": len(cold["commands"]), "sha256": sha(evidence / "cold-restore.json")})
+                         cold_restore={"source": cold["source_head"], "commands": len(cold["commands"]), "sha256": sha(evidence / "cold-restore.json")},
+                         passive_history_control={"source": before["commit"], "commands": len(history["commands"]),
+                                                  "sha256": sha(evidence / "passive-history-control.json")})
     except BaseException as error:
         failure = error
         if source_capture and native_started is None:

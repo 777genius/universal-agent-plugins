@@ -20,6 +20,7 @@ from grok_project_protocol_enablement import (enabled_receipt, expect_retained_r
     ordinary_repair_state, preview_enablement, timestamp_ns)
 import grok_project_protocol_profile as profile_case
 import grok_acp_bootstrap as bootstrap_case
+import grok_project_protocol_trace_probe as trace_case
 
 
 class ContractTests(unittest.TestCase):
@@ -1283,6 +1284,182 @@ class DelegatedPublicationTests(unittest.TestCase):
                          "GROK_NATIVE_PASSED": passed}, capture_output=True, timeout=2, check=False)
                 self.assertEqual(result.returncode == 0, (outcome, publication, passed) == ("success", "admitted", "true"))
                 self.assertEqual((result.stdout, result.stderr), (b"", b""))
+
+
+@unittest.skipUnless(sys.platform == "linux" and hasattr(os, "WNOWAIT"), "Linux nonreaping child observation required")
+class InertTraceMechanicsContracts(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name).resolve()
+        self.fixture = self.root / "fixture"
+        self.fixture.mkdir(mode=0o700)
+        (self.fixture / "original.txt").write_bytes(b"inert original input\n")
+        (self.fixture / "original.txt").chmod(0o600)
+        self.env = {"HOME": str(self.fixture), "PATH": "/usr/bin:/bin", "LANG": "C", "LC_ALL": "C"}
+
+    def collect_inert(self, code, *, seconds=3.0, events=None):
+        import time
+        original_popen = trace_case.subprocess.Popen
+        original_signal, original_waitid = os.killpg, os.waitid
+        observed = [] if events is None else events
+
+        def spawn(argv, **kwargs):
+            self.assertEqual(argv[:4], ["/usr/bin/strace", "-f", "--kill-on-exit", "--decode-pids=pidns"])
+            channel = argv[argv.index("-o") + 1]
+            # Actual inert child and original pipes; no tracer/native success claim.
+            child = original_popen([sys.executable, "-I", "-B", "-c", code, channel], **kwargs)
+            original_wait = child.wait
+
+            def wait(*args, **kwargs):
+                observed.append(("wait", child.pid))
+                return original_wait(*args, **kwargs)
+
+            child.wait = wait
+            return child
+
+        def signal_group(pid, number):
+            self.assertFalse(any(event[0] == "wait" for event in observed))
+            status = original_waitid(os.P_PID, pid, os.WEXITED | os.WNOHANG | os.WNOWAIT)
+            observed.append(("signal", pid, status.si_pid if status else None))
+            return original_signal(pid, number)
+
+        with mock.patch.object(trace_case.subprocess, "Popen", side_effect=spawn), \
+                mock.patch.object(trace_case.os, "killpg", side_effect=signal_group):
+            row = trace_case.collect("contract", ["/usr/bin/true"], self.root, self.fixture, self.env,
+                                     time.monotonic() + seconds, trace=True)
+        self.assertEqual(sum(event[0] == "wait" for event in observed), 1)
+        self.assertEqual(observed[-1], ("wait", row["root_pid"]))
+        self.assertFalse((self.root / "contract.fifo").exists())
+        return row
+
+    def test_each_live_channel_refuses_actual_inert_overrun(self):
+        for name in ("stdout", "stderr", "trace"):
+            with self.subTest(stream=name):
+                descriptor = {"stdout": "1", "stderr": "2", "trace": "channel"}[name]
+                code = "import os,sys\nchannel=os.open(sys.argv[1],os.O_WRONLY)\n"
+                code += f"body=b'x'*{trace_case.LIMITS[name] + 1}\n"
+                code += f"while body:\n body=body[os.write({descriptor},body):]\n"
+                row = self.collect_inert(code)
+                self.assertEqual(row["error"], name + "-limit")
+                self.assertEqual(len(row["streams"][name]["body"]), trace_case.LIMITS[name])
+                self.assertTrue(row["wait_observed"])
+                self.assertTrue(row["group_signal_sent"])
+                self.assertTrue(all(item["eof"] for item in row["streams"].values()))
+
+    def test_exited_original_leader_keeps_group_reserved_until_pipe_child_is_stopped(self):
+        import time
+        events = []
+        code = """import os,sys,time
+channel=os.open(sys.argv[1],os.O_WRONLY)
+pid=os.fork()
+if pid == 0:
+    time.sleep(2)
+    os._exit(0)
+os.write(channel,b'original-leader-exiting\\n')
+os._exit(0)
+"""
+        started = time.monotonic()
+        row = self.collect_inert(code, seconds=1.6, events=events)
+        self.assertEqual(row["error"], "original-deadline")
+        self.assertTrue(row["unreaped_exit_observed"])
+        self.assertTrue(row["wait_observed"])
+        self.assertEqual(row["exit"], 0)
+        self.assertTrue(all(item["eof"] for item in row["streams"].values()))
+        self.assertEqual(events, [("signal", row["root_pid"], row["root_pid"]), ("wait", row["root_pid"])])
+        self.assertLess(time.monotonic() - started, 1.6)
+        with self.assertRaises(ChildProcessError):
+            os.waitid(os.P_PID, row["root_pid"], os.WEXITED | os.WNOHANG | os.WNOWAIT)
+
+    def test_expired_original_budget_opens_no_channel_and_starts_no_process(self):
+        import time
+        with mock.patch.object(trace_case.subprocess, "Popen") as start, mock.patch.object(trace_case.os, "mkfifo") as fifo:
+            with self.assertRaisesRegex(RuntimeError, "original-deadline"):
+                trace_case.collect("expired", ["/usr/bin/true"], self.root, self.fixture, self.env,
+                                   time.monotonic() - 1.0, trace=True)
+        start.assert_not_called()
+        fifo.assert_not_called()
+
+    def test_unexpected_original_reap_cannot_become_a_successful_wait(self):
+        import time
+        original_observe = trace_case.observe_unreaped
+        reaped = []
+
+        def observe(child):
+            result = original_observe(child)
+            if result and not reaped:
+                reaped.append(os.waitpid(child.pid, 0))
+            return result
+
+        with mock.patch.object(trace_case, "observe_unreaped", side_effect=observe), \
+                mock.patch.object(trace_case.os, "killpg") as signal_group:
+            row = trace_case.collect("reaped", [sys.executable, "-I", "-B", "-c", "pass"],
+                                     self.root, self.fixture, self.env, time.monotonic() + 3.0)
+        self.assertEqual(len(reaped), 1)
+        self.assertEqual(row["error"], "original-wait-authority-lost")
+        self.assertFalse(row["wait_observed"])
+        self.assertFalse(row["wait_called"])
+        self.assertIsNone(row["exit"])
+        signal_group.assert_not_called()
+
+    def test_first_control_refusal_does_not_attempt_the_readonly_control(self):
+        import time
+
+        def capture(label, *args, **kwargs):
+            streams = {name: dict(body=bytearray(), eof=True) for name in ("stdout", "stderr")}
+            if label == "direct":
+                streams["trace"] = dict(body=bytearray(), eof=True)
+            return dict(label=label, exit=1 if label == "direct" else 0, error=None,
+                        wait_observed=True, streams=streams)
+
+        receipt = dict(versions=[], runs=[])
+        with mock.patch.object(trace_case, "collect", side_effect=capture) as calls, \
+                mock.patch.object(trace_case, "readonly_arguments") as readonly:
+            with self.assertRaisesRegex(RuntimeError, "direct-tracer-refused"):
+                trace_case.controls(receipt, self.root, self.fixture, self.env, time.monotonic() + 3.0)
+        self.assertEqual([row.args[0] for row in calls.call_args_list], ["strace-version", "bwrap-version", "direct"])
+        readonly.assert_not_called()
+        self.assertEqual(len(receipt["runs"]), 1)
+        self.assertEqual(set(path.name for path in self.root.iterdir()),
+                         {"fixture", "direct.stdout", "direct.stderr", "direct.trace"})
+
+    def test_unknown_capability_result_or_actual_tool_replacement_refuses(self):
+        import errno
+        import time
+        tool = self.root / "inert-tool"
+        tool.write_bytes(b"original executable fixture")
+        tool.chmod(0o700)
+        with ExitStack() as stack, mock.patch.object(trace_case, "TOOLS", (str(tool),)):
+            held = trace_case.hold_tools(stack, time.monotonic() + 3.0)
+            facts = trace_case.tool_facts(held, time.monotonic() + 3.0)
+            self.assertEqual(facts[str(tool)]["capabilities"], "absent")
+            with mock.patch.object(trace_case.os, "getxattr", side_effect=OSError(errno.EACCES, "inert refusal")):
+                with self.assertRaisesRegex(RuntimeError, "capability-unproved"):
+                    trace_case.tool_facts(held, time.monotonic() + 3.0)
+            original = tool.read_bytes()
+            tool.rename(self.root / "original-held-tool")
+            tool.write_bytes(original)
+            tool.chmod(0o700)
+            with self.assertRaisesRegex(RuntimeError, "tool-original-changed"):
+                trace_case.tool_facts(held, time.monotonic() + 3.0)
+
+    def test_fixed_child_source_and_existing_native_workflow_boundary_are_preserved(self):
+        import ast
+        self.assertEqual(hashlib.sha256(trace_case.CHILD_CODE.encode()).hexdigest(),
+                         "987a1e88b975f58eda8351b955431002aeb910cd11dd5c6368a4dfd1e3fbf308")
+        markers = {node.value for node in ast.walk(ast.parse(trace_case.CHILD_CODE))
+                   if isinstance(node, ast.Constant) and isinstance(node.value, bytes)}
+        self.assertEqual(markers, {b"STEP0_DIRECT_DONE\n", b"STEP0_READONLY_EROFS\n"})
+        workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/grok-project-protocol.yml").read_text()
+        ordered = ["Run real MCP without provider", "Preserve original bounded protocol evidence",
+                   "Provision the inert tracer after original native evidence", "Measure bounded inert tracer mechanics",
+                   "Preserve bounded inert tracer evidence separately", "Require the original native result to pass"]
+        self.assertEqual([workflow.index(name) for name in ordered], sorted(workflow.index(name) for name in ordered))
+        setup = workflow.split("      - name: Provision the inert tracer", 1)[1].split("      - name: Measure bounded", 1)[0]
+        self.assertIn("steps.grok_native_upload.outcome == 'success'", setup)
+        driver = workflow.split("      - name: Measure bounded", 1)[1].split("      - name: Preserve bounded inert", 1)[0]
+        self.assertIn("steps.grok_tracer_setup.outcome == 'success'", driver)
+        self.assertIn('exit "$grok_tracer_status"', driver)
 
 
 if __name__ == "__main__":

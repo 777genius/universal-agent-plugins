@@ -149,3 +149,23 @@ func sessionTokenOwnerSID(body []byte) (*windows.SID, error) {
 func openSessionFile(root *os.Root, name string) (*os.File, error) {
 	return root.Open(name)
 }
+
+func sessionPhysicalIdentity(file *os.File, info os.FileInfo) (string, error) {
+	var held syscall.ByHandleFileInformation
+	if err := syscall.GetFileInformationByHandle(syscall.Handle(file.Fd()), &held); err != nil {
+		return "", err
+	}
+	if held.FileAttributes&syscall.FILE_ATTRIBUTE_REPARSE_POINT != 0 ||
+		(held.FileAttributes&syscall.FILE_ATTRIBUTE_DIRECTORY != 0) != info.IsDir() {
+		return "", fmt.Errorf("hermes physical identity is not ordinary")
+	}
+	descriptor, err := windows.GetSecurityInfo(windows.Handle(file.Fd()), windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION)
+	if err != nil {
+		return "", err
+	}
+	owner, _, err := descriptor.Owner()
+	if err != nil || owner == nil {
+		return "", errors.Join(fmt.Errorf("hermes physical owner is unavailable"), err)
+	}
+	return fmt.Sprintf("windows:%d:%d:%d:%s:%d", held.VolumeSerialNumber, held.FileIndexHigh, held.FileIndexLow, owner.String(), info.Mode()), nil
+}

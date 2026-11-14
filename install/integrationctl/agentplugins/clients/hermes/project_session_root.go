@@ -64,7 +64,7 @@ func verifyProjectSessionRoot(ctx context.Context, project string, owned domain.
 	if err := validateSessionDirectory(before); err != nil {
 		return err
 	}
-	directory, err := os.OpenRoot(root)
+	directory, err := os.OpenRoot(root + sessionDirectoryTerminal)
 	if err != nil {
 		return err
 	}

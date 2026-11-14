@@ -6350,5 +6350,295 @@ class PublicWindowsSelectionContracts(unittest.TestCase):
                 self.assertEqual(set(status), expected_keys)
 
 
+class PassiveHistoryIntegrationContracts(unittest.TestCase):
+    @staticmethod
+    def report_command(label, argv, output, pid, *, lineage=None, refused=False):
+        from hermes_passive_history_processes import encoded
+        error = b"" if not refused else output
+        stdout = b"" if refused else output
+        streams = {name: {key: value for key, value in encoded(body).items() if key != "base64"}
+                   for name, body in (("stdout", stdout), ("stderr", error))}
+        status = dict(argv=argv, pid=pid, exit=1 if refused else 0, error=None, streams=streams)
+        if lineage is not None: status["process_identity"] = lineage
+        return dict(label=label, status=status, status_raw=encoded(json.dumps(status).encode()),
+                    stdout=encoded(stdout), stderr=encoded(error))
+
+    @staticmethod
+    def report_processes(python, nonce, install):
+        from hermes_passive_history_control import CHALLENGES
+        from hermes_passive_history_processes import SENTINEL, encoded
+        argv = [python, "-I", "-B", "-c", SENTINEL, nonce]
+        registration = dict(nonce=nonce, recorded=True, pid=606, parent=707, create_time=11.0,
+                            child_pid=505, child_create=12.0, child_argv=" ".join(argv), install=install)
+        row = PublicSpawnLedgerContracts.entry()
+        row.update(pid=505, create_time=12.0, spawner_pid=606, spawner_create=11.0,
+                   argv=registration["child_argv"], install=install)
+        checks = [dict(nonce=nonce, pid=505, parent=707, phase=phase) for phase in CHALLENGES]
+        def closed(pid, code, body):
+            return dict(pid=pid, exit=code, stdout=encoded(body), stderr=encoded(b""),
+                        waited=True, pipes_closed=True, original_handle=True)
+        processes = dict(sentinel=dict(argv=argv, checks=checks,
+            closed=closed(505, 1, b"".join(json.dumps(item).encode() + b"\n" for item in checks))),
+            registrar=dict(argv=[], closed=closed(606, 0, json.dumps(registration).encode() + b"\n")))
+        return processes, registration, row
+
+    @staticmethod
+    def report_native(private, runtime, nonce, data):
+        import base64
+        import copy
+        import sys
+        from hermes_passive_history_processes import encoded
+        selected = private / "public-a/.hermes/uap-session"
+        target = private / "public-a/.uap/managed/clients/hermes" / data.name
+        suffix = ".exe" if os.name == "nt" else ""
+        launcher = target / ("io.github.777genius.agentplugins/managed-stdio-v1/agentplugins" + suffix)
+        probe = runtime["pins"]["probe"]["path"]
+        argv = [str(launcher), "--internal-stdio-v1", str(target), str(data), str(target), "plugin",
+                "--argv-base64-v1", base64.b64encode(Path(probe).name.encode()).decode()]
+        entry = PublicSpawnLedgerContracts.entry(sys.platform, argv=" ".join(argv) if os.name == "nt" else probe)
+        entry["install"] = runtime["install"]
+        events = PublicSpawnLedgerContracts.events(sys.platform)
+        for event in events:
+            event["nonce"] = nonce
+            if os.name == "nt":
+                images = [probe, str(launcher), runtime["python"], runtime["native"]]
+                for process, image in zip(event["facts"]["processes"], images): process["image"] = image
+        PublicSpawnLedgerContracts.write_pair(selected, entry)
+        receipt, bodies = PublicSpawnLedgerContracts.capture(selected, private)
+        recipe = CASE["public_stdio_recipe"](private / "public-a", runtime["pins"]["probe"], nonce)
+        env = {key: item.replace("${PLUGIN_ROOT}", str(target)).replace("${PLUGIN_DATA}", str(data)) for key, item in recipe["env"].items()}
+        env.update(PLUGIN_ROOT=str(target), PLUGIN_DATA=str(data))
+        servers = {"hermes-public-a-http": {"url": "http://127.0.0.1:12345/owned"},
+                   "hermes-public-a-stdio": dict(command=argv[0], args=argv[1:], cwd=str(target), env=env)}
+        producer = dict(entry=entry, argv=argv, events=copy.deepcopy(events), receipt=receipt,
+                        body=encoded(bodies["spawn-ledger.json"]), log_lock=None)
+        return producer, servers
+
+    def report_fixture(self, root):
+        import hashlib
+        import sys
+        from types import ModuleType
+        from hermes_passive_history_processes import digest, encoded, REGISTER, SELECT
+        outer, code = root / "outer", root / "bundle/hermes-agent"
+        private = outer / "public-history"; project = private / "public-a"
+        data = project / ".uap/plugin-data" / ("hermes-public-a-" + "a" * 12)
+        roots = [outer, private, project, private / "public-source-a", private / "evidence", private / "public-uap-state",
+                 project / ".hermes", project / ".hermes/uap-session", project / ".hermes/uap-session/logs", data]
+        for path in [code, *roots]: path.mkdir(parents=True, exist_ok=True)
+        suffix = ".exe" if os.name == "nt" else ""
+        pins = {role: dict(path=str(root / "build" / (role + suffix))) for role in ("uap", "cold", "probe")}
+        native, python = str(root / "bundle/bin" / ("hermes" + suffix)), str(root / ("python" + suffix))
+        runtime = dict(native=native, python=python, code=str(code), install=hashlib.sha256(str(code).lower().encode()).hexdigest()[:12],
+                       code_identity=list(CASE["directory_identity"](code)), pins=pins)
+        nonce = "c" * 64
+        children, registration, row = self.report_processes(python, nonce, runtime["install"])
+        producer, servers = self.report_native(private, runtime, nonce, data)
+        selected = project / ".hermes/uap-session"
+        replacement = selected / "authored"; replacement.write_bytes(json.dumps([row]).encode()); replacement.chmod(0o600)
+        os.replace(replacement, selected / "spawn-ledger.json")
+        receipt, bodies = PublicSpawnLedgerContracts.capture(selected, private)
+        # This is an inert command-recipe fixture, never an official bootstrap/native run.
+        module = ModuleType("hermes_cli._launchers")
+        exec(compile("def runtime_command(root, args=(), *, python, code):\n    return [str(python), '-I', '-c', code, *args]\n",
+                     str(code / "hermes_cli/_launchers.py"), "exec"), module.__dict__)
+        wrap = lambda program, args: CASE["observer_runtime_command"](module.runtime_command, code, Path(python), code=program, args=args)
+        children["registrar"]["argv"] = wrap(REGISTER, [str(code), "505", "707", nonce])
+        selection = dict(nonce=nonce, pid=1004, recorded=[505], selected=[505])
+        records = self.report_commands(project, runtime, servers, wrap(SELECT, [str(code), nonce]), selection)
+        original = digest({"actual-local-envelope-fixture": True})
+        from hermes_passive_history_control import directory_facts
+        phases = ("git", "authored", "add", "bootstrap", "public-stdio-a", "forged", "selection", "inspect", "noninspect", "active-authored", "active")
+        value = dict(schema=1, kind="hermes-held-sibling-inspect-control", source={"commit": "a" * 40, "tree": "b" * 40}, nonce=nonce,
+            platform=sys.platform, runtime=runtime, fixture=dict(outer=str(outer), project=str(project), data=str(data),
+            installation_sha256="d" * 64, binding_sha256="e" * 64, roots=[dict(path=str(path), identity=list(directory_facts(path.stat()))) for path in roots]),
+            commands=records, servers=servers, producer=producer, registration=registration, selection=selection,
+            forged=dict(body=encoded(bodies["spawn-ledger.json"]), active_body=encoded(json.dumps([dict(row, purpose="cli")]).encode()),
+                        receipt=receipt, retained_receipt=receipt, receipt_sha256=digest(receipt), retained_sha256=digest(receipt)),
+            processes=children, protected=dict(original_sha256=original, phases=[dict(label=label, original_sha256=original) for label in phases]),
+            cleanup=dict(processes=True, pipes=True, fixture=True, original_sha256=original),
+            claim="no-ledger-directed-termination-of-original-held-sentinel", universal_signal_audit=False, admission_qualified=False, production_project_mcp=False)
+        context = dict(source=value["source"], nonce=nonce, pins=pins, native=native, python=python, outer=outer,
+                       original_sha256=original, authorities=(CASE["directory_identity"](code), CASE["directory_identity"](outer)))
+        return value, context, module
+
+    def report_commands(self, project, runtime, servers, selection_argv, selection):
+        from hermes_passive_history_control import COMMANDS, REFUSALS
+        tail = ["--target", "hermes", "--scope", "project", "--project-root", str(project)]
+        uap = runtime["pins"]["uap"]["path"]
+        argv = [["git", "init", "-q", str(project)],
+                [uap, "add", str(project.parent / "public-source-a"), "--no-save", "--yes", "--format", "json", *tail],
+                [uap, "run", "--inspect", "--confirm-client-start", *tail],
+                [runtime["native"], "mcp", "test", "hermes-public-a-stdio"], selection_argv,
+                [uap, "run", "--inspect", "--confirm-client-start", *tail],
+                [uap, "run", "--dry-run", "--yes", "--format", "json", *tail],
+                [uap, "run", "--inspect", "--dry-run", "--yes", "--format", "json", *tail]]
+        values = [b"", b'{"result":"success"}', json.dumps(servers).encode(), b"native fixture", json.dumps(selection).encode(),
+                  json.dumps(servers).encode(), REFUSALS["noninspect"].encode(), REFUSALS["active"].encode()]
+        return [self.report_command(label, args, body, 101 if label == "public-stdio-a" else 1000 + index,
+                    lineage=PublicWindowsLineageContracts.original() if os.name == "nt" and label == "public-stdio-a" else None,
+                    refused=label in REFUSALS) for index, (label, args, body) in enumerate(zip(COMMANDS, argv, values))]
+
+    def changed_report(self, report, effect):
+        import copy
+        from hermes_passive_history_processes import encoded
+        changed = copy.deepcopy(report)
+        if effect == "command":
+            changed["commands"][5]["status"]["argv"][0] += "foreign"
+            changed["commands"][5]["status_raw"] = encoded(json.dumps(changed["commands"][5]["status"]).encode())
+        elif effect == "registrar": changed["processes"]["registrar"]["argv"][0] += "foreign"
+        elif effect == "launcher": changed["producer"]["argv"][0] += "foreign"
+        elif effect == "target": changed["producer"]["argv"][2] += "foreign"
+        elif effect == "data": changed["producer"]["argv"][3] += "foreign"
+        elif effect == "environment":
+            changed["servers"]["hermes-public-a-stdio"]["env"]["UNKNOWN"] = "unowned"
+            for index in (2, 5):
+                row = changed["commands"][index]; row["stdout"] = encoded(json.dumps(changed["servers"]).encode())
+                row["status"]["streams"]["stdout"] = {key: value for key, value in row["stdout"].items() if key != "base64"}
+                row["status_raw"] = encoded(json.dumps(row["status"]).encode())
+        elif effect == "runtime": changed["runtime"]["code_identity"][1] += 1
+        elif effect == "outer": changed["fixture"]["roots"][0]["identity"][1] += 1
+        elif effect == "baseline":
+            changed["protected"]["original_sha256"] = changed["cleanup"]["original_sha256"] = "0" * 64
+            for row in changed["protected"]["phases"]: row["original_sha256"] = "0" * 64
+        elif effect == "source": changed["source"]["commit"] = "0" * 40
+        elif effect == "order": changed["commands"][2:4] = reversed(changed["commands"][2:4])
+        elif effect == "closed": changed["processes"]["sentinel"]["closed"]["pipes_closed"] = False
+        return changed
+
+    def test_full_parent_report_rejects_consistent_argv_source_and_baseline_forgeries(self):
+        import sys
+        with tempfile.TemporaryDirectory() as temporary:
+            report, context, module = self.report_fixture(Path(temporary).resolve())
+            with mock.patch.dict(sys.modules, {"hermes_cli._launchers": module}):
+                self.assertEqual(CASE["history_control_report"](report, **context)["nonce"], context["nonce"])
+                for effect in ("command", "registrar", "launcher", "target", "data", "environment", "runtime", "outer", "baseline", "source", "order", "closed"):
+                    with self.subTest(effect=effect):
+                        changed = self.changed_report(report, effect)
+                        with self.assertRaises(RuntimeError): CASE["history_control_report"](changed, **context)
+
+    def test_rehashed_history_and_fixture_owners_join_original_outer_authority(self):
+        import copy
+        import sys
+        from hermes_passive_history_processes import digest
+        with tempfile.TemporaryDirectory() as temporary:
+            report, context, module = self.report_fixture(Path(temporary).resolve())
+            with mock.patch.dict(sys.modules, {"hermes_cli._launchers": module}):
+                CASE["history_control_report"](report, **context)
+                for offset, roots in ((-2, False), (-1, False), (-2, True), (-1, True)):
+                    with self.subTest(offset=offset, fixture_roots=roots):
+                        changed, seen = copy.deepcopy(report), set()
+                        for receipt in (changed["producer"]["receipt"], changed["forged"]["receipt"], changed["forged"]["retained_receipt"]):
+                            if id(receipt) in seen: continue
+                            seen.add(id(receipt))
+                            for name, identity in receipt["identities"].items():
+                                fields = list(identity); fields[offset] += 1
+                                receipt["identities"][name] = fields
+                        value = digest(changed["forged"]["receipt"])
+                        changed["forged"]["receipt_sha256"] = changed["forged"]["retained_sha256"] = value
+                        if roots:
+                            for item in changed["fixture"]["roots"]:
+                                if item["path"] != str(context["outer"]): item["identity"][5 + offset] += 1
+                        with self.assertRaises(RuntimeError): CASE["history_control_report"](changed, **context)
+
+    def test_parent_report_rejects_extra_members_boolean_counts_and_rehashed_status_forgery(self):
+        import copy
+        import sys
+        from hermes_passive_history_processes import encoded
+        with tempfile.TemporaryDirectory() as temporary:
+            report, context, module = self.report_fixture(Path(temporary).resolve())
+            with mock.patch.dict(sys.modules, {"hermes_cli._launchers": module}):
+                CASE["history_control_report"](report, **context)
+                for effect in ("extra", "schema", "stream-count", "status-pid", "duplicate", "stream-hash", "pair-extra", "selector", "partial", "claim"):
+                    with self.subTest(effect=effect):
+                        changed = copy.deepcopy(report); status = changed["commands"][0]["status"]
+                        if effect == "extra": changed["unknown"] = None
+                        elif effect == "schema": changed["schema"] = True
+                        elif effect == "stream-count":
+                            status["streams"]["stdout"]["bytes"] = False
+                            changed["commands"][0]["status_raw"] = encoded(json.dumps(status).encode())
+                        elif effect == "status-pid":
+                            status["pid"] = True
+                            changed["commands"][0]["status_raw"] = encoded(json.dumps(status).encode())
+                        elif effect == "duplicate":
+                            body = json.dumps(status).encode()[:-1] + b', "pid": 1000}'
+                            changed["commands"][0]["status_raw"] = encoded(body)
+                        elif effect == "stream-hash": changed["commands"][3]["stdout"]["sha256"] = "0" * 64
+                        elif effect == "pair-extra": changed["producer"]["receipt"]["rows"]["unexpected"] = {}
+                        elif effect == "selector": changed["selection"]["recorded"] = []
+                        elif effect == "partial": changed["processes"]["registrar"]["closed"]["waited"] = False
+                        elif effect == "claim": changed["universal_signal_audit"] = True
+                        with self.assertRaises(RuntimeError): CASE["history_control_report"](changed, **context)
+
+    def test_only_exact_nested_owned_launcher_uses_original_bounded_pin_route(self):
+        import hashlib
+        import stat
+        body = b"x" * ((1 << 20) + 1)
+        suffix = ".exe" if os.name == "nt" else ""
+        tail = ".uap/managed/clients/hermes/hermes-public-a-" + "a" * 12 + "/io.github.777genius.agentplugins/managed-stdio-v1/agentplugins" + suffix
+        for effect in ("original", "nested", "not-public", "truthy", "wrong-project", "wrong-prefix", "wrong-package", "two", "hash"):
+            with self.subTest(effect=effect), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                key = ("public-a/" if effect == "original" else "public-history/public-a/") + tail
+                if effect == "wrong-project": key = key.replace("public-history/public-a/", "public-history/public-b/")
+                if effect == "wrong-prefix": key = "foreign/" + key
+                if effect == "wrong-package": key = key.replace("hermes-public-a-", "hermes-public-b-")
+                path = root / key
+                path.parent.mkdir(parents=True)
+                path.write_bytes(body); path.chmod(0o700)
+                pins = {key: (len(body), hashlib.sha256(body).hexdigest())}
+                if effect == "two": pins[key.replace("a" * 12, "b" * 12)] = pins[key]
+                if effect == "hash": pins[key] = (len(body), "0" * 64)
+                public = False if effect == "not-public" else 1 if effect == "truthy" else True
+                args = dict(launchers=pins, public=public, launcher_mode=stat.S_IMODE(path.stat().st_mode))
+                if effect in {"original", "nested"}:
+                    image = CASE["inventory"](root, **args)
+                    self.assertEqual(image[key]["sha256"], pins[key][1])
+                else:
+                    reason = "pinned runtime bytes differ" if effect == "hash" else "finite receipt-owned launcher paths"
+                    with self.assertRaisesRegex(RuntimeError, reason):
+                        CASE["inventory"](root, **args)
+
+    def test_private_scanner_reuses_exact_original_name_pin_and_hash_bound(self):
+        import hashlib
+        body = b"s" * ((1 << 20) + 1)
+        original = CASE["public_scanner_pin"]()[0]
+        pin = (original, len(body), hashlib.sha256(body).hexdigest())
+        globals_ = CASE["inventory"].__globals__
+        for effect in ("original", "nested", "not-public", "truthy", "wrong-prefix", "wrong-version", "hash"):
+            with self.subTest(effect=effect), tempfile.TemporaryDirectory() as temporary:
+                key = original if effect == "original" else "public-history/" + original
+                if effect == "wrong-prefix": key = "foreign/" + original
+                if effect == "wrong-version": key = key.replace("0.1.3", "0.1.4")
+                root = Path(temporary).resolve(); path = root / key
+                path.parent.mkdir(parents=True); path.write_bytes(body); path.chmod(0o700)
+                chosen = (original, len(body), "0" * 64) if effect == "hash" else pin
+                public = False if effect == "not-public" else 1 if effect == "truthy" else True
+                with mock.patch.dict(globals_, public_scanner_pin=lambda: chosen):
+                    if effect in {"original", "nested"}:
+                        self.assertEqual(CASE["inventory"](root, public=public)[key]["sha256"], pin[2])
+                    else:
+                        reason = "pinned runtime bytes differ" if effect == "hash" else "inventory member refused"
+                        with self.assertRaisesRegex(RuntimeError, reason):
+                            CASE["inventory"](root, public=public)
+
+    def test_started_history_cannot_be_qualified_by_cold_or_deleted_while_unproved(self):
+        import copy
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary).resolve(); (home / "public-a").mkdir()
+            proof = dict(source={"commit": "a" * 40}, public_project_lifecycle_complete=True,
+                         cold_restore=dict(source="a" * 40, commands=3, sha256="b" * 64), passive_history_required=True)
+            complete = CASE["public_cleanup_complete"]
+            self.assertFalse(complete(home, proof))
+            proof["passive_history_control"] = dict(source="a" * 40, commands=8, sha256="c" * 64)
+            self.assertTrue(complete(home, proof))
+            for key, value in (("commands", True), ("commands", 7), ("source", "d" * 40), ("sha256", "bad"), ("extra", 1)):
+                changed = copy.deepcopy(proof); changed["passive_history_control"][key] = value
+                self.assertFalse(complete(home, changed), key)
+            (home / "public-history").mkdir()
+            self.assertFalse(complete(home, proof))
+            (home / "public-history").rmdir()
+            self.assertTrue(complete(home, proof))
+
+
 if __name__ == "__main__":
     unittest.main()

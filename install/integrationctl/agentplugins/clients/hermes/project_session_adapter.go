@@ -140,6 +140,7 @@ func (adapter *Adapter) verifyProjectRoot(ctx context.Context, env clients.Env, 
 }
 
 func (*Adapter) PlanSession(ctx context.Context, env clients.Env, req clients.SessionRequest) (clients.SessionPlan, error) {
+	env.SessionEnvironment = sessionEnvironment(env.SessionEnvironment)
 	if req.Client.Status != domain.DetectionDetected || !hermesCLISurface(req.Client.Surfaces) {
 		return clients.SessionPlan{}, fmt.Errorf("hermes CLI surface is required for an explicit Project session")
 	}
@@ -150,7 +151,7 @@ func (*Adapter) PlanSession(ctx context.Context, env clients.Env, req clients.Se
 	if err := env.ProjectRoots.VerifyProjectRoot(ctx, projectSessionRoot(req.ProjectRoot), owner); err != nil {
 		return clients.SessionPlan{}, err
 	}
-	plan, err := prepareProjectSession(ctx, req, owner)
+	plan, err := prepareProjectSessionEnvironment(ctx, req, owner, env.SessionEnvironment)
 	if err != nil {
 		return clients.SessionPlan{}, err
 	}
@@ -161,6 +162,7 @@ func (*Adapter) PlanSession(ctx context.Context, env clients.Env, req clients.Se
 }
 
 func (*Adapter) VerifySession(ctx context.Context, env clients.Env, plan clients.SessionPlan) error {
+	env.SessionEnvironment = sessionEnvironment(env.SessionEnvironment)
 	return verifySessionNativeSource(ctx, env, plan)
 }
 

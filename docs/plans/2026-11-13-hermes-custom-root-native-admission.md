@@ -3222,3 +3222,367 @@ preserving the peer fixture and catalogue experiment above. Go formatting,
 compilation, tests and genuine native qualification of this new source
 remain pending while the executor is unavailable. Existing original
 failures and false qualification/cleanup conclusions are unchanged.
+
+
+### Bounded passive inspection after native history: original state and retained execution
+
+This candidate is based on exact `0633402a9c992fd941caebd74a88a0fbe07220bd`
+(tree `3de63b31367d544dd93654f7b17a8eee4c9beddd`) and preserves the complete
+preceding leaf. It composes the incoming optional execution lifetime with the
+separately reviewed passive-inspect source commitment. It supersedes the
+incoming metadata-only admission of arbitrary ledger/stdio-log bytes. Native
+qualification remains open; this section does not recover the hidden inner
+error of an earlier `public-repaired-run-a` refusal.
+
+The actual-package baseline/add/remove control established that the old finite
+bootstrap catalog rejected the three observed stdio roles. Later exact063
+scratch controls additionally showed that a different physical ledger with the
+same bytes and restored mtime could replace the first plan's file before Begin,
+and that stamped/override/gateway/scratch-pruning startup states still reached
+the inert runner. Those seven PASS events describe counterexample observations,
+not safe native execution. Their 10,746-byte original log has SHA-256
+`39bae1b99176851f030fa787bd66ff5bd912d82de83e1f7ed0735e13684b8550`.
+No vendor process ran in those controls.
+
+**Conditional scope.** The additional history is allowed only for the exact
+Project inspection arguments `config get mcp_servers --json`, under explicit
+client-start consent and the existing qualified standalone-bundle boundary.
+The three verifier commands remain `--version`, `config path`, and the same
+config/get command. Ordinary noninspect startup with history still refuses
+before any child. A ledger PID, birth time, argv, ownership SID or filename is
+never process ownership or permission to reap, signal, adopt or trust a child.
+
+The original selected os.Root, its parent, every retained history leaf and any
+original logs directory supply the physical authority. The first plan's
+ConfigDigest now binds inspect mode, selected root/parent identity, the existing
+bundle/config digests, every fixed history role's explicit absence/presence,
+same-opened physical identity, owner/mode, length, bytes hash and original
+modification time. Time is encoded as Unix seconds plus nanoseconds within the
+second, avoiding UnixNano overflow. The default single-link/owner checks remain
+mandatory before and after actual bounded reads. No ledger body or environment
+is exported in a public report or persisted in SessionPlan.
+
+The first three-role implementation's mtime-only counterexample was executed
+before correction: changing only mtime retained the same plan and reached three
+inert observations. Its 2,236-byte log SHA-256 is
+`1e3211f35767a315a239087315ce446fd291e91fcfd3a3673e7211d720d6d58b`.
+The final regression now requires refusal before either Begin or direct Verify
+can start a child, while proving the altered file remains a valid *different*
+fresh capture. Neither that fresh capture nor any subsequent recheck can replace
+the first plan.
+
+| Fixed role | Actual read ceiling | Admitted contents |
+| --- | --- | --- |
+| `spawn-ledger.json` | 4,097 bytes for a 4,096-byte maximum | One strict unique-key JSON row, exactly the pinned sixteen fields, measured `mcp-helper` shape and selected install identifier; argv remains bounded opaque data |
+| `spawn-ledger.json.lock` | One byte for an empty maximum | Empty ordinary owned file, paired with the ledger |
+| `logs/mcp-stderr.log` | 513 bytes for a 512-byte maximum | Complete pinned timestamp/header records naming a receipt-owned stdio server, with exact platform newline and a valid calendar date |
+| Windows only `logs/.__agent.lock` | One byte for an empty maximum | Exact writable Go mode 0666, ordinary owned single-link non-reparse file, immutable identity and bytes |
+
+The ledger pair remains all-or-nothing. The Windows agent-log lock may stand
+alone after HTTP and therefore activates every history-specific guard by itself.
+Linux/macOS do not admit it. `.__errors.lock`, spelling/case variants, additional
+sidecars, arbitrary child stderr and unknown members remain refusals. Directory
+limits increase only by the original captured eligible roles; the general
+bootstrap catalog is unchanged.
+
+The Windows role is source-bound to pinned Hermes logging and the selected
+size-rotating concurrent-log-handler 0.9.30 class. Original Windows880 artifact
+14117700734 was rejoined by ZIP SHA-256
+`15d825ee3ba2456613a3a1ad7147b94c9b48d5324e718e25581b9fd59c009234`,
+CRC and the sole report SHA-256
+`7f9277e08757ef0ec1b18311170485420dc1386030f0a51a0f683eb454813d49`.
+It reports one zero-length 0666 member after `public-http-a`; exact producer
+naming yields relative-name digest
+`d6503b34655ee420b82058507655f28a09177f18851cd32ea54eb4fbe234d256`.
+That archive does not supply a historical owner, file identity, lock state or
+creation receipt for the Go adapter. Go captures immutable data under its own
+original authority; the existing Python producer/continuity implementation is
+byte-identical. UAP does not acquire, clear, recreate or probe the logger lock.
+The timed-rotating class and its nonempty timestamp lock are outside this scope.
+
+**Startup passivity is a prerequisite.** The complete selected-root census still
+excludes update/recovery/profile redirect inputs. History-bearing inspection
+requires the original selected code root to be stamp/journal-free, with its
+existing .git/.env refusal, and rejects an inherited install-root override. The
+selected code path must be ASCII for this additional history case so its install
+identifier exactly matches the pinned Python lowercasing rule; no-history
+Unicode behavior is unchanged. The original inherited temporary selectors must
+make the pinned scratch-pruning setup return false, using Python's exact strip
+character set. No temporary override is manufactured to earn eligibility.
+
+The original state root must already exist as an ordinary unambiguous directory.
+The first missing `hermes` or `gateway-locks` component is retained through its
+original held parent; an existing gateway-lock directory or gateway override
+refuses without reading foreign recovery bodies. These guards close the known
+startup routes to mutable registry readers before a native inspector starts.
+They do not establish general process authority for the ledger or solve the
+separate original-User source-install launcher mutation.
+
+**One capture engine and one execution lifetime.** The incoming
+SessionExecutionPlanner/SessionExecution interfaces are preserved. A single
+private acquisition returns the original config/digest and held runtime
+snapshot. Planning closes that snapshot; Begin must rejoin the first plan's full
+commitment before retaining the same capture engine through all observations
+and the final returning child. There is no second independent history reader.
+Every source comparison and held rejoin uses the original plan; byte-identical
+replacement, changed original parent, mtime-only change, lost pair, new fixed
+history after absence and expired context all refuse.
+
+An originally absent logs directory may become the preexisting ordinary
+bootstrap skeleton during execution. Its new directory is never assigned to
+the saved snapshot, and all fixed history leaves must remain absent through the
+original held Project root. The current complete census and original commitment
+still have to pass on both sides. If an admitted log-history role is present,
+its logs-parent identity is committed from the first plan. An existing logs
+directory without any admitted log-history may be reselected between Plan and
+Begin; once Begin captures that directory it remains the same held object until
+Close. This is a limit of the first-plan commitment, not the absent-to-bootstrap
+exception. The forged native control produces mcp-stderr history, so its logs
+parent is committed from the first plan. Separate startup-state absence leases
+are never relaxed.
+
+The inherited environment is copied at the adapter boundary. Explicit empty
+input remains empty; only nil direct-adapter input takes the legacy ambient
+snapshot once. Every verifier receives that same selected base with the sole
+existing HERMES_HOME override. The separately reviewed public handoff supplies
+one original initial base and one freshly captured final base to final planning
+and that exact final process. No later ambient read substitutes a child input.
+
+The existing 60-second context is created once for retained inspection, capped
+by an earlier caller deadline. Verification reuses it, and final inspection must
+reuse it too. The source snapshot revalidates before and after each child, with
+all original handles retained until Close. The independently reviewed returning
+CLI boundary is a required composition dependency: the nonnil retained branch
+must use the existing supervised CommandRunner/OS.Run and return before final
+Revalidate/Close and success output. Unix syscall.Exec cannot supply that
+postcondition. Ordinary nil-execution clients retain their existing process
+replacement path. The core package tests exercise returning inert runners;
+actual public OS.Run execution is a separate gate.
+
+**Actual local checks for this candidate.** The final Linux Hermes package ran
+49 top-level tests, 180 PASS events, zero failures and zero skips. Its
+230,535-byte JSON log SHA-256 is
+`d50ffa7dc03c3c7fb8ceb7fe870b8b7c93d5766acf2ec66a55c962041f4a4b9c`.
+Both size/complexity and changed-code lints passed for Linux and Windows source
+selection. Windows amd64 and Darwin arm64 test binaries compiled. No native
+Windows/macOS execution is claimed by cross-compilation or lint.
+
+All four incoming lifecycle test names and their finite-command, context,
+mutation/absence and release assertions remain. Their permissive positive
+history fixture now uses the exact schema/header/startup fixture, and the four
+methods live in the cohesive execution test file so file/function limits remain
+enforced. The approved backend-environment test retains filesystem and initial
+invalid-backend refusals while positively proving all three actual runner inputs
+keep the originally supplied backend value after ambient mutation.
+
+Five single-predicate source overlays compiled and failed their intended
+protective assertions: omitting original file identity, removing noninspect
+refusal, ignoring the original missing startup component, removing the terminal
+directory dot, and erasing original mtime. Original sources were unchanged
+during each overlay. The FIFO control uses a real FIFO and releases only its
+own blocked fixture before reporting the expected failure. An initial complexity
+finding and Windows import-order finding were fixed without exemptions; their
+original logs are retained separately.
+
+Seven Windows-specific methods are authored for lock-only/four-role admission,
+ordinary ownership/link/type/name/mode refusal, first metadata and logs-parent
+continuity, every lock-only startup gate, the actual one-byte held reader, and
+removal/restoration of only the captured fourth catalog role. They are selected
+by the existing TestProjectSession CI pattern but were not executed on this
+Linux host. Any unavailable Windows symlink privilege or lack of a distinct
+eligible TokenUser owner is an explicit fixture skip, never native PASS. Actual
+Windows execution of these methods and the native lifecycle remains necessary.
+
+The pinned-bundle forged-sibling control remains a separate reviewed prerequisite
+to native qualification. Its bounded claim is survival of the specific held
+sentinel after the exact public inspection, not a universal no-lookup/no-signal
+or destructive-reaper claim. Existing source/User, sibling, nonce, command,
+stream, physical-root and cleanup failures stay failures. No queued run or
+historical artifact is promoted into completion by this source change.
+
+### Passive inspection R2 test-cap follow-up
+
+The preceding ordinary lint runs retain the repository's test exemptions. An
+additional exact check removed the funlen and revive file-length exemptions for
+all five touched test files. It found four new overlong fixture/test functions
+and the expanded existing inventory runner. The R2 revision extracts only
+cohesive test operations within the same three files; all production bytes,
+test names, subcases, foreign sentinels and protective assertions remain.
+
+The exact new/changed functions now satisfy 60 lines and 40 statements, and the
+files satisfy 500 effective lines, under both Linux and Windows source selection.
+Measured funlen values include fixture 54 lines/40 statements, malformed-history
+case 53/2, stale-history case 51/2, Windows metadata case 45/2, and the inventory
+runner 49/38. The full-file check still reports the unchanged original
+`TestProjectSessionBadPrimaryOrSourceNeverStartsNativeDespiteBackup` at 61 lines.
+Its complete 2,560-byte body is byte-identical to063, SHA-256
+`e3998a534c04f6b72ec9e3a4b01a2990e27b76108cc1649a6e64746725280494`.
+There is no new exemption or whole-file strict-lint PASS claim.
+
+The revised Linux package again executed 49 top-level tests and 180 PASS events,
+with no failures or skips. The 230,528-byte final log SHA-256 is
+`a45ac315a374972d42ffd9acda0e943941445aedada651203845b117a2e55d99`.
+Focused verification executed 36 top-level tests/152 PASS events. The four
+source-overlay controls affected by the moved common fixture were rerun and
+still failed their intended protective assertions. The original standalone FIFO
+control and its unchanged source are retained. Changed-code Linux/Windows lint
+and the revised Windows test compilation passed; Windows execution remains
+pending. The original cap failures and the intervening receiver-name lint
+finding are retained alongside the final measurements.
+
+
+### 2026-11-14: actual held-sibling control required for bundled passive inspection
+
+This is a new, source-bound test candidate against
+`0633402a9c992fd941caebd74a88a0fbe07220bd`. It preserves the complete preceding
+leaf. The passive production correction and returning final CLI boundary are
+separate reviewed prerequisites; this control does not replace them or make
+an ordinary full public launch admissible. Its local tests are mechanics and
+closed-report tests. The unmodified official bundled payload was not available
+locally, so actual native selection and public inspection remain ordinary-CI
+acceptance gates.
+
+The seven-path scope follows the reviewed native-control plan
+`4b7b3dff402e12d46c22a1beb7ab7b3ee2e8e6d1619ae936bf199b4fe119621d`
+and source clarifications
+`bd1dffe1470d319e17f7ff83b38d57be09713dcafc081df1aef1deb8e6f641df`.
+The finite nested-capture amendment is
+`5d81e20272c0e27780034841bca34b79d8b01b72746cec8551049c8b108b19b2`;
+the initial-bootstrap ordering amendment is
+`c5a35b83bd7ec2afe87abfeec9e6219c4e0d5124a38919d9ca1e7556eacf894b`.
+Both amendments received independent source review before implementation.
+
+After the original warm A/B removals, the observer creates exactly one fresh
+`public-history` subtree containing its private `public-a`, local source,
+state and evidence. Every phase captures the full original outer tree: the
+original User, A/B, source, state and retained DATA stay byte-for-byte equal to
+the original warm snapshot outside that one authored subtree. The observer
+retains original named and held identities for the outer, private fixture,
+selected parents, root, logs and DATA. No post-producer baseline is adopted.
+The independently recorded warm snapshot digest and original outer/runtime
+authorities are required by the parent reader, rather than accepted merely
+because hashes embedded in the returned report agree with one another.
+
+There are exactly eight captured ordinary commands, in this order:
+
+| Phase | Required action |
+| --- | --- |
+| git | Initialize the fresh private Project. |
+| add | Use the real public UAP add route for its exact authored package. |
+| bootstrap | Run one public inspect with no retained history. |
+| public-stdio-a | Run the original pinned native `mcp test` and join its actual producer receipt and two protocol events. |
+| selection | Call the pinned ledger reaper with its supported recording-only `kill_fn`. |
+| inspect | Run a separate real public inspect while the forged helper history is held. |
+| noninspect | Refuse the ordinary non-inspect dry plan at its specific history guard. |
+| active | Refuse the inspect dry plan after only the original ledger purpose is changed to `cli`. |
+
+The bootstrap is necessary before the stdio producer because the unchanged
+Windows log-lock reader requires the original logs-directory preimage. It
+uses the existing inspect lock and no-history profile guard. It cannot create
+an early ledger, sidecar, agent log lock or protocol event. The native producer,
+Windows four-process lineage, exact launcher, original pair reader and all
+existing Windows role/continuity helpers remain byte-identical. The sole
+inventory extension permits the complete literal nested managed-launcher
+route, at most one such private launcher, and the single literal nested scanner
+route using the original scanner pin. The original launcher limit, byte limits,
+mode/owner/link checks, held reads and hashes remain in force. Lookalikes,
+truthy non-boolean public flags, unpinned bytes and a second private launcher
+are rejected by real-file tests.
+
+A fixed stdlib sentinel and an original pinned observer registrar are siblings
+owned by this test controller. The registrar uses the unmodified pinned
+`register_child` API to create the adversarial `mcp-helper` row. The original
+registrar exits but remains unreaped on POSIX, or retains its original Windows
+handle, while the sensitivity and public-inspect controls execute. Exact
+original PID/birth/parent/argv/install and nonce joins check the authored row;
+none of those ledger values authorize controller signaling. The supported
+recording callback must select exactly the live held sentinel. Ordered nonce
+responses prove that the same sentinel remains responsive before and after
+the public inspect and both negative controls. The explicit claim is only
+`no-ledger-directed-termination-of-original-held-sentinel`; it is not a
+universal OS lookup or signal audit, nor a claim that no native code ran.
+
+All work stays within one at-most-120-second control budget inside the
+original 720-second lifecycle budget, with a 50-second cold reserve. Ordinary
+commands leave 20 seconds; owned child activity leaves the original final
+10 seconds for teardown. No deadline is renewed. The existing native command
+capture retains its 1 MiB live bound. This control refuses any retained command
+stream over 64 KiB, uses a 16 KiB raw-status cap and a 256 KiB aggregate retained
+command/owned-output cap; it never truncates a passing report. Every raw status,
+stream and exact eight-command argv is joined again, with a final metadata
+sweep across all captured commands after every body has been read.
+
+The original child is retained as soon as Popen succeeds. Constructor faults,
+first-pipe errors and deadline refusals attempt every original stream and
+handle closure, while incomplete closure withholds the report. POSIX signal
+decisions occur before the sole final reap, so an exited original leader
+cannot be replaced by a reused numeric PID. The private fixture is deleted only
+after complete original process closure and comparison against the private
+identity retained at its first open, with the original outer handle retained.
+The post-delete full snapshot must equal the original warm snapshot. Failed
+controls retain the private fixture and cannot make public-family cleanup
+proved. The existing cold restore follows only a successful control.
+
+The report reader closes exact source commit/tree, nonce, executable pins,
+original runtime/outer authority, all eight raw command envelopes, actual
+native entry and original producer argv, authored stdio environment, native
+pair and log-lock continuity, forged/retained history, original child output,
+phase order and cleanup. A separate original warm-boundary digest is mandatory.
+Pair UID/GID fields must match the original selected-root owner, and every
+fixture root owner must match the independently captured original outer owner.
+This preserves the existing stat/handle owner model without adding a SID claim.
+The parent cannot mark the bundled public lifecycle complete or satisfy its
+new cleanup gate without this validated control. Its report keeps
+`admission_qualified`, `production_project_mcp` and `universal_signal_audit`
+false; existing wider qualification flags remain unchanged.
+
+#### Executed local checks for this seven-path candidate
+
+The full profile suite runs 202 methods: 195 pass and seven preexisting
+platform-specific methods skip on this Linux host. All 196 original method
+bodies are byte-identical; the six additions cover the finite nested scanner
+and launcher, required control cleanup, full parent report joins and hostile
+closed-schema cases. The mechanics suite runs 16 methods: 15 pass and the one
+original-Windows-handle acquisition fault test skips on Linux. Actual local
+process and file tests cover unreaped registrar ownership, nonce responsiveness,
+intentional sentinel death, external reap refusal, constructor and pipe faults,
+original cleanup reserve, EOF refusal, held ledger writes and replacement,
+hardlink rejection, fstat failure closure, retained-stream overflow, cross-file
+and cross-command tampering, and original private-root cleanup authority.
+Windows-specific lifetime and sharing-denial branches still require execution
+on Windows; local Linux success is not credited to them.
+
+Five source overlays deliberately remove one protection each. Removing the
+complete final sweep fails both same-command and cross-command mutation cases.
+The exact earlier per-command-only sweep passes the former but fails the latter.
+Adopting a newly named cleanup root reaches the deletion trap, while dropping
+the producer's complete expected-launcher join admits three independently
+forged argv fields. Removing both pair/root owner joins admits consistently rehashed UID/GID
+forgeries, including substituted fixture owners. These are expected assertion
+failures with compilable code;
+they are not native runs. The fixed controls pass on the candidate.
+
+The three new files contain 468, 424 and 294 effective lines. Every newly
+authored function is within 60 physical lines and 40 AST statements. Twenty-four
+existing native producer/read/profile/runtime helpers remain byte-identical.
+The workflow structural replay permits only the three new path-filter entries
+per existing trigger, the extended inert source-runtime suite and the bundled
+inert mechanics step. The official builder, native commands, deadlines, upload
+and final native verdict stay unchanged. Embedded workflow Python and the
+constructed combined test-suite code compile.
+
+Exact executed logs (SHA-256):
+
+- Profile202: `eb9783bb5ceaa9c9270ca45ad0b40be0b6d3b78b3ae2f07b235bbc278fcaaa22` (45893 bytes).
+- Mechanics16: `c7c16cb9d24bff28695efb0e1e6993cc0e743d4f49d125312954a4d303701fae` (3380 bytes).
+- Expected-fail `no-final-receipt-sweep`: `914ed0690e6de2aa7371dee35b096c04e5e0ce85d538445ee7bb08ac0077cdb0` (2357 bytes).
+- Expected-fail `per-command-sweep`: `68ed8a5b053e2204e6e2cbb78ce7a75559ce3266a9f8f435e79ccc922717d159` (1341 bytes).
+- Expected-fail `adopt-cleanup-name`: `2ec38da611deb0ec208525aaccad96407f44d4e51541d9dd35ef8487c629f23f` (1714 bytes).
+- Expected-fail `no-launcher-join`: `8e1cc9b9f399eabb53642e04d19c9031182c82cce5de29356bd120e78d2c84f2` (3444 bytes).
+- Expected-fail `no-owner-join`: `55a84d32d6ee0d4d76acc78d8b33926c01681373f9e315ae6f3875df66c7d2a5` (2386 bytes).
+
+The full immutable review packet records all seven base/candidate hashes, exact
+forward/inverse patch replay, original body-preservation checks, commands and
+complete logs. Independent final source review, coherent publication and real
+three-OS bundled execution remain separate gates. Old generic repaired-run
+failures are not retrospectively attributed to this control.

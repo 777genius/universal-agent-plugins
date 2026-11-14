@@ -24,7 +24,8 @@ var (
 )
 
 // This is a dispatcher fixture, not a native ownership receipt. The real empty
-// state store exercises sessionBindings; only planning/native execution is inert.
+// state store exercises sessionBindings. Default observations are inert; the
+// separate retained-process tests inject the real final process runner.
 type sessionExecutionFixture struct {
 	plan                               clients.SessionPlan
 	path, mode                         string
@@ -34,17 +35,23 @@ type sessionExecutionFixture struct {
 	info                               os.FileInfo
 	plans, begins, verifies, calls     int
 	starts, releases, closes, rechecks int
+	ordinary                           int
+	finalRunner                        ports.CommandRunner
+	finalEdit                          func([]string)
 }
 
 func (*sessionExecutionFixture) ID() domain.ClientID { return domain.ClientHermes }
 
-func (fixture *sessionExecutionFixture) PlanSession(ctx context.Context, _ clients.Env, _ clients.SessionRequest) (clients.SessionPlan, error) {
+func (fixture *sessionExecutionFixture) PlanSession(ctx context.Context, env clients.Env, _ clients.SessionRequest) (clients.SessionPlan, error) {
 	fixture.plans++
 	if err := ctx.Err(); err != nil {
 		return clients.SessionPlan{}, err
 	}
 	plan := fixture.plan
 	if fixture.plans == 2 {
+		if fixture.finalEdit != nil {
+			fixture.finalEdit(env.SessionEnvironment)
+		}
 		switch fixture.mode {
 		case "replan-error":
 			return clients.SessionPlan{}, errSessionExecutionStep
@@ -99,9 +106,19 @@ func (fixture *sessionExecutionFixture) VerifySession(ctx context.Context, env c
 	return nil
 }
 
-func (fixture *sessionExecutionFixture) Context() context.Context { return fixture.ctx }
+func (fixture *sessionExecutionFixture) Context() context.Context {
+	if fixture.mode == "nil-context" {
+		return nil
+	}
+	return fixture.ctx
+}
 
-func (fixture *sessionExecutionFixture) Runner() ports.CommandRunner { return fixture }
+func (fixture *sessionExecutionFixture) Runner() ports.CommandRunner {
+	if fixture.mode == "nil-runner" {
+		return nil
+	}
+	return fixture
+}
 
 func (fixture *sessionExecutionFixture) Revalidate() error {
 	fixture.rechecks++
@@ -125,16 +142,26 @@ func (fixture *sessionExecutionFixture) Close() error {
 	err := fixture.file.Close()
 	fixture.file = nil
 	fixture.cancel()
-	if fixture.mode == "unlock" {
+	if fixture.mode == "unlock" || fixture.mode == "close" {
 		err = errors.Join(err, errSessionExecutionClose)
 	}
 	return err
 }
 
-func (fixture *sessionExecutionFixture) Run(ctx context.Context, _ legacyports.Command) (legacyports.CommandResult, error) {
+func (fixture *sessionExecutionFixture) Run(ctx context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
 	fixture.calls++
 	if ctx != fixture.ctx {
 		return legacyports.CommandResult{}, errors.New("native call renewed the original context")
+	}
+	if fixture.calls == 4 {
+		fixture.starts++
+		if fixture.releases != 1 || fixture.plans != 2 {
+			return legacyports.CommandResult{}, errors.New("final command ran before release and replan")
+		}
+		if fixture.finalRunner != nil {
+			return fixture.finalRunner.Run(ctx, command)
+		}
+		return legacyports.CommandResult{CleanupComplete: true, Stdout: []byte("inspected\n")}, fixture.final(ctx)
 	}
 	return legacyports.CommandResult{CleanupComplete: true}, ctx.Err()
 }
@@ -183,14 +210,13 @@ func newSessionExecutionFixture(t *testing.T, mode string) (App, *sessionExecuti
 	return app, fixture
 }
 
-func (fixture *sessionExecutionFixture) start(ctx context.Context, _ clients.SessionPlan) error {
-	fixture.starts++
-	if fixture.releases != 1 || fixture.plans != 2 {
-		return errors.New("final command ran before release and replan")
-	}
-	if _, err := fixture.Run(ctx, legacyports.Command{}); err != nil {
-		return err
-	}
+func (fixture *sessionExecutionFixture) start(ctx context.Context, _ clients.SessionPlan, _ []string) error {
+	fixture.ordinary++
+	_, err := fixture.Run(ctx, legacyports.Command{})
+	return err
+}
+
+func (fixture *sessionExecutionFixture) final(ctx context.Context) error {
 	switch fixture.mode {
 	case "fourth-mutation":
 		return os.WriteFile(fixture.path, []byte("changed"), 0o600)
@@ -200,15 +226,18 @@ func (fixture *sessionExecutionFixture) start(ctx context.Context, _ clients.Ses
 		fixture.cancel()
 		return context.Canceled
 	}
-	return nil
+	return ctx.Err()
 }
 
 func TestSessionExecutionGuardSpansFourthCommand(t *testing.T) {
-	for _, mode := range []string{"clean", "fourth-mutation", "nonzero", "canceled", "nil"} {
+	for _, mode := range []string{"clean", "fourth-mutation", "nonzero", "canceled", "close", "nil"} {
 		t.Run(mode, func(t *testing.T) {
 			app, fixture := newSessionExecutionFixture(t, mode)
-			err := runClientSession(t.Context(), &cobra.Command{}, app, &options{target: "hermes", format: "human"}, true, true)
-			expected := map[string]error{"fourth-mutation": errSessionHistoryChanged, "nonzero": errSessionExecutionStep, "canceled": context.Canceled}[mode]
+			command := &cobra.Command{}
+			var output bytes.Buffer
+			command.SetOut(&output)
+			err := runClientSession(t.Context(), command, app, &options{target: "hermes", format: "human"}, true, true)
+			expected := map[string]error{"fourth-mutation": errSessionHistoryChanged, "nonzero": errSessionExecutionStep, "canceled": context.Canceled, "close": errSessionExecutionClose}[mode]
 			if expected == nil && err != nil || expected != nil && !errors.Is(err, expected) {
 				t.Fatalf("final execution = %v, want %v", err, expected)
 			}
@@ -216,10 +245,13 @@ func TestSessionExecutionGuardSpansFourthCommand(t *testing.T) {
 				t.Fatal("original four-command execution order changed", fixture)
 			}
 			if mode == "nil" {
-				if fixture.closes != 0 || fixture.rechecks != 0 {
+				if fixture.closes != 0 || fixture.rechecks != 0 || fixture.ordinary != 1 {
 					t.Fatal("nil execution changed the ordinary flow")
 				}
 				return
+			}
+			if fixture.ordinary != 0 || mode == "clean" && output.String() != "inspected\n" || mode != "clean" && output.Len() != 0 {
+				t.Fatal("retained execution used process replacement or emitted unvalidated output")
 			}
 			if fixture.closes != 1 || fixture.rechecks < 2 {
 				t.Fatal("execution did not settle exactly once")

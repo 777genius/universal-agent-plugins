@@ -6,12 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"maps"
-	"os"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"slices"
 	"strings"
 	"time"
@@ -28,6 +25,7 @@ import (
 // not connect MCP or call a model; any native bootstrap remains in its selected
 // runtime root and must pass the same qualified source boundary afterwards.
 func verifySessionNativeSource(ctx context.Context, env clients.Env, plan clients.SessionPlan) (resultErr error) {
+	env.SessionEnvironment = sessionEnvironment(env.SessionEnvironment)
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -47,7 +45,7 @@ func verifySessionNativeSource(ctx context.Context, env clients.Env, plan client
 	if err := verifySessionAuthority(ctx, env, plan); err != nil {
 		return err
 	}
-	body, err := projectSessionConfig(ctx, plan.Directory, sessionRootObject(plan.Directory), plan.Servers, len(plan.Arguments) != 0)
+	source, err := verifiedSessionSource(ctx, plan, sessionRootObject(plan.Directory), env.SessionEnvironment)
 	if err != nil {
 		return err
 	}
@@ -57,7 +55,7 @@ func verifySessionNativeSource(ctx context.Context, env clients.Env, plan client
 		bounded, cancel = context.WithTimeout(ctx, 60*time.Second)
 		defer cancel()
 	}
-	return verifySessionMetadata(bounded, env, plan, body)
+	return verifySessionMetadata(bounded, env, plan, source.body)
 }
 
 func verifySessionMetadata(ctx context.Context, env clients.Env, plan clients.SessionPlan, body []byte) error {
@@ -97,7 +95,7 @@ func observeSessionConfig(ctx context.Context, env clients.Env, plan clients.Ses
 	if err := verifySessionAuthority(ctx, env, plan); err != nil {
 		return nil, err
 	}
-	environment := plan.ChildEnvironment(os.Environ())
+	environment := plan.ChildEnvironment(env.SessionEnvironment)
 	if err := hermesSessionSignals(projectSessionRoot(plan.Directory), environment); err != nil {
 		return nil, err
 	}
@@ -152,7 +150,8 @@ func verifySessionAuthority(ctx context.Context, env clients.Env, plan clients.S
 	if err := env.ProjectRoots.VerifyProjectRoot(ctx, projectSessionRoot(plan.Directory), owner); err != nil {
 		return err
 	}
-	return verifyProjectSessionSource(ctx, plan, owner)
+	_, err := verifiedSessionSource(ctx, plan, owner, env.SessionEnvironment)
+	return err
 }
 
 func compareSessionNativeSource(source, observed []byte) error {
@@ -179,23 +178,12 @@ func compareSessionNativeSource(source, observed []byte) error {
 
 var _ clients.SessionExecutionPlanner = (*Adapter)(nil)
 
-type sessionInspectMember struct {
-	name string
-	file *os.File
-	info os.FileInfo
-	body []byte
-}
-
 type sessionInspectHistory struct {
-	ctx      context.Context
-	cancel   context.CancelFunc
-	env      clients.Env
-	plan     clients.SessionPlan
-	root     *os.Root
-	rootInfo os.FileInfo
-	logs     *os.Root
-	logsInfo os.FileInfo
-	members  []sessionInspectMember
+	ctx    context.Context
+	cancel context.CancelFunc
+	env    clients.Env
+	plan   clients.SessionPlan
+	state  *sessionRuntimeSnapshot
 }
 
 func (*Adapter) BeginSessionExecution(ctx context.Context, env clients.Env, plan clients.SessionPlan) (clients.SessionExecution, error) {
@@ -211,7 +199,7 @@ func (*Adapter) BeginSessionExecution(ctx context.Context, env clients.Env, plan
 
 func sessionVerificationHistory(ctx context.Context, env clients.Env, plan clients.SessionPlan) (*sessionInspectHistory, bool, error) {
 	if history, ok := env.Runner.(*sessionInspectHistory); ok {
-		if history == nil || ctx != history.Context() || !reflect.DeepEqual(plan, history.plan) {
+		if history == nil || ctx != history.Context() || !reflect.DeepEqual(plan, history.plan) || !slices.Equal(env.SessionEnvironment, history.env.SessionEnvironment) {
 			return nil, false, fmt.Errorf("hermes inspect execution differs from original capture")
 		}
 		return history, false, nil
@@ -227,6 +215,7 @@ func captureSessionInspectHistory(ctx context.Context, env clients.Env, plan cli
 	bounded, cancel := context.WithTimeout(ctx, 60*time.Second)
 	plan.Arguments, plan.Servers = slices.Clone(plan.Arguments), slices.Clone(plan.Servers)
 	plan.Environment = maps.Clone(plan.Environment)
+	env.SessionEnvironment = sessionEnvironment(env.SessionEnvironment)
 	history := &sessionInspectHistory{ctx: bounded, cancel: cancel, env: env, plan: plan}
 	if err := history.capture(); err != nil {
 		return nil, errors.Join(err, history.Close())
@@ -238,153 +227,37 @@ func (history *sessionInspectHistory) capture() error {
 	if err := verifySessionAuthority(history.ctx, history.env, history.plan); err != nil {
 		return err
 	}
-	var err error
-	history.rootInfo, err = noAliasDirectory(projectSessionRoot(history.plan.Directory))
+	bundle, err := qualifyHermesBundle(history.plan.Executable)
 	if err != nil {
 		return err
 	}
-	history.root, err = os.OpenRoot(projectSessionRoot(history.plan.Directory))
+	source, state, err := acquireSessionSource(history.ctx, history.plan.Directory, sessionRootObject(history.plan.Directory), history.plan.Servers,
+		sessionRuntimeSelection{true, bundle, history.env.SessionEnvironment})
 	if err != nil {
 		return err
 	}
-	history.logsInfo, err = history.root.Lstat("logs")
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	if err == nil {
-		history.logs, err = history.root.OpenRoot("logs")
-		if err != nil {
-			return err
-		}
-	}
-	names := []string{"spawn-ledger.json", "spawn-ledger.json.lock", "logs/mcp-stderr.log"}
-	if runtime.GOOS == "windows" {
-		names = append(names, "logs/.__agent.lock")
-	}
-	for _, name := range names {
-		if err := history.captureMember(name); err != nil {
-			return err
-		}
+	history.state = state
+	if source.digest != history.plan.ConfigDigest {
+		return fmt.Errorf("hermes original planned history changed before execution")
 	}
 	return history.Revalidate()
-}
-
-func (history *sessionInspectHistory) captureMember(name string) error {
-	if _, err := history.parents(); err != nil {
-		return err
-	}
-	history.members = append(history.members, sessionInspectMember{name: name})
-	member := &history.members[len(history.members)-1]
-	info, err := history.root.Lstat(filepath.FromSlash(name))
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-	if err != nil || !bootstrapMemberMetadata(name, info, true) {
-		return fmt.Errorf("hermes inspect history metadata differs")
-	}
-	member.info = info
-	parent, leaf := history.root, name
-	if strings.HasPrefix(name, "logs/") {
-		parent, leaf = history.logs, filepath.Base(name)
-		if parent == nil {
-			return fmt.Errorf("hermes inspect logs appeared during capture")
-		}
-	}
-	member.file, err = openSessionFile(parent, leaf)
-	if err != nil {
-		return err
-	}
-	member.body, err = history.memberBody(*member)
-	return err
 }
 
 func (history *sessionInspectHistory) Context() context.Context { return history.ctx }
 
 func (history *sessionInspectHistory) Runner() ports.CommandRunner { return history }
 
-func (history *sessionInspectHistory) parents() ([2]os.FileInfo, error) {
-	var result [2]os.FileInfo
-	if err := history.ctx.Err(); err != nil {
-		return result, err
-	}
-	if history.root == nil {
-		return result, fmt.Errorf("hermes inspect history is closed")
-	}
-	named, err := noAliasDirectory(projectSessionRoot(history.plan.Directory))
-	if err != nil || !os.SameFile(history.rootInfo, named) || history.rootInfo.Mode() != named.Mode() {
-		return result, fmt.Errorf("hermes inspect original root changed")
-	}
-	for index, item := range []struct {
-		root *os.Root
-		info os.FileInfo
-		name string
-	}{{history.root, history.rootInfo, "."}, {history.logs, history.logsInfo, "logs"}} {
-		if item.root == nil {
-			continue
-		}
-		held, statErr := item.root.Stat(".")
-		current, nameErr := history.root.Lstat(item.name)
-		if statErr != nil || nameErr != nil || !os.SameFile(item.info, held) || !os.SameFile(held, current) ||
-			item.info.Mode() != held.Mode() || !sameSessionMember(held, current) {
-			return result, fmt.Errorf("hermes inspect history directory changed")
-		}
-		if err := validateSessionRootHandle(item.root); err != nil {
-			return result, err
-		}
-		result[index] = held
-	}
-	return result, nil
-}
-
-func (history *sessionInspectHistory) memberBody(member sessionInspectMember) ([]byte, error) {
-	parents, err := history.parents()
-	if err != nil {
-		return nil, err
-	}
-	held, err := member.file.Stat()
-	named, nameErr := history.root.Lstat(filepath.FromSlash(member.name))
-	if err != nil || nameErr != nil || !sameSessionMember(member.info, held) || !sameSessionMember(held, named) {
-		return nil, fmt.Errorf("hermes inspect history identity changed")
-	}
-	if err := validateSessionOwnedHandle(member.file, held); err != nil {
-		return nil, err
-	}
-	body, readErr := io.ReadAll(io.NewSectionReader(member.file, 0, member.info.Size()+1))
-	after, statErr := member.file.Stat()
-	named, nameErr = history.root.Lstat(filepath.FromSlash(member.name))
-	finalParents, parentErr := history.parents()
-	if readErr != nil || statErr != nil || nameErr != nil || parentErr != nil || int64(len(body)) != member.info.Size() ||
-		!sameSessionMember(member.info, after) || !sameSessionMember(after, named) {
-		return nil, fmt.Errorf("hermes inspect history changed during read")
-	}
-	for index, before := range parents {
-		if before != nil && !sameSessionMember(before, finalParents[index]) {
-			return nil, fmt.Errorf("hermes inspect history parent changed during read")
-		}
-	}
-	return body, errors.Join(history.ctx.Err(), validateSessionOwnedHandle(member.file, after))
-}
-
 func (history *sessionInspectHistory) Revalidate() error {
-	if _, err := history.parents(); err != nil {
+	if history.state == nil {
+		return fmt.Errorf("hermes inspect history is closed")
+	}
+	if err := history.state.rejoinExecution(history.ctx); err != nil {
 		return err
 	}
 	if err := verifySessionAuthority(history.ctx, history.env, history.plan); err != nil {
 		return err
 	}
-	for _, member := range history.members {
-		if member.info == nil {
-			if _, err := history.root.Lstat(filepath.FromSlash(member.name)); !errors.Is(err, os.ErrNotExist) {
-				return fmt.Errorf("hermes inspect history appeared after original absence")
-			}
-			continue
-		}
-		body, err := history.memberBody(member)
-		if err != nil || !bytes.Equal(member.body, body) {
-			return errors.Join(fmt.Errorf("hermes inspect history changed"), err)
-		}
-	}
-	return history.ctx.Err()
+	return history.state.rejoinExecution(history.ctx)
 }
 
 func (history *sessionInspectHistory) Run(ctx context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
@@ -400,19 +273,10 @@ func (history *sessionInspectHistory) Run(ctx context.Context, command legacypor
 
 func (history *sessionInspectHistory) Close() error {
 	var result error
-	for index := range history.members {
-		member := &history.members[index]
-		if member.file != nil {
-			result = errors.Join(result, member.file.Close())
-			member.file = nil
-		}
+	if history.state != nil {
+		result = history.state.close()
+		history.state = nil
 	}
-	for _, directory := range []*os.Root{history.logs, history.root} {
-		if directory != nil {
-			result = errors.Join(result, directory.Close())
-		}
-	}
-	history.logs, history.root = nil, nil
 	history.cancel()
 	return result
 }

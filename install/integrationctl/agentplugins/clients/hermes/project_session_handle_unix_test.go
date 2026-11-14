@@ -3,10 +3,12 @@
 package hermes
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"syscall"
 	"testing"
+	"time"
 
 	"golang.org/x/sys/unix"
 )
@@ -54,5 +56,52 @@ func TestProjectSessionRefusesNonPrivateRootBeforeConfigRead(t *testing.T) {
 	}
 	if _, err := prepareProjectSession(t.Context(), req, owner); err == nil {
 		t.Fatal("session accepted a nonprivate selected root")
+	}
+}
+
+func TestProjectSessionTerminalDirectoryCannotWaitForFIFOProducer(t *testing.T) {
+	parent := t.TempDir()
+	path := filepath.Join(parent, "selected")
+	if err := syscall.Mkfifo(path, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	root, err := os.OpenRoot(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := root.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	done := make(chan error, 1)
+	go func() {
+		selected, err := root.OpenRoot("selected" + sessionDirectoryTerminal)
+		if selected != nil {
+			if closeErr := selected.Close(); closeErr != nil {
+				err = closeErr
+			}
+		}
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if !errors.Is(err, syscall.ENOTDIR) {
+			t.Fatal("FIFO directory selection did not give the expected type refusal", err)
+		}
+	case <-time.After(2 * time.Second):
+		// Release only this fixture's blocked reader before reporting the failure.
+		writer, err := os.OpenFile(path, os.O_WRONLY|syscall.O_NONBLOCK, 0)
+		if err == nil {
+			if err := writer.Close(); err != nil {
+				t.Error(err)
+			}
+		}
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
+			t.Error("fixture FIFO reader did not settle")
+		}
+		t.Fatal("terminal directory acquisition waited for a FIFO producer")
 	}
 }

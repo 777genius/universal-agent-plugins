@@ -11,6 +11,9 @@ name: Hermes native User tools call - scripted localhost provider, no vendor aut
     - scripts/e2e/hermes-noauth-tool-call.py
     - scripts/e2e/hermes-profile-admission.py
     - scripts/test_hermes_profile_admission.py
+    - scripts/hermes_passive_history_control.py
+    - scripts/hermes_passive_history_processes.py
+    - scripts/test_hermes_passive_history_control.py
     - repotests/testdata/agentplugins_native_probe/**
     - scripts/hermes_owned_build_cleanup.py
     - scripts/test_hermes_owned_build_cleanup.py
@@ -35,6 +38,9 @@ name: Hermes native User tools call - scripted localhost provider, no vendor aut
     - scripts/e2e/hermes-noauth-tool-call.py
     - scripts/e2e/hermes-profile-admission.py
     - scripts/test_hermes_profile_admission.py
+    - scripts/hermes_passive_history_control.py
+    - scripts/hermes_passive_history_processes.py
+    - scripts/test_hermes_passive_history_control.py
     - repotests/testdata/agentplugins_native_probe/**
     - scripts/hermes_owned_build_cleanup.py
     - scripts/test_hermes_owned_build_cleanup.py
@@ -240,7 +246,8 @@ jobs:
         from hermes_cli._launchers import runtime_command
         scripts = pathlib.Path.cwd() / 'scripts'
         code = (f'import sys, unittest; sys.path.insert(0, {str(scripts)!r}); '
-                f'suite = unittest.defaultTestLoader.discover({str(scripts)!r}, pattern="test_hermes_profile_admission.py"); '
+                f'suite = unittest.TestSuite(unittest.defaultTestLoader.discover({str(scripts)!r}, pattern=pattern) '
+                'for pattern in ("test_hermes_profile_admission.py", "test_hermes_passive_history_control.py")); '
                 'result = unittest.TextTestRunner(verbosity=2).run(suite); raise SystemExit(not result.wasSuccessful())')
         command = runtime_command(source, python=pathlib.Path(native[0]), code=code)
         subprocess.run(command, check=True, timeout=120)
@@ -334,6 +341,9 @@ jobs:
     - name: Inert owned build alias cleanup contracts
       shell: bash
       run: ${{ matrix.python }} -m unittest discover -s scripts -p test_hermes_owned_build_cleanup.py
+    - name: Inert held-sibling control contracts
+      shell: bash
+      run: ${{ matrix.python }} -m unittest discover -s scripts -p test_hermes_passive_history_control.py -v
     - name: Build the unmodified official standalone Hermes payload
       shell: bash
       run: |

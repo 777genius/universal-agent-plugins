@@ -30,3 +30,7 @@ func validateSessionOwnedDirectory(file *os.File, info os.FileInfo) error {
 func openSessionFile(root *os.Root, name string) (*os.File, error) {
 	return root.Open(name)
 }
+
+func sessionPhysicalIdentity(*os.File, os.FileInfo) (string, error) {
+	return "", fmt.Errorf("hermes physical identity is unsupported on this platform")
+}

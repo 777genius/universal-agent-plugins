@@ -51,3 +51,11 @@ func validateSessionDirectoryHandle(_ *os.File, info os.FileInfo) error {
 func openSessionFile(root *os.Root, name string) (*os.File, error) {
 	return root.OpenFile(name, os.O_RDONLY|syscall.O_NONBLOCK|syscall.O_NOFOLLOW, 0)
 }
+
+func sessionPhysicalIdentity(_ *os.File, info os.FileInfo) (string, error) {
+	metadata, ok := info.Sys().(*syscall.Stat_t)
+	if !ok || !info.IsDir() && !info.Mode().IsRegular() {
+		return "", fmt.Errorf("hermes physical identity is unavailable")
+	}
+	return fmt.Sprintf("unix:%d:%d:%d:%d:%d", metadata.Dev, metadata.Ino, metadata.Uid, metadata.Gid, info.Mode()), nil
+}

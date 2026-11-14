@@ -20,6 +20,7 @@ const hermesBundleRef = "2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19"
 
 type hermesBundle struct {
 	executable, root, digest string
+	originalRoot             os.FileInfo
 }
 
 func qualifyHermesBundle(executable string) (hermesBundle, error) {
@@ -61,7 +62,7 @@ func qualifyHermesBundle(executable string) (hermesBundle, error) {
 		return hermesBundle{}, fmt.Errorf("hermes bundle root changed")
 	}
 	digest := fmt.Sprintf("%x:%x", sha256.Sum256(manifest), sha256.Sum256(launcher))
-	return hermesBundle{executable: executable, root: root, digest: digest}, nil
+	return hermesBundle{executable: executable, root: root, digest: digest, originalRoot: original}, nil
 }
 
 func validateHermesBundle(root, launcher string, body []byte) error {

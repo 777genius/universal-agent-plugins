@@ -50,6 +50,8 @@ type SessionExecutionPlanner interface {
 // Its context carries one original deadline. Runner wraps the original observer;
 // the caller still invokes SessionPlanner.VerifySession. Revalidate and Close
 // run on every exit; Close releases only this execution's retained resources.
+// The final inspected child must return through Runner before validation and
+// Close; process replacement cannot retain this execution authority.
 type SessionExecution interface {
 	Context() context.Context
 	Runner() ports.CommandRunner

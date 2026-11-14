@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -13,7 +12,6 @@ import (
 	"reflect"
 	"regexp"
 	"runtime"
-	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -349,9 +347,8 @@ func (input *hermesColdInputs) rememberData(t *testing.T, installed domain.Insta
 	}
 }
 
-// Keep public Cobra's complete session verification in this process. Only the
-// final StartNativeSession callback uses the ordinary runner instead of Unix
-// exec, so cancellation cannot kill an intermediate owner of another group.
+// Keep public Cobra's complete retained inspection in this process. The
+// recorder delegates all four commands to the original selected runner.
 func (input *hermesColdInputs) inspect(t *testing.T, journey projectJourney, label string, expected map[string]any) {
 	t.Helper()
 	before := projectJourneyRead(t, filepath.Join(journey.a, ".uap", "state-v2.json"))
@@ -365,65 +362,9 @@ func (input *hermesColdInputs) inspect(t *testing.T, journey projectJourney, lab
 		"--project-root", journey.a, "--inspect", "--confirm-client-start"}
 	ctx, cancel := context.WithTimeout(input.ctx, 2*time.Minute)
 	defer cancel()
-	var result legacyports.CommandResult
-	var argv []string
-	var directory, selectedRoot string
-	starts := 0
-	start := func(ctx context.Context, plan clients.SessionPlan) error {
-		starts++
-		if starts != 1 {
-			return fmt.Errorf("native cold session attempted another selected command")
-		}
-		argv, directory = append([]string{plan.Executable}, plan.Arguments...), plan.Directory
-		env := plan.ChildEnvironment(os.Environ())
-		roots := 0
-		for _, entry := range env {
-			key, value, _ := strings.Cut(entry, "=")
-			if strings.EqualFold(key, "HERMES_HOME") {
-				roots++
-				selectedRoot = value
-			}
-		}
-		if roots != 1 || selectedRoot != filepath.Join(journey.a, ".hermes", "uap-session") || directory != journey.a ||
-			!slices.Equal(argv, []string{input.bundle, "config", "get", "mcp_servers", "--json"}) {
-			return fmt.Errorf("native cold command or environment differs from its exact Project selection")
-		}
-		var err error
-		result, err = (processadapter.OS{}).Run(ctx, legacyports.Command{Argv: argv, Env: env, Dir: directory, StdoutLimitBytes: 1 << 20})
-		if !result.CleanupComplete || result.NoChildStarted {
-			return fmt.Errorf("native cold selected command lacks completed cleanup")
-		}
-		return err
-	}
-	app := journey.app
-	app.StartNativeSession = start
-	compose := app.ForScope
-	app.ForScope = func(scope domain.InstallScope, root string) (agentpluginscli.App, error) {
-		selected, err := compose(scope, root)
-		selected.StartNativeSession = start
-		return selected, err
-	}
-	var output, diagnostics bytes.Buffer
-	app.Input, app.Output, app.ErrorOutput, app.Terminal = strings.NewReader(""), &output, &diagnostics, false
-	command := agentpluginscli.NewRoot(app)
-	command.SetOut(&output)
-	command.SetErr(&diagnostics)
-	command.SetArgs(publicArgs)
-	err := command.ExecuteContext(ctx)
-	if err != nil || ctx.Err() != nil || starts != 1 || result.ExitCode != 0 || !result.CleanupComplete || result.NoChildStarted || len(result.Stderr) > 32768 {
-		t.Fatal("actual public Cobra/native Hermes inspect did not complete; caller retains the fixture")
-	}
-	if directory != journey.a || selectedRoot != filepath.Join(journey.a, ".hermes", "uap-session") {
-		t.Fatal("actual native command selected another Project authority")
-	}
-	stdoutDigest, stderrDigest := sha256.Sum256(result.Stdout), sha256.Sum256(result.Stderr)
-	input.commands = append(input.commands, map[string]any{
-		"step": label, "argv": argv, "public_argv": publicArgs, "directory": directory, "selected_root": selectedRoot, "exit_code": result.ExitCode,
-		"stdout_base64": result.Stdout, "stderr_base64": result.Stderr,
-		"stdout_bytes": len(result.Stdout), "stderr_bytes": len(result.Stderr),
-		"stdout_sha256": hex.EncodeToString(stdoutDigest[:]), "stderr_sha256": hex.EncodeToString(stderrDigest[:]),
-		"cleanup_complete": result.CleanupComplete, "no_child_started": result.NoChildStarted,
-	})
+	observed := input.inspectCommands(ctx, t, journey, publicArgs)
+	input.recordInspection(label, publicArgs, observed)
+	result := observed.result
 	actual, err := shared.DecodeStrictJSONObject(result.Stdout)
 	if err != nil || !reflect.DeepEqual(actual, expected) {
 		t.Fatalf("actual native Hermes inventory differs from exact owned YAML: %v / %s", err, result.Stdout)

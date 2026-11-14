@@ -447,3 +447,147 @@ enforced the existing 60-line/40-statement function limits on the changed runtim
 test file without its usual test exemption; it passed. No repository lint
 configuration changed. The complete coherent commit still requires normal CI
 and a genuine hosted original before this diagnostic can identify the offender.
+
+## 2026-11-14 — separate inert tracer mechanics after original native capture
+
+The local tracer experiment stopped before its inert payload: `PTRACE_TRACEME`
+returned `EPERM`, strace exited 1, the three bounded channels reached EOF and
+the original process was waited. Its second readonly control was not attempted.
+That original local refusal says nothing about hosted ptrace compatibility or
+Grok startup. No privilege, kernel-policy or EXITKILL fallback was attempted.
+
+The Project workflow now prepares the official Ubuntu strace package only
+after the existing original native artifact has uploaded. The original native
+setup, runtime census, delegated service, two-member artifact and final native
+verdict retain their order and meaning. A separate fixed test-only driver then
+attempts at most two inert launches: a Python fork/exec of silent `/usr/bin/true`
+with an ordinary private write, followed by the same source under the fixed
+Bubblewrap namespace layout with an expected `EROFS` write refusal. This inert
+layout is not the production input corpus or an enabled C1 profile; the failed
+write is in the inert parent, not an observed native MCP child.
+
+All tool facts, version reads, launches, drain, final wait and identity checks
+share one original ten-second budget. The live stdout/stderr/trace caps are
+4 KiB, 4 KiB and 64 KiB. The original leader remains unreaped through every
+group-signal decision using `waitid(WNOWAIT)`; the sole final wait comes last,
+and no group signal follows it. Unknown capability-xattr errors, replaced tool
+identity, a lost original wait, missing EOF, timeout or an overrun refuse. The
+64 KiB receipt and at most six original stream files upload separately from
+the native artifact; a refused control remains failed and the next control is
+unattempted. The existing native `publication` and `native_passed` outputs are
+never changed by this driver.
+
+Local verification on the 462 source plus this candidate ran all 57 existing
+and added protocol methods successfully, with zero skips. Seven new methods
+cover collector mechanics with actual inert children/pipes for each live byte
+overrun and an already-exited leader with a child retaining its output channel.
+They do not execute strace or Bubblewrap. Removing only the trace-channel
+overflow refusal causes the actual trace overrun assertion to fail; removing
+the final original-child wait-authority check causes the actual prior-reap
+assertion to fail. Both counterfactuals retain their original bounded inputs.
+All 50 preceding method bodies and assertions remain byte-identical.
+
+The hosted mechanics result and raw trace format are still unexecuted for this
+candidate. Even a completed mechanics capture does not admit a parsed complete
+process family, native no-startup evidence, enabled C1 readback, or the public
+enablement/recovery lifecycle. A future observer still needs source-bound
+positive controls in the actual production view, exact original Grok argv and
+input authority, complete fork/exec/terminal parsing and original family
+cleanup. Replacing Grok with a direct probe is a different executable authority.
+Public capability remains false and production recovery records remain v2.
+
+## Original runtime groups and additive captured-authority controls (2026-11-14)
+
+The next genuine Project original used source
+`0633402a9c992fd941caebd74a88a0fbe07220bd`, tree
+`3de63b31367d544dd93654f7b17a8eee4c9beddd`, in
+[run 43640883030](https://github.com/777genius/universal-agent-plugins/actions/runs/43640883030),
+job 132587976156. Artifact 14133875872 is 18,504 bytes, SHA-256
+`1ca5a7728d6173570c1cc73616ebacc3dc76f8ce528e09442d81dd14038e424e`.
+Both original ZIP members passed CRC; all 42 command streams, the compiled
+input identities, clean source before/after and the negative admission were
+joined. The artifact's merge-SHA name does not replace its recorded source.
+
+Its 579-byte tagged stdout, SHA-256
+`019d5a2e850768a4d5777ed61377291b4ee081d0977cf29e6cdd05bd172ef6b8`,
+identifies attempt 1/2 and original member `bin/chage`: UID 0, GID 42,
+expected GID 0, mode `0102755`, and predicate bitmap `0x10`. Only the
+comparison of groups failed. Runtime set-id bits were already metadata admitted
+under the separate mandatory NOSUID mount and capability checks. This is the
+initial census refusal for that readonly attempt; earlier ordinary
+version/help/disable/inspect/doctor commands did execute. The failure's
+preservation field covers its existing protected-file/native-lock checks,
+not the unreached full successful five-root comparison.
+
+Incoming commit `f3b55b53816a10e6491c0e59138dd1387fc083cd` implements the
+parent-census correction and is preserved here. Its complete runtime blob
+`0442962d9aad0d5e054ab31f6706f06e533a4cd7` and existing runtime test blob
+`67a707cf71d35b33e08e8435fbe05a83f934d829` remain byte-for-byte unchanged by
+this additive packet. In particular, `memberFacts` requires the original fixed
+group for `/usr` immediately at capture; descendant rows retain their captured
+groups. `requireRoots` still performs the later strict check for all four roots.
+The incoming renamed retention test, three new methods and initial root-group
+diagnostic remain intact.
+
+The parent still requires the captured root UID, ordinary runtime kinds,
+unchanged non-link group/other write restrictions, mount identity, complete
+hardlink closure and original named/held metadata. The strict seven-predicate
+metadata helper still checks both explicit owner parameters and returns the
+original facts. Each admitted member's numeric GID remains in the first parent
+commitment. The existing digest already serializes GID: its format, count,
+sealed policy schema, header and final comparison are unchanged. A later
+GID-only change cannot renew that first proof. Fixed roots, top-level aliases, selected
+executables and bwrap keep their separate exact owner/group rules. The child
+does not reconstruct a host census from overflow IDs; its existing map, mount,
+capability, fixed-role and selected-byte checks remain in force. There is no
+`chage` exception, host metadata change, copied runtime or wider mount.
+
+The own implementation scope after reconciliation is two paths: one additive
+Go test file and this leaf append. The earlier isolated063 four-path candidate
+is retained only as historical evidence in manifest SHA-256
+`5f08be30a19b135744a3feef6e07e427a7924322df5008e6e17ed58c5123486b`.
+Its 45-method / 163-passing-event run and tagged compilation do not qualify
+execution of the incoming f3 source. No historical production or test file was
+copied over the incoming correction.
+
+The seven additive methods preserve the original multiple-group file,
+directory and link controls, exact held-directory traversal, borrowed iterator
+and file bytes, GID-only proof difference, owner/mode/special-kind refusal, and
+strict fixed-role policy checks. The later fixed-root negative starts from
+valid captured roots, then changes the inert root and its matching captured row
+together before `requireRoots`; it does not bypass or claim success at the
+incoming initial `/usr` guard. A separate matching-owner selected-executable
+control refuses retained set-id metadata and accepts the same facts after only
+the set-id mode bits are cleared. The original incoming oracle is unchanged.
+Unknown timestamp seconds in the diagnostic-derived numeric fixture are
+explicitly inert; this is not a reconstructed complete native stat record.
+
+On exact f3 plus that new test file, the bounded readonly selection passed
+49 top-level methods and 171 test events, with no skips, in 3.204 seconds.
+Its log is 192,059 bytes, SHA-256
+`0be468dd02e222ff67cdd872fe06043a970422c843481474dae028df3f0a7d55`.
+The seven additions contribute 23 passing events. Restoring only the old fixed
+group for descendants inside `memberFacts`, while retaining the strict `/usr`
+branch, makes both the positive member and real held-child controls fail at
+the original group predicate. Restoring only GID erasure makes the GID-only
+original-proof assertion fail. These are compilable one-change overlays and
+intended assertion failures, not native executions.
+
+Whole-file, changed-line and explicit test size/function checks each passed
+with zero issues. The new file has 231 physical / 216 effective lines and a
+maximum function length of 43 physical lines; the existing 60-line/40-statement
+limits were enforced without adding repository exemptions. The two incoming
+runtime files and every excluded readonly-family source remain exact. No new
+tagged-native run is claimed; tagged compilation belongs only to the historical
+063 checkpoint. The separate incoming research-helper host-group projection
+and post-command host commitment are preserved, not reimplemented or credited
+as native proof by these additive Go tests.
+
+The noauth063 original remains distinct: artifact 14133816568 is 26,165 bytes,
+SHA-256 `3c248864b0e321bf11a4fc3aeb33d9caaff56e6cec56121b661ae7c33fa91a21`.
+Its 46 joined streams preserve a completed ordinary no-consent directory repair
+followed by the existing unsupported enablement dry-run refusal. This packet
+does not open that capability. Fresh coherent-source gates and genuine ordinary
+hosted originals, public enablement/recovery, production v3 publication, enabled
+C1 readback and complete same-view startup observation remain pending. The
+separate inert tracer feasibility experiment does not qualify those outcomes.

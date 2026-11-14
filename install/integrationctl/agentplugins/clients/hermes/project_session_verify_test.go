@@ -8,8 +8,8 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
-	"time"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -57,29 +57,38 @@ func sessionInventoryEnvironment(t *testing.T, plan clients.SessionPlan, runner 
 }
 
 type sessionInventoryRunner struct {
-	plan   clients.SessionPlan
-	mode   string
-	calls  [][]string
-	edit   func()
-	editAt int
+	plan         clients.SessionPlan
+	mode         string
+	calls        [][]string
+	environments [][]string
+	edit         func()
+	editAt       int
 }
 
-func (runner *sessionInventoryRunner) Run(_ context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
-	runner.calls = append(runner.calls, append([]string(nil), command.Argv...))
-	if command.Dir != runner.plan.Directory || command.StdoutLimitBytes != 1<<20 {
-		return legacyports.CommandResult{}, errors.New("incorrect observation boundary")
-	}
+func (runner *sessionInventoryRunner) verifyHome(environment []string) error {
 	homes := 0
-	for _, value := range command.Env {
+	for _, value := range environment {
 		if strings.HasPrefix(strings.ToUpper(value), "HERMES_HOME=") {
 			homes++
 			if value != "HERMES_HOME="+projectSessionRoot(runner.plan.Directory) {
-				return legacyports.CommandResult{}, errors.New("wrong selected native home")
+				return errors.New("wrong selected native home")
 			}
 		}
 	}
 	if homes != 1 {
-		return legacyports.CommandResult{}, errors.New("ambiguous selected native home")
+		return errors.New("ambiguous selected native home")
+	}
+	return nil
+}
+
+func (runner *sessionInventoryRunner) Run(_ context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
+	runner.calls = append(runner.calls, append([]string(nil), command.Argv...))
+	runner.environments = append(runner.environments, append([]string{}, command.Env...))
+	if command.Dir != runner.plan.Directory || command.StdoutLimitBytes != 1<<20 {
+		return legacyports.CommandResult{}, errors.New("incorrect observation boundary")
+	}
+	if err := runner.verifyHome(command.Env); err != nil {
+		return legacyports.CommandResult{}, err
 	}
 	result := legacyports.CommandResult{CleanupComplete: true}
 	if len(runner.calls) == 1 {
@@ -241,7 +250,7 @@ func TestProjectSessionBadPrimaryOrSourceNeverStartsNativeDespiteBackup(t *testi
 }
 
 func TestProjectSessionStopsBeforeNextChildWhenSourceChanges(t *testing.T) {
-	for _, change := range []string{"primary-first", "primary-second", "backend", "bundle-env"} {
+	for _, change := range []string{"primary-first", "primary-second", "bundle-env"} {
 		t.Run(change, func(t *testing.T) {
 			at := 1
 			if change == "primary-second" {
@@ -254,10 +263,6 @@ func TestProjectSessionStopsBeforeNextChildWhenSourceChanges(t *testing.T) {
 				t.Fatal(err)
 			}
 			runner := &sessionInventoryRunner{plan: plan, editAt: at, edit: func() {
-				if change == "backend" {
-					t.Setenv("HERMES_CONFIG_BACKEND", "remote")
-					return
-				}
 				path := filepath.Join(projectSessionRoot(req.ProjectRoot), "config.yaml")
 				if change == "bundle-env" {
 					path = filepath.Join(filepath.Dir(filepath.Dir(plan.Executable)), "hermes-agent", ".env")
@@ -268,6 +273,42 @@ func TestProjectSessionStopsBeforeNextChildWhenSourceChanges(t *testing.T) {
 			}}
 			if err := New().VerifySession(t.Context(), sessionInventoryEnvironment(t, plan, runner), plan); err == nil || len(runner.calls) != at {
 				t.Fatal("changed source reached another native command", runner.calls, err)
+			}
+		})
+	}
+}
+
+func TestProjectSessionNativeInventoryKeepsOriginalInheritedEnvironment(t *testing.T) {
+	for _, backend := range []string{"", " FILE "} {
+		t.Run(backend, func(t *testing.T) {
+			t.Setenv("HERMES_CONFIG_BACKEND", backend)
+			req, owner := newProjectSessionFixture(t)
+			plan, err := prepareProjectSession(t.Context(), req, owner)
+			if err != nil {
+				t.Fatal(err)
+			}
+			runner := &sessionInventoryRunner{plan: plan, editAt: 1, edit: func() {
+				t.Setenv("HERMES_CONFIG_BACKEND", "remote")
+			}}
+			env := sessionInventoryEnvironment(t, plan, runner)
+			env.SessionEnvironment = sessionEnvironment(nil)
+			if err := New().VerifySession(t.Context(), env, plan); err != nil || len(runner.calls) != 3 {
+				t.Fatal("original inherited source was not retained", err)
+			}
+			for _, actual := range runner.environments {
+				found := 0
+				for _, item := range actual {
+					key, value, _ := strings.Cut(item, "=")
+					if strings.EqualFold(key, "HERMES_CONFIG_BACKEND") {
+						found++
+						if value != backend {
+							t.Fatal("observer adopted later ambient backend")
+						}
+					}
+				}
+				if found != 1 {
+					t.Fatal("observer lost original supplied backend")
+				}
 			}
 		})
 	}
@@ -304,216 +345,61 @@ func TestProjectSessionNativeInventoryCancellationStartsNoProcess(t *testing.T) 
 	}
 }
 
-func sessionInspectHistoryFixture(t *testing.T, project string) {
-	t.Helper()
-	sessionBootstrapFixture(t, project)
-	files := map[string]struct {
-		body string
-		mode os.FileMode
-	}{
-		"spawn-ledger.json":      {"opaque native history; never process authority\n", 0o600},
-		"spawn-ledger.json.lock": {"", 0o644},
-		"logs/mcp-stderr.log":    {"retained MCP diagnostic\n", 0o644},
+func TestProjectSessionPassiveStateParentKeepsOriginalAuthority(t *testing.T) {
+	f := newSessionHistoryFixture(t)
+	parent := filepath.Join(f.state, "original-parent")
+	selected := filepath.Join(parent, "state")
+	if err := os.MkdirAll(selected, 0o700); err != nil {
+		t.Fatal(err)
 	}
-	if runtime.GOOS == "windows" {
-		files["logs/.__agent.lock"] = struct {
-			body string
-			mode os.FileMode
-		}{"", 0o666}
-	}
-	for name, value := range files {
-		path := filepath.Join(projectSessionRoot(project), filepath.FromSlash(name))
-		if err := os.WriteFile(path, []byte(value.body), value.mode); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.Chmod(path, value.mode); err != nil {
-			t.Fatal(err)
-		}
-	}
-}
-
-func TestProjectSessionInspectRetainsOpaqueHistoryThroughFinalCommand(t *testing.T) {
-	req, owner := newProjectSessionFixture(t)
-	sessionInspectHistoryFixture(t, req.ProjectRoot)
-	req.Inspect = false
-	if _, err := prepareProjectSession(t.Context(), req, owner); err == nil {
-		t.Fatal("ordinary launch admitted inspect-only history")
-	}
-	req.Inspect = true
-	plan, err := prepareProjectSession(t.Context(), req, owner)
+	f.env.SessionEnvironment = clients.SessionPlan{Environment: map[string]string{"XDG_STATE_HOME": selected}}.ChildEnvironment(f.env.SessionEnvironment)
+	bundle, err := qualifyHermesBundle(f.req.Client.ExecutablePath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	runner := &sessionInventoryRunner{plan: plan}
-	env := sessionInventoryEnvironment(t, plan, runner)
-	parent, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-	defer cancel()
-	execution, err := New().BeginSessionExecution(parent, env, plan)
-	if err != nil || execution == nil {
-		t.Fatal("original history capture failed", err)
-	}
-	t.Cleanup(func() { _ = execution.Close() })
-	deadline, _ := parent.Deadline()
-	if actual, ok := execution.Context().Deadline(); !ok || !actual.Equal(deadline) {
-		t.Fatal("inspect renewed the original deadline")
-	}
-	env.Runner = execution.Runner()
-	if err := New().VerifySession(execution.Context(), env, plan); err != nil {
-		t.Fatal(err)
-	}
-	// The CLI's fourth command is outside env.Runner; the retained execution
-	// must remain authoritative until that original final process returns.
-	_, err = runner.Run(execution.Context(), legacyports.Command{Argv: append([]string{plan.Executable}, plan.Arguments...),
-		Dir: plan.Directory, Env: plan.ChildEnvironment(os.Environ()), StdoutLimitBytes: 1 << 20})
-	if err != nil || execution.Revalidate() != nil || len(runner.calls) != 4 {
-		t.Fatal("opaque history did not survive all four metadata commands", err)
-	}
-	history := execution.(*sessionInspectHistory)
-	retained := history.members[0].file
-	if err := execution.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := retained.Close(); !errors.Is(err, os.ErrClosed) {
-		t.Fatal("original history handle remained live", err)
-	}
-	if !errors.Is(execution.Context().Err(), context.Canceled) || execution.Revalidate() == nil {
-		t.Fatal("closed history retained execution authority")
-	}
-}
-
-func TestProjectSessionInspectRejectsHistoryMutationAtEveryCommand(t *testing.T) {
-	for index := range 4 {
-		at := index + 1
-		t.Run([]string{"version", "config-path", "inventory", "final"}[at-1], func(t *testing.T) {
-			req, owner := newProjectSessionFixture(t)
-			sessionInspectHistoryFixture(t, req.ProjectRoot)
-			plan, err := prepareProjectSession(t.Context(), req, owner)
-			if err != nil {
-				t.Fatal(err)
-			}
-			path := filepath.Join(projectSessionRoot(req.ProjectRoot), "spawn-ledger.json")
-			before, err := os.Stat(path)
-			if err != nil {
-				t.Fatal(err)
-			}
-			runner := &sessionInventoryRunner{plan: plan, editAt: at, edit: func() {
-				if err := os.WriteFile(path, []byte(strings.Repeat("x", int(before.Size()))), 0o600); err != nil {
-					t.Fatal(err)
-				}
-				if err := os.Chtimes(path, before.ModTime(), before.ModTime()); err != nil {
-					t.Fatal(err)
-				}
-				after, err := os.Stat(path)
-				if err != nil || !sameSessionMember(before, after) {
-					t.Fatal("mutation did not preserve the existing metadata predicate", err)
-				}
-			}}
-			env := sessionInventoryEnvironment(t, plan, runner)
-			execution, err := New().BeginSessionExecution(t.Context(), env, plan)
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer func() { _ = execution.Close() }()
-			env.Runner = execution.Runner()
-			err = New().VerifySession(execution.Context(), env, plan)
-			if at == 4 {
-				if err != nil {
-					t.Fatal("failed before the final-command mutation", err)
-				}
-				_, err = runner.Run(execution.Context(), legacyports.Command{Argv: append([]string{plan.Executable}, plan.Arguments...),
-					Dir: plan.Directory, Env: plan.ChildEnvironment(os.Environ()), StdoutLimitBytes: 1 << 20})
-				if err != nil {
-					t.Fatal(err)
-				}
-				err = execution.Revalidate()
-			}
-			if err == nil || len(runner.calls) != at {
-				t.Fatal("same-size, same-mtime changed history was adopted", at, runner.calls, err)
-			}
-		})
-	}
-}
-
-func TestProjectSessionInspectRefusesUnmeasuredHistoryBeforeNative(t *testing.T) {
-	cases := []string{"ledger-only", "lock-only", "nonempty-lock", "oversize-ledger", "oversize-stderr", "unknown-lock"}
-	if runtime.GOOS != "windows" {
-		cases = append(cases, "lock-mode", "windows-lock")
-	}
-	for _, change := range cases {
-		t.Run(change, func(t *testing.T) {
-			req, owner := newProjectSessionFixture(t)
-			sessionInspectHistoryFixture(t, req.ProjectRoot)
-			root := projectSessionRoot(req.ProjectRoot)
-			path, body := filepath.Join(root, "spawn-ledger.json.lock"), []byte("changed")
-			switch change {
-			case "ledger-only":
-				if err := os.Remove(path); err != nil {
-					t.Fatal(err)
-				}
-			case "lock-only":
-				if err := os.Remove(filepath.Join(root, "spawn-ledger.json")); err != nil {
-					t.Fatal(err)
-				}
-			case "oversize-ledger":
-				path, body = filepath.Join(root, "spawn-ledger.json"), make([]byte, 4097)
-			case "oversize-stderr":
-				path, body = filepath.Join(root, "logs", "mcp-stderr.log"), make([]byte, (1<<20)+1)
-			case "unknown-lock":
-				path, body = filepath.Join(root, "logs", ".__errors.lock"), nil
-			case "windows-lock":
-				path, body = filepath.Join(root, "logs", ".__agent.lock"), nil
-			case "lock-mode":
-				if err := os.Chmod(path, 0o600); err != nil {
-					t.Fatal(err)
-				}
-			}
-			if change != "ledger-only" && change != "lock-only" && change != "lock-mode" {
-				if err := os.WriteFile(path, body, 0o644); err != nil {
-					t.Fatal(err)
-				}
-			}
-			if _, err := prepareProjectSession(t.Context(), req, owner); err == nil {
-				t.Fatal("unmeasured history was admitted", change)
-			}
-		})
-	}
-}
-
-func TestProjectSessionInspectPreservesAbsenceAndOriginalContext(t *testing.T) {
-	req, owner := newProjectSessionFixture(t)
-	plan, err := prepareProjectSession(t.Context(), req, owner)
+	state, err := captureSessionPassive(t.Context(), bundle, f.env.SessionEnvironment)
 	if err != nil {
 		t.Fatal(err)
 	}
-	runner := &sessionInventoryRunner{plan: plan}
-	env := sessionInventoryEnvironment(t, plan, runner)
-	canceled, cancel := context.WithCancel(t.Context())
-	cancel()
-	if execution, err := New().BeginSessionExecution(canceled, env, plan); !errors.Is(err, context.Canceled) || execution != nil {
-		t.Fatal("pre-canceled capture retained authority", err)
+	t.Cleanup(func() {
+		if state != nil {
+			if err := state.close(); err != nil {
+				t.Error(err)
+			}
+		}
+	})
+	original := state.directories[1]
+	moved := parent + "-retained"
+	if err := os.Rename(parent, moved); err != nil {
+		if runtime.GOOS != "windows" || !errors.Is(err, syscall.Errno(32)) {
+			t.Fatal(err)
+		}
+		if err := state.rejoin(t.Context()); err != nil {
+			t.Fatal("denied Windows rename changed original authority", err)
+		}
+		if _, err := os.Lstat(moved); !os.IsNotExist(err) {
+			t.Fatal("denied rename created its destination", err)
+		}
+		if err := state.close(); err != nil {
+			t.Fatal(err)
+		}
+		state = nil
+		if err := os.Rename(parent, moved); err != nil {
+			t.Fatal("held parent was not released", err)
+		}
+		return
 	}
-	execution, err := New().BeginSessionExecution(t.Context(), env, plan)
-	if err != nil {
+	if err := os.Mkdir(parent, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = execution.Close() }()
-	env.Runner = execution.Runner()
-	if err := New().VerifySession(t.Context(), env, plan); err == nil || len(runner.calls) != 0 {
-		t.Fatal("different context reached a native command", err)
+	if err := os.Rename(filepath.Join(moved, "state"), selected); err != nil {
+		t.Fatal(err)
 	}
-	for _, name := range []string{"spawn-ledger.json", "spawn-ledger.json.lock"} {
-		mode := os.FileMode(0o600)
-		if strings.HasSuffix(name, ".lock") {
-			mode = 0o644
-		}
-		if err := os.WriteFile(filepath.Join(projectSessionRoot(req.ProjectRoot), name), nil, mode); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.Chmod(filepath.Join(projectSessionRoot(req.ProjectRoot), name), mode); err != nil {
-			t.Fatal(err)
-		}
+	named, err := os.Stat(selected)
+	if err != nil || !os.SameFile(original.info, named) {
+		t.Fatal("fixture did not retain original state directory", err)
 	}
-	if err := execution.Revalidate(); err == nil || !strings.Contains(err.Error(), "appeared after original absence") || len(runner.calls) != 0 {
-		t.Fatal("new history replaced captured absence", err)
+	if err := state.rejoin(t.Context()); err == nil {
+		t.Fatal("replacement parent was adopted around original missing component")
 	}
 }

@@ -2082,6 +2082,27 @@ def readonly_directory(path, expected, maps=None):
         raise
 
 
+def readonly_census_leaf(parent, name, relative, info, rows, aliases, runtime):
+    if stat.S_ISREG(info.st_mode):
+        require(info.st_nlink > 0 and (runtime or info.st_nlink == 1 and 0 <= info.st_size <= 512 << 20),
+                'readonly-census-alias')
+        value = stable(info)
+        rows[relative] = value
+        aliases.setdefault((info.st_dev, info.st_ino), []).append(info.st_nlink)
+        require(stable(info) == stable(os.stat(name, dir_fd=parent, follow_symlinks=False)),
+                'readonly-census-file-rejoin')
+    elif runtime and stat.S_ISLNK(info.st_mode):
+        require(info.st_nlink == 1, 'readonly-runtime-link-alias')
+        target = os.readlink(name, dir_fd=parent)
+        require(0 < len(target.encode()) <= 4096 and '\0' not in target, 'readonly-runtime-link-bound')
+        require(stable(info) == stable(os.stat(name, dir_fd=parent, follow_symlinks=False)),
+                'readonly-runtime-link-rejoin')
+        value = stable(info)
+        rows[relative] = (*value, target)
+    else:
+        raise ValueError('readonly-special-member')
+
+
 def readonly_walk(descriptor, req, limit, *, runtime=False, maps=None):
     """Only descriptor-relative metadata; every edge is checked before descent."""
     rows, aliases = {}, {}
@@ -2128,24 +2149,8 @@ def readonly_walk(descriptor, req, limit, *, runtime=False, maps=None):
                             == stable(os.stat(name, dir_fd=parent, follow_symlinks=False)), 'readonly-census-rejoin')
                 finally:
                     os.close(child)
-            elif stat.S_ISREG(info.st_mode):
-                require(info.st_nlink > 0 and (runtime or info.st_nlink == 1 and 0 <= info.st_size <= 512 << 20),
-                        'readonly-census-alias')
-                value = stable(info)
-                rows[relative] = value
-                aliases.setdefault((info.st_dev, info.st_ino), []).append(info.st_nlink)
-                require(stable(info) == stable(os.stat(name, dir_fd=parent, follow_symlinks=False)),
-                        'readonly-census-file-rejoin')
-            elif runtime and stat.S_ISLNK(info.st_mode):
-                require(info.st_nlink == 1, 'readonly-runtime-link-alias')
-                target = os.readlink(name, dir_fd=parent)
-                require(0 < len(target.encode()) <= 4096 and '\0' not in target, 'readonly-runtime-link-bound')
-                require(stable(info) == stable(os.stat(name, dir_fd=parent, follow_symlinks=False)),
-                        'readonly-runtime-link-rejoin')
-                value = stable(info)
-                rows[relative] = (*value, target)
             else:
-                raise ValueError('readonly-special-member')
+                readonly_census_leaf(parent, name, relative, info, rows, aliases, runtime)
             require(len(rows) <= limit, 'readonly-census-count')
         require(stable(before) == stable(os.fstat(parent)), 'readonly-census-directory-rejoin')
     visit(descriptor, '.', 0)
@@ -2669,6 +2674,22 @@ def readonly_runtime_failure_stage(error):
     return READONLY_RUNTIME_OS_STAGES.get(type(error), 'runtime')
 
 
+def readonly_settled_readback(req, phase, row, original, host_original, result, headers):
+    host_after = {}
+    require(readonly_runtime(req, host_original=host_after) == original['runtime']
+            and host_after == host_original, 'readonly-runtime-final')
+    header, trailing = readonly_header(base64.b64decode(row['stderr_base64'], validate=True), req, phase, original)
+    headers.append(header)
+    require(row['error'] is None, 'readonly-child-refused')
+    if phase == 'control':
+        require(row['exit'] == 93 and row['stdout_bytes'] == 0 and not trailing, 'readonly-control-exit')
+        result['readonly']['control_marker'] = readonly_control_marker(req)
+        result['readonly']['control_complete'] = True
+    else:
+        require(result['rpc']['plugins'] is not None and not list((Path(req['input_root']) / 'readonly-witness').iterdir()),
+                'readonly-unexpected-native-startup')
+
+
 def readonly_collector_result(req):
     readonly_request(req)
     result = {key:req[key] for key in ('schema_version', 'source_commit', 'source_tree', 'scope', 'nonce')}
@@ -2700,19 +2721,7 @@ def readonly_collector_result(req):
                                    result['rpc'])
             in_flight = False
             result['commands'].append(row)
-            host_after = {}
-            require(readonly_runtime(req, host_original=host_after) == original['runtime']
-                    and host_after == host_original, 'readonly-runtime-final')
-            header, trailing = readonly_header(base64.b64decode(row['stderr_base64'], validate=True), req, phase, original)
-            headers.append(header)
-            require(row['error'] is None, 'readonly-child-refused')
-            if phase == 'control':
-                require(row['exit'] == 93 and row['stdout_bytes'] == 0 and not trailing, 'readonly-control-exit')
-                result['readonly']['control_marker'] = readonly_control_marker(req)
-                result['readonly']['control_complete'] = True
-            else:
-                require(result['rpc']['plugins'] is not None and not list((Path(req['input_root']) / 'readonly-witness').iterdir()),
-                        'readonly-unexpected-native-startup')
+            readonly_settled_readback(req, phase, row, original, host_original, result, headers)
         require(all(headers[0]['namespaces'][name] != headers[1]['namespaces'][name] for name in READONLY_NAMESPACES),
                 'readonly-namespace-reuse')
         readonly_input(req)
