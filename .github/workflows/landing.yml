@@ -78,6 +78,7 @@ jobs:
 
       - name: Verify and stage signed registry feeds
         run: |
+          go test -count=1 ./cmd/agentplugins-registry-mirror
           go run ./cmd/agentplugins-registry-mirror \
             --registry-repository 777genius/universal-agent-plugins-registry \
             --pages-origin https://777genius.github.io/universal-agent-plugins-registry/ \

@@ -19,9 +19,24 @@ export function releaseTargets(
   context: string,
   schemaVersion: 1 | 2 = 1,
 ): ReleaseTarget[] {
+  return decodeReleaseTargets(value, context, schemaVersion, false);
+}
+
+// Build composition calls this only after the modern Go reader authenticated
+// and validated the complete original bytes. Unknown identities are not grants.
+export function modernReleaseTargets(value: unknown, context: string): ReleaseTarget[] {
+  return decodeReleaseTargets(value, context, 1, true);
+}
+
+function decodeReleaseTargets(
+  value: unknown,
+  context: string,
+  schemaVersion: 1 | 2,
+  modern: boolean,
+): ReleaseTarget[] {
   if (!Array.isArray(value) || !value.length) throw new Error(`${context}: targets are required`);
   const seen = new Set<string>();
-  return value.map((raw, index): ReleaseTarget => {
+  return value.flatMap((raw, index): ReleaseTarget[] => {
     if (!record(raw)) throw new Error(`${context}: target ${index} must be an object`);
     const client = requiredString(raw, 'client', `${context} target ${index}`) as ClientID;
     const scope = schemaVersion === 2
@@ -30,9 +45,11 @@ export function releaseTargets(
     if (schemaVersion === 2 && (raw.scopes !== undefined || (scope !== 'user' && scope !== 'project')))
       throw new Error(`${context}: v2 grant cannot borrow legacy scopes`);
     const key = schemaVersion === 2 ? `${client}:${scope}` : client;
-    if (!CLIENTS.has(client) || seen.has(key))
+    const known = CLIENTS.has(client);
+    if ((!known && !modern) || seen.has(key))
       throw new Error(`${context}: target ${index} has an invalid or duplicate client/scope`);
     seen.add(key);
+    if (modern) validateModernTargetFields(raw, client, `${context} target ${index}`);
     const delivery = requiredString(raw, 'delivery', `${context} target ${client}`);
     if (!['managed', 'prepared', 'manual_activation'].includes(delivery))
       throw new Error(`${context}: target ${client} has invalid delivery`);
@@ -86,15 +103,38 @@ export function releaseTargets(
       throw new Error(`${context}: ChatGPT target requires app_binding`);
     if (client !== 'chatgpt' && appBinding)
       throw new Error(`${context}: app_binding is valid only for ChatGPT`);
-    return {
+    // Filter only after all target fields and duplicates have been checked.
+    if (!known) return [];
+    return [{
       client,
       authentication,
       delivery: delivery as ReleaseTarget['delivery'],
       scopes,
       ...(appBinding ? { app_binding: appBinding } : {}),
       ...(closure ? { canonical_closure: closure } : {}),
-    };
+    }];
   });
+}
+
+function validateModernTargetFields(
+  target: Record<string, unknown>,
+  client: string,
+  context: string,
+): void {
+  if (!/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(client))
+    throw new Error(`${context}: invalid client identity`);
+  const fields = new Set(['client', 'scopes', 'delivery', 'authentication', 'app_binding']);
+  if (Object.keys(target).some((field) => !fields.has(field)))
+    throw new Error(`${context}: unknown schema-1 target field`);
+  const scopes = stringArray(target.scopes, 'scopes', context);
+  if (scopes.length !== 1 || scopes[0] !== 'user')
+    throw new Error(`${context}: schema-1 targets require User scope`);
+  if (target.app_binding !== undefined &&
+    (client !== 'chatgpt' || !record(target.app_binding)))
+    throw new Error(`${context}: app_binding is valid only for ChatGPT`);
+  if (record(target.app_binding) &&
+    Object.keys(target.app_binding).some((field) => !['app_key', 'id', 'mcp_server'].includes(field)))
+    throw new Error(`${context}: unknown app_binding field`);
 }
 
 function evidenceTrustedForEligibility(

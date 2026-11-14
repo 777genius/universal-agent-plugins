@@ -53,6 +53,7 @@ type trustedKeysDocument struct {
 type mirrorMetadata struct {
 	SchemaVersion      int    `json:"schema_version"`
 	RegistryRepository string `json:"registry_repository"`
+	DirectoryFeedID    string `json:"directory_feed_id,omitempty"`
 	DirectorySequence  uint64 `json:"directory_sequence"`
 	DirectoryDigest    string `json:"directory_digest"`
 	DirectoryCommit    string `json:"directory_source_commit"`
@@ -84,6 +85,10 @@ func main() {
 }
 
 func run(registry, origin, output, previous string) error {
+	return runWithDirectoryProfile(registry, origin, output, previous, nil)
+}
+
+func runWithDirectoryProfile(registry, origin, output, previous string, approved *directoryMirrorProfile) error {
 	base, err := safeOrigin(origin)
 	if err != nil {
 		return err
@@ -94,7 +99,12 @@ func run(registry, origin, output, previous string) error {
 	client := &http.Client{Timeout: 30 * time.Second}
 	client.CheckRedirect = sameOriginRedirect(base)
 
-	directory, err := fetchDirectory(client, base, registry)
+	profile := legacyDirectoryProfile(base)
+	if approved != nil {
+		profile = *approved
+	}
+	directoryClient := &http.Client{Timeout: 30 * time.Second, CheckRedirect: sameOriginRedirect(profile.origin)}
+	directory, err := fetchDirectoryWithProfile(directoryClient, registry, profile)
 	if err != nil {
 		return fmt.Errorf("directory: %w", err)
 	}
@@ -109,6 +119,7 @@ func run(registry, origin, output, previous string) error {
 	metadata := mirrorMetadata{
 		SchemaVersion:      1,
 		RegistryRepository: registry,
+		DirectoryFeedID:    directory.feedID,
 		DirectorySequence:  directory.bundle.Snapshot.Sequence,
 		DirectoryDigest:    directory.bundle.Digest,
 		DirectoryCommit:    directory.bundle.Snapshot.SourceCommit,
@@ -166,11 +177,7 @@ type mirrorFile struct {
 }
 
 func stagedFiles(directory directoryResult, discovery discoveryResult, security securityResult) []mirrorFile {
-	return []mirrorFile{
-		{rel: "registry/schemas/1/latest.json", body: directory.pointerBytes},
-		{rel: "registry/schemas/1/snapshots/" + directory.stem + ".json", body: directory.snapshotBytes},
-		{rel: "registry/schemas/1/snapshots/" + directory.stem + ".envelope.json", body: directory.envelopeBytes},
-		{rel: "registry/publication/trusted-keys.json", body: directory.trustBytes},
+	return append(directoryFiles(directory), []mirrorFile{
 		{rel: "discovery/latest.json", body: discovery.pointerBytes},
 		{rel: "discovery/snapshots/" + discovery.stem + ".json", body: discovery.snapshotBytes},
 		{rel: "discovery/snapshots/" + discovery.stem + ".envelope.json", body: discovery.envelopeBytes},
@@ -179,51 +186,7 @@ func stagedFiles(directory directoryResult, discovery discoveryResult, security 
 		{rel: "security/latest.json", body: security.pointerBytes},
 		{rel: "security/snapshots/" + security.stem + ".json", body: security.snapshotBytes},
 		{rel: "security/snapshots/" + security.stem + ".envelope.json", body: security.envelopeBytes},
-	}
-}
-
-type directoryResult struct {
-	pointerBytes, snapshotBytes, envelopeBytes, trustBytes []byte
-	stem                                                   string
-	bundle                                                 directoryv1.VerifiedBundle
-}
-
-func fetchDirectory(client *http.Client, base *url.URL, registry string) (directoryResult, error) {
-	pointerBytes, err := get(client, base.ResolveReference(&url.URL{Path: "registry/schemas/1/latest.json"}).String(), directoryv1.MaxLatestBytes)
-	if err != nil {
-		return directoryResult{}, err
-	}
-	pointer, err := directoryv1.ParsePointer(pointerBytes)
-	if err != nil {
-		return directoryResult{}, err
-	}
-	if len(pointerBytes) > pointer.FetchContract.LatestMaxBytes {
-		return directoryResult{}, errors.New("latest pointer exceeds declared limit")
-	}
-	getArtifact := func(relative string, limit int) ([]byte, error) {
-		return get(client, base.ResolveReference(&url.URL{Path: "registry/schemas/1/" + relative}).String(), limit)
-	}
-	snapshotBytes, err := getArtifact(pointer.SnapshotPath, pointer.FetchContract.SnapshotMaxBytes)
-	if err != nil {
-		return directoryResult{}, err
-	}
-	envelopeBytes, err := getArtifact(pointer.EnvelopePath, pointer.FetchContract.EnvelopeMaxBytes)
-	if err != nil {
-		return directoryResult{}, err
-	}
-	snapshot, err := directoryv1.ParseSnapshot(snapshotBytes)
-	if err != nil {
-		return directoryResult{}, err
-	}
-	trustBytes, trust, err := fetchDirectoryTrust(registry, snapshot.SourceCommit)
-	if err != nil {
-		return directoryResult{}, err
-	}
-	bundle, err := directoryv1.VerifyPointerBundle(pointer, snapshotBytes, envelopeBytes, trust)
-	if err != nil {
-		return directoryResult{}, err
-	}
-	return directoryResult{pointerBytes, snapshotBytes, envelopeBytes, trustBytes, fmt.Sprintf("%020d", pointer.Sequence), bundle}, nil
+	}...)
 }
 
 type discoveryResult struct {
@@ -634,6 +597,9 @@ func enforceMonotonic(previousPath string, candidate mirrorMetadata) error {
 	}
 	if previous.SchemaVersion != 1 {
 		return errors.New("previous marker has unsupported schema")
+	}
+	if previous.DirectoryFeedID != candidate.DirectoryFeedID {
+		return errors.New("previous marker belongs to a different Directory signing lineage")
 	}
 	if previous.RegistryRepository != "" && previous.RegistryRepository != candidate.RegistryRepository {
 		return fmt.Errorf("candidate registry %q differs from previous marker %q", candidate.RegistryRepository, previous.RegistryRepository)
