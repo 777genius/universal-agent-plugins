@@ -109,10 +109,10 @@ func sessionSourceSnapshot(kernel nativeconfig.Kernel, plan clients.SessionPlan)
 // reads the documented pathname; we cannot atomically fence noncooperating
 // writers between the final revalidation and their own open syscall.
 type sessionSourcePin struct {
-	parentPath string
-	filePath   string
-	resolvedParent string
-	parent, file *os.File
+	parentPath           string
+	filePath             string
+	resolvedParent       string
+	parent, file         *os.File
 	parentInfo, fileInfo os.FileInfo
 }
 
