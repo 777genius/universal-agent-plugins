@@ -19,10 +19,10 @@ test('native CLI option handles the Directory CLI and a command inside a Skill p
   assert.equal(withNativeCliInvocation('npx --yes universal-agent-plugins@0.1.108 repair context7', true),
     'agentplugins repair context7');
 
-  const prompt = 'Check the source before running:\\n' + projectSkill;
+  const prompt = 'Check the source before running:\n' + projectSkill;
   assert.equal(hasNpxUapInvocation(prompt), true);
   assert.equal(withNativeCliInvocation(prompt, true),
-    'Check the source before running:\\nagentplugins skills add https://github.com/anthropics/skills --skill frontend-design --scope project');
+    'Check the source before running:\nagentplugins skills add https://github.com/anthropics/skills --skill frontend-design --scope project');
 });
 
 test('does not rewrite unrelated npx calls, vendor installers or arbitrary text', () => {
