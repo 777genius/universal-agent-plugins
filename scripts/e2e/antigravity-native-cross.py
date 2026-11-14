@@ -1343,6 +1343,7 @@ def admission_contracts():
                    "source": {"git": {"commit": revision["resolved_revision"]}}}
             action = {"from_version": "1.0.0", "to_version": "1.0.0", "from_revision": "b" * 40,
                       "from_digest": "sha256:" + "a" * 64, "component_support": [
+                          {"kind": "skill", "name": "check", "support": "native"},
                           {"kind": "mcp_server", "name": "uap_public_probe", "support": "native"}],
                       "alias": "uap-cline-public-probe", "client_id": "antigravity", "installation_id": "owned-installation",
                       "binding_id": "owned-binding", "action": "repair", "package_digest": "sha256:" + "a" * 64, "revision": "b" * 40}
@@ -1358,7 +1359,9 @@ def admission_contracts():
                          "result-iid", "binding", "alias", "client", "from-version", "to-version", "from-revision",
                          "revision", "from-digest", "digest", "operation", "changed", "missing-observation",
                          "disabled", "absent", "unknown-finding", "empty-finding", "reason", "next-action",
-                         "component-kind", "component-name", "component-support", "component-extra"):
+                         "component-kind", "component-name", "component-support", "component-extra",
+                         "component-missing-skill", "component-missing-mcp", "component-order",
+                         "component-duplicate", "component-second-kind", "component-second-name", "component-second-support"):
                 changed = json.loads(json.dumps(packet))
                 row, result = changed["actions"][0], changed["results"][0]
                 if name == "command": changed["command"] = "doctor"
@@ -1393,10 +1396,17 @@ def admission_contracts():
                 elif name == "empty-finding": result["manual_actions"] = [{}]
                 elif name == "reason": result["reason"] = "not checked"
                 elif name == "next-action": result["next_actions"] = [{"kind": "authenticate"}]
-                elif name == "component-kind": row["component_support"][0]["kind"] = "skill"
+                elif name == "component-kind": row["component_support"][0]["kind"] = "mcp_server"
                 elif name == "component-name": row["component_support"][0]["name"] = "foreign"
                 elif name == "component-support": row["component_support"][0]["support"] = "projected"
-                else: row["component_support"][0]["unknown"] = True
+                elif name == "component-extra": row["component_support"][0]["unknown"] = True
+                elif name == "component-missing-skill": row["component_support"].pop(0)
+                elif name == "component-missing-mcp": row["component_support"].pop(1)
+                elif name == "component-order": row["component_support"].reverse()
+                elif name == "component-duplicate": row["component_support"].append(dict(row["component_support"][0]))
+                elif name == "component-second-kind": row["component_support"][1]["kind"] = "skill"
+                elif name == "component-second-name": row["component_support"][1]["name"] = "foreign"
+                else: row["component_support"][1]["support"] = "projected"
                 with self.subTest(name=name), self.assertRaises(AssertionError):
                     public_user_cold_repair_result(json.dumps(changed).encode(), installed, binding, pin)
             for findings in ([], [{}], [{"code": "native_projection_not_checked"}], [{"code": "activation_pending"}]):
@@ -2218,7 +2228,8 @@ def public_user_cold_repair_result(body, installed, binding, pin):
         "scope": "user", "scope_selection_reason": "explicit",
         "actions": [{
             "from_version": version, "to_version": version, "from_revision": commit, "from_digest": digest,
-            "component_support": [{"kind": "mcp_server", "name": "uap_public_probe", "support": "native"}],
+            "component_support": [{"kind": "skill", "name": "check", "support": "native"},
+                          {"kind": "mcp_server", "name": "uap_public_probe", "support": "native"}],
             "alias": alias, "client_id": "antigravity", "installation_id": installation_id, "binding_id": binding_id,
             "action": "repair", "package_digest": digest, "revision": commit,
         }],
