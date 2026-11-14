@@ -1,0 +1,261 @@
+name: Diagnostic Grok original artifact readout
+on:
+  push:
+    branches:
+      - diagnostic/grok-original-readout-20261114
+permissions:
+  actions: read
+jobs:
+  read-fixed-originals:
+    if: github.repository == '777genius/universal-agent-plugins' && github.ref == 'refs/heads/diagnostic/grok-original-readout-20261114' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Inspect the two fixed original artifacts
+        timeout-minutes: 2
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_PROMPT_DISABLED: '1'
+          GH_PAGER: cat
+        run: |
+          python3 - <<'PY'
+          import base64
+          import hashlib
+          import io
+          import json
+          import math
+          import os
+          from pathlib import PurePosixPath
+          import re
+          import selectors
+          import stat
+          import subprocess
+          import sys
+          import time
+          import zipfile
+          
+          SOURCE = "67989a2f5ce219cedace716211346a7971f512af"
+          TREE = "3e094bb4f495360383f210c1e3a28b6f7e0082a7"
+          CASES = (
+              ("grok-protocol", 14130245485, 17935,
+               "2d60555e76e6a0a4f1f5c049f170e79f1884d31f2059f70d30514d88ea066f76",
+               "grok-project-no-model-c4d8a91ee88750da29f8e78cf9745daf40e56b5b.zip"),
+              ("grok-noauth", 14129204371, 26264,
+               "4a593ba77272afcf0c33fa47a8bd0f24e664726545b49ae9e790c050b3c28c37",
+               "grok-noauth-native-call-67989a2f5ce219cedace716211346a7971f512af.zip"),
+          )
+          MEMBERS = {"evidence.json", "delegation.json"}
+          FIELDS = set("probe argv cwd error exit elapsed_seconds stdout_file stderr_file stdout_bytes stderr_bytes "
+                       "stdout_sha256 stderr_sha256 stdout stderr stdout_base64 stderr_base64".split())
+          MAX_MEMBER = 8 << 20
+          MAX_TOTAL = 16 << 20
+          HEX = re.compile(r"[0-9a-f]{64}\Z")
+          LABEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
+          
+          def need(condition):
+              if not condition:
+                  raise ValueError("fixed original readout refused")
+          
+          def sha(body):
+              return hashlib.sha256(body).hexdigest()
+          
+          def download(artifact, size):
+              command = ["gh", "api", "--hostname", "github.com",
+                         "repos/777genius/universal-agent-plugins/actions/artifacts/" + str(artifact) + "/zip"]
+              process = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+              output, errors = bytearray(), bytearray()
+              deadline = time.monotonic() + 45
+              try:
+                  with selectors.DefaultSelector() as selected:
+                      selected.register(process.stdout, selectors.EVENT_READ, output)
+                      selected.register(process.stderr, selectors.EVENT_READ, errors)
+                      while selected.get_map():
+                          remaining = deadline - time.monotonic()
+                          need(remaining > 0)
+                          for key, _ in selected.select(min(remaining, 1)):
+                              target = key.data
+                              maximum = size if target is output else 4096
+                              chunk = os.read(key.fd, min(65536, maximum + 1 - len(target)))
+                              if not chunk:
+                                  selected.unregister(key.fileobj)
+                              else:
+                                  target.extend(chunk)
+                                  need(len(target) <= maximum)
+                      need(process.wait(timeout=max(0.001, deadline - time.monotonic())) == 0)
+                      need(time.monotonic() <= deadline and len(output) == size)
+                      return bytes(output)
+              finally:
+                  if process.poll() is None:
+                      process.kill()
+                  process.wait(timeout=5)
+                  process.stdout.close()
+                  process.stderr.close()
+          
+          def unpack(body, wrapper):
+              for level in range(2):
+                  with zipfile.ZipFile(io.BytesIO(body)) as archive:
+                      rows = archive.infolist()
+                      names = [row.filename for row in rows]
+                      need(1 <= len(rows) <= 2 and len(set(names)) == len(names))
+                      need(sum(row.file_size for row in rows) <= MAX_TOTAL)
+                      for row in rows:
+                          mode = (row.external_attr >> 16) & 0xFFFF
+                          need(not row.is_dir() and not row.flag_bits & 1 and row.compress_type in (0, 8))
+                          need(0 < row.file_size <= MAX_MEMBER and "/" not in row.filename and "\\" not in row.filename)
+                          need(stat.S_IFMT(mode) in (0, stat.S_IFREG))
+                      # read verifies each member's full CRC; no extraction or filesystem writes.
+                      values = {row.filename: archive.read(row) for row in rows}
+                      need(all(len(values[row.filename]) == row.file_size for row in rows))
+                  if set(values) == MEMBERS:
+                      return values
+                  need(level == 0 and set(values) == {wrapper})
+                  body = values[wrapper]
+              raise ValueError("fixed original readout refused")
+          
+          def object_pairs(pairs):
+              result = {}
+              for key, value in pairs:
+                  need(key not in result)
+                  result[key] = value
+              return result
+          
+          def no_constant(_):
+              raise ValueError("fixed original readout refused")
+          
+          def document(body):
+              need(0 < len(body) <= MAX_MEMBER)
+              value = json.loads(body.decode("utf-8"), object_pairs_hook=object_pairs, parse_constant=no_constant)
+              need(type(value) is dict)
+              return value
+          
+          def stream(row, name):
+              encoded = row[name + "_base64"]
+              need(type(encoded) is str and len(encoded) <= 4 * (((1 << 20) + 2) // 3))
+              raw = base64.b64decode(encoded, validate=True)
+              need(len(raw) <= 1 << 20 and base64.b64encode(raw).decode() == encoded)
+              need(type(row[name + "_bytes"]) is int and len(raw) == row[name + "_bytes"])
+              need(type(row[name + "_sha256"]) is str and sha(raw) == row[name + "_sha256"])
+              need(row[name + "_file"] == row["probe"] + "." + name + ".log")
+              need(row[name] == raw.decode("utf-8", "replace"))
+              return raw
+          
+          def commands(value):
+              rows = value["commands"]
+              need(type(rows) is list and 0 <= len(rows) <= 128)
+              seen, decoded = set(), {}
+              for row in rows:
+                  need(type(row) is dict and set(row) == FIELDS)
+                  label = row["probe"]
+                  need(type(label) is str and LABEL.fullmatch(label) and label not in seen)
+                  seen.add(label)
+                  need(type(row["argv"]) is list and 1 <= len(row["argv"]) <= 64)
+                  need(all(type(item) is str and 0 < len(item) <= 4096 and "\0" not in item for item in row["argv"]))
+                  need(type(row["cwd"]) is str and 0 < len(row["cwd"]) <= 4096 and PurePosixPath(row["cwd"]).is_absolute())
+                  need(type(row["exit"]) is int and -255 <= row["exit"] <= 255)
+                  need(type(row["elapsed_seconds"]) in (int, float) and math.isfinite(row["elapsed_seconds"])
+                       and 0 <= row["elapsed_seconds"] <= 900)
+                  need(row["error"] is None or type(row["error"]) is str and len(row["error"]) <= 512)
+                  decoded[label] = (stream(row, "stdout"), stream(row, "stderr"))
+              return rows, decoded
+          
+          def readonly(value, rows, decoded):
+              selected = [row for row in rows if row["probe"] == "readonly-production-inventory"]
+              need(len(selected) <= 1)
+              proof = value.get("readonly_inventory")
+              if not selected:
+                  need(proof is None)
+                  return None, None
+              row = selected[0]
+              argv, project = row["argv"], PurePosixPath(row["cwd"])
+              need(len(argv) == 11 and PurePosixPath(argv[0]).name == "grok-inventory-test")
+              need(argv[1:5] == ["-test.run=^TestEnablementReadonlyNativeInventory$", "-test.v", "-test.count=1", "-test.timeout=45s"])
+              need(argv[5:8] == ["-grok-readonly-home=" + str(project.parent / "home"),
+                                "-grok-readonly-project=" + str(project),
+                                "-grok-readonly-native=" + str(project.parent / "bin/grok")])
+              installations = value.get("prepared_owned_state", {}).get("installations")
+              need(type(installations) is list and len(installations) == 1 and type(installations[0]) is dict)
+              installation = installations[0]
+              clients = installation.get("clients")
+              need(type(clients) is dict and len(clients) == 1)
+              binding = next(iter(clients.values()))
+              need(type(binding) is dict and binding.get("client_id") == "grok" and binding.get("scope") == "project")
+              need(argv[8:] == ["-grok-readonly-path=" + binding.get("target_locator", ""),
+                               "-grok-readonly-name=" + installation.get("declared_name", ""),
+                               "-grok-readonly-version=" + installation.get("package", {}).get("version", "")])
+              if proof is not None:
+                  need(type(proof) is dict and set(proof) == {"calls", "input_snapshot_sha256"})
+                  need(type(proof["calls"]) is int and proof["calls"] == 2
+                       and type(proof["input_snapshot_sha256"]) is str and HEX.fullmatch(proof["input_snapshot_sha256"]))
+                  stdout, _ = decoded[row["probe"]]
+                  need(row["exit"] == 0 and row["error"] is None)
+                  need(stdout.count(b"GROK_READONLY_NATIVE_INVENTORY_PASS\n") == 1
+                       and stdout.count(b"--- PASS: TestEnablementReadonlyNativeInventory ") == 1
+                       and b"--- SKIP:" not in stdout and b"--- FAIL:" not in stdout)
+              return proof, row
+          
+          def preview(body, limit):
+              return {"bytes": len(body), "sha256": sha(body), "truncated": len(body) > limit,
+                      "text": body[:limit].decode("utf-8", "replace")}
+          
+          def project(case, artifact, values):
+              evidence, delegation = document(values["evidence.json"]), document(values["delegation.json"])
+              for value in (evidence, delegation):
+                  need(type(value.get("schema_version")) is int and value["schema_version"] == 1)
+                  need(value.get("source_commit") == SOURCE and value.get("source_tree") == TREE)
+              need(delegation.get("kind") == "grok-delegated-service" and delegation.get("case") == case)
+              need(type(delegation.get("evidence_bytes")) is int and delegation["evidence_bytes"] == len(values["evidence.json"]))
+              need(delegation.get("evidence_sha256") == sha(values["evidence.json"]))
+              need(delegation.get("native_passed") is False and evidence.get("passed") is False)
+              closure = delegation.get("delegated_service")
+              need(type(closure) is dict and closure.get("closed") is True
+                   and closure.get("forced_stop") is False and closure.get("forced_kill") is False)
+              for key in ("installer_sha256", "probe_sha256") + (("inventory_test_sha256",) if case == "grok-protocol" else ()):
+                  need(type(evidence.get(key)) is str and HEX.fullmatch(evidence[key]) and evidence[key] == delegation.get(key))
+              need(evidence.get("vendor_authentication_used") is False
+                   and evidence.get("unmanaged_project_owned_enablement_qualified") is False)
+              if case == "grok-protocol":
+                  need(evidence.get("model_invoked") is False and evidence.get("grok_tools_call_qualified") is False
+                       and evidence.get("transport") == "stdio")
+              else:
+                  need(evidence.get("actual_model_used") is False and evidence.get("scripted_local_provider") is True
+                       and evidence.get("grok_native_tools_call_qualified") is False and evidence.get("platform") == "Linux-x86_64"
+                       and evidence.get("github_run_id") == "43632656361")
+              error = evidence.get("error")
+              need(type(error) is str and 0 < len(error) <= 4096)
+              rows, decoded = commands(evidence)
+              proof, row = readonly(evidence, rows, decoded)
+              result = {"kind": "grok-original-artifact-diagnostic", "artifact_id": artifact, "case": case,
+                        "source_commit": SOURCE, "source_tree": TREE, "evidence_sha256": sha(values["evidence.json"]),
+                        "readout_only": True, "qualifies_native": False,
+                        "readonly_inventory": proof,
+                        "last_command": None if not rows else {"label": rows[-1]["probe"], "exit": rows[-1]["exit"]}}
+              for limit in (2048, 256):
+                  result["error"] = preview(error.encode("utf-8", "surrogatepass"), min(limit, 1024))
+                  result["readonly_command"] = None if row is None else {
+                      "exit": row["exit"], "capture_error_present": row["error"] is not None,
+                      "stdout": preview(decoded[row["probe"]][0], limit),
+                      "stderr": preview(decoded[row["probe"]][1], limit)}
+                  encoded = json.dumps(result, sort_keys=True, ensure_ascii=True, separators=(",", ":"))
+                  if len(("GROK_ORIGINAL_READOUT " + encoded + "\n").encode()) <= 8192:
+                      return encoded
+              raise ValueError("fixed original readout refused")
+          
+          failed = False
+          for case, artifact, size, digest, wrapper in CASES:
+              stage = "download"
+              try:
+                  original = download(artifact, size)
+                  need(sha(original) == digest)
+                  stage = "archive"
+                  values = unpack(original, wrapper)
+                  stage = "source-and-stream-joins"
+                  output = project(case, artifact, values)
+                  # JSON escaping and the constant prefix prevent interpreted log commands.
+                  print("GROK_ORIGINAL_READOUT " + output, flush=True)
+              except Exception:
+                  failed = True
+                  print("GROK_ORIGINAL_READOUT " + json.dumps({
+                      "artifact_id": artifact, "readout_only": True, "qualifies_native": False,
+                      "refused": True, "stage": stage}, sort_keys=True), flush=True)
+          sys.exit(1 if failed else 0)
+          PY
