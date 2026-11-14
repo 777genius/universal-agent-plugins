@@ -28,10 +28,17 @@ var (
 	_ clients.TargetLayout         = (*Adapter)(nil)
 	_ clients.ProjectTargetLayout  = (*Adapter)(nil)
 	_ clients.NativeRegistryLayout = (*Adapter)(nil)
+	_ clients.SelectionReader      = (*Adapter)(nil)
 	_ clients.PlanPrecondition     = (*Adapter)(nil)
 	_ clients.PlanQualifier        = (*Adapter)(nil)
 	_ clients.PlanRefiner          = (*Adapter)(nil)
 )
+
+// Both native scopes record selected servers in the projected MCP document;
+// portable mcp.json is intentionally absent from the delivered package.
+func (*Adapter) ManagedMCPSelection() clients.SelectionLayout {
+	return clients.SelectionLayout{File: "mcp_config.json", Nested: true}
+}
 
 func cleanAbsolute(path string) bool {
 	return path != "" && filepath.IsAbs(path) && filepath.Clean(path) == path &&

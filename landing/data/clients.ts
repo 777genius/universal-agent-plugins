@@ -1,4 +1,6 @@
 import type { ClientTarget } from '../types/registry';
+import { assertClientCoverage } from '../utils/clientContract.ts';
+import { clientIds, type ClientID } from './clientIds.generated.ts';
 
 export interface ClientLandingPage extends ClientTarget {
   slug: string;
@@ -12,7 +14,7 @@ export interface ClientLandingPage extends ClientTarget {
 /** Public presentation only: keep technical compatibility and previously installed profiles intact.
  * Public activation must pass the published-capability guard against the qualified CLI release.
  */
-export const hiddenPublicClientIds: ReadonlySet<string> = new Set(['vscode']);
+export const hiddenPublicClientIds: ReadonlySet<string> = new Set<ClientID>(['vscode']);
 
 const allClientLandingPages: ClientLandingPage[] = [
   {
@@ -258,6 +260,8 @@ const allClientLandingPages: ClientLandingPage[] = [
       'https://pi.dev/docs/latest',
   },
 ];
+
+assertClientCoverage(clientIds, allClientLandingPages, 'Agent presentation');
 
 export const clientLandingPages: ClientLandingPage[] = allClientLandingPages.filter(
   (client) => !hiddenPublicClientIds.has(client.id),

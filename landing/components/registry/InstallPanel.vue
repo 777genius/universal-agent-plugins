@@ -2,7 +2,6 @@
 import { usePluginInstallSelection } from '~/composables/usePluginInstallSelection';
 import {
   installTargets,
-  canonicalInstallTarget,
   canonicalInstallTargets,
   cliInstallTargets,
   type InstallTargetID,
@@ -12,6 +11,7 @@ import { pluginCommands } from '~/utils/commands';
 import { projectCatalogCommands, pinnedPiProjectCommands } from '~/utils/projectCatalogSource';
 import { isFullyRetired } from '~/utils/filter';
 import { vendorInstallSource } from '~/utils/registry';
+import { pluginTargetDescription } from '~/utils/pluginTargetDescription';
 const { t } = useI18n();
 
 const props = defineProps<{ plugin: RegistryPlugin }>();
@@ -57,33 +57,10 @@ const targetOptions = computed(() =>
       !(client.id === 'pi' && pinnedPiSource.value && current.value) &&
       (autoDetect.value || !targets.value.includes(client.id)),
     description: (() => {
-      if (isDiscovered.value)
-        return props.plugin.discovery?.availability === 'available'
-          ? t('registryUi.card.checkedAgainBeforeInstallation')
-          : t('registryUi.card.unavailableAtItsIndexedSource');
-      if (!published.value)
-        return t('registryUi.install.unavailableReviewDataIsNotInstallationAuthority');
-      if (expired.value) return t('registryUi.install.unavailableSignedDirectorySnapshotExpired');
-      const source = targetDistributions.value.get(client.id);
-      const target = source?.targets.find(
-        (item) => item.client === canonicalInstallTarget(client.id),
-      );
-      if (client.id === 'chatgpt')
-        return target
-          ? t('registryUi.desktopGuide.description')
-          : t('registryUi.install.noActiveReleaseSupportsThisClient');
-      if (client.id === 'chatgptweb' && targetAvailability.value.get(client.id)?.kind === 'guided_web')
-        return t('registryUi.install.guidedChatgptSetup');
-      if (client.id === 'chatgptweb')
-        return target?.app_binding
-          ? t('registryUi.install.verifiedConnectionFinishSetupInChatgpt')
-          : t('registryUi.install.notAvailableForChatgpt');
-      if (client.id === 'pi' && !target)
-        return pinnedPiSource.value && current.value
-          ? t('registryUi.install.piPinnedProjectSource')
-          : t('registryUi.install.noCompatibleSignedRelease', { agent: client.name });
-      if (target) return t(`registryUi.delivery.${target.delivery}`);
-      return t('registryUi.install.noCompatibleSignedRelease', { agent: client.name });
+      const hint = pluginTargetDescription(props.plugin, client, {
+        scope: scope.value, published: published.value, expired: expired.value, current: current.value,
+      });
+      return t(hint.key, hint.params);
     })(),
   })),
 );

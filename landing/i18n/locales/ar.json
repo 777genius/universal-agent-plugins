@@ -830,9 +830,12 @@
           "extensions": "إضافات"
         }
       },
-      "noCompatibleSignedRelease": "يدعم UAP الوكيل {agent}، لكن هذا الملحق لا يملك إصدارًا موقّعًا متوافقًا مع نطاق التثبيت المحدد.",
+      "noCompatibleSignedRelease": "لا يتوفر إصدار من الكتالوج للوكيل {agent} في هذا النطاق.",
       "piPinnedProjectSource": "المشروع: ثبّت في Pi من مصدر Git مثبّت على SHA محدد (وليس هدف Pi موقّعًا)؛ تتحقق أداة CLI من التوافق.",
-      "guidedChatgptSetup": "إعداد موجّه لـ ChatGPT Web؛ أكمل الاتصال داخل ChatGPT."
+      "guidedChatgptSetup": "إعداد موجّه لـ ChatGPT Web؛ أكمل الاتصال داخل ChatGPT.",
+      "catalogReleasePending": "لم يُنشر هذا الملحق للوكيل {agent} بعد.",
+      "useComputerScope": "لهذا الملحق، اختر هذا الكمبيوتر.",
+      "unsupportedPluginComponents": "لا يدعم {agent} جميع مكونات هذا الملحق."
     },
     "authentication": {
       "not_required": "لا يلزم حساب",

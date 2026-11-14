@@ -52,7 +52,7 @@ func main() {
 		profile["detectionStatus"] = "not_detected"
 	}
 	if mode == "environment" {
-		for _, key := range []string{"OPENAI_API_KEY", "ANTHROPIC_AUTH_TOKEN", "NODE_OPTIONS", "HTTP_PROXY", "HTTPS_PROXY", "UAP_SDK_TEST_MODE"} {
+		for _, key := range []string{"OPENAI_API_KEY", "HERMES_API_KEY", "ANTHROPIC_AUTH_TOKEN", "NODE_OPTIONS", "HTTP_PROXY", "HTTPS_PROXY", "UAP_SDK_TEST_MODE"} {
 			if os.Getenv(key) != "" {
 				target["label"] = "unexpected inherited credential or launch option"
 			}
@@ -75,12 +75,13 @@ func main() {
 func fixtureTargets(mode string, target map[string]any) []any {
 	targets := []any{target}
 	if mode == "environment" {
-		for _, profile := range []struct{ client, locator string }{
+		for _, profile := range []struct{ client, locator, labelSuffix string }{
+			{client: "hermes", locator: "HERMES_HOME", labelSuffix: "HERMES_DATA_DIR_SUFFIX"},
 			{client: "pi", locator: "PI_CODING_AGENT_DIR"},
 			{client: "qoder", locator: "QODER_CONFIG_DIR"},
 		} {
 			targets = append(targets, map[string]any{
-				"client": profile.client, "label": profile.client, "available": true, "detectionStatus": "detected",
+				"client": profile.client, "label": profile.client + os.Getenv(profile.labelSuffix), "available": true, "detectionStatus": "detected",
 				"profile": map[string]any{
 					"id": profile.client, "client": profile.client, "configRoot": os.Getenv(profile.locator), "detectionStatus": "detected",
 				},
