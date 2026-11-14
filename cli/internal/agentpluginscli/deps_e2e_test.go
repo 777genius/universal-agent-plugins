@@ -19,6 +19,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/sourcespec"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
@@ -357,16 +358,18 @@ func TestDependencyEnvironmentCLIEndToEnd(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	var pending domain.MutationReceipt
 	for key, binding := range state.Installations[0].Clients {
 		n := len(binding.Receipts) - 1
 		binding.Receipts[n].Phase = "state_committed"
-		pending = binding.Receipts[n]
 		state.Installations[0].Clients[key] = binding
 	}
-	foreign := pending
-	foreign.OperationID = "foreign-pending"
-	foreign.EnvironmentAuthority = nil
+	// Grouped removal retains a standalone receipt after its binding is removed.
+	// A binding's package replacement is not a fresh standalone publication.
+	foreign := domain.MutationReceipt{
+		OperationID: "foreign-pending", ClientBindingID: "foreign-binding", Sequence: 1,
+		MutationType: "directory_remove", ActivePath: filepath.Join(t.TempDir(), "foreign-target"),
+		Phase: "state_committed",
+	}
 	state.TransactionReceipts = []domain.MutationReceipt{foreign}
 	if e := f.store.Save(state); e != nil {
 		t.Fatal(e)
@@ -375,8 +378,8 @@ func TestDependencyEnvironmentCLIEndToEnd(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if _, _, e := f.execute(false, "deps", "recover", "--yes", "--format", "json"); e == nil {
-		t.Fatal("mixed recovery was accepted")
+	if _, _, e := f.execute(false, "deps", "recover", "--yes", "--format", "json"); !errors.Is(e, transaction.ErrEnvironmentAuthority) {
+		t.Fatalf("mixed recovery did not reach the environment authority guard: %v", e)
 	}
 	if _, _, e := f.execute(false, "repair", id, "--target", "codex", "--format", "json"); e == nil {
 		t.Fatal("repair bypassed foreign pending recovery")

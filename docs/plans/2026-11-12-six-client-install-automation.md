@@ -192,3 +192,31 @@ remain pending. Subsequent findings are recorded here with their actual source.
 - [Kiro CLI](https://kiro.dev/docs/cli/reference/cli-commands/)
 - Existing `clients/lifecycle.go`, `ports/interfaces_runtime.go` and native E2E
   helpers are the integration seams, not permission to bypass their boundaries.
+
+## 2026-11-14 — dependency recovery fixture after parent-authority validation
+
+Coverage run `43542221892`, job `132285145503`, and Core run `43542221685`,
+job `132285147039`, both failed `TestDependencyEnvironmentCLIEndToEnd` at its
+injected `Store.Save`: `standalone publication parent authority is required`.
+Both checked out PR merge `afd3bfef5159bb3d85b5b451d9f066ff0d3bd443` for branch
+`539e6a54a05cc297370f388116e681fbcdafa443` and base
+`ee6bbb04c3bf1cf2981764e5093d803dc0b57aec`. This was a test-fixture failure before
+the requested recovery, not an observed production publication failure.
+
+The fixture had copied an ordinary binding replacement into standalone receipts.
+Fresh standalone swaps now require original parent authority and cannot inherit
+the replacement's prior digest or physical proof. The corrected foreign fixture
+uses the existing pending standalone `directory_remove` role produced by grouped
+removal after its binding disappears, matching the existing lifecycle recovery
+fixture. The owned pending receipt remains unchanged. The mixed recovery must
+reach the typed environment-authority refusal; state-byte preservation, repair
+refusal, and subsequent owned-only recovery assertions remain in place. No
+production guard, receipt schema, native admission, or public capability changes.
+
+Local Go 1.26.11 validation compiled and started the focused E2E, but its first
+`deps lock --dry-run` refused at Git `phase=init`, `class=ordinary_unsupported`,
+`exit_status=unavailable`, before the changed fixture. The command exited 1 after
+39.943 seconds; the underlying errno was not reported. This is not a local E2E
+pass. `gofmt` and `git diff --check` completed; fresh hosted Core and Coverage
+must execute the complete corrected recovery scenario. The separate generator
+assertions and generated landing mapping remain outside this fixture correction.

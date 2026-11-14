@@ -2367,6 +2367,177 @@ class SourceRuntimeContracts(unittest.TestCase):
                         with self.assertRaisesRegex(RuntimeError, "original census evidence changed"):
                             CASE["source_runtime_snapshot"](inputs, expected)
 
+    def delta(self, before, after, *, deadline=None):
+        import time
+        summaries = [CASE["source_user_digest"](rows, "user") for rows in (before, after)]
+        return CASE["source_user_delta"](before, after, "user", "d" * 64, *summaries,
+                                         time.monotonic() + 10 if deadline is None else deadline)
+
+    def test_settled_source_delta_uses_only_captured_user_records_without_adopting_them(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            _, outer, user, _, source, policy = self.fixture(temporary)
+            before = self.capture(outer, policy)["_records"]
+            (source / "owned.py").write_bytes(b"changed source bytes must not be published")
+            (user / "outside-pm.txt").unlink(); (user / "added").write_bytes(b"added private bytes")
+            info = user.stat(); os.utime(user, ns=(info.st_atime_ns, info.st_mtime_ns + 2_000_000_000))
+            (outer / policy["projects"][0] / "config.yaml").write_bytes(b"independent Project change")
+            after = self.capture(outer, policy)["_records"]
+            captured = json.dumps([before, after], sort_keys=True)
+            with mock.patch.object(os, "read", side_effect=AssertionError("delta read")), \
+                    mock.patch.object(os, "open", side_effect=AssertionError("delta open")), \
+                    mock.patch.object(Path, "lstat", side_effect=AssertionError("delta stat")):
+                value = self.delta(before, after)
+            self.assertEqual(json.dumps([before, after], sort_keys=True), captured)
+            rows = {row["member"]: row for row in value["changes"]}
+            self.assertEqual(set(rows), {"user", "user/added", "user/outside-pm.txt", policy["source"] + "/owned.py"})
+            self.assertEqual((value["total_changes"], value["truncated"]), (4, False))
+            self.assertIsNone(rows["user/added"]["before"]); self.assertIsNone(rows["user/outside-pm.txt"]["after"])
+            self.assertNotEqual(rows["user"]["before"]["metadata"]["mtime_ns"], rows["user"]["after"]["metadata"]["mtime_ns"])
+            self.assertNotIn("private bytes", json.dumps(value)); self.assertNotIn("must not be published", json.dumps(value))
+            with self.assertRaisesRegex(RuntimeError, "original source User changed"):
+                CASE["require_source_user_baseline"](value["after"], value["before"])
+            self.assertEqual(self.delta(after, after)["total_changes"], 0)
+
+    def test_source_delta_retains_prepared_records_only_after_complete_preparation(self):
+        for effect in ("valid", "write-refusal", "capture-refusal"):
+            with self.subTest(effect=effect), tempfile.TemporaryDirectory() as temporary:
+                runner, outer, original, source, _, env = self.installed_fixture(temporary)
+                (original / "auth.json").unlink(); evidence = runner / "evidence"; evidence.mkdir()
+                env.update(RUNNER_TEMP=str(runner), UAP_BIN=str(runner / "unused-uap"), HERMES_NATIVE_SOURCE=str(source))
+                with mock.patch.dict(os.environ, env):
+                    inputs, records, retained = CASE["source_inputs"](runner, source), {}, {}
+                    authority = CASE["directory_identity"](outer)
+                    CASE["source_runtime_snapshot"](inputs, authority, retain=records)
+                    capture, write = CASE["source_runtime_snapshot"], CASE["write_json"]
+                    def capture_then_refuse(*args, **kwargs):
+                        value = capture(*args, **kwargs)
+                        if effect == "capture-refusal": raise RuntimeError("complete private map without accepted return")
+                        return value
+                    def write_or_refuse(*args, **kwargs):
+                        if effect == "write-refusal": raise OSError("receipt write refused")
+                        return write(*args, **kwargs)
+                    with mock.patch.dict(CASE["prepare_source_user"].__globals__, source_runtime_snapshot=capture_then_refuse, write_json=write_or_refuse):
+                        if effect == "valid":
+                            _, prepared, receipt = CASE["prepare_source_user"](inputs, records, evidence, "d" * 64, authority, retain=retained)
+                            self.assertEqual(CASE["source_user_digest"](retained, "user"), prepared["user"])
+                            self.assertEqual(prepared["user"], receipt["prepared_user"])
+                        else:
+                            with self.assertRaises((OSError, RuntimeError)):
+                                CASE["prepare_source_user"](inputs, records, evidence, "d" * 64, authority, retain=retained)
+                            self.assertEqual(retained, {})
+
+    def test_source_delta_bounds_and_no_incomplete_or_unsettled_publication(self):
+        import time
+        with tempfile.TemporaryDirectory() as temporary:
+            runner, outer, user, _, _, policy = self.fixture(temporary)
+            before = self.capture(outer, policy)["_records"]
+            for index in range(10): (user / ("added-" + str(index))).write_bytes(b"inert")
+            after = self.capture(outer, policy)["_records"]
+            value = self.delta(before, after)
+            self.assertEqual((value["total_changes"], len(value["changes"]), value["truncated"]), (11, 8, True))
+            self.assertLessEqual(len(json.dumps(value).encode()), 16 << 10)
+            evidence = runner / "evidence"; evidence.mkdir(); original = PermissionError(13, "retained original")
+            args = [evidence, CASE["directory_identity"](evidence), "d" * 64, {"user": value["before"]}, {"user": value["after"]}, before, after, "user", time.monotonic() + 10]
+            for effect in ("no-failure", "unsettled", "missing-prepared", "unreturned-after", "partial-after", "expired"):
+                call = list(args); failure, settled = original, True
+                if effect == "no-failure": failure = None
+                if effect == "unsettled": settled = False
+                if effect == "missing-prepared": call[3] = None
+                if effect == "unreturned-after": call[4] = None
+                if effect == "partial-after": call[6] = {}
+                if effect == "expired": call[-1] = time.monotonic() - 1
+                with self.subTest(effect=effect), mock.patch.dict(CASE["retain_source_user_delta"].__globals__, write_census_member=mock.Mock()) as scope:
+                    CASE["retain_source_user_delta"](*call, failure=failure, settled=settled)
+                    scope["write_census_member"].assert_not_called()
+            with self.assertRaisesRegex(RuntimeError, "deadline"):
+                self.delta(before, after, deadline=time.monotonic() - 1)
+            def partial(path, value, parent=None):
+                with path.open("xb") as stream: stream.write(b"{")
+                raise OSError("partial delta writer")
+            with mock.patch.dict(CASE["retain_source_user_delta"].__globals__, write_census_member=partial):
+                CASE["retain_source_user_delta"](*args, failure=original, settled=True)
+            with self.assertRaisesRegex(RuntimeError, "original Hermes refusal retained") as refused:
+                CASE["admit_evidence"](evidence, failure=original)
+            self.assertIs(refused.exception.__cause__, original)
+            self.assertEqual((evidence / "source-user-delta.json").read_bytes(), b"{")
+            self.assertFalse((evidence / "upload").exists())
+
+    def test_source_delta_projects_original_windows_identity_and_linux_link_without_target_text(self):
+        import hashlib
+        # Actual metadata from source2b artifacts14089868523 (Windows) and14091083977 (Linux).
+        windows = {"type": "file", "identity": (14296250764777768553, 844424930198189, 33279, 1, 115233,
+                   1794618254176314200, 1794618254176314200, 1794618254176314200, 32, 0, 0, 0),
+                   "sha256": "ffd5b5c5d96b036614ef5306402007d11908aadb68d491e30bb0dcb26ddef757"}
+        value = CASE["source_delta_record"](windows)
+        self.assertEqual([value["metadata"][key] for key in ("birthtime_ns", "attributes", "reparse_tag", "uid", "gid")],
+                         [1794618254176314200, 32, 0, 0, 0])
+        self.assertFalse(value["integer_saturated"])
+        large = {**windows, "identity": (windows["identity"][0], 1 << 65, *windows["identity"][2:])}
+        value = CASE["source_delta_record"](large)
+        self.assertTrue(value["integer_saturated"]); self.assertIsNone(value["metadata"]["inode"])
+        changed = {**large, "identity": (large["identity"][0], (1 << 65) + 1, *large["identity"][2:])}
+        packet = self.delta({"user/file": large}, {"user/file": changed})
+        self.assertEqual(packet["changes"][0]["before"], packet["changes"][0]["after"])
+        self.assertEqual(packet["total_changes"], 1)  # The bounded projection cannot retain either wide inode.
+        value = CASE["source_delta_record"]({"type": "link", "identity": (66305, 9452821, 41471, 1, 10,
+                  1794619614716712820, 1794619614716712820, 1001, 1001), "target": "python3.14"})
+        self.assertIsNone(value["sha256"]); self.assertIsNone(value["metadata"]["birthtime_ns"])
+        self.assertEqual(value["target_sha256"], hashlib.sha256(b"python3.14").hexdigest())
+        self.assertNotIn("python3.14", json.dumps(value))
+
+    def test_source_delta_closed_stage_joins_both_copied_user_summaries(self):
+        import copy
+        import hashlib
+        flags = ("capture_complete", "admission_qualified", "production_project_mcp", "vendor_authentication", "real_model_inference",
+                 "tools_call", "source_install_custom_root_qualified", "source_bootstrap_recovery_qualified")
+        with tempfile.TemporaryDirectory() as temporary:
+            runner, outer, user, _, _, policy = self.fixture(temporary)
+            before = self.capture(outer, policy)["_records"]; (user / "added").write_bytes(b"inert")
+            packet = self.delta(before, self.capture(outer, policy)["_records"])
+            for change in ("valid", "nonce", "before", "after", "bundled", "success", "qualified", "unknown", "boolean", "stat-bool", "stat-bound", "long-member", "truncated", "identical", "duplicate", "extra-row", "bound", "second-read"):
+                with self.subTest(change=change):
+                    evidence = runner / change; evidence.mkdir(); value = copy.deepcopy(packet)
+                    proof = dict.fromkeys(flags, False)
+                    proof.update(nonce="d" * 64, runtime_distribution="source", status="failed",
+                                 source_prepared_runtime={"user": packet["before"]}, runtime_after={"user": packet["after"]})
+                    if change == "nonce": value["nonce"] = "a" * 64
+                    if change in ("before", "after"): value[change]["sha256"] = "a" * 64
+                    if change == "bundled": proof["runtime_distribution"] = "bundled"
+                    if change == "success": proof["status"] = "passed"
+                    if change == "qualified": proof["admission_qualified"] = True
+                    if change == "unknown": value["secret"] = "forbidden"
+                    if change == "boolean": value["total_changes"] = True
+                    if change == "stat-bool": value["changes"][0]["after"]["metadata"]["inode"] = True
+                    if change == "stat-bound": value["changes"][0]["after"]["metadata"]["ctime_ns"] = 1 << 65
+                    if change == "long-member":
+                        value["changes"][0]["member"] = "user/" + "x" * 512
+                        value["changes"][0]["member_sha256"] = hashlib.sha256(value["changes"][0]["member"].encode()).hexdigest()
+                    if change == "truncated": value["truncated"] = True
+                    if change == "identical": value["changes"][0]["after"] = copy.deepcopy(value["changes"][0]["before"])
+                    if change == "duplicate": value["changes"][1] = value["changes"][0]
+                    if change == "extra-row":
+                        value["changes"] = [copy.deepcopy(value["changes"][0]) for _ in range(9)]
+                        for index, row in enumerate(value["changes"]):
+                            row["member"] = "user/member-" + str(index); row["member_sha256"] = hashlib.sha256(row["member"].encode()).hexdigest()
+                        value.update(total_changes=9, truncated=False)
+                    body = json.dumps(value).encode() if change != "bound" else b" " * ((16 << 10) + 1)
+                    member = evidence / "source-user-delta.json"; member.write_bytes(body)
+                    CASE["write_json"](evidence / "profile-admission.json", proof)
+                    actual, reads = CASE["ordinary_bytes"], []
+                    def read(path, expected=None):
+                        reads.append(path.name)
+                        if change == "second-read" and reads.count(member.name) == 2: raise RuntimeError("late delta read refused")
+                        return actual(path, expected)
+                    with mock.patch.dict(CASE["stage_evidence"].__globals__, ordinary_bytes=read, EVIDENCE_CLOSED=False) as scope:
+                        if change == "valid":
+                            CASE["stage_evidence"](evidence)
+                            self.assertEqual((evidence / "upload" / member.name).read_bytes(), body)
+                            self.assertEqual(reads.count("profile-admission.json"), 1)
+                        else:
+                            with self.assertRaises(RuntimeError): CASE["stage_evidence"](evidence)
+                            self.assertFalse(scope["EVIDENCE_CLOSED"]); self.assertFalse((evidence / "upload").exists())
+                            self.assertFalse(list(evidence.glob(".upload-pending-*")))
+
 
 if __name__ == "__main__":
     unittest.main()

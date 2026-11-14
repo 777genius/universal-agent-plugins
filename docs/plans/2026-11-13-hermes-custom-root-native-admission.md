@@ -1405,3 +1405,58 @@ The Windows immutable-install digest change and the separate Linux prepared-User
 baseline refusal remain unexplained by this metadata-only amendment. No baseline
 is adopted, link or read allowance added, source repaired, or qualification
 promoted. Each original stays failed; new genuine source evidence is required.
+
+### Source User differences after confirmed process settlement
+
+The Linux source-only job `132262351679` in the same `2b557b30` run failed at a
+third boundary: its initial payload read succeeded, then the prepared User
+digest comparison refused before the first Project native command. Artifact
+`14091083977` is 9,643 bytes with SHA-256
+`15a0a730b619ced2715413c049db51b5041627711ba742b0c3007cdacb55c774`.
+Its prepared and after-settlement User digests differ although both count
+100,256 members. The original retains no complete private map or leaf delta;
+it does not establish that this change affected metadata alone.
+
+A controlled Linux producer observation used the exact pinned
+[`lease_directory`](https://github.com/NousResearch/hermes-agent/blob/2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19/hermes_cli/runtime_state.py)
+function and the collector's actual snapshot/digest functions. With an existing
+empty `.leases` directory, the pinned function created one empty, locked UUID
+file. Explicit release removed that file; the directory's mtime and ctime still
+differed. User counts were 11, 12 and 11 before, during and after the lease;
+retained file-body hashes were unchanged. All five imported vendor source files
+matched Git `2bd378ed` before and after, bytecode writes were disabled, and the
+environment was unchanged. This ran no Hermes CLI, installer, model or hosted
+admission. Its report SHA-256 is
+`17abda82d6e429dbee9073143591cbdc105921a8f8ca8176b26d0ad8c4116260`.
+It demonstrates a possible mechanism, without identifying the old CI member.
+
+The collector now retains the already captured prepared map only after the
+preparation relation and receipt write succeed. It retains the final map only
+after the complete source snapshot returns. An already failed source run with
+confirmed process settlement can project their User-only difference into one
+fixed `source-user-delta.json`: at most eight rows and 16 KiB, with the total
+change count and an explicit truncation flag. The same absolute 120-second
+budget covers the final snapshot and this comparison. No payload file is
+opened, read or traversed again for the diagnostic. A failed comparison remains
+the original failure, including when it is the first failure in the parent.
+
+Rows contain bounded relative names or their hashes, captured stat fields and
+existing file/link-target digests. Bodies, environment values and link-target
+text remain private. Numeric values outside uint64 become null with an explicit
+saturation flag. Equal projected rows are refused unless saturation has hidden
+the changed value; distinct wide Windows inode values can legitimately produce
+that case. Such a row remains an incomplete numeric observation, never authority.
+The closed staging reader joins both User digest/count pairs and the nonce to
+the single already-copied failed source proof. Existing physical evidence
+authority, first-write, process, partial-file and publication guards remain.
+
+All 97 profile contracts and 16 cleanup contracts passed locally on Linux with
+no skips; the original 92 profile test bodies are unchanged. New controls cover
+real captured file and metadata differences, complete-return/receipt ordering,
+missing captures, unknown settlement, expired budget, original Windows/Linux
+record projection, bounds, copied-proof joins and partial-write refusal. An
+identical unsaturated-row packet was accepted by the initial draft, then refused
+after the one-line guard; the wide-inode saturation control remains positive.
+After-settlement maps cannot reconstruct a vanished live lease file. The old
+native failure remains failed, and this diagnostic grants no new source or
+Project acceptance, baseline, cleanup permission or qualification.

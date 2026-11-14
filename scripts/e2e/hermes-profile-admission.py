@@ -698,6 +698,96 @@ def source_user_digest(records, user, deadline=None):
     return {"sha256": digest.hexdigest(), "entries": entries}
 
 
+SOURCE_DELTA_FIELDS = tuple("device inode mode links bytes mtime_ns ctime_ns birthtime_ns attributes reparse_tag uid gid".split())
+
+
+def source_delta_record(record):
+    if record is None:
+        return None
+    identity = record["identity"]
+    require(type(identity) is tuple and len(identity) in (9, 12), "source delta identity shape")
+    values = (*identity[:7], *(identity[7:10] if len(identity) == 12 else (None, None, None)), *identity[-2:])
+    bounded = lambda number: number if type(number) is int and 0 <= number < 2**64 else None
+    return {"kind": record["type"], "metadata": {key: bounded(number) for key, number in zip(SOURCE_DELTA_FIELDS, values)},
+            "integer_saturated": any(number is not None and bounded(number) is None for number in values),
+            "sha256": record.get("sha256") if record["type"] == "file" else None,
+            "target_sha256": hashlib.sha256(record["target"].encode("utf-8", "surrogatepass")).hexdigest() if record["type"] == "link" else None}
+
+
+def source_user_delta(before, after, user, nonce, before_user, after_user, deadline):
+    """Compare accepted captures only; this never reopens a payload member."""
+    require(user == "user" and all(type(rows) is dict and 0 < len(rows) <= PAYLOAD_MEMBERS for rows in (before, after)), "source delta captured maps required")
+    require(source_user_digest(before, user, deadline) == before_user
+            and source_user_digest(after, user, deadline) == after_user, "source delta captured digest differs")
+    rows, total = [], 0
+    for name in sorted(before.keys() | after.keys()):
+        require(time.monotonic() < deadline, "source delta deadline")
+        if not below(name, user) or before.get(name) == after.get(name):
+            continue
+        total += 1
+        if len(rows) < 8:
+            rows.append({"member": name if len(json.dumps(name, ensure_ascii=True).encode("ascii")) <= 512 else None,
+                         "member_sha256": hashlib.sha256(name.encode("utf-8", "surrogatepass")).hexdigest(),
+                         "before": source_delta_record(before.get(name)), "after": source_delta_record(after.get(name))})
+    value = dict(schema_version=1, measurement_only=True, admission_qualified=False, nonce=nonce,
+                 stage="parent-after-settlement", hash_encoding="utf-8-surrogatepass",
+                 before=dict(before_user), after=dict(after_user), total_changes=total, truncated=total > len(rows), changes=rows)
+    while len(json.dumps(value).encode() + b"\n") > 16 << 10 and rows:
+        rows.pop(); value["truncated"] = True
+    source_delta_document(json.dumps(value).encode() + b"\n")
+    require(time.monotonic() < deadline, "source delta deadline")
+    return value
+
+
+def source_delta_document(body):
+    require(type(body) is bytes and 0 < len(body) <= 16 << 10, "source delta evidence bound")
+    value = census_document(body)
+    closed = lambda row, keys: type(row) is dict and set(row) == set(keys.split())
+    digest = lambda text: type(text) is str and re.fullmatch(r"[0-9a-f]{64}", text) is not None
+    number = lambda item: type(item) is int and 0 <= item < 2**64
+    require(closed(value, "schema_version measurement_only admission_qualified nonce stage hash_encoding before after total_changes truncated changes")
+            and type(value["schema_version"]) is int and value["schema_version"] == 1 and value["measurement_only"] is True
+            and value["admission_qualified"] is False and digest(value["nonce"]) and value["stage"] == "parent-after-settlement"
+            and value["hash_encoding"] == "utf-8-surrogatepass", "source delta schema differs")
+    require(all(closed(value[key], "sha256 entries") and digest(value[key]["sha256"])
+                and number(value[key]["entries"]) and 0 < value[key]["entries"] <= PAYLOAD_MEMBERS for key in ("before", "after")), "source delta summaries differ")
+    rows, total = value["changes"], value["total_changes"]
+    require(type(rows) is list and len(rows) <= 8 and number(total) and len(rows) <= total <= 2 * PAYLOAD_MEMBERS
+            and type(value["truncated"]) is bool and value["truncated"] == (total > len(rows))
+            and (total == 0) == (value["before"] == value["after"]), "source delta counters differ")
+    for row in rows:
+        require(closed(row, "member member_sha256 before after") and digest(row["member_sha256"]), "source delta row differs")
+        name = row["member"]
+        require(name is None or (type(name) is str and below(name, "user") and ":" not in name and "\\" not in name
+                and all(part not in ("", ".", "..") for part in name.split("/")) and len(json.dumps(name).encode()) <= 512
+                and hashlib.sha256(name.encode("utf-8", "surrogatepass")).hexdigest() == row["member_sha256"]), "source delta member differs")
+        require(row["before"] is not None or row["after"] is not None, "source delta empty row")
+        for record in (item for item in (row["before"], row["after"]) if item is not None):
+            require(closed(record, "kind metadata integer_saturated sha256 target_sha256")
+                    and record["kind"] in ("file", "directory", "link") and type(record["integer_saturated"]) is bool
+                    and type(record["metadata"]) is dict and set(record["metadata"]) == set(SOURCE_DELTA_FIELDS)
+                    and all(item is None or number(item) for item in record["metadata"].values())
+                    and (record["integer_saturated"] or all(number(record["metadata"][key]) for key in SOURCE_DELTA_FIELDS if key not in ("birthtime_ns", "attributes", "reparse_tag")))
+                    and (digest(record["sha256"]) if record["kind"] == "file" else record["sha256"] is None)
+                    and (digest(record["target_sha256"]) if record["kind"] == "link" else record["target_sha256"] is None), "source delta record differs")
+        require(row["before"] != row["after"] or row["before"]["integer_saturated"], "source delta unchanged row")
+    require(len({row["member_sha256"] for row in rows}) == len(rows), "source delta duplicate member")
+    return value
+
+
+def retain_source_user_delta(evidence, expected, nonce, prepared, after, before_records, after_records, user, deadline, *, failure, settled):
+    if not isinstance(failure, BaseException) or settled is not True or prepared is None or after is None or not before_records or not after_records:
+        return
+    try:
+        value = source_user_delta(before_records, after_records, user, nonce, prepared["user"], after["user"], deadline)
+        with held_census_evidence(evidence, expected) as (descriptor, verify):
+            verify()
+            require(time.monotonic() < deadline, "source delta deadline")
+            write_census_member(evidence / "source-user-delta.json", value, None if artifacts.WINDOWS else descriptor)
+    except (OSError, KeyError, TypeError, ValueError, RuntimeError):
+        pass  # No repaired baseline or replaced original failure, including partial writes.
+
+
 def source_ledger(records, source, deadline):
     """Partition every captured member once; large runtime trees stay hashed.
 
@@ -958,7 +1048,7 @@ def source_preparation_relation(before, after, inputs, authored, retained, direc
                     "source preparation directory owner differs")
 
 
-def prepare_source_user(inputs, original_records, evidence, nonce, expected):
+def prepare_source_user(inputs, original_records, evidence, nonce, expected, *, retain=None):
     deadline = time.monotonic() + 120
     _, authored = user_fixture_content(nonce)
     directories = source_preparation_directories(inputs, authored)
@@ -979,6 +1069,9 @@ def prepare_source_user(inputs, original_records, evidence, nonce, expected):
                "prepared_user": snapshot["user"], "installer_preimages": retained,
                "declared_directories": sorted(directories), "authored_members": sorted(authored)}
     env["HERMES_SOURCE_PREPARATION_SHA256"] = write_json(evidence / "source-user-preparation.json", receipt)
+    if retain is not None:
+        require(type(retain) is dict and not retain, "source prepared capture destination differs")
+        retain.update(prepared)
     return env, snapshot, receipt
 
 
@@ -2239,7 +2332,7 @@ COMMANDS |= ({"public-" + prefix + scope for prefix in ("git-", "add-", "run-", 
 MEMBERS = ({name + suffix for name in COMMANDS for suffix in (".stdout", ".stderr", ".status.json")}
            | {"original-user-baseline.json", "original-user-final.json", "source-guards.json", "profile-endpoints.json",
               "profile-command-deltas.json", "bootstrap-census-request.json", "bootstrap-census.json", "source-user-preparation.json",
-              "source-payload-refusal.json",
+              "source-payload-refusal.json", "source-user-delta.json",
               "profile-admission.json", "lifecycle.stdout", "lifecycle.stderr", "owned-start-gate",
               "public-endpoints.json", "public-command-deltas.json", "cold-restore.json"})
 
@@ -2261,6 +2354,9 @@ def admit_evidence(directory, *, failure=None):
             elif path.name == "source-payload-refusal.json":
                 require(info.st_size <= 2048, "source refusal evidence bound")
                 source_refusal_document(ordinary_bytes(path, info))
+            elif path.name == "source-user-delta.json":
+                require(info.st_size <= 16 << 10, "source delta evidence bound")
+                source_delta_document(ordinary_bytes(path, info))
     except BaseException:
         if failure is not None:
             raise RuntimeError("original Hermes refusal retained; evidence publication refused") from failure
@@ -2289,7 +2385,7 @@ def stage_evidence(directory):
     pending = directory / (".upload-pending-" + secrets.token_hex(16))
     pending.mkdir(mode=0o700)
     pending_identity = directory_identity(pending)
-    census, source_refusal, source_proof = None, None, None
+    census, source_refusal, source_delta, source_proof = None, None, None, None
     try:
         for name, expected in sorted(sources.items()):
             body = ordinary_bytes(directory / name, expected)
@@ -2301,14 +2397,23 @@ def stage_evidence(directory):
                 source_preparation_document(body)
             elif name == "source-payload-refusal.json":
                 source_refusal = source_refusal_document(body)
-            elif name == "profile-admission.json" and "source-payload-refusal.json" in sources:
+            elif name == "source-user-delta.json":
+                source_delta = source_delta_document(body)
+            elif name == "profile-admission.json" and set(sources) & {"source-payload-refusal.json", "source-user-delta.json"}:
                 source_proof = public_json(body)
             with (pending / name).open("xb") as stream:
                 stream.write(body)
-        if source_refusal is not None:
-            require(type(source_proof) is dict and source_proof.get("nonce") == source_refusal["nonce"]
+        observations = [item for item in (source_refusal, source_delta) if item is not None]
+        if observations:
+            require(type(source_proof) is dict and all(source_proof.get("nonce") == item["nonce"] for item in observations)
                     and source_proof.get("runtime_distribution") == "source" and source_proof.get("status") == "failed"
                     and all(source_proof.get(key) is False for key in ("capture_complete", "admission_qualified", "production_project_mcp", "vendor_authentication", "real_model_inference", "tools_call", "source_install_custom_root_qualified", "source_bootstrap_recovery_qualified")), "source refusal proof differs")
+        if source_delta is not None:
+            prepared, after = source_proof.get("source_prepared_runtime"), source_proof.get("runtime_after")
+            require(type(prepared) is dict and type(after) is dict
+                    and all(type(item.get("user")) is dict and type(item["user"].get("entries")) is int for item in (prepared, after))
+                    and prepared.get("user") == source_delta["before"]
+                    and after.get("user") == source_delta["after"], "source delta proof differs")
         require(directory_identity(directory) == identity
                 and {path.name for path in directory.iterdir()} == set(sources) | {pending.name},
                 "evidence directory/membership changed before publication")
@@ -2382,6 +2487,7 @@ def run():
     target = {"Linux": "linux", "Windows": "win32", "macOS": "darwin"}[os.environ["RUNNER_OS"]] + "-" + os.environ["RUNNER_ARCH"].lower()
     payload_descriptor, runtime_before, native_started, source_installation = None, None, None, None
     source_prepared, preparation, public_pins = None, None, None
+    prepared_records, after_records, source_after_capture, source_after_deadline = {}, {}, None, None
     helpers = runpy.run_path(str(HERE / "hermes-native.py"), run_name="hermes_profile_process_helpers")
     lifecycle_deadline = time.monotonic() + 720
     try:
@@ -2391,7 +2497,7 @@ def run():
             original_records = {}
             runtime_before = source_runtime_snapshot(source_installation, home_authority, retain=original_records)
             proof["runtime_before"] = runtime_before
-            env, source_prepared, preparation = prepare_source_user(source_installation, original_records, evidence, nonce, home_authority)
+            env, source_prepared, preparation = prepare_source_user(source_installation, original_records, evidence, nonce, home_authority, retain=prepared_records)
             runtime_root, python = official_source, source_installation["python"]
             env.update(HERMES_PROFILE_SOURCE_CAPTURE="1", HERMES_HOME=str(source_installation["original"]),
                        HERMES_PROFILE_RUNTIME_ROOT=str(runtime_root), HERMES_PROFILE_PYTHON=str(python))
@@ -2545,7 +2651,10 @@ def run():
                 proof["public_runtimes_after"] = public_runtime_pins(public_pins)
             if runtime_before is not None and process_settled:
                 if source_capture:
-                    runtime_after = source_runtime_snapshot(source_inputs(runner, official_source), home_authority)
+                    source_after_deadline = time.monotonic() + 120
+                    runtime_after = source_runtime_snapshot(source_inputs(runner, official_source), home_authority,
+                                                            retain=after_records, deadline=source_after_deadline)
+                    source_after_capture = runtime_after
                     proof["runtime_after"] = runtime_after
                     require(runtime_after["immutable"] == runtime_before["immutable"]
                             and runtime_after["provenance"] == runtime_before["provenance"], "immutable source installation changed")
@@ -2565,6 +2674,9 @@ def run():
         finally:
             if payload_descriptor is not None:
                 os.close(payload_descriptor)
+        if source_capture:
+            retain_source_user_delta(evidence, evidence_authority, nonce, source_prepared, source_after_capture,
+                                     prepared_records, after_records, "user", source_after_deadline, failure=failure, settled=process_settled)
         if not process_settled:
             safe_failure_evidence(runner, type(failure).__name__ if failure else "process-cleanup-unproved")
             raise RuntimeError("native process cleanup unproved; raw evidence withheld") from failure
