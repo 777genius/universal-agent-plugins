@@ -240,19 +240,19 @@ func TestSessionNativeInventoryRefusesSameBytesFileReplacement(t *testing.T) {
 		}
 		replacementErr = os.Rename(replacement, path)
 	}
-	err = New().VerifySession(t.Context(), clients.Env{Runner: runner, NativeConfig: kernel}, plan)
+	verificationErr := New().VerifySession(t.Context(), clients.Env{Runner: runner, NativeConfig: kernel}, plan)
 	if replacementErr != nil {
 		// Some Windows filesystems deny replacing an open file by design. A
 		// refused rename supplies no replacement-path regression evidence.
 		t.Skipf("filesystem refused replacement of the held native file: %v", replacementErr)
 	}
-	replaced, err := os.Lstat(path)
-	if err != nil || os.SameFile(original, replaced) || original.Mode() != replaced.Mode() ||
+	replaced, statErr := os.Lstat(path)
+	if statErr != nil || os.SameFile(original, replaced) || original.Mode() != replaced.Mode() ||
 		!bytes.Equal(body, mustSessionBytes(t, path)) {
-		t.Fatal("same-byte replacement was not independently established", err)
+		t.Fatal("same-byte replacement was not independently established", statErr)
 	}
-	if !errors.Is(err, nativeconfig.ErrConcurrentChange) {
-		t.Fatalf("same-byte foreign file was accepted by native inventory: %v", err)
+	if !errors.Is(verificationErr, nativeconfig.ErrConcurrentChange) {
+		t.Fatalf("same-byte foreign file was accepted by native inventory: %v", verificationErr)
 	}
 }
 
